@@ -163,6 +163,39 @@ Based on the app-server protocol (`documentation/APP_SERVER_DOCUMENTATION.md`), 
 | MCP tool call progress | `item/mcpToolCall/progress` notification |
 | Terminal interaction | `item/commandExecution/terminalInteraction` notification |
 
+### Planned: Thread Forking
+
+Forking creates a new thread from an existing thread so users can branch the conversation without mutating the original.
+
+#### UX Requirements
+
+- Add a `Fork thread` action in thread row controls and thread header controls.
+- On success, navigate to the new forked thread immediately.
+- Show lineage metadata in the forked thread header:
+  - `Forked from: <source thread title or id>`
+- Preserve lineage information in thread list tooltips/details where available.
+
+#### RPC Contract
+
+- Method: `thread/fork`
+- Primary input: `threadId` of the source thread (preferred over `path`)
+- Optional overrides: `cwd`, `model`, `approvalPolicy`, `sandbox`, `baseInstructions`, `developerInstructions`
+- Expected response: `ThreadForkResponse` with a new `thread.id`
+
+#### State + Routing Behavior
+
+- Insert the new thread into `sourceGroups` / `projectGroups` immediately after fork returns.
+- Set `selectedThreadId` to the new forked thread id.
+- Route to `/thread/:threadId` for the new thread.
+- Keep original thread unchanged and still selectable.
+
+#### Acceptance Criteria
+
+- User can fork from any existing thread.
+- Forked thread has a different id from the source thread.
+- Source thread history remains intact.
+- UI displays the fork origin for the selected forked thread.
+
 ## Communication Protocol
 
 ### HTTP Endpoints (Bridge)
