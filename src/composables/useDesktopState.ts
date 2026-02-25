@@ -534,6 +534,21 @@ function mergeThreadGroups(
   return areGroupArraysEqual(previous, mergedGroups) ? previous : mergedGroups
 }
 
+function toProjectName(cwd: string): string {
+  const parts = cwd.split('/').filter(Boolean)
+  return parts.at(-1) || cwd || 'unknown-project'
+}
+
+function toOptimisticThreadTitle(message: string): string {
+  const firstLine = message
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+
+  if (!firstLine) return 'Untitled thread'
+  return firstLine.slice(0, 80)
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -699,6 +714,45 @@ export function useDesktopState() {
       }),
     }))
     projectGroups.value = mergeThreadGroups(projectGroups.value, flaggedGroups)
+  }
+
+  function insertOptimisticThread(threadId: string, cwd: string, firstMessageText: string): void {
+    const nowIso = new Date().toISOString()
+    const normalizedCwd = cwd.trim()
+    const projectName = toProjectName(normalizedCwd)
+    const nextThread: UiThread = {
+      id: threadId,
+      title: toOptimisticThreadTitle(firstMessageText),
+      projectName,
+      cwd: normalizedCwd,
+      createdAtIso: nowIso,
+      updatedAtIso: nowIso,
+      preview: firstMessageText,
+      unread: false,
+      inProgress: false,
+    }
+
+    const existingGroupIndex = sourceGroups.value.findIndex((group) => group.projectName === projectName)
+    if (existingGroupIndex >= 0) {
+      const existingGroup = sourceGroups.value[existingGroupIndex]
+      const remainingThreads = existingGroup.threads.filter((thread) => thread.id !== threadId)
+      const nextGroup: UiProjectGroup = {
+        projectName,
+        threads: [nextThread, ...remainingThreads],
+      }
+      const nextGroups = [...sourceGroups.value]
+      nextGroups.splice(existingGroupIndex, 1, nextGroup)
+      sourceGroups.value = nextGroups
+    } else {
+      sourceGroups.value = [{ projectName, threads: [nextThread] }, ...sourceGroups.value]
+    }
+
+    const nextProjectOrder = mergeProjectOrder(projectOrder.value, sourceGroups.value)
+    if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
+      projectOrder.value = nextProjectOrder
+      saveProjectOrder(projectOrder.value)
+    }
+    applyThreadFlags()
   }
 
   function pruneThreadScopedState(flatThreads: UiThread[]): void {
@@ -1641,6 +1695,7 @@ export function useDesktopState() {
       threadId = await startThread(targetCwd || undefined, selectedModel || undefined)
       if (!threadId) return ''
 
+      insertOptimisticThread(threadId, targetCwd, nextText)
       resumedThreadById.value = {
         ...resumedThreadById.value,
         [threadId]: true,
@@ -1654,8 +1709,18 @@ export function useDesktopState() {
       )
       setTurnErrorForThread(threadId, null)
       setThreadInProgress(threadId, true)
-
-      await startTurnForThread(threadId, nextText)
+      void startTurnForThread(threadId, nextText)
+        .catch((unknownError) => {
+          shouldAutoScrollOnNextAgentEvent = false
+          setThreadInProgress(threadId, false)
+          setTurnActivityForThread(threadId, null)
+          const errorMessage = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+          setTurnErrorForThread(threadId, errorMessage)
+          error.value = errorMessage
+        })
+        .finally(() => {
+          isSendingMessage.value = false
+        })
       return threadId
     } catch (unknownError) {
       shouldAutoScrollOnNextAgentEvent = false
@@ -1668,9 +1733,8 @@ export function useDesktopState() {
         setTurnErrorForThread(threadId, errorMessage)
       }
       error.value = errorMessage
-      throw unknownError
-    } finally {
       isSendingMessage.value = false
+      throw unknownError
     }
   }
 
