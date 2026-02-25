@@ -1,81 +1,86 @@
-# Project Instructions
+# AGENTS.md
+This file provides guidance to agents when working with code in this repository.
 
-## Codex.app-First Development Policy
+## Build, Run, and Validation Commands
 
-For every **new feature** and every **behavior/UI change**, treat the installed desktop app as the source of truth:
+- Install dependencies: `npm ci`
+- Frontend dev server (Vite): `npm run dev`
+- Build frontend only (includes typecheck): `npm run build:frontend`
+- Build CLI bundle only: `npm run build:cli`
+- Full build (frontend + CLI): `npm run build`
+- Preview built frontend: `npm run preview`
 
-- App path: `/Applications/Codex.app`
-- Primary bundle to inspect: `/Applications/Codex.app/Contents/Resources/app.asar`
+### Single test / full test suite
 
-Do not implement first and compare later. Compare first, then implement.
+- No test runner or test scripts are currently defined in `package.json`.
+- No repository-local Jest/Vitest/Playwright test config was detected.
 
-## Required Workflow (Feature Work)
+### Lint / formatting
 
-1. Identify target behavior:
-- Restate what behavior is being added/changed.
-- Define whether it is: data mapping, runtime event handling, UX text, visual treatment, interaction model, or all of these.
+- No lint or formatting scripts/config files were detected (`eslint`/`prettier` configs are not present).
+- Use TypeScript checks via: `npm run build:frontend` (runs `vue-tsc --noEmit`) and `npm run build`.
 
-2. Inspect Codex.app before coding:
-- Locate the implementation in `app.asar` (extract and search built assets as needed).
-- Find relevant strings/keys/functions/components for the feature (status labels, event names, item types, summaries, collapse/expand behavior, etc.).
-- Capture the closest equivalent pattern if exact parity is not present.
+### Useful one-liners
 
-3. Build a parity checklist from Codex.app:
-- Data model shape (fields used by UI).
-- Realtime event sources and transitions.
-- Rendering structure (what is shown collapsed vs expanded).
-- Copy/text behavior (phrasing and status wording).
-- Interaction behavior (auto-expand, auto-collapse, click/keyboard handling).
-- Visibility rules (when elements appear/disappear).
+- Rebuild everything after changes: `npm run build`
+- Run CLI locally from source output: `node dist-cli/index.js --help`
+- Run CLI with explicit settings: `node dist-cli/index.js --port 3000 --password my-secret`
+- Run published-style CLI without install: `npx codex-web-local --help`
 
-4. Implement against that checklist:
-- Prefer Codex.app behavior over novel design.
-- Keep deviations minimal and intentional.
-- If deviating, include a short reason in the final response.
+## Project Overview
 
-5. Verify parity after implementation:
-- Confirm each checklist item.
-- Run local build/tests.
-- Re-check UI behavior against Codex.app reference.
+- Purpose: a lightweight web UI for Codex app-server that mirrors desktop-like thread workflows and allows browser-based remote access.
+- Stack: Vue 3, Vue Router 4, Vite 6, Tailwind CSS v4 (`@tailwindcss/vite`), TypeScript 5 (strict), Node.js >= 18, Express 5, Commander 13, tsup.
 
-## Response Requirements (When delivering feature changes)
+### Architecture (inferred from source)
 
-For feature tasks, include:
+- Single-page Vue app in `src/`.
+- Vite dev server includes a custom bridge middleware (`createCodexBridgeMiddleware`) to proxy/bridge Codex app-server communication.
+- Production/CLI path serves built SPA from `dist/` and mounts the same bridge middleware in Express.
+- State-heavy UI logic is centralized in composables (`src/composables/useDesktopState.ts`) and API gateway modules under `src/api/`.
 
-- `Codex.app analysis`: what was inspected (files/areas/patterns).
-- `Parity result`: matched items and any explicit deviations.
-- `Fallback note` only if Codex.app could not be inspected or had no equivalent.
+## Folder Structure
 
-## Fallback Rules
+- `src/main.ts`: Vue app bootstrap.
+- `src/App.vue`: top-level layout/composition, route-aware content, sidebar/composer orchestration.
+- `src/router/`: route definitions (`/`, `/thread/:threadId`, fallback redirects).
+- `src/components/`: UI components (`content/`, `sidebar/`, `layout/`, `icons/`).
+- `src/composables/`: shared reactive state and workflow logic (`useDesktopState`).
+- `src/api/`: gateway/RPC clients, DTOs, normalizers, error mapping.
+- `src/server/`: Express server, auth middleware, Codex bridge middleware.
+- `src/cli/`: CLI entrypoint and server startup wiring.
+- `documentation/`: app-server protocol docs and generated schemas (JSON/TypeScript).
+- `dist/`, `dist-cli/`: build outputs (generated).
 
-If Codex.app cannot be inspected (missing app, extraction/search failure) or has no equivalent pattern:
+## Coding Style and Conventions
 
-- State the blocker explicitly.
-- Use best local implementation consistent with existing repository patterns.
-- Keep behavior conservative and avoid speculative UX innovations.
+- TypeScript strict mode is enabled; preserve explicit typing and runtime guards used across API/state layers.
+- Vue uses `<script setup lang="ts">` and Composition API.
+- Current codebase uses mostly single quotes and semicolons sparingly; follow local file style when editing.
+- Prefer small pure helpers for normalization/validation (pattern seen in `useDesktopState.ts` and API normalizers).
+- Keep browser-only APIs guarded (`if (typeof window === 'undefined')`) where SSR/non-browser execution may happen.
 
-## Scope and Safety
+## Gotchas and Anti-Patterns to Avoid
 
-- This policy applies to **feature behavior and UX decisions**, not just styling.
-- Bug fixes should still check Codex.app when they affect user-visible behavior.
-- Prefer minimal patches that align with app behavior rather than large refactors.
+- Do not bypass existing normalization layers in `src/api/normalizers/`; UI expects normalized shapes.
+- Preserve localStorage key compatibility in `useDesktopState.ts`; changing key names breaks persisted UI state.
+- In dev mode, keep Vite watch ignore patterns intact (`.omx`, `.cursor`, `.playwright-cli`, `dist`, `dist-cli`) to avoid noisy rebuild loops.
+- In server code, middleware order matters: auth -> Codex bridge -> static assets -> SPA fallback.
+- Keep CLI/server shutdown handling intact (`SIGINT`/`SIGTERM` with bridge disposal).
 
-## Completion Verification Requirement
+## Useful Workflows
 
-- After completing a task that changes behavior or UI, always run a Playwright verification in **headless** mode.
-- Always capture a screenshot of the changed result and display that screenshot in chat when reporting completion.
+- Typical local loop:
+1. `npm ci`
+2. `npm run dev`
+3. Make changes in `src/`
+4. Validate with `npm run build`
 
-## Findings: Workspace Root Ordering (2026-02-25)
+- Validate CLI path before publishing:
+1. `npm run build`
+2. `node dist-cli/index.js --help`
+3. `node dist-cli/index.js --port 3000 --no-password`
 
-- Codex.app persists workspace root ordering/labels in global state JSON keys:
-  - `electron-saved-workspace-roots` (order source of truth)
-  - `electron-workspace-root-labels`
-  - `active-workspace-roots`
-- In this environment, persisted file path is:
-  - `~/.codex/.codex-global-state.json`
-- In packaged desktop runs, equivalent userData path is typically:
-  - `~/Library/Application Support/Codex/.codex-global-state.json`
-- For folder/project reorder parity, prefer reading these keys over browser LocalStorage-only ordering.
-- Validation requirement for reorder changes:
-  - Run build/typecheck.
-  - Run Playwright in headless mode and capture a screenshot showing sidebar order.
+- If changing bridge/server behavior, validate both execution paths:
+1. Vite dev path: `npm run dev`
+2. Built server path via CLI: `npm run build && node dist-cli/index.js`
