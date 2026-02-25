@@ -135,11 +135,22 @@ function toThreadTitle(summary: Thread): string {
 }
 
 function toUiThread(summary: Thread): UiThread {
+  const rawSummary = summary as Record<string, unknown>
+  const cwd = typeof rawSummary.cwd === 'string' ? rawSummary.cwd : summary.cwd
+  const hasWorktree =
+    rawSummary.isWorktree === true ||
+    rawSummary.worktree === true ||
+    rawSummary.worktreeId !== undefined ||
+    rawSummary.worktreePath !== undefined ||
+    cwd.includes('/.codex/worktrees/') ||
+    cwd.includes('/.git/worktrees/')
+
   return {
     id: summary.id,
     title: toThreadTitle(summary),
     projectName: toProjectName(summary.cwd),
     cwd: summary.cwd,
+    hasWorktree,
     createdAtIso: toIso(summary.createdAt),
     updatedAtIso: toIso(summary.updatedAt),
     preview: summary.preview,

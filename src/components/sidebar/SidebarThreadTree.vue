@@ -18,7 +18,10 @@
               </span>
             </template>
             <button class="thread-main-button" type="button" @click="onSelect(thread.id)">
-              <span class="thread-row-title">{{ thread.title }}</span>
+              <span class="thread-row-title-wrap">
+                <span class="thread-row-title">{{ thread.title }}</span>
+                <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+              </span>
             </button>
             <template #right>
               <span class="thread-row-time">{{ formatRelative(thread.createdAtIso || thread.updatedAtIso) }}</span>
@@ -159,7 +162,10 @@
                   </span>
                 </template>
                 <button class="thread-main-button" type="button" @click="onSelect(thread.id)">
-                  <span class="thread-row-title">{{ thread.title }}</span>
+                  <span class="thread-row-title-wrap">
+                    <span class="thread-row-title">{{ thread.title }}</span>
+                    <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                  </span>
                 </button>
                 <template #right>
                   <span class="thread-row-time">{{ formatRelative(thread.createdAtIso || thread.updatedAtIso) }}</span>
@@ -211,6 +217,7 @@ import IconTablerDots from '../icons/IconTablerDots.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerFolderOpen from '../icons/IconTablerFolderOpen.vue'
+import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerPin from '../icons/IconTablerPin.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 
@@ -1078,8 +1085,16 @@ onBeforeUnmount(() => {
   @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center min-h-5;
 }
 
+.thread-row-title-wrap {
+  @apply min-w-0 inline-flex items-center gap-1;
+}
+
 .thread-row-title {
   @apply block text-sm leading-5 font-normal text-zinc-800 truncate whitespace-nowrap;
+}
+
+.thread-row-worktree-icon {
+  @apply w-3 h-3 text-zinc-500 shrink-0;
 }
 
 .thread-status-indicator {

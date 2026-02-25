@@ -63,6 +63,7 @@ export type UiThread = {
   title: string
   projectName: string
   cwd: string
+  hasWorktree: boolean
   createdAtIso: string
   updatedAtIso: string
   preview: string

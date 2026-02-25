@@ -59,3 +59,8 @@ If Codex.app cannot be inspected (missing app, extraction/search failure) or has
 - This policy applies to **feature behavior and UX decisions**, not just styling.
 - Bug fixes should still check Codex.app when they affect user-visible behavior.
 - Prefer minimal patches that align with app behavior rather than large refactors.
+
+## Completion Verification Requirement
+
+- After completing a task that changes behavior or UI, always run a Playwright verification in **headless** mode.
+- Always capture a screenshot of the changed result and display that screenshot in chat when reporting completion.

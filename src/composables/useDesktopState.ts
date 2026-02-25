@@ -725,6 +725,7 @@ export function useDesktopState() {
       title: toOptimisticThreadTitle(firstMessageText),
       projectName,
       cwd: normalizedCwd,
+      hasWorktree: normalizedCwd.includes('/.codex/worktrees/') || normalizedCwd.includes('/.git/worktrees/'),
       createdAtIso: nowIso,
       updatedAtIso: nowIso,
       preview: firstMessageText,
