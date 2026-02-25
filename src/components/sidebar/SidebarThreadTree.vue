@@ -66,6 +66,7 @@
             role="button"
             tabindex="0"
             @click="toggleProjectCollapse(group.projectName)"
+            @keydown="onProjectHeaderKeyDown($event, group.projectName)"
             @keydown.enter.prevent="toggleProjectCollapse(group.projectName)"
             @keydown.space.prevent="toggleProjectCollapse(group.projectName)"
           >
@@ -511,6 +512,24 @@ function onProjectNameInput(projectName: string): void {
 function onRemoveProject(projectName: string): void {
   emit('remove-project', projectName)
   closeProjectMenu()
+}
+
+function onProjectHeaderKeyDown(event: KeyboardEvent, projectName: string): void {
+  if (!event.altKey) return
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+
+  const currentIndex = props.groups.findIndex((group) => group.projectName === projectName)
+  if (currentIndex < 0) return
+
+  const delta = event.key === 'ArrowUp' ? -1 : 1
+  const targetIndex = Math.max(0, Math.min(currentIndex + delta, props.groups.length - 1))
+  if (targetIndex === currentIndex) return
+
+  event.preventDefault()
+  emit('reorder-project', {
+    projectName,
+    toIndex: targetIndex,
+  })
 }
 
 function isExpanded(projectName: string): boolean {
