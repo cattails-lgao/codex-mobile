@@ -192,8 +192,13 @@ function saveProjectDisplayNames(displayNames: Record<string, string>): void {
 }
 
 function mergeProjectOrder(previousOrder: string[], incomingGroups: UiProjectGroup[]): string[] {
-  const incomingNames = new Set(incomingGroups.map((group) => group.projectName))
-  const nextOrder = previousOrder.filter((projectName) => incomingNames.has(projectName))
+  const nextOrder: string[] = []
+
+  for (const projectName of previousOrder) {
+    if (!nextOrder.includes(projectName)) {
+      nextOrder.push(projectName)
+    }
+  }
 
   for (const group of incomingGroups) {
     if (!nextOrder.includes(group.projectName)) {
@@ -207,8 +212,7 @@ function mergeProjectOrder(previousOrder: string[], incomingGroups: UiProjectGro
 function orderGroupsByProjectOrder(incoming: UiProjectGroup[], projectOrder: string[]): UiProjectGroup[] {
   const incomingByName = new Map(incoming.map((group) => [group.projectName, group]))
   const ordered: UiProjectGroup[] = projectOrder
-    .map((projectName) => incomingByName.get(projectName))
-    .filter((group): group is UiProjectGroup => Boolean(group))
+    .map((projectName) => incomingByName.get(projectName) ?? { projectName, threads: [] })
 
   for (const group of incoming) {
     if (!projectOrder.includes(group.projectName)) {
@@ -1535,12 +1539,10 @@ export function useDesktopState() {
 
     try {
       const rootsState = await getWorkspaceRootsState()
-      const groupNames = new Set(groups.map((group) => group.projectName))
-
       const hydratedOrder: string[] = []
       for (const rootPath of rootsState.order) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-        if (!groupNames.has(projectName) || hydratedOrder.includes(projectName)) continue
+        if (hydratedOrder.includes(projectName)) continue
         hydratedOrder.push(projectName)
       }
 
@@ -1557,7 +1559,6 @@ export function useDesktopState() {
         let changed = false
         for (const [rootPath, label] of Object.entries(rootsState.labels)) {
           const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-          if (!groupNames.has(projectName)) continue
           if (nextLabels[projectName] === label) continue
           nextLabels[projectName] = label
           changed = true
