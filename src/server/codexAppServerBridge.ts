@@ -104,6 +104,30 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
   return next
 }
 
+function getCodexAuthPath(): string {
+  const codexHome = process.env.CODEX_HOME?.trim()
+  return join(codexHome || join(homedir(), '.codex'), 'auth.json')
+}
+
+type CodexAuth = {
+  tokens?: {
+    access_token?: string
+    account_id?: string
+  }
+}
+
+async function readCodexAuth(): Promise<{ accessToken: string; accountId?: string } | null> {
+  try {
+    const raw = await readFile(getCodexAuthPath(), 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    const token = auth.tokens?.access_token
+    if (!token) return null
+    return { accessToken: token, accountId: auth.tokens?.account_id ?? undefined }
+  } catch {
+    return null
+  }
+}
+
 function getCodexGlobalStatePath(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
   if (codexHome) {
@@ -168,18 +192,24 @@ async function proxyTranscribe(
   body: Buffer,
   contentType: string,
   authToken: string,
+  accountId?: string,
 ): Promise<{ status: number; body: string }> {
+  const headers: Record<string, string | number> = {
+    'Content-Type': contentType,
+    'Content-Length': body.length,
+    Authorization: `Bearer ${authToken}`,
+    originator: 'Codex Desktop',
+    'User-Agent': `Codex Desktop/0.1.0 (${process.platform}; ${process.arch})`,
+  }
+
+  if (accountId) {
+    headers['ChatGPT-Account-Id'] = accountId
+  }
+
   return new Promise((resolve, reject) => {
     const req = httpsRequest(
       'https://chatgpt.com/backend-api/transcribe',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': body.length,
-          Authorization: `Bearer ${authToken}`,
-        },
-      },
+      { method: 'POST', headers },
       (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c: Buffer) => chunks.push(c))
@@ -430,17 +460,6 @@ class AppServerProcess {
     return Array.from(this.pendingServerRequests.values())
   }
 
-  async getAuthToken(): Promise<string | null> {
-    await this.ensureInitialized()
-    const result = (await this.call('getAuthStatus', { includeToken: true, refreshToken: false })) as
-      | { authMethod?: string; authToken?: string }
-      | null
-    if (result?.authMethod === 'chatgpt' && result.authToken) {
-      return result.authToken
-    }
-    return null
-  }
-
   dispose(): void {
     if (!this.process) return
 
@@ -642,15 +661,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'POST' && url.pathname === '/codex-api/transcribe') {
-        const authToken = await appServer.getAuthToken()
-        if (!authToken) {
+        const auth = await readCodexAuth()
+        if (!auth) {
           setJson(res, 401, { error: 'No auth token available for transcription' })
           return
         }
 
         const rawBody = await readRawBody(req)
         const incomingCt = req.headers['content-type'] ?? 'application/octet-stream'
-        const upstream = await proxyTranscribe(rawBody, incomingCt, authToken)
+        const upstream = await proxyTranscribe(rawBody, incomingCt, auth.accessToken, auth.accountId)
 
         res.statusCode = upstream.status
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
