@@ -77,25 +77,44 @@
           @update:model-value="onReasoningEffortSelect"
         />
 
-        <button
-          v-if="isTurnInProgress"
-          class="thread-composer-stop"
-          type="button"
-          aria-label="Стоп"
-          :disabled="disabled || !activeThreadId || isInterruptingTurn"
-          @click="onInterrupt"
-        >
-          <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
-        </button>
-        <button
-          v-else
-          class="thread-composer-submit"
-          type="submit"
-          aria-label="Send message"
-          :disabled="!canSubmit"
-        >
-          <IconTablerArrowUp class="thread-composer-submit-icon" />
-        </button>
+        <div class="thread-composer-actions">
+          <button
+            v-if="isDictationSupported && !isTurnInProgress"
+            class="thread-composer-mic"
+            :class="{ 'thread-composer-mic--active': dictationState !== 'idle' }"
+            type="button"
+            :aria-label="dictationState === 'idle' ? 'Hold to dictate' : dictationState === 'recording' ? 'Stop dictation' : 'Transcribing...'"
+            :title="dictationState === 'idle' ? 'Hold to dictate' : dictationState === 'recording' ? 'Release to transcribe' : 'Transcribing...'"
+            :disabled="isInteractionDisabled || dictationState === 'transcribing'"
+            @mousedown.prevent="startRecording"
+            @mouseup="stopRecording"
+            @mouseleave="dictationState === 'recording' && stopRecording()"
+            @touchstart.prevent="startRecording"
+            @touchend="stopRecording"
+          >
+            <IconTablerMicrophone class="thread-composer-mic-icon" />
+          </button>
+
+          <button
+            v-if="isTurnInProgress"
+            class="thread-composer-stop"
+            type="button"
+            aria-label="Стоп"
+            :disabled="disabled || !activeThreadId || isInterruptingTurn"
+            @click="onInterrupt"
+          >
+            <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
+          </button>
+          <button
+            v-else
+            class="thread-composer-submit"
+            type="submit"
+            aria-label="Send message"
+            :disabled="!canSubmit"
+          >
+            <IconTablerArrowUp class="thread-composer-submit-icon" />
+          </button>
+        </div>
       </div>
     </div>
     <input
@@ -122,7 +141,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReasoningEffort } from '../../types/codex'
+import { useDictation } from '../../composables/useDictation'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
+import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
 
@@ -151,6 +172,10 @@ type SelectedImage = {
 
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
+
+const { state: dictationState, isSupported: isDictationSupported, startRecording, stopRecording } = useDictation({
+  onTranscript: (text) => { draft.value = draft.value ? `${draft.value} ${text}` : text },
+})
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
@@ -345,8 +370,24 @@ watch(
   @apply shrink-0;
 }
 
+.thread-composer-actions {
+  @apply ml-auto flex items-center gap-2;
+}
+
+.thread-composer-mic {
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-mic--active {
+  @apply bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700;
+}
+
+.thread-composer-mic-icon {
+  @apply h-5 w-5;
+}
+
 .thread-composer-submit {
-  @apply ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
 }
 
 .thread-composer-submit-icon {
@@ -354,7 +395,7 @@ watch(
 }
 
 .thread-composer-stop {
-  @apply ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
 }
 
 .thread-composer-stop-icon {

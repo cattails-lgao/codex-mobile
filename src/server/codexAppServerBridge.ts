@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -148,18 +149,48 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Uint8Array[] = []
+  const raw = await readRawBody(req)
+  if (raw.length === 0) return null
+  const text = raw.toString('utf8').trim()
+  if (text.length === 0) return null
+  return JSON.parse(text) as unknown
+}
 
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Uint8Array[] = []
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
   }
+  return Buffer.concat(chunks)
+}
 
-  if (chunks.length === 0) return null
-
-  const raw = Buffer.concat(chunks).toString('utf8').trim()
-  if (raw.length === 0) return null
-
-  return JSON.parse(raw) as unknown
+async function proxyTranscribe(
+  body: Buffer,
+  contentType: string,
+  authToken: string,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(
+      'https://chatgpt.com/backend-api/transcribe',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': body.length,
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('error', reject)
+      },
+    )
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
 }
 
 class AppServerProcess {
@@ -399,6 +430,17 @@ class AppServerProcess {
     return Array.from(this.pendingServerRequests.values())
   }
 
+  async getAuthToken(): Promise<string | null> {
+    await this.ensureInitialized()
+    const result = (await this.call('getAuthStatus', { includeToken: true, refreshToken: false })) as
+      | { authMethod?: string; authToken?: string }
+      | null
+    if (result?.authMethod === 'chatgpt' && result.authToken) {
+      return result.authToken
+    }
+    return null
+  }
+
   dispose(): void {
     if (!this.process) return
 
@@ -596,6 +638,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const result = await appServer.rpc(body.method, body.params ?? null)
         setJson(res, 200, { result })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/transcribe') {
+        const authToken = await appServer.getAuthToken()
+        if (!authToken) {
+          setJson(res, 401, { error: 'No auth token available for transcription' })
+          return
+        }
+
+        const rawBody = await readRawBody(req)
+        const incomingCt = req.headers['content-type'] ?? 'application/octet-stream'
+        const upstream = await proxyTranscribe(rawBody, incomingCt, authToken)
+
+        res.statusCode = upstream.status
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(upstream.body)
         return
       }
 

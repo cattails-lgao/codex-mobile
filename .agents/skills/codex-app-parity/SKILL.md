@@ -23,6 +23,68 @@ For every **new feature** and every **behavior/UI change**, treat the installed 
 
 Do not implement first and compare later. Compare first, then implement.
 
+## How to Search for Features in Codex.app
+
+### Extraction
+
+Extract the app bundle once (reuse if already extracted):
+
+```bash
+mkdir -p /tmp/codex-app-extracted
+npx asar extract "/Applications/Codex.app/Contents/Resources/app.asar" /tmp/codex-app-extracted
+```
+
+### Key Directories
+
+| Directory | Contents |
+|-----------|----------|
+| `/tmp/codex-app-extracted/webview/assets/` | Main frontend bundle (`index-*.js`) + locale files |
+| `/tmp/codex-app-extracted/.vite/build/` | Electron main process (`main.js`, `main-*.js`, `preload.js`, `worker.js`) |
+| `/tmp/codex-app-extracted/package.json` | App metadata, version, entry point |
+
+### Searching the Minified Bundle
+
+The main UI bundle is a single large minified JS file at `webview/assets/index-*.js`. Use Python to search since `grep -o` with large repeat counts fails on macOS:
+
+```python
+python3 -c "
+with open('/tmp/codex-app-extracted/webview/assets/index-<hash>.js', 'r') as f:
+    content = f.read()
+idx = content.find('YOUR_SEARCH_TERM')
+if idx >= 0:
+    print(content[max(0, idx-200):idx+500])
+"
+```
+
+### What to Search For
+
+1. **i18n keys**: Search locale files (`webview/assets/zh-TW-*.js`, `webview/assets/en-*.js`, etc.) for human-readable labels. Keys follow the pattern `component.feature.property` (e.g., `composer.dictation.tooltip`).
+
+2. **Component functions**: Minified React components follow patterns like `function X4n({prop1:t,prop2:e,...})`. Search for the feature's i18n key to find the component that renders it.
+
+3. **API calls and endpoints**: Search main process files (`.vite/build/main-*.js`) for endpoint URLs, auth handling, and IPC channels. Key patterns:
+   - `prodApiBaseUrl` → production API base (e.g., `https://chatgpt.com/backend-api`)
+   - `devApiBaseUrl` → dev API base (e.g., `http://localhost:8000/api`)
+   - `fetch-request` / `fetch-response` → IPC-proxied HTTP calls from renderer to main process
+
+4. **Icon names**: Search for icon imports like `audiowave-dark.svg`, `book-open-dark.svg`. Icon mapping is in the main bundle around the `Hwn=Object.assign({` pattern.
+
+5. **Keyboard shortcuts**: Search for `CmdOrCtrl+`, `Cmd+`, `keydown`, `keyCode`, or specific key names.
+
+### Search Strategy
+
+1. Start with **i18n locale files** — they have human-readable labels that identify features.
+2. Use the i18n key to find the **component** in the main bundle.
+3. Trace the component to find **hooks/composables**, **API calls**, and **event handlers**.
+4. Check the **main process** bundle for any server-side proxying or Electron IPC handling.
+
+### Architecture Notes
+
+- **Renderer → Main Process**: The renderer uses a `Uu` HTTP client class that sends `fetch-request` IPC messages to the main process. The main process class `tle` handles these, adds auth tokens, and uses `electron.net.fetch` to make actual HTTP calls.
+- **Auth**: Auth tokens come from the app-server's `getAuthStatus` RPC method (ChatGPT backend auth).
+- **App-server**: A `codex app-server` child process communicating via JSON-RPC over stdin/stdout. Our bridge middleware proxies RPC calls to it.
+- **Config constants**: `R7` = prodApiBaseUrl (`https://chatgpt.com/backend-api`), `I7` = devApiBaseUrl (`http://localhost:8000/api`), `C7` = originator (`Codex Desktop`).
+
 ## Required Workflow (Feature Work)
 
 1. Identify target behavior:
@@ -79,6 +141,15 @@ If Codex.app cannot be inspected (missing app, extraction/search failure) or has
 - After completing a task that changes behavior or UI, always run a Playwright verification in **headless** mode.
 - Always capture a screenshot of the changed result and display that screenshot in chat when reporting completion.
 
+## Self-Improvement Protocol
+
+After each feature implementation session that uses this skill:
+
+1. **Record new findings**: Append a dated `## Findings:` section documenting any newly discovered Codex.app internals (state keys, API endpoints, component patterns, auth flows, etc.).
+2. **Update search instructions**: If new search techniques were used (e.g., a better way to extract minified code, new file locations), update the "How to Search for Features" section.
+3. **Update architecture notes**: If new IPC channels, API endpoints, or data flows were discovered, add them to the Architecture Notes.
+4. **Keep findings actionable**: Each finding should include enough detail that a future session can reuse it without re-discovering.
+
 ## Findings: Workspace Root Ordering (2026-02-25)
 
 - Codex.app persists workspace root ordering/labels in global state JSON keys:
@@ -93,3 +164,15 @@ If Codex.app cannot be inspected (missing app, extraction/search failure) or has
 - Validation requirement for reorder changes:
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
+
+## Findings: Dictation / Microphone Feature (2026-02-26)
+
+- **i18n keys**: `composer.dictation.*` — tooltip is "Hold to dictate", aria is "Dictate".
+- **Component**: `M4n` React hook handles recording state, audio capture, and transcription.
+- **Audio pipeline**: `navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })` → `MediaRecorder` → chunks → `Blob` → multipart POST.
+- **Transcription endpoint**: The renderer sends audio to `/transcribe` via the IPC fetch proxy. The main process (`tle` class) prepends the `prodApiBaseUrl` (`https://chatgpt.com/backend-api`) and attaches ChatGPT auth bearer tokens. Full URL: `https://chatgpt.com/backend-api/transcribe`.
+- **Request format**: Multipart form-data with boundary `----codex-transcribe-<uuid>`, fields: `file` (audio blob) and optional `language`. Body is base64-encoded and sent with `X-Codex-Base64: 1` header.
+- **Response**: `{ text: "transcribed text" }`.
+- **Interaction model**: Press-and-hold to record → release to stop and transcribe → text inserted into composer. Has "insert" and "send" modes.
+- **Icon**: `audiowave-dark.svg` / `audiowave-light.svg` (custom SVG, not from icon library).
+- **Web app implementation**: Our bridge proxies `/codex-api/transcribe` to the ChatGPT backend using auth tokens from the app-server `getAuthStatus` RPC. Frontend uses `useDictation` composable with `MediaRecorder` API.
