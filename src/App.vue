@@ -331,12 +331,13 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
-function onSubmitThreadMessage(text: string): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[] }): void {
+  const text = payload.text
   if (isHomeRoute.value) {
-    void submitFirstMessageForNewThread(text)
+    void submitFirstMessageForNewThread(text, payload.imageUrls)
     return
   }
-  void sendMessageToSelectedThread(text)
+  void sendMessageToSelectedThread(text, payload.imageUrls)
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
@@ -461,9 +462,9 @@ watch(
   { immediate: true },
 )
 
-async function submitFirstMessageForNewThread(text: string): Promise<void> {
+async function submitFirstMessageForNewThread(text: string, imageUrls: string[] = []): Promise<void> {
   try {
-    const threadId = await sendMessageToNewThread(text, newThreadCwd.value)
+    const threadId = await sendMessageToNewThread(text, newThreadCwd.value, imageUrls)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
   } catch {

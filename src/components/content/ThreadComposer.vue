@@ -1,16 +1,62 @@
 <template>
   <form class="thread-composer" @submit.prevent="onSubmit">
     <div class="thread-composer-shell">
+      <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
+        <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
+          <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
+          <button
+            class="thread-composer-attachment-remove"
+            type="button"
+            :aria-label="`Remove ${image.name || 'image'}`"
+            :disabled="isInteractionDisabled"
+            @click="removeImage(image.id)"
+          >
+            x
+          </button>
+        </div>
+      </div>
+
       <input
         v-model="draft"
         class="thread-composer-input"
         type="text"
         :placeholder="placeholderText"
-        :disabled="disabled || !activeThreadId || isTurnInProgress"
+        :disabled="isInteractionDisabled"
         @keydown.enter.exact.prevent="onSubmit"
       />
 
       <div class="thread-composer-controls">
+        <div ref="attachMenuRootRef" class="thread-composer-attach">
+          <button
+            class="thread-composer-attach-trigger"
+            type="button"
+            aria-label="Add photos & files"
+            :disabled="isInteractionDisabled"
+            @click="toggleAttachMenu"
+          >
+            +
+          </button>
+
+          <div v-if="isAttachMenuOpen" class="thread-composer-attach-menu">
+            <button
+              class="thread-composer-attach-item"
+              type="button"
+              :disabled="isInteractionDisabled"
+              @click="triggerPhotoLibrary"
+            >
+              Add photos & files
+            </button>
+            <button
+              class="thread-composer-attach-item"
+              type="button"
+              :disabled="isInteractionDisabled"
+              @click="triggerCameraCapture"
+            >
+              Take photo
+            </button>
+          </div>
+        </div>
+
         <ComposerDropdown
           class="thread-composer-control"
           :model-value="selectedModel"
@@ -52,11 +98,29 @@
         </button>
       </div>
     </div>
+    <input
+      ref="photoLibraryInputRef"
+      class="thread-composer-hidden-input"
+      type="file"
+      accept="image/*"
+      multiple
+      :disabled="isInteractionDisabled"
+      @change="onPhotoLibraryChange"
+    />
+    <input
+      ref="cameraCaptureInputRef"
+      class="thread-composer-hidden-input"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      :disabled="isInteractionDisabled"
+      @change="onCameraCaptureChange"
+    />
   </form>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReasoningEffort } from '../../types/codex'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
@@ -73,13 +137,24 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [text: string]
+  submit: [payload: { text: string; imageUrls: string[] }]
   interrupt: []
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
 }>()
 
+type SelectedImage = {
+  id: string
+  name: string
+  url: string
+}
+
 const draft = ref('')
+const selectedImages = ref<SelectedImage[]>([])
+const attachMenuRootRef = ref<HTMLElement | null>(null)
+const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
+const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
+const isAttachMenuOpen = ref(false)
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
   { value: 'minimal', label: 'Minimal' },
@@ -96,8 +171,9 @@ const canSubmit = computed(() => {
   if (props.disabled) return false
   if (!props.activeThreadId) return false
   if (props.isTurnInProgress) return false
-  return draft.value.trim().length > 0
+  return draft.value.trim().length > 0 || selectedImages.value.length > 0
 })
+const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || !!props.isTurnInProgress)
 
 const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message...' : 'Select a thread to send a message',
@@ -105,9 +181,14 @@ const placeholderText = computed(() =>
 
 function onSubmit(): void {
   const text = draft.value.trim()
-  if (!text || !canSubmit.value) return
-  emit('submit', text)
+  if (!canSubmit.value) return
+  emit('submit', {
+    text,
+    imageUrls: selectedImages.value.map((image) => image.url),
+  })
   draft.value = ''
+  selectedImages.value = []
+  isAttachMenuOpen.value = false
 }
 
 function onInterrupt(): void {
@@ -122,10 +203,81 @@ function onReasoningEffortSelect(value: string): void {
   emit('update:selected-reasoning-effort', value as ReasoningEffort)
 }
 
+function toggleAttachMenu(): void {
+  if (isInteractionDisabled.value) return
+  isAttachMenuOpen.value = !isAttachMenuOpen.value
+}
+
+function triggerPhotoLibrary(): void {
+  photoLibraryInputRef.value?.click()
+}
+
+function triggerCameraCapture(): void {
+  cameraCaptureInputRef.value?.click()
+}
+
+function removeImage(id: string): void {
+  selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
+}
+
+function addFiles(files: FileList | null): void {
+  if (!files || files.length === 0) return
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith('image/')) continue
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return
+      selectedImages.value.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: file.name,
+        url: reader.result,
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+function clearInputValue(inputRef: HTMLInputElement | null): void {
+  if (inputRef) inputRef.value = ''
+}
+
+function onPhotoLibraryChange(event: Event): void {
+  const input = event.target as HTMLInputElement | null
+  addFiles(input?.files ?? null)
+  clearInputValue(input)
+  isAttachMenuOpen.value = false
+}
+
+function onCameraCaptureChange(event: Event): void {
+  const input = event.target as HTMLInputElement | null
+  addFiles(input?.files ?? null)
+  clearInputValue(input)
+  isAttachMenuOpen.value = false
+}
+
+function onDocumentClick(event: MouseEvent): void {
+  if (!isAttachMenuOpen.value) return
+  const root = attachMenuRootRef.value
+  if (!root) return
+  const target = event.target as Node | null
+  if (!target || root.contains(target)) return
+  isAttachMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+})
+
 watch(
   () => props.activeThreadId,
   () => {
     draft.value = ''
+    selectedImages.value = []
+    isAttachMenuOpen.value = false
   },
 )
 </script>
@@ -138,7 +290,23 @@ watch(
 }
 
 .thread-composer-shell {
-  @apply rounded-2xl border border-zinc-300 bg-white p-3 shadow-sm;
+  @apply relative rounded-2xl border border-zinc-300 bg-white p-3 shadow-sm;
+}
+
+.thread-composer-attachments {
+  @apply mb-2 flex flex-wrap gap-2;
+}
+
+.thread-composer-attachment {
+  @apply relative h-14 w-14 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50;
+}
+
+.thread-composer-attachment-image {
+  @apply h-full w-full object-cover;
+}
+
+.thread-composer-attachment-remove {
+  @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-white;
 }
 
 .thread-composer-input {
@@ -155,6 +323,22 @@ watch(
 
 .thread-composer-controls {
   @apply mt-3 flex items-center gap-4;
+}
+
+.thread-composer-attach {
+  @apply relative shrink-0;
+}
+
+.thread-composer-attach-trigger {
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-300 bg-white text-xl leading-none text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400;
+}
+
+.thread-composer-attach-menu {
+  @apply absolute bottom-11 left-0 z-20 min-w-44 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+}
+
+.thread-composer-attach-item {
+  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
 }
 
 .thread-composer-control {
@@ -175,5 +359,9 @@ watch(
 
 .thread-composer-stop-icon {
   @apply h-5 w-5;
+}
+
+.thread-composer-hidden-input {
+  @apply hidden;
 }
 </style>
