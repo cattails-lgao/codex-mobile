@@ -1698,10 +1698,10 @@ export function useDesktopState() {
     }
   }
 
-  async function sendMessageToSelectedThread(text: string): Promise<void> {
+  async function sendMessageToSelectedThread(text: string, imageUrls: string[] = []): Promise<void> {
     const threadId = selectedThreadId.value
     const nextText = text.trim()
-    if (!threadId || !nextText) return
+    if (!threadId || (!nextText && imageUrls.length === 0)) return
 
     isSendingMessage.value = true
     error.value = ''
@@ -1715,7 +1715,7 @@ export function useDesktopState() {
     setThreadInProgress(threadId, true)
 
     try {
-      await startTurnForThread(threadId, nextText)
+      await startTurnForThread(threadId, nextText, imageUrls)
     } catch (unknownError) {
       shouldAutoScrollOnNextAgentEvent = false
       setThreadInProgress(threadId, false)
@@ -1729,11 +1729,11 @@ export function useDesktopState() {
     }
   }
 
-  async function sendMessageToNewThread(text: string, cwd: string): Promise<string> {
+  async function sendMessageToNewThread(text: string, cwd: string, imageUrls: string[] = []): Promise<string> {
     const nextText = text.trim()
     const targetCwd = cwd.trim()
     const selectedModel = selectedModelId.value.trim()
-    if (!nextText) return ''
+    if (!nextText && imageUrls.length === 0) return ''
 
     isSendingMessage.value = true
     error.value = ''
@@ -1743,7 +1743,7 @@ export function useDesktopState() {
       threadId = await startThread(targetCwd || undefined, selectedModel || undefined)
       if (!threadId) return ''
 
-      insertOptimisticThread(threadId, targetCwd, nextText)
+      insertOptimisticThread(threadId, targetCwd, nextText || '[Image]')
       resumedThreadById.value = {
         ...resumedThreadById.value,
         [threadId]: true,
@@ -1757,7 +1757,7 @@ export function useDesktopState() {
       )
       setTurnErrorForThread(threadId, null)
       setThreadInProgress(threadId, true)
-      void startTurnForThread(threadId, nextText)
+      void startTurnForThread(threadId, nextText, imageUrls)
         .catch((unknownError) => {
           shouldAutoScrollOnNextAgentEvent = false
           setThreadInProgress(threadId, false)
@@ -1786,7 +1786,7 @@ export function useDesktopState() {
     }
   }
 
-  async function startTurnForThread(threadId: string, nextText: string): Promise<void> {
+  async function startTurnForThread(threadId: string, nextText: string, imageUrls: string[] = []): Promise<void> {
     const modelId = selectedModelId.value.trim()
     const reasoningEffort = selectedReasoningEffort.value
 
@@ -1798,6 +1798,7 @@ export function useDesktopState() {
       await startThreadTurn(
         threadId,
         nextText,
+        imageUrls,
         modelId || undefined,
         reasoningEffort || undefined,
       )

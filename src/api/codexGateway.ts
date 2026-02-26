@@ -150,13 +150,24 @@ export async function startThread(cwd?: string, model?: string): Promise<string>
 export async function startThreadTurn(
   threadId: string,
   text: string,
+  imageUrls: string[] = [],
   model?: string,
   effort?: ReasoningEffort,
 ): Promise<void> {
   try {
+    const input: Array<Record<string, unknown>> = [{ type: 'text', text }]
+    for (const imageUrl of imageUrls) {
+      const normalizedUrl = imageUrl.trim()
+      if (!normalizedUrl) continue
+      input.push({
+        type: 'image',
+        url: normalizedUrl,
+        image_url: normalizedUrl,
+      })
+    }
     const params: Record<string, unknown> = {
       threadId,
-      input: [{ type: 'text', text }],
+      input,
     }
     if (typeof model === 'string' && model.length > 0) {
       params.model = model
