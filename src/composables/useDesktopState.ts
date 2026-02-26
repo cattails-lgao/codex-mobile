@@ -4,6 +4,7 @@ import {
   getAvailableModelIds,
   getCurrentModelConfig,
   getPendingServerRequests,
+  getSkillsList,
   interruptThreadTurn,
   replyToServerRequest,
   getThreadGroups,
@@ -14,6 +15,7 @@ import {
   subscribeCodexNotifications,
   startThreadTurn,
   type RpcNotification,
+  type SkillInfo,
 } from '../api/codexGateway'
 import type {
   ReasoningEffort,
@@ -578,6 +580,8 @@ export function useDesktopState() {
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
+
+  const installedSkills = ref<SkillInfo[]>([])
 
   const isLoadingThreads = ref(false)
   const isLoadingMessages = ref(false)
@@ -1661,6 +1665,15 @@ export function useDesktopState() {
     }
   }
 
+  async function refreshSkills(): Promise<void> {
+    try {
+      const cwds = sourceGroups.value.flatMap((g) => g.threads.map((t) => t.cwd)).filter(Boolean)
+      installedSkills.value = await getSkillsList(cwds.length > 0 ? [...new Set(cwds)] : undefined)
+    } catch {
+      // keep previous skills on failure
+    }
+  }
+
   async function refreshAll() {
     error.value = ''
 
@@ -1668,6 +1681,7 @@ export function useDesktopState() {
       await Promise.all([
         loadThreads(),
         refreshModelPreferences(),
+        refreshSkills(),
       ])
       await loadMessages(selectedThreadId.value)
     } catch (unknownError) {
@@ -1698,7 +1712,11 @@ export function useDesktopState() {
     }
   }
 
-  async function sendMessageToSelectedThread(text: string, imageUrls: string[] = []): Promise<void> {
+  async function sendMessageToSelectedThread(
+    text: string,
+    imageUrls: string[] = [],
+    skills: Array<{ name: string; path: string }> = [],
+  ): Promise<void> {
     const threadId = selectedThreadId.value
     const nextText = text.trim()
     if (!threadId || (!nextText && imageUrls.length === 0)) return
@@ -1715,7 +1733,7 @@ export function useDesktopState() {
     setThreadInProgress(threadId, true)
 
     try {
-      await startTurnForThread(threadId, nextText, imageUrls)
+      await startTurnForThread(threadId, nextText, imageUrls, skills)
     } catch (unknownError) {
       shouldAutoScrollOnNextAgentEvent = false
       setThreadInProgress(threadId, false)
@@ -1729,7 +1747,12 @@ export function useDesktopState() {
     }
   }
 
-  async function sendMessageToNewThread(text: string, cwd: string, imageUrls: string[] = []): Promise<string> {
+  async function sendMessageToNewThread(
+    text: string,
+    cwd: string,
+    imageUrls: string[] = [],
+    skills: Array<{ name: string; path: string }> = [],
+  ): Promise<string> {
     const nextText = text.trim()
     const targetCwd = cwd.trim()
     const selectedModel = selectedModelId.value.trim()
@@ -1757,7 +1780,7 @@ export function useDesktopState() {
       )
       setTurnErrorForThread(threadId, null)
       setThreadInProgress(threadId, true)
-      void startTurnForThread(threadId, nextText, imageUrls)
+      void startTurnForThread(threadId, nextText, imageUrls, skills)
         .catch((unknownError) => {
           shouldAutoScrollOnNextAgentEvent = false
           setThreadInProgress(threadId, false)
@@ -1786,7 +1809,12 @@ export function useDesktopState() {
     }
   }
 
-  async function startTurnForThread(threadId: string, nextText: string, imageUrls: string[] = []): Promise<void> {
+  async function startTurnForThread(
+    threadId: string,
+    nextText: string,
+    imageUrls: string[] = [],
+    skills: Array<{ name: string; path: string }> = [],
+  ): Promise<void> {
     const modelId = selectedModelId.value.trim()
     const reasoningEffort = selectedReasoningEffort.value
 
@@ -1801,6 +1829,7 @@ export function useDesktopState() {
         imageUrls,
         modelId || undefined,
         reasoningEffort || undefined,
+        skills.length > 0 ? skills : undefined,
       )
 
       resumedThreadById.value = {
@@ -2106,6 +2135,7 @@ export function useDesktopState() {
     availableModelIds,
     selectedModelId,
     selectedReasoningEffort,
+    installedSkills,
     messages,
     isLoadingThreads,
     isLoadingMessages,

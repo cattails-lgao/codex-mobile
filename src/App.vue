@@ -86,7 +86,8 @@
 
               <ThreadComposer :active-thread-id="composerThreadContextId" :disabled="isSendingMessage"
                 :models="availableModelIds" :selected-model="selectedModelId"
-                :selected-reasoning-effort="selectedReasoningEffort" :is-turn-in-progress="false"
+                :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
+                :is-turn-in-progress="false"
                 :is-interrupting-turn="false" @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
@@ -105,6 +106,7 @@
               <ThreadComposer :active-thread-id="composerThreadContextId"
                 :disabled="isSendingMessage || isLoadingMessages" :models="availableModelIds"
                 :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
+                :skills="installedSkills"
                 :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                 @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                 @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
@@ -144,6 +146,7 @@ const {
   availableModelIds,
   selectedModelId,
   selectedReasoningEffort,
+  installedSkills,
   messages,
   isLoadingThreads,
   isLoadingMessages,
@@ -331,13 +334,13 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[] }): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; skills: Array<{ name: string; path: string }> }): void {
   const text = payload.text
   if (isHomeRoute.value) {
-    void submitFirstMessageForNewThread(text, payload.imageUrls)
+    void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills)
     return
   }
-  void sendMessageToSelectedThread(text, payload.imageUrls)
+  void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills)
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
@@ -462,9 +465,13 @@ watch(
   { immediate: true },
 )
 
-async function submitFirstMessageForNewThread(text: string, imageUrls: string[] = []): Promise<void> {
+async function submitFirstMessageForNewThread(
+  text: string,
+  imageUrls: string[] = [],
+  skills: Array<{ name: string; path: string }> = [],
+): Promise<void> {
   try {
-    const threadId = await sendMessageToNewThread(text, newThreadCwd.value, imageUrls)
+    const threadId = await sendMessageToNewThread(text, newThreadCwd.value, imageUrls, skills)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
   } catch {
