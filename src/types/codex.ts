@@ -71,6 +71,14 @@ export type UiThread = {
   inProgress: boolean
 }
 
+export type CommandExecutionData = {
+  command: string
+  cwd: string | null
+  status: 'inProgress' | 'completed' | 'failed' | 'declined' | 'interrupted'
+  aggregatedOutput: string
+  exitCode: number | null
+}
+
 export type UiMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -79,6 +87,7 @@ export type UiMessage = {
   messageType?: string
   rawPayload?: string
   isUnhandled?: boolean
+  commandExecution?: CommandExecutionData
 }
 
 export type UiServerRequest = {

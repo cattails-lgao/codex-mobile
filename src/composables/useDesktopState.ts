@@ -18,6 +18,7 @@ import {
   type SkillInfo,
 } from '../api/codexGateway'
 import type {
+  CommandExecutionData,
   ReasoningEffort,
   ThreadScrollState,
   UiLiveOverlay,
@@ -250,6 +251,12 @@ function reorderStringArray(items: string[], fromIndex: number, toIndex: number)
   return next
 }
 
+function areCommandExecutionsEqual(first?: CommandExecutionData, second?: CommandExecutionData): boolean {
+  if (!first && !second) return true
+  if (!first || !second) return false
+  return first.status === second.status && first.aggregatedOutput === second.aggregatedOutput && first.exitCode === second.exitCode
+}
+
 function areMessageFieldsEqual(first: UiMessage, second: UiMessage): boolean {
   return (
     first.id === second.id &&
@@ -258,7 +265,8 @@ function areMessageFieldsEqual(first: UiMessage, second: UiMessage): boolean {
     areStringArraysEqual(first.images, second.images) &&
     first.messageType === second.messageType &&
     first.rawPayload === second.rawPayload &&
-    first.isUnhandled === second.isUnhandled
+    first.isUnhandled === second.isUnhandled &&
+    areCommandExecutionsEqual(first.commandExecution, second.commandExecution)
   )
 }
 
@@ -563,6 +571,7 @@ export function useDesktopState() {
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
+  const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
@@ -643,7 +652,8 @@ export function useDesktopState() {
 
     const persisted = persistedMessagesByThreadId.value[threadId] ?? []
     const liveAgent = liveAgentMessagesByThreadId.value[threadId] ?? []
-    const combined = persisted === liveAgent ? persisted : [...persisted, ...liveAgent]
+    const liveCommands = liveCommandsByThreadId.value[threadId] ?? []
+    const combined = [...persisted, ...liveCommands, ...liveAgent]
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -784,6 +794,7 @@ export function useDesktopState() {
     persistedMessagesByThreadId.value = pruneThreadStateMap(persistedMessagesByThreadId.value, activeThreadIds)
     liveAgentMessagesByThreadId.value = pruneThreadStateMap(liveAgentMessagesByThreadId.value, activeThreadIds)
     liveReasoningTextByThreadId.value = pruneThreadStateMap(liveReasoningTextByThreadId.value, activeThreadIds)
+    liveCommandsByThreadId.value = pruneThreadStateMap(liveCommandsByThreadId.value, activeThreadIds)
     turnSummaryByThreadId.value = pruneThreadStateMap(turnSummaryByThreadId.value, activeThreadIds)
     turnActivityByThreadId.value = pruneThreadStateMap(turnActivityByThreadId.value, activeThreadIds)
     turnErrorByThreadId.value = pruneThreadStateMap(turnErrorByThreadId.value, activeThreadIds)
@@ -1156,6 +1167,26 @@ export function useDesktopState() {
           },
         }
       }
+      if (itemType === 'commandexecution') {
+        const cmd = readString(item?.command)
+        return {
+          threadId,
+          activity: {
+            label: 'Running command',
+            details: cmd ? [cmd] : [],
+          },
+        }
+      }
+    }
+
+    if (notification.method === 'item/commandExecution/outputDelta') {
+      return {
+        threadId,
+        activity: {
+          label: 'Running command',
+          details: [],
+        },
+      }
     }
 
     if (
@@ -1358,6 +1389,77 @@ export function useDesktopState() {
     return null
   }
 
+  function readCommandExecutionStarted(notification: RpcNotification): UiMessage | null {
+    if (notification.method !== 'item/started') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || item.type !== 'commandExecution') return null
+    const id = readString(item.id)
+    const command = readString(item.command)
+    if (!id) return null
+    const cwd = typeof item.cwd === 'string' ? item.cwd : null
+    return {
+      id,
+      role: 'system',
+      text: command,
+      messageType: 'commandExecution',
+      commandExecution: { command, cwd, status: 'inProgress', aggregatedOutput: '', exitCode: null },
+    }
+  }
+
+  function readCommandOutputDelta(notification: RpcNotification): { itemId: string; delta: string } | null {
+    if (notification.method !== 'item/commandExecution/outputDelta') return null
+    const params = asRecord(notification.params)
+    if (!params) return null
+    const itemId = readString(params.itemId)
+    const delta = readString(params.delta)
+    if (!itemId || !delta) return null
+    return { itemId, delta }
+  }
+
+  function readCommandExecutionCompleted(notification: RpcNotification): UiMessage | null {
+    if (notification.method !== 'item/completed') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || item.type !== 'commandExecution') return null
+    const id = readString(item.id)
+    const command = readString(item.command)
+    if (!id) return null
+    const cwd = typeof item.cwd === 'string' ? item.cwd : null
+    const statusRaw = readString(item.status)
+    const status: CommandExecutionData['status'] =
+      statusRaw === 'failed' ? 'failed' : statusRaw === 'declined' ? 'declined' : statusRaw === 'interrupted' ? 'interrupted' : 'completed'
+    const aggregatedOutput = typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput : ''
+    const exitCode = typeof item.exitCode === 'number' ? item.exitCode : null
+    return {
+      id,
+      role: 'system',
+      text: command,
+      messageType: 'commandExecution',
+      commandExecution: { command, cwd, status, aggregatedOutput, exitCode },
+    }
+  }
+
+  function upsertLiveCommand(threadId: string, msg: UiMessage): void {
+    const previous = liveCommandsByThreadId.value[threadId] ?? []
+    const next = upsertMessage(previous, msg)
+    if (next === previous) return
+    liveCommandsByThreadId.value = { ...liveCommandsByThreadId.value, [threadId]: next }
+  }
+
+  function removeLiveCommandsPersistedIn(threadId: string, persistedMessages: UiMessage[]): void {
+    const current = liveCommandsByThreadId.value[threadId]
+    if (!current || current.length === 0) return
+    const persistedIds = new Set(persistedMessages.map((m) => m.id))
+    const next = current.filter((m) => !persistedIds.has(m.id))
+    if (next.length === current.length) return
+    if (next.length === 0) {
+      liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+    } else {
+      liveCommandsByThreadId.value = { ...liveCommandsByThreadId.value, [threadId]: next }
+    }
+  }
+
   function isAgentContentEvent(notification: RpcNotification): boolean {
     if (notification.method === 'item/agentMessage/delta') {
       return true
@@ -1489,6 +1591,28 @@ export function useDesktopState() {
       }
     }
 
+    const commandStarted = readCommandExecutionStarted(notification)
+    if (commandStarted) {
+      upsertLiveCommand(notificationThreadId, commandStarted)
+      setTurnActivityForThread(notificationThreadId, { label: 'Running command', details: [commandStarted.commandExecution?.command ?? ''] })
+    }
+
+    const commandDelta = readCommandOutputDelta(notification)
+    if (commandDelta) {
+      const current = (liveCommandsByThreadId.value[notificationThreadId] ?? []).find((m) => m.id === commandDelta.itemId)
+      if (current?.commandExecution) {
+        upsertLiveCommand(notificationThreadId, {
+          ...current,
+          commandExecution: { ...current.commandExecution, aggregatedOutput: `${current.commandExecution.aggregatedOutput}${commandDelta.delta}` },
+        })
+      }
+    }
+
+    const commandCompleted = readCommandExecutionCompleted(notification)
+    if (commandCompleted) {
+      upsertLiveCommand(notificationThreadId, commandCompleted)
+    }
+
     if (isAgentContentEvent(notification)) {
       if (shouldAutoScrollOnNextAgentEvent && selectedThreadId.value) {
         setThreadScrollState(selectedThreadId.value, {
@@ -1505,6 +1629,9 @@ export function useDesktopState() {
       activeReasoningItemId = ''
       shouldAutoScrollOnNextAgentEvent = false
       clearLiveReasoningForThread(notificationThreadId)
+      if (liveCommandsByThreadId.value[notificationThreadId]) {
+        liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, notificationThreadId)
+      }
       const completedThreadId = extractThreadIdFromNotification(notification)
       if (completedThreadId) {
         setThreadInProgress(completedThreadId, false)
@@ -1644,6 +1771,7 @@ export function useDesktopState() {
       const previousLiveAgent = liveAgentMessagesByThreadId.value[threadId] ?? []
       const nextLiveAgent = removeRedundantLiveAgentMessages(previousLiveAgent, nextMessages)
       setLiveAgentMessagesForThread(threadId, nextLiveAgent)
+      removeLiveCommandsPersistedIn(threadId, nextMessages)
 
       loadedMessagesByThreadId.value = {
         ...loadedMessagesByThreadId.value,
@@ -2118,6 +2246,7 @@ export function useDesktopState() {
     persistedMessagesByThreadId.value = {}
     liveAgentMessagesByThreadId.value = {}
     liveReasoningTextByThreadId.value = {}
+    liveCommandsByThreadId.value = {}
     turnActivityByThreadId.value = {}
     turnSummaryByThreadId.value = {}
     turnErrorByThreadId.value = {}

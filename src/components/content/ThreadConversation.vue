@@ -90,7 +90,25 @@
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
-        <div class="message-row" :data-role="message.role" :data-message-type="message.messageType || ''">
+        <div v-if="isCommandMessage(message)" class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
+            <button
+              type="button"
+              class="cmd-row"
+              :class="[commandStatusClass(message), { 'cmd-expanded': isCommandExpanded(message) }]"
+              @click="toggleCommandExpand(message)"
+            >
+              <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
+              <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
+              <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
+            </button>
+            <div v-if="isCommandExpanded(message) && message.commandExecution" class="cmd-output-wrap">
+              <pre class="cmd-output">{{ message.commandExecution.aggregatedOutput || '(no output)' }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="message-row" :data-role="message.role" :data-message-type="message.messageType || ''">
           <div class="message-stack" :data-role="message.role">
             <article class="message-body" :data-role="message.role">
               <ul
@@ -159,6 +177,45 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
+
+const expandedCommandIds = ref<Set<string>>(new Set())
+
+function isCommandMessage(message: UiMessage): boolean {
+  return message.messageType === 'commandExecution' && !!message.commandExecution
+}
+
+function isCommandExpanded(message: UiMessage): boolean {
+  if (message.commandExecution?.status === 'inProgress') return true
+  return expandedCommandIds.value.has(message.id)
+}
+
+function toggleCommandExpand(message: UiMessage): void {
+  if (message.commandExecution?.status === 'inProgress') return
+  const next = new Set(expandedCommandIds.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedCommandIds.value = next
+}
+
+function commandStatusLabel(message: UiMessage): string {
+  const ce = message.commandExecution
+  if (!ce) return ''
+  switch (ce.status) {
+    case 'inProgress': return '⟳ Running'
+    case 'completed': return ce.exitCode === 0 ? '✓ Completed' : `✗ Exit ${ce.exitCode ?? '?'}`
+    case 'failed': return '✗ Failed'
+    case 'declined': return '⊘ Declined'
+    case 'interrupted': return '⊘ Interrupted'
+    default: return ''
+  }
+}
+
+function commandStatusClass(message: UiMessage): string {
+  const s = message.commandExecution?.status
+  if (s === 'inProgress') return 'cmd-status-running'
+  if (s === 'completed' && message.commandExecution?.exitCode === 0) return 'cmd-status-ok'
+  return 'cmd-status-error'
+}
 
 const props = defineProps<{
   messages: UiMessage[]
@@ -856,5 +913,49 @@ onBeforeUnmount(() => {
 
 .icon-svg {
   @apply w-5 h-5;
+}
+
+.cmd-row {
+  @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+}
+
+.cmd-row.cmd-expanded {
+  @apply rounded-b-none border-b-0;
+}
+
+.cmd-chevron {
+  @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
+}
+
+.cmd-chevron-open {
+  transform: rotate(90deg);
+}
+
+.cmd-label {
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
+}
+
+.cmd-status {
+  @apply text-[11px] font-medium flex-shrink-0;
+}
+
+.cmd-status-running .cmd-status {
+  @apply text-amber-600;
+}
+
+.cmd-status-ok .cmd-status {
+  @apply text-emerald-600;
+}
+
+.cmd-status-error .cmd-status {
+  @apply text-rose-600;
+}
+
+.cmd-output-wrap {
+  @apply border border-t-0 border-zinc-200 rounded-b-lg bg-zinc-900 overflow-hidden;
+}
+
+.cmd-output {
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
 }
 </style>
