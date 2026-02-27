@@ -153,6 +153,7 @@ export async function startThreadTurn(
   imageUrls: string[] = [],
   model?: string,
   effort?: ReasoningEffort,
+  skills?: Array<{ name: string; path: string }>,
 ): Promise<void> {
   try {
     const input: Array<Record<string, unknown>> = [{ type: 'text', text }]
@@ -164,6 +165,11 @@ export async function startThreadTurn(
         url: normalizedUrl,
         image_url: normalizedUrl,
       })
+    }
+    if (skills) {
+      for (const skill of skills) {
+        input.push({ type: 'skill', name: skill.name, path: skill.path })
+      }
     }
     const params: Record<string, unknown> = {
       threadId,
@@ -264,4 +270,49 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   return normalizeWorkspaceRootsState(envelope.data)
 }
 
-// `thread/loaded/list` returns sessions loaded in memory, not currently running turns.
+export type SkillInfo = {
+  name: string
+  description: string
+  path: string
+  scope: string
+  enabled: boolean
+}
+
+type SkillsListResponseEntry = {
+  cwd: string
+  skills: Array<{
+    name: string
+    description: string
+    shortDescription?: string
+    path: string
+    scope: string
+    enabled: boolean
+  }>
+  errors: unknown[]
+}
+
+export async function getSkillsList(cwds?: string[]): Promise<SkillInfo[]> {
+  try {
+    const params: Record<string, unknown> = {}
+    if (cwds && cwds.length > 0) params.cwds = cwds
+    const payload = await callRpc<{ data: SkillsListResponseEntry[] }>('skills/list', params)
+    const skills: SkillInfo[] = []
+    const seen = new Set<string>()
+    for (const entry of payload.data) {
+      for (const skill of entry.skills) {
+        if (!skill.name || seen.has(skill.path)) continue
+        seen.add(skill.path)
+        skills.push({
+          name: skill.name,
+          description: skill.shortDescription || skill.description || '',
+          path: skill.path,
+          scope: skill.scope,
+          enabled: skill.enabled,
+        })
+      }
+    }
+    return skills
+  } catch {
+    return []
+  }
+}

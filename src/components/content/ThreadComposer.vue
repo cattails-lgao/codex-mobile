@@ -16,14 +16,39 @@
         </div>
       </div>
 
-      <input
-        v-model="draft"
-        class="thread-composer-input"
-        type="text"
-        :placeholder="placeholderText"
-        :disabled="isInteractionDisabled"
-        @keydown.enter.exact.prevent="onSubmit"
-      />
+      <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
+        <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
+          <span class="thread-composer-skill-chip-name">{{ skill.name }}</span>
+          <button
+            class="thread-composer-skill-chip-remove"
+            type="button"
+            :aria-label="`Remove skill ${skill.name}`"
+            @click="removeSkill(skill.path)"
+          >×</button>
+        </span>
+      </div>
+
+      <div class="thread-composer-input-wrap">
+        <input
+          ref="inputRef"
+          v-model="draft"
+          class="thread-composer-input"
+          type="text"
+          :placeholder="placeholderText"
+          :disabled="isInteractionDisabled"
+          @keydown.enter.exact.prevent="onSubmit"
+          @input="onInputChange"
+          @keydown="onInputKeydown"
+        />
+        <ComposerSkillPicker
+          :skills="skillOptions"
+          :visible="isSlashMenuOpen"
+          :anchor-bottom="44"
+          :anchor-left="0"
+          @select="onSlashSkillSelect"
+          @close="closeSlashMenu"
+        />
+      </div>
 
       <div class="thread-composer-controls">
         <div ref="attachMenuRootRef" class="thread-composer-attach">
@@ -65,6 +90,17 @@
           open-direction="up"
           :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
           @update:model-value="onModelSelect"
+        />
+
+        <ComposerSearchDropdown
+          class="thread-composer-control"
+          :options="skillDropdownOptions"
+          :selected-values="selectedSkillPaths"
+          placeholder="Skills"
+          search-placeholder="Search skills..."
+          open-direction="up"
+          :disabled="disabled || !activeThreadId || isTurnInProgress || skills.length === 0"
+          @toggle="onSkillDropdownToggle"
         />
 
         <ComposerDropdown
@@ -146,19 +182,24 @@ import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
+import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
+import ComposerSkillPicker from './ComposerSkillPicker.vue'
+
+type SkillItem = { name: string; description: string; path: string }
 
 const props = defineProps<{
   activeThreadId: string
   models: string[]
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
+  skills?: SkillItem[]
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
   disabled?: boolean
 }>()
 
 const emit = defineEmits<{
-  submit: [payload: { text: string; imageUrls: string[] }]
+  submit: [payload: { text: string; imageUrls: string[]; skills: Array<{ name: string; path: string }> }]
   interrupt: []
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
@@ -172,6 +213,7 @@ type SelectedImage = {
 
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
+const selectedSkills = ref<SkillItem[]>([])
 
 const { state: dictationState, isSupported: isDictationSupported, startRecording, stopRecording } = useDictation({
   onTranscript: (text) => { draft.value = draft.value ? `${draft.value} ${text}` : text },
@@ -179,7 +221,10 @@ const { state: dictationState, isSupported: isDictationSupported, startRecording
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<HTMLInputElement | null>(null)
 const isAttachMenuOpen = ref(false)
+const isSlashMenuOpen = ref(false)
+
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
   { value: 'minimal', label: 'Minimal' },
@@ -192,6 +237,16 @@ const modelOptions = computed(() =>
   props.models.map((modelId) => ({ value: modelId, label: modelId })),
 )
 
+const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
+const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
+const skillDropdownOptions = computed(() =>
+  (props.skills ?? []).map((s) => ({
+    value: s.path,
+    label: s.name,
+    description: s.description,
+  })),
+)
+
 const canSubmit = computed(() => {
   if (props.disabled) return false
   if (!props.activeThreadId) return false
@@ -201,7 +256,7 @@ const canSubmit = computed(() => {
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || !!props.isTurnInProgress)
 
 const placeholderText = computed(() =>
-  props.activeThreadId ? 'Type a message...' : 'Select a thread to send a message',
+  props.activeThreadId ? 'Type a message... (/ for skills)' : 'Select a thread to send a message',
 )
 
 function onSubmit(): void {
@@ -210,10 +265,13 @@ function onSubmit(): void {
   emit('submit', {
     text,
     imageUrls: selectedImages.value.map((image) => image.url),
+    skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
   })
   draft.value = ''
   selectedImages.value = []
+  selectedSkills.value = []
   isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
 }
 
 function onInterrupt(): void {
@@ -245,6 +303,10 @@ function removeImage(id: string): void {
   selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
 }
 
+function removeSkill(path: string): void {
+  selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
+}
+
 function addFiles(files: FileList | null): void {
   if (!files || files.length === 0) return
   for (const file of Array.from(files)) {
@@ -262,8 +324,8 @@ function addFiles(files: FileList | null): void {
   }
 }
 
-function clearInputValue(inputRef: HTMLInputElement | null): void {
-  if (inputRef) inputRef.value = ''
+function clearInputValue(inputRefEl: HTMLInputElement | null): void {
+  if (inputRefEl) inputRefEl.value = ''
 }
 
 function onPhotoLibraryChange(event: Event): void {
@@ -278,6 +340,54 @@ function onCameraCaptureChange(event: Event): void {
   addFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
+}
+
+function onInputChange(): void {
+  const text = draft.value
+  if (text === '/') {
+    isSlashMenuOpen.value = true
+  } else if (isSlashMenuOpen.value && !text.startsWith('/')) {
+    isSlashMenuOpen.value = false
+  }
+}
+
+function onInputKeydown(event: KeyboardEvent): void {
+  if (isSlashMenuOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSlashMenu()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      return
+    }
+  }
+}
+
+function closeSlashMenu(): void {
+  isSlashMenuOpen.value = false
+  inputRef.value?.focus()
+}
+
+function onSlashSkillSelect(skill: SkillItem): void {
+  if (!selectedSkills.value.some((s) => s.path === skill.path)) {
+    selectedSkills.value = [...selectedSkills.value, skill]
+  }
+  draft.value = draft.value.startsWith('/') ? '' : draft.value
+  isSlashMenuOpen.value = false
+  inputRef.value?.focus()
+}
+
+function onSkillDropdownToggle(path: string, checked: boolean): void {
+  if (checked) {
+    const skill = (props.skills ?? []).find((s) => s.path === path)
+    if (skill && !selectedSkills.value.some((s) => s.path === path)) {
+      selectedSkills.value = [...selectedSkills.value, skill]
+    }
+  } else {
+    selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
+  }
 }
 
 function onDocumentClick(event: MouseEvent): void {
@@ -302,7 +412,9 @@ watch(
   () => {
     draft.value = ''
     selectedImages.value = []
+    selectedSkills.value = []
     isAttachMenuOpen.value = false
+    isSlashMenuOpen.value = false
   },
 )
 </script>
@@ -332,6 +444,26 @@ watch(
 
 .thread-composer-attachment-remove {
   @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-white;
+}
+
+.thread-composer-skill-chips {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.thread-composer-skill-chip {
+  @apply inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700;
+}
+
+.thread-composer-skill-chip-name {
+  @apply font-medium;
+}
+
+.thread-composer-skill-chip-remove {
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
+}
+
+.thread-composer-input-wrap {
+  @apply relative;
 }
 
 .thread-composer-input {
