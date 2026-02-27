@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -103,6 +104,30 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
   return next
 }
 
+function getCodexAuthPath(): string {
+  const codexHome = process.env.CODEX_HOME?.trim()
+  return join(codexHome || join(homedir(), '.codex'), 'auth.json')
+}
+
+type CodexAuth = {
+  tokens?: {
+    access_token?: string
+    account_id?: string
+  }
+}
+
+async function readCodexAuth(): Promise<{ accessToken: string; accountId?: string } | null> {
+  try {
+    const raw = await readFile(getCodexAuthPath(), 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    const token = auth.tokens?.access_token
+    if (!token) return null
+    return { accessToken: token, accountId: auth.tokens?.account_id ?? undefined }
+  } catch {
+    return null
+  }
+}
+
 function getCodexGlobalStatePath(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
   if (codexHome) {
@@ -148,18 +173,54 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Uint8Array[] = []
+  const raw = await readRawBody(req)
+  if (raw.length === 0) return null
+  const text = raw.toString('utf8').trim()
+  if (text.length === 0) return null
+  return JSON.parse(text) as unknown
+}
 
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Uint8Array[] = []
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
   }
+  return Buffer.concat(chunks)
+}
 
-  if (chunks.length === 0) return null
+async function proxyTranscribe(
+  body: Buffer,
+  contentType: string,
+  authToken: string,
+  accountId?: string,
+): Promise<{ status: number; body: string }> {
+  const headers: Record<string, string | number> = {
+    'Content-Type': contentType,
+    'Content-Length': body.length,
+    Authorization: `Bearer ${authToken}`,
+    originator: 'Codex Desktop',
+    'User-Agent': `Codex Desktop/0.1.0 (${process.platform}; ${process.arch})`,
+  }
 
-  const raw = Buffer.concat(chunks).toString('utf8').trim()
-  if (raw.length === 0) return null
+  if (accountId) {
+    headers['ChatGPT-Account-Id'] = accountId
+  }
 
-  return JSON.parse(raw) as unknown
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(
+      'https://chatgpt.com/backend-api/transcribe',
+      { method: 'POST', headers },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('error', reject)
+      },
+    )
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
 }
 
 class AppServerProcess {
@@ -596,6 +657,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const result = await appServer.rpc(body.method, body.params ?? null)
         setJson(res, 200, { result })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/transcribe') {
+        const auth = await readCodexAuth()
+        if (!auth) {
+          setJson(res, 401, { error: 'No auth token available for transcription' })
+          return
+        }
+
+        const rawBody = await readRawBody(req)
+        const incomingCt = req.headers['content-type'] ?? 'application/octet-stream'
+        const upstream = await proxyTranscribe(rawBody, incomingCt, auth.accessToken, auth.accountId)
+
+        res.statusCode = upstream.status
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(upstream.body)
         return
       }
 
