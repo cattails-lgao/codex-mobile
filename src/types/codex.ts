@@ -79,6 +79,8 @@ export type UiMessage = {
   messageType?: string
   rawPayload?: string
   isUnhandled?: boolean
+  commandExecution?: CommandExecutionData
+  turnIndex?: number
 }
 
 export type UiServerRequest = {

@@ -99,8 +99,11 @@
                   :active-thread-id="composerThreadContextId" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
+                  :is-turn-in-progress="isSelectedThreadInProgress"
+                  :is-rolling-back="isRollingBack"
                   @update-scroll-state="onUpdateThreadScrollState"
-                  @respond-server-request="onRespondServerRequest" />
+                  @respond-server-request="onRespondServerRequest"
+                  @rollback="onRollback" />
               </div>
 
               <ThreadComposer :active-thread-id="composerThreadContextId"
@@ -161,6 +164,8 @@ const {
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
+  rollbackSelectedThread,
+  isRollingBack,
   setSelectedModelId,
   setSelectedReasoningEffort,
   respondToPendingServerRequest,
@@ -357,6 +362,10 @@ function onSelectReasoningEffort(effort: ReasoningEffort | ''): void {
 
 function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
+}
+
+function onRollback(payload: { turnIndex: number }): void {
+  void rollbackSelectedThread(payload.turnIndex)
 }
 
 function loadSidebarCollapsed(): boolean {

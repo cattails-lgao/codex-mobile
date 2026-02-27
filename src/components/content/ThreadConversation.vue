@@ -87,6 +87,7 @@
         v-for="message in messages"
         :key="message.id"
         class="conversation-item"
+        :class="{ 'conversation-item-rollbackable': canRollbackMessage(message) }"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -122,6 +123,17 @@
                 </p>
               </article>
             </article>
+
+            <button
+              v-if="canRollbackMessage(message)"
+              class="rollback-button"
+              type="button"
+              title="Rollback to this message (remove this turn and all after it)"
+              @click="onRollback(message)"
+            >
+              <IconTablerArrowBackUp class="rollback-icon" />
+              <span class="rollback-label">Rollback</span>
+            </button>
           </div>
         </div>
       </li>
@@ -159,6 +171,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
+import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 
 const props = defineProps<{
   messages: UiMessage[]
@@ -167,11 +180,14 @@ const props = defineProps<{
   isLoading: boolean
   activeThreadId: string
   scrollState: ThreadScrollState | null
+  isTurnInProgress?: boolean
+  isRollingBack?: boolean
 }>()
 
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
+  rollback: [payload: { turnIndex: number }]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
@@ -457,6 +473,18 @@ function onRejectUnknownRequest(requestId: number): void {
       message: 'Rejected from codex-web-local UI.',
     },
   })
+}
+
+function canRollbackMessage(message: UiMessage): boolean {
+  if (message.role !== 'user' && message.role !== 'assistant') return false
+  if (typeof message.turnIndex !== 'number') return false
+  if (props.isTurnInProgress || props.isRollingBack) return false
+  return true
+}
+
+function onRollback(message: UiMessage): void {
+  if (!canRollbackMessage(message)) return
+  emit('rollback', { turnIndex: message.turnIndex! })
 }
 
 function scrollToBottom(): void {
@@ -856,5 +884,65 @@ onBeforeUnmount(() => {
 
 .icon-svg {
   @apply w-5 h-5;
+}
+
+.conversation-item-rollbackable:hover .rollback-button {
+  @apply opacity-100;
+}
+
+.rollback-button {
+  @apply opacity-0 mt-1 inline-flex items-center gap-1 self-end rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300;
+}
+
+.rollback-icon {
+  @apply w-3.5 h-3.5;
+}
+
+.rollback-label {
+  @apply leading-none;
+}
+
+.cmd-row {
+  @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+}
+
+.cmd-row.cmd-expanded {
+  @apply rounded-b-none border-b-0;
+}
+
+.cmd-chevron {
+  @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
+}
+
+.cmd-chevron-open {
+  transform: rotate(90deg);
+}
+
+.cmd-label {
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
+}
+
+.cmd-status {
+  @apply text-[11px] font-medium flex-shrink-0;
+}
+
+.cmd-status-running .cmd-status {
+  @apply text-amber-600;
+}
+
+.cmd-status-ok .cmd-status {
+  @apply text-emerald-600;
+}
+
+.cmd-status-error .cmd-status {
+  @apply text-rose-600;
+}
+
+.cmd-output-wrap {
+  @apply border border-t-0 border-zinc-200 rounded-b-lg bg-zinc-900 overflow-hidden;
+}
+
+.cmd-output {
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
 }
 </style>
