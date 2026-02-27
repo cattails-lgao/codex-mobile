@@ -226,6 +226,7 @@ async function proxyTranscribe(
 class AppServerProcess {
   private process: ChildProcessWithoutNullStreams | null = null
   private initialized = false
+  private initializePromise: Promise<void> | null = null
   private readBuffer = ''
   private nextId = 1
   private stopping = false
@@ -272,6 +273,7 @@ class AppServerProcess {
       this.pendingServerRequests.clear()
       this.process = null
       this.initialized = false
+      this.initializePromise = null
       this.readBuffer = ''
     })
   }
@@ -401,15 +403,23 @@ class AppServerProcess {
 
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) return
+    if (this.initializePromise) {
+      await this.initializePromise
+      return
+    }
 
-    await this.call('initialize', {
+    this.initializePromise = this.call('initialize', {
       clientInfo: {
         name: 'codex-web-local',
         version: '0.1.0',
       },
+    }).then(() => {
+      this.initialized = true
+    }).finally(() => {
+      this.initializePromise = null
     })
 
-    this.initialized = true
+    await this.initializePromise
   }
 
   async rpc(method: string, params: unknown): Promise<unknown> {
@@ -467,6 +477,7 @@ class AppServerProcess {
     this.stopping = true
     this.process = null
     this.initialized = false
+    this.initializePromise = null
     this.readBuffer = ''
 
     const failure = new Error('codex app-server stopped')

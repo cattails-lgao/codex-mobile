@@ -1678,8 +1678,8 @@ export function useDesktopState() {
     error.value = ''
 
     try {
+      await loadThreads()
       await Promise.all([
-        loadThreads(),
         refreshModelPreferences(),
         refreshSkills(),
       ])
