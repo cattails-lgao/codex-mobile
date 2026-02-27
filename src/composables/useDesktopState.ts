@@ -570,6 +570,8 @@ export function useDesktopState() {
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
   const inProgressById = ref<Record<string, boolean>>({})
+  type QueuedMessage = { id: string; text: string; imageUrls: string[]; skills: Array<{ name: string; path: string }> }
+  const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
   const selectedModelId = ref('')
@@ -1458,6 +1460,7 @@ export function useDesktopState() {
       setThreadInProgress(completedTurn.threadId, false)
       setTurnActivityForThread(completedTurn.threadId, null)
       markThreadUnreadByEvent(completedTurn.threadId)
+      void processQueuedMessages(completedTurn.threadId)
     }
 
     const turnErrorMessage = readTurnErrorMessage(notification)
@@ -1543,6 +1546,7 @@ export function useDesktopState() {
         setThreadInProgress(completedThreadId, false)
         setTurnActivityForThread(completedThreadId, null)
         markThreadUnreadByEvent(completedThreadId)
+        void processQueuedMessages(completedThreadId)
       }
     }
 
@@ -1777,12 +1781,34 @@ export function useDesktopState() {
     text: string,
     imageUrls: string[] = [],
     skills: Array<{ name: string; path: string }> = [],
+    mode: 'steer' | 'queue' = 'steer',
   ): Promise<void> {
     const threadId = selectedThreadId.value
     const nextText = text.trim()
     if (!threadId || (!nextText && imageUrls.length === 0)) return
 
-    isSendingMessage.value = true
+    const isInProgress = inProgressById.value[threadId] === true
+
+    if (isInProgress && mode === 'queue') {
+      const queue = queuedMessagesByThreadId.value[threadId] ?? []
+      const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      queuedMessagesByThreadId.value = {
+        ...queuedMessagesByThreadId.value,
+        [threadId]: [...queue, { id, text: nextText, imageUrls, skills }],
+      }
+      return
+    }
+
+    if (isInProgress) {
+      shouldAutoScrollOnNextAgentEvent = true
+      void startTurnForThread(threadId, nextText, imageUrls, skills).catch((unknownError) => {
+        const errorMessage = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+        setTurnErrorForThread(threadId, errorMessage)
+        error.value = errorMessage
+      })
+      return
+    }
+
     error.value = ''
     shouldAutoScrollOnNextAgentEvent = true
     setTurnSummaryForThread(threadId, null)
@@ -1803,8 +1829,6 @@ export function useDesktopState() {
       setTurnErrorForThread(threadId, errorMessage)
       error.value = errorMessage
       throw unknownError
-    } finally {
-      isSendingMessage.value = false
     }
   }
 
@@ -1907,6 +1931,30 @@ export function useDesktopState() {
       await syncFromNotifications()
     } catch (unknownError) {
       throw unknownError
+    }
+  }
+
+  async function processQueuedMessages(threadId: string): Promise<void> {
+    const queue = queuedMessagesByThreadId.value[threadId]
+    if (!queue || queue.length === 0) return
+    const [next, ...rest] = queue
+    queuedMessagesByThreadId.value = rest.length > 0
+      ? { ...queuedMessagesByThreadId.value, [threadId]: rest }
+      : omitKey(queuedMessagesByThreadId.value, threadId)
+    isSendingMessage.value = true
+    error.value = ''
+    shouldAutoScrollOnNextAgentEvent = true
+    setTurnSummaryForThread(threadId, null)
+    setTurnActivityForThread(threadId, { label: 'Thinking', details: buildPendingTurnDetails(selectedModelId.value, selectedReasoningEffort.value) })
+    setTurnErrorForThread(threadId, null)
+    setThreadInProgress(threadId, true)
+    try {
+      await startTurnForThread(threadId, next.text, next.imageUrls, next.skills)
+    } catch {
+      setThreadInProgress(threadId, false)
+      setTurnActivityForThread(threadId, null)
+    } finally {
+      isSendingMessage.value = false
     }
   }
 
@@ -2220,6 +2268,35 @@ export function useDesktopState() {
     turnSummaryByThreadId.value = {}
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
+    queuedMessagesByThreadId.value = {}
+  }
+
+  const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {
+    const threadId = selectedThreadId.value
+    if (!threadId) return []
+    return queuedMessagesByThreadId.value[threadId] ?? []
+  })
+
+  function removeQueuedMessage(messageId: string): void {
+    const threadId = selectedThreadId.value
+    if (!threadId) return
+    const queue = queuedMessagesByThreadId.value[threadId]
+    if (!queue) return
+    const next = queue.filter((m) => m.id !== messageId)
+    queuedMessagesByThreadId.value = next.length > 0
+      ? { ...queuedMessagesByThreadId.value, [threadId]: next }
+      : omitKey(queuedMessagesByThreadId.value, threadId)
+  }
+
+  function steerQueuedMessage(messageId: string): void {
+    const threadId = selectedThreadId.value
+    if (!threadId) return
+    const queue = queuedMessagesByThreadId.value[threadId]
+    if (!queue) return
+    const msg = queue.find((m) => m.id === messageId)
+    if (!msg) return
+    removeQueuedMessage(messageId)
+    void sendMessageToSelectedThread(msg.text, msg.imageUrls, msg.skills, 'steer')
   }
 
   return {
@@ -2251,6 +2328,9 @@ export function useDesktopState() {
     interruptSelectedThreadTurn,
     rollbackSelectedThread,
     isRollingBack,
+    selectedThreadQueuedMessages,
+    removeQueuedMessage,
+    steerQueuedMessage,
     setSelectedModelId,
     setSelectedReasoningEffort,
     respondToPendingServerRequest,

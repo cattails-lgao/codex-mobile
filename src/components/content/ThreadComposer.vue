@@ -1,6 +1,6 @@
 <template>
-  <form class="thread-composer" @submit.prevent="onSubmit">
-    <div class="thread-composer-shell">
+  <form class="thread-composer" @submit.prevent="onSubmit('steer')">
+    <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -36,7 +36,7 @@
           type="text"
           :placeholder="placeholderText"
           :disabled="isInteractionDisabled"
-          @keydown.enter.exact.prevent="onSubmit"
+          @keydown.enter.exact.prevent="onSubmit('steer')"
           @input="onInputChange"
           @keydown="onInputKeydown"
         />
@@ -135,18 +135,20 @@
             v-if="isTurnInProgress"
             class="thread-composer-stop"
             type="button"
-            aria-label="Стоп"
+            aria-label="Stop"
             :disabled="disabled || !activeThreadId || isInterruptingTurn"
             @click="onInterrupt"
           >
             <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
           </button>
           <button
-            v-else
             class="thread-composer-submit"
-            type="submit"
-            aria-label="Send message"
+            :class="{ 'thread-composer-submit--queue': isTurnInProgress }"
+            type="button"
+            :aria-label="isTurnInProgress ? 'Queue message' : 'Send message'"
+            :title="isTurnInProgress ? 'Queue (button) · Enter to steer' : 'Send'"
             :disabled="!canSubmit"
+            @click="onSubmit(isTurnInProgress ? 'queue' : 'steer')"
           >
             <IconTablerArrowUp class="thread-composer-submit-icon" />
           </button>
@@ -175,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReasoningEffort } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -196,10 +198,18 @@ const props = defineProps<{
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
   disabled?: boolean
+  hasQueueAbove?: boolean
 }>()
 
+export type SubmitPayload = {
+  text: string
+  imageUrls: string[]
+  skills: Array<{ name: string; path: string }>
+  mode: 'steer' | 'queue'
+}
+
 const emit = defineEmits<{
-  submit: [payload: { text: string; imageUrls: string[]; skills: Array<{ name: string; path: string }> }]
+  submit: [payload: SubmitPayload]
   interrupt: []
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
@@ -250,28 +260,29 @@ const skillDropdownOptions = computed(() =>
 const canSubmit = computed(() => {
   if (props.disabled) return false
   if (!props.activeThreadId) return false
-  if (props.isTurnInProgress) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0
 })
-const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || !!props.isTurnInProgress)
+const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
 
 const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (/ for skills)' : 'Select a thread to send a message',
 )
 
-function onSubmit(): void {
+function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   const text = draft.value.trim()
   if (!canSubmit.value) return
   emit('submit', {
     text,
     imageUrls: selectedImages.value.map((image) => image.url),
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
+    mode,
   })
   draft.value = ''
   selectedImages.value = []
   selectedSkills.value = []
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
+  nextTick(() => inputRef.value?.focus())
 }
 
 function onInterrupt(): void {
@@ -430,6 +441,10 @@ watch(
   @apply relative rounded-2xl border border-zinc-300 bg-white p-3 shadow-sm;
 }
 
+.thread-composer-shell--no-top-radius {
+  @apply rounded-t-none border-t-0;
+}
+
 .thread-composer-attachments {
   @apply mb-2 flex flex-wrap gap-2;
 }
@@ -520,6 +535,10 @@ watch(
 
 .thread-composer-submit {
   @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
+}
+
+.thread-composer-submit--queue {
+  @apply bg-amber-600 hover:bg-amber-700;
 }
 
 .thread-composer-submit-icon {
