@@ -79,7 +79,7 @@ export type UiMessage = {
   messageType?: string
   rawPayload?: string
   isUnhandled?: boolean
-  commandExecution?: CommandExecutionData
+  commandExecution?: { command: string; status?: string; exitCode?: number; output?: string }
   turnIndex?: number
 }
 

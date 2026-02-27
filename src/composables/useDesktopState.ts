@@ -229,6 +229,15 @@ function orderGroupsByProjectOrder(incoming: UiProjectGroup[], projectOrder: str
   return ordered
 }
 
+function areCommandExecutionsEqual(
+  a?: UiMessage['commandExecution'],
+  b?: UiMessage['commandExecution'],
+): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.command === b.command && a.status === b.status && a.exitCode === b.exitCode && a.output === b.output
+}
+
 function areStringArraysEqual(first?: string[], second?: string[]): boolean {
   const left = Array.isArray(first) ? first : []
   const right = Array.isArray(second) ? second : []
