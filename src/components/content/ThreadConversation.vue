@@ -102,8 +102,13 @@
               <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
               <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
             </button>
-            <div v-if="isCommandExpanded(message) && message.commandExecution" class="cmd-output-wrap">
-              <pre class="cmd-output">{{ message.commandExecution.aggregatedOutput || '(no output)' }}</pre>
+            <div
+              class="cmd-output-wrap"
+              :class="{ 'cmd-output-visible': isCommandExpanded(message), 'cmd-output-collapsing': isCommandCollapsing(message) }"
+            >
+              <div class="cmd-output-inner">
+                <pre class="cmd-output">{{ message.commandExecution?.aggregatedOutput || '(no output)' }}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -124,10 +129,39 @@
               </ul>
 
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
-                <div v-if="message.messageType === 'worked'" class="worked-separator" aria-live="polite">
-                  <span class="worked-separator-line" aria-hidden="true" />
-                  <p class="worked-separator-text">{{ message.text }}</p>
-                  <span class="worked-separator-line" aria-hidden="true" />
+                <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
+                  <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
+                    <span class="worked-separator-line" aria-hidden="true" />
+                    <span class="worked-chevron" :class="{ 'worked-chevron-open': isWorkedExpanded(message) }">▶</span>
+                    <p class="worked-separator-text">{{ message.text }}</p>
+                    <span class="worked-separator-line" aria-hidden="true" />
+                  </button>
+                  <div v-if="isWorkedExpanded(message)" class="worked-details">
+                    <div
+                      v-for="cmd in getCommandsForWorked(messages, messages.indexOf(message))"
+                      :key="`worked-cmd-${cmd.id}`"
+                      class="worked-cmd-item"
+                    >
+                      <button
+                        type="button"
+                        class="cmd-row"
+                        :class="[commandStatusClass(cmd), { 'cmd-expanded': isCommandExpanded(cmd) }]"
+                        @click="toggleCommandExpand(cmd)"
+                      >
+                        <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
+                        <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
+                        <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
+                      </button>
+                      <div
+                        class="cmd-output-wrap"
+                        :class="{ 'cmd-output-visible': isCommandExpanded(cmd), 'cmd-output-collapsing': isCommandCollapsing(cmd) }"
+                      >
+                        <div class="cmd-output-inner">
+                          <pre class="cmd-output">{{ cmd.commandExecution?.aggregatedOutput || '(no output)' }}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <p v-else class="message-text">
                   <template v-for="(segment, index) in parseInlineSegments(message.text)" :key="`seg-${index}`">
@@ -179,6 +213,9 @@ import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } fro
 import IconTablerX from '../icons/IconTablerX.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
+const collapsingCommandIds = ref<Set<string>>(new Set())
+const expandedWorkedIds = ref<Set<string>>(new Set())
+const prevCommandStatuses = ref<Record<string, string>>({})
 
 function isCommandMessage(message: UiMessage): boolean {
   return message.messageType === 'commandExecution' && !!message.commandExecution
@@ -186,7 +223,12 @@ function isCommandMessage(message: UiMessage): boolean {
 
 function isCommandExpanded(message: UiMessage): boolean {
   if (message.commandExecution?.status === 'inProgress') return true
+  if (collapsingCommandIds.value.has(message.id)) return true
   return expandedCommandIds.value.has(message.id)
+}
+
+function isCommandCollapsing(message: UiMessage): boolean {
+  return collapsingCommandIds.value.has(message.id)
 }
 
 function toggleCommandExpand(message: UiMessage): void {
@@ -195,6 +237,17 @@ function toggleCommandExpand(message: UiMessage): void {
   if (next.has(message.id)) next.delete(message.id)
   else next.add(message.id)
   expandedCommandIds.value = next
+}
+
+function toggleWorkedExpand(message: UiMessage): void {
+  const next = new Set(expandedWorkedIds.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedWorkedIds.value = next
+}
+
+function isWorkedExpanded(message: UiMessage): boolean {
+  return expandedWorkedIds.value.has(message.id)
 }
 
 function commandStatusLabel(message: UiMessage): string {
@@ -215,6 +268,27 @@ function commandStatusClass(message: UiMessage): string {
   if (s === 'inProgress') return 'cmd-status-running'
   if (s === 'completed' && message.commandExecution?.exitCode === 0) return 'cmd-status-ok'
   return 'cmd-status-error'
+}
+
+function scheduleCollapse(messageId: string): void {
+  const nextCollapsing = new Set(collapsingCommandIds.value)
+  nextCollapsing.add(messageId)
+  collapsingCommandIds.value = nextCollapsing
+  setTimeout(() => {
+    const next = new Set(collapsingCommandIds.value)
+    next.delete(messageId)
+    collapsingCommandIds.value = next
+  }, 1000)
+}
+
+function getCommandsForWorked(messages: UiMessage[], workedIndex: number): UiMessage[] {
+  const result: UiMessage[] = []
+  for (let i = workedIndex - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m.messageType === 'commandExecution') result.unshift(m)
+    else if (m.role === 'user' || m.messageType === 'worked') break
+  }
+  return result
 }
 
 const props = defineProps<{
@@ -633,8 +707,19 @@ async function scheduleScrollRestore(): Promise<void> {
 
 watch(
   () => props.messages,
-  async () => {
+  async (next) => {
     if (props.isLoading) return
+
+    for (const m of next) {
+      if (m.messageType !== 'commandExecution' || !m.commandExecution) continue
+      const prev = prevCommandStatuses.value[m.id]
+      const cur = m.commandExecution.status
+      if (prev === 'inProgress' && cur !== 'inProgress') {
+        scheduleCollapse(m.id)
+      }
+      prevCommandStatuses.value[m.id] = cur
+    }
+
     await scheduleScrollRestore()
   },
 )
@@ -883,8 +968,20 @@ onBeforeUnmount(() => {
   @apply w-full max-w-full;
 }
 
+.worked-separator-wrap {
+  @apply w-full flex flex-col gap-0;
+}
+
 .worked-separator {
-  @apply w-full flex items-center gap-4;
+  @apply w-full flex items-center gap-3 bg-transparent border-none cursor-pointer p-0;
+}
+
+.worked-chevron {
+  @apply text-[9px] text-zinc-400 transition-transform duration-200 flex-shrink-0;
+}
+
+.worked-chevron-open {
+  transform: rotate(90deg);
 }
 
 .worked-separator-line {
@@ -893,6 +990,14 @@ onBeforeUnmount(() => {
 
 .worked-separator-text {
   @apply m-0 text-sm leading-relaxed font-normal text-slate-800;
+}
+
+.worked-details {
+  @apply flex flex-col gap-1.5 pt-2;
+}
+
+.worked-cmd-item {
+  @apply flex flex-col;
 }
 
 .image-modal-backdrop {
@@ -920,7 +1025,7 @@ onBeforeUnmount(() => {
 }
 
 .cmd-row.cmd-expanded {
-  @apply rounded-b-none border-b-0;
+  @apply rounded-b-none;
 }
 
 .cmd-chevron {
@@ -952,7 +1057,27 @@ onBeforeUnmount(() => {
 }
 
 .cmd-output-wrap {
-  @apply border border-t-0 border-zinc-200 rounded-b-lg bg-zinc-900 overflow-hidden;
+  @apply rounded-b-lg bg-zinc-900;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms ease-out, border-color 300ms ease-out;
+  border: 1px solid transparent;
+  border-top: none;
+}
+
+.cmd-output-wrap.cmd-output-visible {
+  grid-template-rows: 1fr;
+  border-color: #e4e4e7;
+}
+
+.cmd-output-wrap.cmd-output-collapsing {
+  grid-template-rows: 1fr;
+  border-color: #e4e4e7;
+}
+
+.cmd-output-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .cmd-output {
