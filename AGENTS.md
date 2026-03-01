@@ -23,7 +23,6 @@ When merging a worktree branch into `main` and conflicts arise:
 - Do not batch multiple tasks into a single commit.
 - Each commit message should describe the specific change made.
 
-
 ## Completion Verification Requirement
 
 - After completing a task that changes behavior or UI, always run a Playwright verification in headless mode.

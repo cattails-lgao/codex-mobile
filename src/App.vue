@@ -46,6 +46,16 @@
           </button>
         </div>
 
+        <button
+          v-if="!isSidebarCollapsed"
+          class="sidebar-skills-link"
+          :class="{ 'is-active': isSkillsRoute }"
+          type="button"
+          @click="router.push({ name: 'skills' })"
+        >
+          Skills Hub
+        </button>
+
         <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
           v-if="!isSidebarCollapsed"
           :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
@@ -75,7 +85,10 @@
         </ContentHeader>
 
         <section class="content-body">
-          <template v-if="isHomeRoute">
+          <template v-if="isSkillsRoute">
+            <SkillsHub @skills-changed="onSkillsChanged" />
+          </template>
+          <template v-else-if="isHomeRoute">
             <div class="content-grid">
               <div class="new-thread-empty">
                 <p class="new-thread-hero">Let's build</p>
@@ -139,6 +152,7 @@ import ThreadConversation from './components/content/ThreadConversation.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
+import SkillsHub from './components/content/SkillsHub.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
@@ -167,6 +181,7 @@ const {
   isAutoRefreshEnabled,
   autoRefreshSecondsLeft,
   refreshAll,
+  refreshSkills,
   selectThread,
   setThreadScrollState,
   archiveThreadById,
@@ -215,7 +230,9 @@ const knownThreadIdSet = computed(() => {
 })
 
 const isHomeRoute = computed(() => route.name === 'home')
+const isSkillsRoute = computed(() => route.name === 'skills')
 const contentTitle = computed(() => {
+  if (isSkillsRoute.value) return 'Skills'
   if (isHomeRoute.value) return 'New thread'
   return selectedThread.value?.title ?? 'Choose a thread'
 })
@@ -261,6 +278,10 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
   stopPolling()
 })
+
+function onSkillsChanged(): void {
+  void refreshSkills()
+}
 
 function toggleSidebarSearch(): void {
   isSidebarSearchVisible.value = !isSidebarSearchVisible.value
@@ -410,7 +431,7 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
   isRouteSyncInProgress.value = true
 
   try {
-    if (route.name === 'home') {
+    if (route.name === 'home' || route.name === 'skills') {
       if (selectedThreadId.value !== '') {
         await selectThread('')
       }
@@ -457,7 +478,7 @@ watch(
   async (threadId) => {
     if (!hasInitialized.value) return
     if (isRouteSyncInProgress.value) return
-    if (isHomeRoute.value) return
+    if (isHomeRoute.value || isSkillsRoute.value) return
 
     if (!threadId) {
       if (route.name !== 'home') {
@@ -551,6 +572,14 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-search-clear-icon {
   @apply w-3.5 h-3.5;
+}
+
+.sidebar-skills-link {
+  @apply mx-2 flex items-center rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+}
+
+.sidebar-skills-link.is-active {
+  @apply bg-zinc-200 text-zinc-900 font-medium;
 }
 
 .sidebar-thread-controls-header-host {

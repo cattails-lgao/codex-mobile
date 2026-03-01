@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -82,6 +82,253 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
   res.end(JSON.stringify(payload))
 }
 
+function getCodexHomeDir(): string {
+  const codexHome = process.env.CODEX_HOME?.trim()
+  return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
+}
+
+function getSkillsInstallDir(): string {
+  return join(getCodexHomeDir(), 'skills')
+}
+
+async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      const suffix = details.length > 0 ? `: ${details}` : ''
+      reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
+    })
+  })
+}
+
+async function detectUserSkillsDir(appServer: AppServerProcess): Promise<string> {
+  try {
+    const result = (await appServer.rpc('skills/list', {})) as {
+      data?: Array<{ skills?: Array<{ scope?: string; path?: string }> }>
+    }
+    for (const entry of result.data ?? []) {
+      for (const skill of entry.skills ?? []) {
+        if (skill.scope !== 'user' || !skill.path) continue
+        const parts = skill.path.split('/').filter(Boolean)
+        if (parts.length < 2) continue
+        return `/${parts.slice(0, -2).join('/')}`
+      }
+    }
+  } catch {}
+  return getSkillsInstallDir()
+}
+
+async function ensureInstalledSkillIsValid(appServer: AppServerProcess, skillPath: string): Promise<void> {
+  const result = (await appServer.rpc('skills/list', { forceReload: true })) as {
+    data?: Array<{ errors?: Array<{ path?: string; message?: string }> }>
+  }
+  const normalized = skillPath.endsWith('/SKILL.md') ? skillPath : `${skillPath}/SKILL.md`
+  for (const entry of result.data ?? []) {
+    for (const error of entry.errors ?? []) {
+      if (error.path === normalized) {
+        throw new Error(error.message || 'Installed skill is invalid')
+      }
+    }
+  }
+}
+
+type SkillHubEntry = {
+  name: string
+  owner: string
+  description: string
+  displayName: string
+  publishedAt: number
+  avatarUrl: string
+  url: string
+  installed: boolean
+  path?: string
+  enabled?: boolean
+}
+
+type SkillsTreeEntry = {
+  name: string
+  owner: string
+  url: string
+}
+
+type SkillsTreeCache = {
+  entries: SkillsTreeEntry[]
+  fetchedAt: number
+}
+
+type MetaJson = {
+  displayName?: string
+  owner?: string
+  slug?: string
+  latest?: { publishedAt?: number }
+}
+
+const TREE_CACHE_TTL_MS = 5 * 60 * 1000
+let skillsTreeCache: SkillsTreeCache | null = null
+const metaCache = new Map<string, { description: string; displayName: string; publishedAt: number }>()
+
+async function getGhToken(): Promise<string | null> {
+  try {
+    const proc = spawn('gh', ['auth', 'token'], { stdio: ['ignore', 'pipe', 'ignore'] })
+    let out = ''
+    proc.stdout.on('data', (d: Buffer) => { out += d.toString() })
+    return new Promise((resolve) => {
+      proc.on('close', (code) => resolve(code === 0 ? out.trim() : null))
+      proc.on('error', () => resolve(null))
+    })
+  } catch { return null }
+}
+
+async function ghFetch(url: string): Promise<Response> {
+  const token = await getGhToken()
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'codex-web-local',
+  }
+  if (token) headers.Authorization = `Bearer ${token}`
+  return fetch(url, { headers })
+}
+
+async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
+  if (skillsTreeCache && Date.now() - skillsTreeCache.fetchedAt < TREE_CACHE_TTL_MS) {
+    return skillsTreeCache.entries
+  }
+
+  const resp = await ghFetch('https://api.github.com/repos/openclaw/skills/git/trees/main?recursive=1')
+  if (!resp.ok) throw new Error(`GitHub tree API returned ${resp.status}`)
+  const data = (await resp.json()) as { tree?: Array<{ path: string; type: string }> }
+
+  const metaPattern = /^skills\/([^/]+)\/([^/]+)\/_meta\.json$/
+  const seen = new Set<string>()
+  const entries: SkillsTreeEntry[] = []
+
+  for (const node of data.tree ?? []) {
+    const match = metaPattern.exec(node.path)
+    if (!match) continue
+    const [, owner, skillName] = match
+    const key = `${owner}/${skillName}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push({
+      name: skillName,
+      owner,
+      url: `https://github.com/openclaw/skills/tree/main/skills/${owner}/${skillName}`,
+    })
+  }
+
+  skillsTreeCache = { entries, fetchedAt: Date.now() }
+  return entries
+}
+
+async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
+  const toFetch = entries.filter((e) => !metaCache.has(`${e.owner}/${e.name}`))
+  if (toFetch.length === 0) return
+
+  const batch = toFetch.slice(0, 50)
+  const results = await Promise.allSettled(
+    batch.map(async (e) => {
+      const rawUrl = `https://raw.githubusercontent.com/openclaw/skills/main/skills/${e.owner}/${e.name}/_meta.json`
+      const resp = await fetch(rawUrl)
+      if (!resp.ok) return
+      const meta = (await resp.json()) as MetaJson
+      metaCache.set(`${e.owner}/${e.name}`, {
+        displayName: typeof meta.displayName === 'string' ? meta.displayName : '',
+        description: typeof meta.displayName === 'string' ? meta.displayName : '',
+        publishedAt: meta.latest?.publishedAt ?? 0,
+      })
+    }),
+  )
+  void results
+}
+
+function buildHubEntry(e: SkillsTreeEntry): SkillHubEntry {
+  const cached = metaCache.get(`${e.owner}/${e.name}`)
+  return {
+    name: e.name,
+    owner: e.owner,
+    description: cached?.description ?? '',
+    displayName: cached?.displayName ?? '',
+    publishedAt: cached?.publishedAt ?? 0,
+    avatarUrl: `https://github.com/${e.owner}.png?size=40`,
+    url: e.url,
+    installed: false,
+  }
+}
+
+type InstalledSkillInfo = { name: string; path: string; enabled: boolean }
+
+async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
+  const map = new Map<string, InstalledSkillInfo>()
+  const skillsDir = getSkillsInstallDir()
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+      const skillMd = join(skillsDir, entry.name, 'SKILL.md')
+      try {
+        await stat(skillMd)
+        map.set(entry.name, { name: entry.name, path: skillMd, enabled: true })
+      } catch {}
+    }
+  } catch {}
+  return map
+}
+
+async function searchSkillsHub(
+  allEntries: SkillsTreeEntry[],
+  query: string,
+  limit: number,
+  sort: string,
+  installedMap: Map<string, InstalledSkillInfo>,
+): Promise<SkillHubEntry[]> {
+  const q = query.toLowerCase().trim()
+  let filtered = q
+    ? allEntries.filter((s) => {
+        if (s.name.toLowerCase().includes(q) || s.owner.toLowerCase().includes(q)) return true
+        const cached = metaCache.get(`${s.owner}/${s.name}`)
+        if (cached?.displayName?.toLowerCase().includes(q)) return true
+        return false
+      })
+    : allEntries
+
+  const page = filtered.slice(0, Math.min(limit * 2, 200))
+  await fetchMetaBatch(page)
+
+  let results = page.map(buildHubEntry)
+
+  if (sort === 'date') {
+    results.sort((a, b) => b.publishedAt - a.publishedAt)
+  } else if (q) {
+    results.sort((a, b) => {
+      const aExact = a.name.toLowerCase() === q ? 1 : 0
+      const bExact = b.name.toLowerCase() === q ? 1 : 0
+      if (aExact !== bExact) return bExact - aExact
+      return b.publishedAt - a.publishedAt
+    })
+  }
+
+  return results.slice(0, limit).map((s) => {
+    const local = installedMap.get(s.name)
+    return local
+      ? { ...s, installed: true, path: local.path, enabled: local.enabled }
+      : s
+  })
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   const normalized: string[] = []
@@ -105,8 +352,7 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
 }
 
 function getCodexAuthPath(): string {
-  const codexHome = process.env.CODEX_HOME?.trim()
-  return join(codexHome || join(homedir(), '.codex'), 'auth.json')
+  return join(getCodexHomeDir(), 'auth.json')
 }
 
 type CodexAuth = {
@@ -129,11 +375,7 @@ async function readCodexAuth(): Promise<{ accessToken: string; accountId?: strin
 }
 
 function getCodexGlobalStatePath(): string {
-  const codexHome = process.env.CODEX_HOME?.trim()
-  if (codexHome) {
-    return join(codexHome, '.codex-global-state.json')
-  }
-  return join(homedir(), '.codex', '.codex-global-state.json')
+  return join(getCodexHomeDir(), '.codex-global-state.json')
 }
 
 type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
@@ -809,6 +1051,112 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const next = title ? updateThreadTitleCache(cache, id, title) : removeFromThreadTitleCache(cache, id)
         await writeThreadTitleCache(next)
         setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub') {
+        try {
+          const q = url.searchParams.get('q') || ''
+          const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 1), 200)
+          const sort = url.searchParams.get('sort') || 'date'
+          const allEntries = await fetchSkillsTree()
+
+          const installedMap = await scanInstalledSkillsFromDisk()
+          try {
+            const result = (await appServer.rpc('skills/list', {})) as { data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }> }
+            for (const entry of result.data ?? []) {
+              for (const skill of entry.skills ?? []) {
+                if (skill.name) {
+                  installedMap.set(skill.name, { name: skill.name, path: skill.path ?? '', enabled: skill.enabled !== false })
+                }
+              }
+            }
+          } catch {}
+
+          const installedHubEntries = allEntries.filter((e) => installedMap.has(e.name))
+          await fetchMetaBatch(installedHubEntries)
+
+          const installed: SkillHubEntry[] = []
+          for (const [, info] of installedMap) {
+            const hubEntry = allEntries.find((e) => e.name === info.name)
+            const base = hubEntry ? buildHubEntry(hubEntry) : {
+              name: info.name, owner: 'local', description: '', displayName: '',
+              publishedAt: 0, avatarUrl: '', url: '', installed: false,
+            }
+            installed.push({ ...base, installed: true, path: info.path, enabled: info.enabled })
+          }
+
+          const results = await searchSkillsHub(allEntries, q, limit, sort, installedMap)
+          setJson(res, 200, { data: results, installed, total: allEntries.length })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to fetch skills hub') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub/readme') {
+        try {
+          const owner = url.searchParams.get('owner') || ''
+          const name = url.searchParams.get('name') || ''
+          if (!owner || !name) {
+            setJson(res, 400, { error: 'Missing owner or name' })
+            return
+          }
+          const rawUrl = `https://raw.githubusercontent.com/openclaw/skills/main/skills/${owner}/${name}/SKILL.md`
+          const resp = await fetch(rawUrl)
+          if (!resp.ok) throw new Error(`Failed to fetch SKILL.md: ${resp.status}`)
+          const content = await resp.text()
+          setJson(res, 200, { content })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to fetch SKILL.md') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-hub/install') {
+        try {
+          const payload = asRecord(await readJsonBody(req))
+          const owner = typeof payload?.owner === 'string' ? payload.owner : ''
+          const name = typeof payload?.name === 'string' ? payload.name : ''
+          if (!owner || !name) {
+            setJson(res, 400, { error: 'Missing owner or name' })
+            return
+          }
+          const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+          const installDest = await detectUserSkillsDir(appServer)
+          const skillPathInRepo = `skills/${owner}/${name}`
+          await runCommand('python3', [
+            installerScript,
+            '--repo', 'openclaw/skills',
+            '--path', skillPathInRepo,
+            '--dest', installDest,
+            '--method', 'git',
+          ])
+          const skillDir = join(installDest, name)
+          await ensureInstalledSkillIsValid(appServer, skillDir)
+          setJson(res, 200, { ok: true, path: skillDir })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to install skill') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-hub/uninstall') {
+        try {
+          const payload = asRecord(await readJsonBody(req))
+          const name = typeof payload?.name === 'string' ? payload.name : ''
+          const path = typeof payload?.path === 'string' ? payload.path : ''
+          const target = path || (name ? join(getSkillsInstallDir(), name) : '')
+          if (!target) {
+            setJson(res, 400, { error: 'Missing name or path' })
+            return
+          }
+          await rm(target, { recursive: true, force: true })
+          try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+          setJson(res, 200, { ok: true, deletedPath: target })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to uninstall skill') })
+        }
         return
       }
 

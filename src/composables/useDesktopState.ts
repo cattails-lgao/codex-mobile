@@ -2448,6 +2448,7 @@ export function useDesktopState() {
     autoRefreshSecondsLeft,
     error,
     refreshAll,
+    refreshSkills,
     selectThread,
     setThreadScrollState,
     archiveThreadById,

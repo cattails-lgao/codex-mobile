@@ -18,6 +18,11 @@ const router = createRouter({
       component: EmptyRouteView,
     },
     {
+      path: '/skills',
+      name: 'skills',
+      component: EmptyRouteView,
+    },
+    {
       path: '/new-thread',
       redirect: { name: 'home' },
     },
