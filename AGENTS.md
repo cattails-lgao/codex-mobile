@@ -23,15 +23,11 @@ When merging a worktree branch into `main` and conflicts arise:
 - Do not batch multiple tasks into a single commit.
 - Each commit message should describe the specific change made.
 
-## Completion Verification Requirement (MANDATORY)
+## Completion Verification Requirement
 
-- **ALWAYS test UI/behavior changes before reporting completion.** Never skip this step.
-- After completing a task that changes behavior or UI, run a Playwright verification in headless mode.
-- Start the dev server (`npm run dev`) if not already running, then open the page with Playwright CLI.
-- For responsive/mobile changes, use `resize <w> <h>` to test at mobile (375x812) and tablet (768x1024) viewports.
+- After completing a task that changes behavior or UI, always run a Playwright verification in headless mode.
 - Before taking any screenshot, wait a few seconds to ensure the UI has fully loaded.
 - Always capture a screenshot of the changed result and display that screenshot in chat when reporting completion.
-- If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
 
 ## Browser Automation: Prefer Playwright CLI Over Cursor Browser Tool
 
