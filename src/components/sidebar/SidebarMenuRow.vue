@@ -4,6 +4,7 @@
     class="sidebar-menu-row"
     :data-has-left="hasLeft"
     :data-has-right="hasRight"
+    :data-has-right-hover="hasRightHover"
     :data-force-right-hover="props.forceRightHover"
     v-bind="$attrs"
   >
@@ -80,13 +81,13 @@ const hasRight = computed(() => hasRightDefault.value || hasRightHover.value)
   @apply opacity-0 pointer-events-none w-0 overflow-hidden;
 }
 
-.sidebar-menu-row[data-has-right='true']:hover .sidebar-menu-row-right-default,
-.sidebar-menu-row[data-has-right='true']:focus-within .sidebar-menu-row-right-default {
+.sidebar-menu-row[data-has-right='true'][data-has-right-hover='true']:hover .sidebar-menu-row-right-default,
+.sidebar-menu-row[data-has-right='true'][data-has-right-hover='true']:focus-within .sidebar-menu-row-right-default {
   @apply opacity-0 pointer-events-none w-0 overflow-hidden;
 }
 
-.sidebar-menu-row[data-has-right='true']:hover .sidebar-menu-row-right-hover,
-.sidebar-menu-row[data-has-right='true']:focus-within .sidebar-menu-row-right-hover {
+.sidebar-menu-row[data-has-right='true'][data-has-right-hover='true']:hover .sidebar-menu-row-right-hover,
+.sidebar-menu-row[data-has-right='true'][data-has-right-hover='true']:focus-within .sidebar-menu-row-right-hover {
   @apply opacity-100 pointer-events-auto w-auto overflow-visible;
 }
 
