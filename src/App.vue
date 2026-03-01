@@ -1,5 +1,5 @@
 <template>
-  <DesktopLayout :is-sidebar-collapsed="isSidebarCollapsed">
+  <DesktopLayout :is-sidebar-collapsed="isSidebarCollapsed" @close-sidebar="setSidebarCollapsed(true)">
     <template #sidebar>
       <section class="sidebar-root">
         <SidebarThreadControls
@@ -51,7 +51,7 @@
           class="sidebar-skills-link"
           :class="{ 'is-active': isSkillsRoute }"
           type="button"
-          @click="router.push({ name: 'skills' })"
+          @click="router.push({ name: 'skills' }); isMobile && setSidebarCollapsed(true)"
         >
           Skills Hub
         </button>
@@ -71,7 +71,7 @@
         <ContentHeader :title="contentTitle">
           <template #leading>
             <SidebarThreadControls
-              v-if="isSidebarCollapsed"
+              v-if="isSidebarCollapsed || isMobile"
               class="sidebar-thread-controls-header-host"
               :is-sidebar-collapsed="isSidebarCollapsed"
               :is-auto-refresh-enabled="isAutoRefreshEnabled"
@@ -157,6 +157,7 @@ import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vu
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
+import { useMobile } from './composables/useMobile'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -206,6 +207,7 @@ const {
 
 const route = useRoute()
 const router = useRouter()
+const { isMobile } = useMobile()
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
@@ -308,6 +310,7 @@ function onSelectThread(threadId: string): void {
   if (!threadId) return
   if (route.name === 'thread' && routeThreadId.value === threadId) return
   void router.push({ name: 'thread', params: { threadId } })
+  if (isMobile.value) setSidebarCollapsed(true)
 }
 
 function onArchiveThread(threadId: string): void {
@@ -507,6 +510,12 @@ watch(
   { immediate: true },
 )
 
+watch(isMobile, (mobile) => {
+  if (mobile && !isSidebarCollapsed.value) {
+    setSidebarCollapsed(true)
+  }
+})
+
 async function submitFirstMessageForNewThread(
   text: string,
   imageUrls: string[] = [],
@@ -587,7 +596,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-body {
-  @apply flex-1 min-h-0 w-full flex flex-col gap-3 pt-1 pb-4 overflow-y-hidden overflow-x-visible;
+  @apply flex-1 min-h-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-visible;
 }
 
 .content-error {
@@ -607,19 +616,19 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-empty {
-  @apply flex-1 min-h-0 flex flex-col items-center justify-center gap-0.5 px-6;
+  @apply flex-1 min-h-0 flex flex-col items-center justify-center gap-0.5 px-3 sm:px-6;
 }
 
 .new-thread-hero {
-  @apply m-0 text-[2.5rem] font-normal leading-[1.05] text-zinc-900;
+  @apply m-0 text-2xl sm:text-[2.5rem] font-normal leading-[1.05] text-zinc-900;
 }
 
 .new-thread-folder-dropdown {
-  @apply text-[2.5rem] text-zinc-500;
+  @apply text-2xl sm:text-[2.5rem] text-zinc-500;
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-auto text-[2.5rem] leading-[1.05];
+  @apply h-auto text-2xl sm:text-[2.5rem] leading-[1.05];
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-value) {
@@ -627,7 +636,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-chevron) {
-  @apply h-5 w-5 mt-0;
+  @apply h-4 w-4 sm:h-5 sm:w-5 mt-0;
 }
 
 </style>

@@ -1,15 +1,28 @@
 <template>
-  <div class="desktop-layout" :style="layoutStyle">
-    <aside v-if="!isSidebarCollapsed" class="desktop-sidebar">
-      <slot name="sidebar" />
-    </aside>
-    <button
-      v-if="!isSidebarCollapsed"
-      class="desktop-resize-handle"
-      type="button"
-      aria-label="Resize sidebar"
-      @mousedown="onResizeHandleMouseDown"
-    />
+  <div class="desktop-layout" :class="{ 'is-mobile': isMobile }" :style="layoutStyle">
+    <Teleport v-if="isMobile" to="body">
+      <Transition name="drawer">
+        <div v-if="!isSidebarCollapsed" class="mobile-drawer-backdrop" @click="$emit('close-sidebar')">
+          <aside class="mobile-drawer" @click.stop>
+            <slot name="sidebar" />
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <template v-if="!isMobile">
+      <aside v-if="!isSidebarCollapsed" class="desktop-sidebar">
+        <slot name="sidebar" />
+      </aside>
+      <button
+        v-if="!isSidebarCollapsed"
+        class="desktop-resize-handle"
+        type="button"
+        aria-label="Resize sidebar"
+        @mousedown="onResizeHandleMouseDown"
+      />
+    </template>
+
     <section class="desktop-main">
       <slot name="content" />
     </section>
@@ -18,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useMobile } from '../../composables/useMobile'
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +41,12 @@ const props = withDefaults(
     isSidebarCollapsed: false,
   },
 )
+
+defineEmits<{
+  'close-sidebar': []
+}>()
+
+const { isMobile } = useMobile()
 
 const SIDEBAR_WIDTH_KEY = 'codex-web-local.sidebar-width.v1'
 const MIN_SIDEBAR_WIDTH = 260
@@ -39,7 +59,6 @@ function clampSidebarWidth(value: number): number {
 
 function loadSidebarWidth(): number {
   if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH
-
   const raw = window.localStorage.getItem(SIDEBAR_WIDTH_KEY)
   const parsed = Number(raw)
   if (!Number.isFinite(parsed)) return DEFAULT_SIDEBAR_WIDTH
@@ -48,7 +67,7 @@ function loadSidebarWidth(): number {
 
 const sidebarWidth = ref(loadSidebarWidth())
 const layoutStyle = computed(() => {
-  if (props.isSidebarCollapsed) {
+  if (isMobile.value || props.isSidebarCollapsed) {
     return {
       '--sidebar-width': '0px',
       '--layout-columns': 'minmax(0, 1fr)',
@@ -67,7 +86,6 @@ function saveSidebarWidth(value: number): void {
 
 function onResizeHandleMouseDown(event: MouseEvent): void {
   event.preventDefault()
-
   const startX = event.clientX
   const startWidth = sidebarWidth.value
 
@@ -110,5 +128,39 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 
 .desktop-main {
   @apply bg-white min-h-0 overflow-y-hidden overflow-x-visible;
+}
+
+.mobile-drawer-backdrop {
+  @apply fixed inset-0 z-40 bg-black/40;
+}
+
+.mobile-drawer {
+  @apply absolute top-0 left-0 bottom-0 w-[85vw] max-w-80 bg-slate-100 overflow-y-auto shadow-2xl;
+}
+
+.drawer-enter-active,
+.drawer-leave-active {
+  @apply transition-opacity duration-200;
+}
+
+.drawer-enter-active .mobile-drawer,
+.drawer-leave-active .mobile-drawer {
+  transition: transform 200ms ease;
+}
+
+.drawer-enter-from {
+  @apply opacity-0;
+}
+
+.drawer-enter-from .mobile-drawer {
+  transform: translateX(-100%);
+}
+
+.drawer-leave-to {
+  @apply opacity-0;
+}
+
+.drawer-leave-to .mobile-drawer {
+  transform: translateX(-100%);
 }
 </style>

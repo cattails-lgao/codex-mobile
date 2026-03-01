@@ -287,7 +287,7 @@ onMounted(() => {
 @reference "tailwindcss";
 
 .skills-hub {
-  @apply flex flex-col gap-4 p-6 max-w-4xl mx-auto w-full overflow-y-auto h-full;
+  @apply flex flex-col gap-3 sm:gap-4 p-3 sm:p-6 max-w-4xl mx-auto w-full overflow-y-auto h-full;
 }
 
 .skills-hub-header {
@@ -295,7 +295,7 @@ onMounted(() => {
 }
 
 .skills-hub-title {
-  @apply text-2xl font-semibold text-zinc-900 m-0;
+  @apply text-xl sm:text-2xl font-semibold text-zinc-900 m-0;
 }
 
 .skills-hub-subtitle {
@@ -303,7 +303,7 @@ onMounted(() => {
 }
 
 .skills-hub-toolbar {
-  @apply flex items-center gap-2;
+  @apply flex flex-col sm:flex-row items-stretch sm:items-center gap-2;
 }
 
 .skills-hub-search-wrap {

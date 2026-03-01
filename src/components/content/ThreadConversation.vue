@@ -811,15 +811,15 @@ onBeforeUnmount(() => {
 }
 
 .conversation-loading {
-  @apply m-0 px-6 text-sm text-slate-500;
+  @apply m-0 px-2 sm:px-6 text-sm text-slate-500;
 }
 
 .conversation-empty {
-  @apply m-0 px-6 text-sm text-slate-500;
+  @apply m-0 px-2 sm:px-6 text-sm text-slate-500;
 }
 
 .conversation-list {
-  @apply h-full min-h-0 list-none m-0 px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-3;
+  @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
 }
 
 .conversation-item {
@@ -856,7 +856,7 @@ onBeforeUnmount(() => {
 }
 
 .request-card {
-  @apply w-full max-w-180 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2;
+  @apply w-full max-w-180 rounded-xl border border-amber-300 bg-amber-50 px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2;
 }
 
 .request-title {
@@ -872,7 +872,7 @@ onBeforeUnmount(() => {
 }
 
 .request-actions {
-  @apply flex flex-wrap gap-2;
+  @apply flex flex-wrap gap-1.5 sm:gap-2;
 }
 
 .request-button {
@@ -979,7 +979,7 @@ onBeforeUnmount(() => {
 }
 
 .message-card[data-role='user'] {
-  @apply rounded-2xl bg-slate-200 px-4 py-3 max-w-[min(560px,100%)];
+  @apply rounded-2xl bg-slate-200 px-3 sm:px-4 py-2 sm:py-3 max-w-[min(560px,100%)];
   width: fit-content;
   margin-left: auto;
   align-self: flex-end;
@@ -1029,7 +1029,7 @@ onBeforeUnmount(() => {
 }
 
 .image-modal-backdrop {
-  @apply fixed inset-0 z-50 bg-black/40 p-6 flex items-center justify-center;
+  @apply fixed inset-0 z-50 bg-black/40 p-2 sm:p-6 flex items-center justify-center;
 }
 
 .image-modal-content {

@@ -434,11 +434,11 @@ watch(
 @reference "tailwindcss";
 
 .thread-composer {
-  @apply w-full max-w-175 mx-auto px-6;
+  @apply w-full max-w-175 mx-auto px-2 sm:px-6;
 }
 
 .thread-composer-shell {
-  @apply relative rounded-2xl border border-zinc-300 bg-white p-3 shadow-sm;
+  @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
 }
 
 .thread-composer-shell--no-top-radius {
@@ -482,7 +482,7 @@ watch(
 }
 
 .thread-composer-input {
-  @apply w-full min-w-0 h-11 rounded-xl border-0 bg-transparent px-1 text-sm text-zinc-900 outline-none transition;
+  @apply w-full min-w-0 h-10 sm:h-11 rounded-xl border-0 bg-transparent px-1 text-sm text-zinc-900 outline-none transition;
 }
 
 .thread-composer-input:focus {
@@ -494,7 +494,7 @@ watch(
 }
 
 .thread-composer-controls {
-  @apply mt-3 flex items-center gap-4;
+  @apply mt-2 sm:mt-3 flex flex-wrap items-center gap-2 sm:gap-4;
 }
 
 .thread-composer-attach {
@@ -506,7 +506,7 @@ watch(
 }
 
 .thread-composer-attach-menu {
-  @apply absolute bottom-11 left-0 z-20 min-w-44 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute bottom-11 left-0 z-20 min-w-44 max-sm:min-w-40 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .thread-composer-attach-item {

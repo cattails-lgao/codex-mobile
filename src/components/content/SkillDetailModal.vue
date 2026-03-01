@@ -176,15 +176,15 @@ function onToggleEnabled(): void {
 @reference "tailwindcss";
 
 .sdm-overlay {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40;
+  @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40;
 }
 
 .sdm-panel {
-  @apply w-full max-w-lg max-h-[80vh] rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden;
+  @apply w-full max-w-lg max-h-[90vh] sm:max-h-[80vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden;
 }
 
 .sdm-header {
-  @apply flex items-start justify-between gap-3 p-5 pb-3 shrink-0;
+  @apply flex items-start justify-between gap-3 p-4 sm:p-5 pb-3 shrink-0;
 }
 
 .sdm-title-area {
@@ -224,7 +224,7 @@ function onToggleEnabled(): void {
 }
 
 .sdm-body {
-  @apply p-5 pt-0 flex flex-col gap-3 overflow-y-auto flex-1 min-h-0;
+  @apply p-4 sm:p-5 pt-0 flex flex-col gap-3 overflow-y-auto flex-1 min-h-0;
 }
 
 .sdm-desc {
@@ -272,7 +272,7 @@ function onToggleEnabled(): void {
 }
 
 .sdm-footer {
-  @apply p-5 pt-3 border-t border-zinc-100 shrink-0;
+  @apply p-4 sm:p-5 pt-3 border-t border-zinc-100 shrink-0;
 }
 
 .sdm-footer-actions {

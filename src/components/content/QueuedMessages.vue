@@ -36,7 +36,7 @@ defineEmits<{
 @reference "tailwindcss";
 
 .queued-messages {
-  @apply w-full max-w-175 mx-auto px-6;
+  @apply w-full max-w-175 mx-auto px-2 sm:px-6;
 }
 
 .queued-messages-inner {
