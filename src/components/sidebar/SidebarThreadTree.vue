@@ -146,7 +146,6 @@
           <SidebarMenuRow
             as="div"
             class="project-header-row"
-            :force-right-hover="isProjectMenuOpen(group.projectName)"
             role="button"
             tabindex="0"
             @click="toggleProjectCollapse(group.projectName)"
@@ -173,7 +172,7 @@
             >
               <span class="project-title">{{ getProjectDisplayName(group.projectName) }}</span>
             </span>
-            <template #right-hover>
+            <template #right>
               <div class="project-hover-controls">
                 <div :ref="(el) => setProjectMenuWrapRef(group.projectName, el)" class="project-menu-wrap">
                   <button
