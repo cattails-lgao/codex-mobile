@@ -1008,6 +1008,7 @@ function isDraggingProject(projectName: string): boolean {
 function projectGroupStyle(projectName: string): Record<string, string> | undefined {
   const drag = activeProjectDrag.value
   const targetTop = layoutTopByProject.value[projectName] ?? 0
+  const shouldElevateForMenu = openProjectMenuId.value === projectName
 
   if (!drag || drag.projectName !== projectName) {
     return {
@@ -1015,6 +1016,7 @@ function projectGroupStyle(projectName: string): Record<string, string> | undefi
       top: '0',
       left: '0',
       right: '0',
+      zIndex: shouldElevateForMenu ? '40' : '1',
       transform: `translate3d(0, ${targetTop}px, 0)`,
       willChange: 'transform',
       transition: 'transform 180ms ease',
@@ -1081,8 +1083,10 @@ watch(
   },
 )
 
-watch(openProjectMenuId, (projectName) => {
-  if (projectName) {
+const hasOpenDismissableMenu = computed(() => isOrganizeMenuOpen.value || openProjectMenuId.value !== '')
+
+watch(hasOpenDismissableMenu, (isOpen) => {
+  if (isOpen) {
     bindProjectMenuDismissListeners()
     return
   }
