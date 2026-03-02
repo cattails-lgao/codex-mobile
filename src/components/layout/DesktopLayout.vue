@@ -109,7 +109,9 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 @reference "tailwindcss";
 
 .desktop-layout {
-  @apply h-screen grid bg-slate-100 text-slate-900 overflow-hidden;
+  @apply grid bg-slate-100 text-slate-900 overflow-hidden;
+  height: 100vh;
+  height: 100dvh;
   grid-template-columns: var(--layout-columns);
 }
 
