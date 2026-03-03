@@ -136,6 +136,16 @@ npx @friuns/codexui
 
 ---
 
+## 🖼️ Screenshots
+
+### Skills Hub
+![Skills Hub](docs/screenshots/skills-hub.png)
+
+### Chat
+![Chat](docs/screenshots/chat.png)
+
+---
+
 ## 🐛 Troubleshooting
 
 | ❌ Problem | ✅ Fix |
