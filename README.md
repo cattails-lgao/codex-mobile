@@ -121,6 +121,17 @@ pkg install nodejs -y
 npx @friuns/codexui
 ```
 
+Android background requirements:
+
+1. Keep `codexui` running in the current Termux session (do not close it).
+2. In Android settings, disable battery optimization for `Termux`.
+3. Keep the persistent Termux notification enabled so Android is less likely to kill it.
+4. Optional but recommended in Termux:
+```bash
+termux-wake-lock
+```
+5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx @friuns/codexui` again.
+
 ---
 
 ## 🏗️ Architecture
