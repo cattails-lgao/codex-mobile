@@ -31,7 +31,12 @@
         <IconTablerChevronRight class="skills-hub-section-chevron" :class="{ 'is-open': isInstalledOpen }" />
       </button>
       <div v-if="isInstalledOpen" class="skills-hub-grid">
-        <SkillCard v-for="skill in filteredInstalled" :key="skill.name" :skill="skill" @select="openDetail" />
+        <SkillCard
+          v-for="skill in filteredInstalled"
+          :key="skill.name"
+          :skill="skill"
+          @select="(skill) => openDetail(skill as HubSkill)"
+        />
       </div>
     </div>
 
@@ -40,7 +45,12 @@
       <div v-else-if="error" class="skills-hub-error">{{ error }}</div>
       <template v-else>
         <div v-if="browseSkills.length > 0" class="skills-hub-grid">
-          <SkillCard v-for="skill in browseSkills" :key="skill.url" :skill="skill" @select="openDetail" />
+          <SkillCard
+            v-for="skill in browseSkills"
+            :key="skill.url"
+            :skill="skill"
+            @select="(skill) => openDetail(skill as HubSkill)"
+          />
         </div>
         <div v-else-if="query.trim()" class="skills-hub-empty">No skills found for "{{ query }}"</div>
       </template>

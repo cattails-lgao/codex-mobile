@@ -4,7 +4,7 @@ import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
 
 const program = new Command()
-  .name('codex-web-local')
+  .name('codexui')
   .description('Web interface for Codex app-server')
   .option('-p, --port <port>', 'port to listen on', '3000')
   .option('--password <pass>', 'set a specific password')
