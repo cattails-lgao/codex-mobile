@@ -44,6 +44,22 @@ You run one command. It starts a local web server. You open it from your machine
 
 ---
 
+## 🧩 Recent Product Features (from main commits)
+> **Not just launch. Actual UX upgrades.**
+
+- 🗂️ Searchable project picker in new-thread flow
+- ➕ Inline "Add new project" input inside picker (no browser prompt)
+- 📌 New projects get pinned to top automatically
+- 🧠 Smart default new-project name suggestion via server-side free-directory scan (`New Project (N)`)
+- 🔄 Project order persisted globally to workspace roots state
+- 🧵 Optimistic in-progress threads preserved during refresh/poll cycles
+- 📱 Mobile drawer sidebar in desktop layout (teleported overlay + swipe-friendly structure)
+- 🎛️ Skills Hub mobile-friendly spacing/toolbar layout improvements
+- 🪟 Skill detail modal tuned for mobile sheet-style behavior
+- 🧪 Skills Hub event typing fix for `SkillCard` select emit compatibility
+
+---
+
 ## 🌍 What Can You Do With This?
 
 | 🔥 Use Case | 💥 What You Get |
