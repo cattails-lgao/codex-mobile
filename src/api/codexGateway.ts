@@ -275,6 +275,41 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   return normalizeWorkspaceRootsState(envelope.data)
 }
 
+export async function openProjectRoot(path: string, options?: { createIfMissing?: boolean; label?: string }): Promise<string> {
+  const response = await fetch('/codex-api/project-root', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path,
+      createIfMissing: options?.createIfMissing === true,
+      label: options?.label ?? '',
+    }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to open project root')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const normalizedPath = typeof data.path === 'string' ? data.path.trim() : ''
+  return normalizedPath
+}
+
+function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {}
+  const error = record.error
+  return typeof error === 'string' && error.trim().length > 0 ? error : fallback
+}
+
 export type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
 
 export async function getThreadTitleCache(): Promise<ThreadTitleCache> {

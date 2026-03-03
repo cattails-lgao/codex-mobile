@@ -94,7 +94,12 @@
                 <p class="new-thread-hero">Let's build</p>
                 <ComposerDropdown class="new-thread-folder-dropdown" :model-value="newThreadCwd"
                   :options="newThreadFolderOptions" placeholder="Choose folder"
-                  :disabled="newThreadFolderOptions.length === 0" @update:model-value="onSelectNewThreadFolder" />
+                  :enable-search="true"
+                  search-placeholder="Quick search project"
+                  :show-add-action="true"
+                  add-action-label="+ Add new project"
+                  :disabled="false" @update:model-value="onSelectNewThreadFolder"
+                  @add="onAddNewProject" />
               </div>
 
               <ThreadComposer :active-thread-id="composerThreadContextId"
@@ -158,6 +163,7 @@ import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
+import { openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -265,6 +271,14 @@ const newThreadFolderOptions = computed(() => {
     options.push({
       value: cwd,
       label: projectDisplayNameById.value[group.projectName] ?? group.projectName,
+    })
+  }
+
+  const selectedCwd = newThreadCwd.value.trim()
+  if (selectedCwd && !seenCwds.has(selectedCwd)) {
+    options.unshift({
+      value: selectedCwd,
+      label: getPathLeafName(selectedCwd),
     })
   }
 
@@ -386,6 +400,82 @@ function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; ski
 
 function onSelectNewThreadFolder(cwd: string): void {
   newThreadCwd.value = cwd.trim()
+}
+
+async function onAddNewProject(): Promise<void> {
+  const defaultName = getDefaultNewProjectName()
+  const entered = window.prompt('Project name (or paste full path)', defaultName)
+  const normalizedInput = entered?.trim() ?? ''
+  if (!normalizedInput) return
+
+  const isPath = looksLikePath(normalizedInput)
+  const targetPath = isPath
+    ? normalizedInput
+    : joinPath(getProjectBaseDirectory(), normalizedInput)
+  if (!targetPath) return
+
+  try {
+    const normalizedPath = await openProjectRoot(targetPath, {
+      createIfMissing: !isPath,
+      label: isPath ? '' : normalizedInput,
+    })
+    if (normalizedPath) {
+      newThreadCwd.value = normalizedPath
+    }
+  } catch {
+    // Error is surfaced on next request if path is invalid.
+  }
+}
+
+function looksLikePath(value: string): boolean {
+  if (!value) return false
+  if (value.startsWith('~/')) return true
+  if (value.startsWith('/')) return true
+  return /^[a-zA-Z]:[\\/]/.test(value)
+}
+
+function getDefaultNewProjectName(): string {
+  const names = new Set<string>()
+  for (const option of newThreadFolderOptions.value) {
+    names.add(option.label.trim())
+    names.add(getPathLeafName(option.value))
+  }
+  let index = 1
+  while (names.has(`New Project (${String(index)})`)) {
+    index += 1
+  }
+  return `New Project (${String(index)})`
+}
+
+function getProjectBaseDirectory(): string {
+  const selected = newThreadCwd.value.trim()
+  if (selected) return getPathParent(selected)
+  const first = newThreadFolderOptions.value[0]?.value?.trim() ?? ''
+  if (first) return getPathParent(first)
+  return ''
+}
+
+function getPathParent(path: string): string {
+  const trimmed = path.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  const slashIndex = trimmed.lastIndexOf('/')
+  if (slashIndex <= 0) return ''
+  return trimmed.slice(0, slashIndex)
+}
+
+function getPathLeafName(path: string): string {
+  const trimmed = path.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  const slashIndex = trimmed.lastIndexOf('/')
+  if (slashIndex < 0) return trimmed
+  return trimmed.slice(slashIndex + 1)
+}
+
+function joinPath(parent: string, child: string): string {
+  const normalizedParent = parent.trim().replace(/\/+$/, '')
+  const normalizedChild = child.trim().replace(/^\/+/, '')
+  if (!normalizedParent || !normalizedChild) return ''
+  return `${normalizedParent}/${normalizedChild}`
 }
 
 function onSelectModel(modelId: string): void {

@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 
 type JsonRpcCall = {
@@ -1030,6 +1030,51 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         await writeWorkspaceRootsState(nextState)
         setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/project-root') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawPath = typeof payload?.path === 'string' ? payload.path.trim() : ''
+        const createIfMissing = payload?.createIfMissing === true
+        const label = typeof payload?.label === 'string' ? payload.label : ''
+        if (!rawPath) {
+          setJson(res, 400, { error: 'Missing path' })
+          return
+        }
+
+        const normalizedPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath)
+        let pathExists = true
+        try {
+          const info = await stat(normalizedPath)
+          if (!info.isDirectory()) {
+            setJson(res, 400, { error: 'Path exists but is not a directory' })
+            return
+          }
+        } catch {
+          pathExists = false
+        }
+
+        if (!pathExists && createIfMissing) {
+          await mkdir(normalizedPath, { recursive: true })
+        } else if (!pathExists) {
+          setJson(res, 404, { error: 'Directory does not exist' })
+          return
+        }
+
+        const existingState = await readWorkspaceRootsState()
+        const nextOrder = [normalizedPath, ...existingState.order.filter((item) => item !== normalizedPath)]
+        const nextActive = [normalizedPath, ...existingState.active.filter((item) => item !== normalizedPath)]
+        const nextLabels = { ...existingState.labels }
+        if (label.trim().length > 0) {
+          nextLabels[normalizedPath] = label.trim()
+        }
+        await writeWorkspaceRootsState({
+          order: nextOrder,
+          labels: nextLabels,
+          active: nextActive,
+        })
+        setJson(res, 200, { data: { path: normalizedPath } })
         return
       }
 
