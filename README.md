@@ -144,6 +144,10 @@ npx @friuns/codexui
 ### Chat
 ![Chat](docs/screenshots/chat.png)
 
+### Mobile UI
+![Skills Hub Mobile](docs/screenshots/skills-hub-mobile.png)
+![Chat Mobile](docs/screenshots/chat-mobile.png)
+
 ---
 
 ## 🐛 Troubleshooting
