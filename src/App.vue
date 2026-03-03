@@ -165,7 +165,7 @@ import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { openProjectRoot } from './api/codexGateway'
+import { getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -224,6 +224,7 @@ const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
 const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
+const defaultNewProjectName = ref('New Project (1)')
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -287,11 +288,10 @@ const newThreadFolderOptions = computed(() => {
 
   return options
 })
-const defaultNewProjectName = computed(() => getDefaultNewProjectName())
-
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
   void initialize()
+  void refreshDefaultProjectName()
 })
 
 onUnmounted(() => {
@@ -424,6 +424,7 @@ async function onAddNewProject(rawInput: string): Promise<void> {
     if (normalizedPath) {
       newThreadCwd.value = normalizedPath
       pinProjectToTop(getPathLeafName(normalizedPath))
+      void refreshDefaultProjectName()
     }
   } catch {
     // Error is surfaced on next request if path is invalid.
@@ -437,17 +438,19 @@ function looksLikePath(value: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(value)
 }
 
-function getDefaultNewProjectName(): string {
-  const names = new Set<string>()
-  for (const option of newThreadFolderOptions.value) {
-    names.add(option.label.trim())
-    names.add(getPathLeafName(option.value))
+async function refreshDefaultProjectName(): Promise<void> {
+  const baseDir = getProjectBaseDirectory()
+  if (!baseDir) {
+    defaultNewProjectName.value = 'New Project (1)'
+    return
   }
-  let index = 1
-  while (names.has(`New Project (${String(index)})`)) {
-    index += 1
+
+  try {
+    const suggestion = await getProjectRootSuggestion(baseDir)
+    defaultNewProjectName.value = suggestion.name || 'New Project (1)'
+  } catch {
+    defaultNewProjectName.value = 'New Project (1)'
   }
-  return `New Project (${String(index)})`
 }
 
 function getProjectBaseDirectory(): string {
@@ -599,8 +602,16 @@ watch(
     if (!hasSelected) {
       newThreadCwd.value = options[0].value
     }
+    void refreshDefaultProjectName()
   },
   { immediate: true },
+)
+
+watch(
+  () => newThreadCwd.value,
+  () => {
+    void refreshDefaultProjectName()
+  },
 )
 
 watch(isMobile, (mobile) => {

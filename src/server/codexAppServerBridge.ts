@@ -1078,6 +1078,42 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-root-suggestion') {
+        const basePath = url.searchParams.get('basePath')?.trim() ?? ''
+        if (!basePath) {
+          setJson(res, 400, { error: 'Missing basePath' })
+          return
+        }
+        const normalizedBasePath = isAbsolute(basePath) ? basePath : resolve(basePath)
+        try {
+          const baseInfo = await stat(normalizedBasePath)
+          if (!baseInfo.isDirectory()) {
+            setJson(res, 400, { error: 'basePath is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'basePath does not exist' })
+          return
+        }
+
+        let index = 1
+        while (index < 100000) {
+          const candidateName = `New Project (${String(index)})`
+          const candidatePath = join(normalizedBasePath, candidateName)
+          try {
+            await stat(candidatePath)
+            index += 1
+            continue
+          } catch {
+            setJson(res, 200, { data: { name: candidateName, path: candidatePath } })
+            return
+          }
+        }
+
+        setJson(res, 500, { error: 'Failed to compute project name suggestion' })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-titles') {
         const cache = await readThreadTitleCache()
         setJson(res, 200, { data: cache })

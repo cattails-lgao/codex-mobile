@@ -11,6 +11,7 @@ import {
   getThreadGroups,
   getThreadMessages,
   getWorkspaceRootsState,
+  setWorkspaceRootsState,
   getThreadTitleCache,
   persistThreadTitle,
   generateThreadTitle,
@@ -2233,6 +2234,8 @@ export function useDesktopState() {
     if (!currentExists) {
       setSelectedThreadId(flatThreads[0]?.id ?? '')
     }
+
+    void persistProjectOrderToWorkspaceRoots()
   }
 
   function reorderProject(projectName: string, toIndex: number): void {
@@ -2254,6 +2257,7 @@ export function useDesktopState() {
     const orderedGroups = orderGroupsByProjectOrder(sourceGroups.value, projectOrder.value)
     sourceGroups.value = mergeThreadGroups(sourceGroups.value, orderedGroups)
     applyThreadFlags()
+    void persistProjectOrderToWorkspaceRoots()
   }
 
   function pinProjectToTop(projectName: string): void {
@@ -2267,6 +2271,51 @@ export function useDesktopState() {
     const orderedGroups = orderGroupsByProjectOrder(sourceGroups.value, projectOrder.value)
     sourceGroups.value = mergeThreadGroups(sourceGroups.value, orderedGroups)
     applyThreadFlags()
+    void persistProjectOrderToWorkspaceRoots()
+  }
+
+  async function persistProjectOrderToWorkspaceRoots(): Promise<void> {
+    try {
+      const rootsState = await getWorkspaceRootsState()
+      const rootByProjectName = new Map<string, string>()
+      for (const rootPath of rootsState.order) {
+        const projectName = toProjectNameFromWorkspaceRoot(rootPath)
+        if (!rootByProjectName.has(projectName)) {
+          rootByProjectName.set(projectName, rootPath)
+        }
+      }
+      for (const group of sourceGroups.value) {
+        const cwd = group.threads[0]?.cwd?.trim() ?? ''
+        if (!cwd) continue
+        rootByProjectName.set(group.projectName, cwd)
+      }
+
+      const nextOrder: string[] = []
+      for (const projectName of projectOrder.value) {
+        const rootPath = rootByProjectName.get(projectName)
+        if (rootPath && !nextOrder.includes(rootPath)) {
+          nextOrder.push(rootPath)
+        }
+      }
+      for (const rootPath of rootsState.order) {
+        if (!nextOrder.includes(rootPath)) {
+          nextOrder.push(rootPath)
+        }
+      }
+
+      const nextActive = rootsState.active.filter((rootPath) => nextOrder.includes(rootPath))
+      if (nextActive.length === 0 && nextOrder.length > 0) {
+        nextActive.push(nextOrder[0])
+      }
+
+      await setWorkspaceRootsState({
+        order: nextOrder,
+        labels: rootsState.labels,
+        active: nextActive,
+      })
+    } catch {
+      // Keep local project order when global state persistence is unavailable.
+    }
   }
 
   async function syncThreadStatus(): Promise<void> {

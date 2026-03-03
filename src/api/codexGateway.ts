@@ -275,6 +275,17 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   return normalizeWorkspaceRootsState(envelope.data)
 }
 
+export async function setWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+  const response = await fetch('/codex-api/workspace-roots-state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(nextState),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to save workspace roots state')
+  }
+}
+
 export async function openProjectRoot(path: string, options?: { createIfMissing?: boolean; label?: string }): Promise<string> {
   const response = await fetch('/codex-api/project-root', {
     method: 'POST',
@@ -300,6 +311,28 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
       : {}
   const normalizedPath = typeof data.path === 'string' ? data.path.trim() : ''
   return normalizedPath
+}
+
+export async function getProjectRootSuggestion(basePath: string): Promise<{ name: string; path: string }> {
+  const query = new URLSearchParams({ basePath })
+  const response = await fetch(`/codex-api/project-root-suggestion?${query.toString()}`)
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to suggest project name')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  return {
+    name: typeof data.name === 'string' ? data.name.trim() : '',
+    path: typeof data.path === 'string' ? data.path.trim() : '',
+  }
 }
 
 function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
