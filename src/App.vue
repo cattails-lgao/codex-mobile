@@ -341,6 +341,7 @@ function onStartNewThread(projectName: string): void {
   if (projectCwd) {
     newThreadCwd.value = projectCwd
   }
+  if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
   void router.push({ name: 'home' })
 }
@@ -350,6 +351,7 @@ function onStartNewThreadFromToolbar(): void {
   if (cwd) {
     newThreadCwd.value = cwd
   }
+  if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
   void router.push({ name: 'home' })
 }
