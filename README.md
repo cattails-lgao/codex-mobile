@@ -22,6 +22,20 @@
 
 ---
 
+## 🖼️ Screenshots
+
+### Skills Hub
+![Skills Hub](docs/screenshots/skills-hub.png)
+
+### Chat
+![Chat](docs/screenshots/chat.png)
+
+### Mobile UI
+![Skills Hub Mobile](docs/screenshots/skills-hub-mobile.png)
+![Chat Mobile](docs/screenshots/chat-mobile.png)
+
+---
+
 ## 🤯 What Is This?
 **`@friuns/codexui`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
 
@@ -133,20 +147,6 @@ npx @friuns/codexui
 - ✅ Codex app-server environment available
 - ✅ Browser access to host/port
 - ✅ Microphone permission (only for voice dictation)
-
----
-
-## 🖼️ Screenshots
-
-### Skills Hub
-![Skills Hub](docs/screenshots/skills-hub.png)
-
-### Chat
-![Chat](docs/screenshots/chat.png)
-
-### Mobile UI
-![Skills Hub Mobile](docs/screenshots/skills-hub-mobile.png)
-![Chat Mobile](docs/screenshots/chat-mobile.png)
 
 ---
 
