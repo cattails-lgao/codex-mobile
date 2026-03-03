@@ -1,22 +1,12 @@
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { Command } from 'commander'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
 
-const program = new Command()
-  .name('codexui')
-  .description('Web interface for Codex app-server')
-  .option('-p, --port <port>', 'port to listen on', '3000')
-  .option('--password <pass>', 'set a specific password')
-  .option('--no-password', 'disable password protection')
-  .parse()
-
-const opts = program.opts<{ port: string; password: string | boolean }>()
-const port = parseInt(opts.port, 10)
+const program = new Command().name('codexui').description('Web interface for Codex app-server')
 
 function isTermuxRuntime(): boolean {
   return Boolean(process.env.TERMUX_VERSION || process.env.PREFIX?.includes('/com.termux/'))
@@ -34,11 +24,6 @@ function runOrFail(command: string, args: string[], label: string): void {
   }
 }
 
-function hasCodexAuth(): boolean {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
-  return existsSync(join(codexHome, 'auth.json'))
-}
-
 function resolveCodexCommand(): string | null {
   if (canRun('codex', ['--version'])) {
     return 'codex'
@@ -54,9 +39,9 @@ function resolveCodexCommand(): string | null {
   return null
 }
 
-function bootstrapTermuxCodex(): void {
+function ensureTermuxCodexInstalled(): string | null {
   if (!isTermuxRuntime()) {
-    return
+    return resolveCodexCommand()
   }
 
   if (!canRun('git', ['--version'])) {
@@ -84,11 +69,7 @@ function bootstrapTermuxCodex(): void {
     }
     console.log('\nCodex CLI installed.\n')
   }
-
-  if (!hasCodexAuth()) {
-    console.log('\nCodex is not logged in. Starting `codex login`...\n')
-    runOrFail(codexCommand, ['login'], 'Codex login')
-  }
+  return codexCommand
 }
 
 function resolvePassword(input: string | boolean): string | undefined {
@@ -101,9 +82,21 @@ function resolvePassword(input: string | boolean): string | undefined {
   return generatePassword()
 }
 
-async function main() {
-  bootstrapTermuxCodex()
-  const password = resolvePassword(opts.password)
+function printTermuxKeepAlive(lines: string[]): void {
+  if (!isTermuxRuntime()) {
+    return
+  }
+  lines.push('')
+  lines.push('  Android/Termux keep-alive:')
+  lines.push('  1) Keep this Termux session open (do not swipe it away).')
+  lines.push('  2) Disable battery optimization for Termux in Android settings.')
+  lines.push('  3) Optional: run `termux-wake-lock` in another shell.')
+}
+
+async function startServer(options: { port: string; password: string | boolean }) {
+  ensureTermuxCodexInstalled()
+  const port = parseInt(options.port, 10)
+  const password = resolvePassword(options.password)
   const { app, dispose } = createApp({ password })
   const server = createServer(app)
 
@@ -119,13 +112,7 @@ async function main() {
       lines.push(`  Password: ${password}`)
     }
 
-    if (isTermuxRuntime()) {
-      lines.push('')
-      lines.push('  Android/Termux keep-alive:')
-      lines.push('  1) Keep this Termux session open (do not swipe it away).')
-      lines.push('  2) Disable battery optimization for Termux in Android settings.')
-      lines.push('  3) Optional: run `termux-wake-lock` in another shell.')
-    }
+    printTermuxKeepAlive(lines)
 
     lines.push('')
     console.log(lines.join('\n'))
@@ -148,8 +135,28 @@ async function main() {
   process.on('SIGTERM', shutdown)
 }
 
-main().catch((error) => {
+async function runLogin() {
+  const codexCommand = ensureTermuxCodexInstalled() ?? 'codex'
+  console.log('\nStarting `codex login`...\n')
+  runOrFail(codexCommand, ['login'], 'Codex login')
+}
+
+program
+  .option('-p, --port <port>', 'port to listen on', '3000')
+  .option('--password <pass>', 'set a specific password')
+  .option('--no-password', 'disable password protection')
+  .action(async (opts: { port: string; password: string | boolean }) => {
+    await startServer(opts)
+  })
+
+program.command('login').description('Install/check Codex CLI in Termux and run `codex login`').action(runLogin)
+
+program.command('help').description('Show codexui command help').action(() => {
+  program.outputHelp()
+})
+
+program.parseAsync(process.argv).catch((error) => {
   const message = error instanceof Error ? error.message : String(error)
-  console.error(`\nFailed to start codexui: ${message}`)
+  console.error(`\nFailed to run codexui: ${message}`)
   process.exit(1)
 })
