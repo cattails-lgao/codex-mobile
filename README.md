@@ -1,276 +1,129 @@
-<div align="center">
+# 🔥 @friuns/codexui
 
-# AnyClaw
+### 🚀 Run Codex App UI Anywhere: Linux, Windows, or Termux on Android 🚀
 
-### OpenClaw + Codex — Running Natively on Android
+[![npm](https://img.shields.io/npm/v/%40friuns%2Fcodexui?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@friuns/codexui)
+[![platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue?style=for-the-badge)](#-quick-start)
+[![node](https://img.shields.io/badge/Node-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![license](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
 
-[![Android](https://img.shields.io/badge/Android-7.0+-3DDC84?logo=android&logoColor=white&style=for-the-badge)](https://developer.android.com)
-[![OpenClaw](https://img.shields.io/badge/OpenClaw-2026.2.21-FF4500?style=for-the-badge)](https://openclaw.ai)
-[![Codex](https://img.shields.io/badge/Codex_CLI-0.104.0-412991?logo=openai&logoColor=white&style=for-the-badge)](https://github.com/openai/codex)
-[![Node.js](https://img.shields.io/badge/Node.js-24-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white&style=for-the-badge)](https://kotlinlang.org)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+> **Codex UI in your browser. No drama. One command.**
+>  
+> **Yes, that is your Codex desktop app experience exposed over web UI. Yes, it runs cross-platform.**
 
-<br />
-
-> **A self-contained Android APK that bundles OpenClaw + OpenAI Codex CLI**
-> **with a complete Linux environment. Two AI agents, one app, your pocket.**
-
-<br />
-
-[Get it on Google Play](https://play.google.com/store/apps/details?id=gptos.intelligence.assistant) ·
-[Download APK](https://github.com/friuns2/openclaw-android-assistant/releases/latest/download/anyclaw.apk) ·
-[OpenClaw Docs](https://docs.openclaw.ai) ·
-[Project Spec](PROJECT_SPEC.md)
-
-<br />
-
-<img src="screenshots/screenshot.png" width="280" alt="OpenClaw Dashboard" /> &nbsp;&nbsp; <img src="screenshots/screenshot2.png" width="280" alt="Codex Coding Agent" />
-
-</div>
+```text
+ ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗██╗   ██╗██╗
+██╔════╝██╔═══██╗██╔══██╗██╔════╝╚██╗██╔╝██║   ██║██║
+██║     ██║   ██║██║  ██║█████╗   ╚███╔╝ ██║   ██║██║
+██║     ██║   ██║██║  ██║██╔══╝   ██╔██╗ ██║   ██║██║
+╚██████╗╚██████╔╝██████╔╝███████╗██╔╝ ██╗╚██████╔╝██║
+ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝
+```
 
 ---
 
-## What Is This?
+## 🤯 What Is This?
+**`@friuns/codexui`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
 
-This project puts two AI coding agents on your Android phone in a single APK:
+You run one command. It starts a local web server. You open it from your machine, your LAN, or wherever your setup allows.  
 
-- **[OpenClaw](https://openclaw.ai)** — a personal AI assistant with multi-channel support, agent routing, skills, Canvas, and a full Control UI dashboard
-- **[OpenAI Codex CLI](https://github.com/openai/codex)** — a terminal-based coding agent that reads your codebase, writes code, and runs commands
-
-Both run inside an embedded Linux environment extracted from the APK. No root required. No Termux dependency. Everything is self-contained.
-
-The app authenticates once via OpenAI OAuth, and both agents share the same credentials. OpenClaw uses `openai-codex/gpt-5.3-codex` by default; Codex CLI uses its own `codex app-server` backend.
+**TL;DR 🧠: Codex app UI, unlocked for Linux, Windows, and Termux-powered Android setups.**
 
 ---
 
-## What Can You Do?
+## 🌍 What Can You Do With This?
 
-| | Feature | Description |
-|---|---|---|
-| | **OpenClaw Dashboard** | Full Control UI accessible from the sidebar — chat, agents, sessions, skills |
-| | **Codex Chat** | Conversational coding agent with streaming responses and reasoning visibility |
-| | **Execute Commands** | Both agents run shell commands in the embedded Linux environment |
-| | **Multi-Thread Sessions** | Parallel conversations, each with its own context and working directory |
-| | **Full Auto-Approval** | No permission popups — `danger-full-access` mode by default |
-| | **Background Execution** | Foreground service keeps everything alive when you switch apps |
-| | **OAuth Login** | One-time browser-based OpenAI auth — shared between both agents |
-| | **Offline Bootstrap** | Linux environment extracted from APK — works without internet after setup |
+| 🔥 Use Case | 💥 What You Get |
+|---|---|
+| 💻 Linux workstation | Run Codex UI in browser without depending on desktop shell |
+| 🪟 Windows machine | Launch web UI and access from Chrome/Edge quickly |
+| 📱 Termux on Android | Start service in Termux and control from mobile browser |
+| 🧪 Remote dev box | Keep Codex process on server, view UI from client device |
+| 🌐 LAN sharing | Open UI from another device on same network |
+| 🧰 Headless workflows | Keep terminal + browser split for productivity |
+| 🔌 Custom routing | Put behind reverse proxy/tunnel if needed |
+| ⚡ Fast experiments | `npx` run without full global setup |
 
 ---
 
-## Quick Start
+## ⚡ Quick Start
+> **The main event.**
 
 ```bash
-git clone https://github.com/friuns2/openclaw-android-assistant.git
-cd openclaw-android-assistant
+# 🔓 Run instantly (recommended)
+npx @friuns/codexui
 
-npm install && npm run build
-
-cd android && bash scripts/download-bootstrap.sh
-bash scripts/build-server-bundle.sh && ./gradlew assembleDebug
-
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.codex.mobile/.MainActivity
+# 🌐 Then open in browser
+# http://localhost:18923
 ```
 
-Or install from [Google Play](https://play.google.com/store/apps/details?id=gptos.intelligence.assistant), or [download the latest APK](https://github.com/friuns2/openclaw-android-assistant/releases/latest/download/anyclaw.apk).
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                      Android APK                          │
-│                                                           │
-│  ┌────────────┐  ┌──────────────────────────────────────┐ │
-│  │  WebView   │  │  APK Assets                          │ │
-│  │  (Vue.js)  │  │  bootstrap-aarch64.zip               │ │
-│  └─────┬──────┘  │  server-bundle/ (Vue + Express)      │ │
-│        │         │  proxy.js / bionic-compat.js          │ │
-│        │         └──────────────────────────────────────┘ │
-│  ┌─────▼────────────────────────────────────────────────┐ │
-│  │             CodexServerManager                        │ │
-│  │  Bootstrap → Node.js → Codex + OpenClaw → Auth        │ │
-│  │  Proxy → Gateway → Control UI → Web Server            │ │
-│  └─────┬────────────────────────────────────────────────┘ │
-│        │                                                  │
-│  ┌─────▼────────────────────────────────────────────────┐ │
-│  │             Embedded Linux ($PREFIX)                   │ │
-│  │                                                       │ │
-│  │  codex-web-local   → :18923 (HTTP, WebView target)    │ │
-│  │    └─ codex app-server (native Rust/musl, JSON-RPC)   │ │
-│  │                                                       │ │
-│  │  openclaw gateway  → :18789 (WebSocket)               │ │
-│  │  openclaw ctrl UI  → :19001 (static file server)      │ │
-│  │                                                       │ │
-│  │  proxy.js          → :18924 (CONNECT proxy, DNS/TLS)  │ │
-│  └───────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────┘
+### Linux 🐧
+```bash
+node -v   # should be 18+
+npx @friuns/codexui
 ```
 
-### Services
-
-| Port | Service | Purpose |
-|------|---------|---------|
-| 18789 | OpenClaw Gateway | WebSocket control plane for agents, sessions, tools |
-| 18923 | codex-web-local | HTTP server with Vue.js UI (WebView target) |
-| 18924 | CONNECT Proxy | DNS/TLS bridge for musl-linked Codex binary |
-| 19001 | Control UI Server | Static file server for OpenClaw dashboard |
-
----
-
-## OpenClaw Integration
-
-OpenClaw is installed alongside Codex and runs as a WebSocket gateway on the device. The installation is complex because OpenClaw depends on `koffi` (a native FFI module) which requires a full C/C++ toolchain to build from source on Android.
-
-### Build Pipeline
-
-1. **Build dependencies** — Downloads ~20 Termux packages (clang, cmake, make, lld, NDK sysroot, libllvm, etc.)
-2. **Fixes** — Rewrites git-core shebangs, binary-patches `make`/`cmake` to replace hardcoded Termux shell paths with `/system/bin/sh`, creates stub headers (`spawn.h`, `android/api-level.h`, `renameat2_shim.h`)
-3. **npm install** — `npm install -g --ignore-scripts openclaw@latest` (689 packages, skip native builds)
-4. **koffi build** — Builds the native FFI module separately with `CC=clang CXX=clang++ LDFLAGS="-fuse-ld=lld"`
-5. **Path patching** — Rewrites `/tmp`, `/bin/sh`, `/bin/bash`, `/usr/bin/env` in all JS files to `$PREFIX/...`
-
-### Auth Flow
-
-Authentication is automatic from the existing Codex OAuth login:
-
-- `configureOpenClawAuth()` writes `openclaw.json` with gateway token auth + `dangerouslyDisableDeviceAuth`
-- The Codex `access_token` from `~/.codex/auth.json` is copied into `auth-profiles.json` as an `openai-codex:codex-cli` profile with `type: "token"`
-- OpenClaw model is set to `openai-codex/gpt-5.3-codex` — uses the same OpenAI account, no separate API key needed
-- Auth profiles are written to both global (`~/.openclaw/`) and agent-specific (`~/.openclaw/agents/main/agent/`) directories
-
-### Android Compatibility
-
-The `bionic-compat.js` shim (loaded via `NODE_OPTIONS="-r ..."`) patches:
-- `process.platform` — returns `"linux"` instead of `"android"`
-- `os.cpus()` — returns a valid CPU array (Android's `/proc/cpuinfo` format differs)
-- `os.networkInterfaces()` — handles Android's interface naming
-
----
-
-## How It Works
-
-### Embedded Linux
-
-The APK bundles Termux's `bootstrap-aarch64.zip` — a minimal Linux userland with `sh`, `apt-get`, `dpkg-deb`, SSL certificates, and core libraries. On first launch, it's extracted to the app's private storage at `$PREFIX = /data/user/0/com.codex.mobile/files/usr`.
-
-### Native Codex Binary
-
-The Codex CLI ships a 73MB native Rust binary compiled for `aarch64-unknown-linux-musl`. npm refuses to install it on Android, so we download the tarball directly from the npm registry and extract it manually.
-
-### DNS/TLS Proxy
-
-The musl-linked binary reads `/etc/resolv.conf` for DNS — which doesn't exist on Android. A Node.js CONNECT proxy on port 18924 bridges this: Node.js uses Android's Bionic DNS resolver, and the native binary routes all HTTPS through `HTTPS_PROXY`.
-
-### W^X Bypass
-
-Android 10+ enforces SELinux W^X (Write XOR Execute) policies. We use `targetSdk = 28` to bypass this, same approach as Termux (F-Droid).
-
----
-
-## Startup Sequence
-
-1. Battery optimization exemption + foreground service
-2. Bootstrap extraction (Termux userland)
-3. proot installation (package management)
-4. Node.js installation (`apt-get download` + `dpkg-deb`)
-5. Python installation
-6. `bionic-compat.js` extraction
-7. OpenClaw build deps + install + koffi build + path patching
-8. Codex CLI + native platform binary installation
-9. Full-access config (`approval_policy = "never"`)
-10. CONNECT proxy startup
-11. OAuth login (`codex login` via browser)
-12. Health check (`codex exec "say hi"`)
-13. OpenClaw auth config + gateway + Control UI server
-14. codex-web-local server startup
-15. WebView loads `http://127.0.0.1:18923/`
-
----
-
-## Project Structure
-
+### Windows 🪟 (PowerShell)
+```powershell
+node -v   # 18+
+npx @friuns/codexui
 ```
-android/
-├── app/src/main/
-│   ├── AndroidManifest.xml
-│   ├── assets/
-│   │   ├── proxy.js                 # CONNECT proxy (DNS/TLS bridge)
-│   │   ├── bionic-compat.js         # Android platform shim
-│   │   └── server-bundle/           # Pre-built Vue + Express + deps
-│   └── java/com/codex/mobile/
-│       ├── BootstrapInstaller.kt    # Linux environment setup
-│       ├── CodexForegroundService.kt # Background persistence
-│       ├── CodexServerManager.kt    # Install, auth, proxy, OpenClaw, server
-│       └── MainActivity.kt         # WebView + setup orchestration
-├── scripts/
-│   ├── download-bootstrap.sh        # Fetch Termux bootstrap
-│   └── build-server-bundle.sh       # Bundle frontend into APK assets
-src/                                  # codex-web-local (TypeScript + Vue)
-├── api/                              # RPC client, gateway, SSE
-├── components/                       # Vue components (composer, threads, sidebar)
-├── composables/                      # useDesktopState (reactive state)
-├── server/                           # Express + codex app-server bridge
-└── cli/                              # CLI entry point
+
+### Termux (Android) 🤖
+```bash
+pkg update && pkg upgrade -y
+pkg install nodejs -y
+npx @friuns/codexui
 ```
 
 ---
 
-## Requirements
+## 🏗️ Architecture
 
-- **Android 7.0+** (API 24) — ARM64 device
-- **Internet connection** — for first-run setup + API calls
-- **OpenAI account** — authenticated via OAuth browser flow
-- **~500MB storage** — for Linux environment + Node.js + Codex + OpenClaw + build tools
-
----
-
-## Tech Stack
-
-| Layer | Technology | Version |
-|---|---|---|
-| AI Gateway | OpenClaw | 2026.2.21-2 |
-| AI Agent | OpenAI Codex CLI | 0.104.0 |
-| Model | gpt-5.3-codex (via Codex OAuth) | - |
-| Runtime | Node.js (via Termux) | 24.13.0 |
-| Build Tools | Clang/LLVM, CMake, Make, LLD | 21.1.8 / 4.2.3 |
-| Frontend | Vue.js 3 + Vite + TailwindCSS | 3.x |
-| Backend | Express.js + JSON-RPC bridge | - |
-| Android | Kotlin + WebView | 2.1.0 |
-| Linux | Termux bootstrap (aarch64) | - |
+```text
+┌─────────────────────────────┐
+│  Browser (Desktop/Mobile)   │
+└──────────────┬──────────────┘
+               │ HTTP/WebSocket
+┌──────────────▼──────────────┐
+│      @friuns/codexui        │
+│  (Express + Vue UI bridge)  │
+└──────────────┬──────────────┘
+               │ RPC/Bridge calls
+┌──────────────▼──────────────┐
+│      Codex App Server       │
+└─────────────────────────────┘
+```
 
 ---
 
-## Troubleshooting
+## 🎯 Requirements
+- ✅ Node.js `18+`
+- ✅ Codex app-server environment available
+- ✅ Browser access to host/port
 
-| Problem | Solution |
+---
+
+## 🐛 Troubleshooting
+
+| ❌ Problem | ✅ Fix |
 |---|---|
-| App crashes on launch | Check `adb logcat \| grep CodexServerManager` |
-| "Permission denied" executing binaries | Ensure `targetSdk = 28` in `build.gradle.kts` |
-| OpenClaw gateway fails to start | Check `~/.openclaw/openclaw.json` config and auth-profiles |
-| koffi build fails | Verify clang/cmake/make are installed and binary-patched |
-| "No address associated with hostname" | Check internet; CONNECT proxy may not be running |
-| Login page doesn't open | Ensure a default browser is set on the device |
-| App killed in background | Grant battery optimization exemption in Android settings |
+| Port already in use | Run on a free port or stop old process |
+| `npx` fails | Update npm/node, then retry |
+| Termux install fails | `pkg update && pkg upgrade` then reinstall `nodejs` |
+| Can’t open from other device | Check firewall, bind address, and LAN routing |
 
 ---
 
-## Credits
-
-- [OpenClaw](https://openclaw.ai) — Personal AI assistant by Peter Steinberger and community
-- [OpenAI Codex CLI](https://github.com/openai/codex) — Terminal-based coding agent
-- [AidanPark/openclaw-android](https://github.com/AidanPark/openclaw-android) — Android patches and bionic-compat.js
-- [Termux](https://termux.dev) — Linux environment bootstrap for Android
+## 🤝 Contributing
+Issues and PRs are welcome.  
+Bring bug reports, platform notes, and setup improvements.
 
 ---
+
+## ⭐ Star This Repo
+If you believe Codex UI should be accessible from **any machine, any OS, any screen**, star this project and share it. ⭐
 
 <div align="center">
-
-**Two AI agents. One APK. Your pocket.**
-
-[Get it on Google Play](https://play.google.com/store/apps/details?id=gptos.intelligence.assistant) · [Download APK](https://github.com/friuns2/openclaw-android-assistant/releases/latest/download/anyclaw.apk) · [OpenClaw Docs](https://docs.openclaw.ai) · [Project Spec](PROJECT_SPEC.md)
-
+Built for speed, portability, and a little bit of chaos 😏
 </div>
