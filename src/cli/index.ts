@@ -119,6 +119,14 @@ async function main() {
       lines.push(`  Password: ${password}`)
     }
 
+    if (isTermuxRuntime()) {
+      lines.push('')
+      lines.push('  Android/Termux keep-alive:')
+      lines.push('  1) Keep this Termux session open (do not swipe it away).')
+      lines.push('  2) Disable battery optimization for Termux in Android settings.')
+      lines.push('  3) Optional: run `termux-wake-lock` in another shell.')
+    }
+
     lines.push('')
     console.log(lines.join('\n'))
   })
