@@ -31,6 +31,19 @@ You run one command. It starts a local web server. You open it from your machine
 
 ---
 
+## ✨ Features
+> **The payload.**
+
+- 🚀 One-command launch with `npx @friuns/codexui`
+- 🌍 Cross-platform support for Linux, Windows, and Termux on Android
+- 🖥️ Browser-first Codex UI flow on `http://localhost:18923`
+- 🌐 LAN-friendly access from other devices on the same network
+- 🧪 Remote/headless-friendly setup for server-based Codex usage
+- 🔌 Works with reverse proxies and tunneling setups
+- ⚡ No global install required for quick experimentation
+
+---
+
 ## 🌍 What Can You Do With This?
 
 | 🔥 Use Case | 💥 What You Get |
