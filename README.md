@@ -41,6 +41,7 @@ You run one command. It starts a local web server. You open it from your machine
 - 🧪 Remote/headless-friendly setup for server-based Codex usage
 - 🔌 Works with reverse proxies and tunneling setups
 - ⚡ No global install required for quick experimentation
+- 🎙️ Built-in hold-to-dictate voice input with transcription to composer draft
 
 ---
 
@@ -57,6 +58,7 @@ You run one command. It starts a local web server. You open it from your machine
 - 🎛️ Skills Hub mobile-friendly spacing/toolbar layout improvements
 - 🪟 Skill detail modal tuned for mobile sheet-style behavior
 - 🧪 Skills Hub event typing fix for `SkillCard` select emit compatibility
+- 🎙️ Voice dictation flow in composer (`hold to dictate` -> transcribe -> append text)
 
 ---
 
@@ -130,6 +132,7 @@ npx @friuns/codexui
 - ✅ Node.js `18+`
 - ✅ Codex app-server environment available
 - ✅ Browser access to host/port
+- ✅ Microphone permission (only for voice dictation)
 
 ---
 
