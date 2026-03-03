@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { Command } from 'commander'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
@@ -89,24 +89,66 @@ function printTermuxKeepAlive(lines: string[]): void {
   lines.push('  3) Optional: run `termux-wake-lock` in another shell.')
 }
 
+function openBrowser(url: string): void {
+  const command = process.platform === 'darwin'
+    ? { cmd: 'open', args: [url] }
+    : process.platform === 'win32'
+      ? { cmd: 'cmd', args: ['/c', 'start', '', url] }
+      : { cmd: 'xdg-open', args: [url] }
+
+  const child = spawn(command.cmd, command.args, { detached: true, stdio: 'ignore' })
+  child.on('error', () => {})
+  child.unref()
+}
+
+function listenWithFallback(server: ReturnType<typeof createServer>, startPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const attempt = (port: number) => {
+      const onError = (error: NodeJS.ErrnoException) => {
+        server.off('listening', onListening)
+        if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+          attempt(port + 1)
+          return
+        }
+        reject(error)
+      }
+      const onListening = () => {
+        server.off('error', onError)
+        resolve(port)
+      }
+
+      server.once('error', onError)
+      server.once('listening', onListening)
+      server.listen(port)
+    }
+
+    attempt(startPort)
+  })
+}
+
 async function startServer(options: { port: string; password: string | boolean }) {
   const codexCommand = ensureTermuxCodexInstalled() ?? resolveCodexCommand()
   if (!hasCodexAuth() && codexCommand) {
     console.log('\nCodex is not logged in. Starting `codex login`...\n')
     runOrFail(codexCommand, ['login'], 'Codex login')
   }
-  const port = parseInt(options.port, 10)
+  const requestedPort = parseInt(options.port, 10)
   const password = resolvePassword(options.password)
   const { app, dispose } = createApp({ password })
   const server = createServer(app)
+  const port = await listenWithFallback(server, requestedPort)
 
-  server.listen(port, () => {
+  server.on('listening', () => {
     const lines = [
       '',
       'Codex Web Local is running!',
       '',
       `  Local:    http://localhost:${String(port)}`,
     ]
+
+    if (port !== requestedPort) {
+      lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
+    }
 
     if (password) {
       lines.push(`  Password: ${password}`)
@@ -116,6 +158,7 @@ async function startServer(options: { port: string; password: string | boolean }
 
     lines.push('')
     console.log(lines.join('\n'))
+    openBrowser(`http://localhost:${String(port)}`)
   })
 
   function shutdown() {
