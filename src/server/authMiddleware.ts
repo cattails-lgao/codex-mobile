@@ -3,6 +3,16 @@ import type { RequestHandler, Request, Response, NextFunction } from 'express'
 
 const TOKEN_COOKIE = 'codex_web_local_token'
 
+function isLocalhostRequest(req: Request): boolean {
+  const remote = req.socket.remoteAddress ?? ''
+  if (remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1') {
+    return true
+  }
+
+  const host = (req.headers.host ?? '').toLowerCase()
+  return host.startsWith('localhost:') || host === 'localhost' || host.startsWith('127.0.0.1:')
+}
+
 function constantTimeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
   const bufB = Buffer.from(b)
@@ -69,6 +79,11 @@ export function createAuthMiddleware(password: string): RequestHandler {
   const validTokens = new Set<string>()
 
   return (req: Request, res: Response, next: NextFunction): void => {
+    if (isLocalhostRequest(req)) {
+      next()
+      return
+    }
+
     // Handle login POST
     if (req.method === 'POST' && req.path === '/auth/login') {
       let body = ''
