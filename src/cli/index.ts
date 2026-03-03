@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { Command } from 'commander'
@@ -37,6 +38,11 @@ function resolveCodexCommand(): string | null {
     return candidate
   }
   return null
+}
+
+function hasCodexAuth(): boolean {
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  return existsSync(join(codexHome, 'auth.json'))
 }
 
 function ensureTermuxCodexInstalled(): string | null {
@@ -94,7 +100,11 @@ function printTermuxKeepAlive(lines: string[]): void {
 }
 
 async function startServer(options: { port: string; password: string | boolean }) {
-  ensureTermuxCodexInstalled()
+  const codexCommand = ensureTermuxCodexInstalled() ?? resolveCodexCommand()
+  if (!hasCodexAuth() && codexCommand) {
+    console.log('\nCodex is not logged in. Starting `codex login`...\n')
+    runOrFail(codexCommand, ['login'], 'Codex login')
+  }
   const port = parseInt(options.port, 10)
   const password = resolvePassword(options.password)
   const { app, dispose } = createApp({ password })
