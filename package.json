@@ -1,5 +1,5 @@
 {
-  "name": "codexui",
+  "name": "@friuns/codexui",
   "version": "0.1.0",
   "description": "A lightweight web interface for Codex that runs on top of the Codex app-server, allowing remote access from any browser",
   "type": "module",
