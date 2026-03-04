@@ -124,7 +124,7 @@
               >
                 <li v-for="imageUrl in message.images" :key="imageUrl" class="message-image-item">
                   <button class="message-image-button" type="button" @click="openImageModal(imageUrl)">
-                    <img class="message-image-preview" :src="imageUrl" alt="Message image preview" loading="lazy" />
+                    <img class="message-image-preview" :src="toRenderableImageUrl(imageUrl)" alt="Message image preview" loading="lazy" />
                   </button>
                 </li>
               </ul>
@@ -164,15 +164,32 @@
                     </div>
                   </div>
                 </div>
-                <p v-else class="message-text">
-                  <template v-for="(segment, index) in parseInlineSegments(message.text)" :key="`seg-${index}`">
-                    <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                    <a v-else-if="segment.kind === 'file'" class="message-file-link" href="#" @click.prevent>
-                      {{ segment.displayName }}
-                    </a>
-                    <code v-else class="message-inline-code">{{ segment.value }}</code>
+                <div v-else class="message-text-flow">
+                  <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
+                    <p v-if="block.kind === 'text'" class="message-text">
+                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
+                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                        <a v-else-if="segment.kind === 'file'" class="message-file-link" href="#" @click.prevent>
+                          {{ segment.displayName }}
+                        </a>
+                        <code v-else class="message-inline-code">{{ segment.value }}</code>
+                      </template>
+                    </p>
+                    <button
+                      v-else
+                      class="message-image-button"
+                      type="button"
+                      @click="openImageModal(block.url)"
+                    >
+                      <img
+                        class="message-image-preview message-markdown-image"
+                        :src="block.url"
+                        :alt="block.alt || 'Embedded message image'"
+                        loading="lazy"
+                      />
+                    </button>
                   </template>
-                </p>
+                </div>
               </article>
             </article>
 
@@ -331,6 +348,9 @@ type InlineSegment =
   | { kind: 'text'; value: string }
   | { kind: 'code'; value: string }
   | { kind: 'file'; value: string; displayName: string }
+type MessageBlock =
+  | { kind: 'text'; value: string }
+  | { kind: 'image'; url: string; alt: string }
 
 let scrollRestoreFrame = 0
 let bottomLockFrame = 0
@@ -454,6 +474,65 @@ function parseInlineSegments(text: string): InlineSegment[] {
   }
 
   return segments
+}
+
+function toRenderableImageUrl(value: string): string {
+  const normalized = value.trim()
+  if (!normalized) return ''
+  if (
+    normalized.startsWith('data:') ||
+    normalized.startsWith('blob:') ||
+    normalized.startsWith('http://') ||
+    normalized.startsWith('https://') ||
+    normalized.startsWith('/codex-local-image?')
+  ) {
+    return normalized
+  }
+
+  if (normalized.startsWith('file://')) {
+    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
+  }
+
+  const looksLikeUnixAbsolute = normalized.startsWith('/')
+  const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(normalized)
+  if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute) {
+    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
+  }
+
+  return normalized
+}
+
+function parseMessageBlocks(text: string): MessageBlock[] {
+  if (!text.includes('![') || !text.includes('](')) {
+    return [{ kind: 'text', value: text }]
+  }
+
+  const blocks: MessageBlock[] = []
+  const imagePattern = /!\[([^\]]*)\]\(([^)\n]+)\)/gu
+  let cursor = 0
+
+  for (const match of text.matchAll(imagePattern)) {
+    const [fullMatch, altRaw, urlRaw] = match
+    if (typeof match.index !== 'number') continue
+
+    const start = match.index
+    const end = start + fullMatch.length
+    const imageUrl = toRenderableImageUrl(urlRaw.trim())
+    if (!imageUrl) continue
+
+    if (start > cursor) {
+      blocks.push({ kind: 'text', value: text.slice(cursor, start) })
+    }
+
+    blocks.push({ kind: 'image', url: imageUrl, alt: altRaw.trim() })
+    cursor = end
+  }
+
+  if (cursor < text.length) {
+    blocks.push({ kind: 'text', value: text.slice(cursor) })
+  }
+
+  return blocks.length > 0 ? blocks : [{ kind: 'text', value: text }]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -786,7 +865,7 @@ function onConversationScroll(): void {
 }
 
 function openImageModal(imageUrl: string): void {
-  modalImageUrl.value = imageUrl
+  modalImageUrl.value = toRenderableImageUrl(imageUrl)
 }
 
 function closeImageModal(): void {
@@ -957,8 +1036,16 @@ onBeforeUnmount(() => {
   @apply max-w-[min(76ch,100%)] px-0 py-0 bg-transparent border-none rounded-none;
 }
 
+.message-text-flow {
+  @apply flex flex-col gap-2;
+}
+
 .message-text {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
+}
+
+.message-markdown-image {
+  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-white;
 }
 
 .message-inline-code {
