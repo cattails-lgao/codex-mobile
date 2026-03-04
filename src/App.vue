@@ -147,8 +147,8 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Build number">
-    Build {{ buildNumber }}
+  <div class="build-badge" aria-label="Worktree name">
+    WT {{ worktreeName }}
   </div>
 </template>
 
@@ -172,7 +172,7 @@ import { getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
-const buildNumber = import.meta.env.VITE_BUILD_NUMBER ?? 'dev'
+const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 
 const {
   projectGroups,
