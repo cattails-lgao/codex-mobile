@@ -1,23 +1,25 @@
 # AGENTS.md
 
-## "Push to main" Means Merge To Local Main
+## "Push to main or commit to main" Means Merge To Local Main
 
 - When the user says "push", interpret it as: merge the current work into local `main`
 - Do not push to any remote unless the user explicitly asks to push to a remote.
 
-## Worktree Merge Flow (short)
+## Merge to local main flow for worktree:
 
-1. Worktree: commit, then branch (if needed).
+1. In the worktree, commit changes and create a branch.
    - `git add -A && git commit -m "<message>"`
    - `git switch -c <your-branch>`
-2. Rebase branch on `main`.
+2. Rebase branch on latest `main`.
    - `git rebase main`
-   - Conflicts: `git add <files> && git rebase --continue`
-3. Main worktree: merge to local `main`.
+3. Resolve conflicts if any, then continue rebasing.
+   - `git add <resolved-files>`
+   - `git rebase --continue`
+4. Merge into local `main` from the main worktree.
    - `git checkout main`
    - `git merge --ff-only <your-branch>`
-   - If needed: `git merge --no-ff <your-branch>`
-4. "Push" means merge to local `main` unless remote push is explicitly requested.
+5. If `--ff-only` fails (non-linear history), use:
+   - `git merge --no-ff <your-branch>`
 
 ## Commit After Each Task
 
