@@ -60,19 +60,28 @@ function hasCodexAuth(): boolean {
   return existsSync(join(codexHome, 'auth.json'))
 }
 
-function ensureTermuxCodexInstalled(): string | null {
-  if (!isTermuxRuntime()) {
-    return resolveCodexCommand()
-  }
-
+function ensureCodexInstalled(): string | null {
   let codexCommand = resolveCodexCommand()
   if (!codexCommand) {
-    console.log('\nCodex CLI not found. Installing Termux-compatible Codex CLI from npm...\n')
-    runOrFail('npm', ['install', '-g', '@mmmbuto/codex-cli-termux'], 'Codex CLI install')
+    if (isTermuxRuntime()) {
+      console.log('\nCodex CLI not found. Installing Termux-compatible Codex CLI from npm...\n')
+      runOrFail('npm', ['install', '-g', '@mmmbuto/codex-cli-termux'], 'Codex CLI install')
+      codexCommand = resolveCodexCommand()
+      if (!codexCommand) {
+        console.log('\nTermux npm package did not expose `codex`. Installing official CLI fallback...\n')
+        runOrFail('npm', ['install', '-g', '@openai/codex'], 'Codex CLI fallback install')
+      }
+    } else {
+      console.log('\nCodex CLI not found. Installing official Codex CLI from npm...\n')
+      runOrFail('npm', ['install', '-g', '@openai/codex'], 'Codex CLI install')
+    }
+
     codexCommand = resolveCodexCommand()
-    if (!codexCommand) {
-      console.log('\nTermux npm package did not expose `codex`. Installing official CLI fallback...\n')
-      runOrFail('npm', ['install', '-g', '@openai/codex'], 'Codex CLI fallback install')
+    if (!codexCommand && !isTermuxRuntime()) {
+      // Non-Termux path should resolve after official package install.
+      throw new Error('Official Codex CLI install completed but binary is still not available in PATH')
+    }
+    if (!codexCommand && isTermuxRuntime()) {
       codexCommand = resolveCodexCommand()
     }
     if (!codexCommand) {
@@ -143,7 +152,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 
 async function startServer(options: { port: string; password: string | boolean }) {
   const version = await readCliVersion()
-  const codexCommand = ensureTermuxCodexInstalled() ?? resolveCodexCommand()
+  const codexCommand = ensureCodexInstalled() ?? resolveCodexCommand()
   if (!hasCodexAuth() && codexCommand) {
     console.log('\nCodex is not logged in. Starting `codex login`...\n')
     runOrFail(codexCommand, ['login'], 'Codex login')
@@ -193,7 +202,7 @@ async function startServer(options: { port: string; password: string | boolean }
 }
 
 async function runLogin() {
-  const codexCommand = ensureTermuxCodexInstalled() ?? 'codex'
+  const codexCommand = ensureCodexInstalled() ?? 'codex'
   console.log('\nStarting `codex login`...\n')
   runOrFail(codexCommand, ['login'], 'Codex login')
 }
@@ -206,7 +215,7 @@ program
     await startServer(opts)
   })
 
-program.command('login').description('Install/check Codex CLI in Termux and run `codex login`').action(runLogin)
+program.command('login').description('Install/check Codex CLI and run `codex login`').action(runLogin)
 
 program.command('help').description('Show codexui command help').action(() => {
   program.outputHelp()
