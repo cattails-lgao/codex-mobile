@@ -1,13 +1,28 @@
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
 import { Command } from 'commander'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
 
 const program = new Command().name('codexui').description('Web interface for Codex app-server')
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+async function readCliVersion(): Promise<string> {
+  try {
+    const packageJsonPath = join(__dirname, '..', 'package.json')
+    const raw = await readFile(packageJsonPath, 'utf8')
+    const parsed = JSON.parse(raw) as { version?: unknown }
+    return typeof parsed.version === 'string' ? parsed.version : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
 
 function isTermuxRuntime(): boolean {
   return Boolean(process.env.TERMUX_VERSION || process.env.PREFIX?.includes('/com.termux/'))
@@ -127,6 +142,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 }
 
 async function startServer(options: { port: string; password: string | boolean }) {
+  const version = await readCliVersion()
   const codexCommand = ensureTermuxCodexInstalled() ?? resolveCodexCommand()
   if (!hasCodexAuth() && codexCommand) {
     console.log('\nCodex is not logged in. Starting `codex login`...\n')
@@ -137,29 +153,27 @@ async function startServer(options: { port: string; password: string | boolean }
   const { app, dispose } = createApp({ password })
   const server = createServer(app)
   const port = await listenWithFallback(server, requestedPort)
+  const lines = [
+    '',
+    'Codex Web Local is running!',
+    `  Version:  ${version}`,
+    '',
+    `  Local:    http://localhost:${String(port)}`,
+  ]
 
-  server.on('listening', () => {
-    const lines = [
-      '',
-      'Codex Web Local is running!',
-      '',
-      `  Local:    http://localhost:${String(port)}`,
-    ]
+  if (port !== requestedPort) {
+    lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
+  }
 
-    if (port !== requestedPort) {
-      lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
-    }
+  if (password) {
+    lines.push(`  Password: ${password}`)
+  }
 
-    if (password) {
-      lines.push(`  Password: ${password}`)
-    }
+  printTermuxKeepAlive(lines)
 
-    printTermuxKeepAlive(lines)
-
-    lines.push('')
-    console.log(lines.join('\n'))
-    openBrowser(`http://localhost:${String(port)}`)
-  })
+  lines.push('')
+  console.log(lines.join('\n'))
+  openBrowser(`http://localhost:${String(port)}`)
 
   function shutdown() {
     console.log('\nShutting down...')
