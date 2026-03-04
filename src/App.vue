@@ -147,6 +147,9 @@
       </section>
     </template>
   </DesktopLayout>
+  <div class="build-badge" aria-label="Build number">
+    Build {{ buildNumber }}
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -169,6 +172,7 @@ import { getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
+const buildNumber = import.meta.env.VITE_BUILD_NUMBER ?? 'dev'
 
 const {
   projectGroups,
@@ -743,6 +747,10 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-chevron) {
   @apply h-4 w-4 sm:h-5 sm:w-5 mt-0;
+}
+
+.build-badge {
+  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
 }
 
 </style>
