@@ -5,21 +5,20 @@
 - When the user says "push", interpret it as: merge the current work into local `main`
 - Do not push to any remote unless the user explicitly asks to push to a remote.
 
-## Detached HEAD: Best Practical Flow To Update Local `main` (only merge if user asks for it)
+## Best Practical Flow: Rebase Branch Then Merge To Local `main` (only merge if user asks for it)
 
-1. Commit your detached `HEAD` work first.
-   - `git add -A && git commit -m "<message>"`
-2. Switch to local `main` in the main worktree and ensure it is current.
-   - `git checkout main`
-   - `git pull --ff-only` (only when remote sync is explicitly needed)
-3. Apply detached `HEAD` commit(s) onto local `main`.
-   - Prefer: `git cherry-pick <detached-commit-sha>`
-4. If conflicts occur, combine both sides manually (do not blindly use `--ours` or `--theirs`), then continue:
+1. Rebase branch on latest `main`.
+   - `git checkout <your-branch>`
+   - `git rebase main`
+2. Resolve conflicts if any, then continue rebasing.
    - `git add <resolved-files>`
-   - `git cherry-pick --continue`
-5. Validate and finalize.
-   - Run relevant tests/checks.
-   - Keep "push" meaning merge to local `main` only, unless remote push is explicitly requested.
+   - `git rebase --continue`
+3. Merge into local `main`.
+   - `git checkout main`
+   - `git merge --ff-only <your-branch>`
+4. If `--ff-only` fails (non-linear history), use:
+   - `git merge --no-ff <your-branch>`
+5. Keep "push" meaning merge to local `main` only, unless remote push is explicitly requested.
 
 ## Commit After Each Task
 
