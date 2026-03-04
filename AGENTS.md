@@ -5,22 +5,19 @@
 - When the user says "push", interpret it as: merge the current work into local `main`
 - Do not push to any remote unless the user explicitly asks to push to a remote.
 
-## Best Practical Flow For Worktree: Commit, Create Branch, Rebase, Merge To Local `main` (only merge if user asks for it)
+## Worktree Merge Flow (short)
 
-1. In the worktree, commit changes and create a branch.
+1. Worktree: commit, then branch (if needed).
    - `git add -A && git commit -m "<message>"`
    - `git switch -c <your-branch>`
-2. Rebase branch on latest `main`.
+2. Rebase branch on `main`.
    - `git rebase main`
-3. Resolve conflicts if any, then continue rebasing.
-   - `git add <resolved-files>`
-   - `git rebase --continue`
-4. Merge into local `main` from the main worktree.
+   - Conflicts: `git add <files> && git rebase --continue`
+3. Main worktree: merge to local `main`.
    - `git checkout main`
    - `git merge --ff-only <your-branch>`
-5. If `--ff-only` fails (non-linear history), use:
-   - `git merge --no-ff <your-branch>`
-6. Keep "push" meaning merge to local `main` only, unless remote push is explicitly requested.
+   - If needed: `git merge --no-ff <your-branch>`
+4. "Push" means merge to local `main` unless remote push is explicitly requested.
 
 ## Commit After Each Task
 
