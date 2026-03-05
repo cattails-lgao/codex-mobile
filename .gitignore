@@ -3,3 +3,5 @@ dist/
 dist-cli/
 output/
 *.tsbuildinfo
+
+package-lock.json
