@@ -425,9 +425,10 @@ async function onAddNewProject(rawInput: string): Promise<void> {
   if (!normalizedInput) return
 
   const isPath = looksLikePath(normalizedInput)
+  const baseDir = await resolveProjectBaseDirectory()
   const targetPath = isPath
     ? normalizedInput
-    : joinPath(getProjectBaseDirectory(), normalizedInput)
+    : joinPath(baseDir, normalizedInput)
   if (!targetPath) return
 
   try {
@@ -443,6 +444,21 @@ async function onAddNewProject(rawInput: string): Promise<void> {
   } catch {
     // Error is surfaced on next request if path is invalid.
   }
+}
+
+async function resolveProjectBaseDirectory(): Promise<string> {
+  const baseDir = getProjectBaseDirectory()
+  if (baseDir) return baseDir
+  try {
+    const loadedHomeDirectory = await getHomeDirectory()
+    if (loadedHomeDirectory) {
+      homeDirectory.value = loadedHomeDirectory
+      return loadedHomeDirectory
+    }
+  } catch {
+    // Fallback handled by empty return.
+  }
+  return ''
 }
 
 function looksLikePath(value: string): boolean {
