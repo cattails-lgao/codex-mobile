@@ -117,9 +117,9 @@
             class="thread-composer-mic"
             :class="{ 'thread-composer-mic--active': dictationState !== 'idle' }"
             type="button"
-            :aria-label="dictationState === 'idle' ? 'Hold to dictate' : dictationState === 'recording' ? 'Stop dictation' : 'Transcribing...'"
-            :title="dictationState === 'idle' ? 'Hold to dictate' : dictationState === 'recording' ? 'Release to transcribe' : 'Transcribing...'"
-            :disabled="isInteractionDisabled || dictationState === 'transcribing'"
+            :aria-label="dictationState === 'recording' ? 'Stop dictation' : 'Hold to dictate'"
+            :title="dictationState === 'recording' ? 'Release to transcribe' : 'Hold to dictate'"
+            :disabled="isInteractionDisabled"
             @mousedown.prevent="startRecording"
             @mouseup="stopRecording"
             @mouseleave="dictationState === 'recording' && stopRecording()"
@@ -224,7 +224,7 @@ const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
 
 const { state: dictationState, isSupported: isDictationSupported, startRecording, stopRecording } = useDictation({
-  onTranscript: (text) => { draft.value = draft.value ? `${draft.value} ${text}` : text },
+  onTranscript: (text) => { draft.value = draft.value ? `${draft.value}\n${text}` : text },
 })
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)

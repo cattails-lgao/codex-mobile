@@ -23,7 +23,13 @@ export function useDictation(options: {
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data)
       }
-      mediaRecorder.onstop = () => transcribe()
+      mediaRecorder.onstop = () => {
+        const recordedChunks = chunks
+        const recordedMimeType = mediaRecorder?.mimeType || recordedChunks[0]?.type || 'audio/webm'
+        cleanup()
+        state.value = 'idle'
+        void transcribe(recordedChunks, recordedMimeType)
+      }
       mediaRecorder.start()
       state.value = 'recording'
     } catch (error) {
@@ -37,13 +43,10 @@ export function useDictation(options: {
     if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
   }
 
-  async function transcribe() {
-    if (chunks.length === 0) { cleanup(); return }
+  async function transcribe(recordedChunks: Blob[], mimeType: string) {
+    if (recordedChunks.length === 0) return
 
-    state.value = 'transcribing'
-    const mimeType = mediaRecorder?.mimeType || chunks[0]?.type || 'audio/webm'
-    const blob = new Blob(chunks, { type: mimeType })
-    cleanup()
+    const blob = new Blob(recordedChunks, { type: mimeType })
 
     try {
       const ext = mimeType.split(/[/;]/)[1] ?? 'webm'
@@ -77,7 +80,7 @@ export function useDictation(options: {
     } catch (error) {
       options.onError?.(error)
     } finally {
-      state.value = 'idle'
+      if (state.value !== 'recording') state.value = 'idle'
     }
   }
 
