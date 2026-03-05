@@ -40,10 +40,25 @@ function runOrFail(command: string, args: string[], label: string): void {
   }
 }
 
+function runWithStatus(command: string, args: string[]): number {
+  const result = spawnSync(command, args, { stdio: 'inherit' })
+  return result.status ?? -1
+}
+
+function getUserNpmPrefix(): string {
+  return join(homedir(), '.npm-global')
+}
+
 function resolveCodexCommand(): string | null {
   if (canRun('codex', ['--version'])) {
     return 'codex'
   }
+
+  const userCandidate = join(getUserNpmPrefix(), 'bin', 'codex')
+  if (existsSync(userCandidate) && canRun(userCandidate, ['--version'])) {
+    return userCandidate
+  }
+
   const prefix = process.env.PREFIX?.trim()
   if (!prefix) {
     return null
@@ -63,17 +78,31 @@ function hasCodexAuth(): boolean {
 function ensureCodexInstalled(): string | null {
   let codexCommand = resolveCodexCommand()
   if (!codexCommand) {
+    const installWithFallback = (pkg: string, label: string): void => {
+      const status = runWithStatus('npm', ['install', '-g', pkg])
+      if (status === 0) {
+        return
+      }
+      if (isTermuxRuntime()) {
+        throw new Error(`${label} failed with exit code ${String(status)}`)
+      }
+      const userPrefix = getUserNpmPrefix()
+      console.log(`\nGlobal npm install requires elevated permissions. Retrying with --prefix ${userPrefix}...\n`)
+      runOrFail('npm', ['install', '-g', '--prefix', userPrefix, pkg], `${label} (user prefix)`)
+      process.env.PATH = `${join(userPrefix, 'bin')}:${process.env.PATH ?? ''}`
+    }
+
     if (isTermuxRuntime()) {
       console.log('\nCodex CLI not found. Installing Termux-compatible Codex CLI from npm...\n')
-      runOrFail('npm', ['install', '-g', '@mmmbuto/codex-cli-termux'], 'Codex CLI install')
+      installWithFallback('@mmmbuto/codex-cli-termux', 'Codex CLI install')
       codexCommand = resolveCodexCommand()
       if (!codexCommand) {
         console.log('\nTermux npm package did not expose `codex`. Installing official CLI fallback...\n')
-        runOrFail('npm', ['install', '-g', '@openai/codex'], 'Codex CLI fallback install')
+        installWithFallback('@openai/codex', 'Codex CLI fallback install')
       }
     } else {
       console.log('\nCodex CLI not found. Installing official Codex CLI from npm...\n')
-      runOrFail('npm', ['install', '-g', '@openai/codex'], 'Codex CLI install')
+      installWithFallback('@openai/codex', 'Codex CLI install')
     }
 
     codexCommand = resolveCodexCommand()
