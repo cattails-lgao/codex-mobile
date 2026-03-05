@@ -43,3 +43,9 @@
 - Playwright CLI is faster, more reliable, and works in headless environments without a desktop.
 - Use headless mode by default; only add `--headed` when a live visual check is explicitly needed.
 - Skill location: `~/.codex/skills/playwright/SKILL.md` (wrapper script: `~/.codex/skills/playwright/scripts/playwright_cli.sh`).
+
+## NPX Testing Rule
+
+- For any `npx` package behavior test, **publish first**, then test the published `@latest` package.
+- Do not rely on local unpublished changes when validating `npx` behavior.
+- Run `npx` validation on the Oracle host (not local machine) unless user explicitly asks otherwise.
