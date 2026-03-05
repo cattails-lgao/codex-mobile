@@ -280,6 +280,7 @@ async function startServer(options: { port: string; password: string | boolean; 
     lines.push(`  Tunnel:   ${tunnelUrl}`)
     lines.push('')
     lines.push('  Tunnel QR code:')
+    lines.push(`  URL:      ${tunnelUrl}`)
   }
 
   printTermuxKeepAlive(lines)
