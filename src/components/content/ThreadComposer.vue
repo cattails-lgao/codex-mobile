@@ -29,14 +29,12 @@
       </div>
 
       <div class="thread-composer-input-wrap">
-        <input
+        <textarea
           ref="inputRef"
           v-model="draft"
           class="thread-composer-input"
-          type="text"
           :placeholder="placeholderText"
           :disabled="isInteractionDisabled"
-          @keydown.enter.exact.prevent="onSubmit('steer')"
           @input="onInputChange"
           @keydown="onInputKeydown"
         />
@@ -231,7 +229,7 @@ const { state: dictationState, isSupported: isDictationSupported, startRecording
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<HTMLTextAreaElement | null>(null)
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
@@ -368,6 +366,12 @@ function onInputChange(): void {
 }
 
 function onInputKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    onSubmit('steer')
+    return
+  }
+
   if (isSlashMenuOpen.value) {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -487,7 +491,7 @@ watch(
 }
 
 .thread-composer-input {
-  @apply w-full min-w-0 h-10 sm:h-11 rounded-xl border-0 bg-transparent px-1 text-sm text-zinc-900 outline-none transition;
+  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
 }
 
 .thread-composer-input:focus {
