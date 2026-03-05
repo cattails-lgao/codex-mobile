@@ -236,7 +236,7 @@ async function runLogin() {
 }
 
 program
-  .option('-p, --port <port>', 'port to listen on', '3000')
+  .option('-p, --port <port>', 'port to listen on', '5999')
   .option('--password <pass>', 'set a specific password')
   .option('--no-password', 'disable password protection')
   .action(async (opts: { port: string; password: string | boolean }) => {

@@ -321,7 +321,7 @@ Bidirectional sync between `selectedThreadId` state and URL is handled via Vue `
 ### Production Mode
 
 ```bash
-npx codex-web-local [--port 3000] [--password mypass] [--no-password]
+npx codex-web-local [--port 5999] [--password mypass] [--no-password]
 ```
 
 The CLI starts an Express server that serves the built frontend from `dist/` and uses the same bridge middleware. Password authentication is enabled by default with an auto-generated password printed to the console.
