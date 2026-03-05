@@ -49,3 +49,4 @@
 - For any `npx` package behavior test, **publish first**, then test the published `@latest` package.
 - Do not rely on local unpublished changes when validating `npx` behavior.
 - Run `npx` validation on the Oracle host (not local machine) unless user explicitly asks otherwise.
+- For Playwright verification of `npx` behavior, use the Oracle host Tailscale URL (for example `http://100.127.77.25:<port>`) instead of `localhost`.
