@@ -42,6 +42,15 @@ npx codexapp
 # http://localhost:18923
 ```
 
+By default, `codexapp` now also starts:
+
+```bash
+cloudflared tunnel --url http://localhost:<port>
+```
+
+It prints the tunnel URL, terminal QR code, and password together in startup output.  
+Use `--no-tunnel` to disable this behavior.
+
 ### Linux 🐧
 ```bash
 node -v   # should be 18+

@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { Command } from 'commander'
+import qrcode from 'qrcode-terminal'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
 
@@ -154,6 +155,59 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
+function parseCloudflaredUrl(chunk: string): string | null {
+  const urlMatch = chunk.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/g)
+  if (!urlMatch || urlMatch.length === 0) {
+    return null
+  }
+  return urlMatch[urlMatch.length - 1] ?? null
+}
+
+async function startCloudflaredTunnel(localPort: number): Promise<{
+  process: ReturnType<typeof spawn>
+  url: string
+}> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${String(localPort)}`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM')
+      reject(new Error('Timed out waiting for cloudflared tunnel URL'))
+    }, 20000)
+
+    const handleData = (value: Buffer | string) => {
+      const text = String(value)
+      const parsedUrl = parseCloudflaredUrl(text)
+      if (!parsedUrl) {
+        return
+      }
+      clearTimeout(timeout)
+      child.stdout?.off('data', handleData)
+      child.stderr?.off('data', handleData)
+      resolve({ process: child, url: parsedUrl })
+    }
+
+    const onError = (error: Error) => {
+      clearTimeout(timeout)
+      reject(new Error(`Failed to start cloudflared: ${error.message}`))
+    }
+
+    child.once('error', onError)
+    child.stdout?.on('data', handleData)
+    child.stderr?.on('data', handleData)
+
+    child.once('exit', (code) => {
+      if (code === 0) {
+        return
+      }
+      clearTimeout(timeout)
+      reject(new Error(`cloudflared exited before providing a URL (code ${String(code)})`))
+    })
+  })
+}
+
 function listenWithFallback(server: ReturnType<typeof createServer>, startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const attempt = (port: number) => {
@@ -179,7 +233,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
   })
 }
 
-async function startServer(options: { port: string; password: string | boolean }) {
+async function startServer(options: { port: string; password: string | boolean; tunnel: boolean }) {
   const version = await readCliVersion()
   const codexCommand = ensureCodexInstalled() ?? resolveCodexCommand()
   if (!hasCodexAuth() && codexCommand) {
@@ -192,6 +246,20 @@ async function startServer(options: { port: string; password: string | boolean }
   const server = createServer(app)
   attachWebSocket(server)
   const port = await listenWithFallback(server, requestedPort)
+  let tunnelChild: ReturnType<typeof spawn> | null = null
+  let tunnelUrl: string | null = null
+
+  if (options.tunnel) {
+    try {
+      const tunnel = await startCloudflaredTunnel(port)
+      tunnelChild = tunnel.process
+      tunnelUrl = tunnel.url
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`\n[cloudflared] Tunnel not started: ${message}`)
+    }
+  }
+
   const lines = [
     '',
     'Codex Web Local is running!',
@@ -208,14 +276,26 @@ async function startServer(options: { port: string; password: string | boolean }
   if (password) {
     lines.push(`  Password: ${password}`)
   }
+  if (tunnelUrl) {
+    lines.push(`  Tunnel:   ${tunnelUrl}`)
+    lines.push('')
+    lines.push('  Tunnel QR code:')
+  }
 
   printTermuxKeepAlive(lines)
   lines.push('')
   console.log(lines.join('\n'))
+  if (tunnelUrl) {
+    qrcode.generate(tunnelUrl, { small: true })
+    console.log('')
+  }
   openBrowser(`http://localhost:${String(port)}`)
 
   function shutdown() {
     console.log('\nShutting down...')
+    if (tunnelChild && !tunnelChild.killed) {
+      tunnelChild.kill('SIGTERM')
+    }
     server.close(() => {
       dispose()
       process.exit(0)
@@ -241,7 +321,9 @@ program
   .option('-p, --port <port>', 'port to listen on', '5999')
   .option('--password <pass>', 'set a specific password')
   .option('--no-password', 'disable password protection')
-  .action(async (opts: { port: string; password: string | boolean }) => {
+  .option('--tunnel', 'start cloudflared tunnel', true)
+  .option('--no-tunnel', 'disable cloudflared tunnel startup')
+  .action(async (opts: { port: string; password: string | boolean; tunnel: boolean }) => {
     await startServer(opts)
   })
 
