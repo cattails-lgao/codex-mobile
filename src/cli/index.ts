@@ -208,7 +208,6 @@ async function startServer(options: { port: string; password: string | boolean }
   }
 
   printTermuxKeepAlive(lines)
-
   lines.push('')
   console.log(lines.join('\n'))
   openBrowser(`http://localhost:${String(port)}`)
