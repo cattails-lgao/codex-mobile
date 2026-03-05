@@ -22,26 +22,55 @@
 
 ---
 
-## 🖼️ Screenshots
-
-### Skills Hub
-![Skills Hub](docs/screenshots/skills-hub.png)
-
-### Chat
-![Chat](docs/screenshots/chat.png)
-
-### Mobile UI
-![Skills Hub Mobile](docs/screenshots/skills-hub-mobile.png)
-![Chat Mobile](docs/screenshots/chat-mobile.png)
-
----
-
 ## 🤯 What Is This?
 **`codexapp`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
 
 You run one command. It starts a local web server. You open it from your machine, your LAN, or wherever your setup allows.  
 
 **TL;DR 🧠: Codex app UI, unlocked for Linux, Windows, and Termux-powered Android setups.**
+
+---
+
+## ⚡ Quick Start
+> **The main event.**
+
+```bash
+# 🔓 Run instantly (recommended)
+npx codexapp
+
+# 🌐 Then open in browser
+# http://localhost:18923
+```
+
+### Linux 🐧
+```bash
+node -v   # should be 18+
+npx codexapp
+```
+
+### Windows 🪟 (PowerShell)
+```powershell
+node -v   # 18+
+npx codexapp
+```
+
+### Termux (Android) 🤖
+```bash
+pkg update && pkg upgrade -y
+pkg install nodejs -y
+npx codexapp
+```
+
+Android background requirements:
+
+1. Keep `codexapp` running in the current Termux session (do not close it).
+2. In Android settings, disable battery optimization for `Termux`.
+3. Keep the persistent Termux notification enabled so Android is less likely to kill it.
+4. Optional but recommended in Termux:
+```bash
+termux-wake-lock
+```
+5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx codexapp` again.
 
 ---
 
@@ -91,46 +120,17 @@ You run one command. It starts a local web server. You open it from your machine
 
 ---
 
-## ⚡ Quick Start
-> **The main event.**
+## 🖼️ Screenshots
 
-```bash
-# 🔓 Run instantly (recommended)
-npx codexapp
+### Skills Hub
+![Skills Hub](docs/screenshots/skills-hub.png)
 
-# 🌐 Then open in browser
-# http://localhost:18923
-```
+### Chat
+![Chat](docs/screenshots/chat.png)
 
-### Linux 🐧
-```bash
-node -v   # should be 18+
-npx codexapp
-```
-
-### Windows 🪟 (PowerShell)
-```powershell
-node -v   # 18+
-npx codexapp
-```
-
-### Termux (Android) 🤖
-```bash
-pkg update && pkg upgrade -y
-pkg install nodejs -y
-npx codexapp
-```
-
-Android background requirements:
-
-1. Keep `codexapp` running in the current Termux session (do not close it).
-2. In Android settings, disable battery optimization for `Termux`.
-3. Keep the persistent Termux notification enabled so Android is less likely to kill it.
-4. Optional but recommended in Termux:
-```bash
-termux-wake-lock
-```
-5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx codexapp` again.
+### Mobile UI
+![Skills Hub Mobile](docs/screenshots/skills-hub-mobile.png)
+![Chat Mobile](docs/screenshots/chat-mobile.png)
 
 ---
 
