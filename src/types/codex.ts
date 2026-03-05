@@ -79,11 +79,14 @@ export type CommandExecutionData = {
   exitCode: number | null
 }
 
+export type UiFileAttachment = { label: string; path: string }
+
 export type UiMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
   text: string
   images?: string[]
+  fileAttachments?: UiFileAttachment[]
   messageType?: string
   rawPayload?: string
   isUnhandled?: boolean

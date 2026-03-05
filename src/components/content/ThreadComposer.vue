@@ -16,6 +16,20 @@
         </div>
       </div>
 
+      <div v-if="fileAttachments.length > 0" class="thread-composer-file-chips">
+        <span v-for="att in fileAttachments" :key="att.fsPath" class="thread-composer-file-chip">
+          <IconTablerFilePencil class="thread-composer-file-chip-icon" />
+          <span class="thread-composer-file-chip-name" :title="att.fsPath">{{ att.label }}</span>
+          <button
+            class="thread-composer-file-chip-remove"
+            type="button"
+            :aria-label="`Remove ${att.label}`"
+            :disabled="isInteractionDisabled"
+            @click="removeFileAttachment(att.fsPath)"
+          >×</button>
+        </span>
+      </div>
+
       <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
         <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
           <span class="thread-composer-skill-chip-name">{{ skill.name }}</span>
@@ -92,9 +106,17 @@
               class="thread-composer-attach-item"
               type="button"
               :disabled="isInteractionDisabled"
+              @click="triggerFilePicker"
+            >
+              Add files
+            </button>
+            <button
+              class="thread-composer-attach-item"
+              type="button"
+              :disabled="isInteractionDisabled"
               @click="triggerPhotoLibrary"
             >
-              Add photos & files
+              Add photos
             </button>
             <button
               class="thread-composer-attach-item"
@@ -229,9 +251,12 @@ const props = defineProps<{
   hasQueueAbove?: boolean
 }>()
 
+export type FileAttachment = { label: string; path: string; fsPath: string }
+
 export type SubmitPayload = {
   text: string
   imageUrls: string[]
+  fileAttachments: FileAttachment[]
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
 }
@@ -252,6 +277,7 @@ type SelectedImage = {
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
+const fileAttachments = ref<FileAttachment[]>([])
 
 const { state: dictationState, isSupported: isDictationSupported, startRecording, stopRecording } = useDictation({
   onTranscript: (text) => { draft.value = draft.value ? `${draft.value}\n${text}` : text },
@@ -296,7 +322,7 @@ const skillDropdownOptions = computed(() =>
 const canSubmit = computed(() => {
   if (props.disabled) return false
   if (!props.activeThreadId) return false
-  return draft.value.trim().length > 0 || selectedImages.value.length > 0
+  return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
 
@@ -310,12 +336,14 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   emit('submit', {
     text,
     imageUrls: selectedImages.value.map((image) => image.url),
+    fileAttachments: [...fileAttachments.value],
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
     mode,
   })
   draft.value = ''
   selectedImages.value = []
   selectedSkills.value = []
+  fileAttachments.value = []
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
@@ -357,6 +385,28 @@ function removeImage(id: string): void {
 
 function removeSkill(path: string): void {
   selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
+}
+
+function removeFileAttachment(fsPath: string): void {
+  fileAttachments.value = fileAttachments.value.filter((a) => a.fsPath !== fsPath)
+}
+
+function addFileAttachment(filePath: string): void {
+  const normalized = filePath.replace(/\\/g, '/')
+  if (fileAttachments.value.some((a) => a.fsPath === normalized)) return
+  const parts = normalized.split('/').filter(Boolean)
+  const label = parts[parts.length - 1] ?? normalized
+  fileAttachments.value = [...fileAttachments.value, { label, path: normalized, fsPath: normalized }]
+}
+
+function triggerFilePicker(): void {
+  isAttachMenuOpen.value = false
+  mentionStartIndex.value = null
+  mentionQuery.value = ''
+  isFileMentionOpen.value = true
+  fileMentionHighlightedIndex.value = 0
+  void queueFileMentionSearch()
+  nextTick(() => inputRef.value?.focus())
 }
 
 function addFiles(files: FileList | null): void {
@@ -519,21 +569,15 @@ async function queueFileMentionSearch(): Promise<void> {
 }
 
 function applyFileMention(suggestion: ComposerFileSuggestion): void {
-  const start = mentionStartIndex.value
   const input = inputRef.value
-  if (start === null || !input) {
-    closeFileMention()
-    return
+  const start = mentionStartIndex.value
+  if (start !== null && input) {
+    const cursor = input.selectionStart ?? draft.value.length
+    draft.value = `${draft.value.slice(0, start)}${draft.value.slice(cursor)}`.trimEnd()
   }
-  const cursor = input.selectionStart ?? draft.value.length
-  const mentionText = `@${suggestion.path} `
-  draft.value = `${draft.value.slice(0, start)}${mentionText}${draft.value.slice(cursor)}`
+  addFileAttachment(suggestion.path)
   closeFileMention()
-  nextTick(() => {
-    const nextCursor = start + mentionText.length
-    input.setSelectionRange(nextCursor, nextCursor)
-    input.focus()
-  })
+  nextTick(() => input?.focus())
 }
 
 function getMentionFileName(path: string): string {
@@ -624,6 +668,7 @@ watch(
     draft.value = ''
     selectedImages.value = []
     selectedSkills.value = []
+    fileAttachments.value = []
     isAttachMenuOpen.value = false
     isSlashMenuOpen.value = false
     closeFileMention()
@@ -669,6 +714,26 @@ watch(
 
 .thread-composer-attachment-remove {
   @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-white;
+}
+
+.thread-composer-file-chips {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.thread-composer-file-chip {
+  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
+}
+
+.thread-composer-file-chip-icon {
+  @apply h-3.5 w-3.5 text-zinc-400 shrink-0;
+}
+
+.thread-composer-file-chip-name {
+  @apply truncate max-w-40 font-mono;
+}
+
+.thread-composer-file-chip-remove {
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 text-xs leading-none p-0;
 }
 
 .thread-composer-skill-chips {

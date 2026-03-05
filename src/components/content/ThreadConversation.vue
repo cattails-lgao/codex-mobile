@@ -129,6 +129,13 @@
                 </li>
               </ul>
 
+              <div v-if="message.fileAttachments && message.fileAttachments.length > 0" class="message-file-attachments">
+                <span v-for="att in message.fileAttachments" :key="att.path" class="message-file-chip">
+                  <span class="message-file-chip-icon">📄</span>
+                  <span class="message-file-chip-name" :title="att.path">{{ att.label }}</span>
+                </span>
+              </div>
+
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
                   <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
@@ -1048,6 +1055,22 @@ onBeforeUnmount(() => {
 
 .message-image-preview {
   @apply block w-16 h-16 object-cover;
+}
+
+.message-file-attachments {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.message-file-chip {
+  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600;
+}
+
+.message-file-chip-icon {
+  @apply text-[10px] leading-none;
+}
+
+.message-file-chip-name {
+  @apply truncate max-w-40 font-mono;
 }
 
 .message-card {

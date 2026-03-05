@@ -5,7 +5,7 @@ import type {
   ThreadListResponse,
   UserInput,
 } from '../appServerDtos'
-import type { CommandExecutionData, UiMessage, UiProjectGroup, UiThread } from '../../types/codex'
+import type { CommandExecutionData, UiFileAttachment, UiMessage, UiProjectGroup, UiThread } from '../../types/codex'
 
 function toIso(seconds: number): string {
   return new Date(seconds * 1000).toISOString()
@@ -22,6 +22,26 @@ function toRawPayload(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+const FILE_ATTACHMENT_LINE = /^##\s+(.+?):\s+(.+?)\s*$/
+const FILES_MENTIONED_MARKER = /^#\s*files mentioned by the user\s*:?\s*$/i
+
+function extractFileAttachments(value: string): UiFileAttachment[] {
+  const markerIdx = value.split('\n').findIndex((line) => FILES_MENTIONED_MARKER.test(line.trim()))
+  if (markerIdx < 0) return []
+  const lines = value.split('\n').slice(markerIdx + 1)
+  const attachments: UiFileAttachment[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const m = trimmed.match(FILE_ATTACHMENT_LINE)
+    if (!m) break
+    const label = m[1]?.trim()
+    const path = m[2]?.trim().replace(/\s+\((?:lines?\s+\d+(?:-\d+)?)\)\s*$/, '')
+    if (label && path) attachments.push({ label, path })
+  }
+  return attachments
 }
 
 function extractCodexUserRequestText(value: string): string {
@@ -43,8 +63,8 @@ function extractCodexUserRequestText(value: string): string {
 function parseUserMessageContent(
   itemId: string,
   content: UserInput[] | undefined,
-): { text: string; images: string[]; rawBlocks: UiMessage[] } {
-  if (!Array.isArray(content)) return { text: '', images: [], rawBlocks: [] }
+): { text: string; images: string[]; fileAttachments: UiFileAttachment[]; rawBlocks: UiMessage[] } {
+  if (!Array.isArray(content)) return { text: '', images: [], fileAttachments: [], rawBlocks: [] }
 
   const textChunks: string[] = []
   const images: string[] = []
@@ -70,9 +90,13 @@ function parseUserMessageContent(
     }
   }
 
+  const fullText = textChunks.join('\n')
+  const fileAttachments = extractFileAttachments(fullText)
+
   return {
-    text: extractCodexUserRequestText(textChunks.join('\n')),
+    text: extractCodexUserRequestText(fullText),
     images,
+    fileAttachments,
     rawBlocks,
   }
 }
@@ -92,7 +116,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'userMessage') {
     const parsed = parseUserMessageContent(item.id, item.content as UserInput[] | undefined)
     const messages: UiMessage[] = []
-    const hasRenderableUserContent = parsed.text.length > 0 || parsed.images.length > 0
+    const hasRenderableUserContent = parsed.text.length > 0 || parsed.images.length > 0 || parsed.fileAttachments.length > 0
 
     if (hasRenderableUserContent) {
       messages.push({
@@ -100,6 +124,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
         role: 'user',
         text: parsed.text,
         images: parsed.images,
+        fileAttachments: parsed.fileAttachments.length > 0 ? parsed.fileAttachments : undefined,
         messageType: item.type,
       })
     }
