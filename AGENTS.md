@@ -10,15 +10,15 @@
 1. In the worktree, commit changes and create a branch.
    - `git add -A && git commit -m "<message>"`
    - `git switch -c <your-branch>`
-2. Rebase branch on latest `main`.
-   - `git rebase main`
-3. Resolve conflicts if any, then continue rebasing.
-   - `git add <resolved-files>`
-   - `git rebase --continue`
-4. Merge into local `main` from the main worktree.
+2. If the user asks for a **single merge commit**, do this exact sequence in the main worktree:
+   - find pre-merge `main` from reflog (example: `git reflog main`)
+   - `git checkout main`
+   - `git reset --hard <pre-merge-main-commit>`
+   - `git merge --no-ff <your-branch> -m "Merge branch '<your-branch>' into main"`
+3. Otherwise, merge into local `main` from the main worktree:
    - `git checkout main`
    - `git merge --ff-only <your-branch>`
-5. If `--ff-only` fails (non-linear history), use:
+4. If `--ff-only` fails (non-linear history), use:
    - `git merge --no-ff <your-branch>`
 
 ## Commit After Each Task
