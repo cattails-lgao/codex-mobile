@@ -29,6 +29,21 @@
       </div>
 
       <div class="thread-composer-input-wrap">
+        <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
+          <template v-if="fileMentionSuggestions.length > 0">
+            <button
+              v-for="(item, index) in fileMentionSuggestions"
+              :key="item.path"
+              class="thread-composer-file-mention-row"
+              :class="{ 'is-active': index === fileMentionHighlightedIndex }"
+              type="button"
+              @mousedown.prevent="applyFileMention(item)"
+            >
+              {{ item.path }}
+            </button>
+          </template>
+          <div v-else class="thread-composer-file-mention-empty">No matching files</div>
+        </div>
         <textarea
           ref="inputRef"
           v-model="draft"
@@ -178,6 +193,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReasoningEffort } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
+import { searchComposerFiles, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
@@ -189,6 +205,7 @@ type SkillItem = { name: string; description: string; path: string }
 
 const props = defineProps<{
   activeThreadId: string
+  cwd?: string
   models: string[]
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
@@ -232,6 +249,13 @@ const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
+const mentionStartIndex = ref<number | null>(null)
+const mentionQuery = ref('')
+const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
+const isFileMentionOpen = ref(false)
+const fileMentionHighlightedIndex = ref(0)
+let fileMentionSearchToken = 0
+let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
@@ -264,7 +288,7 @@ const canSubmit = computed(() => {
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
 
 const placeholderText = computed(() =>
-  props.activeThreadId ? 'Type a message... (/ for skills)' : 'Select a thread to send a message',
+  props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
 )
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
@@ -281,6 +305,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   selectedSkills.value = []
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
+  closeFileMention()
   if (isAndroid) {
     inputRef.value?.blur()
     return
@@ -363,9 +388,44 @@ function onInputChange(): void {
   } else if (isSlashMenuOpen.value && !text.startsWith('/')) {
     isSlashMenuOpen.value = false
   }
+  updateFileMentionState()
 }
 
 function onInputKeydown(event: KeyboardEvent): void {
+  if (isFileMentionOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeFileMention()
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      if (fileMentionSuggestions.value.length > 0) {
+        fileMentionHighlightedIndex.value =
+          (fileMentionHighlightedIndex.value + 1) % fileMentionSuggestions.value.length
+      }
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (fileMentionSuggestions.value.length > 0) {
+        const size = fileMentionSuggestions.value.length
+        fileMentionHighlightedIndex.value = (fileMentionHighlightedIndex.value + size - 1) % size
+      }
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      const selected = fileMentionSuggestions.value[fileMentionHighlightedIndex.value]
+      if (selected) {
+        applyFileMention(selected)
+      } else {
+        closeFileMention()
+      }
+      return
+    }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     onSubmit('steer')
@@ -388,6 +448,79 @@ function onInputKeydown(event: KeyboardEvent): void {
 function closeSlashMenu(): void {
   isSlashMenuOpen.value = false
   inputRef.value?.focus()
+}
+
+function closeFileMention(): void {
+  isFileMentionOpen.value = false
+  mentionStartIndex.value = null
+  mentionQuery.value = ''
+  fileMentionSuggestions.value = []
+  fileMentionHighlightedIndex.value = 0
+}
+
+function updateFileMentionState(): void {
+  const input = inputRef.value
+  if (!input) {
+    closeFileMention()
+    return
+  }
+  const cursor = input.selectionStart ?? draft.value.length
+  const beforeCursor = draft.value.slice(0, cursor)
+  const match = beforeCursor.match(/(^|\s)(@[^\s@]*)$/)
+  if (!match) {
+    closeFileMention()
+    return
+  }
+
+  const mentionToken = match[2] ?? ''
+  const mentionOffset = mentionToken.length
+  const startIndex = cursor - mentionOffset
+  mentionStartIndex.value = startIndex
+  mentionQuery.value = mentionToken.slice(1)
+  isFileMentionOpen.value = true
+  void queueFileMentionSearch()
+}
+
+async function queueFileMentionSearch(): Promise<void> {
+  if (!isFileMentionOpen.value) return
+  const cwd = (props.cwd ?? '').trim()
+  if (!cwd) {
+    fileMentionSuggestions.value = []
+    return
+  }
+  if (fileMentionDebounceTimer) {
+    clearTimeout(fileMentionDebounceTimer)
+  }
+  const token = ++fileMentionSearchToken
+  fileMentionDebounceTimer = setTimeout(async () => {
+    try {
+      const rows = await searchComposerFiles(cwd, mentionQuery.value, 20)
+      if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+      fileMentionSuggestions.value = rows
+      fileMentionHighlightedIndex.value = 0
+    } catch {
+      if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+      fileMentionSuggestions.value = []
+    }
+  }, 120)
+}
+
+function applyFileMention(suggestion: ComposerFileSuggestion): void {
+  const start = mentionStartIndex.value
+  const input = inputRef.value
+  if (start === null || !input) {
+    closeFileMention()
+    return
+  }
+  const cursor = input.selectionStart ?? draft.value.length
+  const mentionText = `@${suggestion.path} `
+  draft.value = `${draft.value.slice(0, start)}${mentionText}${draft.value.slice(cursor)}`
+  closeFileMention()
+  nextTick(() => {
+    const nextCursor = start + mentionText.length
+    input.setSelectionRange(nextCursor, nextCursor)
+    input.focus()
+  })
 }
 
 function onSlashSkillSelect(skill: SkillItem): void {
@@ -425,6 +558,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  if (fileMentionDebounceTimer) {
+    clearTimeout(fileMentionDebounceTimer)
+  }
 })
 
 watch(
@@ -435,6 +571,16 @@ watch(
     selectedSkills.value = []
     isAttachMenuOpen.value = false
     isSlashMenuOpen.value = false
+    closeFileMention()
+  },
+)
+
+watch(
+  () => props.cwd,
+  () => {
+    if (isFileMentionOpen.value) {
+      void queueFileMentionSearch()
+    }
   },
 )
 </script>
@@ -488,6 +634,22 @@ watch(
 
 .thread-composer-input-wrap {
   @apply relative;
+}
+
+.thread-composer-file-mentions {
+  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+}
+
+.thread-composer-file-mention-row {
+  @apply block w-full rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+}
+
+.thread-composer-file-mention-row.is-active {
+  @apply bg-zinc-100;
+}
+
+.thread-composer-file-mention-empty {
+  @apply px-2 py-1.5 text-xs text-zinc-500;
 }
 
 .thread-composer-input {

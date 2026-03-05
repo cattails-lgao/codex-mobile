@@ -82,6 +82,46 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
   res.end(JSON.stringify(payload))
 }
 
+function scoreFileCandidate(path: string, query: string): number {
+  if (!query) return 0
+  const lowerPath = path.toLowerCase()
+  const lowerQuery = query.toLowerCase()
+  const baseName = lowerPath.slice(lowerPath.lastIndexOf('/') + 1)
+  if (baseName === lowerQuery) return 0
+  if (baseName.startsWith(lowerQuery)) return 1
+  if (baseName.includes(lowerQuery)) return 2
+  if (lowerPath.includes(`/${lowerQuery}`)) return 3
+  if (lowerPath.includes(lowerQuery)) return 4
+  return 10
+}
+
+async function listFilesWithRipgrep(cwd: string): Promise<string[]> {
+  return await new Promise<string[]>((resolve, reject) => {
+    const proc = spawn('rg', ['--files', '--hidden', '-g', '!.git', '-g', '!node_modules'], {
+      cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        const rows = stdout
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+        resolve(rows)
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      reject(new Error(details || 'rg --files failed'))
+    })
+  })
+}
+
 function getCodexHomeDir(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
   return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
@@ -1111,6 +1151,43 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         setJson(res, 500, { error: 'Failed to compute project name suggestion' })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/composer-file-search') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+        const query = typeof payload?.query === 'string' ? payload.query.trim() : ''
+        const limitRaw = typeof payload?.limit === 'number' ? payload.limit : 20
+        const limit = Math.max(1, Math.min(100, Math.floor(limitRaw)))
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const info = await stat(cwd)
+          if (!info.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          const files = await listFilesWithRipgrep(cwd)
+          const scored = files
+            .map((path) => ({ path, score: scoreFileCandidate(path, query) }))
+            .filter((row) => query.length === 0 || row.score < 10)
+            .sort((a, b) => (a.score - b.score) || a.path.localeCompare(b.path))
+            .slice(0, limit)
+            .map((row) => ({ path: row.path }))
+          setJson(res, 200, { data: scored })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to search files') })
+        }
         return
       }
 

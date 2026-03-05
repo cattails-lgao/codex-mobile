@@ -105,6 +105,7 @@
               </div>
 
               <ThreadComposer :active-thread-id="composerThreadContextId"
+                :cwd="composerCwd"
                 :models="availableModelIds" :selected-model="selectedModelId"
                 :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
                 :is-turn-in-progress="false"
@@ -133,6 +134,7 @@
                   @delete="removeQueuedMessage"
                 />
                 <ThreadComposer :active-thread-id="composerThreadContextId"
+                  :cwd="composerCwd"
                   :models="availableModelIds"
                   :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
                   :skills="installedSkills"
@@ -267,6 +269,10 @@ const filteredMessages = computed(() =>
 )
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
+const composerCwd = computed(() => {
+  if (isHomeRoute.value) return newThreadCwd.value.trim()
+  return selectedThread.value?.cwd?.trim() ?? ''
+})
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []

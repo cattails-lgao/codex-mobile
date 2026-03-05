@@ -29,6 +29,10 @@ export type WorkspaceRootsState = {
   active: string[]
 }
 
+export type ComposerFileSuggestion = {
+  path: string
+}
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -333,6 +337,40 @@ export async function getProjectRootSuggestion(basePath: string): Promise<{ name
     name: typeof data.name === 'string' ? data.name.trim() : '',
     path: typeof data.path === 'string' ? data.path.trim() : '',
   }
+}
+
+export async function searchComposerFiles(cwd: string, query: string, limit = 20): Promise<ComposerFileSuggestion[]> {
+  const trimmedCwd = cwd.trim()
+  if (!trimmedCwd) return []
+  const response = await fetch('/codex-api/composer-file-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cwd: trimmedCwd,
+      query: query.trim(),
+      limit,
+    }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to search files')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data = Array.isArray(record.data) ? record.data : []
+  const suggestions: ComposerFileSuggestion[] = []
+  for (const item of data) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    const rawPath = row.path
+    const value = typeof rawPath === 'string' ? rawPath.trim() : ''
+    if (!value) continue
+    suggestions.push({ path: value })
+  }
+  return suggestions
 }
 
 function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
