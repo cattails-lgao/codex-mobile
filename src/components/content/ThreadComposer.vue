@@ -39,7 +39,19 @@
               type="button"
               @mousedown.prevent="applyFileMention(item)"
             >
-              {{ item.path }}
+              <span
+                v-if="getMentionBadgeText(item.path)"
+                class="thread-composer-file-mention-icon-badge"
+                :class="`is-${getMentionBadgeClass(item.path)}`"
+              >
+                {{ getMentionBadgeText(item.path) }}
+              </span>
+              <span v-else-if="isMarkdownFile(item.path)" class="thread-composer-file-mention-icon-markdown">↓</span>
+              <IconTablerFilePencil v-else class="thread-composer-file-mention-icon-file" />
+              <span class="thread-composer-file-mention-text">
+                <span class="thread-composer-file-mention-name">{{ getMentionFileName(item.path) }}</span>
+                <span v-if="getMentionDirName(item.path)" class="thread-composer-file-mention-dir">{{ getMentionDirName(item.path) }}</span>
+              </span>
             </button>
           </template>
           <div v-else class="thread-composer-file-mention-empty">No matching files</div>
@@ -195,6 +207,7 @@ import type { ReasoningEffort } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import { searchComposerFiles, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
+import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
@@ -523,6 +536,48 @@ function applyFileMention(suggestion: ComposerFileSuggestion): void {
   })
 }
 
+function getMentionFileName(path: string): string {
+  const idx = path.lastIndexOf('/')
+  if (idx < 0) return path
+  return path.slice(idx + 1)
+}
+
+function getMentionDirName(path: string): string {
+  const idx = path.lastIndexOf('/')
+  if (idx <= 0) return ''
+  return path.slice(0, idx)
+}
+
+function getFileExtension(path: string): string {
+  const base = getMentionFileName(path)
+  const idx = base.lastIndexOf('.')
+  if (idx <= 0) return ''
+  return base.slice(idx + 1).toLowerCase()
+}
+
+function getMentionBadgeText(path: string): string {
+  const ext = getFileExtension(path)
+  if (ext === 'ts') return 'TS'
+  if (ext === 'tsx') return 'TSX'
+  if (ext === 'js') return 'JS'
+  if (ext === 'jsx') return 'JSX'
+  if (ext === 'json') return '{}'
+  return ''
+}
+
+function getMentionBadgeClass(path: string): string {
+  const ext = getFileExtension(path)
+  if (ext.startsWith('ts')) return 'ts'
+  if (ext.startsWith('js')) return 'js'
+  if (ext === 'json') return 'json'
+  return 'default'
+}
+
+function isMarkdownFile(path: string): boolean {
+  const ext = getFileExtension(path)
+  return ext === 'md' || ext === 'mdx'
+}
+
 function onSlashSkillSelect(skill: SkillItem): void {
   if (!selectedSkills.value.some((s) => s.path === skill.path)) {
     selectedSkills.value = [...selectedSkills.value, skill]
@@ -641,11 +696,47 @@ watch(
 }
 
 .thread-composer-file-mention-row {
-  @apply block w-full rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
 }
 
 .thread-composer-file-mention-row.is-active {
   @apply bg-zinc-100;
+}
+
+.thread-composer-file-mention-icon-badge {
+  @apply inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[9px] font-semibold leading-none;
+}
+
+.thread-composer-file-mention-icon-badge.is-ts {
+  @apply bg-zinc-700 text-white;
+}
+
+.thread-composer-file-mention-icon-badge.is-js {
+  @apply bg-zinc-600 text-white;
+}
+
+.thread-composer-file-mention-icon-badge.is-json {
+  @apply bg-zinc-600 text-white;
+}
+
+.thread-composer-file-mention-icon-markdown {
+  @apply inline-flex h-5 min-w-5 items-center justify-center text-sm leading-none text-zinc-700;
+}
+
+.thread-composer-file-mention-icon-file {
+  @apply h-4 w-4 text-zinc-600;
+}
+
+.thread-composer-file-mention-text {
+  @apply min-w-0 flex items-baseline gap-2;
+}
+
+.thread-composer-file-mention-name {
+  @apply truncate text-zinc-900;
+}
+
+.thread-composer-file-mention-dir {
+  @apply truncate text-zinc-400;
 }
 
 .thread-composer-file-mention-empty {
