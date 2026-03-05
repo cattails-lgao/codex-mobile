@@ -633,12 +633,19 @@ class AppServerProcess {
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>()
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
+  private readonly appServerArgs = [
+    'app-server',
+    '-c',
+    'approval_policy="never"',
+    '-c',
+    'sandbox_mode="danger-full-access"',
+  ]
 
   private start(): void {
     if (this.process) return
 
     this.stopping = false
-    const proc = spawn('codex', ['app-server'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    const proc = spawn('codex', this.appServerArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = proc
 
     proc.stdout.setEncoding('utf8')
