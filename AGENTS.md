@@ -50,3 +50,15 @@
 - Do not rely on local unpublished changes when validating `npx` behavior.
 - Run `npx` validation on the Oracle host (not local machine) unless user explicitly asks otherwise.
 - For Playwright verification of `npx` behavior, use the Oracle host Tailscale URL (for example `http://100.127.77.25:<port>`) instead of `localhost`.
+
+## A1 Playwright Verification (From Mac via Tailscale)
+
+- Use this flow when validating UI behavior on Oracle A1 from the local Mac machine.
+- On A1, start the app server with Codex CLI available in `PATH`:
+  - `export PATH="$HOME/.npm-global/bin:$PATH"`
+  - `npm run dev -- --host 0.0.0.0 --port 4173`
+- From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4173`), not localhost.
+- Verify success with both checks:
+  - UI assertion in Playwright (new project/folder appears in sidebar or selector).
+  - Filesystem assertion on A1 (`test -d /home/ubuntu/<project-name>`).
+- Save screenshot artifact under `output/playwright/` and include it in the report.
