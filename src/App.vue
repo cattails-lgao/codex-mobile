@@ -170,7 +170,7 @@ import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
+import { getHomeDirectory, getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -231,6 +231,7 @@ const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
 const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
 const defaultNewProjectName = ref('New Project (1)')
+const homeDirectory = ref('')
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -301,6 +302,7 @@ const newThreadFolderOptions = computed(() => {
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
   void initialize()
+  void loadHomeDirectory()
   void refreshDefaultProjectName()
 })
 
@@ -423,9 +425,10 @@ async function onAddNewProject(rawInput: string): Promise<void> {
   if (!normalizedInput) return
 
   const isPath = looksLikePath(normalizedInput)
+  const baseDir = await resolveProjectBaseDirectory()
   const targetPath = isPath
     ? normalizedInput
-    : joinPath(getProjectBaseDirectory(), normalizedInput)
+    : joinPath(baseDir, normalizedInput)
   if (!targetPath) return
 
   try {
@@ -441,6 +444,21 @@ async function onAddNewProject(rawInput: string): Promise<void> {
   } catch {
     // Error is surfaced on next request if path is invalid.
   }
+}
+
+async function resolveProjectBaseDirectory(): Promise<string> {
+  const baseDir = getProjectBaseDirectory()
+  if (baseDir) return baseDir
+  try {
+    const loadedHomeDirectory = await getHomeDirectory()
+    if (loadedHomeDirectory) {
+      homeDirectory.value = loadedHomeDirectory
+      return loadedHomeDirectory
+    }
+  } catch {
+    // Fallback handled by empty return.
+  }
+  return ''
 }
 
 function looksLikePath(value: string): boolean {
@@ -470,7 +488,15 @@ function getProjectBaseDirectory(): string {
   if (selected) return getPathParent(selected)
   const first = newThreadFolderOptions.value[0]?.value?.trim() ?? ''
   if (first) return getPathParent(first)
-  return ''
+  return homeDirectory.value.trim()
+}
+
+async function loadHomeDirectory(): Promise<void> {
+  try {
+    homeDirectory.value = await getHomeDirectory()
+  } catch {
+    homeDirectory.value = ''
+  }
 }
 
 function getPathParent(path: string): string {
