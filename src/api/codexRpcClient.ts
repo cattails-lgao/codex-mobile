@@ -142,26 +142,85 @@ function toNotification(value: unknown): RpcNotification | null {
 }
 
 export function subscribeRpcNotifications(onNotification: (value: RpcNotification) => void): () => void {
-  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+  if (typeof window === 'undefined') {
     return () => {}
   }
 
-  const source = new EventSource('/codex-api/events')
+  let cleanup: (() => void) | null = null
+  let closed = false
 
-  source.onmessage = (event) => {
-    try {
-      const parsed = JSON.parse(event.data) as unknown
-      const notification = toNotification(parsed)
-      if (notification) {
-        onNotification(notification)
+  const attachSse = () => {
+    if (typeof EventSource === 'undefined' || closed) return
+    const source = new EventSource('/codex-api/events')
+
+    source.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data) as unknown
+        const notification = toNotification(parsed)
+        if (notification) {
+          onNotification(notification)
+        }
+      } catch {
+        // Ignore malformed event payloads and keep stream alive.
       }
-    } catch {
-      // Ignore malformed event payloads and keep stream alive.
     }
+    cleanup = () => source.close()
+  }
+
+  if (typeof WebSocket !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const socket = new WebSocket(`${protocol}//${window.location.host}/codex-api/ws`)
+    let didOpen = false
+    let fallbackTimer: number | null = window.setTimeout(() => {
+      if (didOpen || closed) return
+      socket.close()
+      attachSse()
+    }, 2500)
+
+    socket.onopen = () => {
+      didOpen = true
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer)
+        fallbackTimer = null
+      }
+    }
+
+    socket.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(String(event.data)) as unknown
+        const notification = toNotification(parsed)
+        if (notification) {
+          onNotification(notification)
+        }
+      } catch {
+        // Ignore malformed event payloads and keep stream alive.
+      }
+    }
+
+    socket.onerror = () => {
+      if (!didOpen && !closed) {
+        attachSse()
+      }
+    }
+
+    socket.onclose = () => {
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer)
+        fallbackTimer = null
+      }
+      if (!didOpen && !closed) {
+        attachSse()
+      }
+    }
+
+    cleanup = () => socket.close()
+  } else {
+    attachSse()
   }
 
   return () => {
-    source.close()
+    closed = true
+    cleanup?.()
   }
 }
 

@@ -1027,6 +1027,7 @@ class MethodCatalog {
 
 type CodexBridgeMiddleware = ((req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>) & {
   dispose: () => void
+  subscribeNotifications: (listener: (value: { method: string; params: unknown; atIso: string }) => void) => () => void
 }
 
 type SharedBridgeState = {
@@ -1404,13 +1405,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         res.setHeader('Connection', 'keep-alive')
         res.setHeader('X-Accel-Buffering', 'no')
 
-        const unsubscribe = appServer.onNotification((notification) => {
+        const unsubscribe = middleware.subscribeNotifications((notification: { method: string; params: unknown; atIso: string }) => {
           if (res.writableEnded || res.destroyed) return
-          const payload = {
-            ...notification,
-            atIso: new Date().toISOString(),
-          }
-          res.write(`data: ${JSON.stringify(payload)}\n\n`)
+          res.write(`data: ${JSON.stringify(notification)}\n\n`)
         })
 
         res.write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`)
@@ -1440,6 +1437,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
   middleware.dispose = () => {
     appServer.dispose()
+  }
+  middleware.subscribeNotifications = (
+    listener: (value: { method: string; params: unknown; atIso: string }) => void,
+  ) => {
+    return appServer.onNotification((notification: { method: string; params: unknown }) => {
+      listener({
+        ...notification,
+        atIso: new Date().toISOString(),
+      })
+    })
   }
 
   return middleware

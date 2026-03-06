@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
 import type { RequestHandler, Request, Response, NextFunction } from 'express'
 
 const TOKEN_COOKIE = 'codex_web_local_token'
@@ -31,6 +32,31 @@ function parseCookies(header: string | undefined): Record<string, string> {
     cookies[key] = value
   }
   return cookies
+}
+
+function isLocalhostRemote(remote: string): boolean {
+  return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+}
+
+function isLocalhostHost(host: string): boolean {
+  const normalized = host.toLowerCase()
+  return normalized.startsWith('localhost:') || normalized === 'localhost' || normalized.startsWith('127.0.0.1:')
+}
+
+function isAuthorizedByRequestLike(
+  remoteAddress: string | undefined,
+  hostHeader: string | undefined,
+  cookieHeader: string | undefined,
+  validTokens: Set<string>,
+): boolean {
+  const remote = remoteAddress ?? ''
+  if (isLocalhostRemote(remote) || isLocalhostHost(hostHeader ?? '')) {
+    return true
+  }
+
+  const cookies = parseCookies(cookieHeader)
+  const token = cookies[TOKEN_COOKIE]
+  return Boolean(token && validTokens.has(token))
 }
 
 const LOGIN_PAGE_HTML = `<!DOCTYPE html>
@@ -76,10 +102,19 @@ form.addEventListener('submit',async e=>{
 </html>`
 
 export function createAuthMiddleware(password: string): RequestHandler {
+  return createAuthSession(password).middleware
+}
+
+export type AuthSession = {
+  middleware: RequestHandler
+  isRequestAuthorized: (req: IncomingMessage) => boolean
+}
+
+export function createAuthSession(password: string): AuthSession {
   const validTokens = new Set<string>()
 
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (isLocalhostRequest(req)) {
+  const middleware: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+    if (isAuthorizedByRequestLike(req.socket.remoteAddress, req.headers.host, req.headers.cookie, validTokens)) {
       next()
       return
     }
@@ -111,17 +146,15 @@ export function createAuthMiddleware(password: string): RequestHandler {
       return
     }
 
-    // Check for valid token cookie
-    const cookies = parseCookies(req.headers.cookie)
-    const token = cookies[TOKEN_COOKIE]
-
-    if (token && validTokens.has(token)) {
-      next()
-      return
-    }
-
     // No valid session — serve login page
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.status(200).send(LOGIN_PAGE_HTML)
+  }
+
+  return {
+    middleware,
+    isRequestAuthorized: (req: IncomingMessage) => (
+      isAuthorizedByRequestLike(req.socket.remoteAddress, req.headers.host, req.headers.cookie, validTokens)
+    ),
   }
 }

@@ -40,7 +40,7 @@
 ### Key Architectural Decisions
 
 - **No Pinia / Vuex**: All state lives in a single composable (`useDesktopState`). Reactive refs + computed properties manage thread, message, model, and UI state.
-- **No WebSocket**: Real-time communication uses **SSE** (`EventSource`) on `/codex-api/events` for server-to-client notifications, and standard HTTP POST for client-to-server RPC.
+- **Realtime transport**: Client prefers **WebSocket** on `/codex-api/ws` for server-to-client notifications, with automatic fallback to **SSE** (`EventSource`) on `/codex-api/events`. Client-to-server RPC stays on HTTP POST.
 - **Single child process**: The Node server spawns exactly one `codex app-server` child process and multiplexes all RPC calls through it via stdin/stdout.
 - **Shared bridge state**: A global singleton (`AppServerProcess` + `MethodCatalog`) survives Vite HMR reloads during development.
 
@@ -207,7 +207,8 @@ Forking creates a new thread from an existing thread so users can branch the con
 | GET | `/codex-api/server-requests/pending` | List pending server requests |
 | GET | `/codex-api/meta/methods` | Discover available RPC methods |
 | GET | `/codex-api/meta/notifications` | Discover available notification types |
-| GET | `/codex-api/events` | SSE stream for real-time notifications |
+| GET | `/codex-api/events` | SSE fallback stream for real-time notifications |
+| WS upgrade | `/codex-api/ws` | Primary WebSocket channel for real-time notifications |
 
 ### Bridge → App-Server
 
@@ -281,7 +282,7 @@ All frontend state is managed by `useDesktopState()` — a single Vue composable
 
 ### Event Processing Pipeline
 
-1. SSE events arrive via `EventSource` on `/codex-api/events`
+1. Realtime events arrive via WebSocket on `/codex-api/ws` (fallback: `EventSource` on `/codex-api/events`)
 2. Each event is passed to `applyRealtimeUpdates()` for immediate UI effects (activity labels, live text, in-progress flags)
 3. Events are also passed to `queueEventDrivenSync()` which debounces (220ms) a full data refresh
 4. The debounced `syncFromNotifications()` calls `loadThreads()` and `loadMessages()` to reconcile server state
