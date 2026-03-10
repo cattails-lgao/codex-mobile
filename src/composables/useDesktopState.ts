@@ -634,6 +634,14 @@ export function useDesktopState() {
   const inProgressById = ref<Record<string, boolean>>({})
   type FileAttachment = { label: string; path: string; fsPath: string }
   type QueuedMessage = { id: string; text: string; imageUrls: string[]; skills: Array<{ name: string; path: string }>; fileAttachments: FileAttachment[] }
+  type PendingTurnRequest = {
+    text: string
+    imageUrls: string[]
+    skills: Array<{ name: string; path: string }>
+    fileAttachments: FileAttachment[]
+    effort: ReasoningEffort | ''
+    fallbackRetried: boolean
+  }
   const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
@@ -651,6 +659,7 @@ export function useDesktopState() {
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
+  const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
 
   const threadTitleById = ref<Record<string, string>>({})
 
@@ -676,6 +685,7 @@ export function useDesktopState() {
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
   const pendingTurnStartsById = new Map<string, TurnStartedInfo>()
+  const fallbackRetryInFlightThreadIds = new Set<string>()
 
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
@@ -746,6 +756,73 @@ export function useDesktopState() {
       await setDefaultModel(MODEL_FALLBACK_ID)
     } catch {
       // Keep local selection even when persisting default model fails.
+    }
+  }
+
+  function setPendingTurnRequest(threadId: string, request: PendingTurnRequest): void {
+    pendingTurnRequestByThreadId.value = {
+      ...pendingTurnRequestByThreadId.value,
+      [threadId]: request,
+    }
+  }
+
+  function clearPendingTurnRequest(threadId: string): void {
+    if (!pendingTurnRequestByThreadId.value[threadId]) return
+    pendingTurnRequestByThreadId.value = omitKey(pendingTurnRequestByThreadId.value, threadId)
+  }
+
+  async function retryPendingTurnWithFallback(threadId: string): Promise<void> {
+    if (fallbackRetryInFlightThreadIds.has(threadId)) return
+    const pending = pendingTurnRequestByThreadId.value[threadId]
+    if (!pending || pending.fallbackRetried) return
+
+    fallbackRetryInFlightThreadIds.add(threadId)
+    setPendingTurnRequest(threadId, {
+      ...pending,
+      fallbackRetried: true,
+    })
+
+    try {
+      await applyFallbackModelSelection()
+      setTurnErrorForThread(threadId, null)
+      error.value = ''
+      setTurnSummaryForThread(threadId, null)
+      setTurnActivityForThread(threadId, {
+        label: 'Thinking',
+        details: buildPendingTurnDetails(MODEL_FALLBACK_ID, pending.effort),
+      })
+      setThreadInProgress(threadId, true)
+
+      if (resumedThreadById.value[threadId] !== true) {
+        await resumeThread(threadId)
+      }
+
+      await startThreadTurn(
+        threadId,
+        pending.text,
+        pending.imageUrls,
+        MODEL_FALLBACK_ID,
+        pending.effort || undefined,
+        pending.skills.length > 0 ? pending.skills : undefined,
+        pending.fileAttachments,
+      )
+
+      resumedThreadById.value = {
+        ...resumedThreadById.value,
+        [threadId]: true,
+      }
+
+      pendingThreadMessageRefresh.add(threadId)
+      pendingThreadsRefresh = true
+      await syncFromNotifications()
+    } catch (unknownError) {
+      const errorMessage = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+      setTurnErrorForThread(threadId, errorMessage)
+      error.value = errorMessage
+      setThreadInProgress(threadId, false)
+      setTurnActivityForThread(threadId, null)
+    } finally {
+      fallbackRetryInFlightThreadIds.delete(threadId)
     }
   }
 
@@ -1612,6 +1689,13 @@ export function useDesktopState() {
     }
 
     const completedTurn = readTurnCompletedInfo(notification)
+    const turnErrorMessage = readTurnErrorMessage(notification)
+    const completedThreadId = completedTurn?.threadId ?? extractThreadIdFromNotification(notification)
+    const shouldRetryWithFallback =
+      Boolean(completedThreadId) &&
+      Boolean(turnErrorMessage) &&
+      selectedModelId.value !== MODEL_FALLBACK_ID &&
+      isUnsupportedChatGptModelError(new Error(turnErrorMessage))
     if (completedTurn) {
       const startedTurnState = pendingTurnStartsById.get(completedTurn.turnId)
       if (startedTurnState) {
@@ -1637,18 +1721,20 @@ export function useDesktopState() {
       setThreadInProgress(completedTurn.threadId, false)
       setTurnActivityForThread(completedTurn.threadId, null)
       markThreadUnreadByEvent(completedTurn.threadId)
-      void processQueuedMessages(completedTurn.threadId)
+      if (!shouldRetryWithFallback) {
+        clearPendingTurnRequest(completedTurn.threadId)
+        void processQueuedMessages(completedTurn.threadId)
+      }
     }
 
-    const turnErrorMessage = readTurnErrorMessage(notification)
     if (turnErrorMessage) {
       const failedThreadId = completedTurn?.threadId || extractThreadIdFromNotification(notification)
       if (failedThreadId) {
         setTurnErrorForThread(failedThreadId, turnErrorMessage)
       }
       error.value = turnErrorMessage
-      if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(turnErrorMessage))) {
-        void applyFallbackModelSelection()
+      if (failedThreadId && shouldRetryWithFallback) {
+        void retryPendingTurnWithFallback(failedThreadId)
       }
     } else if (completedTurn) {
       setTurnErrorForThread(completedTurn.threadId, null)
@@ -1662,7 +1748,11 @@ export function useDesktopState() {
       }
       error.value = notificationErrorMessage
       if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(notificationErrorMessage))) {
-        void applyFallbackModelSelection()
+        if (errorThreadId) {
+          void retryPendingTurnWithFallback(errorThreadId)
+        } else {
+          void applyFallbackModelSelection()
+        }
       }
     }
 
@@ -1763,7 +1853,10 @@ export function useDesktopState() {
         setThreadInProgress(completedThreadId, false)
         setTurnActivityForThread(completedThreadId, null)
         markThreadUnreadByEvent(completedThreadId)
-        void processQueuedMessages(completedThreadId)
+        if (!shouldRetryWithFallback) {
+          clearPendingTurnRequest(completedThreadId)
+          void processQueuedMessages(completedThreadId)
+        }
       }
     }
 
@@ -2141,6 +2234,18 @@ export function useDesktopState() {
   ): Promise<void> {
     const modelId = selectedModelId.value.trim()
     const reasoningEffort = selectedReasoningEffort.value
+    const normalizedText = nextText.trim()
+    const normalizedSkills = skills.map((skill) => ({ name: skill.name, path: skill.path }))
+    const normalizedFileAttachments = fileAttachments.map((file) => ({ ...file }))
+
+    setPendingTurnRequest(threadId, {
+      text: normalizedText,
+      imageUrls: [...imageUrls],
+      skills: normalizedSkills,
+      fileAttachments: normalizedFileAttachments,
+      effort: reasoningEffort,
+      fallbackRetried: false,
+    })
 
     try {
       if (resumedThreadById.value[threadId] !== true) {
@@ -2160,6 +2265,14 @@ export function useDesktopState() {
       } catch (unknownError) {
         if (modelId && modelId !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(unknownError)) {
           await applyFallbackModelSelection()
+          setPendingTurnRequest(threadId, {
+            text: normalizedText,
+            imageUrls: [...imageUrls],
+            skills: normalizedSkills,
+            fileAttachments: normalizedFileAttachments,
+            effort: reasoningEffort,
+            fallbackRetried: true,
+          })
           await startThreadTurn(
             threadId,
             nextText,
