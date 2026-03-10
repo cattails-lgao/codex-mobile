@@ -4,6 +4,7 @@ import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
 import tailwindcss from "@tailwindcss/vite";
 import { createReadStream } from "node:fs";
 import { extname, isAbsolute } from "node:path";
+import { WebSocketServer, type WebSocket } from "ws";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   ".avif": "image/avif",
@@ -40,6 +41,7 @@ function getWorktreeName(): string {
 }
 
 const worktreeName = getWorktreeName();
+const WS_UPGRADE_ATTACHED_KEY = "__codexBridgeWsAttached__";
 
 export default defineConfig({
   define: {
@@ -66,6 +68,45 @@ export default defineConfig({
       name: "codex-bridge",
       configureServer(server) {
         const bridge = createCodexBridgeMiddleware();
+        const httpServer = server.httpServer;
+        if (httpServer) {
+          const hostScope = httpServer as typeof httpServer & {
+            [WS_UPGRADE_ATTACHED_KEY]?: boolean;
+          };
+          if (!hostScope[WS_UPGRADE_ATTACHED_KEY]) {
+            hostScope[WS_UPGRADE_ATTACHED_KEY] = true;
+            const wss = new WebSocketServer({ noServer: true });
+
+            httpServer.on("upgrade", (req, socket, head) => {
+              const requestUrl = new URL(req.url ?? "", "http://localhost");
+              if (requestUrl.pathname !== "/codex-api/ws") return;
+              wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+                wss.emit("connection", ws, req);
+              });
+            });
+
+            wss.on("connection", (ws: WebSocket) => {
+              ws.send(
+                JSON.stringify({
+                  method: "ready",
+                  params: { ok: true },
+                  atIso: new Date().toISOString(),
+                }),
+              );
+              const unsubscribe = bridge.subscribeNotifications((notification) => {
+                if (ws.readyState !== ws.OPEN) return;
+                ws.send(JSON.stringify(notification));
+              });
+
+              ws.on("close", unsubscribe);
+              ws.on("error", unsubscribe);
+            });
+
+            httpServer.once("close", () => {
+              wss.close();
+            });
+          }
+        }
         server.middlewares.use((req, res, next) => {
           if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
           const url = new URL(req.url, "http://localhost");
