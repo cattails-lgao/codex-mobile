@@ -11,6 +11,7 @@ import {
   getThreadGroups,
   getThreadMessages,
   getWorkspaceRootsState,
+  setDefaultModel,
   setWorkspaceRootsState,
   getThreadTitleCache,
   persistThreadTitle,
@@ -48,6 +49,7 @@ const EVENT_SYNC_DEBOUNCE_MS = 220
 const AUTO_REFRESH_INTERVAL_MS = 4000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
+const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -260,6 +262,15 @@ function areCommandExecutionsEqual(first?: CommandExecutionData, second?: Comman
   if (!first && !second) return true
   if (!first || !second) return false
   return first.status === second.status && first.aggregatedOutput === second.aggregatedOutput && first.exitCode === second.exitCode
+}
+
+function isUnsupportedChatGptModelError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('not supported when using codex with a chatgpt account') ||
+    message.includes('model is not supported')
+  )
 }
 
 function areMessageFieldsEqual(first: UiMessage, second: UiMessage): boolean {
@@ -726,6 +737,18 @@ export function useDesktopState() {
     selectedModelId.value = modelId.trim()
   }
 
+  async function applyFallbackModelSelection(): Promise<void> {
+    selectedModelId.value = MODEL_FALLBACK_ID
+    if (!availableModelIds.value.includes(MODEL_FALLBACK_ID)) {
+      availableModelIds.value = [...availableModelIds.value, MODEL_FALLBACK_ID]
+    }
+    try {
+      await setDefaultModel(MODEL_FALLBACK_ID)
+    } catch {
+      // Keep local selection even when persisting default model fails.
+    }
+  }
+
   function setSelectedReasoningEffort(effort: ReasoningEffort | ''): void {
     if (effort && !REASONING_EFFORT_OPTIONS.includes(effort)) {
       return
@@ -1116,6 +1139,15 @@ export function useDesktopState() {
     if (!turn || turn.status !== 'failed') return ''
     const errorPayload = asRecord(turn.error)
     return readString(errorPayload?.message)
+  }
+
+  function readNotificationErrorMessage(notification: RpcNotification): string {
+    if (notification.method !== 'error') return ''
+    const params = asRecord(notification.params)
+    return (
+      readString(params?.message) ||
+      readString(asRecord(params?.error)?.message)
+    )
   }
 
   function normalizeServerRequest(params: unknown): UiServerRequest | null {
@@ -1615,8 +1647,23 @@ export function useDesktopState() {
         setTurnErrorForThread(failedThreadId, turnErrorMessage)
       }
       error.value = turnErrorMessage
+      if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(turnErrorMessage))) {
+        void applyFallbackModelSelection()
+      }
     } else if (completedTurn) {
       setTurnErrorForThread(completedTurn.threadId, null)
+    }
+
+    const notificationErrorMessage = readNotificationErrorMessage(notification)
+    if (notificationErrorMessage) {
+      const errorThreadId = extractThreadIdFromNotification(notification)
+      if (errorThreadId) {
+        setTurnErrorForThread(errorThreadId, notificationErrorMessage)
+      }
+      error.value = notificationErrorMessage
+      if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(notificationErrorMessage))) {
+        void applyFallbackModelSelection()
+      }
     }
 
     const notificationThreadId = extractThreadIdFromNotification(notification)
@@ -2026,7 +2073,16 @@ export function useDesktopState() {
     let threadId = ''
 
     try {
-      threadId = await startThread(targetCwd || undefined, selectedModel || undefined)
+      try {
+        threadId = await startThread(targetCwd || undefined, selectedModel || undefined)
+      } catch (unknownError) {
+        if (selectedModel && selectedModel !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(unknownError)) {
+          await applyFallbackModelSelection()
+          threadId = await startThread(targetCwd || undefined, MODEL_FALLBACK_ID)
+        } else {
+          throw unknownError
+        }
+      }
       if (!threadId) return ''
 
       insertOptimisticThread(threadId, targetCwd, nextText || '[Image]')
@@ -2091,15 +2147,32 @@ export function useDesktopState() {
         await resumeThread(threadId)
       }
 
-      await startThreadTurn(
-        threadId,
-        nextText,
-        imageUrls,
-        modelId || undefined,
-        reasoningEffort || undefined,
-        skills.length > 0 ? skills : undefined,
-        fileAttachments,
-      )
+      try {
+        await startThreadTurn(
+          threadId,
+          nextText,
+          imageUrls,
+          modelId || undefined,
+          reasoningEffort || undefined,
+          skills.length > 0 ? skills : undefined,
+          fileAttachments,
+        )
+      } catch (unknownError) {
+        if (modelId && modelId !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(unknownError)) {
+          await applyFallbackModelSelection()
+          await startThreadTurn(
+            threadId,
+            nextText,
+            imageUrls,
+            MODEL_FALLBACK_ID,
+            reasoningEffort || undefined,
+            skills.length > 0 ? skills : undefined,
+            fileAttachments,
+          )
+        } else {
+          throw unknownError
+        }
+      }
 
       resumedThreadById.value = {
         ...resumedThreadById.value,
