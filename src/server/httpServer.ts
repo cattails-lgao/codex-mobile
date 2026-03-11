@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
+import { existsSync } from 'node:fs'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
@@ -8,6 +9,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = join(__dirname, '..', 'dist')
+const spaEntryFile = join(distDir, 'index.html')
 
 export type ServerOptions = {
   password?: string
@@ -79,12 +81,33 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     })
   })
 
+  const hasFrontendAssets = existsSync(spaEntryFile)
+
   // 4. Static files from Vue build
-  app.use(express.static(distDir))
+  if (hasFrontendAssets) {
+    app.use(express.static(distDir))
+  }
 
   // 5. SPA fallback
   app.use((_req, res) => {
-    res.sendFile(join(distDir, 'index.html'))
+    if (!hasFrontendAssets) {
+      res.status(503).type('text/plain').send(
+        [
+          'Codex web UI assets are missing.',
+          `Expected: ${spaEntryFile}`,
+          'If running from source, build frontend assets with: npm run build:frontend',
+          'If running with npx, clear the npx cache and reinstall codexapp.',
+        ].join('\n'),
+      )
+      return
+    }
+
+    res.sendFile(spaEntryFile, (error) => {
+      if (!error) return
+      if (!res.headersSent) {
+        res.status(404).type('text/plain').send('Frontend entry file not found.')
+      }
+    })
   })
 
   return {
