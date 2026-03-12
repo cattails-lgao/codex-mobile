@@ -15,7 +15,11 @@ import type {
   ThreadReadResponse,
 } from './appServerDtos'
 import { normalizeCodexApiError } from './codexErrors'
-import { normalizeThreadGroupsV2, normalizeThreadMessagesV2 } from './normalizers/v2'
+import {
+  normalizeThreadGroupsV2,
+  normalizeThreadMessagesV2,
+  readThreadInProgressFromResponse,
+} from './normalizers/v2'
 import type { UiMessage, UiProjectGroup } from '../types/codex'
 
 type CurrentModelConfig = {
@@ -65,6 +69,17 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
   return normalizeThreadMessagesV2(payload)
 }
 
+async function getThreadDetailV2(threadId: string): Promise<{ messages: UiMessage[]; inProgress: boolean }> {
+  const payload = await callRpc<ThreadReadResponse>('thread/read', {
+    threadId,
+    includeTurns: true,
+  })
+  return {
+    messages: normalizeThreadMessagesV2(payload),
+    inProgress: readThreadInProgressFromResponse(payload),
+  }
+}
+
 export async function getThreadGroups(): Promise<UiProjectGroup[]> {
   try {
     return await getThreadGroupsV2()
@@ -76,6 +91,14 @@ export async function getThreadGroups(): Promise<UiProjectGroup[]> {
 export async function getThreadMessages(threadId: string): Promise<UiMessage[]> {
   try {
     return await getThreadMessagesV2(threadId)
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
+  }
+}
+
+export async function getThreadDetail(threadId: string): Promise<{ messages: UiMessage[]; inProgress: boolean }> {
+  try {
+    return await getThreadDetailV2(threadId)
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
   }

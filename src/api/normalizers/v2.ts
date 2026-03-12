@@ -3,6 +3,7 @@ import type {
   ThreadItem,
   ThreadReadResponse,
   ThreadListResponse,
+  Turn,
   UserInput,
 } from '../appServerDtos'
 import type { CommandExecutionData, UiFileAttachment, UiMessage, UiProjectGroup, UiThread } from '../../types/codex'
@@ -183,6 +184,20 @@ function toThreadTitle(summary: Thread): string {
   return named.length > 0 ? named : 'Untitled thread'
 }
 
+function isTurnInProgress(turn: Turn | null | undefined): boolean {
+  return turn?.status === 'inProgress'
+}
+
+function readThreadInProgress(summary: Thread): boolean {
+  const rawSummary = summary as Record<string, unknown>
+  if (rawSummary.inProgress === true) return true
+  if (rawSummary.status === 'inProgress' || rawSummary.turnStatus === 'inProgress') return true
+
+  const turns = Array.isArray(summary.turns) ? summary.turns : []
+  const lastTurn = turns.at(-1)
+  return isTurnInProgress(lastTurn)
+}
+
 function toUiThread(summary: Thread): UiThread {
   const rawSummary = summary as Record<string, unknown>
   const cwd = typeof rawSummary.cwd === 'string' ? rawSummary.cwd : summary.cwd
@@ -204,7 +219,7 @@ function toUiThread(summary: Thread): UiThread {
     updatedAtIso: toIso(summary.updatedAt),
     preview: summary.preview,
     unread: false,
-    inProgress: false,
+    inProgress: readThreadInProgress(summary),
   }
 }
 
@@ -248,4 +263,9 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse): UiMessag
     }
   }
   return messages
+}
+
+export function readThreadInProgressFromResponse(payload: ThreadReadResponse): boolean {
+  const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
+  return isTurnInProgress(turns.at(-1))
 }

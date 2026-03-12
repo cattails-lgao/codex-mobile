@@ -5,11 +5,11 @@ import {
   getCurrentModelConfig,
   getPendingServerRequests,
   getSkillsList,
+  getThreadDetail,
   interruptThreadTurn,
   replyToServerRequest,
   rollbackThread,
   getThreadGroups,
-  getThreadMessages,
   getWorkspaceRootsState,
   setDefaultModel,
   setWorkspaceRootsState,
@@ -2026,7 +2026,7 @@ export function useDesktopState() {
         }
       }
 
-      const nextMessages = await getThreadMessages(threadId)
+      const { messages: nextMessages, inProgress } = await getThreadDetail(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
       const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
         preserveMissing: options.silent === true,
@@ -2050,6 +2050,7 @@ export function useDesktopState() {
           [threadId]: version,
         }
       }
+      setThreadInProgress(threadId, inProgress)
       markThreadAsRead(threadId)
     } finally {
       if (shouldShowLoading) {
