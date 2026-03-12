@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   archiveThread,
+  renameThread,
   getAvailableModelIds,
   getCurrentModelConfig,
   getPendingServerRequests,
@@ -2106,6 +2107,20 @@ export function useDesktopState() {
     }
   }
 
+  async function renameThreadById(threadId: string, threadName: string) {
+    const normalizedName = threadName.trim()
+    if (!threadId || !normalizedName) return
+
+    try {
+      await renameThread(threadId, normalizedName)
+      threadTitleById.value = { ...threadTitleById.value, [threadId]: normalizedName }
+      applyThreadFlags()
+      void persistThreadTitle(threadId, normalizedName)
+    } catch (unknownError) {
+      error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+    }
+  }
+
   async function sendMessageToSelectedThread(
     text: string,
     imageUrls: string[] = [],
@@ -2765,6 +2780,7 @@ export function useDesktopState() {
     selectThread,
     setThreadScrollState,
     archiveThreadById,
+    renameThreadById,
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,

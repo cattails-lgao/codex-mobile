@@ -27,6 +27,21 @@
               <span class="thread-row-time">{{ formatRelative(thread.createdAtIso || thread.updatedAtIso) }}</span>
             </template>
             <template #right-hover>
+              <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
+                <button
+                  class="thread-menu-trigger"
+                  type="button"
+                  title="thread_menu"
+                  @click.stop="toggleThreadMenu(thread.id)"
+                >
+                  <IconTablerDots class="thread-icon" />
+                </button>
+                <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                  <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
+                    Rename thread
+                  </button>
+                </div>
+              </div>
               <button
                 class="thread-archive-button"
                 :data-confirm="archiveConfirmThreadId === thread.id"
@@ -117,6 +132,21 @@
             <span class="thread-row-time">{{ formatRelative(thread.createdAtIso || thread.updatedAtIso) }}</span>
           </template>
           <template #right-hover>
+            <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
+              <button
+                class="thread-menu-trigger"
+                type="button"
+                title="thread_menu"
+                @click.stop="toggleThreadMenu(thread.id)"
+              >
+                <IconTablerDots class="thread-icon" />
+              </button>
+              <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
+                  Rename thread
+                </button>
+              </div>
+            </div>
             <button
               class="thread-archive-button"
               :data-confirm="archiveConfirmThreadId === thread.id"
@@ -252,6 +282,21 @@
                   <span class="thread-row-time">{{ formatRelative(thread.createdAtIso || thread.updatedAtIso) }}</span>
                 </template>
                 <template #right-hover>
+                  <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
+                    <button
+                      class="thread-menu-trigger"
+                      type="button"
+                      title="thread_menu"
+                      @click.stop="toggleThreadMenu(thread.id)"
+                    >
+                      <IconTablerDots class="thread-icon" />
+                    </button>
+                    <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                      <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
+                        Rename thread
+                      </button>
+                    </div>
+                  </div>
                   <button
                     class="thread-archive-button"
                     :data-confirm="archiveConfirmThreadId === thread.id"
@@ -284,11 +329,33 @@
           </SidebarMenuRow>
       </article>
     </div>
+
+    <Teleport to="body">
+      <div v-if="renameThreadDialogVisible" class="rename-thread-overlay" @click.self="closeRenameThreadDialog">
+        <div class="rename-thread-panel" role="dialog" aria-modal="true" aria-label="Thread title">
+          <h3 class="rename-thread-title">Rename thread</h3>
+          <p class="rename-thread-subtitle">Make it short and recognizable.</p>
+          <input
+            ref="renameThreadInputRef"
+            v-model="renameThreadDraft"
+            class="rename-thread-input"
+            type="text"
+            placeholder="Add title..."
+            @keydown.enter.prevent="submitRenameThread"
+            @keydown.esc.prevent="closeRenameThreadDialog"
+          />
+          <div class="rename-thread-actions">
+            <button class="rename-thread-button" type="button" @click="closeRenameThreadDialog">Cancel</button>
+            <button class="rename-thread-button rename-thread-button-primary" type="button" @click="submitRenameThread">Save</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import type { UiProjectGroup, UiThread } from '../../types/codex'
 import IconTablerArchive from '../icons/IconTablerArchive.vue'
@@ -315,6 +382,7 @@ const emit = defineEmits<{
   archive: [threadId: string]
   'start-new-thread': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
+  'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
 }>()
@@ -355,8 +423,13 @@ const collapsedProjects = ref<Record<string, boolean>>({})
 const pinnedThreadIds = ref<string[]>([])
 const archiveConfirmThreadId = ref('')
 const openProjectMenuId = ref('')
+const openThreadMenuId = ref('')
 const projectMenuMode = ref<'actions' | 'rename'>('actions')
 const projectRenameDraft = ref('')
+const renameThreadDialogVisible = ref(false)
+const renameThreadDialogThreadId = ref('')
+const renameThreadDraft = ref('')
+const renameThreadInputRef = ref<HTMLInputElement | null>(null)
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
@@ -366,6 +439,7 @@ const suppressNextProjectToggleId = ref('')
 const measuredHeightByProject = ref<Record<string, number>>({})
 const projectGroupElementByName = new Map<string, HTMLElement>()
 const projectMenuWrapElementByName = new Map<string, HTMLElement>()
+const threadMenuWrapElementById = new Map<string, HTMLElement>()
 const projectNameByElement = new WeakMap<HTMLElement, string>()
 const organizeMenuWrapRef = ref<HTMLElement | null>(null)
 const isOrganizeMenuOpen = ref(false)
@@ -592,6 +666,51 @@ function onThreadRowLeave(threadId: string): void {
   if (archiveConfirmThreadId.value === threadId) {
     archiveConfirmThreadId.value = ''
   }
+  if (openThreadMenuId.value === threadId) {
+    closeThreadMenu()
+  }
+}
+
+function isThreadMenuOpen(threadId: string): boolean {
+  return openThreadMenuId.value === threadId
+}
+
+function closeThreadMenu(): void {
+  openThreadMenuId.value = ''
+}
+
+function toggleThreadMenu(threadId: string): void {
+  if (openThreadMenuId.value === threadId) {
+    closeThreadMenu()
+    return
+  }
+  openThreadMenuId.value = threadId
+  archiveConfirmThreadId.value = ''
+}
+
+function openRenameThreadDialog(threadId: string, currentTitle: string): void {
+  renameThreadDialogThreadId.value = threadId
+  renameThreadDraft.value = currentTitle
+  renameThreadDialogVisible.value = true
+  closeThreadMenu()
+  nextTick(() => {
+    renameThreadInputRef.value?.focus()
+    renameThreadInputRef.value?.select()
+  })
+}
+
+function closeRenameThreadDialog(): void {
+  renameThreadDialogVisible.value = false
+  renameThreadDialogThreadId.value = ''
+  renameThreadDraft.value = ''
+}
+
+function submitRenameThread(): void {
+  const threadId = renameThreadDialogThreadId.value
+  const title = renameThreadDraft.value.trim()
+  if (!threadId || !title) return
+  emit('rename-thread', { threadId, title })
+  closeRenameThreadDialog()
 }
 
 function getProjectDisplayName(projectName: string): string {
@@ -716,11 +835,41 @@ function setProjectMenuWrapRef(projectName: string, element: Element | Component
   projectMenuWrapElementByName.delete(projectName)
 }
 
+function setThreadMenuWrapRef(threadId: string, element: Element | ComponentPublicInstance | null): void {
+  const htmlElement =
+    element instanceof HTMLElement
+      ? element
+      : element && '$el' in element && element.$el instanceof HTMLElement
+        ? element.$el
+        : null
+
+  if (htmlElement) {
+    threadMenuWrapElementById.set(threadId, htmlElement)
+    return
+  }
+
+  threadMenuWrapElementById.delete(threadId)
+}
+
 function isEventInsideOpenProjectMenu(event: Event): boolean {
   const projectName = openProjectMenuId.value
   if (!projectName) return false
 
   const openMenuWrapElement = projectMenuWrapElementByName.get(projectName)
+  if (!openMenuWrapElement) return false
+
+  const eventPath = typeof event.composedPath === 'function' ? event.composedPath() : []
+  if (eventPath.includes(openMenuWrapElement)) return true
+
+  const target = event.target
+  return target instanceof Node ? openMenuWrapElement.contains(target) : false
+}
+
+function isEventInsideOpenThreadMenu(event: Event): boolean {
+  const threadId = openThreadMenuId.value
+  if (!threadId) return false
+
+  const openMenuWrapElement = threadMenuWrapElementById.get(threadId)
   if (!openMenuWrapElement) return false
 
   const eventPath = typeof event.composedPath === 'function' ? event.composedPath() : []
@@ -744,22 +893,34 @@ function onProjectMenuPointerDown(event: PointerEvent): void {
   }
 
   if (!openProjectMenuId.value) return
-  if (isEventInsideOpenProjectMenu(event)) return
-  closeProjectMenu()
+  if (!isEventInsideOpenProjectMenu(event)) {
+    closeProjectMenu()
+  }
+
+  if (!openThreadMenuId.value) return
+  if (isEventInsideOpenThreadMenu(event)) return
+  closeThreadMenu()
 }
 
 function onProjectMenuFocusIn(event: FocusEvent): void {
-  if (!openProjectMenuId.value) return
-  if (isEventInsideOpenProjectMenu(event)) return
-  closeProjectMenu()
+  if (openProjectMenuId.value && !isEventInsideOpenProjectMenu(event)) {
+    closeProjectMenu()
+  }
+  if (openThreadMenuId.value && !isEventInsideOpenThreadMenu(event)) {
+    closeThreadMenu()
+  }
 }
 
 function onWindowBlurForProjectMenu(): void {
   if (isOrganizeMenuOpen.value) {
     isOrganizeMenuOpen.value = false
   }
-  if (!openProjectMenuId.value) return
-  closeProjectMenu()
+  if (openProjectMenuId.value) {
+    closeProjectMenu()
+  }
+  if (openThreadMenuId.value) {
+    closeThreadMenu()
+  }
 }
 
 function bindProjectMenuDismissListeners(): void {
@@ -1296,6 +1457,22 @@ onBeforeUnmount(() => {
   @apply block text-sm font-normal text-zinc-500;
 }
 
+.thread-menu-wrap {
+  @apply relative;
+}
+
+.thread-menu-trigger {
+  @apply h-4 w-4 rounded p-0 text-xs text-zinc-600 flex items-center justify-center;
+}
+
+.thread-menu-panel {
+  @apply absolute right-0 top-full mt-1 z-20 min-w-36 rounded-md border border-zinc-200 bg-white p-1 shadow-md flex flex-col gap-0.5;
+}
+
+.thread-menu-item {
+  @apply rounded px-2 py-1 text-left text-sm text-zinc-700 hover:bg-zinc-100;
+}
+
 .thread-archive-button {
   @apply h-4 w-4 rounded p-0 text-xs text-zinc-600 flex items-center justify-center;
 }
@@ -1352,5 +1529,37 @@ onBeforeUnmount(() => {
 .thread-row:focus-within .thread-status-indicator[data-state='unread'],
 .thread-row:focus-within .thread-status-indicator[data-state='working'] {
   @apply opacity-0;
+}
+
+.rename-thread-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4;
+}
+
+.rename-thread-panel {
+  @apply w-full max-w-sm rounded-xl bg-white p-4 shadow-xl;
+}
+
+.rename-thread-title {
+  @apply m-0 text-base font-semibold text-zinc-900;
+}
+
+.rename-thread-subtitle {
+  @apply mt-1 mb-3 text-sm text-zinc-500;
+}
+
+.rename-thread-input {
+  @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+}
+
+.rename-thread-actions {
+  @apply mt-3 flex items-center justify-end gap-2;
+}
+
+.rename-thread-button {
+  @apply rounded-md px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100;
+}
+
+.rename-thread-button-primary {
+  @apply bg-zinc-900 text-white hover:bg-black;
 }
 </style>

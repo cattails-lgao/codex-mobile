@@ -63,6 +63,7 @@
             :search-query="sidebarSearchQuery"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
+            @rename-thread="onRenameThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject" />
         </div>
 
@@ -227,6 +228,7 @@ const {
   selectThread,
   setThreadScrollState,
   archiveThreadById,
+  renameThreadById,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
@@ -409,6 +411,10 @@ function onStartNewThreadFromToolbar(): void {
 
 function onRenameProject(payload: { projectName: string; displayName: string }): void {
   renameProject(payload.projectName, payload.displayName)
+}
+
+function onRenameThread(payload: { threadId: string; title: string }): void {
+  void renameThreadById(payload.threadId, payload.title)
 }
 
 function onRemoveProject(projectName: string): void {

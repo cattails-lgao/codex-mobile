@@ -205,3 +205,16 @@ After each feature implementation session that uses this skill:
   - `Escape` closes mention UI.
   - `Enter` and `Tab` commit the highlighted mention.
 - Composer placeholder copy in local mode explicitly documents this affordance: `Ask Codex anything, @ to add files, / for commands`.
+
+## Findings: Thread Rename Flow (2026-03-12)
+
+- Codex.app locale keys confirm sidebar rename flow is dialog-based, not inline:
+  - `sidebarElectron.renameThread`
+  - `sidebarElectron.renameThreadDialogTitle`
+  - `sidebarElectron.renameThreadDialogSubtitle`
+  - `sidebarElectron.renameThreadDialogPlaceholder`
+  - `sidebarElectron.renameThreadDialogSave`
+  - `sidebarElectron.renameThreadDialogCancel`
+  - `sidebarElectron.renameThreadDialogAriaLabel`
+- App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
+- `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).

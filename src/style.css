@@ -245,8 +245,44 @@
   @apply text-zinc-300 hover:bg-zinc-700;
 }
 
+:root.dark .thread-menu-panel {
+  @apply border-zinc-600 bg-zinc-800;
+}
+
+:root.dark .thread-menu-item {
+  @apply text-zinc-300 hover:bg-zinc-700;
+}
+
 :root.dark .thread-archive-button {
   @apply text-zinc-400;
+}
+
+:root.dark .thread-menu-trigger {
+  @apply text-zinc-400;
+}
+
+:root.dark .rename-thread-panel {
+  @apply bg-zinc-800;
+}
+
+:root.dark .rename-thread-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .rename-thread-subtitle {
+  @apply text-zinc-400;
+}
+
+:root.dark .rename-thread-input {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-100;
+}
+
+:root.dark .rename-thread-button {
+  @apply text-zinc-300 hover:bg-zinc-700;
+}
+
+:root.dark .rename-thread-button-primary {
+  @apply bg-zinc-200 text-zinc-900 hover:bg-white;
 }
 
 :root.dark .thread-pin-button {
