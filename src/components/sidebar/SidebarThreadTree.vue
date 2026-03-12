@@ -40,6 +40,9 @@
                   <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                     Rename thread
                   </button>
+                  <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
+                    Delete thread
+                  </button>
                 </div>
               </div>
               <button
@@ -144,6 +147,9 @@
               <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
                 <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                   Rename thread
+                </button>
+                <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
+                  Delete thread
                 </button>
               </div>
             </div>
@@ -295,6 +301,9 @@
                       <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                         Rename thread
                       </button>
+                      <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
+                        Delete thread
+                      </button>
                     </div>
                   </div>
                   <button
@@ -347,6 +356,21 @@
           <div class="rename-thread-actions">
             <button class="rename-thread-button" type="button" @click="closeRenameThreadDialog">Cancel</button>
             <button class="rename-thread-button rename-thread-button-primary" type="button" @click="submitRenameThread">Save</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="deleteThreadDialogVisible" class="rename-thread-overlay" @click.self="closeDeleteThreadDialog">
+        <div class="rename-thread-panel" role="dialog" aria-modal="true" aria-label="Delete thread">
+          <h3 class="rename-thread-title">Delete thread?</h3>
+          <p class="rename-thread-subtitle">
+            This will archive the thread "{{ deleteThreadTitle }}". You can find it later in archived threads.
+          </p>
+          <div class="rename-thread-actions">
+            <button class="rename-thread-button" type="button" @click="closeDeleteThreadDialog">Cancel</button>
+            <button class="rename-thread-button rename-thread-button-danger" type="button" @click="submitDeleteThread">Delete</button>
           </div>
         </div>
       </div>
@@ -430,6 +454,9 @@ const renameThreadDialogVisible = ref(false)
 const renameThreadDialogThreadId = ref('')
 const renameThreadDraft = ref('')
 const renameThreadInputRef = ref<HTMLInputElement | null>(null)
+const deleteThreadDialogVisible = ref(false)
+const deleteThreadDialogThreadId = ref('')
+const deleteThreadTitle = ref('')
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
@@ -711,6 +738,27 @@ function submitRenameThread(): void {
   if (!threadId || !title) return
   emit('rename-thread', { threadId, title })
   closeRenameThreadDialog()
+}
+
+function openDeleteThreadDialog(threadId: string, currentTitle: string): void {
+  deleteThreadDialogThreadId.value = threadId
+  deleteThreadTitle.value = currentTitle
+  deleteThreadDialogVisible.value = true
+  closeThreadMenu()
+}
+
+function closeDeleteThreadDialog(): void {
+  deleteThreadDialogVisible.value = false
+  deleteThreadDialogThreadId.value = ''
+  deleteThreadTitle.value = ''
+}
+
+function submitDeleteThread(): void {
+  const threadId = deleteThreadDialogThreadId.value
+  if (!threadId) return
+  pinnedThreadIds.value = pinnedThreadIds.value.filter((id) => id !== threadId)
+  emit('archive', threadId)
+  closeDeleteThreadDialog()
 }
 
 function getProjectDisplayName(projectName: string): string {
@@ -1473,6 +1521,10 @@ onBeforeUnmount(() => {
   @apply rounded px-2 py-1 text-left text-sm text-zinc-700 hover:bg-zinc-100;
 }
 
+.thread-menu-item-danger {
+  @apply text-rose-700 hover:bg-rose-50;
+}
+
 .thread-archive-button {
   @apply h-4 w-4 rounded p-0 text-xs text-zinc-600 flex items-center justify-center;
 }
@@ -1561,5 +1613,9 @@ onBeforeUnmount(() => {
 
 .rename-thread-button-primary {
   @apply bg-zinc-900 text-white hover:bg-black;
+}
+
+.rename-thread-button-danger {
+  @apply bg-rose-600 text-white hover:bg-rose-700;
 }
 </style>

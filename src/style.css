@@ -253,6 +253,10 @@
   @apply text-zinc-300 hover:bg-zinc-700;
 }
 
+:root.dark .thread-menu-item-danger {
+  @apply text-rose-300 hover:bg-rose-900/40;
+}
+
 :root.dark .thread-archive-button {
   @apply text-zinc-400;
 }
@@ -283,6 +287,10 @@
 
 :root.dark .rename-thread-button-primary {
   @apply bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .rename-thread-button-danger {
+  @apply bg-rose-500 text-white hover:bg-rose-400;
 }
 
 :root.dark .thread-pin-button {

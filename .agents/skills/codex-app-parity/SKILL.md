@@ -218,3 +218,8 @@ After each feature implementation session that uses this skill:
   - `sidebarElectron.renameThreadDialogAriaLabel`
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
+
+## Findings: Thread Delete Semantics (2026-03-12)
+
+- In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
+- For delete-like UI parity in sidebar menus, implement a destructive confirmation dialog and route confirmation to `thread/archive`.
