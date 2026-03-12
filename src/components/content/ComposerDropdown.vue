@@ -170,7 +170,8 @@ function onConfirmAdd(): void {
 function onCancelAdd(): void {
   isAdding.value = false
   addDraft.value = ''
-  nextTick(() => searchInputRef.value?.focus())
+  isOpen.value = false
+  searchQuery.value = ''
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {

@@ -442,10 +442,9 @@ function onCameraCaptureChange(event: Event): void {
 
 function onInputChange(): void {
   const text = draft.value
-  if (text === '/') {
-    isSlashMenuOpen.value = true
-  } else if (isSlashMenuOpen.value && !text.startsWith('/')) {
-    isSlashMenuOpen.value = false
+  const shouldShowSlashMenu = text.startsWith('/')
+  if (shouldShowSlashMenu !== isSlashMenuOpen.value) {
+    isSlashMenuOpen.value = shouldShowSlashMenu
   }
   updateFileMentionState()
 }
