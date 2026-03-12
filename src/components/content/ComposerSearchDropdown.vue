@@ -169,7 +169,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .search-dropdown-menu-wrap {
-  @apply absolute left-0 z-30 w-64 max-sm:w-56 max-sm:left-auto max-sm:right-0;
+  @apply absolute left-0 z-50 w-64 max-sm:w-56 max-sm:left-auto max-sm:right-0;
 }
 
 .search-dropdown-menu-wrap-down {

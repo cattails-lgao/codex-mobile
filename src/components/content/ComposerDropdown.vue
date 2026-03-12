@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-menu-wrap {
-  @apply absolute left-0 z-30;
+  @apply absolute left-0 z-50;
 }
 
 .composer-dropdown-menu-wrap-down {

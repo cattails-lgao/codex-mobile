@@ -819,7 +819,7 @@ watch(
 }
 
 .thread-composer-controls {
-  @apply mt-2 sm:mt-3 flex items-center gap-2 sm:gap-4 overflow-x-auto overflow-y-visible;
+  @apply relative mt-2 sm:mt-3 flex items-center gap-2 sm:gap-4 overflow-visible;
 }
 
 .thread-composer-attach {
