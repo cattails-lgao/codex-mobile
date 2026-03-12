@@ -73,6 +73,10 @@
                 <span class="sidebar-settings-label">Require ⌘ + enter to send</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
               </button>
+              <button class="sidebar-settings-row" type="button" @click="cycleInProgressSendMode">
+                <span class="sidebar-settings-label">When busy, send as</span>
+                <span class="sidebar-settings-value">{{ inProgressSendMode === 'steer' ? 'Steer' : 'Queue' }}</span>
+              </button>
               <button class="sidebar-settings-row" type="button" @click="cycleDarkMode">
                 <span class="sidebar-settings-label">Appearance</span>
                 <span class="sidebar-settings-value">{{ darkMode === 'system' ? 'System' : darkMode === 'dark' ? 'Dark' : 'Light' }}</span>
@@ -125,12 +129,12 @@
                   @add="onAddNewProject" />
               </div>
 
-              <ThreadComposer :active-thread-id="composerThreadContextId"
-                :cwd="composerCwd"
+                <ThreadComposer :active-thread-id="composerThreadContextId"
+                  :cwd="composerCwd"
                 :models="availableModelIds" :selected-model="selectedModelId"
                 :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
                 :is-turn-in-progress="false"
-                :is-interrupting-turn="false" :send-with-enter="sendWithEnter" @submit="onSubmitThreadMessage"
+                :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode" @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
           </template>
@@ -161,7 +165,7 @@
                   :skills="installedSkills"
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                  :send-with-enter="sendWithEnter"
+                  :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
               </div>
@@ -257,8 +261,10 @@ const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
+const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
+const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 
 const routeThreadId = computed(() => {
@@ -585,9 +591,20 @@ function loadDarkModePref(): 'system' | 'light' | 'dark' {
   return 'system'
 }
 
+function loadInProgressSendModePref(): 'steer' | 'queue' {
+  if (typeof window === 'undefined') return 'queue'
+  const v = window.localStorage.getItem(IN_PROGRESS_SEND_MODE_KEY)
+  return v === 'steer' ? 'steer' : 'queue'
+}
+
 function toggleSendWithEnter(): void {
   sendWithEnter.value = !sendWithEnter.value
   window.localStorage.setItem(SEND_WITH_ENTER_KEY, sendWithEnter.value ? '1' : '0')
+}
+
+function cycleInProgressSendMode(): void {
+  inProgressSendMode.value = inProgressSendMode.value === 'steer' ? 'queue' : 'steer'
+  window.localStorage.setItem(IN_PROGRESS_SEND_MODE_KEY, inProgressSendMode.value)
 }
 
 function cycleDarkMode(): void {

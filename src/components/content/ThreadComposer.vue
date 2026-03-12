@@ -182,12 +182,12 @@
           </button>
           <button
             class="thread-composer-submit"
-            :class="{ 'thread-composer-submit--queue': isTurnInProgress }"
+            :class="{ 'thread-composer-submit--queue': isTurnInProgress && inProgressMode === 'queue' }"
             type="button"
-            :aria-label="isTurnInProgress ? 'Queue message' : 'Send message'"
-            :title="isTurnInProgress ? 'Queue (button) · Enter to steer' : 'Send'"
+            :aria-label="isTurnInProgress && inProgressMode === 'queue' ? 'Queue message' : 'Send message'"
+            :title="isTurnInProgress ? `Send as ${inProgressMode}` : 'Send'"
             :disabled="!canSubmit"
-            @click="onSubmit(isTurnInProgress ? 'queue' : 'steer')"
+            @click="onSubmit(isTurnInProgress ? inProgressMode : 'steer')"
           >
             <IconTablerArrowUp class="thread-composer-submit-icon" />
           </button>
@@ -241,6 +241,7 @@ const props = defineProps<{
   disabled?: boolean
   hasQueueAbove?: boolean
   sendWithEnter?: boolean
+  inProgressSubmitMode?: 'steer' | 'queue'
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -317,6 +318,9 @@ const canSubmit = computed(() => {
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
+const inProgressMode = computed<'steer' | 'queue'>(() =>
+  props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
+)
 
 const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
@@ -486,7 +490,7 @@ function onInputKeydown(event: KeyboardEvent): void {
     : event.key === 'Enter' && (event.metaKey || event.ctrlKey)
   if (shouldSend) {
     event.preventDefault()
-    onSubmit('steer')
+    onSubmit(props.isTurnInProgress ? inProgressMode.value : 'steer')
     return
   }
 
