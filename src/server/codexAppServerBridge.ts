@@ -1216,8 +1216,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await runCommand('git', ['init'], { cwd: sourceCwd })
             gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
           }
-          const repoNameRaw = basename(gitRoot)
-          const repoName = repoNameRaw.replace(/[^a-zA-Z0-9._-]/g, '-') || 'repo'
+          const repoName = basename(gitRoot) || 'repo'
           const worktreesRoot = join(getCodexHomeDir(), 'worktrees')
           await mkdir(worktreesRoot, { recursive: true })
 
