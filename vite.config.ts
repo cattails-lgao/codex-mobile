@@ -3,7 +3,7 @@ import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
 import tailwindcss from "@tailwindcss/vite";
 import { createReadStream } from "node:fs";
-import { extname, isAbsolute } from "node:path";
+import { basename, extname, isAbsolute } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
@@ -17,7 +17,32 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+const INLINE_FILE_CONTENT_TYPES: Record<string, string> = {
+  ...IMAGE_CONTENT_TYPES,
+  ".json": "application/json; charset=utf-8",
+  ".log": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+  ".yaml": "text/yaml; charset=utf-8",
+  ".yml": "text/yaml; charset=utf-8",
+};
+
 function normalizeLocalImagePath(rawPath: string): string {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("file://")) {
+    try {
+      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ""));
+    } catch {
+      return trimmed.replace(/^file:\/\//u, "");
+    }
+  }
+  return trimmed;
+}
+
+function normalizeLocalPath(rawPath: string): string {
   const trimmed = rawPath.trim();
   if (!trimmed) return "";
   if (trimmed.startsWith("file://")) {
@@ -137,6 +162,41 @@ export default defineConfig({
             res.statusCode = 404;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: "Image file not found." }));
+          });
+          stream.pipe(res);
+        });
+        server.middlewares.use((req, res, next) => {
+          if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
+          const url = new URL(req.url, "http://localhost");
+          if (url.pathname !== "/codex-local-file") return next();
+
+          const localPath = normalizeLocalPath(url.searchParams.get("path") ?? "");
+          if (!localPath || !isAbsolute(localPath)) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Expected absolute local file path." }));
+            return;
+          }
+
+          const extension = extname(localPath).toLowerCase();
+          const inlineContentType = INLINE_FILE_CONTENT_TYPES[extension];
+
+          res.statusCode = 200;
+          res.setHeader("Cache-Control", "private, no-store");
+          if (inlineContentType) {
+            res.setHeader("Content-Type", inlineContentType);
+            res.setHeader("Content-Disposition", `inline; filename="${basename(localPath)}"`);
+          } else {
+            res.setHeader("Content-Type", "application/octet-stream");
+            res.setHeader("Content-Disposition", `attachment; filename="${basename(localPath)}"`);
+          }
+
+          const stream = createReadStream(localPath);
+          stream.on("error", () => {
+            if (res.headersSent) return;
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "File not found." }));
           });
           stream.pipe(res);
         });
