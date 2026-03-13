@@ -63,8 +63,6 @@ type ThreadSearchIndex = {
   docsById: Map<string, ThreadSearchDocument>
 }
 
-type ThreadSearchMode = 'exact' | 'semantic' | 'hybrid'
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -94,10 +92,6 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(payload))
-}
-
-function tokenizeText(value: string): string[] {
-  return (value.toLowerCase().match(/[a-z0-9_]+/g) ?? []).filter((token) => token.length > 1)
 }
 
 function extractThreadMessageText(threadReadPayload: unknown): string {
@@ -136,29 +130,6 @@ function extractThreadMessageText(threadReadPayload: unknown): string {
   }
 
   return parts.join('\n').trim()
-}
-
-function scoreLexicalMatch(query: string, doc: ThreadSearchDocument): number {
-  const q = query.toLowerCase()
-  if (!q) return 0
-  let score = 0
-  if (doc.title.toLowerCase().includes(q)) score += 3
-  if (doc.preview.toLowerCase().includes(q)) score += 2
-  if (doc.messageText.toLowerCase().includes(q)) score += 2
-  return score
-}
-
-function scoreSemanticInMemory(query: string, doc: ThreadSearchDocument): number {
-  const queryTokens = new Set(tokenizeText(query))
-  if (queryTokens.size === 0) return 0
-  const docTokens = new Set(tokenizeText(doc.searchableText))
-  if (docTokens.size === 0) return 0
-
-  let overlap = 0
-  for (const token of queryTokens) {
-    if (docTokens.has(token)) overlap += 1
-  }
-  return overlap / queryTokens.size
 }
 
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
@@ -1455,51 +1426,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const query = typeof payload?.query === 'string' ? payload.query.trim() : ''
         const limitRaw = typeof payload?.limit === 'number' ? payload.limit : 200
         const limit = Math.max(1, Math.min(1000, Math.floor(limitRaw)))
-        const modeRaw = typeof payload?.mode === 'string' ? payload.mode : 'hybrid'
-        const mode: ThreadSearchMode =
-          modeRaw === 'exact' || modeRaw === 'semantic' || modeRaw === 'hybrid'
-            ? modeRaw
-            : 'hybrid'
         if (!query) {
-          setJson(res, 200, { data: { threadIds: [], indexedThreadCount: 0, mode } })
+          setJson(res, 200, { data: { threadIds: [], indexedThreadCount: 0 } })
           return
         }
 
         const index = await getThreadSearchIndex()
-        const candidateScores = new Map<string, number>()
-
-        if (mode === 'exact') {
-          for (const [id, doc] of index.docsById.entries()) {
-            if (isExactPhraseMatch(query, doc)) {
-              candidateScores.set(id, 1)
-            }
-          }
-        }
-
-        if (mode === 'semantic' || mode === 'hybrid') {
-          for (const [id, doc] of index.docsById.entries()) {
-            const semanticScore = scoreSemanticInMemory(query, doc)
-            if (semanticScore > 0) {
-              candidateScores.set(id, (candidateScores.get(id) ?? 0) + semanticScore)
-            }
-          }
-        }
-
-        if (mode === 'hybrid') {
-          for (const [id, doc] of index.docsById.entries()) {
-            const lexicalScore = scoreLexicalMatch(query, doc)
-            if (lexicalScore > 0) {
-              candidateScores.set(id, (candidateScores.get(id) ?? 0) + lexicalScore)
-            }
-          }
-        }
-
-        const rankedIds = Array.from(candidateScores.entries())
-          .sort((a, b) => b[1] - a[1])
+        const matchedIds = Array.from(index.docsById.entries())
+          .filter(([, doc]) => isExactPhraseMatch(query, doc))
           .slice(0, limit)
           .map(([id]) => id)
 
-        setJson(res, 200, { data: { threadIds: rankedIds, indexedThreadCount: index.docsById.size, mode } })
+        setJson(res, 200, { data: { threadIds: matchedIds, indexedThreadCount: index.docsById.size } })
         return
       }
 
