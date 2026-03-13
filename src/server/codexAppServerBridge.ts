@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -64,6 +64,7 @@ type ThreadSearchIndex = {
   docsById: Map<string, ThreadSearchDocument>
   collection: InstanceType<typeof zvec.ZVecCollection> | null
   collectionPath: string
+  vectorSearchAvailable: boolean
 }
 
 type ThreadSearchMode = 'exact' | 'semantic' | 'hybrid'
@@ -1259,10 +1260,10 @@ async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<Thre
     })))
   } catch {
     await rm(collectionPath, { recursive: true, force: true })
-    return { docsById, collection: null, collectionPath: '' }
+    return { docsById, collection: null, collectionPath: '', vectorSearchAvailable: false }
   }
 
-  return { docsById, collection, collectionPath }
+  return { docsById, collection, collectionPath, vectorSearchAvailable: true }
 }
 
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
@@ -1523,6 +1524,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const index = await getThreadSearchIndex()
         const candidateScores = new Map<string, number>()
+
+        if (!index.vectorSearchAvailable) {
+          const q = query.toLowerCase()
+          const matchedByTitle = Array.from(index.docsById.values())
+            .filter((doc) => doc.title.toLowerCase().includes(q))
+            .slice(0, limit)
+            .map((doc) => doc.id)
+          setJson(res, 200, {
+            data: {
+              threadIds: matchedByTitle,
+              indexedThreadCount: index.docsById.size,
+              mode,
+              fallback: 'title-only',
+            },
+          })
+          return
+        }
 
         if (mode === 'exact') {
           for (const [id, doc] of index.docsById.entries()) {
