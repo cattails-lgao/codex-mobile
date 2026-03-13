@@ -52,6 +52,18 @@ type PendingServerRequest = {
   receivedAtIso: string
 }
 
+type ThreadSearchDocument = {
+  id: string
+  title: string
+  preview: string
+  messageText: string
+  searchableText: string
+}
+
+type ThreadSearchIndex = {
+  docsById: Map<string, ThreadSearchDocument>
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -81,6 +93,54 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(payload))
+}
+
+function extractThreadMessageText(threadReadPayload: unknown): string {
+  const payload = asRecord(threadReadPayload)
+  const thread = asRecord(payload?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : []
+  const parts: string[] = []
+
+  for (const turn of turns) {
+    const turnRecord = asRecord(turn)
+    const items = Array.isArray(turnRecord?.items) ? turnRecord.items : []
+    for (const item of items) {
+      const itemRecord = asRecord(item)
+      const type = typeof itemRecord?.type === 'string' ? itemRecord.type : ''
+      if (type === 'agentMessage' && typeof itemRecord?.text === 'string' && itemRecord.text.trim().length > 0) {
+        parts.push(itemRecord.text.trim())
+        continue
+      }
+      if (type === 'userMessage') {
+        const content = Array.isArray(itemRecord?.content) ? itemRecord.content : []
+        for (const block of content) {
+          const blockRecord = asRecord(block)
+          if (blockRecord?.type === 'text' && typeof blockRecord.text === 'string' && blockRecord.text.trim().length > 0) {
+            parts.push(blockRecord.text.trim())
+          }
+        }
+        continue
+      }
+      if (type === 'commandExecution') {
+        const command = typeof itemRecord?.command === 'string' ? itemRecord.command.trim() : ''
+        const output = typeof itemRecord?.aggregatedOutput === 'string' ? itemRecord.aggregatedOutput.trim() : ''
+        if (command) parts.push(command)
+        if (output) parts.push(output)
+      }
+    }
+  }
+
+  return parts.join('\n').trim()
+}
+
+function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return false
+  return (
+    doc.title.toLowerCase().includes(q) ||
+    doc.preview.toLowerCase().includes(q) ||
+    doc.messageText.toLowerCase().includes(q)
+  )
 }
 
 function scoreFileCandidate(path: string, query: string): number {
@@ -1104,8 +1164,92 @@ function getSharedBridgeState(): SharedBridgeState {
   return created
 }
 
+async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<ThreadSearchDocument[]> {
+  const threads: Array<{ id: string; title: string; preview: string }> = []
+  let cursor: string | null = null
+
+  do {
+    const response = asRecord(await appServer.rpc('thread/list', {
+      archived: false,
+      limit: 100,
+      sortKey: 'updated_at',
+      cursor,
+    }))
+    const data = Array.isArray(response?.data) ? response.data : []
+    for (const row of data) {
+      const record = asRecord(row)
+      const id = typeof record?.id === 'string' ? record.id : ''
+      if (!id) continue
+      const title = typeof record?.name === 'string' && record.name.trim().length > 0
+        ? record.name.trim()
+        : (typeof record?.preview === 'string' && record.preview.trim().length > 0 ? record.preview.trim() : 'Untitled thread')
+      const preview = typeof record?.preview === 'string' ? record.preview : ''
+      threads.push({ id, title, preview })
+    }
+    cursor = typeof response?.nextCursor === 'string' && response.nextCursor.length > 0 ? response.nextCursor : null
+  } while (cursor)
+
+  const docs: ThreadSearchDocument[] = []
+  const concurrency = 4
+  for (let offset = 0; offset < threads.length; offset += concurrency) {
+    const batch = threads.slice(offset, offset + concurrency)
+    const loaded = await Promise.all(batch.map(async (thread) => {
+      try {
+        const readResponse = await appServer.rpc('thread/read', {
+          threadId: thread.id,
+          includeTurns: true,
+        })
+        const messageText = extractThreadMessageText(readResponse)
+        const searchableText = [thread.title, thread.preview, messageText].filter(Boolean).join('\n')
+        return {
+          id: thread.id,
+          title: thread.title,
+          preview: thread.preview,
+          messageText,
+          searchableText,
+        } satisfies ThreadSearchDocument
+      } catch {
+        const searchableText = [thread.title, thread.preview].filter(Boolean).join('\n')
+        return {
+          id: thread.id,
+          title: thread.title,
+          preview: thread.preview,
+          messageText: '',
+          searchableText,
+        } satisfies ThreadSearchDocument
+      }
+    }))
+    docs.push(...loaded)
+  }
+
+  return docs
+}
+
+async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<ThreadSearchIndex> {
+  const docs = await loadAllThreadsForSearch(appServer)
+  const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
+  return { docsById }
+}
+
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   const { appServer, methodCatalog } = getSharedBridgeState()
+  let threadSearchIndex: ThreadSearchIndex | null = null
+  let threadSearchIndexPromise: Promise<ThreadSearchIndex> | null = null
+
+  async function getThreadSearchIndex(): Promise<ThreadSearchIndex> {
+    if (threadSearchIndex) return threadSearchIndex
+    if (!threadSearchIndexPromise) {
+      threadSearchIndexPromise = buildThreadSearchIndex(appServer)
+        .then((index) => {
+          threadSearchIndex = index
+          return index
+        })
+        .finally(() => {
+          threadSearchIndexPromise = null
+        })
+    }
+    return threadSearchIndexPromise
+  }
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     try {
@@ -1406,6 +1550,26 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'POST' && url.pathname === '/codex-api/thread-search') {
+        const payload = asRecord(await readJsonBody(req))
+        const query = typeof payload?.query === 'string' ? payload.query.trim() : ''
+        const limitRaw = typeof payload?.limit === 'number' ? payload.limit : 200
+        const limit = Math.max(1, Math.min(1000, Math.floor(limitRaw)))
+        if (!query) {
+          setJson(res, 200, { data: { threadIds: [], indexedThreadCount: 0 } })
+          return
+        }
+
+        const index = await getThreadSearchIndex()
+        const matchedIds = Array.from(index.docsById.entries())
+          .filter(([, doc]) => isExactPhraseMatch(query, doc))
+          .slice(0, limit)
+          .map(([id]) => id)
+
+        setJson(res, 200, { data: { threadIds: matchedIds, indexedThreadCount: index.docsById.size } })
+        return
+      }
+
       if (req.method === 'PUT' && url.pathname === '/codex-api/thread-titles') {
         const payload = asRecord(await readJsonBody(req))
         const id = typeof payload?.id === 'string' ? payload.id : ''
@@ -1565,6 +1729,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   }
 
   middleware.dispose = () => {
+    threadSearchIndex = null
     appServer.dispose()
   }
   middleware.subscribeNotifications = (

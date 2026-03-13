@@ -61,6 +61,7 @@
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
+            :search-matched-thread-ids="serverMatchedThreadIds"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @rename-thread="onRenameThread"
@@ -214,7 +215,14 @@ import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { createWorktree, getHomeDirectory, getProjectRootSuggestion, getWorkspaceRootsState, openProjectRoot } from './api/codexGateway'
+import {
+  createWorktree,
+  getHomeDirectory,
+  getProjectRootSuggestion,
+  getWorkspaceRootsState,
+  openProjectRoot,
+  searchThreads,
+} from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -282,6 +290,8 @@ const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
 const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
+const serverMatchedThreadIds = ref<string[] | null>(null)
+let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
@@ -383,7 +393,35 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
+  if (threadSearchTimer) {
+    clearTimeout(threadSearchTimer)
+    threadSearchTimer = null
+  }
   stopPolling()
+})
+
+watch(sidebarSearchQuery, (value) => {
+  const query = value.trim()
+  if (threadSearchTimer) {
+    clearTimeout(threadSearchTimer)
+    threadSearchTimer = null
+  }
+  if (!query) {
+    serverMatchedThreadIds.value = null
+    return
+  }
+
+  threadSearchTimer = setTimeout(() => {
+    void searchThreads(query, 1000)
+      .then((result) => {
+        if (sidebarSearchQuery.value.trim() !== query) return
+        serverMatchedThreadIds.value = result.threadIds
+      })
+      .catch(() => {
+        if (sidebarSearchQuery.value.trim() !== query) return
+        serverMatchedThreadIds.value = null
+      })
+  }, 220)
 })
 
 function onSkillsChanged(): void {
