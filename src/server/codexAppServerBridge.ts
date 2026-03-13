@@ -156,6 +156,27 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
   })
 }
 
+function isMissingHeadError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes("not a valid object name: 'head'") || message.includes('not a valid object name: head')
+}
+
+async function ensureRepoHasInitialCommit(repoRoot: string): Promise<void> {
+  const agentsPath = join(repoRoot, 'AGENTS.md')
+  try {
+    await stat(agentsPath)
+  } catch {
+    await writeFile(agentsPath, '', 'utf8')
+  }
+
+  await runCommand('git', ['add', 'AGENTS.md'], { cwd: repoRoot })
+  await runCommand(
+    'git',
+    ['-c', 'user.name=Codex', '-c', 'user.email=codex@local', 'commit', '-m', 'Initialize repository for worktree support'],
+    { cwd: repoRoot },
+  )
+}
+
 async function runCommandCapture(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return await new Promise<string>((resolveOutput, reject) => {
     const proc = spawn(command, args, {
@@ -1212,7 +1233,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const branch = `codex/${worktreeId}`
 
           await mkdir(worktreeParent, { recursive: true })
-          await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          try {
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          } catch (error) {
+            if (!isMissingHeadError(error)) throw error
+            await ensureRepoHasInitialCommit(gitRoot)
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          }
 
           setJson(res, 200, {
             data: {

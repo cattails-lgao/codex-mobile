@@ -132,6 +132,18 @@
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
                 />
+                <div
+                  v-if="worktreeInitStatus.phase !== 'idle'"
+                  class="worktree-init-status"
+                  :class="{
+                    'is-running': worktreeInitStatus.phase === 'running',
+                    'is-success': worktreeInitStatus.phase === 'success',
+                    'is-error': worktreeInitStatus.phase === 'error',
+                  }"
+                >
+                  <strong class="worktree-init-status-title">{{ worktreeInitStatus.title }}</strong>
+                  <span class="worktree-init-status-message">{{ worktreeInitStatus.message }}</span>
+                </div>
               </div>
 
                 <ThreadComposer :active-thread-id="composerThreadContextId"
@@ -262,6 +274,11 @@ const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
 const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
+const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'success' | 'error'; title: string; message: string }>({
+  phase: 'idle',
+  title: '',
+  message: '',
+})
 const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
@@ -778,6 +795,15 @@ watch(
   },
 )
 
+watch(
+  () => newThreadRuntime.value,
+  (runtime) => {
+    if (runtime === 'local') {
+      worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+    }
+  },
+)
+
 watch(isMobile, (mobile) => {
   if (mobile && !isSidebarCollapsed.value) {
     setSidebarCollapsed(true)
@@ -791,15 +817,30 @@ async function submitFirstMessageForNewThread(
   fileAttachments: Array<{ label: string; path: string; fsPath: string }> = [],
 ): Promise<void> {
   try {
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
     let targetCwd = newThreadCwd.value
     if (newThreadRuntime.value === 'worktree') {
+      worktreeInitStatus.value = {
+        phase: 'running',
+        title: 'Creating worktree',
+        message: 'Creating a worktree and running setup.',
+      }
       try {
         const created = await createWorktree(newThreadCwd.value)
         targetCwd = created.cwd
         newThreadCwd.value = created.cwd
+        worktreeInitStatus.value = {
+          phase: 'success',
+          title: 'Worktree ready',
+          message: created.cwd,
+        }
       } catch {
-        // Parity fallback for worktree setup failures: continue in local project.
-        targetCwd = newThreadCwd.value
+        worktreeInitStatus.value = {
+          phase: 'error',
+          title: 'Worktree setup failed',
+          message: 'Unable to create worktree. Try again or switch to Local project.',
+        }
+        return
       }
     }
     const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
@@ -925,6 +966,30 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-runtime-dropdown {
   @apply mt-3;
+}
+
+.worktree-init-status {
+  @apply mt-3 flex w-full max-w-xl flex-col gap-1 rounded-xl border px-3 py-2 text-sm;
+}
+
+.worktree-init-status.is-running {
+  @apply border-zinc-300 bg-zinc-50 text-zinc-700;
+}
+
+.worktree-init-status.is-success {
+  @apply border-emerald-300 bg-emerald-50 text-emerald-800;
+}
+
+.worktree-init-status.is-error {
+  @apply border-rose-300 bg-rose-50 text-rose-800;
+}
+
+.worktree-init-status-title {
+  @apply font-medium;
+}
+
+.worktree-init-status-message {
+  @apply break-all;
 }
 
 .sidebar-settings-area {
