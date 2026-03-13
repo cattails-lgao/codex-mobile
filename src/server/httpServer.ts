@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
 import { existsSync } from 'node:fs'
 import express, { type Express } from 'express'
@@ -58,6 +58,15 @@ function normalizeLocalPath(rawPath: string): string {
   return trimmed
 }
 
+function decodeBrowsePath(rawPath: string): string {
+  if (!rawPath) return ''
+  try {
+    return decodeURIComponent(rawPath)
+  } catch {
+    return rawPath
+  }
+}
+
 export function createServer(options: ServerOptions = {}): ServerInstance {
   const app = express()
   const bridge = createCodexBridgeMiddleware()
@@ -94,7 +103,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     })
   })
 
-  // 4. Serve local files inline for browser preview.
+  // 4. Serve local files inline for direct file open.
   app.get('/codex-local-file', (req, res) => {
     const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
     const localPath = normalizeLocalPath(rawPath)
@@ -104,7 +113,23 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     }
 
     res.setHeader('Cache-Control', 'private, no-store')
-    res.setHeader('Content-Disposition', `inline; filename="${basename(localPath)}"`)
+    res.setHeader('Content-Disposition', 'inline')
+    res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
+      if (!error) return
+      if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
+    })
+  })
+
+  // 5. Serve local files by path to preserve relative asset loading for HTML.
+  app.get('/codex-local-browse/*path', (req, res) => {
+    const rawPath = typeof req.params.path === 'string' ? req.params.path : ''
+    const localPath = decodeBrowsePath(`/${rawPath}`)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local file path.' })
+      return
+    }
+
+    res.setHeader('Cache-Control', 'private, no-store')
     res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
       if (!error) return
       if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
@@ -113,12 +138,12 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
 
   const hasFrontendAssets = existsSync(spaEntryFile)
 
-  // 5. Static files from Vue build
+  // 6. Static files from Vue build
   if (hasFrontendAssets) {
     app.use(express.static(distDir))
   }
 
-  // 6. SPA fallback
+  // 7. SPA fallback
   app.use((_req, res) => {
     if (!hasFrontendAssets) {
       res.status(503).type('text/plain').send(

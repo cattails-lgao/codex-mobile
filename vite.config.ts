@@ -43,6 +43,15 @@ function normalizeLocalPath(rawPath: string): string {
   return trimmed;
 }
 
+function decodeBrowsePath(rawPath: string): string {
+  if (!rawPath) return "";
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    return rawPath;
+  }
+}
+
 function getWorktreeName(): string {
   const normalizedCwd = process.cwd().replace(/\\/g, "/");
   const segments = normalizedCwd.split("/").filter(Boolean);
@@ -170,6 +179,30 @@ export default defineConfig({
           res.setHeader("Cache-Control", "private, no-store");
           res.setHeader("Content-Disposition", `inline; filename="${basename(localPath)}"`);
 
+          const stream = createReadStream(localPath);
+          stream.on("error", () => {
+            if (res.headersSent) return;
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "File not found." }));
+          });
+          stream.pipe(res);
+        });
+        server.middlewares.use((req, res, next) => {
+          if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
+          const url = new URL(req.url, "http://localhost");
+          if (!url.pathname.startsWith("/codex-local-browse/")) return next();
+
+          const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-browse".length));
+          if (!localPath || !isAbsolute(localPath)) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Expected absolute local file path." }));
+            return;
+          }
+
+          res.statusCode = 200;
+          res.setHeader("Cache-Control", "private, no-store");
           const stream = createReadStream(localPath);
           stream.on("error", () => {
             if (res.headersSent) return;

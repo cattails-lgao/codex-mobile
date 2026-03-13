@@ -134,7 +134,7 @@
                   <span class="message-file-chip-icon">📄</span>
                   <a
                     class="message-file-link message-file-chip-name"
-                    :href="toDownloadUrl(att.path)"
+                    :href="toBrowseUrl(att.path)"
                     target="_blank"
                     rel="noopener noreferrer"
                     :title="att.path"
@@ -187,7 +187,7 @@
                         <a
                           v-else-if="segment.kind === 'file'"
                           class="message-file-link"
-                          :href="toDownloadUrl(segment.path)"
+                          :href="toBrowseUrl(segment.path)"
                           target="_blank"
                           rel="noopener noreferrer"
                           :title="segment.path"
@@ -536,7 +536,7 @@ function toRenderableImageUrl(value: string): string {
   return normalized
 }
 
-function toDownloadUrl(pathValue: string): string {
+function toBrowseUrl(pathValue: string): string {
   const normalized = pathValue.trim()
   if (!normalized) return '#'
   const looksLikeAbsolutePath = (candidate: string): boolean => (
@@ -545,11 +545,11 @@ function toDownloadUrl(pathValue: string): string {
 
   const parsed = parseFileReference(normalized)
   if (parsed?.path && looksLikeAbsolutePath(parsed.path)) {
-    return `/codex-local-file?path=${encodeURIComponent(parsed.path)}`
+    return `/codex-local-browse${encodeURI(parsed.path)}`
   }
 
   if (looksLikeAbsolutePath(normalized)) {
-    return `/codex-local-file?path=${encodeURIComponent(normalized)}`
+    return `/codex-local-browse${encodeURI(normalized)}`
   }
 
   return '#'
