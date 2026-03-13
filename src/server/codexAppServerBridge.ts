@@ -1,6 +1,7 @@
+import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -247,7 +248,7 @@ async function ensureRepoHasInitialCommit(repoRoot: string): Promise<void> {
 }
 
 async function runCommandCapture(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
-  return await new Promise<string>((resolveOutput, reject) => {
+  return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
       env: process.env,
@@ -260,7 +261,31 @@ async function runCommandCapture(command: string, args: string[], options: { cwd
     proc.on('error', reject)
     proc.on('close', (code) => {
       if (code === 0) {
-        resolveOutput(stdout.trim())
+        resolve(stdout.trim())
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      const suffix = details.length > 0 ? `: ${details}` : ''
+      reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
+    })
+  })
+}
+
+async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout.trim())
         return
       }
       const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
@@ -425,7 +450,7 @@ function buildHubEntry(e: SkillsTreeEntry): SkillHubEntry {
 }
 
 type InstalledSkillInfo = { name: string; path: string; enabled: boolean }
-type SyncedSkill = { owner: string; name: string; enabled: boolean }
+type SyncedSkill = { owner?: string; name: string; enabled: boolean }
 
 type SkillsSyncState = {
   githubToken?: string
@@ -451,6 +476,7 @@ type GithubTokenResponse = {
 const GITHUB_DEVICE_CLIENT_ID = 'Iv1.b507a08c87ecfe98'
 const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codex-skills-sync'
 const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
+const SKILLS_SYNC_FOLDER_PATH = 'installed-skills'
 const GITHUB_WEB_OAUTH_CLIENT_ID = process.env.GITHUB_OAUTH_CLIENT_ID?.trim() || ''
 const GITHUB_WEB_OAUTH_CLIENT_SECRET = process.env.GITHUB_OAUTH_CLIENT_SECRET?.trim() || ''
 const githubOauthStateCache = new Map<string, number>()
@@ -666,8 +692,8 @@ async function readRemoteSkillsManifest(token: string, repoOwner: string, repoNa
     const item = asRecord(row)
     const owner = typeof item?.owner === 'string' ? item.owner : ''
     const name = typeof item?.name === 'string' ? item.name : ''
-    if (!owner || !name) continue
-    skills.push({ owner, name, enabled: item?.enabled !== false })
+    if (!name) continue
+    skills.push({ ...(owner ? { owner } : {}), name, enabled: item?.enabled !== false })
   }
   return skills
 }
@@ -700,23 +726,128 @@ async function writeRemoteSkillsManifest(
   })
 }
 
+function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string): string {
+  return `https://x-access-token:${encodeURIComponent(token)}@github.com/${repoOwner}/${repoName}.git`
+}
+
+async function syncInstalledSkillsFolderToRepo(
+  token: string,
+  repoOwner: string,
+  repoName: string,
+  installedMap: Map<string, InstalledSkillInfo>,
+): Promise<void> {
+  const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-sync-push-'))
+  try {
+    const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
+    await runCommand('git', ['clone', '--depth', '1', remoteUrl, tmp])
+
+    const repoSkillsDir = join(tmp, SKILLS_SYNC_FOLDER_PATH)
+    await rm(repoSkillsDir, { recursive: true, force: true })
+    await mkdir(repoSkillsDir, { recursive: true })
+
+    for (const [name, info] of installedMap.entries()) {
+      const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
+      const target = join(repoSkillsDir, name)
+      await cp(localSkillDir, target, { recursive: true, force: true })
+    }
+
+    await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: tmp })
+    await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: tmp })
+    await runCommand('git', ['add', SKILLS_SYNC_FOLDER_PATH, SKILLS_SYNC_MANIFEST_PATH], { cwd: tmp })
+    const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: tmp })).trim()
+    if (!status) return
+    await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: tmp })
+    await runCommand('git', ['push', 'origin', 'HEAD'], { cwd: tmp })
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
+}
+
+async function pullInstalledSkillsFolderFromRepo(
+  token: string,
+  repoOwner: string,
+  repoName: string,
+  localSkillsDir: string,
+): Promise<void> {
+  const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-sync-pull-'))
+  try {
+    const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
+    await runCommand('git', ['clone', '--depth', '1', remoteUrl, tmp])
+    const repoSkillsDir = join(tmp, SKILLS_SYNC_FOLDER_PATH)
+    let repoSkillEntries: string[] = []
+    try {
+      const entries = await readdir(repoSkillsDir, { withFileTypes: true })
+      repoSkillEntries = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.')).map((entry) => entry.name)
+    } catch {
+      repoSkillEntries = []
+    }
+
+    await mkdir(localSkillsDir, { recursive: true })
+    const currentLocal = await scanInstalledSkillsFromDisk()
+    const repoSet = new Set(repoSkillEntries)
+    for (const [name, info] of currentLocal.entries()) {
+      if (!repoSet.has(name)) {
+        const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
+        await rm(localSkillDir, { recursive: true, force: true })
+      }
+    }
+
+    for (const name of repoSkillEntries) {
+      const from = join(repoSkillsDir, name)
+      const to = join(localSkillsDir, name)
+      await rm(to, { recursive: true, force: true })
+      await cp(from, to, { recursive: true, force: true })
+    }
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
+}
+
 async function collectLocalSyncedSkills(appServer: AppServerProcess): Promise<SyncedSkill[]> {
   const state = await readSkillsSyncState()
-  const owners = state.installedOwners ?? {}
+  const owners = { ...(state.installedOwners ?? {}) }
+  const tree = await fetchSkillsTree()
+  const uniqueOwnerByName = new Map<string, string>()
+  const ambiguousNames = new Set<string>()
+  for (const entry of tree) {
+    if (ambiguousNames.has(entry.name)) continue
+    const existingOwner = uniqueOwnerByName.get(entry.name)
+    if (!existingOwner) {
+      uniqueOwnerByName.set(entry.name, entry.owner)
+      continue
+    }
+    if (existingOwner !== entry.owner) {
+      uniqueOwnerByName.delete(entry.name)
+      ambiguousNames.add(entry.name)
+    }
+  }
+
   const skills = (await appServer.rpc('skills/list', {})) as { data?: Array<{ skills?: Array<{ name?: string; enabled?: boolean; scope?: string }> }> }
   const seen = new Set<string>()
   const synced: SyncedSkill[] = []
+  let ownersChanged = false
   for (const entry of skills.data ?? []) {
     for (const skill of entry.skills ?? []) {
       const name = typeof skill.name === 'string' ? skill.name : ''
       if (!name || seen.has(name)) continue
       seen.add(name)
-      const owner = owners[name]
-      if (!owner) continue
-      synced.push({ owner, name, enabled: skill.enabled !== false })
+      let owner = owners[name]
+      if (!owner) {
+        owner = uniqueOwnerByName.get(name) ?? ''
+        if (owner) {
+          owners[name] = owner
+          ownersChanged = true
+        }
+      }
+      synced.push({ ...(owner ? { owner } : {}), name, enabled: skill.enabled !== false })
     }
   }
-  synced.sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`))
+
+  if (ownersChanged) {
+    await writeSkillsSyncState({ ...state, installedOwners: owners })
+  }
+
+  synced.sort((a, b) => `${a.owner ?? ''}/${a.name}`.localeCompare(`${b.owner ?? ''}/${b.name}`))
   return synced
 }
 
@@ -724,7 +855,9 @@ async function autoPushSyncedSkills(appServer: AppServerProcess): Promise<void> 
   const state = await readSkillsSyncState()
   if (!state.githubToken || !state.repoOwner || !state.repoName) return
   const local = await collectLocalSyncedSkills(appServer)
+  const installedMap = await scanInstalledSkillsFromDisk()
   await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
+  await syncInstalledSkillsFolderToRepo(state.githubToken, state.repoOwner, state.repoName, installedMap)
 }
 
 async function searchSkillsHub(
@@ -1938,6 +2071,24 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/github/token-login') {
+        try {
+          const payload = asRecord(await readJsonBody(req))
+          const token = typeof payload?.token === 'string' ? payload.token.trim() : ''
+          if (!token) {
+            setJson(res, 400, { error: 'Missing GitHub token' })
+            return
+          }
+          const username = await resolveGithubUsername(token)
+          const state = await readSkillsSyncState()
+          await writeSkillsSyncState({ ...state, githubToken: token, githubUsername: username })
+          setJson(res, 200, { ok: true, data: { githubUsername: username } })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to login with GitHub token') })
+        }
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/github/web/start') {
         try {
           if (!GITHUB_WEB_OAUTH_CLIENT_ID || !GITHUB_WEB_OAUTH_CLIENT_SECRET) {
@@ -2044,8 +2195,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/push') {
         try {
-          await autoPushSyncedSkills(appServer)
-          setJson(res, 200, { ok: true })
+          const state = await readSkillsSyncState()
+          if (!state.githubToken || !state.repoOwner || !state.repoName) {
+            setJson(res, 400, { error: 'Skills sync is not configured yet' })
+            return
+          }
+          const local = await collectLocalSyncedSkills(appServer)
+          const installedMap = await scanInstalledSkillsFromDisk()
+          await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
+          await syncInstalledSkillsFolderToRepo(state.githubToken, state.repoOwner, state.repoName, installedMap)
+          setJson(res, 200, { ok: true, data: { synced: local.length } })
         } catch (error) {
           setJson(res, 502, { error: getErrorMessage(error, 'Failed to push synced skills') })
         }
@@ -2060,15 +2219,35 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
           const remote = await readRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName)
+          const tree = await fetchSkillsTree()
+          const uniqueOwnerByName = new Map<string, string>()
+          const ambiguousNames = new Set<string>()
+          for (const entry of tree) {
+            if (ambiguousNames.has(entry.name)) continue
+            const existingOwner = uniqueOwnerByName.get(entry.name)
+            if (!existingOwner) {
+              uniqueOwnerByName.set(entry.name, entry.owner)
+              continue
+            }
+            if (existingOwner !== entry.owner) {
+              uniqueOwnerByName.delete(entry.name)
+              ambiguousNames.add(entry.name)
+            }
+          }
           const localDir = await detectUserSkillsDir(appServer)
+          await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName, localDir)
           const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
           const localSkills = await scanInstalledSkillsFromDisk()
           for (const skill of remote) {
+            const owner = skill.owner || uniqueOwnerByName.get(skill.name) || ''
+            if (!owner) {
+              continue
+            }
             if (!localSkills.has(skill.name)) {
               await runCommand('python3', [
                 installerScript,
                 '--repo', 'openclaw/skills',
-                '--path', `skills/${skill.owner}/${skill.name}`,
+                '--path', `skills/${owner}/${skill.name}`,
                 '--dest', localDir,
                 '--method', 'git',
               ])
@@ -2083,7 +2262,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
           }
           const nextOwners: Record<string, string> = {}
-          for (const item of remote) nextOwners[item.name] = item.owner
+          for (const item of remote) {
+            const owner = item.owner || uniqueOwnerByName.get(item.name) || ''
+            if (owner) nextOwners[item.name] = owner
+          }
           await writeSkillsSyncState({ ...state, installedOwners: nextOwners })
           try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
           setJson(res, 200, { ok: true, data: { synced: remote.length } })

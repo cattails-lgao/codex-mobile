@@ -35,14 +35,7 @@
         <code>{{ deviceLogin.user_code }}</code>
       </div>
       <div class="skills-sync-actions">
-        <button
-          v-if="syncStatus.webOauthEnabled"
-          class="skills-hub-sort"
-          type="button"
-          @click="startGithubWebLogin"
-        >
-          Login with GitHub (Web)
-        </button>
+        <button class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
         <button class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
         <button class="skills-hub-sort" type="button" @click="setupSyncRepo" :disabled="!syncStatus.loggedIn">Create Private Repo</button>
         <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="!syncStatus.configured">Pull</button>
@@ -98,6 +91,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { initializeApp, getApp, getApps } from 'firebase/app'
+import { getAuth, GithubAuthProvider, signInWithPopup } from 'firebase/auth'
 import IconTablerSearch from '../icons/IconTablerSearch.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
@@ -129,7 +124,6 @@ const syncStatus = ref({
   repoOwner: '',
   repoName: '',
   configured: false,
-  webOauthEnabled: false,
 })
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -369,8 +363,42 @@ async function startGithubLogin(): Promise<void> {
   }
 }
 
-function startGithubWebLogin(): void {
-  window.location.href = '/codex-api/skills-sync/github/web/start'
+const firebaseConfig = {
+  apiKey: 'AIzaSyAf0CIHBZ-wEQJ8CCUUWo1Wl9P7typ_ZPI',
+  authDomain: 'gptcall-416910.firebaseapp.com',
+  projectId: 'gptcall-416910',
+  storageBucket: 'gptcall-416910.appspot.com',
+  messagingSenderId: '99275526699',
+  appId: '1:99275526699:web:3b623e1e2996108b52106e',
+}
+
+async function startGithubFirebaseLogin(): Promise<void> {
+  try {
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+    const auth = getAuth(app)
+    const provider = new GithubAuthProvider()
+    provider.addScope('repo')
+    const result = await signInWithPopup(auth, provider)
+    const credential = GithubAuthProvider.credentialFromResult(result)
+    const token = credential?.accessToken ?? ''
+    if (!token) {
+      throw new Error('GitHub access token missing from Firebase login')
+    }
+    const resp = await fetch('/codex-api/skills-sync/github/token-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to login with GitHub token')
+    }
+    await loadSyncStatus()
+    showToast('GitHub login successful')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed Firebase GitHub login'
+    showToast(message, 'error')
+  }
 }
 
 async function setupSyncRepo(): Promise<void> {
@@ -410,18 +438,6 @@ async function pushSkillsSync(): Promise<void> {
 }
 
 onMounted(() => {
-  const params = new URLSearchParams(window.location.search)
-  const syncAuth = params.get('syncAuth')
-  const reason = params.get('reason')
-  if (syncAuth === 'ok') showToast('GitHub web login successful')
-  if (syncAuth === 'error') showToast(reason || 'GitHub web login failed', 'error')
-  if (syncAuth) {
-    params.delete('syncAuth')
-    params.delete('reason')
-    const next = params.toString()
-    const nextUrl = `${window.location.pathname}${next ? `?${next}` : ''}${window.location.hash}`
-    window.history.replaceState({}, '', nextUrl)
-  }
   void fetchSkills('')
   void loadSyncStatus()
 })
