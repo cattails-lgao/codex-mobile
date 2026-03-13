@@ -104,7 +104,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     }
 
     res.setHeader('Cache-Control', 'private, no-store')
-    res.download(localPath, basename(localPath), (error) => {
+    res.download(localPath, basename(localPath), { dotfiles: 'allow' }, (error) => {
       if (!error) return
       if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
     })
