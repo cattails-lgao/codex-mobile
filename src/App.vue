@@ -137,7 +137,6 @@
                   class="worktree-init-status"
                   :class="{
                     'is-running': worktreeInitStatus.phase === 'running',
-                    'is-success': worktreeInitStatus.phase === 'success',
                     'is-error': worktreeInitStatus.phase === 'error',
                   }"
                 >
@@ -274,7 +273,7 @@ const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
 const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
-const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'success' | 'error'; title: string; message: string }>({
+const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
   title: '',
   message: '',
@@ -804,6 +803,22 @@ watch(
   },
 )
 
+watch(
+  () => route.name,
+  (name) => {
+    if (name !== 'home') {
+      worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+    }
+  },
+)
+
+watch(
+  () => selectedThreadId.value,
+  () => {
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+  },
+)
+
 watch(isMobile, (mobile) => {
   if (mobile && !isSidebarCollapsed.value) {
     setSidebarCollapsed(true)
@@ -829,11 +844,7 @@ async function submitFirstMessageForNewThread(
         const created = await createWorktree(newThreadCwd.value)
         targetCwd = created.cwd
         newThreadCwd.value = created.cwd
-        worktreeInitStatus.value = {
-          phase: 'success',
-          title: 'Worktree ready',
-          message: created.cwd,
-        }
+        worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
       } catch {
         worktreeInitStatus.value = {
           phase: 'error',
@@ -974,10 +985,6 @@ async function submitFirstMessageForNewThread(
 
 .worktree-init-status.is-running {
   @apply border-zinc-300 bg-zinc-50 text-zinc-700;
-}
-
-.worktree-init-status.is-success {
-  @apply border-emerald-300 bg-emerald-50 text-emerald-800;
 }
 
 .worktree-init-status.is-error {
