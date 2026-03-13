@@ -132,7 +132,14 @@
               <div v-if="message.fileAttachments && message.fileAttachments.length > 0" class="message-file-attachments">
                 <span v-for="att in message.fileAttachments" :key="att.path" class="message-file-chip">
                   <span class="message-file-chip-icon">📄</span>
-                  <span class="message-file-chip-name" :title="att.path">{{ att.label }}</span>
+                  <a
+                    class="message-file-link message-file-chip-name"
+                    :href="toDownloadUrl(att.path)"
+                    :download="getBasename(att.path)"
+                    :title="att.path"
+                  >
+                    {{ att.path }}
+                  </a>
                 </span>
               </div>
 
@@ -176,8 +183,14 @@
                     <p v-if="block.kind === 'text'" class="message-text">
                       <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                        <a v-else-if="segment.kind === 'file'" class="message-file-link" href="#" @click.prevent>
-                          {{ segment.displayName }}
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toDownloadUrl(segment.path)"
+                          :download="segment.downloadName"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
                         </a>
                         <code v-else class="message-inline-code">{{ segment.value }}</code>
                       </template>
@@ -358,7 +371,7 @@ const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
   | { kind: 'code'; value: string }
-  | { kind: 'file'; value: string; displayName: string }
+  | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
 type MessageBlock =
   | { kind: 'text'; value: string }
   | { kind: 'image'; url: string; alt: string; markdown: string }
@@ -467,9 +480,16 @@ function parseInlineSegments(text: string): InlineSegment[] {
     if (token.length > 0) {
       const fileReference = parseFileReference(token)
       if (fileReference) {
-        const basename = getBasename(fileReference.path)
-        const displayName = fileReference.line ? `${basename} (line ${String(fileReference.line)})` : basename
-        segments.push({ kind: 'file', value: token, displayName })
+        const displayPath = fileReference.line
+          ? `${fileReference.path}:${String(fileReference.line)}`
+          : fileReference.path
+        segments.push({
+          kind: 'file',
+          value: token,
+          path: fileReference.path,
+          displayPath,
+          downloadName: getBasename(fileReference.path),
+        })
       } else {
         segments.push({ kind: 'code', value: token })
       }
@@ -512,6 +532,25 @@ function toRenderableImageUrl(value: string): string {
   }
 
   return normalized
+}
+
+function toDownloadUrl(pathValue: string): string {
+  const normalized = pathValue.trim()
+  if (!normalized) return '#'
+  const looksLikeAbsolutePath = (candidate: string): boolean => (
+    candidate.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(candidate)
+  )
+
+  const parsed = parseFileReference(normalized)
+  if (parsed?.path && looksLikeAbsolutePath(parsed.path)) {
+    return `/codex-local-file?path=${encodeURIComponent(parsed.path)}`
+  }
+
+  if (looksLikeAbsolutePath(normalized)) {
+    return `/codex-local-file?path=${encodeURIComponent(normalized)}`
+  }
+
+  return '#'
 }
 
 function parseMessageBlocks(text: string): MessageBlock[] {

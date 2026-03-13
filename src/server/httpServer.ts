@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { dirname, extname, isAbsolute, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
 import { existsSync } from 'node:fs'
 import express, { type Express } from 'express'
@@ -33,6 +33,19 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
 }
 
 function normalizeLocalImagePath(rawPath: string): string {
+  const trimmed = rawPath.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('file://')) {
+    try {
+      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ''))
+    } catch {
+      return trimmed.replace(/^file:\/\//u, '')
+    }
+  }
+  return trimmed
+}
+
+function normalizeLocalPath(rawPath: string): string {
   const trimmed = rawPath.trim()
   if (!trimmed) return ''
   if (trimmed.startsWith('file://')) {
@@ -81,14 +94,30 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     })
   })
 
+  // 4. Serve local files as downloadable attachments.
+  app.get('/codex-local-file', (req, res) => {
+    const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
+    const localPath = normalizeLocalPath(rawPath)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local file path.' })
+      return
+    }
+
+    res.setHeader('Cache-Control', 'private, no-store')
+    res.download(localPath, basename(localPath), (error) => {
+      if (!error) return
+      if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
+    })
+  })
+
   const hasFrontendAssets = existsSync(spaEntryFile)
 
-  // 4. Static files from Vue build
+  // 5. Static files from Vue build
   if (hasFrontendAssets) {
     app.use(express.static(distDir))
   }
 
-  // 5. SPA fallback
+  // 6. SPA fallback
   app.use((_req, res) => {
     if (!hasFrontendAssets) {
       res.status(503).type('text/plain').send(
