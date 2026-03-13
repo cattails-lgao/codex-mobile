@@ -161,6 +161,11 @@ function isMissingHeadError(error: unknown): boolean {
   return message.includes("not a valid object name: 'head'") || message.includes('not a valid object name: head')
 }
 
+function isNotGitRepositoryError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('not a git repository') || message.includes('fatal: not a git repository')
+}
+
 async function ensureRepoHasInitialCommit(repoRoot: string): Promise<void> {
   const agentsPath = join(repoRoot, 'AGENTS.md')
   try {
@@ -1203,7 +1208,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          let gitRoot = ''
+          try {
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          } catch (error) {
+            if (!isNotGitRepositoryError(error)) throw error
+            await runCommand('git', ['init'], { cwd: sourceCwd })
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          }
           const repoNameRaw = basename(gitRoot)
           const repoName = repoNameRaw.replace(/[^a-zA-Z0-9._-]/g, '-') || 'repo'
           const worktreesRoot = join(getCodexHomeDir(), 'worktrees')

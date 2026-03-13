@@ -790,6 +790,7 @@ watch(
 watch(
   () => newThreadCwd.value,
   () => {
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
     void refreshDefaultProjectName()
   },
 )
