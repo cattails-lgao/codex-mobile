@@ -6,7 +6,6 @@ import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import zvec from '@zvec/zvec'
 
 type JsonRpcCall = {
   jsonrpc: '2.0'
@@ -62,9 +61,6 @@ type ThreadSearchDocument = {
 
 type ThreadSearchIndex = {
   docsById: Map<string, ThreadSearchDocument>
-  collection: InstanceType<typeof zvec.ZVecCollection> | null
-  collectionPath: string
-  vectorSearchAvailable: boolean
 }
 
 type ThreadSearchMode = 'exact' | 'semantic' | 'hybrid'
@@ -102,35 +98,6 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
 
 function tokenizeText(value: string): string[] {
   return (value.toLowerCase().match(/[a-z0-9_]+/g) ?? []).filter((token) => token.length > 1)
-}
-
-function hashToken(token: string): number {
-  let hash = 2166136261
-  for (let i = 0; i < token.length; i += 1) {
-    hash ^= token.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return Math.abs(hash >>> 0) % 262144
-}
-
-function toDenseVector(value: string, dimensions = 512): number[] {
-  const vector = new Array<number>(dimensions).fill(0)
-  for (const token of tokenizeText(value)) {
-    const key = hashToken(token) % dimensions
-    vector[key] += 1
-  }
-
-  let norm = 0
-  for (const value of vector) {
-    norm += value * value
-  }
-  if (norm === 0) return vector
-  const denom = Math.sqrt(norm)
-
-  for (let i = 0; i < vector.length; i += 1) {
-    vector[i] = vector[i] / denom
-  }
-  return vector
 }
 
 function extractThreadMessageText(threadReadPayload: unknown): string {
@@ -179,6 +146,19 @@ function scoreLexicalMatch(query: string, doc: ThreadSearchDocument): number {
   if (doc.preview.toLowerCase().includes(q)) score += 2
   if (doc.messageText.toLowerCase().includes(q)) score += 2
   return score
+}
+
+function scoreSemanticInMemory(query: string, doc: ThreadSearchDocument): number {
+  const queryTokens = new Set(tokenizeText(query))
+  if (queryTokens.size === 0) return 0
+  const docTokens = new Set(tokenizeText(doc.searchableText))
+  if (docTokens.size === 0) return 0
+
+  let overlap = 0
+  for (const token of queryTokens) {
+    if (docTokens.has(token)) overlap += 1
+  }
+  return overlap / queryTokens.size
 }
 
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
@@ -1226,44 +1206,7 @@ async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<Thr
 async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<ThreadSearchIndex> {
   const docs = await loadAllThreadsForSearch(appServer)
   const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
-
-  const collectionPath = join(
-    tmpdir(),
-    `codex-web-local-thread-search-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-  )
-  let collection: ThreadSearchIndex['collection'] = null
-  try {
-    const schema = new zvec.ZVecCollectionSchema({
-      name: 'threadsearch',
-      vectors: {
-        name: 'content_vec',
-        dataType: zvec.ZVecDataType.VECTOR_FP32,
-        dimension: 512,
-        indexParams: {
-          indexType: zvec.ZVecIndexType.FLAT,
-          metricType: zvec.ZVecMetricType.COSINE,
-        },
-      },
-      fields: [
-        { name: 'title', dataType: zvec.ZVecDataType.STRING },
-      ],
-    })
-    collection = zvec.ZVecCreateAndOpen(collectionPath, schema)
-    collection.insertSync(docs.map((doc) => ({
-      id: doc.id,
-      vectors: {
-        content_vec: toDenseVector(doc.searchableText),
-      },
-      fields: {
-        title: doc.title,
-      },
-    })))
-  } catch {
-    await rm(collectionPath, { recursive: true, force: true })
-    return { docsById, collection: null, collectionPath: '', vectorSearchAvailable: false }
-  }
-
-  return { docsById, collection, collectionPath, vectorSearchAvailable: true }
+  return { docsById }
 }
 
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
@@ -1525,23 +1468,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const index = await getThreadSearchIndex()
         const candidateScores = new Map<string, number>()
 
-        if (!index.vectorSearchAvailable) {
-          const q = query.toLowerCase()
-          const matchedByTitle = Array.from(index.docsById.values())
-            .filter((doc) => doc.title.toLowerCase().includes(q))
-            .slice(0, limit)
-            .map((doc) => doc.id)
-          setJson(res, 200, {
-            data: {
-              threadIds: matchedByTitle,
-              indexedThreadCount: index.docsById.size,
-              mode,
-              fallback: 'title-only',
-            },
-          })
-          return
-        }
-
         if (mode === 'exact') {
           for (const [id, doc] of index.docsById.entries()) {
             if (isExactPhraseMatch(query, doc)) {
@@ -1550,21 +1476,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
         }
 
-        if ((mode === 'semantic' || mode === 'hybrid') && index.collection) {
-          try {
-            const semanticRows = index.collection.querySync({
-              fieldName: 'content_vec',
-              vector: toDenseVector(query),
-              topk: Math.max(limit * 3, 150),
-            })
-            for (const row of semanticRows) {
-              if (!row || typeof row.id !== 'string') continue
-              if (!index.docsById.has(row.id)) continue
-              const similarity = Math.max(0, 2 - row.score)
-              candidateScores.set(row.id, (candidateScores.get(row.id) ?? 0) + similarity)
+        if (mode === 'semantic' || mode === 'hybrid') {
+          for (const [id, doc] of index.docsById.entries()) {
+            const semanticScore = scoreSemanticInMemory(query, doc)
+            if (semanticScore > 0) {
+              candidateScores.set(id, (candidateScores.get(id) ?? 0) + semanticScore)
             }
-          } catch {
-            // Fall back to lexical ranking below.
           }
         }
 
@@ -1745,16 +1662,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   }
 
   middleware.dispose = () => {
-    if (threadSearchIndex?.collection) {
-      try {
-        threadSearchIndex.collection.closeSync()
-      } catch {
-        // ignore disposal errors
-      }
-    }
-    if (threadSearchIndex?.collectionPath) {
-      void rm(threadSearchIndex.collectionPath, { recursive: true, force: true })
-    }
     threadSearchIndex = null
     appServer.dispose()
   }
