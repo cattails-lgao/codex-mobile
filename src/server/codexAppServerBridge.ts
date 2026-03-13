@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
+import { readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -66,6 +66,8 @@ type ThreadSearchIndex = {
   collectionPath: string
 }
 
+type ThreadSearchMode = 'exact' | 'semantic' | 'hybrid'
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -110,23 +112,22 @@ function hashToken(token: string): number {
   return Math.abs(hash >>> 0) % 262144
 }
 
-function toSparseVector(value: string): Record<number, number> {
-  const counts = new Map<number, number>()
+function toDenseVector(value: string, dimensions = 512): number[] {
+  const vector = new Array<number>(dimensions).fill(0)
   for (const token of tokenizeText(value)) {
-    const key = hashToken(token)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
+    const key = hashToken(token) % dimensions
+    vector[key] += 1
   }
 
   let norm = 0
-  for (const count of counts.values()) {
-    norm += count * count
+  for (const value of vector) {
+    norm += value * value
   }
-  if (norm === 0) return {}
+  if (norm === 0) return vector
   const denom = Math.sqrt(norm)
 
-  const vector: Record<number, number> = {}
-  for (const [key, count] of counts.entries()) {
-    vector[key] = count / denom
+  for (let i = 0; i < vector.length; i += 1) {
+    vector[i] = vector[i] / denom
   }
   return vector
 }
@@ -177,6 +178,16 @@ function scoreLexicalMatch(query: string, doc: ThreadSearchDocument): number {
   if (doc.preview.toLowerCase().includes(q)) score += 2
   if (doc.messageText.toLowerCase().includes(q)) score += 2
   return score
+}
+
+function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return false
+  return (
+    doc.title.toLowerCase().includes(q) ||
+    doc.preview.toLowerCase().includes(q) ||
+    doc.messageText.toLowerCase().includes(q)
+  )
 }
 
 function scoreFileCandidate(path: string, query: string): number {
@@ -1215,17 +1226,21 @@ async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<Thre
   const docs = await loadAllThreadsForSearch(appServer)
   const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
 
-  const collectionPath = await mkdtemp(join(tmpdir(), 'codex-web-local-thread-search-'))
+  const collectionPath = join(
+    tmpdir(),
+    `codex-web-local-thread-search-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  )
   let collection: ThreadSearchIndex['collection'] = null
   try {
     const schema = new zvec.ZVecCollectionSchema({
-      name: 'thread_search',
+      name: 'threadsearch',
       vectors: {
         name: 'content_vec',
-        dataType: zvec.ZVecDataType.SPARSE_VECTOR_FP32,
+        dataType: zvec.ZVecDataType.VECTOR_FP32,
+        dimension: 512,
         indexParams: {
           indexType: zvec.ZVecIndexType.FLAT,
-          metricType: zvec.ZVecMetricType.IP,
+          metricType: zvec.ZVecMetricType.COSINE,
         },
       },
       fields: [
@@ -1236,7 +1251,7 @@ async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<Thre
     collection.insertSync(docs.map((doc) => ({
       id: doc.id,
       vectors: {
-        content_vec: toSparseVector(doc.searchableText),
+        content_vec: toDenseVector(doc.searchableText),
       },
       fields: {
         title: doc.title,
@@ -1496,35 +1511,51 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const query = typeof payload?.query === 'string' ? payload.query.trim() : ''
         const limitRaw = typeof payload?.limit === 'number' ? payload.limit : 200
         const limit = Math.max(1, Math.min(1000, Math.floor(limitRaw)))
+        const modeRaw = typeof payload?.mode === 'string' ? payload.mode : 'hybrid'
+        const mode: ThreadSearchMode =
+          modeRaw === 'exact' || modeRaw === 'semantic' || modeRaw === 'hybrid'
+            ? modeRaw
+            : 'hybrid'
         if (!query) {
-          setJson(res, 200, { data: { threadIds: [], indexedThreadCount: 0 } })
+          setJson(res, 200, { data: { threadIds: [], indexedThreadCount: 0, mode } })
           return
         }
 
         const index = await getThreadSearchIndex()
         const candidateScores = new Map<string, number>()
 
-        if (index.collection) {
+        if (mode === 'exact') {
+          for (const [id, doc] of index.docsById.entries()) {
+            if (isExactPhraseMatch(query, doc)) {
+              candidateScores.set(id, 1)
+            }
+          }
+        }
+
+        if ((mode === 'semantic' || mode === 'hybrid') && index.collection) {
           try {
             const semanticRows = index.collection.querySync({
               fieldName: 'content_vec',
-              vector: toSparseVector(query),
+              vector: toDenseVector(query),
               topk: Math.max(limit * 3, 150),
             })
             for (const row of semanticRows) {
               if (!row || typeof row.id !== 'string') continue
               if (!index.docsById.has(row.id)) continue
-              candidateScores.set(row.id, (candidateScores.get(row.id) ?? 0) + row.score)
+              const similarity = Math.max(0, 2 - row.score)
+              candidateScores.set(row.id, (candidateScores.get(row.id) ?? 0) + similarity)
             }
           } catch {
             // Fall back to lexical ranking below.
           }
         }
 
-        for (const [id, doc] of index.docsById.entries()) {
-          const lexicalScore = scoreLexicalMatch(query, doc)
-          if (lexicalScore > 0) {
-            candidateScores.set(id, (candidateScores.get(id) ?? 0) + lexicalScore)
+        if (mode === 'hybrid') {
+          for (const [id, doc] of index.docsById.entries()) {
+            const lexicalScore = scoreLexicalMatch(query, doc)
+            if (lexicalScore > 0) {
+              candidateScores.set(id, (candidateScores.get(id) ?? 0) + lexicalScore)
+            }
           }
         }
 
@@ -1533,7 +1564,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           .slice(0, limit)
           .map(([id]) => id)
 
-        setJson(res, 200, { data: { threadIds: rankedIds, indexedThreadCount: index.docsById.size } })
+        setJson(res, 200, { data: { threadIds: rankedIds, indexedThreadCount: index.docsById.size, mode } })
         return
       }
 

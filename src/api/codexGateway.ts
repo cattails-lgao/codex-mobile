@@ -40,6 +40,7 @@ export type ComposerFileSuggestion = {
 export type ThreadSearchResult = {
   threadIds: string[]
   indexedThreadCount: number
+  mode?: 'exact' | 'semantic' | 'hybrid'
 }
 
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
@@ -440,11 +441,15 @@ export async function searchComposerFiles(cwd: string, query: string, limit = 20
   return suggestions
 }
 
-export async function searchThreads(query: string, limit = 200): Promise<ThreadSearchResult> {
+export async function searchThreads(
+  query: string,
+  limit = 200,
+  mode: 'exact' | 'semantic' | 'hybrid' = 'hybrid',
+): Promise<ThreadSearchResult> {
   const response = await fetch('/codex-api/thread-search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, limit }),
+    body: JSON.stringify({ query, limit, mode }),
   })
   const payload = (await response.json()) as { data?: ThreadSearchResult; error?: string }
   if (!response.ok) {
