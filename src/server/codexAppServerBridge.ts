@@ -425,6 +425,32 @@ function buildHubEntry(e: SkillsTreeEntry): SkillHubEntry {
 }
 
 type InstalledSkillInfo = { name: string; path: string; enabled: boolean }
+type SyncedSkill = { owner: string; name: string; enabled: boolean }
+
+type SkillsSyncState = {
+  githubToken?: string
+  githubUsername?: string
+  repoOwner?: string
+  repoName?: string
+  installedOwners?: Record<string, string>
+}
+
+type GithubDeviceCodeResponse = {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  expires_in: number
+  interval: number
+}
+
+type GithubTokenResponse = {
+  access_token?: string
+  error?: string
+}
+
+const GITHUB_DEVICE_CLIENT_ID = 'Iv1.b507a08c87ecfe98'
+const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codex-skills-sync'
+const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
 
 async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
   const map = new Map<string, InstalledSkillInfo>()
@@ -441,6 +467,192 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
     }
   } catch {}
   return map
+}
+
+function getSkillsSyncStatePath(): string {
+  return join(getCodexHomeDir(), 'skills-sync.json')
+}
+
+async function readSkillsSyncState(): Promise<SkillsSyncState> {
+  try {
+    const raw = await readFile(getSkillsSyncStatePath(), 'utf8')
+    const parsed = JSON.parse(raw) as SkillsSyncState
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+async function writeSkillsSyncState(state: SkillsSyncState): Promise<void> {
+  await writeFile(getSkillsSyncStatePath(), JSON.stringify(state), 'utf8')
+}
+
+async function getGithubJson<T>(url: string, token: string, method = 'GET', body?: unknown): Promise<T> {
+  const resp = await fetch(url, {
+    method,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'codex-web-local',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`GitHub API ${method} ${url} failed (${resp.status}): ${text}`)
+  }
+  return await resp.json() as T
+}
+
+async function startGithubDeviceLogin(): Promise<GithubDeviceCodeResponse> {
+  const resp = await fetch('https://github.com/login/device/code', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'codex-web-local',
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_DEVICE_CLIENT_ID,
+      scope: 'repo read:user',
+    }),
+  })
+  if (!resp.ok) {
+    throw new Error(`GitHub device flow init failed (${resp.status})`)
+  }
+  return await resp.json() as GithubDeviceCodeResponse
+}
+
+async function completeGithubDeviceLogin(deviceCode: string): Promise<{ token: string | null; error: string | null }> {
+  const resp = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'codex-web-local',
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_DEVICE_CLIENT_ID,
+      device_code: deviceCode,
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+    }),
+  })
+  if (!resp.ok) {
+    throw new Error(`GitHub token exchange failed (${resp.status})`)
+  }
+  const payload = await resp.json() as GithubTokenResponse
+  if (!payload.access_token) return { token: null, error: payload.error || 'unknown_error' }
+  return { token: payload.access_token, error: null }
+}
+
+async function resolveGithubUsername(token: string): Promise<string> {
+  const user = await getGithubJson<{ login: string }>('https://api.github.com/user', token)
+  return user.login
+}
+
+async function ensureSkillsSyncRepo(token: string, repoOwner: string, repoName: string): Promise<void> {
+  const existsResp = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'codex-web-local',
+    },
+  })
+  if (existsResp.ok) return
+  if (existsResp.status !== 404) {
+    throw new Error(`Failed to check repo existence (${existsResp.status})`)
+  }
+  await getGithubJson(
+    'https://api.github.com/user/repos',
+    token,
+    'POST',
+    { name: repoName, private: true, auto_init: true, description: 'Codex skills sync state' },
+  )
+}
+
+async function readRemoteSkillsManifest(token: string, repoOwner: string, repoName: string): Promise<SyncedSkill[]> {
+  const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${SKILLS_SYNC_MANIFEST_PATH}`
+  const resp = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'codex-web-local',
+    },
+  })
+  if (resp.status === 404) return []
+  if (!resp.ok) throw new Error(`Failed to read remote manifest (${resp.status})`)
+  const payload = await resp.json() as { content?: string }
+  const content = payload.content ? Buffer.from(payload.content.replace(/\n/g, ''), 'base64').toString('utf8') : '[]'
+  const parsed = JSON.parse(content) as unknown
+  if (!Array.isArray(parsed)) return []
+  const skills: SyncedSkill[] = []
+  for (const row of parsed) {
+    const item = asRecord(row)
+    const owner = typeof item?.owner === 'string' ? item.owner : ''
+    const name = typeof item?.name === 'string' ? item.name : ''
+    if (!owner || !name) continue
+    skills.push({ owner, name, enabled: item?.enabled !== false })
+  }
+  return skills
+}
+
+async function writeRemoteSkillsManifest(
+  token: string,
+  repoOwner: string,
+  repoName: string,
+  skills: SyncedSkill[],
+): Promise<void> {
+  const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${SKILLS_SYNC_MANIFEST_PATH}`
+  let sha = ''
+  const existing = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'codex-web-local',
+    },
+  })
+  if (existing.ok) {
+    const payload = await existing.json() as { sha?: string }
+    sha = payload.sha ?? ''
+  }
+  const content = Buffer.from(JSON.stringify(skills, null, 2), 'utf8').toString('base64')
+  await getGithubJson(url, token, 'PUT', {
+    message: 'Update synced skills manifest',
+    content,
+    ...(sha ? { sha } : {}),
+  })
+}
+
+async function collectLocalSyncedSkills(appServer: AppServerProcess): Promise<SyncedSkill[]> {
+  const state = await readSkillsSyncState()
+  const owners = state.installedOwners ?? {}
+  const skills = (await appServer.rpc('skills/list', {})) as { data?: Array<{ skills?: Array<{ name?: string; enabled?: boolean; scope?: string }> }> }
+  const seen = new Set<string>()
+  const synced: SyncedSkill[] = []
+  for (const entry of skills.data ?? []) {
+    for (const skill of entry.skills ?? []) {
+      const name = typeof skill.name === 'string' ? skill.name : ''
+      if (!name || seen.has(name)) continue
+      seen.add(name)
+      const owner = owners[name]
+      if (!owner) continue
+      synced.push({ owner, name, enabled: skill.enabled !== false })
+    }
+  }
+  synced.sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`))
+  return synced
+}
+
+async function autoPushSyncedSkills(appServer: AppServerProcess): Promise<void> {
+  const state = await readSkillsSyncState()
+  if (!state.githubToken || !state.repoOwner || !state.repoName) return
+  const local = await collectLocalSyncedSkills(appServer)
+  await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
 }
 
 async function searchSkillsHub(
@@ -1629,6 +1841,126 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/status') {
+        const state = await readSkillsSyncState()
+        setJson(res, 200, {
+          data: {
+            loggedIn: Boolean(state.githubToken),
+            githubUsername: state.githubUsername ?? '',
+            repoOwner: state.repoOwner ?? '',
+            repoName: state.repoName ?? '',
+            configured: Boolean(state.githubToken && state.repoOwner && state.repoName),
+          },
+        })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/github/start-login') {
+        try {
+          const started = await startGithubDeviceLogin()
+          setJson(res, 200, { data: started })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to start GitHub login') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/github/complete-login') {
+        try {
+          const payload = asRecord(await readJsonBody(req))
+          const deviceCode = typeof payload?.deviceCode === 'string' ? payload.deviceCode : ''
+          if (!deviceCode) {
+            setJson(res, 400, { error: 'Missing deviceCode' })
+            return
+          }
+          const result = await completeGithubDeviceLogin(deviceCode)
+          if (!result.token) {
+            setJson(res, 200, { ok: false, pending: result.error === 'authorization_pending', error: result.error || 'login_failed' })
+            return
+          }
+          const token = result.token
+          const username = await resolveGithubUsername(token)
+          const state = await readSkillsSyncState()
+          await writeSkillsSyncState({ ...state, githubToken: token, githubUsername: username })
+          setJson(res, 200, { ok: true, data: { githubUsername: username } })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to complete GitHub login') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/setup') {
+        try {
+          const payload = asRecord(await readJsonBody(req))
+          const requestedRepoName = typeof payload?.repoName === 'string' ? payload.repoName.trim() : ''
+          const state = await readSkillsSyncState()
+          if (!state.githubToken) {
+            setJson(res, 401, { error: 'Login with GitHub first' })
+            return
+          }
+          const username = state.githubUsername || await resolveGithubUsername(state.githubToken)
+          const repoName = requestedRepoName || state.repoName || DEFAULT_SKILLS_SYNC_REPO_NAME
+          await ensureSkillsSyncRepo(state.githubToken, username, repoName)
+          await writeSkillsSyncState({ ...state, githubUsername: username, repoOwner: username, repoName })
+          await autoPushSyncedSkills(appServer)
+          setJson(res, 200, { ok: true, data: { repoOwner: username, repoName } })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to setup skills sync repo') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/push') {
+        try {
+          await autoPushSyncedSkills(appServer)
+          setJson(res, 200, { ok: true })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to push synced skills') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/pull') {
+        try {
+          const state = await readSkillsSyncState()
+          if (!state.githubToken || !state.repoOwner || !state.repoName) {
+            setJson(res, 400, { error: 'Skills sync is not configured yet' })
+            return
+          }
+          const remote = await readRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName)
+          const localDir = await detectUserSkillsDir(appServer)
+          const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+          const localSkills = await scanInstalledSkillsFromDisk()
+          for (const skill of remote) {
+            if (!localSkills.has(skill.name)) {
+              await runCommand('python3', [
+                installerScript,
+                '--repo', 'openclaw/skills',
+                '--path', `skills/${skill.owner}/${skill.name}`,
+                '--dest', localDir,
+                '--method', 'git',
+              ])
+            }
+            const skillPath = join(localDir, skill.name)
+            await appServer.rpc('skills/config/write', { path: skillPath, enabled: skill.enabled })
+          }
+          const remoteNames = new Set(remote.map((row) => row.name))
+          for (const [name, localInfo] of localSkills.entries()) {
+            if (!remoteNames.has(name)) {
+              await rm(localInfo.path.replace(/\/SKILL\.md$/, ''), { recursive: true, force: true })
+            }
+          }
+          const nextOwners: Record<string, string> = {}
+          for (const item of remote) nextOwners[item.name] = item.owner
+          await writeSkillsSyncState({ ...state, installedOwners: nextOwners })
+          try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+          setJson(res, 200, { ok: true, data: { synced: remote.length } })
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to pull synced skills') })
+        }
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub/readme') {
         try {
           const owner = url.searchParams.get('owner') || ''
@@ -1669,6 +2001,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           ])
           const skillDir = join(installDest, name)
           await ensureInstalledSkillIsValid(appServer, skillDir)
+          const syncState = await readSkillsSyncState()
+          const nextOwners = { ...(syncState.installedOwners ?? {}), [name]: owner }
+          await writeSkillsSyncState({ ...syncState, installedOwners: nextOwners })
+          await autoPushSyncedSkills(appServer)
           setJson(res, 200, { ok: true, path: skillDir })
         } catch (error) {
           setJson(res, 502, { error: getErrorMessage(error, 'Failed to install skill') })
@@ -1687,6 +2023,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
           await rm(target, { recursive: true, force: true })
+          if (name) {
+            const syncState = await readSkillsSyncState()
+            const nextOwners = { ...(syncState.installedOwners ?? {}) }
+            delete nextOwners[name]
+            await writeSkillsSyncState({ ...syncState, installedOwners: nextOwners })
+          }
+          await autoPushSyncedSkills(appServer)
           try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
           setJson(res, 200, { ok: true, deletedPath: target })
         } catch (error) {

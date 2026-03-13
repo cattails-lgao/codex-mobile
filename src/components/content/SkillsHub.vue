@@ -23,6 +23,25 @@
       </button>
     </div>
 
+    <div class="skills-sync-panel">
+      <div class="skills-sync-header">
+        <strong>Skills Sync (GitHub)</strong>
+        <span v-if="syncStatus.configured" class="skills-sync-badge">Connected: {{ syncStatus.repoOwner }}/{{ syncStatus.repoName }}</span>
+        <span v-else-if="syncStatus.loggedIn" class="skills-sync-badge">Logged in as {{ syncStatus.githubUsername }}</span>
+        <span v-else class="skills-sync-badge">Not connected</span>
+      </div>
+      <div v-if="deviceLogin" class="skills-sync-device">
+        <span>Open <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">GitHub device login</a> and enter code:</span>
+        <code>{{ deviceLogin.user_code }}</code>
+      </div>
+      <div class="skills-sync-actions">
+        <button class="skills-hub-sort" type="button" @click="startGithubLogin">Login with GitHub</button>
+        <button class="skills-hub-sort" type="button" @click="setupSyncRepo" :disabled="!syncStatus.loggedIn">Create Private Repo</button>
+        <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="!syncStatus.configured">Pull</button>
+        <button class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured">Push</button>
+      </div>
+    </div>
+
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
 
     <div v-if="filteredInstalled.length > 0" class="skills-hub-section">
@@ -95,6 +114,14 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const actionSkillKey = ref('')
 const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
+const deviceLogin = ref<{ device_code: string; user_code: string; verification_uri: string } | null>(null)
+const syncStatus = ref({
+  loggedIn: false,
+  githubUsername: '',
+  repoOwner: '',
+  repoName: '',
+  configured: false,
+})
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -281,6 +308,7 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
       body: JSON.stringify({ method: 'skills/config/write', params: { path: skill.path, enabled } }),
     })
     if (!resp.ok) throw new Error('Failed to update skill')
+    await fetch('/codex-api/skills-sync/push', { method: 'POST' })
     showToast(`${skill.displayName || skill.name} skill ${enabled ? 'enabled' : 'disabled'}`)
     await fetchSkills(query.value)
   } catch (e) {
@@ -288,8 +316,89 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
   }
 }
 
+async function loadSyncStatus(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/status')
+    if (!resp.ok) return
+    const payload = (await resp.json()) as { data?: typeof syncStatus.value }
+    if (payload.data) syncStatus.value = payload.data
+  } catch {
+    // best effort
+  }
+}
+
+async function startGithubLogin(): Promise<void> {
+  try {
+    const startResp = await fetch('/codex-api/skills-sync/github/start-login', { method: 'POST' })
+    const startData = (await startResp.json()) as { data?: { device_code: string; user_code: string; verification_uri: string; interval?: number } }
+    if (!startResp.ok || !startData.data) throw new Error('Failed to start GitHub login')
+    deviceLogin.value = startData.data
+    const maxAttempts = 30
+    const waitMs = Math.max((startData.data.interval ?? 5) * 1000, 3000)
+    let loggedIn = false
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+      const completeResp = await fetch('/codex-api/skills-sync/github/complete-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceCode: startData.data.device_code }),
+      })
+      const completeData = (await completeResp.json()) as { ok?: boolean; pending?: boolean; error?: string }
+      if (!completeResp.ok) throw new Error(completeData.error || 'Failed to complete GitHub login')
+      if (completeData.ok) {
+        loggedIn = true
+        break
+      }
+      if (!completeData.pending) throw new Error(completeData.error || 'Failed to complete GitHub login')
+    }
+    if (!loggedIn) throw new Error('GitHub login timed out. Please retry.')
+    deviceLogin.value = null
+    await loadSyncStatus()
+    showToast('GitHub login successful')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed GitHub login', 'error')
+  }
+}
+
+async function setupSyncRepo(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/setup', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to setup sync repo')
+    await loadSyncStatus()
+    showToast('Private sync repo is ready')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed to setup sync repo', 'error')
+  }
+}
+
+async function pullSkillsSync(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/pull', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to pull synced skills')
+    await fetchSkills(query.value)
+    emit('skills-changed')
+    showToast('Pulled skills from private sync repo')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed to pull sync', 'error')
+  }
+}
+
+async function pushSkillsSync(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/push', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to push synced skills')
+    showToast('Pushed skills to private sync repo')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed to push sync', 'error')
+  }
+}
+
 onMounted(() => {
   void fetchSkills('')
+  void loadSyncStatus()
 })
 </script>
 
@@ -334,6 +443,26 @@ onMounted(() => {
 
 .skills-hub-sort {
   @apply shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer;
+}
+
+.skills-sync-panel {
+  @apply rounded-xl border border-zinc-200 bg-zinc-50 p-3 flex flex-col gap-2;
+}
+
+.skills-sync-header {
+  @apply flex flex-wrap items-center gap-2 text-sm text-zinc-700;
+}
+
+.skills-sync-badge {
+  @apply text-xs rounded-md border border-zinc-300 bg-white px-2 py-0.5;
+}
+
+.skills-sync-device {
+  @apply text-xs text-zinc-600 flex items-center gap-2 flex-wrap;
+}
+
+.skills-sync-actions {
+  @apply flex flex-wrap gap-2;
 }
 
 .skills-hub-toast {
