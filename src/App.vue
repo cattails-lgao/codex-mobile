@@ -128,6 +128,10 @@
                   add-placeholder="Project name or absolute path"
                   :disabled="false" @update:model-value="onSelectNewThreadFolder"
                   @add="onAddNewProject" />
+                <ComposerRuntimeDropdown
+                  class="new-thread-runtime-dropdown"
+                  v-model="newThreadRuntime"
+                />
               </div>
 
                 <ThreadComposer :active-thread-id="composerThreadContextId"
@@ -191,6 +195,7 @@ import ThreadConversation from './components/content/ThreadConversation.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
+import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SkillsHub from './components/content/SkillsHub.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
@@ -198,7 +203,7 @@ import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { getHomeDirectory, getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
+import { createWorktree, getHomeDirectory, getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -255,6 +260,7 @@ const { isMobile } = useMobile()
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
+const newThreadRuntime = ref<'local' | 'worktree'>('local')
 const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
@@ -760,7 +766,13 @@ async function submitFirstMessageForNewThread(
   fileAttachments: Array<{ label: string; path: string; fsPath: string }> = [],
 ): Promise<void> {
   try {
-    const threadId = await sendMessageToNewThread(text, newThreadCwd.value, imageUrls, skills, fileAttachments)
+    let targetCwd = newThreadCwd.value
+    if (newThreadRuntime.value === 'worktree') {
+      const created = await createWorktree(newThreadCwd.value)
+      targetCwd = created.cwd
+      newThreadCwd.value = created.cwd
+    }
+    const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
   } catch {
@@ -879,6 +891,10 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-chevron) {
   @apply h-4 w-4 sm:h-5 sm:w-5 mt-0;
+}
+
+.new-thread-runtime-dropdown {
+  @apply mt-3;
 }
 
 .sidebar-settings-area {

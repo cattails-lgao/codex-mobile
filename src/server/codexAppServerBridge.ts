@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 
 type JsonRpcCall = {
@@ -146,6 +146,30 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
     proc.on('close', (code) => {
       if (code === 0) {
         resolve()
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      const suffix = details.length > 0 ? `: ${details}` : ''
+      reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
+    })
+  })
+}
+
+async function runCommandCapture(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+  return await new Promise<string>((resolveOutput, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolveOutput(stdout.trim())
         return
       }
       const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
@@ -1133,6 +1157,52 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/home-directory') {
         setJson(res, 200, { data: { path: homedir() } })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/create') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawSourceCwd = typeof payload?.sourceCwd === 'string' ? payload.sourceCwd.trim() : ''
+        if (!rawSourceCwd) {
+          setJson(res, 400, { error: 'Missing sourceCwd' })
+          return
+        }
+
+        const sourceCwd = isAbsolute(rawSourceCwd) ? rawSourceCwd : resolve(rawSourceCwd)
+        try {
+          const sourceInfo = await stat(sourceCwd)
+          if (!sourceInfo.isDirectory()) {
+            setJson(res, 400, { error: 'sourceCwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'sourceCwd does not exist' })
+          return
+        }
+
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          const repoNameRaw = basename(gitRoot)
+          const repoName = repoNameRaw.replace(/[^a-zA-Z0-9._-]/g, '-') || 'repo'
+          const timestampPart = Date.now().toString(36)
+          const randomPart = Math.random().toString(36).slice(2, 8)
+          const worktreeParent = join(getCodexHomeDir(), 'worktrees', repoName)
+          const worktreeCwd = join(worktreeParent, `${timestampPart}-${randomPart}`)
+          const branch = `codex/${repoName}-${timestampPart}-${randomPart}`
+
+          await mkdir(worktreeParent, { recursive: true })
+          await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+
+          setJson(res, 200, {
+            data: {
+              cwd: worktreeCwd,
+              branch,
+              gitRoot,
+            },
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to create worktree') })
+        }
         return
       }
 
