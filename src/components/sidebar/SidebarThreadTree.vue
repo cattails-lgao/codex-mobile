@@ -368,6 +368,7 @@ const props = defineProps<{
   selectedThreadId: string
   isLoading: boolean
   searchQuery: string
+  threadSearchTextById: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -497,9 +498,11 @@ const isSearchActive = computed(() => normalizedSearchQuery.value.length > 0)
 function threadMatchesSearch(thread: UiThread): boolean {
   if (!isSearchActive.value) return true
   const q = normalizedSearchQuery.value
+  const searchText = (props.threadSearchTextById[thread.id] ?? '').toLowerCase()
   return (
     thread.title.toLowerCase().includes(q) ||
-    thread.preview.toLowerCase().includes(q)
+    thread.preview.toLowerCase().includes(q) ||
+    searchText.includes(q)
   )
 }
 

@@ -61,6 +61,7 @@
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
+            :thread-search-text-by-id="threadMessageSearchTextById"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @rename-thread="onRenameThread"
@@ -217,6 +218,7 @@ const {
   selectedReasoningEffort,
   installedSkills,
   messages,
+  threadMessageSearchTextById,
   isLoadingThreads,
   isLoadingMessages,
   isSendingMessage,
