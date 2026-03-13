@@ -1,10 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 
 type JsonRpcCall = {
@@ -146,6 +147,56 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
     proc.on('close', (code) => {
       if (code === 0) {
         resolve()
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      const suffix = details.length > 0 ? `: ${details}` : ''
+      reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
+    })
+  })
+}
+
+function isMissingHeadError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes("not a valid object name: 'head'") || message.includes('not a valid object name: head')
+}
+
+function isNotGitRepositoryError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('not a git repository') || message.includes('fatal: not a git repository')
+}
+
+async function ensureRepoHasInitialCommit(repoRoot: string): Promise<void> {
+  const agentsPath = join(repoRoot, 'AGENTS.md')
+  try {
+    await stat(agentsPath)
+  } catch {
+    await writeFile(agentsPath, '', 'utf8')
+  }
+
+  await runCommand('git', ['add', 'AGENTS.md'], { cwd: repoRoot })
+  await runCommand(
+    'git',
+    ['-c', 'user.name=Codex', '-c', 'user.email=codex@local', 'commit', '-m', 'Initialize repository for worktree support'],
+    { cwd: repoRoot },
+  )
+}
+
+async function runCommandCapture(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+  return await new Promise<string>((resolveOutput, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolveOutput(stdout.trim())
         return
       }
       const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
@@ -1133,6 +1184,84 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/home-directory') {
         setJson(res, 200, { data: { path: homedir() } })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/create') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawSourceCwd = typeof payload?.sourceCwd === 'string' ? payload.sourceCwd.trim() : ''
+        if (!rawSourceCwd) {
+          setJson(res, 400, { error: 'Missing sourceCwd' })
+          return
+        }
+
+        const sourceCwd = isAbsolute(rawSourceCwd) ? rawSourceCwd : resolve(rawSourceCwd)
+        try {
+          const sourceInfo = await stat(sourceCwd)
+          if (!sourceInfo.isDirectory()) {
+            setJson(res, 400, { error: 'sourceCwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'sourceCwd does not exist' })
+          return
+        }
+
+        try {
+          let gitRoot = ''
+          try {
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          } catch (error) {
+            if (!isNotGitRepositoryError(error)) throw error
+            await runCommand('git', ['init'], { cwd: sourceCwd })
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          }
+          const repoName = basename(gitRoot) || 'repo'
+          const worktreesRoot = join(getCodexHomeDir(), 'worktrees')
+          await mkdir(worktreesRoot, { recursive: true })
+
+          // Match Codex desktop layout so project grouping resolves to repo name:
+          // ~/.codex/worktrees/<id>/<repoName>
+          let worktreeId = ''
+          let worktreeParent = ''
+          let worktreeCwd = ''
+          for (let attempt = 0; attempt < 12; attempt += 1) {
+            const candidate = randomBytes(2).toString('hex')
+            const parent = join(worktreesRoot, candidate)
+            try {
+              await stat(parent)
+              continue
+            } catch {
+              worktreeId = candidate
+              worktreeParent = parent
+              worktreeCwd = join(parent, repoName)
+              break
+            }
+          }
+          if (!worktreeId || !worktreeParent || !worktreeCwd) {
+            throw new Error('Failed to allocate a unique worktree id')
+          }
+          const branch = `codex/${worktreeId}`
+
+          await mkdir(worktreeParent, { recursive: true })
+          try {
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          } catch (error) {
+            if (!isMissingHeadError(error)) throw error
+            await ensureRepoHasInitialCommit(gitRoot)
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          }
+
+          setJson(res, 200, {
+            data: {
+              cwd: worktreeCwd,
+              branch,
+              gitRoot,
+            },
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to create worktree') })
+        }
         return
       }
 

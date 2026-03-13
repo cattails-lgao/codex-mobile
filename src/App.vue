@@ -128,6 +128,21 @@
                   add-placeholder="Project name or absolute path"
                   :disabled="false" @update:model-value="onSelectNewThreadFolder"
                   @add="onAddNewProject" />
+                <ComposerRuntimeDropdown
+                  class="new-thread-runtime-dropdown"
+                  v-model="newThreadRuntime"
+                />
+                <div
+                  v-if="worktreeInitStatus.phase !== 'idle'"
+                  class="worktree-init-status"
+                  :class="{
+                    'is-running': worktreeInitStatus.phase === 'running',
+                    'is-error': worktreeInitStatus.phase === 'error',
+                  }"
+                >
+                  <strong class="worktree-init-status-title">{{ worktreeInitStatus.title }}</strong>
+                  <span class="worktree-init-status-message">{{ worktreeInitStatus.message }}</span>
+                </div>
               </div>
 
                 <ThreadComposer :active-thread-id="composerThreadContextId"
@@ -191,6 +206,7 @@ import ThreadConversation from './components/content/ThreadConversation.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
+import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SkillsHub from './components/content/SkillsHub.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
@@ -198,7 +214,7 @@ import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { getHomeDirectory, getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
+import { createWorktree, getHomeDirectory, getProjectRootSuggestion, getWorkspaceRootsState, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -255,6 +271,13 @@ const { isMobile } = useMobile()
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
+const newThreadRuntime = ref<'local' | 'worktree'>('local')
+const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
+const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
+  phase: 'idle',
+  title: '',
+  message: '',
+})
 const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
@@ -315,6 +338,16 @@ const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
 
+  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+    const cwd = cwdRaw.trim()
+    if (!cwd || seenCwds.has(cwd)) continue
+    seenCwds.add(cwd)
+    options.push({
+      value: cwd,
+      label: workspaceRootOptionsState.value.labels[cwd] || getPathLeafName(cwd),
+    })
+  }
+
   for (const group of projectGroups.value) {
     const cwd = group.threads[0]?.cwd?.trim() ?? ''
     if (!cwd || seenCwds.has(cwd)) continue
@@ -343,6 +376,7 @@ onMounted(() => {
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
   void loadHomeDirectory()
+  void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
 })
 
@@ -484,6 +518,7 @@ async function onAddNewProject(rawInput: string): Promise<void> {
     if (normalizedPath) {
       newThreadCwd.value = normalizedPath
       pinProjectToTop(getPathLeafName(normalizedPath))
+      void loadWorkspaceRootOptionsState()
       void refreshDefaultProjectName()
     }
   } catch {
@@ -541,6 +576,18 @@ async function loadHomeDirectory(): Promise<void> {
     homeDirectory.value = await getHomeDirectory()
   } catch {
     homeDirectory.value = ''
+  }
+}
+
+async function loadWorkspaceRootOptionsState(): Promise<void> {
+  try {
+    const state = await getWorkspaceRootsState()
+    workspaceRootOptionsState.value = {
+      order: [...state.order],
+      labels: { ...state.labels },
+    }
+  } catch {
+    workspaceRootOptionsState.value = { order: [], labels: {} }
   }
 }
 
@@ -743,7 +790,33 @@ watch(
 watch(
   () => newThreadCwd.value,
   () => {
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
     void refreshDefaultProjectName()
+  },
+)
+
+watch(
+  () => newThreadRuntime.value,
+  (runtime) => {
+    if (runtime === 'local') {
+      worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+    }
+  },
+)
+
+watch(
+  () => route.name,
+  (name) => {
+    if (name !== 'home') {
+      worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+    }
+  },
+)
+
+watch(
+  () => selectedThreadId.value,
+  () => {
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
   },
 )
 
@@ -760,7 +833,29 @@ async function submitFirstMessageForNewThread(
   fileAttachments: Array<{ label: string; path: string; fsPath: string }> = [],
 ): Promise<void> {
   try {
-    const threadId = await sendMessageToNewThread(text, newThreadCwd.value, imageUrls, skills, fileAttachments)
+    worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+    let targetCwd = newThreadCwd.value
+    if (newThreadRuntime.value === 'worktree') {
+      worktreeInitStatus.value = {
+        phase: 'running',
+        title: 'Creating worktree',
+        message: 'Creating a worktree and running setup.',
+      }
+      try {
+        const created = await createWorktree(newThreadCwd.value)
+        targetCwd = created.cwd
+        newThreadCwd.value = created.cwd
+        worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+      } catch {
+        worktreeInitStatus.value = {
+          phase: 'error',
+          title: 'Worktree setup failed',
+          message: 'Unable to create worktree. Try again or switch to Local project.',
+        }
+        return
+      }
+    }
+    const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
   } catch {
@@ -879,6 +974,30 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-chevron) {
   @apply h-4 w-4 sm:h-5 sm:w-5 mt-0;
+}
+
+.new-thread-runtime-dropdown {
+  @apply mt-3;
+}
+
+.worktree-init-status {
+  @apply mt-3 flex w-full max-w-xl flex-col gap-1 rounded-xl border px-3 py-2 text-sm;
+}
+
+.worktree-init-status.is-running {
+  @apply border-zinc-300 bg-zinc-50 text-zinc-700;
+}
+
+.worktree-init-status.is-error {
+  @apply border-rose-300 bg-rose-50 text-rose-800;
+}
+
+.worktree-init-status-title {
+  @apply font-medium;
+}
+
+.worktree-init-status-message {
+  @apply break-all;
 }
 
 .sidebar-settings-area {

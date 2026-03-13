@@ -37,6 +37,12 @@ export type ComposerFileSuggestion = {
   path: string
 }
 
+export type WorktreeCreateResult = {
+  cwd: string
+  branch: string
+  gitRoot: string
+}
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -322,6 +328,19 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
       ? (payload as Record<string, unknown>)
       : {}
   return normalizeWorkspaceRootsState(envelope.data)
+}
+
+export async function createWorktree(sourceCwd: string): Promise<WorktreeCreateResult> {
+  const response = await fetch('/codex-api/worktree/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceCwd }),
+  })
+  const payload = (await response.json()) as { data?: WorktreeCreateResult; error?: string }
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error || 'Failed to create worktree')
+  }
+  return payload.data
 }
 
 export async function getHomeDirectory(): Promise<string> {
