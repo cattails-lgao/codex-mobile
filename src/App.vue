@@ -203,7 +203,7 @@ import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
-import { createWorktree, getHomeDirectory, getProjectRootSuggestion, openProjectRoot } from './api/codexGateway'
+import { createWorktree, getHomeDirectory, getProjectRootSuggestion, getWorkspaceRootsState, openProjectRoot } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -261,6 +261,7 @@ const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
+const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
 const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
@@ -321,6 +322,16 @@ const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
 
+  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+    const cwd = cwdRaw.trim()
+    if (!cwd || seenCwds.has(cwd)) continue
+    seenCwds.add(cwd)
+    options.push({
+      value: cwd,
+      label: workspaceRootOptionsState.value.labels[cwd] || getPathLeafName(cwd),
+    })
+  }
+
   for (const group of projectGroups.value) {
     const cwd = group.threads[0]?.cwd?.trim() ?? ''
     if (!cwd || seenCwds.has(cwd)) continue
@@ -349,6 +360,7 @@ onMounted(() => {
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
   void loadHomeDirectory()
+  void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
 })
 
@@ -490,6 +502,7 @@ async function onAddNewProject(rawInput: string): Promise<void> {
     if (normalizedPath) {
       newThreadCwd.value = normalizedPath
       pinProjectToTop(getPathLeafName(normalizedPath))
+      void loadWorkspaceRootOptionsState()
       void refreshDefaultProjectName()
     }
   } catch {
@@ -547,6 +560,18 @@ async function loadHomeDirectory(): Promise<void> {
     homeDirectory.value = await getHomeDirectory()
   } catch {
     homeDirectory.value = ''
+  }
+}
+
+async function loadWorkspaceRootOptionsState(): Promise<void> {
+  try {
+    const state = await getWorkspaceRootsState()
+    workspaceRootOptionsState.value = {
+      order: [...state.order],
+      labels: { ...state.labels },
+    }
+  } catch {
+    workspaceRootOptionsState.value = { order: [], labels: {} }
   }
 }
 
@@ -768,9 +793,14 @@ async function submitFirstMessageForNewThread(
   try {
     let targetCwd = newThreadCwd.value
     if (newThreadRuntime.value === 'worktree') {
-      const created = await createWorktree(newThreadCwd.value)
-      targetCwd = created.cwd
-      newThreadCwd.value = created.cwd
+      try {
+        const created = await createWorktree(newThreadCwd.value)
+        targetCwd = created.cwd
+        newThreadCwd.value = created.cwd
+      } catch {
+        // Parity fallback for worktree setup failures: continue in local project.
+        targetCwd = newThreadCwd.value
+      }
     }
     const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return

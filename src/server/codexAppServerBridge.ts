@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -1184,11 +1185,31 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
           const repoNameRaw = basename(gitRoot)
           const repoName = repoNameRaw.replace(/[^a-zA-Z0-9._-]/g, '-') || 'repo'
-          const timestampPart = Date.now().toString(36)
-          const randomPart = Math.random().toString(36).slice(2, 8)
-          const worktreeParent = join(getCodexHomeDir(), 'worktrees', repoName)
-          const worktreeCwd = join(worktreeParent, `${timestampPart}-${randomPart}`)
-          const branch = `codex/${repoName}-${timestampPart}-${randomPart}`
+          const worktreesRoot = join(getCodexHomeDir(), 'worktrees')
+          await mkdir(worktreesRoot, { recursive: true })
+
+          // Match Codex desktop layout so project grouping resolves to repo name:
+          // ~/.codex/worktrees/<id>/<repoName>
+          let worktreeId = ''
+          let worktreeParent = ''
+          let worktreeCwd = ''
+          for (let attempt = 0; attempt < 12; attempt += 1) {
+            const candidate = randomBytes(2).toString('hex')
+            const parent = join(worktreesRoot, candidate)
+            try {
+              await stat(parent)
+              continue
+            } catch {
+              worktreeId = candidate
+              worktreeParent = parent
+              worktreeCwd = join(parent, repoName)
+              break
+            }
+          }
+          if (!worktreeId || !worktreeParent || !worktreeCwd) {
+            throw new Error('Failed to allocate a unique worktree id')
+          }
+          const branch = `codex/${worktreeId}`
 
           await mkdir(worktreeParent, { recursive: true })
           await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
