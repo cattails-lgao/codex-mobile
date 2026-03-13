@@ -451,6 +451,9 @@ type GithubTokenResponse = {
 const GITHUB_DEVICE_CLIENT_ID = 'Iv1.b507a08c87ecfe98'
 const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codex-skills-sync'
 const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
+const GITHUB_WEB_OAUTH_CLIENT_ID = process.env.GITHUB_OAUTH_CLIENT_ID?.trim() || ''
+const GITHUB_WEB_OAUTH_CLIENT_SECRET = process.env.GITHUB_OAUTH_CLIENT_SECRET?.trim() || ''
+const githubOauthStateCache = new Map<string, number>()
 
 async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
   const map = new Map<string, InstalledSkillInfo>()
@@ -545,6 +548,75 @@ async function completeGithubDeviceLogin(deviceCode: string): Promise<{ token: s
   const payload = await resp.json() as GithubTokenResponse
   if (!payload.access_token) return { token: null, error: payload.error || 'unknown_error' }
   return { token: payload.access_token, error: null }
+}
+
+function cleanupGithubOauthStates(): void {
+  const now = Date.now()
+  for (const [state, expiresAt] of githubOauthStateCache.entries()) {
+    if (expiresAt <= now) githubOauthStateCache.delete(state)
+  }
+}
+
+function createGithubOauthState(): string {
+  cleanupGithubOauthStates()
+  const state = randomBytes(24).toString('hex')
+  githubOauthStateCache.set(state, Date.now() + 10 * 60 * 1000)
+  return state
+}
+
+function consumeGithubOauthState(state: string): boolean {
+  cleanupGithubOauthStates()
+  const expiresAt = githubOauthStateCache.get(state)
+  if (!expiresAt) return false
+  githubOauthStateCache.delete(state)
+  return expiresAt > Date.now()
+}
+
+function resolveBaseUrl(req: IncomingMessage): string {
+  const host = req.headers.host?.trim() || '127.0.0.1:4173'
+  const protoHeader = req.headers['x-forwarded-proto']
+  const proto = typeof protoHeader === 'string' && protoHeader.length > 0
+    ? protoHeader.split(',')[0].trim()
+    : 'http'
+  return `${proto}://${host}`
+}
+
+function htmlEscape(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] ?? char))
+}
+
+async function exchangeGithubWebOauthCode(code: string, redirectUri: string): Promise<string> {
+  if (!GITHUB_WEB_OAUTH_CLIENT_ID || !GITHUB_WEB_OAUTH_CLIENT_SECRET) {
+    throw new Error('Set GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET to use web auth')
+  }
+  const resp = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'codex-web-local',
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_WEB_OAUTH_CLIENT_ID,
+      client_secret: GITHUB_WEB_OAUTH_CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri,
+    }),
+  })
+  if (!resp.ok) {
+    throw new Error(`GitHub web OAuth token exchange failed (${resp.status})`)
+  }
+  const payload = await resp.json() as GithubTokenResponse
+  if (!payload.access_token) {
+    throw new Error(payload.error || 'No access token returned')
+  }
+  return payload.access_token
 }
 
 async function resolveGithubUsername(token: string): Promise<string> {
@@ -1850,6 +1922,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             repoOwner: state.repoOwner ?? '',
             repoName: state.repoName ?? '',
             configured: Boolean(state.githubToken && state.repoOwner && state.repoName),
+            webOauthEnabled: Boolean(GITHUB_WEB_OAUTH_CLIENT_ID && GITHUB_WEB_OAUTH_CLIENT_SECRET),
           },
         })
         return
@@ -1861,6 +1934,65 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: started })
         } catch (error) {
           setJson(res, 502, { error: getErrorMessage(error, 'Failed to start GitHub login') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/github/web/start') {
+        try {
+          if (!GITHUB_WEB_OAUTH_CLIENT_ID || !GITHUB_WEB_OAUTH_CLIENT_SECRET) {
+            setJson(res, 400, { error: 'Web OAuth is not configured on server (missing GITHUB_OAUTH_CLIENT_ID/SECRET)' })
+            return
+          }
+          const state = createGithubOauthState()
+          const callbackPath = '/codex-api/skills-sync/github/web/callback'
+          const baseUrl = resolveBaseUrl(req)
+          const redirectUri = `${baseUrl}${callbackPath}`
+          const authUrl = new URL('https://github.com/login/oauth/authorize')
+          authUrl.searchParams.set('client_id', GITHUB_WEB_OAUTH_CLIENT_ID)
+          authUrl.searchParams.set('redirect_uri', redirectUri)
+          authUrl.searchParams.set('scope', 'repo read:user')
+          authUrl.searchParams.set('state', state)
+          res.statusCode = 302
+          res.setHeader('Location', authUrl.toString())
+          res.end()
+        } catch (error) {
+          setJson(res, 502, { error: getErrorMessage(error, 'Failed to start GitHub web auth') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/github/web/callback') {
+        const stateParam = url.searchParams.get('state')?.trim() ?? ''
+        const code = url.searchParams.get('code')?.trim() ?? ''
+        const errorParam = url.searchParams.get('error')?.trim() ?? ''
+        if (errorParam) {
+          const message = encodeURIComponent(errorParam)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=${message}')</script></body></html>`)
+          return
+        }
+        if (!stateParam || !consumeGithubOauthState(stateParam) || !code) {
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=invalid_state')</script></body></html>`)
+          return
+        }
+        try {
+          const redirectUri = `${resolveBaseUrl(req)}/codex-api/skills-sync/github/web/callback`
+          const token = await exchangeGithubWebOauthCode(code, redirectUri)
+          const username = await resolveGithubUsername(token)
+          const current = await readSkillsSyncState()
+          await writeSkillsSyncState({ ...current, githubToken: token, githubUsername: username })
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.end('<!DOCTYPE html><html><body><script>window.location.replace(\'/skills?syncAuth=ok\')</script></body></html>')
+        } catch (error) {
+          const message = encodeURIComponent(getErrorMessage(error, 'oauth_failed'))
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=${message}')</script></body></html>`)
         }
         return
       }

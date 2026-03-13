@@ -35,7 +35,15 @@
         <code>{{ deviceLogin.user_code }}</code>
       </div>
       <div class="skills-sync-actions">
-        <button class="skills-hub-sort" type="button" @click="startGithubLogin">Login with GitHub</button>
+        <button
+          v-if="syncStatus.webOauthEnabled"
+          class="skills-hub-sort"
+          type="button"
+          @click="startGithubWebLogin"
+        >
+          Login with GitHub (Web)
+        </button>
+        <button class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
         <button class="skills-hub-sort" type="button" @click="setupSyncRepo" :disabled="!syncStatus.loggedIn">Create Private Repo</button>
         <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="!syncStatus.configured">Pull</button>
         <button class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured">Push</button>
@@ -121,6 +129,7 @@ const syncStatus = ref({
   repoOwner: '',
   repoName: '',
   configured: false,
+  webOauthEnabled: false,
 })
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -360,6 +369,10 @@ async function startGithubLogin(): Promise<void> {
   }
 }
 
+function startGithubWebLogin(): void {
+  window.location.href = '/codex-api/skills-sync/github/web/start'
+}
+
 async function setupSyncRepo(): Promise<void> {
   try {
     const resp = await fetch('/codex-api/skills-sync/setup', { method: 'POST' })
@@ -397,6 +410,18 @@ async function pushSkillsSync(): Promise<void> {
 }
 
 onMounted(() => {
+  const params = new URLSearchParams(window.location.search)
+  const syncAuth = params.get('syncAuth')
+  const reason = params.get('reason')
+  if (syncAuth === 'ok') showToast('GitHub web login successful')
+  if (syncAuth === 'error') showToast(reason || 'GitHub web login failed', 'error')
+  if (syncAuth) {
+    params.delete('syncAuth')
+    params.delete('reason')
+    const next = params.toString()
+    const nextUrl = `${window.location.pathname}${next ? `?${next}` : ''}${window.location.hash}`
+    window.history.replaceState({}, '', nextUrl)
+  }
   void fetchSkills('')
   void loadSyncStatus()
 })
