@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { homedir, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -246,6 +246,25 @@ function parseCloudflaredUrl(chunk: string): string | null {
   return urlMatch[urlMatch.length - 1] ?? null
 }
 
+function getAccessibleUrls(port: number): string[] {
+  const urls = new Set<string>([`http://localhost:${String(port)}`])
+  const interfaces = networkInterfaces()
+  for (const entries of Object.values(interfaces)) {
+    if (!entries) {
+      continue
+    }
+    for (const entry of entries) {
+      if (entry.internal) {
+        continue
+      }
+      if (entry.family === 'IPv4') {
+        urls.add(`http://${entry.address}:${String(port)}`)
+      }
+    }
+  }
+  return Array.from(urls)
+}
+
 async function startCloudflaredTunnel(command: string, localPort: number): Promise<{
   process: ReturnType<typeof spawn>
   url: string
@@ -309,7 +328,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 
       server.once('error', onError)
       server.once('listening', onListening)
-      server.listen(port)
+      server.listen(port, '0.0.0.0')
     }
 
     attempt(startPort)
@@ -350,8 +369,15 @@ async function startServer(options: { port: string; password: string | boolean; 
     `  Version:  ${version}`,
     '  GitHub:   https://github.com/friuns2/codexui',
     '',
-    `  Local:    http://localhost:${String(port)}`,
+    `  Bind:     http://0.0.0.0:${String(port)}`,
   ]
+  const accessUrls = getAccessibleUrls(port)
+  if (accessUrls.length > 0) {
+    lines.push(`  Local:    ${accessUrls[0]}`)
+    for (const accessUrl of accessUrls.slice(1)) {
+      lines.push(`  Network:  ${accessUrl}`)
+    }
+  }
 
   if (port !== requestedPort) {
     lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
@@ -362,9 +388,7 @@ async function startServer(options: { port: string; password: string | boolean; 
   }
   if (tunnelUrl) {
     lines.push(`  Tunnel:   ${tunnelUrl}`)
-    lines.push('')
-    lines.push('  Tunnel QR code:')
-    lines.push(`  URL:      ${tunnelUrl}`)
+    lines.push('  Tunnel QR code below')
   }
 
   printTermuxKeepAlive(lines)
