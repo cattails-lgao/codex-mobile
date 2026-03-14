@@ -1,11 +1,12 @@
 import { createServer } from 'node:http'
-import { existsSync } from 'node:fs'
+import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { homedir, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
+import { get as httpsGet } from 'node:https'
 import { Command } from 'commander'
 import qrcode from 'qrcode-terminal'
 import { createServer as createApp } from '../server/httpServer.js'
@@ -69,6 +70,88 @@ function resolveCodexCommand(): string | null {
     return candidate
   }
   return null
+}
+
+function resolveCloudflaredCommand(): string | null {
+  if (canRun('cloudflared', ['--version'])) {
+    return 'cloudflared'
+  }
+  const localCandidate = join(homedir(), '.local', 'bin', 'cloudflared')
+  if (existsSync(localCandidate) && canRun(localCandidate, ['--version'])) {
+    return localCandidate
+  }
+  return null
+}
+
+function mapCloudflaredLinuxArch(arch: NodeJS.Architecture): string | null {
+  if (arch === 'x64') {
+    return 'amd64'
+  }
+  if (arch === 'arm64') {
+    return 'arm64'
+  }
+  return null
+}
+
+function downloadFile(url: string, destination: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = (currentUrl: string) => {
+      httpsGet(currentUrl, (response) => {
+        const code = response.statusCode ?? 0
+        if (code >= 300 && code < 400 && response.headers.location) {
+          response.resume()
+          request(response.headers.location)
+          return
+        }
+        if (code !== 200) {
+          response.resume()
+          reject(new Error(`Download failed with HTTP status ${String(code)}`))
+          return
+        }
+        const file = createWriteStream(destination, { mode: 0o755 })
+        response.pipe(file)
+        file.on('finish', () => {
+          file.close()
+          resolve()
+        })
+        file.on('error', reject)
+      }).on('error', reject)
+    }
+
+    request(url)
+  })
+}
+
+async function ensureCloudflaredInstalledLinux(): Promise<string | null> {
+  const current = resolveCloudflaredCommand()
+  if (current) {
+    return current
+  }
+  if (process.platform !== 'linux') {
+    return null
+  }
+
+  const mappedArch = mapCloudflaredLinuxArch(process.arch)
+  if (!mappedArch) {
+    throw new Error(`cloudflared auto-install is not supported for Linux architecture: ${process.arch}`)
+  }
+
+  const userBinDir = join(homedir(), '.local', 'bin')
+  mkdirSync(userBinDir, { recursive: true })
+  const destination = join(userBinDir, 'cloudflared')
+  const downloadUrl = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${mappedArch}`
+
+  console.log('\ncloudflared not found. Installing to ~/.local/bin...\n')
+  await downloadFile(downloadUrl, destination)
+  chmodSync(destination, 0o755)
+  process.env.PATH = `${userBinDir}:${process.env.PATH ?? ''}`
+
+  const installed = resolveCloudflaredCommand()
+  if (!installed) {
+    throw new Error('cloudflared download completed but executable is still not available')
+  }
+  console.log('\ncloudflared installed.\n')
+  return installed
 }
 
 function hasCodexAuth(): boolean {
@@ -163,12 +246,31 @@ function parseCloudflaredUrl(chunk: string): string | null {
   return urlMatch[urlMatch.length - 1] ?? null
 }
 
-async function startCloudflaredTunnel(localPort: number): Promise<{
+function getAccessibleUrls(port: number): string[] {
+  const urls = new Set<string>([`http://localhost:${String(port)}`])
+  const interfaces = networkInterfaces()
+  for (const entries of Object.values(interfaces)) {
+    if (!entries) {
+      continue
+    }
+    for (const entry of entries) {
+      if (entry.internal) {
+        continue
+      }
+      if (entry.family === 'IPv4') {
+        urls.add(`http://${entry.address}:${String(port)}`)
+      }
+    }
+  }
+  return Array.from(urls)
+}
+
+async function startCloudflaredTunnel(command: string, localPort: number): Promise<{
   process: ReturnType<typeof spawn>
   url: string
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${String(localPort)}`], {
+    const child = spawn(command, ['tunnel', '--url', `http://localhost:${String(localPort)}`], {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -226,7 +328,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 
       server.once('error', onError)
       server.once('listening', onListening)
-      server.listen(port)
+      server.listen(port, '0.0.0.0')
     }
 
     attempt(startPort)
@@ -251,7 +353,8 @@ async function startServer(options: { port: string; password: string | boolean; 
 
   if (options.tunnel) {
     try {
-      const tunnel = await startCloudflaredTunnel(port)
+      const cloudflaredCommand = await ensureCloudflaredInstalledLinux() ?? 'cloudflared'
+      const tunnel = await startCloudflaredTunnel(cloudflaredCommand, port)
       tunnelChild = tunnel.process
       tunnelUrl = tunnel.url
     } catch (error) {
@@ -266,8 +369,15 @@ async function startServer(options: { port: string; password: string | boolean; 
     `  Version:  ${version}`,
     '  GitHub:   https://github.com/friuns2/codexui',
     '',
-    `  Local:    http://localhost:${String(port)}`,
+    `  Bind:     http://0.0.0.0:${String(port)}`,
   ]
+  const accessUrls = getAccessibleUrls(port)
+  if (accessUrls.length > 0) {
+    lines.push(`  Local:    ${accessUrls[0]}`)
+    for (const accessUrl of accessUrls.slice(1)) {
+      lines.push(`  Network:  ${accessUrl}`)
+    }
+  }
 
   if (port !== requestedPort) {
     lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
@@ -278,9 +388,7 @@ async function startServer(options: { port: string; password: string | boolean; 
   }
   if (tunnelUrl) {
     lines.push(`  Tunnel:   ${tunnelUrl}`)
-    lines.push('')
-    lines.push('  Tunnel QR code:')
-    lines.push(`  URL:      ${tunnelUrl}`)
+    lines.push('  Tunnel QR code below')
   }
 
   printTermuxKeepAlive(lines)
