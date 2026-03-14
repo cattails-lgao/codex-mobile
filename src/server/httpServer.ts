@@ -6,7 +6,7 @@ import { writeFile, stat } from 'node:fs/promises'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditablePath, normalizeLocalPath } from './localBrowseUi.js'
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditableFile, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -161,7 +161,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
     }
-    if (!isTextEditablePath(localPath)) {
+    if (!(await isTextEditableFile(localPath))) {
       res.status(415).json({ error: 'Only text-like files are editable.' })
       return
     }

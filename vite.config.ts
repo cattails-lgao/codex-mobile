@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditablePath, normalizeLocalPath } from "./src/server/localBrowseUi";
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
 import tailwindcss from "@tailwindcss/vite";
 import { createReadStream } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
@@ -247,7 +247,7 @@ export default defineConfig({
             res.end(JSON.stringify({ error: "Expected absolute local file path." }));
             return;
           }
-          if (!isTextEditablePath(localPath)) {
+          if (!(await isTextEditableFile(localPath))) {
             res.statusCode = 415;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: "Only text-like files are editable." }));

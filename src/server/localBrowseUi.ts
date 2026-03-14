@@ -1,5 +1,5 @@
 import { dirname, extname, join } from 'node:path'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { open, readFile, readdir, stat } from 'node:fs/promises'
 
 type DirectoryItem = {
   name: string
@@ -12,7 +12,7 @@ type DirectoryItem = {
 const TEXT_EDITABLE_EXTENSIONS = new Set([
   '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
   '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
-  '.sh', '.toml', '.ini', '.conf', '.sql',
+  '.sh', '.toml', '.ini', '.conf', '.sql', '.bat', '.cmd', '.ps1',
 ])
 
 function languageForPath(pathValue: string): string {
@@ -67,6 +67,38 @@ export function isTextEditablePath(pathValue: string): boolean {
   return TEXT_EDITABLE_EXTENSIONS.has(extname(pathValue).toLowerCase())
 }
 
+function looksLikeTextBuffer(buffer: Buffer): boolean {
+  if (buffer.length === 0) return true
+  for (const byte of buffer) {
+    if (byte === 0) return false
+  }
+  const decoded = buffer.toString('utf8')
+  const replacementCount = (decoded.match(/\uFFFD/gu) ?? []).length
+  return replacementCount / decoded.length < 0.05
+}
+
+async function probeFileIsText(localPath: string): Promise<boolean> {
+  const handle = await open(localPath, 'r')
+  try {
+    const sample = Buffer.allocUnsafe(4096)
+    const { bytesRead } = await handle.read(sample, 0, sample.length, 0)
+    return looksLikeTextBuffer(sample.subarray(0, bytesRead))
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function isTextEditableFile(localPath: string): Promise<boolean> {
+  if (isTextEditablePath(localPath)) return true
+  try {
+    const fileStat = await stat(localPath)
+    if (!fileStat.isFile()) return false
+    return await probeFileIsText(localPath)
+  } catch {
+    return false
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -98,11 +130,12 @@ async function getDirectoryItems(localPath: string): Promise<DirectoryItem[]> {
   const withMeta = await Promise.all(entries.map(async (entry) => {
     const entryPath = join(localPath, entry.name)
     const entryStat = await stat(entryPath)
+    const editable = !entry.isDirectory() && await isTextEditableFile(entryPath)
     return {
       name: entry.name,
       path: entryPath,
       isDirectory: entry.isDirectory(),
-      editable: !entry.isDirectory() && isTextEditablePath(entryPath),
+      editable,
       mtimeMs: entryStat.mtimeMs,
     }
   }))
