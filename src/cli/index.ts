@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { get as httpsGet } from 'node:https'
@@ -152,6 +153,36 @@ async function ensureCloudflaredInstalledLinux(): Promise<string | null> {
   }
   console.log('\ncloudflared installed.\n')
   return installed
+}
+
+async function shouldInstallCloudflaredInteractively(): Promise<boolean> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.warn('\n[cloudflared] cloudflared is missing and terminal is non-interactive, skipping install.')
+    return false
+  }
+
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const answer = await prompt.question('cloudflared is not installed. Install it now to ~/.local/bin? [y/N] ')
+    const normalized = answer.trim().toLowerCase()
+    return normalized === 'y' || normalized === 'yes'
+  } finally {
+    prompt.close()
+  }
+}
+
+async function resolveCloudflaredForTunnel(): Promise<string | null> {
+  const current = resolveCloudflaredCommand()
+  if (current) {
+    return current
+  }
+
+  const installApproved = await shouldInstallCloudflaredInteractively()
+  if (!installApproved) {
+    return null
+  }
+
+  return ensureCloudflaredInstalledLinux()
 }
 
 function hasCodexAuth(): boolean {
@@ -353,7 +384,10 @@ async function startServer(options: { port: string; password: string | boolean; 
 
   if (options.tunnel) {
     try {
-      const cloudflaredCommand = await ensureCloudflaredInstalledLinux() ?? 'cloudflared'
+      const cloudflaredCommand = await resolveCloudflaredForTunnel()
+      if (!cloudflaredCommand) {
+        throw new Error('cloudflared is not installed')
+      }
       const tunnel = await startCloudflaredTunnel(cloudflaredCommand, port)
       tunnelChild = tunnel.process
       tunnelUrl = tunnel.url
