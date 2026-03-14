@@ -158,7 +158,11 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
 
 function isMissingHeadError(error: unknown): boolean {
   const message = getErrorMessage(error, '').toLowerCase()
-  return message.includes("not a valid object name: 'head'") || message.includes('not a valid object name: head')
+  return (
+    message.includes("not a valid object name: 'head'") ||
+    message.includes('not a valid object name: head') ||
+    message.includes('invalid reference: head')
+  )
 }
 
 function isNotGitRepositoryError(error: unknown): boolean {
