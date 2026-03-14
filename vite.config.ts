@@ -150,9 +150,9 @@ async function renderDirectoryListing(res: import("node:http").ServerResponse, l
     .map(({ entry, entryPath }) => {
       const suffix = entry.isDirectory() ? "/" : "";
       const editAction = (!entry.isDirectory() && isTextEditablePath(entryPath))
-        ? ` <a href="${escapeHtml(toEditHref(entryPath))}">Edit</a>`
+        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(entry.name)}" href="${escapeHtml(toEditHref(entryPath))}" title="Edit">✏️</a>`
         : "";
-      return `<li><a href="${escapeHtml(toBrowseHref(entryPath))}">${escapeHtml(entry.name)}${suffix}</a>${editAction}</li>`;
+      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(entryPath))}">${escapeHtml(entry.name)}${suffix}</a>${editAction}</li>`;
     })
     .join("\n");
 
@@ -168,12 +168,21 @@ async function renderDirectoryListing(res: import("node:http").ServerResponse, l
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Index of ${escapeHtml(localPath)}</title>
   <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 24px; background: #0b1020; color: #dbe6ff; }
+    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
     a { color: #8cc2ff; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    ul { list-style: none; padding: 0; margin: 12px 0 0; }
-    li { padding: 3px 0; }
+    ul { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
+    .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }
+    .file-link { display: block; padding: 10px 12px; border: 1px solid #28405f; border-radius: 10px; background: #0f1b33; overflow-wrap: anywhere; }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid #36557a; border-radius: 10px; background: #162643; text-decoration: none; }
+    .icon-btn:hover { filter: brightness(1.08); text-decoration: none; }
     h1 { font-size: 18px; margin: 0; word-break: break-all; }
+    @media (max-width: 640px) {
+      body { margin: 12px; }
+      .file-row { gap: 8px; }
+      .file-link { font-size: 15px; padding: 12px; }
+      .icon-btn { width: 44px; height: 44px; }
+    }
   </style>
 </head>
 <body>
