@@ -84,6 +84,15 @@ function toEditHref(pathValue: string): string {
   return `/codex-local-edit${encodeURI(pathValue)}`
 }
 
+function escapeForInlineScriptString(value: string): string {
+  // Prevent breaking out of inline <script> blocks when file content contains HTML/script tokens.
+  return JSON.stringify(value)
+    .replace(/<\//gu, '<\\/')
+    .replace(/<!--/gu, '<\\!--')
+    .replace(/\u2028/gu, '\\u2028')
+    .replace(/\u2029/gu, '\\u2029')
+}
+
 async function getDirectoryItems(localPath: string): Promise<DirectoryItem[]> {
   const entries = await readdir(localPath, { withFileTypes: true })
   const withMeta = await Promise.all(entries.map(async (entry) => {
@@ -158,6 +167,7 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
   const content = await readFile(localPath, 'utf8')
   const parentPath = dirname(localPath)
   const language = languageForPath(localPath)
+  const safeContentLiteral = escapeForInlineScriptString(content)
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -197,7 +207,7 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
     const editor = ace.edit('editor');
     editor.setTheme('ace/theme/tomorrow_night');
     editor.session.setMode('ace/mode/${escapeHtml(language)}');
-    editor.setValue(${JSON.stringify(content)}, -1);
+    editor.setValue(${safeContentLiteral}, -1);
     editor.setOptions({
       fontSize: '13px',
       wrap: true,
