@@ -23,11 +23,11 @@ function languageForPath(pathValue: string): string {
     case '.jsx': return 'javascript'
     case '.tsx': return 'typescript'
     case '.py': return 'python'
-    case '.sh': return 'bash'
+    case '.sh': return 'sh'
     case '.css':
     case '.scss': return 'css'
     case '.html':
-    case '.htm': return 'xml'
+    case '.htm': return 'html'
     case '.json': return 'json'
     case '.md': return 'markdown'
     case '.yaml':
@@ -38,84 +38,6 @@ function languageForPath(pathValue: string): string {
     case '.ini':
     case '.conf': return 'ini'
     default: return 'plaintext'
-  }
-}
-
-function codeMirrorLanguageImport(pathValue: string): string {
-  const extension = extname(pathValue).toLowerCase()
-  switch (extension) {
-    case '.js':
-    case '.jsx':
-      return "import { javascript } from 'https://esm.sh/@codemirror/lang-javascript'"
-    case '.ts':
-    case '.tsx':
-      return "import { javascript } from 'https://esm.sh/@codemirror/lang-javascript'"
-    case '.py':
-      return "import { python } from 'https://esm.sh/@codemirror/lang-python'"
-    case '.sh':
-      return "import { shell } from 'https://esm.sh/@codemirror/legacy-modes/mode/shell'"
-    case '.css':
-    case '.scss':
-      return "import { css } from 'https://esm.sh/@codemirror/lang-css'"
-    case '.html':
-    case '.htm':
-      return "import { html } from 'https://esm.sh/@codemirror/lang-html'"
-    case '.json':
-      return "import { json } from 'https://esm.sh/@codemirror/lang-json'"
-    case '.md':
-      return "import { markdown } from 'https://esm.sh/@codemirror/lang-markdown'"
-    case '.yaml':
-    case '.yml':
-      return "import { StreamLanguage } from 'https://esm.sh/@codemirror/language'\nimport { yaml } from 'https://esm.sh/@codemirror/legacy-modes/mode/yaml'"
-    case '.xml':
-      return "import { xml } from 'https://esm.sh/@codemirror/lang-xml'"
-    case '.sql':
-      return "import { sql } from 'https://esm.sh/@codemirror/lang-sql'"
-    case '.toml':
-    case '.ini':
-    case '.conf':
-      return "import { StreamLanguage } from 'https://esm.sh/@codemirror/language'\nimport { properties } from 'https://esm.sh/@codemirror/legacy-modes/mode/properties'"
-    default:
-      return ''
-  }
-}
-
-function codeMirrorLanguageSetup(pathValue: string): string {
-  const extension = extname(pathValue).toLowerCase()
-  switch (extension) {
-    case '.js':
-    case '.jsx':
-      return 'javascript()'
-    case '.ts':
-    case '.tsx':
-      return 'javascript({ typescript: true })'
-    case '.py':
-      return 'python()'
-    case '.sh':
-      return 'StreamLanguage.define(shell)'
-    case '.css':
-    case '.scss':
-      return 'css()'
-    case '.html':
-    case '.htm':
-      return 'html()'
-    case '.json':
-      return 'json()'
-    case '.md':
-      return 'markdown()'
-    case '.yaml':
-    case '.yml':
-      return 'StreamLanguage.define(yaml)'
-    case '.xml':
-      return 'xml()'
-    case '.sql':
-      return 'sql()'
-    case '.toml':
-    case '.ini':
-    case '.conf':
-      return 'StreamLanguage.define(properties)'
-    default:
-      return 'null'
   }
 }
 
@@ -236,8 +158,6 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
   const content = await readFile(localPath, 'utf8')
   const parentPath = dirname(localPath)
   const language = languageForPath(localPath)
-  const languageImport = codeMirrorLanguageImport(localPath)
-  const languageSetup = codeMirrorLanguageSetup(localPath)
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -251,17 +171,12 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
     button:hover, a:hover { filter: brightness(1.08); }
     #editor { min-height: calc(100vh - 170px); border: 1px solid #345; border-radius: 8px; overflow: hidden; }
     #status { margin-left: 8px; color: #8cc2ff; }
-    .cm-editor { height: calc(100vh - 170px); background: #07101f; color: #dbe6ff; }
-    .cm-scroller { font-family: ui-monospace, Menlo, Monaco, monospace; font-size: 13px; line-height: 1.5; }
-    .cm-gutters { background: #07101f; color: #6f8eb5; border-right: 1px solid #243a5a; }
-    .cm-activeLineGutter { background: #10213c; }
-    .cm-activeLine { background: #10213c; }
-    .cm-content { caret-color: #dbe6ff; }
-    .cm-cursor, .cm-dropCursor { border-left-color: #dbe6ff; }
-    .cm-selectionBackground, .cm-content ::selection { background: rgba(140, 194, 255, 0.3) !important; }
+    .ace_editor { background: #07101f !important; color: #dbe6ff !important; }
+    .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
+    .ace_marker-layer .ace_active-line { background: #10213c !important; }
+    .ace_marker-layer .ace_selection { background: rgba(140, 194, 255, 0.3) !important; }
     @media (max-width: 900px) {
       #editor { min-height: calc(65vh - 90px); }
-      .cm-editor { height: calc(65vh - 90px); }
     }
   </style>
 </head>
@@ -273,38 +188,30 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
   </div>
   <div class="row">${escapeHtml(localPath)} · ${escapeHtml(language)}</div>
   <div id="editor"></div>
-  <script type="module">
-    import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from 'https://esm.sh/@codemirror/view';
-    import { EditorState } from 'https://esm.sh/@codemirror/state';
-    import { defaultKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands';
-    import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from 'https://esm.sh/@codemirror/language';
-    ${languageImport}
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js"></script>
+  <script>
     const saveBtn = document.getElementById('saveBtn');
     const status = document.getElementById('status');
-    const editorRoot = document.getElementById('editor');
-    const langExt = ${languageSetup};
-    const state = EditorState.create({
-      doc: ${JSON.stringify(content)},
-      extensions: [
-        lineNumbers(),
-        highlightActiveLineGutter(),
-        bracketMatching(),
-        indentOnInput(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-        keymap.of([...defaultKeymap, indentWithTab]),
-        EditorView.lineWrapping,
-        ...(langExt ? [langExt] : []),
-      ]
+    const editor = ace.edit('editor');
+    editor.setTheme('ace/theme/tomorrow_night');
+    editor.session.setMode('ace/mode/${escapeHtml(language)}');
+    editor.setValue(${JSON.stringify(content)}, -1);
+    editor.setOptions({
+      fontSize: '13px',
+      wrap: true,
+      showPrintMargin: false,
+      useSoftTabs: true,
+      tabSize: 2,
+      behavioursEnabled: true,
     });
-    const view = new EditorView({ state, parent: editorRoot });
+    editor.resize();
 
     saveBtn.addEventListener('click', async () => {
       status.textContent = 'Saving...';
       const response = await fetch(location.pathname, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        body: view.state.doc.toString(),
+        body: editor.getValue(),
       });
       status.textContent = response.ok ? 'Saved' : 'Save failed';
     });
