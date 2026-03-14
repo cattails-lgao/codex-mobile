@@ -2,10 +2,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
 import { existsSync } from 'node:fs'
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { writeFile, stat } from 'node:fs/promises'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditablePath, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -44,170 +45,6 @@ function normalizeLocalImagePath(rawPath: string): string {
     }
   }
   return trimmed
-}
-
-function normalizeLocalPath(rawPath: string): string {
-  const trimmed = rawPath.trim()
-  if (!trimmed) return ''
-  if (trimmed.startsWith('file://')) {
-    try {
-      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ''))
-    } catch {
-      return trimmed.replace(/^file:\/\//u, '')
-    }
-  }
-  return trimmed
-}
-
-function decodeBrowsePath(rawPath: string): string {
-  if (!rawPath) return ''
-  try {
-    return decodeURIComponent(rawPath)
-  } catch {
-    return rawPath
-  }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;')
-}
-
-function toBrowseHref(pathValue: string): string {
-  return `/codex-local-browse${encodeURI(pathValue)}`
-}
-
-function toEditHref(pathValue: string): string {
-  return `/codex-local-edit${encodeURI(pathValue)}`
-}
-
-function isTextEditablePath(pathValue: string): boolean {
-  const extension = extname(pathValue).toLowerCase()
-  return [
-    '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
-    '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
-    '.sh', '.toml', '.ini', '.conf', '.sql',
-  ].includes(extension)
-}
-
-async function renderTextEditor(res: express.Response, localPath: string): Promise<void> {
-  if (!isTextEditablePath(localPath)) {
-    res.status(415).json({ error: 'Only text-like files are editable.' })
-    return
-  }
-
-  const content = await readFile(localPath, 'utf8')
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Edit ${escapeHtml(localPath)}</title>
-  <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
-    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-    button, a { background: #1b2a4a; color: #dbe6ff; border: 1px solid #345; padding: 6px 10px; border-radius: 6px; text-decoration: none; cursor: pointer; }
-    button:hover, a:hover { filter: brightness(1.08); }
-    textarea { width: 100%; min-height: calc(100vh - 130px); background: #07101f; color: #dbe6ff; border: 1px solid #345; border-radius: 8px; padding: 12px; box-sizing: border-box; }
-    #status { margin-left: 8px; color: #8cc2ff; }
-  </style>
-</head>
-<body>
-  <div class="row">
-    <a href="${escapeHtml(toBrowseHref(dirname(localPath)))}">Back</a>
-    <button id="saveBtn" type="button">Save</button>
-    <span id="status"></span>
-  </div>
-  <div class="row">${escapeHtml(localPath)}</div>
-  <textarea id="editor">${escapeHtml(content)}</textarea>
-  <script>
-    const saveBtn = document.getElementById('saveBtn');
-    const status = document.getElementById('status');
-    const editor = document.getElementById('editor');
-    saveBtn.addEventListener('click', async () => {
-      status.textContent = 'Saving...';
-      const response = await fetch(location.pathname, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        body: editor.value,
-      });
-      if (response.ok) {
-        status.textContent = 'Saved';
-      } else {
-        status.textContent = 'Save failed';
-      }
-    });
-  </script>
-</body>
-</html>`
-  res.status(200).type('text/html; charset=utf-8').send(html)
-}
-
-async function renderDirectoryListing(res: express.Response, localPath: string): Promise<void> {
-  const entries = await readdir(localPath, { withFileTypes: true })
-  const entriesWithMeta = await Promise.all(entries.map(async (entry) => {
-    const entryPath = join(localPath, entry.name)
-    const entryStat = await stat(entryPath)
-    return { entry, entryPath, mtimeMs: entryStat.mtimeMs }
-  }))
-  const sorted = entriesWithMeta.slice().sort((a, b) => {
-    if (b.mtimeMs !== a.mtimeMs) return b.mtimeMs - a.mtimeMs
-    if (a.entry.isDirectory() && !b.entry.isDirectory()) return -1
-    if (!a.entry.isDirectory() && b.entry.isDirectory()) return 1
-    return a.entry.name.localeCompare(b.entry.name)
-  })
-
-  const parentPath = dirname(localPath)
-  const rows = sorted
-    .map(({ entry, entryPath }) => {
-      const suffix = entry.isDirectory() ? '/' : ''
-      const editAction = (!entry.isDirectory() && isTextEditablePath(entryPath))
-        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(entry.name)}" href="${escapeHtml(toEditHref(entryPath))}" title="Edit">✏️</a>`
-        : ''
-      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(entryPath))}">${escapeHtml(entry.name)}${suffix}</a>${editAction}</li>`
-    })
-    .join('\n')
-
-  const parentLink = localPath !== parentPath
-    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
-    : ''
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Index of ${escapeHtml(localPath)}</title>
-  <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
-    a { color: #8cc2ff; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    ul { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
-    .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }
-    .file-link { display: block; padding: 10px 12px; border: 1px solid #28405f; border-radius: 10px; background: #0f1b33; overflow-wrap: anywhere; }
-    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid #36557a; border-radius: 10px; background: #162643; text-decoration: none; }
-    .icon-btn:hover { filter: brightness(1.08); text-decoration: none; }
-    h1 { font-size: 18px; margin: 0; word-break: break-all; }
-    @media (max-width: 640px) {
-      body { margin: 12px; }
-      .file-row { gap: 8px; }
-      .file-link { font-size: 15px; padding: 12px; }
-      .icon-btn { width: 44px; height: 44px; }
-    }
-  </style>
-</head>
-<body>
-  <h1>Index of ${escapeHtml(localPath)}</h1>
-  ${parentLink}
-  <ul>${rows}</ul>
-</body>
-</html>`
-
-  res.status(200).type('text/html; charset=utf-8').send(html)
 }
 
 export function createServer(options: ServerOptions = {}): ServerInstance {
@@ -276,7 +113,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       const fileStat = await stat(localPath)
       res.setHeader('Cache-Control', 'private, no-store')
       if (fileStat.isDirectory()) {
-        await renderDirectoryListing(res, localPath)
+        const html = await createDirectoryListingHtml(localPath)
+        res.status(200).type('text/html; charset=utf-8').send(html)
         return
       }
 
@@ -303,7 +141,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         res.status(400).json({ error: 'Expected file path.' })
         return
       }
-      await renderTextEditor(res, localPath)
+      const html = await createTextEditorHtml(localPath)
+      res.status(200).type('text/html; charset=utf-8').send(html)
     } catch {
       res.status(404).json({ error: 'File not found.' })
     }
