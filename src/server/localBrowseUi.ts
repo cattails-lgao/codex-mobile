@@ -170,14 +170,19 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
     .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
     button, a { background: #1b2a4a; color: #dbe6ff; border: 1px solid #345; padding: 6px 10px; border-radius: 6px; text-decoration: none; cursor: pointer; }
     button:hover, a:hover { filter: brightness(1.08); }
-    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    textarea { width: 100%; min-height: calc(100vh - 170px); background: #07101f; color: #dbe6ff; border: 1px solid #345; border-radius: 8px; padding: 12px; box-sizing: border-box; }
-    pre { margin: 0; min-height: calc(100vh - 170px); background: #07101f; border: 1px solid #345; border-radius: 8px; overflow: auto; }
-    code { display: block; padding: 12px; min-height: calc(100vh - 170px); box-sizing: border-box; white-space: pre; }
+    .editor-wrap { position: relative; min-height: calc(100vh - 170px); border: 1px solid #345; border-radius: 8px; background: #07101f; overflow: hidden; }
+    .editor-wrap pre { margin: 0; min-height: calc(100vh - 170px); overflow: auto; }
+    .editor-wrap code { display: block; padding: 12px; min-height: calc(100vh - 170px); box-sizing: border-box; white-space: pre; }
+    .editor-wrap textarea {
+      position: absolute; inset: 0; width: 100%; min-height: calc(100vh - 170px);
+      padding: 12px; box-sizing: border-box; border: none; resize: none; background: transparent;
+      color: transparent; caret-color: #dbe6ff; font: inherit; line-height: 1.5; white-space: pre; overflow: auto;
+    }
+    .editor-wrap textarea:focus { outline: none; }
+    .editor-wrap textarea::selection { background: rgba(140, 194, 255, 0.3); color: transparent; }
     #status { margin-left: 8px; color: #8cc2ff; }
     @media (max-width: 900px) {
-      .editor-grid { grid-template-columns: 1fr; }
-      textarea, pre, code { min-height: calc(50vh - 90px); }
+      .editor-wrap, .editor-wrap pre, .editor-wrap code, .editor-wrap textarea { min-height: calc(65vh - 90px); }
     }
   </style>
 </head>
@@ -188,9 +193,9 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
     <span id="status"></span>
   </div>
   <div class="row">${escapeHtml(localPath)}</div>
-  <div class="editor-grid">
-    <textarea id="editor">${escapeHtml(content)}</textarea>
-    <pre><code id="preview" class="language-${escapeHtml(language)}"></code></pre>
+  <div class="editor-wrap">
+    <pre id="previewPre"><code id="preview" class="language-${escapeHtml(language)}"></code></pre>
+    <textarea id="editor" spellcheck="false">${escapeHtml(content)}</textarea>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
@@ -205,6 +210,7 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
     const status = document.getElementById('status');
     const editor = document.getElementById('editor');
     const preview = document.getElementById('preview');
+    const previewPre = document.getElementById('previewPre');
     const initialLanguage = '${escapeHtml(language)}';
 
     function updatePreview() {
@@ -217,9 +223,15 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
         }
         window.hljs.highlightElement(preview);
       }
+      previewPre.scrollTop = editor.scrollTop;
+      previewPre.scrollLeft = editor.scrollLeft;
     }
 
     editor.addEventListener('input', updatePreview);
+    editor.addEventListener('scroll', () => {
+      previewPre.scrollTop = editor.scrollTop;
+      previewPre.scrollLeft = editor.scrollLeft;
+    });
     updatePreview();
 
     saveBtn.addEventListener('click', async () => {
