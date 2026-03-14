@@ -2,10 +2,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
 import { existsSync } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { writeFile, stat } from 'node:fs/promises'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditablePath, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -44,89 +45,6 @@ function normalizeLocalImagePath(rawPath: string): string {
     }
   }
   return trimmed
-}
-
-function normalizeLocalPath(rawPath: string): string {
-  const trimmed = rawPath.trim()
-  if (!trimmed) return ''
-  if (trimmed.startsWith('file://')) {
-    try {
-      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ''))
-    } catch {
-      return trimmed.replace(/^file:\/\//u, '')
-    }
-  }
-  return trimmed
-}
-
-function decodeBrowsePath(rawPath: string): string {
-  if (!rawPath) return ''
-  try {
-    return decodeURIComponent(rawPath)
-  } catch {
-    return rawPath
-  }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;')
-}
-
-function toBrowseHref(pathValue: string): string {
-  return `/codex-local-browse${encodeURI(pathValue)}`
-}
-
-async function renderDirectoryListing(res: express.Response, localPath: string): Promise<void> {
-  const entries = await readdir(localPath, { withFileTypes: true })
-  const sorted = entries
-    .slice()
-    .sort((a, b) => {
-      if (a.isDirectory() && !b.isDirectory()) return -1
-      if (!a.isDirectory() && b.isDirectory()) return 1
-      return a.name.localeCompare(b.name)
-    })
-
-  const parentPath = dirname(localPath)
-  const rows = sorted
-    .map((entry) => {
-      const entryPath = join(localPath, entry.name)
-      const suffix = entry.isDirectory() ? '/' : ''
-      return `<li><a href="${escapeHtml(toBrowseHref(entryPath))}">${escapeHtml(entry.name)}${suffix}</a></li>`
-    })
-    .join('\n')
-
-  const parentLink = localPath !== parentPath
-    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
-    : ''
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Index of ${escapeHtml(localPath)}</title>
-  <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 24px; background: #0b1020; color: #dbe6ff; }
-    a { color: #8cc2ff; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    ul { list-style: none; padding: 0; margin: 12px 0 0; }
-    li { padding: 3px 0; }
-    h1 { font-size: 18px; margin: 0; word-break: break-all; }
-  </style>
-</head>
-<body>
-  <h1>Index of ${escapeHtml(localPath)}</h1>
-  ${parentLink}
-  <ul>${rows}</ul>
-</body>
-</html>`
-
-  res.status(200).type('text/html; charset=utf-8').send(html)
 }
 
 export function createServer(options: ServerOptions = {}): ServerInstance {
@@ -195,7 +113,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       const fileStat = await stat(localPath)
       res.setHeader('Cache-Control', 'private, no-store')
       if (fileStat.isDirectory()) {
-        await renderDirectoryListing(res, localPath)
+        const html = await createDirectoryListingHtml(localPath)
+        res.status(200).type('text/html; charset=utf-8').send(html)
         return
       }
 
@@ -208,14 +127,55 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     }
   })
 
+  // 6. Edit text-like local files.
+  app.get('/codex-local-edit/*path', async (req, res) => {
+    const rawPath = typeof req.params.path === 'string' ? req.params.path : ''
+    const localPath = decodeBrowsePath(`/${rawPath}`)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local file path.' })
+      return
+    }
+    try {
+      const fileStat = await stat(localPath)
+      if (!fileStat.isFile()) {
+        res.status(400).json({ error: 'Expected file path.' })
+        return
+      }
+      const html = await createTextEditorHtml(localPath)
+      res.status(200).type('text/html; charset=utf-8').send(html)
+    } catch {
+      res.status(404).json({ error: 'File not found.' })
+    }
+  })
+
+  app.put('/codex-local-edit/*path', express.text({ type: '*/*', limit: '10mb' }), async (req, res) => {
+    const rawPath = typeof req.params.path === 'string' ? req.params.path : ''
+    const localPath = decodeBrowsePath(`/${rawPath}`)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local file path.' })
+      return
+    }
+    if (!isTextEditablePath(localPath)) {
+      res.status(415).json({ error: 'Only text-like files are editable.' })
+      return
+    }
+    const body = typeof req.body === 'string' ? req.body : ''
+    try {
+      await writeFile(localPath, body, 'utf8')
+      res.status(200).json({ ok: true })
+    } catch {
+      res.status(404).json({ error: 'File not found.' })
+    }
+  })
+
   const hasFrontendAssets = existsSync(spaEntryFile)
 
-  // 6. Static files from Vue build
+  // 7. Static files from Vue build
   if (hasFrontendAssets) {
     app.use(express.static(distDir))
   }
 
-  // 7. SPA fallback
+  // 8. SPA fallback
   app.use((_req, res) => {
     if (!hasFrontendAssets) {
       res.status(503).type('text/plain').send(

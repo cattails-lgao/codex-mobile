@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditablePath, normalizeLocalPath } from "./src/server/localBrowseUi";
 import tailwindcss from "@tailwindcss/vite";
 import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 
@@ -29,91 +30,6 @@ function normalizeLocalImagePath(rawPath: string): string {
     }
   }
   return trimmed;
-}
-
-function normalizeLocalPath(rawPath: string): string {
-  const trimmed = rawPath.trim();
-  if (!trimmed) return "";
-  if (trimmed.startsWith("file://")) {
-    try {
-      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ""));
-    } catch {
-      return trimmed.replace(/^file:\/\//u, "");
-    }
-  }
-  return trimmed;
-}
-
-function decodeBrowsePath(rawPath: string): string {
-  if (!rawPath) return "";
-  try {
-    return decodeURIComponent(rawPath);
-  } catch {
-    return rawPath;
-  }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&#39;");
-}
-
-function toBrowseHref(pathValue: string): string {
-  return `/codex-local-browse${encodeURI(pathValue)}`;
-}
-
-async function renderDirectoryListing(res: import("node:http").ServerResponse, localPath: string): Promise<void> {
-  const entries = await readdir(localPath, { withFileTypes: true });
-  const sorted = entries
-    .slice()
-    .sort((a, b) => {
-      if (a.isDirectory() && !b.isDirectory()) return -1;
-      if (!a.isDirectory() && b.isDirectory()) return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-  const rows = sorted
-    .map((entry) => {
-      const entryPath = `${localPath.replace(/\/+$/u, "")}/${entry.name}`;
-      const suffix = entry.isDirectory() ? "/" : "";
-      return `<li><a href="${escapeHtml(toBrowseHref(entryPath))}">${escapeHtml(entry.name)}${suffix}</a></li>`;
-    })
-    .join("\n");
-
-  const parentPath = localPath === "/" ? "/" : localPath.replace(/\/+$/u, "").replace(/\/[^/]+$/u, "") || "/";
-  const parentLink = localPath !== parentPath
-    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
-    : "";
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Index of ${escapeHtml(localPath)}</title>
-  <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 24px; background: #0b1020; color: #dbe6ff; }
-    a { color: #8cc2ff; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    ul { list-style: none; padding: 0; margin: 12px 0 0; }
-    li { padding: 3px 0; }
-    h1 { font-size: 18px; margin: 0; word-break: break-all; }
-  </style>
-</head>
-<body>
-  <h1>Index of ${escapeHtml(localPath)}</h1>
-  ${parentLink}
-  <ul>${rows}</ul>
-</body>
-</html>`;
-
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.end(html);
 }
 
 function getWorktreeName(): string {
@@ -269,7 +185,10 @@ export default defineConfig({
             const fileStat = await stat(localPath);
             res.setHeader("Cache-Control", "private, no-store");
             if (fileStat.isDirectory()) {
-              await renderDirectoryListing(res, localPath);
+              const html = await createDirectoryListingHtml(localPath);
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "text/html; charset=utf-8");
+              res.end(html);
               return;
             }
 
@@ -287,6 +206,72 @@ export default defineConfig({
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: "File not found." }));
           }
+        });
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
+          const url = new URL(req.url, "http://localhost");
+          if (!url.pathname.startsWith("/codex-local-edit/")) return next();
+          const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-edit".length));
+          if (!localPath || !isAbsolute(localPath)) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Expected absolute local file path." }));
+            return;
+          }
+          try {
+            const fileStat = await stat(localPath);
+            if (!fileStat.isFile()) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Expected file path." }));
+              return;
+            }
+            const html = await createTextEditorHtml(localPath);
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.end(html);
+          } catch {
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "File not found." }));
+          }
+        });
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url || req.method !== "PUT") return next();
+          const url = new URL(req.url, "http://localhost");
+          if (!url.pathname.startsWith("/codex-local-edit/")) return next();
+          const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-edit".length));
+          if (!localPath || !isAbsolute(localPath)) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Expected absolute local file path." }));
+            return;
+          }
+          if (!isTextEditablePath(localPath)) {
+            res.statusCode = 415;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Only text-like files are editable." }));
+            return;
+          }
+          const chunks: Buffer[] = [];
+          req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+          req.on("end", async () => {
+            try {
+              await writeFile(localPath, Buffer.concat(chunks).toString("utf8"), "utf8");
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ ok: true }));
+            } catch {
+              res.statusCode = 404;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "File not found." }));
+            }
+          });
+          req.on("error", () => {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Write failed." }));
+          });
         });
         server.middlewares.use(bridge);
         server.httpServer?.once("close", () => {
