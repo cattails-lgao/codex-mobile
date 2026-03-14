@@ -63,6 +63,7 @@
             :search-query="sidebarSearchQuery"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
+            @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject" />
         </div>
@@ -397,6 +398,13 @@ function onStartNewThread(projectName: string): void {
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
   void router.push({ name: 'home' })
+}
+
+function onBrowseProjectFiles(projectName: string): void {
+  const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
+  const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
+  if (!projectCwd || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(projectCwd)}`, '_blank', 'noopener,noreferrer')
 }
 
 function onStartNewThreadFromToolbar(): void {
