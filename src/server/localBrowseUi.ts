@@ -165,28 +165,30 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Edit ${escapeHtml(localPath)}</title>
   <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
-    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { font-family: ui-monospace, Menlo, Monaco, monospace; background: #0b1020; color: #dbe6ff; display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #0b1020; border-bottom: 1px solid #243a5a; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     button, a { background: #1b2a4a; color: #dbe6ff; border: 1px solid #345; padding: 6px 10px; border-radius: 6px; text-decoration: none; cursor: pointer; }
     button:hover, a:hover { filter: brightness(1.08); }
-    #editor { min-height: calc(100vh - 170px); border: 1px solid #345; border-radius: 8px; overflow: hidden; }
+    #editor { flex: 1 1 auto; min-height: 0; width: 100%; border: none; overflow: hidden; }
     #status { margin-left: 8px; color: #8cc2ff; }
-    .ace_editor { background: #07101f !important; color: #dbe6ff !important; }
+    .ace_editor { background: #07101f !important; color: #dbe6ff !important; width: 100% !important; height: 100% !important; }
     .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
     .ace_marker-layer .ace_active-line { background: #10213c !important; }
     .ace_marker-layer .ace_selection { background: rgba(140, 194, 255, 0.3) !important; }
-    @media (max-width: 900px) {
-      #editor { min-height: calc(65vh - 90px); }
-    }
+    .meta { opacity: 0.9; font-size: 12px; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
-  <div class="row">
-    <a href="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
-    <button id="saveBtn" type="button">Save</button>
-    <span id="status"></span>
+  <div class="toolbar">
+    <div class="row">
+      <a href="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
+      <button id="saveBtn" type="button">Save</button>
+      <span id="status"></span>
+    </div>
+    <div class="meta">${escapeHtml(localPath)} · ${escapeHtml(language)}</div>
   </div>
-  <div class="row">${escapeHtml(localPath)} · ${escapeHtml(language)}</div>
   <div id="editor"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js"></script>
   <script>
