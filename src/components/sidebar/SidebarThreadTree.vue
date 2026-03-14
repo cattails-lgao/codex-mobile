@@ -202,6 +202,9 @@
 
                   <div v-if="isProjectMenuOpen(group.projectName)" class="project-menu-panel" @click.stop>
                     <template v-if="projectMenuMode === 'actions'">
+                      <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
+                        Browse files
+                      </button>
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group.projectName)">
                         Edit name
                       </button>
@@ -375,6 +378,7 @@ const emit = defineEmits<{
   select: [threadId: string]
   archive: [threadId: string]
   'start-new-thread': [projectName: string]
+  'browse-project-files': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
@@ -768,6 +772,11 @@ function onProjectNameInput(projectName: string): void {
 
 function onRemoveProject(projectName: string): void {
   emit('remove-project', projectName)
+  closeProjectMenu()
+}
+
+function onBrowseProjectFiles(projectName: string): void {
+  emit('browse-project-files', projectName)
   closeProjectMenu()
 }
 
