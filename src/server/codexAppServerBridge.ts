@@ -785,16 +785,50 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
   } catch {
     await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
   }
+  await resolveMergeConflictsByNewerCommit(localDir, branch)
   try {
     await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir })
   } catch {}
   try {
-    await runCommand('git', ['pull', '--rebase', 'origin', branch], { cwd: localDir })
+    await runCommand('git', ['pull', '--no-rebase', 'origin', branch], { cwd: localDir })
   } catch {
-    try { await runCommand('git', ['pull', '--no-rebase', 'origin', branch], { cwd: localDir }) } catch {}
+    await resolveMergeConflictsByNewerCommit(localDir, branch)
   }
   try { await runCommand('git', ['stash', 'pop'], { cwd: localDir }) } catch {}
   return localDir
+}
+
+async function resolveMergeConflictsByNewerCommit(repoDir: string, branch: string): Promise<void> {
+  const unmerged = (await runCommandWithOutput('git', ['diff', '--name-only', '--diff-filter=U'], { cwd: repoDir }))
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter(Boolean)
+  if (unmerged.length === 0) return
+
+  for (const path of unmerged) {
+    const oursTime = await getCommitTime(repoDir, 'HEAD', path)
+    const theirsTime = await getCommitTime(repoDir, `origin/${branch}`, path)
+    if (theirsTime > oursTime) {
+      await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
+    } else {
+      await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
+    }
+    await runCommand('git', ['add', '--', path], { cwd: repoDir })
+  }
+
+  const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
+  if (mergeHead) {
+    await runCommand('git', ['commit', '-m', 'Auto-resolve skills merge by newer file'], { cwd: repoDir })
+  }
+}
+
+async function getCommitTime(repoDir: string, ref: string, path: string): Promise<number> {
+  try {
+    const output = (await runCommandWithOutput('git', ['log', '-1', '--format=%ct', ref, '--', path], { cwd: repoDir })).trim()
+    return output ? Number.parseInt(output, 10) : 0
+  } catch {
+    return 0
+  }
 }
 
 async function syncInstalledSkillsFolderToRepo(
