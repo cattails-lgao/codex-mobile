@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -594,6 +595,8 @@ async function completeGithubDeviceLogin(deviceCode: string): Promise<{ token: s
 }
 
 function isAndroidLikeRuntime(): boolean {
+  if (process.platform === 'android') return true
+  if (existsSync('/data/data/com.termux')) return true
   if (process.env.TERMUX_VERSION) return true
   const prefix = process.env.PREFIX?.toLowerCase() ?? ''
   if (prefix.includes('/com.termux/')) return true
@@ -780,9 +783,12 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
 
   await runCommand('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: localDir })
   await runCommand('git', ['fetch', 'origin'], { cwd: localDir })
+  // If a previous merge is in progress, resolve before any checkout.
+  await resolveMergeConflictsByNewerCommit(localDir, branch)
   try {
     await runCommand('git', ['checkout', branch], { cwd: localDir })
   } catch {
+    await resolveMergeConflictsByNewerCommit(localDir, branch)
     await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
   }
   await resolveMergeConflictsByNewerCommit(localDir, branch)
