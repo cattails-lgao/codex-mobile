@@ -947,6 +947,12 @@ async function initializeSkillsSyncOnStartup(appServer: AppServerProcess): Promi
     const state = await readSkillsSyncState()
     const localSkillsDir = getSkillsInstallDir()
     if (!state.githubToken) {
+      if (!isAndroidLikeRuntime()) {
+        startupSyncStatus.mode = 'idle'
+        startupSyncStatus.lastAction = 'skip-upstream-non-android'
+        startupSyncStatus.lastSuccessAtIso = new Date().toISOString()
+        return
+      }
       startupSyncStatus.mode = 'unauthenticated-bootstrap'
       startupSyncStatus.lastAction = 'pull-upstream'
       await bootstrapSkillsFromUpstreamIntoLocal(localSkillsDir)
