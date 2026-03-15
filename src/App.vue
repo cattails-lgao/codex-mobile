@@ -193,8 +193,8 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Worktree name">
-    WT {{ worktreeName }}
+  <div class="build-badge" aria-label="Worktree name and version">
+    WT {{ worktreeName }} · v{{ appVersion }}
   </div>
 </template>
 
@@ -228,6 +228,7 @@ import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
+const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 
 const {
   projectGroups,

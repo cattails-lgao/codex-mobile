@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
+import pkg from "./package.json";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   ".avif": "image/avif",
@@ -43,11 +44,13 @@ function getWorktreeName(): string {
 }
 
 const worktreeName = getWorktreeName();
+const appVersion = typeof pkg.version === "string" ? pkg.version : "unknown";
 const WS_UPGRADE_ATTACHED_KEY = "__codexBridgeWsAttached__";
 
 export default defineConfig({
   define: {
     "import.meta.env.VITE_WORKTREE_NAME": JSON.stringify(worktreeName),
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
   },
   server: {
     host: "0.0.0.0",
