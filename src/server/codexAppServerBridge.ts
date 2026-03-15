@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, copyFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -190,10 +190,6 @@ function getCodexHomeDir(): string {
 
 function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
-}
-
-function getSkillsRemoteCacheDir(owner: string, repo: string): string {
-  return join(getCodexHomeDir(), '.skills-sync-remotes', `${owner}__${repo}`)
 }
 
 async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
@@ -752,26 +748,34 @@ function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string)
   return `https://x-access-token:${encodeURIComponent(token)}@github.com/${repoOwner}/${repoName}.git`
 }
 
-async function ensureLocalRepoClone(repoUrl: string, localDir: string, branch: string): Promise<void> {
+async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Promise<string> {
+  const localDir = getSkillsInstallDir()
+  await mkdir(localDir, { recursive: true })
   const gitDir = join(localDir, '.git')
   let hasGitDir = false
   try {
-    const info = await stat(gitDir)
-    hasGitDir = info.isDirectory()
+    hasGitDir = (await stat(gitDir)).isDirectory()
   } catch {
     hasGitDir = false
   }
 
   if (!hasGitDir) {
-    await rm(localDir, { recursive: true, force: true })
-    await mkdir(join(localDir, '..'), { recursive: true })
-    try {
-      await runCommand('git', ['clone', '--single-branch', '--branch', branch, repoUrl, localDir])
-    } catch {
-      await runCommand('git', ['clone', repoUrl, localDir])
-      try { await runCommand('git', ['checkout', '-B', branch], { cwd: localDir }) } catch {}
+    await runCommand('git', ['init'], { cwd: localDir })
+    await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: localDir })
+    await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: localDir })
+    await runCommand('git', ['add', '-A'], { cwd: localDir })
+    try { await runCommand('git', ['commit', '-m', 'Local skills snapshot before sync'], { cwd: localDir }) } catch {}
+    await runCommand('git', ['branch', '-M', branch], { cwd: localDir })
+    try { await runCommand('git', ['remote', 'add', 'origin', repoUrl], { cwd: localDir }) } catch {
+      await runCommand('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: localDir })
     }
-    return
+    await runCommand('git', ['fetch', 'origin'], { cwd: localDir })
+    try {
+      await runCommand('git', ['merge', '--allow-unrelated-histories', '--no-edit', `origin/${branch}`], { cwd: localDir })
+    } catch {
+      // branch may not exist remotely yet
+    }
+    return localDir
   }
 
   await runCommand('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: localDir })
@@ -782,56 +786,28 @@ async function ensureLocalRepoClone(repoUrl: string, localDir: string, branch: s
     await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
   }
   try {
-    await runCommand('git', ['pull', '--ff-only', 'origin', branch], { cwd: localDir })
+    await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir })
+  } catch {}
+  try {
+    await runCommand('git', ['pull', '--rebase', 'origin', branch], { cwd: localDir })
   } catch {
-    // keep local branch if remote branch doesn't exist yet
+    try { await runCommand('git', ['pull', '--no-rebase', 'origin', branch], { cwd: localDir }) } catch {}
   }
-}
-
-async function copyTreeNewerWins(sourceDir: string, targetDir: string): Promise<void> {
-  await mkdir(targetDir, { recursive: true })
-  const entries = await readdir(sourceDir, { withFileTypes: true })
-  for (const entry of entries) {
-    if (entry.name === '.git') continue
-    const sourcePath = join(sourceDir, entry.name)
-    const targetPath = join(targetDir, entry.name)
-    if (entry.isDirectory()) {
-      await copyTreeNewerWins(sourcePath, targetPath)
-      continue
-    }
-    if (!entry.isFile()) continue
-    let shouldCopy = false
-    try {
-      const [srcStat, dstStat] = await Promise.all([stat(sourcePath), stat(targetPath)])
-      shouldCopy = srcStat.mtimeMs > dstStat.mtimeMs
-    } catch {
-      shouldCopy = true
-    }
-    if (shouldCopy) {
-      await mkdir(join(targetPath, '..'), { recursive: true })
-      await copyFile(sourcePath, targetPath)
-    }
-  }
+  try { await runCommand('git', ['stash', 'pop'], { cwd: localDir }) } catch {}
+  return localDir
 }
 
 async function syncInstalledSkillsFolderToRepo(
   token: string,
   repoOwner: string,
   repoName: string,
-  installedMap: Map<string, InstalledSkillInfo>,
+  _installedMap: Map<string, InstalledSkillInfo>,
 ): Promise<void> {
   const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
   const branch = getPreferredSyncBranch()
-  const repoDir = getSkillsRemoteCacheDir(repoOwner, repoName)
-  await ensureLocalRepoClone(remoteUrl, repoDir, branch)
-  const addPaths: string[] = [SKILLS_SYNC_MANIFEST_PATH]
-
-  for (const [name, info] of installedMap.entries()) {
-    const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
-    const target = join(repoDir, name)
-    await copyTreeNewerWins(localSkillDir, target)
-    addPaths.push(name)
-  }
+  const repoDir = await ensureSkillsWorkingTreeRepo(remoteUrl, branch)
+  const addPaths: string[] = ['.']
+  void _installedMap
 
   await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: repoDir })
   await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: repoDir })
@@ -846,62 +822,18 @@ async function pullInstalledSkillsFolderFromRepo(
   token: string,
   repoOwner: string,
   repoName: string,
-  localSkillsDir: string,
+  _localSkillsDir: string,
 ): Promise<void> {
   const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
   const branch = getPreferredSyncBranch()
-  const repoDir = getSkillsRemoteCacheDir(repoOwner, repoName)
-  await ensureLocalRepoClone(remoteUrl, repoDir, branch)
-  await mergeSkillsFromRepoIntoLocal(repoDir, localSkillsDir)
+  await ensureSkillsWorkingTreeRepo(remoteUrl, branch)
 }
 
-async function mergeSkillsFromRepoIntoLocal(repoDir: string, localSkillsDir: string): Promise<void> {
-  await mkdir(localSkillsDir, { recursive: true })
-  const skillsDir = join(repoDir, 'skills')
-
-  // Layout A: repository stores skills under `skills/`.
-  try {
-    await copyTreeNewerWins(skillsDir, localSkillsDir)
-  } catch {
-    // missing `skills/` layout
-  }
-
-  // Layout B: repository stores skills/files at root.
-  // Copy root entries (except git internals and duplicate `skills/`) with newer-wins.
-  try {
-    const entries = await readdir(repoDir, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.name === '.git' || entry.name === 'skills') continue
-      const sourcePath = join(repoDir, entry.name)
-      const targetPath = join(localSkillsDir, entry.name)
-      if (entry.isDirectory()) {
-        await copyTreeNewerWins(sourcePath, targetPath)
-        continue
-      }
-      if (!entry.isFile()) continue
-      let shouldCopy = false
-      try {
-        const [srcStat, dstStat] = await Promise.all([stat(sourcePath), stat(targetPath)])
-        shouldCopy = srcStat.mtimeMs > dstStat.mtimeMs
-      } catch {
-        shouldCopy = true
-      }
-      if (shouldCopy) {
-        await mkdir(join(targetPath, '..'), { recursive: true })
-        await copyFile(sourcePath, targetPath)
-      }
-    }
-  } catch {
-    // ignore missing repo dir
-  }
-}
-
-async function bootstrapSkillsFromUpstreamIntoLocal(localSkillsDir: string): Promise<void> {
+async function bootstrapSkillsFromUpstreamIntoLocal(_localSkillsDir: string): Promise<void> {
+  void _localSkillsDir
   const repoUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
   const branch = getPreferredSyncBranch()
-  const upstreamCacheDir = getSkillsRemoteCacheDir(SYNC_UPSTREAM_SKILLS_OWNER, SYNC_UPSTREAM_SKILLS_REPO)
-  await ensureLocalRepoClone(repoUrl, upstreamCacheDir, branch)
-  await mergeSkillsFromRepoIntoLocal(upstreamCacheDir, localSkillsDir)
+  await ensureSkillsWorkingTreeRepo(repoUrl, branch)
 }
 
 async function collectLocalSyncedSkills(appServer: AppServerProcess): Promise<SyncedSkill[]> {
