@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, copyFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
@@ -191,6 +190,10 @@ function getCodexHomeDir(): string {
 
 function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
+}
+
+function getSkillsRemoteCacheDir(owner: string, repo: string): string {
+  return join(getCodexHomeDir(), '.skills-sync-remotes', `${owner}__${repo}`)
 }
 
 async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
@@ -388,7 +391,7 @@ async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
     return skillsTreeCache.entries
   }
 
-  const resp = await ghFetch('https://api.github.com/repos/openclaw/skills/git/trees/main?recursive=1')
+  const resp = await ghFetch(`https://api.github.com/repos/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/git/trees/main?recursive=1`)
   if (!resp.ok) throw new Error(`GitHub tree API returned ${resp.status}`)
   const data = (await resp.json()) as { tree?: Array<{ path: string; type: string }> }
 
@@ -406,7 +409,7 @@ async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
     entries.push({
       name: skillName,
       owner,
-      url: `https://github.com/openclaw/skills/tree/main/skills/${owner}/${skillName}`,
+      url: `https://github.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/tree/main/skills/${owner}/${skillName}`,
     })
   }
 
@@ -421,7 +424,7 @@ async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
   const batch = toFetch.slice(0, 50)
   const results = await Promise.allSettled(
     batch.map(async (e) => {
-      const rawUrl = `https://raw.githubusercontent.com/openclaw/skills/main/skills/${e.owner}/${e.name}/_meta.json`
+      const rawUrl = `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${e.owner}/${e.name}/_meta.json`
       const resp = await fetch(rawUrl)
       if (!resp.ok) return
       const meta = (await resp.json()) as MetaJson
@@ -468,18 +471,36 @@ type GithubDeviceCodeResponse = {
   interval: number
 }
 
-type GithubTokenResponse = {
-  access_token?: string
-  error?: string
-}
+type GithubTokenResponse = { access_token?: string; error?: string }
 
 const GITHUB_DEVICE_CLIENT_ID = 'Iv1.b507a08c87ecfe98'
-const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codex-skills-sync'
+const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codexskills'
 const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
-const SKILLS_SYNC_FOLDER_PATH = 'installed-skills'
-const GITHUB_WEB_OAUTH_CLIENT_ID = process.env.GITHUB_OAUTH_CLIENT_ID?.trim() || ''
-const GITHUB_WEB_OAUTH_CLIENT_SECRET = process.env.GITHUB_OAUTH_CLIENT_SECRET?.trim() || ''
-const githubOauthStateCache = new Map<string, number>()
+const SYNC_UPSTREAM_SKILLS_OWNER = 'OpenClawAndroid'
+const SYNC_UPSTREAM_SKILLS_REPO = 'skills'
+const HUB_SKILLS_OWNER = 'openclaw'
+const HUB_SKILLS_REPO = 'skills'
+let startupSkillsSyncInitialized = false
+
+type StartupSyncStatus = {
+  inProgress: boolean
+  mode: 'unauthenticated-bootstrap' | 'authenticated-fork-sync' | 'idle'
+  branch: string
+  lastAction: string
+  lastRunAtIso: string
+  lastSuccessAtIso: string
+  lastError: string
+}
+
+const startupSyncStatus: StartupSyncStatus = {
+  inProgress: false,
+  mode: 'idle',
+  branch: getPreferredSyncBranch(),
+  lastAction: 'not-started',
+  lastRunAtIso: '',
+  lastSuccessAtIso: '',
+  lastError: '',
+}
 
 async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
   const map = new Map<string, InstalledSkillInfo>()
@@ -576,73 +597,22 @@ async function completeGithubDeviceLogin(deviceCode: string): Promise<{ token: s
   return { token: payload.access_token, error: null }
 }
 
-function cleanupGithubOauthStates(): void {
-  const now = Date.now()
-  for (const [state, expiresAt] of githubOauthStateCache.entries()) {
-    if (expiresAt <= now) githubOauthStateCache.delete(state)
-  }
+function isAndroidLikeRuntime(): boolean {
+  if (process.env.TERMUX_VERSION) return true
+  const prefix = process.env.PREFIX?.toLowerCase() ?? ''
+  if (prefix.includes('/com.termux/')) return true
+  const proot = process.env.PROOT_TMP_DIR?.toLowerCase() ?? ''
+  if (proot.length > 0) return true
+  return false
 }
 
-function createGithubOauthState(): string {
-  cleanupGithubOauthStates()
-  const state = randomBytes(24).toString('hex')
-  githubOauthStateCache.set(state, Date.now() + 10 * 60 * 1000)
-  return state
+function getPreferredSyncBranch(): string {
+  return isAndroidLikeRuntime() ? 'android' : 'main'
 }
 
-function consumeGithubOauthState(state: string): boolean {
-  cleanupGithubOauthStates()
-  const expiresAt = githubOauthStateCache.get(state)
-  if (!expiresAt) return false
-  githubOauthStateCache.delete(state)
-  return expiresAt > Date.now()
-}
-
-function resolveBaseUrl(req: IncomingMessage): string {
-  const host = req.headers.host?.trim() || '127.0.0.1:4173'
-  const protoHeader = req.headers['x-forwarded-proto']
-  const proto = typeof protoHeader === 'string' && protoHeader.length > 0
-    ? protoHeader.split(',')[0].trim()
-    : 'http'
-  return `${proto}://${host}`
-}
-
-function htmlEscape(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[char] ?? char))
-}
-
-async function exchangeGithubWebOauthCode(code: string, redirectUri: string): Promise<string> {
-  if (!GITHUB_WEB_OAUTH_CLIENT_ID || !GITHUB_WEB_OAUTH_CLIENT_SECRET) {
-    throw new Error('Set GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET to use web auth')
-  }
-  const resp = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'codex-web-local',
-    },
-    body: new URLSearchParams({
-      client_id: GITHUB_WEB_OAUTH_CLIENT_ID,
-      client_secret: GITHUB_WEB_OAUTH_CLIENT_SECRET,
-      code,
-      redirect_uri: redirectUri,
-    }),
-  })
-  if (!resp.ok) {
-    throw new Error(`GitHub web OAuth token exchange failed (${resp.status})`)
-  }
-  const payload = await resp.json() as GithubTokenResponse
-  if (!payload.access_token) {
-    throw new Error(payload.error || 'No access token returned')
-  }
-  return payload.access_token
+function isUpstreamSkillsRepo(repoOwner: string, repoName: string): boolean {
+  return repoOwner.toLowerCase() === SYNC_UPSTREAM_SKILLS_OWNER.toLowerCase()
+    && repoName.toLowerCase() === SYNC_UPSTREAM_SKILLS_REPO.toLowerCase()
 }
 
 async function resolveGithubUsername(token: string): Promise<string> {
@@ -650,8 +620,14 @@ async function resolveGithubUsername(token: string): Promise<string> {
   return user.login
 }
 
-async function ensureSkillsSyncRepo(token: string, repoOwner: string, repoName: string): Promise<void> {
-  const existsResp = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+async function ensurePrivateForkFromUpstream(
+  token: string,
+  username: string,
+  repoName: string,
+): Promise<void> {
+  const repoUrl = `https://api.github.com/repos/${username}/${repoName}`
+  let created = false
+  const existing = await fetch(repoUrl, {
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
@@ -659,16 +635,62 @@ async function ensureSkillsSyncRepo(token: string, repoOwner: string, repoName: 
       'User-Agent': 'codex-web-local',
     },
   })
-  if (existsResp.ok) return
-  if (existsResp.status !== 404) {
-    throw new Error(`Failed to check repo existence (${existsResp.status})`)
+  if (existing.ok) {
+    const details = await existing.json() as { private?: boolean }
+    if (details.private === true) return
+    await getGithubJson(repoUrl, token, 'PATCH', { private: true })
+    return
   }
+  if (existing.status !== 404) {
+    throw new Error(`Failed to check personal repo existence (${existing.status})`)
+  }
+
   await getGithubJson(
     'https://api.github.com/user/repos',
     token,
     'POST',
-    { name: repoName, private: true, auto_init: true, description: 'Codex skills sync state' },
+    { name: repoName, private: true, auto_init: false, description: 'Codex skills private mirror sync' },
   )
+  created = true
+
+  let ready = false
+  for (let i = 0; i < 20; i++) {
+    const check = await fetch(repoUrl, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'codex-web-local',
+      },
+    })
+    if (check.ok) {
+      ready = true
+      break
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  if (!ready) throw new Error('Private mirror repo was created but is not available yet')
+
+  if (!created) return
+
+  const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-seed-'))
+  try {
+    const upstreamUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
+    const branch = getPreferredSyncBranch()
+    try {
+      await runCommand('git', ['clone', '--depth', '1', '--single-branch', '--branch', branch, upstreamUrl, tmp])
+    } catch {
+      await runCommand('git', ['clone', '--depth', '1', upstreamUrl, tmp])
+    }
+    const privateRemote = toGitHubTokenRemote(username, repoName, token)
+    await runCommand('git', ['remote', 'set-url', 'origin', privateRemote], { cwd: tmp })
+    try {
+      await runCommand('git', ['checkout', '-B', branch], { cwd: tmp })
+    } catch {}
+    await runCommand('git', ['push', '-u', 'origin', `HEAD:${branch}`], { cwd: tmp })
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
 }
 
 async function readRemoteSkillsManifest(token: string, repoOwner: string, repoName: string): Promise<SyncedSkill[]> {
@@ -730,37 +752,94 @@ function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string)
   return `https://x-access-token:${encodeURIComponent(token)}@github.com/${repoOwner}/${repoName}.git`
 }
 
+async function ensureLocalRepoClone(repoUrl: string, localDir: string, branch: string): Promise<void> {
+  const gitDir = join(localDir, '.git')
+  let hasGitDir = false
+  try {
+    const info = await stat(gitDir)
+    hasGitDir = info.isDirectory()
+  } catch {
+    hasGitDir = false
+  }
+
+  if (!hasGitDir) {
+    await rm(localDir, { recursive: true, force: true })
+    await mkdir(join(localDir, '..'), { recursive: true })
+    try {
+      await runCommand('git', ['clone', '--single-branch', '--branch', branch, repoUrl, localDir])
+    } catch {
+      await runCommand('git', ['clone', repoUrl, localDir])
+      try { await runCommand('git', ['checkout', '-B', branch], { cwd: localDir }) } catch {}
+    }
+    return
+  }
+
+  await runCommand('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: localDir })
+  await runCommand('git', ['fetch', 'origin'], { cwd: localDir })
+  try {
+    await runCommand('git', ['checkout', branch], { cwd: localDir })
+  } catch {
+    await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
+  }
+  try {
+    await runCommand('git', ['pull', '--ff-only', 'origin', branch], { cwd: localDir })
+  } catch {
+    // keep local branch if remote branch doesn't exist yet
+  }
+}
+
+async function copyTreeNewerWins(sourceDir: string, targetDir: string): Promise<void> {
+  await mkdir(targetDir, { recursive: true })
+  const entries = await readdir(sourceDir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (entry.name === '.git') continue
+    const sourcePath = join(sourceDir, entry.name)
+    const targetPath = join(targetDir, entry.name)
+    if (entry.isDirectory()) {
+      await copyTreeNewerWins(sourcePath, targetPath)
+      continue
+    }
+    if (!entry.isFile()) continue
+    let shouldCopy = false
+    try {
+      const [srcStat, dstStat] = await Promise.all([stat(sourcePath), stat(targetPath)])
+      shouldCopy = srcStat.mtimeMs > dstStat.mtimeMs
+    } catch {
+      shouldCopy = true
+    }
+    if (shouldCopy) {
+      await mkdir(join(targetPath, '..'), { recursive: true })
+      await copyFile(sourcePath, targetPath)
+    }
+  }
+}
+
 async function syncInstalledSkillsFolderToRepo(
   token: string,
   repoOwner: string,
   repoName: string,
   installedMap: Map<string, InstalledSkillInfo>,
 ): Promise<void> {
-  const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-sync-push-'))
-  try {
-    const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
-    await runCommand('git', ['clone', '--depth', '1', remoteUrl, tmp])
+  const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
+  const branch = getPreferredSyncBranch()
+  const repoDir = getSkillsRemoteCacheDir(repoOwner, repoName)
+  await ensureLocalRepoClone(remoteUrl, repoDir, branch)
+  const addPaths: string[] = [SKILLS_SYNC_MANIFEST_PATH]
 
-    const repoSkillsDir = join(tmp, SKILLS_SYNC_FOLDER_PATH)
-    await rm(repoSkillsDir, { recursive: true, force: true })
-    await mkdir(repoSkillsDir, { recursive: true })
-
-    for (const [name, info] of installedMap.entries()) {
-      const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
-      const target = join(repoSkillsDir, name)
-      await cp(localSkillDir, target, { recursive: true, force: true })
-    }
-
-    await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: tmp })
-    await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: tmp })
-    await runCommand('git', ['add', SKILLS_SYNC_FOLDER_PATH, SKILLS_SYNC_MANIFEST_PATH], { cwd: tmp })
-    const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: tmp })).trim()
-    if (!status) return
-    await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: tmp })
-    await runCommand('git', ['push', 'origin', 'HEAD'], { cwd: tmp })
-  } finally {
-    await rm(tmp, { recursive: true, force: true })
+  for (const [name, info] of installedMap.entries()) {
+    const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
+    const target = join(repoDir, name)
+    await copyTreeNewerWins(localSkillDir, target)
+    addPaths.push(name)
   }
+
+  await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: repoDir })
+  await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: repoDir })
+  await runCommand('git', ['add', ...addPaths], { cwd: repoDir })
+  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+  if (!status) return
+  await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: repoDir })
+  await runCommand('git', ['push', 'origin', `HEAD:${branch}`], { cwd: repoDir })
 }
 
 async function pullInstalledSkillsFolderFromRepo(
@@ -769,38 +848,60 @@ async function pullInstalledSkillsFolderFromRepo(
   repoName: string,
   localSkillsDir: string,
 ): Promise<void> {
-  const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-sync-pull-'))
-  try {
-    const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
-    await runCommand('git', ['clone', '--depth', '1', remoteUrl, tmp])
-    const repoSkillsDir = join(tmp, SKILLS_SYNC_FOLDER_PATH)
-    let repoSkillEntries: string[] = []
-    try {
-      const entries = await readdir(repoSkillsDir, { withFileTypes: true })
-      repoSkillEntries = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.')).map((entry) => entry.name)
-    } catch {
-      repoSkillEntries = []
-    }
+  const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
+  const branch = getPreferredSyncBranch()
+  const repoDir = getSkillsRemoteCacheDir(repoOwner, repoName)
+  await ensureLocalRepoClone(remoteUrl, repoDir, branch)
+  await mergeSkillsFromRepoIntoLocal(repoDir, localSkillsDir)
+}
 
-    await mkdir(localSkillsDir, { recursive: true })
-    const currentLocal = await scanInstalledSkillsFromDisk()
-    const repoSet = new Set(repoSkillEntries)
-    for (const [name, info] of currentLocal.entries()) {
-      if (!repoSet.has(name)) {
-        const localSkillDir = info.path.replace(/[/\\]SKILL\.md$/u, '')
-        await rm(localSkillDir, { recursive: true, force: true })
+async function mergeSkillsFromRepoIntoLocal(repoDir: string, localSkillsDir: string): Promise<void> {
+  await mkdir(localSkillsDir, { recursive: true })
+  const skillsDir = join(repoDir, 'skills')
+
+  // Layout A: repository stores skills under `skills/`.
+  try {
+    await copyTreeNewerWins(skillsDir, localSkillsDir)
+  } catch {
+    // missing `skills/` layout
+  }
+
+  // Layout B: repository stores skills/files at root.
+  // Copy root entries (except git internals and duplicate `skills/`) with newer-wins.
+  try {
+    const entries = await readdir(repoDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.name === '.git' || entry.name === 'skills') continue
+      const sourcePath = join(repoDir, entry.name)
+      const targetPath = join(localSkillsDir, entry.name)
+      if (entry.isDirectory()) {
+        await copyTreeNewerWins(sourcePath, targetPath)
+        continue
+      }
+      if (!entry.isFile()) continue
+      let shouldCopy = false
+      try {
+        const [srcStat, dstStat] = await Promise.all([stat(sourcePath), stat(targetPath)])
+        shouldCopy = srcStat.mtimeMs > dstStat.mtimeMs
+      } catch {
+        shouldCopy = true
+      }
+      if (shouldCopy) {
+        await mkdir(join(targetPath, '..'), { recursive: true })
+        await copyFile(sourcePath, targetPath)
       }
     }
-
-    for (const name of repoSkillEntries) {
-      const from = join(repoSkillsDir, name)
-      const to = join(localSkillsDir, name)
-      await rm(to, { recursive: true, force: true })
-      await cp(from, to, { recursive: true, force: true })
-    }
-  } finally {
-    await rm(tmp, { recursive: true, force: true })
+  } catch {
+    // ignore missing repo dir
   }
+}
+
+async function bootstrapSkillsFromUpstreamIntoLocal(localSkillsDir: string): Promise<void> {
+  const repoUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
+  const branch = getPreferredSyncBranch()
+  const upstreamCacheDir = getSkillsRemoteCacheDir(SYNC_UPSTREAM_SKILLS_OWNER, SYNC_UPSTREAM_SKILLS_REPO)
+  await ensureLocalRepoClone(repoUrl, upstreamCacheDir, branch)
+  await mergeSkillsFromRepoIntoLocal(upstreamCacheDir, localSkillsDir)
 }
 
 async function collectLocalSyncedSkills(appServer: AppServerProcess): Promise<SyncedSkill[]> {
@@ -854,10 +955,71 @@ async function collectLocalSyncedSkills(appServer: AppServerProcess): Promise<Sy
 async function autoPushSyncedSkills(appServer: AppServerProcess): Promise<void> {
   const state = await readSkillsSyncState()
   if (!state.githubToken || !state.repoOwner || !state.repoName) return
+  if (isUpstreamSkillsRepo(state.repoOwner, state.repoName)) {
+    throw new Error('Refusing to push to upstream skills repository')
+  }
   const local = await collectLocalSyncedSkills(appServer)
   const installedMap = await scanInstalledSkillsFromDisk()
   await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
   await syncInstalledSkillsFolderToRepo(state.githubToken, state.repoOwner, state.repoName, installedMap)
+}
+
+async function initializeSkillsSyncOnStartup(appServer: AppServerProcess): Promise<void> {
+  if (startupSkillsSyncInitialized) return
+  startupSkillsSyncInitialized = true
+  startupSyncStatus.inProgress = true
+  startupSyncStatus.lastRunAtIso = new Date().toISOString()
+  startupSyncStatus.lastError = ''
+  startupSyncStatus.branch = getPreferredSyncBranch()
+  try {
+    const state = await readSkillsSyncState()
+    const localSkillsDir = getSkillsInstallDir()
+    if (!state.githubToken) {
+      startupSyncStatus.mode = 'unauthenticated-bootstrap'
+      startupSyncStatus.lastAction = 'pull-upstream'
+      await bootstrapSkillsFromUpstreamIntoLocal(localSkillsDir)
+      try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+      startupSyncStatus.lastSuccessAtIso = new Date().toISOString()
+      startupSyncStatus.lastAction = 'pull-upstream-complete'
+      return
+    }
+    startupSyncStatus.mode = 'authenticated-fork-sync'
+    startupSyncStatus.lastAction = 'ensure-private-fork'
+    const username = state.githubUsername || await resolveGithubUsername(state.githubToken)
+    const repoName = DEFAULT_SKILLS_SYNC_REPO_NAME
+    await ensurePrivateForkFromUpstream(state.githubToken, username, repoName)
+    const nextState: SkillsSyncState = { ...state, githubUsername: username, repoOwner: username, repoName }
+    await writeSkillsSyncState(nextState)
+    startupSyncStatus.lastAction = 'pull-private-fork'
+    await pullInstalledSkillsFolderFromRepo(state.githubToken, username, repoName, localSkillsDir)
+    try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+    startupSyncStatus.lastAction = 'push-private-fork'
+    await autoPushSyncedSkills(appServer)
+    startupSyncStatus.lastSuccessAtIso = new Date().toISOString()
+    startupSyncStatus.lastAction = 'startup-sync-complete'
+  } catch (error) {
+    startupSyncStatus.lastError = getErrorMessage(error, 'startup-sync-failed')
+    startupSyncStatus.lastAction = 'startup-sync-failed'
+  } finally {
+    startupSyncStatus.inProgress = false
+  }
+}
+
+async function finalizeGithubLoginAndSync(token: string, username: string, appServer: AppServerProcess): Promise<void> {
+  const repoName = DEFAULT_SKILLS_SYNC_REPO_NAME
+  await ensurePrivateForkFromUpstream(token, username, repoName)
+  const current = await readSkillsSyncState()
+  await writeSkillsSyncState({
+    ...current,
+    githubToken: token,
+    githubUsername: username,
+    repoOwner: username,
+    repoName,
+  })
+  const localDir = getSkillsInstallDir()
+  await pullInstalledSkillsFolderFromRepo(token, username, repoName, localDir)
+  try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+  await autoPushSyncedSkills(appServer)
 }
 
 async function searchSkillsHub(
@@ -1115,7 +1277,7 @@ function handleFileUpload(req: IncomingMessage, res: ServerResponse): void {
       setJson(res, 500, { error: getErrorMessage(err, 'Upload failed') })
     }
   })
-  req.on('error', (err) => {
+  req.on('error', (err: Error) => {
     setJson(res, 500, { error: getErrorMessage(err, 'Upload stream error') })
   })
 }
@@ -1671,6 +1833,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     }
     return threadSearchIndexPromise
   }
+  void initializeSkillsSyncOnStartup(appServer)
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     try {
@@ -2055,7 +2218,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             repoOwner: state.repoOwner ?? '',
             repoName: state.repoName ?? '',
             configured: Boolean(state.githubToken && state.repoOwner && state.repoName),
-            webOauthEnabled: Boolean(GITHUB_WEB_OAUTH_CLIENT_ID && GITHUB_WEB_OAUTH_CLIENT_SECRET),
+            startup: {
+              inProgress: startupSyncStatus.inProgress,
+              mode: startupSyncStatus.mode,
+              branch: startupSyncStatus.branch,
+              lastAction: startupSyncStatus.lastAction,
+              lastRunAtIso: startupSyncStatus.lastRunAtIso,
+              lastSuccessAtIso: startupSyncStatus.lastSuccessAtIso,
+              lastError: startupSyncStatus.lastError,
+            },
           },
         })
         return
@@ -2080,8 +2251,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
           const username = await resolveGithubUsername(token)
-          const state = await readSkillsSyncState()
-          await writeSkillsSyncState({ ...state, githubToken: token, githubUsername: username })
+          await finalizeGithubLoginAndSync(token, username, appServer)
           setJson(res, 200, { ok: true, data: { githubUsername: username } })
         } catch (error) {
           setJson(res, 502, { error: getErrorMessage(error, 'Failed to login with GitHub token') })
@@ -2089,61 +2259,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/github/web/start') {
+      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/github/logout') {
         try {
-          if (!GITHUB_WEB_OAUTH_CLIENT_ID || !GITHUB_WEB_OAUTH_CLIENT_SECRET) {
-            setJson(res, 400, { error: 'Web OAuth is not configured on server (missing GITHUB_OAUTH_CLIENT_ID/SECRET)' })
-            return
-          }
-          const state = createGithubOauthState()
-          const callbackPath = '/codex-api/skills-sync/github/web/callback'
-          const baseUrl = resolveBaseUrl(req)
-          const redirectUri = `${baseUrl}${callbackPath}`
-          const authUrl = new URL('https://github.com/login/oauth/authorize')
-          authUrl.searchParams.set('client_id', GITHUB_WEB_OAUTH_CLIENT_ID)
-          authUrl.searchParams.set('redirect_uri', redirectUri)
-          authUrl.searchParams.set('scope', 'repo read:user')
-          authUrl.searchParams.set('state', state)
-          res.statusCode = 302
-          res.setHeader('Location', authUrl.toString())
-          res.end()
+          const state = await readSkillsSyncState()
+          await writeSkillsSyncState({
+            ...state,
+            githubToken: undefined,
+            githubUsername: undefined,
+            repoOwner: undefined,
+            repoName: undefined,
+          })
+          setJson(res, 200, { ok: true })
         } catch (error) {
-          setJson(res, 502, { error: getErrorMessage(error, 'Failed to start GitHub web auth') })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/github/web/callback') {
-        const stateParam = url.searchParams.get('state')?.trim() ?? ''
-        const code = url.searchParams.get('code')?.trim() ?? ''
-        const errorParam = url.searchParams.get('error')?.trim() ?? ''
-        if (errorParam) {
-          const message = encodeURIComponent(errorParam)
-          res.statusCode = 200
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=${message}')</script></body></html>`)
-          return
-        }
-        if (!stateParam || !consumeGithubOauthState(stateParam) || !code) {
-          res.statusCode = 200
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=invalid_state')</script></body></html>`)
-          return
-        }
-        try {
-          const redirectUri = `${resolveBaseUrl(req)}/codex-api/skills-sync/github/web/callback`
-          const token = await exchangeGithubWebOauthCode(code, redirectUri)
-          const username = await resolveGithubUsername(token)
-          const current = await readSkillsSyncState()
-          await writeSkillsSyncState({ ...current, githubToken: token, githubUsername: username })
-          res.statusCode = 200
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end('<!DOCTYPE html><html><body><script>window.location.replace(\'/skills?syncAuth=ok\')</script></body></html>')
-        } catch (error) {
-          const message = encodeURIComponent(getErrorMessage(error, 'oauth_failed'))
-          res.statusCode = 200
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end(`<!DOCTYPE html><html><body><script>window.location.replace('/skills?syncAuth=error&reason=${message}')</script></body></html>`)
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to logout GitHub') })
         }
         return
       }
@@ -2163,32 +2291,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
           const token = result.token
           const username = await resolveGithubUsername(token)
-          const state = await readSkillsSyncState()
-          await writeSkillsSyncState({ ...state, githubToken: token, githubUsername: username })
+          await finalizeGithubLoginAndSync(token, username, appServer)
           setJson(res, 200, { ok: true, data: { githubUsername: username } })
         } catch (error) {
           setJson(res, 502, { error: getErrorMessage(error, 'Failed to complete GitHub login') })
-        }
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/setup') {
-        try {
-          const payload = asRecord(await readJsonBody(req))
-          const requestedRepoName = typeof payload?.repoName === 'string' ? payload.repoName.trim() : ''
-          const state = await readSkillsSyncState()
-          if (!state.githubToken) {
-            setJson(res, 401, { error: 'Login with GitHub first' })
-            return
-          }
-          const username = state.githubUsername || await resolveGithubUsername(state.githubToken)
-          const repoName = requestedRepoName || state.repoName || DEFAULT_SKILLS_SYNC_REPO_NAME
-          await ensureSkillsSyncRepo(state.githubToken, username, repoName)
-          await writeSkillsSyncState({ ...state, githubUsername: username, repoOwner: username, repoName })
-          await autoPushSyncedSkills(appServer)
-          setJson(res, 200, { ok: true, data: { repoOwner: username, repoName } })
-        } catch (error) {
-          setJson(res, 502, { error: getErrorMessage(error, 'Failed to setup skills sync repo') })
         }
         return
       }
@@ -2198,6 +2304,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const state = await readSkillsSyncState()
           if (!state.githubToken || !state.repoOwner || !state.repoName) {
             setJson(res, 400, { error: 'Skills sync is not configured yet' })
+            return
+          }
+          if (isUpstreamSkillsRepo(state.repoOwner, state.repoName)) {
+            setJson(res, 400, { error: 'Refusing to push to upstream repository' })
             return
           }
           const local = await collectLocalSyncedSkills(appServer)
@@ -2246,7 +2356,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             if (!localSkills.has(skill.name)) {
               await runCommand('python3', [
                 installerScript,
-                '--repo', 'openclaw/skills',
+                '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
                 '--path', `skills/${owner}/${skill.name}`,
                 '--dest', localDir,
                 '--method', 'git',
@@ -2283,7 +2393,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             setJson(res, 400, { error: 'Missing owner or name' })
             return
           }
-          const rawUrl = `https://raw.githubusercontent.com/openclaw/skills/main/skills/${owner}/${name}/SKILL.md`
+          const rawUrl = `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${owner}/${name}/SKILL.md`
           const resp = await fetch(rawUrl)
           if (!resp.ok) throw new Error(`Failed to fetch SKILL.md: ${resp.status}`)
           const content = await resp.text()
@@ -2308,7 +2418,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const skillPathInRepo = `skills/${owner}/${name}`
           await runCommand('python3', [
             installerScript,
-            '--repo', 'openclaw/skills',
+            '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
             '--path', skillPathInRepo,
             '--dest', installDest,
             '--method', 'git',

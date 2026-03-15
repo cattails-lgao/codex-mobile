@@ -30,14 +30,22 @@
         <span v-else-if="syncStatus.loggedIn" class="skills-sync-badge">Logged in as {{ syncStatus.githubUsername }}</span>
         <span v-else class="skills-sync-badge">Not connected</span>
       </div>
+      <div class="skills-sync-meta">
+        <span>Startup: {{ syncStatus.startup.mode }}</span>
+        <span>Branch: {{ syncStatus.startup.branch }}</span>
+        <span>Action: {{ syncStatus.startup.lastAction }}</span>
+      </div>
+      <div v-if="syncStatus.startup.lastError" class="skills-sync-error">
+        {{ syncStatus.startup.lastError }}
+      </div>
       <div v-if="deviceLogin" class="skills-sync-device">
         <span>Open <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">GitHub device login</a> and enter code:</span>
         <code>{{ deviceLogin.user_code }}</code>
       </div>
       <div class="skills-sync-actions">
-        <button class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
-        <button class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
-        <button class="skills-hub-sort" type="button" @click="setupSyncRepo" :disabled="!syncStatus.loggedIn">Create Private Repo</button>
+        <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
+        <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
+        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="logoutGithub">Logout GitHub</button>
         <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="!syncStatus.configured">Pull</button>
         <button class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured">Push</button>
       </div>
@@ -124,6 +132,15 @@ const syncStatus = ref({
   repoOwner: '',
   repoName: '',
   configured: false,
+  startup: {
+    inProgress: false,
+    mode: 'idle',
+    branch: 'main',
+    lastAction: 'not-started',
+    lastRunAtIso: '',
+    lastSuccessAtIso: '',
+    lastError: '',
+  },
 })
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -401,18 +418,6 @@ async function startGithubFirebaseLogin(): Promise<void> {
   }
 }
 
-async function setupSyncRepo(): Promise<void> {
-  try {
-    const resp = await fetch('/codex-api/skills-sync/setup', { method: 'POST' })
-    const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to setup sync repo')
-    await loadSyncStatus()
-    showToast('Private sync repo is ready')
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to setup sync repo', 'error')
-  }
-}
-
 async function pullSkillsSync(): Promise<void> {
   try {
     const resp = await fetch('/codex-api/skills-sync/pull', { method: 'POST' })
@@ -434,6 +439,18 @@ async function pushSkillsSync(): Promise<void> {
     showToast('Pushed skills to private sync repo')
   } catch (e) {
     showToast(e instanceof Error ? e.message : 'Failed to push sync', 'error')
+  }
+}
+
+async function logoutGithub(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/github/logout', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to logout GitHub')
+    await loadSyncStatus()
+    showToast('Logged out from GitHub')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed to logout GitHub', 'error')
   }
 }
 
@@ -500,6 +517,14 @@ onMounted(() => {
 
 .skills-sync-device {
   @apply text-xs text-zinc-600 flex items-center gap-2 flex-wrap;
+}
+
+.skills-sync-meta {
+  @apply text-xs text-zinc-600 flex items-center gap-3 flex-wrap;
+}
+
+.skills-sync-error {
+  @apply text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1;
 }
 
 .skills-sync-actions {
