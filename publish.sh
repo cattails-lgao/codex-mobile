@@ -8,25 +8,23 @@ fi
 
 package_name=$(node -p "require('./package.json').name")
 current_version=$(node -p "require('./package.json').version")
-published_version=$(npm view "$package_name" version 2>/dev/null || true)
+published_version=$(npm view "$package_name" dist-tags.latest 2>/dev/null || true)
 
-if [[ -n "$published_version" ]]; then
-  next_version=$(node -e "
-const current = process.argv[1].split('.').map(Number);
-const published = process.argv[2].split('.').map(Number);
-const base = published[0] === current[0] && published[1] === current[1] && published[2] === current[2]
-  ? published
-  : current;
+next_version=$(node -e "
+const parse = (v) => v.split('.').map((n) => Number(n));
+const gt = (a, b) => {
+  for (let i = 0; i < 3; i += 1) {
+    if (a[i] > b[i]) return true;
+    if (a[i] < b[i]) return false;
+  }
+  return false;
+};
+const current = parse(process.argv[1]);
+const published = process.argv[2] ? parse(process.argv[2]) : [0, 0, 0];
+const base = gt(current, published) ? current : published;
 base[2] += 1;
 console.log(base.join('.'));
 " "$current_version" "$published_version")
-else
-  next_version=$(node -e "
-const parts = process.argv[1].split('.').map(Number);
-parts[2] += 1;
-console.log(parts.join('.'));
-" "$current_version")
-fi
 
 if [[ "$next_version" != "$current_version" ]]; then
   npm version "$next_version" --no-git-tag-version
