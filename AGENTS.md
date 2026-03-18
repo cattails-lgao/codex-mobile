@@ -31,6 +31,13 @@
 
 - **ALWAYS test UI/behavior changes before reporting completion.** Never skip this step.
 - After completing a task that changes behavior or UI, run a Playwright verification in headless mode and attach evidence.
+- If a change affects package/runtime/module loading behavior, also run a CJS smoke test before completion.
+- CJS smoke test requirement:
+  1. Build the project/artifact first (if needed).
+  2. Run a Node `require(...)` check against the changed entry (or closest public CJS entry).
+  3. Confirm the module loads without runtime errors and expected exported symbol(s) exist.
+  4. Include the exact CJS command and result summary in the completion report.
+- For Playwright automation scripts, CJS (`const { chromium } = require('playwright')`) is the default style unless ESM is explicitly required.
 - Always run this test sequence:
   1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4173`).
   2. If there are stale servers on the same port, stop them first to avoid false test results.
@@ -53,6 +60,7 @@
   - viewport(s)
   - assertion/result summary
   - screenshot absolute path(s)
+  - CJS command/result (when module-loading behavior was changed)
 
 ## NPX Testing Rule
 
