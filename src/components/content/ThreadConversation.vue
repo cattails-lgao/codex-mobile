@@ -184,6 +184,7 @@
                     <p v-if="block.kind === 'text'" class="message-text">
                       <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <a
                           v-else-if="segment.kind === 'file'"
                           class="message-file-link"
@@ -383,6 +384,7 @@ const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
+  | { kind: 'bold'; value: string }
   | { kind: 'code'; value: string }
   | { kind: 'url'; value: string; href: string }
   | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
@@ -556,7 +558,7 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /\S+/gu
+  const pattern = /https?:\/\/\S+|file:\/\/\S+|\S*[\\/]\S+/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -583,7 +585,12 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       segments.push({ kind: 'text', value: leading })
     }
 
-    if (/^https?:\/\//u.test(token)) {
+    if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
+      segments.push({ kind: 'bold', value: token.slice(2, -2) })
+      if (trailing) {
+        segments.push({ kind: 'text', value: trailing })
+      }
+    } else if (/^https?:\/\//u.test(token)) {
       segments.push({ kind: 'url', value: token, href: token })
       if (trailing) {
         segments.push({ kind: 'text', value: trailing })
@@ -613,9 +620,61 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     segments.push({ kind: 'text', value: text.slice(cursor) })
   }
 
-  return segments
+  return applyBoldMarkersAcrossTextSegments(segments)
 }
 
+function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSegment[] {
+  const output: InlineSegment[] = []
+  let inBold = false
+  let boldBuffer = ''
+
+  const pushText = (value: string): void => {
+    if (!value) return
+    output.push({ kind: 'text', value })
+  }
+
+  for (const segment of segments) {
+    if (segment.kind !== 'text') {
+      if (inBold) {
+        pushText(`**${boldBuffer}`)
+        inBold = false
+        boldBuffer = ''
+      }
+      output.push(segment)
+      continue
+    }
+
+    let remaining = segment.value
+    while (remaining.length > 0) {
+      const markerIndex = remaining.indexOf('**')
+      if (markerIndex < 0) {
+        if (inBold) boldBuffer += remaining
+        else pushText(remaining)
+        break
+      }
+
+      const before = remaining.slice(0, markerIndex)
+      if (inBold) boldBuffer += before
+      else pushText(before)
+
+      remaining = remaining.slice(markerIndex + 2)
+      if (inBold) {
+        if (boldBuffer.length > 0) output.push({ kind: 'bold', value: boldBuffer })
+        else pushText('****')
+        boldBuffer = ''
+        inBold = false
+      } else {
+        inBold = true
+      }
+    }
+  }
+
+  if (inBold) {
+    pushText(`**${boldBuffer}`)
+  }
+
+  return output
+}
 function splitTextByFileUrls(text: string): InlineSegment[] {
   const markdownLinkPattern = /\[([^\]\n]+)\]\(([^)\n]+)\)/gu
   const segments: InlineSegment[] = []
@@ -1405,6 +1464,10 @@ onBeforeUnmount(() => {
 
 .message-text {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
+}
+
+.message-bold-text {
+  @apply font-semibold text-slate-900;
 }
 
 .message-markdown-image {
