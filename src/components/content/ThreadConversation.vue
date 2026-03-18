@@ -194,6 +194,16 @@
                         >
                           {{ segment.displayPath }}
                         </a>
+                        <a
+                          v-else-if="segment.kind === 'url'"
+                          class="message-file-link"
+                          :href="segment.href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.href"
+                        >
+                          {{ segment.value }}
+                        </a>
                         <code v-else class="message-inline-code">{{ segment.value }}</code>
                       </template>
                     </p>
@@ -352,6 +362,7 @@ const props = defineProps<{
   liveOverlay: UiLiveOverlay | null
   isLoading: boolean
   activeThreadId: string
+  cwd: string
   scrollState: ThreadScrollState | null
   isTurnInProgress?: boolean
   isRollingBack?: boolean
@@ -373,6 +384,7 @@ const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
   | { kind: 'code'; value: string }
+  | { kind: 'url'; value: string; href: string }
   | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
 type MessageBlock =
   | { kind: 'text'; value: string }
@@ -395,6 +407,7 @@ type ParsedToolQuestion = {
 function isFilePath(value: string): boolean {
   if (!value || /\s/u.test(value)) return false
   if (value.endsWith('/') || value.endsWith('\\')) return false
+  if (value.startsWith('file://')) return true
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(value)) return false
 
   const looksLikeUnixAbsolute = value.startsWith('/')
@@ -410,10 +423,89 @@ function getBasename(pathValue: string): string {
   return name || pathValue
 }
 
+function normalizePathSeparators(pathValue: string): string {
+  return pathValue.replace(/\\/gu, '/')
+}
+
+function normalizeFileUrlToPath(pathValue: string): string {
+  if (!pathValue.startsWith('file://')) return pathValue
+  let stripped = pathValue.replace(/^file:\/\//u, '')
+  try {
+    stripped = decodeURIComponent(stripped)
+  } catch {
+    // Keep best-effort path if decoding fails.
+  }
+  if (/^\/[A-Za-z]:\//u.test(stripped)) {
+    stripped = stripped.slice(1)
+  }
+  return stripped
+}
+
+function inferHomeFromCwd(cwd: string): string {
+  const normalized = normalizePathSeparators(cwd)
+  const userMatch = normalized.match(/^\/Users\/([^/]+)/u)
+  if (userMatch) return `/Users/${userMatch[1]}`
+  const homeMatch = normalized.match(/^\/home\/([^/]+)/u)
+  if (homeMatch) return `/home/${homeMatch[1]}`
+  return ''
+}
+
+function normalizePathDots(pathValue: string): string {
+  const normalized = normalizePathSeparators(pathValue)
+  if (!normalized) return normalized
+
+  let root = ''
+  let rest = normalized
+  const driveMatch = rest.match(/^([A-Za-z]:)(\/.*)?$/u)
+  if (driveMatch) {
+    root = `${driveMatch[1]}/`
+    rest = (driveMatch[2] ?? '').replace(/^\/+/u, '')
+  } else if (rest.startsWith('/')) {
+    root = '/'
+    rest = rest.slice(1)
+  }
+
+  const parts = rest.split('/').filter(Boolean)
+  const stack: string[] = []
+  for (const part of parts) {
+    if (part === '.') continue
+    if (part === '..') {
+      if (stack.length > 0) stack.pop()
+      continue
+    }
+    stack.push(part)
+  }
+
+  const joined = stack.join('/')
+  if (root) return `${root}${joined}`.replace(/\/+$/u, '') || root
+  return joined || normalized
+}
+
+function resolveRelativePath(pathValue: string, cwd: string): string {
+  const normalizedPath = normalizePathSeparators(normalizeFileUrlToPath(pathValue.trim()))
+  if (!normalizedPath) return ''
+
+  const looksLikeAbsolute = normalizedPath.startsWith('/') || /^[A-Za-z]:\//u.test(normalizedPath)
+  if (looksLikeAbsolute) return normalizePathDots(normalizedPath)
+
+  if (normalizedPath.startsWith('~/')) {
+    const homeBase = inferHomeFromCwd(cwd)
+    if (homeBase) {
+      return normalizePathDots(`${homeBase}/${normalizedPath.slice(2)}`)
+    }
+  }
+
+  const base = normalizePathSeparators(cwd.trim())
+  if (!base) return normalizePathDots(normalizedPath)
+  return normalizePathDots(`${base.replace(/\/+$/u, '')}/${normalizedPath}`)
+}
+
 function parseFileReference(value: string): { path: string; line: number | null } | null {
   if (!value) return null
 
-  let pathValue = value
+  let pathValue = value.trim()
+  const wrapped = trimLinkWrappers(pathValue)
+  pathValue = wrapped.core.trim()
   let line: number | null = null
 
   const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C\d+)?$/u)
@@ -428,12 +520,139 @@ function parseFileReference(value: string): { path: string; line: number | null 
     }
   }
 
+  pathValue = normalizeFileUrlToPath(pathValue)
   if (!isFilePath(pathValue)) return null
   return { path: pathValue, line }
 }
 
+function trimLinkWrappers(value: string): { core: string; leading: string; trailing: string } {
+  let core = value
+  let leading = ''
+  let trailing = ''
+
+  while (/^[('"`[{<“‘]/u.test(core)) {
+    leading += core[0]
+    core = core.slice(1)
+  }
+  while (/[)"'`\]}>”’]$/u.test(core)) {
+    trailing = core.slice(-1) + trailing
+    core = core.slice(0, -1)
+  }
+
+  return { core, leading, trailing }
+}
+
+function splitPlainTextByLinks(text: string): InlineSegment[] {
+  const segments: InlineSegment[] = []
+  const pattern = /\S+/gu
+  let cursor = 0
+
+  for (const match of text.matchAll(pattern)) {
+    if (typeof match.index !== 'number') continue
+    const start = match.index
+    const end = start + match[0].length
+
+    if (start > cursor) {
+      segments.push({ kind: 'text', value: text.slice(cursor, start) })
+    }
+
+    let token = match[0]
+    let trailingPunctuation = ''
+    while (/[.,;:]$/u.test(token)) {
+      trailingPunctuation = token.slice(-1) + trailingPunctuation
+      token = token.slice(0, -1)
+    }
+    const wrapped = trimLinkWrappers(token)
+    token = wrapped.core
+    const leading = wrapped.leading
+    const trailing = wrapped.trailing + trailingPunctuation
+
+    if (leading) {
+      segments.push({ kind: 'text', value: leading })
+    }
+
+    if (/^https?:\/\//u.test(token)) {
+      segments.push({ kind: 'url', value: token, href: token })
+      if (trailing) {
+        segments.push({ kind: 'text', value: trailing })
+      }
+    } else {
+      const ref = parseFileReference(token)
+      if (ref) {
+        segments.push({
+          kind: 'file',
+          value: token,
+          path: ref.path,
+          displayPath: token,
+          downloadName: getBasename(ref.path),
+        })
+        if (trailing) {
+          segments.push({ kind: 'text', value: trailing })
+        }
+      } else {
+        segments.push({ kind: 'text', value: match[0] })
+      }
+    }
+
+    cursor = end
+  }
+
+  if (cursor < text.length) {
+    segments.push({ kind: 'text', value: text.slice(cursor) })
+  }
+
+  return segments
+}
+
+function splitTextByFileUrls(text: string): InlineSegment[] {
+  const markdownLinkPattern = /\[([^\]\n]+)\]\(([^)\n]+)\)/gu
+  const segments: InlineSegment[] = []
+  let cursor = 0
+
+  for (const match of text.matchAll(markdownLinkPattern)) {
+    if (typeof match.index !== 'number') continue
+    const [fullMatch, labelRaw, targetRaw] = match
+    const start = match.index
+    const end = start + fullMatch.length
+
+    if (start > cursor) {
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
+    }
+
+    const labelWrapped = trimLinkWrappers((labelRaw ?? '').trim())
+    const label = labelWrapped.core.trim() || (labelRaw ?? '').trim()
+    const targetWrapped = trimLinkWrappers((targetRaw ?? '').trim())
+    const target = targetWrapped.core.trim()
+
+    if (/^https?:\/\//u.test(target)) {
+      segments.push({ kind: 'url', value: label || target, href: target })
+    } else {
+      const ref = parseFileReference(target)
+      if (ref) {
+        segments.push({
+          kind: 'file',
+          value: target,
+          path: ref.path,
+          displayPath: label || target,
+          downloadName: getBasename(ref.path),
+        })
+      } else {
+        segments.push({ kind: 'text', value: fullMatch })
+      }
+    }
+
+    cursor = end
+  }
+
+  if (cursor < text.length) {
+    segments.push(...splitPlainTextByLinks(text.slice(cursor)))
+  }
+
+  return segments
+}
+
 function parseInlineSegments(text: string): InlineSegment[] {
-  if (!text.includes('`')) return [{ kind: 'text', value: text }]
+  if (!text.includes('`')) return splitTextByFileUrls(text)
 
   const segments: InlineSegment[] = []
   let cursor = 0
@@ -475,7 +694,7 @@ function parseInlineSegments(text: string): InlineSegment[] {
     }
 
     if (cursor > textStart) {
-      segments.push({ kind: 'text', value: text.slice(textStart, cursor) })
+      segments.push(...splitTextByFileUrls(text.slice(textStart, cursor)))
     }
 
     const token = text.slice(cursor + openLength, closingStart)
@@ -504,7 +723,7 @@ function parseInlineSegments(text: string): InlineSegment[] {
   }
 
   if (textStart < text.length) {
-    segments.push({ kind: 'text', value: text.slice(textStart) })
+    segments.push(...splitTextByFileUrls(text.slice(textStart)))
   }
 
   return segments
@@ -544,12 +763,12 @@ function toBrowseUrl(pathValue: string): string {
   )
 
   const parsed = parseFileReference(normalized)
-  if (parsed?.path && looksLikeAbsolutePath(parsed.path)) {
-    return `/codex-local-browse${encodeURI(parsed.path)}`
-  }
+  const candidatePath = parsed?.path ?? normalized
+  const resolved = resolveRelativePath(candidatePath, props.cwd)
 
-  if (looksLikeAbsolutePath(normalized)) {
-    return `/codex-local-browse${encodeURI(normalized)}`
+  if (looksLikeAbsolutePath(resolved)) {
+    const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
+    return `/codex-local-browse${encodeURI(normalizedResolved)}`
   }
 
   return '#'
