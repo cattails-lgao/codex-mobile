@@ -105,12 +105,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { initializeApp, getApp, getApps } from 'firebase/app'
-import { getAuth, GithubAuthProvider, signInWithPopup } from 'firebase/auth'
 import IconTablerSearch from '../icons/IconTablerSearch.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
 import SkillDetailModal, { type HubSkill } from './SkillDetailModal.vue'
+import { useGithubSkillsSync } from '../../composables/useGithubSkillsSync'
 
 const EMPTY_SKILL: HubSkill = { name: '', owner: '', description: '', url: '', installed: false }
 const SKILLS_HUB_CACHE_KEY = 'codex-web-local.skills-hub.cache.v1'
@@ -131,26 +130,6 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const actionSkillKey = ref('')
 const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
-const syncActionStatus = ref('')
-const syncActionError = ref('')
-const syncActionInFlight = ref<'pull' | 'push' | ''>('')
-const deviceLogin = ref<{ device_code: string; user_code: string; verification_uri: string } | null>(null)
-const syncStatus = ref({
-  loggedIn: false,
-  githubUsername: '',
-  repoOwner: '',
-  repoName: '',
-  configured: false,
-  startup: {
-    inProgress: false,
-    mode: 'idle',
-    branch: 'main',
-    lastAction: 'not-started',
-    lastRunAtIso: '',
-    lastSuccessAtIso: '',
-    lastError: '',
-  },
-})
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -167,9 +146,6 @@ const isDetailInstalling = computed(() =>
 const isDetailUninstalling = computed(() =>
   isUninstallActionInFlight.value && actionSkillKey.value === currentDetailSkillKey.value,
 )
-const isPullInFlight = computed(() => syncActionInFlight.value === 'pull')
-const isPushInFlight = computed(() => syncActionInFlight.value === 'push')
-const isSyncActionInFlight = computed(() => syncActionInFlight.value !== '')
 const filteredInstalled = computed(() => {
   const q = query.value.toLowerCase().trim()
   if (!q) return installedSkills.value
@@ -348,141 +324,27 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
   }
 }
 
-async function loadSyncStatus(): Promise<void> {
-  try {
-    const resp = await fetch('/codex-api/skills-sync/status')
-    if (!resp.ok) return
-    const payload = (await resp.json()) as { data?: typeof syncStatus.value }
-    if (payload.data) syncStatus.value = payload.data
-  } catch {
-    // best effort
-  }
-}
-
-async function startGithubLogin(): Promise<void> {
-  try {
-    const startResp = await fetch('/codex-api/skills-sync/github/start-login', { method: 'POST' })
-    const startData = (await startResp.json()) as { data?: { device_code: string; user_code: string; verification_uri: string; interval?: number } }
-    if (!startResp.ok || !startData.data) throw new Error('Failed to start GitHub login')
-    deviceLogin.value = startData.data
-    const maxAttempts = 30
-    const waitMs = Math.max((startData.data.interval ?? 5) * 1000, 3000)
-    let loggedIn = false
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs))
-      const completeResp = await fetch('/codex-api/skills-sync/github/complete-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceCode: startData.data.device_code }),
-      })
-      const completeData = (await completeResp.json()) as { ok?: boolean; pending?: boolean; error?: string }
-      if (!completeResp.ok) throw new Error(completeData.error || 'Failed to complete GitHub login')
-      if (completeData.ok) {
-        loggedIn = true
-        break
-      }
-      if (!completeData.pending) throw new Error(completeData.error || 'Failed to complete GitHub login')
-    }
-    if (!loggedIn) throw new Error('GitHub login timed out. Please retry.')
-    deviceLogin.value = null
-    await loadSyncStatus()
-    showToast('GitHub login successful')
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed GitHub login', 'error')
-  }
-}
-
-const firebaseConfig = {
-  apiKey: 'AIzaSyAf0CIHBZ-wEQJ8CCUUWo1Wl9P7typ_ZPI',
-  authDomain: 'gptcall-416910.firebaseapp.com',
-  projectId: 'gptcall-416910',
-  storageBucket: 'gptcall-416910.appspot.com',
-  messagingSenderId: '99275526699',
-  appId: '1:99275526699:web:3b623e1e2996108b52106e',
-}
-
-async function startGithubFirebaseLogin(): Promise<void> {
-  try {
-    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
-    const auth = getAuth(app)
-    const provider = new GithubAuthProvider()
-    provider.addScope('repo')
-    const result = await signInWithPopup(auth, provider)
-    const credential = GithubAuthProvider.credentialFromResult(result)
-    const token = credential?.accessToken ?? ''
-    if (!token) {
-      throw new Error('GitHub access token missing from Firebase login')
-    }
-    const resp = await fetch('/codex-api/skills-sync/github/token-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-    const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!resp.ok || !data.ok) {
-      throw new Error(data.error || 'Failed to login with GitHub token')
-    }
-    await loadSyncStatus()
-    showToast('GitHub login successful')
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed Firebase GitHub login'
-    showToast(message, 'error')
-  }
-}
-
-async function pullSkillsSync(): Promise<void> {
-  syncActionError.value = ''
-  syncActionStatus.value = 'pull-started'
-  syncActionInFlight.value = 'pull'
-  try {
-    const resp = await fetch('/codex-api/skills-sync/pull', { method: 'POST' })
-    const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to pull synced skills')
+const {
+  deviceLogin,
+  isPullInFlight,
+  isPushInFlight,
+  isSyncActionInFlight,
+  loadSyncStatus,
+  logoutGithub,
+  pullSkillsSync,
+  pushSkillsSync,
+  startGithubFirebaseLogin,
+  startGithubLogin,
+  syncActionError,
+  syncActionStatus,
+  syncStatus,
+} = useGithubSkillsSync({
+  showToast,
+  onPulled: async () => {
     await fetchSkills(query.value)
     emit('skills-changed')
-    syncActionStatus.value = 'pull-success'
-    showToast(syncStatus.value.loggedIn ? 'Pulled skills from private sync repo' : 'Pulled skills from upstream repo')
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Failed to pull sync'
-    syncActionError.value = message
-    syncActionStatus.value = 'pull-failed'
-    showToast(message, 'error')
-  } finally {
-    syncActionInFlight.value = ''
-  }
-}
-
-async function pushSkillsSync(): Promise<void> {
-  syncActionError.value = ''
-  syncActionStatus.value = 'push-started'
-  syncActionInFlight.value = 'push'
-  try {
-    const resp = await fetch('/codex-api/skills-sync/push', { method: 'POST' })
-    const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to push synced skills')
-    syncActionStatus.value = 'push-success'
-    showToast('Pushed skills to private sync repo')
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Failed to push sync'
-    syncActionError.value = message
-    syncActionStatus.value = 'push-failed'
-    showToast(message, 'error')
-  } finally {
-    syncActionInFlight.value = ''
-  }
-}
-
-async function logoutGithub(): Promise<void> {
-  try {
-    const resp = await fetch('/codex-api/skills-sync/github/logout', { method: 'POST' })
-    const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to logout GitHub')
-    await loadSyncStatus()
-    showToast('Logged out from GitHub')
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to logout GitHub', 'error')
-  }
-}
+  },
+})
 
 onMounted(() => {
   void fetchSkills('')
