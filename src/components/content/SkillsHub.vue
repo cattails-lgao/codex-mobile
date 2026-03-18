@@ -5,22 +5,38 @@
       <p class="skills-hub-subtitle">Browse and discover skills from the OpenClaw community</p>
     </div>
 
-    <div class="skills-hub-toolbar">
-      <div class="skills-hub-search-wrap">
-        <IconTablerSearch class="skills-hub-search-icon" />
-        <input
-          ref="searchRef"
-          v-model="query"
-          class="skills-hub-search"
-          type="text"
-          placeholder="Search skills... (e.g. flight, docker, react)"
-          @input="onSearchInput"
-        />
-        <span v-if="totalCount > 0" class="skills-hub-count">{{ totalCount }} skills</span>
+    <div class="skills-sync-panel">
+      <div class="skills-sync-header">
+        <strong>Skills Sync (GitHub)</strong>
+        <span v-if="syncStatus.configured" class="skills-sync-badge">Connected: {{ syncStatus.repoOwner }}/{{ syncStatus.repoName }}</span>
+        <span v-else-if="syncStatus.loggedIn" class="skills-sync-badge">Logged in as {{ syncStatus.githubUsername }}</span>
+        <span v-else class="skills-sync-badge">Not connected</span>
       </div>
-      <button class="skills-hub-sort" type="button" @click="toggleSort">
-        {{ sortLabel }}
-      </button>
+      <div class="skills-sync-meta">
+        <span>Startup: {{ syncStatus.startup.mode }}</span>
+        <span>Branch: {{ syncStatus.startup.branch }}</span>
+        <span>Action: {{ syncStatus.startup.lastAction }}</span>
+      </div>
+      <div v-if="syncStatus.startup.lastError" class="skills-sync-error">
+        {{ syncStatus.startup.lastError }}
+      </div>
+      <div v-if="syncActionStatus" class="skills-sync-meta">
+        <span>Manual sync: {{ syncActionStatus }}</span>
+      </div>
+      <div v-if="syncActionError" class="skills-sync-error">
+        {{ syncActionError }}
+      </div>
+      <div v-if="deviceLogin" class="skills-sync-device">
+        <span>Open <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">GitHub device login</a> and enter code:</span>
+        <code>{{ deviceLogin.user_code }}</code>
+      </div>
+      <div class="skills-sync-actions">
+        <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
+        <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
+        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="logoutGithub" :disabled="isSyncActionInFlight">Logout GitHub</button>
+        <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="isSyncActionInFlight">{{ isPullInFlight ? 'Pulling...' : 'Pull' }}</button>
+        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured || isSyncActionInFlight">{{ isPushInFlight ? 'Pushing...' : 'Push' }}</button>
+      </div>
     </div>
 
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
@@ -38,6 +54,24 @@
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>
+    </div>
+
+    <div class="skills-hub-toolbar">
+      <div class="skills-hub-search-wrap">
+        <IconTablerSearch class="skills-hub-search-icon" />
+        <input
+          ref="searchRef"
+          v-model="query"
+          class="skills-hub-search"
+          type="text"
+          placeholder="Search skills... (e.g. flight, docker, react)"
+          @input="onSearchInput"
+        />
+        <span v-if="totalCount > 0" class="skills-hub-count">{{ totalCount }} skills</span>
+      </div>
+      <button class="skills-hub-sort" type="button" @click="toggleSort">
+        {{ sortLabel }}
+      </button>
     </div>
 
     <div class="skills-hub-section">
@@ -71,6 +105,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { initializeApp, getApp, getApps } from 'firebase/app'
+import { getAuth, GithubAuthProvider, signInWithPopup } from 'firebase/auth'
 import IconTablerSearch from '../icons/IconTablerSearch.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
@@ -95,6 +131,26 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const actionSkillKey = ref('')
 const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
+const syncActionStatus = ref('')
+const syncActionError = ref('')
+const syncActionInFlight = ref<'pull' | 'push' | ''>('')
+const deviceLogin = ref<{ device_code: string; user_code: string; verification_uri: string } | null>(null)
+const syncStatus = ref({
+  loggedIn: false,
+  githubUsername: '',
+  repoOwner: '',
+  repoName: '',
+  configured: false,
+  startup: {
+    inProgress: false,
+    mode: 'idle',
+    branch: 'main',
+    lastAction: 'not-started',
+    lastRunAtIso: '',
+    lastSuccessAtIso: '',
+    lastError: '',
+  },
+})
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -111,6 +167,9 @@ const isDetailInstalling = computed(() =>
 const isDetailUninstalling = computed(() =>
   isUninstallActionInFlight.value && actionSkillKey.value === currentDetailSkillKey.value,
 )
+const isPullInFlight = computed(() => syncActionInFlight.value === 'pull')
+const isPushInFlight = computed(() => syncActionInFlight.value === 'push')
+const isSyncActionInFlight = computed(() => syncActionInFlight.value !== '')
 const filteredInstalled = computed(() => {
   const q = query.value.toLowerCase().trim()
   if (!q) return installedSkills.value
@@ -281,6 +340,7 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
       body: JSON.stringify({ method: 'skills/config/write', params: { path: skill.path, enabled } }),
     })
     if (!resp.ok) throw new Error('Failed to update skill')
+    await fetch('/codex-api/skills-sync/push', { method: 'POST' })
     showToast(`${skill.displayName || skill.name} skill ${enabled ? 'enabled' : 'disabled'}`)
     await fetchSkills(query.value)
   } catch (e) {
@@ -288,8 +348,145 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
   }
 }
 
+async function loadSyncStatus(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/status')
+    if (!resp.ok) return
+    const payload = (await resp.json()) as { data?: typeof syncStatus.value }
+    if (payload.data) syncStatus.value = payload.data
+  } catch {
+    // best effort
+  }
+}
+
+async function startGithubLogin(): Promise<void> {
+  try {
+    const startResp = await fetch('/codex-api/skills-sync/github/start-login', { method: 'POST' })
+    const startData = (await startResp.json()) as { data?: { device_code: string; user_code: string; verification_uri: string; interval?: number } }
+    if (!startResp.ok || !startData.data) throw new Error('Failed to start GitHub login')
+    deviceLogin.value = startData.data
+    const maxAttempts = 30
+    const waitMs = Math.max((startData.data.interval ?? 5) * 1000, 3000)
+    let loggedIn = false
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+      const completeResp = await fetch('/codex-api/skills-sync/github/complete-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceCode: startData.data.device_code }),
+      })
+      const completeData = (await completeResp.json()) as { ok?: boolean; pending?: boolean; error?: string }
+      if (!completeResp.ok) throw new Error(completeData.error || 'Failed to complete GitHub login')
+      if (completeData.ok) {
+        loggedIn = true
+        break
+      }
+      if (!completeData.pending) throw new Error(completeData.error || 'Failed to complete GitHub login')
+    }
+    if (!loggedIn) throw new Error('GitHub login timed out. Please retry.')
+    deviceLogin.value = null
+    await loadSyncStatus()
+    showToast('GitHub login successful')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed GitHub login', 'error')
+  }
+}
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyAf0CIHBZ-wEQJ8CCUUWo1Wl9P7typ_ZPI',
+  authDomain: 'gptcall-416910.firebaseapp.com',
+  projectId: 'gptcall-416910',
+  storageBucket: 'gptcall-416910.appspot.com',
+  messagingSenderId: '99275526699',
+  appId: '1:99275526699:web:3b623e1e2996108b52106e',
+}
+
+async function startGithubFirebaseLogin(): Promise<void> {
+  try {
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+    const auth = getAuth(app)
+    const provider = new GithubAuthProvider()
+    provider.addScope('repo')
+    const result = await signInWithPopup(auth, provider)
+    const credential = GithubAuthProvider.credentialFromResult(result)
+    const token = credential?.accessToken ?? ''
+    if (!token) {
+      throw new Error('GitHub access token missing from Firebase login')
+    }
+    const resp = await fetch('/codex-api/skills-sync/github/token-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to login with GitHub token')
+    }
+    await loadSyncStatus()
+    showToast('GitHub login successful')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed Firebase GitHub login'
+    showToast(message, 'error')
+  }
+}
+
+async function pullSkillsSync(): Promise<void> {
+  syncActionError.value = ''
+  syncActionStatus.value = 'pull-started'
+  syncActionInFlight.value = 'pull'
+  try {
+    const resp = await fetch('/codex-api/skills-sync/pull', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to pull synced skills')
+    await fetchSkills(query.value)
+    emit('skills-changed')
+    syncActionStatus.value = 'pull-success'
+    showToast(syncStatus.value.loggedIn ? 'Pulled skills from private sync repo' : 'Pulled skills from upstream repo')
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to pull sync'
+    syncActionError.value = message
+    syncActionStatus.value = 'pull-failed'
+    showToast(message, 'error')
+  } finally {
+    syncActionInFlight.value = ''
+  }
+}
+
+async function pushSkillsSync(): Promise<void> {
+  syncActionError.value = ''
+  syncActionStatus.value = 'push-started'
+  syncActionInFlight.value = 'push'
+  try {
+    const resp = await fetch('/codex-api/skills-sync/push', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to push synced skills')
+    syncActionStatus.value = 'push-success'
+    showToast('Pushed skills to private sync repo')
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to push sync'
+    syncActionError.value = message
+    syncActionStatus.value = 'push-failed'
+    showToast(message, 'error')
+  } finally {
+    syncActionInFlight.value = ''
+  }
+}
+
+async function logoutGithub(): Promise<void> {
+  try {
+    const resp = await fetch('/codex-api/skills-sync/github/logout', { method: 'POST' })
+    const data = (await resp.json()) as { ok?: boolean; error?: string }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to logout GitHub')
+    await loadSyncStatus()
+    showToast('Logged out from GitHub')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : 'Failed to logout GitHub', 'error')
+  }
+}
+
 onMounted(() => {
   void fetchSkills('')
+  void loadSyncStatus()
 })
 </script>
 
@@ -334,6 +531,34 @@ onMounted(() => {
 
 .skills-hub-sort {
   @apply shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer;
+}
+
+.skills-sync-panel {
+  @apply rounded-xl border border-zinc-200 bg-zinc-50 p-3 flex flex-col gap-2;
+}
+
+.skills-sync-header {
+  @apply flex flex-wrap items-center gap-2 text-sm text-zinc-700;
+}
+
+.skills-sync-badge {
+  @apply text-xs rounded-md border border-zinc-300 bg-white px-2 py-0.5;
+}
+
+.skills-sync-device {
+  @apply text-xs text-zinc-600 flex items-center gap-2 flex-wrap;
+}
+
+.skills-sync-meta {
+  @apply text-xs text-zinc-600 flex items-center gap-3 flex-wrap;
+}
+
+.skills-sync-error {
+  @apply text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1;
+}
+
+.skills-sync-actions {
+  @apply flex flex-wrap gap-2;
 }
 
 .skills-hub-toast {

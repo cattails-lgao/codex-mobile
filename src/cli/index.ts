@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { createServer } from 'node:http'
 import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
