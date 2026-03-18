@@ -38,6 +38,11 @@
   3. Confirm the module loads without runtime errors and expected exported symbol(s) exist.
   4. Include the exact CJS command and result summary in the completion report.
 - For Playwright automation scripts, CJS (`const { chromium } = require('playwright')`) is the default style unless ESM is explicitly required.
+- Preferred Playwright verification pattern for chat parsing changes:
+  - send a message with a unique marker (for selecting the correct rendered row)
+  - include mixed content in one message (for example: plain text, `**bold**`, and `` `code` ``)
+  - inspect row HTML and count expected rendered nodes (for example `strong.message-bold-text`)
+  - save screenshot to `output/playwright/<task-name>.png`
 - Always run this test sequence:
   1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4173`).
   2. If there are stale servers on the same port, stop them first to avoid false test results.
