@@ -5,24 +5,6 @@
       <p class="skills-hub-subtitle">Browse and discover skills from the OpenClaw community</p>
     </div>
 
-    <div class="skills-hub-toolbar">
-      <div class="skills-hub-search-wrap">
-        <IconTablerSearch class="skills-hub-search-icon" />
-        <input
-          ref="searchRef"
-          v-model="query"
-          class="skills-hub-search"
-          type="text"
-          placeholder="Search skills... (e.g. flight, docker, react)"
-          @input="onSearchInput"
-        />
-        <span v-if="totalCount > 0" class="skills-hub-count">{{ totalCount }} skills</span>
-      </div>
-      <button class="skills-hub-sort" type="button" @click="toggleSort">
-        {{ sortLabel }}
-      </button>
-    </div>
-
     <div class="skills-sync-panel">
       <div class="skills-sync-header">
         <strong>Skills Sync (GitHub)</strong>
@@ -38,6 +20,12 @@
       <div v-if="syncStatus.startup.lastError" class="skills-sync-error">
         {{ syncStatus.startup.lastError }}
       </div>
+      <div v-if="syncActionStatus" class="skills-sync-meta">
+        <span>Manual sync: {{ syncActionStatus }}</span>
+      </div>
+      <div v-if="syncActionError" class="skills-sync-error">
+        {{ syncActionError }}
+      </div>
       <div v-if="deviceLogin" class="skills-sync-device">
         <span>Open <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">GitHub device login</a> and enter code:</span>
         <code>{{ deviceLogin.user_code }}</code>
@@ -45,9 +33,9 @@
       <div class="skills-sync-actions">
         <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
         <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
-        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="logoutGithub">Logout GitHub</button>
-        <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="!syncStatus.configured">Pull</button>
-        <button class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured">Push</button>
+        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="logoutGithub" :disabled="isSyncActionInFlight">Logout GitHub</button>
+        <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="isSyncActionInFlight">{{ isPullInFlight ? 'Pulling...' : 'Pull' }}</button>
+        <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured || isSyncActionInFlight">{{ isPushInFlight ? 'Pushing...' : 'Push' }}</button>
       </div>
     </div>
 
@@ -66,6 +54,24 @@
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>
+    </div>
+
+    <div class="skills-hub-toolbar">
+      <div class="skills-hub-search-wrap">
+        <IconTablerSearch class="skills-hub-search-icon" />
+        <input
+          ref="searchRef"
+          v-model="query"
+          class="skills-hub-search"
+          type="text"
+          placeholder="Search skills... (e.g. flight, docker, react)"
+          @input="onSearchInput"
+        />
+        <span v-if="totalCount > 0" class="skills-hub-count">{{ totalCount }} skills</span>
+      </div>
+      <button class="skills-hub-sort" type="button" @click="toggleSort">
+        {{ sortLabel }}
+      </button>
     </div>
 
     <div class="skills-hub-section">
@@ -125,6 +131,9 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const actionSkillKey = ref('')
 const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
+const syncActionStatus = ref('')
+const syncActionError = ref('')
+const syncActionInFlight = ref<'pull' | 'push' | ''>('')
 const deviceLogin = ref<{ device_code: string; user_code: string; verification_uri: string } | null>(null)
 const syncStatus = ref({
   loggedIn: false,
@@ -158,6 +167,9 @@ const isDetailInstalling = computed(() =>
 const isDetailUninstalling = computed(() =>
   isUninstallActionInFlight.value && actionSkillKey.value === currentDetailSkillKey.value,
 )
+const isPullInFlight = computed(() => syncActionInFlight.value === 'pull')
+const isPushInFlight = computed(() => syncActionInFlight.value === 'push')
+const isSyncActionInFlight = computed(() => syncActionInFlight.value !== '')
 const filteredInstalled = computed(() => {
   const q = query.value.toLowerCase().trim()
   if (!q) return installedSkills.value
@@ -419,26 +431,44 @@ async function startGithubFirebaseLogin(): Promise<void> {
 }
 
 async function pullSkillsSync(): Promise<void> {
+  syncActionError.value = ''
+  syncActionStatus.value = 'pull-started'
+  syncActionInFlight.value = 'pull'
   try {
     const resp = await fetch('/codex-api/skills-sync/pull', { method: 'POST' })
     const data = (await resp.json()) as { ok?: boolean; error?: string }
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to pull synced skills')
     await fetchSkills(query.value)
     emit('skills-changed')
-    showToast('Pulled skills from private sync repo')
+    syncActionStatus.value = 'pull-success'
+    showToast(syncStatus.value.loggedIn ? 'Pulled skills from private sync repo' : 'Pulled skills from upstream repo')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to pull sync', 'error')
+    const message = e instanceof Error ? e.message : 'Failed to pull sync'
+    syncActionError.value = message
+    syncActionStatus.value = 'pull-failed'
+    showToast(message, 'error')
+  } finally {
+    syncActionInFlight.value = ''
   }
 }
 
 async function pushSkillsSync(): Promise<void> {
+  syncActionError.value = ''
+  syncActionStatus.value = 'push-started'
+  syncActionInFlight.value = 'push'
   try {
     const resp = await fetch('/codex-api/skills-sync/push', { method: 'POST' })
     const data = (await resp.json()) as { ok?: boolean; error?: string }
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Failed to push synced skills')
+    syncActionStatus.value = 'push-success'
     showToast('Pushed skills to private sync repo')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to push sync', 'error')
+    const message = e instanceof Error ? e.message : 'Failed to push sync'
+    syncActionError.value = message
+    syncActionStatus.value = 'push-failed'
+    showToast(message, 'error')
+  } finally {
+    syncActionInFlight.value = ''
   }
 }
 

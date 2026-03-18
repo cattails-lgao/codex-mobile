@@ -1005,11 +1005,33 @@ async function ensureCodexAgentsSymlinkToSkillsAgents(): Promise<void> {
   const codexHomeDir = getCodexHomeDir()
   const skillsAgentsPath = join(codexHomeDir, 'skills', 'AGENTS.md')
   const codexAgentsPath = join(codexHomeDir, 'AGENTS.md')
+
+  await mkdir(join(codexHomeDir, 'skills'), { recursive: true })
+
+  // If ~/.codex/AGENTS.md exists (file or symlink), copy its content into skills/AGENTS.md.
+  let copiedFromCodex = false
   try {
-    const skillsAgentsStat = await stat(skillsAgentsPath)
-    if (!skillsAgentsStat.isFile()) return
-  } catch {
-    return
+    const codexAgentsStat = await lstat(codexAgentsPath)
+    if (codexAgentsStat.isFile() || codexAgentsStat.isSymbolicLink()) {
+      const content = await readFile(codexAgentsPath, 'utf8')
+      await writeFile(skillsAgentsPath, content, 'utf8')
+      copiedFromCodex = true
+    } else {
+      await rm(codexAgentsPath, { force: true, recursive: true })
+    }
+  } catch {}
+
+  // If no source content existed, ensure skills/AGENTS.md exists as an empty file.
+  if (!copiedFromCodex) {
+    try {
+      const skillsAgentsStat = await stat(skillsAgentsPath)
+      if (!skillsAgentsStat.isFile()) {
+        await rm(skillsAgentsPath, { force: true, recursive: true })
+        await writeFile(skillsAgentsPath, '', 'utf8')
+      }
+    } catch {
+      await writeFile(skillsAgentsPath, '', 'utf8')
+    }
   }
 
   const relativeTarget = join('skills', 'AGENTS.md')
@@ -2393,7 +2415,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const state = await readSkillsSyncState()
           if (!state.githubToken || !state.repoOwner || !state.repoName) {
-            setJson(res, 400, { error: 'Skills sync is not configured yet' })
+            const localDir = await detectUserSkillsDir(appServer)
+            await bootstrapSkillsFromUpstreamIntoLocal(localDir)
+            try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+            setJson(res, 200, { ok: true, data: { synced: 0, source: 'upstream' } })
             return
           }
           const remote = await readRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName)
