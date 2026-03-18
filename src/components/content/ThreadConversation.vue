@@ -542,6 +542,18 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   return { core, leading, trailing }
 }
 
+function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
+  const trimmed = value.trim()
+  const match = trimmed.match(/^\[([^\]\n]+)\]\(([^)\n]+)\)$/u)
+  if (!match) return null
+  const labelRaw = (match[1] ?? '').trim()
+  const targetRaw = (match[2] ?? '').trim()
+  const label = trimLinkWrappers(labelRaw).core.trim() || labelRaw
+  const target = trimLinkWrappers(targetRaw).core.trim()
+  if (!target) return null
+  return { label, target }
+}
+
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
   const pattern = /\S+/gu
@@ -619,10 +631,9 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
       segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
     }
 
-    const labelWrapped = trimLinkWrappers((labelRaw ?? '').trim())
-    const label = labelWrapped.core.trim() || (labelRaw ?? '').trim()
-    const targetWrapped = trimLinkWrappers((targetRaw ?? '').trim())
-    const target = targetWrapped.core.trim()
+    const markdownToken = parseMarkdownLinkToken(`[${labelRaw ?? ''}](${targetRaw ?? ''})`)
+    const label = markdownToken?.label ?? (labelRaw ?? '').trim()
+    const target = markdownToken?.target ?? (targetRaw ?? '').trim()
 
     if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
@@ -699,20 +710,44 @@ function parseInlineSegments(text: string): InlineSegment[] {
 
     const token = text.slice(cursor + openLength, closingStart)
     if (token.length > 0) {
-      const fileReference = parseFileReference(token)
-      if (fileReference) {
-        const displayPath = fileReference.line
-          ? `${fileReference.path}:${String(fileReference.line)}`
-          : fileReference.path
-        segments.push({
-          kind: 'file',
-          value: token,
-          path: fileReference.path,
-          displayPath,
-          downloadName: getBasename(fileReference.path),
-        })
+      const markdownLink = parseMarkdownLinkToken(token)
+      if (markdownLink) {
+        if (/^https?:\/\//u.test(markdownLink.target)) {
+          segments.push({
+            kind: 'url',
+            value: markdownLink.label || markdownLink.target,
+            href: markdownLink.target,
+          })
+        } else {
+          const markdownFileReference = parseFileReference(markdownLink.target)
+          if (markdownFileReference) {
+            segments.push({
+              kind: 'file',
+              value: markdownLink.target,
+              path: markdownFileReference.path,
+              displayPath: markdownLink.label || markdownLink.target,
+              downloadName: getBasename(markdownFileReference.path),
+            })
+          } else {
+            segments.push({ kind: 'code', value: token })
+          }
+        }
       } else {
-        segments.push({ kind: 'code', value: token })
+        const fileReference = parseFileReference(token)
+        if (fileReference) {
+          const displayPath = fileReference.line
+            ? `${fileReference.path}:${String(fileReference.line)}`
+            : fileReference.path
+          segments.push({
+            kind: 'file',
+            value: token,
+            path: fileReference.path,
+            displayPath,
+            downloadName: getBasename(fileReference.path),
+          })
+        } else {
+          segments.push({ kind: 'code', value: token })
+        }
       }
     } else {
       segments.push({ kind: 'text', value: `${delimiter}${delimiter}` })
