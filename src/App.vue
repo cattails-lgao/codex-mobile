@@ -7,11 +7,8 @@
             v-if="!isSidebarCollapsed"
             class="sidebar-thread-controls-host"
             :is-sidebar-collapsed="isSidebarCollapsed"
-            :is-auto-refresh-enabled="isAutoRefreshEnabled"
-            :auto-refresh-button-label="autoRefreshButtonLabel"
             :show-new-thread-button="true"
             @toggle-sidebar="setSidebarCollapsed(!isSidebarCollapsed)"
-            @toggle-auto-refresh="onToggleAutoRefreshTimer"
             @start-new-thread="onStartNewThreadFromToolbar"
           >
             <button
@@ -102,11 +99,8 @@
               v-if="isSidebarCollapsed || isMobile"
               class="sidebar-thread-controls-header-host"
               :is-sidebar-collapsed="isSidebarCollapsed"
-              :is-auto-refresh-enabled="isAutoRefreshEnabled"
-              :auto-refresh-button-label="autoRefreshButtonLabel"
               :show-new-thread-button="true"
               @toggle-sidebar="setSidebarCollapsed(!isSidebarCollapsed)"
-              @toggle-auto-refresh="onToggleAutoRefreshTimer"
               @start-new-thread="onStartNewThreadFromToolbar"
             />
           </template>
@@ -247,8 +241,6 @@ const {
   isLoadingMessages,
   isSendingMessage,
   isInterruptingTurn,
-  isAutoRefreshEnabled,
-  autoRefreshSecondsLeft,
   refreshAll,
   refreshSkills,
   selectThread,
@@ -270,7 +262,6 @@ const {
   removeProject,
   reorderProject,
   pinProjectToTop,
-  toggleAutoRefreshTimer,
   startPolling,
   stopPolling,
 } = useDesktopState()
@@ -326,11 +317,6 @@ const contentTitle = computed(() => {
   if (isHomeRoute.value) return 'New thread'
   return selectedThread.value?.title ?? 'Choose a thread'
 })
-const autoRefreshButtonLabel = computed(() =>
-  isAutoRefreshEnabled.value
-    ? `Auto refresh in ${String(autoRefreshSecondsLeft.value)}s`
-    : 'Enable 4s refresh',
-)
 const filteredMessages = computed(() =>
   messages.value.filter((message) => {
     const type = normalizeMessageType(message.messageType, message.role)
@@ -512,10 +498,6 @@ function onUpdateThreadScrollState(payload: { threadId: string; state: ThreadScr
 
 function onRespondServerRequest(payload: { id: number; result?: unknown; error?: { code?: number; message: string } }): void {
   void respondToPendingServerRequest(payload)
-}
-
-function onToggleAutoRefreshTimer(): void {
-  toggleAutoRefreshTimer()
 }
 
 function setSidebarCollapsed(nextValue: boolean): void {

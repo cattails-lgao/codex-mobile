@@ -45,9 +45,7 @@ const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
 const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v1'
-const AUTO_REFRESH_ENABLED_STORAGE_KEY = 'codex-web-local.auto-refresh-enabled.v1'
 const EVENT_SYNC_DEBOUNCE_MS = 220
-const AUTO_REFRESH_INTERVAL_MS = 4000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
@@ -70,16 +68,6 @@ function loadReadStateMap(): Record<string, string> {
 function saveReadStateMap(state: Record<string, string>): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(READ_STATE_STORAGE_KEY, JSON.stringify(state))
-}
-
-function loadAutoRefreshEnabled(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(AUTO_REFRESH_ENABLED_STORAGE_KEY) === '1'
-}
-
-function saveAutoRefreshEnabled(value: boolean): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(AUTO_REFRESH_ENABLED_STORAGE_KEY, value ? '1' : '0')
 }
 
 function clamp(value: number, minValue: number, maxValue: number): number {
@@ -674,12 +662,8 @@ export function useDesktopState() {
   const error = ref('')
   const isPolling = ref(false)
   const hasLoadedThreads = ref(false)
-  const isAutoRefreshEnabled = ref(loadAutoRefreshEnabled())
-  const autoRefreshSecondsLeft = ref(Math.floor(AUTO_REFRESH_INTERVAL_MS / 1000))
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
-  let autoRefreshIntervalTimer: number | null = null
-  let autoRefreshCountdownTimer: number | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
   let hasHydratedWorkspaceRootsState = false
@@ -2619,9 +2603,6 @@ export function useDesktopState() {
     if (typeof window === 'undefined') return
 
     if (stopNotificationStream) return
-    if (isAutoRefreshEnabled.value) {
-      startAutoRefreshTimer()
-    }
     void loadPendingServerRequestsFromBridge()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       applyRealtimeUpdates(notification)
@@ -2655,53 +2636,7 @@ export function useDesktopState() {
     }
   }
 
-  function stopAutoRefreshTimer(options: { updatePreference?: boolean } = {}): void {
-    const updatePreference = options.updatePreference ?? true
-
-    if (autoRefreshIntervalTimer !== null && typeof window !== 'undefined') {
-      window.clearInterval(autoRefreshIntervalTimer)
-      autoRefreshIntervalTimer = null
-    }
-    if (autoRefreshCountdownTimer !== null && typeof window !== 'undefined') {
-      window.clearInterval(autoRefreshCountdownTimer)
-      autoRefreshCountdownTimer = null
-    }
-    if (updatePreference) {
-      isAutoRefreshEnabled.value = false
-      saveAutoRefreshEnabled(false)
-    }
-    autoRefreshSecondsLeft.value = Math.floor(AUTO_REFRESH_INTERVAL_MS / 1000)
-  }
-
-  function startAutoRefreshTimer(): void {
-    if (typeof window === 'undefined') return
-    if (autoRefreshIntervalTimer !== null || autoRefreshCountdownTimer !== null) return
-
-    isAutoRefreshEnabled.value = true
-    saveAutoRefreshEnabled(true)
-    autoRefreshSecondsLeft.value = Math.floor(AUTO_REFRESH_INTERVAL_MS / 1000)
-
-    autoRefreshIntervalTimer = window.setInterval(() => {
-      autoRefreshSecondsLeft.value = Math.floor(AUTO_REFRESH_INTERVAL_MS / 1000)
-      void syncThreadStatus()
-    }, AUTO_REFRESH_INTERVAL_MS)
-
-    autoRefreshCountdownTimer = window.setInterval(() => {
-      autoRefreshSecondsLeft.value = Math.max(0, autoRefreshSecondsLeft.value - 1)
-    }, 1000)
-  }
-
-  function toggleAutoRefreshTimer(): void {
-    if (isAutoRefreshEnabled.value) {
-      stopAutoRefreshTimer()
-      return
-    }
-    startAutoRefreshTimer()
-  }
-
   function stopPolling(): void {
-    stopAutoRefreshTimer({ updatePreference: false })
-
     if (stopNotificationStream) {
       stopNotificationStream()
       stopNotificationStream = null
@@ -2772,8 +2707,6 @@ export function useDesktopState() {
     isLoadingMessages,
     isSendingMessage,
     isInterruptingTurn,
-    isAutoRefreshEnabled,
-    autoRefreshSecondsLeft,
     error,
     refreshAll,
     refreshSkills,
@@ -2796,7 +2729,6 @@ export function useDesktopState() {
     removeProject,
     reorderProject,
     pinProjectToTop,
-    toggleAutoRefreshTimer,
     startPolling,
     stopPolling,
   }

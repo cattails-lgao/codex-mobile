@@ -189,14 +189,6 @@
   @apply text-zinc-400 hover:border-zinc-600 hover:bg-zinc-800;
 }
 
-:root.dark .sidebar-thread-controls-button[aria-pressed='true'] {
-  @apply border-emerald-700 bg-emerald-900/40 text-emerald-400;
-}
-
-:root.dark .sidebar-thread-controls-button[aria-pressed='false'] {
-  @apply text-zinc-500;
-}
-
 :root.dark .new-thread-hero {
   @apply text-zinc-100;
 }
