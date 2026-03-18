@@ -87,7 +87,7 @@
         v-for="message in messages"
         :key="message.id"
         class="conversation-item"
-        :class="{ 'conversation-item-rollbackable': canRollbackMessage(message) }"
+        :class="{ 'conversation-item-actionable': canShowMessageActions(message) }"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -227,16 +227,28 @@
               </article>
             </article>
 
-            <button
-              v-if="canRollbackMessage(message)"
-              class="rollback-button"
-              type="button"
-              title="Rollback to this message (remove this turn and all after it)"
-              @click="onRollback(message)"
-            >
-              <IconTablerArrowBackUp class="rollback-icon" />
-              <span class="rollback-label">Rollback</span>
-            </button>
+            <div v-if="canShowMessageActions(message)" class="message-actions">
+              <button
+                v-if="canCopyMessage(message)"
+                class="message-action-button"
+                type="button"
+                title="Copy message text"
+                @click="onCopyMessage(message)"
+              >
+                <IconTablerCopy class="message-action-icon" />
+                <span class="message-action-label">Copy</span>
+              </button>
+              <button
+                v-if="canRollbackMessage(message)"
+                class="message-action-button"
+                type="button"
+                title="Rollback to this message (remove this turn and all after it)"
+                @click="onRollback(message)"
+              >
+                <IconTablerArrowBackUp class="message-action-icon" />
+                <span class="message-action-label">Rollback</span>
+              </button>
+            </div>
           </div>
         </div>
       </li>
@@ -276,6 +288,7 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
+import IconTablerCopy from '../icons/IconTablerCopy.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsingCommandIds = ref<Set<string>>(new Set())
@@ -964,6 +977,33 @@ function canRollbackMessage(message: UiMessage): boolean {
   return true
 }
 
+function canCopyMessage(message: UiMessage): boolean {
+  if (message.role !== 'user' && message.role !== 'assistant') return false
+  return message.text.trim().length > 0
+}
+
+function canShowMessageActions(message: UiMessage): boolean {
+  return canCopyMessage(message) || canRollbackMessage(message)
+}
+
+async function onCopyMessage(message: UiMessage): Promise<void> {
+  if (!canCopyMessage(message)) return
+  const text = message.text.trim()
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+}
+
 function onRollback(message: UiMessage): void {
   if (!canRollbackMessage(message)) return
   emit('rollback', { turnIndex: message.turnIndex! })
@@ -1463,19 +1503,23 @@ onBeforeUnmount(() => {
   @apply w-5 h-5;
 }
 
-.conversation-item-rollbackable:hover .rollback-button {
+.conversation-item-actionable:hover .message-action-button {
   @apply opacity-100;
 }
 
-.rollback-button {
-  @apply opacity-0 mt-1 inline-flex items-center gap-1 self-start rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300;
+.message-actions {
+  @apply mt-1 inline-flex items-center gap-1 self-start;
 }
 
-.rollback-icon {
+.message-action-button {
+  @apply opacity-0 inline-flex items-center gap-1 self-start rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300;
+}
+
+.message-action-icon {
   @apply w-3.5 h-3.5;
 }
 
-.rollback-label {
+.message-action-label {
   @apply leading-none;
 }
 
