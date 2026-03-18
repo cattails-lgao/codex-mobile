@@ -720,7 +720,8 @@ function toBrowseUrl(pathValue: string): string {
   const resolved = resolveRelativePath(candidatePath, props.cwd)
 
   if (looksLikeAbsolutePath(resolved)) {
-    return `/codex-local-browse${encodeURI(resolved)}`
+    const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
+    return `/codex-local-browse${encodeURI(normalizedResolved)}`
   }
 
   return '#'
