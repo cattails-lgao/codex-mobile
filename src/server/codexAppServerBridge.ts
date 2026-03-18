@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -792,15 +792,23 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
     await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
   }
   await resolveMergeConflictsByNewerCommit(localDir, branch)
+  const localMtimesBeforePull = await snapshotFileMtimes(localDir)
   try {
     await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir })
   } catch {}
+  let pulledMtimes = new Map<string, number>()
   try {
     await runCommand('git', ['pull', '--no-rebase', 'origin', branch], { cwd: localDir })
+    pulledMtimes = await snapshotFileMtimes(localDir)
   } catch {
     await resolveMergeConflictsByNewerCommit(localDir, branch)
+    pulledMtimes = await snapshotFileMtimes(localDir)
   }
-  try { await runCommand('git', ['stash', 'pop'], { cwd: localDir }) } catch {}
+  try {
+    await runCommand('git', ['stash', 'pop'], { cwd: localDir })
+  } catch {
+    await resolveStashPopConflictsByFileTime(localDir, localMtimesBeforePull, pulledMtimes)
+  }
   return localDir
 }
 
@@ -834,6 +842,63 @@ async function getCommitTime(repoDir: string, ref: string, path: string): Promis
     return output ? Number.parseInt(output, 10) : 0
   } catch {
     return 0
+  }
+}
+
+async function resolveStashPopConflictsByFileTime(
+  repoDir: string,
+  localMtimesBeforePull: Map<string, number>,
+  pulledMtimes: Map<string, number>,
+): Promise<void> {
+  const unmerged = (await runCommandWithOutput('git', ['diff', '--name-only', '--diff-filter=U'], { cwd: repoDir }))
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter(Boolean)
+  if (unmerged.length === 0) return
+
+  // During stash pop conflicts, `--theirs` corresponds to stashed local changes.
+  // Prefer the side whose file mtime snapshot is newer.
+  for (const path of unmerged) {
+    const localMtime = localMtimesBeforePull.get(path) ?? 0
+    const pulledMtime = pulledMtimes.get(path) ?? 0
+    const side = localMtime >= pulledMtime ? '--theirs' : '--ours'
+    await runCommand('git', ['checkout', side, '--', path], { cwd: repoDir })
+    await runCommand('git', ['add', '--', path], { cwd: repoDir })
+  }
+
+  const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
+  if (mergeHead) {
+    await runCommand('git', ['commit', '-m', 'Auto-resolve stash-pop conflicts by file time'], { cwd: repoDir })
+  }
+}
+
+async function snapshotFileMtimes(dir: string): Promise<Map<string, number>> {
+  const mtimes = new Map<string, number>()
+  await walkFileMtimes(dir, dir, mtimes)
+  return mtimes
+}
+
+async function walkFileMtimes(rootDir: string, currentDir: string, out: Map<string, number>): Promise<void> {
+  let entries: Array<{ name: string | Buffer; isDirectory: () => boolean; isFile: () => boolean }>
+  try {
+    entries = (await readdir(currentDir, { withFileTypes: true })) as Array<{ name: string | Buffer; isDirectory: () => boolean; isFile: () => boolean }>
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const entryName = String(entry.name)
+    if (entryName === '.git') continue
+    const absolutePath = join(currentDir, entryName)
+    const relativePath = absolutePath.slice(rootDir.length + 1)
+    if (entry.isDirectory()) {
+      await walkFileMtimes(rootDir, absolutePath, out)
+      continue
+    }
+    if (!entry.isFile()) continue
+    try {
+      const info = await stat(absolutePath)
+      out.set(relativePath, info.mtimeMs)
+    } catch {}
   }
 }
 
@@ -936,6 +1001,30 @@ async function autoPushSyncedSkills(appServer: AppServerProcess): Promise<void> 
   await syncInstalledSkillsFolderToRepo(state.githubToken, state.repoOwner, state.repoName, installedMap)
 }
 
+async function ensureCodexAgentsSymlinkToSkillsAgents(): Promise<void> {
+  const codexHomeDir = getCodexHomeDir()
+  const skillsAgentsPath = join(codexHomeDir, 'skills', 'AGENTS.md')
+  const codexAgentsPath = join(codexHomeDir, 'AGENTS.md')
+  try {
+    const skillsAgentsStat = await stat(skillsAgentsPath)
+    if (!skillsAgentsStat.isFile()) return
+  } catch {
+    return
+  }
+
+  const relativeTarget = join('skills', 'AGENTS.md')
+  try {
+    const current = await lstat(codexAgentsPath)
+    if (current.isSymbolicLink()) {
+      const existingTarget = await readlink(codexAgentsPath)
+      if (existingTarget === relativeTarget) return
+    }
+    await rm(codexAgentsPath, { force: true, recursive: true })
+  } catch {}
+
+  await symlink(relativeTarget, codexAgentsPath)
+}
+
 async function initializeSkillsSyncOnStartup(appServer: AppServerProcess): Promise<void> {
   if (startupSkillsSyncInitialized) return
   startupSkillsSyncInitialized = true
@@ -947,6 +1036,7 @@ async function initializeSkillsSyncOnStartup(appServer: AppServerProcess): Promi
     const state = await readSkillsSyncState()
     const localSkillsDir = getSkillsInstallDir()
     if (!state.githubToken) {
+      await ensureCodexAgentsSymlinkToSkillsAgents()
       if (!isAndroidLikeRuntime()) {
         startupSyncStatus.mode = 'idle'
         startupSyncStatus.lastAction = 'skip-upstream-non-android'
