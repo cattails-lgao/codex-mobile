@@ -160,7 +160,7 @@
             <div class="content-grid">
               <div class="content-thread">
                 <ThreadConversation :messages="filteredMessages" :is-loading="isLoadingMessages"
-                  :active-thread-id="composerThreadContextId" :scroll-state="selectedThreadScrollState"
+                  :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
                   :is-turn-in-progress="isSelectedThreadInProgress"
