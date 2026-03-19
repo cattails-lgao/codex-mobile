@@ -185,6 +185,10 @@
   @apply text-zinc-200;
 }
 
+:root.dark .content-export-button {
+  @apply border-zinc-600 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
+}
+
 :root.dark .sidebar-thread-controls-button {
   @apply text-zinc-400 hover:border-zinc-600 hover:bg-zinc-800;
 }
