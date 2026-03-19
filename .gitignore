@@ -7,3 +7,5 @@ output/
 package-lock.json
 .codex/
 .env
+
+package.json
