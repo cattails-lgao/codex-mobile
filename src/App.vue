@@ -63,7 +63,8 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
-            @remove-project="onRemoveProject" @reorder-project="onReorderProject" />
+            @remove-project="onRemoveProject" @reorder-project="onReorderProject"
+            @export-thread="onExportThread" />
         </div>
 
         <div v-if="!isSidebarCollapsed" class="sidebar-settings-area">
@@ -103,16 +104,6 @@
               @toggle-sidebar="setSidebarCollapsed(!isSidebarCollapsed)"
               @start-new-thread="onStartNewThreadFromToolbar"
             />
-          </template>
-          <template #actions>
-            <button
-              v-if="canExportChat"
-              class="content-export-button"
-              type="button"
-              @click="onExportChat"
-            >
-              Export chat
-            </button>
           </template>
         </ContentHeader>
 
@@ -342,11 +333,6 @@ const composerCwd = computed(() => {
   return selectedThread.value?.cwd?.trim() ?? ''
 })
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
-const canExportChat = computed(() => {
-  if (isHomeRoute.value || isSkillsRoute.value) return false
-  if (!selectedThread.value) return false
-  return filteredMessages.value.length > 0
-})
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -457,6 +443,16 @@ function onSelectThread(threadId: string): void {
   if (route.name === 'thread' && routeThreadId.value === threadId) return
   void router.push({ name: 'thread', params: { threadId } })
   if (isMobile.value) setSidebarCollapsed(true)
+}
+
+async function onExportThread(threadId: string): Promise<void> {
+  if (!threadId) return
+  if (selectedThreadId.value !== threadId) {
+    await selectThread(threadId)
+    await router.push({ name: 'thread', params: { threadId } })
+  }
+  await nextTick()
+  onExportChat()
 }
 
 function onArchiveThread(threadId: string): void {
@@ -675,7 +671,8 @@ function onRollback(payload: { turnIndex: number }): void {
 }
 
 function onExportChat(): void {
-  if (!canExportChat.value || typeof document === 'undefined') return
+  if (isHomeRoute.value || isSkillsRoute.value || typeof document === 'undefined') return
+  if (!selectedThread.value || filteredMessages.value.length === 0) return
   const markdown = buildThreadMarkdown()
   const fileName = buildExportFileName()
   const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
@@ -1067,9 +1064,6 @@ async function submitFirstMessageForNewThread(
   @apply flex-1 min-h-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-visible;
 }
 
-.content-export-button {
-  @apply inline-flex h-7 items-center rounded-md border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
-}
 
 .content-error {
   @apply m-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;

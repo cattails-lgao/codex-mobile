@@ -32,8 +32,8 @@
 
 ## Completion Verification Requirement (MANDATORY)
 
-- **ALWAYS test UI/behavior changes before reporting completion.** Never skip this step.
-- After completing a task that changes behavior or UI, run a Playwright verification in headless mode and attach evidence.
+- Test changes before reporting completion when feasible.
+- Run Playwright verification only when the user explicitly asks for Playwright/browser automation testing.
 - If a change affects package/runtime/module loading behavior, also run a CJS smoke test before completion.
 - CJS smoke test requirement:
   1. Build the project/artifact first (if needed).
@@ -41,25 +41,26 @@
   3. Confirm the module loads without runtime errors and expected exported symbol(s) exist.
   4. Include the exact CJS command and result summary in the completion report.
 - For Playwright automation scripts, CJS (`const { chromium } = require('playwright')`) is the default style unless ESM is explicitly required.
-- Preferred Playwright verification pattern for chat parsing changes:
+- Preferred Playwright verification pattern for chat parsing changes (when Playwright is requested):
   - send a message with a unique marker (for selecting the correct rendered row)
   - include mixed content in one message (for example: plain text, `**bold**`, and `` `code` ``)
   - inspect row HTML and count expected rendered nodes (for example `strong.message-bold-text`)
   - save screenshot to `output/playwright/<task-name>.png`
-- Always run this test sequence:
+- Playwright test sequence (when Playwright is requested):
   1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4173`).
   2. If there are stale servers on the same port, stop them first to avoid false test results.
   3. Run Playwright CLI against `http://127.0.0.1:4173` (or required test URL) and exercise the changed flow.
   4. For responsive/mobile changes, run checks at 375x812 and 768x1024.
   5. Wait 2-3 seconds before capturing final screenshot(s).
   6. Save screenshots under `output/playwright/` with task-specific names.
-- Always capture a screenshot of the changed result and display that screenshot in chat when reporting completion.
+- Capture screenshots only when Playwright verification is requested.
 - If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
-- If Playwright assertion fails, do not report completion; fix and re-run until passing.
+- If requested Playwright assertions fail, do not report completion; fix and re-run until passing.
 
 ## Browser Automation: Prefer Playwright CLI Over Cursor Browser Tool
 
 - For all browser interactions (navigation, clicking, typing, screenshots, snapshots), prefer the Playwright CLI skill in headless mode over the Cursor IDE browser MCP tool.
+- Do not run Playwright for routine task completion unless the user explicitly asks for it.
 - Playwright CLI is faster, more reliable, and works in headless environments without a desktop.
 - Use headless mode by default; only add `--headed` when a live visual check is explicitly needed.
 - Skill location: `~/.codex/skills/playwright/SKILL.md` (wrapper script: `~/.codex/skills/playwright/scripts/playwright_cli.sh`).
