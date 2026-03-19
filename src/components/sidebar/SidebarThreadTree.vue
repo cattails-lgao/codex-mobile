@@ -37,6 +37,9 @@
                   <IconTablerDots class="thread-icon" />
                 </button>
                 <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                  <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
+                    Export chat
+                  </button>
                   <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                     Rename thread
                   </button>
@@ -135,6 +138,9 @@
                 <IconTablerDots class="thread-icon" />
               </button>
               <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
+                  Export chat
+                </button>
                 <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                   Rename thread
                 </button>
@@ -281,6 +287,9 @@
                       <IconTablerDots class="thread-icon" />
                     </button>
                     <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                      <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
+                        Export chat
+                      </button>
                       <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                         Rename thread
                       </button>
@@ -383,6 +392,7 @@ const emit = defineEmits<{
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
+  'export-thread': [threadId: string]
 }>()
 
 type PendingProjectDrag = {
@@ -645,6 +655,11 @@ function togglePin(threadId: string): void {
 
 function onSelect(threadId: string): void {
   emit('select', threadId)
+}
+
+function onExportThread(threadId: string): void {
+  emit('export-thread', threadId)
+  closeThreadMenu()
 }
 
 function getNewThreadButtonAriaLabel(projectName: string): string {
