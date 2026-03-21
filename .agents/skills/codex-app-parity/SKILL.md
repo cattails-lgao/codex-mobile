@@ -245,6 +245,13 @@ After each feature implementation session that uses this skill:
   - fenced code blocks (``` / ~~~)
 - To avoid breaking local-image rendering and file-link handling, code-fence splitting should happen before inline image token splitting, otherwise `![...](...)` inside fenced code can be misparsed as a real image block.
 
+## Findings: Mobile Composer Auto-Zoom Fallback (2026-03-21)
+
+- Codex.app could not be inspected in this environment, so mobile zoom behavior was handled with a browser-level fallback.
+- On mobile browsers, especially iOS Safari, focusing text inputs below `16px` commonly triggers viewport auto-zoom.
+- In this repo, the main composer textarea used `text-sm` (`14px` computed on mobile), which is sufficient to trigger that browser behavior.
+- Conservative fix: keep viewport meta unchanged and raise focusable text input font-size to `16px` on mobile widths, instead of disabling pinch zoom globally.
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
