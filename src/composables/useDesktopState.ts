@@ -33,8 +33,10 @@ import type {
   UiProjectGroup,
   UiServerRequest,
   UiServerRequestReply,
+  UiToolSummary,
   UiThread,
 } from '../types/codex'
+import { buildCommandActivitySummary, buildCommandToolSummary, buildFileChangeToolSummary } from '../utils/toolSummary'
 
 function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
@@ -253,6 +255,41 @@ function areCommandExecutionsEqual(first?: CommandExecutionData, second?: Comman
   return first.status === second.status && first.aggregatedOutput === second.aggregatedOutput && first.exitCode === second.exitCode
 }
 
+function areToolSummaryCountsEqual(
+  first?: Array<{ label: string; value: number }>,
+  second?: Array<{ label: string; value: number }>,
+): boolean {
+  const left = Array.isArray(first) ? first : []
+  const right = Array.isArray(second) ? second : []
+  if (left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]?.label !== right[index]?.label || left[index]?.value !== right[index]?.value) {
+      return false
+    }
+  }
+  return true
+}
+
+function areToolSummariesEqual(first?: UiToolSummary, second?: UiToolSummary): boolean {
+  if (!first && !second) return true
+  if (!first || !second) return false
+  if (first.kind !== second.kind || first.label !== second.label) return false
+
+  if (first.kind === 'command' && second.kind === 'command') {
+    return first.status === second.status && first.code === second.code
+  }
+
+  if (first.kind === 'activity' && second.kind === 'activity') {
+    return areToolSummaryCountsEqual(first.counts, second.counts)
+  }
+
+  if (first.kind === 'fileChange' && second.kind === 'fileChange') {
+    return first.path === second.path && first.added === second.added && first.removed === second.removed
+  }
+
+  return false
+}
+
 function isUnsupportedChatGptModelError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const message = error.message.toLowerCase()
@@ -272,6 +309,7 @@ function areMessageFieldsEqual(first: UiMessage, second: UiMessage): boolean {
     first.rawPayload === second.rawPayload &&
     first.isUnhandled === second.isUnhandled &&
     areCommandExecutionsEqual(first.commandExecution, second.commandExecution) &&
+    areToolSummariesEqual(first.toolSummary, second.toolSummary) &&
     first.turnIndex === second.turnIndex
   )
 }
@@ -632,6 +670,7 @@ export function useDesktopState() {
   const selectedThreadId = ref(loadSelectedThreadId())
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
+  const liveToolSummariesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
@@ -726,8 +765,9 @@ export function useDesktopState() {
 
     const persisted = persistedMessagesByThreadId.value[threadId] ?? []
     const liveAgent = liveAgentMessagesByThreadId.value[threadId] ?? []
+    const liveToolSummaries = liveToolSummariesByThreadId.value[threadId] ?? []
     const liveCommands = liveCommandsByThreadId.value[threadId] ?? []
-    const combined = [...persisted, ...liveCommands, ...liveAgent]
+    const combined = [...persisted, ...liveCommands, ...liveToolSummaries, ...liveAgent]
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -971,6 +1011,7 @@ export function useDesktopState() {
     resumedThreadById.value = pruneThreadStateMap(resumedThreadById.value, activeThreadIds)
     persistedMessagesByThreadId.value = pruneThreadStateMap(persistedMessagesByThreadId.value, activeThreadIds)
     liveAgentMessagesByThreadId.value = pruneThreadStateMap(liveAgentMessagesByThreadId.value, activeThreadIds)
+    liveToolSummariesByThreadId.value = pruneThreadStateMap(liveToolSummariesByThreadId.value, activeThreadIds)
     liveReasoningTextByThreadId.value = pruneThreadStateMap(liveReasoningTextByThreadId.value, activeThreadIds)
     liveCommandsByThreadId.value = pruneThreadStateMap(liveCommandsByThreadId.value, activeThreadIds)
     turnSummaryByThreadId.value = pruneThreadStateMap(turnSummaryByThreadId.value, activeThreadIds)
@@ -1145,10 +1186,25 @@ export function useDesktopState() {
     }
   }
 
+  function setLiveToolSummariesForThread(threadId: string, nextMessages: UiMessage[]): void {
+    const previous = liveToolSummariesByThreadId.value[threadId] ?? []
+    if (areMessageArraysEqual(previous, nextMessages)) return
+    liveToolSummariesByThreadId.value = {
+      ...liveToolSummariesByThreadId.value,
+      [threadId]: nextMessages,
+    }
+  }
+
   function upsertLiveAgentMessage(threadId: string, nextMessage: UiMessage): void {
     const previous = liveAgentMessagesByThreadId.value[threadId] ?? []
     const next = upsertMessage(previous, nextMessage)
     setLiveAgentMessagesForThread(threadId, next)
+  }
+
+  function upsertLiveToolSummary(threadId: string, nextMessage: UiMessage): void {
+    const previous = liveToolSummariesByThreadId.value[threadId] ?? []
+    const next = upsertMessage(previous, nextMessage)
+    setLiveToolSummariesForThread(threadId, next)
   }
 
   function setLiveReasoningText(threadId: string, text: string): void {
@@ -1591,6 +1647,7 @@ export function useDesktopState() {
       text: command,
       messageType: 'commandExecution',
       commandExecution: { command, cwd, status: 'inProgress', aggregatedOutput: '', exitCode: null },
+      toolSummary: buildCommandToolSummary('inProgress', command),
     }
   }
 
@@ -1624,7 +1681,49 @@ export function useDesktopState() {
       text: command,
       messageType: 'commandExecution',
       commandExecution: { command, cwd, status, aggregatedOutput, exitCode },
+      toolSummary: buildCommandToolSummary(status, command),
     }
+  }
+
+  function readCommandActivitySummaryMessage(notification: RpcNotification): UiMessage | null {
+    if (notification.method !== 'item/completed') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || item.type !== 'commandExecution') return null
+    const id = readString(item.id)
+    if (!id) return null
+    const summary = buildCommandActivitySummary(item.commandActions)
+    if (!summary) return null
+    return {
+      id: `${id}:activity`,
+      role: 'system',
+      text: '',
+      messageType: 'toolSummary.activity',
+      toolSummary: summary,
+    }
+  }
+
+  function readFileChangeSummaryMessages(notification: RpcNotification): UiMessage[] {
+    if (notification.method !== 'item/completed') return []
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || item.type !== 'fileChange') return []
+    const id = readString(item.id)
+    if (!id) return []
+    const changes = Array.isArray(item.changes) ? item.changes : []
+    const messages: UiMessage[] = []
+    changes.forEach((change, index) => {
+      const summary = buildFileChangeToolSummary(change)
+      if (!summary) return
+      messages.push({
+        id: `${id}:file:${index}`,
+        role: 'system',
+        text: '',
+        messageType: 'toolSummary.fileChange',
+        toolSummary: summary,
+      })
+    })
+    return messages
   }
 
   function upsertLiveCommand(threadId: string, msg: UiMessage): void {
@@ -1644,6 +1743,19 @@ export function useDesktopState() {
       liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
     } else {
       liveCommandsByThreadId.value = { ...liveCommandsByThreadId.value, [threadId]: next }
+    }
+  }
+
+  function removeLiveToolSummariesPersistedIn(threadId: string, persistedMessages: UiMessage[]): void {
+    const current = liveToolSummariesByThreadId.value[threadId]
+    if (!current || current.length === 0) return
+    const persistedIds = new Set(persistedMessages.map((message) => message.id))
+    const next = current.filter((message) => !persistedIds.has(message.id))
+    if (next.length === current.length) return
+    if (next.length === 0) {
+      liveToolSummariesByThreadId.value = omitKey(liveToolSummariesByThreadId.value, threadId)
+    } else {
+      liveToolSummariesByThreadId.value = { ...liveToolSummariesByThreadId.value, [threadId]: next }
     }
   }
 
@@ -1840,6 +1952,16 @@ export function useDesktopState() {
       upsertLiveCommand(notificationThreadId, commandCompleted)
     }
 
+    const commandActivitySummary = readCommandActivitySummaryMessage(notification)
+    if (commandActivitySummary) {
+      upsertLiveToolSummary(notificationThreadId, commandActivitySummary)
+    }
+
+    const fileChangeSummaries = readFileChangeSummaryMessages(notification)
+    for (const summaryMessage of fileChangeSummaries) {
+      upsertLiveToolSummary(notificationThreadId, summaryMessage)
+    }
+
     if (isAgentContentEvent(notification)) {
       if (shouldAutoScrollOnNextAgentEvent && selectedThreadId.value) {
         setThreadScrollState(selectedThreadId.value, {
@@ -1856,9 +1978,6 @@ export function useDesktopState() {
       activeReasoningItemId = ''
       shouldAutoScrollOnNextAgentEvent = false
       clearLiveReasoningForThread(notificationThreadId)
-      if (liveCommandsByThreadId.value[notificationThreadId]) {
-        liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, notificationThreadId)
-      }
       const completedThreadId = extractThreadIdFromNotification(notification)
       if (completedThreadId) {
         setThreadInProgress(completedThreadId, false)
@@ -2036,6 +2155,7 @@ export function useDesktopState() {
       const nextLiveAgent = removeRedundantLiveAgentMessages(previousLiveAgent, nextMessages)
       setLiveAgentMessagesForThread(threadId, nextLiveAgent)
       removeLiveCommandsPersistedIn(threadId, nextMessages)
+      removeLiveToolSummariesPersistedIn(threadId, nextMessages)
 
       loadedMessagesByThreadId.value = {
         ...loadedMessagesByThreadId.value,
@@ -2708,6 +2828,7 @@ export function useDesktopState() {
     shouldAutoScrollOnNextAgentEvent = false
     persistedMessagesByThreadId.value = {}
     liveAgentMessagesByThreadId.value = {}
+    liveToolSummariesByThreadId.value = {}
     liveReasoningTextByThreadId.value = {}
     liveCommandsByThreadId.value = {}
     turnActivityByThreadId.value = {}

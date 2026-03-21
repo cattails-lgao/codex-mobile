@@ -7,6 +7,7 @@ import type {
   UserInput,
 } from '../appServerDtos'
 import type { CommandExecutionData, UiFileAttachment, UiMessage, UiProjectGroup, UiThread } from '../../types/codex'
+import { buildCommandActivitySummary, buildCommandToolSummary, buildFileChangeToolSummary } from '../../utils/toolSummary'
 
 function toIso(seconds: number): string {
   return new Date(seconds * 1000).toISOString()
@@ -149,15 +150,45 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     const cwd = typeof raw.cwd === 'string' ? raw.cwd : null
     const aggregatedOutput = typeof raw.aggregatedOutput === 'string' ? raw.aggregatedOutput : ''
     const exitCode = typeof raw.exitCode === 'number' ? raw.exitCode : null
-    return [
+    const messages: UiMessage[] = [
       {
         id: item.id,
         role: 'system' as const,
         text: cmd,
         messageType: 'commandExecution',
         commandExecution: { command: cmd, cwd, status, aggregatedOutput, exitCode },
+        toolSummary: buildCommandToolSummary(status, cmd),
       },
     ]
+    const activitySummary = buildCommandActivitySummary(raw.commandActions)
+    if (activitySummary) {
+      messages.push({
+        id: `${item.id}:activity`,
+        role: 'system',
+        text: '',
+        messageType: 'toolSummary.activity',
+        toolSummary: activitySummary,
+      })
+    }
+    return messages
+  }
+
+  if (item.type === 'fileChange') {
+    const raw = item as Record<string, unknown>
+    const changes = Array.isArray(raw.changes) ? raw.changes : []
+    const messages: UiMessage[] = []
+    changes.forEach((change, index) => {
+      const summary = buildFileChangeToolSummary(change)
+      if (!summary) return
+      messages.push({
+        id: `${item.id}:file:${index}`,
+        role: 'system',
+        text: '',
+        messageType: 'toolSummary.fileChange',
+        toolSummary: summary,
+      })
+    })
+    return messages
   }
 
   return []

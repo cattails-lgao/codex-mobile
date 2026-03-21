@@ -91,7 +91,64 @@
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
-        <div v-if="isCommandMessage(message)" class="message-row" data-role="system">
+        <div v-if="isToolSummaryMessage(message)" class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
+            <button
+              v-if="isExpandableToolSummary(message)"
+              type="button"
+              class="tool-summary-row"
+              :class="{ 'tool-summary-row-expanded': isCommandExpanded(message) }"
+              @click="toggleCommandExpand(message)"
+            >
+              <span class="tool-summary-label">{{ toolSummaryLabel(message) }}</span>
+              <code v-if="toolSummaryCode(message)" class="tool-summary-code">{{ toolSummaryCode(message) }}</code>
+              <a
+                v-else-if="toolSummaryPath(message)"
+                class="tool-summary-link"
+                :href="toBrowseUrl(toolSummaryPath(message)!)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="toolSummaryPath(message)!"
+                @click.stop
+              >
+                {{ toolSummaryPathLabel(message) }}
+              </a>
+              <span v-if="toolSummaryCountsText(message)" class="tool-summary-count">{{ toolSummaryCountsText(message) }}</span>
+              <span v-if="toolSummaryAddedText(message)" class="tool-summary-diff tool-summary-diff-added">{{ toolSummaryAddedText(message) }}</span>
+              <span v-if="toolSummaryRemovedText(message)" class="tool-summary-diff tool-summary-diff-removed">{{ toolSummaryRemovedText(message) }}</span>
+            </button>
+
+            <div v-else class="tool-summary-row">
+              <span class="tool-summary-label">{{ toolSummaryLabel(message) }}</span>
+              <code v-if="toolSummaryCode(message)" class="tool-summary-code">{{ toolSummaryCode(message) }}</code>
+              <a
+                v-else-if="toolSummaryPath(message)"
+                class="tool-summary-link"
+                :href="toBrowseUrl(toolSummaryPath(message)!)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="toolSummaryPath(message)!"
+              >
+                {{ toolSummaryPathLabel(message) }}
+              </a>
+              <span v-if="toolSummaryCountsText(message)" class="tool-summary-count">{{ toolSummaryCountsText(message) }}</span>
+              <span v-if="toolSummaryAddedText(message)" class="tool-summary-diff tool-summary-diff-added">{{ toolSummaryAddedText(message) }}</span>
+              <span v-if="toolSummaryRemovedText(message)" class="tool-summary-diff tool-summary-diff-removed">{{ toolSummaryRemovedText(message) }}</span>
+            </div>
+
+            <div
+              v-if="isExpandableToolSummary(message)"
+              class="cmd-output-wrap"
+              :class="{ 'cmd-output-visible': isCommandExpanded(message), 'cmd-output-collapsing': isCommandCollapsing(message) }"
+            >
+              <div class="cmd-output-inner">
+                <pre class="cmd-output">{{ message.commandExecution?.aggregatedOutput || '(no output)' }}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
             <button
               type="button"
@@ -456,7 +513,14 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
+import type {
+  ThreadScrollState,
+  UiLiveOverlay,
+  UiMessage,
+  UiServerRequest,
+  UiToolSummary,
+  UiToolSummaryCount,
+} from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
@@ -468,6 +532,14 @@ const prevCommandStatuses = ref<Record<string, string>>({})
 
 function isCommandMessage(message: UiMessage): boolean {
   return message.messageType === 'commandExecution' && !!message.commandExecution
+}
+
+function isToolSummaryMessage(message: UiMessage): boolean {
+  return !!message.toolSummary
+}
+
+function isExpandableToolSummary(message: UiMessage): boolean {
+  return isToolSummaryMessage(message) && !!message.commandExecution
 }
 
 function isCommandExpanded(message: UiMessage): boolean {
@@ -517,6 +589,52 @@ function commandStatusClass(message: UiMessage): string {
   if (s === 'inProgress') return 'cmd-status-running'
   if (s === 'completed' && message.commandExecution?.exitCode === 0) return 'cmd-status-ok'
   return 'cmd-status-error'
+}
+
+function readToolSummary(message: UiMessage): UiToolSummary | null {
+  return message.toolSummary ?? null
+}
+
+function toolSummaryLabel(message: UiMessage): string {
+  return readToolSummary(message)?.label ?? ''
+}
+
+function toolSummaryCode(message: UiMessage): string {
+  const summary = readToolSummary(message)
+  return summary?.kind === 'command' ? summary.code : ''
+}
+
+function toolSummaryCounts(message: UiMessage): UiToolSummaryCount[] {
+  const summary = readToolSummary(message)
+  return summary?.kind === 'activity' ? summary.counts : []
+}
+
+function toolSummaryCountsText(message: UiMessage): string {
+  return toolSummaryCounts(message)
+    .map((count) => `${String(count.value)} ${count.label}`)
+    .join(', ')
+}
+
+function toolSummaryPath(message: UiMessage): string {
+  const summary = readToolSummary(message)
+  return summary?.kind === 'fileChange' ? summary.path : ''
+}
+
+function toolSummaryPathLabel(message: UiMessage): string {
+  const pathValue = toolSummaryPath(message)
+  return pathValue ? getBasename(pathValue) : ''
+}
+
+function toolSummaryAddedText(message: UiMessage): string {
+  const summary = readToolSummary(message)
+  if (summary?.kind !== 'fileChange' || summary.added <= 0) return ''
+  return `+${String(summary.added)}`
+}
+
+function toolSummaryRemovedText(message: UiMessage): string {
+  const summary = readToolSummary(message)
+  if (summary?.kind !== 'fileChange' || summary.removed <= 0) return ''
+  return `-${String(summary.removed)}`
 }
 
 function scheduleCollapse(messageId: string): void {
@@ -2187,6 +2305,46 @@ onBeforeUnmount(() => {
 
 .cmd-row {
   @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+}
+
+.tool-summary-row {
+  @apply inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-transparent bg-transparent px-0 py-0 text-left text-sm leading-relaxed text-zinc-500;
+}
+
+.tool-summary-row-expanded {
+  @apply text-zinc-600;
+}
+
+.tool-summary-row[type='button'] {
+  @apply cursor-pointer transition-colors hover:text-zinc-700;
+}
+
+.tool-summary-label {
+  @apply flex-shrink-0;
+}
+
+.tool-summary-code {
+  @apply min-w-0 max-w-full rounded-md border border-zinc-200 bg-zinc-100/80 px-1.5 py-0.5 text-[0.875em] leading-[1.35] text-zinc-700 font-mono break-all;
+}
+
+.tool-summary-link {
+  @apply min-w-0 max-w-full truncate text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
+}
+
+.tool-summary-count {
+  @apply text-inherit;
+}
+
+.tool-summary-diff {
+  @apply text-sm font-medium;
+}
+
+.tool-summary-diff-added {
+  @apply text-emerald-500;
+}
+
+.tool-summary-diff-removed {
+  @apply text-rose-500;
 }
 
 .cmd-row.cmd-expanded {
