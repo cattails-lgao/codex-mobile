@@ -181,7 +181,7 @@
                 </div>
                 <div v-else class="message-text-flow">
                   <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
-                    <p v-if="block.kind === 'text'" class="message-text">
+                    <p v-if="block.kind === 'paragraph'" class="message-text">
                       <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
@@ -208,6 +208,68 @@
                         <code v-else class="message-inline-code">{{ segment.value }}</code>
                       </template>
                     </p>
+                    <ul v-else-if="block.kind === 'unorderedList'" class="message-list message-list-unordered">
+                      <li v-for="(item, itemIndex) in block.items" :key="`ul-${blockIndex}-${itemIndex}`" class="message-list-item">
+                        <div class="message-list-item-text">
+                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ul-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                            <a
+                              v-else-if="segment.kind === 'file'"
+                              class="message-file-link"
+                              :href="toBrowseUrl(segment.path)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.path"
+                            >
+                              {{ segment.displayPath }}
+                            </a>
+                            <a
+                              v-else-if="segment.kind === 'url'"
+                              class="message-file-link"
+                              :href="segment.href"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.href"
+                            >
+                              {{ segment.value }}
+                            </a>
+                            <code v-else class="message-inline-code">{{ segment.value }}</code>
+                          </template>
+                        </div>
+                      </li>
+                    </ul>
+                    <ol v-else-if="block.kind === 'orderedList'" class="message-list message-list-ordered">
+                      <li v-for="(item, itemIndex) in block.items" :key="`ol-${blockIndex}-${itemIndex}`" class="message-list-item">
+                        <div class="message-list-item-text">
+                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ol-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                            <a
+                              v-else-if="segment.kind === 'file'"
+                              class="message-file-link"
+                              :href="toBrowseUrl(segment.path)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.path"
+                            >
+                              {{ segment.displayPath }}
+                            </a>
+                            <a
+                              v-else-if="segment.kind === 'url'"
+                              class="message-file-link"
+                              :href="segment.href"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.href"
+                            >
+                              {{ segment.value }}
+                            </a>
+                            <code v-else class="message-inline-code">{{ segment.value }}</code>
+                          </template>
+                        </div>
+                      </li>
+                    </ol>
                     <p v-else-if="isMarkdownImageFailed(message.id, blockIndex)" class="message-text">{{ block.markdown }}</p>
                     <button
                       v-else
@@ -402,7 +464,9 @@ type InlineSegment =
   | { kind: 'url'; value: string; href: string }
   | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
 type MessageBlock =
-  | { kind: 'text'; value: string }
+  | { kind: 'paragraph'; value: string }
+  | { kind: 'unorderedList'; items: string[] }
+  | { kind: 'orderedList'; items: string[] }
   | { kind: 'image'; url: string; alt: string; markdown: string }
 
 let scrollRestoreFrame = 0
@@ -881,9 +945,87 @@ function toBrowseUrl(pathValue: string): string {
   return '#'
 }
 
+function normalizeMarkdownText(text: string): string {
+  return text.replace(/\r\n/gu, '\n')
+}
+
+function isBlankMarkdownLine(line: string): boolean {
+  return line.trim().length === 0
+}
+
+function readUnorderedListItem(line: string): string | null {
+  const match = line.match(/^\s*[-*+]\s+(.+)$/u)
+  return match?.[1]?.trim() ?? null
+}
+
+function readOrderedListItem(line: string): string | null {
+  const match = line.match(/^\s*\d+[.)]\s+(.+)$/u)
+  return match?.[1]?.trim() ?? null
+}
+
+function parseTextBlocks(text: string): MessageBlock[] {
+  const normalizedText = normalizeMarkdownText(text)
+  const lines = normalizedText.split('\n')
+  const blocks: MessageBlock[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    if (isBlankMarkdownLine(lines[index])) {
+      index += 1
+      continue
+    }
+
+    const unorderedItem = readUnorderedListItem(lines[index])
+    if (unorderedItem !== null) {
+      const items: string[] = []
+      while (index < lines.length) {
+        const nextItem = readUnorderedListItem(lines[index])
+        if (nextItem === null) break
+        items.push(nextItem)
+        index += 1
+      }
+      if (items.length > 0) {
+        blocks.push({ kind: 'unorderedList', items })
+        continue
+      }
+    }
+
+    const orderedItem = readOrderedListItem(lines[index])
+    if (orderedItem !== null) {
+      const items: string[] = []
+      while (index < lines.length) {
+        const nextItem = readOrderedListItem(lines[index])
+        if (nextItem === null) break
+        items.push(nextItem)
+        index += 1
+      }
+      if (items.length > 0) {
+        blocks.push({ kind: 'orderedList', items })
+        continue
+      }
+    }
+
+    const paragraphLines: string[] = []
+    while (index < lines.length) {
+      if (isBlankMarkdownLine(lines[index])) break
+      if (readUnorderedListItem(lines[index]) !== null || readOrderedListItem(lines[index]) !== null) break
+      paragraphLines.push(lines[index])
+      index += 1
+    }
+
+    const value = paragraphLines.join('\n').trim()
+    if (value) {
+      blocks.push({ kind: 'paragraph', value })
+    }
+  }
+
+  return blocks
+}
+
 function parseMessageBlocks(text: string): MessageBlock[] {
   if (!text.includes('![') || !text.includes('](')) {
-    return [{ kind: 'text', value: text }]
+    const blocks = parseTextBlocks(text)
+    return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
   }
 
   const blocks: MessageBlock[] = []
@@ -900,7 +1042,7 @@ function parseMessageBlocks(text: string): MessageBlock[] {
     if (!imageUrl) continue
 
     if (start > cursor) {
-      blocks.push({ kind: 'text', value: text.slice(cursor, start) })
+      blocks.push(...parseTextBlocks(text.slice(cursor, start)))
     }
 
     blocks.push({ kind: 'image', url: imageUrl, alt: altRaw.trim(), markdown: fullMatch })
@@ -908,10 +1050,10 @@ function parseMessageBlocks(text: string): MessageBlock[] {
   }
 
   if (cursor < text.length) {
-    blocks.push({ kind: 'text', value: text.slice(cursor) })
+    blocks.push(...parseTextBlocks(text.slice(cursor)))
   }
 
-  return blocks.length > 0 ? blocks : [{ kind: 'text', value: text }]
+  return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1504,6 +1646,26 @@ onBeforeUnmount(() => {
 
 .message-text {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
+}
+
+.message-list {
+  @apply m-0 pl-5 text-sm leading-relaxed text-slate-800 flex flex-col gap-1.5;
+}
+
+.message-list-unordered {
+  @apply list-disc;
+}
+
+.message-list-ordered {
+  @apply list-decimal;
+}
+
+.message-list-item {
+  @apply pl-1;
+}
+
+.message-list-item-text {
+  @apply whitespace-pre-wrap;
 }
 
 .message-bold-text {
