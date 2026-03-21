@@ -962,11 +962,13 @@ type CodexBridgeMiddleware = ((req: IncomingMessage, res: ServerResponse, next: 
 }
 
 type SharedBridgeState = {
+  version: string
   appServer: AppServerProcess
   methodCatalog: MethodCatalog
 }
 
 const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
+const SHARED_BRIDGE_VERSION = 'experimental-api-v1'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
@@ -974,9 +976,15 @@ function getSharedBridgeState(): SharedBridgeState {
   }
 
   const existing = globalScope[SHARED_BRIDGE_KEY]
-  if (existing) return existing
+  if (existing) {
+    if (existing.version === SHARED_BRIDGE_VERSION) {
+      return existing
+    }
+    existing.appServer.dispose()
+  }
 
   const created: SharedBridgeState = {
+    version: SHARED_BRIDGE_VERSION,
     appServer: new AppServerProcess(),
     methodCatalog: new MethodCatalog(),
   }
