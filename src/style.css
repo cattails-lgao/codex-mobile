@@ -305,12 +305,56 @@
   @apply text-zinc-200;
 }
 
+:root.dark .message-heading {
+  @apply text-zinc-100;
+}
+
+:root.dark .message-heading-h6 {
+  @apply text-zinc-400;
+}
+
+:root.dark .message-bold-text {
+  @apply text-zinc-100;
+}
+
+:root.dark .message-italic-text {
+  @apply text-zinc-200;
+}
+
+:root.dark .message-strikethrough-text {
+  @apply text-zinc-400;
+}
+
+:root.dark .message-blockquote {
+  @apply border-zinc-600 bg-zinc-800/70 text-zinc-300;
+}
+
+:root.dark .message-list {
+  @apply text-zinc-200;
+}
+
+:root.dark .message-task-checkbox {
+  @apply text-zinc-400;
+}
+
 :root.dark .message-card[data-role='user'] {
   @apply bg-zinc-700;
 }
 
 :root.dark .message-inline-code {
   @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
+}
+
+:root.dark .message-code-block {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .message-code-language {
+  @apply border-zinc-800 text-zinc-400;
+}
+
+:root.dark .message-divider {
+  @apply bg-zinc-700/80;
 }
 
 :root.dark .message-file-chip {
