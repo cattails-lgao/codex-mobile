@@ -81,31 +81,6 @@ export type CommandExecutionData = {
 
 export type UiFileAttachment = { label: string; path: string }
 
-export type UiToolSummaryCount = {
-  label: string
-  value: number
-}
-
-export type UiToolSummary =
-  | {
-    kind: 'command'
-    label: string
-    status: CommandExecutionData['status']
-    code: string
-  }
-  | {
-    kind: 'activity'
-    label: string
-    counts: UiToolSummaryCount[]
-  }
-  | {
-    kind: 'fileChange'
-    label: string
-    path: string
-    added: number
-    removed: number
-  }
-
 export type UiMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -116,7 +91,6 @@ export type UiMessage = {
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData
-  toolSummary?: UiToolSummary
   turnIndex?: number
 }
 
