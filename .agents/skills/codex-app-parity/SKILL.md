@@ -269,6 +269,17 @@ After each feature implementation session that uses this skill:
 - The browser tab title for the main app comes from `index.html`.
 - The unauthenticated/login page has its own inline HTML template in `authMiddleware.ts`, so branding changes need to update both places to stay consistent.
 
+## Findings: Sidebar Thread Menu Clickability Fallback (2026-03-21)
+
+- Codex.app could not be inspected in this environment, so thread-menu behavior was aligned using stable web popover patterns.
+- In this sidebar implementation, thread menus are rendered inside the `right-hover` slot of `SidebarMenuRow`; if the row stops being hovered and no explicit open-state override is applied, that slot can collapse and make the menu hard to interact with.
+- Outside-click dismissal must include `openThreadMenuId` in the shared dismiss-listener condition. Otherwise thread menus fall back to ad-hoc closing logic and can behave inconsistently.
+- For rows near the bottom of the scrollable sidebar, the menu should choose its open direction based on available space in the nearest overflow-clipping ancestor rather than always opening downward.
+- A low-risk fallback is:
+  - keep the row in `forceRightHover` mode while its menu is open
+  - raise the open row above siblings with a higher z-index
+  - auto-flip the menu upward when the scroll container has less space below than above
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
