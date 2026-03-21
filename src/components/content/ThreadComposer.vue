@@ -1,5 +1,9 @@
 <template>
   <form class="thread-composer" @submit.prevent="onSubmit('steer')">
+    <p v-if="dictationErrorText" class="thread-composer-dictation-error">
+      {{ dictationErrorText }}
+    </p>
+
     <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
@@ -63,10 +67,6 @@
           >×</button>
         </span>
       </div>
-
-      <p v-if="dictationErrorText" class="thread-composer-dictation-error">
-        {{ dictationErrorText }}
-      </p>
 
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
@@ -1143,7 +1143,7 @@ watch(
 }
 
 .thread-composer-dictation-error {
-  @apply mb-2 text-xs text-amber-700;
+  @apply mb-2 px-1 text-xs text-amber-700;
 }
 
 .thread-composer-submit {
