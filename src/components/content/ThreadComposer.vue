@@ -16,8 +16,30 @@
         </div>
       </div>
 
-      <div v-if="fileAttachments.length > 0" class="thread-composer-file-chips">
-        <span v-for="att in fileAttachments" :key="att.fsPath" class="thread-composer-file-chip">
+      <div v-if="folderUploadGroups.length > 0" class="thread-composer-folder-chips">
+        <span v-for="group in folderUploadGroups" :key="group.id" class="thread-composer-folder-chip">
+          <IconTablerFolder class="thread-composer-folder-chip-icon" />
+          <span class="thread-composer-folder-chip-name" :title="group.name">{{ group.name }}</span>
+          <span class="thread-composer-folder-chip-meta">
+            <template v-if="group.isUploading">
+              {{ getFolderUploadPercent(group) }}% uploading ({{ group.processed }}/{{ group.total }})
+            </template>
+            <template v-else>
+              {{ group.filePaths.length }} file{{ group.filePaths.length === 1 ? '' : 's' }}
+            </template>
+          </span>
+          <button
+            class="thread-composer-folder-chip-remove"
+            type="button"
+            :aria-label="`Remove folder ${group.name}`"
+            :disabled="isInteractionDisabled"
+            @click="removeFolderAttachment(group.id)"
+          >×</button>
+        </span>
+      </div>
+
+      <div v-if="standaloneFileAttachments.length > 0" class="thread-composer-file-chips">
+        <span v-for="att in standaloneFileAttachments" :key="att.fsPath" class="thread-composer-file-chip">
           <IconTablerFilePencil class="thread-composer-file-chip-icon" />
           <span class="thread-composer-file-chip-name" :title="att.fsPath">{{ att.label }}</span>
           <button
@@ -109,6 +131,14 @@
               @click="triggerPhotoLibrary"
             >
               Add photos & files
+            </button>
+            <button
+              class="thread-composer-attach-item"
+              type="button"
+              :disabled="isInteractionDisabled"
+              @click="triggerFolderPicker"
+            >
+              Add folder
             </button>
             <button
               class="thread-composer-attach-item"
@@ -211,6 +241,16 @@
       :disabled="isInteractionDisabled"
       @change="onCameraCaptureChange"
     />
+    <input
+      ref="folderPickerInputRef"
+      class="thread-composer-hidden-input"
+      type="file"
+      multiple
+      webkitdirectory
+      directory
+      :disabled="isInteractionDisabled"
+      @change="onFolderPickerChange"
+    />
   </form>
 </template>
 
@@ -221,6 +261,7 @@ import { useDictation } from '../../composables/useDictation'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
+import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
@@ -267,10 +308,20 @@ type SelectedImage = {
   url: string
 }
 
+type FolderUploadGroup = {
+  id: string
+  name: string
+  total: number
+  processed: number
+  filePaths: string[]
+  isUploading: boolean
+}
+
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
 const fileAttachments = ref<FileAttachment[]>([])
+const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
 const { state: dictationState, isSupported: isDictationSupported, startRecording, stopRecording } = useDictation({
   onTranscript: (text) => { draft.value = draft.value ? `${draft.value}\n${text}` : text },
@@ -278,6 +329,7 @@ const { state: dictationState, isSupported: isDictationSupported, startRecording
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
+const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
@@ -317,6 +369,13 @@ const canSubmit = computed(() => {
   if (!props.activeThreadId) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
+const standaloneFileAttachments = computed(() => {
+  const grouped = new Set<string>()
+  for (const group of folderUploadGroups.value) {
+    for (const path of group.filePaths) grouped.add(path)
+  }
+  return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
+})
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
 const inProgressMode = computed<'steer' | 'queue'>(() =>
   props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
@@ -340,6 +399,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   selectedImages.value = []
   selectedSkills.value = []
   fileAttachments.value = []
+  folderUploadGroups.value = []
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
@@ -375,6 +435,10 @@ function triggerCameraCapture(): void {
   cameraCaptureInputRef.value?.click()
 }
 
+function triggerFolderPicker(): void {
+  folderPickerInputRef.value?.click()
+}
+
 function removeImage(id: string): void {
   selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
 }
@@ -387,11 +451,24 @@ function removeFileAttachment(fsPath: string): void {
   fileAttachments.value = fileAttachments.value.filter((a) => a.fsPath !== fsPath)
 }
 
-function addFileAttachment(filePath: string): void {
+function removeFolderAttachment(groupId: string): void {
+  const group = folderUploadGroups.value.find((item) => item.id === groupId)
+  if (!group) return
+  const toRemove = new Set(group.filePaths)
+  fileAttachments.value = fileAttachments.value.filter((a) => !toRemove.has(a.fsPath))
+  folderUploadGroups.value = folderUploadGroups.value.filter((item) => item.id !== groupId)
+}
+
+function getFolderUploadPercent(group: FolderUploadGroup): number {
+  if (group.total <= 0) return 0
+  return Math.round((group.processed / group.total) * 100)
+}
+
+function addFileAttachment(filePath: string, customLabel?: string): void {
   const normalized = filePath.replace(/\\/g, '/')
   if (fileAttachments.value.some((a) => a.fsPath === normalized)) return
   const parts = normalized.split('/').filter(Boolean)
-  const label = parts[parts.length - 1] ?? normalized
+  const label = customLabel?.trim() || parts[parts.length - 1] || normalized
   fileAttachments.value = [...fileAttachments.value, { label, path: normalized, fsPath: normalized }]
 }
 
@@ -422,6 +499,52 @@ function addFiles(files: FileList | null): void {
   }
 }
 
+async function addFolderFiles(files: FileList | null): Promise<void> {
+  if (!files || files.length === 0) return
+  const rows = Array.from(files)
+  const firstRelativePath = (rows[0] as File & { webkitRelativePath?: string }).webkitRelativePath || rows[0].name
+  const folderName = firstRelativePath.split('/').filter(Boolean)[0] || 'Folder'
+  const groupId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  folderUploadGroups.value = [
+    ...folderUploadGroups.value,
+    {
+      id: groupId,
+      name: folderName,
+      total: rows.length,
+      processed: 0,
+      filePaths: [],
+      isUploading: true,
+    },
+  ]
+
+  const updateGroup = (updater: (group: FolderUploadGroup) => FolderUploadGroup): void => {
+    folderUploadGroups.value = folderUploadGroups.value.map((group) => (
+      group.id === groupId ? updater(group) : group
+    ))
+  }
+
+  for (const file of rows) {
+    try {
+      const serverPath = await uploadFile(file)
+      if (serverPath) {
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+        addFileAttachment(serverPath, relativePath)
+        updateGroup((group) => ({
+          ...group,
+          processed: group.processed + 1,
+          filePaths: [...group.filePaths, serverPath],
+        }))
+        continue
+      }
+      updateGroup((group) => ({ ...group, processed: group.processed + 1 }))
+    } catch {
+      updateGroup((group) => ({ ...group, processed: group.processed + 1 }))
+    }
+  }
+
+  updateGroup((group) => ({ ...group, isUploading: false }))
+}
+
 function clearInputValue(inputRefEl: HTMLInputElement | null): void {
   if (inputRefEl) inputRefEl.value = ''
 }
@@ -436,6 +559,13 @@ function onPhotoLibraryChange(event: Event): void {
 function onCameraCaptureChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
   addFiles(input?.files ?? null)
+  clearInputValue(input)
+  isAttachMenuOpen.value = false
+}
+
+function onFolderPickerChange(event: Event): void {
+  const input = event.target as HTMLInputElement | null
+  void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
@@ -667,6 +797,7 @@ watch(
     selectedImages.value = []
     selectedSkills.value = []
     fileAttachments.value = []
+    folderUploadGroups.value = []
     isAttachMenuOpen.value = false
     isSlashMenuOpen.value = false
     closeFileMention()
@@ -716,6 +847,30 @@ watch(
 
 .thread-composer-file-chips {
   @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.thread-composer-folder-chips {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.thread-composer-folder-chip {
+  @apply inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800;
+}
+
+.thread-composer-folder-chip-icon {
+  @apply h-3.5 w-3.5 text-amber-600 shrink-0;
+}
+
+.thread-composer-folder-chip-name {
+  @apply truncate max-w-40 font-medium;
+}
+
+.thread-composer-folder-chip-meta {
+  @apply text-amber-700/90;
+}
+
+.thread-composer-folder-chip-remove {
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-amber-600 transition hover:bg-amber-200 hover:text-amber-800 text-xs leading-none p-0;
 }
 
 .thread-composer-file-chip {
