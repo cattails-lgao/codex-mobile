@@ -213,7 +213,7 @@
             type="button"
             :aria-label="dictationButtonLabel"
             :title="dictationButtonLabel"
-            :disabled="isInteractionDisabled || dictationState === 'transcribing'"
+            :disabled="isInteractionDisabled"
             @click="onDictationToggle"
             @pointerdown="onDictationPressStart"
             @pointerup="onDictationPressEnd"
@@ -439,7 +439,9 @@ const inProgressMode = computed<'steer' | 'queue'>(() =>
 const isDictationRecording = computed(() => dictationState.value === 'recording')
 const dictationButtonLabel = computed(() => {
   if (dictationState.value === 'recording') return 'Stop dictation'
-  if (dictationState.value === 'transcribing') return 'Transcribing dictation'
+  if (dictationState.value === 'transcribing') {
+    return props.dictationClickToToggle ? 'Transcribing. Click to re-record' : 'Transcribing. Hold to re-record'
+  }
   return props.dictationClickToToggle ? 'Click to dictate' : 'Hold to dictate'
 })
 const dictationErrorText = computed(() =>
