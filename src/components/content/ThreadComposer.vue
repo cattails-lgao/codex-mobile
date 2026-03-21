@@ -397,6 +397,7 @@ const isFileMentionOpen = ref(false)
 const fileMentionHighlightedIndex = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let isHoldPressActive = false
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
@@ -505,14 +506,26 @@ function onDictationToggle(): void {
 function onDictationPressStart(event: Event): void {
   if (props.dictationClickToToggle) return
   event.preventDefault()
+  if (isHoldPressActive) return
+  isHoldPressActive = true
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  window.addEventListener('mouseup', onDictationPressEnd)
+  window.addEventListener('touchend', onDictationPressEnd)
+  window.addEventListener('touchcancel', onDictationPressEnd)
+  window.addEventListener('blur', onDictationPressEnd)
   void startRecording()
 }
 
 function onDictationPressEnd(): void {
   if (props.dictationClickToToggle) return
+  if (!isHoldPressActive) return
+  isHoldPressActive = false
+  window.removeEventListener('mouseup', onDictationPressEnd)
+  window.removeEventListener('touchend', onDictationPressEnd)
+  window.removeEventListener('touchcancel', onDictationPressEnd)
+  window.removeEventListener('blur', onDictationPressEnd)
   stopRecording()
 }
 
@@ -882,6 +895,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('mouseup', onDictationPressEnd)
+  window.removeEventListener('touchend', onDictationPressEnd)
+  window.removeEventListener('touchcancel', onDictationPressEnd)
+  window.removeEventListener('blur', onDictationPressEnd)
   if (fileMentionDebounceTimer) {
     clearTimeout(fileMentionDebounceTimer)
   }
