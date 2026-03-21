@@ -503,8 +503,10 @@ function onRenameThread(payload: { threadId: string; title: string }): void {
   void renameThreadById(payload.threadId, payload.title)
 }
 
-function onRemoveProject(projectName: string): void {
-  removeProject(projectName)
+async function onRemoveProject(projectName: string): Promise<void> {
+  await removeProject(projectName)
+  await loadWorkspaceRootOptionsState()
+  void refreshDefaultProjectName()
 }
 
 function onReorderProject(payload: { projectName: string; toIndex: number }): void {

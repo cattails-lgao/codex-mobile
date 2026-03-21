@@ -477,6 +477,20 @@ function omitKey<TValue>(record: Record<string, TValue>, key: string): Record<st
   return next
 }
 
+function omitKeys<TValue>(record: Record<string, TValue>, keys: Set<string>): Record<string, TValue> {
+  if (keys.size === 0) return record
+  let changed = false
+  const next: Record<string, TValue> = {}
+  for (const [key, value] of Object.entries(record)) {
+    if (keys.has(key)) {
+      changed = true
+      continue
+    }
+    next[key] = value
+  }
+  return changed ? next : record
+}
+
 function areThreadFieldsEqual(first: UiThread, second: UiThread): boolean {
   return (
     first.id === second.id &&
@@ -2410,7 +2424,7 @@ export function useDesktopState() {
     saveProjectDisplayNames(projectDisplayNameById.value)
   }
 
-  function removeProject(projectName: string): void {
+  async function removeProject(projectName: string): Promise<void> {
     if (projectName.length === 0) return
 
     const nextProjectOrder = projectOrder.value.filter((name) => name !== projectName)
@@ -2438,7 +2452,48 @@ export function useDesktopState() {
       setSelectedThreadId(flatThreads[0]?.id ?? '')
     }
 
-    void persistProjectOrderToWorkspaceRoots()
+    const removedRootPaths = new Set<string>()
+    try {
+      const rootsState = await getWorkspaceRootsState()
+      for (const rootPath of rootsState.order) {
+        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
+          removedRootPaths.add(rootPath)
+        }
+      }
+      for (const rootPath of rootsState.active) {
+        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
+          removedRootPaths.add(rootPath)
+        }
+      }
+      for (const rootPath of Object.keys(rootsState.labels)) {
+        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
+          removedRootPaths.add(rootPath)
+        }
+      }
+    } catch {
+      // Keep local-only removal when global state is unavailable.
+    }
+
+    if (removedRootPaths.size > 0) {
+      try {
+        const rootsState = await getWorkspaceRootsState()
+        const nextOrder = rootsState.order.filter((rootPath) => !removedRootPaths.has(rootPath))
+        const nextActive = rootsState.active.filter((rootPath) => !removedRootPaths.has(rootPath))
+        const fallbackActive = nextActive.length === 0 && nextOrder.length > 0
+          ? [nextOrder[0]]
+          : nextActive
+        await setWorkspaceRootsState({
+          order: nextOrder,
+          labels: omitKeys(rootsState.labels, removedRootPaths),
+          active: fallbackActive,
+        })
+        return
+      } catch {
+        // Fall back to order-only persistence if direct removal fails.
+      }
+    }
+
+    await persistProjectOrderToWorkspaceRoots()
   }
 
   function reorderProject(projectName: string, toIndex: number): void {
