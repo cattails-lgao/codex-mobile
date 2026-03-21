@@ -114,6 +114,14 @@
               class="thread-composer-attach-item"
               type="button"
               :disabled="isInteractionDisabled"
+              @click="triggerFolderPicker"
+            >
+              Add folder
+            </button>
+            <button
+              class="thread-composer-attach-item"
+              type="button"
+              :disabled="isInteractionDisabled"
               @click="triggerCameraCapture"
             >
               Take photo
@@ -211,6 +219,16 @@
       :disabled="isInteractionDisabled"
       @change="onCameraCaptureChange"
     />
+    <input
+      ref="folderPickerInputRef"
+      class="thread-composer-hidden-input"
+      type="file"
+      multiple
+      webkitdirectory
+      directory
+      :disabled="isInteractionDisabled"
+      @change="onFolderPickerChange"
+    />
   </form>
 </template>
 
@@ -278,6 +296,7 @@ const { state: dictationState, isSupported: isDictationSupported, startRecording
 const attachMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
+const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
@@ -375,6 +394,10 @@ function triggerCameraCapture(): void {
   cameraCaptureInputRef.value?.click()
 }
 
+function triggerFolderPicker(): void {
+  folderPickerInputRef.value?.click()
+}
+
 function removeImage(id: string): void {
   selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
 }
@@ -387,11 +410,11 @@ function removeFileAttachment(fsPath: string): void {
   fileAttachments.value = fileAttachments.value.filter((a) => a.fsPath !== fsPath)
 }
 
-function addFileAttachment(filePath: string): void {
+function addFileAttachment(filePath: string, customLabel?: string): void {
   const normalized = filePath.replace(/\\/g, '/')
   if (fileAttachments.value.some((a) => a.fsPath === normalized)) return
   const parts = normalized.split('/').filter(Boolean)
-  const label = parts[parts.length - 1] ?? normalized
+  const label = customLabel?.trim() || parts[parts.length - 1] || normalized
   fileAttachments.value = [...fileAttachments.value, { label, path: normalized, fsPath: normalized }]
 }
 
@@ -422,6 +445,21 @@ function addFiles(files: FileList | null): void {
   }
 }
 
+async function addFolderFiles(files: FileList | null): Promise<void> {
+  if (!files || files.length === 0) return
+  const rows = Array.from(files)
+  for (const file of rows) {
+    try {
+      const serverPath = await uploadFile(file)
+      if (!serverPath) continue
+      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+      addFileAttachment(serverPath, relativePath)
+    } catch {
+      // Ignore per-file upload failures and continue with remaining files.
+    }
+  }
+}
+
 function clearInputValue(inputRefEl: HTMLInputElement | null): void {
   if (inputRefEl) inputRefEl.value = ''
 }
@@ -436,6 +474,13 @@ function onPhotoLibraryChange(event: Event): void {
 function onCameraCaptureChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
   addFiles(input?.files ?? null)
+  clearInputValue(input)
+  isAttachMenuOpen.value = false
+}
+
+function onFolderPickerChange(event: Event): void {
+  const input = event.target as HTMLInputElement | null
+  void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
