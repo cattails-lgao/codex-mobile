@@ -24,6 +24,8 @@ export function useDictation(options: {
   let processorNode: ScriptProcessorNode | null = null
   let recordingStartedAt: number | null = null
   let waveformSamples: number[] = []
+  let isStartingRecording = false
+  let stopRequestedBeforeStart = false
 
   function drawWaveform(): void {
     const canvas = waveformCanvasRef.value
@@ -129,7 +131,9 @@ export function useDictation(options: {
   }
 
   async function startRecording() {
-    if (state.value !== 'idle' || !isSupported.value) return
+    if (state.value !== 'idle' || !isSupported.value || isStartingRecording) return
+    isStartingRecording = true
+    stopRequestedBeforeStart = false
 
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })
@@ -147,14 +151,23 @@ export function useDictation(options: {
       startWaveformCapture(mediaStream)
       mediaRecorder.start(250)
       state.value = 'recording'
+      if (stopRequestedBeforeStart) {
+        stopRecording()
+      }
     } catch (error) {
       cleanup()
       state.value = 'idle'
       options.onError?.(error)
+    } finally {
+      isStartingRecording = false
     }
   }
 
   function stopRecording() {
+    if (isStartingRecording && state.value === 'idle') {
+      stopRequestedBeforeStart = true
+      return
+    }
     if (state.value !== 'recording' || !mediaRecorder) return
     if (mediaRecorder.state !== 'inactive') {
       state.value = 'transcribing'
