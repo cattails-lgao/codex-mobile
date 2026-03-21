@@ -219,6 +219,16 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Empty Project Removal Persistence (2026-03-21)
+
+- In this web UI, empty project groups can be recreated purely from persisted workspace-root state, even when no threads exist for that project.
+- The persistence source of truth is still the global state keys:
+  - `electron-saved-workspace-roots`
+  - `electron-workspace-root-labels`
+  - `active-workspace-roots`
+- Removing a project must delete matching workspace-root entries from all three persisted collections; updating in-memory order alone is insufficient because hydration will rebuild an empty placeholder group on refresh.
+- The placeholder group is produced by `orderGroupsByProjectOrder(...)`, which materializes `{ projectName, threads: [] }` when a persisted project name has no matching incoming thread group.
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
