@@ -204,7 +204,7 @@
           </span>
 
           <button
-            v-if="isDictationSupported && !isTurnInProgress"
+            v-if="isDictationSupported"
             class="thread-composer-mic"
             :class="{
               'thread-composer-mic--active': dictationState === 'recording',
@@ -236,6 +236,7 @@
             <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
           </button>
           <button
+            v-else
             class="thread-composer-submit"
             :class="{ 'thread-composer-submit--queue': isTurnInProgress && inProgressMode === 'queue' }"
             type="button"
@@ -322,6 +323,7 @@ export type SubmitPayload = {
   fileAttachments: FileAttachment[]
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
+  source?: 'manual' | 'dictation'
 }
 
 const emit = defineEmits<{
@@ -367,7 +369,7 @@ const {
     dictationFeedback.value = ''
     if (props.dictationAutoSend !== false) {
       const mode = props.isTurnInProgress ? inProgressMode.value : 'steer'
-      onSubmit(mode)
+      onSubmitWithSource(mode, 'dictation')
       return
     }
     nextTick(() => inputRef.value?.focus())
@@ -460,6 +462,10 @@ const placeholderText = computed(() =>
 )
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
+  onSubmitWithSource(mode, 'manual')
+}
+
+function onSubmitWithSource(mode: 'steer' | 'queue', source: 'manual' | 'dictation'): void {
   const text = draft.value.trim()
   if (!canSubmit.value) return
   emit('submit', {
@@ -468,6 +474,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
     fileAttachments: [...fileAttachments.value],
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
     mode,
+    source,
   })
   draft.value = ''
   selectedImages.value = []

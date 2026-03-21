@@ -345,6 +345,15 @@ const filteredMessages = computed(() =>
     return true
   }),
 )
+const latestUserTurnIndex = computed(() => {
+  let latest = -1
+  for (const message of messages.value) {
+    if (message.role !== 'user') continue
+    if (typeof message.turnIndex !== 'number') continue
+    if (message.turnIndex > latest) latest = message.turnIndex
+  }
+  return latest
+})
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
 const composerCwd = computed(() => {
@@ -545,13 +554,30 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; source?: 'manual' | 'dictation' }): void {
   const text = payload.text
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
     return
   }
+  if (payload.source === 'dictation' && isSelectedThreadInProgress.value) {
+    void rollbackAndResendDictation(payload)
+    return
+  }
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments)
+}
+
+async function rollbackAndResendDictation(payload: {
+  text: string
+  imageUrls: string[]
+  fileAttachments: Array<{ label: string; path: string; fsPath: string }>
+  skills: Array<{ name: string; path: string }>
+}): Promise<void> {
+  const rollbackTargetTurnIndex = latestUserTurnIndex.value
+  if (rollbackTargetTurnIndex >= 0) {
+    await rollbackSelectedThread(rollbackTargetTurnIndex)
+  }
+  await sendMessageToSelectedThread(payload.text, payload.imageUrls, payload.skills, 'steer', payload.fileAttachments)
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
