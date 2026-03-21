@@ -413,3 +413,16 @@
 :root.dark .thread-composer-input::placeholder {
   @apply text-zinc-500;
 }
+
+@media (max-width: 768px) {
+  .thread-composer-input,
+  .composer-dropdown-search-input,
+  .composer-dropdown-add-input,
+  .search-dropdown-search,
+  .sidebar-search-input,
+  .project-menu-input,
+  .rename-thread-input,
+  .request-input {
+    font-size: 16px !important;
+  }
+}
