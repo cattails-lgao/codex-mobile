@@ -263,6 +263,12 @@ After each feature implementation session that uses this skill:
   - fenced code and divider styles (`.message-code-block`, `.message-code-language`, `.message-divider`)
 - A safe fallback pattern is to keep foreground text near existing dark message colors (`zinc-100`/`zinc-200`) and move structural surfaces to darker zinc backgrounds, so markdown blocks remain legible without deviating from the current dark theme.
 
+## Findings: Web Title Branding Fallback (2026-03-21)
+
+- Codex.app could not be inspected in this environment, so title branding was aligned using the existing web entry points.
+- The browser tab title for the main app comes from `index.html`.
+- The unauthenticated/login page has its own inline HTML template in `authMiddleware.ts`, so branding changes need to update both places to stay consistent.
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
