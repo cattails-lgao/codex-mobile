@@ -252,6 +252,17 @@ After each feature implementation session that uses this skill:
 - In this repo, the main composer textarea used `text-sm` (`14px` computed on mobile), which is sufficient to trigger that browser behavior.
 - Conservative fix: keep viewport meta unchanged and raise focusable text input font-size to `16px` on mobile widths, instead of disabling pinch zoom globally.
 
+## Findings: Dark Markdown Theme Coverage Fallback (2026-03-21)
+
+- Codex.app could not be inspected in this environment, so dark-mode markdown behavior was aligned using existing web theme conventions.
+- When adding new markdown block renderers in `ThreadConversation.vue`, matching `:root.dark` overrides must also be added in `style.css`; otherwise the new nodes inherit light-theme slate colors and become low-contrast in dark mode.
+- The markdown-specific classes that require explicit dark coverage in the current UI are:
+  - headings (`.message-heading`, `.message-heading-h6`)
+  - emphasis (`.message-bold-text`, `.message-italic-text`, `.message-strikethrough-text`)
+  - blockquote/list/task styles (`.message-blockquote`, `.message-list`, `.message-task-checkbox`)
+  - fenced code and divider styles (`.message-code-block`, `.message-code-language`, `.message-divider`)
+- A safe fallback pattern is to keep foreground text near existing dark message colors (`zinc-100`/`zinc-200`) and move structural surfaces to darker zinc backgrounds, so markdown blocks remain legible without deviating from the current dark theme.
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
