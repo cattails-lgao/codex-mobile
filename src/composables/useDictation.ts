@@ -187,9 +187,21 @@ export function useDictation(options: {
         body: formData,
       })
 
-      const data = (await response.json()) as { text?: string; error?: string }
-      if (!response.ok) throw new Error(data.error?.trim() || `Transcription failed: ${response.status}`)
-      const text = (data.text ?? '').trim()
+      const responseText = await response.text()
+      let data: { text?: string; error?: string } | null = null
+      try {
+        data = responseText.trim() ? (JSON.parse(responseText) as { text?: string; error?: string }) : null
+      } catch {
+        data = null
+      }
+
+      if (!response.ok) {
+        const jsonError = data?.error?.trim()
+        const textError = responseText.trim()
+        throw new Error(jsonError || textError || `Transcription failed: ${response.status}`)
+      }
+
+      const text = (data?.text ?? '').trim()
       if (text.length > 0) {
         options.onTranscript(text)
       } else {
