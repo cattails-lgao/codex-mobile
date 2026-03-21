@@ -215,10 +215,10 @@
             :title="dictationButtonLabel"
             :disabled="isInteractionDisabled || dictationState === 'transcribing'"
             @click="onDictationToggle"
-            @mousedown.prevent="onDictationPressStart"
+            @mousedown="onDictationPressStart"
             @mouseup="onDictationPressEnd"
             @mouseleave="dictationState === 'recording' && onDictationPressEnd()"
-            @touchstart.prevent="onDictationPressStart"
+            @touchstart="onDictationPressStart"
             @touchend="onDictationPressEnd"
             @touchcancel="onDictationPressEnd"
           >
@@ -502,8 +502,9 @@ function onDictationToggle(): void {
   toggleRecording()
 }
 
-function onDictationPressStart(): void {
+function onDictationPressStart(event: Event): void {
   if (props.dictationClickToToggle) return
+  event.preventDefault()
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
