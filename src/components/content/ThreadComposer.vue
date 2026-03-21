@@ -218,7 +218,6 @@
             @pointerdown="onDictationPressStart"
             @pointerup="onDictationPressEnd"
             @pointercancel="onDictationPressEnd"
-            @lostpointercapture="onDictationPressEnd"
           >
             <IconTablerPlayerStopFilled
               v-if="dictationState === 'recording'"
@@ -1133,6 +1132,7 @@ watch(
 
 .thread-composer-mic {
   @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+  touch-action: none;
 }
 
 .thread-composer-mic--active {
