@@ -64,6 +64,10 @@
         </span>
       </div>
 
+      <p v-if="dictationErrorText" class="thread-composer-dictation-error">
+        {{ dictationErrorText }}
+      </p>
+
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
@@ -250,9 +254,6 @@
         </div>
       </div>
 
-      <p v-if="dictationErrorText" class="thread-composer-dictation-error">
-        {{ dictationErrorText }}
-      </p>
     </div>
     <input
       ref="photoLibraryInputRef"
@@ -1142,7 +1143,7 @@ watch(
 }
 
 .thread-composer-dictation-error {
-  @apply mt-2 text-xs text-amber-700;
+  @apply mb-2 text-xs text-amber-700;
 }
 
 .thread-composer-submit {
