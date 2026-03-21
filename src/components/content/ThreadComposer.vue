@@ -311,6 +311,7 @@ const props = defineProps<{
   inProgressSubmitMode?: 'steer' | 'queue'
   dictationClickToToggle?: boolean
   prependDraftRequest?: { id: number; text: string } | null
+  dictationAutoSend?: boolean
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -364,6 +365,11 @@ const {
   onTranscript: (text) => {
     draft.value = draft.value ? `${draft.value}\n${text}` : text
     dictationFeedback.value = ''
+    if (props.dictationAutoSend !== false) {
+      const mode = props.isTurnInProgress ? inProgressMode.value : 'steer'
+      onSubmit(mode)
+      return
+    }
     nextTick(() => inputRef.value?.focus())
   },
   onEmpty: () => {

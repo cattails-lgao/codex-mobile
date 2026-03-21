@@ -86,6 +86,10 @@
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
               </button>
+              <button class="sidebar-settings-row" type="button" @click="toggleDictationAutoSend">
+                <span class="sidebar-settings-label">Auto send dictation</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
+              </button>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -152,7 +156,7 @@
                 :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
                 :is-turn-in-progress="false"
                 :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                :dictation-click-to-toggle="dictationClickToToggle"
+                :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                 :prepend-draft-request="rollbackDraftPrependRequest"
                 @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
@@ -186,7 +190,7 @@
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                  :dictation-click-to-toggle="dictationClickToToggle"
+                  :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :prepend-draft-request="rollbackDraftPrependRequest"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
@@ -302,12 +306,14 @@ const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
+const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
 const rollbackDraftPrependRequest = ref<{ id: number; text: string } | null>(null)
 let rollbackDraftPrependRequestId = 0
+const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -817,6 +823,11 @@ function cycleDarkMode(): void {
 function toggleDictationClickToToggle(): void {
   dictationClickToToggle.value = !dictationClickToToggle.value
   window.localStorage.setItem(DICTATION_CLICK_TO_TOGGLE_KEY, dictationClickToToggle.value ? '1' : '0')
+}
+
+function toggleDictationAutoSend(): void {
+  dictationAutoSend.value = !dictationAutoSend.value
+  window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
 }
 
 function applyDarkMode(): void {
