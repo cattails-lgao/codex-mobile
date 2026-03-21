@@ -7,7 +7,8 @@
             class="thread-row"
             :data-active="thread.id === selectedThreadId"
             :data-pinned="isPinned(thread.id)"
-            @mouseleave="onThreadRowLeave(thread.id)"
+            :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
+            :force-right-hover="isThreadMenuOpen(thread.id)"
           >
             <template #left>
               <span class="thread-left-stack">
@@ -36,7 +37,12 @@
                 >
                   <IconTablerDots class="thread-icon" />
                 </button>
-                <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                <div
+                  v-if="isThreadMenuOpen(thread.id)"
+                  class="thread-menu-panel"
+                  :data-open-direction="getThreadMenuDirection(thread.id)"
+                  @click.stop
+                >
                   <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                     Export chat
                   </button>
@@ -99,13 +105,14 @@
     <p v-else-if="isLoading && groups.length === 0" class="thread-tree-loading">Loading threads...</p>
 
     <ul v-else-if="isChronologicalView" class="thread-list thread-list-global">
-      <li v-for="thread in globalThreads" :key="thread.id" class="thread-row-item">
-        <SidebarMenuRow
-          class="thread-row"
-          :data-active="thread.id === selectedThreadId"
-          :data-pinned="isPinned(thread.id)"
-          @mouseleave="onThreadRowLeave(thread.id)"
-        >
+        <li v-for="thread in globalThreads" :key="thread.id" class="thread-row-item">
+          <SidebarMenuRow
+            class="thread-row"
+            :data-active="thread.id === selectedThreadId"
+            :data-pinned="isPinned(thread.id)"
+            :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
+            :force-right-hover="isThreadMenuOpen(thread.id)"
+          >
           <template #left>
             <span class="thread-left-stack">
               <span
@@ -137,7 +144,12 @@
               >
                 <IconTablerDots class="thread-icon" />
               </button>
-              <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+              <div
+                v-if="isThreadMenuOpen(thread.id)"
+                class="thread-menu-panel"
+                :data-open-direction="getThreadMenuDirection(thread.id)"
+                @click.stop
+              >
                 <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                   Export chat
                 </button>
@@ -206,7 +218,12 @@
                     <IconTablerDots class="thread-icon" />
                   </button>
 
-                  <div v-if="isProjectMenuOpen(group.projectName)" class="project-menu-panel" @click.stop>
+                  <div
+                    v-if="isProjectMenuOpen(group.projectName)"
+                    class="project-menu-panel"
+                    :data-open-direction="projectMenuDirectionById[group.projectName] ?? 'down'"
+                    @click.stop
+                  >
                     <template v-if="projectMenuMode === 'actions'">
                       <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
                         Browse files
@@ -253,7 +270,8 @@
                 class="thread-row"
                 :data-active="thread.id === selectedThreadId"
                 :data-pinned="isPinned(thread.id)"
-                @mouseleave="onThreadRowLeave(thread.id)"
+                :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
+                :force-right-hover="isThreadMenuOpen(thread.id)"
               >
                 <template #left>
                   <span class="thread-left-stack">
@@ -286,7 +304,12 @@
                     >
                       <IconTablerDots class="thread-icon" />
                     </button>
-                    <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                    <div
+                      v-if="isThreadMenuOpen(thread.id)"
+                      class="thread-menu-panel"
+                      :data-open-direction="getThreadMenuDirection(thread.id)"
+                      @click.stop
+                    >
                       <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                         Export chat
                       </button>
@@ -424,6 +447,8 @@ type DragPointerSample = {
   clientY: number
 }
 
+type MenuDirection = 'up' | 'down'
+
 const DRAG_START_THRESHOLD_PX = 4
 const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const expandedProjects = ref<Record<string, boolean>>({})
@@ -431,6 +456,8 @@ const collapsedProjects = ref<Record<string, boolean>>({})
 const pinnedThreadIds = ref<string[]>([])
 const openProjectMenuId = ref('')
 const openThreadMenuId = ref('')
+const projectMenuDirectionById = ref<Record<string, MenuDirection>>({})
+const threadMenuDirectionById = ref<Record<string, MenuDirection>>({})
 const projectMenuMode = ref<'actions' | 'rename'>('actions')
 const projectRenameDraft = ref('')
 const renameThreadDialogVisible = ref(false)
@@ -670,12 +697,6 @@ function onStartNewThread(projectName: string): void {
   emit('start-new-thread', projectName)
 }
 
-function onThreadRowLeave(threadId: string): void {
-  if (openThreadMenuId.value === threadId) {
-    closeThreadMenu()
-  }
-}
-
 function isThreadMenuOpen(threadId: string): boolean {
   return openThreadMenuId.value === threadId
 }
@@ -689,7 +710,13 @@ function toggleThreadMenu(threadId: string): void {
     closeThreadMenu()
     return
   }
+
+  closeProjectMenu()
+  isOrganizeMenuOpen.value = false
   openThreadMenuId.value = threadId
+  nextTick(() => {
+    updateThreadMenuDirection(threadId)
+  })
 }
 
 function openRenameThreadDialog(threadId: string, currentTitle: string): void {
@@ -753,7 +780,12 @@ function closeProjectMenu(): void {
 }
 
 function toggleOrganizeMenu(): void {
-  isOrganizeMenuOpen.value = !isOrganizeMenuOpen.value
+  const nextValue = !isOrganizeMenuOpen.value
+  if (nextValue) {
+    closeProjectMenu()
+    closeThreadMenu()
+  }
+  isOrganizeMenuOpen.value = nextValue
 }
 
 function setThreadViewMode(mode: 'project' | 'chronological'): void {
@@ -767,15 +799,24 @@ function toggleProjectMenu(projectName: string): void {
     return
   }
 
+  closeThreadMenu()
+  isOrganizeMenuOpen.value = false
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'actions'
   projectRenameDraft.value = getProjectDisplayName(projectName)
+  nextTick(() => {
+    updateProjectMenuDirection(projectName)
+  })
 }
 
 function openRenameProjectMenu(projectName: string): void {
+  closeThreadMenu()
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'rename'
   projectRenameDraft.value = getProjectDisplayName(projectName)
+  nextTick(() => {
+    updateProjectMenuDirection(projectName)
+  })
 }
 
 function onProjectNameInput(projectName: string): void {
@@ -879,6 +920,60 @@ function setThreadMenuWrapRef(threadId: string, element: Element | ComponentPubl
   }
 
   threadMenuWrapElementById.delete(threadId)
+}
+
+function findMenuBoundaryRect(element: HTMLElement): DOMRect {
+  let parent: HTMLElement | null = element.parentElement
+  while (parent) {
+    const styles = window.getComputedStyle(parent)
+    const overflowY = styles.overflowY || styles.overflow
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden' || overflowY === 'clip') {
+      return parent.getBoundingClientRect()
+    }
+    parent = parent.parentElement
+  }
+
+  return new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+}
+
+function resolveMenuDirection(menuWrapElement: HTMLElement, panelSelector: string): MenuDirection {
+  const menuPanelElement = menuWrapElement.querySelector<HTMLElement>(panelSelector)
+  if (!menuPanelElement) return 'down'
+
+  const wrapRect = menuWrapElement.getBoundingClientRect()
+  const boundaryRect = findMenuBoundaryRect(menuWrapElement)
+  const panelHeight = menuPanelElement.getBoundingClientRect().height || menuPanelElement.offsetHeight || 0
+  const panelGap = 6
+  const spaceBelow = boundaryRect.bottom - wrapRect.bottom
+  const spaceAbove = wrapRect.top - boundaryRect.top
+
+  if (spaceBelow >= panelHeight + panelGap) return 'down'
+  if (spaceAbove > spaceBelow) return 'up'
+  return 'down'
+}
+
+function updateThreadMenuDirection(threadId: string): void {
+  const menuWrapElement = threadMenuWrapElementById.get(threadId)
+  if (!menuWrapElement) return
+
+  threadMenuDirectionById.value = {
+    ...threadMenuDirectionById.value,
+    [threadId]: resolveMenuDirection(menuWrapElement, '.thread-menu-panel'),
+  }
+}
+
+function getThreadMenuDirection(threadId: string): MenuDirection {
+  return threadMenuDirectionById.value[threadId] ?? 'down'
+}
+
+function updateProjectMenuDirection(projectName: string): void {
+  const menuWrapElement = projectMenuWrapElementByName.get(projectName)
+  if (!menuWrapElement) return
+
+  projectMenuDirectionById.value = {
+    ...projectMenuDirectionById.value,
+    [projectName]: resolveMenuDirection(menuWrapElement, '.project-menu-panel'),
+  }
 }
 
 function isEventInsideOpenProjectMenu(event: Event): boolean {
@@ -1274,7 +1369,9 @@ watch(
   },
 )
 
-const hasOpenDismissableMenu = computed(() => isOrganizeMenuOpen.value || openProjectMenuId.value !== '')
+const hasOpenDismissableMenu = computed(
+  () => isOrganizeMenuOpen.value || openProjectMenuId.value !== '' || openThreadMenuId.value !== '',
+)
 
 watch(hasOpenDismissableMenu, (isOpen) => {
   if (isOpen) {
@@ -1407,6 +1504,12 @@ onBeforeUnmount(() => {
   @apply absolute right-0 top-full mt-1 z-20 min-w-36 rounded-md border border-zinc-200 bg-white p-1 shadow-md flex flex-col gap-0.5;
 }
 
+.project-menu-panel[data-open-direction='up'] {
+  top: auto;
+  bottom: calc(100% + 0.25rem);
+  margin-top: 0;
+}
+
 .project-menu-item {
   @apply rounded px-2 py-1 text-left text-sm text-zinc-700 hover:bg-zinc-100;
 }
@@ -1455,6 +1558,10 @@ onBeforeUnmount(() => {
   @apply hover:bg-zinc-200;
 }
 
+.thread-row[data-menu-open='true'] {
+  @apply relative z-30;
+}
+
 .thread-left-stack {
   @apply relative w-4 h-4 flex items-center justify-center;
 }
@@ -1497,6 +1604,12 @@ onBeforeUnmount(() => {
 
 .thread-menu-panel {
   @apply absolute right-0 top-full mt-1 z-20 min-w-36 rounded-md border border-zinc-200 bg-white p-1 shadow-md flex flex-col gap-0.5;
+}
+
+.thread-menu-panel[data-open-direction='up'] {
+  top: auto;
+  bottom: calc(100% + 0.25rem);
+  margin-top: 0;
 }
 
 .thread-menu-item {
