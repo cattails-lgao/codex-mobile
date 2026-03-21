@@ -185,6 +185,8 @@
                       <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                         <a
                           v-else-if="segment.kind === 'file'"
                           class="message-file-link"
@@ -208,12 +210,111 @@
                         <code v-else class="message-inline-code">{{ segment.value }}</code>
                       </template>
                     </p>
+                    <component
+                      :is="headingTag(block.level)"
+                      v-else-if="block.kind === 'heading'"
+                      class="message-heading"
+                      :class="headingClass(block.level)"
+                    >
+                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`heading-seg-${blockIndex}-${segmentIndex}`">
+                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toBrowseUrl(segment.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
+                        </a>
+                        <a
+                          v-else-if="segment.kind === 'url'"
+                          class="message-file-link"
+                          :href="segment.href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.href"
+                        >
+                          {{ segment.value }}
+                        </a>
+                        <code v-else class="message-inline-code">{{ segment.value }}</code>
+                      </template>
+                    </component>
+                    <blockquote v-else-if="block.kind === 'blockquote'" class="message-blockquote">
+                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`quote-seg-${blockIndex}-${segmentIndex}`">
+                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toBrowseUrl(segment.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
+                        </a>
+                        <a
+                          v-else-if="segment.kind === 'url'"
+                          class="message-file-link"
+                          :href="segment.href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.href"
+                        >
+                          {{ segment.value }}
+                        </a>
+                        <code v-else class="message-inline-code">{{ segment.value }}</code>
+                      </template>
+                    </blockquote>
                     <ul v-else-if="block.kind === 'unorderedList'" class="message-list message-list-unordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ul-${blockIndex}-${itemIndex}`" class="message-list-item">
                         <div class="message-list-item-text">
                           <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ul-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
                             <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                            <a
+                              v-else-if="segment.kind === 'file'"
+                              class="message-file-link"
+                              :href="toBrowseUrl(segment.path)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.path"
+                            >
+                              {{ segment.displayPath }}
+                            </a>
+                            <a
+                              v-else-if="segment.kind === 'url'"
+                              class="message-file-link"
+                              :href="segment.href"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.href"
+                            >
+                              {{ segment.value }}
+                            </a>
+                            <code v-else class="message-inline-code">{{ segment.value }}</code>
+                          </template>
+                        </div>
+                      </li>
+                    </ul>
+                    <ul v-else-if="block.kind === 'taskList'" class="message-list message-task-list">
+                      <li v-for="(item, itemIndex) in block.items" :key="`task-${blockIndex}-${itemIndex}`" class="message-task-item">
+                        <span class="message-task-checkbox" :data-checked="item.checked">{{ item.checked ? '☑' : '☐' }}</span>
+                        <div class="message-list-item-text">
+                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item.text)" :key="`task-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                             <a
                               v-else-if="segment.kind === 'file'"
                               class="message-file-link"
@@ -245,6 +346,8 @@
                           <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ol-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
                             <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                             <a
                               v-else-if="segment.kind === 'file'"
                               class="message-file-link"
@@ -270,6 +373,11 @@
                         </div>
                       </li>
                     </ol>
+                    <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
+                      <div v-if="block.language" class="message-code-language">{{ block.language }}</div>
+                      <pre class="message-code-pre"><code>{{ block.value }}</code></pre>
+                    </div>
+                    <hr v-else-if="block.kind === 'thematicBreak'" class="message-divider" />
                     <p v-else-if="isMarkdownImageFailed(message.id, blockIndex)" class="message-text">{{ block.markdown }}</p>
                     <button
                       v-else
@@ -460,13 +568,24 @@ const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
   | { kind: 'bold'; value: string }
+  | { kind: 'italic'; value: string }
+  | { kind: 'strikethrough'; value: string }
   | { kind: 'code'; value: string }
   | { kind: 'url'; value: string; href: string }
   | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
+type TaskListItem = {
+  text: string
+  checked: boolean
+}
 type MessageBlock =
   | { kind: 'paragraph'; value: string }
+  | { kind: 'heading'; level: number; value: string }
+  | { kind: 'blockquote'; value: string }
   | { kind: 'unorderedList'; items: string[] }
+  | { kind: 'taskList'; items: TaskListItem[] }
   | { kind: 'orderedList'; items: string[] }
+  | { kind: 'codeBlock'; language: string; value: string }
+  | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
 
 let scrollRestoreFrame = 0
@@ -633,6 +752,28 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
   return { label, target }
 }
 
+function headingTag(level: number): string {
+  const normalizedLevel = Math.min(6, Math.max(1, Math.trunc(level)))
+  return `h${String(normalizedLevel)}`
+}
+
+function headingClass(level: number): string {
+  switch (Math.min(6, Math.max(1, Math.trunc(level)))) {
+    case 1:
+      return 'message-heading-h1'
+    case 2:
+      return 'message-heading-h2'
+    case 3:
+      return 'message-heading-h3'
+    case 4:
+      return 'message-heading-h4'
+    case 5:
+      return 'message-heading-h5'
+    default:
+      return 'message-heading-h6'
+  }
+}
+
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
   const pattern = /https?:\/\/\S+|file:\/\/\S+|\S*[\\/]\S+/gu
@@ -697,13 +838,20 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     segments.push({ kind: 'text', value: text.slice(cursor) })
   }
 
-  return applyBoldMarkersAcrossTextSegments(segments)
+  return applyInlineMarkdownMarkers(segments)
 }
 
-function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSegment[] {
+function applyDelimitedMarkersAcrossTextSegments(
+  segments: InlineSegment[],
+  options: {
+    marker: string
+    kind: Extract<InlineSegment['kind'], 'bold' | 'italic' | 'strikethrough'>
+    isValidContent?: (value: string) => boolean
+  },
+): InlineSegment[] {
   const output: InlineSegment[] = []
-  let inBold = false
-  let boldBuffer = ''
+  let isOpen = false
+  let buffer = ''
 
   const pushText = (value: string): void => {
     if (!value) return
@@ -712,10 +860,10 @@ function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSe
 
   for (const segment of segments) {
     if (segment.kind !== 'text') {
-      if (inBold) {
-        pushText(`**${boldBuffer}`)
-        inBold = false
-        boldBuffer = ''
+      if (isOpen) {
+        pushText(`${options.marker}${buffer}`)
+        isOpen = false
+        buffer = ''
       }
       output.push(segment)
       continue
@@ -723,35 +871,71 @@ function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSe
 
     let remaining = segment.value
     while (remaining.length > 0) {
-      const markerIndex = remaining.indexOf('**')
+      const markerIndex = remaining.indexOf(options.marker)
       if (markerIndex < 0) {
-        if (inBold) boldBuffer += remaining
+        if (isOpen) buffer += remaining
         else pushText(remaining)
         break
       }
 
       const before = remaining.slice(0, markerIndex)
-      if (inBold) boldBuffer += before
+      if (isOpen) buffer += before
       else pushText(before)
 
-      remaining = remaining.slice(markerIndex + 2)
-      if (inBold) {
-        if (boldBuffer.length > 0) output.push({ kind: 'bold', value: boldBuffer })
-        else pushText('****')
-        boldBuffer = ''
-        inBold = false
+      remaining = remaining.slice(markerIndex + options.marker.length)
+      if (isOpen) {
+        const content = buffer
+        if (
+          content.length > 0 &&
+          (options.isValidContent ? options.isValidContent(content) : true)
+        ) {
+          output.push({ kind: options.kind, value: content })
+        } else {
+          pushText(`${options.marker}${content}${options.marker}`)
+        }
+        buffer = ''
+        isOpen = false
       } else {
-        inBold = true
+        isOpen = true
       }
     }
   }
 
-  if (inBold) {
-    pushText(`**${boldBuffer}`)
+  if (isOpen) {
+    pushText(`${options.marker}${buffer}`)
   }
 
   return output
 }
+
+function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[] {
+  const nonWhitespaceWrapped = (value: string): boolean => (
+    value.trim().length > 0 &&
+    !/^\s/u.test(value) &&
+    !/\s$/u.test(value)
+  )
+
+  let next = applyDelimitedMarkersAcrossTextSegments(segments, {
+    marker: '**',
+    kind: 'bold',
+    isValidContent: nonWhitespaceWrapped,
+  })
+
+  next = applyDelimitedMarkersAcrossTextSegments(next, {
+    marker: '~~',
+    kind: 'strikethrough',
+    isValidContent: nonWhitespaceWrapped,
+  })
+
+  next = applyDelimitedMarkersAcrossTextSegments(next, {
+    marker: '*',
+    kind: 'italic',
+    isValidContent: nonWhitespaceWrapped,
+  })
+
+  return next
+}
+
 function splitTextByFileUrls(text: string): InlineSegment[] {
   const markdownLinkPattern = /\[([^\]\n]+)\]\(([^)\n]+)\)/gu
   const segments: InlineSegment[] = []
@@ -953,14 +1137,51 @@ function isBlankMarkdownLine(line: string): boolean {
   return line.trim().length === 0
 }
 
+function readHeading(line: string): { level: number; value: string } | null {
+  const match = line.match(/^\s{0,3}(#{1,6})\s+(.+)$/u)
+  if (!match) return null
+  return {
+    level: match[1].length,
+    value: match[2].trim(),
+  }
+}
+
+function readBlockquoteLine(line: string): string | null {
+  const match = line.match(/^\s{0,3}>\s?(.*)$/u)
+  if (!match) return null
+  return match[1] ?? ''
+}
+
 function readUnorderedListItem(line: string): string | null {
   const match = line.match(/^\s*[-*+]\s+(.+)$/u)
   return match?.[1]?.trim() ?? null
 }
 
+function readTaskListItem(line: string): TaskListItem | null {
+  const match = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.+)$/u)
+  if (!match) return null
+  return {
+    checked: (match[1] ?? ' ').toLowerCase() === 'x',
+    text: match[2]?.trim() ?? '',
+  }
+}
+
 function readOrderedListItem(line: string): string | null {
   const match = line.match(/^\s*\d+[.)]\s+(.+)$/u)
   return match?.[1]?.trim() ?? null
+}
+
+function isThematicBreakLine(line: string): boolean {
+  return /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/u.test(line.trim())
+}
+
+function readFenceStart(line: string): { marker: string; language: string } | null {
+  const match = line.match(/^\s{0,3}(```+|~~~+)\s*([^\s`~][^`]*)?\s*$/u)
+  if (!match) return null
+  return {
+    marker: match[1],
+    language: (match[2] ?? '').trim(),
+  }
 }
 
 function parseTextBlocks(text: string): MessageBlock[] {
@@ -973,6 +1194,67 @@ function parseTextBlocks(text: string): MessageBlock[] {
     if (isBlankMarkdownLine(lines[index])) {
       index += 1
       continue
+    }
+
+    const fence = readFenceStart(lines[index])
+    if (fence) {
+      index += 1
+      const codeLines: string[] = []
+      while (index < lines.length) {
+        if (lines[index].trim() === fence.marker) {
+          index += 1
+          break
+        }
+        codeLines.push(lines[index])
+        index += 1
+      }
+      blocks.push({
+        kind: 'codeBlock',
+        language: fence.language,
+        value: codeLines.join('\n'),
+      })
+      continue
+    }
+
+    if (isThematicBreakLine(lines[index])) {
+      blocks.push({ kind: 'thematicBreak' })
+      index += 1
+      continue
+    }
+
+    const heading = readHeading(lines[index])
+    if (heading) {
+      blocks.push({ kind: 'heading', level: heading.level, value: heading.value })
+      index += 1
+      continue
+    }
+
+    const quoteLine = readBlockquoteLine(lines[index])
+    if (quoteLine !== null) {
+      const quoteLines: string[] = []
+      while (index < lines.length) {
+        const nextQuoteLine = readBlockquoteLine(lines[index])
+        if (nextQuoteLine === null) break
+        quoteLines.push(nextQuoteLine)
+        index += 1
+      }
+      blocks.push({ kind: 'blockquote', value: quoteLines.join('\n').trim() })
+      continue
+    }
+
+    const taskItem = readTaskListItem(lines[index])
+    if (taskItem !== null) {
+      const items: TaskListItem[] = []
+      while (index < lines.length) {
+        const nextItem = readTaskListItem(lines[index])
+        if (nextItem === null) break
+        items.push(nextItem)
+        index += 1
+      }
+      if (items.length > 0) {
+        blocks.push({ kind: 'taskList', items })
+        continue
+      }
     }
 
     const unorderedItem = readUnorderedListItem(lines[index])
@@ -1008,7 +1290,15 @@ function parseTextBlocks(text: string): MessageBlock[] {
     const paragraphLines: string[] = []
     while (index < lines.length) {
       if (isBlankMarkdownLine(lines[index])) break
-      if (readUnorderedListItem(lines[index]) !== null || readOrderedListItem(lines[index]) !== null) break
+      if (
+        readFenceStart(lines[index]) ||
+        isThematicBreakLine(lines[index]) ||
+        readHeading(lines[index]) ||
+        readBlockquoteLine(lines[index]) !== null ||
+        readTaskListItem(lines[index]) !== null ||
+        readUnorderedListItem(lines[index]) !== null ||
+        readOrderedListItem(lines[index]) !== null
+      ) break
       paragraphLines.push(lines[index])
       index += 1
     }
@@ -1022,10 +1312,9 @@ function parseTextBlocks(text: string): MessageBlock[] {
   return blocks
 }
 
-function parseMessageBlocks(text: string): MessageBlock[] {
+function parseNonCodeMessageBlocks(text: string): MessageBlock[] {
   if (!text.includes('![') || !text.includes('](')) {
-    const blocks = parseTextBlocks(text)
-    return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
+    return parseTextBlocks(text)
   }
 
   const blocks: MessageBlock[] = []
@@ -1053,6 +1342,51 @@ function parseMessageBlocks(text: string): MessageBlock[] {
     blocks.push(...parseTextBlocks(text.slice(cursor)))
   }
 
+  return blocks
+}
+
+function parseMessageBlocks(text: string): MessageBlock[] {
+  const normalizedText = normalizeMarkdownText(text)
+  const lines = normalizedText.split('\n')
+  const blocks: MessageBlock[] = []
+  let index = 0
+  let chunkStart = 0
+
+  const flushChunk = (endExclusive: number): void => {
+    if (endExclusive <= chunkStart) return
+    const chunk = lines.slice(chunkStart, endExclusive).join('\n')
+    blocks.push(...parseNonCodeMessageBlocks(chunk))
+  }
+
+  while (index < lines.length) {
+    const fence = readFenceStart(lines[index])
+    if (!fence) {
+      index += 1
+      continue
+    }
+
+    flushChunk(index)
+
+    index += 1
+    const codeLines: string[] = []
+    while (index < lines.length) {
+      if (lines[index].trim() === fence.marker) {
+        index += 1
+        break
+      }
+      codeLines.push(lines[index])
+      index += 1
+    }
+
+    blocks.push({
+      kind: 'codeBlock',
+      language: fence.language,
+      value: codeLines.join('\n'),
+    })
+    chunkStart = index
+  }
+
+  flushChunk(lines.length)
   return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
 }
 
@@ -1648,6 +1982,38 @@ onBeforeUnmount(() => {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
 }
 
+.message-heading {
+  @apply m-0 text-slate-900 tracking-tight;
+}
+
+.message-heading-h1 {
+  @apply text-2xl font-semibold leading-tight;
+}
+
+.message-heading-h2 {
+  @apply text-xl font-semibold leading-tight;
+}
+
+.message-heading-h3 {
+  @apply text-lg font-semibold leading-snug;
+}
+
+.message-heading-h4 {
+  @apply text-base font-semibold leading-snug;
+}
+
+.message-heading-h5 {
+  @apply text-sm font-semibold leading-snug uppercase tracking-[0.02em];
+}
+
+.message-heading-h6 {
+  @apply text-xs font-semibold leading-snug uppercase tracking-[0.04em] text-slate-600;
+}
+
+.message-blockquote {
+  @apply m-0 border-l-4 border-slate-300 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 bg-slate-50/70 rounded-r-lg;
+}
+
 .message-list {
   @apply m-0 pl-5 text-sm leading-relaxed text-slate-800 flex flex-col gap-1.5;
 }
@@ -1668,8 +2034,28 @@ onBeforeUnmount(() => {
   @apply whitespace-pre-wrap;
 }
 
+.message-task-list {
+  @apply list-none pl-0;
+}
+
+.message-task-item {
+  @apply flex items-start gap-2;
+}
+
+.message-task-checkbox {
+  @apply mt-0.5 text-sm leading-none text-slate-500 select-none;
+}
+
 .message-bold-text {
   @apply font-semibold text-slate-900;
+}
+
+.message-italic-text {
+  @apply italic;
+}
+
+.message-strikethrough-text {
+  @apply line-through text-slate-500;
 }
 
 .message-markdown-image {
@@ -1680,8 +2066,24 @@ onBeforeUnmount(() => {
   @apply rounded-md border border-slate-200 bg-slate-100/60 px-1.5 py-0.5 text-[0.875em] leading-[1.4] text-slate-900 font-mono;
 }
 
+.message-code-block {
+  @apply overflow-hidden rounded-xl border border-slate-200 bg-slate-950 text-slate-100;
+}
+
+.message-code-language {
+  @apply border-b border-slate-800 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.08em] text-slate-400;
+}
+
+.message-code-pre {
+  @apply m-0 overflow-x-auto px-3 py-3 text-[13px] leading-relaxed font-mono whitespace-pre;
+}
+
 .message-file-link {
   @apply text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
+}
+
+.message-divider {
+  @apply m-0 border-0 h-px bg-slate-300/80;
 }
 
 .message-stack[data-role='user'] {

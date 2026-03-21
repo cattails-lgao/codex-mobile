@@ -237,6 +237,13 @@ After each feature implementation session that uses this skill:
   - block-level parsing for paragraphs, unordered lists, ordered lists, and inline markdown images
   - inline parsing reused for bold, inline code, URLs, and file links
 - This avoids introducing a full markdown dependency while fixing the most visible raw-markup regressions (`- item`, `1. item`, `**bold**`).
+- Expanded fallback block support that still fits this local parser architecture:
+  - headings (`#` ... `######`)
+  - blockquotes (`> quote`)
+  - task lists (`- [ ]`, `- [x]`)
+  - thematic breaks (`---`, `***`, `___`)
+  - fenced code blocks (``` / ~~~)
+- To avoid breaking local-image rendering and file-link handling, code-fence splitting should happen before inline image token splitting, otherwise `![...](...)` inside fenced code can be misparsed as a real image block.
 
 ## Findings: Thread Delete Semantics (2026-03-12)
 
