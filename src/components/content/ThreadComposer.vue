@@ -104,6 +104,7 @@
           :disabled="isInteractionDisabled"
           @input="onInputChange"
           @keydown="onInputKeydown"
+          @paste="onInputPaste"
         />
         <ComposerSkillPicker
           :skills="skillOptions"
@@ -587,25 +588,66 @@ function isImageFile(file: File): boolean {
   return /\.(png|jpe?g|gif|webp)$/i.test(file.name)
 }
 
-function addFiles(files: FileList | null): void {
+function addImageFile(file: File): void {
+  const reader = new FileReader()
+  reader.onload = () => {
+    if (typeof reader.result !== 'string') return
+    selectedImages.value.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file.name || `Pasted image ${selectedImages.value.length + 1}`,
+      url: reader.result,
+    })
+  }
+  reader.readAsDataURL(file)
+}
+
+function addFiles(files: FileList | File[] | null): void {
   if (!files || files.length === 0) return
   for (const file of Array.from(files)) {
     if (isImageFile(file)) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') return
-        selectedImages.value.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          name: file.name,
-          url: reader.result,
-        })
-      }
-      reader.readAsDataURL(file)
-    } else {
-      void uploadFile(file).then((serverPath) => {
-        if (serverPath) addFileAttachment(serverPath)
-      }).catch(() => {})
+      addImageFile(file)
+      continue
     }
+
+    void uploadFile(file).then((serverPath) => {
+      if (serverPath) addFileAttachment(serverPath)
+    }).catch(() => {})
+  }
+}
+
+function readClipboardImageFiles(event: ClipboardEvent): File[] {
+  const clipboardItems = event.clipboardData?.items
+  if (clipboardItems && clipboardItems.length > 0) {
+    const imageFiles: File[] = []
+    for (const item of Array.from(clipboardItems)) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
+      const file = item.getAsFile()
+      if (file) {
+        imageFiles.push(file)
+      }
+    }
+    if (imageFiles.length > 0) {
+      return imageFiles
+    }
+  }
+
+  const clipboardFiles = event.clipboardData?.files
+  if (!clipboardFiles || clipboardFiles.length === 0) {
+    return []
+  }
+
+  return Array.from(clipboardFiles).filter((file) => isImageFile(file))
+}
+
+function onInputPaste(event: ClipboardEvent): void {
+  if (isInteractionDisabled.value) return
+  const imageFiles = readClipboardImageFiles(event)
+  if (imageFiles.length === 0) return
+  event.preventDefault()
+  addFiles(imageFiles)
+  isAttachMenuOpen.value = false
+  if (dictationFeedback.value) {
+    dictationFeedback.value = ''
   }
 }
 
