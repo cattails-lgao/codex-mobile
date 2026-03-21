@@ -229,6 +229,15 @@ After each feature implementation session that uses this skill:
 - Removing a project must delete matching workspace-root entries from all three persisted collections; updating in-memory order alone is insufficient because hydration will rebuild an empty placeholder group on refresh.
 - The placeholder group is produced by `orderGroupsByProjectOrder(...)`, which materializes `{ projectName, threads: [] }` when a persisted project name has no matching incoming thread group.
 
+## Findings: Markdown Block Rendering Fallback (2026-03-21)
+
+- Codex.app could not be inspected in this Linux environment because `/Applications/Codex.app` is unavailable.
+- Conservative fallback for message markdown rendering is to keep the existing inline parser and add a lightweight block parser in `ThreadConversation.vue`.
+- A low-risk split that matches existing web UI structure is:
+  - block-level parsing for paragraphs, unordered lists, ordered lists, and inline markdown images
+  - inline parsing reused for bold, inline code, URLs, and file links
+- This avoids introducing a full markdown dependency while fixing the most visible raw-markup regressions (`- item`, `1. item`, `**bold**`).
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.
