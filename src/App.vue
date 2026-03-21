@@ -148,12 +148,13 @@
 
                 <ThreadComposer :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
-                :models="availableModelIds" :selected-model="selectedModelId"
-                :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
-                :is-turn-in-progress="false"
-                :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                :dictation-click-to-toggle="dictationClickToToggle" @submit="onSubmitThreadMessage"
-                @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
+                  :models="availableModelIds" :selected-model="selectedModelId"
+                  :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
+                  :codex-quota="codexQuota"
+                  :is-turn-in-progress="false"
+                  :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                  :dictation-click-to-toggle="dictationClickToToggle" @submit="onSubmitThreadMessage"
+                  @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
           </template>
           <template v-else>
@@ -181,6 +182,7 @@
                   :models="availableModelIds"
                   :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
                   :skills="installedSkills"
+                  :codex-quota="codexQuota"
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
@@ -238,6 +240,7 @@ const {
   selectedThreadScrollState,
   selectedThreadServerRequests,
   selectedLiveOverlay,
+  codexQuota,
   selectedThreadId,
   availableModelIds,
   selectedModelId,

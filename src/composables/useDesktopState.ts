@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   archiveThread,
+  getAccountRateLimits,
   renameThread,
   getAvailableModelIds,
   getCurrentModelConfig,
@@ -8,6 +9,7 @@ import {
   getSkillsList,
   getThreadDetail,
   interruptThreadTurn,
+  pickCodexRateLimitSnapshot,
   replyToServerRequest,
   rollbackThread,
   getThreadGroups,
@@ -31,6 +33,7 @@ import type {
   UiLiveOverlay,
   UiMessage,
   UiProjectGroup,
+  UiRateLimitSnapshot,
   UiServerRequest,
   UiServerRequestReply,
   UiThread,
@@ -663,6 +666,7 @@ export function useDesktopState() {
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
+  const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
 
   const threadTitleById = ref<Record<string, string>>({})
 
@@ -720,6 +724,7 @@ export function useDesktopState() {
       errorText,
     }
   })
+  const codexQuota = computed<UiRateLimitSnapshot | null>(() => codexRateLimit.value)
   const messages = computed<UiMessage[]>(() => {
     const threadId = selectedThreadId.value
     if (!threadId) return []
@@ -744,6 +749,10 @@ export function useDesktopState() {
 
   function setSelectedModelId(modelId: string): void {
     selectedModelId.value = modelId.trim()
+  }
+
+  function setCodexRateLimit(nextSnapshot: UiRateLimitSnapshot | null): void {
+    codexRateLimit.value = nextSnapshot
   }
 
   async function applyFallbackModelSelection(): Promise<void> {
@@ -1679,6 +1688,11 @@ export function useDesktopState() {
       }
     }
 
+    if (notification.method === 'account/rateLimits/updated') {
+      setCodexRateLimit(pickCodexRateLimitSnapshot(notification.params))
+      return
+    }
+
     const turnActivity = readTurnActivity(notification)
     if (turnActivity) {
       setTurnActivityForThread(turnActivity.threadId, turnActivity.activity)
@@ -2067,6 +2081,14 @@ export function useDesktopState() {
     }
   }
 
+  async function refreshCodexRateLimits(): Promise<void> {
+    try {
+      setCodexRateLimit(await getAccountRateLimits())
+    } catch {
+      // Keep the last known quota snapshot on transient failures.
+    }
+  }
+
   async function refreshAll() {
     error.value = ''
 
@@ -2075,6 +2097,7 @@ export function useDesktopState() {
       await Promise.all([
         refreshModelPreferences(),
         refreshSkills(),
+        refreshCodexRateLimits(),
       ])
       await loadMessages(selectedThreadId.value)
     } catch (unknownError) {
@@ -2659,6 +2682,7 @@ export function useDesktopState() {
 
     if (stopNotificationStream) return
     void loadPendingServerRequestsFromBridge()
+    void refreshCodexRateLimits()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       applyRealtimeUpdates(notification)
       queueEventDrivenSync(notification)
@@ -2715,6 +2739,7 @@ export function useDesktopState() {
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
+    codexRateLimit.value = null
   }
 
   const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {
@@ -2752,6 +2777,7 @@ export function useDesktopState() {
     selectedThreadScrollState,
     selectedThreadServerRequests,
     selectedLiveOverlay,
+    codexQuota,
     selectedThreadId,
     availableModelIds,
     selectedModelId,

@@ -68,6 +68,16 @@
         </span>
       </div>
 
+      <div
+        v-if="quotaSummaryText"
+        class="thread-composer-rate-limit"
+        :title="quotaTooltipText"
+        aria-live="polite"
+      >
+        <span class="thread-composer-rate-limit-label">Codex quota</span>
+        <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
+      </div>
+
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
@@ -285,7 +295,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ReasoningEffort } from '../../types/codex'
+import type { ReasoningEffort, UiRateLimitSnapshot, UiRateLimitWindow } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -306,6 +316,7 @@ const props = defineProps<{
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
   skills?: SkillItem[]
+  codexQuota?: UiRateLimitSnapshot | null
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
   disabled?: boolean
@@ -455,6 +466,89 @@ const dictationDurationLabel = computed(() => {
 const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
 )
+const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
+const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))
+
+function formatPlanType(planType: string | null | undefined): string {
+  if (!planType || planType === 'unknown') return ''
+  if (planType === 'edu') return 'Education'
+  return `${planType.slice(0, 1).toUpperCase()}${planType.slice(1)}`
+}
+
+function formatWindowSpan(windowMinutes: number | null): string {
+  if (typeof windowMinutes !== 'number' || !Number.isFinite(windowMinutes) || windowMinutes <= 0) return ''
+  if (windowMinutes % 1440 === 0) return `${windowMinutes / 1440}d`
+  if (windowMinutes % 60 === 0) return `${windowMinutes / 60}h`
+  return `${windowMinutes}m`
+}
+
+function formatResetTime(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  const resetMs = resetsAt * 1000
+  const diffMs = resetMs - Date.now()
+  if (diffMs <= 0) return 'resetting now'
+
+  const totalMinutes = Math.round(diffMs / 60000)
+  if (totalMinutes < 60) return `resets in ${Math.max(1, totalMinutes)}m`
+
+  const totalHours = Math.round(totalMinutes / 60)
+  if (totalHours < 48) return `resets in ${Math.max(1, totalHours)}h`
+
+  const totalDays = Math.round(totalHours / 24)
+  return `resets in ${Math.max(1, totalDays)}d`
+}
+
+function formatWindowSummary(window: UiRateLimitWindow): string {
+  const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+  const span = formatWindowSpan(window.windowMinutes)
+  return span ? `${remainingPercent}% left / ${span}` : `${remainingPercent}% left`
+}
+
+function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+
+  const segments: string[] = []
+  const plan = formatPlanType(quota.planType)
+  if (plan) segments.push(plan)
+  if (quota.primary) segments.push(formatWindowSummary(quota.primary))
+  if (quota.secondary) segments.push(formatWindowSummary(quota.secondary))
+
+  if (segments.length === 0 && quota.credits?.unlimited) {
+    segments.push('Unlimited credits')
+  } else if (segments.length === 0 && quota.credits?.hasCredits && quota.credits.balance) {
+    segments.push(`${quota.credits.balance} credits`)
+  }
+
+  return segments.join(' · ')
+}
+
+function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+
+  const lines: string[] = []
+  const plan = formatPlanType(quota.planType)
+  if (plan) {
+    lines.push(`Plan: ${plan}`)
+  }
+
+  if (quota.primary) {
+    const reset = formatResetTime(quota.primary.resetsAt)
+    lines.push(`Primary window: ${formatWindowSummary(quota.primary)}${reset ? `, ${reset}` : ''}`)
+  }
+
+  if (quota.secondary) {
+    const reset = formatResetTime(quota.secondary.resetsAt)
+    lines.push(`Secondary window: ${formatWindowSummary(quota.secondary)}${reset ? `, ${reset}` : ''}`)
+  }
+
+  if (quota.credits?.unlimited) {
+    lines.push('Credits: unlimited')
+  } else if (quota.credits?.hasCredits && quota.credits.balance) {
+    lines.push(`Credits: ${quota.credits.balance}`)
+  }
+
+  return lines.join('\n')
+}
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   const text = draft.value.trim()
@@ -1062,6 +1156,18 @@ watch(
 
 .thread-composer-skill-chip-remove {
   @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
+}
+
+.thread-composer-rate-limit {
+  @apply mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] leading-5 text-zinc-500;
+}
+
+.thread-composer-rate-limit-label {
+  @apply font-medium text-zinc-700;
+}
+
+.thread-composer-rate-limit-value {
+  @apply break-words;
 }
 
 .thread-composer-input-wrap {

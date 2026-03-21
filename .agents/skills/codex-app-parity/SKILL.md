@@ -219,6 +219,16 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Account Rate Limits Protocol (2026-03-21)
+
+- App-server exposes quota state via `account/rateLimits/read` and pushes live updates with `account/rateLimits/updated`.
+- Read responses can include `rateLimitsByLimitId.codex`; if absent, fall back to the legacy top-level `rateLimits` bucket.
+- Runtime payloads use camelCase fields:
+  - snapshot: `limitId`, `limitName`, `planType`, `primary`, `secondary`, `credits`
+  - window: `usedPercent`, `windowDurationMins`, `resetsAt`
+  - credits: `hasCredits`, `unlimited`, `balance`
+- For compact composer display, a conservative summary can be derived from `primary`/`secondary` windows without forcing a full account panel.
+
 ## Findings: Empty Project Removal Persistence (2026-03-21)
 
 - In this web UI, empty project groups can be recreated purely from persisted workspace-root state, even when no threads exist for that project.

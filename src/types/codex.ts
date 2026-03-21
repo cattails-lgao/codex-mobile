@@ -125,6 +125,27 @@ export type UiProjectGroup = {
   threads: UiThread[]
 }
 
+export type UiRateLimitWindow = {
+  usedPercent: number
+  windowMinutes: number | null
+  resetsAt: number | null
+}
+
+export type UiCreditsSnapshot = {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+export type UiRateLimitSnapshot = {
+  limitId: string | null
+  limitName: string | null
+  primary: UiRateLimitWindow | null
+  secondary: UiRateLimitWindow | null
+  credits: UiCreditsSnapshot | null
+  planType: string | null
+}
+
 export type ThreadScrollState = {
   scrollTop: number
   isAtBottom: boolean
