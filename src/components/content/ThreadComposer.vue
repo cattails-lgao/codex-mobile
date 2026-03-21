@@ -215,12 +215,10 @@
             :title="dictationButtonLabel"
             :disabled="isInteractionDisabled || dictationState === 'transcribing'"
             @click="onDictationToggle"
-            @mousedown="onDictationPressStart"
-            @mouseup="onDictationPressEnd"
-            @mouseleave="dictationState === 'recording' && onDictationPressEnd()"
-            @touchstart="onDictationPressStart"
-            @touchend="onDictationPressEnd"
-            @touchcancel="onDictationPressEnd"
+            @pointerdown="onDictationPressStart"
+            @pointerup="onDictationPressEnd"
+            @pointercancel="onDictationPressEnd"
+            @lostpointercapture="onDictationPressEnd"
           >
             <IconTablerPlayerStopFilled
               v-if="dictationState === 'recording'"
@@ -503,17 +501,24 @@ function onDictationToggle(): void {
   toggleRecording()
 }
 
-function onDictationPressStart(event: Event): void {
+function onDictationPressStart(event: PointerEvent): void {
   if (props.dictationClickToToggle) return
   event.preventDefault()
   if (isHoldPressActive) return
   isHoldPressActive = true
+  const target = event.currentTarget as HTMLElement | null
+  if (target) {
+    try {
+      target.setPointerCapture(event.pointerId)
+    } catch {
+      // Ignore if pointer cannot be captured in the current environment.
+    }
+  }
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
-  window.addEventListener('mouseup', onDictationPressEnd)
-  window.addEventListener('touchend', onDictationPressEnd)
-  window.addEventListener('touchcancel', onDictationPressEnd)
+  window.addEventListener('pointerup', onDictationPressEnd)
+  window.addEventListener('pointercancel', onDictationPressEnd)
   window.addEventListener('blur', onDictationPressEnd)
   void startRecording()
 }
@@ -522,9 +527,8 @@ function onDictationPressEnd(): void {
   if (props.dictationClickToToggle) return
   if (!isHoldPressActive) return
   isHoldPressActive = false
-  window.removeEventListener('mouseup', onDictationPressEnd)
-  window.removeEventListener('touchend', onDictationPressEnd)
-  window.removeEventListener('touchcancel', onDictationPressEnd)
+  window.removeEventListener('pointerup', onDictationPressEnd)
+  window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
   stopRecording()
 }
@@ -895,9 +899,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
-  window.removeEventListener('mouseup', onDictationPressEnd)
-  window.removeEventListener('touchend', onDictationPressEnd)
-  window.removeEventListener('touchcancel', onDictationPressEnd)
+  window.removeEventListener('pointerup', onDictationPressEnd)
+  window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
   if (fileMentionDebounceTimer) {
     clearTimeout(fileMentionDebounceTimer)
