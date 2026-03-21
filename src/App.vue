@@ -554,13 +554,13 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; source?: 'manual' | 'dictation' }): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; rollbackLatestUserTurn?: boolean }): void {
   const text = payload.text
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
     return
   }
-  if (payload.source === 'dictation' && isSelectedThreadInProgress.value) {
+  if (payload.rollbackLatestUserTurn === true) {
     void rollbackAndResendDictation(payload)
     return
   }

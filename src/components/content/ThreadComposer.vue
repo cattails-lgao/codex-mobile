@@ -323,7 +323,7 @@ export type SubmitPayload = {
   fileAttachments: FileAttachment[]
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
-  source?: 'manual' | 'dictation'
+  rollbackLatestUserTurn?: boolean
 }
 
 const emit = defineEmits<{
@@ -369,7 +369,10 @@ const {
     dictationFeedback.value = ''
     if (props.dictationAutoSend !== false) {
       const mode = props.isTurnInProgress ? inProgressMode.value : 'steer'
-      onSubmitWithSource(mode, 'dictation')
+      onSubmit(mode, {
+        rollbackLatestUserTurn: mode === 'steer' && dictationShouldRollbackLatestUserTurn,
+      })
+      dictationShouldRollbackLatestUserTurn = false
       return
     }
     nextTick(() => inputRef.value?.focus())
@@ -402,6 +405,7 @@ const fileMentionHighlightedIndex = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
+let dictationShouldRollbackLatestUserTurn = false
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
@@ -461,11 +465,7 @@ const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
 )
 
-function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
-  onSubmitWithSource(mode, 'manual')
-}
-
-function onSubmitWithSource(mode: 'steer' | 'queue', source: 'manual' | 'dictation'): void {
+function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestUserTurn?: boolean }): void {
   const text = draft.value.trim()
   if (!canSubmit.value) return
   emit('submit', {
@@ -474,7 +474,7 @@ function onSubmitWithSource(mode: 'steer' | 'queue', source: 'manual' | 'dictati
     fileAttachments: [...fileAttachments.value],
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
     mode,
-    source,
+    rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
   draft.value = ''
   selectedImages.value = []
@@ -508,6 +508,10 @@ function onDictationToggle(): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  if (dictationState.value === 'idle') {
+    dictationShouldRollbackLatestUserTurn =
+      props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
+  }
   toggleRecording()
 }
 
@@ -527,6 +531,8 @@ function onDictationPressStart(event: PointerEvent): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  dictationShouldRollbackLatestUserTurn =
+    props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
   window.addEventListener('pointerup', onDictationPressEnd)
   window.addEventListener('pointercancel', onDictationPressEnd)
   window.addEventListener('blur', onDictationPressEnd)
