@@ -448,6 +448,10 @@ const modelOptions = computed(() =>
   props.models.map((modelId) => ({ value: modelId, label: modelId })),
 )
 
+const isPlanModeWaitingForModel = computed(() =>
+  props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
+)
+
 const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
 const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
 const skillDropdownOptions = computed(() =>
@@ -461,6 +465,7 @@ const skillDropdownOptions = computed(() =>
 const canSubmit = computed(() => {
   if (props.disabled) return false
   if (!props.activeThreadId) return false
+  if (isPlanModeWaitingForModel.value) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const standaloneFileAttachments = computed(() => {
@@ -491,7 +496,11 @@ const dictationDurationLabel = computed(() => {
 })
 
 const placeholderText = computed(() =>
-  props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
+  !props.activeThreadId
+    ? 'Select a thread to send a message'
+    : isPlanModeWaitingForModel.value
+      ? 'Loading models for plan mode...'
+      : 'Type a message... (@ for files, / for skills)',
 )
 const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
 const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))

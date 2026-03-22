@@ -219,6 +219,12 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Plan Mode Turn Start (2026-03-22)
+
+- App-server rejects `turn/start.collaborationMode` unless the client advertises `initialize.capabilities.experimentalApi = true`.
+- `turn/start.collaborationMode.settings.model` must be a non-empty concrete model id. Sending `""` can leave a plan-mode thread stuck or fail without rendering plan output.
+- In this environment, `collaborationMode/list` returns `Plan` with `mode: "plan"` and `reasoning_effort: "medium"`, but `model` is `null`, so the client must source the actual model from current config or available models before starting the turn.
+
 ## Findings: Account Rate Limits Protocol (2026-03-21)
 
 - App-server exposes quota state via `account/rateLimits/read` and pushes live updates with `account/rateLimits/updated`.

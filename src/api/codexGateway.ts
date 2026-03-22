@@ -36,6 +36,15 @@ type CurrentModelConfig = {
   reasoningEffort: ReasoningEffort | ''
 }
 
+type ResolvedPlanModeSettings = {
+  model: string
+  reasoningEffort: ReasoningEffort | null
+}
+
+function normalizePlanModeReasoningEffort(value: ReasoningEffort | '' | null | undefined): ReasoningEffort | null {
+  return value && value.length > 0 ? value : null
+}
+
 export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
@@ -309,6 +318,51 @@ function buildTextWithAttachments(
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
 }
 
+async function resolvePlanModeSettings(
+  model?: string,
+  effort?: ReasoningEffort,
+): Promise<ResolvedPlanModeSettings> {
+  const explicitModel = model?.trim() ?? ''
+  if (explicitModel) {
+    return {
+      model: explicitModel,
+      reasoningEffort: normalizePlanModeReasoningEffort(effort),
+    }
+  }
+
+  let currentConfig: CurrentModelConfig | null = null
+  try {
+    currentConfig = await getCurrentModelConfig()
+  } catch {
+    currentConfig = null
+  }
+
+  const configuredModel = currentConfig?.model.trim() ?? ''
+  if (configuredModel) {
+    return {
+      model: configuredModel,
+      reasoningEffort: normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+    }
+  }
+
+  let availableModelIds: string[] = []
+  try {
+    availableModelIds = await getAvailableModelIds()
+  } catch {
+    availableModelIds = []
+  }
+
+  const fallbackModel = availableModelIds.find((candidate) => candidate.trim().length > 0)?.trim() ?? ''
+  if (fallbackModel) {
+    return {
+      model: fallbackModel,
+      reasoningEffort: normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+    }
+  }
+
+  throw new Error('Plan mode requires an available model. Wait for models to load and try again.')
+}
+
 export async function startThreadTurn(
   threadId: string,
   text: string,
@@ -320,6 +374,7 @@ export async function startThreadTurn(
   collaborationMode?: CollaborationModeKind,
 ): Promise<void> {
   try {
+    const normalizedModel = model?.trim() ?? ''
     const finalText = buildTextWithAttachments(text, fileAttachments)
     const input: Array<Record<string, unknown>> = [{ type: 'text', text: finalText }]
     for (const imageUrl of imageUrls) {
@@ -342,18 +397,19 @@ export async function startThreadTurn(
       input,
     }
     if (attachments.length > 0) params.attachments = attachments
-    if (typeof model === 'string' && model.length > 0) {
-      params.model = model
+    if (normalizedModel) {
+      params.model = normalizedModel
     }
     if (typeof effort === 'string' && effort.length > 0) {
       params.effort = effort
     }
     if (collaborationMode === 'plan') {
+      const planSettings = await resolvePlanModeSettings(normalizedModel, effort)
       params.collaborationMode = {
         mode: 'plan',
         settings: {
-          model: model ?? '',
-          reasoning_effort: effort ?? null,
+          model: planSettings.model,
+          reasoning_effort: planSettings.reasoningEffort,
           developer_instructions: null,
         },
       }
