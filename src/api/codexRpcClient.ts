@@ -1,5 +1,6 @@
 import type { RpcEnvelope, RpcMethodCatalog } from '../types/codex'
 import { CodexApiError, extractErrorMessage } from './codexErrors'
+import { appPath, appWsUrl } from '../utils/appUrl'
 
 type RpcRequestBody = {
   method: string
@@ -32,7 +33,7 @@ export async function rpcCall<T>(method: string, params?: unknown): Promise<T> {
 
   let response: Response
   try {
-    response = await fetch('/codex-api/rpc', {
+    response = await fetch(appPath('codex-api/rpc'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -76,7 +77,7 @@ export async function rpcCall<T>(method: string, params?: unknown): Promise<T> {
 }
 
 export async function fetchRpcMethodCatalog(): Promise<string[]> {
-  const response = await fetch('/codex-api/meta/methods')
+  const response = await fetch(appPath('codex-api/meta/methods'))
 
   let payload: unknown = null
   try {
@@ -101,7 +102,7 @@ export async function fetchRpcMethodCatalog(): Promise<string[]> {
 }
 
 export async function fetchRpcNotificationCatalog(): Promise<string[]> {
-  const response = await fetch('/codex-api/meta/notifications')
+  const response = await fetch(appPath('codex-api/meta/notifications'))
 
   let payload: unknown = null
   try {
@@ -187,7 +188,7 @@ export function subscribeRpcNotifications(onNotification: (value: RpcNotificatio
   const attachSse = (attempt = 0) => {
     if (typeof EventSource === 'undefined' || closed) return
     cleanup?.()
-    const source = new EventSource('/codex-api/events')
+    const source = new EventSource(appPath('codex-api/events'))
     let isConnectionClosed = false
 
     source.onmessage = (event) => {
@@ -229,8 +230,7 @@ export function subscribeRpcNotifications(onNotification: (value: RpcNotificatio
     }
 
     cleanup?.()
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const socket = new WebSocket(`${protocol}//${window.location.host}/codex-api/ws`)
+    const socket = new WebSocket(appWsUrl('codex-api/ws'))
     let didOpen = false
     let intentionallyClosed = false
     let fallbackTimer: number | null = window.setTimeout(() => {
@@ -302,7 +302,7 @@ export function subscribeRpcNotifications(onNotification: (value: RpcNotificatio
 export async function respondServerRequest(body: ServerRequestReplyBody): Promise<void> {
   let response: Response
   try {
-    response = await fetch('/codex-api/server-requests/respond', {
+    response = await fetch(appPath('codex-api/server-requests/respond'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -336,7 +336,7 @@ export async function respondServerRequest(body: ServerRequestReplyBody): Promis
 }
 
 export async function fetchPendingServerRequests(): Promise<unknown[]> {
-  const response = await fetch('/codex-api/server-requests/pending')
+  const response = await fetch(appPath('codex-api/server-requests/pending'))
 
   let payload: unknown = null
   try {

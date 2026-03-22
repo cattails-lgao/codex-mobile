@@ -110,6 +110,7 @@ import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
 import SkillDetailModal, { type HubSkill } from './SkillDetailModal.vue'
 import { useGithubSkillsSync } from '../../composables/useGithubSkillsSync'
+import { appPath } from '../../utils/appUrl'
 
 const EMPTY_SKILL: HubSkill = { name: '', owner: '', description: '', url: '', installed: false }
 const SKILLS_HUB_CACHE_KEY = 'codex-web-local.skills-hub.cache.v1'
@@ -234,7 +235,7 @@ async function fetchSkills(q: string): Promise<void> {
     if (q.trim()) params.set('q', q.trim())
     params.set('limit', '100')
     params.set('sort', sortMode.value)
-    const resp = await fetch(`/codex-api/skills-hub?${params}`)
+    const resp = await fetch(`${appPath('codex-api/skills-hub')}?${params.toString()}`)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const data = (await resp.json()) as SkillsHubPayload
     applySkillsPayload(data)
@@ -260,7 +261,7 @@ async function handleInstall(skill: HubSkill): Promise<void> {
   actionSkillKey.value = `${skill.owner}/${skill.name}`
   isInstallActionInFlight.value = true
   try {
-    const resp = await fetch('/codex-api/skills-hub/install', {
+    const resp = await fetch(appPath('codex-api/skills-hub/install'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ owner: skill.owner, name: skill.name }),
@@ -286,7 +287,7 @@ async function handleUninstall(skill: HubSkill): Promise<void> {
   actionSkillKey.value = `${skill.owner}/${skill.name}`
   isUninstallActionInFlight.value = true
   try {
-    const resp = await fetch('/codex-api/skills-hub/uninstall', {
+    const resp = await fetch(appPath('codex-api/skills-hub/uninstall'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: skill.name, path: skill.path }),
@@ -310,13 +311,13 @@ async function handleUninstall(skill: HubSkill): Promise<void> {
 
 async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<void> {
   try {
-    const resp = await fetch('/codex-api/rpc', {
+    const resp = await fetch(appPath('codex-api/rpc'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ method: 'skills/config/write', params: { path: skill.path, enabled } }),
     })
     if (!resp.ok) throw new Error('Failed to update skill')
-    await fetch('/codex-api/skills-sync/push', { method: 'POST' })
+    await fetch(appPath('codex-api/skills-sync/push'), { method: 'POST' })
     showToast(`${skill.displayName || skill.name} skill ${enabled ? 'enabled' : 'disabled'}`)
     await fetchSkills(query.value)
   } catch (e) {

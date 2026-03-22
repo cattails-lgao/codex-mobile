@@ -1,4 +1,5 @@
 import { onBeforeUnmount, ref } from 'vue'
+import { appPath } from '../utils/appUrl'
 
 export type DictationState = 'idle' | 'recording' | 'transcribing'
 const DICTATION_SILENCE_THRESHOLD = 0.0025
@@ -195,7 +196,7 @@ export function useDictation(options: {
       const formData = new FormData()
       formData.append('file', blob, `codex.${ext}`)
 
-      const response = await fetch('/codex-api/transcribe', {
+      const response = await fetch(appPath('codex-api/transcribe'), {
         method: 'POST',
         body: formData,
       })

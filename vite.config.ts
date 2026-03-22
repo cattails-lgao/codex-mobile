@@ -47,7 +47,20 @@ const worktreeName = getWorktreeName();
 const appVersion = typeof pkg.version === "string" ? pkg.version : "unknown";
 const WS_UPGRADE_ATTACHED_KEY = "__codexBridgeWsAttached__";
 
+function normalizeBasePath(value: string | undefined): string {
+  const trimmed = (value ?? "/").trim();
+  if (!trimmed || trimmed === "/") return "/";
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailingSlashes = withLeadingSlash.replace(/\/+$/u, "");
+  return `${withoutTrailingSlashes}/`;
+}
+
+const appBasePath = normalizeBasePath(
+  process.env.CODEX_UI_BASE_PATH || process.env.VITE_APP_BASE_PATH || "/",
+);
+
 export default defineConfig({
+  base: appBasePath,
   define: {
     "import.meta.env.VITE_WORKTREE_NAME": JSON.stringify(worktreeName),
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),

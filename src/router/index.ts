@@ -5,7 +5,7 @@ const EmptyRouteView = {
 }
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',

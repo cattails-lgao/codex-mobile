@@ -225,6 +225,7 @@ import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
+import { appPath } from './utils/appUrl'
 import {
   createWorktree,
   getHomeDirectory,
@@ -496,7 +497,7 @@ function onBrowseProjectFiles(projectName: string): void {
   const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
   const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
   if (!projectCwd || typeof window === 'undefined') return
-  window.open(`/codex-local-browse${encodeURI(projectCwd)}`, '_blank', 'noopener,noreferrer')
+  window.open(appPath(`codex-local-browse${encodeURI(projectCwd)}`), '_blank', 'noopener,noreferrer')
 }
 
 function onStartNewThreadFromToolbar(): void {
