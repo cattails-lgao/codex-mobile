@@ -262,7 +262,7 @@ const {
   refreshAll,
   refreshSkills,
   selectThread,
-  loadMessages,
+  ensureThreadMessagesLoaded,
   setThreadScrollState,
   archiveThreadById,
   renameThreadById,
@@ -860,18 +860,19 @@ function onSelectCollaborationMode(mode: 'default' | 'plan'): void {
 }
 
 async function initialize(): Promise<void> {
+  await router.isReady()
+
   if (route.name === 'thread' && routeThreadId.value) {
     primeSelectedThread(routeThreadId.value)
   }
 
   startPolling()
-  await refreshAll({ includeSelectedThreadMessages: false })
+  await refreshAll({
+    includeSelectedThreadMessages: true,
+    awaitAncillaryRefreshes: false,
+  })
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
-
-  if (route.name === 'thread' && selectedThreadId.value) {
-    void loadMessages(selectedThreadId.value, { silent: true })
-  }
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
@@ -897,6 +898,8 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
 
       if (selectedThreadId.value !== threadId) {
         await selectThread(threadId)
+      } else {
+        void ensureThreadMessagesLoaded(threadId, { silent: true })
       }
       return
     }
@@ -937,6 +940,16 @@ watch(
 
     if (route.name === 'thread' && routeThreadId.value === threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
+  },
+)
+
+watch(
+  () => [hasInitialized.value, route.name, selectedThreadId.value] as const,
+  ([ready, routeName, threadId]) => {
+    if (!ready) return
+    if (routeName !== 'thread') return
+    if (!threadId) return
+    void ensureThreadMessagesLoaded(threadId, { silent: true })
   },
 )
 

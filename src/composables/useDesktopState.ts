@@ -2290,6 +2290,12 @@ export function useDesktopState() {
     }
   }
 
+  async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
+    if (!threadId) return
+    if (loadedMessagesByThreadId.value[threadId] === true) return
+    await loadMessages(threadId, options)
+  }
+
   async function refreshSkills(): Promise<void> {
     try {
       const cwds = sourceGroups.value.flatMap((g) => g.threads.map((t) => t.cwd)).filter(Boolean)
@@ -2307,20 +2313,26 @@ export function useDesktopState() {
     }
   }
 
-  async function refreshAll(options: { includeSelectedThreadMessages?: boolean } = {}) {
+  async function refreshAll(
+    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean } = {},
+  ) {
     error.value = ''
     const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
+    const awaitAncillaryRefreshes = options.awaitAncillaryRefreshes !== false
 
     try {
       await loadThreads()
-      await Promise.all([
+      const ancillaryRefresh = Promise.allSettled([
         refreshModelPreferences(),
         refreshCollaborationModes(),
         refreshSkills(),
         refreshCodexRateLimits(),
-      ])
+      ]).then(() => undefined)
       if (includeSelectedThreadMessages) {
         await loadMessages(selectedThreadId.value)
+      }
+      if (awaitAncillaryRefreshes) {
+        await ancillaryRefresh
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
@@ -2955,7 +2967,6 @@ export function useDesktopState() {
 
     if (stopNotificationStream) return
     void loadPendingServerRequestsFromBridge()
-    void refreshCodexRateLimits()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       if (notification.method === 'ready') {
         void recoverBridgeState()
@@ -3076,6 +3087,7 @@ export function useDesktopState() {
     refreshSkills,
     selectThread,
     loadMessages,
+    ensureThreadMessagesLoaded,
     setThreadScrollState,
     archiveThreadById,
     renameThreadById,
