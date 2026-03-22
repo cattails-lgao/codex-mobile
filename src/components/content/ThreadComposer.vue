@@ -170,15 +170,18 @@
         </div>
 
         <template v-if="!isDictationRecording">
-          <ComposerDropdown
-            class="thread-composer-control thread-composer-control-mode"
-            :model-value="selectedCollaborationMode"
-            :options="collaborationModeOptions"
-            placeholder="Mode"
-            open-direction="up"
+          <button
+            class="thread-composer-plan-toggle"
+            :class="{ 'is-active': isPlanModeSelected }"
+            type="button"
+            :aria-label="isPlanModeSelected ? 'Disable plan mode' : 'Enable plan mode'"
+            :aria-pressed="isPlanModeSelected"
             :disabled="disabled || !activeThreadId || isTurnInProgress"
-            @update:model-value="onCollaborationModeSelect"
-          />
+            @click="toggleCollaborationMode"
+          >
+            <span class="thread-composer-plan-toggle-label">Plan</span>
+            <span class="thread-composer-plan-toggle-state">{{ isPlanModeSelected ? 'On' : 'Off' }}</span>
+          </button>
 
           <ComposerDropdown
             class="thread-composer-control"
@@ -436,17 +439,10 @@ const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ]
-const collaborationModeOptions = computed(() => (
-  props.collaborationModes?.length
-    ? props.collaborationModes
-    : [
-      { value: 'default', label: 'Default' },
-      { value: 'plan', label: 'Plan' },
-    ]
-))
 const modelOptions = computed(() =>
   props.models.map((modelId) => ({ value: modelId, label: modelId })),
 )
+const isPlanModeSelected = computed(() => props.selectedCollaborationMode === 'plan')
 
 const isPlanModeWaitingForModel = computed(() =>
   props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
@@ -619,8 +615,8 @@ function onModelSelect(value: string): void {
   emit('update:selected-model', value)
 }
 
-function onCollaborationModeSelect(value: string): void {
-  emit('update:selected-collaboration-mode', value === 'plan' ? 'plan' : 'default')
+function toggleCollaborationMode(): void {
+  emit('update:selected-collaboration-mode', isPlanModeSelected.value ? 'default' : 'plan')
 }
 
 function onReasoningEffortSelect(value: string): void {
@@ -1308,6 +1304,26 @@ watch(
 
 .thread-composer-control :deep(.composer-dropdown-value) {
   @apply truncate;
+}
+
+.thread-composer-plan-toggle {
+  @apply inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
+}
+
+.thread-composer-plan-toggle.is-active {
+  @apply border-sky-300 bg-sky-100 text-sky-900;
+}
+
+.thread-composer-plan-toggle-label {
+  @apply leading-none;
+}
+
+.thread-composer-plan-toggle-state {
+  @apply inline-flex min-w-8 items-center justify-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] leading-none text-zinc-500 transition;
+}
+
+.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-state {
+  @apply bg-white/80 text-sky-700;
 }
 
 .thread-composer-actions {
