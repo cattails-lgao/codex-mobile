@@ -1,5 +1,7 @@
 # 🔥 codexapp
 
+Forked from [pavel-voronin/codex-web-local](https://github.com/pavel-voronin/codex-web-local) by Pavel Voronin.
+
 ### 🚀 Run Codex App UI Anywhere: Linux, Windows, or Termux on Android 🚀
 
 [![npm](https://img.shields.io/npm/v/codexapp?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/codexapp)
