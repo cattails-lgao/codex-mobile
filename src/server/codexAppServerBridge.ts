@@ -1208,7 +1208,7 @@ class MethodCatalog {
 }
 
 class TelegramThreadBridge {
-  private readonly token: string
+  private token: string
   private readonly appServer: AppServerProcess
   private readonly defaultCwd: string
   private readonly threadIdByChatId = new Map<number, string>()
@@ -1255,6 +1255,9 @@ class TelegramThreadBridge {
   }
 
   private async getUpdates(): Promise<TelegramUpdate[]> {
+    if (!this.token) {
+      throw new Error('Telegram bot token is not configured')
+    }
     const response = await fetch(this.apiUrl('getUpdates'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1271,6 +1274,32 @@ class TelegramThreadBridge {
 
   private apiUrl(method: string): string {
     return `https://api.telegram.org/bot${this.token}/${method}`
+  }
+
+  configureToken(token: string): void {
+    const normalizedToken = token.trim()
+    if (!normalizedToken) {
+      throw new Error('Telegram bot token is required')
+    }
+    this.token = normalizedToken
+  }
+
+  connectThread(threadId: string, chatId: number, token?: string): void {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId) {
+      throw new Error('threadId is required')
+    }
+    if (!Number.isFinite(chatId)) {
+      throw new Error('chatId must be a number')
+    }
+    if (typeof token === 'string' && token.trim().length > 0) {
+      this.configureToken(token)
+    }
+    if (!this.token) {
+      throw new Error('Telegram bot token is not configured')
+    }
+    this.bindChatToThread(chatId, normalizedThreadId)
+    this.start()
   }
 
   private async sendTelegramMessage(chatId: number, text: string): Promise<void> {
@@ -1968,6 +1997,32 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const cache = await readThreadTitleCache()
         const next = title ? updateThreadTitleCache(cache, id, title) : removeFromThreadTitleCache(cache, id)
         await writeThreadTitleCache(next)
+        setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/telegram/connect-thread') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const chatIdRaw = payload?.chatId
+        const botToken = typeof payload?.botToken === 'string' ? payload.botToken.trim() : ''
+        const chatId =
+          typeof chatIdRaw === 'number'
+            ? chatIdRaw
+            : typeof chatIdRaw === 'string' && chatIdRaw.trim().length > 0
+              ? Number(chatIdRaw.trim())
+              : Number.NaN
+
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+        if (!Number.isFinite(chatId)) {
+          setJson(res, 400, { error: 'Invalid chatId' })
+          return
+        }
+
+        telegramBridge.connectThread(threadId, chatId, botToken || undefined)
         setJson(res, 200, { ok: true })
         return
       }

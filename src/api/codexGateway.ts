@@ -544,6 +544,27 @@ export async function searchThreads(
   return payload.data ?? { threadIds: [], indexedThreadCount: 0 }
 }
 
+export async function connectThreadToTelegram(
+  threadId: string,
+  chatId: number,
+  botToken: string,
+): Promise<void> {
+  const response = await fetch('/codex-api/telegram/connect-thread', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      threadId,
+      chatId,
+      botToken,
+    }),
+  })
+  const payload = await response.json()
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to connect Telegram bot')
+    throw new Error(message)
+  }
+}
+
 function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
   const record = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? (payload as Record<string, unknown>)

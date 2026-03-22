@@ -43,6 +43,9 @@
                   <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                     Rename thread
                   </button>
+                  <button class="thread-menu-item" type="button" @click="onConnectThreadTelegram(thread.id)">
+                    Connect to Telegram bot
+                  </button>
                   <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
                     Delete thread
                   </button>
@@ -143,6 +146,9 @@
                 </button>
                 <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                   Rename thread
+                </button>
+                <button class="thread-menu-item" type="button" @click="onConnectThreadTelegram(thread.id)">
+                  Connect to Telegram bot
                 </button>
                 <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
                   Delete thread
@@ -293,6 +299,9 @@
                       <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                         Rename thread
                       </button>
+                      <button class="thread-menu-item" type="button" @click="onConnectThreadTelegram(thread.id)">
+                        Connect to Telegram bot
+                      </button>
                       <button class="thread-menu-item thread-menu-item-danger" type="button" @click="openDeleteThreadDialog(thread.id, thread.title)">
                         Delete thread
                       </button>
@@ -390,6 +399,7 @@ const emit = defineEmits<{
   'browse-project-files': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
+  'connect-thread-telegram': [threadId: string]
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
   'export-thread': [threadId: string]
@@ -659,6 +669,11 @@ function onSelect(threadId: string): void {
 
 function onExportThread(threadId: string): void {
   emit('export-thread', threadId)
+  closeThreadMenu()
+}
+
+function onConnectThreadTelegram(threadId: string): void {
+  emit('connect-thread-telegram', threadId)
   closeThreadMenu()
 }
 

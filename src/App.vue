@@ -63,6 +63,7 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
+            @connect-thread-telegram="onConnectThreadTelegram"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread" />
         </div>
@@ -259,6 +260,7 @@ import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
+  connectThreadToTelegram,
   createWorktree,
   getHomeDirectory,
   getProjectRootSuggestion,
@@ -688,6 +690,28 @@ function onRenameProject(payload: { projectName: string; displayName: string }):
 
 function onRenameThread(payload: { threadId: string; title: string }): void {
   void renameThreadById(payload.threadId, payload.title)
+}
+
+function onConnectThreadTelegram(threadId: string): void {
+  if (typeof window === 'undefined') return
+  const botToken = window.prompt('Telegram bot token')
+  if (!botToken || !botToken.trim()) return
+  const chatIdRaw = window.prompt('Telegram chat ID')
+  if (!chatIdRaw || !chatIdRaw.trim()) return
+  const chatId = Number(chatIdRaw.trim())
+  if (!Number.isFinite(chatId)) {
+    window.alert('Invalid Telegram chat ID')
+    return
+  }
+
+  void connectThreadToTelegram(threadId, chatId, botToken.trim())
+    .then(() => {
+      window.alert('Telegram bot connected to this thread')
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
+      window.alert(message)
+    })
 }
 
 function onRemoveProject(projectName: string): void {
