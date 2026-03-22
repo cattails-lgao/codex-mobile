@@ -204,7 +204,36 @@
                     <span v-if="message.messageType === 'plan.live'" class="plan-card-badge">Updating</span>
                   </div>
                   <p v-if="readPlanExplanation(message)" class="plan-card-explanation">
-                    {{ readPlanExplanation(message) }}
+                    <template
+                      v-for="(segment, segmentIndex) in parseInlineSegments(readPlanExplanation(message))"
+                      :key="`plan-explanation-${message.id}-${segmentIndex}`"
+                    >
+                      <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                      <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                      <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                      <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                      <a
+                        v-else-if="segment.kind === 'file'"
+                        class="message-file-link"
+                        :href="toBrowseUrl(segment.path)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :title="segment.path"
+                      >
+                        {{ segment.displayPath }}
+                      </a>
+                      <a
+                        v-else-if="segment.kind === 'url'"
+                        class="message-file-link"
+                        :href="segment.href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :title="segment.href"
+                      >
+                        {{ segment.value }}
+                      </a>
+                      <code v-else class="message-inline-code">{{ segment.value }}</code>
+                    </template>
                   </p>
                   <ol v-if="readPlanSteps(message).length > 0" class="plan-step-list">
                     <li
@@ -214,10 +243,69 @@
                       :data-status="step.status"
                     >
                       <span class="plan-step-status" :data-status="step.status">{{ planStepStatusIcon(step.status) }}</span>
-                      <span class="plan-step-text">{{ step.step }}</span>
+                      <span class="plan-step-text">
+                        <template
+                          v-for="(segment, segmentIndex) in parseInlineSegments(step.step)"
+                          :key="`plan-step-${message.id}-${stepIndex}-${segmentIndex}`"
+                        >
+                          <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                          <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                          <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                          <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                          <a
+                            v-else-if="segment.kind === 'file'"
+                            class="message-file-link"
+                            :href="toBrowseUrl(segment.path)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :title="segment.path"
+                          >
+                            {{ segment.displayPath }}
+                          </a>
+                          <a
+                            v-else-if="segment.kind === 'url'"
+                            class="message-file-link"
+                            :href="segment.href"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :title="segment.href"
+                          >
+                            {{ segment.value }}
+                          </a>
+                          <code v-else class="message-inline-code">{{ segment.value }}</code>
+                        </template>
+                      </span>
                     </li>
                   </ol>
-                  <p v-else class="message-text">{{ message.text }}</p>
+                  <p v-else class="message-text">
+                    <template v-for="(segment, segmentIndex) in parseInlineSegments(message.text)" :key="`plan-fallback-${message.id}-${segmentIndex}`">
+                      <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                      <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                      <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                      <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                      <a
+                        v-else-if="segment.kind === 'file'"
+                        class="message-file-link"
+                        :href="toBrowseUrl(segment.path)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :title="segment.path"
+                      >
+                        {{ segment.displayPath }}
+                      </a>
+                      <a
+                        v-else-if="segment.kind === 'url'"
+                        class="message-file-link"
+                        :href="segment.href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        :title="segment.href"
+                      >
+                        {{ segment.value }}
+                      </a>
+                      <code v-else class="message-inline-code">{{ segment.value }}</code>
+                    </template>
+                  </p>
                 </div>
                 <div v-else class="message-text-flow">
                   <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
