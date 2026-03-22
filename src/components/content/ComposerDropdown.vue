@@ -6,6 +6,7 @@
       :disabled="disabled"
       @click="onToggle"
     >
+      <component :is="selectedPrefixIcon" v-if="selectedPrefixIcon" class="composer-dropdown-prefix-icon" />
       <span class="composer-dropdown-value">{{ selectedLabel }}</span>
       <IconTablerChevronDown class="composer-dropdown-chevron" />
     </button>
@@ -77,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 
 type DropdownOption = {
@@ -90,6 +91,7 @@ const props = defineProps<{
   options: DropdownOption[]
   placeholder?: string
   disabled?: boolean
+  selectedPrefixIcon?: Component | null
   openDirection?: 'up' | 'down'
   enableSearch?: boolean
   searchPlaceholder?: string
@@ -216,6 +218,10 @@ onBeforeUnmount(() => {
 
 .composer-dropdown-trigger {
   @apply inline-flex h-7 min-w-0 items-center gap-1 border-0 bg-transparent p-0 text-sm leading-none text-zinc-500 outline-none transition;
+}
+
+.composer-dropdown-prefix-icon {
+  @apply h-3.5 w-3.5 shrink-0 text-amber-500;
 }
 
 .composer-dropdown-trigger:disabled {

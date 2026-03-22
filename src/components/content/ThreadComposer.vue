@@ -186,6 +186,7 @@
             class="thread-composer-control"
             :model-value="selectedModel"
             :options="modelOptions"
+            :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
             placeholder="Model"
             open-direction="up"
             :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
@@ -310,6 +311,7 @@ import type { ReasoningEffort, SpeedMode } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
+import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
@@ -458,8 +460,12 @@ const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ]
+function formatModelLabel(modelId: string): string {
+  return modelId.trim().replace(/^gpt/i, 'GPT')
+}
+
 const modelOptions = computed(() =>
-  props.models.map((modelId) => ({ value: modelId, label: modelId })),
+  props.models.map((modelId) => ({ value: modelId, label: formatModelLabel(modelId) })),
 )
 
 const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
@@ -494,6 +500,9 @@ const standaloneFileAttachments = computed(() => {
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => props.selectedModel.trim() === 'gpt-5.4')
+const showFastModeModelIcon = computed(() =>
+  props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
+)
 const isSpeedToggleDisabled = computed(() =>
   isInteractionDisabled.value || props.isUpdatingSpeedMode === true || !isFastModeSupported.value,
 )
