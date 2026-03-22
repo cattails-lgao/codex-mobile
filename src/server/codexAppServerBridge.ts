@@ -752,6 +752,10 @@ class AppServerProcess {
         experimentalApi: true,
       },
     }).then(() => {
+      this.sendLine({
+        jsonrpc: '2.0',
+        method: 'initialized',
+      })
       this.initialized = true
     }).finally(() => {
       this.initializePromise = null
@@ -968,7 +972,7 @@ type SharedBridgeState = {
 }
 
 const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
-const SHARED_BRIDGE_VERSION = 'experimental-api-v1'
+const SHARED_BRIDGE_VERSION = 'experimental-api-v2'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
