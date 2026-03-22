@@ -262,6 +262,7 @@ const {
   refreshAll,
   refreshSkills,
   selectThread,
+  loadMessages,
   setThreadScrollState,
   archiveThreadById,
   renameThreadById,
@@ -283,6 +284,7 @@ const {
   pinProjectToTop,
   startPolling,
   stopPolling,
+  primeSelectedThread,
 } = useDesktopState()
 
 const route = useRoute()
@@ -858,10 +860,18 @@ function onSelectCollaborationMode(mode: 'default' | 'plan'): void {
 }
 
 async function initialize(): Promise<void> {
-  await refreshAll()
+  if (route.name === 'thread' && routeThreadId.value) {
+    primeSelectedThread(routeThreadId.value)
+  }
+
+  startPolling()
+  await refreshAll({ includeSelectedThreadMessages: false })
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
-  startPolling()
+
+  if (route.name === 'thread' && selectedThreadId.value) {
+    void loadMessages(selectedThreadId.value, { silent: true })
+  }
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {

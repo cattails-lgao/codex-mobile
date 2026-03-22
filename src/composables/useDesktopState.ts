@@ -1483,6 +1483,22 @@ export function useDesktopState() {
     pendingServerRequestsByThreadId.value = next
   }
 
+  function replacePendingServerRequests(requests: UiServerRequest[]): void {
+    const next: Record<string, UiServerRequest[]> = {}
+    for (const request of requests) {
+      const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
+      const current = next[threadId] ?? []
+      current.push(request)
+      next[threadId] = current
+    }
+
+    for (const rows of Object.values(next)) {
+      rows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso))
+    }
+
+    pendingServerRequestsByThreadId.value = next
+  }
+
   function handleServerRequestNotification(notification: RpcNotification): boolean {
     if (notification.method === 'server/request') {
       const request = normalizeServerRequest(notification.params)
@@ -2291,8 +2307,9 @@ export function useDesktopState() {
     }
   }
 
-  async function refreshAll() {
+  async function refreshAll(options: { includeSelectedThreadMessages?: boolean } = {}) {
     error.value = ''
+    const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
 
     try {
       await loadThreads()
@@ -2302,7 +2319,9 @@ export function useDesktopState() {
         refreshSkills(),
         refreshCodexRateLimits(),
       ])
-      await loadMessages(selectedThreadId.value)
+      if (includeSelectedThreadMessages) {
+        await loadMessages(selectedThreadId.value)
+      }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
     }
@@ -2922,6 +2941,15 @@ export function useDesktopState() {
     }
   }
 
+  async function recoverBridgeState(): Promise<void> {
+    await loadPendingServerRequestsFromBridge()
+    pendingThreadsRefresh = true
+    if (selectedThreadId.value) {
+      pendingThreadMessageRefresh.add(selectedThreadId.value)
+    }
+    await syncFromNotifications()
+  }
+
   function startPolling(): void {
     if (typeof window === 'undefined') return
 
@@ -2929,6 +2957,10 @@ export function useDesktopState() {
     void loadPendingServerRequestsFromBridge()
     void refreshCodexRateLimits()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
+      if (notification.method === 'ready') {
+        void recoverBridgeState()
+        return
+      }
       applyRealtimeUpdates(notification)
       queueEventDrivenSync(notification)
     })
@@ -2937,12 +2969,10 @@ export function useDesktopState() {
   async function loadPendingServerRequestsFromBridge(): Promise<void> {
     try {
       const rows = await getPendingServerRequests()
-      for (const row of rows) {
-        const request = normalizeServerRequest(row)
-        if (request) {
-          upsertPendingServerRequest(request)
-        }
-      }
+      const normalizedRequests = rows
+        .map((row) => normalizeServerRequest(row))
+        .filter((request): request is UiServerRequest => request !== null)
+      replacePendingServerRequests(normalizedRequests)
     } catch {
       // Keep UI usable when pending request endpoint is temporarily unavailable.
     }
@@ -3017,6 +3047,10 @@ export function useDesktopState() {
     void sendMessageToSelectedThread(msg.text, msg.imageUrls, msg.skills, 'steer', msg.fileAttachments)
   }
 
+  function primeSelectedThread(threadId: string): void {
+    setSelectedThreadId(threadId)
+  }
+
   return {
     projectGroups,
     projectDisplayNameById,
@@ -3041,6 +3075,7 @@ export function useDesktopState() {
     refreshAll,
     refreshSkills,
     selectThread,
+    loadMessages,
     setThreadScrollState,
     archiveThreadById,
     renameThreadById,
@@ -3062,5 +3097,6 @@ export function useDesktopState() {
     pinProjectToTop,
     startPolling,
     stopPolling,
+    primeSelectedThread,
   }
 }
