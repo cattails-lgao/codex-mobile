@@ -162,6 +162,13 @@ onUnmounted(() => {
   grid-template-columns: var(--layout-columns);
 }
 
+.desktop-layout.is-mobile {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overscroll-behavior-y: none;
+}
+
 .desktop-sidebar {
   @apply bg-slate-100 min-h-0 overflow-hidden;
 }
@@ -177,6 +184,7 @@ onUnmounted(() => {
 
 .desktop-main {
   @apply bg-white min-h-0 overflow-y-hidden overflow-x-visible;
+  overscroll-behavior-y: none;
 }
 
 .mobile-drawer-backdrop {

@@ -1414,6 +1414,7 @@ onBeforeUnmount(() => {
 
 .conversation-list {
   @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
+  overscroll-behavior-y: contain;
 }
 
 .conversation-item {
