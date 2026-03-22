@@ -385,7 +385,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
-  rollback: [payload: { turnIndex: number }]
+  rollback: [payload: { turnIndex: number; prependText?: string }]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
@@ -1100,7 +1100,11 @@ async function onCopyMessage(message: UiMessage): Promise<void> {
 
 function onRollback(message: UiMessage): void {
   if (!canRollbackMessage(message)) return
-  emit('rollback', { turnIndex: message.turnIndex! })
+  const prependText = message.role === 'user' ? message.text.trim() : ''
+  emit('rollback', {
+    turnIndex: message.turnIndex!,
+    prependText: prependText.length > 0 ? prependText : undefined,
+  })
 }
 
 function scrollToBottom(): void {

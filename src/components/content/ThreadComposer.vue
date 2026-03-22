@@ -312,6 +312,7 @@ const props = defineProps<{
   sendWithEnter?: boolean
   inProgressSubmitMode?: 'steer' | 'queue'
   dictationClickToToggle?: boolean
+  prependDraftRequest?: { id: number; text: string } | null
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -927,6 +928,17 @@ watch(
     if (isFileMentionOpen.value) {
       void queueFileMentionSearch()
     }
+  },
+)
+
+watch(
+  () => props.prependDraftRequest?.id,
+  () => {
+    const text = props.prependDraftRequest?.text?.trim() ?? ''
+    if (!text) return
+    draft.value = draft.value ? `${text}\n${draft.value}` : text
+    onInputChange()
+    nextTick(() => inputRef.value?.focus())
   },
 )
 </script>

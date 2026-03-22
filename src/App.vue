@@ -152,7 +152,9 @@
                 :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
                 :is-turn-in-progress="false"
                 :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                :dictation-click-to-toggle="dictationClickToToggle" @submit="onSubmitThreadMessage"
+                :dictation-click-to-toggle="dictationClickToToggle"
+                :prepend-draft-request="rollbackDraftPrependRequest"
+                @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
           </template>
@@ -185,6 +187,7 @@
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle"
+                  :prepend-draft-request="rollbackDraftPrependRequest"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
               </div>
@@ -303,6 +306,8 @@ const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
+const rollbackDraftPrependRequest = ref<{ id: number; text: string } | null>(null)
+let rollbackDraftPrependRequestId = 0
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -674,7 +679,12 @@ function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
 }
 
-function onRollback(payload: { turnIndex: number }): void {
+function onRollback(payload: { turnIndex: number; prependText?: string }): void {
+  const prependText = payload.prependText?.trim() ?? ''
+  if (prependText.length > 0) {
+    rollbackDraftPrependRequestId += 1
+    rollbackDraftPrependRequest.value = { id: rollbackDraftPrependRequestId, text: prependText }
+  }
   void rollbackSelectedThread(payload.turnIndex)
 }
 
