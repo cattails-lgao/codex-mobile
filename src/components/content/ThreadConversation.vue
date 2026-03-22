@@ -203,38 +203,11 @@
                     <p class="plan-card-title">Plan</p>
                     <span v-if="message.messageType === 'plan.live'" class="plan-card-badge">Updating</span>
                   </div>
-                  <p v-if="readPlanExplanation(message)" class="plan-card-explanation">
-                    <template
-                      v-for="(segment, segmentIndex) in parseInlineSegments(readPlanExplanation(message))"
-                      :key="`plan-explanation-${message.id}-${segmentIndex}`"
-                    >
-                      <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                      <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                      <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                      <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                      <a
-                        v-else-if="segment.kind === 'file'"
-                        class="message-file-link"
-                        :href="toBrowseUrl(segment.path)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        :title="segment.path"
-                      >
-                        {{ segment.displayPath }}
-                      </a>
-                      <a
-                        v-else-if="segment.kind === 'url'"
-                        class="message-file-link"
-                        :href="segment.href"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        :title="segment.href"
-                      >
-                        {{ segment.value }}
-                      </a>
-                      <code v-else class="message-inline-code">{{ segment.value }}</code>
-                    </template>
-                  </p>
+                  <div
+                    v-if="readPlanExplanation(message)"
+                    class="plan-card-explanation plan-card-markdown"
+                    v-html="renderMarkdownBlocksAsHtml(readPlanExplanation(message))"
+                  />
                   <ol v-if="readPlanSteps(message).length > 0" class="plan-step-list">
                     <li
                       v-for="(step, stepIndex) in readPlanSteps(message)"
@@ -243,69 +216,10 @@
                       :data-status="step.status"
                     >
                       <span class="plan-step-status" :data-status="step.status">{{ planStepStatusIcon(step.status) }}</span>
-                      <span class="plan-step-text">
-                        <template
-                          v-for="(segment, segmentIndex) in parseInlineSegments(step.step)"
-                          :key="`plan-step-${message.id}-${stepIndex}-${segmentIndex}`"
-                        >
-                          <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                          <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                          <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                          <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                          <a
-                            v-else-if="segment.kind === 'file'"
-                            class="message-file-link"
-                            :href="toBrowseUrl(segment.path)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="segment.path"
-                          >
-                            {{ segment.displayPath }}
-                          </a>
-                          <a
-                            v-else-if="segment.kind === 'url'"
-                            class="message-file-link"
-                            :href="segment.href"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="segment.href"
-                          >
-                            {{ segment.value }}
-                          </a>
-                          <code v-else class="message-inline-code">{{ segment.value }}</code>
-                        </template>
-                      </span>
+                      <div class="plan-step-text plan-card-markdown" v-html="renderMarkdownBlocksAsHtml(step.step)" />
                     </li>
                   </ol>
-                  <p v-else class="message-text">
-                    <template v-for="(segment, segmentIndex) in parseInlineSegments(message.text)" :key="`plan-fallback-${message.id}-${segmentIndex}`">
-                      <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                      <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                      <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                      <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                      <a
-                        v-else-if="segment.kind === 'file'"
-                        class="message-file-link"
-                        :href="toBrowseUrl(segment.path)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        :title="segment.path"
-                      >
-                        {{ segment.displayPath }}
-                      </a>
-                      <a
-                        v-else-if="segment.kind === 'url'"
-                        class="message-file-link"
-                        :href="segment.href"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        :title="segment.href"
-                      >
-                        {{ segment.value }}
-                      </a>
-                      <code v-else class="message-inline-code">{{ segment.value }}</code>
-                    </template>
-                  </p>
+                  <div v-else class="plan-card-markdown" v-html="renderMarkdownBlocksAsHtml(message.text)" />
                 </div>
                 <div v-else class="message-text-flow">
                   <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
@@ -1591,6 +1505,93 @@ function parseMessageBlocks(text: string): MessageBlock[] {
   return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;')
+}
+
+function renderInlineSegmentsAsHtml(text: string): string {
+  return parseInlineSegments(text)
+    .map((segment) => {
+      if (segment.kind === 'text') {
+        return escapeHtml(segment.value)
+      }
+      if (segment.kind === 'bold') {
+        return `<strong class="message-bold-text">${escapeHtml(segment.value)}</strong>`
+      }
+      if (segment.kind === 'italic') {
+        return `<em class="message-italic-text">${escapeHtml(segment.value)}</em>`
+      }
+      if (segment.kind === 'strikethrough') {
+        return `<s class="message-strikethrough-text">${escapeHtml(segment.value)}</s>`
+      }
+      if (segment.kind === 'file') {
+        return `<a class="message-file-link" href="${escapeHtml(toBrowseUrl(segment.path))}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.path)}">${escapeHtml(segment.displayPath)}</a>`
+      }
+      if (segment.kind === 'url') {
+        return `<a class="message-file-link" href="${escapeHtml(segment.href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.href)}">${escapeHtml(segment.value)}</a>`
+      }
+      return `<code class="message-inline-code">${escapeHtml(segment.value)}</code>`
+    })
+    .join('')
+}
+
+function renderMarkdownBlocksAsHtml(text: string): string {
+  return parseMessageBlocks(text)
+    .map((block) => {
+      if (block.kind === 'paragraph') {
+        return `<p class="message-text">${renderInlineSegmentsAsHtml(block.value)}</p>`
+      }
+      if (block.kind === 'heading') {
+        const level = Math.min(6, Math.max(1, Math.trunc(block.level)))
+        const tag = headingTag(level)
+        const classes = `message-heading ${headingClass(level)}`
+        return `<${tag} class="${classes}">${renderInlineSegmentsAsHtml(block.value)}</${tag}>`
+      }
+      if (block.kind === 'blockquote') {
+        return `<blockquote class="message-blockquote">${renderInlineSegmentsAsHtml(block.value)}</blockquote>`
+      }
+      if (block.kind === 'unorderedList') {
+        const items = block.items
+          .map((item) => `<li class="message-list-item"><div class="message-list-item-text">${renderInlineSegmentsAsHtml(item)}</div></li>`)
+          .join('')
+        return `<ul class="message-list message-list-unordered">${items}</ul>`
+      }
+      if (block.kind === 'taskList') {
+        const items = block.items
+          .map((item) => (
+            `<li class="message-task-item">` +
+            `<span class="message-task-checkbox" data-checked="${item.checked ? 'true' : 'false'}">${item.checked ? '☑' : '☐'}</span>` +
+            `<div class="message-list-item-text">${renderInlineSegmentsAsHtml(item.text)}</div>` +
+            `</li>`
+          ))
+          .join('')
+        return `<ul class="message-list message-task-list">${items}</ul>`
+      }
+      if (block.kind === 'orderedList') {
+        const items = block.items
+          .map((item) => `<li class="message-list-item"><div class="message-list-item-text">${renderInlineSegmentsAsHtml(item)}</div></li>`)
+          .join('')
+        return `<ol class="message-list message-list-ordered">${items}</ol>`
+      }
+      if (block.kind === 'codeBlock') {
+        const language = block.language
+          ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
+          : ''
+        return `<div class="message-code-block">${language}<pre class="message-code-pre"><code>${escapeHtml(block.value)}</code></pre></div>`
+      }
+      if (block.kind === 'thematicBreak') {
+        return '<hr class="message-divider">'
+      }
+      return `<img class="message-image-preview message-markdown-image" src="${escapeHtml(block.url)}" alt="${escapeHtml(block.alt || 'Embedded message image')}" loading="lazy">`
+    })
+    .join('')
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -2220,7 +2221,19 @@ onBeforeUnmount(() => {
 }
 
 .plan-card-explanation {
-  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-700;
+  @apply text-slate-700;
+}
+
+.plan-card-markdown {
+  @apply flex flex-col gap-2;
+}
+
+.plan-card-markdown :deep(.message-text),
+.plan-card-markdown :deep(.message-heading),
+.plan-card-markdown :deep(.message-blockquote),
+.plan-card-markdown :deep(.message-list),
+.plan-card-markdown :deep(.message-code-block) {
+  @apply m-0;
 }
 
 .plan-step-list {
@@ -2252,7 +2265,7 @@ onBeforeUnmount(() => {
 }
 
 .plan-step-text {
-  @apply whitespace-pre-wrap;
+  @apply min-w-0 flex-1;
 }
 
 .message-text {
