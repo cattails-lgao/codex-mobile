@@ -11,98 +11,6 @@
 
     <ul v-else ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
       <li
-        v-for="request in pendingRequests"
-        :key="`server-request:${request.id}`"
-        class="conversation-item conversation-item-request"
-      >
-        <div class="message-row">
-          <div class="message-stack">
-            <article class="request-card">
-              <p class="request-title">{{ request.method }}</p>
-              <p class="request-meta">Request #{{ request.id }} · {{ formatIsoTime(request.receivedAtIso) }}</p>
-
-              <p v-if="readRequestReason(request)" class="request-reason">{{ readRequestReason(request) }}</p>
-
-              <section v-if="request.method === 'item/commandExecution/requestApproval'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
-              </section>
-
-              <section v-else-if="request.method === 'item/fileChange/requestApproval'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
-              </section>
-
-              <section v-else-if="request.method === 'item/tool/requestUserInput'" class="request-user-input">
-                <div
-                  v-for="question in readToolQuestions(request)"
-                  :key="`${request.id}:${question.id}`"
-                  class="request-question"
-                >
-                  <p class="request-question-title">{{ question.header || question.question }}</p>
-                  <p v-if="question.header && question.question" class="request-question-text">{{ question.question }}</p>
-                  <select
-                    v-if="question.options.length > 0"
-                    class="request-select"
-                    :value="readQuestionAnswer(request.id, question.id, question.options[0]?.label || '')"
-                    @change="onQuestionAnswerChange(request.id, question.id, $event)"
-                  >
-                    <option
-                      v-for="option in question.options"
-                      :key="`${request.id}:${question.id}:${option.label}`"
-                      :value="option.label"
-                    >
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <p
-                    v-if="question.options.length > 0 && readQuestionOptionDescription(request.id, question)"
-                    class="request-question-option-description"
-                  >
-                    {{ readQuestionOptionDescription(request.id, question) }}
-                  </p>
-                  <input
-                    v-else
-                    class="request-input"
-                    :type="question.isSecret ? 'password' : 'text'"
-                    :value="readQuestionAnswer(request.id, question.id, '')"
-                    :placeholder="question.isSecret ? 'Enter secret answer' : 'Enter answer'"
-                    @input="onQuestionAnswerInput(request.id, question.id, $event)"
-                  />
-                  <input
-                    v-if="question.isOther"
-                    class="request-input"
-                    :type="question.isSecret ? 'password' : 'text'"
-                    :value="readQuestionOtherAnswer(request.id, question.id)"
-                    placeholder="Other answer"
-                    @input="onQuestionOtherAnswerInput(request.id, question.id, $event)"
-                  />
-                </div>
-
-                <button type="button" class="request-button request-button-primary" @click="onRespondToolRequestUserInput(request)">
-                  Submit Answers
-                </button>
-              </section>
-
-              <section v-else-if="request.method === 'item/tool/call'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondToolCallFailure(request.id)">Fail Tool Call</button>
-                <button type="button" class="request-button" @click="onRespondToolCallSuccess(request.id)">Success (Empty)</button>
-              </section>
-
-              <section v-else class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondEmptyResult(request.id)">Return Empty Result</button>
-                <button type="button" class="request-button" @click="onRejectUnknownRequest(request.id)">Reject Request</button>
-              </section>
-            </article>
-          </div>
-        </div>
-      </li>
-
-      <li
         v-for="message in messages"
         :key="message.id"
         class="conversation-item"
@@ -478,6 +386,97 @@
                 {{ liveOverlay.reasoningText }}
               </p>
               <p v-if="liveOverlay.errorText" class="live-overlay-error">{{ liveOverlay.errorText }}</p>
+            </article>
+          </div>
+        </div>
+      </li>
+      <li
+        v-for="request in pendingRequests"
+        :key="`server-request:${request.id}`"
+        class="conversation-item conversation-item-request"
+      >
+        <div class="message-row">
+          <div class="message-stack">
+            <article class="request-card">
+              <p class="request-title">{{ request.method }}</p>
+              <p class="request-meta">Request #{{ request.id }} · {{ formatIsoTime(request.receivedAtIso) }}</p>
+
+              <p v-if="readRequestReason(request)" class="request-reason">{{ readRequestReason(request) }}</p>
+
+              <section v-if="request.method === 'item/commandExecution/requestApproval'" class="request-actions">
+                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
+              </section>
+
+              <section v-else-if="request.method === 'item/fileChange/requestApproval'" class="request-actions">
+                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
+                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
+              </section>
+
+              <section v-else-if="request.method === 'item/tool/requestUserInput'" class="request-user-input">
+                <div
+                  v-for="question in readToolQuestions(request)"
+                  :key="`${request.id}:${question.id}`"
+                  class="request-question"
+                >
+                  <p class="request-question-title">{{ question.header || question.question }}</p>
+                  <p v-if="question.header && question.question" class="request-question-text">{{ question.question }}</p>
+                  <select
+                    v-if="question.options.length > 0"
+                    class="request-select"
+                    :value="readQuestionAnswer(request.id, question.id, question.options[0]?.label || '')"
+                    @change="onQuestionAnswerChange(request.id, question.id, $event)"
+                  >
+                    <option
+                      v-for="option in question.options"
+                      :key="`${request.id}:${question.id}:${option.label}`"
+                      :value="option.label"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <p
+                    v-if="question.options.length > 0 && readQuestionOptionDescription(request.id, question)"
+                    class="request-question-option-description"
+                  >
+                    {{ readQuestionOptionDescription(request.id, question) }}
+                  </p>
+                  <input
+                    v-else
+                    class="request-input"
+                    :type="question.isSecret ? 'password' : 'text'"
+                    :value="readQuestionAnswer(request.id, question.id, '')"
+                    :placeholder="question.isSecret ? 'Enter secret answer' : 'Enter answer'"
+                    @input="onQuestionAnswerInput(request.id, question.id, $event)"
+                  />
+                  <input
+                    v-if="question.isOther"
+                    class="request-input"
+                    :type="question.isSecret ? 'password' : 'text'"
+                    :value="readQuestionOtherAnswer(request.id, question.id)"
+                    placeholder="Other answer"
+                    @input="onQuestionOtherAnswerInput(request.id, question.id, $event)"
+                  />
+                </div>
+
+                <button type="button" class="request-button request-button-primary" @click="onRespondToolRequestUserInput(request)">
+                  Submit Answers
+                </button>
+              </section>
+
+              <section v-else-if="request.method === 'item/tool/call'" class="request-actions">
+                <button type="button" class="request-button request-button-primary" @click="onRespondToolCallFailure(request.id)">Fail Tool Call</button>
+                <button type="button" class="request-button" @click="onRespondToolCallSuccess(request.id)">Success (Empty)</button>
+              </section>
+
+              <section v-else class="request-actions">
+                <button type="button" class="request-button request-button-primary" @click="onRespondEmptyResult(request.id)">Return Empty Result</button>
+                <button type="button" class="request-button" @click="onRejectUnknownRequest(request.id)">Reject Request</button>
+              </section>
             </article>
           </div>
         </div>
@@ -1933,6 +1932,15 @@ watch(
 
     await scheduleScrollRestore()
   },
+)
+
+watch(
+  () => props.pendingRequests,
+  async () => {
+    if (props.isLoading) return
+    await scheduleScrollRestore()
+  },
+  { deep: true },
 )
 
 watch(
