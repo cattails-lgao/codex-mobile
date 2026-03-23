@@ -224,6 +224,7 @@ After each feature implementation session that uses this skill:
 - In this web workspace, mobile home-screen installation depends on both `link[rel="apple-touch-icon"]` in `index.html` and the PNG entries in `public/manifest.webmanifest`; updating only the manifest is not enough for iPhone-style add-to-home-screen flows.
 - Small PNGs generated from SVG via headless Chrome can silently degrade to all-white images when the SVG is loaded indirectly during screenshot capture. Rendering a reliable large PNG first and deriving smaller sizes from that output avoids blank icon assets.
 - For non-transparent exported PNG icons, any transparent margin around the SVG is rasterized against the page background. Set an explicit dark page background during capture or use full-bleed icon artwork to avoid white edges that make installed icons look washed out.
+- A more reliable fix than screenshot capture is to rasterize SVGs through a browser canvas (`Image` + `drawImage` + `canvas.toDataURL()`), which preserves the real SVG bounds and avoids dark corner contamination from the page background.
 
 ## Findings: PWA Packaging Fallback (2026-03-23)
 
