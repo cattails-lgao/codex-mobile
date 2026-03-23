@@ -202,8 +202,8 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Worktree name and version">
-    WT {{ worktreeName }} · v{{ appVersion }}
+  <div class="build-badge" aria-label="Author name, worktree name, and version">
+    nervmor {{ worktreeName }} · v{{ appVersion }}
   </div>
 </template>
 
