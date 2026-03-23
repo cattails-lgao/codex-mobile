@@ -60,6 +60,10 @@
   @apply border-zinc-700;
 }
 
+:root.dark .sidebar-settings-rate-limits {
+  @apply border-zinc-700;
+}
+
 :root.dark .sidebar-settings-value {
   @apply text-zinc-400 bg-zinc-700;
 }

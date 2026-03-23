@@ -103,6 +103,9 @@
                   @update:model-value="onDictationLanguageChange"
                 />
               </div>
+              <div class="sidebar-settings-rate-limits">
+                <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
+              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -216,11 +219,8 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="top-right-status-stack">
-    <div class="build-badge" aria-label="Worktree name and version">
+  <div class="build-badge" aria-label="Worktree name and version">
     WT {{ worktreeName }} · v{{ appVersion }}
-    </div>
-    <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
   </div>
 </template>
 
@@ -1478,12 +1478,12 @@ async function submitFirstMessageForNewThread(
   transform: translateY(8px);
 }
 
-.top-right-status-stack {
-  @apply fixed top-3 right-3 z-50 flex max-w-[min(22rem,calc(100vw-1.5rem))] flex-col items-end gap-2;
+.sidebar-settings-rate-limits {
+  @apply border-t border-zinc-200 px-2 pt-2;
 }
 
 .build-badge {
-  @apply rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
+  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
 }
 
 </style>
