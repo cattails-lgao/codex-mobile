@@ -321,7 +321,6 @@ import type {
   UiRateLimitWindow,
 } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
-import { useMobile } from '../../composables/useMobile'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
@@ -391,7 +390,6 @@ const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
 const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
-const { isMobile } = useMobile()
 
 const dictationFeedback = ref('')
 const {
@@ -505,10 +503,8 @@ const placeholderText = computed(() =>
       ? 'Loading models for plan mode...'
       : 'Type a message... (@ for files, / for skills)',
 )
-const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null, isMobile.value))
-const quotaWeeklyRefreshText = computed(() => (
-  isMobile.value ? '' : buildQuotaWeeklyRefreshText(props.codexQuota ?? null)
-))
+const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
+const quotaWeeklyRefreshText = computed(() => '')
 const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))
 
 function formatPlanType(planType: string | null | undefined): string {
@@ -553,10 +549,8 @@ function formatResetDate(resetsAt: number | null): string {
 
 function formatResetDateCompact(resetsAt: number | null): string {
   if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(resetsAt * 1000))
+  const date = new Date(resetsAt * 1000)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
 function pickWeeklyQuotaWindow(quota: UiRateLimitSnapshot): UiRateLimitWindow | null {
@@ -574,10 +568,10 @@ function pickWeeklyQuotaWindow(quota: UiRateLimitSnapshot): UiRateLimitWindow | 
 function formatWindowSummary(window: UiRateLimitWindow): string {
   const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
   const span = formatWindowSpan(window.windowMinutes)
-  return span ? `${remainingPercent}% left / ${span}` : `${remainingPercent}% left`
+  return span ? `${remainingPercent}% / ${span}` : `${remainingPercent}%`
 }
 
-function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null, includeCompactWeeklyRefresh = false): string {
+function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null): string {
   if (!quota) return ''
 
   const segments: string[] = []
@@ -586,12 +580,10 @@ function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null, includeCompact
   if (quota.primary) segments.push(formatWindowSummary(quota.primary))
   if (quota.secondary) segments.push(formatWindowSummary(quota.secondary))
 
-  if (includeCompactWeeklyRefresh) {
-    const weeklyWindow = pickWeeklyQuotaWindow(quota)
-    const weeklyRefreshDate = formatResetDateCompact(weeklyWindow?.resetsAt ?? null)
-    if (weeklyRefreshDate) {
-      segments.push(`wk ${weeklyRefreshDate}`)
-    }
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  const weeklyRefreshDate = formatResetDateCompact(weeklyWindow?.resetsAt ?? null)
+  if (weeklyRefreshDate) {
+    segments.push(weeklyRefreshDate)
   }
 
   if (segments.length === 0 && quota.credits?.unlimited) {
@@ -1260,11 +1252,11 @@ watch(
 }
 
 .thread-composer-rate-limit {
-  @apply mb-1.5 flex flex-col gap-0.5 px-1 text-[11px] leading-5 text-zinc-500;
+  @apply mb-1.5 px-1 text-[11px] leading-5 text-zinc-500;
 }
 
 .thread-composer-rate-limit-row {
-  @apply flex min-w-0 items-center gap-x-1.5 gap-y-1 sm:flex-wrap;
+  @apply flex min-w-0 items-center gap-x-1.5 gap-y-1;
 }
 
 .thread-composer-rate-limit-label {
@@ -1272,11 +1264,7 @@ watch(
 }
 
 .thread-composer-rate-limit-value {
-  @apply min-w-0 truncate sm:whitespace-normal sm:break-words;
-}
-
-.thread-composer-rate-limit-refresh {
-  @apply text-[10px] leading-4 text-zinc-400;
+  @apply min-w-0 truncate;
 }
 
 .thread-composer-input-wrap {
