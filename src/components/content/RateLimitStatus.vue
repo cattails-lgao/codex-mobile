@@ -64,14 +64,14 @@ function formatWindowDuration(windowDurationMins: number | null): string {
   return `${Math.round((windowDurationMins / 60) * 10) / 10}h`
 }
 
-function formatUsedPercent(value: number): string {
-  return `${Math.round(value)}%`
+function formatRemainingPercent(value: number): string {
+  return `${Math.max(0, 100 - Math.round(value))}% left`
 }
 
 function formatWindowMetric(window: UiRateLimitWindow, key: string): RateLimitMetric {
   return {
     key,
-    label: `${formatWindowDuration(window.windowDurationMins)} ${formatUsedPercent(window.usedPercent)}`,
+    label: `${formatWindowDuration(window.windowDurationMins)} ${formatRemainingPercent(window.usedPercent)}`,
   }
 }
 

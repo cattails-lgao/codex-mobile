@@ -35,29 +35,6 @@ function normalizeLocalImagePath(rawPath: string): string {
 }
 
 function getWorktreeName(): string {
-  const normalizedCwd = process.cwd().replace(/\\/g, "/");
-  const segments = normalizedCwd.split("/").filter(Boolean);
-  const worktreesIndex = segments.lastIndexOf("worktrees");
-  if (worktreesIndex >= 0 && worktreesIndex + 1 < segments.length) {
-    return segments[worktreesIndex + 1];
-  }
-
-  const gitDir = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-dir"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-  });
-  if (gitDir.status === 0) {
-    const resolvedGitDir = gitDir.stdout.trim().replace(/\\/g, "/");
-    const worktreeMarker = "/.git/worktrees/";
-    const markerIndex = resolvedGitDir.indexOf(worktreeMarker);
-    if (markerIndex >= 0) {
-      const worktreeSegments = resolvedGitDir.slice(markerIndex + worktreeMarker.length).split("/").filter(Boolean);
-      if (worktreeSegments.length > 0) {
-        return worktreeSegments[0] ?? "unknown";
-      }
-    }
-  }
-
   const gitCommonDir = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
     cwd: process.cwd(),
     encoding: "utf8",
@@ -72,6 +49,8 @@ function getWorktreeName(): string {
     }
   }
 
+  const normalizedCwd = process.cwd().replace(/\\/g, "/");
+  const segments = normalizedCwd.split("/").filter(Boolean);
   return segments[segments.length - 1] ?? "unknown";
 }
 
