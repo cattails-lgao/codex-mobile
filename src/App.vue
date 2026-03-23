@@ -252,34 +252,108 @@ import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
-const FALLBACK_LANGUAGE_CODES = [
-  'aa', 'ab', 'ae', 'af', 'ak', 'am', 'an', 'ar', 'as', 'av', 'ay', 'az',
-  'ba', 'be', 'bg', 'bh', 'bi', 'bm', 'bn', 'bo', 'br', 'bs',
-  'ca', 'ce', 'ch', 'co', 'cr', 'cs', 'cu', 'cv', 'cy',
-  'da', 'de', 'dv', 'dz',
-  'ee', 'el', 'en', 'eo', 'es', 'et', 'eu',
-  'fa', 'ff', 'fi', 'fj', 'fo', 'fr', 'fy',
-  'ga', 'gd', 'gl', 'gn', 'gu', 'gv',
-  'ha', 'he', 'hi', 'ho', 'hr', 'ht', 'hu', 'hy', 'hz',
-  'ia', 'id', 'ie', 'ig', 'ii', 'ik', 'io', 'is', 'it', 'iu',
-  'ja', 'jv',
-  'ka', 'kg', 'ki', 'kj', 'kk', 'kl', 'km', 'kn', 'ko', 'kr', 'ks', 'ku', 'kv', 'kw', 'ky',
-  'la', 'lb', 'lg', 'li', 'ln', 'lo', 'lt', 'lu', 'lv',
-  'mg', 'mh', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my',
-  'na', 'nb', 'nd', 'ne', 'ng', 'nl', 'nn', 'no', 'nr', 'nv', 'ny',
-  'oc', 'oj', 'om', 'or', 'os',
-  'pa', 'pi', 'pl', 'ps', 'pt',
-  'qu',
-  'rm', 'rn', 'ro', 'ru', 'rw',
-  'sa', 'sc', 'sd', 'se', 'sg', 'si', 'sk', 'sl', 'sm', 'sn', 'so', 'sq', 'sr', 'ss', 'st', 'su', 'sv', 'sw',
-  'ta', 'te', 'tg', 'th', 'ti', 'tk', 'tl', 'tn', 'to', 'tr', 'ts', 'tt', 'tw', 'ty',
-  'ug', 'uk', 'ur', 'uz',
-  've', 'vi', 'vo',
-  'wa', 'wo',
-  'xh',
-  'yi', 'yo',
-  'za', 'zh', 'zu',
-]
+const WHISPER_LANGUAGES: Record<string, string> = {
+  en: 'english',
+  zh: 'chinese',
+  de: 'german',
+  es: 'spanish',
+  ru: 'russian',
+  ko: 'korean',
+  fr: 'french',
+  ja: 'japanese',
+  pt: 'portuguese',
+  tr: 'turkish',
+  pl: 'polish',
+  ca: 'catalan',
+  nl: 'dutch',
+  ar: 'arabic',
+  sv: 'swedish',
+  it: 'italian',
+  id: 'indonesian',
+  hi: 'hindi',
+  fi: 'finnish',
+  vi: 'vietnamese',
+  he: 'hebrew',
+  uk: 'ukrainian',
+  el: 'greek',
+  ms: 'malay',
+  cs: 'czech',
+  ro: 'romanian',
+  da: 'danish',
+  hu: 'hungarian',
+  ta: 'tamil',
+  no: 'norwegian',
+  th: 'thai',
+  ur: 'urdu',
+  hr: 'croatian',
+  bg: 'bulgarian',
+  lt: 'lithuanian',
+  la: 'latin',
+  mi: 'maori',
+  ml: 'malayalam',
+  cy: 'welsh',
+  sk: 'slovak',
+  te: 'telugu',
+  fa: 'persian',
+  lv: 'latvian',
+  bn: 'bengali',
+  sr: 'serbian',
+  az: 'azerbaijani',
+  sl: 'slovenian',
+  kn: 'kannada',
+  et: 'estonian',
+  mk: 'macedonian',
+  br: 'breton',
+  eu: 'basque',
+  is: 'icelandic',
+  hy: 'armenian',
+  ne: 'nepali',
+  mn: 'mongolian',
+  bs: 'bosnian',
+  kk: 'kazakh',
+  sq: 'albanian',
+  sw: 'swahili',
+  gl: 'galician',
+  mr: 'marathi',
+  pa: 'punjabi',
+  si: 'sinhala',
+  km: 'khmer',
+  sn: 'shona',
+  yo: 'yoruba',
+  so: 'somali',
+  af: 'afrikaans',
+  oc: 'occitan',
+  ka: 'georgian',
+  be: 'belarusian',
+  tg: 'tajik',
+  sd: 'sindhi',
+  gu: 'gujarati',
+  am: 'amharic',
+  yi: 'yiddish',
+  lo: 'lao',
+  uz: 'uzbek',
+  fo: 'faroese',
+  ht: 'haitian creole',
+  ps: 'pashto',
+  tk: 'turkmen',
+  nn: 'nynorsk',
+  mt: 'maltese',
+  sa: 'sanskrit',
+  lb: 'luxembourgish',
+  my: 'myanmar',
+  bo: 'tibetan',
+  tl: 'tagalog',
+  mg: 'malagasy',
+  as: 'assamese',
+  tt: 'tatar',
+  haw: 'hawaiian',
+  ln: 'lingala',
+  ha: 'hausa',
+  ba: 'bashkir',
+  jw: 'javanese',
+  su: 'sundanese',
+  yue: 'cantonese',
+}
 
 const {
   projectGroups,
@@ -906,36 +980,30 @@ function toggleDictationAutoSend(): void {
 }
 
 function onDictationLanguageChange(nextValue: string): void {
-  const value = nextValue.trim() || 'auto'
+  const normalized = normalizeToWhisperLanguage(nextValue.trim())
+  const value = normalized || 'auto'
   dictationLanguage.value = value
   window.localStorage.setItem(DICTATION_LANGUAGE_KEY, value)
 }
 
 function loadDictationLanguagePref(): string {
   if (typeof window === 'undefined') return 'auto'
-  const value = window.localStorage.getItem(DICTATION_LANGUAGE_KEY)?.trim()
-  return value || 'auto'
+  const value = window.localStorage.getItem(DICTATION_LANGUAGE_KEY)?.trim() || 'auto'
+  const normalized = normalizeToWhisperLanguage(value)
+  return normalized || 'auto'
 }
 
 function buildDictationLanguageOptions(): Array<{ value: string; label: string }> {
   const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: 'Auto (Browser)' }]
-  if (typeof navigator === 'undefined') {
-    return options
-  }
-
   const seen = new Set<string>(['auto'])
-  const formatter = typeof Intl !== 'undefined' && 'DisplayNames' in Intl
-    ? new Intl.DisplayNames(['en'], { type: 'language' })
-    : null
-
   function formatLanguageLabel(value: string): string {
-    const base = value.split('-')[0] ?? value
-    const languageName = formatter?.of(base) || base
-    return `${languageName} (${value})`
+    const languageName = WHISPER_LANGUAGES[value] || value
+    const title = languageName.charAt(0).toUpperCase() + languageName.slice(1)
+    return `${title} (${value})`
   }
 
-  for (const raw of navigator.languages ?? []) {
-    const value = raw.trim()
+  for (const raw of typeof navigator !== 'undefined' ? (navigator.languages ?? []) : []) {
+    const value = normalizeToWhisperLanguage(raw)
     if (!value || seen.has(value)) continue
     seen.add(value)
     options.push({
@@ -944,22 +1012,8 @@ function buildDictationLanguageOptions(): Array<{ value: string; label: string }
     })
   }
 
-  let allLanguages: string[] = []
-  const supportedValuesOf = (Intl as Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf
-  if (typeof supportedValuesOf === 'function') {
-    try {
-      allLanguages = supportedValuesOf('language')
-    } catch {
-      allLanguages = []
-    }
-  }
-  if (allLanguages.length === 0) {
-    allLanguages = FALLBACK_LANGUAGE_CODES
-  }
-
-  for (const valueRaw of allLanguages) {
-    const value = valueRaw.trim()
-    if (!value || seen.has(value)) continue
+  for (const value of Object.keys(WHISPER_LANGUAGES)) {
+    if (seen.has(value)) continue
     seen.add(value)
     options.push({
       value,
@@ -976,6 +1030,15 @@ function buildDictationLanguageOptions(): Array<{ value: string; label: string }
   }
 
   return options
+}
+
+function normalizeToWhisperLanguage(raw: string): string {
+  const value = raw.trim().toLowerCase()
+  if (!value || value === 'auto') return ''
+  if (value in WHISPER_LANGUAGES) return value
+  const base = value.split('-')[0] ?? value
+  if (base in WHISPER_LANGUAGES) return base
+  return ''
 }
 
 function applyDarkMode(): void {
