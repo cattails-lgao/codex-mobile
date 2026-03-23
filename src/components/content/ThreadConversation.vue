@@ -1605,8 +1605,13 @@ onBeforeUnmount(() => {
   @apply relative inline-block align-baseline;
 }
 
+.message-file-link-wrap::after {
+  content: '';
+  @apply absolute left-full top-0 h-full w-2;
+}
+
 .message-file-edit-link {
-  @apply absolute left-full top-1/2 -translate-y-1/2 ml-1 rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
+  @apply absolute left-full top-1/2 -translate-y-1/2 rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
 }
 
 .message-file-link-wrap:hover .message-file-edit-link,
