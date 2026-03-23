@@ -183,7 +183,8 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 }
 
 .rate-limit-card {
-  @apply w-full max-w-88 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-right shadow-sm backdrop-blur;
+  @apply w-full rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-right shadow-sm backdrop-blur;
+  max-width: 22rem;
 }
 
 .rate-limit-card-header {
