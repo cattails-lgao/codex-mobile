@@ -82,39 +82,68 @@ function getWindowMetrics(snapshot: UiRateLimitSnapshot): RateLimitMetric[] {
   return metrics
 }
 
-function formatResetText(resetsAt: number | null): string {
+function formatAbsoluteResetDate(resetsAt: number | null): string {
   if (!resetsAt) return ''
 
   const resetDate = new Date(resetsAt * 1000)
-  const diffMs = resetDate.getTime() - Date.now()
+  const month = resetDate.getMonth() + 1
+  const day = String(resetDate.getDate()).padStart(2, '0')
+  const hours = String(resetDate.getHours()).padStart(2, '0')
+  const minutes = String(resetDate.getMinutes()).padStart(2, '0')
+  return `${month}.${day} ${hours}:${minutes}`
+}
+
+function formatRelativeResetText(window: UiRateLimitWindow | null): string {
+  if (!window?.resetsAt) return ''
+
+  const diffMs = window.resetsAt * 1000 - Date.now()
   if (diffMs <= 0) return 'Resetting now'
 
-  const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-  const absoluteText = absoluteFormatter.format(resetDate)
   const diffMinutes = Math.round(diffMs / 60000)
-
   if (diffMinutes < 60) {
-    return `Resets in ${diffMinutes}m (${absoluteText})`
+    return `Resets in ${diffMinutes}m`
   }
 
   const diffHours = Math.round(diffMinutes / 60)
   if (diffHours < 24) {
-    return `Resets in ${diffHours}h (${absoluteText})`
+    return `Resets in ${diffHours}h`
   }
 
-  return `Resets ${absoluteText}`
+  const diffDays = Math.round(diffHours / 24)
+  return `Resets in ${diffDays}d`
 }
 
-function getResetText(snapshot: UiRateLimitSnapshot): string {
-  const resetCandidates = [snapshot.primary?.resetsAt ?? null, snapshot.secondary?.resetsAt ?? null]
-    .filter((value): value is number => value !== null)
-    .sort((first, second) => first - second)
-  return formatResetText(resetCandidates[0] ?? null)
+function getResetWindows(snapshot: UiRateLimitSnapshot): UiRateLimitWindow[] {
+  return [snapshot.primary, snapshot.secondary].filter((window): window is UiRateLimitWindow => window !== null)
+}
+
+function getPrimaryResetWindow(snapshot: UiRateLimitSnapshot): UiRateLimitWindow | null {
+  const windows = getResetWindows(snapshot)
+  if (windows.length === 0) return null
+
+  return [...windows].sort((first, second) => {
+    const firstDuration = first.windowDurationMins ?? Number.MAX_SAFE_INTEGER
+    const secondDuration = second.windowDurationMins ?? Number.MAX_SAFE_INTEGER
+    if (firstDuration !== secondDuration) return firstDuration - secondDuration
+    return (first.resetsAt ?? Number.MAX_SAFE_INTEGER) - (second.resetsAt ?? Number.MAX_SAFE_INTEGER)
+  })[0]
+}
+
+function getWeeklyResetText(snapshot: UiRateLimitSnapshot): string {
+  const windows = getResetWindows(snapshot)
+  if (windows.length === 0) return ''
+
+  const weeklyWindow = [...windows].sort((first, second) => {
+    const firstDuration = first.windowDurationMins ?? -1
+    const secondDuration = second.windowDurationMins ?? -1
+    if (firstDuration !== secondDuration) return secondDuration - firstDuration
+    return (second.resetsAt ?? -1) - (first.resetsAt ?? -1)
+  })[0]
+
+  const absoluteText = formatAbsoluteResetDate(weeklyWindow.resetsAt)
+  if (!absoluteText) return ''
+
+  return absoluteText
 }
 
 function getCreditsText(snapshot: UiRateLimitSnapshot): string {
@@ -127,7 +156,11 @@ function getCreditsText(snapshot: UiRateLimitSnapshot): string {
 }
 
 function getFooterParts(snapshot: UiRateLimitSnapshot): string[] {
-  return [getResetText(snapshot), getCreditsText(snapshot)].filter((value) => value.length > 0)
+  return [
+    formatRelativeResetText(getPrimaryResetWindow(snapshot)),
+    getWeeklyResetText(snapshot),
+    getCreditsText(snapshot),
+  ].filter((value) => value.length > 0)
 }
 
 function buildTooltip(snapshot: UiRateLimitSnapshot): string {
