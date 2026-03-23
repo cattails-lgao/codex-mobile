@@ -132,15 +132,28 @@
               <div v-if="message.fileAttachments && message.fileAttachments.length > 0" class="message-file-attachments">
                 <span v-for="att in message.fileAttachments" :key="att.path" class="message-file-chip">
                   <span class="message-file-chip-icon">📄</span>
-                  <a
-                    class="message-file-link message-file-chip-name"
-                    :href="toBrowseUrl(att.path)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    :title="att.path"
-                  >
-                    {{ att.path }}
-                  </a>
+                  <span class="message-file-link-wrap">
+                    <a
+                      class="message-file-link message-file-chip-name"
+                      :href="toBrowseUrl(att.path)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      :title="att.path"
+                    >
+                      {{ att.path }}
+                    </a>
+                    <a
+                      v-if="isEditablePath(att.path)"
+                      class="message-file-edit-link"
+                      :href="toEditUrl(att.path)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      :title="`Edit ${att.path}`"
+                      aria-label="Edit file"
+                    >
+                      Edit
+                    </a>
+                  </span>
                 </span>
               </div>
 
@@ -185,16 +198,28 @@
                       <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                        <a
-                          v-else-if="segment.kind === 'file'"
-                          class="message-file-link"
-                          :href="toBrowseUrl(segment.path)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.path"
-                        >
-                          {{ segment.displayPath }}
-                        </a>
+                        <span v-else-if="segment.kind === 'file'" class="message-file-link-wrap">
+                          <a
+                            class="message-file-link"
+                            :href="toBrowseUrl(segment.path)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :title="segment.path"
+                          >
+                            {{ segment.displayPath }}
+                          </a>
+                          <a
+                            v-if="isEditablePath(segment.path)"
+                            class="message-file-edit-link"
+                            :href="toEditUrl(segment.path)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :title="`Edit ${segment.path}`"
+                            aria-label="Edit file"
+                          >
+                            Edit
+                          </a>
+                        </span>
                         <a
                           v-else-if="segment.kind === 'url'"
                           class="message-file-link"
@@ -913,6 +938,40 @@ function toBrowseUrl(pathValue: string): string {
   return '#'
 }
 
+const EDITABLE_FILE_EXTENSIONS = new Set([
+  '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
+  '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
+  '.sh', '.toml', '.ini', '.conf', '.sql', '.bat', '.cmd', '.ps1',
+])
+
+function extname(pathValue: string): string {
+  const normalized = normalizePathSeparators(pathValue).split('/').pop() ?? ''
+  const dot = normalized.lastIndexOf('.')
+  if (dot <= 0 || dot === normalized.length - 1) return ''
+  return normalized.slice(dot).toLowerCase()
+}
+
+function isEditablePath(pathValue: string): boolean {
+  const parsed = parseFileReference(pathValue)
+  const candidatePath = parsed?.path ?? pathValue
+  const resolved = resolveRelativePath(candidatePath, props.cwd)
+  return EDITABLE_FILE_EXTENSIONS.has(extname(resolved))
+}
+
+function toEditUrl(pathValue: string): string {
+  const normalized = pathValue.trim()
+  if (!normalized) return '#'
+  const parsed = parseFileReference(normalized)
+  const candidatePath = parsed?.path ?? normalized
+  const resolved = resolveRelativePath(candidatePath, props.cwd)
+  const looksLikeAbsolutePath = (candidate: string): boolean => (
+    candidate.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(candidate)
+  )
+  if (!looksLikeAbsolutePath(resolved)) return '#'
+  const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
+  return `/codex-local-edit${encodeURI(normalizedResolved)}`
+}
+
 function parseMessageBlocks(text: string): MessageBlock[] {
   if (!text.includes('![') || !text.includes('](')) {
     return [{ kind: 'text', value: text }]
@@ -1556,6 +1615,23 @@ onBeforeUnmount(() => {
 
 .message-file-link {
   @apply text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
+}
+
+.message-file-link-wrap {
+  @apply inline-flex items-center gap-1 align-baseline;
+}
+
+.message-file-edit-link {
+  @apply hidden rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline;
+}
+
+.message-file-link-wrap:hover .message-file-edit-link,
+.message-file-link-wrap:focus-within .message-file-edit-link {
+  @apply inline-flex;
+}
+
+.message-file-edit-link:hover {
+  @apply border-slate-400 bg-white text-slate-900;
 }
 
 .message-stack[data-role='user'] {
