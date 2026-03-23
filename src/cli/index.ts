@@ -401,7 +401,7 @@ async function startServer(options: { port: string; password: string | boolean; 
     '',
     'Codex Web Local is running!',
     `  Version:  ${version}`,
-    '  npm:      https://www.npmjs.com/package/@nervmor/codexapp',
+    '  npm:      https://www.npmjs.com/package/@nervmor/codexui',
     '',
     `  Bind:     http://0.0.0.0:${String(port)}`,
   ]
