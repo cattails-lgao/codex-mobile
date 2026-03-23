@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -188,6 +188,72 @@ async function listFilesWithRipgrep(cwd: string): Promise<string[]> {
 function getCodexHomeDir(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
   return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
+}
+
+function quoteCmdExeArg(value: string): string {
+  const normalized = value.replace(/"/g, '""')
+  if (!/[\s"]/u.test(normalized)) {
+    return normalized
+  }
+  return `"${normalized}"`
+}
+
+function getSpawnInvocation(command: string, args: string[] = []): { cmd: string; args: string[] } {
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
+    return {
+      cmd: 'cmd.exe',
+      args: ['/d', '/s', '/c', [quoteCmdExeArg(command), ...args.map((arg) => quoteCmdExeArg(arg))].join(' ')],
+    }
+  }
+
+  return { cmd: command, args }
+}
+
+function canRun(command: string, args: string[] = []): boolean {
+  const invocation = getSpawnInvocation(command, args)
+  const result = spawnSync(invocation.cmd, invocation.args, { stdio: 'ignore' })
+  return result.status === 0
+}
+
+function getUserNpmPrefix(): string {
+  return join(homedir(), '.npm-global')
+}
+
+function resolveCodexCommand(): string | null {
+  if (canRun('codex', ['--version'])) {
+    return 'codex'
+  }
+
+  if (process.platform === 'win32') {
+    const windowsCandidates = [
+      process.env.APPDATA ? join(process.env.APPDATA, 'npm', 'codex.cmd') : '',
+      join(homedir(), '.local', 'bin', 'codex.cmd'),
+      join(getUserNpmPrefix(), 'bin', 'codex.cmd'),
+    ].filter(Boolean)
+
+    for (const candidate of windowsCandidates) {
+      if (existsSync(candidate) && canRun(candidate, ['--version'])) {
+        return candidate
+      }
+    }
+  }
+
+  const userCandidate = join(getUserNpmPrefix(), 'bin', 'codex')
+  if (existsSync(userCandidate) && canRun(userCandidate, ['--version'])) {
+    return userCandidate
+  }
+
+  const prefix = process.env.PREFIX?.trim()
+  if (!prefix) {
+    return null
+  }
+
+  const candidate = join(prefix, 'bin', 'codex')
+  if (existsSync(candidate) && canRun(candidate, ['--version'])) {
+    return candidate
+  }
+
+  return null
 }
 
 function getSkillsInstallDir(): string {
@@ -678,7 +744,9 @@ class AppServerProcess {
     if (this.process) return
 
     this.stopping = false
-    const proc = spawn('codex', this.appServerArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
+    const codexCommand = resolveCodexCommand() ?? 'codex'
+    const invocation = getSpawnInvocation(codexCommand, this.appServerArgs)
+    const proc = spawn(invocation.cmd, invocation.args, { stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = proc
 
     proc.stdout.setEncoding('utf8')
@@ -958,7 +1026,9 @@ class MethodCatalog {
 
   private async runGenerateSchemaCommand(outDir: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      const process = spawn('codex', ['app-server', 'generate-json-schema', '--out', outDir], {
+      const codexCommand = resolveCodexCommand() ?? 'codex'
+      const invocation = getSpawnInvocation(codexCommand, ['app-server', 'generate-json-schema', '--out', outDir])
+      const process = spawn(invocation.cmd, invocation.args, {
         stdio: ['ignore', 'ignore', 'pipe'],
       })
 
