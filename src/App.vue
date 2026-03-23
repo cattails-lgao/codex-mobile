@@ -92,15 +92,16 @@
               </button>
               <div class="sidebar-settings-row sidebar-settings-row--select">
                 <span class="sidebar-settings-label">Dictation language</span>
-                <select
-                  class="sidebar-settings-select"
-                  :value="dictationLanguage"
-                  @change="onDictationLanguageChange"
-                >
-                  <option v-for="option in dictationLanguageOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
+                <ComposerDropdown
+                  class="sidebar-settings-language-dropdown"
+                  :model-value="dictationLanguage"
+                  :options="dictationLanguageOptions"
+                  placeholder="Auto (Browser)"
+                  open-direction="up"
+                  :enable-search="true"
+                  search-placeholder="Search language..."
+                  @update:model-value="onDictationLanguageChange"
+                />
               </div>
             </div>
           </Transition>
@@ -876,9 +877,8 @@ function toggleDictationAutoSend(): void {
   window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
 }
 
-function onDictationLanguageChange(event: Event): void {
-  const target = event.target as HTMLSelectElement | null
-  const value = target?.value?.trim() || 'auto'
+function onDictationLanguageChange(nextValue: string): void {
+  const value = nextValue.trim() || 'auto'
   dictationLanguage.value = value
   window.localStorage.setItem(DICTATION_LANGUAGE_KEY, value)
 }
@@ -900,15 +900,47 @@ function buildDictationLanguageOptions(): Array<{ value: string; label: string }
     ? new Intl.DisplayNames(['en'], { type: 'language' })
     : null
 
+  function formatLanguageLabel(value: string): string {
+    const base = value.split('-')[0] ?? value
+    const languageName = formatter?.of(base) || base
+    return `${languageName} (${value})`
+  }
+
   for (const raw of navigator.languages ?? []) {
     const value = raw.trim()
     if (!value || seen.has(value)) continue
     seen.add(value)
-    const base = value.split('-')[0] ?? value
-    const languageName = formatter?.of(base) || base
     options.push({
       value,
-      label: `${languageName} (${value})`,
+      label: `Preferred: ${formatLanguageLabel(value)}`,
+    })
+  }
+
+  let allLanguages: string[] = []
+  const supportedValuesOf = (Intl as Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf
+  if (typeof supportedValuesOf === 'function') {
+    try {
+      allLanguages = supportedValuesOf('language')
+    } catch {
+      allLanguages = []
+    }
+  }
+
+  for (const valueRaw of allLanguages) {
+    const value = valueRaw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    options.push({
+      value,
+      label: formatLanguageLabel(value),
+    })
+  }
+
+  const current = dictationLanguage.value.trim()
+  if (current && !seen.has(current)) {
+    options.push({
+      value: current,
+      label: formatLanguageLabel(current),
     })
   }
 
@@ -1269,11 +1301,19 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-row--select {
-  @apply cursor-default;
+  @apply cursor-default items-center gap-2;
 }
 
-.sidebar-settings-select {
-  @apply rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
+.sidebar-settings-language-dropdown {
+  @apply min-w-0 max-w-52;
+}
+
+.sidebar-settings-language-dropdown :deep(.composer-dropdown-trigger) {
+  @apply h-auto rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
+}
+
+.sidebar-settings-language-dropdown :deep(.composer-dropdown-value) {
+  @apply max-w-32;
 }
 
 .sidebar-settings-row + .sidebar-settings-row {
