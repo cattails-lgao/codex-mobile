@@ -24,34 +24,6 @@
    - `git checkout main`
    - `git merge --no-ff <your-branch>`
 
-## Accept PR On GitHub (MERGED, Not Just Closed)
-
-- Use this flow only when the user explicitly asks to accept/merge the PR on GitHub.
-- First complete the local merge flow above so local `main` contains the intended code.
-- Then push remote `main` to the canonical repo remote (for this project use `https://github.com/friuns2/codexUI.git`).
-
-### Required verification
-
-1. Check PR state directly:
-   - `gh pr view <number> --repo friuns2/codexUI --json state,mergedAt,mergeCommit,mergeStateStatus,url`
-2. If `state` is `MERGED`, stop.
-3. If PR is still `OPEN` and `mergeStateStatus` is `DIRTY` (common for rebased/cross-repo PRs):
-   - push the reconciled branch to the PR head ref
-   - if still open, create a no-content linkage merge commit on `main` against the exact PR head SHA:
-     - `git checkout main`
-     - `git merge --no-ff -s ours <pr-head-sha> -m "Merge pull request #<number> from <owner>/<branch>"`
-   - push `main` again
-4. Re-run `gh pr view ...` and confirm:
-   - `state: MERGED`
-   - `mergedAt` is non-null
-   - `mergeCommit` is non-null
-
-### Notes
-
-- "Merged locally" is not sufficient; final report must include GitHub PR state confirmation.
-- Cross-repo PRs may stay open after local integration unless the PR head ancestry is linked on `main`.
-- If contributor attribution matters, avoid rewriting PR commit ancestry when possible.
-
 ## Commit After Each Task
 
 - Always create a commit after completing each discrete task or sub-task.

@@ -86,6 +86,23 @@
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
               </button>
+              <button class="sidebar-settings-row" type="button" @click="toggleDictationAutoSend">
+                <span class="sidebar-settings-label">Auto send dictation</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
+              </button>
+              <div class="sidebar-settings-row sidebar-settings-row--select">
+                <span class="sidebar-settings-label">Dictation language</span>
+                <ComposerDropdown
+                  class="sidebar-settings-language-dropdown"
+                  :model-value="dictationLanguage"
+                  :options="dictationLanguageOptions"
+                  placeholder="Auto-detect"
+                  open-direction="up"
+                  :enable-search="true"
+                  search-placeholder="Search language..."
+                  @update:model-value="onDictationLanguageChange"
+                />
+              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -152,8 +169,9 @@
                 :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
                 :is-turn-in-progress="false"
                 :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                :dictation-click-to-toggle="dictationClickToToggle"
+                :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                 :prepend-draft-request="rollbackDraftPrependRequest"
+                :dictation-language="dictationLanguage"
                 @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
@@ -186,8 +204,9 @@
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                  :dictation-click-to-toggle="dictationClickToToggle"
+                  :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :prepend-draft-request="rollbackDraftPrependRequest"
+                  :dictation-language="dictationLanguage"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
               </div>
@@ -233,6 +252,108 @@ import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
+const WHISPER_LANGUAGES: Record<string, string> = {
+  en: 'english',
+  zh: 'chinese',
+  de: 'german',
+  es: 'spanish',
+  ru: 'russian',
+  ko: 'korean',
+  fr: 'french',
+  ja: 'japanese',
+  pt: 'portuguese',
+  tr: 'turkish',
+  pl: 'polish',
+  ca: 'catalan',
+  nl: 'dutch',
+  ar: 'arabic',
+  sv: 'swedish',
+  it: 'italian',
+  id: 'indonesian',
+  hi: 'hindi',
+  fi: 'finnish',
+  vi: 'vietnamese',
+  he: 'hebrew',
+  uk: 'ukrainian',
+  el: 'greek',
+  ms: 'malay',
+  cs: 'czech',
+  ro: 'romanian',
+  da: 'danish',
+  hu: 'hungarian',
+  ta: 'tamil',
+  no: 'norwegian',
+  th: 'thai',
+  ur: 'urdu',
+  hr: 'croatian',
+  bg: 'bulgarian',
+  lt: 'lithuanian',
+  la: 'latin',
+  mi: 'maori',
+  ml: 'malayalam',
+  cy: 'welsh',
+  sk: 'slovak',
+  te: 'telugu',
+  fa: 'persian',
+  lv: 'latvian',
+  bn: 'bengali',
+  sr: 'serbian',
+  az: 'azerbaijani',
+  sl: 'slovenian',
+  kn: 'kannada',
+  et: 'estonian',
+  mk: 'macedonian',
+  br: 'breton',
+  eu: 'basque',
+  is: 'icelandic',
+  hy: 'armenian',
+  ne: 'nepali',
+  mn: 'mongolian',
+  bs: 'bosnian',
+  kk: 'kazakh',
+  sq: 'albanian',
+  sw: 'swahili',
+  gl: 'galician',
+  mr: 'marathi',
+  pa: 'punjabi',
+  si: 'sinhala',
+  km: 'khmer',
+  sn: 'shona',
+  yo: 'yoruba',
+  so: 'somali',
+  af: 'afrikaans',
+  oc: 'occitan',
+  ka: 'georgian',
+  be: 'belarusian',
+  tg: 'tajik',
+  sd: 'sindhi',
+  gu: 'gujarati',
+  am: 'amharic',
+  yi: 'yiddish',
+  lo: 'lao',
+  uz: 'uzbek',
+  fo: 'faroese',
+  ht: 'haitian creole',
+  ps: 'pashto',
+  tk: 'turkmen',
+  nn: 'nynorsk',
+  mt: 'maltese',
+  sa: 'sanskrit',
+  lb: 'luxembourgish',
+  my: 'myanmar',
+  bo: 'tibetan',
+  tl: 'tagalog',
+  mg: 'malagasy',
+  as: 'assamese',
+  tt: 'tatar',
+  haw: 'hawaiian',
+  ln: 'lingala',
+  ha: 'hausa',
+  ba: 'bashkir',
+  jw: 'javanese',
+  su: 'sundanese',
+  yue: 'cantonese',
+}
 
 const {
   projectGroups,
@@ -302,12 +423,17 @@ const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
+const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
+const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
 const rollbackDraftPrependRequest = ref<{ id: number; text: string } | null>(null)
 let rollbackDraftPrependRequestId = 0
+const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
+const dictationLanguage = ref(loadDictationLanguagePref())
+const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -339,6 +465,15 @@ const filteredMessages = computed(() =>
     return true
   }),
 )
+const latestUserTurnIndex = computed(() => {
+  let latest = -1
+  for (const message of messages.value) {
+    if (message.role !== 'user') continue
+    if (typeof message.turnIndex !== 'number') continue
+    if (message.turnIndex > latest) latest = message.turnIndex
+  }
+  return latest
+})
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
 const composerCwd = computed(() => {
@@ -539,13 +674,33 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; rollbackLatestUserTurn?: boolean }): void {
   const text = payload.text
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
     return
   }
+  if (payload.rollbackLatestUserTurn === true) {
+    void rollbackAndResendDictation(payload)
+    return
+  }
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments)
+}
+
+async function rollbackAndResendDictation(payload: {
+  text: string
+  imageUrls: string[]
+  fileAttachments: Array<{ label: string; path: string; fsPath: string }>
+  skills: Array<{ name: string; path: string }>
+}): Promise<void> {
+  if (isSelectedThreadInProgress.value) {
+    await interruptSelectedThreadTurn()
+  }
+  const rollbackTargetTurnIndex = latestUserTurnIndex.value
+  if (rollbackTargetTurnIndex >= 0) {
+    await rollbackSelectedThread(rollbackTargetTurnIndex)
+  }
+  await sendMessageToSelectedThread(payload.text, payload.imageUrls, payload.skills, 'steer', payload.fileAttachments)
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
@@ -791,9 +946,9 @@ function loadDarkModePref(): 'system' | 'light' | 'dark' {
 }
 
 function loadInProgressSendModePref(): 'steer' | 'queue' {
-  if (typeof window === 'undefined') return 'queue'
+  if (typeof window === 'undefined') return 'steer'
   const v = window.localStorage.getItem(IN_PROGRESS_SEND_MODE_KEY)
-  return v === 'steer' ? 'steer' : 'queue'
+  return v === 'queue' ? 'queue' : 'steer'
 }
 
 function toggleSendWithEnter(): void {
@@ -817,6 +972,73 @@ function cycleDarkMode(): void {
 function toggleDictationClickToToggle(): void {
   dictationClickToToggle.value = !dictationClickToToggle.value
   window.localStorage.setItem(DICTATION_CLICK_TO_TOGGLE_KEY, dictationClickToToggle.value ? '1' : '0')
+}
+
+function toggleDictationAutoSend(): void {
+  dictationAutoSend.value = !dictationAutoSend.value
+  window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
+}
+
+function onDictationLanguageChange(nextValue: string): void {
+  const normalized = normalizeToWhisperLanguage(nextValue.trim())
+  const value = normalized || 'auto'
+  dictationLanguage.value = value
+  window.localStorage.setItem(DICTATION_LANGUAGE_KEY, value)
+}
+
+function loadDictationLanguagePref(): string {
+  if (typeof window === 'undefined') return 'auto'
+  const value = window.localStorage.getItem(DICTATION_LANGUAGE_KEY)?.trim() || 'auto'
+  const normalized = normalizeToWhisperLanguage(value)
+  return normalized || 'auto'
+}
+
+function buildDictationLanguageOptions(): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: 'Auto-detect' }]
+  const seen = new Set<string>(['auto'])
+  function formatLanguageLabel(value: string): string {
+    const languageName = WHISPER_LANGUAGES[value] || value
+    const title = languageName.charAt(0).toUpperCase() + languageName.slice(1)
+    return `${title} (${value})`
+  }
+
+  for (const raw of typeof navigator !== 'undefined' ? (navigator.languages ?? []) : []) {
+    const value = normalizeToWhisperLanguage(raw)
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    options.push({
+      value,
+      label: `Preferred: ${formatLanguageLabel(value)}`,
+    })
+  }
+
+  for (const value of Object.keys(WHISPER_LANGUAGES)) {
+    if (seen.has(value)) continue
+    seen.add(value)
+    options.push({
+      value,
+      label: formatLanguageLabel(value),
+    })
+  }
+
+  const current = dictationLanguage.value.trim()
+  if (current && !seen.has(current)) {
+    options.push({
+      value: current,
+      label: formatLanguageLabel(current),
+    })
+  }
+
+  return options
+}
+
+function normalizeToWhisperLanguage(raw: string): string {
+  const value = raw.trim().toLowerCase()
+  if (!value || value === 'auto') return ''
+  if (value in WHISPER_LANGUAGES) return value
+  const base = value.split('-')[0] ?? value
+  if (base in WHISPER_LANGUAGES) return base
+  return ''
 }
 
 function applyDarkMode(): void {
@@ -1170,6 +1392,22 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-row {
   @apply flex items-center justify-between w-full px-3 py-2.5 text-sm text-zinc-700 border-0 bg-transparent transition hover:bg-zinc-50 cursor-pointer;
+}
+
+.sidebar-settings-row--select {
+  @apply cursor-default items-center gap-2;
+}
+
+.sidebar-settings-language-dropdown {
+  @apply min-w-0 max-w-52;
+}
+
+.sidebar-settings-language-dropdown :deep(.composer-dropdown-trigger) {
+  @apply h-auto rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
+}
+
+.sidebar-settings-language-dropdown :deep(.composer-dropdown-value) {
+  @apply max-w-32;
 }
 
 .sidebar-settings-row + .sidebar-settings-row {

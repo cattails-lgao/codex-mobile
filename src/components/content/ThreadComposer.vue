@@ -204,16 +204,15 @@
           </span>
 
           <button
-            v-if="isDictationSupported && !isTurnInProgress"
+            v-if="isDictationSupported"
             class="thread-composer-mic"
             :class="{
               'thread-composer-mic--active': dictationState === 'recording',
-              'thread-composer-mic--transcribing': dictationState === 'transcribing',
             }"
             type="button"
             :aria-label="dictationButtonLabel"
             :title="dictationButtonLabel"
-            :disabled="isInteractionDisabled || dictationState === 'transcribing'"
+            :disabled="isInteractionDisabled"
             @click="onDictationToggle"
             @pointerdown="onDictationPressStart"
             @pointerup="onDictationPressEnd"
@@ -223,7 +222,6 @@
               v-if="dictationState === 'recording'"
               class="thread-composer-mic-icon thread-composer-mic-icon--stop"
             />
-            <span v-else-if="dictationState === 'transcribing'" class="thread-composer-mic-spinner" aria-hidden="true" />
             <IconTablerMicrophone v-else class="thread-composer-mic-icon" />
           </button>
 
@@ -238,6 +236,7 @@
             <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
           </button>
           <button
+            v-else
             class="thread-composer-submit"
             :class="{ 'thread-composer-submit--queue': isTurnInProgress && inProgressMode === 'queue' }"
             type="button"
@@ -313,6 +312,8 @@ const props = defineProps<{
   inProgressSubmitMode?: 'steer' | 'queue'
   dictationClickToToggle?: boolean
   prependDraftRequest?: { id: number; text: string } | null
+  dictationAutoSend?: boolean
+  dictationLanguage?: string
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -323,6 +324,7 @@ export type SubmitPayload = {
   fileAttachments: FileAttachment[]
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
+  rollbackLatestUserTurn?: boolean
 }
 
 const emit = defineEmits<{
@@ -363,9 +365,18 @@ const {
   stopRecording,
   toggleRecording,
 } = useDictation({
+  getLanguage: () => props.dictationLanguage ?? 'auto',
   onTranscript: (text) => {
     draft.value = draft.value ? `${draft.value}\n${text}` : text
     dictationFeedback.value = ''
+    if (props.dictationAutoSend !== false) {
+      const mode = props.isTurnInProgress ? inProgressMode.value : 'steer'
+      onSubmit(mode, {
+        rollbackLatestUserTurn: mode === 'steer' && dictationShouldRollbackLatestUserTurn,
+      })
+      dictationShouldRollbackLatestUserTurn = false
+      return
+    }
     nextTick(() => inputRef.value?.focus())
   },
   onEmpty: () => {
@@ -396,6 +407,7 @@ const fileMentionHighlightedIndex = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
+let dictationShouldRollbackLatestUserTurn = false
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
@@ -439,7 +451,6 @@ const inProgressMode = computed<'steer' | 'queue'>(() =>
 const isDictationRecording = computed(() => dictationState.value === 'recording')
 const dictationButtonLabel = computed(() => {
   if (dictationState.value === 'recording') return 'Stop dictation'
-  if (dictationState.value === 'transcribing') return 'Transcribing dictation'
   return props.dictationClickToToggle ? 'Click to dictate' : 'Hold to dictate'
 })
 const dictationErrorText = computed(() =>
@@ -456,7 +467,7 @@ const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
 )
 
-function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
+function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestUserTurn?: boolean }): void {
   const text = draft.value.trim()
   if (!canSubmit.value) return
   emit('submit', {
@@ -465,6 +476,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
     fileAttachments: [...fileAttachments.value],
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
     mode,
+    rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
   draft.value = ''
   selectedImages.value = []
@@ -498,6 +510,10 @@ function onDictationToggle(): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  if (dictationState.value === 'idle') {
+    dictationShouldRollbackLatestUserTurn =
+      props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
+  }
   toggleRecording()
 }
 
@@ -517,6 +533,8 @@ function onDictationPressStart(event: PointerEvent): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  dictationShouldRollbackLatestUserTurn =
+    props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
   window.addEventListener('pointerup', onDictationPressEnd)
   window.addEventListener('pointercancel', onDictationPressEnd)
   window.addEventListener('blur', onDictationPressEnd)
@@ -1151,16 +1169,8 @@ watch(
   @apply bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700;
 }
 
-.thread-composer-mic--transcribing {
-  @apply bg-zinc-200 text-zinc-600;
-}
-
 .thread-composer-mic-icon {
   @apply h-5 w-5;
-}
-
-.thread-composer-mic-spinner {
-  @apply block h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin;
 }
 
 .thread-composer-dictation-waveform-wrap {
