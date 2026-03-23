@@ -7,11 +7,11 @@
   "author": "nervmor",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/friuns2/codexui.git"
+    "url": "git+https://github.com/nervmor/codexui.git"
   },
-  "homepage": "https://github.com/friuns2/codexui#readme",
+  "homepage": "https://github.com/nervmor/codexui#readme",
   "bugs": {
-    "url": "https://github.com/friuns2/codexui/issues"
+    "url": "https://github.com/nervmor/codexui/issues"
   },
   "publishConfig": {
     "access": "public"
