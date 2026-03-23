@@ -64,6 +64,11 @@ function formatWindowDuration(windowDurationMins: number | null): string {
   return `${Math.round((windowDurationMins / 60) * 10) / 10}h`
 }
 
+function formatRemainingPercent(value: number): string {
+  const remaining = Math.max(0, Math.min(100, 100 - value))
+  return `${Math.round(remaining)}% left`
+}
+
 function formatUsedPercent(value: number): string {
   return `${Math.round(value)}%`
 }
@@ -71,7 +76,7 @@ function formatUsedPercent(value: number): string {
 function formatWindowMetric(window: UiRateLimitWindow, key: string): RateLimitMetric {
   return {
     key,
-    label: `${formatWindowDuration(window.windowDurationMins)} ${formatUsedPercent(window.usedPercent)}`,
+    label: `${formatWindowDuration(window.windowDurationMins)} ${formatRemainingPercent(window.usedPercent)}`,
   }
 }
 
@@ -167,6 +172,9 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
   const lines = [getSnapshotTitle(snapshot)]
   for (const metric of getWindowMetrics(snapshot)) {
     lines.push(metric.label)
+  }
+  for (const window of getResetWindows(snapshot)) {
+    lines.push(`${formatWindowDuration(window.windowDurationMins)} used ${formatUsedPercent(window.usedPercent)}`)
   }
   for (const footer of getFooterParts(snapshot)) {
     lines.push(footer)
