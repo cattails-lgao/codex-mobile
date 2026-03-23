@@ -143,7 +143,7 @@
                       {{ att.path }}
                     </a>
                     <a
-                      v-if="isEditablePath(att.path)"
+                      v-if="canShowEditLink(att.path)"
                       class="message-file-edit-link"
                       :href="toEditUrl(att.path)"
                       target="_blank"
@@ -151,7 +151,7 @@
                       :title="`Edit ${att.path}`"
                       aria-label="Edit file"
                     >
-                      Edit
+                      ✎
                     </a>
                   </span>
                 </span>
@@ -209,7 +209,7 @@
                             {{ segment.displayPath }}
                           </a>
                           <a
-                            v-if="isEditablePath(segment.path)"
+                            v-if="canShowEditLink(segment.path)"
                             class="message-file-edit-link"
                             :href="toEditUrl(segment.path)"
                             target="_blank"
@@ -217,7 +217,7 @@
                             :title="`Edit ${segment.path}`"
                             aria-label="Edit file"
                           >
-                            Edit
+                            ✎
                           </a>
                         </span>
                         <a
@@ -938,24 +938,8 @@ function toBrowseUrl(pathValue: string): string {
   return '#'
 }
 
-const EDITABLE_FILE_EXTENSIONS = new Set([
-  '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
-  '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
-  '.sh', '.toml', '.ini', '.conf', '.sql', '.bat', '.cmd', '.ps1',
-])
-
-function extname(pathValue: string): string {
-  const normalized = normalizePathSeparators(pathValue).split('/').pop() ?? ''
-  const dot = normalized.lastIndexOf('.')
-  if (dot <= 0 || dot === normalized.length - 1) return ''
-  return normalized.slice(dot).toLowerCase()
-}
-
-function isEditablePath(pathValue: string): boolean {
-  const parsed = parseFileReference(pathValue)
-  const candidatePath = parsed?.path ?? pathValue
-  const resolved = resolveRelativePath(candidatePath, props.cwd)
-  return EDITABLE_FILE_EXTENSIONS.has(extname(resolved))
+function canShowEditLink(pathValue: string): boolean {
+  return toEditUrl(pathValue) !== '#'
 }
 
 function toEditUrl(pathValue: string): string {
