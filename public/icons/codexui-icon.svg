@@ -30,21 +30,23 @@
     </filter>
   </defs>
 
-  <g filter="url(#cardShadow)">
-    <rect x="8" y="8" width="496" height="496" rx="104" fill="#FCFEFD" />
-  </g>
+  <g transform="translate(44 44) scale(0.828125)">
+    <g filter="url(#cardShadow)">
+      <rect x="8" y="8" width="496" height="496" rx="104" fill="#FCFEFD" />
+    </g>
 
-  <g filter="url(#cloudShadow)">
-    <circle cx="256" cy="160" r="104" fill="url(#cloud)" />
-    <circle cx="330" cy="186" r="94" fill="url(#cloud)" />
-    <circle cx="178" cy="232" r="114" fill="url(#cloud)" />
-    <circle cx="352" cy="280" r="96" fill="url(#cloud)" />
-    <circle cx="186" cy="320" r="104" fill="url(#cloud)" />
-    <circle cx="282" cy="354" r="96" fill="url(#cloud)" />
-    <circle cx="256" cy="252" r="118" fill="url(#cloud)" />
-    <circle cx="256" cy="252" r="118" fill="url(#sheen)" />
-  </g>
+    <g filter="url(#cloudShadow)">
+      <circle cx="256" cy="160" r="104" fill="url(#cloud)" />
+      <circle cx="330" cy="186" r="94" fill="url(#cloud)" />
+      <circle cx="178" cy="232" r="114" fill="url(#cloud)" />
+      <circle cx="352" cy="280" r="96" fill="url(#cloud)" />
+      <circle cx="186" cy="320" r="104" fill="url(#cloud)" />
+      <circle cx="282" cy="354" r="96" fill="url(#cloud)" />
+      <circle cx="256" cy="252" r="118" fill="url(#cloud)" />
+      <circle cx="256" cy="252" r="118" fill="url(#sheen)" />
+    </g>
 
-  <path d="M169 203L210 272L169 338" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M268 309H348" stroke="white" stroke-width="28" stroke-linecap="round" />
+    <path d="M169 203L210 272L169 338" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M268 309H348" stroke="white" stroke-width="28" stroke-linecap="round" />
+  </g>
 </svg>
