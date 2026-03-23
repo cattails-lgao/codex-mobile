@@ -8,6 +8,7 @@ const MAX_WAVEFORM_SAMPLES = 256
 
 export function useDictation(options: {
   onTranscript: (text: string) => void
+  getLanguage?: () => string
   onEmpty?: () => void
   onError?: (error: unknown) => void
 }) {
@@ -208,6 +209,10 @@ export function useDictation(options: {
       const ext = mimeType.split(/[/;]/)[1] ?? 'webm'
       const formData = new FormData()
       formData.append('file', blob, `codex.${ext}`)
+      const selectedLanguage = options.getLanguage?.().trim() ?? ''
+      if (selectedLanguage && selectedLanguage.toLowerCase() !== 'auto') {
+        formData.append('language', selectedLanguage)
+      }
       const abortController = new AbortController()
       transcribeAbortController = abortController
 

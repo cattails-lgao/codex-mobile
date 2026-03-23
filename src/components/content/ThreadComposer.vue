@@ -313,6 +313,7 @@ const props = defineProps<{
   dictationClickToToggle?: boolean
   prependDraftRequest?: { id: number; text: string } | null
   dictationAutoSend?: boolean
+  dictationLanguage?: string
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -364,6 +365,7 @@ const {
   stopRecording,
   toggleRecording,
 } = useDictation({
+  getLanguage: () => props.dictationLanguage ?? 'auto',
   onTranscript: (text) => {
     draft.value = draft.value ? `${draft.value}\n${text}` : text
     dictationFeedback.value = ''

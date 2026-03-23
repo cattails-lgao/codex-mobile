@@ -90,6 +90,18 @@
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
+              <div class="sidebar-settings-row sidebar-settings-row--select">
+                <span class="sidebar-settings-label">Dictation language</span>
+                <select
+                  class="sidebar-settings-select"
+                  :value="dictationLanguage"
+                  @change="onDictationLanguageChange"
+                >
+                  <option v-for="option in dictationLanguageOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -158,6 +170,7 @@
                 :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                 :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                 :prepend-draft-request="rollbackDraftPrependRequest"
+                :dictation-language="dictationLanguage"
                 @submit="onSubmitThreadMessage"
                 @update:selected-model="onSelectModel" @update:selected-reasoning-effort="onSelectReasoningEffort" />
             </div>
@@ -192,6 +205,7 @@
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :prepend-draft-request="rollbackDraftPrependRequest"
+                  :dictation-language="dictationLanguage"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
               </div>
@@ -307,6 +321,7 @@ const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
 const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
+const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
@@ -314,6 +329,8 @@ const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, f
 const rollbackDraftPrependRequest = ref<{ id: number; text: string } | null>(null)
 let rollbackDraftPrependRequestId = 0
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
+const dictationLanguage = ref(loadDictationLanguagePref())
+const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -859,6 +876,45 @@ function toggleDictationAutoSend(): void {
   window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
 }
 
+function onDictationLanguageChange(event: Event): void {
+  const target = event.target as HTMLSelectElement | null
+  const value = target?.value?.trim() || 'auto'
+  dictationLanguage.value = value
+  window.localStorage.setItem(DICTATION_LANGUAGE_KEY, value)
+}
+
+function loadDictationLanguagePref(): string {
+  if (typeof window === 'undefined') return 'auto'
+  const value = window.localStorage.getItem(DICTATION_LANGUAGE_KEY)?.trim()
+  return value || 'auto'
+}
+
+function buildDictationLanguageOptions(): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: 'Auto (Browser)' }]
+  if (typeof navigator === 'undefined') {
+    return options
+  }
+
+  const seen = new Set<string>(['auto'])
+  const formatter = typeof Intl !== 'undefined' && 'DisplayNames' in Intl
+    ? new Intl.DisplayNames(['en'], { type: 'language' })
+    : null
+
+  for (const raw of navigator.languages ?? []) {
+    const value = raw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    const base = value.split('-')[0] ?? value
+    const languageName = formatter?.of(base) || base
+    options.push({
+      value,
+      label: `${languageName} (${value})`,
+    })
+  }
+
+  return options
+}
+
 function applyDarkMode(): void {
   const root = document.documentElement
   if (darkMode.value === 'dark') {
@@ -1210,6 +1266,14 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-row {
   @apply flex items-center justify-between w-full px-3 py-2.5 text-sm text-zinc-700 border-0 bg-transparent transition hover:bg-zinc-50 cursor-pointer;
+}
+
+.sidebar-settings-row--select {
+  @apply cursor-default;
+}
+
+.sidebar-settings-select {
+  @apply rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
 }
 
 .sidebar-settings-row + .sidebar-settings-row {
