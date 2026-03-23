@@ -21,7 +21,6 @@ import {
   normalizeThreadMessagesV2,
   readThreadInProgressFromResponse,
 } from './normalizers/v2'
-import { appPath } from '../utils/appUrl'
 import type {
   CollaborationModeKind,
   CollaborationModeOption,
@@ -534,7 +533,7 @@ function normalizeWorkspaceRootsState(payload: unknown): WorkspaceRootsState {
 }
 
 export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
-  const response = await fetch(appPath('codex-api/workspace-roots-state'))
+  const response = await fetch('/codex-api/workspace-roots-state')
   const payload = (await response.json()) as unknown
   if (!response.ok) {
     throw new Error('Failed to load workspace roots state')
@@ -547,7 +546,7 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
 }
 
 export async function createWorktree(sourceCwd: string): Promise<WorktreeCreateResult> {
-  const response = await fetch(appPath('codex-api/worktree/create'), {
+  const response = await fetch('/codex-api/worktree/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sourceCwd }),
@@ -560,7 +559,7 @@ export async function createWorktree(sourceCwd: string): Promise<WorktreeCreateR
 }
 
 export async function getHomeDirectory(): Promise<string> {
-  const response = await fetch(appPath('codex-api/home-directory'))
+  const response = await fetch('/codex-api/home-directory')
   const payload = (await response.json()) as unknown
   if (!response.ok) {
     throw new Error('Failed to load home directory')
@@ -577,7 +576,7 @@ export async function getHomeDirectory(): Promise<string> {
 }
 
 export async function setWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
-  const response = await fetch(appPath('codex-api/workspace-roots-state'), {
+  const response = await fetch('/codex-api/workspace-roots-state', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(nextState),
@@ -588,7 +587,7 @@ export async function setWorkspaceRootsState(nextState: WorkspaceRootsState): Pr
 }
 
 export async function openProjectRoot(path: string, options?: { createIfMissing?: boolean; label?: string }): Promise<string> {
-  const response = await fetch(appPath('codex-api/project-root'), {
+  const response = await fetch('/codex-api/project-root', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -616,7 +615,7 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
 
 export async function getProjectRootSuggestion(basePath: string): Promise<{ name: string; path: string }> {
   const query = new URLSearchParams({ basePath })
-  const response = await fetch(`${appPath('codex-api/project-root-suggestion')}?${query.toString()}`)
+  const response = await fetch(`/codex-api/project-root-suggestion?${query.toString()}`)
   const payload = (await response.json()) as unknown
   if (!response.ok) {
     const message = getErrorMessageFromPayload(payload, 'Failed to suggest project name')
@@ -639,7 +638,7 @@ export async function getProjectRootSuggestion(basePath: string): Promise<{ name
 export async function searchComposerFiles(cwd: string, query: string, limit = 20): Promise<ComposerFileSuggestion[]> {
   const trimmedCwd = cwd.trim()
   if (!trimmedCwd) return []
-  const response = await fetch(appPath('codex-api/composer-file-search'), {
+  const response = await fetch('/codex-api/composer-file-search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -674,7 +673,7 @@ export async function searchThreads(
   query: string,
   limit = 200,
 ): Promise<ThreadSearchResult> {
-  const response = await fetch(appPath('codex-api/thread-search'), {
+  const response = await fetch('/codex-api/thread-search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, limit }),
@@ -698,7 +697,7 @@ export type ThreadTitleCache = { titles: Record<string, string>; order: string[]
 
 export async function getThreadTitleCache(): Promise<ThreadTitleCache> {
   try {
-    const response = await fetch(appPath('codex-api/thread-titles'))
+    const response = await fetch('/codex-api/thread-titles')
     if (!response.ok) return { titles: {}, order: [] }
     const envelope = (await response.json()) as { data?: ThreadTitleCache }
     return envelope.data ?? { titles: {}, order: [] }
@@ -709,7 +708,7 @@ export async function getThreadTitleCache(): Promise<ThreadTitleCache> {
 
 export async function persistThreadTitle(id: string, title: string): Promise<void> {
   try {
-    await fetch(appPath('codex-api/thread-titles'), {
+    await fetch('/codex-api/thread-titles', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, title }),
@@ -779,7 +778,7 @@ export async function uploadFile(file: File): Promise<string | null> {
   try {
     const form = new FormData()
     form.append('file', file)
-    const resp = await fetch(appPath('codex-api/upload-file'), { method: 'POST', body: form })
+    const resp = await fetch('/codex-api/upload-file', { method: 'POST', body: form })
     if (!resp.ok) return null
     const data = (await resp.json()) as { path?: string }
     return data.path ?? null

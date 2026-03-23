@@ -498,7 +498,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
-import { appPath } from '../../utils/appUrl'
 import IconTablerX from '../icons/IconTablerX.vue'
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
@@ -1199,26 +1198,25 @@ function parseInlineSegments(text: string): InlineSegment[] {
 
 function toRenderableImageUrl(value: string): string {
   const normalized = value.trim()
-  const localImageBasePath = appPath('codex-local-image')
   if (!normalized) return ''
   if (
     normalized.startsWith('data:') ||
     normalized.startsWith('blob:') ||
     normalized.startsWith('http://') ||
     normalized.startsWith('https://') ||
-    normalized.startsWith(`${localImageBasePath}?`)
+    normalized.startsWith('/codex-local-image?')
   ) {
     return normalized
   }
 
   if (normalized.startsWith('file://')) {
-    return `${localImageBasePath}?path=${encodeURIComponent(normalized)}`
+    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
   }
 
   const looksLikeUnixAbsolute = normalized.startsWith('/')
   const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(normalized)
   if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute) {
-    return `${localImageBasePath}?path=${encodeURIComponent(normalized)}`
+    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
   }
 
   return normalized
@@ -1237,7 +1235,7 @@ function toBrowseUrl(pathValue: string): string {
 
   if (looksLikeAbsolutePath(resolved)) {
     const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
-    return appPath(`codex-local-browse${encodeURI(normalizedResolved)}`)
+    return `/codex-local-browse${encodeURI(normalizedResolved)}`
   }
 
   return '#'

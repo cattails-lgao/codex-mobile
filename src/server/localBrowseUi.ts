@@ -154,14 +154,14 @@ export async function createDirectoryListingHtml(localPath: string): Promise<str
     .map((item) => {
       const suffix = item.isDirectory ? '/' : ''
       const editAction = item.editable
-        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(item.name)}" href="${escapeHtml(toEditHref(item.path))}" data-app-path="${escapeHtml(toEditHref(item.path))}" title="Edit">✏️</a>`
+        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(item.name)}" href="${escapeHtml(toEditHref(item.path))}" title="Edit">✏️</a>`
         : ''
-      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path))}" data-app-path="${escapeHtml(toBrowseHref(item.path))}">${escapeHtml(item.name)}${suffix}</a>${editAction}</li>`
+      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path))}">${escapeHtml(item.name)}${suffix}</a>${editAction}</li>`
     })
     .join('\n')
 
   const parentLink = localPath !== parentPath
-    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}" data-app-path="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
+    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
     : ''
 
   return `<!doctype html>
@@ -192,25 +192,6 @@ export async function createDirectoryListingHtml(localPath: string): Promise<str
   <h1>Index of ${escapeHtml(localPath)}</h1>
   ${parentLink}
   <ul>${rows}</ul>
-  <script>
-    (() => {
-      const pathname = window.location.pathname;
-      const markers = ['/codex-local-browse/', '/codex-local-edit/'];
-      let prefix = '';
-      for (const marker of markers) {
-        const index = pathname.indexOf(marker);
-        if (index >= 0) {
-          prefix = pathname.slice(0, index);
-          break;
-        }
-      }
-      for (const element of document.querySelectorAll('[data-app-path]')) {
-        const target = element.getAttribute('data-app-path');
-        if (!target) continue;
-        element.setAttribute('href', prefix + target);
-      }
-    })();
-  </script>
 </body>
 </html>`
 }
@@ -245,7 +226,7 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
 <body>
   <div class="toolbar">
     <div class="row">
-      <a href="${escapeHtml(toBrowseHref(parentPath))}" data-app-path="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
+      <a href="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
       <button id="saveBtn" type="button">Save</button>
       <span id="status"></span>
     </div>
@@ -269,24 +250,6 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
       behavioursEnabled: true,
     });
     editor.resize();
-
-    (() => {
-      const pathname = window.location.pathname;
-      const markers = ['/codex-local-browse/', '/codex-local-edit/'];
-      let prefix = '';
-      for (const marker of markers) {
-        const index = pathname.indexOf(marker);
-        if (index >= 0) {
-          prefix = pathname.slice(0, index);
-          break;
-        }
-      }
-      for (const element of document.querySelectorAll('[data-app-path]')) {
-        const target = element.getAttribute('data-app-path');
-        if (!target) continue;
-        element.setAttribute('href', prefix + target);
-      }
-    })();
 
     saveBtn.addEventListener('click', async () => {
       status.textContent = 'Saving...';

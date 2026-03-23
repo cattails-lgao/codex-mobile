@@ -73,7 +73,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import IconTablerX from '../icons/IconTablerX.vue'
-import { appPath } from '../../utils/appUrl'
 
 export type HubSkill = {
   name: string
@@ -139,7 +138,7 @@ async function fetchReadme(): Promise<void> {
   readmeContent.value = ''
   try {
     const params = new URLSearchParams({ owner: props.skill.owner, name: props.skill.name })
-    const resp = await fetch(`${appPath('codex-api/skills-hub/readme')}?${params.toString()}`)
+    const resp = await fetch(`/codex-api/skills-hub/readme?${params}`)
     if (!resp.ok) return
     const data = (await resp.json()) as { content?: string }
     readmeContent.value = data.content ?? ''

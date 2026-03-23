@@ -178,27 +178,6 @@ termux-wake-lock
 | `npx` fails | Update npm/node, then retry |
 | Termux install fails | `pkg update && pkg upgrade` then reinstall `nodejs` |
 | Can’t open from other device | Check firewall, bind address, and LAN routing |
-| Reverse proxy shows white screen under `/subpath/` | Rebuild with `CODEX_UI_BASE_PATH=/subpath/` so assets, API, WS, and hash routes use the same prefix |
-
-### Caddy Subpath Example
-
-If you expose codexapp under a subpath such as `/kanna/`, build the frontend with the same prefix:
-
-```bash
-CODEX_UI_BASE_PATH=/kanna/ npm run build
-```
-
-Then proxy that prefix to the app server and strip the prefix before forwarding:
-
-```caddyfile
-example.com {
-  handle_path /kanna/* {
-    reverse_proxy 127.0.0.1:18923
-  }
-}
-```
-
-If you proxy from the domain root instead, keep the default build without `CODEX_UI_BASE_PATH`.
 
 ---
 
