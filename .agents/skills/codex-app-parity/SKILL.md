@@ -255,6 +255,7 @@ After each feature implementation session that uses this skill:
   - credits: `hasCredits`, `unlimited`, `balance`
 - For compact composer display, a conservative summary can be derived from `primary`/`secondary` windows without forcing a full account panel.
 - Weekly refresh copy can be derived entirely client-side by selecting the quota window whose `windowDurationMins` is `10080` (or the nearest longer weekly-like window) and formatting its `resetsAt` timestamp into a calendar date for the tooltip.
+- On touch/mobile surfaces, quota details hidden only in a `title` attribute are effectively invisible. Weekly refresh information needs to be rendered as visible text in the composer quota badge, not only in hover-only tooltip content.
 
 ## Findings: Empty Project Removal Persistence (2026-03-21)
 

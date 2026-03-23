@@ -74,8 +74,13 @@
         :title="quotaTooltipText"
         aria-live="polite"
       >
-        <span class="thread-composer-rate-limit-label">Codex quota</span>
-        <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
+        <span class="thread-composer-rate-limit-row">
+          <span class="thread-composer-rate-limit-label">Codex quota</span>
+          <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
+        </span>
+        <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
+          {{ quotaWeeklyRefreshText }}
+        </span>
       </div>
 
       <div class="thread-composer-input-wrap">
@@ -499,6 +504,7 @@ const placeholderText = computed(() =>
       : 'Type a message... (@ for files, / for skills)',
 )
 const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
+const quotaWeeklyRefreshText = computed(() => buildQuotaWeeklyRefreshText(props.codexQuota ?? null))
 const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))
 
 function formatPlanType(planType: string | null | undefined): string {
@@ -611,6 +617,14 @@ function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
   }
 
   return lines.join('\n')
+}
+
+function buildQuotaWeeklyRefreshText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  if (!weeklyWindow) return ''
+  const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
+  return weeklyRefreshDate ? `Weekly refresh ${weeklyRefreshDate}` : ''
 }
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
@@ -1226,7 +1240,11 @@ watch(
 }
 
 .thread-composer-rate-limit {
-  @apply mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] leading-5 text-zinc-500;
+  @apply mb-1.5 flex flex-col gap-0.5 px-1 text-[11px] leading-5 text-zinc-500;
+}
+
+.thread-composer-rate-limit-row {
+  @apply flex flex-wrap items-center gap-x-2 gap-y-1;
 }
 
 .thread-composer-rate-limit-label {
@@ -1235,6 +1253,10 @@ watch(
 
 .thread-composer-rate-limit-value {
   @apply break-words;
+}
+
+.thread-composer-rate-limit-refresh {
+  @apply text-[10px] leading-4 text-zinc-400;
 }
 
 .thread-composer-input-wrap {
