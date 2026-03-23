@@ -204,6 +204,7 @@ export function useDictation(options: {
 
     const blob = new Blob(recordedChunks, { type: mimeType })
     state.value = 'transcribing'
+    let requestAbortController: AbortController | null = null
 
     try {
       const ext = mimeType.split(/[/;]/)[1] ?? 'webm'
@@ -213,13 +214,13 @@ export function useDictation(options: {
       if (selectedLanguage && selectedLanguage.toLowerCase() !== 'auto') {
         formData.append('language', selectedLanguage)
       }
-      const abortController = new AbortController()
-      transcribeAbortController = abortController
+      requestAbortController = new AbortController()
+      transcribeAbortController = requestAbortController
 
       const response = await fetch('/codex-api/transcribe', {
         method: 'POST',
         body: formData,
-        signal: abortController.signal,
+        signal: requestAbortController.signal,
       })
 
       const responseText = await response.text()
@@ -248,7 +249,7 @@ export function useDictation(options: {
       }
       options.onError?.(error)
     } finally {
-      if (transcribeAbortController === abortController) {
+      if (requestAbortController && transcribeAbortController === requestAbortController) {
         transcribeAbortController = null
       }
       if (state.value === 'transcribing') {
