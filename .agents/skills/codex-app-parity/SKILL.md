@@ -254,6 +254,7 @@ After each feature implementation session that uses this skill:
   - window: `usedPercent`, `windowDurationMins`, `resetsAt`
   - credits: `hasCredits`, `unlimited`, `balance`
 - For compact composer display, a conservative summary can be derived from `primary`/`secondary` windows without forcing a full account panel.
+- Weekly refresh copy can be derived entirely client-side by selecting the quota window whose `windowDurationMins` is `10080` (or the nearest longer weekly-like window) and formatting its `resetsAt` timestamp into a calendar date for the tooltip.
 
 ## Findings: Empty Project Removal Persistence (2026-03-21)
 

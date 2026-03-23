@@ -530,6 +530,29 @@ function formatResetTime(resetsAt: number | null): string {
   return `resets in ${Math.max(1, totalDays)}d`
 }
 
+function formatResetDate(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(resetsAt * 1000))
+}
+
+function pickWeeklyQuotaWindow(quota: UiRateLimitSnapshot): UiRateLimitWindow | null {
+  const windows = [quota.primary, quota.secondary].filter((window): window is UiRateLimitWindow => window !== null)
+  const exactWeekly = windows.find((window) => window.windowMinutes === 7 * 24 * 60)
+  if (exactWeekly) return exactWeekly
+
+  const longerWindows = windows
+    .filter((window) => typeof window.windowMinutes === 'number' && window.windowMinutes >= 7 * 24 * 60)
+    .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))
+
+  return longerWindows[0] ?? null
+}
+
 function formatWindowSummary(window: UiRateLimitWindow): string {
   const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
   const span = formatWindowSpan(window.windowMinutes)
@@ -577,6 +600,14 @@ function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
     lines.push('Credits: unlimited')
   } else if (quota.credits?.hasCredits && quota.credits.balance) {
     lines.push(`Credits: ${quota.credits.balance}`)
+  }
+
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  if (weeklyWindow) {
+    const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
+    if (weeklyRefreshDate) {
+      lines.push(`Weekly refresh: ${weeklyRefreshDate}`)
+    }
   }
 
   return lines.join('\n')
