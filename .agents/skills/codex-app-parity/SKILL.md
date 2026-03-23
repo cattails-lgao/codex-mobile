@@ -219,6 +219,12 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Mobile Install Icons (2026-03-23)
+
+- In this web workspace, mobile home-screen installation depends on both `link[rel="apple-touch-icon"]` in `index.html` and the PNG entries in `public/manifest.webmanifest`; updating only the manifest is not enough for iPhone-style add-to-home-screen flows.
+- Small PNGs generated from SVG via headless Chrome can silently degrade to all-white images when the SVG is loaded indirectly during screenshot capture. Rendering a reliable large PNG first and deriving smaller sizes from that output avoids blank icon assets.
+- For non-transparent exported PNG icons, any transparent margin around the SVG is rasterized against the page background. Set an explicit dark page background during capture or use full-bleed icon artwork to avoid white edges that make installed icons look washed out.
+
 ## Findings: PWA Packaging Fallback (2026-03-23)
 
 - This repository can be made installable as a browser app without changing runtime behavior by adding standard PWA assets:
