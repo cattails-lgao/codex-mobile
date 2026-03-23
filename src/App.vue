@@ -96,7 +96,7 @@
                   class="sidebar-settings-language-dropdown"
                   :model-value="dictationLanguage"
                   :options="dictationLanguageOptions"
-                  placeholder="Auto (Browser)"
+                  placeholder="Auto-detect"
                   open-direction="up"
                   :enable-search="true"
                   search-placeholder="Search language..."
@@ -994,7 +994,7 @@ function loadDictationLanguagePref(): string {
 }
 
 function buildDictationLanguageOptions(): Array<{ value: string; label: string }> {
-  const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: 'Auto (Browser)' }]
+  const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: 'Auto-detect' }]
   const seen = new Set<string>(['auto'])
   function formatLanguageLabel(value: string): string {
     const languageName = WHISPER_LANGUAGES[value] || value
