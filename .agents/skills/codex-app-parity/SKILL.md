@@ -258,6 +258,15 @@ After each feature implementation session that uses this skill:
 ## Findings: Empty Project Removal Persistence (2026-03-21)
 
 - In this web UI, empty project groups can be recreated purely from persisted workspace-root state, even when no threads exist for that project.
+
+## Findings: Mobile Foreground Resume (2026-03-23)
+
+- In this web workspace, a conservative mobile-only freshness policy can be implemented at the app shell level (`App.vue`) by combining:
+  - `document.visibilitychange` to record background entry
+  - `window.pageshow` to catch BFCache restores
+  - `window.focus` as a final foreground fallback
+- Restricting the behavior to the existing `<768px` mobile breakpoint avoids forcing reloads on tablet/desktop layouts during tab focus changes.
+- A small hidden-duration threshold helps avoid accidental reloads from transient overlays while still reloading after real app switches.
 - The persistence source of truth is still the global state keys:
   - `electron-saved-workspace-roots`
   - `electron-workspace-root-labels`

@@ -313,10 +313,13 @@ const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
+const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
+const mobileHiddenAtMs = ref<number | null>(null)
+const mobileResumeReloadTriggered = ref(false)
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -393,6 +396,9 @@ const darkModeMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(p
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+  window.addEventListener('pageshow', onWindowPageShow)
+  window.addEventListener('focus', onWindowFocus)
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
@@ -403,6 +409,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+  window.removeEventListener('pageshow', onWindowPageShow)
+  window.removeEventListener('focus', onWindowFocus)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
   if (threadSearchTimer) {
     clearTimeout(threadSearchTimer)
@@ -548,6 +557,43 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.key.toLowerCase() !== 'b') return
   event.preventDefault()
   setSidebarCollapsed(!isSidebarCollapsed.value)
+}
+
+function onDocumentVisibilityChange(): void {
+  if (typeof document === 'undefined') return
+  if (!isMobile.value) return
+
+  if (document.visibilityState === 'hidden') {
+    mobileHiddenAtMs.value = Date.now()
+    mobileResumeReloadTriggered.value = false
+    return
+  }
+
+  maybeReloadAfterMobileResume()
+}
+
+function onWindowPageShow(event: PageTransitionEvent): void {
+  if (!event.persisted) return
+  maybeReloadAfterMobileResume()
+}
+
+function onWindowFocus(): void {
+  maybeReloadAfterMobileResume()
+}
+
+function maybeReloadAfterMobileResume(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  if (!isMobile.value) return
+  if (document.visibilityState !== 'visible') return
+  if (mobileResumeReloadTriggered.value) return
+  if (mobileHiddenAtMs.value === null) return
+
+  const hiddenForMs = Date.now() - mobileHiddenAtMs.value
+  if (hiddenForMs < MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS) return
+
+  mobileResumeReloadTriggered.value = true
+  mobileHiddenAtMs.value = null
+  window.location.reload()
 }
 
 function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
