@@ -236,6 +236,7 @@ import {
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
+const LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY = 'codex-web-local.last-active-thread-route.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 
@@ -320,6 +321,7 @@ const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
 const mobileHiddenAtMs = ref<number | null>(null)
 const mobileResumeReloadTriggered = ref(false)
+const mobileResumeSyncInProgress = ref(false)
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -569,19 +571,19 @@ function onDocumentVisibilityChange(): void {
     return
   }
 
-  maybeReloadAfterMobileResume()
+  maybeSyncAfterMobileResume()
 }
 
 function onWindowPageShow(event: PageTransitionEvent): void {
   if (!event.persisted) return
-  maybeReloadAfterMobileResume()
+  maybeSyncAfterMobileResume()
 }
 
 function onWindowFocus(): void {
-  maybeReloadAfterMobileResume()
+  maybeSyncAfterMobileResume()
 }
 
-function maybeReloadAfterMobileResume(): void {
+function maybeSyncAfterMobileResume(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   if (!isMobile.value) return
   if (document.visibilityState !== 'visible') return
@@ -593,7 +595,23 @@ function maybeReloadAfterMobileResume(): void {
 
   mobileResumeReloadTriggered.value = true
   mobileHiddenAtMs.value = null
-  window.location.reload()
+  void syncAfterMobileResume()
+}
+
+async function syncAfterMobileResume(): Promise<void> {
+  if (mobileResumeSyncInProgress.value) return
+  mobileResumeSyncInProgress.value = true
+
+  try {
+    await refreshAll({
+      includeSelectedThreadMessages: true,
+      awaitAncillaryRefreshes: true,
+    })
+    await restoreLastActiveThreadRoute()
+    await syncThreadSelectionWithRoute()
+  } finally {
+    mobileResumeSyncInProgress.value = false
+  }
 }
 
 function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
@@ -916,8 +934,74 @@ async function initialize(): Promise<void> {
   await refreshAll({
     includeSelectedThreadMessages: true,
   })
+  await restoreLastActiveThreadRoute()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
+}
+
+type LastActiveThreadRoute = {
+  routeName: 'thread'
+  threadId: string
+  updatedAtIso: string
+}
+
+function loadLastActiveThreadRoute(): LastActiveThreadRoute | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.localStorage.getItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as Partial<LastActiveThreadRoute> | null
+    if (!parsed || parsed.routeName !== 'thread') return null
+    if (typeof parsed.threadId !== 'string' || parsed.threadId.trim().length === 0) return null
+    if (typeof parsed.updatedAtIso !== 'string' || parsed.updatedAtIso.trim().length === 0) return null
+
+    return {
+      routeName: 'thread',
+      threadId: parsed.threadId.trim(),
+      updatedAtIso: parsed.updatedAtIso,
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveLastActiveThreadRoute(threadId: string): void {
+  if (typeof window === 'undefined') return
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return
+
+  const payload: LastActiveThreadRoute = {
+    routeName: 'thread',
+    threadId: normalizedThreadId,
+    updatedAtIso: new Date().toISOString(),
+  }
+  window.localStorage.setItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY, JSON.stringify(payload))
+}
+
+function clearLastActiveThreadRoute(): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY)
+}
+
+async function restoreLastActiveThreadRoute(): Promise<boolean> {
+  if (route.name !== 'home') return false
+
+  const persistedRoute = loadLastActiveThreadRoute()
+  const fallbackThreadId = selectedThreadId.value.trim()
+  const candidateThreadId = persistedRoute?.threadId ?? fallbackThreadId
+  if (!candidateThreadId) return false
+
+  if (!knownThreadIdSet.value.has(candidateThreadId)) {
+    if (persistedRoute?.threadId === candidateThreadId) {
+      clearLastActiveThreadRoute()
+    }
+    return false
+  }
+
+  await router.replace({ name: 'thread', params: { threadId: candidateThreadId } })
+  return true
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
@@ -953,6 +1037,20 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
     isRouteSyncInProgress.value = false
   }
 }
+
+watch(
+  () => [route.name, routeThreadId.value, selectedThreadId.value, hasInitialized.value] as const,
+  ([routeName, threadIdFromRoute, threadIdFromSelection, ready]) => {
+    if (!ready) return
+    if (routeName !== 'thread') return
+
+    const threadId = (threadIdFromRoute || threadIdFromSelection).trim()
+    if (!threadId) return
+    if (!knownThreadIdSet.value.has(threadId)) return
+
+    saveLastActiveThreadRoute(threadId)
+  },
+)
 
 watch(
   () =>
