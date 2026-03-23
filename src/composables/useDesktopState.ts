@@ -45,6 +45,7 @@ function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
+const SELECTED_MODEL_STORAGE_KEY = 'codex-web-local.selected-model-id.v1'
 const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
 const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v1'
 const EVENT_SYNC_DEBOUNCE_MS = 220
@@ -138,6 +139,21 @@ function saveSelectedThreadId(threadId: string): void {
     return
   }
   window.localStorage.setItem(SELECTED_THREAD_STORAGE_KEY, threadId)
+}
+
+function loadSelectedModelId(): string {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(SELECTED_MODEL_STORAGE_KEY)?.trim() ?? ''
+}
+
+function saveSelectedModelId(modelId: string): void {
+  if (typeof window === 'undefined') return
+  const normalizedModelId = modelId.trim()
+  if (!normalizedModelId) {
+    window.localStorage.removeItem(SELECTED_MODEL_STORAGE_KEY)
+    return
+  }
+  window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, normalizedModelId)
 }
 
 function loadProjectOrder(): string[] {
@@ -638,7 +654,7 @@ export function useDesktopState() {
   const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
-  const selectedModelId = ref('')
+  const selectedModelId = ref(loadSelectedModelId())
   const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const scrollStateByThreadId = ref<Record<string, ThreadScrollState>>(loadThreadScrollStateMap())
@@ -737,10 +753,12 @@ export function useDesktopState() {
 
   function setSelectedModelId(modelId: string): void {
     selectedModelId.value = modelId.trim()
+    saveSelectedModelId(selectedModelId.value)
   }
 
   async function applyFallbackModelSelection(): Promise<void> {
     selectedModelId.value = MODEL_FALLBACK_ID
+    saveSelectedModelId(selectedModelId.value)
     if (!availableModelIds.value.includes(MODEL_FALLBACK_ID)) {
       availableModelIds.value = [...availableModelIds.value, MODEL_FALLBACK_ID]
     }
@@ -862,6 +880,7 @@ export function useDesktopState() {
         } else {
           selectedModelId.value = ''
         }
+        saveSelectedModelId(selectedModelId.value)
       }
 
       if (
