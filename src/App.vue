@@ -470,6 +470,7 @@ onMounted(() => {
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
+  void applyLaunchProjectPathFromUrl()
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
@@ -858,6 +859,28 @@ async function onAddNewProject(rawInput: string): Promise<void> {
     }
   } catch {
     // Error is surfaced on next request if path is invalid.
+  }
+}
+
+async function applyLaunchProjectPathFromUrl(): Promise<void> {
+  if (typeof window === 'undefined') return
+  const launchProjectPath = new URLSearchParams(window.location.search).get('openProjectPath')?.trim() ?? ''
+  if (!launchProjectPath) return
+  try {
+    const normalizedPath = await openProjectRoot(launchProjectPath, {
+      createIfMissing: false,
+      label: '',
+    })
+    if (!normalizedPath) return
+    newThreadCwd.value = normalizedPath
+    pinProjectToTop(getPathLeafName(normalizedPath))
+    await router.replace({ name: 'home' })
+    await loadWorkspaceRootOptionsState()
+    const nextUrl = new URL(window.location.href)
+    nextUrl.searchParams.delete('openProjectPath')
+    window.history.replaceState({}, '', nextUrl.toString())
+  } catch {
+    // If launch path is invalid, keep normal startup behavior.
   }
 }
 
