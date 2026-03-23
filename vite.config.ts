@@ -3,6 +3,7 @@ import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
 import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
 import tailwindcss from "@tailwindcss/vite";
+import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
@@ -34,6 +35,20 @@ function normalizeLocalImagePath(rawPath: string): string {
 }
 
 function getWorktreeName(): string {
+  const gitCommonDir = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  if (gitCommonDir.status === 0) {
+    const resolvedGitCommonDir = gitCommonDir.stdout.trim().replace(/\\/g, "/");
+    if (resolvedGitCommonDir.endsWith("/.git")) {
+      const segments = resolvedGitCommonDir.split("/").filter(Boolean);
+      if (segments.length >= 2) {
+        return segments[segments.length - 2] ?? "unknown";
+      }
+    }
+  }
+
   const normalizedCwd = process.cwd().replace(/\\/g, "/");
   const segments = normalizedCwd.split("/").filter(Boolean);
   const worktreesIndex = segments.lastIndexOf("worktrees");

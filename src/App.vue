@@ -195,10 +195,10 @@
     </template>
   </DesktopLayout>
   <div class="top-right-status-stack">
-    <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
     <div class="build-badge" aria-label="Worktree name and version">
     WT {{ worktreeName }} · v{{ appVersion }}
     </div>
+    <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
   </div>
 </template>
 
