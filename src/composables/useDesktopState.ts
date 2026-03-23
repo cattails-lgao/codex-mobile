@@ -815,6 +815,7 @@ export function useDesktopState() {
         [threadId]: true,
       }
 
+      scheduleRateLimitRefresh()
       pendingThreadMessageRefresh.add(threadId)
       pendingThreadsRefresh = true
       await syncFromNotifications()
