@@ -189,7 +189,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
           'Codex web UI assets are missing.',
           `Expected: ${spaEntryFile}`,
           'If running from source, build frontend assets with: npm run build:frontend',
-          'If running with npx, clear the npx cache and reinstall codexapp.',
+          'If running with npx, clear the npx cache and reinstall @nervmor/codexapp.',
         ].join('\n'),
       )
       return

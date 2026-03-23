@@ -1,8 +1,8 @@
-# 🔥 codexapp
+# 🔥 @nervmor/codexapp
 
 ### 🚀 Run Codex App UI Anywhere: Linux, Windows, or Termux on Android 🚀
 
-[![npm](https://img.shields.io/npm/v/codexapp?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/codexapp)
+[![npm](https://img.shields.io/npm/v/%40nervmor%2Fcodexapp?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@nervmor/codexapp)
 [![platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue?style=for-the-badge)](#-quick-start)
 [![node](https://img.shields.io/badge/Node-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
@@ -23,7 +23,7 @@
 ---
 
 ## 🤯 What Is This?
-**`codexapp`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
+**`@nervmor/codexapp`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
 
 You run one command. It starts a local web server. You open it from your machine, your LAN, or wherever your setup allows.  
 
@@ -36,13 +36,13 @@ You run one command. It starts a local web server. You open it from your machine
 
 ```bash
 # 🔓 Run instantly (recommended)
-npx codexapp
+npx @nervmor/codexapp
 
 # 🌐 Then open in browser
 # http://localhost:18923
 ```
 
-By default, `codexapp` now also starts:
+By default, `@nervmor/codexapp` now also starts:
 
 ```bash
 cloudflared tunnel --url http://localhost:<port>
@@ -54,20 +54,20 @@ Use `--no-tunnel` to disable this behavior.
 ### Linux 🐧
 ```bash
 node -v   # should be 18+
-npx codexapp
+npx @nervmor/codexapp
 ```
 
 ### Windows 🪟 (PowerShell)
 ```powershell
 node -v   # 18+
-npx codexapp
+npx @nervmor/codexapp
 ```
 
 ### Termux (Android) 🤖
 ```bash
 pkg update && pkg upgrade -y
 pkg install nodejs -y
-npx codexapp
+npx @nervmor/codexapp
 ```
 
 Android background requirements:
@@ -79,14 +79,14 @@ Android background requirements:
 ```bash
 termux-wake-lock
 ```
-5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx codexapp` again.
+5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx @nervmor/codexapp` again.
 
 ---
 
 ## ✨ Features
 > **The payload.**
 
-- 🚀 One-command launch with `npx codexapp`
+- 🚀 One-command launch with `npx @nervmor/codexapp`
 - 🌍 Cross-platform support for Linux, Windows, and Termux on Android
 - 🖥️ Browser-first Codex UI flow on `http://localhost:18923`
 - 🌐 LAN-friendly access from other devices on the same network

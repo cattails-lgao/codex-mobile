@@ -1,10 +1,10 @@
 {
-  "name": "codexapp",
-  "version": "0.1.39",
+  "name": "@nervmor/codexapp",
+  "version": "1.0.0",
   "description": "A lightweight web interface for Codex that runs on top of the Codex app-server, allowing remote access from any browser",
   "type": "module",
   "license": "MIT",
-  "author": "Pavel Voronin, Igor Levochkin",
+  "author": "nervmor",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/friuns2/codexui.git"
@@ -12,6 +12,9 @@
   "homepage": "https://github.com/friuns2/codexui#readme",
   "bugs": {
     "url": "https://github.com/friuns2/codexui/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "codex",
