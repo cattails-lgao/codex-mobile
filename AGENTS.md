@@ -8,12 +8,13 @@
 - During debugging and testing, use the system-installed Chrome browser to verify behavior on `http://127.0.0.1:4172`.
 - Do not use the production port `4173` for debugging, experiments, or temporary validation.
 - The production instance must run in an isolated `tmux` session in the background on port `4173`.
+- The production instance must start without password protection; always include `--no-password` in the production launch command.
 - Publish to production only after verification passes in Chrome on port `4172`.
 - Keep production continuously available: debugging and testing must not interrupt the existing `tmux` production session.
 - Recommended production release flow:
   1. `npm run build`
   2. `tmux has-session -t codexui-prod 2>/dev/null && tmux kill-session -t codexui-prod`
-  3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel'`
+  3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel --no-password'`
   4. Verify the production service on `http://127.0.0.1:4173`
 
 ## "Push to main or commit to main" Means Merge To Local Main
