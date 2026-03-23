@@ -34,6 +34,21 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
 }
 
+function renderFrontendMissingHtml(message: string, details?: string[]): string {
+  const lines = details && details.length > 0 ? `<pre>${details.join('\n')}</pre>` : ''
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head><meta charset="utf-8"><title>Codex Web UI Error</title></head>',
+    '<body>',
+    `<h1>${message}</h1>`,
+    lines,
+    '<p><a href="/">Back to chat</a></p>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
 function normalizeLocalImagePath(rawPath: string): string {
   const trimmed = rawPath.trim()
   if (!trimmed) return ''
@@ -184,21 +199,23 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
   // 8. SPA fallback
   app.use((_req, res) => {
     if (!hasFrontendAssets) {
-      res.status(503).type('text/plain').send(
-        [
-          'Codex web UI assets are missing.',
-          `Expected: ${spaEntryFile}`,
-          'If running from source, build frontend assets with: npm run build:frontend',
-          'If running with npx, clear the npx cache and reinstall codexapp.',
-        ].join('\n'),
-      )
+      res
+        .status(503)
+        .type('text/html; charset=utf-8')
+        .send(
+          renderFrontendMissingHtml('Codex web UI assets are missing.', [
+            `Expected: ${spaEntryFile}`,
+            'If running from source, build frontend assets with: npm run build:frontend',
+            'If running with npx, clear the npx cache and reinstall codexapp.',
+          ]),
+        )
       return
     }
 
     res.sendFile(spaEntryFile, (error) => {
       if (!error) return
       if (!res.headersSent) {
-        res.status(404).type('text/plain').send('Frontend entry file not found.')
+        res.status(404).type('text/html; charset=utf-8').send(renderFrontendMissingHtml('Frontend entry file not found.'))
       }
     })
   })
