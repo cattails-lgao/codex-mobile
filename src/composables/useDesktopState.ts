@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   archiveThread,
+  getAccountRateLimits,
   renameThread,
   getAvailableModelIds,
   getCurrentModelConfig,
@@ -31,6 +32,7 @@ import type {
   UiLiveOverlay,
   UiMessage,
   UiProjectGroup,
+  UiRateLimitSnapshot,
   UiServerRequest,
   UiServerRequestReply,
   UiThread,
@@ -653,6 +655,7 @@ export function useDesktopState() {
   const threadTitleById = ref<Record<string, string>>({})
 
   const installedSkills = ref<SkillInfo[]>([])
+  const accountRateLimitSnapshots = ref<UiRateLimitSnapshot[]>([])
 
   const isLoadingThreads = ref(false)
   const isLoadingMessages = ref(false)
@@ -864,6 +867,14 @@ export function useDesktopState() {
       }
     } catch {
       // Keep chat UI usable even if model metadata is temporarily unavailable.
+    }
+  }
+
+  async function refreshRateLimits(): Promise<void> {
+    try {
+      accountRateLimitSnapshots.value = normalizeRateLimitSnapshotsPayload(await getAccountRateLimits())
+    } catch {
+      // Keep the last known rate-limit state if the endpoint is temporarily unavailable.
     }
   }
 
@@ -1177,6 +1188,89 @@ export function useDesktopState() {
 
   function readNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+
+  function getRateLimitSnapshotKey(snapshot: UiRateLimitSnapshot): string {
+    return snapshot.limitId?.trim() || snapshot.limitName?.trim() || '__default__'
+  }
+
+  function normalizeRateLimitWindow(value: unknown): UiRateLimitSnapshot['primary'] {
+    const record = asRecord(value)
+    if (!record) return null
+
+    return {
+      usedPercent: clamp(readNumber(record.usedPercent) ?? 0, 0, 100),
+      windowDurationMins: readNumber(record.windowDurationMins),
+      resetsAt: readNumber(record.resetsAt),
+    }
+  }
+
+  function normalizeRateLimitSnapshot(value: unknown): UiRateLimitSnapshot | null {
+    const record = asRecord(value)
+    if (!record) return null
+
+    const credits = asRecord(record.credits)
+    return {
+      limitId: readString(record.limitId) || null,
+      limitName: readString(record.limitName) || null,
+      primary: normalizeRateLimitWindow(record.primary),
+      secondary: normalizeRateLimitWindow(record.secondary),
+      credits: credits
+        ? {
+            hasCredits: credits.hasCredits === true,
+            unlimited: credits.unlimited === true,
+            balance: readString(credits.balance) || null,
+          }
+        : null,
+      planType: readString(record.planType) || null,
+    }
+  }
+
+  function normalizeRateLimitSnapshotsPayload(value: unknown): UiRateLimitSnapshot[] {
+    const record = asRecord(value)
+    if (!record) return []
+
+    const next: UiRateLimitSnapshot[] = []
+    const seen = new Set<string>()
+    const pushSnapshot = (snapshot: UiRateLimitSnapshot | null): void => {
+      if (!snapshot) return
+      const key = getRateLimitSnapshotKey(snapshot)
+      if (seen.has(key)) return
+      seen.add(key)
+      next.push(snapshot)
+    }
+
+    pushSnapshot(normalizeRateLimitSnapshot(record.rateLimits))
+
+    const byLimitId = asRecord(record.rateLimitsByLimitId)
+    if (byLimitId) {
+      for (const snapshot of Object.values(byLimitId)) {
+        pushSnapshot(normalizeRateLimitSnapshot(snapshot))
+      }
+    }
+
+    return next
+  }
+
+  function mergeRateLimitSnapshots(
+    previous: UiRateLimitSnapshot[],
+    incoming: UiRateLimitSnapshot[],
+  ): UiRateLimitSnapshot[] {
+    if (incoming.length === 0) return previous
+
+    const incomingByKey = new Map(incoming.map((snapshot) => [getRateLimitSnapshotKey(snapshot), snapshot]))
+    const merged = previous.map((snapshot) => incomingByKey.get(getRateLimitSnapshotKey(snapshot)) ?? snapshot)
+    const mergedKeys = new Set(merged.map((snapshot) => getRateLimitSnapshotKey(snapshot)))
+
+    for (const snapshot of incoming) {
+      const key = getRateLimitSnapshotKey(snapshot)
+      if (!mergedKeys.has(key)) {
+        merged.push(snapshot)
+        mergedKeys.add(key)
+      }
+    }
+
+    return merged
   }
 
   function extractThreadIdFromNotification(notification: RpcNotification): string {
@@ -1654,6 +1748,13 @@ export function useDesktopState() {
       return
     }
 
+    if (notification.method === 'account/rateLimits/updated') {
+      const snapshots = normalizeRateLimitSnapshotsPayload(notification.params)
+      if (snapshots.length > 0) {
+        accountRateLimitSnapshots.value = mergeRateLimitSnapshots(accountRateLimitSnapshots.value, snapshots)
+      }
+    }
+
     if (notification.method === 'thread/name/updated') {
       const params = asRecord(notification.params)
       const threadId = readString(params?.threadId)
@@ -2060,6 +2161,7 @@ export function useDesktopState() {
       await loadThreads()
       await Promise.all([
         refreshModelPreferences(),
+        refreshRateLimits(),
         refreshSkills(),
       ])
       await loadMessages(selectedThreadId.value)
@@ -2702,6 +2804,7 @@ export function useDesktopState() {
     selectedModelId,
     selectedReasoningEffort,
     installedSkills,
+    accountRateLimitSnapshots,
     messages,
     isLoadingThreads,
     isLoadingMessages,

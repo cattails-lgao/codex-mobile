@@ -194,8 +194,11 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Worktree name and version">
+  <div class="top-right-status-stack">
+    <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
+    <div class="build-badge" aria-label="Worktree name and version">
     WT {{ worktreeName }} · v{{ appVersion }}
+    </div>
   </div>
 </template>
 
@@ -208,6 +211,7 @@ import ContentHeader from './components/content/ContentHeader.vue'
 import ThreadConversation from './components/content/ThreadConversation.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
+import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SkillsHub from './components/content/SkillsHub.vue'
@@ -243,6 +247,7 @@ const {
   selectedModelId,
   selectedReasoningEffort,
   installedSkills,
+  accountRateLimitSnapshots,
   messages,
   isLoadingThreads,
   isLoadingMessages,
@@ -1202,8 +1207,12 @@ async function submitFirstMessageForNewThread(
   transform: translateY(8px);
 }
 
+.top-right-status-stack {
+  @apply fixed top-3 right-3 z-50 flex max-w-[min(22rem,calc(100vw-1.5rem))] flex-col items-end gap-2;
+}
+
 .build-badge {
-  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
+  @apply rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
 }
 
 </style>
