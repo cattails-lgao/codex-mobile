@@ -22,7 +22,7 @@
       </div>
 
       <div v-if="getFooterParts(snapshot).length > 0" class="rate-limit-card-footer">
-        {{ getFooterParts(snapshot).join(' · ') }}
+        {{ getFooterParts(snapshot).join(' | ') }}
       </div>
     </div>
   </aside>
@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import type { UiRateLimitSnapshot, UiRateLimitWindow } from '../../types/codex'
 
-const props = defineProps<{
+defineProps<{
   snapshots: UiRateLimitSnapshot[]
 }>()
 
@@ -84,23 +84,30 @@ function getWindowMetrics(snapshot: UiRateLimitSnapshot): RateLimitMetric[] {
 
 function formatResetText(resetsAt: number | null): string {
   if (!resetsAt) return ''
+
   const resetDate = new Date(resetsAt * 1000)
   const diffMs = resetDate.getTime() - Date.now()
   if (diffMs <= 0) return 'Resetting now'
 
-  const diffMinutes = Math.round(diffMs / 60000)
-  if (diffMinutes < 60) return `Resets in ${diffMinutes}m`
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) return `Resets in ${diffHours}h`
-
-  const formatter = new Intl.DateTimeFormat(undefined, {
+  const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   })
-  return `Resets ${formatter.format(resetDate)}`
+  const absoluteText = absoluteFormatter.format(resetDate)
+  const diffMinutes = Math.round(diffMs / 60000)
+
+  if (diffMinutes < 60) {
+    return `Resets in ${diffMinutes}m (${absoluteText})`
+  }
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (diffHours < 24) {
+    return `Resets in ${diffHours}h (${absoluteText})`
+  }
+
+  return `Resets ${absoluteText}`
 }
 
 function getResetText(snapshot: UiRateLimitSnapshot): string {
@@ -116,7 +123,7 @@ function getCreditsText(snapshot: UiRateLimitSnapshot): string {
   if (credits.unlimited) return 'Unlimited credits'
   if (credits.balance) return `Credits ${credits.balance}`
   if (credits.hasCredits) return 'Credits available'
-  return 'No credits'
+  return ''
 }
 
 function getFooterParts(snapshot: UiRateLimitSnapshot): string[] {
