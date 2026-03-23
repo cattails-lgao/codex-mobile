@@ -1,5 +1,21 @@
 # AGENTS.md
 
+## Build, Debug, And Production Runbook
+
+- Build the project with `npm run build`.
+- Debugging and test runs must use port `4172`.
+- Start the debug/test server with `npm run dev -- --host 0.0.0.0 --port 4172`.
+- During debugging and testing, use the system-installed Chrome browser to verify behavior on `http://127.0.0.1:4172`.
+- Do not use the production port `4173` for debugging, experiments, or temporary validation.
+- The production instance must run in an isolated `tmux` session in the background on port `4173`.
+- Publish to production only after verification passes in Chrome on port `4172`.
+- Keep production continuously available: debugging and testing must not interrupt the existing `tmux` production session.
+- Recommended production release flow:
+  1. `npm run build`
+  2. `tmux has-session -t codexui-prod 2>/dev/null && tmux kill-session -t codexui-prod`
+  3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel'`
+  4. Verify the production service on `http://127.0.0.1:4173`
+
 ## "Push to main or commit to main" Means Merge To Local Main
 
 - When the user says "push", interpret it as: merge the current work into local `main`
@@ -33,6 +49,7 @@
 ## Completion Verification Requirement (MANDATORY)
 
 - Test changes before reporting completion when feasible.
+- Default local validation is manual testing in the system Chrome browser against port `4172`.
 - Run Playwright verification only when the user explicitly asks for Playwright/browser automation testing.
 - If a change affects package/runtime/module loading behavior, also run a CJS smoke test before completion.
 - CJS smoke test requirement:
@@ -47,9 +64,9 @@
   - inspect row HTML and count expected rendered nodes (for example `strong.message-bold-text`)
   - save screenshot to `output/playwright/<task-name>.png`
 - Playwright test sequence (when Playwright is requested):
-  1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4173`).
+  1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4172`).
   2. If there are stale servers on the same port, stop them first to avoid false test results.
-  3. Run Playwright CLI against `http://127.0.0.1:4173` (or required test URL) and exercise the changed flow.
+  3. Run Playwright CLI against `http://127.0.0.1:4172` (or required test URL) and exercise the changed flow.
   4. For responsive/mobile changes, run checks at 375x812 and 768x1024.
   5. Wait 2-3 seconds before capturing final screenshot(s).
   6. Save screenshots under `output/playwright/` with task-specific names.
@@ -83,8 +100,8 @@
 - Use this flow when validating UI behavior on Oracle A1 from the local Mac machine.
 - On A1, start the app server with Codex CLI available in `PATH`:
   - `export PATH="$HOME/.npm-global/bin:$PATH"`
-  - `npm run dev -- --host 0.0.0.0 --port 4173`
-- From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4173`), not localhost.
+  - `npm run dev -- --host 0.0.0.0 --port 4172`
+- From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4172`), not localhost.
 - Verify success with both checks:
   - UI assertion in Playwright (new project/folder appears in sidebar or selector).
   - Filesystem assertion on A1 (`test -d /home/ubuntu/<project-name>`).
