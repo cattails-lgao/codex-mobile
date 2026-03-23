@@ -1520,28 +1520,6 @@ async function readMergedThreadTitleCache() {
   ]);
   return mergeThreadTitleCaches(sessionIndexCache, persistedCache);
 }
-async function readPinnedThreadIds() {
-  const statePath = getCodexGlobalStatePath();
-  try {
-    const raw = await readFile2(statePath, "utf8");
-    const payload = asRecord2(JSON.parse(raw)) ?? {};
-    return normalizeStringArray(payload["pinned-thread-ids"]);
-  } catch {
-    return [];
-  }
-}
-async function writePinnedThreadIds(threadIds) {
-  const statePath = getCodexGlobalStatePath();
-  let payload = {};
-  try {
-    const raw = await readFile2(statePath, "utf8");
-    payload = asRecord2(JSON.parse(raw)) ?? {};
-  } catch {
-    payload = {};
-  }
-  payload["pinned-thread-ids"] = normalizeStringArray(threadIds);
-  await writeFile2(statePath, JSON.stringify(payload), "utf8");
-}
 async function readWorkspaceRootsState() {
   const statePath = getCodexGlobalStatePath();
   let payload = {};
@@ -2365,11 +2343,6 @@ function createCodexBridgeMiddleware() {
         setJson2(res, 200, { data: cache });
         return;
       }
-      if (req.method === "GET" && url.pathname === "/codex-api/pinned-threads") {
-        const threadIds = await readPinnedThreadIds();
-        setJson2(res, 200, { data: threadIds });
-        return;
-      }
       if (req.method === "POST" && url.pathname === "/codex-api/thread-search") {
         const payload = asRecord2(await readJsonBody(req));
         const query = typeof payload?.query === "string" ? payload.query.trim() : "";
@@ -2395,12 +2368,6 @@ function createCodexBridgeMiddleware() {
         const cache = await readThreadTitleCache();
         const next2 = title ? updateThreadTitleCache(cache, id, title) : removeFromThreadTitleCache(cache, id);
         await writeThreadTitleCache(next2);
-        setJson2(res, 200, { ok: true });
-        return;
-      }
-      if (req.method === "PUT" && url.pathname === "/codex-api/pinned-threads") {
-        const payload = asRecord2(await readJsonBody(req));
-        await writePinnedThreadIds(normalizeStringArray(payload?.threadIds));
         setJson2(res, 200, { ok: true });
         return;
       }
