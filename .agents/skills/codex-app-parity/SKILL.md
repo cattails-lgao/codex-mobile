@@ -219,6 +219,19 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: PWA Packaging Fallback (2026-03-23)
+
+- This repository can be made installable as a browser app without changing runtime behavior by adding standard PWA assets:
+  - HTML manifest link + theme color metadata
+  - production-only service worker registration in `src/main.ts`
+  - static `manifest.webmanifest`
+  - static icons under `public/icons/`
+- Codex.app desktop parity could not be inspected in this environment because `/Applications/Codex.app` was unavailable, so PWA packaging should follow the fallback path and avoid speculative UX changes.
+- A conservative service worker strategy for this repo is:
+  - bypass `/codex-api/*` and local file proxy endpoints
+  - use navigation fallback to cached `/`
+  - use runtime caching for same-origin static assets and manifest
+
 ## Findings: Plan Mode Turn Start (2026-03-22)
 
 - App-server rejects `turn/start.collaborationMode` unless the client advertises `initialize.capabilities.experimentalApi = true`.
