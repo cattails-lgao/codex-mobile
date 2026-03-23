@@ -1602,16 +1602,16 @@ onBeforeUnmount(() => {
 }
 
 .message-file-link-wrap {
-  @apply inline-flex items-center gap-1 align-baseline;
+  @apply relative inline-block align-baseline;
 }
 
 .message-file-edit-link {
-  @apply hidden rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline;
+  @apply absolute left-full top-1/2 -translate-y-1/2 ml-1 rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
 }
 
 .message-file-link-wrap:hover .message-file-edit-link,
 .message-file-link-wrap:focus-within .message-file-edit-link {
-  @apply inline-flex;
+  @apply opacity-100 pointer-events-auto;
 }
 
 .message-file-edit-link:hover {
