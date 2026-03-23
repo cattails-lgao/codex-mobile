@@ -420,7 +420,7 @@ type ParsedToolQuestion = {
 }
 
 function isFilePath(value: string): boolean {
-  if (!value || /\s/u.test(value)) return false
+  if (!value) return false
   if (value.endsWith('/') || value.endsWith('\\')) return false
   if (value.startsWith('file://')) return true
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(value)) return false
@@ -559,14 +559,45 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
 
 function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
   const trimmed = value.trim()
-  const match = trimmed.match(/^\[([^\]\n]+)\]\(([^)\n]+)\)$/u)
-  if (!match) return null
-  const labelRaw = (match[1] ?? '').trim()
-  const targetRaw = (match[2] ?? '').trim()
+  const parsed = readMarkdownLinkAt(trimmed, 0)
+  if (!parsed || parsed.end !== trimmed.length) return null
+  const labelRaw = parsed.label.trim()
+  const targetRaw = parsed.target.trim()
   const label = trimLinkWrappers(labelRaw).core.trim() || labelRaw
   const target = trimLinkWrappers(targetRaw).core.trim()
   if (!target) return null
   return { label, target }
+}
+
+function readMarkdownLinkAt(
+  text: string,
+  startIndex: number,
+): { label: string; target: string; end: number } | null {
+  if (text[startIndex] !== '[') return null
+  const closeBracket = text.indexOf('](', startIndex + 1)
+  if (closeBracket < 0) return null
+
+  const label = text.slice(startIndex + 1, closeBracket)
+  if (!label || label.includes('\n')) return null
+
+  let cursor = closeBracket + 2
+  let depth = 1
+  while (cursor < text.length) {
+    const char = text[cursor]
+    if (char === '\n') return null
+    if (char === '(') depth += 1
+    else if (char === ')') {
+      depth -= 1
+      if (depth === 0) {
+        const target = text.slice(closeBracket + 2, cursor)
+        if (!target.trim()) return null
+        return { label, target, end: cursor + 1 }
+      }
+    }
+    cursor += 1
+  }
+
+  return null
 }
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
@@ -689,23 +720,24 @@ function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSe
   return output
 }
 function splitTextByFileUrls(text: string): InlineSegment[] {
-  const markdownLinkPattern = /\[([^\]\n]+)\]\(([^)\n]+)\)/gu
   const segments: InlineSegment[] = []
   let cursor = 0
 
-  for (const match of text.matchAll(markdownLinkPattern)) {
-    if (typeof match.index !== 'number') continue
-    const [fullMatch, labelRaw, targetRaw] = match
-    const start = match.index
-    const end = start + fullMatch.length
-
-    if (start > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
+  while (cursor < text.length) {
+    const openBracket = text.indexOf('[', cursor)
+    if (openBracket < 0) break
+    const markdownToken = readMarkdownLinkAt(text, openBracket)
+    if (!markdownToken) {
+      cursor = openBracket + 1
+      continue
     }
 
-    const markdownToken = parseMarkdownLinkToken(`[${labelRaw ?? ''}](${targetRaw ?? ''})`)
-    const label = markdownToken?.label ?? (labelRaw ?? '').trim()
-    const target = markdownToken?.target ?? (targetRaw ?? '').trim()
+    if (openBracket > cursor) {
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, openBracket)))
+    }
+
+    const label = trimLinkWrappers(markdownToken.label.trim()).core.trim() || markdownToken.label.trim()
+    const target = trimLinkWrappers(markdownToken.target.trim()).core.trim()
 
     if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
@@ -720,11 +752,11 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
           downloadName: getBasename(ref.path),
         })
       } else {
-        segments.push({ kind: 'text', value: fullMatch })
+        segments.push({ kind: 'text', value: text.slice(openBracket, markdownToken.end) })
       }
     }
 
-    cursor = end
+    cursor = markdownToken.end
   }
 
   if (cursor < text.length) {
