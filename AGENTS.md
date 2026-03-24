@@ -1,21 +1,17 @@
 # AGENTS.md
 
-## Build, Debug, And Production Runbook
+## Build And Restart Runbook
 
 - Build the project with `npm run build`.
-- Debugging and test runs must use port `4172`.
-- Start the debug/test server with `npm run dev -- --host 0.0.0.0 --port 4172`.
-- During debugging and testing, use the system-installed Chrome browser to verify behavior on `http://127.0.0.1:4172`.
-- Do not use the production port `4173` for debugging, experiments, or temporary validation.
-- The production instance must run in an isolated `tmux` session in the background on port `4173`.
-- The production instance must start without password protection; always include `--no-password` in the production launch command.
-- Publish to production only after verification passes in Chrome on port `4172`.
-- Keep production continuously available: debugging and testing must not interrupt the existing `tmux` production session.
-- Recommended production release flow:
+- Port `4172` is retired and must not be used for debugging, testing, or deployment.
+- The only runtime environment is the `4173` instance.
+- After each change, do not run manual browser testing or Playwright verification unless the user explicitly asks for it.
+- The `4173` instance must run in an isolated `tmux` session in the background.
+- The `4173` instance must start without password protection; always include `--no-password` in the launch command.
+- Recommended update flow:
   1. `npm run build`
   2. `tmux has-session -t codexui-prod 2>/dev/null && tmux kill-session -t codexui-prod`
   3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel --no-password'`
-  4. Verify the production service on `http://127.0.0.1:4173`
 
 ## "Push to main or commit to main" Means Merge To Local Main
 
@@ -47,33 +43,14 @@
 - Do not batch multiple tasks into a single commit.
 - Each commit message should describe the specific change made.
 
-## Completion Verification Requirement (MANDATORY)
+## Completion Requirement
 
-- Test changes before reporting completion when feasible.
-- Default local validation is manual testing in the system Chrome browser against port `4172`.
-- Run Playwright verification only when the user explicitly asks for Playwright/browser automation testing.
-- If a change affects package/runtime/module loading behavior, also run a CJS smoke test before completion.
-- CJS smoke test requirement:
-  1. Build the project/artifact first (if needed).
-  2. Run a Node `require(...)` check against the changed entry (or closest public CJS entry).
-  3. Confirm the module loads without runtime errors and expected exported symbol(s) exist.
-  4. Include the exact CJS command and result summary in the completion report.
-- For Playwright automation scripts, CJS (`const { chromium } = require('playwright')`) is the default style unless ESM is explicitly required.
-- Preferred Playwright verification pattern for chat parsing changes (when Playwright is requested):
-  - send a message with a unique marker (for selecting the correct rendered row)
-  - include mixed content in one message (for example: plain text, `**bold**`, and `` `code` ``)
-  - inspect row HTML and count expected rendered nodes (for example `strong.message-bold-text`)
-  - save screenshot to `output/playwright/<task-name>.png`
-- Playwright test sequence (when Playwright is requested):
-  1. Start or confirm a single dev server instance (`npm run dev -- --host 0.0.0.0 --port 4172`).
-  2. If there are stale servers on the same port, stop them first to avoid false test results.
-  3. Run Playwright CLI against `http://127.0.0.1:4172` (or required test URL) and exercise the changed flow.
-  4. For responsive/mobile changes, run checks at 375x812 and 768x1024.
-  5. Wait 2-3 seconds before capturing final screenshot(s).
-  6. Save screenshots under `output/playwright/` with task-specific names.
-- Capture screenshots only when Playwright verification is requested.
-- If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
-- If requested Playwright assertions fail, do not report completion; fix and re-run until passing.
+- Do not run routine testing after each change.
+- Default completion for any change is:
+  1. `npm run build`
+  2. restart the `tmux` session on port `4173`
+- Manual browser checks, Playwright verification, screenshots, and CJS smoke tests are only required when the user explicitly asks for them.
+- If explicitly requested, run browser automation against `http://127.0.0.1:4173`.
 
 ## Browser Automation: Prefer Playwright CLI Over Cursor Browser Tool
 
@@ -87,7 +64,7 @@
   - viewport(s)
   - assertion/result summary
   - screenshot absolute path(s)
-  - CJS command/result (when module-loading behavior was changed)
+  - CJS command/result (only when the user explicitly requested CJS verification)
 
 ## NPX Testing Rule
 
@@ -98,11 +75,11 @@
 
 ## A1 Playwright Verification (From Mac via Tailscale)
 
-- Use this flow when validating UI behavior on Oracle A1 from the local Mac machine.
+- Use this flow only when the user explicitly asks to validate UI behavior on Oracle A1 from the local Mac machine.
 - On A1, start the app server with Codex CLI available in `PATH`:
   - `export PATH="$HOME/.npm-global/bin:$PATH"`
-  - `npm run dev -- --host 0.0.0.0 --port 4172`
-- From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4172`), not localhost.
+  - `node dist-cli/index.js --port 4173 --no-tunnel --no-password`
+- From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4173`), not localhost.
 - Verify success with both checks:
   - UI assertion in Playwright (new project/folder appears in sidebar or selector).
   - Filesystem assertion on A1 (`test -d /home/ubuntu/<project-name>`).
