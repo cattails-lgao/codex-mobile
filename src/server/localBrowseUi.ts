@@ -156,12 +156,12 @@ export async function createDirectoryListingHtml(localPath: string): Promise<str
       const editAction = item.editable
         ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(item.name)}" href="${escapeHtml(toEditHref(item.path))}" title="Edit">✏️</a>`
         : ''
-      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path))}">${escapeHtml(item.name)}${suffix}</a>${editAction}</li>`
+      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path))}">${escapeHtml(item.name)}${suffix}</a><span class="row-actions">${editAction}</span></li>`
     })
     .join('\n')
 
   const parentLink = localPath !== parentPath
-    ? `<p><a href="${escapeHtml(toBrowseHref(parentPath))}">..</a></p>`
+    ? `<a href="${escapeHtml(toBrowseHref(parentPath))}">..</a>`
     : ''
 
   return `<!doctype html>
@@ -177,8 +177,27 @@ export async function createDirectoryListingHtml(localPath: string): Promise<str
     ul { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
     .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }
     .file-link { display: block; padding: 10px 12px; border: 1px solid #28405f; border-radius: 10px; background: #0f1b33; overflow-wrap: anywhere; }
-    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid #36557a; border-radius: 10px; background: #162643; text-decoration: none; }
+    .header-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .header-parent-link { color: #9ec8ff; font-size: 14px; padding: 8px 10px; border: 1px solid #2a4569; border-radius: 10px; background: #101f3a; }
+    .header-parent-link:hover { text-decoration: none; filter: brightness(1.08); }
+    .header-open-btn {
+      height: 42px;
+      padding: 0 14px;
+      border: 1px solid #4f8de0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2e6ee6 0%, #3d8cff 100%);
+      color: #eef6ff;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(33, 90, 199, 0.35);
+    }
+    .header-open-btn:hover { filter: brightness(1.08); }
+    .header-open-btn:disabled { opacity: 0.6; cursor: default; }
+    .row-actions { display: inline-flex; align-items: center; gap: 8px; min-width: 42px; justify-content: flex-end; }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid #36557a; border-radius: 10px; background: #162643; color: #dbe6ff; text-decoration: none; cursor: pointer; }
     .icon-btn:hover { filter: brightness(1.08); text-decoration: none; }
+    .status { margin: 10px 0 0; color: #8cc2ff; min-height: 1.25em; }
     h1 { font-size: 18px; margin: 0; word-break: break-all; }
     @media (max-width: 640px) {
       body { margin: 12px; }
@@ -190,8 +209,46 @@ export async function createDirectoryListingHtml(localPath: string): Promise<str
 </head>
 <body>
   <h1>Index of ${escapeHtml(localPath)}</h1>
-  ${parentLink}
+  <div class="header-actions">
+    ${parentLink ? `<a class="header-parent-link" href="${escapeHtml(toBrowseHref(parentPath))}">..</a>` : ''}
+    <button class="header-open-btn open-folder-btn" type="button" aria-label="Open current folder in Codex" title="Open folder in Codex" data-path="${escapeHtml(localPath)}">Open folder in Codex</button>
+  </div>
+  <p id="status" class="status"></p>
   <ul>${rows}</ul>
+  <script>
+    const status = document.getElementById('status');
+    document.addEventListener('click', async (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest('.open-folder-btn');
+      if (!(button instanceof HTMLButtonElement)) return;
+
+      const path = button.getAttribute('data-path') || '';
+      if (!path) return;
+      button.disabled = true;
+      status.textContent = 'Opening folder in Codex...';
+      try {
+        const response = await fetch('/codex-api/project-root', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path,
+            createIfMissing: false,
+            label: '',
+          }),
+        });
+        if (!response.ok) {
+          status.textContent = 'Failed to open folder.';
+          button.disabled = false;
+          return;
+        }
+        window.location.assign('/#/');
+      } catch {
+        status.textContent = 'Failed to open folder.';
+        button.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>`
 }
