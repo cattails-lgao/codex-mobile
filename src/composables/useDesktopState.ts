@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import {
+  autoCommitWorktreeChanges,
   archiveThread,
   getAccountRateLimits,
   renameThread,
@@ -53,6 +54,7 @@ const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
+const AUTO_COMMIT_MESSAGE_FALLBACK = 'Auto-commit from Codex worktree chat turn'
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -779,6 +781,17 @@ export function useDesktopState() {
   function clearPendingTurnRequest(threadId: string): void {
     if (!pendingTurnRequestByThreadId.value[threadId]) return
     pendingTurnRequestByThreadId.value = omitKey(pendingTurnRequestByThreadId.value, threadId)
+  }
+
+  async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string): Promise<void> {
+    const normalizedMessage = commitMessage.trim()
+    if (!normalizedMessage) return
+    const thread = allThreads.value.find((row) => row.id === threadId)
+    if (!thread?.hasWorktree) return
+    const cwd = thread.cwd.trim()
+    if (!cwd) return
+    await autoCommitWorktreeChanges(cwd, normalizedMessage)
+    pendingThreadsRefresh = true
   }
 
   async function retryPendingTurnWithFallback(threadId: string): Promise<void> {
@@ -1822,6 +1835,7 @@ export function useDesktopState() {
       selectedModelId.value !== MODEL_FALLBACK_ID &&
       isUnsupportedChatGptModelError(new Error(turnErrorMessage))
     if (completedTurn) {
+      const pendingTurnRequest = pendingTurnRequestByThreadId.value[completedTurn.threadId]
       const startedTurnState = pendingTurnStartsById.get(completedTurn.turnId)
       if (startedTurnState) {
         pendingTurnStartsById.delete(completedTurn.turnId)
@@ -1849,6 +1863,12 @@ export function useDesktopState() {
       if (!shouldRetryWithFallback) {
         clearPendingTurnRequest(completedTurn.threadId)
         void processQueuedMessages(completedTurn.threadId)
+      }
+      if (!turnErrorMessage && !shouldRetryWithFallback) {
+        const commitMessage = pendingTurnRequest?.text?.trim() || AUTO_COMMIT_MESSAGE_FALLBACK
+        void autoCommitCompletedWorktreeTurn(completedTurn.threadId, commitMessage).catch(() => {
+          // Keep chat flow resilient when auto-commit fails.
+        })
       }
     }
 

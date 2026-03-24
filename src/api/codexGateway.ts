@@ -44,6 +44,10 @@ export type WorktreeCreateResult = {
   gitRoot: string
 }
 
+export type WorktreeAutoCommitResult = {
+  committed: boolean
+}
+
 export type ThreadSearchResult = {
   threadIds: string[]
   indexedThreadCount: number
@@ -349,6 +353,19 @@ export async function createWorktree(sourceCwd: string): Promise<WorktreeCreateR
   const payload = (await response.json()) as { data?: WorktreeCreateResult; error?: string }
   if (!response.ok || !payload.data) {
     throw new Error(payload.error || 'Failed to create worktree')
+  }
+  return payload.data
+}
+
+export async function autoCommitWorktreeChanges(cwd: string, message: string): Promise<WorktreeAutoCommitResult> {
+  const response = await fetch('/codex-api/worktree/auto-commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cwd, message }),
+  })
+  const payload = (await response.json()) as { data?: WorktreeAutoCommitResult; error?: string }
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error || 'Failed to auto-commit worktree changes')
   }
   return payload.data
 }
