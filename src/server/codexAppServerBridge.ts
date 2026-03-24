@@ -600,6 +600,10 @@ class AppServerProcess {
     })
 
     proc.on('exit', () => {
+      if (this.process !== proc) {
+        return
+      }
+
       const failure = new Error(this.stopping ? 'codex app-server stopped' : 'codex app-server exited unexpectedly')
       for (const request of this.pending.values()) {
         request.reject(failure)
