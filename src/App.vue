@@ -604,10 +604,10 @@ function pickWeeklyQuotaWindow(account: UiAccountEntry) {
 
 function formatAccountQuota(account: UiAccountEntry): string {
   const quota = account.quotaSnapshot
-  const window = pickWeeklyQuotaWindow(account) ?? quota?.primary ?? quota?.secondary ?? null
+  const window = pickWeeklyQuotaWindow(account)
   if (window) {
     const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
-    return pickWeeklyQuotaWindow(account) ? `${remainingPercent}% weekly remaining` : `${remainingPercent}% remaining`
+    return `${remainingPercent}% weekly remaining`
   }
   if (quota?.credits?.unlimited) {
     return 'Unlimited credits'
