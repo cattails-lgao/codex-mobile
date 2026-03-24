@@ -11,6 +11,7 @@ import { basename, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
+import { getSpawnInvocation, resolveCodexCommand } from '../utils/commandInvocation.js'
 
 type JsonRpcCall = {
   jsonrpc: '2.0'
@@ -780,7 +781,8 @@ class AppServerProcess {
     if (this.process) return
 
     this.stopping = false
-    const proc = spawn('codex', this.appServerArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
+    const invocation = getSpawnInvocation(resolveCodexCommand() ?? 'codex', this.appServerArgs)
+    const proc = spawn(invocation.command, invocation.args, { stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = proc
 
     proc.stdout.setEncoding('utf8')
@@ -1060,7 +1062,8 @@ class MethodCatalog {
 
   private async runGenerateSchemaCommand(outDir: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      const process = spawn('codex', ['app-server', 'generate-json-schema', '--out', outDir], {
+      const invocation = getSpawnInvocation(resolveCodexCommand() ?? 'codex', ['app-server', 'generate-json-schema', '--out', outDir])
+      const process = spawn(invocation.command, invocation.args, {
         stdio: ['ignore', 'ignore', 'pipe'],
       })
 
