@@ -416,6 +416,7 @@ const mentionQuery = ref('')
 const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
 const isFileMentionOpen = ref(false)
 const fileMentionHighlightedIndex = ref(0)
+const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
@@ -497,19 +498,41 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
     mode,
     rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
-  draft.value = ''
-  selectedImages.value = []
-  selectedSkills.value = []
-  fileAttachments.value = []
-  folderUploadGroups.value = []
-  isAttachMenuOpen.value = false
-  isSlashMenuOpen.value = false
-  closeFileMention()
+  clearDraftState()
   if (isAndroid) {
     inputRef.value?.blur()
     return
   }
   nextTick(() => inputRef.value?.focus())
+}
+
+function replaceDraftState(payload: ComposerDraftPayload): void {
+  draftGeneration.value += 1
+  draft.value = payload.text
+  selectedImages.value = payload.imageUrls.map((url, index) => ({
+    id: `queued-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `Image ${index + 1}`,
+    url,
+  }))
+  selectedSkills.value = payload.skills.map((skill) => (
+    (props.skills ?? []).find((item) => item.path === skill.path)
+    ?? { name: skill.name, description: '', path: skill.path }
+  ))
+  fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
+  folderUploadGroups.value = []
+  dictationFeedback.value = ''
+  isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
+  closeFileMention()
+}
+
+function clearDraftState(): void {
+  replaceDraftState({
+    text: '',
+    imageUrls: [],
+    fileAttachments: [],
+    skills: [],
+  })
 }
 
 function onInterrupt(): void {
@@ -627,10 +650,12 @@ function isImageFile(file: File): boolean {
 
 function addFiles(files: FileList | null): void {
   if (!files || files.length === 0) return
+  const generation = draftGeneration.value
   for (const file of Array.from(files)) {
     if (isImageFile(file)) {
       const reader = new FileReader()
       reader.onload = () => {
+        if (generation !== draftGeneration.value) return
         if (typeof reader.result !== 'string') return
         selectedImages.value.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -641,6 +666,7 @@ function addFiles(files: FileList | null): void {
       reader.readAsDataURL(file)
     } else {
       void uploadFile(file).then((serverPath) => {
+        if (generation !== draftGeneration.value) return
         if (serverPath) addFileAttachment(serverPath)
       }).catch(() => {})
     }
@@ -649,6 +675,7 @@ function addFiles(files: FileList | null): void {
 
 async function addFolderFiles(files: FileList | null): Promise<void> {
   if (!files || files.length === 0) return
+  const generation = draftGeneration.value
   const rows = Array.from(files)
   const firstRelativePath = (rows[0] as File & { webkitRelativePath?: string }).webkitRelativePath || rows[0].name
   const folderName = firstRelativePath.split('/').filter(Boolean)[0] || 'Folder'
@@ -666,6 +693,7 @@ async function addFolderFiles(files: FileList | null): Promise<void> {
   ]
 
   const updateGroup = (updater: (group: FolderUploadGroup) => FolderUploadGroup): void => {
+    if (generation !== draftGeneration.value) return
     folderUploadGroups.value = folderUploadGroups.value.map((group) => (
       group.id === groupId ? updater(group) : group
     ))
@@ -674,6 +702,7 @@ async function addFolderFiles(files: FileList | null): Promise<void> {
   for (const file of rows) {
     try {
       const serverPath = await uploadFile(file)
+      if (generation !== draftGeneration.value) return
       if (serverPath) {
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
         addFileAttachment(serverPath, relativePath)
@@ -860,22 +889,7 @@ function applyFileMention(suggestion: ComposerFileSuggestion): void {
 }
 
 function hydrateDraft(payload: ComposerDraftPayload): void {
-  draft.value = payload.text
-  selectedImages.value = payload.imageUrls.map((url, index) => ({
-    id: `queued-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `Image ${index + 1}`,
-    url,
-  }))
-  selectedSkills.value = payload.skills.map((skill) => (
-    (props.skills ?? []).find((item) => item.path === skill.path)
-    ?? { name: skill.name, description: '', path: skill.path }
-  ))
-  fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
-  folderUploadGroups.value = []
-  dictationFeedback.value = ''
-  isAttachMenuOpen.value = false
-  isSlashMenuOpen.value = false
-  closeFileMention()
+  replaceDraftState(payload)
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -972,15 +986,7 @@ onBeforeUnmount(() => {
 watch(
   () => props.activeThreadId,
   () => {
-    draft.value = ''
-    selectedImages.value = []
-    selectedSkills.value = []
-    fileAttachments.value = []
-    folderUploadGroups.value = []
-    dictationFeedback.value = ''
-    isAttachMenuOpen.value = false
-    isSlashMenuOpen.value = false
-    closeFileMention()
+    clearDraftState()
   },
 )
 
