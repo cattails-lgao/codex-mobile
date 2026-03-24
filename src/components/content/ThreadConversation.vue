@@ -1220,10 +1220,8 @@ function applySavedScrollState(): void {
   }
 
   const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const targetScrollTop =
-    typeof savedState.scrollRatio === 'number'
-      ? savedState.scrollRatio * maxScrollTop
-      : savedState.scrollTop
+  // Preserve the user's absolute reading position when new content streams in below.
+  const targetScrollTop = savedState.scrollTop
   container.scrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop)
   emitScrollState(container)
 }
@@ -1319,10 +1317,13 @@ watch(
 watch(
   () => props.liveOverlay,
   async (overlay) => {
-    if (!overlay) return
-    await nextTick()
-    enforceBottomState()
-    scheduleBottomLock(8)
+    if (!overlay) {
+      liveOverlayErrorAnchorMessageId.value = ''
+      await scheduleScrollRestore()
+      return
+    }
+    captureLiveOverlayErrorAnchor()
+    await scheduleScrollRestore()
   },
   { deep: true },
 )
