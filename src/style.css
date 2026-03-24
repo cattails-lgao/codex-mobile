@@ -164,6 +164,10 @@
   @apply text-zinc-400;
 }
 
+:root.dark .thread-composer-plan-toggle {
+  @apply text-zinc-400 hover:text-zinc-200;
+}
+
 :root.dark .composer-dropdown-menu {
   @apply border-zinc-600 bg-zinc-800;
 }

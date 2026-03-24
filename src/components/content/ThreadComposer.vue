@@ -1370,11 +1370,11 @@ watch(
 }
 
 .thread-composer-plan-toggle {
-  @apply inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white pl-3 pr-2.5 text-sm text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
+  @apply inline-flex h-7 shrink-0 items-center gap-1.5 border-0 bg-transparent p-0 text-sm leading-none text-zinc-500 transition hover:text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-400;
 }
 
 .thread-composer-plan-toggle.is-active {
-  @apply border-zinc-200 bg-white text-zinc-700;
+  @apply text-zinc-700;
 }
 
 .thread-composer-plan-toggle-label {
