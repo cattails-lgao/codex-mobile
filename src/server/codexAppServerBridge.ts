@@ -322,6 +322,18 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
   return next
 }
 
+function normalizeCommitMessage(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const normalized = value
+    .replace(/\r\n?/gu, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join('\n')
+    .trim()
+  return normalized.slice(0, 2000)
+}
+
 function getCodexAuthPath(): string {
   return join(getCodexHomeDir(), 'auth.json')
 }
@@ -1437,6 +1449,54 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to create worktree') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/auto-commit') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+        const commitMessage = normalizeCommitMessage(payload?.message)
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!commitMessage) {
+          setJson(res, 400, { error: 'Missing message' })
+          return
+        }
+
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          await runCommandCapture('git', ['rev-parse', '--is-inside-work-tree'], { cwd })
+          const beforeStatus = await runCommandWithOutput('git', ['status', '--porcelain'], { cwd })
+          if (!beforeStatus.trim()) {
+            setJson(res, 200, { data: { committed: false } })
+            return
+          }
+
+          await runCommand('git', ['add', '-A'], { cwd })
+          const stagedStatus = await runCommandWithOutput('git', ['diff', '--cached', '--name-only'], { cwd })
+          if (!stagedStatus.trim()) {
+            setJson(res, 200, { data: { committed: false } })
+            return
+          }
+
+          await runCommand('git', ['commit', '-m', commitMessage], { cwd })
+          setJson(res, 200, { data: { committed: true } })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to auto-commit worktree changes') })
         }
         return
       }
