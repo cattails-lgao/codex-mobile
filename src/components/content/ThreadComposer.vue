@@ -155,6 +155,30 @@
             >
               Take photo
             </button>
+            <div class="thread-composer-attach-separator" />
+            <button
+              v-if="isFastModeSupported"
+              class="thread-composer-attach-setting"
+              type="button"
+              role="switch"
+              :aria-checked="selectedSpeedMode === 'fast'"
+              :aria-label="`Fast mode ${selectedSpeedMode === 'fast' ? 'enabled' : 'disabled'}`"
+              :disabled="isSpeedToggleDisabled"
+              @click="onToggleSpeedMode"
+            >
+              <span class="thread-composer-attach-setting-copy">
+                <span class="thread-composer-attach-setting-label">Fast mode</span>
+                <span class="thread-composer-attach-setting-description">{{ speedModeDescription }}</span>
+              </span>
+              <span
+                class="thread-composer-attach-switch"
+                :class="{
+                  'is-on': selectedSpeedMode === 'fast',
+                  'is-busy': isUpdatingSpeedMode,
+                  'is-disabled': isSpeedToggleDisabled,
+                }"
+              />
+            </button>
           </div>
         </div>
 
@@ -163,6 +187,7 @@
             class="thread-composer-control"
             :model-value="selectedModel"
             :options="modelOptions"
+            :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
             placeholder="Model"
             open-direction="up"
             :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
@@ -283,10 +308,11 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ReasoningEffort } from '../../types/codex'
+import type { ReasoningEffort, SpeedMode } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
+import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
@@ -303,9 +329,11 @@ const props = defineProps<{
   models: string[]
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
+  selectedSpeedMode: SpeedMode
   skills?: SkillItem[]
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
+  isUpdatingSpeedMode?: boolean
   disabled?: boolean
   hasQueueAbove?: boolean
   sendWithEnter?: boolean
@@ -344,6 +372,7 @@ const emit = defineEmits<{
   interrupt: []
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
+  'update:selected-speed-mode': [mode: SpeedMode]
 }>()
 
 type SelectedImage = {
@@ -432,8 +461,12 @@ const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ]
+function formatModelLabel(modelId: string): string {
+  return modelId.trim().replace(/^gpt/i, 'GPT')
+}
+
 const modelOptions = computed(() =>
-  props.models.map((modelId) => ({ value: modelId, label: modelId })),
+  props.models.map((modelId) => ({ value: modelId, label: formatModelLabel(modelId) })),
 )
 
 const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
@@ -448,6 +481,7 @@ const skillDropdownOptions = computed(() =>
 
 const canSubmit = computed(() => {
   if (props.disabled) return false
+  if (props.isUpdatingSpeedMode) return false
   if (!props.activeThreadId) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
@@ -466,6 +500,21 @@ const standaloneFileAttachments = computed(() => {
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
+const isFastModeSupported = computed(() => props.selectedModel.trim() === 'gpt-5.4')
+const showFastModeModelIcon = computed(() =>
+  props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
+)
+const isSpeedToggleDisabled = computed(() =>
+  isInteractionDisabled.value || props.isUpdatingSpeedMode === true,
+)
+const speedModeDescription = computed(() => {
+  if (props.isUpdatingSpeedMode) {
+    return 'Saving speed setting...'
+  }
+  return props.selectedSpeedMode === 'fast'
+    ? 'About 1.5x faster, with credits used at 2x'
+    : 'Default speed with normal credit usage'
+})
 const inProgressMode = computed<'steer' | 'queue'>(() =>
   props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
 )
@@ -546,6 +595,11 @@ function onModelSelect(value: string): void {
 
 function onReasoningEffortSelect(value: string): void {
   emit('update:selected-reasoning-effort', value as ReasoningEffort)
+}
+
+function onToggleSpeedMode(): void {
+  if (isSpeedToggleDisabled.value) return
+  emit('update:selected-speed-mode', props.selectedSpeedMode === 'fast' ? 'standard' : 'fast')
 }
 
 function onDictationToggle(): void {
@@ -1190,11 +1244,56 @@ watch(
 }
 
 .thread-composer-attach-menu {
-  @apply absolute bottom-11 left-0 z-20 min-w-44 max-sm:min-w-40 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute bottom-11 left-0 z-20 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .thread-composer-attach-item {
   @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-attach-separator {
+  @apply my-1 h-px bg-zinc-100;
+}
+
+.thread-composer-attach-setting {
+  @apply flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-attach-setting-copy {
+  @apply min-w-0 flex flex-col;
+}
+
+.thread-composer-attach-setting-label {
+  @apply text-sm text-zinc-800;
+}
+
+.thread-composer-attach-setting-description {
+  @apply mt-0.5 text-xs text-zinc-500;
+}
+
+.thread-composer-attach-switch {
+  @apply relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors;
+}
+
+.thread-composer-attach-switch::after {
+  content: '';
+  @apply absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform shadow-sm;
+}
+
+.thread-composer-attach-switch.is-on {
+  @apply bg-emerald-600;
+}
+
+.thread-composer-attach-switch.is-on::after {
+  transform: translateX(16px);
+}
+
+.thread-composer-attach-switch.is-busy {
+  @apply opacity-70;
+}
+
+.thread-composer-attach-switch.is-disabled {
+  @apply opacity-50;
 }
 
 .thread-composer-control {
