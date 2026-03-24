@@ -2026,7 +2026,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .conversation-root {
-  @apply h-full min-h-0 p-0 flex flex-col overflow-y-hidden overflow-x-visible bg-transparent border-none rounded-none;
+  @apply h-full min-h-0 min-w-0 p-0 flex flex-col overflow-y-hidden overflow-x-hidden bg-transparent border-none rounded-none;
 }
 
 .conversation-loading {
@@ -2038,11 +2038,11 @@ onBeforeUnmount(() => {
 }
 
 .conversation-list {
-  @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
+  @apply h-full min-h-0 min-w-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-hidden flex flex-col gap-2 sm:gap-3;
 }
 
 .conversation-item {
-  @apply m-0 w-full flex;
+  @apply m-0 w-full min-w-0 flex;
 }
 
 .conversation-item-request {
@@ -2054,7 +2054,7 @@ onBeforeUnmount(() => {
 }
 
 .message-row {
-  @apply relative w-full max-w-180 mx-auto flex;
+  @apply relative w-full min-w-0 max-w-180 mx-auto flex;
 }
 
 .message-row[data-role='user'] {
@@ -2071,7 +2071,7 @@ onBeforeUnmount(() => {
 }
 
 .message-stack {
-  @apply flex flex-col w-full;
+  @apply flex flex-col w-full min-w-0;
 }
 
 .request-card {
@@ -2087,7 +2087,8 @@ onBeforeUnmount(() => {
 }
 
 .request-reason {
-  @apply m-0 text-sm leading-5 text-amber-900 whitespace-pre-wrap;
+  @apply m-0 text-sm leading-5 text-amber-900 whitespace-pre-wrap break-words;
+  overflow-wrap: anywhere;
 }
 
 .request-actions {
@@ -2139,10 +2140,11 @@ onBeforeUnmount(() => {
 }
 
 .live-overlay-reasoning {
-  @apply m-0 text-sm leading-5 text-zinc-500 whitespace-pre-wrap;
+  @apply m-0 text-sm leading-5 text-zinc-500 whitespace-pre-wrap break-words;
   display: block;
   max-height: calc(1.25rem * 5);
   overflow: auto;
+  overflow-wrap: anywhere;
   scrollbar-width: none;
   mask-image: linear-gradient(to top, black 75%, transparent 100%);
   -webkit-mask-image: linear-gradient(to top, black 75%, transparent 100%);
@@ -2157,7 +2159,7 @@ onBeforeUnmount(() => {
 }
 
 .message-body {
-  @apply flex flex-col max-w-full;
+  @apply flex flex-col min-w-0 max-w-full;
   width: fit-content;
 }
 
@@ -2364,7 +2366,8 @@ onBeforeUnmount(() => {
 }
 
 .message-text {
-  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
+  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-800;
+  overflow-wrap: anywhere;
 }
 
 .message-heading {
@@ -2396,7 +2399,8 @@ onBeforeUnmount(() => {
 }
 
 .message-blockquote {
-  @apply m-0 border-l-4 border-slate-300 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 bg-slate-50/70 rounded-r-lg;
+  @apply m-0 border-l-4 border-slate-300 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-700 bg-slate-50/70 rounded-r-lg;
+  overflow-wrap: anywhere;
 }
 
 .message-list {
@@ -2416,7 +2420,8 @@ onBeforeUnmount(() => {
 }
 
 .message-list-item-text {
-  @apply whitespace-pre-wrap;
+  @apply whitespace-pre-wrap break-words;
+  overflow-wrap: anywhere;
 }
 
 .message-task-list {
