@@ -157,6 +157,7 @@
             </button>
             <div class="thread-composer-attach-separator" />
             <button
+              v-if="isFastModeSupported"
               class="thread-composer-attach-setting"
               type="button"
               role="switch"
@@ -504,12 +505,9 @@ const showFastModeModelIcon = computed(() =>
   props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
 )
 const isSpeedToggleDisabled = computed(() =>
-  isInteractionDisabled.value || props.isUpdatingSpeedMode === true || !isFastModeSupported.value,
+  isInteractionDisabled.value || props.isUpdatingSpeedMode === true,
 )
 const speedModeDescription = computed(() => {
-  if (!isFastModeSupported.value) {
-    return 'GPT-5.4 only'
-  }
   if (props.isUpdatingSpeedMode) {
     return 'Saving speed setting...'
   }
