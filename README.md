@@ -1,15 +1,15 @@
 # 🔥 @nervmor/codexui
 
-### 🚀 Run Codex App UI Anywhere: Linux, Windows, or Termux on Android 🚀
+### 🚀 Run `@nervmor/codexui` Anywhere: Linux, Windows, or Termux on Android 🚀
 
 [![npm](https://img.shields.io/npm/v/%40nervmor%2Fcodexui?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@nervmor/codexui)
 [![platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue?style=for-the-badge)](#-quick-start)
 [![node](https://img.shields.io/badge/Node-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
 
-> **Codex UI in your browser. No drama. One command.**
+> **`@nervmor/codexui` in your browser. No drama. One command.**
 >  
-> **Yes, that is your Codex desktop app experience exposed over web UI. Yes, it runs cross-platform.**
+> **This project exposes your Codex app-server workflow through a browser UI, and it runs cross-platform.**
 
 ```text
  ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗██╗   ██╗██╗
@@ -27,7 +27,7 @@
 
 You run one command. It starts a local web server. You open it from your machine, your LAN, or wherever your setup allows.  
 
-**TL;DR 🧠: Codex app UI, unlocked for Linux, Windows, and Termux-powered Android setups.**
+**TL;DR 🧠: `@nervmor/codexui` gives you the Codex browser UI flow on Linux, Windows, and Termux-powered Android setups.**
 
 ---
 
@@ -37,6 +37,9 @@ You run one command. It starts a local web server. You open it from your machine
 ```bash
 # 🔓 Run instantly (recommended)
 npx @nervmor/codexui
+
+# 📦 Or install globally
+npm install -g @nervmor/codexui
 
 # 🌐 Then open in browser
 # http://localhost:18923
@@ -118,7 +121,7 @@ termux-wake-lock
 
 | 🔥 Use Case | 💥 What You Get |
 |---|---|
-| 💻 Linux workstation | Run Codex UI in browser without depending on desktop shell |
+| 💻 Linux workstation | Run `@nervmor/codexui` in browser without depending on desktop shell |
 | 🪟 Windows machine | Launch web UI and access from Chrome/Edge quickly |
 | 📱 Termux on Android | Start service in Termux and control from mobile browser |
 | 🧪 Remote dev box | Keep Codex process on server, view UI from client device |
@@ -188,7 +191,7 @@ Bring bug reports, platform notes, and setup improvements.
 ---
 
 ## ⭐ Star This Repo
-If you believe Codex UI should be accessible from **any machine, any OS, any screen**, star this project and share it. ⭐
+If you believe **`@nervmor/codexui`** should be accessible from **any machine, any OS, any screen**, star this project and share it. ⭐
 
 <div align="center">
 Built for speed, portability, and a little bit of chaos 😏
