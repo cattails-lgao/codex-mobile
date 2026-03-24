@@ -17,6 +17,24 @@ const program = new Command().name('codexui').description('Web interface for Cod
 const __dirname = dirname(fileURLToPath(import.meta.url))
 let hasPromptedCloudflaredInstall = false
 
+function getCodexHomePath(): string {
+  return process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+}
+
+function getCloudflaredPromptMarkerPath(): string {
+  return join(getCodexHomePath(), '.cloudflared-install-prompted')
+}
+
+function hasPromptedCloudflaredInstallPersisted(): boolean {
+  return existsSync(getCloudflaredPromptMarkerPath())
+}
+
+async function persistCloudflaredInstallPrompted(): Promise<void> {
+  const codexHome = getCodexHomePath()
+  mkdirSync(codexHome, { recursive: true })
+  await writeFile(getCloudflaredPromptMarkerPath(), `${Date.now()}\n`, 'utf8')
+}
+
 async function readCliVersion(): Promise<string> {
   try {
     const packageJsonPath = join(__dirname, '..', 'package.json')
@@ -157,10 +175,11 @@ async function ensureCloudflaredInstalledLinux(): Promise<string | null> {
 }
 
 async function shouldInstallCloudflaredInteractively(): Promise<boolean> {
-  if (hasPromptedCloudflaredInstall) {
+  if (hasPromptedCloudflaredInstall || hasPromptedCloudflaredInstallPersisted()) {
     return false
   }
   hasPromptedCloudflaredInstall = true
+  await persistCloudflaredInstallPrompted()
 
   if (process.platform === 'win32') {
     return false
@@ -200,7 +219,7 @@ async function resolveCloudflaredForTunnel(): Promise<string | null> {
 }
 
 function hasCodexAuth(): boolean {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  const codexHome = getCodexHomePath()
   return existsSync(join(codexHome, 'auth.json'))
 }
 
@@ -381,7 +400,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 }
 
 function getCodexGlobalStatePath(): string {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  const codexHome = getCodexHomePath()
   return join(codexHome, '.codex-global-state.json')
 }
 
