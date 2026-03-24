@@ -15,6 +15,7 @@ import { generatePassword } from '../server/password.js'
 
 const program = new Command().name('codexui').description('Web interface for Codex app-server')
 const __dirname = dirname(fileURLToPath(import.meta.url))
+let hasPromptedCloudflaredInstall = false
 
 async function readCliVersion(): Promise<string> {
   try {
@@ -156,6 +157,15 @@ async function ensureCloudflaredInstalledLinux(): Promise<string | null> {
 }
 
 async function shouldInstallCloudflaredInteractively(): Promise<boolean> {
+  if (hasPromptedCloudflaredInstall) {
+    return false
+  }
+  hasPromptedCloudflaredInstall = true
+
+  if (process.platform === 'win32') {
+    return false
+  }
+
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.warn('\n[cloudflared] cloudflared is missing and terminal is non-interactive, skipping install.')
     return false
@@ -175,6 +185,10 @@ async function resolveCloudflaredForTunnel(): Promise<string | null> {
   const current = resolveCloudflaredCommand()
   if (current) {
     return current
+  }
+
+  if (process.platform === 'win32') {
+    return null
   }
 
   const installApproved = await shouldInstallCloudflaredInteractively()
