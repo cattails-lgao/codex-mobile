@@ -89,11 +89,15 @@
                     :key="account.accountId"
                     class="sidebar-settings-account-item"
                     :class="{ 'is-active': account.isActive }"
+                    :title="`${account.email || 'Account'}\nWorkspace ${account.accountId}`"
                   >
                     <div class="sidebar-settings-account-main">
                       <p class="sidebar-settings-account-email">{{ account.email || 'Account' }}</p>
                       <p class="sidebar-settings-account-meta">
                         {{ formatAccountMeta(account) }}
+                      </p>
+                      <p class="sidebar-settings-account-id">
+                        Workspace {{ shortAccountId(account.accountId) }}
                       </p>
                     </div>
                     <button
@@ -544,7 +548,7 @@ function shortAccountId(accountId: string): string {
 }
 
 function formatAccountMeta(account: UiAccountEntry): string {
-  const segments = [account.planType || 'unknown', shortAccountId(account.accountId)]
+  const segments = [account.planType || 'unknown']
   if (account.authMode) {
     segments.unshift(account.authMode)
   }
@@ -1507,6 +1511,14 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-account-meta {
   @apply truncate text-[11px] text-zinc-500;
+}
+
+.sidebar-settings-account-id {
+  @apply mt-1 inline-flex max-w-full rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[11px] text-zinc-700;
+}
+
+.sidebar-settings-account-item.is-active .sidebar-settings-account-id {
+  @apply bg-emerald-100 text-emerald-800;
 }
 
 .sidebar-settings-account-switch {

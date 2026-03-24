@@ -219,6 +219,11 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Settings Account Labels (2026-03-24)
+
+- No equivalent multi-account switcher UI was found in the installed Codex.app bundle for Settings/account list behavior, so parity work should follow the existing local Settings visual language instead of inventing a separate header menu.
+- When showing multiple saved accounts that share the same email, account/workspace identity needs its own dedicated label line; folding the workspace identifier into secondary metadata and truncating it makes entries indistinguishable in narrow sidebars.
+
 ## Findings: Mobile Install Icons (2026-03-23)
 
 - In this web workspace, mobile home-screen installation depends on both `link[rel="apple-touch-icon"]` in `index.html` and the PNG entries in `public/manifest.webmanifest`; updating only the manifest is not enough for iPhone-style add-to-home-screen flows.
