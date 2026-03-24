@@ -1,7 +1,8 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 type AppServerLike = {
@@ -14,6 +15,29 @@ type AccountRouteContext = {
   appServer: AppServerLike
 }
 
+type StoredRateLimitWindow = {
+  usedPercent: number
+  windowMinutes: number | null
+  resetsAt: number | null
+}
+
+type StoredCreditsSnapshot = {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+type StoredRateLimitSnapshot = {
+  limitId: string | null
+  limitName: string | null
+  primary: StoredRateLimitWindow | null
+  secondary: StoredRateLimitWindow | null
+  credits: StoredCreditsSnapshot | null
+  planType: string | null
+}
+
+type AccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
+
 type StoredAccountEntry = {
   accountId: string
   storageId: string
@@ -22,6 +46,10 @@ type StoredAccountEntry = {
   planType: string | null
   lastRefreshedAtIso: string
   lastActivatedAtIso: string | null
+  quotaSnapshot: StoredRateLimitSnapshot | null
+  quotaUpdatedAtIso: string | null
+  quotaStatus: AccountQuotaStatus
+  quotaError: string | null
 }
 
 type StoredAccountsState = {
@@ -42,10 +70,39 @@ type TokenMetadata = {
   planType: string | null
 }
 
+type AccountInspection = {
+  metadata: TokenMetadata
+  quotaSnapshot: StoredRateLimitSnapshot | null
+}
+
+const APP_SERVER_ARGS = [
+  'app-server',
+  '-c',
+  'approval_policy="never"',
+  '-c',
+  'sandbox_mode="danger-full-access"',
+] as const
+
+const ACCOUNT_QUOTA_REFRESH_TTL_MS = 5 * 60 * 1000
+
+let backgroundRefreshPromise: Promise<void> | null = null
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function readBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
 }
 
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -62,6 +119,9 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   const error = record?.error
   if (typeof error === 'string' && error.trim().length > 0) {
     return error.trim()
+  }
+  if (typeof record?.message === 'string' && record.message.trim().length > 0) {
+    return record.message.trim()
   }
   return fallback
 }
@@ -87,24 +147,88 @@ function toStorageId(accountId: string): string {
   return createHash('sha256').update(accountId).digest('hex')
 }
 
+function normalizeRateLimitWindow(value: unknown): StoredRateLimitWindow | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const usedPercent = readNumber(record.usedPercent ?? record.used_percent)
+  if (usedPercent === null) return null
+
+  return {
+    usedPercent,
+    windowMinutes: readNumber(record.windowDurationMins ?? record.window_minutes),
+    resetsAt: readNumber(record.resetsAt ?? record.resets_at),
+  }
+}
+
+function normalizeCreditsSnapshot(value: unknown): StoredCreditsSnapshot | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const hasCredits = readBoolean(record.hasCredits ?? record.has_credits)
+  const unlimited = readBoolean(record.unlimited)
+  if (hasCredits === null || unlimited === null) return null
+
+  return {
+    hasCredits,
+    unlimited,
+    balance: readString(record.balance),
+  }
+}
+
+function normalizeRateLimitSnapshot(value: unknown): StoredRateLimitSnapshot | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const primary = normalizeRateLimitWindow(record.primary)
+  const secondary = normalizeRateLimitWindow(record.secondary)
+  const credits = normalizeCreditsSnapshot(record.credits)
+
+  if (!primary && !secondary && !credits) return null
+
+  return {
+    limitId: readString(record.limitId ?? record.limit_id),
+    limitName: readString(record.limitName ?? record.limit_name),
+    primary,
+    secondary,
+    credits,
+    planType: readString(record.planType ?? record.plan_type),
+  }
+}
+
+function pickCodexRateLimitSnapshot(payload: unknown): StoredRateLimitSnapshot | null {
+  const record = asRecord(payload)
+  if (!record) return null
+
+  const rateLimitsByLimitId = asRecord(record.rateLimitsByLimitId ?? record.rate_limits_by_limit_id)
+  const codexBucket = normalizeRateLimitSnapshot(rateLimitsByLimitId?.codex)
+  if (codexBucket) return codexBucket
+
+  return normalizeRateLimitSnapshot(record.rateLimits ?? record.rate_limits)
+}
+
 function normalizeStoredAccountEntry(value: unknown): StoredAccountEntry | null {
   const record = asRecord(value)
-  const accountId = typeof record?.accountId === 'string' ? record.accountId.trim() : ''
-  const storageId = typeof record?.storageId === 'string' ? record.storageId.trim() : ''
-  const lastRefreshedAtIso = typeof record?.lastRefreshedAtIso === 'string' ? record.lastRefreshedAtIso.trim() : ''
-  const lastActivatedAtIso =
-    typeof record?.lastActivatedAtIso === 'string' && record.lastActivatedAtIso.trim().length > 0
-      ? record.lastActivatedAtIso.trim()
-      : null
+  const accountId = readString(record?.accountId)
+  const storageId = readString(record?.storageId)
+  const lastRefreshedAtIso = readString(record?.lastRefreshedAtIso)
+  const quotaStatusRaw = readString(record?.quotaStatus)
+  const quotaStatus: AccountQuotaStatus =
+    quotaStatusRaw === 'loading' || quotaStatusRaw === 'ready' || quotaStatusRaw === 'error' ? quotaStatusRaw : 'idle'
   if (!accountId || !storageId || !lastRefreshedAtIso) return null
+
   return {
     accountId,
     storageId,
-    authMode: typeof record?.authMode === 'string' && record.authMode.trim().length > 0 ? record.authMode.trim() : null,
-    email: typeof record?.email === 'string' && record.email.trim().length > 0 ? record.email.trim() : null,
-    planType: typeof record?.planType === 'string' && record.planType.trim().length > 0 ? record.planType.trim() : null,
+    authMode: readString(record?.authMode),
+    email: readString(record?.email),
+    planType: readString(record?.planType),
     lastRefreshedAtIso,
-    lastActivatedAtIso,
+    lastActivatedAtIso: readString(record?.lastActivatedAtIso),
+    quotaSnapshot: normalizeRateLimitSnapshot(record?.quotaSnapshot),
+    quotaUpdatedAtIso: readString(record?.quotaUpdatedAtIso),
+    quotaStatus,
+    quotaError: readString(record?.quotaError),
   }
 }
 
@@ -112,10 +236,7 @@ async function readStoredAccountsState(): Promise<StoredAccountsState> {
   try {
     const raw = await readFile(getAccountsStatePath(), 'utf8')
     const parsed = asRecord(JSON.parse(raw))
-    const activeAccountId =
-      typeof parsed?.activeAccountId === 'string' && parsed.activeAccountId.trim().length > 0
-        ? parsed.activeAccountId.trim()
-        : null
+    const activeAccountId = readString(parsed?.activeAccountId)
     const rawAccounts = Array.isArray(parsed?.accounts) ? parsed.accounts : []
     const accounts = rawAccounts
       .map((entry) => normalizeStoredAccountEntry(entry))
@@ -221,10 +342,13 @@ async function readRuntimeAccountMetadata(appServer: AppServerLike): Promise<Tok
   }
 }
 
-async function validateSwitchedAccount(appServer: AppServerLike): Promise<TokenMetadata> {
+async function validateSwitchedAccount(appServer: AppServerLike): Promise<AccountInspection> {
   const metadata = await readRuntimeAccountMetadata(appServer)
-  await appServer.rpc('account/rateLimits/read', null)
-  return metadata
+  const quotaPayload = await appServer.rpc('account/rateLimits/read', null)
+  return {
+    metadata,
+    quotaSnapshot: pickCodexRateLimitSnapshot(quotaPayload),
+  }
 }
 
 async function restoreActiveAuth(raw: string | null): Promise<void> {
@@ -243,6 +367,260 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function withTemporaryCodexAppServer<T>(
+  authRaw: string,
+  run: (rpc: (method: string, params: unknown) => Promise<unknown>) => Promise<T>,
+): Promise<T> {
+  const tempCodexHome = await mkdtemp(join(tmpdir(), 'codexui-account-'))
+  const authPath = join(tempCodexHome, 'auth.json')
+  await writeFile(authPath, authRaw, { encoding: 'utf8', mode: 0o600 })
+
+  const proc = spawn('codex', [...APP_SERVER_ARGS], {
+    env: { ...process.env, CODEX_HOME: tempCodexHome },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  let disposed = false
+  let initialized = false
+  let initializePromise: Promise<void> | null = null
+  let readBuffer = ''
+  let nextId = 1
+  const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>()
+
+  const rejectAllPending = (error: Error) => {
+    for (const request of pending.values()) {
+      request.reject(error)
+    }
+    pending.clear()
+  }
+
+  proc.stdout.setEncoding('utf8')
+  proc.stdout.on('data', (chunk: string) => {
+    readBuffer += chunk
+    let lineEnd = readBuffer.indexOf('\n')
+    while (lineEnd !== -1) {
+      const line = readBuffer.slice(0, lineEnd).trim()
+      readBuffer = readBuffer.slice(lineEnd + 1)
+      if (line.length > 0) {
+        try {
+          const message = JSON.parse(line) as { id?: number; result?: unknown; error?: { message?: string } }
+          if (typeof message.id === 'number' && pending.has(message.id)) {
+            const current = pending.get(message.id)
+            pending.delete(message.id)
+            if (!current) {
+              lineEnd = readBuffer.indexOf('\n')
+              continue
+            }
+            if (message.error?.message) {
+              current.reject(new Error(message.error.message))
+            } else {
+              current.resolve(message.result)
+            }
+          }
+        } catch {
+          // Ignore malformed lines and unrelated notifications.
+        }
+      }
+      lineEnd = readBuffer.indexOf('\n')
+    }
+  })
+
+  proc.stderr.setEncoding('utf8')
+  proc.stderr.on('data', () => {
+    // JSON-RPC errors are surfaced through stdout responses.
+  })
+
+  proc.on('error', (error) => {
+    rejectAllPending(error instanceof Error ? error : new Error('codex app-server failed to start'))
+  })
+
+  proc.on('exit', () => {
+    if (disposed) return
+    rejectAllPending(new Error('codex app-server exited unexpectedly'))
+  })
+
+  const sendLine = (payload: Record<string, unknown>) => {
+    proc.stdin.write(`${JSON.stringify(payload)}\n`)
+  }
+
+  const call = async (method: string, params: unknown): Promise<unknown> => {
+    const id = nextId++
+    return await new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject })
+      sendLine({
+        jsonrpc: '2.0',
+        id,
+        method,
+        params,
+      })
+    })
+  }
+
+  const ensureInitialized = async (): Promise<void> => {
+    if (initialized) return
+    if (initializePromise) {
+      await initializePromise
+      return
+    }
+
+    initializePromise = call('initialize', {
+      clientInfo: {
+        name: 'codexui-account-refresh',
+        version: '0.1.0',
+      },
+      capabilities: {
+        experimentalApi: true,
+      },
+    }).then(() => {
+      sendLine({
+        jsonrpc: '2.0',
+        method: 'initialized',
+      })
+      initialized = true
+    }).finally(() => {
+      initializePromise = null
+    })
+
+    await initializePromise
+  }
+
+  const dispose = async () => {
+    if (disposed) return
+    disposed = true
+    rejectAllPending(new Error('codex app-server stopped'))
+    try {
+      proc.stdin.end()
+    } catch {
+      // ignore
+    }
+    try {
+      proc.kill('SIGTERM')
+    } catch {
+      // ignore
+    }
+    await rm(tempCodexHome, { recursive: true, force: true })
+  }
+
+  try {
+    await ensureInitialized()
+    return await run(call)
+  } finally {
+    await dispose()
+  }
+}
+
+async function inspectStoredAccount(entry: StoredAccountEntry): Promise<AccountInspection> {
+  const snapshotPath = getSnapshotPath(entry.storageId)
+  const authRaw = await readFile(snapshotPath, 'utf8')
+  return await withTemporaryCodexAppServer(authRaw, async (rpc) => {
+    const accountPayload = asRecord(await rpc('account/read', { refreshToken: false }))
+    const account = asRecord(accountPayload?.account)
+    const quotaPayload = await rpc('account/rateLimits/read', null)
+    return {
+      metadata: {
+        email: typeof account?.email === 'string' && account.email.trim().length > 0 ? account.email.trim() : entry.email,
+        planType: typeof account?.planType === 'string' && account.planType.trim().length > 0 ? account.planType.trim() : entry.planType,
+      },
+      quotaSnapshot: pickCodexRateLimitSnapshot(quotaPayload),
+    }
+  })
+}
+
+function shouldRefreshAccountQuota(entry: StoredAccountEntry): boolean {
+  if (entry.quotaStatus === 'loading') return false
+  if (!entry.quotaUpdatedAtIso) return true
+  const updatedAtMs = Date.parse(entry.quotaUpdatedAtIso)
+  if (!Number.isFinite(updatedAtMs)) return true
+  return Date.now() - updatedAtMs >= ACCOUNT_QUOTA_REFRESH_TTL_MS
+}
+
+async function replaceStoredAccount(nextEntry: StoredAccountEntry, activeAccountId: string | null): Promise<void> {
+  const state = await readStoredAccountsState()
+  const nextState = withUpsertedAccount({
+    activeAccountId,
+    accounts: state.accounts,
+  }, nextEntry)
+  await writeStoredAccountsState({
+    activeAccountId,
+    accounts: nextState.accounts,
+  })
+}
+
+async function refreshAccountsInBackground(accountIds: string[], activeAccountId: string | null): Promise<void> {
+  for (const accountId of accountIds) {
+    const state = await readStoredAccountsState()
+    const entry = state.accounts.find((item) => item.accountId === accountId)
+    if (!entry) continue
+
+    try {
+      const inspected = await inspectStoredAccount(entry)
+      await replaceStoredAccount({
+        ...entry,
+        email: inspected.metadata.email ?? entry.email,
+        planType: inspected.metadata.planType ?? entry.planType,
+        quotaSnapshot: inspected.quotaSnapshot ?? entry.quotaSnapshot,
+        quotaUpdatedAtIso: new Date().toISOString(),
+        quotaStatus: 'ready',
+        quotaError: null,
+      }, activeAccountId)
+    } catch (error) {
+      await replaceStoredAccount({
+        ...entry,
+        quotaUpdatedAtIso: new Date().toISOString(),
+        quotaStatus: 'error',
+        quotaError: getErrorMessage(error, 'Failed to refresh account quota'),
+      }, activeAccountId)
+    }
+  }
+}
+
+async function scheduleAccountsBackgroundRefresh(
+  options: { force?: boolean; prioritizeAccountId?: string; accountIds?: string[] } = {},
+): Promise<StoredAccountsState> {
+  const state = await readStoredAccountsState()
+  if (state.accounts.length === 0) return state
+  if (backgroundRefreshPromise) return state
+
+  const allowedIds = options.accountIds ? new Set(options.accountIds) : null
+  const candidates = state.accounts
+    .filter((entry) => !allowedIds || allowedIds.has(entry.accountId))
+    .filter((entry) => options.force === true || shouldRefreshAccountQuota(entry))
+    .sort((left, right) => {
+      const prioritize = options.prioritizeAccountId ?? ''
+      const leftPriority = left.accountId === prioritize ? 1 : 0
+      const rightPriority = right.accountId === prioritize ? 1 : 0
+      if (leftPriority !== rightPriority) return rightPriority - leftPriority
+      return 0
+    })
+
+  if (candidates.length === 0) return state
+
+  const candidateIds = new Set(candidates.map((entry) => entry.accountId))
+  const markedState: StoredAccountsState = {
+    activeAccountId: state.activeAccountId,
+    accounts: state.accounts.map((entry) => (
+      candidateIds.has(entry.accountId)
+        ? {
+          ...entry,
+          quotaStatus: 'loading',
+          quotaError: null,
+        }
+        : entry
+    )),
+  }
+
+  await writeStoredAccountsState(markedState)
+
+  backgroundRefreshPromise = refreshAccountsInBackground(
+    candidates.map((entry) => entry.accountId),
+    markedState.activeAccountId,
+  ).finally(() => {
+    backgroundRefreshPromise = null
+  })
+
+  return markedState
 }
 
 async function importAccountFromAuthPath(path: string): Promise<{
@@ -264,6 +642,10 @@ async function importAccountFromAuthPath(path: string): Promise<{
     planType: imported.metadata.planType ?? existing?.planType ?? null,
     lastRefreshedAtIso: new Date().toISOString(),
     lastActivatedAtIso: existing?.lastActivatedAtIso ?? null,
+    quotaSnapshot: existing?.quotaSnapshot ?? null,
+    quotaUpdatedAtIso: existing?.quotaUpdatedAtIso ?? null,
+    quotaStatus: existing?.quotaStatus ?? 'idle',
+    quotaError: existing?.quotaError ?? null,
   }
   const nextState = withUpsertedAccount(state, nextEntry)
   await writeStoredAccountsState(nextState)
@@ -284,7 +666,7 @@ export async function handleAccountRoutes(
   const { appServer } = context
 
   if (req.method === 'GET' && url.pathname === '/codex-api/accounts') {
-    const state = await readStoredAccountsState()
+    const state = await scheduleAccountsBackgroundRefresh()
     setJson(res, 200, {
       data: {
         activeAccountId: state.activeAccountId,
@@ -311,7 +693,7 @@ export async function handleAccountRoutes(
 
       try {
         appServer.dispose()
-        const runtimeMetadata = await validateSwitchedAccount(appServer)
+        const inspection = await validateSwitchedAccount(appServer)
         const state = await readStoredAccountsState()
         const importedAccountId = imported.importedAccountId
         const target = state.accounts.find((entry) => entry.accountId === importedAccountId) ?? null
@@ -321,9 +703,13 @@ export async function handleAccountRoutes(
 
         const nextEntry: StoredAccountEntry = {
           ...target,
-          email: runtimeMetadata.email ?? target.email,
-          planType: runtimeMetadata.planType ?? target.planType,
+          email: inspection.metadata.email ?? target.email,
+          planType: inspection.metadata.planType ?? target.planType,
           lastActivatedAtIso: new Date().toISOString(),
+          quotaSnapshot: inspection.quotaSnapshot ?? target.quotaSnapshot,
+          quotaUpdatedAtIso: new Date().toISOString(),
+          quotaStatus: 'ready',
+          quotaError: null,
         }
         const nextState = withUpsertedAccount({
           activeAccountId: importedAccountId,
@@ -334,11 +720,17 @@ export async function handleAccountRoutes(
           accounts: nextState.accounts,
         })
 
+        const backgroundState = await scheduleAccountsBackgroundRefresh({
+          force: true,
+          prioritizeAccountId: importedAccountId,
+          accountIds: nextState.accounts.filter((entry) => entry.accountId !== importedAccountId).map((entry) => entry.accountId),
+        })
+
         setJson(res, 200, {
           data: {
             activeAccountId: importedAccountId,
             importedAccountId,
-            accounts: sortAccounts(nextState.accounts, importedAccountId).map((entry) => toPublicAccountEntry(entry, importedAccountId)),
+            accounts: sortAccounts(backgroundState.accounts, importedAccountId).map((entry) => toPublicAccountEntry(entry, importedAccountId)),
           },
         })
       } catch (error) {
@@ -407,12 +799,16 @@ export async function handleAccountRoutes(
 
       try {
         appServer.dispose()
-        const runtimeMetadata = await validateSwitchedAccount(appServer)
+        const inspection = await validateSwitchedAccount(appServer)
         const nextEntry: StoredAccountEntry = {
           ...target,
-          email: runtimeMetadata.email ?? target.email,
-          planType: runtimeMetadata.planType ?? target.planType,
+          email: inspection.metadata.email ?? target.email,
+          planType: inspection.metadata.planType ?? target.planType,
           lastActivatedAtIso: new Date().toISOString(),
+          quotaSnapshot: inspection.quotaSnapshot ?? target.quotaSnapshot,
+          quotaUpdatedAtIso: new Date().toISOString(),
+          quotaStatus: 'ready',
+          quotaError: null,
         }
         const nextState = withUpsertedAccount({
           activeAccountId: accountId,
@@ -421,6 +817,11 @@ export async function handleAccountRoutes(
         await writeStoredAccountsState({
           activeAccountId: accountId,
           accounts: nextState.accounts,
+        })
+        void scheduleAccountsBackgroundRefresh({
+          force: true,
+          prioritizeAccountId: accountId,
+          accountIds: nextState.accounts.filter((entry) => entry.accountId !== accountId).map((entry) => entry.accountId),
         })
         setJson(res, 200, {
           ok: true,

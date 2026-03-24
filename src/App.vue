@@ -95,12 +95,15 @@
                     :key="account.accountId"
                     class="sidebar-settings-account-item"
                     :class="{ 'is-active': account.isActive }"
-                    :title="`${account.email || 'Account'}\nWorkspace ${account.accountId}`"
+                    :title="buildAccountTitle(account)"
                   >
                     <div class="sidebar-settings-account-main">
                       <p class="sidebar-settings-account-email">{{ account.email || 'Account' }}</p>
                       <p class="sidebar-settings-account-meta">
                         {{ formatAccountMeta(account) }}
+                      </p>
+                      <p class="sidebar-settings-account-quota">
+                        {{ formatAccountQuota(account) }}
                       </p>
                       <p class="sidebar-settings-account-id">
                         Workspace {{ shortAccountId(account.accountId) }}
@@ -376,6 +379,8 @@ const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, f
 const mobileHiddenAtMs = ref<number | null>(null)
 const mobileResumeReloadTriggered = ref(false)
 const mobileResumeSyncInProgress = ref(false)
+let accountStatePollTimer: number | null = null
+let isAccountStatePollInFlight = false
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -476,6 +481,10 @@ onUnmounted(() => {
   window.removeEventListener('pageshow', onWindowPageShow)
   window.removeEventListener('focus', onWindowFocus)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
+  if (accountStatePollTimer !== null) {
+    window.clearInterval(accountStatePollTimer)
+    accountStatePollTimer = null
+  }
   if (threadSearchTimer) {
     clearTimeout(threadSearchTimer)
     threadSearchTimer = null
@@ -506,6 +515,26 @@ watch(sidebarSearchQuery, (value) => {
       })
   }, 220)
 })
+
+watch(accounts, () => {
+  if (typeof window === 'undefined') return
+  const shouldPoll = accounts.value.some((account) => account.quotaStatus === 'loading')
+  if (!shouldPoll) {
+    if (accountStatePollTimer !== null) {
+      window.clearInterval(accountStatePollTimer)
+      accountStatePollTimer = null
+    }
+    return
+  }
+  if (accountStatePollTimer !== null) return
+  accountStatePollTimer = window.setInterval(() => {
+    if (isAccountStatePollInFlight) return
+    isAccountStatePollInFlight = true
+    void loadAccountsState({ silent: true }).finally(() => {
+      isAccountStatePollInFlight = false
+    })
+  }, 1500)
+}, { deep: true })
 
 function onSkillsChanged(): void {
   void refreshSkills()
@@ -561,11 +590,43 @@ function formatAccountMeta(account: UiAccountEntry): string {
   return segments.join(' · ')
 }
 
-async function loadAccountsState(): Promise<void> {
+function formatAccountQuota(account: UiAccountEntry): string {
+  const quota = account.quotaSnapshot
+  if (quota?.credits?.unlimited) {
+    return 'Unlimited credits'
+  }
+  if (quota?.credits?.hasCredits && quota.credits.balance) {
+    return `${quota.credits.balance} credits`
+  }
+  const window = quota?.primary ?? quota?.secondary ?? null
+  if (window) {
+    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+    return `${remainingPercent}% remaining`
+  }
+  if (account.quotaStatus === 'loading') {
+    return 'Loading quota…'
+  }
+  if (account.quotaStatus === 'error') {
+    return account.quotaError || 'Quota unavailable'
+  }
+  return 'Fetching account details…'
+}
+
+function buildAccountTitle(account: UiAccountEntry): string {
+  return [
+    account.email || 'Account',
+    formatAccountMeta(account),
+    formatAccountQuota(account),
+    `Workspace ${account.accountId}`,
+  ].filter(Boolean).join('\n')
+}
+
+async function loadAccountsState(options: { silent?: boolean } = {}): Promise<void> {
   try {
     const result = await getAccounts()
     accounts.value = result.accounts
   } catch (error) {
+    if (options.silent === true) return
     accountActionError.value = error instanceof Error ? error.message : 'Failed to load accounts'
   }
 }
@@ -579,9 +640,8 @@ async function onRefreshAccounts(): Promise<void> {
     accounts.value = result.accounts
     stopPolling()
     startPolling()
-    await refreshAll({
+    void refreshAll({
       includeSelectedThreadMessages: true,
-      awaitAncillaryRefreshes: true,
     })
   } catch (error) {
     accountActionError.value = error instanceof Error ? error.message : 'Failed to refresh accounts'
@@ -599,14 +659,18 @@ async function onSwitchAccount(accountId: string): Promise<void> {
   accountActionError.value = ''
   isSwitchingAccounts.value = true
   try {
-    await switchAccount(accountId)
+    const nextActiveAccount = await switchAccount(accountId)
+    accounts.value = accounts.value.map((account) => (
+      account.accountId === accountId
+        ? nextActiveAccount
+        : { ...account, isActive: false }
+    ))
     stopPolling()
     startPolling()
-    await refreshAll({
+    void refreshAll({
       includeSelectedThreadMessages: true,
-      awaitAncillaryRefreshes: true,
     })
-    await loadAccountsState()
+    void loadAccountsState({ silent: true })
   } catch (error) {
     accountActionError.value = error instanceof Error ? error.message : 'Failed to switch account'
   } finally {
@@ -1060,7 +1124,7 @@ async function initialize(): Promise<void> {
   await refreshAll({
     includeSelectedThreadMessages: true,
   })
-  await loadAccountsState()
+  void loadAccountsState({ silent: true })
   await restoreLastActiveThreadRoute()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
@@ -1531,6 +1595,10 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-account-meta {
   @apply truncate text-[11px] text-zinc-500;
+}
+
+.sidebar-settings-account-quota {
+  @apply truncate text-[11px] text-zinc-600;
 }
 
 .sidebar-settings-account-id {

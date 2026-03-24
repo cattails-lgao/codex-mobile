@@ -161,6 +161,8 @@ export type UiRateLimitSnapshot = {
   planType: string | null
 }
 
+export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
+
 export type UiAccountEntry = {
   accountId: string
   authMode: string | null
@@ -168,6 +170,10 @@ export type UiAccountEntry = {
   planType: string | null
   lastRefreshedAtIso: string
   lastActivatedAtIso: string | null
+  quotaSnapshot: UiRateLimitSnapshot | null
+  quotaUpdatedAtIso: string | null
+  quotaStatus: UiAccountQuotaStatus
+  quotaError: string | null
   isActive: boolean
 }
 

@@ -23,6 +23,7 @@ import {
 } from './normalizers/v2'
 import type {
   UiAccountEntry,
+  UiAccountQuotaStatus,
   CollaborationModeKind,
   CollaborationModeOption,
   UiCreditsSnapshot,
@@ -149,6 +150,9 @@ function normalizeAccountEntry(value: unknown, activeAccountId: string | null = 
   const record = asRecord(value)
   if (!record) return null
   const accountId = readString(record.accountId)
+  const quotaStatusRaw = readString(record.quotaStatus)
+  const quotaStatus: UiAccountQuotaStatus =
+    quotaStatusRaw === 'loading' || quotaStatusRaw === 'ready' || quotaStatusRaw === 'error' ? quotaStatusRaw : 'idle'
   if (!accountId) return null
   return {
     accountId,
@@ -157,6 +161,10 @@ function normalizeAccountEntry(value: unknown, activeAccountId: string | null = 
     planType: readString(record.planType),
     lastRefreshedAtIso: readString(record.lastRefreshedAtIso) ?? '',
     lastActivatedAtIso: readString(record.lastActivatedAtIso),
+    quotaSnapshot: normalizeRateLimitSnapshot(record.quotaSnapshot),
+    quotaUpdatedAtIso: readString(record.quotaUpdatedAtIso),
+    quotaStatus,
+    quotaError: readString(record.quotaError),
     isActive: readBoolean(record.isActive) ?? accountId === activeAccountId,
   }
 }
