@@ -1,6 +1,6 @@
 {
   "name": "@nervmor/codexui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A lightweight web interface for Codex that runs on top of the Codex app-server, allowing remote access from any browser",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,6 @@
     "node": ">=18"
   },
   "bin": {
-    "codexapp": "dist-cli/index.js",
     "codexui": "dist-cli/index.js"
   },
   "files": [
