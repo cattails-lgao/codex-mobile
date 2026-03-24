@@ -286,7 +286,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, ThreadScrollState, UiAccountEntry } from './types/codex'
+import type { ReasoningEffort, ThreadScrollState, UiAccountEntry, UiRateLimitWindow } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY = 'codex-web-local.last-active-thread-route.v1'
@@ -590,18 +590,30 @@ function formatAccountMeta(account: UiAccountEntry): string {
   return segments.join(' · ')
 }
 
+function pickWeeklyQuotaWindow(account: UiAccountEntry) {
+  const quota = account.quotaSnapshot
+  const windows = [quota?.primary, quota?.secondary].filter((quotaWindow): quotaWindow is UiRateLimitWindow => quotaWindow !== null)
+  const exactWeekly = windows.find((quotaWindow) => quotaWindow.windowMinutes === 7 * 24 * 60)
+  if (exactWeekly) {
+    return exactWeekly
+  }
+  return windows
+    .filter((quotaWindow) => typeof quotaWindow.windowMinutes === 'number' && quotaWindow.windowMinutes >= 7 * 24 * 60)
+    .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))[0] ?? null
+}
+
 function formatAccountQuota(account: UiAccountEntry): string {
   const quota = account.quotaSnapshot
+  const window = pickWeeklyQuotaWindow(account) ?? quota?.primary ?? quota?.secondary ?? null
+  if (window) {
+    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+    return pickWeeklyQuotaWindow(account) ? `${remainingPercent}% weekly remaining` : `${remainingPercent}% remaining`
+  }
   if (quota?.credits?.unlimited) {
     return 'Unlimited credits'
   }
   if (quota?.credits?.hasCredits && quota.credits.balance) {
     return `${quota.credits.balance} credits`
-  }
-  const window = quota?.primary ?? quota?.secondary ?? null
-  if (window) {
-    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
-    return `${remainingPercent}% remaining`
   }
   if (account.quotaStatus === 'loading') {
     return 'Loading quota…'
