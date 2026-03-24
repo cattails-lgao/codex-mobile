@@ -196,10 +196,11 @@
               <div class="composer-with-queue">
                 <QueuedMessages
                   :messages="selectedThreadQueuedMessages"
+                  @edit="onEditQueuedMessage"
                   @steer="steerQueuedMessage"
                   @delete="removeQueuedMessage"
                 />
-                <ThreadComposer :active-thread-id="composerThreadContextId"
+                <ThreadComposer ref="threadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :models="availableModelIds"
                   :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
@@ -252,6 +253,7 @@ import {
   searchThreads,
 } from './api/codexGateway'
 import type { ReasoningEffort, ThreadScrollState } from './types/codex'
+import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
@@ -405,6 +407,7 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
@@ -691,6 +694,26 @@ function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fil
     return
   }
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments)
+}
+
+function onEditQueuedMessage(messageId: string): void {
+  const message = selectedThreadQueuedMessages.value.find((item) => item.id === messageId)
+  const composer = threadComposerRef.value
+  if (!message || !composer) return
+
+  if (composer.hasUnsavedDraft()) {
+    const shouldReplace = window.confirm('Replace the current draft with this queued message for editing?')
+    if (!shouldReplace) return
+  }
+
+  const payload: ComposerDraftPayload = {
+    text: message.text,
+    imageUrls: [...message.imageUrls],
+    fileAttachments: message.fileAttachments.map((attachment) => ({ ...attachment })),
+    skills: message.skills.map((skill) => ({ ...skill })),
+  }
+  composer.hydrateDraft(payload)
+  removeQueuedMessage(messageId)
 }
 
 async function rollbackAndResendDictation(payload: {

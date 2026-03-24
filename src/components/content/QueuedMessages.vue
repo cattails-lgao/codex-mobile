@@ -6,8 +6,9 @@
         <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
-      <span class="queued-row-text">{{ msg.text }}</span>
+      <span class="queued-row-text">{{ getMessagePreview(msg) }}</span>
       <div class="queued-row-actions">
+        <button class="queued-row-edit" type="button" title="Edit queued message" @click="$emit('edit', msg.id)">Edit</button>
         <button class="queued-row-steer" type="button" title="Send now without interrupting work" @click="$emit('steer', msg.id)">Steer</button>
         <button class="queued-row-delete" type="button" aria-label="Delete queued message" title="Delete queued message" @click="$emit('delete', msg.id)">
           <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
@@ -22,14 +23,39 @@
 </template>
 
 <script setup lang="ts">
+type QueuedMessageRow = {
+  id: string
+  text: string
+  imageUrls?: string[]
+  skills?: Array<{ name: string; path: string }>
+  fileAttachments?: Array<{ label: string; path: string; fsPath: string }>
+}
+
 defineProps<{
-  messages: Array<{ id: string; text: string }>
+  messages: QueuedMessageRow[]
 }>()
 
 defineEmits<{
+  edit: [messageId: string]
   steer: [messageId: string]
   delete: [messageId: string]
 }>()
+
+function getMessagePreview(message: QueuedMessageRow): string {
+  const text = message.text.trim()
+  if (text) return text
+
+  const parts: string[] = []
+  const imageCount = message.imageUrls?.length ?? 0
+  const fileCount = message.fileAttachments?.length ?? 0
+  const skillCount = message.skills?.length ?? 0
+
+  if (imageCount > 0) parts.push(`${imageCount} image${imageCount === 1 ? '' : 's'}`)
+  if (fileCount > 0) parts.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`)
+  if (skillCount > 0) parts.push(`${skillCount} skill${skillCount === 1 ? '' : 's'}`)
+
+  return parts.join(', ') || '(empty queued message)'
+}
 </script>
 
 <style scoped>
@@ -60,6 +86,10 @@ defineEmits<{
 }
 
 .queued-row-steer {
+  @apply rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
+}
+
+.queued-row-edit {
   @apply rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
 }
 

@@ -318,6 +318,13 @@ const props = defineProps<{
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
 
+export type ComposerDraftPayload = {
+  text: string
+  imageUrls: string[]
+  fileAttachments: FileAttachment[]
+  skills: Array<{ name: string; path: string }>
+}
+
 export type SubmitPayload = {
   text: string
   imageUrls: string[]
@@ -325,6 +332,11 @@ export type SubmitPayload = {
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
   rollbackLatestUserTurn?: boolean
+}
+
+export type ThreadComposerExposed = {
+  hydrateDraft: (payload: ComposerDraftPayload) => void
+  hasUnsavedDraft: () => boolean
 }
 
 const emit = defineEmits<{
@@ -437,6 +449,13 @@ const canSubmit = computed(() => {
   if (!props.activeThreadId) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
+const hasUnsavedDraft = computed(() =>
+  draft.value.trim().length > 0
+  || selectedImages.value.length > 0
+  || selectedSkills.value.length > 0
+  || fileAttachments.value.length > 0
+  || folderUploadGroups.value.length > 0,
+)
 const standaloneFileAttachments = computed(() => {
   const grouped = new Set<string>()
   for (const group of folderUploadGroups.value) {
@@ -840,6 +859,26 @@ function applyFileMention(suggestion: ComposerFileSuggestion): void {
   nextTick(() => input?.focus())
 }
 
+function hydrateDraft(payload: ComposerDraftPayload): void {
+  draft.value = payload.text
+  selectedImages.value = payload.imageUrls.map((url, index) => ({
+    id: `queued-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `Image ${index + 1}`,
+    url,
+  }))
+  selectedSkills.value = payload.skills.map((skill) => (
+    (props.skills ?? []).find((item) => item.path === skill.path)
+    ?? { name: skill.name, description: '', path: skill.path }
+  ))
+  fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
+  folderUploadGroups.value = []
+  dictationFeedback.value = ''
+  isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
+  closeFileMention()
+  nextTick(() => inputRef.value?.focus())
+}
+
 function getMentionFileName(path: string): string {
   const idx = path.lastIndexOf('/')
   if (idx < 0) return path
@@ -913,6 +952,11 @@ function onDocumentClick(event: MouseEvent): void {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+})
+
+defineExpose<ThreadComposerExposed>({
+  hydrateDraft,
+  hasUnsavedDraft: () => hasUnsavedDraft.value,
 })
 
 onBeforeUnmount(() => {
