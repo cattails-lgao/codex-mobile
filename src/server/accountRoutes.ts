@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -317,47 +317,6 @@ export async function handleAccountRoutes(
         return true
       }
       setJson(res, 400, { error: 'invalid_auth_json', message: 'Failed to parse the current auth.json file.' })
-    }
-    return true
-  }
-
-  if (req.method === 'POST' && url.pathname === '/codex-api/accounts/import') {
-    try {
-      const rawBody = await new Promise<string>((resolve, reject) => {
-        let body = ''
-        req.setEncoding('utf8')
-        req.on('data', (chunk: string) => { body += chunk })
-        req.on('end', () => resolve(body))
-        req.on('error', reject)
-      })
-      const payload = asRecord(rawBody.length > 0 ? JSON.parse(rawBody) : {})
-      const rawPath = typeof payload?.path === 'string' ? payload.path.trim() : ''
-      if (!rawPath) {
-        setJson(res, 400, { error: 'missing_auth_path', message: 'Missing auth.json path.' })
-        return true
-      }
-
-      const authPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath)
-      const info = await stat(authPath).catch(() => null)
-      if (!info) {
-        setJson(res, 404, { error: 'auth_path_not_found', message: 'auth.json path does not exist.' })
-        return true
-      }
-      if (!info.isFile()) {
-        setJson(res, 400, { error: 'invalid_auth_path', message: 'Expected auth.json file path.' })
-        return true
-      }
-
-      setJson(res, 200, {
-        data: await importAccountFromAuthPath(authPath),
-      })
-    } catch (error) {
-      const message = getErrorMessage(error, 'Failed to import account')
-      if (message === 'missing_account_id') {
-        setJson(res, 400, { error: 'missing_account_id', message: 'The imported auth.json is missing tokens.account_id.' })
-        return true
-      }
-      setJson(res, 400, { error: 'invalid_auth_json', message: 'Failed to parse the imported auth.json file.' })
     }
     return true
   }
