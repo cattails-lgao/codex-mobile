@@ -408,6 +408,7 @@ const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
+const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
@@ -685,6 +686,14 @@ function onWindowKeyDown(event: KeyboardEvent): void {
 
 function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; rollbackLatestUserTurn?: boolean }): void {
   const text = payload.text
+  const editingState = editingQueuedMessageState.value
+  const queueInsertIndex =
+    payload.mode === 'queue'
+    && editingState
+    && editingState.threadId === selectedThreadId.value
+      ? editingState.queueIndex
+      : undefined
+  editingQueuedMessageState.value = null
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
     return
@@ -693,11 +702,12 @@ function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fil
     void rollbackAndResendDictation(payload)
     return
   }
-  void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments)
+  void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments, queueInsertIndex)
 }
 
 function onEditQueuedMessage(messageId: string): void {
-  const message = selectedThreadQueuedMessages.value.find((item) => item.id === messageId)
+  const queueIndex = selectedThreadQueuedMessages.value.findIndex((item) => item.id === messageId)
+  const message = queueIndex >= 0 ? selectedThreadQueuedMessages.value[queueIndex] : undefined
   const composer = threadComposerRef.value
   if (!message || !composer) return
 
@@ -706,6 +716,9 @@ function onEditQueuedMessage(messageId: string): void {
     if (!shouldReplace) return
   }
 
+  editingQueuedMessageState.value = selectedThreadId.value
+    ? { threadId: selectedThreadId.value, queueIndex }
+    : null
   const payload: ComposerDraftPayload = {
     text: message.text,
     imageUrls: [...message.imageUrls],
