@@ -75,7 +75,6 @@
         aria-live="polite"
       >
         <span class="thread-composer-rate-limit-row">
-          <span class="thread-composer-rate-limit-label">Codex quota</span>
           <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
         </span>
         <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
@@ -1260,10 +1259,6 @@ watch(
 
 .thread-composer-rate-limit-row {
   @apply flex min-w-0 items-center gap-x-1.5 gap-y-1;
-}
-
-.thread-composer-rate-limit-label {
-  @apply shrink-0 font-medium text-zinc-700;
 }
 
 .thread-composer-rate-limit-value {
