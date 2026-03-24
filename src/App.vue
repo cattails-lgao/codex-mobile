@@ -80,8 +80,28 @@
                   <span class="sidebar-settings-account-count">{{ accounts.length }}</span>
                 </div>
                 <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
+                <div class="sidebar-settings-account-import">
+                  <input
+                    v-model="importAuthPath"
+                    class="sidebar-settings-account-input"
+                    type="text"
+                    spellcheck="false"
+                    autocomplete="off"
+                    placeholder="/path/to/auth.json"
+                    :disabled="isRefreshingAccounts || isSwitchingAccounts"
+                    @keydown.enter.prevent="onImportAccountFromPath"
+                  />
+                  <button
+                    class="sidebar-settings-account-import-button"
+                    type="button"
+                    :disabled="isRefreshingAccounts || isSwitchingAccounts"
+                    @click="onImportAccountFromPath"
+                  >
+                    {{ isRefreshingAccounts ? 'Importing…' : 'Import file' }}
+                  </button>
+                </div>
                 <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
-                  Run `codex login`, then click refresh.
+                  Run `codex login` and click refresh, or import another auth.json file above.
                 </p>
                 <div v-else class="sidebar-settings-account-list">
                   <article
@@ -270,6 +290,7 @@ import {
   createWorktree,
   getAccounts,
   getHomeDirectory,
+  importAccountFromPath,
   getProjectRootSuggestion,
   getWorkspaceRootsState,
   openProjectRoot,
@@ -358,6 +379,7 @@ const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
 const accountActionError = ref('')
+const importAuthPath = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
@@ -573,6 +595,26 @@ async function onRefreshAccounts(): Promise<void> {
     accounts.value = result.accounts
   } catch (error) {
     accountActionError.value = error instanceof Error ? error.message : 'Failed to refresh accounts'
+  } finally {
+    isRefreshingAccounts.value = false
+  }
+}
+
+async function onImportAccountFromPath(): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
+  const authPath = importAuthPath.value.trim()
+  if (!authPath) {
+    accountActionError.value = 'Enter an auth.json path to import.'
+    return
+  }
+  accountActionError.value = ''
+  isRefreshingAccounts.value = true
+  try {
+    const result = await importAccountFromPath(authPath)
+    accounts.value = result.accounts
+    importAuthPath.value = ''
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to import account'
   } finally {
     isRefreshingAccounts.value = false
   }
@@ -1483,6 +1525,18 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-account-error {
   @apply mb-2 rounded-md bg-rose-50 px-2 py-1.5 text-xs text-rose-700;
+}
+
+.sidebar-settings-account-import {
+  @apply mb-2 flex items-center gap-2;
+}
+
+.sidebar-settings-account-input {
+  @apply min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-xs text-zinc-700 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400;
+}
+
+.sidebar-settings-account-import-button {
+  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-empty {

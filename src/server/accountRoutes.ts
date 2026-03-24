@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -245,6 +245,36 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+async function importAccountFromAuthPath(path: string): Promise<{
+  activeAccountId: string | null
+  importedAccountId: string
+  accounts: Array<StoredAccountEntry & { isActive: boolean }>
+}> {
+  const imported = await readAuthFileFromPath(path)
+  const storageId = toStorageId(imported.accountId)
+  await writeSnapshot(storageId, imported.raw)
+
+  const state = await readStoredAccountsState()
+  const existing = state.accounts.find((entry) => entry.accountId === imported.accountId) ?? null
+  const nextEntry: StoredAccountEntry = {
+    accountId: imported.accountId,
+    storageId,
+    authMode: imported.authMode,
+    email: imported.metadata.email ?? existing?.email ?? null,
+    planType: imported.metadata.planType ?? existing?.planType ?? null,
+    lastRefreshedAtIso: new Date().toISOString(),
+    lastActivatedAtIso: existing?.lastActivatedAtIso ?? null,
+  }
+  const nextState = withUpsertedAccount(state, nextEntry)
+  await writeStoredAccountsState(nextState)
+
+  return {
+    activeAccountId: nextState.activeAccountId,
+    importedAccountId: imported.accountId,
+    accounts: sortAccounts(nextState.accounts, nextState.activeAccountId).map((entry) => toPublicAccountEntry(entry, nextState.activeAccountId)),
+  }
+}
+
 export async function handleAccountRoutes(
   req: IncomingMessage,
   res: ServerResponse,
@@ -277,30 +307,8 @@ export async function handleAccountRoutes(
 
   if (req.method === 'POST' && url.pathname === '/codex-api/accounts/refresh') {
     try {
-      const current = await readAuthFileFromPath(getActiveAuthPath())
-      const storageId = toStorageId(current.accountId)
-      await writeSnapshot(storageId, current.raw)
-
-      const state = await readStoredAccountsState()
-      const existing = state.accounts.find((entry) => entry.accountId === current.accountId) ?? null
-      const nextEntry: StoredAccountEntry = {
-        accountId: current.accountId,
-        storageId,
-        authMode: current.authMode,
-        email: current.metadata.email ?? existing?.email ?? null,
-        planType: current.metadata.planType ?? existing?.planType ?? null,
-        lastRefreshedAtIso: new Date().toISOString(),
-        lastActivatedAtIso: existing?.lastActivatedAtIso ?? null,
-      }
-      const nextState = withUpsertedAccount(state, nextEntry)
-      await writeStoredAccountsState(nextState)
-
       setJson(res, 200, {
-        data: {
-          activeAccountId: nextState.activeAccountId,
-          importedAccountId: current.accountId,
-          accounts: sortAccounts(nextState.accounts, nextState.activeAccountId).map((entry) => toPublicAccountEntry(entry, nextState.activeAccountId)),
-        },
+        data: await importAccountFromAuthPath(getActiveAuthPath()),
       })
     } catch (error) {
       const message = getErrorMessage(error, 'Failed to refresh account')
@@ -309,6 +317,47 @@ export async function handleAccountRoutes(
         return true
       }
       setJson(res, 400, { error: 'invalid_auth_json', message: 'Failed to parse the current auth.json file.' })
+    }
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/codex-api/accounts/import') {
+    try {
+      const rawBody = await new Promise<string>((resolve, reject) => {
+        let body = ''
+        req.setEncoding('utf8')
+        req.on('data', (chunk: string) => { body += chunk })
+        req.on('end', () => resolve(body))
+        req.on('error', reject)
+      })
+      const payload = asRecord(rawBody.length > 0 ? JSON.parse(rawBody) : {})
+      const rawPath = typeof payload?.path === 'string' ? payload.path.trim() : ''
+      if (!rawPath) {
+        setJson(res, 400, { error: 'missing_auth_path', message: 'Missing auth.json path.' })
+        return true
+      }
+
+      const authPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath)
+      const info = await stat(authPath).catch(() => null)
+      if (!info) {
+        setJson(res, 404, { error: 'auth_path_not_found', message: 'auth.json path does not exist.' })
+        return true
+      }
+      if (!info.isFile()) {
+        setJson(res, 400, { error: 'invalid_auth_path', message: 'Expected auth.json file path.' })
+        return true
+      }
+
+      setJson(res, 200, {
+        data: await importAccountFromAuthPath(authPath),
+      })
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to import account')
+      if (message === 'missing_account_id') {
+        setJson(res, 400, { error: 'missing_account_id', message: 'The imported auth.json is missing tokens.account_id.' })
+        return true
+      }
+      setJson(res, 400, { error: 'invalid_auth_json', message: 'Failed to parse the imported auth.json file.' })
     }
     return true
   }

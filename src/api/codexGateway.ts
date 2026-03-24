@@ -311,6 +311,20 @@ export async function refreshAccountsFromAuth(): Promise<AccountsListResult> {
   return normalizeAccountsListResult(envelope?.data)
 }
 
+export async function importAccountFromPath(path: string): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to import account'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
+}
+
 export async function switchAccount(accountId: string): Promise<UiAccountEntry> {
   const response = await fetch('/codex-api/accounts/switch', {
     method: 'POST',
