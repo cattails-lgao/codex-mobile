@@ -1611,7 +1611,7 @@ onBeforeUnmount(() => {
 }
 
 .message-file-edit-link {
-  @apply absolute left-full top-1/2 -translate-y-1/2 rounded border border-slate-300 bg-slate-50 px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
+  @apply absolute left-full top-1/2 -translate-y-1/2 rounded border border-slate-300 bg-transparent px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
 }
 
 .message-file-link-wrap:hover .message-file-edit-link,
@@ -1620,7 +1620,7 @@ onBeforeUnmount(() => {
 }
 
 .message-file-edit-link:hover {
-  @apply border-slate-400 bg-white text-slate-900;
+  @apply border-slate-400 bg-transparent text-slate-900;
 }
 
 .message-stack[data-role='user'] {
