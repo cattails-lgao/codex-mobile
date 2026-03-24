@@ -564,7 +564,8 @@ function pickWeeklyQuotaWindow(quota: UiRateLimitSnapshot): UiRateLimitWindow | 
     .filter((window) => typeof window.windowMinutes === 'number' && window.windowMinutes >= 7 * 24 * 60)
     .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))
 
-  return longerWindows[0] ?? null
+  if (longerWindows[0]) return longerWindows[0]
+  return quota.secondary ?? null
 }
 
 function formatWindowSummary(window: UiRateLimitWindow): string {
@@ -573,16 +574,23 @@ function formatWindowSummary(window: UiRateLimitWindow): string {
   return span ? `${remainingPercent}% / ${span}` : `${remainingPercent}%`
 }
 
+function formatWeeklyWindowSummary(window: UiRateLimitWindow): string {
+  const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+  const span = formatWindowSpan(window.windowMinutes) || '7d'
+  return `${remainingPercent}% / ${span}`
+}
+
 function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null): string {
   if (!quota) return ''
 
   const segments: string[] = []
   const plan = formatPlanType(quota.planType)
   if (plan) segments.push(plan)
-  if (quota.primary) segments.push(formatWindowSummary(quota.primary))
-  if (quota.secondary) segments.push(formatWindowSummary(quota.secondary))
 
   const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  if (weeklyWindow) {
+    segments.push(formatWeeklyWindowSummary(weeklyWindow))
+  }
   const weeklyRefreshDate = formatResetDateCompact(weeklyWindow?.resetsAt ?? null)
   if (weeklyRefreshDate) {
     segments.push(weeklyRefreshDate)
@@ -606,16 +614,6 @@ function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
     lines.push(`Plan: ${plan}`)
   }
 
-  if (quota.primary) {
-    const reset = formatResetTime(quota.primary.resetsAt)
-    lines.push(`Primary window: ${formatWindowSummary(quota.primary)}${reset ? `, ${reset}` : ''}`)
-  }
-
-  if (quota.secondary) {
-    const reset = formatResetTime(quota.secondary.resetsAt)
-    lines.push(`Secondary window: ${formatWindowSummary(quota.secondary)}${reset ? `, ${reset}` : ''}`)
-  }
-
   if (quota.credits?.unlimited) {
     lines.push('Credits: unlimited')
   } else if (quota.credits?.hasCredits && quota.credits.balance) {
@@ -624,10 +622,8 @@ function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
 
   const weeklyWindow = pickWeeklyQuotaWindow(quota)
   if (weeklyWindow) {
-    const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
-    if (weeklyRefreshDate) {
-      lines.push(`Weekly refresh: ${weeklyRefreshDate}`)
-    }
+    const reset = formatResetTime(weeklyWindow.resetsAt)
+    lines.push(`Weekly window: ${formatWeeklyWindowSummary(weeklyWindow)}${reset ? `, ${reset}` : ''}`)
   }
 
   return lines.join('\n')

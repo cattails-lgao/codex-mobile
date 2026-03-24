@@ -592,14 +592,19 @@ function formatAccountMeta(account: UiAccountEntry): string {
 
 function pickWeeklyQuotaWindow(account: UiAccountEntry) {
   const quota = account.quotaSnapshot
+  if (!quota) return null
   const windows = [quota?.primary, quota?.secondary].filter((quotaWindow): quotaWindow is UiRateLimitWindow => quotaWindow !== null)
   const exactWeekly = windows.find((quotaWindow) => quotaWindow.windowMinutes === 7 * 24 * 60)
   if (exactWeekly) {
     return exactWeekly
   }
-  return windows
+  const longerWindow = windows
     .filter((quotaWindow) => typeof quotaWindow.windowMinutes === 'number' && quotaWindow.windowMinutes >= 7 * 24 * 60)
     .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))[0] ?? null
+  if (longerWindow) {
+    return longerWindow
+  }
+  return quota.secondary ?? null
 }
 
 function formatAccountQuota(account: UiAccountEntry): string {
