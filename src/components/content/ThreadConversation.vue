@@ -419,6 +419,7 @@ const liveOverlayReasoningRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
+const localScrollState = ref<ThreadScrollState | null>(null)
 const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
@@ -1195,17 +1196,27 @@ function isAtBottom(container: HTMLElement): boolean {
   return distance <= BOTTOM_THRESHOLD_PX
 }
 
-function emitScrollState(container: HTMLElement): void {
-  if (!props.activeThreadId) return
+function readScrollState(container: HTMLElement): ThreadScrollState {
   const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
   const scrollRatio = maxScrollTop > 0 ? Math.min(Math.max(container.scrollTop / maxScrollTop, 0), 1) : 1
+  return {
+    scrollTop: container.scrollTop,
+    isAtBottom: isAtBottom(container),
+    scrollRatio,
+  }
+}
+
+function resolveScrollState(): ThreadScrollState | null {
+  return localScrollState.value ?? props.scrollState
+}
+
+function emitScrollState(container: HTMLElement): void {
+  const nextState = readScrollState(container)
+  localScrollState.value = nextState
+  if (!props.activeThreadId) return
   emit('updateScrollState', {
     threadId: props.activeThreadId,
-    state: {
-      scrollTop: container.scrollTop,
-      isAtBottom: isAtBottom(container),
-      scrollRatio,
-    },
+    state: nextState,
   })
 }
 
@@ -1213,7 +1224,7 @@ function applySavedScrollState(): void {
   const container = conversationListRef.value
   if (!container) return
 
-  const savedState = props.scrollState
+  const savedState = resolveScrollState()
   if (!savedState || savedState.isAtBottom) {
     enforceBottomState()
     return
@@ -1234,7 +1245,7 @@ function enforceBottomState(): void {
 }
 
 function shouldLockToBottom(): boolean {
-  const savedState = props.scrollState
+  const savedState = resolveScrollState()
   return !savedState || savedState.isAtBottom === true
 }
 
@@ -1339,6 +1350,7 @@ watch(
 watch(
   () => props.activeThreadId,
   () => {
+    localScrollState.value = null
     modalImageUrl.value = ''
     failedMarkdownImageKeys.value = new Set()
   },
