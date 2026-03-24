@@ -185,7 +185,9 @@
             @click="toggleCollaborationMode"
           >
             <span class="thread-composer-plan-toggle-label">Plan</span>
-            <span class="thread-composer-plan-toggle-state">{{ isPlanModeSelected ? 'On' : 'Off' }}</span>
+            <span class="thread-composer-plan-toggle-switch" aria-hidden="true">
+              <span class="thread-composer-plan-toggle-switch-thumb" />
+            </span>
           </button>
 
           <ComposerDropdown
@@ -1368,7 +1370,7 @@ watch(
 }
 
 .thread-composer-plan-toggle {
-  @apply inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
+  @apply inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white pl-3 pr-2.5 text-sm text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
 }
 
 .thread-composer-plan-toggle.is-active {
@@ -1379,12 +1381,24 @@ watch(
   @apply leading-none;
 }
 
-.thread-composer-plan-toggle-state {
-  @apply inline-flex min-w-8 items-center justify-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] leading-none text-zinc-500 transition;
+.thread-composer-plan-toggle-switch {
+  @apply relative inline-flex h-4 w-7 shrink-0 rounded-full bg-zinc-200 transition;
 }
 
-.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-state {
-  @apply bg-white/80 text-sky-700;
+.thread-composer-plan-toggle-switch-thumb {
+  @apply absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform;
+}
+
+.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch {
+  @apply bg-sky-500;
+}
+
+.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch-thumb {
+  transform: translateX(12px);
+}
+
+.thread-composer-plan-toggle:disabled .thread-composer-plan-toggle-switch {
+  @apply bg-zinc-200;
 }
 
 .thread-composer-actions {
