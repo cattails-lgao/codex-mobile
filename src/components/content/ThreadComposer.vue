@@ -376,6 +376,7 @@ const {
   startRecording,
   stopRecording,
   toggleRecording,
+  cancel: cancelDictation,
 } = useDictation({
   getLanguage: () => props.dictationLanguage ?? 'auto',
   onTranscript: (text) => {
@@ -889,6 +890,7 @@ function applyFileMention(suggestion: ComposerFileSuggestion): void {
 }
 
 function hydrateDraft(payload: ComposerDraftPayload): void {
+  cancelDictation()
   replaceDraftState(payload)
   nextTick(() => inputRef.value?.focus())
 }
@@ -986,6 +988,7 @@ onBeforeUnmount(() => {
 watch(
   () => props.activeThreadId,
   () => {
+    cancelDictation()
     clearDraftState()
   },
 )
