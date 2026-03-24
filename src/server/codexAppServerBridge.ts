@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { createReadStream, existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
@@ -664,39 +665,97 @@ function handleFileUpload(req: IncomingMessage, res: ServerResponse): void {
   })
 }
 
+function httpPost(
+  url: string,
+  headers: Record<string, string | number>,
+  body: Buffer,
+): Promise<{ status: number; body: string }> {
+  const doRequest = url.startsWith('http://') ? httpRequest : httpsRequest
+  return new Promise((resolve, reject) => {
+    const req = doRequest(url, { method: 'POST', headers }, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (c: Buffer) => chunks.push(c))
+      res.on('end', () => resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf8') }))
+      res.on('error', reject)
+    })
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
+}
+
+let curlImpersonateAvailable: boolean | null = null
+
+function curlImpersonatePost(
+  url: string,
+  headers: Record<string, string | number>,
+  body: Buffer,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const args = ['-s', '-w', '\n%{http_code}', '-X', 'POST', url]
+    for (const [k, v] of Object.entries(headers)) {
+      if (k.toLowerCase() === 'content-length') continue
+      args.push('-H', `${k}: ${String(v)}`)
+    }
+    args.push('--data-binary', '@-')
+    const proc = spawn('curl-impersonate-chrome', args, {
+      env: { ...process.env, CURL_IMPERSONATE: 'chrome116' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const chunks: Buffer[] = []
+    proc.stdout.on('data', (c: Buffer) => chunks.push(c))
+    proc.on('error', (e) => {
+      curlImpersonateAvailable = false
+      reject(e)
+    })
+    proc.on('close', (code) => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      const lastNewline = raw.lastIndexOf('\n')
+      const statusStr = lastNewline >= 0 ? raw.slice(lastNewline + 1).trim() : ''
+      const responseBody = lastNewline >= 0 ? raw.slice(0, lastNewline) : raw
+      const status = parseInt(statusStr, 10) || (code === 0 ? 200 : 500)
+      curlImpersonateAvailable = true
+      resolve({ status, body: responseBody })
+    })
+    proc.stdin.write(body)
+    proc.stdin.end()
+  })
+}
+
 async function proxyTranscribe(
   body: Buffer,
   contentType: string,
   authToken: string,
   accountId?: string,
 ): Promise<{ status: number; body: string }> {
-  const headers: Record<string, string | number> = {
+  const chatgptHeaders: Record<string, string | number> = {
     'Content-Type': contentType,
     'Content-Length': body.length,
     Authorization: `Bearer ${authToken}`,
     originator: 'Codex Desktop',
     'User-Agent': `Codex Desktop/0.1.0 (${process.platform}; ${process.arch})`,
   }
+  if (accountId) chatgptHeaders['ChatGPT-Account-Id'] = accountId
 
-  if (accountId) {
-    headers['ChatGPT-Account-Id'] = accountId
+  const postFn = curlImpersonateAvailable !== false ? curlImpersonatePost : httpPost
+  let result: { status: number; body: string }
+  try {
+    result = await postFn('https://chatgpt.com/backend-api/transcribe', chatgptHeaders, body)
+  } catch {
+    result = await httpPost('https://chatgpt.com/backend-api/transcribe', chatgptHeaders, body)
   }
 
-  return new Promise((resolve, reject) => {
-    const req = httpsRequest(
-      'https://chatgpt.com/backend-api/transcribe',
-      { method: 'POST', headers },
-      (res) => {
-        const chunks: Buffer[] = []
-        res.on('data', (c: Buffer) => chunks.push(c))
-        res.on('end', () => resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks).toString('utf8') }))
-        res.on('error', reject)
-      },
-    )
-    req.on('error', reject)
-    req.write(body)
-    req.end()
-  })
+  if (result.status === 403 && result.body.includes('cf_chl')) {
+    if (curlImpersonateAvailable !== false && postFn !== curlImpersonatePost) {
+      try {
+        const ciResult = await curlImpersonatePost('https://chatgpt.com/backend-api/transcribe', chatgptHeaders, body)
+        if (ciResult.status !== 403) return ciResult
+      } catch {}
+    }
+    return { status: 503, body: JSON.stringify({ error: 'Transcription blocked by Cloudflare. Install curl-impersonate-chrome.' }) }
+  }
+
+  return result
 }
 
 class AppServerProcess {

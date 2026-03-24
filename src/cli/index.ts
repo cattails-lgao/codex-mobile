@@ -279,20 +279,22 @@ function parseCloudflaredUrl(chunk: string): string | null {
 
 function getAccessibleUrls(port: number): string[] {
   const urls = new Set<string>([`http://localhost:${String(port)}`])
-  const interfaces = networkInterfaces()
-  for (const entries of Object.values(interfaces)) {
-    if (!entries) {
-      continue
-    }
-    for (const entry of entries) {
-      if (entry.internal) {
+  try {
+    const interfaces = networkInterfaces()
+    for (const entries of Object.values(interfaces)) {
+      if (!entries) {
         continue
       }
-      if (entry.family === 'IPv4') {
-        urls.add(`http://${entry.address}:${String(port)}`)
+      for (const entry of entries) {
+        if (entry.internal) {
+          continue
+        }
+        if (entry.family === 'IPv4') {
+          urls.add(`http://${entry.address}:${String(port)}`)
+        }
       }
     }
-  }
+  } catch {}
   return Array.from(urls)
 }
 
@@ -425,7 +427,7 @@ async function addProjectOnly(projectPath: string): Promise<void> {
   await persistLaunchProject(trimmed)
 }
 
-async function startServer(options: { port: string; password: string | boolean; tunnel: boolean; projectPath?: string }) {
+async function startServer(options: { port: string; password: string | boolean; tunnel: boolean; open: boolean; projectPath?: string }) {
   const version = await readCliVersion()
   const projectPath = options.projectPath?.trim() ?? ''
   if (projectPath.length > 0) {
@@ -500,7 +502,7 @@ async function startServer(options: { port: string; password: string | boolean; 
     qrcode.generate(tunnelUrl, { small: true })
     console.log('')
   }
-  openBrowser(`http://localhost:${String(port)}`)
+  if (options.open) openBrowser(`http://localhost:${String(port)}`)
 
   function shutdown() {
     console.log('\nShutting down...')
@@ -536,9 +538,11 @@ program
   .option('--no-password', 'disable password protection')
   .option('--tunnel', 'start cloudflared tunnel', true)
   .option('--no-tunnel', 'disable cloudflared tunnel startup')
+  .option('--open', 'open browser on startup', true)
+  .option('--no-open', 'do not open browser on startup')
   .action(async (
     projectPath: string | undefined,
-    opts: { port: string; password: string | boolean; tunnel: boolean; openProject?: string },
+    opts: { port: string; password: string | boolean; tunnel: boolean; open: boolean; openProject?: string },
   ) => {
     const rawArgv = process.argv.slice(2)
     const openProjectFlagIndex = rawArgv.findIndex((arg) => arg === '--open-project' || arg.startsWith('--open-project='))
