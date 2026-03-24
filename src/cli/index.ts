@@ -3,7 +3,7 @@ import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir, networkInterfaces } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
@@ -12,6 +12,7 @@ import { Command } from 'commander'
 import qrcode from 'qrcode-terminal'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
+import { canRunCommand, getUserNpmPrefix, resolveCodexCommand, spawnSyncCommand } from '../utils/commandInvocation.js'
 
 const program = new Command().name('codexui').description('Web interface for Codex app-server')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -32,45 +33,20 @@ function isTermuxRuntime(): boolean {
 }
 
 function canRun(command: string, args: string[] = []): boolean {
-  const result = spawnSync(command, args, { stdio: 'ignore' })
-  return result.status === 0
+  const result = canRunCommand(command, args)
+  return result
 }
 
 function runOrFail(command: string, args: string[], label: string): void {
-  const result = spawnSync(command, args, { stdio: 'inherit' })
+  const result = spawnSyncCommand(command, args, { stdio: 'inherit' })
   if (result.status !== 0) {
     throw new Error(`${label} failed with exit code ${String(result.status ?? -1)}`)
   }
 }
 
 function runWithStatus(command: string, args: string[]): number {
-  const result = spawnSync(command, args, { stdio: 'inherit' })
+  const result = spawnSyncCommand(command, args, { stdio: 'inherit' })
   return result.status ?? -1
-}
-
-function getUserNpmPrefix(): string {
-  return join(homedir(), '.npm-global')
-}
-
-function resolveCodexCommand(): string | null {
-  if (canRun('codex', ['--version'])) {
-    return 'codex'
-  }
-
-  const userCandidate = join(getUserNpmPrefix(), 'bin', 'codex')
-  if (existsSync(userCandidate) && canRun(userCandidate, ['--version'])) {
-    return userCandidate
-  }
-
-  const prefix = process.env.PREFIX?.trim()
-  if (!prefix) {
-    return null
-  }
-  const candidate = join(prefix, 'bin', 'codex')
-  if (existsSync(candidate) && canRun(candidate, ['--version'])) {
-    return candidate
-  }
-  return null
 }
 
 function resolveCloudflaredCommand(): string | null {
