@@ -82,12 +82,12 @@
                     :disabled="isRefreshingAccounts || isSwitchingAccounts"
                     @click="onRefreshAccounts"
                   >
-                    {{ isRefreshingAccounts ? 'Refreshing…' : 'Refresh' }}
+                    {{ isRefreshingAccounts ? 'Reloading…' : 'Reload' }}
                   </button>
                 </div>
                 <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
                 <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
-                  Run `codex login`, then click refresh.
+                  Run `codex login`, then click reload.
                 </p>
                 <div v-else class="sidebar-settings-account-list">
                   <article

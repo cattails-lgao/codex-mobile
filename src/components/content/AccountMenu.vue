@@ -13,7 +13,7 @@
       <p v-if="error" class="account-menu-error">{{ error }}</p>
 
       <p v-if="accounts.length === 0" class="account-menu-empty">
-        No saved accounts yet. Run `codex login`, then click refresh.
+        No saved accounts yet. Run `codex login`, then click reload.
       </p>
 
       <div v-else class="account-menu-list">
