@@ -60,6 +60,59 @@
   @apply border-zinc-700;
 }
 
+:root.dark .sidebar-settings-account-section {
+  @apply border-zinc-700 bg-zinc-800/70;
+}
+
+:root.dark .sidebar-settings-account-title {
+  @apply text-zinc-200;
+}
+
+:root.dark .sidebar-settings-account-count {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-error {
+  @apply bg-rose-950/40 text-rose-200;
+}
+
+:root.dark .sidebar-settings-account-refresh,
+:root.dark .sidebar-settings-account-switch {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
+:root.dark .sidebar-settings-account-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-account-item {
+  @apply border-zinc-700 bg-zinc-900/70;
+}
+
+:root.dark .sidebar-settings-account-item.is-active {
+  @apply border-emerald-500/35 bg-emerald-500/10;
+}
+
+:root.dark .sidebar-settings-account-email {
+  @apply text-zinc-100;
+}
+
+:root.dark .sidebar-settings-account-meta {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-account-quota {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-id {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
+  @apply bg-emerald-500/15 text-emerald-200;
+}
+
 :root.dark .sidebar-settings-value {
   @apply text-zinc-400 bg-zinc-700;
 }
