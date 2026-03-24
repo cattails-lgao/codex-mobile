@@ -570,11 +570,11 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   let leading = ''
   let trailing = ''
 
-  while (/^[('"`[{<“‘]/u.test(core)) {
+  while (/^['"`“‘]/u.test(core)) {
     leading += core[0]
     core = core.slice(1)
   }
-  while (/[)"'`\]}>”’]$/u.test(core)) {
+  while (/['"`”’]$/u.test(core)) {
     trailing = core.slice(-1) + trailing
     core = core.slice(0, -1)
   }
