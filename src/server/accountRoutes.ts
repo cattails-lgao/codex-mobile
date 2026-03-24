@@ -307,9 +307,46 @@ export async function handleAccountRoutes(
 
   if (req.method === 'POST' && url.pathname === '/codex-api/accounts/refresh') {
     try {
-      setJson(res, 200, {
-        data: await importAccountFromAuthPath(getActiveAuthPath()),
-      })
+      const imported = await importAccountFromAuthPath(getActiveAuthPath())
+
+      try {
+        appServer.dispose()
+        const runtimeMetadata = await validateSwitchedAccount(appServer)
+        const state = await readStoredAccountsState()
+        const importedAccountId = imported.importedAccountId
+        const target = state.accounts.find((entry) => entry.accountId === importedAccountId) ?? null
+        if (!target) {
+          throw new Error('account_not_found')
+        }
+
+        const nextEntry: StoredAccountEntry = {
+          ...target,
+          email: runtimeMetadata.email ?? target.email,
+          planType: runtimeMetadata.planType ?? target.planType,
+          lastActivatedAtIso: new Date().toISOString(),
+        }
+        const nextState = withUpsertedAccount({
+          activeAccountId: importedAccountId,
+          accounts: state.accounts,
+        }, nextEntry)
+        await writeStoredAccountsState({
+          activeAccountId: importedAccountId,
+          accounts: nextState.accounts,
+        })
+
+        setJson(res, 200, {
+          data: {
+            activeAccountId: importedAccountId,
+            importedAccountId,
+            accounts: sortAccounts(nextState.accounts, importedAccountId).map((entry) => toPublicAccountEntry(entry, importedAccountId)),
+          },
+        })
+      } catch (error) {
+        setJson(res, 502, {
+          error: 'account_refresh_failed',
+          message: getErrorMessage(error, 'Failed to refresh account'),
+        })
+      }
     } catch (error) {
       const message = getErrorMessage(error, 'Failed to refresh account')
       if (message === 'missing_account_id') {

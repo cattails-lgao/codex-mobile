@@ -577,6 +577,12 @@ async function onRefreshAccounts(): Promise<void> {
   try {
     const result = await refreshAccountsFromAuth()
     accounts.value = result.accounts
+    stopPolling()
+    startPolling()
+    await refreshAll({
+      includeSelectedThreadMessages: true,
+      awaitAncillaryRefreshes: true,
+    })
   } catch (error) {
     accountActionError.value = error instanceof Error ? error.message : 'Failed to refresh accounts'
   } finally {
