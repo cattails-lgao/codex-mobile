@@ -8,6 +8,7 @@ import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
+import { handleAccountRoutes } from './accountRoutes.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 
 type JsonRpcCall = {
@@ -1092,6 +1093,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       const url = new URL(req.url, 'http://localhost')
+
+      if (await handleAccountRoutes(req, res, url, { appServer })) {
+        return
+      }
 
       if (await handleSkillsRoutes(req, res, url, { appServer, readJsonBody })) {
         return

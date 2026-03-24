@@ -70,6 +70,43 @@
         <div v-if="!isSidebarCollapsed" class="sidebar-settings-area">
           <Transition name="settings-panel">
             <div v-if="isSettingsOpen" class="sidebar-settings-panel">
+              <button class="sidebar-settings-row" type="button" :disabled="isRefreshingAccounts || isSwitchingAccounts" @click="onRefreshAccounts">
+                <span class="sidebar-settings-label">Refresh account</span>
+                <span class="sidebar-settings-value">{{ isRefreshingAccounts ? 'Refreshing…' : 'Import auth.json' }}</span>
+              </button>
+              <div class="sidebar-settings-account-section">
+                <div class="sidebar-settings-account-header">
+                  <span class="sidebar-settings-account-title">Accounts</span>
+                  <span class="sidebar-settings-account-count">{{ accounts.length }}</span>
+                </div>
+                <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
+                <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
+                  Run `codex login`, then click refresh.
+                </p>
+                <div v-else class="sidebar-settings-account-list">
+                  <article
+                    v-for="account in accounts"
+                    :key="account.accountId"
+                    class="sidebar-settings-account-item"
+                    :class="{ 'is-active': account.isActive }"
+                  >
+                    <div class="sidebar-settings-account-main">
+                      <p class="sidebar-settings-account-email">{{ account.email || 'Account' }}</p>
+                      <p class="sidebar-settings-account-meta">
+                        {{ formatAccountMeta(account) }}
+                      </p>
+                    </div>
+                    <button
+                      class="sidebar-settings-account-switch"
+                      type="button"
+                      :disabled="isSwitchingAccounts || account.isActive"
+                      @click="onSwitchAccount(account.accountId)"
+                    >
+                      {{ account.isActive ? 'Active' : isSwitchingAccounts ? 'Switching…' : 'Switch' }}
+                    </button>
+                  </article>
+                </div>
+              </div>
               <button class="sidebar-settings-row" type="button" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">Require ⌘ + enter to send</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -227,13 +264,16 @@ import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
   createWorktree,
+  getAccounts,
   getHomeDirectory,
   getProjectRootSuggestion,
   getWorkspaceRootsState,
   openProjectRoot,
+  refreshAccountsFromAuth,
   searchThreads,
+  switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, ThreadScrollState } from './types/codex'
+import type { ReasoningEffort, ThreadScrollState, UiAccountEntry } from './types/codex'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY = 'codex-web-local.last-active-thread-route.v1'
@@ -310,6 +350,10 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const accounts = ref<UiAccountEntry[]>([])
+const isRefreshingAccounts = ref(false)
+const isSwitchingAccounts = ref(false)
+const accountActionError = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
@@ -360,6 +404,13 @@ const composerCwd = computed(() => {
   return selectedThread.value?.cwd?.trim() ?? ''
 })
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
+const isAccountSwitchBlocked = computed(() =>
+  isSendingMessage.value ||
+  isInterruptingTurn.value ||
+  isRollingBack.value ||
+  isSelectedThreadInProgress.value ||
+  selectedThreadServerRequests.value.length > 0,
+)
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -486,6 +537,65 @@ async function onExportThread(threadId: string): Promise<void> {
   }
   await nextTick()
   onExportChat()
+}
+
+function shortAccountId(accountId: string): string {
+  return accountId.length > 8 ? accountId.slice(-8) : accountId
+}
+
+function formatAccountMeta(account: UiAccountEntry): string {
+  const segments = [account.planType || 'unknown', shortAccountId(account.accountId)]
+  if (account.authMode) {
+    segments.unshift(account.authMode)
+  }
+  return segments.join(' · ')
+}
+
+async function loadAccountsState(): Promise<void> {
+  try {
+    const result = await getAccounts()
+    accounts.value = result.accounts
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to load accounts'
+  }
+}
+
+async function onRefreshAccounts(): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
+  accountActionError.value = ''
+  isRefreshingAccounts.value = true
+  try {
+    const result = await refreshAccountsFromAuth()
+    accounts.value = result.accounts
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to refresh accounts'
+  } finally {
+    isRefreshingAccounts.value = false
+  }
+}
+
+async function onSwitchAccount(accountId: string): Promise<void> {
+  if (isSwitchingAccounts.value || isRefreshingAccounts.value) return
+  if (isAccountSwitchBlocked.value) {
+    accountActionError.value = 'Finish the current turn and pending requests before switching accounts.'
+    return
+  }
+  accountActionError.value = ''
+  isSwitchingAccounts.value = true
+  try {
+    await switchAccount(accountId)
+    stopPolling()
+    startPolling()
+    await refreshAll({
+      includeSelectedThreadMessages: true,
+      awaitAncillaryRefreshes: true,
+    })
+    await loadAccountsState()
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to switch account'
+  } finally {
+    isSwitchingAccounts.value = false
+  }
 }
 
 function onArchiveThread(threadId: string): void {
@@ -934,6 +1044,7 @@ async function initialize(): Promise<void> {
   await refreshAll({
     includeSelectedThreadMessages: true,
   })
+  await loadAccountsState()
   await restoreLastActiveThreadRoute()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
@@ -1348,6 +1459,58 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-row + .sidebar-settings-row {
   @apply border-t border-zinc-100;
+}
+
+.sidebar-settings-account-section {
+  @apply border-t border-zinc-100 bg-zinc-50/60 px-3 py-3;
+}
+
+.sidebar-settings-account-header {
+  @apply mb-2 flex items-center justify-between gap-2;
+}
+
+.sidebar-settings-account-title {
+  @apply text-sm font-medium text-zinc-800;
+}
+
+.sidebar-settings-account-count {
+  @apply rounded bg-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-600;
+}
+
+.sidebar-settings-account-error {
+  @apply mb-2 rounded-md bg-rose-50 px-2 py-1.5 text-xs text-rose-700;
+}
+
+.sidebar-settings-account-empty {
+  @apply text-xs text-zinc-500;
+}
+
+.sidebar-settings-account-list {
+  @apply flex max-h-56 flex-col gap-2 overflow-y-auto;
+}
+
+.sidebar-settings-account-item {
+  @apply flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2;
+}
+
+.sidebar-settings-account-item.is-active {
+  @apply border-emerald-200 bg-emerald-50;
+}
+
+.sidebar-settings-account-main {
+  @apply min-w-0 flex-1;
+}
+
+.sidebar-settings-account-email {
+  @apply truncate text-sm text-zinc-800;
+}
+
+.sidebar-settings-account-meta {
+  @apply truncate text-[11px] text-zinc-500;
+}
+
+.sidebar-settings-account-switch {
+  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-label {

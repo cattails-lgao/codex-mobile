@@ -161,6 +161,16 @@ export type UiRateLimitSnapshot = {
   planType: string | null
 }
 
+export type UiAccountEntry = {
+  accountId: string
+  authMode: string | null
+  email: string | null
+  planType: string | null
+  lastRefreshedAtIso: string
+  lastActivatedAtIso: string | null
+  isActive: boolean
+}
+
 export type ThreadScrollState = {
   scrollTop: number
   isAtBottom: boolean

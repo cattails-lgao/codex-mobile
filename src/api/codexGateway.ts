@@ -22,6 +22,7 @@ import {
   readThreadInProgressFromResponse,
 } from './normalizers/v2'
 import type {
+  UiAccountEntry,
   CollaborationModeKind,
   CollaborationModeOption,
   UiCreditsSnapshot,
@@ -69,6 +70,12 @@ export type WorktreeCreateResult = {
 export type ThreadSearchResult = {
   threadIds: string[]
   indexedThreadCount: number
+}
+
+export type AccountsListResult = {
+  activeAccountId: string | null
+  accounts: UiAccountEntry[]
+  importedAccountId?: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -135,6 +142,22 @@ function normalizeRateLimitSnapshot(value: unknown): UiRateLimitSnapshot | null 
     secondary,
     credits,
     planType: readString(record.planType ?? record.plan_type),
+  }
+}
+
+function normalizeAccountEntry(value: unknown, activeAccountId: string | null = null): UiAccountEntry | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const accountId = readString(record.accountId)
+  if (!accountId) return null
+  return {
+    accountId,
+    authMode: readString(record.authMode),
+    email: readString(record.email),
+    planType: readString(record.planType),
+    lastRefreshedAtIso: readString(record.lastRefreshedAtIso) ?? '',
+    lastActivatedAtIso: readString(record.lastActivatedAtIso),
+    isActive: readBoolean(record.isActive) ?? accountId === activeAccountId,
   }
 }
 
@@ -251,6 +274,60 @@ export async function getAccountRateLimits(): Promise<UiRateLimitSnapshot | null
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to load account rate limits', 'account/rateLimits/read')
   }
+}
+
+function normalizeAccountsListResult(payload: unknown): AccountsListResult {
+  const record = asRecord(payload)
+  const activeAccountId = readString(record?.activeAccountId)
+  const data = Array.isArray(record?.accounts) ? record?.accounts : []
+  return {
+    activeAccountId,
+    importedAccountId: readString(record?.importedAccountId) ?? undefined,
+    accounts: data
+      .map((entry) => normalizeAccountEntry(entry, activeAccountId))
+      .filter((entry): entry is UiAccountEntry => entry !== null),
+  }
+}
+
+export async function getAccounts(): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts')
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load accounts'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
+}
+
+export async function refreshAccountsFromAuth(): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts/refresh', {
+    method: 'POST',
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to refresh accounts'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
+}
+
+export async function switchAccount(accountId: string): Promise<UiAccountEntry> {
+  const response = await fetch('/codex-api/accounts/switch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accountId }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to switch account'))
+  }
+  const envelope = asRecord(payload)
+  const data = asRecord(envelope?.data)
+  const account = normalizeAccountEntry(data?.account, readString(data?.activeAccountId))
+  if (!account) {
+    throw new Error('Failed to switch account')
+  }
+  return account
 }
 
 export async function resumeThread(threadId: string): Promise<void> {
@@ -689,6 +766,10 @@ function getErrorMessageFromPayload(payload: unknown, fallback: string): string 
   const record = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? (payload as Record<string, unknown>)
     : {}
+  const message = record.message
+  if (typeof message === 'string' && message.trim().length > 0) {
+    return message
+  }
   const error = record.error
   return typeof error === 'string' && error.trim().length > 0 ? error : fallback
 }
