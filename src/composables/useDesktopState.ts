@@ -652,6 +652,7 @@ export function useDesktopState() {
     fallbackRetried: boolean
   }
   const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
+  const queueProcessingByThreadId = ref<Record<string, boolean>>({})
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
   const selectedModelId = ref(loadSelectedModelId())
@@ -2240,6 +2241,7 @@ export function useDesktopState() {
     skills: Array<{ name: string; path: string }> = [],
     mode: 'steer' | 'queue' = 'steer',
     fileAttachments: FileAttachment[] = [],
+    queueInsertIndex?: number,
   ): Promise<void> {
     const threadId = selectedThreadId.value
     const nextText = text.trim()
@@ -2250,9 +2252,14 @@ export function useDesktopState() {
     if (isInProgress && mode === 'queue') {
       const queue = queuedMessagesByThreadId.value[threadId] ?? []
       const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const nextQueue = [...queue]
+      const insertIndex = typeof queueInsertIndex === 'number'
+        ? Math.max(0, Math.min(queueInsertIndex, nextQueue.length))
+        : nextQueue.length
+      nextQueue.splice(insertIndex, 0, { id, text: nextText, imageUrls, skills, fileAttachments })
       queuedMessagesByThreadId.value = {
         ...queuedMessagesByThreadId.value,
-        [threadId]: [...queue, { id, text: nextText, imageUrls, skills, fileAttachments }],
+        [threadId]: nextQueue,
       }
       return
     }
@@ -2442,8 +2449,13 @@ export function useDesktopState() {
   }
 
   async function processQueuedMessages(threadId: string): Promise<void> {
+    if (queueProcessingByThreadId.value[threadId] === true) return
     const queue = queuedMessagesByThreadId.value[threadId]
     if (!queue || queue.length === 0) return
+    queueProcessingByThreadId.value = {
+      ...queueProcessingByThreadId.value,
+      [threadId]: true,
+    }
     const [next, ...rest] = queue
     queuedMessagesByThreadId.value = rest.length > 0
       ? { ...queuedMessagesByThreadId.value, [threadId]: rest }
@@ -2461,6 +2473,7 @@ export function useDesktopState() {
       setThreadInProgress(threadId, false)
       setTurnActivityForThread(threadId, null)
     } finally {
+      queueProcessingByThreadId.value = omitKey(queueProcessingByThreadId.value, threadId)
       isSendingMessage.value = false
     }
   }
@@ -2793,6 +2806,7 @@ export function useDesktopState() {
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
+    queueProcessingByThreadId.value = {}
   }
 
   const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {

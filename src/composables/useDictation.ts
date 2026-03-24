@@ -195,6 +195,13 @@ export function useDictation(options: {
     }
   }
 
+  function cancel() {
+    stopRequestedBeforeStart = false
+    cancelTranscription()
+    cleanup()
+    state.value = 'idle'
+  }
+
   async function transcribe(recordedChunks: Blob[], mimeType: string) {
     if (recordedChunks.length === 0) {
       options.onEmpty?.()
@@ -274,8 +281,7 @@ export function useDictation(options: {
   }
 
   onBeforeUnmount(() => {
-    cancelTranscription()
-    cleanup()
+    cancel()
   })
 
   function toggleRecording() {
@@ -296,5 +302,6 @@ export function useDictation(options: {
     startRecording,
     stopRecording,
     toggleRecording,
+    cancel,
   }
 }
