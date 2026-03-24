@@ -151,7 +151,7 @@
                       :title="`Edit ${att.path}`"
                       aria-label="Edit file"
                     >
-                      ✎
+                      Edit
                     </a>
                   </span>
                 </span>
@@ -217,7 +217,7 @@
                             :title="`Edit ${segment.path}`"
                             aria-label="Edit file"
                           >
-                            ✎
+                            Edit
                           </a>
                         </span>
                         <a
