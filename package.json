@@ -38,6 +38,8 @@
     "build:cli": "tsup",
     "build": "npm run build:frontend && npm run build:cli",
     "preview": "vite preview",
+    "test:audio:hello": "bash scripts/create-hello-wav.sh",
+    "test:backend:whisper": "npm run build:cli && node scripts/test-whisper-backend.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
