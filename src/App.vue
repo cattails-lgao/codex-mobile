@@ -170,7 +170,7 @@
                 </div>
                 <div class="new-thread-trending">
                   <div class="new-thread-trending-header">
-                    <p class="new-thread-trending-title">Trending GitHub tips</p>
+                    <p class="new-thread-trending-title">Trending GitHub repos</p>
                     <ComposerDropdown
                       class="new-thread-trending-scope-dropdown"
                       :model-value="githubTipsScope"
@@ -180,7 +180,7 @@
                   </div>
                   <p v-if="isTrendingProjectsLoading" class="new-thread-trending-empty">Loading trending projects...</p>
                   <p v-else-if="trendingProjects.length === 0" class="new-thread-trending-empty">
-                    Trending tips are unavailable right now.
+                    Trending repos are unavailable right now.
                   </p>
                   <div v-else class="new-thread-trending-list">
                     <button
@@ -190,7 +190,14 @@
                       class="new-thread-trending-tip"
                       @click="onSelectTrendingProjectTip(project)"
                     >
-                      <span class="new-thread-trending-tip-name">{{ project.fullName }}</span>
+                      <span class="new-thread-trending-tip-name" :title="project.fullName">
+                        <template v-if="shouldHideTrendingOwner(project)">
+                          {{ project.repo || project.fullName }}
+                        </template>
+                        <template v-else>
+                          {{ project.fullName }}
+                        </template>
+                      </span>
                       <span class="new-thread-trending-tip-meta">{{ formatTrendingTipMeta(project) }}</span>
                       <span class="new-thread-trending-tip-description">
                         {{ project.description || 'No description available.' }}
@@ -808,6 +815,14 @@ function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
     fileAttachments: [],
     skills: [],
   })
+}
+
+function shouldHideTrendingOwner(project: GithubTrendingProject): boolean {
+  const owner = project.owner.trim()
+  const repo = project.repo.trim()
+  if (!owner || !repo) return false
+  if (owner.length >= 14) return true
+  return (owner.length + repo.length + 1) >= 26
 }
 
 function onEditQueuedMessage(messageId: string): void {
@@ -1592,7 +1607,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-trending-tip-name {
-  @apply text-sm font-medium text-zinc-900;
+  @apply w-full truncate text-sm font-medium text-zinc-900;
 }
 
 .new-thread-trending-tip-meta {
