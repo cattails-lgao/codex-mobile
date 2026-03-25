@@ -90,6 +90,10 @@
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
+              <button class="sidebar-settings-row" type="button" @click="toggleWorktreeGitAutomation">
+                <span class="sidebar-settings-label">Worktree Git automation</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
+              </button>
               <div class="sidebar-settings-row sidebar-settings-row--select">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -392,6 +396,7 @@ const {
   removeQueuedMessage,
   steerQueuedMessage,
   setSelectedModelId,
+  setWorktreeGitAutomationEnabled,
   setSelectedReasoningEffort,
   respondToPendingServerRequest,
   renameProject,
@@ -430,6 +435,7 @@ const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
 const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
+const WORKTREE_GIT_AUTOMATION_KEY = 'codex-web-local.worktree-git-automation.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
@@ -439,6 +445,7 @@ let rollbackDraftPrependRequestId = 0
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
+const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, true))
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -1007,6 +1014,11 @@ function toggleDictationAutoSend(): void {
   window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
 }
 
+function toggleWorktreeGitAutomation(): void {
+  worktreeGitAutomationEnabled.value = !worktreeGitAutomationEnabled.value
+  window.localStorage.setItem(WORKTREE_GIT_AUTOMATION_KEY, worktreeGitAutomationEnabled.value ? '1' : '0')
+}
+
 function onDictationLanguageChange(nextValue: string): void {
   const normalized = normalizeToWhisperLanguage(nextValue.trim())
   const value = normalized || 'auto'
@@ -1219,6 +1231,14 @@ watch(
   () => {
     worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
   },
+)
+
+watch(
+  () => worktreeGitAutomationEnabled.value,
+  (enabled) => {
+    setWorktreeGitAutomationEnabled(enabled)
+  },
+  { immediate: true },
 )
 
 watch(isMobile, (mobile) => {
