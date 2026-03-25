@@ -1583,11 +1583,12 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-trending-list {
-  @apply flex flex-wrap gap-2;
+  @apply grid grid-cols-3 gap-2;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
 }
 
 .new-thread-trending-tip {
-  @apply flex min-w-64 flex-1 cursor-pointer flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50;
+  @apply flex cursor-pointer flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50;
 }
 
 .new-thread-trending-tip-name {
