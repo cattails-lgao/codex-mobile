@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upstream Sync Curator"
+  short_description: "Analyze upstream by feature before selective sync"
+  default_prompt: "Use $upstream-sync-curator to analyze friuns2/codexUI upstream changes for this repo, group them by feature theme, and wait for my selection before introducing any theme in a temporary worktree."
