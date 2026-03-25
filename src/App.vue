@@ -191,19 +191,14 @@
                       @click="onSelectTrendingProjectTip(project)"
                     >
                       <span class="new-thread-trending-tip-name" :title="project.fullName">
-                        <template v-if="shouldHideTrendingOwnerByWidth(project.id)">
-                          {{ project.repo || project.fullName }}
+                        <template v-if="project.owner && project.repo">
+                          <span class="new-thread-trending-tip-name-owner">{{ project.owner }}</span>
+                          <span class="new-thread-trending-tip-name-slash">/</span>
+                          <span class="new-thread-trending-tip-name-repo">{{ project.repo }}</span>
                         </template>
                         <template v-else>
-                          {{ project.fullName }}
+                          <span class="new-thread-trending-tip-name-repo">{{ project.fullName }}</span>
                         </template>
-                      </span>
-                      <span
-                        class="new-thread-trending-tip-name-measure"
-                        aria-hidden="true"
-                        :ref="(el) => setTrendingNameMeasureRef(project.id, el as HTMLElement | null)"
-                      >
-                        {{ project.fullName }}
                       </span>
                       <span class="new-thread-trending-tip-meta">{{ formatTrendingTipMeta(project) }}</span>
                       <span class="new-thread-trending-tip-description">
@@ -485,9 +480,6 @@ const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
-const hideTrendingOwnerByWidth = ref<Record<number, boolean>>({})
-const trendingNameMeasureRefs = new Map<number, HTMLElement>()
-let trendingNameMeasureFrameId: number | null = null
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
@@ -618,7 +610,6 @@ const githubTipsScopeOptions = computed<Array<{ value: GithubTipsScope; label: s
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
-  window.addEventListener('resize', scheduleTrendingNameMeasure)
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
@@ -631,11 +622,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
-  window.removeEventListener('resize', scheduleTrendingNameMeasure)
-  if (trendingNameMeasureFrameId !== null) {
-    window.cancelAnimationFrame(trendingNameMeasureFrameId)
-    trendingNameMeasureFrameId = null
-  }
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
   if (threadSearchTimer) {
     clearTimeout(threadSearchTimer)
@@ -831,42 +817,6 @@ function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
     fileAttachments: [],
     skills: [],
   })
-}
-
-function setTrendingNameMeasureRef(projectId: number, el: HTMLElement | null): void {
-  if (el) {
-    trendingNameMeasureRefs.set(projectId, el)
-  } else {
-    trendingNameMeasureRefs.delete(projectId)
-  }
-  scheduleTrendingNameMeasure()
-}
-
-function shouldHideTrendingOwnerByWidth(projectId: number): boolean {
-  return hideTrendingOwnerByWidth.value[projectId] === true
-}
-
-function scheduleTrendingNameMeasure(): void {
-  if (typeof window === 'undefined') return
-  if (trendingNameMeasureFrameId !== null) {
-    window.cancelAnimationFrame(trendingNameMeasureFrameId)
-  }
-  trendingNameMeasureFrameId = window.requestAnimationFrame(() => {
-    trendingNameMeasureFrameId = null
-    measureTrendingNameWidths()
-  })
-}
-
-function measureTrendingNameWidths(): void {
-  const nextValue: Record<number, boolean> = {}
-  for (const project of trendingProjects.value) {
-    const measureEl = trendingNameMeasureRefs.get(project.id)
-    if (!measureEl) continue
-    const titleEl = measureEl.previousElementSibling as HTMLElement | null
-    if (!titleEl) continue
-    nextValue[project.id] = measureEl.offsetWidth > titleEl.clientWidth + 1
-  }
-  hideTrendingOwnerByWidth.value = nextValue
 }
 
 function onEditQueuedMessage(messageId: string): void {
@@ -1400,15 +1350,6 @@ watch(
 )
 
 watch(
-  () => trendingProjects.value.map((project) => project.id).join(','),
-  () => {
-    nextTick(() => {
-      scheduleTrendingNameMeasure()
-    })
-  },
-)
-
-watch(
   () => newThreadFolderOptions.value,
   (options) => {
     if (options.length === 0) {
@@ -1656,15 +1597,31 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-trending-tip {
-  @apply relative flex cursor-pointer flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50;
+  @apply flex cursor-pointer flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50;
+  container-type: inline-size;
 }
 
 .new-thread-trending-tip-name {
   @apply w-full truncate text-sm font-medium text-zinc-900;
 }
 
-.new-thread-trending-tip-name-measure {
-  @apply pointer-events-none absolute invisible whitespace-nowrap text-sm font-medium;
+.new-thread-trending-tip-name-owner {
+  @apply inline;
+}
+
+.new-thread-trending-tip-name-slash {
+  @apply inline;
+}
+
+.new-thread-trending-tip-name-repo {
+  @apply inline;
+}
+
+@container (max-width: 250px) {
+  .new-thread-trending-tip-name-owner,
+  .new-thread-trending-tip-name-slash {
+    display: none;
+  }
 }
 
 .new-thread-trending-tip-meta {
