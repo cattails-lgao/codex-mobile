@@ -189,11 +189,15 @@ function parseGithubTrendingHtml(html: string, limit: number): GithubTrendingIte
   const items: GithubTrendingItem[] = []
   let seq = Date.now()
   for (const row of rows) {
-    const hrefMatch = row.match(/href="\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)"/)
+    const repoBlockMatch = row.match(/<h2[\s\S]*?<\/h2>/)
+    const hrefMatch = repoBlockMatch?.[0]?.match(/href="\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)"/)
     if (!hrefMatch) continue
     const fullName = hrefMatch[1] ?? ''
     if (!fullName || items.some((item) => item.fullName === fullName)) continue
-    const descriptionMatch = row.match(/<p[^>]*>([\s\S]*?)<\/p>/)
+    const descriptionMatch =
+      row.match(/<p[^>]*class="[^"]*col-9[^"]*"[^>]*>([\s\S]*?)<\/p>/)
+      ?? row.match(/<p[^>]*class="[^"]*color-fg-muted[^"]*"[^>]*>([\s\S]*?)<\/p>/)
+      ?? row.match(/<p[^>]*>([\s\S]*?)<\/p>/)
     const languageMatch = row.match(/programmingLanguage[^>]*>\s*([\s\S]*?)\s*<\/span>/)
     const starsMatch = row.match(/href="\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/stargazers"[\s\S]*?>([\s\S]*?)<\/a>/)
     const starsText = stripHtml(starsMatch?.[1] ?? '').replace(/,/g, '')

@@ -83,11 +83,18 @@ function normalizeGithubProjectDescription(fullName: string, rawDescription: str
   const description = rawDescription.trim()
   if (!description) return ''
   const escapedName = fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const ownerRepoSpaced = fullName.replace('/', '\\s*/\\s*').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const [owner = '', repo = ''] = fullName.split('/', 2)
+  const escapedOwner = owner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedRepo = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const ownerRepoSpaced = owner && repo
+    ? `${escapedOwner}\\s*/\\s*${escapedRepo}`
+    : escapedName
   return description
     .replace(/^[★☆*\s:|\-]+/u, '')
+    .replace(/^(sponsor|star)\s+/i, '')
     .replace(new RegExp(`^${escapedName}\\s*[-:|]*\\s*`, 'i'), '')
     .replace(new RegExp(`^${ownerRepoSpaced}\\s*[-:|]*\\s*`, 'i'), '')
+    .replace(/^(sponsor|star)\s+/i, '')
     .trim()
 }
 
