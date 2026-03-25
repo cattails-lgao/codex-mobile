@@ -53,7 +53,9 @@ const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
 const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v1'
-const COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode.v1'
+const COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode-by-context.v1'
+const LEGACY_COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode.v1'
+const NEW_THREAD_COLLABORATION_MODE_CONTEXT = '__new-thread__'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
@@ -79,15 +81,60 @@ function saveReadStateMap(state: Record<string, string>): void {
   window.localStorage.setItem(READ_STATE_STORAGE_KEY, JSON.stringify(state))
 }
 
-function loadSelectedCollaborationMode(): CollaborationModeKind {
-  if (typeof window === 'undefined') return 'default'
-  const raw = window.localStorage.getItem(COLLABORATION_MODE_STORAGE_KEY)
-  return raw === 'plan' ? 'plan' : 'default'
+function normalizeCollaborationMode(value: unknown): CollaborationModeKind {
+  return value === 'plan' ? 'plan' : 'default'
 }
 
-function saveSelectedCollaborationMode(value: CollaborationModeKind): void {
+function toCollaborationModeContextId(threadId: string): string {
+  const normalizedThreadId = threadId.trim()
+  return normalizedThreadId || NEW_THREAD_COLLABORATION_MODE_CONTEXT
+}
+
+function loadSelectedCollaborationModeMap(): Record<string, CollaborationModeKind> {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const raw = window.localStorage.getItem(COLLABORATION_MODE_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+      const next: Record<string, CollaborationModeKind> = {}
+      for (const [contextId, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof contextId !== 'string' || contextId.length === 0) continue
+        const normalizedMode = normalizeCollaborationMode(value)
+        if (normalizedMode === 'plan') {
+          next[contextId] = normalizedMode
+        }
+      }
+      return next
+    }
+  } catch {
+    // Fall back to the legacy global preference below.
+  }
+
+  const legacyMode = normalizeCollaborationMode(window.localStorage.getItem(LEGACY_COLLABORATION_MODE_STORAGE_KEY))
+  return legacyMode === 'plan'
+    ? { [NEW_THREAD_COLLABORATION_MODE_CONTEXT]: 'plan' }
+    : {}
+}
+
+function readSelectedCollaborationMode(
+  state: Record<string, CollaborationModeKind>,
+  threadId: string,
+): CollaborationModeKind {
+  const contextId = toCollaborationModeContextId(threadId)
+  return normalizeCollaborationMode(state[contextId])
+}
+
+function saveSelectedCollaborationModeMap(state: Record<string, CollaborationModeKind>): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(COLLABORATION_MODE_STORAGE_KEY, value)
+  if (Object.keys(state).length === 0) {
+    window.localStorage.removeItem(COLLABORATION_MODE_STORAGE_KEY)
+  } else {
+    window.localStorage.setItem(COLLABORATION_MODE_STORAGE_KEY, JSON.stringify(state))
+  }
+  window.localStorage.removeItem(LEGACY_COLLABORATION_MODE_STORAGE_KEY)
 }
 
 function clamp(value: number, minValue: number, maxValue: number): number {
@@ -702,7 +749,12 @@ export function useDesktopState() {
     { value: 'default', label: 'Default' },
     { value: 'plan', label: 'Plan' },
   ])
-  const selectedCollaborationMode = ref<CollaborationModeKind>(loadSelectedCollaborationMode())
+  const selectedCollaborationModeByContext = ref<Record<string, CollaborationModeKind>>(
+    loadSelectedCollaborationModeMap(),
+  )
+  const selectedCollaborationMode = ref<CollaborationModeKind>(
+    readSelectedCollaborationMode(selectedCollaborationModeByContext.value, selectedThreadId.value),
+  )
   const selectedModelId = ref('')
   const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
@@ -796,6 +848,10 @@ export function useDesktopState() {
     if (selectedThreadId.value === nextThreadId) return
     selectedThreadId.value = nextThreadId
     saveSelectedThreadId(nextThreadId)
+    selectedCollaborationMode.value = readSelectedCollaborationMode(
+      selectedCollaborationModeByContext.value,
+      nextThreadId,
+    )
     activeReasoningItemId = ''
     shouldAutoScrollOnNextAgentEvent = false
   }
@@ -806,9 +862,17 @@ export function useDesktopState() {
 
   function setSelectedCollaborationMode(mode: CollaborationModeKind): void {
     const nextMode: CollaborationModeKind = mode === 'plan' ? 'plan' : 'default'
-    if (selectedCollaborationMode.value === nextMode) return
+    const contextId = toCollaborationModeContextId(selectedThreadId.value)
+    const currentMode = readSelectedCollaborationMode(selectedCollaborationModeByContext.value, selectedThreadId.value)
+    if (currentMode === nextMode && selectedCollaborationMode.value === nextMode) return
     selectedCollaborationMode.value = nextMode
-    saveSelectedCollaborationMode(nextMode)
+    selectedCollaborationModeByContext.value = nextMode === 'plan'
+      ? {
+          ...selectedCollaborationModeByContext.value,
+          [contextId]: nextMode,
+        }
+      : omitKey(selectedCollaborationModeByContext.value, contextId)
+    saveSelectedCollaborationModeMap(selectedCollaborationModeByContext.value)
   }
 
   function setCodexRateLimit(nextSnapshot: UiRateLimitSnapshot | null): void {
