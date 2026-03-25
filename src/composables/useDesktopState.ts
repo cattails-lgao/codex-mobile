@@ -702,6 +702,7 @@ export function useDesktopState() {
   let shouldAutoScrollOnNextAgentEvent = false
   const pendingTurnStartsById = new Map<string, TurnStartedInfo>()
   const fallbackRetryInFlightThreadIds = new Set<string>()
+  const isWorktreeGitAutomationEnabled = ref(true)
 
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
@@ -764,6 +765,10 @@ export function useDesktopState() {
     saveSelectedModelId(selectedModelId.value)
   }
 
+  function setWorktreeGitAutomationEnabled(enabled: boolean): void {
+    isWorktreeGitAutomationEnabled.value = enabled
+  }
+
   async function applyFallbackModelSelection(): Promise<void> {
     selectedModelId.value = MODEL_FALLBACK_ID
     saveSelectedModelId(selectedModelId.value)
@@ -790,6 +795,7 @@ export function useDesktopState() {
   }
 
   async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string): Promise<void> {
+    if (!isWorktreeGitAutomationEnabled.value) return
     const normalizedMessage = commitMessage.trim()
     if (!normalizedMessage) return
     const thread = allThreads.value.find((row) => row.id === threadId)
@@ -801,6 +807,7 @@ export function useDesktopState() {
   }
 
   async function rollbackWorktreeGitToTurnMessage(threadId: string, turnIndex: number): Promise<void> {
+    if (!isWorktreeGitAutomationEnabled.value) return
     const thread = allThreads.value.find((row) => row.id === threadId)
     if (!thread?.hasWorktree) return
     const cwd = thread.cwd.trim()
@@ -2941,6 +2948,7 @@ export function useDesktopState() {
     removeQueuedMessage,
     steerQueuedMessage,
     setSelectedModelId,
+    setWorktreeGitAutomationEnabled,
     setSelectedReasoningEffort,
     updateSelectedSpeedMode,
     respondToPendingServerRequest,
