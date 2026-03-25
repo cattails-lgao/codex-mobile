@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { RequestHandler, Request, Response, NextFunction } from 'express'
 
-const TOKEN_COOKIE = 'codex_web_local_token'
+const TOKEN_COOKIE = 'portal_session'
 
 function constantTimeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
@@ -26,6 +26,11 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 function isLocalhostRemote(remote: string): boolean {
   return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+}
+
+function isLocalhostHost(host: string): boolean {
+  const normalized = host.toLowerCase()
+  return normalized.startsWith('localhost:') || normalized === 'localhost' || normalized.startsWith('127.0.0.1:')
 }
 
 function isIPv4Octet(value: string): boolean {
@@ -57,12 +62,17 @@ function isTrustedTailscaleRemote(remote: string): boolean {
 
 function isAuthorizedByRequestLike(
   remoteAddress: string | undefined,
-  _hostHeader: string | undefined,
+  hostHeader: string | undefined,
   cookieHeader: string | undefined,
   validTokens: Set<string>,
 ): boolean {
   const remote = remoteAddress ?? ''
-  if (isLocalhostRemote(remote) || isTrustedTailscaleRemote(remote)) {
+  // SSH reverse tunnels terminate on loopback, so remoteAddress alone is not enough
+  // to prove this is a direct local browser request.
+  if (isLocalhostRemote(remote) && isLocalhostHost(hostHeader ?? '')) {
+    return true
+  }
+  if (isTrustedTailscaleRemote(remote)) {
     return true
   }
 
