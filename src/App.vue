@@ -278,7 +278,7 @@ const SETTINGS_HELP = {
   appearance: 'Switch between system theme, light mode, and dark mode.',
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
-  worktreeRollback: 'Enable worktree Git automation for rollback/reset and chat-linked commits in worktree threads.',
+  worktreeRollback: 'When enabled, each message creates a Git commit. On rollback, it runs Git reset to the commit for that message.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
 const WHISPER_LANGUAGES: Record<string, string> = {
