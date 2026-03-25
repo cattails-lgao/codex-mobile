@@ -813,7 +813,15 @@ export function useDesktopState() {
     const rollbackMessageText = rollbackUserMessage?.text?.trim() ?? ''
     if (!rollbackMessageText) return
 
-    await rollbackWorktreeToMessage(cwd, rollbackMessageText)
+    try {
+      await rollbackWorktreeToMessage(cwd, rollbackMessageText)
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : ''
+      if (message.includes('No matching commit found')) {
+        return
+      }
+      throw unknownError
+    }
     pendingThreadsRefresh = true
   }
 
