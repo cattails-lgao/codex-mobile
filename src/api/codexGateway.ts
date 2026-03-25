@@ -60,6 +60,17 @@ export type ThreadSearchResult = {
   indexedThreadCount: number
 }
 
+export type GithubTrendingProject = {
+  id: number
+  fullName: string
+  owner: string
+  repo: string
+  url: string
+  description: string
+  language: string
+  stars: number
+}
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -542,6 +553,61 @@ export async function searchThreads(
     throw new Error(payload.error || 'Failed to search threads')
   }
   return payload.data ?? { threadIds: [], indexedThreadCount: 0 }
+}
+
+function formatGithubDate(date: Date): string {
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export async function getGithubTrendingProjects(limit = 5): Promise<GithubTrendingProject[]> {
+  const safeLimit = Math.min(10, Math.max(1, Math.floor(limit)))
+  const sinceDate = new Date()
+  sinceDate.setUTCDate(sinceDate.getUTCDate() - 7)
+  const query = new URLSearchParams({
+    q: `created:>=${formatGithubDate(sinceDate)}`,
+    sort: 'stars',
+    order: 'desc',
+    per_page: String(safeLimit),
+  })
+  const response = await fetch(`https://api.github.com/search/repositories?${query.toString()}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub trending projects (${response.status})`)
+  }
+  const payload = (await response.json()) as unknown
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const items = Array.isArray(record.items) ? record.items : []
+  const projects: GithubTrendingProject[] = []
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    const id = typeof row.id === 'number' ? row.id : 0
+    const fullName = typeof row.full_name === 'string' ? row.full_name.trim() : ''
+    const htmlUrl = typeof row.html_url === 'string' ? row.html_url.trim() : ''
+    if (!id || !fullName || !htmlUrl) continue
+    const [owner = '', repo = ''] = fullName.split('/', 2)
+    projects.push({
+      id,
+      fullName,
+      owner,
+      repo,
+      url: htmlUrl,
+      description: typeof row.description === 'string' ? row.description.trim() : '',
+      language: typeof row.language === 'string' ? row.language.trim() : '',
+      stars: typeof row.stargazers_count === 'number' ? row.stargazers_count : 0,
+    })
+  }
+  return projects
 }
 
 function getErrorMessageFromPayload(payload: unknown, fallback: string): string {

@@ -168,10 +168,32 @@
                   <strong class="worktree-init-status-title">{{ worktreeInitStatus.title }}</strong>
                   <span class="worktree-init-status-message">{{ worktreeInitStatus.message }}</span>
                 </div>
+                <div class="new-thread-trending">
+                  <p class="new-thread-trending-title">Trending GitHub tips</p>
+                  <p v-if="isTrendingProjectsLoading" class="new-thread-trending-empty">Loading trending projects...</p>
+                  <p v-else-if="trendingProjects.length === 0" class="new-thread-trending-empty">
+                    Trending tips are unavailable right now.
+                  </p>
+                  <div v-else class="new-thread-trending-list">
+                    <button
+                      v-for="project in trendingProjects"
+                      :key="project.id"
+                      type="button"
+                      class="new-thread-trending-tip"
+                      @click="onSelectTrendingProjectTip(project)"
+                    >
+                      <span class="new-thread-trending-tip-name">{{ project.fullName }}</span>
+                      <span class="new-thread-trending-tip-meta">{{ formatTrendingTipMeta(project) }}</span>
+                      <span class="new-thread-trending-tip-description">
+                        {{ project.description || 'No description available.' }}
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-                <ThreadComposer :active-thread-id="composerThreadContextId"
-                  :cwd="composerCwd"
+                <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
+                :cwd="composerCwd"
                 :models="availableModelIds" :selected-model="selectedModelId"
                 :selected-reasoning-effort="selectedReasoningEffort"
                 :selected-speed-mode="selectedSpeedMode"
@@ -260,6 +282,7 @@ import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
   createWorktree,
+  getGithubTrendingProjects,
   getHomeDirectory,
   getProjectRootSuggestion,
   getWorkspaceRootsState,
@@ -268,6 +291,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
+import type { GithubTrendingProject } from './api/codexGateway'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
@@ -434,7 +458,10 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
+const trendingProjects = ref<GithubTrendingProject[]>([])
+const isTrendingProjectsLoading = ref(false)
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
@@ -564,6 +591,7 @@ onMounted(() => {
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
+  void loadTrendingProjects()
 })
 
 onUnmounted(() => {
@@ -734,6 +762,23 @@ function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fil
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments, queueInsertIndex)
 }
 
+function formatTrendingTipMeta(project: GithubTrendingProject): string {
+  const stars = new Intl.NumberFormat().format(project.stars)
+  if (project.language) return `${project.language} · ★ ${stars}`
+  return `★ ${stars}`
+}
+
+function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
+  const composer = homeThreadComposerRef.value
+  if (!composer) return
+  composer.hydrateDraft({
+    text: `Clone and run github repo ${project.url}`,
+    imageUrls: [],
+    fileAttachments: [],
+    skills: [],
+  })
+}
+
 function onEditQueuedMessage(messageId: string): void {
   const queueIndex = selectedThreadQueuedMessages.value.findIndex((item) => item.id === messageId)
   const message = queueIndex >= 0 ? selectedThreadQueuedMessages.value[queueIndex] : undefined
@@ -889,6 +934,17 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
     }
   } catch {
     workspaceRootOptionsState.value = { order: [], labels: {} }
+  }
+}
+
+async function loadTrendingProjects(): Promise<void> {
+  isTrendingProjectsLoading.value = true
+  try {
+    trendingProjects.value = await getGithubTrendingProjects(6)
+  } catch {
+    trendingProjects.value = []
+  } finally {
+    isTrendingProjectsLoading.value = false
   }
 }
 
@@ -1462,6 +1518,38 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-runtime-dropdown {
   @apply mt-3;
+}
+
+.new-thread-trending {
+  @apply mt-4 w-full max-w-3xl;
+}
+
+.new-thread-trending-title {
+  @apply m-0 mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500;
+}
+
+.new-thread-trending-empty {
+  @apply m-0 text-sm text-zinc-500;
+}
+
+.new-thread-trending-list {
+  @apply flex flex-wrap gap-2;
+}
+
+.new-thread-trending-tip {
+  @apply flex min-w-64 flex-1 cursor-pointer flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50;
+}
+
+.new-thread-trending-tip-name {
+  @apply text-sm font-medium text-zinc-900;
+}
+
+.new-thread-trending-tip-meta {
+  @apply text-xs text-zinc-500;
+}
+
+.new-thread-trending-tip-description {
+  @apply line-clamp-2 text-xs text-zinc-600;
 }
 
 .worktree-init-status {
