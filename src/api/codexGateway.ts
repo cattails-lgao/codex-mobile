@@ -79,6 +79,18 @@ export type GithubTipsScope =
   | 'trending-weekly'
   | 'trending-monthly'
 
+function normalizeGithubProjectDescription(fullName: string, rawDescription: string): string {
+  const description = rawDescription.trim()
+  if (!description) return ''
+  const escapedName = fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const ownerRepoSpaced = fullName.replace('/', '\\s*/\\s*').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return description
+    .replace(/^[★☆*\s:|\-]+/u, '')
+    .replace(new RegExp(`^${escapedName}\\s*[-:|]*\\s*`, 'i'), '')
+    .replace(new RegExp(`^${ownerRepoSpaced}\\s*[-:|]*\\s*`, 'i'), '')
+    .trim()
+}
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -610,7 +622,10 @@ export async function getGithubTrendingProjects(limit = 5): Promise<GithubTrendi
       owner,
       repo,
       url: htmlUrl,
-      description: typeof row.description === 'string' ? row.description.trim() : '',
+      description: normalizeGithubProjectDescription(
+        fullName,
+        typeof row.description === 'string' ? row.description : '',
+      ),
       language: typeof row.language === 'string' ? row.language.trim() : '',
       stars: typeof row.stargazers_count === 'number' ? row.stargazers_count : 0,
     })
@@ -665,7 +680,10 @@ export async function getGithubProjectsForScope(
         owner,
         repo,
         url: htmlUrl,
-        description: typeof row.description === 'string' ? row.description.trim() : '',
+        description: normalizeGithubProjectDescription(
+          fullName,
+          typeof row.description === 'string' ? row.description : '',
+        ),
         language: typeof row.language === 'string' ? row.language.trim() : '',
         stars: typeof row.stargazers_count === 'number' ? row.stargazers_count : 0,
       })
@@ -706,7 +724,10 @@ export async function getGithubProjectsForScope(
       owner,
       repo,
       url,
-      description: typeof row.description === 'string' ? row.description.trim() : '',
+      description: normalizeGithubProjectDescription(
+        fullName,
+        typeof row.description === 'string' ? row.description : '',
+      ),
       language: typeof row.language === 'string' ? row.language.trim() : '',
       stars: typeof row.stars === 'number' ? row.stars : 0,
     })
