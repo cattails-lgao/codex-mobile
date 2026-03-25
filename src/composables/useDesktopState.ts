@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import {
+  autoCommitWorktreeChanges,
   archiveThread,
   getAccountRateLimits,
   renameThread,
@@ -20,6 +21,7 @@ import {
   persistThreadTitle,
   generateThreadTitle,
   resumeThread,
+  rollbackWorktreeToMessage,
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
@@ -55,6 +57,7 @@ const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
+const AUTO_COMMIT_MESSAGE_FALLBACK = 'Auto-commit from Codex worktree chat turn'
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -699,6 +702,7 @@ export function useDesktopState() {
   let shouldAutoScrollOnNextAgentEvent = false
   const pendingTurnStartsById = new Map<string, TurnStartedInfo>()
   const fallbackRetryInFlightThreadIds = new Set<string>()
+  const isWorktreeGitAutomationEnabled = ref(true)
 
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
@@ -761,6 +765,10 @@ export function useDesktopState() {
     saveSelectedModelId(selectedModelId.value)
   }
 
+  function setWorktreeGitAutomationEnabled(enabled: boolean): void {
+    isWorktreeGitAutomationEnabled.value = enabled
+  }
+
   async function applyFallbackModelSelection(): Promise<void> {
     selectedModelId.value = MODEL_FALLBACK_ID
     saveSelectedModelId(selectedModelId.value)
@@ -784,6 +792,42 @@ export function useDesktopState() {
   function clearPendingTurnRequest(threadId: string): void {
     if (!pendingTurnRequestByThreadId.value[threadId]) return
     pendingTurnRequestByThreadId.value = omitKey(pendingTurnRequestByThreadId.value, threadId)
+  }
+
+  async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string): Promise<void> {
+    if (!isWorktreeGitAutomationEnabled.value) return
+    const normalizedMessage = commitMessage.trim()
+    if (!normalizedMessage) return
+    const thread = allThreads.value.find((row) => row.id === threadId)
+    if (!thread?.hasWorktree) return
+    const cwd = thread.cwd.trim()
+    if (!cwd) return
+    await autoCommitWorktreeChanges(cwd, normalizedMessage)
+    pendingThreadsRefresh = true
+  }
+
+  async function rollbackWorktreeGitToTurnMessage(threadId: string, turnIndex: number): Promise<void> {
+    if (!isWorktreeGitAutomationEnabled.value) return
+    const thread = allThreads.value.find((row) => row.id === threadId)
+    if (!thread?.hasWorktree) return
+    const cwd = thread.cwd.trim()
+    if (!cwd) return
+
+    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+    const rollbackUserMessage = persisted.find((message) => message.role === 'user' && message.turnIndex === turnIndex)
+    const rollbackMessageText = rollbackUserMessage?.text?.trim() ?? ''
+    if (!rollbackMessageText) return
+
+    try {
+      await rollbackWorktreeToMessage(cwd, rollbackMessageText)
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : ''
+      if (message.includes('No matching commit found')) {
+        return
+      }
+      throw unknownError
+    }
+    pendingThreadsRefresh = true
   }
 
   async function retryPendingTurnWithFallback(threadId: string): Promise<void> {
@@ -1850,6 +1894,7 @@ export function useDesktopState() {
       selectedModelId.value !== MODEL_FALLBACK_ID &&
       isUnsupportedChatGptModelError(new Error(turnErrorMessage))
     if (completedTurn) {
+      const pendingTurnRequest = pendingTurnRequestByThreadId.value[completedTurn.threadId]
       const startedTurnState = pendingTurnStartsById.get(completedTurn.turnId)
       if (startedTurnState) {
         pendingTurnStartsById.delete(completedTurn.turnId)
@@ -1877,6 +1922,12 @@ export function useDesktopState() {
       if (!shouldRetryWithFallback) {
         clearPendingTurnRequest(completedTurn.threadId)
         void processQueuedMessages(completedTurn.threadId)
+      }
+      if (!turnErrorMessage && !shouldRetryWithFallback) {
+        const commitMessage = pendingTurnRequest?.text?.trim() || AUTO_COMMIT_MESSAGE_FALLBACK
+        void autoCommitCompletedWorktreeTurn(completedTurn.threadId, commitMessage).catch(() => {
+          // Keep chat flow resilient when auto-commit fails.
+        })
       }
     }
 
@@ -2551,6 +2602,7 @@ export function useDesktopState() {
     isRollingBack.value = true
     error.value = ''
     try {
+      await rollbackWorktreeGitToTurnMessage(threadId, turnIndex)
       const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])
@@ -2904,6 +2956,7 @@ export function useDesktopState() {
     removeQueuedMessage,
     steerQueuedMessage,
     setSelectedModelId,
+    setWorktreeGitAutomationEnabled,
     setSelectedReasoningEffort,
     updateSelectedSpeedMode,
     respondToPendingServerRequest,
