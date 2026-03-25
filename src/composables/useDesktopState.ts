@@ -20,6 +20,7 @@ import {
   persistThreadTitle,
   generateThreadTitle,
   resumeThread,
+  rollbackWorktreeToMessage,
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
@@ -791,6 +792,21 @@ export function useDesktopState() {
     const cwd = thread.cwd.trim()
     if (!cwd) return
     await autoCommitWorktreeChanges(cwd, normalizedMessage)
+    pendingThreadsRefresh = true
+  }
+
+  async function rollbackWorktreeGitToTurnMessage(threadId: string, turnIndex: number): Promise<void> {
+    const thread = allThreads.value.find((row) => row.id === threadId)
+    if (!thread?.hasWorktree) return
+    const cwd = thread.cwd.trim()
+    if (!cwd) return
+
+    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+    const rollbackUserMessage = persisted.find((message) => message.role === 'user' && message.turnIndex === turnIndex)
+    const rollbackMessageText = rollbackUserMessage?.text?.trim() ?? ''
+    if (!rollbackMessageText) return
+
+    await rollbackWorktreeToMessage(cwd, rollbackMessageText)
     pendingThreadsRefresh = true
   }
 
@@ -2527,6 +2543,7 @@ export function useDesktopState() {
     isRollingBack.value = true
     error.value = ''
     try {
+      await rollbackWorktreeGitToTurnMessage(threadId, turnIndex)
       const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])

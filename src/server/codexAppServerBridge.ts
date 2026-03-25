@@ -333,6 +333,27 @@ function normalizeCommitMessage(value: unknown): string {
   return normalized.slice(0, 2000)
 }
 
+async function hasGitWorkingTreeChanges(cwd: string): Promise<boolean> {
+  const status = await runCommandWithOutput('git', ['status', '--porcelain'], { cwd })
+  return status.trim().length > 0
+}
+
+async function findCommitByExactMessage(cwd: string, message: string): Promise<string> {
+  const normalizedTarget = normalizeCommitMessage(message)
+  if (!normalizedTarget) return ''
+  const raw = await runCommandWithOutput('git', ['log', '--format=%H%x1f%B%x1e'], { cwd })
+  const entries = raw.split('\x1e')
+  for (const entry of entries) {
+    if (!entry.trim()) continue
+    const [shaRaw, bodyRaw] = entry.split('\x1f')
+    const sha = (shaRaw ?? '').trim()
+    const body = normalizeCommitMessage(bodyRaw ?? '')
+    if (!sha) continue
+    if (body === normalizedTarget) return sha
+  }
+  return ''
+}
+
 function getCodexAuthPath(): string {
   return join(getCodexHomeDir(), 'auth.json')
 }
@@ -1494,6 +1515,54 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: { committed: true } })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to auto-commit worktree changes') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/rollback-to-message') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+        const commitMessage = normalizeCommitMessage(payload?.message)
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!commitMessage) {
+          setJson(res, 400, { error: 'Missing message' })
+          return
+        }
+
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          await runCommandCapture('git', ['rev-parse', '--is-inside-work-tree'], { cwd })
+          const commitSha = await findCommitByExactMessage(cwd, commitMessage)
+          if (!commitSha) {
+            setJson(res, 404, { error: 'No matching commit found for this user message' })
+            return
+          }
+
+          let stashed = false
+          if (await hasGitWorkingTreeChanges(cwd)) {
+            const stashMessage = `codex-auto-stash-before-rollback-${Date.now()}`
+            await runCommand('git', ['stash', 'push', '-u', '-m', stashMessage], { cwd })
+            stashed = true
+          }
+
+          await runCommand('git', ['reset', '--hard', commitSha], { cwd })
+          setJson(res, 200, { data: { reset: true, commitSha, stashed } })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to rollback worktree to user message commit') })
         }
         return
       }
