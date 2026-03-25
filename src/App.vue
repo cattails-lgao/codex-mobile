@@ -94,6 +94,10 @@
                 <span class="sidebar-settings-label">Worktree rollback</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
               </button>
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.githubTrendingProjects" @click="toggleGithubTrendingProjects">
+                <span class="sidebar-settings-label">GitHub trending projects</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': showGithubTrendingProjects }" />
+              </button>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -168,7 +172,7 @@
                   <strong class="worktree-init-status-title">{{ worktreeInitStatus.title }}</strong>
                   <span class="worktree-init-status-message">{{ worktreeInitStatus.message }}</span>
                 </div>
-                <div class="new-thread-trending">
+                <div v-if="showGithubTrendingProjects" class="new-thread-trending">
                   <div class="new-thread-trending-header">
                     <p class="new-thread-trending-title">Trending GitHub projects</p>
                     <ComposerDropdown
@@ -320,6 +324,7 @@ const SETTINGS_HELP = {
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
   worktreeRollback: 'When enabled, each message creates a Git commit. On rollback, it runs Git reset to the commit for that message.',
+  githubTrendingProjects: 'Show or hide GitHub trending project cards on the new thread screen.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
 const WHISPER_LANGUAGES: Record<string, string> = {
@@ -507,6 +512,7 @@ const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle
 const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 const WORKTREE_GIT_AUTOMATION_KEY = 'codex-web-local.worktree-git-automation.v1'
+const GITHUB_TRENDING_PROJECTS_KEY = 'codex-web-local.github-trending-projects.v1'
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
@@ -517,6 +523,7 @@ const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, true))
+const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, true))
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -617,7 +624,9 @@ onMounted(() => {
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
-  void loadTrendingProjects()
+  if (showGithubTrendingProjects.value) {
+    void loadTrendingProjects()
+  }
 })
 
 onUnmounted(() => {
@@ -1177,6 +1186,11 @@ function toggleWorktreeGitAutomation(): void {
   window.localStorage.setItem(WORKTREE_GIT_AUTOMATION_KEY, worktreeGitAutomationEnabled.value ? '1' : '0')
 }
 
+function toggleGithubTrendingProjects(): void {
+  showGithubTrendingProjects.value = !showGithubTrendingProjects.value
+  window.localStorage.setItem(GITHUB_TRENDING_PROJECTS_KEY, showGithubTrendingProjects.value ? '1' : '0')
+}
+
 function onDictationLanguageChange(nextValue: string): void {
   const normalized = normalizeToWhisperLanguage(nextValue.trim())
   const value = normalized || 'auto'
@@ -1345,6 +1359,18 @@ watch(
 watch(
   () => githubTipsScope.value,
   () => {
+    if (!showGithubTrendingProjects.value) return
+    void loadTrendingProjects()
+  },
+)
+
+watch(
+  () => showGithubTrendingProjects.value,
+  (enabled) => {
+    if (!enabled) {
+      trendingProjects.value = []
+      return
+    }
     void loadTrendingProjects()
   },
 )
