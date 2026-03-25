@@ -470,7 +470,7 @@ const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
-const githubTipsScope = ref<GithubTipsScope>('search-weekly')
+const githubTipsScope = ref<GithubTipsScope>('trending-daily')
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
@@ -794,7 +794,7 @@ function onGithubTipsScopeChange(nextValue: string): void {
     'trending-weekly',
     'trending-monthly',
   ])
-  const scope = allowed.has(nextValue as GithubTipsScope) ? (nextValue as GithubTipsScope) : 'search-weekly'
+  const scope = allowed.has(nextValue as GithubTipsScope) ? (nextValue as GithubTipsScope) : 'trending-daily'
   if (githubTipsScope.value === scope) return
   githubTipsScope.value = scope
 }
