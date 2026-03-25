@@ -1,8 +1,8 @@
 import { createServer } from 'node:http'
 import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir, networkInterfaces } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
@@ -366,8 +366,76 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
   })
 }
 
-async function startServer(options: { port: string; password: string | boolean; tunnel: boolean }) {
+function getCodexGlobalStatePath(): string {
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  return join(codexHome, '.codex-global-state.json')
+}
+
+function normalizeUniqueStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const next: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const trimmed = item.trim()
+    if (!trimmed || next.includes(trimmed)) continue
+    next.push(trimmed)
+  }
+  return next
+}
+
+async function persistLaunchProject(projectPath: string): Promise<void> {
+  const trimmed = projectPath.trim()
+  if (!trimmed) return
+  const normalizedPath = isAbsolute(trimmed) ? trimmed : resolve(trimmed)
+  const directoryInfo = await stat(normalizedPath)
+  if (!directoryInfo.isDirectory()) {
+    throw new Error(`Not a directory: ${normalizedPath}`)
+  }
+
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const parsed = JSON.parse(raw) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      payload = parsed as Record<string, unknown>
+    }
+  } catch {
+    payload = {}
+  }
+
+  const roots = normalizeUniqueStrings(payload['electron-saved-workspace-roots'])
+  const activeRoots = normalizeUniqueStrings(payload['active-workspace-roots'])
+  payload['electron-saved-workspace-roots'] = [
+    normalizedPath,
+    ...roots.filter((value) => value !== normalizedPath),
+  ]
+  payload['active-workspace-roots'] = [
+    normalizedPath,
+    ...activeRoots.filter((value) => value !== normalizedPath),
+  ]
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function addProjectOnly(projectPath: string): Promise<void> {
+  const trimmed = projectPath.trim()
+  if (!trimmed) {
+    throw new Error('Missing project path')
+  }
+  await persistLaunchProject(trimmed)
+}
+
+async function startServer(options: { port: string; password: string | boolean; tunnel: boolean; projectPath?: string }) {
   const version = await readCliVersion()
+  const projectPath = options.projectPath?.trim() ?? ''
+  if (projectPath.length > 0) {
+    try {
+      await persistLaunchProject(projectPath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`\n[project] Could not open launch project: ${message}\n`)
+    }
+  }
   const codexCommand = ensureCodexInstalled() ?? resolveCodexCommand()
   if (!hasCodexAuth() && codexCommand) {
     console.log('\nCodex is not logged in. Starting `codex login`...\n')
@@ -461,13 +529,32 @@ async function runLogin() {
 }
 
 program
+  .argument('[projectPath]', 'project directory to open on launch')
+  .option('--open-project <path>', 'open project directory on launch (Codex desktop parity)')
   .option('-p, --port <port>', 'port to listen on', '5999')
   .option('--password <pass>', 'set a specific password')
   .option('--no-password', 'disable password protection')
   .option('--tunnel', 'start cloudflared tunnel', true)
   .option('--no-tunnel', 'disable cloudflared tunnel startup')
-  .action(async (opts: { port: string; password: string | boolean; tunnel: boolean }) => {
-    await startServer(opts)
+  .action(async (
+    projectPath: string | undefined,
+    opts: { port: string; password: string | boolean; tunnel: boolean; openProject?: string },
+  ) => {
+    const rawArgv = process.argv.slice(2)
+    const openProjectFlagIndex = rawArgv.findIndex((arg) => arg === '--open-project' || arg.startsWith('--open-project='))
+    let openProjectOnly = (opts.openProject ?? '').trim()
+    if (!openProjectOnly && openProjectFlagIndex >= 0 && projectPath?.trim()) {
+      // Commander may map "--open-project ." to the positional arg in this command layout.
+      openProjectOnly = projectPath.trim()
+    }
+    if (openProjectOnly.length > 0) {
+      await addProjectOnly(openProjectOnly)
+      console.log(`Added project: ${openProjectOnly}`)
+      return
+    }
+
+    const launchProject = (projectPath ?? '').trim()
+    await startServer({ ...opts, projectPath: launchProject })
   })
 
 program.command('login').description('Install/check Codex CLI and run `codex login`').action(runLogin)

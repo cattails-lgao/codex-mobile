@@ -347,6 +347,10 @@ function getCodexGlobalStatePath(): string {
   return join(getCodexHomeDir(), '.codex-global-state.json')
 }
 
+function getCodexSessionIndexPath(): string {
+  return join(getCodexHomeDir(), 'session_index.jsonl')
+}
+
 type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
 const MAX_THREAD_TITLES = 500
 
@@ -379,6 +383,63 @@ function removeFromThreadTitleCache(cache: ThreadTitleCache, id: string): Thread
   return { titles, order: cache.order.filter((o) => o !== id) }
 }
 
+type SessionIndexThreadTitle = {
+  id: string
+  title: string
+  updatedAtMs: number
+}
+
+function normalizeSessionIndexThreadTitle(value: unknown): SessionIndexThreadTitle | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const id = typeof record.id === 'string' ? record.id.trim() : ''
+  const title = typeof record.thread_name === 'string' ? record.thread_name.trim() : ''
+  const updatedAtIso = typeof record.updated_at === 'string' ? record.updated_at.trim() : ''
+  const updatedAtMs = updatedAtIso ? Date.parse(updatedAtIso) : Number.NaN
+
+  if (!id || !title) return null
+  return {
+    id,
+    title,
+    updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : 0,
+  }
+}
+
+function trimThreadTitleCache(cache: ThreadTitleCache): ThreadTitleCache {
+  const titles = { ...cache.titles }
+  const order = cache.order.filter((id) => {
+    if (!titles[id]) return false
+    return true
+  }).slice(0, MAX_THREAD_TITLES)
+
+  for (const id of Object.keys(titles)) {
+    if (!order.includes(id)) {
+      delete titles[id]
+    }
+  }
+
+  return { titles, order }
+}
+
+function mergeThreadTitleCaches(base: ThreadTitleCache, overlay: ThreadTitleCache): ThreadTitleCache {
+  const titles = { ...base.titles, ...overlay.titles }
+  const order: string[] = []
+
+  for (const id of [...overlay.order, ...base.order]) {
+    if (!titles[id] || order.includes(id)) continue
+    order.push(id)
+  }
+
+  for (const id of Object.keys(titles)) {
+    if (!order.includes(id)) {
+      order.push(id)
+    }
+  }
+
+  return trimThreadTitleCache({ titles, order })
+}
+
 async function readThreadTitleCache(): Promise<ThreadTitleCache> {
   const statePath = getCodexGlobalStatePath()
   try {
@@ -401,6 +462,50 @@ async function writeThreadTitleCache(cache: ThreadTitleCache): Promise<void> {
   }
   payload['thread-titles'] = cache
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function readThreadTitlesFromSessionIndex(): Promise<ThreadTitleCache> {
+  try {
+    const raw = await readFile(getCodexSessionIndexPath(), 'utf8')
+    const latestById = new Map<string, SessionIndexThreadTitle>()
+
+    for (const line of raw.split(/\r?\n/u)) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      try {
+        const entry = normalizeSessionIndexThreadTitle(JSON.parse(trimmed) as unknown)
+        if (!entry) continue
+
+        const previous = latestById.get(entry.id)
+        if (!previous || entry.updatedAtMs >= previous.updatedAtMs) {
+          latestById.set(entry.id, entry)
+        }
+      } catch {
+        // Skip malformed lines and keep scanning the rest of the index.
+      }
+    }
+
+    const entries = Array.from(latestById.values()).sort((first, second) => second.updatedAtMs - first.updatedAtMs)
+    const titles: Record<string, string> = {}
+    const order: string[] = []
+    for (const entry of entries) {
+      titles[entry.id] = entry.title
+      order.push(entry.id)
+    }
+
+    return trimThreadTitleCache({ titles, order })
+  } catch {
+    return { titles: {}, order: [] }
+  }
+}
+
+async function readMergedThreadTitleCache(): Promise<ThreadTitleCache> {
+  const [sessionIndexCache, persistedCache] = await Promise.all([
+    readThreadTitlesFromSessionIndex(),
+    readThreadTitleCache(),
+  ])
+  return mergeThreadTitleCaches(sessionIndexCache, persistedCache)
 }
 
 async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
@@ -1391,7 +1496,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-titles') {
-        const cache = await readThreadTitleCache()
+        const cache = await readMergedThreadTitleCache()
         setJson(res, 200, { data: cache })
         return
       }
