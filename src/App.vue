@@ -169,7 +169,15 @@
                   <span class="worktree-init-status-message">{{ worktreeInitStatus.message }}</span>
                 </div>
                 <div class="new-thread-trending">
-                  <p class="new-thread-trending-title">Trending GitHub tips</p>
+                  <div class="new-thread-trending-header">
+                    <p class="new-thread-trending-title">Trending GitHub tips</p>
+                    <ComposerDropdown
+                      class="new-thread-trending-scope-dropdown"
+                      :model-value="githubTipsScope"
+                      :options="githubTipsScopeOptions"
+                      @update:model-value="onGithubTipsScopeChange"
+                    />
+                  </div>
                   <p v-if="isTrendingProjectsLoading" class="new-thread-trending-empty">Loading trending projects...</p>
                   <p v-else-if="trendingProjects.length === 0" class="new-thread-trending-empty">
                     Trending tips are unavailable right now.
@@ -282,7 +290,7 @@ import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
   createWorktree,
-  getGithubTrendingProjects,
+  getGithubProjectsForScope,
   getHomeDirectory,
   getProjectRootSuggestion,
   getWorkspaceRootsState,
@@ -291,7 +299,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GithubTrendingProject } from './api/codexGateway'
+import type { GithubTipsScope, GithubTrendingProject } from './api/codexGateway'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
@@ -462,6 +470,7 @@ const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
+const githubTipsScope = ref<GithubTipsScope>('search-weekly')
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
@@ -581,6 +590,14 @@ const newThreadFolderOptions = computed(() => {
   return options
 })
 const darkModeMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+const githubTipsScopeOptions = computed<Array<{ value: GithubTipsScope; label: string }>>(() => [
+  { value: 'search-daily', label: 'Search daily' },
+  { value: 'search-weekly', label: 'Search weekly' },
+  { value: 'search-monthly', label: 'Search monthly' },
+  { value: 'trending-daily', label: 'Trending daily' },
+  { value: 'trending-weekly', label: 'Trending weekly' },
+  { value: 'trending-monthly', label: 'Trending monthly' },
+])
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
@@ -768,6 +785,20 @@ function formatTrendingTipMeta(project: GithubTrendingProject): string {
   return `★ ${stars}`
 }
 
+function onGithubTipsScopeChange(nextValue: string): void {
+  const allowed = new Set<GithubTipsScope>([
+    'search-daily',
+    'search-weekly',
+    'search-monthly',
+    'trending-daily',
+    'trending-weekly',
+    'trending-monthly',
+  ])
+  const scope = allowed.has(nextValue as GithubTipsScope) ? (nextValue as GithubTipsScope) : 'search-weekly'
+  if (githubTipsScope.value === scope) return
+  githubTipsScope.value = scope
+}
+
 function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
   const composer = homeThreadComposerRef.value
   if (!composer) return
@@ -940,7 +971,7 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
 async function loadTrendingProjects(): Promise<void> {
   isTrendingProjectsLoading.value = true
   try {
-    trendingProjects.value = await getGithubTrendingProjects(6)
+    trendingProjects.value = await getGithubProjectsForScope(githubTipsScope.value, 6)
   } catch {
     trendingProjects.value = []
   } finally {
@@ -1303,6 +1334,13 @@ watch(
 )
 
 watch(
+  () => githubTipsScope.value,
+  () => {
+    void loadTrendingProjects()
+  },
+)
+
+watch(
   () => newThreadFolderOptions.value,
   (options) => {
     if (options.length === 0) {
@@ -1524,8 +1562,20 @@ async function submitFirstMessageForNewThread(
   @apply mt-4 w-full max-w-3xl;
 }
 
+.new-thread-trending-header {
+  @apply mb-2 flex items-center justify-between gap-2;
+}
+
 .new-thread-trending-title {
-  @apply m-0 mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500;
+  @apply m-0 text-xs font-medium uppercase tracking-wide text-zinc-500;
+}
+
+.new-thread-trending-scope-dropdown {
+  @apply min-w-40;
+}
+
+.new-thread-trending-scope-dropdown :deep(.composer-dropdown-trigger) {
+  @apply h-8 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
 }
 
 .new-thread-trending-empty {

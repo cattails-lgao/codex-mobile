@@ -71,6 +71,14 @@ export type GithubTrendingProject = {
   stars: number
 }
 
+export type GithubTipsScope =
+  | 'search-daily'
+  | 'search-weekly'
+  | 'search-monthly'
+  | 'trending-daily'
+  | 'trending-weekly'
+  | 'trending-monthly'
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -605,6 +613,102 @@ export async function getGithubTrendingProjects(limit = 5): Promise<GithubTrendi
       description: typeof row.description === 'string' ? row.description.trim() : '',
       language: typeof row.language === 'string' ? row.language.trim() : '',
       stars: typeof row.stargazers_count === 'number' ? row.stargazers_count : 0,
+    })
+  }
+  return projects
+}
+
+export async function getGithubProjectsForScope(
+  scope: GithubTipsScope,
+  limit = 6,
+): Promise<GithubTrendingProject[]> {
+  const safeLimit = Math.min(10, Math.max(1, Math.floor(limit)))
+  if (scope.startsWith('search-')) {
+    const sinceDate = new Date()
+    if (scope === 'search-daily') sinceDate.setUTCDate(sinceDate.getUTCDate() - 1)
+    else if (scope === 'search-weekly') sinceDate.setUTCDate(sinceDate.getUTCDate() - 7)
+    else sinceDate.setUTCDate(sinceDate.getUTCDate() - 30)
+
+    const query = new URLSearchParams({
+      q: `created:>=${formatGithubDate(sinceDate)}`,
+      sort: 'stars',
+      order: 'desc',
+      per_page: String(safeLimit),
+    })
+    const response = await fetch(`https://api.github.com/search/repositories?${query.toString()}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch GitHub search projects (${response.status})`)
+    }
+    const payload = (await response.json()) as unknown
+    const record =
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {}
+    const items = Array.isArray(record.items) ? record.items : []
+    const projects: GithubTrendingProject[] = []
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const row = item as Record<string, unknown>
+      const id = typeof row.id === 'number' ? row.id : 0
+      const fullName = typeof row.full_name === 'string' ? row.full_name.trim() : ''
+      const htmlUrl = typeof row.html_url === 'string' ? row.html_url.trim() : ''
+      if (!id || !fullName || !htmlUrl) continue
+      const [owner = '', repo = ''] = fullName.split('/', 2)
+      projects.push({
+        id,
+        fullName,
+        owner,
+        repo,
+        url: htmlUrl,
+        description: typeof row.description === 'string' ? row.description.trim() : '',
+        language: typeof row.language === 'string' ? row.language.trim() : '',
+        stars: typeof row.stargazers_count === 'number' ? row.stargazers_count : 0,
+      })
+    }
+    return projects
+  }
+
+  const since =
+    scope === 'trending-daily'
+      ? 'daily'
+      : scope === 'trending-weekly'
+        ? 'weekly'
+        : 'monthly'
+  const query = new URLSearchParams({ since, limit: String(safeLimit) })
+  const response = await fetch(`/codex-api/github-trending?${query.toString()}`)
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to fetch GitHub trending projects')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data = Array.isArray(record.data) ? record.data : []
+  const projects: GithubTrendingProject[] = []
+  for (const item of data) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    const id = typeof row.id === 'number' ? row.id : 0
+    const fullName = typeof row.fullName === 'string' ? row.fullName.trim() : ''
+    const url = typeof row.url === 'string' ? row.url.trim() : ''
+    if (!id || !fullName || !url) continue
+    const [owner = '', repo = ''] = fullName.split('/', 2)
+    projects.push({
+      id,
+      fullName,
+      owner,
+      repo,
+      url,
+      description: typeof row.description === 'string' ? row.description.trim() : '',
+      language: typeof row.language === 'string' ? row.language.trim() : '',
+      stars: typeof row.stars === 'number' ? row.stars : 0,
     })
   }
   return projects
