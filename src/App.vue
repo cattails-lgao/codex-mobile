@@ -1583,7 +1583,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-trending-list {
-  @apply grid grid-cols-3 gap-2;
+  @apply grid grid-cols-2 sm:grid-cols-3 gap-2;
   grid-template-rows: repeat(2, minmax(0, 1fr));
 }
 
