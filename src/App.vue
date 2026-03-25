@@ -70,31 +70,31 @@
         <div v-if="!isSidebarCollapsed" class="sidebar-settings-area">
           <Transition name="settings-panel">
             <div v-if="isSettingsOpen" class="sidebar-settings-panel">
-              <button class="sidebar-settings-row" type="button" @click="toggleSendWithEnter">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">Require ⌘ + enter to send</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
               </button>
-              <button class="sidebar-settings-row" type="button" @click="cycleInProgressSendMode">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.inProgressSendMode" @click="cycleInProgressSendMode">
                 <span class="sidebar-settings-label">When busy, send as</span>
                 <span class="sidebar-settings-value">{{ inProgressSendMode === 'steer' ? 'Steer' : 'Queue' }}</span>
               </button>
-              <button class="sidebar-settings-row" type="button" @click="cycleDarkMode">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.appearance" @click="cycleDarkMode">
                 <span class="sidebar-settings-label">Appearance</span>
                 <span class="sidebar-settings-value">{{ darkMode === 'system' ? 'System' : darkMode === 'dark' ? 'Dark' : 'Light' }}</span>
               </button>
-              <button class="sidebar-settings-row" type="button" @click="toggleDictationClickToToggle">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.dictationClickToToggle" @click="toggleDictationClickToToggle">
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
               </button>
-              <button class="sidebar-settings-row" type="button" @click="toggleDictationAutoSend">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.dictationAutoSend" @click="toggleDictationAutoSend">
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
-              <button class="sidebar-settings-row" type="button" @click="toggleWorktreeGitAutomation">
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.worktreeRollback" @click="toggleWorktreeGitAutomation">
                 <span class="sidebar-settings-label">Worktree rollback</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
               </button>
-              <div class="sidebar-settings-row sidebar-settings-row--select">
+              <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
                   class="sidebar-settings-language-dropdown"
@@ -272,6 +272,15 @@ import type { ComposerDraftPayload, ThreadComposerExposed } from './components/c
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
+const SETTINGS_HELP = {
+  sendWithEnter: 'When enabled, press Enter to send. When disabled, use Command+Enter to send.',
+  inProgressSendMode: 'If a turn is still running, choose whether a new prompt should steer the current turn or be queued.',
+  appearance: 'Switch between system theme, light mode, and dark mode.',
+  dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
+  dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
+  worktreeRollback: 'When enabled, each message creates a Git commit. On rollback, it runs Git reset to the commit for that message.',
+  dictationLanguage: 'Choose transcription language or keep auto-detect.',
+} as const
 const WHISPER_LANGUAGES: Record<string, string> = {
   en: 'english',
   zh: 'chinese',
