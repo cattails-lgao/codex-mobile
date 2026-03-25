@@ -15,6 +15,25 @@ import { generatePassword } from '../server/password.js'
 
 const program = new Command().name('codexui').description('Web interface for Codex app-server')
 const __dirname = dirname(fileURLToPath(import.meta.url))
+let hasPromptedCloudflaredInstall = false
+
+function getCodexHomePath(): string {
+  return process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+}
+
+function getCloudflaredPromptMarkerPath(): string {
+  return join(getCodexHomePath(), '.cloudflared-install-prompted')
+}
+
+function hasPromptedCloudflaredInstallPersisted(): boolean {
+  return existsSync(getCloudflaredPromptMarkerPath())
+}
+
+async function persistCloudflaredInstallPrompted(): Promise<void> {
+  const codexHome = getCodexHomePath()
+  mkdirSync(codexHome, { recursive: true })
+  await writeFile(getCloudflaredPromptMarkerPath(), `${Date.now()}\n`, 'utf8')
+}
 
 async function readCliVersion(): Promise<string> {
   try {
@@ -156,6 +175,16 @@ async function ensureCloudflaredInstalledLinux(): Promise<string | null> {
 }
 
 async function shouldInstallCloudflaredInteractively(): Promise<boolean> {
+  if (hasPromptedCloudflaredInstall || hasPromptedCloudflaredInstallPersisted()) {
+    return false
+  }
+  hasPromptedCloudflaredInstall = true
+  await persistCloudflaredInstallPrompted()
+
+  if (process.platform === 'win32') {
+    return false
+  }
+
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.warn('\n[cloudflared] cloudflared is missing and terminal is non-interactive, skipping install.')
     return false
@@ -177,6 +206,10 @@ async function resolveCloudflaredForTunnel(): Promise<string | null> {
     return current
   }
 
+  if (process.platform === 'win32') {
+    return null
+  }
+
   const installApproved = await shouldInstallCloudflaredInteractively()
   if (!installApproved) {
     return null
@@ -186,7 +219,7 @@ async function resolveCloudflaredForTunnel(): Promise<string | null> {
 }
 
 function hasCodexAuth(): boolean {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  const codexHome = getCodexHomePath()
   return existsSync(join(codexHome, 'auth.json'))
 }
 
@@ -367,7 +400,7 @@ function listenWithFallback(server: ReturnType<typeof createServer>, startPort: 
 }
 
 function getCodexGlobalStatePath(): string {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+  const codexHome = getCodexHomePath()
   return join(codexHome, '.codex-global-state.json')
 }
 
