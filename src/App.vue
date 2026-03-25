@@ -1617,7 +1617,7 @@ async function submitFirstMessageForNewThread(
   @apply inline;
 }
 
-@container (max-width: 250px) {
+@container (max-width: 220px) {
   .new-thread-trending-tip-name-owner,
   .new-thread-trending-tip-name-slash {
     display: none;
