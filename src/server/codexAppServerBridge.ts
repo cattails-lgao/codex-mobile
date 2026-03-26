@@ -401,6 +401,10 @@ let sessionIndexThreadTitleCacheState: SessionIndexThreadTitleCacheState = {
   cache: EMPTY_THREAD_TITLE_CACHE,
 }
 
+type TelegramBridgeConfigState = {
+  botToken: string
+}
+
 function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
   const record = asRecord(value)
   if (!record) return EMPTY_THREAD_TITLE_CACHE
@@ -619,6 +623,40 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels)
   payload['active-workspace-roots'] = normalizeStringArray(nextState.active)
 
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
+  const record = asRecord(value)
+  if (!record) return { botToken: '' }
+  const botToken = typeof record.botToken === 'string' ? record.botToken.trim() : ''
+  return { botToken }
+}
+
+async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
+  const statePath = getCodexGlobalStatePath()
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const payload = asRecord(JSON.parse(raw)) ?? {}
+    return normalizeTelegramBridgeConfig(payload['telegram-bridge'])
+  } catch {
+    return { botToken: '' }
+  }
+}
+
+async function writeTelegramBridgeConfig(nextState: TelegramBridgeConfigState): Promise<void> {
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    payload = asRecord(JSON.parse(raw)) ?? {}
+  } catch {
+    payload = {}
+  }
+
+  payload['telegram-bridge'] = {
+    botToken: nextState.botToken.trim(),
+  }
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
@@ -1315,7 +1353,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     return threadSearchIndexPromise
   }
   void initializeSkillsSyncOnStartup(appServer)
-  telegramBridge.start()
+  void readTelegramBridgeConfig()
+    .then((config) => {
+      if (!config.botToken) return
+      telegramBridge.configureToken(config.botToken)
+      telegramBridge.start()
+    })
+    .catch(() => {})
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     try {
@@ -1768,6 +1812,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         telegramBridge.configureToken(botToken)
         telegramBridge.start()
+        await writeTelegramBridgeConfig({ botToken })
         setJson(res, 200, { ok: true })
         return
       }
