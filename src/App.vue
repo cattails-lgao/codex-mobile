@@ -94,7 +94,11 @@
                     v-for="account in accounts"
                     :key="account.accountId"
                     class="sidebar-settings-account-item"
-                    :class="{ 'is-active': account.isActive, 'is-unavailable': isAccountUnavailable(account) }"
+                    :class="{
+                      'is-active': account.isActive,
+                      'is-unavailable': isAccountUnavailable(account),
+                      'is-confirming-remove': isRemoveConfirmationActive(account),
+                    }"
                     :title="buildAccountTitle(account)"
                   >
                     <div class="sidebar-settings-account-main">
@@ -120,11 +124,12 @@
                       </button>
                       <button
                         class="sidebar-settings-account-remove"
+                        :class="{ 'is-confirming': isRemoveConfirmationActive(account) }"
                         type="button"
                         :disabled="isAccountActionDisabled(account)"
                         @click="onRemoveAccount(account.accountId)"
                       >
-                        {{ removingAccountId === account.accountId ? 'Removing…' : 'Remove' }}
+                        {{ getAccountRemoveLabel(account) }}
                       </button>
                     </div>
                   </article>
@@ -378,6 +383,7 @@ const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
 const removingAccountId = ref('')
+const confirmingRemoveAccountId = ref('')
 const accountActionError = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
@@ -618,11 +624,21 @@ function isAccountActionDisabled(account: UiAccountEntry): boolean {
     || (account.isActive && removingAccountId.value !== account.accountId && isAccountSwitchBlocked.value)
 }
 
+function isRemoveConfirmationActive(account: UiAccountEntry): boolean {
+  return confirmingRemoveAccountId.value === account.accountId
+}
+
 function getAccountSwitchLabel(account: UiAccountEntry): string {
   if (isAccountUnavailable(account)) return 'Unavailable'
   if (account.isActive) return 'Active'
   if (isSwitchingAccounts.value) return 'Switching…'
   return 'Switch'
+}
+
+function getAccountRemoveLabel(account: UiAccountEntry): string {
+  if (removingAccountId.value === account.accountId) return 'Removing…'
+  if (isRemoveConfirmationActive(account)) return 'Confirm remove'
+  return 'Remove'
 }
 
 function pickWeeklyQuotaWindow(account: UiAccountEntry) {
@@ -681,6 +697,9 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
   try {
     const result = await getAccounts()
     accounts.value = result.accounts
+    if (!result.accounts.some((account) => account.accountId === confirmingRemoveAccountId.value)) {
+      confirmingRemoveAccountId.value = ''
+    }
   } catch (error) {
     if (options.silent === true) return
     accountActionError.value = error instanceof Error ? error.message : 'Failed to load accounts'
@@ -690,6 +709,7 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
 async function onRefreshAccounts(): Promise<void> {
   if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
   accountActionError.value = ''
+  confirmingRemoveAccountId.value = ''
   isRefreshingAccounts.value = true
   try {
     const result = await refreshAccountsFromAuth()
@@ -713,6 +733,7 @@ async function onSwitchAccount(accountId: string): Promise<void> {
     return
   }
   accountActionError.value = ''
+  confirmingRemoveAccountId.value = ''
   isSwitchingAccounts.value = true
   try {
     const nextActiveAccount = await switchAccount(accountId)
@@ -738,18 +759,18 @@ async function onRemoveAccount(accountId: string): Promise<void> {
   if (isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0) return
   const targetAccount = accounts.value.find((account) => account.accountId === accountId) ?? null
   if (!targetAccount) return
+  if (confirmingRemoveAccountId.value !== accountId) {
+    confirmingRemoveAccountId.value = accountId
+    return
+  }
   if (targetAccount.isActive && isAccountSwitchBlocked.value) {
     accountActionError.value = 'Finish the current turn and pending requests before removing the active account.'
     return
   }
 
-  const label = targetAccount.email || `workspace ${shortAccountId(accountId)}`
-  if (typeof window !== 'undefined' && !window.confirm(`Remove ${label} from saved accounts?`)) {
-    return
-  }
-
   const removedWasActive = targetAccount.isActive
   accountActionError.value = ''
+  confirmingRemoveAccountId.value = ''
   removingAccountId.value = accountId
   try {
     const result = await removeAccount(accountId)
@@ -1707,7 +1728,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-account-actions {
-  @apply flex shrink-0 flex-col gap-1.5;
+  @apply flex shrink-0 flex-col items-end gap-1.5;
 }
 
 .sidebar-settings-account-email {
@@ -1739,7 +1760,17 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-account-remove {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-default disabled:opacity-60;
+  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 opacity-0 pointer-events-none transition hover:bg-rose-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-item:hover .sidebar-settings-account-remove,
+.sidebar-settings-account-item:focus-within .sidebar-settings-account-remove,
+.sidebar-settings-account-item.is-confirming-remove .sidebar-settings-account-remove {
+  @apply opacity-100 pointer-events-auto;
+}
+
+.sidebar-settings-account-remove.is-confirming {
+  @apply border-rose-300 bg-rose-50 text-rose-800 font-medium;
 }
 
 .sidebar-settings-label {

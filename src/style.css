@@ -125,6 +125,10 @@
   @apply border-rose-500/40 bg-zinc-700 text-rose-200 hover:bg-rose-500/15;
 }
 
+:root.dark .sidebar-settings-account-remove.is-confirming {
+  @apply border-rose-400/60 bg-rose-500/15 text-rose-100;
+}
+
 :root.dark .sidebar-settings-value {
   @apply text-zinc-400 bg-zinc-700;
 }
