@@ -1226,6 +1226,7 @@ class TelegramThreadBridge {
   private active = false
   private pollingTask: Promise<void> | null = null
   private nextUpdateOffset = 0
+  private lastError = ''
 
   constructor(appServer: AppServerProcess) {
     this.appServer = appServer
@@ -1251,6 +1252,7 @@ class TelegramThreadBridge {
     while (this.active) {
       try {
         const updates = await this.getUpdates()
+        this.lastError = ''
         for (const update of updates) {
           const updateId = typeof update.update_id === 'number' ? update.update_id : -1
           if (updateId >= 0) {
@@ -1258,7 +1260,8 @@ class TelegramThreadBridge {
           }
           await this.handleIncomingUpdate(update)
         }
-      } catch {
+      } catch (error) {
+        this.lastError = getErrorMessage(error, 'Telegram polling failed')
         await new Promise((resolve) => setTimeout(resolve, 1500))
       }
     }
@@ -1292,6 +1295,16 @@ class TelegramThreadBridge {
       throw new Error('Telegram bot token is required')
     }
     this.token = normalizedToken
+  }
+
+  getStatus(): { configured: boolean; active: boolean; mappedChats: number; mappedThreads: number; lastError: string } {
+    return {
+      configured: this.token.length > 0,
+      active: this.active,
+      mappedChats: this.threadIdByChatId.size,
+      mappedThreads: this.chatIdsByThreadId.size,
+      lastError: this.lastError,
+    }
   }
 
   connectThread(threadId: string, chatId: number, token?: string): void {
@@ -1373,10 +1386,15 @@ class TelegramThreadBridge {
     }
 
     const threadId = await this.ensureThreadForChat(chatId)
-    await this.appServer.rpc('turn/start', {
-      threadId,
-      input: [{ type: 'text', text }],
-    })
+    try {
+      await this.appServer.rpc('turn/start', {
+        threadId,
+        input: [{ type: 'text', text }],
+      })
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to forward message to thread')
+      await this.sendTelegramMessage(chatId, `Forward failed: ${message}`)
+    }
   }
 
   private async handleCallbackQuery(callbackQuery: NonNullable<TelegramUpdate['callback_query']>): Promise<void> {
@@ -1449,8 +1467,11 @@ class TelegramThreadBridge {
       if (!id) continue
       const name = typeof record?.name === 'string' ? record.name.trim() : ''
       const preview = typeof record?.preview === 'string' ? record.preview.trim() : ''
-      const title = name || preview || id
-      threads.push({ id, title: title.slice(0, 64) })
+      const cwd = typeof record?.cwd === 'string' ? record.cwd.trim() : ''
+      const projectName = cwd ? basename(cwd) : 'project'
+      const threadTitle = (name || preview || id).replace(/\s+/g, ' ').trim()
+      const title = `${projectName}/${threadTitle}`.slice(0, 64)
+      threads.push({ id, title })
     }
     return threads
   }
@@ -2157,6 +2178,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         telegramBridge.configureToken(botToken)
         telegramBridge.start()
         setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/telegram/status') {
+        setJson(res, 200, { data: telegramBridge.getStatus() })
         return
       }
 

@@ -60,6 +60,14 @@ export type ThreadSearchResult = {
   indexedThreadCount: number
 }
 
+export type TelegramStatus = {
+  configured: boolean
+  active: boolean
+  mappedChats: number
+  mappedThreads: number
+  lastError: string
+}
+
 async function callRpc<T>(method: string, params?: unknown): Promise<T> {
   try {
     return await rpcCall<T>(method, params)
@@ -558,6 +566,30 @@ export async function configureTelegramBot(
   if (!response.ok) {
     const message = getErrorMessageFromPayload(payload, 'Failed to connect Telegram bot')
     throw new Error(message)
+  }
+}
+
+export async function getTelegramStatus(): Promise<TelegramStatus> {
+  const response = await fetch('/codex-api/telegram/status')
+  const payload = await response.json()
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to load Telegram status')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  return {
+    configured: data.configured === true,
+    active: data.active === true,
+    mappedChats: typeof data.mappedChats === 'number' ? data.mappedChats : 0,
+    mappedThreads: typeof data.mappedThreads === 'number' ? data.mappedThreads : 0,
+    lastError: typeof data.lastError === 'string' ? data.lastError : '',
   }
 }
 
