@@ -2146,28 +2146,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'POST' && url.pathname === '/codex-api/telegram/connect-thread') {
+      if (req.method === 'POST' && url.pathname === '/codex-api/telegram/configure-bot') {
         const payload = asRecord(await readJsonBody(req))
-        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
-        const chatIdRaw = payload?.chatId
         const botToken = typeof payload?.botToken === 'string' ? payload.botToken.trim() : ''
-        const chatId =
-          typeof chatIdRaw === 'number'
-            ? chatIdRaw
-            : typeof chatIdRaw === 'string' && chatIdRaw.trim().length > 0
-              ? Number(chatIdRaw.trim())
-              : Number.NaN
-
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-        if (!Number.isFinite(chatId)) {
-          setJson(res, 400, { error: 'Invalid chatId' })
+        if (!botToken) {
+          setJson(res, 400, { error: 'Missing botToken' })
           return
         }
 
-        telegramBridge.connectThread(threadId, chatId, botToken || undefined)
+        telegramBridge.configureToken(botToken)
+        telegramBridge.start()
         setJson(res, 200, { ok: true })
         return
       }

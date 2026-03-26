@@ -544,17 +544,13 @@ export async function searchThreads(
   return payload.data ?? { threadIds: [], indexedThreadCount: 0 }
 }
 
-export async function connectThreadToTelegram(
-  threadId: string,
-  chatId: number,
+export async function configureTelegramBot(
   botToken: string,
 ): Promise<void> {
-  const response = await fetch('/codex-api/telegram/connect-thread', {
+  const response = await fetch('/codex-api/telegram/configure-bot', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      threadId,
-      chatId,
       botToken,
     }),
   })

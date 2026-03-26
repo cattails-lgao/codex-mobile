@@ -63,7 +63,6 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
-            @connect-thread-telegram="onConnectThreadTelegram"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread" />
         </div>
@@ -111,6 +110,10 @@
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
+              <button class="sidebar-settings-row" type="button" @click="onConnectTelegramBot">
+                <span class="sidebar-settings-label">Connect Telegram bot</span>
+                <span class="sidebar-settings-value">Set token</span>
+              </button>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -260,7 +263,7 @@ import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
-  connectThreadToTelegram,
+  configureTelegramBot,
   createWorktree,
   getHomeDirectory,
   getProjectRootSuggestion,
@@ -692,21 +695,14 @@ function onRenameThread(payload: { threadId: string; title: string }): void {
   void renameThreadById(payload.threadId, payload.title)
 }
 
-function onConnectThreadTelegram(threadId: string): void {
+function onConnectTelegramBot(): void {
   if (typeof window === 'undefined') return
   const botToken = window.prompt('Telegram bot token')
   if (!botToken || !botToken.trim()) return
-  const chatIdRaw = window.prompt('Telegram chat ID')
-  if (!chatIdRaw || !chatIdRaw.trim()) return
-  const chatId = Number(chatIdRaw.trim())
-  if (!Number.isFinite(chatId)) {
-    window.alert('Invalid Telegram chat ID')
-    return
-  }
 
-  void connectThreadToTelegram(threadId, chatId, botToken.trim())
+  void configureTelegramBot(botToken.trim())
     .then(() => {
-      window.alert('Telegram bot connected to this thread')
+      window.alert('Telegram bot configured. Open the bot DM and send /start.')
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
