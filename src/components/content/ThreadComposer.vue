@@ -452,6 +452,8 @@ let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
 let dictationShouldRollbackLatestUserTurn = false
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
+let lastActiveThreadId = ''
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
@@ -548,6 +550,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
     mode,
     rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
+  clearPersistedDraftForThread(props.activeThreadId)
   clearDraftState()
   if (isAndroid) {
     inputRef.value?.blur()
@@ -583,6 +586,40 @@ function clearDraftState(): void {
     fileAttachments: [],
     skills: [],
   })
+}
+
+function getDraftStorageKey(threadId: string): string {
+  return `${DRAFT_STORAGE_PREFIX}${threadId}`
+}
+
+function loadPersistedDraftForThread(threadId: string): string {
+  if (typeof window === 'undefined') return ''
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return ''
+  try {
+    return window.localStorage.getItem(getDraftStorageKey(normalizedThreadId)) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function persistDraftForThread(threadId: string, text: string): void {
+  if (typeof window === 'undefined') return
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return
+  try {
+    if (text.length > 0) {
+      window.localStorage.setItem(getDraftStorageKey(normalizedThreadId), text)
+      return
+    }
+    window.localStorage.removeItem(getDraftStorageKey(normalizedThreadId))
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+}
+
+function clearPersistedDraftForThread(threadId: string): void {
+  persistDraftForThread(threadId, '')
 }
 
 function onInterrupt(): void {
@@ -1041,9 +1078,27 @@ onBeforeUnmount(() => {
 
 watch(
   () => props.activeThreadId,
-  () => {
+  (nextThreadId) => {
     cancelDictation()
+    if (lastActiveThreadId) {
+      persistDraftForThread(lastActiveThreadId, draft.value)
+    }
     clearDraftState()
+    const restored = loadPersistedDraftForThread(nextThreadId)
+    if (restored) {
+      draft.value = restored
+      onInputChange()
+    }
+    lastActiveThreadId = nextThreadId.trim()
+  },
+  { immediate: true },
+)
+
+watch(
+  draft,
+  (value) => {
+    if (!lastActiveThreadId) return
+    persistDraftForThread(lastActiveThreadId, value)
   },
 )
 
