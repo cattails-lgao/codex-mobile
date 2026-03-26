@@ -53,6 +53,18 @@ function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
 }
 
+function resolveSkillInstallerScriptPath(): string {
+  const candidates = [
+    join(getCodexHomeDir(), 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(homedir(), '.codex', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(homedir(), '.cursor', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  throw new Error(`Skill installer script not found. Checked: ${candidates.join(', ')}`)
+}
+
 async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -1101,7 +1113,7 @@ export async function handleSkillsRoutes(
       }
       const localDir = await detectUserSkillsDir(appServer)
       await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
-      const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+      const installerScript = resolveSkillInstallerScriptPath()
       const localSkills = await scanInstalledSkillsFromDisk()
       for (const skill of remote) {
         const owner = skill.owner || uniqueOwnerByName.get(skill.name) || ''
@@ -1181,7 +1193,7 @@ export async function handleSkillsRoutes(
         setJson(res, 400, { error: 'Missing owner or name' })
         return true
       }
-      const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+      const installerScript = resolveSkillInstallerScriptPath()
       const installDest = await detectUserSkillsDir(appServer)
       await runCommand('python3', [
         installerScript,
