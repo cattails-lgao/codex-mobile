@@ -53,6 +53,18 @@ function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
 }
 
+function resolveSkillInstallerScriptPath(): string {
+  const candidates = [
+    join(getCodexHomeDir(), 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(homedir(), '.codex', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(homedir(), '.cursor', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  throw new Error(`Skill installer script not found. Checked: ${candidates.join(', ')}`)
+}
+
 async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -320,6 +332,24 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
     }
   } catch {}
   return map
+}
+
+function extractSkillDescriptionFromMarkdown(markdown: string): string {
+  const lines = markdown.split(/\r?\n/)
+  let inCodeFence = false
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence
+      continue
+    }
+    if (inCodeFence || line.length === 0) continue
+    if (line.startsWith('#')) continue
+    if (line.startsWith('>')) continue
+    if (line.startsWith('- ') || line.startsWith('* ')) continue
+    return line
+  }
+  return ''
 }
 
 function getSkillsSyncStatePath(): string {
@@ -1083,7 +1113,7 @@ export async function handleSkillsRoutes(
       }
       const localDir = await detectUserSkillsDir(appServer)
       await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
-      const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+      const installerScript = resolveSkillInstallerScriptPath()
       const localSkills = await scanInstalledSkillsFromDisk()
       for (const skill of remote) {
         const owner = skill.owner || uniqueOwnerByName.get(skill.name) || ''
@@ -1124,15 +1154,30 @@ export async function handleSkillsRoutes(
     try {
       const owner = url.searchParams.get('owner') || ''
       const name = url.searchParams.get('name') || ''
+      const installed = url.searchParams.get('installed') === 'true'
+      const skillPath = url.searchParams.get('path') || ''
       if (!owner || !name) {
         setJson(res, 400, { error: 'Missing owner or name' })
         return true
+      }
+      if (installed) {
+        const installedMap = await scanInstalledSkillsFromDisk()
+        const installedInfo = installedMap.get(name)
+        const localSkillPath = installedInfo?.path
+          || (skillPath ? (skillPath.endsWith('/SKILL.md') ? skillPath : `${skillPath}/SKILL.md`) : '')
+        if (localSkillPath) {
+          const content = await readFile(localSkillPath, 'utf8')
+          const description = extractSkillDescriptionFromMarkdown(content)
+          setJson(res, 200, { content, description, source: 'local' })
+          return true
+        }
       }
       const rawUrl = `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${owner}/${name}/SKILL.md`
       const resp = await fetch(rawUrl)
       if (!resp.ok) throw new Error(`Failed to fetch SKILL.md: ${resp.status}`)
       const content = await resp.text()
-      setJson(res, 200, { content })
+      const description = extractSkillDescriptionFromMarkdown(content)
+      setJson(res, 200, { content, description, source: 'remote' })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to fetch SKILL.md') })
     }
@@ -1148,7 +1193,7 @@ export async function handleSkillsRoutes(
         setJson(res, 400, { error: 'Missing owner or name' })
         return true
       }
-      const installerScript = '/Users/igor/.cursor/skills/.system/skill-installer/scripts/install-skill-from-github.py'
+      const installerScript = resolveSkillInstallerScriptPath()
       const installDest = await detectUserSkillsDir(appServer)
       await runCommand('python3', [
         installerScript,

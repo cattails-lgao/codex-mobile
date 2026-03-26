@@ -25,7 +25,7 @@
         </div>
 
         <div class="sdm-body">
-          <p v-if="skill.description" class="sdm-desc">{{ skill.description }}</p>
+          <p v-if="effectiveDescription" class="sdm-desc">{{ effectiveDescription }}</p>
 
           <div v-if="isLoadingReadme" class="sdm-readme-loading">Loading skill contents...</div>
           <div v-else-if="readmeContent" class="sdm-readme" v-html="renderedReadme"></div>
@@ -102,11 +102,13 @@ const emit = defineEmits<{
 }>()
 
 const localEnabled = ref<boolean | null>(null)
+const localDescription = ref('')
 const readmeContent = ref('')
 const isLoadingReadme = ref(false)
 
 const effectiveEnabled = computed(() => localEnabled.value ?? props.skill.enabled ?? true)
 const isActing = computed(() => (props.isInstalling === true) || (props.isUninstalling === true))
+const effectiveDescription = computed(() => localDescription.value || props.skill.description)
 
 const renderedReadme = computed(() => {
   const raw = readmeContent.value
@@ -135,13 +137,17 @@ function simpleMarkdown(md: string): string {
 async function fetchReadme(): Promise<void> {
   if (!props.skill.owner || !props.skill.name) return
   isLoadingReadme.value = true
+  localDescription.value = ''
   readmeContent.value = ''
   try {
     const params = new URLSearchParams({ owner: props.skill.owner, name: props.skill.name })
+    if (props.skill.installed) params.set('installed', 'true')
+    if (props.skill.path) params.set('path', props.skill.path)
     const resp = await fetch(`/codex-api/skills-hub/readme?${params}`)
     if (!resp.ok) return
-    const data = (await resp.json()) as { content?: string }
+    const data = (await resp.json()) as { content?: string; description?: string }
     readmeContent.value = data.content ?? ''
+    localDescription.value = data.description ?? ''
   } catch {
     // silently fail
   } finally {
@@ -152,6 +158,7 @@ async function fetchReadme(): Promise<void> {
 watch(() => props.visible, (v) => {
   if (v) {
     localEnabled.value = null
+    localDescription.value = ''
     readmeContent.value = ''
     void fetchReadme()
   }
