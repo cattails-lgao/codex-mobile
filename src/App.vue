@@ -100,6 +100,7 @@
                       'is-confirming-remove': isRemoveConfirmationActive(account),
                     }"
                     :title="buildAccountTitle(account)"
+                    @mouseleave="onAccountCardPointerLeave(account.accountId)"
                   >
                     <div class="sidebar-settings-account-main">
                       <p class="sidebar-settings-account-email">{{ account.email || 'Account' }}</p>
@@ -637,8 +638,15 @@ function getAccountSwitchLabel(account: UiAccountEntry): string {
 
 function getAccountRemoveLabel(account: UiAccountEntry): string {
   if (removingAccountId.value === account.accountId) return 'Removing…'
-  if (isRemoveConfirmationActive(account)) return 'Confirm remove'
+  if (isRemoveConfirmationActive(account)) return 'Click again to remove'
   return 'Remove'
+}
+
+function onAccountCardPointerLeave(accountId: string): void {
+  if (removingAccountId.value === accountId) return
+  if (confirmingRemoveAccountId.value === accountId) {
+    confirmingRemoveAccountId.value = ''
+  }
 }
 
 function pickWeeklyQuotaWindow(account: UiAccountEntry) {
@@ -1728,7 +1736,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-account-actions {
-  @apply flex shrink-0 flex-col items-end gap-1.5;
+  @apply flex w-24 shrink-0 flex-col items-end gap-1.5;
 }
 
 .sidebar-settings-account-email {
@@ -1756,21 +1764,20 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-account-switch {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply min-w-[4.75rem] shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-center text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-remove {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 opacity-0 pointer-events-none transition hover:bg-rose-50 disabled:cursor-default disabled:opacity-60;
+  @apply shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-item:hover .sidebar-settings-account-remove,
-.sidebar-settings-account-item:focus-within .sidebar-settings-account-remove,
 .sidebar-settings-account-item.is-confirming-remove .sidebar-settings-account-remove {
   @apply opacity-100 pointer-events-auto;
 }
 
 .sidebar-settings-account-remove.is-confirming {
-  @apply border-rose-300 bg-rose-50 text-rose-800 font-medium;
+  @apply border-amber-300 bg-amber-50 text-amber-700 font-medium;
 }
 
 .sidebar-settings-label {

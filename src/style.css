@@ -122,11 +122,11 @@
 }
 
 :root.dark .sidebar-settings-account-remove {
-  @apply border-rose-500/40 bg-zinc-700 text-rose-200 hover:bg-rose-500/15;
+  @apply border-amber-500/35 bg-zinc-700 text-zinc-400 hover:bg-amber-500/10;
 }
 
 :root.dark .sidebar-settings-account-remove.is-confirming {
-  @apply border-rose-400/60 bg-rose-500/15 text-rose-100;
+  @apply border-amber-400/50 bg-amber-500/10 text-amber-200;
 }
 
 :root.dark .sidebar-settings-value {
