@@ -110,14 +110,10 @@
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
-              <button class="sidebar-settings-row" type="button" @click="onConnectTelegramBot">
-                <span class="sidebar-settings-label">Connect Telegram bot</span>
-                <span class="sidebar-settings-value">Set token</span>
-              </button>
-              <div class="sidebar-settings-row" aria-live="polite">
-                <span class="sidebar-settings-label">Telegram status</span>
+              <button class="sidebar-settings-row" type="button" aria-live="polite" @click="onConnectTelegramBot">
+                <span class="sidebar-settings-label">Telegram</span>
                 <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
-              </div>
+              </button>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
