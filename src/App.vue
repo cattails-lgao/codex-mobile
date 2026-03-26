@@ -110,6 +110,10 @@
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
+              <button class="sidebar-settings-row" type="button" aria-live="polite" @click="onConnectTelegramBot">
+                <span class="sidebar-settings-label">Telegram</span>
+                <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
+              </button>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -259,7 +263,9 @@ import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
+  configureTelegramBot,
   createWorktree,
+  getTelegramStatus,
   getHomeDirectory,
   getProjectRootSuggestion,
   getWorkspaceRootsState,
@@ -268,6 +274,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
+import type { TelegramStatus } from './api/codexGateway'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
@@ -472,6 +479,13 @@ const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, true))
+const telegramStatus = ref<TelegramStatus>({
+  configured: false,
+  active: false,
+  mappedChats: 0,
+  mappedThreads: 0,
+  lastError: '',
+})
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -562,6 +576,13 @@ const newThreadFolderOptions = computed(() => {
   return options
 })
 const darkModeMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+const telegramStatusText = computed(() => {
+  if (!telegramStatus.value.configured) return 'Not configured'
+  const base = telegramStatus.value.active ? 'Online' : 'Configured (offline)'
+  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s)`
+  const error = telegramStatus.value.lastError ? `, error: ${telegramStatus.value.lastError}` : ''
+  return `${base}, ${mapped}${error}`
+})
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
@@ -572,6 +593,7 @@ onMounted(() => {
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
+  void refreshTelegramStatus()
 })
 
 onUnmounted(() => {
@@ -610,6 +632,21 @@ watch(sidebarSearchQuery, (value) => {
 
 function onSkillsChanged(): void {
   void refreshSkills()
+}
+
+async function refreshTelegramStatus(): Promise<void> {
+  try {
+    telegramStatus.value = await getTelegramStatus()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load Telegram status'
+    telegramStatus.value = {
+      configured: false,
+      active: false,
+      mappedChats: 0,
+      mappedThreads: 0,
+      lastError: message,
+    }
+  }
 }
 
 function toggleSidebarSearch(): void {
@@ -688,6 +725,23 @@ function onRenameProject(payload: { projectName: string; displayName: string }):
 
 function onRenameThread(payload: { threadId: string; title: string }): void {
   void renameThreadById(payload.threadId, payload.title)
+}
+
+function onConnectTelegramBot(): void {
+  if (typeof window === 'undefined') return
+  const botToken = window.prompt('Telegram bot token')
+  if (!botToken || !botToken.trim()) return
+
+  void configureTelegramBot(botToken.trim())
+    .then(() => {
+      window.alert('Telegram bot configured. Open the bot DM and send /start.')
+      void refreshTelegramStatus()
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
+      window.alert(message)
+      void refreshTelegramStatus()
+    })
 }
 
 function onRemoveProject(projectName: string): void {
