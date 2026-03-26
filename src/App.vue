@@ -240,7 +240,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
@@ -495,6 +495,14 @@ const contentTitle = computed(() => {
   if (isHomeRoute.value) return 'New thread'
   return selectedThread.value?.title ?? 'Choose a thread'
 })
+
+const pageSuffix = typeof window !== 'undefined' ? window.location.host : 'Codex'
+watchEffect(() => {
+  if (typeof document !== 'undefined') {
+    document.title = `${contentTitle.value} — ${pageSuffix}`
+  }
+})
+
 const filteredMessages = computed(() =>
   messages.value.filter((message) => {
     const type = normalizeMessageType(message.messageType, message.role)
