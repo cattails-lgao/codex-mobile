@@ -322,6 +322,24 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
   return map
 }
 
+function extractSkillDescriptionFromMarkdown(markdown: string): string {
+  const lines = markdown.split(/\r?\n/)
+  let inCodeFence = false
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence
+      continue
+    }
+    if (inCodeFence || line.length === 0) continue
+    if (line.startsWith('#')) continue
+    if (line.startsWith('>')) continue
+    if (line.startsWith('- ') || line.startsWith('* ')) continue
+    return line
+  }
+  return ''
+}
+
 function getSkillsSyncStatePath(): string {
   return join(getCodexHomeDir(), 'skills-sync.json')
 }
@@ -1124,15 +1142,30 @@ export async function handleSkillsRoutes(
     try {
       const owner = url.searchParams.get('owner') || ''
       const name = url.searchParams.get('name') || ''
+      const installed = url.searchParams.get('installed') === 'true'
+      const skillPath = url.searchParams.get('path') || ''
       if (!owner || !name) {
         setJson(res, 400, { error: 'Missing owner or name' })
         return true
+      }
+      if (installed) {
+        const installedMap = await scanInstalledSkillsFromDisk()
+        const installedInfo = installedMap.get(name)
+        const localSkillPath = installedInfo?.path
+          || (skillPath ? (skillPath.endsWith('/SKILL.md') ? skillPath : `${skillPath}/SKILL.md`) : '')
+        if (localSkillPath) {
+          const content = await readFile(localSkillPath, 'utf8')
+          const description = extractSkillDescriptionFromMarkdown(content)
+          setJson(res, 200, { content, description, source: 'local' })
+          return true
+        }
       }
       const rawUrl = `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${owner}/${name}/SKILL.md`
       const resp = await fetch(rawUrl)
       if (!resp.ok) throw new Error(`Failed to fetch SKILL.md: ${resp.status}`)
       const content = await resp.text()
-      setJson(res, 200, { content })
+      const description = extractSkillDescriptionFromMarkdown(content)
+      setJson(res, 200, { content, description, source: 'remote' })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to fetch SKILL.md') })
     }
