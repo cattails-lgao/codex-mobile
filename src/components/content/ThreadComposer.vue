@@ -452,6 +452,8 @@ let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
 let dictationShouldRollbackLatestUserTurn = false
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
+let lastActiveThreadId = ''
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
@@ -548,6 +550,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
     mode,
     rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
+  clearPersistedDraftForThread(props.activeThreadId)
   clearDraftState()
   if (isAndroid) {
     inputRef.value?.blur()
@@ -583,6 +586,89 @@ function clearDraftState(): void {
     fileAttachments: [],
     skills: [],
   })
+}
+
+function getDraftStorageKey(threadId: string): string {
+  return `${DRAFT_STORAGE_PREFIX}${threadId}`
+}
+
+function loadPersistedDraftForThread(threadId: string): ComposerDraftPayload | null {
+  if (typeof window === 'undefined') return null
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return null
+  try {
+    const raw = window.localStorage.getItem(getDraftStorageKey(normalizedThreadId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<ComposerDraftPayload> | string
+    if (typeof parsed === 'string') {
+      return {
+        text: parsed,
+        imageUrls: [],
+        fileAttachments: [],
+        skills: [],
+      }
+    }
+    return {
+      text: typeof parsed.text === 'string' ? parsed.text : '',
+      imageUrls: Array.isArray(parsed.imageUrls)
+        ? parsed.imageUrls.filter((url): url is string => typeof url === 'string')
+        : [],
+      fileAttachments: Array.isArray(parsed.fileAttachments)
+        ? parsed.fileAttachments.filter((attachment): attachment is FileAttachment => (
+          Boolean(attachment)
+          && typeof attachment.label === 'string'
+          && typeof attachment.path === 'string'
+          && typeof attachment.fsPath === 'string'
+        ))
+        : [],
+      skills: Array.isArray(parsed.skills)
+        ? parsed.skills.filter((skill): skill is { name: string; path: string } => (
+          Boolean(skill)
+          && typeof skill.name === 'string'
+          && typeof skill.path === 'string'
+        ))
+        : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+function persistDraftForThread(threadId: string, payload: ComposerDraftPayload): void {
+  if (typeof window === 'undefined') return
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return
+  try {
+    const hasContent = payload.text.trim().length > 0
+      || payload.imageUrls.length > 0
+      || payload.fileAttachments.length > 0
+      || payload.skills.length > 0
+    if (hasContent) {
+      window.localStorage.setItem(getDraftStorageKey(normalizedThreadId), JSON.stringify(payload))
+      return
+    }
+    window.localStorage.removeItem(getDraftStorageKey(normalizedThreadId))
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+}
+
+function clearPersistedDraftForThread(threadId: string): void {
+  persistDraftForThread(threadId, {
+    text: '',
+    imageUrls: [],
+    fileAttachments: [],
+    skills: [],
+  })
+}
+
+function getCurrentDraftPayload(): ComposerDraftPayload {
+  return {
+    text: draft.value,
+    imageUrls: selectedImages.value.map((image) => image.url),
+    fileAttachments: fileAttachments.value.map((attachment) => ({ ...attachment })),
+    skills: selectedSkills.value.map((skill) => ({ name: skill.name, path: skill.path })),
+  }
 }
 
 function onInterrupt(): void {
@@ -1041,11 +1127,26 @@ onBeforeUnmount(() => {
 
 watch(
   () => props.activeThreadId,
-  () => {
+  (nextThreadId) => {
     cancelDictation()
+    if (lastActiveThreadId) {
+      persistDraftForThread(lastActiveThreadId, getCurrentDraftPayload())
+    }
     clearDraftState()
+    const restored = loadPersistedDraftForThread(nextThreadId)
+    if (restored) {
+      replaceDraftState(restored)
+      onInputChange()
+    }
+    lastActiveThreadId = nextThreadId.trim()
   },
+  { immediate: true },
 )
+
+watch([draft, selectedImages, fileAttachments, selectedSkills], () => {
+  if (!lastActiveThreadId) return
+  persistDraftForThread(lastActiveThreadId, getCurrentDraftPayload())
+}, { deep: true })
 
 watch(
   () => props.cwd,
