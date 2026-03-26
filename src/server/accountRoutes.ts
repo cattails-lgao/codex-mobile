@@ -37,6 +37,7 @@ type StoredRateLimitSnapshot = {
 }
 
 type AccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
+type AccountUnavailableReason = 'payment_required'
 
 type StoredAccountEntry = {
   accountId: string
@@ -50,6 +51,7 @@ type StoredAccountEntry = {
   quotaUpdatedAtIso: string | null
   quotaStatus: AccountQuotaStatus
   quotaError: string | null
+  unavailableReason: AccountUnavailableReason | null
 }
 
 type StoredAccountsState = {
@@ -105,6 +107,10 @@ function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
 
+function normalizeAccountUnavailableReason(value: unknown): AccountUnavailableReason | null {
+  return value === 'payment_required' ? value : null
+}
+
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -124,6 +130,16 @@ function getErrorMessage(payload: unknown, fallback: string): string {
     return record.message.trim()
   }
   return fallback
+}
+
+function isPaymentRequiredErrorMessage(value: string | null): boolean {
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return normalized.includes('payment required') || /\b402\b/.test(normalized)
+}
+
+function detectAccountUnavailableReason(error: unknown): AccountUnavailableReason | null {
+  return isPaymentRequiredErrorMessage(getErrorMessage(error, '')) ? 'payment_required' : null
 }
 
 function getCodexHomeDir(): string {
@@ -229,6 +245,8 @@ function normalizeStoredAccountEntry(value: unknown): StoredAccountEntry | null 
     quotaUpdatedAtIso: readString(record?.quotaUpdatedAtIso),
     quotaStatus,
     quotaError: readString(record?.quotaError),
+    unavailableReason: normalizeAccountUnavailableReason(record?.unavailableReason)
+      ?? (isPaymentRequiredErrorMessage(readString(record?.quotaError)) ? 'payment_required' : null),
   }
 }
 
@@ -331,6 +349,10 @@ async function writeSnapshot(storageId: string, raw: string): Promise<void> {
   const dir = join(getAccountsSnapshotRoot(), storageId)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   await writeFile(getSnapshotPath(storageId), raw, { encoding: 'utf8', mode: 0o600 })
+}
+
+async function removeSnapshot(storageId: string): Promise<void> {
+  await rm(join(getAccountsSnapshotRoot(), storageId), { recursive: true, force: true })
 }
 
 async function readRuntimeAccountMetadata(appServer: AppServerLike): Promise<TokenMetadata> {
@@ -548,6 +570,17 @@ async function replaceStoredAccount(nextEntry: StoredAccountEntry, activeAccount
   })
 }
 
+async function pickReplacementActiveAccount(accounts: StoredAccountEntry[]): Promise<StoredAccountEntry | null> {
+  const sorted = sortAccounts(accounts, null)
+  for (const entry of sorted) {
+    if (entry.unavailableReason === 'payment_required') continue
+    if (await fileExists(getSnapshotPath(entry.storageId))) {
+      return entry
+    }
+  }
+  return null
+}
+
 async function refreshAccountsInBackground(accountIds: string[], activeAccountId: string | null): Promise<void> {
   for (const accountId of accountIds) {
     const state = await readStoredAccountsState()
@@ -564,6 +597,7 @@ async function refreshAccountsInBackground(accountIds: string[], activeAccountId
         quotaUpdatedAtIso: new Date().toISOString(),
         quotaStatus: 'ready',
         quotaError: null,
+        unavailableReason: null,
       }, activeAccountId)
     } catch (error) {
       await replaceStoredAccount({
@@ -571,6 +605,7 @@ async function refreshAccountsInBackground(accountIds: string[], activeAccountId
         quotaUpdatedAtIso: new Date().toISOString(),
         quotaStatus: 'error',
         quotaError: getErrorMessage(error, 'Failed to refresh account quota'),
+        unavailableReason: detectAccountUnavailableReason(error),
       }, activeAccountId)
     }
   }
@@ -646,6 +681,7 @@ async function importAccountFromAuthPath(path: string): Promise<{
     quotaUpdatedAtIso: existing?.quotaUpdatedAtIso ?? null,
     quotaStatus: existing?.quotaStatus ?? 'idle',
     quotaError: existing?.quotaError ?? null,
+    unavailableReason: existing?.unavailableReason ?? null,
   }
   const nextState = withUpsertedAccount(state, nextEntry)
   await writeStoredAccountsState(nextState)
@@ -710,6 +746,7 @@ export async function handleAccountRoutes(
           quotaUpdatedAtIso: new Date().toISOString(),
           quotaStatus: 'ready',
           quotaError: null,
+          unavailableReason: null,
         }
         const nextState = withUpsertedAccount({
           activeAccountId: importedAccountId,
@@ -809,6 +846,7 @@ export async function handleAccountRoutes(
           quotaUpdatedAtIso: new Date().toISOString(),
           quotaStatus: 'ready',
           quotaError: null,
+          unavailableReason: null,
         }
         const nextState = withUpsertedAccount({
           activeAccountId: accountId,
@@ -833,6 +871,13 @@ export async function handleAccountRoutes(
       } catch (error) {
         await restoreActiveAuth(previousRaw)
         appServer.dispose()
+        await replaceStoredAccount({
+          ...target,
+          quotaUpdatedAtIso: new Date().toISOString(),
+          quotaStatus: 'error',
+          quotaError: getErrorMessage(error, 'Failed to switch account'),
+          unavailableReason: detectAccountUnavailableReason(error),
+        }, state.activeAccountId)
         setJson(res, 502, {
           error: 'account_switch_failed',
           message: getErrorMessage(error, 'Failed to switch account'),
@@ -842,6 +887,157 @@ export async function handleAccountRoutes(
       setJson(res, 400, {
         error: 'invalid_auth_json',
         message: getErrorMessage(error, 'Failed to switch account'),
+      })
+    }
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/codex-api/accounts/remove') {
+    try {
+      const rawBody = await new Promise<string>((resolve, reject) => {
+        let body = ''
+        req.setEncoding('utf8')
+        req.on('data', (chunk: string) => { body += chunk })
+        req.on('end', () => resolve(body))
+        req.on('error', reject)
+      })
+      const payload = asRecord(rawBody.length > 0 ? JSON.parse(rawBody) : {})
+      const accountId = typeof payload?.accountId === 'string' ? payload.accountId.trim() : ''
+      if (!accountId) {
+        setJson(res, 400, { error: 'account_not_found', message: 'Missing accountId.' })
+        return true
+      }
+
+      const state = await readStoredAccountsState()
+      const target = state.accounts.find((entry) => entry.accountId === accountId) ?? null
+      if (!target) {
+        setJson(res, 404, { error: 'account_not_found', message: 'The requested account was not found.' })
+        return true
+      }
+
+      const remainingAccounts = state.accounts.filter((entry) => entry.accountId !== accountId)
+      if (state.activeAccountId !== accountId) {
+        await removeSnapshot(target.storageId)
+        await writeStoredAccountsState({
+          activeAccountId: state.activeAccountId,
+          accounts: remainingAccounts,
+        })
+        setJson(res, 200, {
+          ok: true,
+          data: {
+            activeAccountId: state.activeAccountId,
+            accounts: sortAccounts(remainingAccounts, state.activeAccountId).map((entry) => toPublicAccountEntry(entry, state.activeAccountId)),
+          },
+        })
+        return true
+      }
+
+      if (appServer.listPendingServerRequests().length > 0) {
+        setJson(res, 409, {
+          error: 'account_remove_blocked',
+          message: 'Finish pending approval requests before removing the active account.',
+        })
+        return true
+      }
+
+      let previousRaw: string | null = null
+      try {
+        previousRaw = await readFile(getActiveAuthPath(), 'utf8')
+      } catch {
+        previousRaw = null
+      }
+
+      const replacement = await pickReplacementActiveAccount(remainingAccounts)
+      if (!replacement) {
+        await restoreActiveAuth(null)
+        appServer.dispose()
+        await removeSnapshot(target.storageId)
+        await writeStoredAccountsState({
+          activeAccountId: null,
+          accounts: remainingAccounts,
+        })
+        void scheduleAccountsBackgroundRefresh({
+          force: true,
+          accountIds: remainingAccounts.map((entry) => entry.accountId),
+        })
+        setJson(res, 200, {
+          ok: true,
+          data: {
+            activeAccountId: null,
+            accounts: sortAccounts(remainingAccounts, null).map((entry) => toPublicAccountEntry(entry, null)),
+          },
+        })
+        return true
+      }
+
+      const replacementSnapshotPath = getSnapshotPath(replacement.storageId)
+      if (!(await fileExists(replacementSnapshotPath))) {
+        setJson(res, 404, {
+          error: 'account_not_found',
+          message: 'The replacement account snapshot is missing.',
+        })
+        return true
+      }
+
+      const replacementRaw = await readFile(replacementSnapshotPath, 'utf8')
+      await writeFile(getActiveAuthPath(), replacementRaw, { encoding: 'utf8', mode: 0o600 })
+
+      try {
+        appServer.dispose()
+        const inspection = await validateSwitchedAccount(appServer)
+        const activatedReplacement: StoredAccountEntry = {
+          ...replacement,
+          email: inspection.metadata.email ?? replacement.email,
+          planType: inspection.metadata.planType ?? replacement.planType,
+          lastActivatedAtIso: new Date().toISOString(),
+          quotaSnapshot: inspection.quotaSnapshot ?? replacement.quotaSnapshot,
+          quotaUpdatedAtIso: new Date().toISOString(),
+          quotaStatus: 'ready',
+          quotaError: null,
+          unavailableReason: null,
+        }
+        const nextAccounts = remainingAccounts.map((entry) => (
+          entry.accountId === activatedReplacement.accountId ? activatedReplacement : entry
+        ))
+        await removeSnapshot(target.storageId)
+        await writeStoredAccountsState({
+          activeAccountId: activatedReplacement.accountId,
+          accounts: nextAccounts,
+        })
+        void scheduleAccountsBackgroundRefresh({
+          force: true,
+          prioritizeAccountId: activatedReplacement.accountId,
+          accountIds: nextAccounts
+            .filter((entry) => entry.accountId !== activatedReplacement.accountId)
+            .map((entry) => entry.accountId),
+        })
+        setJson(res, 200, {
+          ok: true,
+          data: {
+            activeAccountId: activatedReplacement.accountId,
+            accounts: sortAccounts(nextAccounts, activatedReplacement.accountId)
+              .map((entry) => toPublicAccountEntry(entry, activatedReplacement.accountId)),
+          },
+        })
+      } catch (error) {
+        await restoreActiveAuth(previousRaw)
+        appServer.dispose()
+        await replaceStoredAccount({
+          ...replacement,
+          quotaUpdatedAtIso: new Date().toISOString(),
+          quotaStatus: 'error',
+          quotaError: getErrorMessage(error, 'Failed to switch account'),
+          unavailableReason: detectAccountUnavailableReason(error),
+        }, state.activeAccountId)
+        setJson(res, 502, {
+          error: 'account_remove_failed',
+          message: getErrorMessage(error, 'Failed to remove account'),
+        })
+      }
+    } catch (error) {
+      setJson(res, 400, {
+        error: 'invalid_auth_json',
+        message: getErrorMessage(error, 'Failed to remove account'),
       })
     }
     return true

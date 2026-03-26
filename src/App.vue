@@ -94,7 +94,7 @@
                     v-for="account in accounts"
                     :key="account.accountId"
                     class="sidebar-settings-account-item"
-                    :class="{ 'is-active': account.isActive }"
+                    :class="{ 'is-active': account.isActive, 'is-unavailable': isAccountUnavailable(account) }"
                     :title="buildAccountTitle(account)"
                   >
                     <div class="sidebar-settings-account-main">
@@ -109,14 +109,24 @@
                         Workspace {{ shortAccountId(account.accountId) }}
                       </p>
                     </div>
-                    <button
-                      class="sidebar-settings-account-switch"
-                      type="button"
-                      :disabled="isSwitchingAccounts || account.isActive"
-                      @click="onSwitchAccount(account.accountId)"
-                    >
-                      {{ account.isActive ? 'Active' : isSwitchingAccounts ? 'Switching…' : 'Switch' }}
-                    </button>
+                    <div class="sidebar-settings-account-actions">
+                      <button
+                        class="sidebar-settings-account-switch"
+                        type="button"
+                        :disabled="isAccountActionDisabled(account) || account.isActive || isAccountUnavailable(account)"
+                        @click="onSwitchAccount(account.accountId)"
+                      >
+                        {{ getAccountSwitchLabel(account) }}
+                      </button>
+                      <button
+                        class="sidebar-settings-account-remove"
+                        type="button"
+                        :disabled="isAccountActionDisabled(account)"
+                        @click="onRemoveAccount(account.accountId)"
+                      >
+                        {{ removingAccountId === account.accountId ? 'Removing…' : 'Remove' }}
+                      </button>
+                    </div>
                   </article>
                 </div>
               </div>
@@ -282,6 +292,7 @@ import {
   getProjectRootSuggestion,
   getWorkspaceRootsState,
   openProjectRoot,
+  removeAccount,
   refreshAccountsFromAuth,
   searchThreads,
   switchAccount,
@@ -366,6 +377,7 @@ const isSettingsOpen = ref(false)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
+const removingAccountId = ref('')
 const accountActionError = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
@@ -591,6 +603,28 @@ function formatAccountMeta(account: UiAccountEntry): string {
   return segments.join(' · ')
 }
 
+function isPaymentRequiredErrorMessage(value: string | null): boolean {
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return normalized.includes('payment required') || /\b402\b/.test(normalized)
+}
+
+function isAccountUnavailable(account: UiAccountEntry): boolean {
+  return account.unavailableReason === 'payment_required' || isPaymentRequiredErrorMessage(account.quotaError)
+}
+
+function isAccountActionDisabled(account: UiAccountEntry): boolean {
+  return isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0
+    || (account.isActive && removingAccountId.value !== account.accountId && isAccountSwitchBlocked.value)
+}
+
+function getAccountSwitchLabel(account: UiAccountEntry): string {
+  if (isAccountUnavailable(account)) return 'Unavailable'
+  if (account.isActive) return 'Active'
+  if (isSwitchingAccounts.value) return 'Switching…'
+  return 'Switch'
+}
+
 function pickWeeklyQuotaWindow(account: UiAccountEntry) {
   const quota = account.quotaSnapshot
   if (!quota) return null
@@ -609,6 +643,9 @@ function pickWeeklyQuotaWindow(account: UiAccountEntry) {
 }
 
 function formatAccountQuota(account: UiAccountEntry): string {
+  if (isAccountUnavailable(account)) {
+    return account.quotaError || '402 Payment Required'
+  }
   const quota = account.quotaSnapshot
   const window = pickWeeklyQuotaWindow(account)
   if (window) {
@@ -634,6 +671,7 @@ function buildAccountTitle(account: UiAccountEntry): string {
   return [
     account.email || 'Account',
     formatAccountMeta(account),
+    isAccountUnavailable(account) ? 'Unavailable account' : null,
     formatAccountQuota(account),
     `Workspace ${account.accountId}`,
   ].filter(Boolean).join('\n')
@@ -693,6 +731,41 @@ async function onSwitchAccount(accountId: string): Promise<void> {
     accountActionError.value = error instanceof Error ? error.message : 'Failed to switch account'
   } finally {
     isSwitchingAccounts.value = false
+  }
+}
+
+async function onRemoveAccount(accountId: string): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0) return
+  const targetAccount = accounts.value.find((account) => account.accountId === accountId) ?? null
+  if (!targetAccount) return
+  if (targetAccount.isActive && isAccountSwitchBlocked.value) {
+    accountActionError.value = 'Finish the current turn and pending requests before removing the active account.'
+    return
+  }
+
+  const label = targetAccount.email || `workspace ${shortAccountId(accountId)}`
+  if (typeof window !== 'undefined' && !window.confirm(`Remove ${label} from saved accounts?`)) {
+    return
+  }
+
+  const removedWasActive = targetAccount.isActive
+  accountActionError.value = ''
+  removingAccountId.value = accountId
+  try {
+    const result = await removeAccount(accountId)
+    accounts.value = result.accounts
+    stopPolling()
+    startPolling()
+    if (removedWasActive) {
+      void refreshAll({
+        includeSelectedThreadMessages: true,
+      })
+    }
+    void loadAccountsState({ silent: true })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to remove account'
+  } finally {
+    removingAccountId.value = ''
   }
 }
 
@@ -1625,8 +1698,16 @@ async function submitFirstMessageForNewThread(
   @apply border-emerald-200 bg-emerald-50;
 }
 
+.sidebar-settings-account-item.is-unavailable {
+  @apply border-rose-200 bg-rose-50;
+}
+
 .sidebar-settings-account-main {
   @apply min-w-0 flex-1;
+}
+
+.sidebar-settings-account-actions {
+  @apply flex shrink-0 flex-col gap-1.5;
 }
 
 .sidebar-settings-account-email {
@@ -1649,8 +1730,16 @@ async function submitFirstMessageForNewThread(
   @apply bg-emerald-100 text-emerald-800;
 }
 
+.sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
+  @apply bg-rose-100 text-rose-800;
+}
+
 .sidebar-settings-account-switch {
   @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-remove {
+  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 transition hover:bg-rose-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-label {

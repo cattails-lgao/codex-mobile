@@ -93,6 +93,10 @@
   @apply border-emerald-500/35 bg-emerald-500/10;
 }
 
+:root.dark .sidebar-settings-account-item.is-unavailable {
+  @apply border-rose-500/35 bg-rose-500/10;
+}
+
 :root.dark .sidebar-settings-account-email {
   @apply text-zinc-100;
 }
@@ -111,6 +115,14 @@
 
 :root.dark .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
   @apply bg-emerald-500/15 text-emerald-200;
+}
+
+:root.dark .sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
+  @apply bg-rose-500/15 text-rose-200;
+}
+
+:root.dark .sidebar-settings-account-remove {
+  @apply border-rose-500/40 bg-zinc-700 text-rose-200 hover:bg-rose-500/15;
 }
 
 :root.dark .sidebar-settings-value {

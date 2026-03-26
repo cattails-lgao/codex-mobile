@@ -24,6 +24,7 @@ import {
 import type {
   UiAccountEntry,
   UiAccountQuotaStatus,
+  UiAccountUnavailableReason,
   CollaborationModeKind,
   CollaborationModeOption,
   UiCreditsSnapshot,
@@ -97,6 +98,16 @@ function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
 
+function normalizeAccountUnavailableReason(value: unknown): UiAccountUnavailableReason | null {
+  return value === 'payment_required' ? value : null
+}
+
+function isPaymentRequiredErrorMessage(value: string | null): boolean {
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return normalized.includes('payment required') || /\b402\b/.test(normalized)
+}
+
 function normalizeRateLimitWindow(value: unknown): UiRateLimitWindow | null {
   const record = asRecord(value)
   if (!record) return null
@@ -165,6 +176,8 @@ function normalizeAccountEntry(value: unknown, activeAccountId: string | null = 
     quotaUpdatedAtIso: readString(record.quotaUpdatedAtIso),
     quotaStatus,
     quotaError: readString(record.quotaError),
+    unavailableReason: normalizeAccountUnavailableReason(record.unavailableReason)
+      ?? (isPaymentRequiredErrorMessage(readString(record.quotaError)) ? 'payment_required' : null),
     isActive: readBoolean(record.isActive) ?? accountId === activeAccountId,
   }
 }
@@ -336,6 +349,20 @@ export async function switchAccount(accountId: string): Promise<UiAccountEntry> 
     throw new Error('Failed to switch account')
   }
   return account
+}
+
+export async function removeAccount(accountId: string): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accountId }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to remove account'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
 }
 
 export async function resumeThread(threadId: string): Promise<void> {

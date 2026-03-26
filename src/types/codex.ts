@@ -162,6 +162,7 @@ export type UiRateLimitSnapshot = {
 }
 
 export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
+export type UiAccountUnavailableReason = 'payment_required'
 
 export type UiAccountEntry = {
   accountId: string
@@ -174,6 +175,7 @@ export type UiAccountEntry = {
   quotaUpdatedAtIso: string | null
   quotaStatus: UiAccountQuotaStatus
   quotaError: string | null
+  unavailableReason: UiAccountUnavailableReason | null
   isActive: boolean
 }
 
