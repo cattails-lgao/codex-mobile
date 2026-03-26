@@ -1236,6 +1236,7 @@ class TelegramThreadBridge {
   start(): void {
     if (!this.token || this.active) return
     this.active = true
+    void this.notifyOnlineForKnownChats().catch(() => {})
     this.pollingTask = this.pollLoop()
     this.appServer.onNotification((notification) => {
       void this.handleNotification(notification).catch(() => {})
@@ -1309,6 +1310,7 @@ class TelegramThreadBridge {
     }
     this.bindChatToThread(chatId, normalizedThreadId)
     this.start()
+    void this.sendOnlineMessage(chatId).catch(() => {})
   }
 
   private async sendTelegramMessage(
@@ -1327,6 +1329,17 @@ class TelegramThreadBridge {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
+  }
+
+  private async sendOnlineMessage(chatId: number): Promise<void> {
+    await this.sendTelegramMessage(chatId, 'Codex thread bridge went online.')
+  }
+
+  private async notifyOnlineForKnownChats(): Promise<void> {
+    const knownChatIds = Array.from(this.threadIdByChatId.keys())
+    for (const chatId of knownChatIds) {
+      await this.sendOnlineMessage(chatId)
+    }
   }
 
   private async handleIncomingUpdate(update: TelegramUpdate): Promise<void> {
