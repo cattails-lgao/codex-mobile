@@ -74,8 +74,17 @@ type TelegramUpdate = {
   message?: {
     message_id?: number
     text?: string
-    chat?: {
-      id?: number
+      chat?: {
+        id?: number
+      }
+    }
+  callback_query?: {
+    id?: string
+    data?: string
+    message?: {
+      chat?: {
+        id?: number
+      }
     }
   }
 }
@@ -1264,7 +1273,7 @@ class TelegramThreadBridge {
       body: JSON.stringify({
         timeout: 45,
         offset: this.nextUpdateOffset,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
       }),
     })
     const payload = asRecord(await response.json())
@@ -1302,27 +1311,37 @@ class TelegramThreadBridge {
     this.start()
   }
 
-  private async sendTelegramMessage(chatId: number, text: string): Promise<void> {
+  private async sendTelegramMessage(
+    chatId: number,
+    text: string,
+    options: { replyMarkup?: unknown } = {},
+  ): Promise<void> {
     const message = text.trim()
     if (!message) return
+    const payload: Record<string, unknown> = { chat_id: chatId, text: message }
+    if (options.replyMarkup) {
+      payload.reply_markup = options.replyMarkup
+    }
     await fetch(this.apiUrl('sendMessage'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: message }),
+      body: JSON.stringify(payload),
     })
   }
 
   private async handleIncomingUpdate(update: TelegramUpdate): Promise<void> {
+    if (update.callback_query) {
+      await this.handleCallbackQuery(update.callback_query)
+      return
+    }
+
     const message = update.message
     const chatId = message?.chat?.id
     const text = message?.text?.trim()
     if (typeof chatId !== 'number' || !text) return
 
     if (text === '/start') {
-      await this.sendTelegramMessage(
-        chatId,
-        'Telegram bridge is active. Send any message to forward it into your Codex thread. Use /newthread to start a new mapped thread.',
-      )
+      await this.sendThreadPicker(chatId)
       return
     }
 
@@ -1345,6 +1364,82 @@ class TelegramThreadBridge {
       threadId,
       input: [{ type: 'text', text }],
     })
+  }
+
+  private async handleCallbackQuery(callbackQuery: NonNullable<TelegramUpdate['callback_query']>): Promise<void> {
+    const callbackId = typeof callbackQuery.id === 'string' ? callbackQuery.id : ''
+    const data = typeof callbackQuery.data === 'string' ? callbackQuery.data : ''
+    const chatId = callbackQuery.message?.chat?.id
+    if (!callbackId) return
+
+    if (!data.startsWith('thread:') || typeof chatId !== 'number') {
+      await this.answerCallbackQuery(callbackId, 'Invalid selection')
+      return
+    }
+
+    const threadId = data.slice('thread:'.length).trim()
+    if (!threadId) {
+      await this.answerCallbackQuery(callbackId, 'Invalid thread id')
+      return
+    }
+
+    this.bindChatToThread(chatId, threadId)
+    await this.answerCallbackQuery(callbackId, 'Thread connected')
+    await this.sendTelegramMessage(chatId, `Connected to thread: ${threadId}`)
+    const history = await this.readThreadHistorySummary(threadId)
+    if (history) {
+      await this.sendTelegramMessage(chatId, history)
+    }
+  }
+
+  private async answerCallbackQuery(callbackQueryId: string, text: string): Promise<void> {
+    await fetch(this.apiUrl('answerCallbackQuery'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text,
+      }),
+    })
+  }
+
+  private async sendThreadPicker(chatId: number): Promise<void> {
+    const threads = await this.listRecentThreads()
+    if (threads.length === 0) {
+      await this.sendTelegramMessage(chatId, 'No threads found. Send /newthread to create one.')
+      return
+    }
+
+    const inlineKeyboard = threads.map((thread) => [
+      {
+        text: thread.title,
+        callback_data: `thread:${thread.id}`,
+      },
+    ])
+
+    await this.sendTelegramMessage(chatId, 'Select a thread to connect:', {
+      replyMarkup: { inline_keyboard: inlineKeyboard },
+    })
+  }
+
+  private async listRecentThreads(): Promise<Array<{ id: string; title: string }>> {
+    const payload = asRecord(await this.appServer.rpc('thread/list', {
+      archived: false,
+      limit: 20,
+      sortKey: 'updated_at',
+    }))
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    const threads: Array<{ id: string; title: string }> = []
+    for (const row of rows) {
+      const record = asRecord(row)
+      const id = typeof record?.id === 'string' ? record.id.trim() : ''
+      if (!id) continue
+      const name = typeof record?.name === 'string' ? record.name.trim() : ''
+      const preview = typeof record?.preview === 'string' ? record.preview.trim() : ''
+      const title = name || preview || id
+      threads.push({ id, title: title.slice(0, 64) })
+    }
+    return threads
   }
 
   private async createThreadForChat(chatId: number): Promise<string> {
@@ -1437,6 +1532,43 @@ class TelegramThreadBridge {
       }
     }
     return ''
+  }
+
+  private async readThreadHistorySummary(threadId: string): Promise<string> {
+    const response = asRecord(await this.appServer.rpc('thread/read', { threadId, includeTurns: true }))
+    const thread = asRecord(response?.thread)
+    const turns = Array.isArray(thread?.turns) ? thread.turns : []
+    const historyRows: string[] = []
+
+    for (const turn of turns) {
+      const turnRecord = asRecord(turn)
+      const items = Array.isArray(turnRecord?.items) ? turnRecord.items : []
+      for (const item of items) {
+        const itemRecord = asRecord(item)
+        const type = typeof itemRecord?.type === 'string' ? itemRecord.type : ''
+        if (type === 'userMessage') {
+          const content = Array.isArray(itemRecord?.content) ? itemRecord.content : []
+          for (const block of content) {
+            const blockRecord = asRecord(block)
+            if (blockRecord?.type === 'text' && typeof blockRecord.text === 'string' && blockRecord.text.trim()) {
+              historyRows.push(`User: ${blockRecord.text.trim()}`)
+            }
+          }
+        }
+        if (type === 'agentMessage' && typeof itemRecord?.text === 'string' && itemRecord.text.trim()) {
+          historyRows.push(`Assistant: ${itemRecord.text.trim()}`)
+        }
+      }
+    }
+
+    if (historyRows.length === 0) {
+      return 'Thread has no message history yet.'
+    }
+
+    const tail = historyRows.slice(-12).join('\n\n')
+    const maxLen = 3800
+    const summary = tail.length > maxLen ? tail.slice(tail.length - maxLen) : tail
+    return `Recent history:\n\n${summary}`
   }
 }
 
