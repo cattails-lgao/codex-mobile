@@ -39,12 +39,16 @@ type CurrentModelConfig = {
   reasoningEffort: ReasoningEffort | ''
 }
 
-type ResolvedPlanModeSettings = {
+type ResolvedCollaborationModeSettings = {
   model: string
   reasoningEffort: ReasoningEffort | null
 }
 
 function normalizePlanModeReasoningEffort(value: ReasoningEffort | '' | null | undefined): ReasoningEffort | null {
+  return value && value.length > 0 ? value : null
+}
+
+function normalizeCollaborationModeReasoningEffort(value: ReasoningEffort | '' | null | undefined): ReasoningEffort | null {
   return value && value.length > 0 ? value : null
 }
 
@@ -430,15 +434,18 @@ function buildTextWithAttachments(
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
 }
 
-async function resolvePlanModeSettings(
+async function resolveCollaborationModeSettings(
+  mode: CollaborationModeKind,
   model?: string,
   effort?: ReasoningEffort,
-): Promise<ResolvedPlanModeSettings> {
+): Promise<ResolvedCollaborationModeSettings> {
   const explicitModel = model?.trim() ?? ''
   if (explicitModel) {
     return {
       model: explicitModel,
-      reasoningEffort: normalizePlanModeReasoningEffort(effort),
+      reasoningEffort: mode === 'plan'
+        ? normalizePlanModeReasoningEffort(effort)
+        : normalizeCollaborationModeReasoningEffort(effort),
     }
   }
 
@@ -453,7 +460,9 @@ async function resolvePlanModeSettings(
   if (configuredModel) {
     return {
       model: configuredModel,
-      reasoningEffort: normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+      reasoningEffort: mode === 'plan'
+        ? normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort)
+        : normalizeCollaborationModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
     }
   }
 
@@ -468,11 +477,13 @@ async function resolvePlanModeSettings(
   if (fallbackModel) {
     return {
       model: fallbackModel,
-      reasoningEffort: normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+      reasoningEffort: mode === 'plan'
+        ? normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort)
+        : normalizeCollaborationModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
     }
   }
 
-  throw new Error('Plan mode requires an available model. Wait for models to load and try again.')
+  throw new Error(`${mode === 'plan' ? 'Plan' : 'Default'} mode requires an available model. Wait for models to load and try again.`)
 }
 
 export async function startThreadTurn(
@@ -515,13 +526,13 @@ export async function startThreadTurn(
     if (typeof effort === 'string' && effort.length > 0) {
       params.effort = effort
     }
-    if (collaborationMode === 'plan') {
-      const planSettings = await resolvePlanModeSettings(normalizedModel, effort)
+    if (collaborationMode) {
+      const collaborationModeSettings = await resolveCollaborationModeSettings(collaborationMode, normalizedModel, effort)
       params.collaborationMode = {
-        mode: 'plan',
+        mode: collaborationMode,
         settings: {
-          model: planSettings.model,
-          reasoning_effort: planSettings.reasoningEffort,
+          model: collaborationModeSettings.model,
+          reasoning_effort: collaborationModeSettings.reasoningEffort,
           developer_instructions: null,
         },
       }
