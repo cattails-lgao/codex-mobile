@@ -1062,8 +1062,16 @@ function buildThreadMarkdown(): string {
 
     if (message.images && message.images.length > 0) {
       lines.push('Images:')
+      let omittedEmbeddedCount = 0
       for (const imageUrl of message.images) {
+        if (isEmbeddedImageUrl(imageUrl)) {
+          omittedEmbeddedCount += 1
+          continue
+        }
         lines.push(`- ${imageUrl}`)
+      }
+      if (omittedEmbeddedCount > 0) {
+        lines.push(`- [${omittedEmbeddedCount} embedded image${omittedEmbeddedCount > 1 ? 's' : ''} omitted]`)
       }
       lines.push('')
     }
@@ -1074,6 +1082,11 @@ function buildThreadMarkdown(): string {
 
 function escapeMarkdownText(value: string): string {
   return value.replace(/([\\`*_{}\[\]()#+\-.!])/g, '\\$1')
+}
+
+function isEmbeddedImageUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized.startsWith('data:') || normalized.startsWith('blob:')
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
