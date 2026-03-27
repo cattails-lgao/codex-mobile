@@ -1214,7 +1214,11 @@ function isDraggingProject(projectName: string): boolean {
 function projectGroupStyle(projectName: string): Record<string, string> | undefined {
   const drag = activeProjectDrag.value
   const targetTop = layoutTopByProject.value[projectName] ?? 0
-  const shouldElevateForMenu = openProjectMenuId.value === projectName
+  const openThreadMenuProjectName = openThreadMenuId.value
+    ? props.groups.find((group) => group.threads.some((thread) => thread.id === openThreadMenuId.value))?.projectName ?? ''
+    : ''
+  const shouldElevateForMenu =
+    openProjectMenuId.value === projectName || openThreadMenuProjectName === projectName
 
   if (!drag || drag.projectName !== projectName) {
     return {
