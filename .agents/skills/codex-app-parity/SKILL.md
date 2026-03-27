@@ -218,6 +218,12 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Ordered List Numbering (2026-03-27)
+
+- `ThreadConversation.vue` uses a custom Markdown block parser rather than a standard Markdown library.
+- Ordered-list items separated by non-indented paragraphs are parsed into multiple `orderedList` blocks.
+- To preserve author-visible numbering in that case, each `orderedList` block needs the original marker value persisted and rendered via the HTML `<ol start=\"...\">` attribute.
+
 ## Findings: Dictation / Microphone Feature (2026-02-26)
 
 - **i18n keys**: `composer.dictation.*` — tooltip is "Hold to dictate", aria is "Dictate".

@@ -336,7 +336,11 @@
                         </div>
                       </li>
                     </ul>
-                    <ol v-else-if="block.kind === 'orderedList'" class="message-list message-list-ordered">
+                    <ol
+                      v-else-if="block.kind === 'orderedList'"
+                      class="message-list message-list-ordered"
+                      :start="block.start"
+                    >
                       <li v-for="(item, itemIndex) in block.items" :key="`ol-${blockIndex}-${itemIndex}`" class="message-list-item">
                         <div class="message-list-item-content" v-html="renderListItemContentAsHtml(item)" />
                       </li>
@@ -839,7 +843,7 @@ type MessageBlock =
   | { kind: 'blockquote'; value: string }
   | { kind: 'unorderedList'; items: ListItem[] }
   | { kind: 'taskList'; items: TaskListItem[] }
-  | { kind: 'orderedList'; items: ListItem[] }
+  | { kind: 'orderedList'; items: ListItem[]; start: number }
   | { kind: 'codeBlock'; language: string; value: string }
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
@@ -1616,18 +1620,22 @@ function readTaskListItemMatch(line: string): { indent: number; item: TaskListIt
   }
 }
 
-function readOrderedListItem(line: string): string | null {
-  const match = line.match(/^\s*\d+[.)]\s+(.+)$/u)
-  return match?.[1]?.trim() ?? null
-}
-
-function readOrderedListItemMatch(line: string): { indent: number; text: string } | null {
-  const match = line.match(/^(\s*)\d+[.)]\s+(.+)$/u)
+function readOrderedListItemData(line: string): { indent: number; text: string; start: number } | null {
+  const match = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/u)
   if (!match) return null
   return {
     indent: leadingIndentWidth(match[1] ?? ''),
-    text: match[2]?.trim() ?? '',
+    start: Number.parseInt(match[2] ?? '1', 10) || 1,
+    text: match[3]?.trim() ?? '',
   }
+}
+
+function readOrderedListItem(line: string): string | null {
+  return readOrderedListItemData(line)?.text ?? null
+}
+
+function readOrderedListItemMatch(line: string): { indent: number; text: string; start: number } | null {
+  return readOrderedListItemData(line)
 }
 
 function isParagraphBreakingLine(line: string): boolean {
@@ -1901,14 +1909,23 @@ function parseTextBlocks(text: string): MessageBlock[] {
 
     const orderedItem = readOrderedListItem(lines[index])
     if (orderedItem !== null) {
+      const orderedItemMatch = readOrderedListItemMatch(lines[index])
       const parsedList = readListItems(lines, index, readOrderedListItemMatch, true)
       if (parsedList) {
-        blocks.push({ kind: 'orderedList', items: parsedList.items })
+        blocks.push({
+          kind: 'orderedList',
+          items: parsedList.items,
+          start: orderedItemMatch?.start ?? 1,
+        })
         index = parsedList.nextIndex
         continue
       }
       if (orderedItem.length > 0) {
-        blocks.push({ kind: 'orderedList', items: [{ paragraphs: [orderedItem] }] })
+        blocks.push({
+          kind: 'orderedList',
+          items: [{ paragraphs: [orderedItem] }],
+          start: orderedItemMatch?.start ?? 1,
+        })
         index += 1
         continue
       }
@@ -2098,7 +2115,7 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
     const items = block.items
       .map((item) => `<li class="message-list-item"><div class="message-list-item-content">${renderListItemContentAsHtml(item)}</div></li>`)
       .join('')
-    return `<ol class="message-list message-list-ordered">${items}</ol>`
+    return `<ol class="message-list message-list-ordered" start="${block.start}">${items}</ol>`
   }
   if (block.kind === 'codeBlock') {
     const language = block.language
