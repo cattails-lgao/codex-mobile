@@ -1,6 +1,6 @@
 ---
 name: "codex-app-parity"
-description: "Use when implementing or changing user-visible behavior/UI in this repository and parity with the installed Codex desktop app must be validated before coding."
+description: "Use when implementing or changing user-visible behavior/UI in this repository and parity with the latest official Codex references must be validated before coding. Prefer official OpenAI docs and official code; use an installed Codex app only as supplemental reference when available."
 ---
 
 # Codex App Parity Skill
@@ -10,22 +10,59 @@ Do not use it for purely internal refactors that do not affect behavior.
 
 ## Objective
 
-Ensure behavior is implemented with Codex.app as the source of truth, then verified with headless Playwright and screenshots.
+Ensure behavior is implemented against the latest official Codex references, then verified with headless Playwright and screenshots.
 
 ## Project Instructions
 
-## Codex.app-First Development Policy
+## Official Codex Reference-First Development Policy
 
-For every **new feature** and every **behavior/UI change**, treat the installed desktop app as the source of truth:
+For every **new feature** and every **behavior/UI change**, treat the latest official Codex materials as the source of truth.
 
-- App path: `/Applications/Codex.app`
-- Primary bundle to inspect: `/Applications/Codex.app/Contents/Resources/app.asar`
+Reference priority:
+
+1. Official OpenAI Codex docs on `developers.openai.com` / `platform.openai.com`
+2. Official OpenAI code in `openai/codex`
+3. Official product pages or release notes when relevant to user-visible behavior
+4. A locally installed `Codex.app` bundle only if it is actually available on the current machine
 
 Do not implement first and compare later. Compare first, then implement.
 
-## How to Search for Features in Codex.app
+When sources conflict, prefer current official docs or official repository behavior over older reverse-engineered desktop bundle findings.
 
-### Extraction
+Because this workspace is commonly developed on Linux, do not assume `/Applications/Codex.app` exists.
+
+## Official Sources To Check First
+
+- Docs entry point: `https://platform.openai.com/docs/codex`
+- Developer portal landing page: `https://developers.openai.com/`
+- Official repository: `https://github.com/openai/codex`
+
+If the task depends on the **latest** behavior, verify the current official source before coding and note the concrete source pages you used.
+
+## How to Search for Features in Official References
+
+### Docs-first search
+
+1. Search official Codex docs for the feature or workflow.
+2. Search official developer docs for adjacent terminology, model/tool references, or product guidance.
+3. Capture the exact page titles and URLs that informed the implementation.
+
+### Official code search
+
+Use the official `openai/codex` repository as the code reference when docs are insufficient or when behavior needs implementation detail:
+
+- Search `README.md`, `docs/`, and relevant packages first.
+- Use repository search terms based on UI labels, settings names, RPC names, and command names.
+- Prefer current main-branch code or the latest tagged release over older snippets copied elsewhere.
+
+### Optional local desktop bundle inspection
+
+If a local desktop app is available, it can still be inspected as supplemental evidence for UI details that are missing from official docs/code.
+
+Typical macOS paths:
+
+- App path: `/Applications/Codex.app`
+- Primary bundle: `/Applications/Codex.app/Contents/Resources/app.asar`
 
 Extract the app bundle once (reuse if already extracted):
 
@@ -73,10 +110,10 @@ if idx >= 0:
 
 ### Search Strategy
 
-1. Start with **i18n locale files** — they have human-readable labels that identify features.
-2. Use the i18n key to find the **component** in the main bundle.
-3. Trace the component to find **hooks/composables**, **API calls**, and **event handlers**.
-4. Check the **main process** bundle for any server-side proxying or Electron IPC handling.
+1. Start with **official docs** and current product documentation.
+2. If docs are too high-level, inspect the **official repository** for implementation patterns.
+3. If a desktop bundle is available and still needed, use **i18n locale files** and bundle search to recover UI details.
+4. Trace the result to find **hooks/composables**, **API calls**, **event handlers**, and supporting process logic.
 
 ### Architecture Notes
 
@@ -91,12 +128,14 @@ if idx >= 0:
 - Restate what behavior is being added/changed.
 - Define whether it is: data mapping, runtime event handling, UX text, visual treatment, interaction model, or all of these.
 
-2. Inspect Codex.app before coding:
-- Locate the implementation in `app.asar` (extract and search built assets as needed).
+2. Inspect official Codex references before coding:
+- Check the latest official docs first.
+- Check the official `openai/codex` repository when implementation detail is needed.
+- If available and useful, inspect a local `Codex.app` bundle as supplemental evidence.
 - Find relevant strings/keys/functions/components for the feature (status labels, event names, item types, summaries, collapse/expand behavior, etc.).
 - Capture the closest equivalent pattern if exact parity is not present.
 
-3. Build a parity checklist from Codex.app:
+3. Build a parity checklist from the official references:
 - Data model shape (fields used by UI).
 - Realtime event sources and transitions.
 - Rendering structure (what is shown collapsed vs expanded).
@@ -105,36 +144,47 @@ if idx >= 0:
 - Visibility rules (when elements appear/disappear).
 
 4. Implement against that checklist:
-- Prefer Codex.app behavior over novel design.
+- Prefer official Codex behavior over novel design.
 - Keep deviations minimal and intentional.
 - If deviating, include a short reason in the final response.
 
 5. Verify parity after implementation:
 - Confirm each checklist item.
 - Run local build/tests.
-- Re-check UI behavior against Codex.app reference.
+- Re-check UI behavior against the official references you used.
 
 ## Response Requirements (When delivering feature changes)
 
 For feature tasks, include:
 
-- `Codex.app analysis`: what was inspected (files/areas/patterns).
+- `Official Codex reference analysis`: what was inspected (docs pages, repo areas, optional desktop bundle areas).
 - `Parity result`: matched items and any explicit deviations.
-- `Fallback note` only if Codex.app could not be inspected or had no equivalent.
+- `Fallback note` only if the official references were insufficient or had no equivalent.
 
 ## Fallback Rules
 
-If Codex.app cannot be inspected (missing app, extraction/search failure) or has no equivalent pattern:
+If the official references are insufficient, unreachable, or have no equivalent pattern:
 
 - State the blocker explicitly.
 - Use best local implementation consistent with existing repository patterns.
 - Keep behavior conservative and avoid speculative UX innovations.
 
+If the official references are incomplete but a local desktop app is available, use the desktop app as a secondary source rather than the primary source.
+
+## Source Freshness Requirement
+
+For requests involving current or changing Codex behavior:
+
+- State the blocker explicitly.
+- Verify the latest official source before coding.
+- Record the concrete pages or repository locations used.
+- Use explicit dates in the final note when freshness matters.
+
 ## Scope and Safety
 
 - This policy applies to **feature behavior and UX decisions**, not just styling.
-- Bug fixes should still check Codex.app when they affect user-visible behavior.
-- Prefer minimal patches that align with app behavior rather than large refactors.
+- Bug fixes should still check official Codex references when they affect user-visible behavior.
+- Prefer minimal patches that align with official behavior rather than large refactors.
 
 ## Completion Verification Requirement
 
@@ -149,6 +199,9 @@ After each feature implementation session that uses this skill:
 2. **Update search instructions**: If new search techniques were used (e.g., a better way to extract minified code, new file locations), update the "How to Search for Features" section.
 3. **Update architecture notes**: If new IPC channels, API endpoints, or data flows were discovered, add them to the Architecture Notes.
 4. **Keep findings actionable**: Each finding should include enough detail that a future session can reuse it without re-discovering.
+
+Historical findings below may come from official docs, the official repository, or earlier desktop bundle inspections.
+If a finding conflicts with current official docs or current official code, treat the current official source as authoritative.
 
 ## Findings: Workspace Root Ordering (2026-02-25)
 
@@ -219,10 +272,11 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
-## Findings: Local Parity Fallback (2026-03-27)
+## Findings: Linux Official-Source-First Parity (2026-03-27)
 
-- In this workspace, `/Applications/Codex.app/Contents/Resources/app.asar` was not present, so Codex.app-first inspection could not run.
-- For user-visible changes under this constraint, use the skill's fallback path explicitly: preserve existing repository interaction patterns, keep the UX conservative, and call out the parity blocker in the completion report.
+- In this workspace, `/Applications/Codex.app/Contents/Resources/app.asar` was not present, so desktop bundle inspection could not be the default parity workflow.
+- For Linux-based development here, use official Codex docs and the official `openai/codex` repository as the primary parity references.
+- Use a local desktop bundle only as an optional supplement when it is actually available on the current machine.
 
 ## Findings: Settings Account Labels (2026-03-24)
 
