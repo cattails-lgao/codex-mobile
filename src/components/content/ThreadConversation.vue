@@ -485,11 +485,11 @@
       v-if="showJumpToLatestButton"
       type="button"
       class="jump-to-latest-button"
+      title="Jump to latest"
       aria-label="Jump to latest output"
       @click="jumpToLatest"
     >
       <IconTablerArrowUp class="icon-svg jump-to-latest-icon" />
-      <span>Jump to latest</span>
     </button>
 
     <div v-if="modalImageUrl.length > 0" class="image-modal-backdrop" @click="closeImageModal">
@@ -2388,7 +2388,7 @@ onBeforeUnmount(() => {
 }
 
 .jump-to-latest-button {
-  @apply absolute right-4 bottom-4 z-20 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/96 px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-slate-900/10 transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900;
+  @apply absolute left-1/2 bottom-4 z-20 inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/96 text-slate-700 shadow-lg shadow-slate-900/10 transition hover:-translate-x-1/2 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900;
 }
 
 .jump-to-latest-icon {
