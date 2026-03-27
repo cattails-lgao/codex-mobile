@@ -543,6 +543,17 @@
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
 
+    <button
+      v-if="showJumpToLatestButton"
+      type="button"
+      class="jump-to-latest-button"
+      aria-label="Jump to latest output"
+      @click="jumpToLatest"
+    >
+      <IconTablerArrowUp class="icon-svg jump-to-latest-icon" />
+      <span>Jump to latest</span>
+    </button>
+
     <div v-if="modalImageUrl.length > 0" class="image-modal-backdrop" @click="closeImageModal">
       <div class="image-modal-content" @click.stop>
         <button class="image-modal-close" type="button" aria-label="Close image preview" @click="closeImageModal">
@@ -557,6 +568,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
+import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerX from '../icons/IconTablerX.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
@@ -826,6 +838,7 @@ const liveOverlayReasoningRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
+const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
 const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
@@ -858,6 +871,10 @@ let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const failedMarkdownImageKeys = ref<Set<string>>(new Set())
+
+const showJumpToLatestButton = computed(
+  () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
+)
 
 type ParsedToolQuestion = {
   id: string
@@ -2008,8 +2025,12 @@ function applySavedScrollState(): void {
   if (!container) return
 
   const savedState = props.scrollState
-  if (!savedState || savedState.isAtBottom) {
+  if (autoFollowOutput.value) {
     enforceBottomState()
+    return
+  }
+  if (!savedState || savedState.isAtBottom) {
+    emitScrollState(container)
     return
   }
 
@@ -2030,8 +2051,7 @@ function enforceBottomState(): void {
 }
 
 function shouldLockToBottom(): boolean {
-  const savedState = props.scrollState
-  return !savedState || savedState.isAtBottom === true
+  return autoFollowOutput.value
 }
 
 function runBottomLockFrame(): void {
@@ -2062,6 +2082,12 @@ function scheduleBottomLock(frames = 6): void {
 
 function onPendingImageSettled(): void {
   scheduleBottomLock(3)
+}
+
+function jumpToLatest(): void {
+  autoFollowOutput.value = true
+  enforceBottomState()
+  scheduleBottomLock(4)
 }
 
 function bindPendingImageHandlers(): void {
@@ -2137,6 +2163,7 @@ watch(
   async (overlay) => {
     if (!overlay) return
     await nextTick()
+    if (!shouldLockToBottom()) return
     enforceBottomState()
     scheduleBottomLock(8)
   },
@@ -2154,15 +2181,24 @@ watch(
 watch(
   () => props.activeThreadId,
   () => {
+    autoFollowOutput.value = props.scrollState?.isAtBottom !== false
     modalImageUrl.value = ''
     failedMarkdownImageKeys.value = new Set()
   },
   { flush: 'post' },
 )
 
+watch(
+  () => props.scrollState?.isAtBottom,
+  (isAtBottom) => {
+    autoFollowOutput.value = isAtBottom !== false
+  },
+)
+
 function onConversationScroll(): void {
   const container = conversationListRef.value
   if (!container || props.isLoading) return
+  autoFollowOutput.value = isAtBottom(container)
   emitScrollState(container)
 }
 
@@ -2217,7 +2253,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .conversation-root {
-  @apply h-full min-h-0 min-w-0 p-0 flex flex-col overflow-y-hidden overflow-x-hidden bg-transparent border-none rounded-none;
+  @apply relative h-full min-h-0 min-w-0 p-0 flex flex-col overflow-y-hidden overflow-x-hidden bg-transparent border-none rounded-none;
 }
 
 .conversation-loading {
@@ -2259,6 +2295,14 @@ onBeforeUnmount(() => {
 
 .conversation-bottom-anchor {
   @apply h-px;
+}
+
+.jump-to-latest-button {
+  @apply absolute right-4 bottom-4 z-20 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/96 px-3 py-2 text-xs font-medium text-slate-700 shadow-lg shadow-slate-900/10 transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900;
+}
+
+.jump-to-latest-icon {
+  transform: rotate(180deg);
 }
 
 .message-stack {
