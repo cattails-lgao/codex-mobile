@@ -116,13 +116,13 @@
                 <button
                   type="button"
                   class="message-copy-button"
-                  :data-copied="copiedMessageId === message.id"
-                  :aria-label="copiedMessageId === message.id ? 'Response copied' : 'Copy response'"
-                  :title="copiedMessageId === message.id ? 'Response copied' : 'Copy response'"
-                  @click="copyResponse(message)"
+                  :data-copied="copiedResponseAnchorId === message.id"
+                  :aria-label="copiedResponseAnchorId === message.id ? 'Response copied' : 'Copy response'"
+                  :title="copiedResponseAnchorId === message.id ? 'Response copied' : 'Copy response'"
+                  @click="copyResponse(message.id)"
                 >
                   <IconTablerCopy class="icon-svg message-copy-icon" />
-                  <span class="message-copy-label">{{ copiedMessageId === message.id ? 'Copied' : 'Copy' }}</span>
+                  <span class="message-copy-label">{{ copiedResponseAnchorId === message.id ? 'Copied' : 'Copy' }}</span>
                 </button>
               </div>
 
@@ -592,6 +592,7 @@ function isCopyableAssistantMessage(message: UiMessage): boolean {
   return message.role === 'assistant'
     && !isCommandMessage(message)
     && message.messageType !== 'worked'
+    && !(message.messageType ?? '').endsWith('.live')
 }
 
 const activeCommandMessageId = computed(() => {
@@ -811,7 +812,7 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const liveOverlayReasoningRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
-const copiedMessageId = ref('')
+const copiedResponseAnchorId = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
@@ -1064,7 +1065,10 @@ function buildPlanCopyText(message: UiMessage): string {
 
 function buildCopyableMessageContent(message: UiMessage): string {
   const sections: string[] = []
-  const textContent = message.text.trim() || buildPlanCopyText(message)
+  const rawTextContent = message.text.trim() || buildPlanCopyText(message)
+  const textContent = isPlanMessage(message) && rawTextContent
+    ? `Plan\n${rawTextContent}`
+    : rawTextContent
   if (textContent) {
     sections.push(textContent)
   }
@@ -1086,8 +1090,42 @@ function buildCopyableMessageContent(message: UiMessage): string {
   return sections.join('\n\n').trim()
 }
 
+const copyableResponseContentByAnchorId = computed<Record<string, string>>(() => {
+  const groupedResponses = new Map<string, { anchorMessageId: string; parts: string[] }>()
+
+  for (const message of props.messages) {
+    if (!isCopyableAssistantMessage(message)) continue
+
+    const content = buildCopyableMessageContent(message)
+    if (!content) continue
+
+    const responseKey = typeof message.turnIndex === 'number'
+      ? `turn:${message.turnIndex}`
+      : `message:${message.id}`
+    const existing = groupedResponses.get(responseKey)
+    if (existing) {
+      existing.anchorMessageId = message.id
+      existing.parts.push(content)
+      continue
+    }
+
+    groupedResponses.set(responseKey, {
+      anchorMessageId: message.id,
+      parts: [content],
+    })
+  }
+
+  const next: Record<string, string> = {}
+  for (const response of groupedResponses.values()) {
+    const content = response.parts.join('\n\n').trim()
+    if (!content) continue
+    next[response.anchorMessageId] = content
+  }
+  return next
+})
+
 function showCopyResponseButton(message: UiMessage): boolean {
-  return isCopyableAssistantMessage(message) && buildCopyableMessageContent(message).length > 0
+  return typeof copyableResponseContentByAnchorId.value[message.id] === 'string'
 }
 
 function copyTextWithSelectionFallback(text: string): boolean {
@@ -1114,8 +1152,8 @@ function copyTextWithSelectionFallback(text: string): boolean {
   }
 }
 
-async function copyResponse(message: UiMessage): Promise<void> {
-  const content = buildCopyableMessageContent(message)
+async function copyResponse(anchorMessageId: string): Promise<void> {
+  const content = copyableResponseContentByAnchorId.value[anchorMessageId] ?? ''
   if (!content) return
 
   let copied = false
@@ -1134,13 +1172,13 @@ async function copyResponse(message: UiMessage): Promise<void> {
 
   if (!copied) return
 
-  copiedMessageId.value = message.id
+  copiedResponseAnchorId.value = anchorMessageId
   if (copiedMessageResetTimer) {
     clearTimeout(copiedMessageResetTimer)
   }
   copiedMessageResetTimer = setTimeout(() => {
-    if (copiedMessageId.value === message.id) {
-      copiedMessageId.value = ''
+    if (copiedResponseAnchorId.value === anchorMessageId) {
+      copiedResponseAnchorId.value = ''
     }
     copiedMessageResetTimer = null
   }, 1800)
