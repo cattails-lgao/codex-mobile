@@ -14,7 +14,7 @@
         v-for="message in messages"
         :key="message.id"
         class="conversation-item"
-        :class="{ 'conversation-item-actionable': canShowMessageActions(message) }"
+        :class="{ 'conversation-item-actionable': canCopyMessage(message) }"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -348,7 +348,7 @@
               </article>
             </article>
 
-            <div v-if="canShowMessageActions(message)" class="message-actions">
+            <div v-if="canCopyMessage(message)" class="message-actions">
               <button
                 v-if="canCopyMessage(message)"
                 class="message-action-button"
@@ -358,16 +358,6 @@
               >
                 <IconTablerCopy class="message-action-icon" />
                 <span class="message-action-label">Copy</span>
-              </button>
-              <button
-                v-if="canRollbackMessage(message)"
-                class="message-action-button"
-                type="button"
-                title="Rollback to this message (remove this turn and all after it)"
-                @click="onRollback(message)"
-              >
-                <IconTablerArrowBackUp class="message-action-icon" />
-                <span class="message-action-label">Rollback</span>
               </button>
             </div>
           </div>
@@ -499,7 +489,6 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
-import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
@@ -659,14 +648,11 @@ const props = defineProps<{
   activeThreadId: string
   cwd: string
   scrollState: ThreadScrollState | null
-  isTurnInProgress?: boolean
-  isRollingBack?: boolean
 }>()
 
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
-  rollback: [payload: { turnIndex: number }]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
@@ -1759,20 +1745,9 @@ function onRejectUnknownRequest(requestId: number): void {
   })
 }
 
-function canRollbackMessage(message: UiMessage): boolean {
-  if (message.role !== 'user' && message.role !== 'assistant') return false
-  if (typeof message.turnIndex !== 'number') return false
-  if (props.isTurnInProgress || props.isRollingBack) return false
-  return true
-}
-
 function canCopyMessage(message: UiMessage): boolean {
   if (message.role !== 'user' && message.role !== 'assistant') return false
   return message.text.trim().length > 0
-}
-
-function canShowMessageActions(message: UiMessage): boolean {
-  return canCopyMessage(message) || canRollbackMessage(message)
 }
 
 async function onCopyMessage(message: UiMessage): Promise<void> {
@@ -1791,11 +1766,6 @@ async function onCopyMessage(message: UiMessage): Promise<void> {
     document.execCommand('copy')
     document.body.removeChild(textarea)
   }
-}
-
-function onRollback(message: UiMessage): void {
-  if (!canRollbackMessage(message)) return
-  emit('rollback', { turnIndex: message.turnIndex! })
 }
 
 function scrollToBottom(): void {

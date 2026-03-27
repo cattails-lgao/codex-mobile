@@ -780,7 +780,6 @@ export function useDesktopState() {
   const isLoadingMessages = ref(false)
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
-  const isRollingBack = ref(false)
   const error = ref('')
   const isPolling = ref(false)
   const hasLoadedThreads = ref(false)
@@ -2742,40 +2741,6 @@ export function useDesktopState() {
     }
   }
 
-  async function rollbackSelectedThread(turnIndex: number): Promise<void> {
-    const threadId = selectedThreadId.value
-    if (!threadId) return
-    if (isRollingBack.value) return
-
-    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
-    if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
-    const numTurns = maxTurnIndex - turnIndex + 1
-    if (numTurns < 1) return
-
-    isRollingBack.value = true
-    error.value = ''
-    try {
-      const nextMessages = await rollbackThread(threadId, numTurns)
-      setPersistedMessagesForThread(threadId, nextMessages)
-      clearLivePlansForThread(threadId)
-      setLiveAgentMessagesForThread(threadId, [])
-      clearLiveReasoningForThread(threadId)
-      if (liveCommandsByThreadId.value[threadId]) {
-        liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
-      }
-      setTurnSummaryForThread(threadId, null)
-      setTurnActivityForThread(threadId, null)
-      setTurnErrorForThread(threadId, null)
-      pendingThreadsRefresh = true
-      await syncFromNotifications()
-    } catch (unknownError) {
-      error.value = unknownError instanceof Error ? unknownError.message : 'Failed to rollback thread'
-    } finally {
-      isRollingBack.value = false
-    }
-  }
-
   function renameProject(projectName: string, displayName: string): void {
     if (projectName.length === 0) return
 
@@ -3160,8 +3125,6 @@ export function useDesktopState() {
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,
-    rollbackSelectedThread,
-    isRollingBack,
     selectedThreadQueuedMessages,
     removeQueuedMessage,
     steerQueuedMessage,

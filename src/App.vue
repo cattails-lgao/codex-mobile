@@ -233,11 +233,8 @@
                   :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
-                  :is-turn-in-progress="isSelectedThreadInProgress"
-                  :is-rolling-back="isRollingBack"
                   @update-scroll-state="onUpdateThreadScrollState"
-                  @respond-server-request="onRespondServerRequest"
-                  @rollback="onRollback" />
+                  @respond-server-request="onRespondServerRequest" />
               </div>
 
               <div class="composer-with-queue">
@@ -340,8 +337,6 @@ const {
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
-  rollbackSelectedThread,
-  isRollingBack,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
   steerQueuedMessage,
@@ -441,7 +436,6 @@ const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selected
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
   isInterruptingTurn.value ||
-  isRollingBack.value ||
   isSelectedThreadInProgress.value ||
   selectedThreadServerRequests.value.length > 0,
 )
@@ -1084,10 +1078,6 @@ function onSelectReasoningEffort(effort: ReasoningEffort | ''): void {
 
 function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
-}
-
-function onRollback(payload: { turnIndex: number }): void {
-  void rollbackSelectedThread(payload.turnIndex)
 }
 
 function onExportChat(): void {

@@ -363,3 +363,9 @@ After each feature implementation session that uses this skill:
 ## Findings: Build Badge (2026-03-16)
 
 - Searched extracted Codex.app webview assets for `build-badge`, `WT`, and `worktree` UI markers; no explicit build badge or worktree/version label found in renderer bundle.
+
+## Findings: Parity Extraction Sanity Check (2026-03-27)
+
+- In this environment, `/Applications/Codex.app` may be absent while `/tmp/codex-app-extracted` still exists as an empty directory from a prior session.
+- Before relying on extracted bundle searches, verify both the app bundle path and that the extraction target actually contains files.
+- When both checks fail for a UI change, treat parity inspection as blocked, use existing repository behavior as the fallback baseline, and report that gap explicitly in the final response.
