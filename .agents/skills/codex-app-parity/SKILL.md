@@ -219,6 +219,12 @@ After each feature implementation session that uses this skill:
 - App-server RPC for rename uses method `thread/name/set` with params `{ threadId, name }` (not `threadName`).
 - `thread/name/updated` realtime notification carries `{ threadId, threadName }`, so parity implementations should handle both request/response naming differences (`name` on write, `threadName` on notification).
 
+## Findings: Thread Fork RPC (2026-03-27)
+
+- The local protocol schemas include a stable `thread/fork` RPC in v2, separate from `thread/start`.
+- `ThreadForkParams` accepts `threadId` (required) with optional `cwd` and `model` overrides, and returns a response shape that includes `thread.id`.
+- For sidebar "Create chat fork" actions, prefer `thread/fork` over creating a fresh thread with `thread/start`.
+
 ## Findings: Thread Delete Semantics (2026-03-12)
 
 - In this app-server API surface there is no `thread/delete` method in v2 docs/schemas; thread removal from active list is handled through `thread/archive`.

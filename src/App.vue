@@ -63,6 +63,7 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
+            @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread" />
         </div>
@@ -461,6 +462,7 @@ const {
   selectThread,
   setThreadScrollState,
   archiveThreadById,
+  forkThreadById,
   renameThreadById,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
@@ -743,6 +745,17 @@ async function onExportThread(threadId: string): Promise<void> {
 
 function onArchiveThread(threadId: string): void {
   void archiveThreadById(threadId)
+}
+
+async function onForkThread(threadId: string): Promise<void> {
+  const nextThreadId = await forkThreadById(threadId)
+  if (!nextThreadId) return
+  if (!isHomeRoute.value) {
+    await router.push({ name: 'thread', params: { threadId: nextThreadId } })
+  } else {
+    await router.replace({ name: 'thread', params: { threadId: nextThreadId } })
+  }
+  if (isMobile.value) setSidebarCollapsed(true)
 }
 
 function onStartNewThread(projectName: string): void {
