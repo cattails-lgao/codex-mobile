@@ -1006,12 +1006,11 @@ function onExportChat(): void {
   if (isHomeRoute.value || isSkillsRoute.value || typeof document === 'undefined') return
   if (!selectedThread.value || filteredMessages.value.length === 0) return
   const markdown = buildThreadMarkdown()
-  const fileName = buildExportFileName()
   const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
   const objectUrl = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = objectUrl
-  link.download = fileName
+  link.download = buildExportFileName()
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -1065,8 +1064,16 @@ function buildThreadMarkdown(): string {
 
     if (message.images && message.images.length > 0) {
       lines.push('Images:')
+      let omittedEmbeddedCount = 0
       for (const imageUrl of message.images) {
+        if (isEmbeddedImageUrl(imageUrl)) {
+          omittedEmbeddedCount += 1
+          continue
+        }
         lines.push(`- ${imageUrl}`)
+      }
+      if (omittedEmbeddedCount > 0) {
+        lines.push(`- [${omittedEmbeddedCount} embedded image${omittedEmbeddedCount > 1 ? 's' : ''} omitted]`)
       }
       lines.push('')
     }
@@ -1088,6 +1095,11 @@ function buildExportFileName(): string {
 
 function escapeMarkdownText(value: string): string {
   return value.replace(/([\\`*_{}\[\]()#+\-.!])/g, '\\$1')
+}
+
+function isEmbeddedImageUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized.startsWith('data:') || normalized.startsWith('blob:')
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
