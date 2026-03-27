@@ -111,6 +111,10 @@
                   @update:model-value="onDictationLanguageChange"
                 />
               </div>
+              <button class="sidebar-settings-row" type="button" aria-live="polite" @click="onConnectTelegramBot">
+                <span class="sidebar-settings-label">Telegram</span>
+                <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
+              </button>
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
@@ -302,17 +306,19 @@ import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
+  configureTelegramBot,
   createWorktree,
   getGithubProjectsForScope,
   getHomeDirectory,
   getProjectRootSuggestion,
+  getTelegramStatus,
   getWorkspaceRootsState,
   openProjectRoot,
   searchThreads,
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GithubTipsScope, GithubTrendingProject } from './api/codexGateway'
+import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
@@ -524,6 +530,13 @@ const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, true))
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, true))
+const telegramStatus = ref<TelegramStatus>({
+  configured: false,
+  active: false,
+  mappedChats: 0,
+  mappedThreads: 0,
+  lastError: '',
+})
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -614,6 +627,13 @@ const githubTipsScopeOptions = computed<Array<{ value: GithubTipsScope; label: s
   { value: 'trending-weekly', label: 'Trending weekly' },
   { value: 'trending-monthly', label: 'Trending monthly' },
 ])
+const telegramStatusText = computed(() => {
+  if (!telegramStatus.value.configured) return 'Not configured'
+  const base = telegramStatus.value.active ? 'Online' : 'Configured (offline)'
+  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s)`
+  const error = telegramStatus.value.lastError ? `, error: ${telegramStatus.value.lastError}` : ''
+  return `${base}, ${mapped}${error}`
+})
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
@@ -624,6 +644,7 @@ onMounted(() => {
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
+  void refreshTelegramStatus()
   if (showGithubTrendingProjects.value) {
     void loadTrendingProjects()
   }
@@ -665,6 +686,21 @@ watch(sidebarSearchQuery, (value) => {
 
 function onSkillsChanged(): void {
   void refreshSkills()
+}
+
+async function refreshTelegramStatus(): Promise<void> {
+  try {
+    telegramStatus.value = await getTelegramStatus()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load Telegram status'
+    telegramStatus.value = {
+      configured: false,
+      active: false,
+      mappedChats: 0,
+      mappedThreads: 0,
+      lastError: message,
+    }
+  }
 }
 
 function toggleSidebarSearch(): void {
@@ -815,6 +851,23 @@ function onGithubTipsScopeChange(nextValue: string): void {
   const scope = allowed.has(nextValue as GithubTipsScope) ? (nextValue as GithubTipsScope) : 'trending-daily'
   if (githubTipsScope.value === scope) return
   githubTipsScope.value = scope
+}
+
+function onConnectTelegramBot(): void {
+  if (typeof window === 'undefined') return
+  const botToken = window.prompt('Telegram bot token')
+  if (!botToken || !botToken.trim()) return
+
+  void configureTelegramBot(botToken.trim())
+    .then(() => {
+      window.alert('Telegram bot configured. Open the bot DM and send /start.')
+      void refreshTelegramStatus()
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
+      window.alert(message)
+      void refreshTelegramStatus()
+    })
 }
 
 function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
