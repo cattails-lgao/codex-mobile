@@ -582,6 +582,10 @@ const hasLiveAssistantText = computed(() =>
   ),
 )
 
+const isLiveTurnRuntime = computed(() =>
+  Boolean(props.liveOverlay) || activeCommandMessageId.value.length > 0 || hasLiveAssistantText.value,
+)
+
 function readPlanExplanation(message: UiMessage): string {
   return readPlanData(message)?.explanation ?? ''
 }
@@ -612,11 +616,11 @@ function isCommandExpanded(message: UiMessage): boolean {
 }
 
 function isCommandCompact(message: UiMessage): boolean {
-  return isCommandMessage(message) && hasLiveAssistantText.value
+  return isCommandMessage(message) && isLiveTurnRuntime.value
 }
 
 function isCommandOutputCondensed(message: UiMessage): boolean {
-  return isCommandMessage(message) && (hasLiveAssistantText.value || message.commandExecution?.status === 'inProgress')
+  return isCommandMessage(message) && (isLiveTurnRuntime.value || message.commandExecution?.status === 'inProgress')
 }
 
 function toggleCommandExpand(message: UiMessage): void {
@@ -655,12 +659,13 @@ function isWorkedExpanded(message: UiMessage): boolean {
 function commandStatusLabel(message: UiMessage): string {
   const ce = message.commandExecution
   if (!ce) return ''
+  const compact = isCommandCompact(message)
   switch (ce.status) {
-    case 'inProgress': return '⟳ Running'
-    case 'completed': return ce.exitCode === 0 ? '✓ Completed' : `✗ Exit ${ce.exitCode ?? '?'}`
-    case 'failed': return '✗ Failed'
-    case 'declined': return '⊘ Declined'
-    case 'interrupted': return '⊘ Interrupted'
+    case 'inProgress': return compact ? 'Running' : '⟳ Running'
+    case 'completed': return ce.exitCode === 0 ? (compact ? 'Done' : '✓ Completed') : `Exit ${ce.exitCode ?? '?'}`
+    case 'failed': return compact ? 'Failed' : '✗ Failed'
+    case 'declined': return compact ? 'Declined' : '⊘ Declined'
+    case 'interrupted': return compact ? 'Stopped' : '⊘ Interrupted'
     default: return ''
   }
 }
@@ -2641,7 +2646,22 @@ onBeforeUnmount(() => {
 }
 
 .cmd-row.cmd-compact {
-  @apply py-1;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.625rem;
+}
+
+.cmd-row.cmd-compact .cmd-chevron {
+  font-size: 9px;
+}
+
+.cmd-row.cmd-compact .cmd-label {
+  font-size: 0.75rem;
+}
+
+.cmd-row.cmd-compact .cmd-status {
+  max-width: 4.5rem;
+  font-size: 0.75rem;
 }
 
 .cmd-row.cmd-expanded {
