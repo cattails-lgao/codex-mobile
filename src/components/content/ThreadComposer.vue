@@ -4,7 +4,13 @@
       {{ dictationErrorText }}
     </p>
 
-    <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
+    <div
+      class="thread-composer-shell"
+      :class="{
+        'thread-composer-shell--no-top-radius': hasQueueAbove,
+        'thread-composer-shell--drag-active': isDragActive,
+      }"
+    >
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -68,7 +74,17 @@
         </span>
       </div>
 
-      <div class="thread-composer-input-wrap">
+      <div
+        class="thread-composer-input-wrap"
+        :class="{ 'thread-composer-input-wrap--drag-active': isDragActive }"
+        @dragenter="onInputDragEnter"
+        @dragover="onInputDragOver"
+        @dragleave="onInputDragLeave"
+        @drop="onInputDrop"
+      >
+        <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
+          <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
+        </div>
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
             <button
@@ -104,6 +120,7 @@
           :disabled="isInteractionDisabled"
           @input="onInputChange"
           @keydown="onInputKeydown"
+          @paste="onInputPaste"
         />
         <ComposerSkillPicker
           :skills="skillOptions"
@@ -300,6 +317,9 @@
       </div>
 
     </div>
+    <p v-if="!dictationErrorText && attachmentFeedbackText" class="thread-composer-attachment-feedback">
+      {{ attachmentFeedbackText }}
+    </p>
     <input
       ref="photoLibraryInputRef"
       class="thread-composer-hidden-input"
@@ -421,6 +441,9 @@ const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
 const dictationFeedback = ref('')
+const attachmentStatusText = ref('')
+const pendingAttachmentCount = ref(0)
+const isDragActive = ref(false)
 const {
   state: dictationState,
   isSupported: isDictationSupported,
@@ -475,6 +498,8 @@ let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
 let dictationShouldRollbackLatestUserTurn = false
+let dragDepth = 0
+let attachmentSessionToken = 0
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
 let lastActiveThreadId = ''
@@ -509,6 +534,7 @@ const canSubmit = computed(() => {
   if (props.disabled) return false
   if (props.isUpdatingSpeedMode) return false
   if (!props.activeThreadId) return false
+  if (pendingAttachmentCount.value > 0) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const hasUnsavedDraft = computed(() =>
@@ -553,6 +579,14 @@ const dictationButtonLabel = computed(() => {
 const dictationErrorText = computed(() =>
   dictationState.value === 'idle' ? dictationFeedback.value.trim() : '',
 )
+const attachmentFeedbackText = computed(() => {
+  const explicit = attachmentStatusText.value.trim()
+  if (explicit) return explicit
+  if (pendingAttachmentCount.value <= 0) return ''
+  return pendingAttachmentCount.value === 1
+    ? 'Attaching file...'
+    : `Attaching ${pendingAttachmentCount.value} files...`
+})
 const dictationDurationLabel = computed(() => {
   const totalSeconds = Math.max(0, Math.floor(recordingDurationMs.value / 1000))
   const minutes = Math.floor(totalSeconds / 60)
@@ -606,9 +640,14 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
   folderUploadGroups.value = []
   dictationFeedback.value = ''
+  attachmentStatusText.value = ''
+  pendingAttachmentCount.value = 0
+  isDragActive.value = false
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
+  dragDepth = 0
+  attachmentSessionToken += 1
 }
 
 function clearDraftState(): void {
@@ -821,29 +860,131 @@ function isImageFile(file: File): boolean {
   return /\.(png|jpe?g|gif|webp)$/i.test(file.name)
 }
 
-function addFiles(files: FileList | null): void {
-  if (!files || files.length === 0) return
-  const generation = draftGeneration.value
-  for (const file of Array.from(files)) {
-    if (isImageFile(file)) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (generation !== draftGeneration.value) return
-        if (typeof reader.result !== 'string') return
-        selectedImages.value.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          name: file.name,
-          url: reader.result,
-        })
+function normalizeSelectedFiles(files: FileList | File[] | null | undefined): File[] {
+  if (!files) return []
+  return Array.from(files)
+}
+
+function beginAttachmentWork(sessionToken: number): boolean {
+  if (sessionToken !== attachmentSessionToken) return false
+  pendingAttachmentCount.value += 1
+  return true
+}
+
+function finishAttachmentWork(sessionToken: number): void {
+  if (sessionToken !== attachmentSessionToken) return
+  pendingAttachmentCount.value = Math.max(0, pendingAttachmentCount.value - 1)
+}
+
+function createAttachmentId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function createPastedImageName(file: File): string {
+  const now = new Date()
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('-')
+  const ext = file.type.startsWith('image/')
+    ? file.type.slice('image/'.length).replace(/[^a-z0-9]+/gi, '') || 'png'
+    : 'png'
+  return `pasted-image-${timestamp}.${ext}`
+}
+
+function ensureFileName(file: File): File {
+  if (file.name.trim()) return file
+  return new File([file], createPastedImageName(file), {
+    type: file.type || 'image/png',
+    lastModified: Date.now(),
+  })
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
       }
-      reader.readAsDataURL(file)
+      reject(new Error('Image read returned an unsupported result'))
+    }
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Image read failed'))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+async function attachImageFile(file: File, sessionToken: number): Promise<void> {
+  if (!beginAttachmentWork(sessionToken)) return
+  try {
+    const normalizedFile = ensureFileName(file)
+    const dataUrl = await readFileAsDataUrl(normalizedFile)
+    if (sessionToken !== attachmentSessionToken) return
+    selectedImages.value = [
+      ...selectedImages.value,
+      {
+        id: createAttachmentId(),
+        name: normalizedFile.name,
+        url: dataUrl,
+      },
+    ]
+    attachmentStatusText.value = ''
+  } catch {
+    if (sessionToken === attachmentSessionToken) {
+      attachmentStatusText.value = 'Could not attach image.'
+    }
+  } finally {
+    finishAttachmentWork(sessionToken)
+  }
+}
+
+async function attachUploadedFile(file: File, sessionToken: number): Promise<void> {
+  if (!beginAttachmentWork(sessionToken)) return
+  try {
+    const serverPath = await uploadFile(file)
+    if (sessionToken !== attachmentSessionToken) return
+    if (!serverPath) {
+      attachmentStatusText.value = `Could not attach ${file.name || 'file'}.`
+      return
+    }
+    addFileAttachment(serverPath)
+    attachmentStatusText.value = ''
+  } catch {
+    if (sessionToken === attachmentSessionToken) {
+      attachmentStatusText.value = `Could not attach ${file.name || 'file'}.`
+    }
+  } finally {
+    finishAttachmentWork(sessionToken)
+  }
+}
+
+function attachIncomingFiles(files: FileList | File[] | null | undefined): void {
+  const normalizedFiles = normalizeSelectedFiles(files)
+  if (normalizedFiles.length === 0) return
+  attachmentStatusText.value = ''
+  isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
+  closeFileMention()
+  const sessionToken = attachmentSessionToken
+  for (const file of normalizedFiles) {
+    if (isImageFile(file)) {
+      void attachImageFile(file, sessionToken)
     } else {
-      void uploadFile(file).then((serverPath) => {
-        if (generation !== draftGeneration.value) return
-        if (serverPath) addFileAttachment(serverPath)
-      }).catch(() => {})
+      void attachUploadedFile(file, sessionToken)
     }
   }
+}
+
+function hasFilePayload(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false
+  return Array.from(dataTransfer.types ?? []).includes('Files')
 }
 
 async function addFolderFiles(files: FileList | null): Promise<void> {
@@ -901,14 +1042,14 @@ function clearInputValue(inputRefEl: HTMLInputElement | null): void {
 
 function onPhotoLibraryChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  addFiles(input?.files ?? null)
+  attachIncomingFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
 
 function onCameraCaptureChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  addFiles(input?.files ?? null)
+  attachIncomingFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
@@ -918,6 +1059,52 @@ function onFolderPickerChange(event: Event): void {
   void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
+}
+
+function onInputPaste(event: ClipboardEvent): void {
+  if (isInteractionDisabled.value) return
+  const items = Array.from(event.clipboardData?.items ?? [])
+  if (items.length === 0) return
+  const imageFiles = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file instanceof File)
+  if (imageFiles.length === 0) return
+  event.preventDefault()
+  attachIncomingFiles(imageFiles)
+}
+
+function onInputDragEnter(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth += 1
+  isDragActive.value = true
+}
+
+function onInputDragOver(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  isDragActive.value = true
+}
+
+function onInputDragLeave(event: DragEvent): void {
+  if (!hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) {
+    isDragActive.value = false
+  }
+}
+
+function onInputDrop(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth = 0
+  isDragActive.value = false
+  attachIncomingFiles(event.dataTransfer?.files ?? null)
 }
 
 function onInputChange(): void {
@@ -1219,6 +1406,10 @@ watch(
   @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
 }
 
+.thread-composer-shell--drag-active {
+  @apply border-zinc-900 shadow-md;
+}
+
 .thread-composer-shell--no-top-radius {
   @apply rounded-t-none border-t-0;
 }
@@ -1301,6 +1492,18 @@ watch(
 
 .thread-composer-input-wrap {
   @apply relative;
+}
+
+.thread-composer-input-wrap--drag-active {
+  @apply rounded-xl bg-zinc-50;
+}
+
+.thread-composer-drop-overlay {
+  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-zinc-900 bg-white/90;
+}
+
+.thread-composer-drop-overlay-copy {
+  @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
 }
 
 .thread-composer-file-mentions {
@@ -1500,6 +1703,10 @@ watch(
 
 .thread-composer-dictation-error {
   @apply mb-2 px-1 text-xs text-amber-700;
+}
+
+.thread-composer-attachment-feedback {
+  @apply mt-2 px-1 text-xs text-zinc-500;
 }
 
 .thread-composer-submit {
