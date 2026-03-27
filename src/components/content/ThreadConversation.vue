@@ -207,6 +207,7 @@
                           target="_blank"
                           rel="noopener noreferrer"
                           :title="segment.href"
+                          @contextmenu.prevent="onUrlLinkContextMenu($event, segment.href)"
                         >
                           {{ segment.value }}
                         </a>
@@ -295,7 +296,10 @@
       @click.stop
     >
       <button type="button" class="file-link-context-menu-item" @click="openFileLinkContextBrowse">
-        Open file
+        Open link
+      </button>
+      <button type="button" class="file-link-context-menu-item" @click="copyFileLinkContextLink">
+        Copy link
       </button>
       <button
         v-if="fileLinkContextEditUrl"
@@ -976,6 +980,16 @@ function onFileLinkContextMenu(event: MouseEvent, pathValue: string): void {
   isFileLinkContextMenuVisible.value = true
 }
 
+function onUrlLinkContextMenu(event: MouseEvent, href: string): void {
+  const normalizedHref = href.trim()
+  if (!normalizedHref) return
+  fileLinkContextBrowseUrl.value = normalizedHref
+  fileLinkContextEditUrl.value = ''
+  fileLinkContextMenuX.value = event.clientX
+  fileLinkContextMenuY.value = event.clientY
+  isFileLinkContextMenuVisible.value = true
+}
+
 function closeFileLinkContextMenu(): void {
   if (!isFileLinkContextMenuVisible.value) return
   isFileLinkContextMenuVisible.value = false
@@ -993,6 +1007,25 @@ function openFileLinkContextEdit(): void {
   closeFileLinkContextMenu()
   if (!href || href === '#') return
   window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+async function copyFileLinkContextLink(): Promise<void> {
+  const href = fileLinkContextBrowseUrl.value
+  closeFileLinkContextMenu()
+  if (!href || href === '#') return
+  try {
+    await navigator.clipboard.writeText(href)
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = href
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
 }
 
 function onWindowPointerDownForFileLinkContextMenu(event: PointerEvent): void {
