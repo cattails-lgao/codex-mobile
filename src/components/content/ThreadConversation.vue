@@ -299,39 +299,7 @@
                     </blockquote>
                     <ul v-else-if="block.kind === 'unorderedList'" class="message-list message-list-unordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ul-${blockIndex}-${itemIndex}`" class="message-list-item">
-                        <div
-                          v-for="(paragraph, paragraphIndex) in item.paragraphs"
-                          :key="`ul-paragraph-${blockIndex}-${itemIndex}-${paragraphIndex}`"
-                          class="message-list-item-text message-list-item-paragraph"
-                        >
-                          <template v-for="(segment, segmentIndex) in parseInlineSegments(paragraph)" :key="`ul-seg-${blockIndex}-${itemIndex}-${paragraphIndex}-${segmentIndex}`">
-                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                            <a
-                              v-else-if="segment.kind === 'file'"
-                              class="message-file-link"
-                              :href="toBrowseUrl(segment.path)"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.path"
-                            >
-                              {{ segment.displayPath }}
-                            </a>
-                            <a
-                              v-else-if="segment.kind === 'url'"
-                              class="message-file-link"
-                              :href="segment.href"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.href"
-                            >
-                              {{ segment.value }}
-                            </a>
-                            <code v-else class="message-inline-code">{{ segment.value }}</code>
-                          </template>
-                        </div>
+                        <div class="message-list-item-content" v-html="renderListItemContentAsHtml(item)" />
                       </li>
                     </ul>
                     <ul v-else-if="block.kind === 'taskList'" class="message-list message-task-list">
@@ -370,39 +338,7 @@
                     </ul>
                     <ol v-else-if="block.kind === 'orderedList'" class="message-list message-list-ordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ol-${blockIndex}-${itemIndex}`" class="message-list-item">
-                        <div
-                          v-for="(paragraph, paragraphIndex) in item.paragraphs"
-                          :key="`ol-paragraph-${blockIndex}-${itemIndex}-${paragraphIndex}`"
-                          class="message-list-item-text message-list-item-paragraph"
-                        >
-                          <template v-for="(segment, segmentIndex) in parseInlineSegments(paragraph)" :key="`ol-seg-${blockIndex}-${itemIndex}-${paragraphIndex}-${segmentIndex}`">
-                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                            <a
-                              v-else-if="segment.kind === 'file'"
-                              class="message-file-link"
-                              :href="toBrowseUrl(segment.path)"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.path"
-                            >
-                              {{ segment.displayPath }}
-                            </a>
-                            <a
-                              v-else-if="segment.kind === 'url'"
-                              class="message-file-link"
-                              :href="segment.href"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.href"
-                            >
-                              {{ segment.value }}
-                            </a>
-                            <code v-else class="message-inline-code">{{ segment.value }}</code>
-                          </template>
-                        </div>
+                        <div class="message-list-item-content" v-html="renderListItemContentAsHtml(item)" />
                       </li>
                     </ol>
                     <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
@@ -868,6 +804,7 @@ type TaskListItem = {
 }
 type ListItem = {
   paragraphs: string[]
+  children?: MessageBlock[]
 }
 type MessageBlock =
   | { kind: 'paragraph'; value: string }
@@ -1430,6 +1367,25 @@ function normalizeMarkdownText(text: string): string {
   return text.replace(/\r\n/gu, '\n')
 }
 
+function leadingIndentWidth(line: string): number {
+  const leadingWhitespace = line.match(/^\s*/u)?.[0] ?? ''
+  return leadingWhitespace.replace(/\t/gu, '    ').length
+}
+
+function stripIndentedContent(line: string, baseIndent: number): string {
+  if (baseIndent <= 0) return line.trimStart()
+
+  let index = 0
+  let width = 0
+  while (index < line.length && width < baseIndent) {
+    const character = line[index]
+    width += character === '\t' ? 4 : 1
+    index += 1
+  }
+
+  return line.slice(index)
+}
+
 function isBlankMarkdownLine(line: string): boolean {
   return line.trim().length === 0
 }
@@ -1454,6 +1410,15 @@ function readUnorderedListItem(line: string): string | null {
   return match?.[1]?.trim() ?? null
 }
 
+function readUnorderedListItemMatch(line: string): { indent: number; text: string } | null {
+  const match = line.match(/^(\s*)[-*+]\s+(.+)$/u)
+  if (!match) return null
+  return {
+    indent: leadingIndentWidth(match[1] ?? ''),
+    text: match[2]?.trim() ?? '',
+  }
+}
+
 function readTaskListItem(line: string): TaskListItem | null {
   const match = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.+)$/u)
   if (!match) return null
@@ -1463,9 +1428,30 @@ function readTaskListItem(line: string): TaskListItem | null {
   }
 }
 
+function readTaskListItemMatch(line: string): { indent: number; item: TaskListItem } | null {
+  const match = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.+)$/u)
+  if (!match) return null
+  return {
+    indent: leadingIndentWidth(match[1] ?? ''),
+    item: {
+      checked: (match[2] ?? ' ').toLowerCase() === 'x',
+      text: match[3]?.trim() ?? '',
+    },
+  }
+}
+
 function readOrderedListItem(line: string): string | null {
   const match = line.match(/^\s*\d+[.)]\s+(.+)$/u)
   return match?.[1]?.trim() ?? null
+}
+
+function readOrderedListItemMatch(line: string): { indent: number; text: string } | null {
+  const match = line.match(/^(\s*)\d+[.)]\s+(.+)$/u)
+  if (!match) return null
+  return {
+    indent: leadingIndentWidth(match[1] ?? ''),
+    text: match[2]?.trim() ?? '',
+  }
 }
 
 function isParagraphBreakingLine(line: string): boolean {
@@ -1481,12 +1467,19 @@ function isParagraphBreakingLine(line: string): boolean {
   )
 }
 
-function readListParagraph(lines: string[], startIndex: number): { value: string; nextIndex: number } | null {
+function readListParagraph(
+  lines: string[],
+  startIndex: number,
+  baseIndent = -1,
+): { value: string; nextIndex: number } | null {
   const paragraphLines: string[] = []
   let index = startIndex
 
-  while (index < lines.length && !isParagraphBreakingLine(lines[index])) {
-    paragraphLines.push(lines[index])
+  while (index < lines.length) {
+    if (isParagraphBreakingLine(lines[index])) break
+    if (baseIndent >= 0 && leadingIndentWidth(lines[index]) <= baseIndent) break
+
+    paragraphLines.push(baseIndent >= 0 ? stripIndentedContent(lines[index], baseIndent + 1) : lines[index])
     index += 1
   }
 
@@ -1494,32 +1487,106 @@ function readListParagraph(lines: string[], startIndex: number): { value: string
   return value ? { value, nextIndex: index } : null
 }
 
-function readListItems(
+function readNestedListBlocks(
   lines: string[],
   startIndex: number,
-  readItem: (line: string) => string | null,
-): { items: ListItem[]; nextIndex: number } | null {
-  const items: ListItem[] = []
+  parentIndent: number,
+): { blocks: MessageBlock[]; nextIndex: number } | null {
+  const nestedLines: string[] = []
   let index = startIndex
 
   while (index < lines.length) {
-    const itemValue = readItem(lines[index])
-    if (itemValue === null) break
+    const line = lines[index]
+    if (isBlankMarkdownLine(line)) {
+      const nextNonBlankIndex = lines.findIndex((candidate, candidateIndex) => candidateIndex >= index + 1 && !isBlankMarkdownLine(candidate))
+      if (nextNonBlankIndex === -1) {
+        nestedLines.push('')
+        index = lines.length
+        break
+      }
+      if (leadingIndentWidth(lines[nextNonBlankIndex]) <= parentIndent) break
+      nestedLines.push('')
+      index += 1
+      continue
+    }
 
-    const paragraphs = [itemValue]
+    if (leadingIndentWidth(line) <= parentIndent) break
+
+    nestedLines.push(stripIndentedContent(line, parentIndent + 1))
+    index += 1
+  }
+
+  while (nestedLines.length > 0 && isBlankMarkdownLine(nestedLines[0])) nestedLines.shift()
+  while (nestedLines.length > 0 && isBlankMarkdownLine(nestedLines[nestedLines.length - 1])) nestedLines.pop()
+
+  if (nestedLines.length === 0) return null
+
+  return {
+    blocks: parseTextBlocks(nestedLines.join('\n')),
+    nextIndex: index,
+  }
+}
+
+function readListItems(
+  lines: string[],
+  startIndex: number,
+  readItem: (line: string) => { indent: number; text: string } | null,
+): { items: ListItem[]; nextIndex: number } | null {
+  const items: ListItem[] = []
+  let index = startIndex
+  const firstItem = readItem(lines[startIndex])
+  if (!firstItem) return null
+  const baseIndent = firstItem.indent
+
+  while (index < lines.length) {
+    const itemValue = readItem(lines[index])
+    if (itemValue === null || itemValue.indent !== baseIndent) break
+
+    const paragraphs = [itemValue.text]
+    const children: MessageBlock[] = []
     index += 1
 
     while (index < lines.length) {
-      if (isBlankMarkdownLine(lines[index])) break
-      if (readItem(lines[index]) !== null) break
+      if (isBlankMarkdownLine(lines[index])) {
+        const nextNonBlankIndex = lines.findIndex((candidate, candidateIndex) => candidateIndex >= index + 1 && !isBlankMarkdownLine(candidate))
+        if (nextNonBlankIndex === -1) {
+          index = lines.length
+          break
+        }
+        const nextSameLevelItem = readItem(lines[nextNonBlankIndex])
+        if (nextSameLevelItem && nextSameLevelItem.indent === baseIndent) {
+          index = nextNonBlankIndex
+          break
+        }
+        if (leadingIndentWidth(lines[nextNonBlankIndex]) <= baseIndent) {
+          index = nextNonBlankIndex
+          break
+        }
+        index += 1
+        continue
+      }
 
-      const continuation = readListParagraph(lines, index)
+      const nextSameLevelItem = readItem(lines[index])
+      if (nextSameLevelItem && nextSameLevelItem.indent === baseIndent) break
+
+      if (leadingIndentWidth(lines[index]) > baseIndent) {
+        const nestedBlocks = readNestedListBlocks(lines, index, baseIndent)
+        if (nestedBlocks) {
+          children.push(...nestedBlocks.blocks)
+          index = nestedBlocks.nextIndex
+          continue
+        }
+      }
+
+      if (leadingIndentWidth(lines[index]) <= baseIndent) break
+
+      const continuation = readListParagraph(lines, index, baseIndent)
       if (!continuation) break
       paragraphs.push(continuation.value)
       index = continuation.nextIndex
     }
 
-    items.push({ paragraphs })
+    items.push(children.length > 0 ? { paragraphs, children } : { paragraphs })
   }
 
   return items.length > 0 ? { items, nextIndex: index } : null
@@ -1599,10 +1666,11 @@ function parseTextBlocks(text: string): MessageBlock[] {
     const taskItem = readTaskListItem(lines[index])
     if (taskItem !== null) {
       const items: TaskListItem[] = []
+      const baseIndent = readTaskListItemMatch(lines[index])?.indent ?? 0
       while (index < lines.length) {
-        const nextItem = readTaskListItem(lines[index])
-        if (nextItem === null) break
-        items.push(nextItem)
+        const nextItem = readTaskListItemMatch(lines[index])
+        if (nextItem === null || nextItem.indent !== baseIndent) break
+        items.push(nextItem.item)
         index += 1
       }
       if (items.length > 0) {
@@ -1613,7 +1681,7 @@ function parseTextBlocks(text: string): MessageBlock[] {
 
     const unorderedItem = readUnorderedListItem(lines[index])
     if (unorderedItem !== null) {
-      const parsedList = readListItems(lines, index, readUnorderedListItem)
+      const parsedList = readListItems(lines, index, readUnorderedListItemMatch)
       if (parsedList) {
         blocks.push({ kind: 'unorderedList', items: parsedList.items })
         index = parsedList.nextIndex
@@ -1628,7 +1696,7 @@ function parseTextBlocks(text: string): MessageBlock[] {
 
     const orderedItem = readOrderedListItem(lines[index])
     if (orderedItem !== null) {
-      const parsedList = readListItems(lines, index, readOrderedListItem)
+      const parsedList = readListItems(lines, index, readOrderedListItemMatch)
       if (parsedList) {
         blocks.push({ kind: 'orderedList', items: parsedList.items })
         index = parsedList.nextIndex
@@ -1785,55 +1853,63 @@ function renderListItemParagraphsAsHtml(item: ListItem): string {
     .join('')
 }
 
+function renderListItemContentAsHtml(item: ListItem): string {
+  const paragraphsHtml = renderListItemParagraphsAsHtml(item)
+  const childrenHtml = item.children?.map((block) => renderMessageBlockAsHtml(block)).join('') ?? ''
+  return paragraphsHtml + childrenHtml
+}
+
+function renderMessageBlockAsHtml(block: MessageBlock): string {
+  if (block.kind === 'paragraph') {
+    return `<p class="message-text">${renderInlineSegmentsAsHtml(block.value)}</p>`
+  }
+  if (block.kind === 'heading') {
+    const level = Math.min(6, Math.max(1, Math.trunc(block.level)))
+    const tag = headingTag(level)
+    const classes = `message-heading ${headingClass(level)}`
+    return `<${tag} class="${classes}">${renderInlineSegmentsAsHtml(block.value)}</${tag}>`
+  }
+  if (block.kind === 'blockquote') {
+    return `<blockquote class="message-blockquote">${renderInlineSegmentsAsHtml(block.value)}</blockquote>`
+  }
+  if (block.kind === 'unorderedList') {
+    const items = block.items
+      .map((item) => `<li class="message-list-item"><div class="message-list-item-content">${renderListItemContentAsHtml(item)}</div></li>`)
+      .join('')
+    return `<ul class="message-list message-list-unordered">${items}</ul>`
+  }
+  if (block.kind === 'taskList') {
+    const items = block.items
+      .map((item) => (
+        `<li class="message-task-item">` +
+        `<span class="message-task-checkbox" data-checked="${item.checked ? 'true' : 'false'}">${item.checked ? '☑' : '☐'}</span>` +
+        `<div class="message-list-item-text">${renderInlineSegmentsAsHtml(item.text)}</div>` +
+        `</li>`
+      ))
+      .join('')
+    return `<ul class="message-list message-task-list">${items}</ul>`
+  }
+  if (block.kind === 'orderedList') {
+    const items = block.items
+      .map((item) => `<li class="message-list-item"><div class="message-list-item-content">${renderListItemContentAsHtml(item)}</div></li>`)
+      .join('')
+    return `<ol class="message-list message-list-ordered">${items}</ol>`
+  }
+  if (block.kind === 'codeBlock') {
+    const language = block.language
+      ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
+      : ''
+    return `<div class="message-code-block">${language}<pre class="message-code-pre"><code>${escapeHtml(block.value)}</code></pre></div>`
+  }
+  if (block.kind === 'thematicBreak') {
+    return '<hr class="message-divider">'
+  }
+  return `<img class="message-image-preview message-markdown-image" src="${escapeHtml(block.url)}" alt="${escapeHtml(block.alt || 'Embedded message image')}" loading="lazy">`
+}
+
 function renderMarkdownBlocksAsHtml(text: string): string {
   return parseMessageBlocks(text)
-    .map((block) => {
-      if (block.kind === 'paragraph') {
-        return `<p class="message-text">${renderInlineSegmentsAsHtml(block.value)}</p>`
-      }
-      if (block.kind === 'heading') {
-        const level = Math.min(6, Math.max(1, Math.trunc(block.level)))
-        const tag = headingTag(level)
-        const classes = `message-heading ${headingClass(level)}`
-        return `<${tag} class="${classes}">${renderInlineSegmentsAsHtml(block.value)}</${tag}>`
-      }
-      if (block.kind === 'blockquote') {
-        return `<blockquote class="message-blockquote">${renderInlineSegmentsAsHtml(block.value)}</blockquote>`
-      }
-      if (block.kind === 'unorderedList') {
-        const items = block.items
-          .map((item) => `<li class="message-list-item">${renderListItemParagraphsAsHtml(item)}</li>`)
-          .join('')
-        return `<ul class="message-list message-list-unordered">${items}</ul>`
-      }
-      if (block.kind === 'taskList') {
-        const items = block.items
-          .map((item) => (
-            `<li class="message-task-item">` +
-            `<span class="message-task-checkbox" data-checked="${item.checked ? 'true' : 'false'}">${item.checked ? '☑' : '☐'}</span>` +
-            `<div class="message-list-item-text">${renderInlineSegmentsAsHtml(item.text)}</div>` +
-            `</li>`
-          ))
-          .join('')
-        return `<ul class="message-list message-task-list">${items}</ul>`
-      }
-      if (block.kind === 'orderedList') {
-        const items = block.items
-          .map((item) => `<li class="message-list-item">${renderListItemParagraphsAsHtml(item)}</li>`)
-          .join('')
-        return `<ol class="message-list message-list-ordered">${items}</ol>`
-      }
-      if (block.kind === 'codeBlock') {
-        const language = block.language
-          ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
-          : ''
-        return `<div class="message-code-block">${language}<pre class="message-code-pre"><code>${escapeHtml(block.value)}</code></pre></div>`
-      }
-      if (block.kind === 'thematicBreak') {
-        return '<hr class="message-divider">'
-      }
-      return `<img class="message-image-preview message-markdown-image" src="${escapeHtml(block.url)}" alt="${escapeHtml(block.alt || 'Embedded message image')}" loading="lazy">`
-    })
+    .map((block) => renderMessageBlockAsHtml(block))
     .join('')
 }
 
@@ -2670,6 +2746,10 @@ onBeforeUnmount(() => {
 
 .message-list-item {
   @apply pl-1;
+}
+
+.message-list-item-content {
+  @apply flex flex-col gap-1.5;
 }
 
 .message-list-item-text {
