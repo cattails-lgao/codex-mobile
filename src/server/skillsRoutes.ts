@@ -65,19 +65,37 @@ function resolveSkillInstallerScriptPath(): string {
   throw new Error(`Skill installer script not found. Checked: ${candidates.join(', ')}`)
 }
 
-async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+const DEFAULT_COMMAND_TIMEOUT_MS = 120_000
+
+async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
+  const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    let settled = false
     let stdout = ''
     let stderr = ''
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      proc.kill('SIGKILL')
+      reject(new Error(`Command timed out after ${timeout}ms (${command} ${args.join(' ')})`))
+    }, timeout)
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on('error', reject)
+    proc.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(err)
+    })
     proc.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       if (code === 0) {
         resolve()
         return
@@ -89,19 +107,35 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
   })
 }
 
-async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<string> {
+  const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    let settled = false
     let stdout = ''
     let stderr = ''
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      proc.kill('SIGKILL')
+      reject(new Error(`Command timed out after ${timeout}ms (${command} ${args.join(' ')})`))
+    }, timeout)
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on('error', reject)
+    proc.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(err)
+    })
     proc.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       if (code === 0) {
         resolve(stdout.trim())
         return
@@ -110,6 +144,16 @@ async function runCommandWithOutput(command: string, args: string[], options: { 
       const suffix = details.length > 0 ? `: ${details}` : ''
       reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
     })
+  })
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val) },
+      (err) => { clearTimeout(timer); reject(err) },
+    )
   })
 }
 
@@ -1194,20 +1238,27 @@ export async function handleSkillsRoutes(
         return true
       }
       const installerScript = resolveSkillInstallerScriptPath()
-      const installDest = await detectUserSkillsDir(appServer)
+      const installDest = await withTimeout(
+        detectUserSkillsDir(appServer),
+        10_000,
+        'detectUserSkillsDir',
+      ).catch(() => getSkillsInstallDir())
+      const skillDir = join(installDest, name)
+      if (existsSync(skillDir)) {
+        await rm(skillDir, { recursive: true, force: true })
+      }
       await runCommand('python3', [
         installerScript,
         '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
         '--path', `skills/${owner}/${name}`,
         '--dest', installDest,
         '--method', 'git',
-      ])
-      const skillDir = join(installDest, name)
-      await ensureInstalledSkillIsValid(appServer, skillDir)
+      ], { timeoutMs: 90_000 })
+      try { await withTimeout(ensureInstalledSkillIsValid(appServer, skillDir), 10_000, 'ensureInstalledSkillIsValid') } catch {}
       const syncState = await readSkillsSyncState()
       const nextOwners = { ...(syncState.installedOwners ?? {}), [name]: owner }
       await writeSkillsSyncState({ ...syncState, installedOwners: nextOwners })
-      await autoPushSyncedSkills(appServer)
+      autoPushSyncedSkills(appServer).catch(() => {})
       setJson(res, 200, { ok: true, path: skillDir })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to install skill') })
@@ -1232,8 +1283,8 @@ export async function handleSkillsRoutes(
         delete nextOwners[name]
         await writeSkillsSyncState({ ...syncState, installedOwners: nextOwners })
       }
-      await autoPushSyncedSkills(appServer)
-      try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
+      autoPushSyncedSkills(appServer).catch(() => {})
+      try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
       setJson(res, 200, { ok: true, deletedPath: target })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to uninstall skill') })

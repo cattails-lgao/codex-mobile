@@ -23,6 +23,15 @@
         </div>
         <span class="skill-card-owner">{{ skill.owner }}</span>
       </div>
+      <button
+        v-if="skill.installed && skillDirPath"
+        class="skill-card-browse"
+        type="button"
+        title="Browse files"
+        @click.stop="onBrowse"
+      >
+        <IconTablerFolder class="skill-card-browse-icon" />
+      </button>
     </div>
     <p v-if="skill.description" class="skill-card-desc">{{ skill.description }}</p>
     <span v-if="publishedLabel" class="skill-card-date">{{ publishedLabel }}</span>
@@ -31,6 +40,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import IconTablerFolder from '../icons/IconTablerFolder.vue'
 
 const props = defineProps<{
   skill: {
@@ -42,11 +52,24 @@ const props = defineProps<{
     avatarUrl?: string
     url: string
     installed: boolean
+    path?: string
     enabled?: boolean
   }
 }>()
 
 defineEmits<{ select: [skill: unknown] }>()
+
+const skillDirPath = computed(() => {
+  const p = props.skill.path
+  if (!p) return ''
+  return p.endsWith('/SKILL.md') ? p.slice(0, -'/SKILL.md'.length) : p
+})
+
+function onBrowse(): void {
+  const dir = skillDirPath.value
+  if (!dir) return
+  window.open(`/codex-local-browse${encodeURI(dir)}`, '_blank', 'noopener,noreferrer')
+}
 
 const publishedLabel = computed(() => {
   const ts = props.skill.publishedAt
@@ -111,6 +134,14 @@ function onAvatarError(e: Event): void {
 
 .skill-card-owner {
   @apply text-xs text-zinc-400;
+}
+
+.skill-card-browse {
+  @apply shrink-0 ml-auto h-7 w-7 rounded-lg border-0 bg-transparent text-zinc-300 flex items-center justify-center transition hover:bg-zinc-100 hover:text-zinc-600;
+}
+
+.skill-card-browse-icon {
+  @apply w-4 h-4;
 }
 
 .skill-card-desc {
