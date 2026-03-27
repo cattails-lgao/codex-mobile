@@ -55,6 +55,7 @@ const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
 const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v1'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
+const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
@@ -696,6 +697,7 @@ export function useDesktopState() {
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
   let rateLimitRefreshTimer: number | null = null
+  const delayedTurnSyncTimerByThreadId = new Map<string, number>()
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -1001,6 +1003,25 @@ export function useDesktopState() {
       rateLimitRefreshTimer = null
       void refreshRateLimits()
     }, RATE_LIMIT_REFRESH_DEBOUNCE_MS)
+  }
+
+  function clearDelayedTurnSync(threadId: string): void {
+    if (!threadId || typeof window === 'undefined') return
+    const timerId = delayedTurnSyncTimerByThreadId.get(threadId)
+    if (timerId === undefined) return
+    window.clearTimeout(timerId)
+    delayedTurnSyncTimerByThreadId.delete(threadId)
+  }
+
+  function scheduleDelayedTurnSync(threadId: string): void {
+    if (!threadId || typeof window === 'undefined') return
+    clearDelayedTurnSync(threadId)
+    const timerId = window.setTimeout(() => {
+      delayedTurnSyncTimerByThreadId.delete(threadId)
+      pendingThreadMessageRefresh.add(threadId)
+      void syncFromNotifications()
+    }, TURN_START_FOLLOW_UP_SYNC_DELAY_MS)
+    delayedTurnSyncTimerByThreadId.set(threadId, timerId)
   }
 
   function applyCachedTitlesToGroups(groups: UiProjectGroup[]): UiProjectGroup[] {
@@ -2554,6 +2575,7 @@ export function useDesktopState() {
       pendingThreadMessageRefresh.add(threadId)
       pendingThreadsRefresh = true
       await syncFromNotifications()
+      scheduleDelayedTurnSync(threadId)
     } catch (unknownError) {
       throw unknownError
     }
@@ -2909,6 +2931,12 @@ export function useDesktopState() {
       window.clearTimeout(rateLimitRefreshTimer)
       rateLimitRefreshTimer = null
     }
+    if (typeof window !== 'undefined') {
+      for (const timerId of delayedTurnSyncTimerByThreadId.values()) {
+        window.clearTimeout(timerId)
+      }
+    }
+    delayedTurnSyncTimerByThreadId.clear()
     activeReasoningItemId = ''
     shouldAutoScrollOnNextAgentEvent = false
     persistedMessagesByThreadId.value = {}
