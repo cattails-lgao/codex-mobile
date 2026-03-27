@@ -563,6 +563,14 @@ const contentTitle = computed(() => {
   if (isHomeRoute.value) return 'New thread'
   return selectedThread.value?.title ?? 'Choose a thread'
 })
+const browserHostName =
+  typeof window !== 'undefined'
+    ? (window.location.hostname || window.location.host || 'codexui')
+    : 'codexui'
+const pageTitle = computed(() => {
+  const threadTitle = selectedThread.value?.title?.trim() ?? ''
+  return threadTitle || browserHostName
+})
 const filteredMessages = computed(() =>
   messages.value.filter((message) => {
     const type = normalizeMessageType(message.messageType, message.role)
@@ -1472,6 +1480,15 @@ watch(
   () => {
     worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
   },
+)
+
+watch(
+  pageTitle,
+  (value) => {
+    if (typeof document === 'undefined') return
+    document.title = value
+  },
+  { immediate: true },
 )
 
 watch(
