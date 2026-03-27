@@ -143,17 +143,6 @@
                     >
                       {{ att.path }}
                     </a>
-                    <a
-                      v-if="canShowEditLink(att.path)"
-                      class="message-file-edit-link"
-                      :href="toEditUrl(att.path)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="`Edit ${att.path}`"
-                      aria-label="Edit file"
-                    >
-                      Edit
-                    </a>
                   </span>
                 </span>
               </div>
@@ -209,17 +198,6 @@
                             @contextmenu.prevent="onFileLinkContextMenu($event, segment.path)"
                           >
                             {{ segment.displayPath }}
-                          </a>
-                          <a
-                            v-if="canShowEditLink(segment.path)"
-                            class="message-file-edit-link"
-                            :href="toEditUrl(segment.path)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="`Edit ${segment.path}`"
-                            aria-label="Edit file"
-                          >
-                            Edit
                           </a>
                         </span>
                         <a
@@ -966,10 +944,6 @@ function toBrowseUrl(pathValue: string): string {
   }
 
   return '#'
-}
-
-function canShowEditLink(pathValue: string): boolean {
-  return toEditUrl(pathValue) !== '#'
 }
 
 function toEditUrl(pathValue: string): string {
@@ -1727,25 +1701,7 @@ onBeforeUnmount(() => {
 }
 
 .message-file-link-wrap {
-  @apply relative inline-block align-baseline;
-}
-
-.message-file-link-wrap::after {
-  content: '';
-  @apply absolute left-full top-0 h-full w-2;
-}
-
-.message-file-edit-link {
-  @apply absolute left-full top-1/2 -translate-y-1/2 rounded bg-transparent px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
-}
-
-.message-file-link-wrap:hover .message-file-edit-link,
-.message-file-link-wrap:focus-within .message-file-edit-link {
-  @apply opacity-100 pointer-events-auto;
-}
-
-.message-file-edit-link:hover {
-  @apply bg-transparent text-slate-900;
+  @apply inline-block align-baseline;
 }
 
 .file-link-context-menu {
