@@ -1777,11 +1777,11 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-account-remove {
-  @apply shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
+  @apply invisible shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-item.is-remove-visible .sidebar-settings-account-remove {
-  @apply opacity-100 pointer-events-auto;
+  @apply visible opacity-100 pointer-events-auto;
 }
 
 .sidebar-settings-account-remove.is-confirming {
