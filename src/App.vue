@@ -119,6 +119,9 @@
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
+              <div class="sidebar-settings-build-label" aria-label="Worktree name and version">
+                WT {{ worktreeName }} · v{{ appVersion }}
+              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -282,9 +285,6 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Worktree name and version">
-    WT {{ worktreeName }} · v{{ appVersion }}
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -1808,8 +1808,8 @@ async function submitFirstMessageForNewThread(
   @apply border-t border-zinc-200 px-2 pt-2;
 }
 
-.build-badge {
-  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
+.sidebar-settings-build-label {
+  @apply border-t border-zinc-100 px-3 py-2 text-[11px] text-zinc-500;
 }
 
 </style>
