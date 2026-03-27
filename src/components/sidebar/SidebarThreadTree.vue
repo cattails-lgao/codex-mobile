@@ -7,7 +7,9 @@
             class="thread-row"
             :data-active="thread.id === selectedThreadId"
             :data-pinned="isPinned(thread.id)"
+            :force-right-hover="isThreadMenuOpen(thread.id)"
             @mouseleave="onThreadRowLeave(thread.id)"
+            @contextmenu="onThreadRowContextMenu($event, thread.id)"
           >
             <template #left>
               <span class="thread-left-stack">
@@ -39,6 +41,9 @@
                 <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
                   <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                     Export chat
+                  </button>
+                  <button class="thread-menu-item" type="button" @click="onForkThread(thread.id)">
+                    Create chat fork
                   </button>
                   <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                     Rename thread
@@ -104,7 +109,9 @@
           class="thread-row"
           :data-active="thread.id === selectedThreadId"
           :data-pinned="isPinned(thread.id)"
+          :force-right-hover="isThreadMenuOpen(thread.id)"
           @mouseleave="onThreadRowLeave(thread.id)"
+          @contextmenu="onThreadRowContextMenu($event, thread.id)"
         >
           <template #left>
             <span class="thread-left-stack">
@@ -140,6 +147,9 @@
               <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
                 <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                   Export chat
+                </button>
+                <button class="thread-menu-item" type="button" @click="onForkThread(thread.id)">
+                  Create chat fork
                 </button>
                 <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                   Rename thread
@@ -253,7 +263,9 @@
                 class="thread-row"
                 :data-active="thread.id === selectedThreadId"
                 :data-pinned="isPinned(thread.id)"
+                :force-right-hover="isThreadMenuOpen(thread.id)"
                 @mouseleave="onThreadRowLeave(thread.id)"
+                @contextmenu="onThreadRowContextMenu($event, thread.id)"
               >
                 <template #left>
                   <span class="thread-left-stack">
@@ -289,6 +301,9 @@
                     <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
                       <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                         Export chat
+                      </button>
+                      <button class="thread-menu-item" type="button" @click="onForkThread(thread.id)">
+                        Create chat fork
                       </button>
                       <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(thread.id, thread.title)">
                         Rename thread
@@ -393,6 +408,7 @@ const emit = defineEmits<{
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
   'export-thread': [threadId: string]
+  'fork-thread': [threadId: string]
 }>()
 
 type PendingProjectDrag = {
@@ -662,6 +678,11 @@ function onExportThread(threadId: string): void {
   closeThreadMenu()
 }
 
+function onForkThread(threadId: string): void {
+  emit('fork-thread', threadId)
+  closeThreadMenu()
+}
+
 function getNewThreadButtonAriaLabel(projectName: string): string {
   return `start new thread ${getProjectDisplayName(projectName)}`
 }
@@ -689,6 +710,11 @@ function toggleThreadMenu(threadId: string): void {
     closeThreadMenu()
     return
   }
+  openThreadMenuId.value = threadId
+}
+
+function onThreadRowContextMenu(event: MouseEvent, threadId: string): void {
+  event.preventDefault()
   openThreadMenuId.value = threadId
 }
 
@@ -1199,7 +1225,11 @@ function isDraggingProject(projectName: string): boolean {
 function projectGroupStyle(projectName: string): Record<string, string> | undefined {
   const drag = activeProjectDrag.value
   const targetTop = layoutTopByProject.value[projectName] ?? 0
-  const shouldElevateForMenu = openProjectMenuId.value === projectName
+  const openThreadMenuProjectName = openThreadMenuId.value
+    ? props.groups.find((group) => group.threads.some((thread) => thread.id === openThreadMenuId.value))?.projectName ?? ''
+    : ''
+  const shouldElevateForMenu =
+    openProjectMenuId.value === projectName || openThreadMenuProjectName === projectName
 
   if (!drag || drag.projectName !== projectName) {
     return {

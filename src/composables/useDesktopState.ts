@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import {
   autoCommitWorktreeChanges,
   archiveThread,
+  forkThread,
   getAccountRateLimits,
   renameThread,
   getAvailableModelIds,
@@ -2310,6 +2311,35 @@ export function useDesktopState() {
     }
   }
 
+  async function forkThreadById(threadId: string): Promise<string> {
+    const sourceThreadId = threadId.trim()
+    if (!sourceThreadId) return ''
+
+    const sourceThread = flattenThreads(sourceGroups.value).find((row) => row.id === sourceThreadId)
+    const sourceCwd = sourceThread?.cwd?.trim() ?? ''
+    const sourceTitle = sourceThread?.title?.trim() ?? 'Forked chat'
+    const selectedModel = selectedModelId.value.trim()
+    error.value = ''
+
+    try {
+      const nextThreadId = await forkThread(sourceThreadId, sourceCwd || undefined, selectedModel || undefined)
+      if (!nextThreadId) return ''
+
+      insertOptimisticThread(nextThreadId, sourceCwd, sourceTitle)
+      resumedThreadById.value = {
+        ...resumedThreadById.value,
+        [nextThreadId]: true,
+      }
+      setSelectedThreadId(nextThreadId)
+      await loadThreads()
+      await loadMessages(nextThreadId)
+      return nextThreadId
+    } catch (unknownError) {
+      error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+      return ''
+    }
+  }
+
   async function sendMessageToSelectedThread(
     text: string,
     imageUrls: string[] = [],
@@ -2944,6 +2974,7 @@ export function useDesktopState() {
     setThreadScrollState,
     archiveThreadById,
     renameThreadById,
+    forkThreadById,
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,

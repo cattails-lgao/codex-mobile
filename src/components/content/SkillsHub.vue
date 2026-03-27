@@ -8,7 +8,15 @@
     <div class="skills-sync-panel">
       <div class="skills-sync-header">
         <strong>Skills Sync (GitHub)</strong>
-        <span v-if="syncStatus.configured" class="skills-sync-badge">Connected: {{ syncStatus.repoOwner }}/{{ syncStatus.repoName }}</span>
+        <a
+          v-if="syncStatus.configured && githubRepoUrl"
+          class="skills-sync-badge skills-sync-badge-link"
+          :href="githubRepoUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Connected: {{ syncStatus.repoOwner }}/{{ syncStatus.repoName }}
+        </a>
         <span v-else-if="syncStatus.loggedIn" class="skills-sync-badge">Logged in as {{ syncStatus.githubUsername }}</span>
         <span v-else class="skills-sync-badge">Not connected</span>
       </div>
@@ -146,6 +154,13 @@ const isDetailInstalling = computed(() =>
 const isDetailUninstalling = computed(() =>
   isUninstallActionInFlight.value && actionSkillKey.value === currentDetailSkillKey.value,
 )
+const githubRepoUrl = computed(() => {
+  if (!syncStatus.value.configured) return ''
+  const owner = syncStatus.value.repoOwner.trim()
+  const repo = syncStatus.value.repoName.trim()
+  if (!owner || !repo) return ''
+  return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+})
 const filteredInstalled = computed(() => {
   const q = query.value.toLowerCase().trim()
   if (!q) return installedSkills.value
@@ -405,6 +420,10 @@ onMounted(() => {
 
 .skills-sync-badge {
   @apply text-xs rounded-md border border-zinc-300 bg-white px-2 py-0.5;
+}
+
+.skills-sync-badge-link {
+  @apply text-zinc-700 hover:text-zinc-900 hover:border-zinc-400;
 }
 
 .skills-sync-device {

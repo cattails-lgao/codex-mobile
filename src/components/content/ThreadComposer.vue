@@ -1,5 +1,5 @@
 <template>
-  <form class="thread-composer" @submit.prevent="onSubmit('steer')">
+  <form class="thread-composer" @submit.prevent="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')">
     <p v-if="dictationErrorText" class="thread-composer-dictation-error">
       {{ dictationErrorText }}
     </p>
@@ -156,6 +156,30 @@
               Take photo
             </button>
             <div class="thread-composer-attach-separator" />
+            <div class="thread-composer-attach-mode">
+              <span class="thread-composer-attach-mode-label">In-progress send</span>
+              <div class="thread-composer-attach-mode-buttons">
+                <button
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': activeInProgressMode === 'steer' }"
+                  type="button"
+                  :disabled="isInteractionDisabled"
+                  @click="setActiveInProgressMode('steer')"
+                >
+                  Steer
+                </button>
+                <button
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': activeInProgressMode === 'queue' }"
+                  type="button"
+                  :disabled="isInteractionDisabled"
+                  @click="setActiveInProgressMode('queue')"
+                >
+                  Queue
+                </button>
+              </div>
+            </div>
+            <div class="thread-composer-attach-separator" />
             <button
               v-if="isFastModeSupported"
               class="thread-composer-attach-setting"
@@ -251,7 +275,7 @@
           </button>
 
           <button
-            v-if="isTurnInProgress"
+            v-if="isTurnInProgress && !hasSubmitContent"
             class="thread-composer-stop"
             type="button"
             aria-label="Stop"
@@ -263,12 +287,12 @@
           <button
             v-else
             class="thread-composer-submit"
-            :class="{ 'thread-composer-submit--queue': isTurnInProgress && inProgressMode === 'queue' }"
+            :class="{ 'thread-composer-submit--queue': isTurnInProgress && activeInProgressMode === 'queue' }"
             type="button"
-            :aria-label="isTurnInProgress && inProgressMode === 'queue' ? 'Queue message' : 'Send message'"
-            :title="isTurnInProgress ? `Send as ${inProgressMode}` : 'Send'"
+            :aria-label="isTurnInProgress && activeInProgressMode === 'queue' ? 'Queue message' : 'Send message'"
+            :title="isTurnInProgress ? `Send as ${activeInProgressMode}` : 'Send'"
             :disabled="!canSubmit"
-            @click="onSubmit(isTurnInProgress ? inProgressMode : 'steer')"
+            @click="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')"
           >
             <IconTablerArrowUp class="thread-composer-submit-icon" />
           </button>
@@ -412,7 +436,7 @@ const {
     draft.value = draft.value ? `${draft.value}\n${text}` : text
     dictationFeedback.value = ''
     if (props.dictationAutoSend !== false) {
-      const mode = props.isTurnInProgress ? inProgressMode.value : 'steer'
+      const mode = props.isTurnInProgress ? activeInProgressMode.value : 'steer'
       onSubmit(mode, {
         rollbackLatestUserTurn: mode === 'steer' && dictationShouldRollbackLatestUserTurn,
       })
@@ -520,6 +544,7 @@ const speedModeDescription = computed(() => {
 const inProgressMode = computed<'steer' | 'queue'>(() =>
   props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
 )
+const activeInProgressMode = ref<'steer' | 'queue'>(inProgressMode.value)
 const isDictationRecording = computed(() => dictationState.value === 'recording')
 const dictationButtonLabel = computed(() => {
   if (dictationState.value === 'recording') return 'Stop dictation'
@@ -537,6 +562,9 @@ const dictationDurationLabel = computed(() => {
 
 const placeholderText = computed(() =>
   props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
+)
+const hasSubmitContent = computed(() =>
+  draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0,
 )
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestUserTurn?: boolean }): void {
@@ -557,6 +585,10 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
     return
   }
   nextTick(() => inputRef.value?.focus())
+}
+
+function setActiveInProgressMode(mode: 'steer' | 'queue'): void {
+  activeInProgressMode.value = mode
 }
 
 function replaceDraftState(payload: ComposerDraftPayload): void {
@@ -695,7 +727,7 @@ function onDictationToggle(): void {
   }
   if (dictationState.value === 'idle') {
     dictationShouldRollbackLatestUserTurn =
-      props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
+      props.isTurnInProgress === true && activeInProgressMode.value === 'steer'
   }
   toggleRecording()
 }
@@ -717,7 +749,7 @@ function onDictationPressStart(event: PointerEvent): void {
     dictationFeedback.value = ''
   }
   dictationShouldRollbackLatestUserTurn =
-    props.isTurnInProgress === true && props.inProgressSubmitMode === 'steer'
+    props.isTurnInProgress === true && activeInProgressMode.value === 'steer'
   window.addEventListener('pointerup', onDictationPressEnd)
   window.addEventListener('pointercancel', onDictationPressEnd)
   window.addEventListener('blur', onDictationPressEnd)
@@ -940,7 +972,7 @@ function onInputKeydown(event: KeyboardEvent): void {
     : event.key === 'Enter' && (event.metaKey || event.ctrlKey)
   if (shouldSend) {
     event.preventDefault()
-    onSubmit(props.isTurnInProgress ? inProgressMode.value : 'steer')
+    onSubmit(props.isTurnInProgress ? activeInProgressMode.value : 'steer')
     return
   }
 
@@ -1158,6 +1190,13 @@ watch(
 )
 
 watch(
+  inProgressMode,
+  (nextMode) => {
+    activeInProgressMode.value = nextMode
+  },
+)
+
+watch(
   () => props.prependDraftRequest?.id,
   () => {
     const text = props.prependDraftRequest?.text?.trim() ?? ''
@@ -1355,6 +1394,26 @@ watch(
 
 .thread-composer-attach-separator {
   @apply my-1 h-px bg-zinc-100;
+}
+
+.thread-composer-attach-mode {
+  @apply px-3 py-2 flex items-center justify-between gap-2;
+}
+
+.thread-composer-attach-mode-label {
+  @apply text-sm text-zinc-800;
+}
+
+.thread-composer-attach-mode-buttons {
+  @apply inline-flex items-center rounded-full border border-zinc-200 bg-white p-0.5;
+}
+
+.thread-composer-attach-mode-button {
+  @apply rounded-full border-0 bg-transparent px-2 py-1 text-xs text-zinc-600 transition hover:text-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-attach-mode-button.is-active {
+  @apply bg-zinc-900 text-white hover:text-white;
 }
 
 .thread-composer-attach-setting {

@@ -63,6 +63,7 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-project-files="onBrowseProjectFiles"
             @rename-thread="onRenameThread"
+            @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread" />
         </div>
@@ -117,6 +118,9 @@
               </button>
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
+              </div>
+              <div class="sidebar-settings-build-label" aria-label="Worktree name and version">
+                WT {{ worktreeName }} · v{{ appVersion }}
               </div>
             </div>
           </Transition>
@@ -281,9 +285,6 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Worktree name and version">
-    WT {{ worktreeName }} · v{{ appVersion }}
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -462,6 +463,7 @@ const {
   selectThread,
   setThreadScrollState,
   archiveThreadById,
+  forkThreadById,
   renameThreadById,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
@@ -560,6 +562,14 @@ const contentTitle = computed(() => {
   if (isSkillsRoute.value) return 'Skills'
   if (isHomeRoute.value) return 'New thread'
   return selectedThread.value?.title ?? 'Choose a thread'
+})
+const browserHostName =
+  typeof window !== 'undefined'
+    ? (window.location.hostname || window.location.host || 'codexui')
+    : 'codexui'
+const pageTitle = computed(() => {
+  const threadTitle = selectedThread.value?.title?.trim() ?? ''
+  return threadTitle || browserHostName
 })
 const filteredMessages = computed(() =>
   messages.value.filter((message) => {
@@ -744,6 +754,17 @@ async function onExportThread(threadId: string): Promise<void> {
 
 function onArchiveThread(threadId: string): void {
   void archiveThreadById(threadId)
+}
+
+async function onForkThread(threadId: string): Promise<void> {
+  const nextThreadId = await forkThreadById(threadId)
+  if (!nextThreadId) return
+  if (!isHomeRoute.value) {
+    await router.push({ name: 'thread', params: { threadId: nextThreadId } })
+  } else {
+    await router.replace({ name: 'thread', params: { threadId: nextThreadId } })
+  }
+  if (isMobile.value) setSidebarCollapsed(true)
 }
 
 function onStartNewThread(projectName: string): void {
@@ -1462,6 +1483,15 @@ watch(
 )
 
 watch(
+  pageTitle,
+  (value) => {
+    if (typeof document === 'undefined') return
+    document.title = value
+  },
+  { immediate: true },
+)
+
+watch(
   () => worktreeGitAutomationEnabled.value,
   (enabled) => {
     setWorktreeGitAutomationEnabled(enabled)
@@ -1795,8 +1825,8 @@ async function submitFirstMessageForNewThread(
   @apply border-t border-zinc-200 px-2 pt-2;
 }
 
-.build-badge {
-  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
+.sidebar-settings-build-label {
+  @apply border-t border-zinc-100 px-3 py-2 text-[11px] text-zinc-500;
 }
 
 </style>

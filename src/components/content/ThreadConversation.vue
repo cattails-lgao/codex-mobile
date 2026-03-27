@@ -139,19 +139,9 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       :title="att.path"
+                      @contextmenu.prevent="onFileLinkContextMenu($event, att.path)"
                     >
                       {{ att.path }}
-                    </a>
-                    <a
-                      v-if="canShowEditLink(att.path)"
-                      class="message-file-edit-link"
-                      :href="toEditUrl(att.path)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="`Edit ${att.path}`"
-                      aria-label="Edit file"
-                    >
-                      Edit
                     </a>
                   </span>
                 </span>
@@ -205,19 +195,9 @@
                             target="_blank"
                             rel="noopener noreferrer"
                             :title="segment.path"
+                            @contextmenu.prevent="onFileLinkContextMenu($event, segment.path)"
                           >
                             {{ segment.displayPath }}
-                          </a>
-                          <a
-                            v-if="canShowEditLink(segment.path)"
-                            class="message-file-edit-link"
-                            :href="toEditUrl(segment.path)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="`Edit ${segment.path}`"
-                            aria-label="Edit file"
-                          >
-                            Edit
                           </a>
                         </span>
                         <a
@@ -227,6 +207,7 @@
                           target="_blank"
                           rel="noopener noreferrer"
                           :title="segment.href"
+                          @contextmenu.prevent="onUrlLinkContextMenu($event, segment.href)"
                         >
                           {{ segment.value }}
                         </a>
@@ -306,11 +287,34 @@
         <img class="image-modal-image" :src="modalImageUrl" alt="Expanded message image" />
       </div>
     </div>
+
+    <div
+      v-if="isFileLinkContextMenuVisible"
+      ref="fileLinkContextMenuRef"
+      class="file-link-context-menu"
+      :style="fileLinkContextMenuStyle"
+      @click.stop
+    >
+      <button type="button" class="file-link-context-menu-item" @click="openFileLinkContextBrowse">
+        Open link
+      </button>
+      <button type="button" class="file-link-context-menu-item" @click="copyFileLinkContextLink">
+        Copy link
+      </button>
+      <button
+        v-if="fileLinkContextEditUrl"
+        type="button"
+        class="file-link-context-menu-item"
+        @click="openFileLinkContextEdit"
+      >
+        Edit file
+      </button>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
@@ -417,6 +421,7 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const liveOverlayReasoningRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
+const fileLinkContextMenuRef = ref<HTMLElement | null>(null)
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const localScrollState = ref<ThreadScrollState | null>(null)
@@ -437,6 +442,11 @@ let bottomLockFramesLeft = 0
 let pendingSavedScrollRestore = true
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const failedMarkdownImageKeys = ref<Set<string>>(new Set())
+const isFileLinkContextMenuVisible = ref(false)
+const fileLinkContextMenuX = ref(0)
+const fileLinkContextMenuY = ref(0)
+const fileLinkContextBrowseUrl = ref('')
+const fileLinkContextEditUrl = ref('')
 
 type ParsedToolQuestion = {
   id: string
@@ -940,10 +950,6 @@ function toBrowseUrl(pathValue: string): string {
   return '#'
 }
 
-function canShowEditLink(pathValue: string): boolean {
-  return toEditUrl(pathValue) !== '#'
-}
-
 function toEditUrl(pathValue: string): string {
   const normalized = pathValue.trim()
   if (!normalized) return '#'
@@ -956,6 +962,91 @@ function toEditUrl(pathValue: string): string {
   if (!looksLikeAbsolutePath(resolved)) return '#'
   const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
   return `/codex-local-edit${encodeURI(normalizedResolved)}`
+}
+
+const fileLinkContextMenuStyle = computed(() => ({
+  left: `${String(fileLinkContextMenuX.value)}px`,
+  top: `${String(fileLinkContextMenuY.value)}px`,
+}))
+
+function onFileLinkContextMenu(event: MouseEvent, pathValue: string): void {
+  const browseUrl = toBrowseUrl(pathValue)
+  if (browseUrl === '#') return
+  fileLinkContextBrowseUrl.value = browseUrl
+  const editUrl = toEditUrl(pathValue)
+  fileLinkContextEditUrl.value = editUrl === '#' ? '' : editUrl
+  fileLinkContextMenuX.value = event.clientX
+  fileLinkContextMenuY.value = event.clientY
+  isFileLinkContextMenuVisible.value = true
+}
+
+function onUrlLinkContextMenu(event: MouseEvent, href: string): void {
+  const normalizedHref = href.trim()
+  if (!normalizedHref) return
+  fileLinkContextBrowseUrl.value = normalizedHref
+  fileLinkContextEditUrl.value = ''
+  fileLinkContextMenuX.value = event.clientX
+  fileLinkContextMenuY.value = event.clientY
+  isFileLinkContextMenuVisible.value = true
+}
+
+function closeFileLinkContextMenu(): void {
+  if (!isFileLinkContextMenuVisible.value) return
+  isFileLinkContextMenuVisible.value = false
+}
+
+function openFileLinkContextBrowse(): void {
+  const href = fileLinkContextBrowseUrl.value
+  closeFileLinkContextMenu()
+  if (!href || href === '#') return
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+function openFileLinkContextEdit(): void {
+  const href = fileLinkContextEditUrl.value
+  closeFileLinkContextMenu()
+  if (!href || href === '#') return
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+async function copyFileLinkContextLink(): Promise<void> {
+  const href = fileLinkContextBrowseUrl.value
+  closeFileLinkContextMenu()
+  if (!href || href === '#') return
+  try {
+    await navigator.clipboard.writeText(href)
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = href
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+}
+
+function onWindowPointerDownForFileLinkContextMenu(event: PointerEvent): void {
+  if (!isFileLinkContextMenuVisible.value) return
+  const menu = fileLinkContextMenuRef.value
+  if (!menu) {
+    closeFileLinkContextMenu()
+    return
+  }
+  const target = event.target
+  if (target instanceof Node && menu.contains(target)) return
+  closeFileLinkContextMenu()
+}
+
+function onWindowBlurForFileLinkContextMenu(): void {
+  closeFileLinkContextMenu()
+}
+
+function onWindowKeydownForFileLinkContextMenu(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  closeFileLinkContextMenu()
 }
 
 function parseMessageBlocks(text: string): MessageBlock[] {
@@ -1361,11 +1452,25 @@ watch(
     pendingSavedScrollRestore = true
     localScrollState.value = null
     modalImageUrl.value = ''
+    closeFileLinkContextMenu()
     failedMarkdownImageKeys.value = new Set()
     await scheduleScrollRestore({ restoreSavedState: true })
   },
   { flush: 'post' },
 )
+
+watch(isFileLinkContextMenuVisible, (isVisible) => {
+  if (isVisible) {
+    window.addEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
+    window.addEventListener('blur', onWindowBlurForFileLinkContextMenu)
+    window.addEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
+    return
+  }
+
+  window.removeEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
+  window.removeEventListener('blur', onWindowBlurForFileLinkContextMenu)
+  window.removeEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
+})
 
 function onConversationScroll(): void {
   const container = conversationListRef.value
@@ -1417,6 +1522,9 @@ onBeforeUnmount(() => {
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
   }
+  window.removeEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
+  window.removeEventListener('blur', onWindowBlurForFileLinkContextMenu)
+  window.removeEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
 })
 </script>
 
@@ -1626,25 +1734,15 @@ onBeforeUnmount(() => {
 }
 
 .message-file-link-wrap {
-  @apply relative inline-block align-baseline;
+  @apply inline-block align-baseline;
 }
 
-.message-file-link-wrap::after {
-  content: '';
-  @apply absolute left-full top-0 h-full w-2;
+.file-link-context-menu {
+  @apply fixed z-50 min-w-28 rounded-md border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
-.message-file-edit-link {
-  @apply absolute left-full top-1/2 -translate-y-1/2 rounded bg-transparent px-1.5 py-0 text-[11px] leading-5 text-slate-700 no-underline opacity-0 pointer-events-none;
-}
-
-.message-file-link-wrap:hover .message-file-edit-link,
-.message-file-link-wrap:focus-within .message-file-edit-link {
-  @apply opacity-100 pointer-events-auto;
-}
-
-.message-file-edit-link:hover {
-  @apply bg-transparent text-slate-900;
+.file-link-context-menu-item {
+  @apply block w-full rounded px-2 py-1 text-left text-xs text-zinc-700 hover:bg-zinc-100;
 }
 
 .message-stack[data-role='user'] {
@@ -1807,6 +1905,11 @@ onBeforeUnmount(() => {
 }
 
 .cmd-output {
-  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 max-h-60 overflow-x-auto overflow-y-auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
 }
 </style>
