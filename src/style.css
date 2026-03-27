@@ -257,6 +257,22 @@ body {
   @apply text-zinc-400;
 }
 
+:root.dark .thread-composer-attach-mode-label {
+  @apply text-zinc-100;
+}
+
+:root.dark .thread-composer-attach-mode-buttons {
+  @apply border-zinc-600 bg-zinc-900;
+}
+
+:root.dark .thread-composer-attach-mode-button {
+  @apply text-zinc-300 hover:text-zinc-100;
+}
+
+:root.dark .thread-composer-attach-mode-button.is-active {
+  @apply bg-zinc-200 text-zinc-900 hover:text-zinc-900;
+}
+
 :root.dark .thread-composer-attach-switch {
   @apply bg-zinc-600;
 }
