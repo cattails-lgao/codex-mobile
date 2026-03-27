@@ -7,7 +7,9 @@
             class="thread-row"
             :data-active="thread.id === selectedThreadId"
             :data-pinned="isPinned(thread.id)"
+            :force-right-hover="isThreadMenuOpen(thread.id)"
             @mouseleave="onThreadRowLeave(thread.id)"
+            @contextmenu="onThreadRowContextMenu($event, thread.id)"
           >
             <template #left>
               <span class="thread-left-stack">
@@ -107,7 +109,9 @@
           class="thread-row"
           :data-active="thread.id === selectedThreadId"
           :data-pinned="isPinned(thread.id)"
+          :force-right-hover="isThreadMenuOpen(thread.id)"
           @mouseleave="onThreadRowLeave(thread.id)"
+          @contextmenu="onThreadRowContextMenu($event, thread.id)"
         >
           <template #left>
             <span class="thread-left-stack">
@@ -259,7 +263,9 @@
                 class="thread-row"
                 :data-active="thread.id === selectedThreadId"
                 :data-pinned="isPinned(thread.id)"
+                :force-right-hover="isThreadMenuOpen(thread.id)"
                 @mouseleave="onThreadRowLeave(thread.id)"
+                @contextmenu="onThreadRowContextMenu($event, thread.id)"
               >
                 <template #left>
                   <span class="thread-left-stack">
@@ -704,6 +710,11 @@ function toggleThreadMenu(threadId: string): void {
     closeThreadMenu()
     return
   }
+  openThreadMenuId.value = threadId
+}
+
+function onThreadRowContextMenu(event: MouseEvent, threadId: string): void {
+  event.preventDefault()
   openThreadMenuId.value = threadId
 }
 
