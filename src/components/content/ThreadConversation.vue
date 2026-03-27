@@ -22,7 +22,13 @@
             <button
               type="button"
               class="cmd-row"
-              :class="[commandStatusClass(message), { 'cmd-expanded': isCommandExpanded(message) }]"
+              :class="[
+                commandStatusClass(message),
+                {
+                  'cmd-expanded': isCommandExpanded(message),
+                  'cmd-compact': isCommandCompact(message),
+                },
+              ]"
               @click="toggleCommandExpand(message)"
             >
               <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
@@ -31,10 +37,14 @@
             </button>
             <div
               class="cmd-output-wrap"
-              :class="{ 'cmd-output-visible': isCommandExpanded(message), 'cmd-output-collapsing': isCommandCollapsing(message) }"
+              :class="{ 'cmd-output-visible': isCommandExpanded(message) }"
             >
               <div class="cmd-output-inner">
-                <pre class="cmd-output">{{ message.commandExecution?.aggregatedOutput || '(no output)' }}</pre>
+                <pre
+                  class="cmd-output"
+                  :class="{ 'cmd-output-condensed': isCommandOutputCondensed(message) }"
+                  v-text="message.commandExecution?.aggregatedOutput || '(no output)'"
+                ></pre>
               </div>
             </div>
           </div>
@@ -87,7 +97,13 @@
                       <button
                         type="button"
                         class="cmd-row"
-                        :class="[commandStatusClass(cmd), { 'cmd-expanded': isCommandExpanded(cmd) }]"
+                        :class="[
+                          commandStatusClass(cmd),
+                          {
+                            'cmd-expanded': isCommandExpanded(cmd),
+                            'cmd-compact': isCommandCompact(cmd),
+                          },
+                        ]"
                         @click="toggleCommandExpand(cmd)"
                       >
                         <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
@@ -96,10 +112,14 @@
                       </button>
                       <div
                         class="cmd-output-wrap"
-                        :class="{ 'cmd-output-visible': isCommandExpanded(cmd), 'cmd-output-collapsing': isCommandCollapsing(cmd) }"
+                        :class="{ 'cmd-output-visible': isCommandExpanded(cmd) }"
                       >
                         <div class="cmd-output-inner">
-                          <pre class="cmd-output">{{ cmd.commandExecution?.aggregatedOutput || '(no output)' }}</pre>
+                          <pre
+                            class="cmd-output"
+                            :class="{ 'cmd-output-condensed': isCommandOutputCondensed(cmd) }"
+                            v-text="cmd.commandExecution?.aggregatedOutput || '(no output)'"
+                          ></pre>
                         </div>
                       </div>
                     </div>
@@ -481,14 +501,13 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
-const collapsingCommandIds = ref<Set<string>>(new Set())
+const collapsedAutoCommandIds = ref<Set<string>>(new Set())
 const expandedWorkedIds = ref<Set<string>>(new Set())
-const prevCommandStatuses = ref<Record<string, string>>({})
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
   const normalized = text.replace(/\r\n/g, '\n').trim()
@@ -545,6 +564,24 @@ function isPlanMessage(message: UiMessage): boolean {
   return message.messageType === 'plan' || message.messageType === 'plan.live'
 }
 
+const activeCommandMessageId = computed(() => {
+  for (let index = props.messages.length - 1; index >= 0; index -= 1) {
+    const message = props.messages[index]
+    if (message.messageType === 'commandExecution' && message.commandExecution?.status === 'inProgress') {
+      return message.id
+    }
+  }
+  return ''
+})
+
+const hasLiveAssistantText = computed(() =>
+  props.messages.some((message) =>
+    message.role === 'assistant' &&
+    message.messageType === 'agentMessage.live' &&
+    message.text.trim().length > 0,
+  ),
+)
+
 function readPlanExplanation(message: UiMessage): string {
   return readPlanData(message)?.explanation ?? ''
 }
@@ -564,22 +601,44 @@ function planStepStatusIcon(status: UiPlanStep['status']): string {
   }
 }
 
-function isCommandExpanded(message: UiMessage): boolean {
-  if (message.commandExecution?.status === 'inProgress') return true
-  if (collapsingCommandIds.value.has(message.id)) return true
-  return expandedCommandIds.value.has(message.id)
+function isCommandAutoExpanded(message: UiMessage): boolean {
+  return !hasLiveAssistantText.value && message.id === activeCommandMessageId.value
 }
 
-function isCommandCollapsing(message: UiMessage): boolean {
-  return collapsingCommandIds.value.has(message.id)
+function isCommandExpanded(message: UiMessage): boolean {
+  if (!isCommandMessage(message)) return false
+  return expandedCommandIds.value.has(message.id)
+    || (!collapsedAutoCommandIds.value.has(message.id) && isCommandAutoExpanded(message))
+}
+
+function isCommandCompact(message: UiMessage): boolean {
+  return isCommandMessage(message) && hasLiveAssistantText.value
+}
+
+function isCommandOutputCondensed(message: UiMessage): boolean {
+  return isCommandMessage(message) && (hasLiveAssistantText.value || message.commandExecution?.status === 'inProgress')
 }
 
 function toggleCommandExpand(message: UiMessage): void {
-  if (message.commandExecution?.status === 'inProgress') return
-  const next = new Set(expandedCommandIds.value)
-  if (next.has(message.id)) next.delete(message.id)
-  else next.add(message.id)
-  expandedCommandIds.value = next
+  if (!isCommandMessage(message)) return
+
+  const nextExpanded = new Set(expandedCommandIds.value)
+  const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
+  const isAutoExpanded = isCommandAutoExpanded(message)
+  const isManuallyExpanded = nextExpanded.has(message.id)
+
+  if (isManuallyExpanded) {
+    nextExpanded.delete(message.id)
+    if (isAutoExpanded) nextCollapsedAuto.add(message.id)
+  } else if (isAutoExpanded && !nextCollapsedAuto.has(message.id)) {
+    nextCollapsedAuto.add(message.id)
+  } else {
+    nextExpanded.add(message.id)
+    nextCollapsedAuto.delete(message.id)
+  }
+
+  expandedCommandIds.value = nextExpanded
+  collapsedAutoCommandIds.value = nextCollapsedAuto
 }
 
 function toggleWorkedExpand(message: UiMessage): void {
@@ -613,15 +672,13 @@ function commandStatusClass(message: UiMessage): string {
   return 'cmd-status-error'
 }
 
-function scheduleCollapse(messageId: string): void {
-  const nextCollapsing = new Set(collapsingCommandIds.value)
-  nextCollapsing.add(messageId)
-  collapsingCommandIds.value = nextCollapsing
-  setTimeout(() => {
-    const next = new Set(collapsingCommandIds.value)
-    next.delete(messageId)
-    collapsingCommandIds.value = next
-  }, 1000)
+function pruneCommandIdSet(source: Set<string>, validIds: Set<string>): Set<string> {
+  if (source.size === 0) return source
+  const next = new Set<string>()
+  for (const id of source) {
+    if (validIds.has(id)) next.add(id)
+  }
+  return next.size === source.size ? source : next
 }
 
 function getCommandsForWorked(messages: UiMessage[], workedIndex: number): UiMessage[] {
@@ -1925,17 +1982,26 @@ watch(
   async (next) => {
     if (props.isLoading) return
 
-    for (const m of next) {
-      if (m.messageType !== 'commandExecution' || !m.commandExecution) continue
-      const prev = prevCommandStatuses.value[m.id]
-      const cur = m.commandExecution.status
-      if (prev === 'inProgress' && cur !== 'inProgress') {
-        scheduleCollapse(m.id)
-      }
-      prevCommandStatuses.value[m.id] = cur
-    }
+    const commandIds = new Set(
+      next
+        .filter((message) => message.messageType === 'commandExecution' && message.commandExecution)
+        .map((message) => message.id),
+    )
+    expandedCommandIds.value = pruneCommandIdSet(expandedCommandIds.value, commandIds)
+    collapsedAutoCommandIds.value = pruneCommandIdSet(collapsedAutoCommandIds.value, commandIds)
 
     await scheduleScrollRestore()
+  },
+)
+
+watch(
+  activeCommandMessageId,
+  (nextId, prevId) => {
+    if (!prevId || prevId === nextId) return
+    if (!collapsedAutoCommandIds.value.has(prevId)) return
+    const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
+    nextCollapsedAuto.delete(prevId)
+    collapsedAutoCommandIds.value = nextCollapsedAuto
   },
 )
 
@@ -2574,6 +2640,10 @@ onBeforeUnmount(() => {
   @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
 }
 
+.cmd-row.cmd-compact {
+  @apply py-1;
+}
+
 .cmd-row.cmd-expanded {
   @apply rounded-b-none border-b-0;
 }
@@ -2591,7 +2661,7 @@ onBeforeUnmount(() => {
 }
 
 .cmd-status {
-  @apply text-[11px] font-medium flex-shrink-0;
+  @apply max-w-24 truncate text-right text-[11px] font-medium flex-shrink-0;
 }
 
 .cmd-status-running .cmd-status {
@@ -2620,11 +2690,6 @@ onBeforeUnmount(() => {
   border-color: #e4e4e7;
 }
 
-.cmd-output-wrap.cmd-output-collapsing {
-  grid-template-rows: 1fr;
-  border-color: #e4e4e7;
-}
-
 .cmd-output-inner {
   overflow: hidden;
   min-height: 0;
@@ -2632,5 +2697,9 @@ onBeforeUnmount(() => {
 
 .cmd-output {
   @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+}
+
+.cmd-output.cmd-output-condensed {
+  max-height: 9rem;
 }
 </style>
