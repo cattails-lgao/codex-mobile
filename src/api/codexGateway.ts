@@ -259,6 +259,32 @@ export async function startThread(cwd?: string, model?: string): Promise<string>
   }
 }
 
+export async function forkThread(threadId: string, cwd?: string, model?: string): Promise<string> {
+  try {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId) {
+      throw new Error('thread/fork requires threadId')
+    }
+    const params: Record<string, unknown> = {
+      threadId: normalizedThreadId,
+    }
+    if (typeof cwd === 'string' && cwd.trim().length > 0) {
+      params.cwd = cwd.trim()
+    }
+    if (typeof model === 'string' && model.trim().length > 0) {
+      params.model = model.trim()
+    }
+    const payload = await callRpc<{ thread?: { id?: string } }>('thread/fork', params)
+    const nextThreadId = normalizeThreadIdFromPayload(payload)
+    if (!nextThreadId) {
+      throw new Error('thread/fork did not return a thread id')
+    }
+    return nextThreadId
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
+  }
+}
+
 export type FileAttachmentParam = { label: string; path: string; fsPath: string }
 
 function buildTextWithAttachments(
