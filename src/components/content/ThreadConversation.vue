@@ -1807,6 +1807,11 @@ onBeforeUnmount(() => {
 }
 
 .cmd-output {
-  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 max-h-60 overflow-x-auto overflow-y-auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
 }
 </style>
