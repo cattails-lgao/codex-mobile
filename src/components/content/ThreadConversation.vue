@@ -10,15 +10,68 @@
     </p>
 
     <ul v-else ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
+      <template v-for="message in messages" :key="message.id">
       <li
-        v-for="message in messages"
-        :key="message.id"
+        v-if="!hiddenGroupedCommandIds.has(message.id)"
         class="conversation-item"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
         <div v-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
+            <button
+              v-if="getGroupedCommandsForLatest(message).length > 0"
+              type="button"
+              class="cmd-row cmd-row-group cmd-compact"
+              :class="{ 'cmd-expanded': isCommandGroupExpanded(message) }"
+              @click="toggleCommandGroup(message)"
+            >
+              <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandGroupExpanded(message) }">▶</span>
+              <span class="cmd-group-label">{{ commandGroupLabel(getGroupedCommandsForLatest(message)) }}</span>
+              <span class="cmd-status">{{ isCommandGroupExpanded(message) ? 'Hide' : 'Show' }}</span>
+            </button>
+            <div
+              v-if="getGroupedCommandsForLatest(message).length > 0"
+              class="cmd-group-wrap"
+              :class="{ 'cmd-group-visible': isCommandGroupExpanded(message) }"
+            >
+              <div class="cmd-group-inner">
+                <div
+                  v-for="cmd in getGroupedCommandsForLatest(message)"
+                  :key="`grouped-cmd-${cmd.id}`"
+                  class="worked-cmd-item"
+                >
+                  <button
+                    type="button"
+                    class="cmd-row"
+                    :class="[
+                      commandStatusClass(cmd),
+                      {
+                        'cmd-expanded': isCommandExpanded(cmd),
+                        'cmd-compact': true,
+                      },
+                    ]"
+                    @click="toggleCommandExpand(cmd)"
+                  >
+                    <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
+                    <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
+                    <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
+                  </button>
+                  <div
+                    class="cmd-output-wrap"
+                    :class="{ 'cmd-output-visible': isCommandExpanded(cmd) }"
+                  >
+                    <div class="cmd-output-inner">
+                      <pre
+                        class="cmd-output"
+                        :class="{ 'cmd-output-condensed': isCommandOutputCondensed(cmd) }"
+                        v-text="cmd.commandExecution?.aggregatedOutput || '(no output)'"
+                      ></pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <button
               type="button"
               class="cmd-row"
@@ -378,6 +431,7 @@
           </div>
         </div>
       </li>
+      </template>
       <li v-if="liveOverlay" class="conversation-item conversation-item-overlay">
         <div class="message-row">
           <div class="message-stack">
@@ -507,6 +561,7 @@ import IconTablerX from '../icons/IconTablerX.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsedAutoCommandIds = ref<Set<string>>(new Set())
+const expandedCommandGroupIds = ref<Set<string>>(new Set())
 const expandedWorkedIds = ref<Set<string>>(new Set())
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
@@ -586,6 +641,38 @@ const isLiveTurnRuntime = computed(() =>
   Boolean(props.liveOverlay) || activeCommandMessageId.value.length > 0 || hasLiveAssistantText.value,
 )
 
+const groupedCommandsByLatestId = computed<Record<string, UiMessage[]>>(() => {
+  const next: Record<string, UiMessage[]> = {}
+  for (let index = 0; index < props.messages.length;) {
+    const message = props.messages[index]
+    if (!isCommandMessage(message)) {
+      index += 1
+      continue
+    }
+
+    const block: UiMessage[] = []
+    while (index < props.messages.length && isCommandMessage(props.messages[index])) {
+      block.push(props.messages[index])
+      index += 1
+    }
+
+    if (block.length <= 1) continue
+    const latest = block[block.length - 1]
+    next[latest.id] = block.slice(0, -1)
+  }
+  return next
+})
+
+const hiddenGroupedCommandIds = computed(() => {
+  const next = new Set<string>()
+  for (const commands of Object.values(groupedCommandsByLatestId.value)) {
+    for (const command of commands) {
+      next.add(command.id)
+    }
+  }
+  return next
+})
+
 function readPlanExplanation(message: UiMessage): string {
   return readPlanData(message)?.explanation ?? ''
 }
@@ -643,6 +730,28 @@ function toggleCommandExpand(message: UiMessage): void {
 
   expandedCommandIds.value = nextExpanded
   collapsedAutoCommandIds.value = nextCollapsedAuto
+}
+
+function getGroupedCommandsForLatest(message: UiMessage): UiMessage[] {
+  return groupedCommandsByLatestId.value[message.id] ?? []
+}
+
+function toggleCommandGroup(message: UiMessage): void {
+  const groupedCommands = getGroupedCommandsForLatest(message)
+  if (groupedCommands.length === 0) return
+  const next = new Set(expandedCommandGroupIds.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedCommandGroupIds.value = next
+}
+
+function isCommandGroupExpanded(message: UiMessage): boolean {
+  return expandedCommandGroupIds.value.has(message.id)
+}
+
+function commandGroupLabel(commands: UiMessage[]): string {
+  const count = commands.length
+  return count === 1 ? '1 earlier command' : `${count} earlier commands`
 }
 
 function toggleWorkedExpand(message: UiMessage): void {
@@ -1994,6 +2103,10 @@ watch(
     )
     expandedCommandIds.value = pruneCommandIdSet(expandedCommandIds.value, commandIds)
     collapsedAutoCommandIds.value = pruneCommandIdSet(collapsedAutoCommandIds.value, commandIds)
+    expandedCommandGroupIds.value = pruneCommandIdSet(
+      expandedCommandGroupIds.value,
+      new Set(Object.keys(groupedCommandsByLatestId.value)),
+    )
 
     await scheduleScrollRestore()
   },
@@ -2645,6 +2758,10 @@ onBeforeUnmount(() => {
   @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
 }
 
+.cmd-row.cmd-row-group {
+  @apply border-dashed border-zinc-300 bg-zinc-100/90 text-zinc-600;
+}
+
 .cmd-row.cmd-compact {
   gap: 0.375rem;
   padding: 0.375rem 0.625rem;
@@ -2680,6 +2797,10 @@ onBeforeUnmount(() => {
   @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
 }
 
+.cmd-group-label {
+  @apply flex-1 min-w-0 truncate text-xs font-medium text-zinc-600;
+}
+
 .cmd-status {
   @apply max-w-24 truncate text-right text-[11px] font-medium flex-shrink-0;
 }
@@ -2708,6 +2829,20 @@ onBeforeUnmount(() => {
 .cmd-output-wrap.cmd-output-visible {
   grid-template-rows: 1fr;
   border-color: #e4e4e7;
+}
+
+.cmd-group-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease-out;
+}
+
+.cmd-group-wrap.cmd-group-visible {
+  grid-template-rows: 1fr;
+}
+
+.cmd-group-inner {
+  @apply mb-1 flex min-h-0 flex-col gap-1 overflow-hidden pl-2;
 }
 
 .cmd-output-inner {
