@@ -30,6 +30,7 @@ import {
 } from '../api/codexGateway'
 import type {
   CommandExecutionData,
+  UiPendingRequestState,
   ReasoningEffort,
   SpeedMode,
   ThreadScrollState,
@@ -512,7 +513,8 @@ function areThreadFieldsEqual(first: UiThread, second: UiThread): boolean {
     first.updatedAtIso === second.updatedAtIso &&
     first.preview === second.preview &&
     first.unread === second.unread &&
-    first.inProgress === second.inProgress
+    first.inProgress === second.inProgress &&
+    first.pendingRequestState === second.pendingRequestState
   )
 }
 
@@ -1013,12 +1015,36 @@ export function useDesktopState() {
     }))
   }
 
+  function getThreadPendingRequests(threadId: string): UiServerRequest[] {
+    if (!threadId) return []
+    return Array.isArray(pendingServerRequestsByThreadId.value[threadId])
+      ? pendingServerRequestsByThreadId.value[threadId]
+      : []
+  }
+
+  function isApprovalRequestMethod(method: string): boolean {
+    return (
+      method === 'item/commandExecution/requestApproval' ||
+      method === 'item/fileChange/requestApproval' ||
+      method === 'execCommandApproval' ||
+      method === 'applyPatchApproval'
+    )
+  }
+
+  function readPendingRequestState(requests: UiServerRequest[]): UiPendingRequestState | null {
+    if (requests.some((request) => isApprovalRequestMethod(request.method))) {
+      return 'approval'
+    }
+    return requests.length > 0 ? 'response' : null
+  }
+
   function applyThreadFlags(): void {
     const withTitles = applyCachedTitlesToGroups(sourceGroups.value)
     const flaggedGroups: UiProjectGroup[] = withTitles.map((group) => ({
       projectName: group.projectName,
       threads: group.threads.map((thread) => {
         const inProgress = inProgressById.value[thread.id] === true
+        const pendingRequestState = readPendingRequestState(getThreadPendingRequests(thread.id))
         const isSelected = selectedThreadId.value === thread.id
         const lastReadIso = readStateByThreadId.value[thread.id]
         const unreadByEvent = eventUnreadByThreadId.value[thread.id] === true
@@ -1028,6 +1054,7 @@ export function useDesktopState() {
           ...thread,
           inProgress,
           unread,
+          pendingRequestState,
         }
       }),
     }))
@@ -1463,6 +1490,7 @@ export function useDesktopState() {
       ...pendingServerRequestsByThreadId.value,
       [threadId]: nextRows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso)),
     }
+    applyThreadFlags()
   }
 
   function removePendingServerRequestById(requestId: number): void {
@@ -1474,6 +1502,7 @@ export function useDesktopState() {
       }
     }
     pendingServerRequestsByThreadId.value = next
+    applyThreadFlags()
   }
 
   function handleServerRequestNotification(notification: RpcNotification): boolean {
@@ -2849,15 +2878,17 @@ export function useDesktopState() {
     }
   }
 
-  async function respondToPendingServerRequest(reply: UiServerRequestReply): Promise<void> {
+  async function respondToPendingServerRequest(reply: UiServerRequestReply): Promise<boolean> {
     try {
       await replyToServerRequest(reply.id, {
         result: reply.result,
         error: reply.error,
       })
       removePendingServerRequestById(reply.id)
+      return true
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to reply to server request'
+      return false
     }
   }
 
