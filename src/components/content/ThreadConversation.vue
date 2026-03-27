@@ -224,8 +224,12 @@
                     </blockquote>
                     <ul v-else-if="block.kind === 'unorderedList'" class="message-list message-list-unordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ul-${blockIndex}-${itemIndex}`" class="message-list-item">
-                        <div class="message-list-item-text">
-                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ul-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                        <div
+                          v-for="(paragraph, paragraphIndex) in item.paragraphs"
+                          :key="`ul-paragraph-${blockIndex}-${itemIndex}-${paragraphIndex}`"
+                          class="message-list-item-text message-list-item-paragraph"
+                        >
+                          <template v-for="(segment, segmentIndex) in parseInlineSegments(paragraph)" :key="`ul-seg-${blockIndex}-${itemIndex}-${paragraphIndex}-${segmentIndex}`">
                             <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                             <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -291,8 +295,12 @@
                     </ul>
                     <ol v-else-if="block.kind === 'orderedList'" class="message-list message-list-ordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ol-${blockIndex}-${itemIndex}`" class="message-list-item">
-                        <div class="message-list-item-text">
-                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item)" :key="`ol-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                        <div
+                          v-for="(paragraph, paragraphIndex) in item.paragraphs"
+                          :key="`ol-paragraph-${blockIndex}-${itemIndex}-${paragraphIndex}`"
+                          class="message-list-item-text message-list-item-paragraph"
+                        >
+                          <template v-for="(segment, segmentIndex) in parseInlineSegments(paragraph)" :key="`ol-seg-${blockIndex}-${itemIndex}-${paragraphIndex}-${segmentIndex}`">
                             <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                             <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -660,13 +668,16 @@ type TaskListItem = {
   text: string
   checked: boolean
 }
+type ListItem = {
+  paragraphs: string[]
+}
 type MessageBlock =
   | { kind: 'paragraph'; value: string }
   | { kind: 'heading'; level: number; value: string }
   | { kind: 'blockquote'; value: string }
-  | { kind: 'unorderedList'; items: string[] }
+  | { kind: 'unorderedList'; items: ListItem[] }
   | { kind: 'taskList'; items: TaskListItem[] }
-  | { kind: 'orderedList'; items: string[] }
+  | { kind: 'orderedList'; items: ListItem[] }
   | { kind: 'codeBlock'; language: string; value: string }
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
@@ -1255,6 +1266,63 @@ function readOrderedListItem(line: string): string | null {
   return match?.[1]?.trim() ?? null
 }
 
+function isParagraphBreakingLine(line: string): boolean {
+  return (
+    isBlankMarkdownLine(line) ||
+    readFenceStart(line) !== null ||
+    isThematicBreakLine(line) ||
+    readHeading(line) !== null ||
+    readBlockquoteLine(line) !== null ||
+    readTaskListItem(line) !== null ||
+    readUnorderedListItem(line) !== null ||
+    readOrderedListItem(line) !== null
+  )
+}
+
+function readListParagraph(lines: string[], startIndex: number): { value: string; nextIndex: number } | null {
+  const paragraphLines: string[] = []
+  let index = startIndex
+
+  while (index < lines.length && !isParagraphBreakingLine(lines[index])) {
+    paragraphLines.push(lines[index])
+    index += 1
+  }
+
+  const value = paragraphLines.join('\n').trim()
+  return value ? { value, nextIndex: index } : null
+}
+
+function readListItems(
+  lines: string[],
+  startIndex: number,
+  readItem: (line: string) => string | null,
+): { items: ListItem[]; nextIndex: number } | null {
+  const items: ListItem[] = []
+  let index = startIndex
+
+  while (index < lines.length) {
+    const itemValue = readItem(lines[index])
+    if (itemValue === null) break
+
+    const paragraphs = [itemValue]
+    index += 1
+
+    while (index < lines.length) {
+      if (isBlankMarkdownLine(lines[index])) break
+      if (readItem(lines[index]) !== null) break
+
+      const continuation = readListParagraph(lines, index)
+      if (!continuation) break
+      paragraphs.push(continuation.value)
+      index = continuation.nextIndex
+    }
+
+    items.push({ paragraphs })
+  }
+
+  return items.length > 0 ? { items, nextIndex: index } : null
+}
+
 function isThematicBreakLine(line: string): boolean {
   return /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/u.test(line.trim())
 }
@@ -1343,30 +1411,30 @@ function parseTextBlocks(text: string): MessageBlock[] {
 
     const unorderedItem = readUnorderedListItem(lines[index])
     if (unorderedItem !== null) {
-      const items: string[] = []
-      while (index < lines.length) {
-        const nextItem = readUnorderedListItem(lines[index])
-        if (nextItem === null) break
-        items.push(nextItem)
-        index += 1
+      const parsedList = readListItems(lines, index, readUnorderedListItem)
+      if (parsedList) {
+        blocks.push({ kind: 'unorderedList', items: parsedList.items })
+        index = parsedList.nextIndex
+        continue
       }
-      if (items.length > 0) {
-        blocks.push({ kind: 'unorderedList', items })
+      if (unorderedItem.length > 0) {
+        blocks.push({ kind: 'unorderedList', items: [{ paragraphs: [unorderedItem] }] })
+        index += 1
         continue
       }
     }
 
     const orderedItem = readOrderedListItem(lines[index])
     if (orderedItem !== null) {
-      const items: string[] = []
-      while (index < lines.length) {
-        const nextItem = readOrderedListItem(lines[index])
-        if (nextItem === null) break
-        items.push(nextItem)
-        index += 1
+      const parsedList = readListItems(lines, index, readOrderedListItem)
+      if (parsedList) {
+        blocks.push({ kind: 'orderedList', items: parsedList.items })
+        index = parsedList.nextIndex
+        continue
       }
-      if (items.length > 0) {
-        blocks.push({ kind: 'orderedList', items })
+      if (orderedItem.length > 0) {
+        blocks.push({ kind: 'orderedList', items: [{ paragraphs: [orderedItem] }] })
+        index += 1
         continue
       }
     }
@@ -1509,6 +1577,12 @@ function renderInlineSegmentsAsHtml(text: string): string {
     .join('')
 }
 
+function renderListItemParagraphsAsHtml(item: ListItem): string {
+  return item.paragraphs
+    .map((paragraph) => `<div class="message-list-item-text message-list-item-paragraph">${renderInlineSegmentsAsHtml(paragraph)}</div>`)
+    .join('')
+}
+
 function renderMarkdownBlocksAsHtml(text: string): string {
   return parseMessageBlocks(text)
     .map((block) => {
@@ -1526,7 +1600,7 @@ function renderMarkdownBlocksAsHtml(text: string): string {
       }
       if (block.kind === 'unorderedList') {
         const items = block.items
-          .map((item) => `<li class="message-list-item"><div class="message-list-item-text">${renderInlineSegmentsAsHtml(item)}</div></li>`)
+          .map((item) => `<li class="message-list-item">${renderListItemParagraphsAsHtml(item)}</li>`)
           .join('')
         return `<ul class="message-list message-list-unordered">${items}</ul>`
       }
@@ -1543,7 +1617,7 @@ function renderMarkdownBlocksAsHtml(text: string): string {
       }
       if (block.kind === 'orderedList') {
         const items = block.items
-          .map((item) => `<li class="message-list-item"><div class="message-list-item-text">${renderInlineSegmentsAsHtml(item)}</div></li>`)
+          .map((item) => `<li class="message-list-item">${renderListItemParagraphsAsHtml(item)}</li>`)
           .join('')
         return `<ol class="message-list message-list-ordered">${items}</ol>`
       }
@@ -2234,6 +2308,10 @@ onBeforeUnmount(() => {
   @apply whitespace-pre-wrap;
 }
 
+.plan-card-markdown :deep(.message-list-item-paragraph + .message-list-item-paragraph) {
+  @apply mt-2;
+}
+
 .plan-card-markdown :deep(.message-task-list) {
   @apply list-none pl-0;
 }
@@ -2355,6 +2433,10 @@ onBeforeUnmount(() => {
 .message-list-item-text {
   @apply whitespace-pre-wrap break-words;
   overflow-wrap: anywhere;
+}
+
+.message-list-item-paragraph + .message-list-item-paragraph {
+  @apply mt-2;
 }
 
 .message-task-list {
