@@ -1625,10 +1625,19 @@ function readListParagraph(
   return value ? { value, nextIndex: index } : null
 }
 
+function findNextNonBlankLineIndex(lines: string[], startIndex: number): number {
+  for (let index = startIndex; index < lines.length; index += 1) {
+    if (!isBlankMarkdownLine(lines[index])) return index
+  }
+  return -1
+}
+
 function readNestedListBlocks(
   lines: string[],
   startIndex: number,
   parentIndent: number,
+  stopAtItem: ((line: string) => { indent: number; text: string } | null) | null = null,
+  allowLooseChildLists = false,
 ): { blocks: MessageBlock[]; nextIndex: number } | null {
   const nestedLines: string[] = []
   let index = startIndex
@@ -1636,21 +1645,35 @@ function readNestedListBlocks(
   while (index < lines.length) {
     const line = lines[index]
     if (isBlankMarkdownLine(line)) {
-      const nextNonBlankIndex = lines.findIndex((candidate, candidateIndex) => candidateIndex >= index + 1 && !isBlankMarkdownLine(candidate))
+      const nextNonBlankIndex = findNextNonBlankLineIndex(lines, index + 1)
       if (nextNonBlankIndex === -1) {
         nestedLines.push('')
         index = lines.length
         break
       }
+      const nextStopItem = stopAtItem?.(lines[nextNonBlankIndex])
+      if (nextStopItem && nextStopItem.indent === parentIndent) break
       if (leadingIndentWidth(lines[nextNonBlankIndex]) <= parentIndent) break
       nestedLines.push('')
       index += 1
       continue
     }
 
-    if (leadingIndentWidth(line) <= parentIndent) break
+    const stopItem = stopAtItem?.(line)
+    if (stopItem && stopItem.indent === parentIndent) break
 
-    nestedLines.push(stripIndentedContent(line, parentIndent + 1))
+    const lineIndent = leadingIndentWidth(line)
+    const isLooseChildList = allowLooseChildLists && (
+      readTaskListItem(line) !== null ||
+      readUnorderedListItem(line) !== null
+    )
+    if (lineIndent <= parentIndent && !isLooseChildList) break
+
+    nestedLines.push(
+      lineIndent > parentIndent
+        ? stripIndentedContent(line, parentIndent + 1)
+        : line.trimStart(),
+    )
     index += 1
   }
 
@@ -1669,6 +1692,7 @@ function readListItems(
   lines: string[],
   startIndex: number,
   readItem: (line: string) => { indent: number; text: string } | null,
+  allowLooseChildLists = false,
 ): { items: ListItem[]; nextIndex: number } | null {
   const items: ListItem[] = []
   let index = startIndex
@@ -1686,7 +1710,7 @@ function readListItems(
 
     while (index < lines.length) {
       if (isBlankMarkdownLine(lines[index])) {
-        const nextNonBlankIndex = lines.findIndex((candidate, candidateIndex) => candidateIndex >= index + 1 && !isBlankMarkdownLine(candidate))
+        const nextNonBlankIndex = findNextNonBlankLineIndex(lines, index + 1)
         if (nextNonBlankIndex === -1) {
           index = lines.length
           break
@@ -1707,8 +1731,13 @@ function readListItems(
       const nextSameLevelItem = readItem(lines[index])
       if (nextSameLevelItem && nextSameLevelItem.indent === baseIndent) break
 
-      if (leadingIndentWidth(lines[index]) > baseIndent) {
-        const nestedBlocks = readNestedListBlocks(lines, index, baseIndent)
+      const hasIndentedChildren = leadingIndentWidth(lines[index]) > baseIndent
+      const hasLooseChildList = allowLooseChildLists && (
+        readTaskListItem(lines[index]) !== null ||
+        readUnorderedListItem(lines[index]) !== null
+      )
+      if (hasIndentedChildren || hasLooseChildList) {
+        const nestedBlocks = readNestedListBlocks(lines, index, baseIndent, readItem, allowLooseChildLists)
         if (nestedBlocks) {
           children.push(...nestedBlocks.blocks)
           index = nestedBlocks.nextIndex
@@ -1834,7 +1863,7 @@ function parseTextBlocks(text: string): MessageBlock[] {
 
     const orderedItem = readOrderedListItem(lines[index])
     if (orderedItem !== null) {
-      const parsedList = readListItems(lines, index, readOrderedListItemMatch)
+      const parsedList = readListItems(lines, index, readOrderedListItemMatch, true)
       if (parsedList) {
         blocks.push({ kind: 'orderedList', items: parsedList.items })
         index = parsedList.nextIndex
