@@ -23,12 +23,12 @@
               v-if="getGroupedCommandsForLatest(message).length > 0"
               type="button"
               class="cmd-row cmd-row-group cmd-compact"
-              :class="{ 'cmd-expanded': isCommandGroupExpanded(message) }"
+              :class="[commandStatusClass(message), { 'cmd-expanded': isCommandGroupExpanded(message) }]"
               @click="toggleCommandGroup(message)"
             >
               <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandGroupExpanded(message) }">▶</span>
-              <span class="cmd-group-label">{{ commandGroupLabel(getGroupedCommandsForLatest(message)) }}</span>
-              <span class="cmd-status">{{ isCommandGroupExpanded(message) ? 'Hide' : 'Show' }}</span>
+              <span class="cmd-group-label">{{ commandGroupSummaryLabel(message) }}</span>
+              <span class="cmd-status">{{ commandGroupSummaryStatus(message) }}</span>
             </button>
             <div
               v-if="getGroupedCommandsForLatest(message).length > 0"
@@ -37,7 +37,7 @@
             >
               <div class="cmd-group-inner">
                 <div
-                  v-for="cmd in getGroupedCommandsForLatest(message)"
+                  v-for="cmd in getCommandBlockForLatest(message)"
                   :key="`grouped-cmd-${cmd.id}`"
                   class="worked-cmd-item"
                 >
@@ -72,34 +72,36 @@
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              class="cmd-row"
-              :class="[
-                commandStatusClass(message),
-                {
-                  'cmd-expanded': isCommandExpanded(message),
-                  'cmd-compact': isCommandCompact(message),
-                },
-              ]"
-              @click="toggleCommandExpand(message)"
-            >
-              <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
-              <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
-              <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
-            </button>
-            <div
-              class="cmd-output-wrap"
-              :class="{ 'cmd-output-visible': isCommandExpanded(message) }"
-            >
-              <div class="cmd-output-inner">
-                <pre
-                  class="cmd-output"
-                  :class="{ 'cmd-output-condensed': isCommandOutputCondensed(message) }"
-                  v-text="message.commandExecution?.aggregatedOutput || '(no output)'"
-                ></pre>
+            <template v-else>
+              <button
+                type="button"
+                class="cmd-row"
+                :class="[
+                  commandStatusClass(message),
+                  {
+                    'cmd-expanded': isCommandExpanded(message),
+                    'cmd-compact': isCommandCompact(message),
+                  },
+                ]"
+                @click="toggleCommandExpand(message)"
+              >
+                <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
+                <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
+                <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
+              </button>
+              <div
+                class="cmd-output-wrap"
+                :class="{ 'cmd-output-visible': isCommandExpanded(message) }"
+              >
+                <div class="cmd-output-inner">
+                  <pre
+                    class="cmd-output"
+                    :class="{ 'cmd-output-condensed': isCommandOutputCondensed(message) }"
+                    v-text="message.commandExecution?.aggregatedOutput || '(no output)'"
+                  ></pre>
+                </div>
               </div>
-            </div>
+            </template>
           </div>
         </div>
 
@@ -748,6 +750,11 @@ function getGroupedCommandsForLatest(message: UiMessage): UiMessage[] {
   return groupedCommandsByLatestId.value[message.id] ?? []
 }
 
+function getCommandBlockForLatest(message: UiMessage): UiMessage[] {
+  if (!isCommandMessage(message)) return []
+  return [...getGroupedCommandsForLatest(message), message]
+}
+
 function toggleCommandGroup(message: UiMessage): void {
   const groupedCommands = getGroupedCommandsForLatest(message)
   if (groupedCommands.length === 0) return
@@ -761,9 +768,16 @@ function isCommandGroupExpanded(message: UiMessage): boolean {
   return expandedCommandGroupIds.value.has(message.id)
 }
 
-function commandGroupLabel(commands: UiMessage[]): string {
+function commandGroupSummaryLabel(message: UiMessage): string {
+  const commands = getCommandBlockForLatest(message)
   const count = commands.length
-  return count === 1 ? '1 earlier command' : `${count} earlier commands`
+  const latestCommand = message.commandExecution?.command?.trim() || '(command)'
+  const countLabel = count === 1 ? '1 command' : `${count} commands`
+  return `${countLabel} · latest: ${latestCommand}`
+}
+
+function commandGroupSummaryStatus(message: UiMessage): string {
+  return commandStatusLabel(message)
 }
 
 function toggleWorkedExpand(message: UiMessage): void {
