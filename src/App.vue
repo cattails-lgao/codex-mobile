@@ -1008,11 +1008,13 @@ function onExportChat(): void {
   const markdown = buildThreadMarkdown()
   const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
   const objectUrl = URL.createObjectURL(blob)
-  const openedWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer')
-  if (!openedWindow) {
-    window.location.href = objectUrl
-  }
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = buildExportFileName()
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
 }
 
 function buildThreadMarkdown(): string {
@@ -1078,6 +1080,17 @@ function buildThreadMarkdown(): string {
   }
 
   return `${lines.join('\n').trimEnd()}\n`
+}
+
+function buildExportFileName(): string {
+  const threadTitle = selectedThread.value?.title?.trim() || 'chat'
+  const sanitized = threadTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const base = sanitized || 'chat'
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  return `${base}-${stamp}.md`
 }
 
 function escapeMarkdownText(value: string): string {
