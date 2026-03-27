@@ -369,3 +369,9 @@ After each feature implementation session that uses this skill:
 - In this environment, `/Applications/Codex.app` may be absent while `/tmp/codex-app-extracted` still exists as an empty directory from a prior session.
 - Before relying on extracted bundle searches, verify both the app bundle path and that the extraction target actually contains files.
 - When both checks fail for a UI change, treat parity inspection as blocked, use existing repository behavior as the fallback baseline, and report that gap explicitly in the final response.
+
+## Findings: Message Action Removal Fallback (2026-03-27)
+
+- With Codex.app unavailable for inspection, message-action removals should be implemented as full UI deletion, not partial hiding.
+- In this codebase, message actions span both template nodes in `ThreadConversation.vue` and shared dark-theme overrides in `style.css`; removing only the button markup leaves dead hover/dark styles behind.
+- A safe fallback cleanup is to remove the template block, the helper functions/imports that feed it, and the corresponding `.message-action*` selectors together in the same change.
