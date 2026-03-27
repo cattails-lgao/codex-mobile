@@ -155,32 +155,30 @@
             >
               Take photo
             </button>
-            <template v-if="isTurnInProgress">
-              <div class="thread-composer-attach-separator" />
-              <div class="thread-composer-attach-mode">
-                <span class="thread-composer-attach-mode-label">In-progress send</span>
-                <div class="thread-composer-attach-mode-buttons">
-                  <button
-                    class="thread-composer-attach-mode-button"
-                    :class="{ 'is-active': activeInProgressMode === 'steer' }"
-                    type="button"
-                    :disabled="isInteractionDisabled"
-                    @click="setActiveInProgressMode('steer')"
-                  >
-                    Steer
-                  </button>
-                  <button
-                    class="thread-composer-attach-mode-button"
-                    :class="{ 'is-active': activeInProgressMode === 'queue' }"
-                    type="button"
-                    :disabled="isInteractionDisabled"
-                    @click="setActiveInProgressMode('queue')"
-                  >
-                    Queue
-                  </button>
-                </div>
+            <div class="thread-composer-attach-separator" />
+            <div class="thread-composer-attach-mode">
+              <span class="thread-composer-attach-mode-label">In-progress send</span>
+              <div class="thread-composer-attach-mode-buttons">
+                <button
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': activeInProgressMode === 'steer' }"
+                  type="button"
+                  :disabled="isInteractionDisabled"
+                  @click="setActiveInProgressMode('steer')"
+                >
+                  Steer
+                </button>
+                <button
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': activeInProgressMode === 'queue' }"
+                  type="button"
+                  :disabled="isInteractionDisabled"
+                  @click="setActiveInProgressMode('queue')"
+                >
+                  Queue
+                </button>
               </div>
-            </template>
+            </div>
             <div class="thread-composer-attach-separator" />
             <button
               v-if="isFastModeSupported"
