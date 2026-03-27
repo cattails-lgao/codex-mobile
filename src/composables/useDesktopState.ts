@@ -1518,6 +1518,23 @@ export function useDesktopState() {
     }
   }
 
+  function readToolRequestUserInputQuestionIds(request: UiServerRequest): string[] {
+    if (request.method !== 'item/tool/requestUserInput') return []
+    const params = asRecord(request.params)
+    const questions = Array.isArray(params?.questions) ? params.questions : []
+    const questionIds: string[] = []
+
+    for (const row of questions) {
+      const question = asRecord(row)
+      const id = readString(question?.id).trim()
+      if (id) {
+        questionIds.push(id)
+      }
+    }
+
+    return questionIds
+  }
+
   function upsertPendingServerRequest(request: UiServerRequest): void {
     const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
     const current = pendingServerRequestsByThreadId.value[threadId] ?? []
@@ -2441,6 +2458,36 @@ export function useDesktopState() {
     }
   }
 
+  async function maybeReplyToPendingUserInputRequest(
+    threadId: string,
+    text: string,
+    imageUrls: string[] = [],
+    skills: Array<{ name: string; path: string }> = [],
+    fileAttachments: FileAttachment[] = [],
+  ): Promise<boolean> {
+    if (!threadId || !text.trim()) return false
+    if (imageUrls.length > 0 || skills.length > 0 || fileAttachments.length > 0) return false
+
+    const requests = pendingServerRequestsByThreadId.value[threadId] ?? []
+    const userInputRequests = requests.filter((request) => request.method === 'item/tool/requestUserInput')
+    if (userInputRequests.length !== 1) return false
+
+    const [request] = userInputRequests
+    const questionIds = readToolRequestUserInputQuestionIds(request)
+    if (questionIds.length !== 1) return false
+
+    return respondToPendingServerRequest({
+      id: request.id,
+      result: {
+        answers: {
+          [questionIds[0]]: {
+            answers: [text.trim()],
+          },
+        },
+      },
+    })
+  }
+
   async function sendMessageToSelectedThread(
     text: string,
     imageUrls: string[] = [],
@@ -2451,6 +2498,10 @@ export function useDesktopState() {
     const threadId = selectedThreadId.value
     const nextText = text.trim()
     if (!threadId || (!nextText && imageUrls.length === 0 && fileAttachments.length === 0)) return
+
+    if (await maybeReplyToPendingUserInputRequest(threadId, nextText, imageUrls, skills, fileAttachments)) {
+      return
+    }
 
     const isInProgress = inProgressById.value[threadId] === true
 
@@ -3020,15 +3071,17 @@ export function useDesktopState() {
     }
   }
 
-  async function respondToPendingServerRequest(reply: UiServerRequestReply): Promise<void> {
+  async function respondToPendingServerRequest(reply: UiServerRequestReply): Promise<boolean> {
     try {
       await replyToServerRequest(reply.id, {
         result: reply.result,
         error: reply.error,
       })
       removePendingServerRequestById(reply.id)
+      return true
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to reply to server request'
+      return false
     }
   }
 
