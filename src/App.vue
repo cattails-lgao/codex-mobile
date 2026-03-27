@@ -98,8 +98,10 @@
                       'is-active': account.isActive,
                       'is-unavailable': isAccountUnavailable(account),
                       'is-confirming-remove': isRemoveConfirmationActive(account),
+                      'is-remove-visible': isRemoveVisible(account),
                     }"
                     :title="buildAccountTitle(account)"
+                    @mouseenter="onAccountCardPointerEnter(account.accountId)"
                     @mouseleave="onAccountCardPointerLeave(account.accountId)"
                   >
                     <div class="sidebar-settings-account-main">
@@ -380,6 +382,7 @@ const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
 const removingAccountId = ref('')
 const confirmingRemoveAccountId = ref('')
+const hoveredAccountId = ref('')
 const accountActionError = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
@@ -623,6 +626,10 @@ function isRemoveConfirmationActive(account: UiAccountEntry): boolean {
   return confirmingRemoveAccountId.value === account.accountId
 }
 
+function isRemoveVisible(account: UiAccountEntry): boolean {
+  return hoveredAccountId.value === account.accountId || isRemoveConfirmationActive(account)
+}
+
 function getAccountSwitchLabel(account: UiAccountEntry): string {
   if (isAccountUnavailable(account)) return 'Unavailable'
   if (account.isActive) return 'Active'
@@ -636,7 +643,14 @@ function getAccountRemoveLabel(account: UiAccountEntry): string {
   return 'Remove'
 }
 
+function onAccountCardPointerEnter(accountId: string): void {
+  hoveredAccountId.value = accountId
+}
+
 function onAccountCardPointerLeave(accountId: string): void {
+  if (hoveredAccountId.value === accountId) {
+    hoveredAccountId.value = ''
+  }
   if (removingAccountId.value === accountId) return
   if (confirmingRemoveAccountId.value === accountId) {
     confirmingRemoveAccountId.value = ''
@@ -699,6 +713,9 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
   try {
     const result = await getAccounts()
     accounts.value = result.accounts
+    if (!result.accounts.some((account) => account.accountId === hoveredAccountId.value)) {
+      hoveredAccountId.value = ''
+    }
     if (!result.accounts.some((account) => account.accountId === confirmingRemoveAccountId.value)) {
       confirmingRemoveAccountId.value = ''
     }
@@ -711,6 +728,7 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
 async function onRefreshAccounts(): Promise<void> {
   if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
   accountActionError.value = ''
+  hoveredAccountId.value = ''
   confirmingRemoveAccountId.value = ''
   isRefreshingAccounts.value = true
   try {
@@ -735,6 +753,7 @@ async function onSwitchAccount(accountId: string): Promise<void> {
     return
   }
   accountActionError.value = ''
+  hoveredAccountId.value = ''
   confirmingRemoveAccountId.value = ''
   isSwitchingAccounts.value = true
   try {
@@ -1761,8 +1780,7 @@ async function submitFirstMessageForNewThread(
   @apply shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
 }
 
-.sidebar-settings-account-item:hover .sidebar-settings-account-remove,
-.sidebar-settings-account-item.is-confirming-remove .sidebar-settings-account-remove {
+.sidebar-settings-account-item.is-remove-visible .sidebar-settings-account-remove {
   @apply opacity-100 pointer-events-auto;
 }
 
