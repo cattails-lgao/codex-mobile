@@ -453,3 +453,9 @@ If a finding conflicts with current official docs or current official code, trea
 - With Codex.app unavailable for inspection, message-action removals should be implemented as full UI deletion, not partial hiding.
 - In this codebase, message actions span both template nodes in `ThreadConversation.vue` and shared dark-theme overrides in `style.css`; removing only the button markup leaves dead hover/dark styles behind.
 - A safe fallback cleanup is to remove the template block, the helper functions/imports that feed it, and the corresponding `.message-action*` selectors together in the same change.
+
+## Findings: Retry Error Status Restoration (2026-03-28)
+
+- Official Codex protocol marks transient stream failures separately from terminal failures: `stream_error` is documented as a notification the system is already handling with retry/backoff, and v2 `error` notifications expose `willRetry`.
+- In `openai/codex` TUI (`codex-rs/tui_app_server/src/chatwidget.rs`), retry-status UI is restored on the next non-retry notification instead of remaining visible for the rest of the turn.
+- For codexui parity, retry/reconnect overlays should be stored as transient state and cleared when follow-up non-retry events arrive or when the transport emits `ready` after reconnect.

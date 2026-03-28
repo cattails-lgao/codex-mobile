@@ -465,6 +465,7 @@ type TurnActivityState = {
 
 type TurnErrorState = {
   message: string
+  transient: boolean
 }
 
 type TurnStartedInfo = {
@@ -1231,7 +1232,11 @@ export function useDesktopState() {
     }
   }
 
-  function setTurnErrorForThread(threadId: string, message: string | null): void {
+  function setTurnErrorForThread(
+    threadId: string,
+    message: string | null,
+    options: { transient?: boolean } = {},
+  ): void {
     if (!threadId) return
 
     const previous = turnErrorByThreadId.value[threadId]
@@ -1243,12 +1248,32 @@ export function useDesktopState() {
       return
     }
 
-    if (previous?.message === normalizedMessage) return
+    const transient = options.transient === true
+    if (previous?.message === normalizedMessage && previous.transient === transient) return
 
     turnErrorByThreadId.value = {
       ...turnErrorByThreadId.value,
-      [threadId]: { message: normalizedMessage },
+      [threadId]: { message: normalizedMessage, transient },
     }
+  }
+
+  function clearTransientTurnErrorForThread(threadId: string): void {
+    if (!threadId) return
+    if (!turnErrorByThreadId.value[threadId]?.transient) return
+    setTurnErrorForThread(threadId, null)
+  }
+
+  function clearAllTransientTurnErrors(): void {
+    const transientThreadIds = Object.entries(turnErrorByThreadId.value)
+      .filter(([, state]) => state?.transient)
+      .map(([threadId]) => threadId)
+    if (transientThreadIds.length === 0) return
+
+    let nextState = turnErrorByThreadId.value
+    for (const threadId of transientThreadIds) {
+      nextState = omitKey(nextState, threadId)
+    }
+    turnErrorByThreadId.value = nextState
   }
 
   function currentThreadVersion(threadId: string): string {
@@ -1487,13 +1512,19 @@ export function useDesktopState() {
     return readString(errorPayload?.message)
   }
 
-  function readNotificationErrorMessage(notification: RpcNotification): string {
-    if (notification.method !== 'error') return ''
+  function readNotificationErrorState(notification: RpcNotification): { message: string; transient: boolean } | null {
+    if (notification.method !== 'error') return null
     const params = asRecord(notification.params)
-    return (
+    const message = (
       readString(params?.message) ||
       readString(asRecord(params?.error)?.message)
     )
+    if (!message) return null
+
+    return {
+      message,
+      transient: params?.willRetry === true,
+    }
   }
 
   function normalizeServerRequest(params: unknown): UiServerRequest | null {
@@ -1980,6 +2011,12 @@ export function useDesktopState() {
       setTurnActivityForThread(turnActivity.threadId, turnActivity.activity)
     }
 
+    const notificationThreadId = extractThreadIdFromNotification(notification)
+    const notificationErrorState = readNotificationErrorState(notification)
+    if (!notificationErrorState && notificationThreadId) {
+      clearTransientTurnErrorForThread(notificationThreadId)
+    }
+
     const startedTurn = readTurnStartedInfo(notification)
     if (startedTurn) {
       pendingTurnStartsById.set(startedTurn.turnId, startedTurn)
@@ -2048,14 +2085,15 @@ export function useDesktopState() {
       setTurnErrorForThread(completedTurn.threadId, null)
     }
 
-    const notificationErrorMessage = readNotificationErrorMessage(notification)
-    if (notificationErrorMessage) {
-      const errorThreadId = extractThreadIdFromNotification(notification)
+    if (notificationErrorState) {
+      const errorThreadId = notificationThreadId
       if (errorThreadId) {
-        setTurnErrorForThread(errorThreadId, notificationErrorMessage)
+        setTurnErrorForThread(errorThreadId, notificationErrorState.message, {
+          transient: notificationErrorState.transient,
+        })
       }
-      error.value = notificationErrorMessage
-      if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(notificationErrorMessage))) {
+      error.value = notificationErrorState.message
+      if (selectedModelId.value !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(new Error(notificationErrorState.message))) {
         if (errorThreadId) {
           void retryPendingTurnWithFallback(errorThreadId)
         } else {
@@ -2064,7 +2102,6 @@ export function useDesktopState() {
       }
     }
 
-    const notificationThreadId = extractThreadIdFromNotification(notification)
     const planUpdate = readPlanUpdate(notification)
     if (planUpdate) {
       upsertLivePlanMessage(planUpdate.threadId, planUpdate.message)
@@ -3132,6 +3169,7 @@ export function useDesktopState() {
     void loadPendingServerRequestsFromBridge()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       if (notification.method === 'ready') {
+        clearAllTransientTurnErrors()
         void recoverBridgeState()
         return
       }
