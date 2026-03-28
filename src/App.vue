@@ -239,6 +239,7 @@
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
                   @update-scroll-state="onUpdateThreadScrollState"
+                  @fork-thread="onForkThreadFromMessage"
                   @respond-server-request="onRespondServerRequest" />
               </div>
 
@@ -339,6 +340,7 @@ const {
   setThreadScrollState,
   archiveThreadById,
   renameThreadById,
+  forkThreadFromTurn,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
@@ -870,6 +872,13 @@ function onUpdateThreadScrollState(payload: { threadId: string; state: ThreadScr
 
 function onRespondServerRequest(payload: { id: number; result?: unknown; error?: { code?: number; message: string } }): void {
   void respondToPendingServerRequest(payload)
+}
+
+async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: number }): Promise<void> {
+  const forkedThreadId = await forkThreadFromTurn(payload.threadId, payload.turnIndex)
+  if (!forkedThreadId) return
+  await router.push({ name: 'thread', params: { threadId: forkedThreadId } })
+  if (isMobile.value) setSidebarCollapsed(true)
 }
 
 function setSidebarCollapsed(nextValue: boolean): void {

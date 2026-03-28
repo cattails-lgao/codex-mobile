@@ -375,6 +375,17 @@
                 :data-role="message.role"
               >
                 <button
+                  v-if="showForkResponseButton(message)"
+                  type="button"
+                  class="message-fork-button"
+                  aria-label="Fork thread from this response"
+                  title="Fork thread from this response"
+                  @click="forkResponse(message.id)"
+                >
+                  <IconTablerGitFork class="icon-svg message-fork-icon" />
+                  <span class="message-fork-label">Fork</span>
+                </button>
+                <button
                   type="button"
                   class="message-copy-button"
                   :data-copied="copiedResponseAnchorId === message.id"
@@ -530,6 +541,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
+import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerX from '../icons/IconTablerX.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
@@ -809,6 +821,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
+  forkThread: [payload: { threadId: string; turnIndex: number }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
 }>()
 
@@ -1128,8 +1141,39 @@ const copyableResponseContentByAnchorId = computed<Record<string, string>>(() =>
   return next
 })
 
+const forkableTurnIndexByAnchorId = computed<Record<string, number>>(() => {
+  const groupedTurns = new Map<string, { anchorMessageId: string; turnIndex: number }>()
+
+  for (const message of props.messages) {
+    if (!isCopyableAssistantMessage(message) || typeof message.turnIndex !== 'number') continue
+
+    const responseKey = `turn:${message.turnIndex}`
+    const existing = groupedTurns.get(responseKey)
+    if (existing) {
+      existing.anchorMessageId = message.id
+      existing.turnIndex = message.turnIndex
+      continue
+    }
+
+    groupedTurns.set(responseKey, {
+      anchorMessageId: message.id,
+      turnIndex: message.turnIndex,
+    })
+  }
+
+  const next: Record<string, number> = {}
+  for (const groupedTurn of groupedTurns.values()) {
+    next[groupedTurn.anchorMessageId] = groupedTurn.turnIndex
+  }
+  return next
+})
+
 function showCopyResponseButton(message: UiMessage): boolean {
   return typeof copyableResponseContentByAnchorId.value[message.id] === 'string'
+}
+
+function showForkResponseButton(message: UiMessage): boolean {
+  return typeof forkableTurnIndexByAnchorId.value[message.id] === 'number'
 }
 
 function copyTextWithSelectionFallback(text: string): boolean {
@@ -1186,6 +1230,16 @@ async function copyResponse(anchorMessageId: string): Promise<void> {
     }
     copiedMessageResetTimer = null
   }, 1800)
+}
+
+function forkResponse(anchorMessageId: string): void {
+  const turnIndex = forkableTurnIndexByAnchorId.value[anchorMessageId]
+  if (typeof turnIndex !== 'number') return
+  if (!props.activeThreadId) return
+  emit('forkThread', {
+    threadId: props.activeThreadId,
+    turnIndex,
+  })
 }
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
@@ -2719,9 +2773,10 @@ onBeforeUnmount(() => {
 }
 
 .message-toolbar {
-  @apply mt-1 self-end;
+  @apply mt-1 self-end flex items-center gap-1;
 }
 
+.message-fork-button,
 .message-copy-button {
   @apply inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/90 px-1.25 py-0.5 text-[9px] font-medium leading-none text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-900;
 }
@@ -2730,10 +2785,12 @@ onBeforeUnmount(() => {
   @apply border-emerald-200 bg-emerald-50 text-emerald-700;
 }
 
+.message-fork-icon,
 .message-copy-icon {
   @apply text-[10px];
 }
 
+.message-fork-label,
 .message-copy-label {
   @apply leading-none;
 }

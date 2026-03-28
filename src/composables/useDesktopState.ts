@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   archiveThread,
+  forkThread as forkThreadRpc,
   getAvailableCollaborationModes,
   getAccountRateLimits,
   renameThread,
@@ -2458,6 +2459,79 @@ export function useDesktopState() {
     }
   }
 
+  async function forkThreadFromTurn(threadId: string, turnIndex: number): Promise<string> {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId || !Number.isInteger(turnIndex) || turnIndex < 0) return ''
+
+    if (inProgressById.value[normalizedThreadId] === true) {
+      error.value = 'Finish the current turn before forking from a response.'
+      return ''
+    }
+
+    if (loadedMessagesByThreadId.value[normalizedThreadId] !== true) {
+      try {
+        await loadMessages(normalizedThreadId)
+      } catch (unknownError) {
+        error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+        return ''
+      }
+    }
+
+    const sourceMessages = persistedMessagesByThreadId.value[normalizedThreadId] ?? []
+    let lastTurnIndex = -1
+    for (const message of sourceMessages) {
+      if (typeof message.turnIndex === 'number' && Number.isFinite(message.turnIndex)) {
+        lastTurnIndex = Math.max(lastTurnIndex, message.turnIndex)
+      }
+    }
+
+    if (lastTurnIndex >= 0 && turnIndex > lastTurnIndex) return ''
+
+    const sourceThread = flattenThreads(sourceGroups.value).find((row) => row.id === normalizedThreadId) ?? null
+
+    try {
+      error.value = ''
+      const forked = await forkThreadRpc(normalizedThreadId)
+      const forkedThreadId = forked.threadId.trim()
+      if (!forkedThreadId) return ''
+
+      const forkedCwd = forked.cwd.trim() || sourceThread?.cwd?.trim() || ''
+      insertOptimisticThread(forkedThreadId, forkedCwd, sourceThread?.preview || sourceThread?.title || 'Forked thread')
+      setPersistedMessagesForThread(forkedThreadId, forked.messages)
+      loadedMessagesByThreadId.value = {
+        ...loadedMessagesByThreadId.value,
+        [forkedThreadId]: true,
+      }
+      resumedThreadById.value = {
+        ...resumedThreadById.value,
+        [forkedThreadId]: true,
+      }
+      clearLivePlansForThread(forkedThreadId)
+      setLiveAgentMessagesForThread(forkedThreadId, [])
+      clearLiveReasoningForThread(forkedThreadId)
+      if (liveCommandsByThreadId.value[forkedThreadId]) {
+        liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, forkedThreadId)
+      }
+      setTurnSummaryForThread(forkedThreadId, null)
+      setTurnActivityForThread(forkedThreadId, null)
+      setTurnErrorForThread(forkedThreadId, null)
+      setThreadInProgress(forkedThreadId, false)
+
+      const turnsToRollback = lastTurnIndex - turnIndex
+      if (turnsToRollback > 0) {
+        const rolledBackMessages = await rollbackThread(forkedThreadId, turnsToRollback)
+        setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
+      }
+
+      setSelectedThreadId(forkedThreadId)
+      void loadThreads().catch(() => {})
+      return forkedThreadId
+    } catch (unknownError) {
+      error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+      return ''
+    }
+  }
+
   async function maybeReplyToPendingUserInputRequest(
     threadId: string,
     text: string,
@@ -3175,6 +3249,7 @@ export function useDesktopState() {
     setThreadScrollState,
     archiveThreadById,
     renameThreadById,
+    forkThreadFromTurn,
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,

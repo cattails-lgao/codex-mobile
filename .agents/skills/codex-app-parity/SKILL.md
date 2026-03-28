@@ -218,6 +218,18 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Thread Forking (2026-03-28)
+
+- The bundled app-server protocol in this repo already exposes stable `thread/fork` support in v2, so UI work should call the RPC directly instead of simulating a new thread locally.
+- `ThreadForkParams.path` is documented as an unstable rollout-path override, while `threadId` remains the preferred stable entry point for IDE clients.
+- When implementing “fork from this answer” in the UI, a safe repo-local strategy is:
+  - call `thread/fork` for the source thread
+  - then call `thread/rollback` on the new thread for trailing turns after the chosen answer
+- Verification can assert real branching, not just button presence:
+  - fork from a non-final response in Playwright
+  - confirm URL changes to a new thread id
+  - confirm the new thread has fewer turns than the source thread
+
 ## Findings: Ordered List Numbering (2026-03-27)
 
 - `ThreadConversation.vue` uses a custom Markdown block parser rather than a standard Markdown library.

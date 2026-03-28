@@ -400,6 +400,20 @@ function normalizeThreadIdFromPayload(payload: unknown): string {
   return ''
 }
 
+function normalizeThreadCwdFromPayload(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const record = payload as Record<string, unknown>
+
+  const thread = record.thread
+  if (thread && typeof thread === 'object') {
+    const cwd = (thread as Record<string, unknown>).cwd
+    if (typeof cwd === 'string' && cwd.length > 0) {
+      return cwd
+    }
+  }
+  return ''
+}
+
 export async function startThread(cwd?: string, model?: string): Promise<string> {
   try {
     const params: Record<string, unknown> = {}
@@ -417,6 +431,26 @@ export async function startThread(cwd?: string, model?: string): Promise<string>
     return threadId
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to start a new thread', 'thread/start')
+  }
+}
+
+export async function forkThread(threadId: string): Promise<{ threadId: string; cwd: string; messages: UiMessage[] }> {
+  try {
+    const payload = await callRpc<ThreadReadResponse & { thread?: { id?: string; cwd?: string } }>('thread/fork', {
+      threadId,
+      persistExtendedHistory: true,
+    })
+    const forkedThreadId = normalizeThreadIdFromPayload(payload)
+    if (!forkedThreadId) {
+      throw new Error('thread/fork did not return a thread id')
+    }
+    return {
+      threadId: forkedThreadId,
+      cwd: normalizeThreadCwdFromPayload(payload),
+      messages: normalizeThreadMessagesV2(payload),
+    }
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
   }
 }
 
