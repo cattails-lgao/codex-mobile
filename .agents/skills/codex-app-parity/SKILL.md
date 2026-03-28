@@ -229,6 +229,7 @@ If a finding conflicts with current official docs or current official code, trea
   - fork from a non-final response in Playwright
   - confirm URL changes to a new thread id
   - confirm the new thread has fewer turns than the source thread
+- Thread title rendering in this fork must prefer server-provided `name`/`title` over `preview`; otherwise renamed forked threads will still look identical to the source thread in the header and sidebar.
 
 ## Findings: Ordered List Numbering (2026-03-27)
 

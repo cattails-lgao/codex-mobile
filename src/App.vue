@@ -878,6 +878,9 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
   const forkedThreadId = await forkThreadFromTurn(payload.threadId, payload.turnIndex)
   if (!forkedThreadId) return
   await router.push({ name: 'thread', params: { threadId: forkedThreadId } })
+  if (selectedThreadId.value !== forkedThreadId) {
+    await selectThread(forkedThreadId)
+  }
   if (isMobile.value) setSidebarCollapsed(true)
 }
 

@@ -715,6 +715,11 @@ function toOptimisticThreadTitle(message: string): string {
   return firstLine.slice(0, 80)
 }
 
+function toForkedThreadTitle(title: string): string {
+  const normalizedTitle = title.trim() || 'Untitled thread'
+  return /^fork:\s+/iu.test(normalizedTitle) ? normalizedTitle : `Fork: ${normalizedTitle}`
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -2496,7 +2501,8 @@ export function useDesktopState() {
       if (!forkedThreadId) return ''
 
       const forkedCwd = forked.cwd.trim() || sourceThread?.cwd?.trim() || ''
-      insertOptimisticThread(forkedThreadId, forkedCwd, sourceThread?.preview || sourceThread?.title || 'Forked thread')
+      const forkedThreadTitle = toForkedThreadTitle(sourceThread?.title || sourceThread?.preview || 'Untitled thread')
+      insertOptimisticThread(forkedThreadId, forkedCwd, forkedThreadTitle)
       setPersistedMessagesForThread(forkedThreadId, forked.messages)
       loadedMessagesByThreadId.value = {
         ...loadedMessagesByThreadId.value,
@@ -2523,6 +2529,7 @@ export function useDesktopState() {
         setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
       }
 
+      await renameThreadById(forkedThreadId, forkedThreadTitle)
       setSelectedThreadId(forkedThreadId)
       void loadThreads().catch(() => {})
       return forkedThreadId
