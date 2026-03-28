@@ -367,6 +367,14 @@ async function ensureRollbackGitRepo(cwd: string): Promise<string> {
   }
   await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
   await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
+  try {
+    await runCommandCapture('git', ['--git-dir', gitDir, '--work-tree', cwd, 'rev-parse', '--verify', 'HEAD'])
+  } catch {
+    await runCommand(
+      'git',
+      ['--git-dir', gitDir, '--work-tree', cwd, 'commit', '--allow-empty', '-m', 'Initialize rollback history'],
+    )
+  }
   await ensureLocalCodexGitignoreHasRollbacks(cwd)
   return gitDir
 }
