@@ -334,18 +334,8 @@ function normalizeCommitMessage(value: unknown): string {
   return normalized.slice(0, 2000)
 }
 
-function toRollbackProjectPathSegments(cwd: string): string[] {
-  return cwd
-    .replace(/^[A-Za-z]:/u, '')
-    .split(/[\\/]+/u)
-    .filter(Boolean)
-    .map((segment) => segment.replace(/[^A-Za-z0-9._-]/gu, '_'))
-}
-
 function getRollbackGitDirForCwd(cwd: string): string {
-  const segments = toRollbackProjectPathSegments(cwd)
-  const projectPathSegments = segments.length > 0 ? segments : ['project']
-  return join(cwd, '.codex', 'rollbacks', ...projectPathSegments, '.git')
+  return join(cwd, '.codex', 'rollbacks', '.git')
 }
 
 async function ensureLocalCodexGitignoreHasRollbacks(cwd: string): Promise<void> {
