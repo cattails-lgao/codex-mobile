@@ -100,8 +100,8 @@
               @click="toggleCommandExpand(message)"
             >
               <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
-              <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
               <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
+              <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
             </button>
             <div
               class="cmd-output-wrap"
@@ -168,8 +168,8 @@
                         @click="toggleCommandExpand(cmd)"
                       >
                         <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
-                        <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
                         <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
+                        <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
                       </button>
                       <div
                         class="cmd-output-wrap"
@@ -1846,6 +1846,11 @@ onBeforeUnmount(() => {
 
 .cmd-row {
   @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
 }
 
 .cmd-row.cmd-expanded {
@@ -1861,7 +1866,9 @@ onBeforeUnmount(() => {
 }
 
 .cmd-label {
-  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
+  @apply text-xs font-mono text-zinc-700;
+  flex: 0 0 auto;
+  min-width: max-content;
 }
 
 .cmd-status {
