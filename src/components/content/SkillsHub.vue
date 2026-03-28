@@ -42,6 +42,7 @@
         <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubFirebaseLogin">Login with GitHub</button>
         <button v-if="!syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="startGithubLogin">Device Login</button>
         <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="logoutGithub" :disabled="isSyncActionInFlight">Logout GitHub</button>
+        <button class="skills-hub-sort" type="button" @click="startupSkillsSync" :disabled="isSyncActionInFlight">{{ isStartupSyncInFlight ? 'Syncing...' : 'Startup Sync' }}</button>
         <button class="skills-hub-sort" type="button" @click="pullSkillsSync" :disabled="isSyncActionInFlight">{{ isPullInFlight ? 'Pulling...' : 'Pull' }}</button>
         <button v-if="syncStatus.loggedIn" class="skills-hub-sort" type="button" @click="pushSkillsSync" :disabled="!syncStatus.configured || isSyncActionInFlight">{{ isPushInFlight ? 'Pushing...' : 'Push' }}</button>
       </div>
@@ -343,11 +344,13 @@ const {
   deviceLogin,
   isPullInFlight,
   isPushInFlight,
+  isStartupSyncInFlight,
   isSyncActionInFlight,
   loadSyncStatus,
   logoutGithub,
   pullSkillsSync,
   pushSkillsSync,
+  startupSkillsSync,
   startGithubFirebaseLogin,
   startGithubLogin,
   syncActionError,
