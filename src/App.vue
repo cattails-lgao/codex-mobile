@@ -61,7 +61,7 @@
             :search-matched-thread-ids="serverMatchedThreadIds"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
-            @browse-project-files="onBrowseProjectFiles"
+            @browse-thread-files="onBrowseThreadFiles"
             @rename-thread="onRenameThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread" />
@@ -657,11 +657,17 @@ function onStartNewThread(projectName: string): void {
   void router.push({ name: 'home' })
 }
 
-function onBrowseProjectFiles(projectName: string): void {
-  const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
-  const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
-  if (!projectCwd || typeof window === 'undefined') return
-  window.open(`/codex-local-browse${encodeURI(projectCwd)}`, '_blank', 'noopener,noreferrer')
+function onBrowseThreadFiles(threadId: string): void {
+  let targetCwd = ''
+  for (const group of projectGroups.value) {
+    const thread = group.threads.find((row) => row.id === threadId)
+    if (thread?.cwd?.trim()) {
+      targetCwd = thread.cwd.trim()
+      break
+    }
+  }
+  if (!targetCwd || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
 }
 
 function onStartNewThreadFromToolbar(): void {

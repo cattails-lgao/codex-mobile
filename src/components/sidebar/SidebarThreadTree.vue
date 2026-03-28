@@ -37,6 +37,9 @@
                   <IconTablerDots class="thread-icon" />
                 </button>
                 <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                  <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(thread.id)">
+                    Browse files
+                  </button>
                   <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                     Export chat
                   </button>
@@ -138,6 +141,9 @@
                 <IconTablerDots class="thread-icon" />
               </button>
               <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(thread.id)">
+                  Browse files
+                </button>
                 <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                   Export chat
                 </button>
@@ -208,9 +214,6 @@
 
                   <div v-if="isProjectMenuOpen(group.projectName)" class="project-menu-panel" @click.stop>
                     <template v-if="projectMenuMode === 'actions'">
-                      <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
-                        Browse files
-                      </button>
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group.projectName)">
                         Edit name
                       </button>
@@ -287,6 +290,9 @@
                       <IconTablerDots class="thread-icon" />
                     </button>
                     <div v-if="isThreadMenuOpen(thread.id)" class="thread-menu-panel" @click.stop>
+                      <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(thread.id)">
+                        Browse files
+                      </button>
                       <button class="thread-menu-item" type="button" @click="onExportThread(thread.id)">
                         Export chat
                       </button>
@@ -387,7 +393,7 @@ const emit = defineEmits<{
   select: [threadId: string]
   archive: [threadId: string]
   'start-new-thread': [projectName: string]
-  'browse-project-files': [projectName: string]
+  'browse-thread-files': [threadId: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
@@ -670,6 +676,11 @@ function onStartNewThread(projectName: string): void {
   emit('start-new-thread', projectName)
 }
 
+function onBrowseThreadFiles(threadId: string): void {
+  emit('browse-thread-files', threadId)
+  closeThreadMenu()
+}
+
 function onThreadRowLeave(threadId: string): void {
   if (openThreadMenuId.value === threadId) {
     closeThreadMenu()
@@ -787,11 +798,6 @@ function onProjectNameInput(projectName: string): void {
 
 function onRemoveProject(projectName: string): void {
   emit('remove-project', projectName)
-  closeProjectMenu()
-}
-
-function onBrowseProjectFiles(projectName: string): void {
-  emit('browse-project-files', projectName)
   closeProjectMenu()
 }
 
