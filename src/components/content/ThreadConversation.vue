@@ -2456,6 +2456,10 @@ function jumpToLatest(): void {
   scheduleBottomLock(4)
 }
 
+defineExpose({
+  jumpToLatest,
+})
+
 function bindPendingImageHandlers(): void {
   if (!shouldLockToBottom()) return
   const container = conversationListRef.value

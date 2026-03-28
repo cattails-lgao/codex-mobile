@@ -218,6 +218,13 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Mobile Composer Submit Stabilization (2026-03-28)
+
+- In this workspace, mobile web send UX is more reliable when submit does two things together:
+  - blur the composer textarea immediately so the virtual keyboard dismisses
+  - trigger the conversation `jumpToLatest()` immediately and again over the next animation frames so the viewport stays pinned after the keyboard resize
+- Relying on conversation auto-follow alone is not enough for the mobile keyboard-close transition because the viewport height change can land after the first bottom-lock pass.
+
 ## Findings: Thread Forking (2026-03-28)
 
 - The bundled app-server protocol in this repo already exposes stable `thread/fork` support in v2, so UI work should call the RPC directly instead of simulating a new thread locally.

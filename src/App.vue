@@ -234,7 +234,7 @@
           <template v-else>
             <div class="content-grid">
               <div class="content-thread">
-                <ThreadConversation :messages="filteredMessages" :is-loading="isLoadingMessages"
+                <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                   :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
@@ -363,6 +363,7 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
@@ -954,11 +955,30 @@ async function syncAfterMobileResume(): Promise<void> {
 
 function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
   const text = payload.text
+  scheduleMobileConversationJumpToLatest()
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
     return
   }
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments)
+}
+
+function scheduleMobileConversationJumpToLatest(): void {
+  if (!isMobile.value || isHomeRoute.value) return
+
+  const jumpToLatest = () => {
+    threadConversationRef.value?.jumpToLatest()
+  }
+
+  jumpToLatest()
+  void nextTick(() => {
+    jumpToLatest()
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      jumpToLatest()
+      window.requestAnimationFrame(jumpToLatest)
+    })
+  })
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
@@ -1540,6 +1560,7 @@ async function submitFirstMessageForNewThread(
     const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
+    scheduleMobileConversationJumpToLatest()
   } catch {
     // Error is already reflected in state.
   }

@@ -322,6 +322,7 @@ import type {
   UiRateLimitWindow,
 } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
+import { useMobile } from '../../composables/useMobile'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
@@ -425,6 +426,7 @@ const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const { isMobile } = useMobile()
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
 const mentionStartIndex = ref<number | null>(null)
@@ -435,7 +437,6 @@ const fileMentionHighlightedIndex = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
-const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
@@ -659,7 +660,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
-  if (isAndroid) {
+  if (isMobile.value) {
     inputRef.value?.blur()
     return
   }
