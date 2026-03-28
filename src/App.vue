@@ -90,8 +90,8 @@
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
-              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.worktreeRollback" @click="toggleWorktreeGitAutomation">
-                <span class="sidebar-settings-label">Worktree rollback</span>
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.rollbackCommits" @click="toggleWorktreeGitAutomation">
+                <span class="sidebar-settings-label">Rollback commits</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
               </button>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -278,7 +278,7 @@ const SETTINGS_HELP = {
   appearance: 'Switch between system theme, light mode, and dark mode.',
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
-  worktreeRollback: 'When enabled, each message creates a Git commit. On rollback, it runs Git reset to the commit for that message.',
+  rollbackCommits: 'When enabled, each message creates a rollback Git commit. On rollback, it resets to the commit before that message.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
 const WHISPER_LANGUAGES: Record<string, string> = {

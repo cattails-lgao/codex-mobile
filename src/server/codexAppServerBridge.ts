@@ -7,7 +7,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
@@ -334,15 +334,76 @@ function normalizeCommitMessage(value: unknown): string {
   return normalized.slice(0, 2000)
 }
 
-async function hasGitWorkingTreeChanges(cwd: string): Promise<boolean> {
-  const status = await runCommandWithOutput('git', ['status', '--porcelain'], { cwd })
+function toRollbackProjectPathSegments(cwd: string): string[] {
+  return cwd
+    .replace(/^[A-Za-z]:/u, '')
+    .split(/[\\/]+/u)
+    .filter(Boolean)
+    .map((segment) => segment.replace(/[^A-Za-z0-9._-]/gu, '_'))
+}
+
+function getRollbackGitDirForCwd(cwd: string): string {
+  const segments = toRollbackProjectPathSegments(cwd)
+  return join(getCodexHomeDir(), 'rollbacks', ...segments, '.git')
+}
+
+async function ensureCodexGitignoreHasRollbacks(): Promise<void> {
+  const codexHome = getCodexHomeDir()
+  const gitignorePath = join(codexHome, '.gitignore')
+  await mkdir(codexHome, { recursive: true })
+  let current = ''
+  try {
+    current = await readFile(gitignorePath, 'utf8')
+  } catch {
+    current = ''
+  }
+  const rows = current.split(/\r?\n/).map((line) => line.trim())
+  if (rows.includes('rollbacks/')) return
+  const prefix = current.length > 0 && !current.endsWith('\n') ? `${current}\n` : current
+  await writeFile(gitignorePath, `${prefix}rollbacks/\n`, 'utf8')
+}
+
+async function ensureRollbackGitRepo(cwd: string): Promise<string> {
+  const gitDir = getRollbackGitDirForCwd(cwd)
+  try {
+    const headInfo = await stat(join(gitDir, 'HEAD'))
+    if (!headInfo.isFile()) {
+      throw new Error('Invalid rollback git repository')
+    }
+  } catch {
+    await mkdir(dirname(gitDir), { recursive: true })
+    await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, 'init'])
+  }
+  await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
+  await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
+  await ensureCodexGitignoreHasRollbacks()
+  return gitDir
+}
+
+async function runRollbackGit(cwd: string, args: string[]): Promise<void> {
+  const gitDir = await ensureRollbackGitRepo(cwd)
+  await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, ...args])
+}
+
+async function runRollbackGitCapture(cwd: string, args: string[]): Promise<string> {
+  const gitDir = await ensureRollbackGitRepo(cwd)
+  return await runCommandCapture('git', ['--git-dir', gitDir, '--work-tree', cwd, ...args])
+}
+
+async function runRollbackGitWithOutput(cwd: string, args: string[]): Promise<string> {
+  const gitDir = await ensureRollbackGitRepo(cwd)
+  return await runCommandWithOutput('git', ['--git-dir', gitDir, '--work-tree', cwd, ...args])
+}
+
+async function hasRollbackGitWorkingTreeChanges(cwd: string): Promise<boolean> {
+  const status = await runRollbackGitWithOutput(cwd, ['status', '--porcelain'])
   return status.trim().length > 0
 }
 
-async function findCommitByExactMessage(cwd: string, message: string): Promise<string> {
+async function findRollbackCommitByExactMessage(cwd: string, message: string): Promise<string> {
   const normalizedTarget = normalizeCommitMessage(message)
   if (!normalizedTarget) return ''
-  const raw = await runCommandWithOutput('git', ['log', '--format=%H%x1f%B%x1e'], { cwd })
+  const raw = await runRollbackGitWithOutput(cwd, ['log', '--format=%H%x1f%B%x1e'])
   const entries = raw.split('\x1e')
   for (const entry of entries) {
     if (!entry.trim()) continue
@@ -1500,24 +1561,24 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          await runCommandCapture('git', ['rev-parse', '--is-inside-work-tree'], { cwd })
-          const beforeStatus = await runCommandWithOutput('git', ['status', '--porcelain'], { cwd })
+          await ensureRollbackGitRepo(cwd)
+          const beforeStatus = await runRollbackGitWithOutput(cwd, ['status', '--porcelain'])
           if (!beforeStatus.trim()) {
             setJson(res, 200, { data: { committed: false } })
             return
           }
 
-          await runCommand('git', ['add', '-A'], { cwd })
-          const stagedStatus = await runCommandWithOutput('git', ['diff', '--cached', '--name-only'], { cwd })
+          await runRollbackGit(cwd, ['add', '-A'])
+          const stagedStatus = await runRollbackGitWithOutput(cwd, ['diff', '--cached', '--name-only'])
           if (!stagedStatus.trim()) {
             setJson(res, 200, { data: { committed: false } })
             return
           }
 
-          await runCommand('git', ['commit', '-m', commitMessage], { cwd })
+          await runRollbackGit(cwd, ['commit', '-m', commitMessage])
           setJson(res, 200, { data: { committed: true } })
         } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to auto-commit worktree changes') })
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to auto-commit rollback changes') })
         }
         return
       }
@@ -1548,31 +1609,31 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          await runCommandCapture('git', ['rev-parse', '--is-inside-work-tree'], { cwd })
-          const commitSha = await findCommitByExactMessage(cwd, commitMessage)
+          await ensureRollbackGitRepo(cwd)
+          const commitSha = await findRollbackCommitByExactMessage(cwd, commitMessage)
           if (!commitSha) {
             setJson(res, 404, { error: 'No matching commit found for this user message' })
             return
           }
           let resetTargetSha = ''
           try {
-            resetTargetSha = await runCommandCapture('git', ['rev-parse', `${commitSha}^`], { cwd })
+            resetTargetSha = await runRollbackGitCapture(cwd, ['rev-parse', `${commitSha}^`])
           } catch {
             setJson(res, 409, { error: 'Cannot rollback: matched commit has no parent commit' })
             return
           }
 
           let stashed = false
-          if (await hasGitWorkingTreeChanges(cwd)) {
+          if (await hasRollbackGitWorkingTreeChanges(cwd)) {
             const stashMessage = `codex-auto-stash-before-rollback-${Date.now()}`
-            await runCommand('git', ['stash', 'push', '-u', '-m', stashMessage], { cwd })
+            await runRollbackGit(cwd, ['stash', 'push', '-u', '-m', stashMessage])
             stashed = true
           }
 
-          await runCommand('git', ['reset', '--hard', resetTargetSha], { cwd })
+          await runRollbackGit(cwd, ['reset', '--hard', resetTargetSha])
           setJson(res, 200, { data: { reset: true, commitSha, resetTargetSha, stashed } })
         } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to rollback worktree to user message commit') })
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to rollback project to user message commit') })
         }
         return
       }

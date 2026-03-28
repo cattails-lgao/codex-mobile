@@ -399,7 +399,7 @@ export async function autoCommitWorktreeChanges(cwd: string, message: string): P
   })
   const payload = (await response.json()) as { data?: WorktreeAutoCommitResult; error?: string }
   if (!response.ok || !payload.data) {
-    throw new Error(payload.error || 'Failed to auto-commit worktree changes')
+    throw new Error(payload.error || 'Failed to auto-commit rollback changes')
   }
   return payload.data
 }
@@ -412,7 +412,7 @@ export async function rollbackWorktreeToMessage(cwd: string, message: string): P
   })
   const payload = (await response.json()) as { data?: WorktreeRollbackResult; error?: string }
   if (!response.ok || !payload.data) {
-    throw new Error(payload.error || 'Failed to rollback worktree to message commit')
+    throw new Error(payload.error || 'Failed to rollback project to message commit')
   }
   return payload.data
 }
