@@ -344,8 +344,8 @@ function toRollbackProjectPathSegments(cwd: string): string[] {
 
 function getRollbackGitDirForCwd(cwd: string): string {
   const segments = toRollbackProjectPathSegments(cwd)
-  const projectPathSegment = segments.length > 0 ? segments.join('__') : 'project'
-  return join(cwd, '.codex', 'rollbacks', projectPathSegment, '.git')
+  const projectPathSegments = segments.length > 0 ? segments : ['project']
+  return join(cwd, '.codex', 'rollbacks', ...projectPathSegments, '.git')
 }
 
 async function ensureLocalCodexGitignoreHasRollbacks(cwd: string): Promise<void> {
