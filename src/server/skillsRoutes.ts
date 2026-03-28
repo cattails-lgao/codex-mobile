@@ -309,6 +309,11 @@ type SkillsSyncState = {
   repoOwner?: string
   repoName?: string
   installedOwners?: Record<string, string>
+  lastPullCommitSha?: string
+  lastPushCommitSha?: string
+  lastSyncAttemptCount?: number
+  lastSyncError?: string
+  lastSyncAtIso?: string
 }
 
 type GithubDeviceCodeResponse = {
@@ -327,6 +332,8 @@ const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
 const SYNC_UPSTREAM_SKILLS_OWNER = 'OpenClawAndroid'
 const SYNC_UPSTREAM_SKILLS_REPO = 'skills'
 const PRIVATE_SYNC_BRANCH = 'main'
+const PUBLIC_UPSTREAM_BRANCH_ANDROID = 'android'
+const PUBLIC_UPSTREAM_BRANCH_DEFAULT = 'main'
 const HUB_SKILLS_OWNER = 'openclaw'
 const HUB_SKILLS_REPO = 'skills'
 let startupSkillsSyncInitialized = false
@@ -475,7 +482,7 @@ function isAndroidLikeRuntime(): boolean {
 }
 
 function getPreferredPublicUpstreamBranch(): string {
-  return isAndroidLikeRuntime() ? 'android' : 'main'
+  return isAndroidLikeRuntime() ? PUBLIC_UPSTREAM_BRANCH_ANDROID : PUBLIC_UPSTREAM_BRANCH_DEFAULT
 }
 
 function isUpstreamSkillsRepo(repoOwner: string, repoName: string): boolean {
@@ -760,24 +767,49 @@ async function syncInstalledSkillsFolderToRepo(
   async function pushWithNonFastForwardRetry(repoDir: string, branch: string): Promise<void> {
     const maxAttempts = 3
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await runCommand('git', ['fetch', 'origin'], { cwd: repoDir })
+      let hasLatestRemote = false
+      try {
+        await runCommand('git', ['merge-base', '--is-ancestor', `origin/${branch}`, 'HEAD'], { cwd: repoDir })
+        hasLatestRemote = true
+      } catch {
+        hasLatestRemote = false
+      }
+      if (!hasLatestRemote) {
+        try {
+          await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: repoDir })
+        } catch {
+          await resolveMergeConflictsByNewerCommit(repoDir, branch)
+        }
+        await runCommand('git', ['add', '.'], { cwd: repoDir })
+        const statusAfterReconcile = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+        if (statusAfterReconcile) {
+          await runCommand('git', ['commit', '-m', 'Reconcile skills sync before push retry'], { cwd: repoDir })
+        }
+      }
       try {
         await runCommand('git', ['push', 'origin', `HEAD:${branch}`], { cwd: repoDir })
+        const state = await readSkillsSyncState()
+        const pushedHead = await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir })
+        await writeSkillsSyncState({
+          ...state,
+          lastPushCommitSha: pushedHead.trim(),
+          lastSyncAttemptCount: attempt,
+          lastSyncError: '',
+          lastSyncAtIso: new Date().toISOString(),
+        })
         return
       } catch (error) {
         if (!isNonFastForwardPushError(error) || attempt >= maxAttempts) {
+          const state = await readSkillsSyncState()
+          await writeSkillsSyncState({
+            ...state,
+            lastSyncAttemptCount: attempt,
+            lastSyncError: getErrorMessage(error, 'push failed'),
+            lastSyncAtIso: new Date().toISOString(),
+          })
           throw error
         }
-      }
-      await runCommand('git', ['fetch', 'origin'], { cwd: repoDir })
-      try {
-        await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: repoDir })
-      } catch {
-        await resolveMergeConflictsByNewerCommit(repoDir, branch)
-      }
-      await runCommand('git', ['add', '.'], { cwd: repoDir })
-      const statusAfterReconcile = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
-      if (statusAfterReconcile) {
-        await runCommand('git', ['commit', '-m', 'Reconcile skills sync before push retry'], { cwd: repoDir })
       }
     }
     throw new Error('Failed to push after non-fast-forward retries')
@@ -1052,6 +1084,13 @@ export async function handleSkillsRoutes(
         repoOwner: state.repoOwner ?? '',
         repoName: state.repoName ?? '',
         configured: Boolean(state.githubToken && state.repoOwner && state.repoName),
+        telemetry: {
+          lastPullCommitSha: state.lastPullCommitSha ?? '',
+          lastPushCommitSha: state.lastPushCommitSha ?? '',
+          lastSyncAttemptCount: state.lastSyncAttemptCount ?? 0,
+          lastSyncError: state.lastSyncError ?? '',
+          lastSyncAtIso: state.lastSyncAtIso ?? '',
+        },
         startup: {
           inProgress: startupSyncStatus.inProgress,
           mode: startupSyncStatus.mode,
@@ -1182,30 +1221,20 @@ export async function handleSkillsRoutes(
       }
       const localDir = await detectUserSkillsDir(appServer)
       await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
-      const installerScript = resolveSkillInstallerScriptPath(getCodexHomeDir())
-      if (!installerScript) {
-        throw new Error('Skill installer script not found')
-      }
-      const pythonCommand = resolvePythonCommand()
-      if (!pythonCommand) {
-        throw new Error('Python 3 is required to install skills')
-      }
       const localSkills = await scanInstalledSkillsFromDisk()
+      const missingAfterPull: string[] = []
       for (const skill of remote) {
         const owner = skill.owner || uniqueOwnerByName.get(skill.name) || ''
         if (!owner) continue
         if (!localSkills.has(skill.name)) {
-          await runCommand(pythonCommand.command, [
-            ...pythonCommand.args,
-            installerScript,
-            '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
-            '--path', `skills/${owner}/${skill.name}`,
-            '--dest', localDir,
-            '--method', 'git',
-          ])
+          missingAfterPull.push(`${owner}/${skill.name}`)
+          continue
         }
         const skillPath = join(localDir, skill.name)
         await appServer.rpc('skills/config/write', { path: skillPath, enabled: skill.enabled })
+      }
+      if (missingAfterPull.length > 0) {
+        throw new Error(`Missing skill folders after pull: ${missingAfterPull.join(', ')}`)
       }
       const remoteNames = new Set(remote.map((row) => row.name))
       for (const [name, localInfo] of localSkills.entries()) {
@@ -1218,7 +1247,15 @@ export async function handleSkillsRoutes(
         const owner = item.owner || uniqueOwnerByName.get(item.name) || ''
         if (owner) nextOwners[item.name] = owner
       }
-      await writeSkillsSyncState({ ...state, installedOwners: nextOwners })
+      const pulledHead = await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: getSkillsInstallDir() }).catch(() => '')
+      await writeSkillsSyncState({
+        ...state,
+        installedOwners: nextOwners,
+        lastPullCommitSha: pulledHead.trim(),
+        lastSyncAttemptCount: 1,
+        lastSyncError: '',
+        lastSyncAtIso: new Date().toISOString(),
+      })
       try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
       setJson(res, 200, { ok: true, data: { synced: remote.length } })
     } catch (error) {
