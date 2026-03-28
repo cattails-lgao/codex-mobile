@@ -16,6 +16,47 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
+current_branch=$(git branch --show-current)
+if [[ -z "$current_branch" ]]; then
+  echo "publish.sh must be run on a branch, not detached HEAD" >&2
+  exit 1
+fi
+
+tracking_ref=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+if [[ -z "$tracking_ref" ]]; then
+  echo "current branch $current_branch has no upstream tracking branch" >&2
+  exit 1
+fi
+
+tracking_remote=${tracking_ref%%/*}
+git fetch --prune "$tracking_remote"
+
+has_local_changes=0
+if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  has_local_changes=1
+fi
+
+local_commit=$(git rev-parse @)
+remote_commit=$(git rev-parse "$tracking_ref")
+base_commit=$(git merge-base @ "$tracking_ref")
+
+if [[ "$local_commit" == "$base_commit" && "$local_commit" != "$remote_commit" ]]; then
+  if [[ "$has_local_changes" -eq 1 ]]; then
+    echo "branch is behind $tracking_ref; sync remote changes before publishing" >&2
+    exit 1
+  fi
+
+  git pull --ff-only "$tracking_remote" "$current_branch"
+elif [[ "$remote_commit" != "$base_commit" ]]; then
+  echo "branch has diverged from $tracking_ref; rebase or merge remote changes before publishing" >&2
+  exit 1
+fi
+
+if [[ -z "$(git status --short)" ]]; then
+  echo "no uncommitted changes to publish" >&2
+  exit 1
+fi
+
 package_name=$(node -p "require('./package.json').name")
 current_version=$(node -p "require('./package.json').version")
 published_version=$(npm view "$package_name" dist-tags.latest 2>/dev/null || true)
