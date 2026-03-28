@@ -267,3 +267,14 @@ export function readThreadInProgressFromResponse(payload: ThreadReadResponse): b
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   return isTurnInProgress(turns.at(-1))
 }
+
+export function readActiveTurnIdFromResponse(payload: ThreadReadResponse): string {
+  const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index]
+    if (isTurnInProgress(turn) && typeof turn.id === 'string' && turn.id.trim().length > 0) {
+      return turn.id.trim()
+    }
+  }
+  return ''
+}

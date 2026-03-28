@@ -2216,7 +2216,7 @@ export function useDesktopState() {
         }
       }
 
-      const { messages: nextMessages, inProgress } = await getThreadDetail(threadId)
+      const { messages: nextMessages, inProgress, activeTurnId } = await getThreadDetail(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
       const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
         preserveMissing: options.silent === true,
@@ -2241,6 +2241,14 @@ export function useDesktopState() {
         }
       }
       setThreadInProgress(threadId, inProgress)
+      if (activeTurnId) {
+        activeTurnIdByThreadId.value = {
+          ...activeTurnIdByThreadId.value,
+          [threadId]: activeTurnId,
+        }
+      } else if (activeTurnIdByThreadId.value[threadId]) {
+        activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, threadId)
+      }
       markThreadAsRead(threadId)
     } finally {
       if (shouldShowLoading) {
@@ -2509,8 +2517,9 @@ export function useDesktopState() {
         await resumeThread(threadId)
       }
 
+      let startedTurnId = ''
       try {
-        await startThreadTurn(
+        startedTurnId = await startThreadTurn(
           threadId,
           nextText,
           imageUrls,
@@ -2530,7 +2539,7 @@ export function useDesktopState() {
             effort: reasoningEffort,
             fallbackRetried: true,
           })
-          await startThreadTurn(
+          startedTurnId = await startThreadTurn(
             threadId,
             nextText,
             imageUrls,
@@ -2541,6 +2550,13 @@ export function useDesktopState() {
           )
         } else {
           throw unknownError
+        }
+      }
+
+      if (startedTurnId) {
+        activeTurnIdByThreadId.value = {
+          ...activeTurnIdByThreadId.value,
+          [threadId]: startedTurnId,
         }
       }
 
@@ -2591,7 +2607,20 @@ export function useDesktopState() {
     const threadId = selectedThreadId.value
     if (!threadId) return
     if (inProgressById.value[threadId] !== true) return
-    const turnId = activeTurnIdByThreadId.value[threadId]
+    let turnId = activeTurnIdByThreadId.value[threadId]
+    if (!turnId) {
+      const { activeTurnId } = await getThreadDetail(threadId)
+      turnId = activeTurnId
+      if (turnId) {
+        activeTurnIdByThreadId.value = {
+          ...activeTurnIdByThreadId.value,
+          [threadId]: turnId,
+        }
+      }
+    }
+    if (!turnId) {
+      throw new Error('Could not determine active turn id for interrupt')
+    }
 
     isInterruptingTurn.value = true
     error.value = ''

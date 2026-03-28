@@ -74,8 +74,9 @@
           class="skills-hub-search"
           type="text"
           placeholder="Search skills... (e.g. flight, docker, react)"
-          @input="onSearchInput"
+          @keyup.enter.prevent="onSearchSubmit"
         />
+        <button class="skills-hub-search-btn" type="button" @click="onSearchSubmit">Search</button>
         <span v-if="totalCount > 0" class="skills-hub-count">{{ totalCount }} skills</span>
       </div>
       <button class="skills-hub-sort" type="button" @click="toggleSort">
@@ -95,7 +96,7 @@
             @select="(skill) => openDetail(skill as HubSkill)"
           />
         </div>
-        <div v-else-if="query.trim()" class="skills-hub-empty">No skills found for "{{ query }}"</div>
+        <div v-else-if="activeQuery.trim()" class="skills-hub-empty">No skills found for "{{ activeQuery }}"</div>
       </template>
     </div>
 
@@ -126,6 +127,7 @@ type SkillsHubPayload = { data: HubSkill[]; installed?: HubSkill[]; total: numbe
 
 const searchRef = ref<HTMLInputElement | null>(null)
 const query = ref('')
+const activeQuery = ref('')
 const sortMode = ref<'date' | 'name'>('date')
 const browseSkills = ref<HubSkill[]>([])
 const installedSkills = ref<HubSkill[]>([])
@@ -139,7 +141,6 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const actionSkillKey = ref('')
 const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const emit = defineEmits<{
@@ -180,7 +181,7 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
 
 function toggleSort(): void {
   sortMode.value = sortMode.value === 'date' ? 'name' : 'date'
-  void fetchSkills(query.value)
+  void fetchSkills(activeQuery.value)
 }
 
 function cacheKey(q: string): string {
@@ -238,7 +239,9 @@ function applySkillsPayload(payload: SkillsHubPayload): void {
 }
 
 async function fetchSkills(q: string): Promise<void> {
-  const key = cacheKey(q)
+  const normalizedQuery = q.trim()
+  activeQuery.value = normalizedQuery
+  const key = cacheKey(normalizedQuery)
   const cached = readCache(key)
   if (cached) {
     applySkillsPayload(cached)
@@ -247,7 +250,7 @@ async function fetchSkills(q: string): Promise<void> {
   error.value = ''
   try {
     const params = new URLSearchParams()
-    if (q.trim()) params.set('q', q.trim())
+    if (normalizedQuery) params.set('q', normalizedQuery)
     params.set('limit', '100')
     params.set('sort', sortMode.value)
     const resp = await fetch(`/codex-api/skills-hub?${params}`)
@@ -262,9 +265,8 @@ async function fetchSkills(q: string): Promise<void> {
   }
 }
 
-function onSearchInput(): void {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => fetchSkills(query.value), 300)
+function onSearchSubmit(): void {
+  void fetchSkills(query.value)
 }
 
 function openDetail(skill: HubSkill): void {
@@ -334,7 +336,7 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
     if (!resp.ok) throw new Error('Failed to update skill')
     await fetch('/codex-api/skills-sync/push', { method: 'POST' })
     showToast(`${skill.displayName || skill.name} skill ${enabled ? 'enabled' : 'disabled'}`)
-    await fetchSkills(query.value)
+    await fetchSkills(activeQuery.value)
   } catch (e) {
     showToast(e instanceof Error ? e.message : 'Failed to update skill', 'error')
   }
@@ -359,7 +361,7 @@ const {
 } = useGithubSkillsSync({
   showToast,
   onPulled: async () => {
-    await fetchSkills(query.value)
+    await fetchSkills(activeQuery.value)
     emit('skills-changed')
   },
 })
@@ -403,6 +405,10 @@ onMounted(() => {
 
 .skills-hub-search {
   @apply flex-1 min-w-0 bg-transparent text-sm text-zinc-800 placeholder-zinc-400 outline-none border-none p-0;
+}
+
+.skills-hub-search-btn {
+  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer;
 }
 
 .skills-hub-count {
