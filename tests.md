@@ -93,11 +93,13 @@ This file tracks manual regression and feature verification steps.
 2. Confirm the browse results do not refresh immediately while typing.
 3. Click the `Search` button.
 4. Change the query text to another value and press Enter in the input.
+5. Clear the query, then click `Search` to reload the default browse list.
 
 #### Expected Results
 - Typing alone does not trigger remote Skills Hub search requests.
 - Results refresh only after explicit submit via the `Search` button or Enter key.
 - Empty-state text (if shown) references the last submitted query.
+- Submitting an empty query returns the default skills listing.
 
 #### Rollback/Cleanup
 - Clear the search input and run a blank search to return to default listing.
