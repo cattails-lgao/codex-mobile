@@ -25,6 +25,10 @@ type AppServerLike = {
   onNotification: (listener: (value: { method: string; params: unknown }) => void) => () => void
 }
 
+type TelegramThreadBridgeOptions = {
+  onChatSeen?: (chatId: number) => void
+}
+
 export type TelegramBridgeStatus = {
   configured: boolean
   active: boolean
@@ -69,11 +73,13 @@ export class TelegramThreadBridge {
   private pollingTask: Promise<void> | null = null
   private nextUpdateOffset = 0
   private lastError = ''
+  private readonly onChatSeen?: (chatId: number) => void
 
-  constructor(appServer: AppServerLike) {
+  constructor(appServer: AppServerLike, options: TelegramThreadBridgeOptions = {}) {
     this.appServer = appServer
     this.token = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? ''
     this.defaultCwd = process.env.TELEGRAM_DEFAULT_CWD?.trim() ?? process.cwd()
+    this.onChatSeen = options.onChatSeen
   }
 
   start(): void {
@@ -164,8 +170,14 @@ export class TelegramThreadBridge {
       throw new Error('Telegram bot token is not configured')
     }
     this.bindChatToThread(chatId, normalizedThreadId)
+    this.markChatSeen(chatId)
     this.start()
     void this.sendOnlineMessage(chatId).catch(() => {})
+  }
+
+  private markChatSeen(chatId: number): void {
+    if (!Number.isFinite(chatId)) return
+    this.onChatSeen?.(Math.trunc(chatId))
   }
 
   private async sendTelegramMessage(
@@ -207,6 +219,7 @@ export class TelegramThreadBridge {
     const chatId = message?.chat?.id
     const text = message?.text?.trim()
     if (typeof chatId !== 'number' || !text) return
+    this.markChatSeen(chatId)
 
     if (text === '/start') {
       await this.sendThreadPicker(chatId)
@@ -243,6 +256,9 @@ export class TelegramThreadBridge {
     const callbackId = typeof callbackQuery.id === 'string' ? callbackQuery.id : ''
     const data = typeof callbackQuery.data === 'string' ? callbackQuery.data : ''
     const chatId = callbackQuery.message?.chat?.id
+    if (typeof chatId === 'number') {
+      this.markChatSeen(chatId)
+    }
     if (!callbackId) return
 
     if (!data.startsWith('thread:') || typeof chatId !== 'number') {

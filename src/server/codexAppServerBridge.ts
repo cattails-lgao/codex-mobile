@@ -547,6 +547,7 @@ let sessionIndexThreadTitleCacheState: SessionIndexThreadTitleCacheState = {
 
 type TelegramBridgeConfigState = {
   botToken: string
+  chatIds: number[]
 }
 
 function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
@@ -772,9 +773,13 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
 
 function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
   const record = asRecord(value)
-  if (!record) return { botToken: '' }
+  if (!record) return { botToken: '', chatIds: [] }
   const botToken = typeof record.botToken === 'string' ? record.botToken.trim() : ''
-  return { botToken }
+  const rawChatIds = Array.isArray(record.chatIds) ? record.chatIds : []
+  const chatIds = Array.from(new Set(rawChatIds
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .map((value) => Math.trunc(value)))).slice(0, 50)
+  return { botToken, chatIds }
 }
 
 async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
@@ -784,15 +789,35 @@ async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
     const payload = asRecord(JSON.parse(raw)) ?? {}
     return normalizeTelegramBridgeConfig(payload)
   } catch {
-    return { botToken: '' }
+    return { botToken: '', chatIds: [] }
   }
 }
 
 async function writeTelegramBridgeConfig(nextState: TelegramBridgeConfigState): Promise<void> {
+  const normalized = normalizeTelegramBridgeConfig(nextState)
   const telegramConfigPath = getTelegramBridgeConfigPath()
   await writeFile(telegramConfigPath, JSON.stringify({
-    botToken: nextState.botToken.trim(),
+    botToken: normalized.botToken,
+    chatIds: normalized.chatIds,
   }), 'utf8')
+}
+
+let telegramBridgeConfigMutation: Promise<void> = Promise.resolve()
+
+function rememberTelegramChatId(chatId: number): Promise<void> {
+  const normalizedChatId = Math.trunc(chatId)
+  if (!Number.isFinite(normalizedChatId)) return Promise.resolve()
+
+  telegramBridgeConfigMutation = telegramBridgeConfigMutation.then(async () => {
+    const current = await readTelegramBridgeConfig()
+    if (current.chatIds.includes(normalizedChatId)) return
+    const next = {
+      ...current,
+      chatIds: [normalizedChatId, ...current.chatIds].slice(0, 50),
+    }
+    await writeTelegramBridgeConfig(next)
+  })
+  return telegramBridgeConfigMutation
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -1409,7 +1434,11 @@ function getSharedBridgeState(): SharedBridgeState {
   const created: SharedBridgeState = {
     appServer,
     methodCatalog: new MethodCatalog(),
-    telegramBridge: new TelegramThreadBridge(appServer),
+    telegramBridge: new TelegramThreadBridge(appServer, {
+      onChatSeen: (chatId) => {
+        void rememberTelegramChatId(chatId).catch(() => {})
+      },
+    }),
   }
   globalScope[SHARED_BRIDGE_KEY] = created
   return created
@@ -1976,7 +2005,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         telegramBridge.configureToken(botToken)
         telegramBridge.start()
-        await writeTelegramBridgeConfig({ botToken })
+        const existingConfig = await readTelegramBridgeConfig()
+        await writeTelegramBridgeConfig({
+          botToken,
+          chatIds: existingConfig.chatIds,
+        })
         setJson(res, 200, { ok: true })
         return
       }
