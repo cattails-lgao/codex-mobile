@@ -646,9 +646,23 @@ function onArchiveThread(threadId: string): void {
   void archiveThreadById(threadId)
 }
 
+function isWorktreePath(cwdRaw: string): boolean {
+  const cwd = cwdRaw.trim().replace(/\\/gu, '/')
+  if (!cwd) return false
+  return cwd.includes('/.codex/worktrees/') || cwd.includes('/.git/worktrees/')
+}
+
+function resolvePreferredLocalCwd(projectName: string, fallbackCwd = ''): string {
+  const group = projectGroups.value.find((row) => row.projectName === projectName)
+  if (!group) return fallbackCwd.trim()
+  const nonWorktreeThread = group.threads.find((thread) => !isWorktreePath(thread.cwd))
+  const candidate = nonWorktreeThread?.cwd?.trim() ?? group.threads[0]?.cwd?.trim() ?? ''
+  return candidate || fallbackCwd.trim()
+}
+
 function onStartNewThread(projectName: string): void {
   const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
-  const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
+  const projectCwd = resolvePreferredLocalCwd(projectName, projectGroup?.threads[0]?.cwd?.trim() ?? '')
   if (projectCwd) {
     newThreadCwd.value = projectCwd
   }
@@ -671,7 +685,10 @@ function onBrowseThreadFiles(threadId: string): void {
 }
 
 function onStartNewThreadFromToolbar(): void {
-  const cwd = selectedThread.value?.cwd?.trim() ?? ''
+  const selected = selectedThread.value
+  const cwd = selected
+    ? resolvePreferredLocalCwd(selected.projectName, selected.cwd?.trim() ?? '')
+    : ''
   if (cwd) {
     newThreadCwd.value = cwd
   }
@@ -1281,6 +1298,14 @@ watch(
   (runtime) => {
     if (runtime === 'local') {
       worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+      const current = newThreadCwd.value.trim()
+      if (current && isWorktreePath(current)) {
+        const fallbackProjectName = selectedThread.value?.projectName ?? getPathLeafName(current)
+        const localCwd = resolvePreferredLocalCwd(fallbackProjectName, '')
+        if (localCwd) {
+          newThreadCwd.value = localCwd
+        }
+      }
     }
   },
 )
