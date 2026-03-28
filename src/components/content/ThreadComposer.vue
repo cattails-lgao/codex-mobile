@@ -434,6 +434,12 @@ type FolderUploadGroup = {
   isUploading: boolean
 }
 
+type AttachmentBatchStats = {
+  total: number
+  succeeded: number
+  failed: number
+}
+
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
@@ -441,8 +447,8 @@ const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
 const dictationFeedback = ref('')
-const attachmentStatusText = ref('')
 const pendingAttachmentCount = ref(0)
+const attachmentBatchStats = ref<AttachmentBatchStats | null>(null)
 const isDragActive = ref(false)
 const {
   state: dictationState,
@@ -580,8 +586,23 @@ const dictationErrorText = computed(() =>
   dictationState.value === 'idle' ? dictationFeedback.value.trim() : '',
 )
 const attachmentFeedbackText = computed(() => {
-  const explicit = attachmentStatusText.value.trim()
-  if (explicit) return explicit
+  const stats = attachmentBatchStats.value
+  if (stats) {
+    const completed = stats.succeeded + stats.failed
+    const remaining = Math.max(0, stats.total - completed)
+    if (remaining > 0) {
+      if (stats.failed > 0) {
+        return `${stats.failed} failed, attaching ${formatAttachmentFileCount(remaining)}...`
+      }
+      return remaining === 1 ? 'Attaching file...' : `Attaching ${remaining} files...`
+    }
+    if (stats.failed > 0) {
+      if (stats.succeeded > 0) {
+        return `${stats.succeeded} attached, ${stats.failed} failed.`
+      }
+      return stats.failed === 1 ? 'Could not attach file.' : `Could not attach ${stats.failed} files.`
+    }
+  }
   if (pendingAttachmentCount.value <= 0) return ''
   return pendingAttachmentCount.value === 1
     ? 'Attaching file...'
@@ -640,13 +661,12 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
   folderUploadGroups.value = []
   dictationFeedback.value = ''
-  attachmentStatusText.value = ''
+  attachmentBatchStats.value = null
   pendingAttachmentCount.value = 0
-  isDragActive.value = false
+  resetDragState()
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
-  dragDepth = 0
   attachmentSessionToken += 1
 }
 
@@ -865,6 +885,10 @@ function normalizeSelectedFiles(files: FileList | File[] | null | undefined): Fi
   return Array.from(files)
 }
 
+function formatAttachmentFileCount(count: number): string {
+  return count === 1 ? '1 file' : `${count} files`
+}
+
 function beginAttachmentWork(sessionToken: number): boolean {
   if (sessionToken !== attachmentSessionToken) return false
   pendingAttachmentCount.value += 1
@@ -874,6 +898,35 @@ function beginAttachmentWork(sessionToken: number): boolean {
 function finishAttachmentWork(sessionToken: number): void {
   if (sessionToken !== attachmentSessionToken) return
   pendingAttachmentCount.value = Math.max(0, pendingAttachmentCount.value - 1)
+}
+
+function beginAttachmentBatch(total: number): void {
+  if (total <= 0) return
+  const current = attachmentBatchStats.value
+  const completed = current ? current.succeeded + current.failed : 0
+  if (!current || completed >= current.total) {
+    attachmentBatchStats.value = { total, succeeded: 0, failed: 0 }
+    return
+  }
+  attachmentBatchStats.value = {
+    ...current,
+    total: current.total + total,
+  }
+}
+
+function recordAttachmentBatchResult(result: 'success' | 'failure'): void {
+  const current = attachmentBatchStats.value
+  if (!current) return
+  attachmentBatchStats.value = {
+    ...current,
+    succeeded: current.succeeded + (result === 'success' ? 1 : 0),
+    failed: current.failed + (result === 'failure' ? 1 : 0),
+  }
+}
+
+function resetDragState(): void {
+  dragDepth = 0
+  isDragActive.value = false
 }
 
 function createAttachmentId(): string {
@@ -935,10 +988,10 @@ async function attachImageFile(file: File, sessionToken: number): Promise<void> 
         url: dataUrl,
       },
     ]
-    attachmentStatusText.value = ''
+    recordAttachmentBatchResult('success')
   } catch {
     if (sessionToken === attachmentSessionToken) {
-      attachmentStatusText.value = 'Could not attach image.'
+      recordAttachmentBatchResult('failure')
     }
   } finally {
     finishAttachmentWork(sessionToken)
@@ -951,14 +1004,14 @@ async function attachUploadedFile(file: File, sessionToken: number): Promise<voi
     const serverPath = await uploadFile(file)
     if (sessionToken !== attachmentSessionToken) return
     if (!serverPath) {
-      attachmentStatusText.value = `Could not attach ${file.name || 'file'}.`
+      recordAttachmentBatchResult('failure')
       return
     }
     addFileAttachment(serverPath)
-    attachmentStatusText.value = ''
+    recordAttachmentBatchResult('success')
   } catch {
     if (sessionToken === attachmentSessionToken) {
-      attachmentStatusText.value = `Could not attach ${file.name || 'file'}.`
+      recordAttachmentBatchResult('failure')
     }
   } finally {
     finishAttachmentWork(sessionToken)
@@ -968,7 +1021,7 @@ async function attachUploadedFile(file: File, sessionToken: number): Promise<voi
 function attachIncomingFiles(files: FileList | File[] | null | undefined): void {
   const normalizedFiles = normalizeSelectedFiles(files)
   if (normalizedFiles.length === 0) return
-  attachmentStatusText.value = ''
+  beginAttachmentBatch(normalizedFiles.length)
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
@@ -1065,12 +1118,15 @@ function onInputPaste(event: ClipboardEvent): void {
   if (isInteractionDisabled.value) return
   const items = Array.from(event.clipboardData?.items ?? [])
   if (items.length === 0) return
+  const hasPlainText = (event.clipboardData?.getData('text/plain') ?? '').length > 0
   const imageFiles = items
     .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
     .map((item) => item.getAsFile())
     .filter((file): file is File => file instanceof File)
   if (imageFiles.length === 0) return
-  event.preventDefault()
+  if (!hasPlainText) {
+    event.preventDefault()
+  }
   attachIncomingFiles(imageFiles)
 }
 
@@ -1091,20 +1147,24 @@ function onInputDragOver(event: DragEvent): void {
 }
 
 function onInputDragLeave(event: DragEvent): void {
-  if (!hasFilePayload(event.dataTransfer)) return
+  if (!isDragActive.value) return
   event.preventDefault()
   dragDepth = Math.max(0, dragDepth - 1)
   if (dragDepth === 0) {
-    isDragActive.value = false
+    resetDragState()
   }
 }
 
 function onInputDrop(event: DragEvent): void {
   if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
   event.preventDefault()
-  dragDepth = 0
-  isDragActive.value = false
+  resetDragState()
   attachIncomingFiles(event.dataTransfer?.files ?? null)
+}
+
+function onWindowDragCleanup(): void {
+  if (!isDragActive.value && dragDepth === 0) return
+  resetDragState()
 }
 
 function onInputChange(): void {
@@ -1327,6 +1387,9 @@ function onDocumentClick(event: MouseEvent): void {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('drop', onWindowDragCleanup)
+  window.addEventListener('dragend', onWindowDragCleanup)
+  window.addEventListener('blur', onWindowDragCleanup)
 })
 
 defineExpose<ThreadComposerExposed>({
@@ -1336,6 +1399,9 @@ defineExpose<ThreadComposerExposed>({
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('drop', onWindowDragCleanup)
+  window.removeEventListener('dragend', onWindowDragCleanup)
+  window.removeEventListener('blur', onWindowDragCleanup)
   window.removeEventListener('pointerup', onDictationPressEnd)
   window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
