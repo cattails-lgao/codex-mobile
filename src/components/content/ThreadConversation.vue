@@ -2776,9 +2776,12 @@ onBeforeUnmount(() => {
   @apply mt-1 self-end flex items-center gap-1;
 }
 
-.message-fork-button,
 .message-copy-button {
   @apply inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/90 px-1.25 py-0.5 text-[9px] font-medium leading-none text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-900;
+}
+
+.message-fork-button {
+  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-slate-500 transition hover:text-slate-900;
 }
 
 .message-copy-button[data-copied='true'] {
