@@ -193,3 +193,45 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Leave runtime mode and appearance at the previous user preference.
+
+### Feature: Dark theme states for runtime mode toggle
+
+#### Prerequisites
+- App is running from this repository.
+- Home/new-thread screen is open.
+- Appearance is set to `Dark` in Settings.
+
+#### Steps
+1. Locate the runtime mode toggle (`Local project` and `New worktree`) under `Choose folder`.
+2. Hover each option and verify hover state is visible against dark backgrounds.
+3. Select `New worktree`, then select `Local project` and compare active/inactive contrast.
+4. Tab to the toggle options with keyboard navigation and verify the focus ring is visible.
+5. Confirm icon color remains readable for selected and unselected options.
+
+#### Expected Results
+- Toggle container, options, and text/icons use dark-friendly colors.
+- Hover and selected states are clearly distinguishable in dark mode.
+- Keyboard focus ring is visible and does not blend into the background.
+
+#### Rollback/Cleanup
+- Return appearance and runtime selection to the previous user preference.
+
+### Feature: Stop button interrupts active turn without missing turnId
+
+#### Prerequisites
+- App is running from this repository.
+- At least one thread can run a long response (for example, request a large code explanation).
+
+#### Steps
+1. Send a prompt that keeps the assistant generating for several seconds.
+2. Immediately click the `Stop` button before the first assistant chunk fully completes.
+3. Confirm generation halts.
+4. Repeat with a resumed/existing in-progress thread (reload app while a turn is running, then click `Stop`).
+
+#### Expected Results
+- No error appears saying `turn/interrupt requires turnId`.
+- Turn is interrupted successfully in both immediate-stop and resumed-thread scenarios.
+- Thread state exits in-progress and the stop control returns to idle.
+
+#### Rollback/Cleanup
+- None.

@@ -52,34 +52,26 @@ function onSelect(value: RuntimeMode): void {
 }
 
 .runtime-toggle-option:hover {
-  @apply text-zinc-900;
+  @apply bg-zinc-200/70 text-zinc-900;
 }
 
 .runtime-toggle-option.is-selected {
   @apply border-zinc-200 bg-white text-zinc-900 shadow-sm;
 }
 
+.runtime-toggle-option:focus-visible {
+  @apply outline-none ring-2 ring-zinc-300 ring-offset-1 ring-offset-white;
+}
+
 .runtime-toggle-option-icon {
-  @apply h-3.5 w-3.5 shrink-0;
+  @apply h-3.5 w-3.5 shrink-0 text-zinc-500;
+}
+
+.runtime-toggle-option.is-selected .runtime-toggle-option-icon {
+  @apply text-zinc-700;
 }
 
 .runtime-toggle-option-label {
   @apply whitespace-nowrap;
-}
-
-:global(:root.dark) .runtime-toggle {
-  @apply border-zinc-700 bg-zinc-900;
-}
-
-:global(:root.dark) .runtime-toggle-option {
-  @apply text-zinc-300;
-}
-
-:global(:root.dark) .runtime-toggle-option:hover {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .runtime-toggle-option.is-selected {
-  @apply border-zinc-600 bg-zinc-800 text-zinc-100;
 }
 </style>

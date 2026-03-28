@@ -538,36 +538,31 @@ body {
   @apply text-zinc-300;
 }
 
-:root.dark .runtime-dropdown-trigger {
-  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
+:root.dark .runtime-toggle {
+  @apply border-zinc-700 bg-zinc-900;
 }
 
-:root.dark .runtime-dropdown-trigger-icon,
-:root.dark .runtime-dropdown-trigger-chevron {
+:root.dark .runtime-toggle-option {
+  @apply text-zinc-300;
+}
+
+:root.dark .runtime-toggle-option:hover {
+  @apply bg-zinc-800 text-zinc-100;
+}
+
+:root.dark .runtime-toggle-option.is-selected {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-100 shadow-none;
+}
+
+:root.dark .runtime-toggle-option:focus-visible {
+  @apply ring-zinc-600 ring-offset-zinc-900;
+}
+
+:root.dark .runtime-toggle-option-icon {
   @apply text-zinc-400;
 }
 
-:root.dark .runtime-dropdown-menu {
-  @apply border-zinc-600 bg-zinc-800;
-}
-
-:root.dark .runtime-dropdown-title {
-  @apply text-zinc-400;
-}
-
-:root.dark .runtime-dropdown-option {
-  @apply text-zinc-200 hover:bg-zinc-700;
-}
-
-:root.dark .runtime-dropdown-option.is-selected {
-  @apply bg-zinc-700;
-}
-
-:root.dark .runtime-dropdown-option-icon {
-  @apply text-zinc-400;
-}
-
-:root.dark .runtime-dropdown-option-check {
+:root.dark .runtime-toggle-option.is-selected .runtime-toggle-option-icon {
   @apply text-zinc-200;
 }
 
