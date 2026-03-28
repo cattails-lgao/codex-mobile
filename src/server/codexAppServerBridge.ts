@@ -344,13 +344,14 @@ function toRollbackProjectPathSegments(cwd: string): string[] {
 
 function getRollbackGitDirForCwd(cwd: string): string {
   const segments = toRollbackProjectPathSegments(cwd)
-  return join(getCodexHomeDir(), 'rollbacks', ...segments, '.git')
+  const projectPathSegment = segments.length > 0 ? segments.join('__') : 'project'
+  return join(cwd, '.codex', 'rollbacks', projectPathSegment, '.git')
 }
 
-async function ensureCodexGitignoreHasRollbacks(): Promise<void> {
-  const codexHome = getCodexHomeDir()
-  const gitignorePath = join(codexHome, '.gitignore')
-  await mkdir(codexHome, { recursive: true })
+async function ensureLocalCodexGitignoreHasRollbacks(cwd: string): Promise<void> {
+  const localCodexDir = join(cwd, '.codex')
+  const gitignorePath = join(localCodexDir, '.gitignore')
+  await mkdir(localCodexDir, { recursive: true })
   let current = ''
   try {
     current = await readFile(gitignorePath, 'utf8')
@@ -372,11 +373,11 @@ async function ensureRollbackGitRepo(cwd: string): Promise<string> {
     }
   } catch {
     await mkdir(dirname(gitDir), { recursive: true })
-    await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, 'init'])
+  await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, 'init'])
   }
   await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
   await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
-  await ensureCodexGitignoreHasRollbacks()
+  await ensureLocalCodexGitignoreHasRollbacks(cwd)
   return gitDir
 }
 
