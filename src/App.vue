@@ -61,7 +61,7 @@
             :search-matched-thread-ids="serverMatchedThreadIds"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
-            @browse-project-files="onBrowseProjectFiles"
+            @browse-thread-files="onBrowseThreadFiles"
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
@@ -91,8 +91,8 @@
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
-              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.worktreeRollback" @click="toggleWorktreeGitAutomation">
-                <span class="sidebar-settings-label">Worktree rollback</span>
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.rollbackCommits" @click="toggleWorktreeGitAutomation">
+                <span class="sidebar-settings-label">Rollback commits</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
               </button>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.githubTrendingProjects" @click="toggleGithubTrendingProjects">
@@ -331,7 +331,7 @@ const SETTINGS_HELP = {
   appearance: 'Switch between system theme, light mode, and dark mode.',
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
-  worktreeRollback: 'When enabled, each message creates a Git commit. On rollback, it runs Git reset to the commit for that message.',
+  rollbackCommits: 'When enabled, each message creates a rollback Git commit. On rollback, it resets to the commit before that message.',
   githubTrendingProjects: 'Show or hide GitHub trending project cards on the new thread screen.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
@@ -767,9 +767,23 @@ async function onForkThread(threadId: string): Promise<void> {
   if (isMobile.value) setSidebarCollapsed(true)
 }
 
+function isWorktreePath(cwdRaw: string): boolean {
+  const cwd = cwdRaw.trim().replace(/\\/gu, '/')
+  if (!cwd) return false
+  return cwd.includes('/.codex/worktrees/') || cwd.includes('/.git/worktrees/')
+}
+
+function resolvePreferredLocalCwd(projectName: string, fallbackCwd = ''): string {
+  const group = projectGroups.value.find((row) => row.projectName === projectName)
+  if (!group) return fallbackCwd.trim()
+  const nonWorktreeThread = group.threads.find((thread) => !isWorktreePath(thread.cwd))
+  const candidate = nonWorktreeThread?.cwd?.trim() ?? group.threads[0]?.cwd?.trim() ?? ''
+  return candidate || fallbackCwd.trim()
+}
+
 function onStartNewThread(projectName: string): void {
   const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
-  const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
+  const projectCwd = resolvePreferredLocalCwd(projectName, projectGroup?.threads[0]?.cwd?.trim() ?? '')
   if (projectCwd) {
     newThreadCwd.value = projectCwd
   }
@@ -778,15 +792,24 @@ function onStartNewThread(projectName: string): void {
   void router.push({ name: 'home' })
 }
 
-function onBrowseProjectFiles(projectName: string): void {
-  const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
-  const projectCwd = projectGroup?.threads[0]?.cwd?.trim() ?? ''
-  if (!projectCwd || typeof window === 'undefined') return
-  window.open(`/codex-local-browse${encodeURI(projectCwd)}`, '_blank', 'noopener,noreferrer')
+function onBrowseThreadFiles(threadId: string): void {
+  let targetCwd = ''
+  for (const group of projectGroups.value) {
+    const thread = group.threads.find((row) => row.id === threadId)
+    if (thread?.cwd?.trim()) {
+      targetCwd = thread.cwd.trim()
+      break
+    }
+  }
+  if (!targetCwd || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
 }
 
 function onStartNewThreadFromToolbar(): void {
-  const cwd = selectedThread.value?.cwd?.trim() ?? ''
+  const selected = selectedThread.value
+  const cwd = selected
+    ? resolvePreferredLocalCwd(selected.projectName, selected.cwd?.trim() ?? '')
+    : ''
   if (cwd) {
     newThreadCwd.value = cwd
   }
@@ -1462,6 +1485,14 @@ watch(
   (runtime) => {
     if (runtime === 'local') {
       worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
+      const current = newThreadCwd.value.trim()
+      if (current && isWorktreePath(current)) {
+        const fallbackProjectName = selectedThread.value?.projectName ?? getPathLeafName(current)
+        const localCwd = resolvePreferredLocalCwd(fallbackProjectName, '')
+        if (localCwd) {
+          newThreadCwd.value = localCwd
+        }
+      }
     }
   },
 )

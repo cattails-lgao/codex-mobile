@@ -59,7 +59,7 @@ const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
-const AUTO_COMMIT_MESSAGE_FALLBACK = 'Auto-commit from Codex worktree chat turn'
+const AUTO_COMMIT_MESSAGE_FALLBACK = 'Auto-commit from Codex rollback chat turn'
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -797,7 +797,7 @@ export function useDesktopState() {
     const normalizedMessage = commitMessage.trim()
     if (!normalizedMessage) return
     const thread = allThreads.value.find((row) => row.id === threadId)
-    if (!thread?.hasWorktree) return
+    if (!thread) return
     const cwd = thread.cwd.trim()
     if (!cwd) return
     await autoCommitWorktreeChanges(cwd, normalizedMessage)
@@ -807,7 +807,7 @@ export function useDesktopState() {
   async function rollbackWorktreeGitToTurnMessage(threadId: string, turnIndex: number): Promise<void> {
     if (!isWorktreeGitAutomationEnabled.value) return
     const thread = allThreads.value.find((row) => row.id === threadId)
-    if (!thread?.hasWorktree) return
+    if (!thread) return
     const cwd = thread.cwd.trim()
     if (!cwd) return
 
