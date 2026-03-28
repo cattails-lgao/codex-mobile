@@ -912,7 +912,7 @@ export async function getSkillsList(cwds?: string[]): Promise<SkillInfo[]> {
   }
 }
 
-const FILE_UPLOAD_TIMEOUT_MS = 30_000
+const FILE_UPLOAD_TIMEOUT_MS = 60_000
 
 export async function uploadFile(file: File): Promise<string | null> {
   const controller = new AbortController()
