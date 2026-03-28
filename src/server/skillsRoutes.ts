@@ -326,6 +326,7 @@ const DEFAULT_SKILLS_SYNC_REPO_NAME = 'codexskills'
 const SKILLS_SYNC_MANIFEST_PATH = 'installed-skills.json'
 const SYNC_UPSTREAM_SKILLS_OWNER = 'OpenClawAndroid'
 const SYNC_UPSTREAM_SKILLS_REPO = 'skills'
+const PRIVATE_SYNC_BRANCH = 'main'
 const HUB_SKILLS_OWNER = 'openclaw'
 const HUB_SKILLS_REPO = 'skills'
 let startupSkillsSyncInitialized = false
@@ -343,7 +344,7 @@ type StartupSyncStatus = {
 const startupSyncStatus: StartupSyncStatus = {
   inProgress: false,
   mode: 'idle',
-  branch: getPreferredSyncBranch(),
+  branch: PRIVATE_SYNC_BRANCH,
   lastAction: 'not-started',
   lastRunAtIso: '',
   lastSuccessAtIso: '',
@@ -473,7 +474,7 @@ function isAndroidLikeRuntime(): boolean {
   return proot.length > 0
 }
 
-function getPreferredSyncBranch(): string {
+function getPreferredPublicUpstreamBranch(): string {
   return isAndroidLikeRuntime() ? 'android' : 'main'
 }
 
@@ -538,7 +539,7 @@ async function ensurePrivateForkFromUpstream(token: string, username: string, re
   const tmp = await mkdtemp(join(tmpdir(), 'codex-skills-seed-'))
   try {
     const upstreamUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
-    const branch = getPreferredSyncBranch()
+    const branch = PRIVATE_SYNC_BRANCH
     try {
       await runCommand('git', ['clone', '--depth', '1', '--single-branch', '--branch', branch, upstreamUrl, tmp])
     } catch {
@@ -645,7 +646,7 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
   try { await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir }) } catch {}
   let pulledMtimes = new Map<string, number>()
   try {
-    await runCommand('git', ['pull', '--no-rebase', 'origin', branch], { cwd: localDir })
+    await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: localDir })
     pulledMtimes = await snapshotFileMtimes(localDir)
   } catch {
     await resolveMergeConflictsByNewerCommit(localDir, branch)
@@ -749,8 +750,41 @@ async function syncInstalledSkillsFolderToRepo(
   repoName: string,
   _installedMap: Map<string, InstalledSkillInfo>,
 ): Promise<void> {
+  function isNonFastForwardPushError(error: unknown): boolean {
+    const text = getErrorMessage(error, '').toLowerCase()
+    return text.includes('non-fast-forward')
+      || text.includes('fetch first')
+      || (text.includes('rejected') && text.includes('push'))
+  }
+
+  async function pushWithNonFastForwardRetry(repoDir: string, branch: string): Promise<void> {
+    const maxAttempts = 3
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await runCommand('git', ['push', 'origin', `HEAD:${branch}`], { cwd: repoDir })
+        return
+      } catch (error) {
+        if (!isNonFastForwardPushError(error) || attempt >= maxAttempts) {
+          throw error
+        }
+      }
+      await runCommand('git', ['fetch', 'origin'], { cwd: repoDir })
+      try {
+        await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: repoDir })
+      } catch {
+        await resolveMergeConflictsByNewerCommit(repoDir, branch)
+      }
+      await runCommand('git', ['add', '.'], { cwd: repoDir })
+      const statusAfterReconcile = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+      if (statusAfterReconcile) {
+        await runCommand('git', ['commit', '-m', 'Reconcile skills sync before push retry'], { cwd: repoDir })
+      }
+    }
+    throw new Error('Failed to push after non-fast-forward retries')
+  }
+
   const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
-  const branch = getPreferredSyncBranch()
+  const branch = PRIVATE_SYNC_BRANCH
   const repoDir = await ensureSkillsWorkingTreeRepo(remoteUrl, branch)
   void _installedMap
   await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: repoDir })
@@ -759,18 +793,18 @@ async function syncInstalledSkillsFolderToRepo(
   const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
   if (!status) return
   await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: repoDir })
-  await runCommand('git', ['push', 'origin', `HEAD:${branch}`], { cwd: repoDir })
+  await pushWithNonFastForwardRetry(repoDir, branch)
 }
 
 async function pullInstalledSkillsFolderFromRepo(token: string, repoOwner: string, repoName: string): Promise<void> {
   const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
-  const branch = getPreferredSyncBranch()
+  const branch = PRIVATE_SYNC_BRANCH
   await ensureSkillsWorkingTreeRepo(remoteUrl, branch)
 }
 
 async function bootstrapSkillsFromUpstreamIntoLocal(): Promise<void> {
   const repoUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
-  const branch = getPreferredSyncBranch()
+  const branch = getPreferredPublicUpstreamBranch()
   await ensureSkillsWorkingTreeRepo(repoUrl, branch)
 }
 
@@ -877,7 +911,7 @@ export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): P
   startupSyncStatus.inProgress = true
   startupSyncStatus.lastRunAtIso = new Date().toISOString()
   startupSyncStatus.lastError = ''
-  startupSyncStatus.branch = getPreferredSyncBranch()
+  startupSyncStatus.branch = PRIVATE_SYNC_BRANCH
   try {
     const state = await readSkillsSyncState()
     if (!state.githubToken) {
@@ -889,6 +923,7 @@ export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): P
         return
       }
       startupSyncStatus.mode = 'unauthenticated-bootstrap'
+      startupSyncStatus.branch = getPreferredPublicUpstreamBranch()
       startupSyncStatus.lastAction = 'pull-upstream'
       await bootstrapSkillsFromUpstreamIntoLocal()
       try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
@@ -897,6 +932,7 @@ export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): P
       return
     }
     startupSyncStatus.mode = 'authenticated-fork-sync'
+    startupSyncStatus.branch = PRIVATE_SYNC_BRANCH
     startupSyncStatus.lastAction = 'ensure-private-fork'
     const username = state.githubUsername || await resolveGithubUsername(state.githubToken)
     const repoName = DEFAULT_SKILLS_SYNC_REPO_NAME
@@ -1276,7 +1312,8 @@ export async function handleSkillsRoutes(
       const payload = asRecord(await readJsonBody(req))
       const name = typeof payload?.name === 'string' ? payload.name : ''
       const path = typeof payload?.path === 'string' ? payload.path : ''
-      const target = path || (name ? join(getSkillsInstallDir(), name) : '')
+      const normalizedPath = path.endsWith('/SKILL.md') ? path.slice(0, -'/SKILL.md'.length) : path
+      const target = normalizedPath || (name ? join(getSkillsInstallDir(), name) : '')
       if (!target) {
         setJson(res, 400, { error: 'Missing name or path' })
         return true
