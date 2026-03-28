@@ -537,3 +537,215 @@ body {
 :root.dark .new-thread-trending-tip-description {
   @apply text-zinc-300;
 }
+
+:root.dark .runtime-dropdown-trigger {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
+}
+
+:root.dark .runtime-dropdown-trigger-icon,
+:root.dark .runtime-dropdown-trigger-chevron {
+  @apply text-zinc-400;
+}
+
+:root.dark .runtime-dropdown-menu {
+  @apply border-zinc-600 bg-zinc-800;
+}
+
+:root.dark .runtime-dropdown-title {
+  @apply text-zinc-400;
+}
+
+:root.dark .runtime-dropdown-option {
+  @apply text-zinc-200 hover:bg-zinc-700;
+}
+
+:root.dark .runtime-dropdown-option.is-selected {
+  @apply bg-zinc-700;
+}
+
+:root.dark .runtime-dropdown-option-icon {
+  @apply text-zinc-400;
+}
+
+:root.dark .runtime-dropdown-option-check {
+  @apply text-zinc-200;
+}
+
+:root.dark .worktree-init-status.is-running {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .worktree-init-status.is-error {
+  @apply border-rose-700 bg-rose-950/40 text-rose-200;
+}
+
+:root.dark .skills-hub-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .skills-hub-subtitle {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-hub-search-wrap {
+  @apply border-zinc-700 bg-zinc-800 focus-within:border-zinc-500;
+}
+
+:root.dark .skills-hub-search-icon {
+  @apply text-zinc-500;
+}
+
+:root.dark .skills-hub-search {
+  @apply text-zinc-200 placeholder-zinc-500;
+}
+
+:root.dark .skills-hub-search-btn,
+:root.dark .skills-hub-sort {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-500;
+}
+
+:root.dark .skills-hub-count {
+  @apply text-zinc-500;
+}
+
+:root.dark .skills-sync-panel {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .skills-sync-header {
+  @apply text-zinc-300;
+}
+
+:root.dark .skills-sync-badge {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .skills-sync-badge-link {
+  @apply text-zinc-200 hover:text-white hover:border-zinc-500;
+}
+
+:root.dark .skills-sync-device,
+:root.dark .skills-sync-meta {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-sync-device a {
+  @apply text-blue-400 hover:text-blue-300;
+}
+
+:root.dark .skills-sync-device code {
+  @apply border border-zinc-600 bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-200;
+}
+
+:root.dark .skills-sync-error {
+  @apply border-rose-800 bg-rose-950/40 text-rose-200;
+}
+
+:root.dark .skills-hub-section-toggle {
+  @apply text-zinc-300 hover:text-zinc-100;
+}
+
+:root.dark .skills-hub-loading,
+:root.dark .skills-hub-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-hub-error {
+  @apply border-rose-800 bg-rose-950/40 text-rose-200;
+}
+
+:root.dark .skill-card {
+  @apply border-zinc-700 bg-zinc-800 hover:border-zinc-600 hover:bg-zinc-700/70;
+}
+
+:root.dark .skill-card-avatar {
+  @apply bg-zinc-700;
+}
+
+:root.dark .skill-card-avatar-fallback {
+  @apply bg-zinc-600 text-zinc-300;
+}
+
+:root.dark .skill-card-name {
+  @apply text-zinc-100;
+}
+
+:root.dark .skill-card-badge-disabled {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-300;
+}
+
+:root.dark .skill-card-owner {
+  @apply text-zinc-400;
+}
+
+:root.dark .skill-card-browse {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:root.dark .skill-card-desc {
+  @apply text-zinc-300;
+}
+
+:root.dark .skill-card-date {
+  @apply text-zinc-500;
+}
+
+:root.dark .sdm-panel {
+  @apply bg-zinc-800;
+}
+
+:root.dark .sdm-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .sdm-badge-disabled {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-300;
+}
+
+:root.dark .sdm-owner {
+  @apply text-zinc-400;
+}
+
+:root.dark .sdm-close {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:root.dark .sdm-desc {
+  @apply text-zinc-300;
+}
+
+:root.dark .sdm-readme-loading {
+  @apply text-zinc-400;
+}
+
+:root.dark .sdm-readme {
+  @apply text-zinc-300 border-zinc-700;
+}
+
+:root.dark .sdm-readme h2 {
+  @apply text-zinc-100;
+}
+
+:root.dark .sdm-readme h3 {
+  @apply text-zinc-200;
+}
+
+:root.dark .sdm-readme h4 {
+  @apply text-zinc-300;
+}
+
+:root.dark .sdm-readme code {
+  @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .sdm-footer {
+  @apply border-zinc-700;
+}
+
+:root.dark .sdm-btn-primary {
+  @apply bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .sdm-btn-secondary {
+  @apply bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
