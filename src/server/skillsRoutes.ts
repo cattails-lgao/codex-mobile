@@ -937,9 +937,8 @@ async function ensureCodexAgentsSymlinkToSkillsAgents(): Promise<void> {
   await symlink(relativeTarget, codexAgentsPath)
 }
 
-export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): Promise<void> {
-  if (startupSkillsSyncInitialized) return
-  startupSkillsSyncInitialized = true
+async function runSkillsSyncStartup(appServer: AppServerLike): Promise<void> {
+  if (startupSyncStatus.inProgress) return
   startupSyncStatus.inProgress = true
   startupSyncStatus.lastRunAtIso = new Date().toISOString()
   startupSyncStatus.lastError = ''
@@ -983,6 +982,12 @@ export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): P
   } finally {
     startupSyncStatus.inProgress = false
   }
+}
+
+export async function initializeSkillsSyncOnStartup(appServer: AppServerLike): Promise<void> {
+  if (startupSkillsSyncInitialized) return
+  startupSkillsSyncInitialized = true
+  await runSkillsSyncStartup(appServer)
 }
 
 async function finalizeGithubLoginAndSync(token: string, username: string, appServer: AppServerLike): Promise<void> {
@@ -1190,6 +1195,16 @@ export async function handleSkillsRoutes(
       setJson(res, 200, { ok: true, data: { synced: local.length } })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to push synced skills') })
+    }
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/codex-api/skills-sync/startup-sync') {
+    try {
+      await runSkillsSyncStartup(appServer)
+      setJson(res, 200, { ok: true })
+    } catch (error) {
+      setJson(res, 502, { error: getErrorMessage(error, 'Failed to run startup sync') })
     }
     return true
   }
