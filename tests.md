@@ -103,3 +103,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Clear the search input and run a blank search to return to default listing.
+
+### Feature: Dark theme for trending GitHub projects and local project dropdown
+
+#### Prerequisites
+- App is running from this repository.
+- Home/new-thread screen is open.
+- Appearance is set to `Dark` in Settings.
+- `GitHub trending projects` setting is enabled.
+
+#### Steps
+1. On the home/new-thread screen, inspect the `Choose folder` dropdown trigger.
+2. Open the `Choose folder` dropdown and confirm menu/option contrast remains readable in dark mode.
+3. Inspect the `Trending GitHub projects` section title, scope dropdown, and project cards.
+4. Hover a trending project card and the scope dropdown trigger.
+5. Toggle appearance back to `Light`, then return to `Dark`.
+
+#### Expected Results
+- Local project dropdown trigger/value uses dark theme colors with readable contrast.
+- Trending section title, empty/loading text, scope dropdown, and cards use dark backgrounds/borders/text.
+- Hover states in dark mode stay visible and do not switch to light backgrounds.
+- Theme switch back/forth preserves correct styling for both controls.
+
+#### Rollback/Cleanup
+- Reset appearance to the previous user preference.
