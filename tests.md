@@ -216,6 +216,26 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Return appearance and runtime selection to the previous user preference.
 
+### Feature: pnpm dev script installs dependencies and starts Vite
+
+#### Prerequisites
+- `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
+- Repository is cloned and `node_modules/` does not exist (or may be stale).
+
+#### Steps
+1. Remove `node_modules/` if present: `rm -rf node_modules`.
+2. Run `pnpm run dev`.
+3. Wait for Vite dev server to start and display the local URL.
+4. Open the displayed URL in a browser.
+
+#### Expected Results
+- `pnpm install` runs automatically before Vite starts (dependencies are installed).
+- Vite dev server starts successfully and serves the app.
+- No `npm` commands are invoked.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Stop button interrupts active turn without missing turnId
 
 #### Prerequisites

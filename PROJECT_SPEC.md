@@ -309,15 +309,15 @@ Bidirectional sync between `selectedThreadId` state and URL is handled via Vue `
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start Vite dev server (port 5173) |
-| `npm run build` | Type-check + build frontend + build CLI |
-| `npm run build:frontend` | `vue-tsc --noEmit && vite build` |
-| `npm run build:cli` | `tsup` (builds CLI to `dist-cli/`) |
-| `npm run preview` | Preview production build |
+| `pnpm run dev` | Install deps + start Vite dev server (port 5173) |
+| `pnpm run build` | Type-check + build frontend + build CLI |
+| `pnpm run build:frontend` | `vue-tsc --noEmit && vite build` |
+| `pnpm run build:cli` | `tsup` (builds CLI to `dist-cli/`) |
+| `pnpm run preview` | Preview production build |
 
 ### Dev Mode
 
-`npm run dev` starts a Vite dev server that includes the codex bridge as middleware. The bridge spawns `codex app-server` as a child process. The frontend calls `/codex-api/*` endpoints on the same origin.
+`pnpm run dev` installs dependencies and starts a Vite dev server that includes the codex bridge as middleware. The bridge spawns `codex app-server` as a child process. The frontend calls `/codex-api/*` endpoints on the same origin.
 
 ### Production Mode
 

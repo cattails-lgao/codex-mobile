@@ -20,16 +20,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "21"
-          cache: "npm"
 
-      - name: Install npm dependencies
-        run: npm ci --ignore-scripts || npm install
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Build Vue frontend
-        run: npm run build:frontend
+        run: pnpm run build:frontend
 
       - name: Build CLI server
-        run: npm run build:cli
+        run: pnpm run build:cli
 
       - name: Bundle server into APK assets
         run: bash android/scripts/build-server-bundle.sh
