@@ -439,7 +439,6 @@ type MessageBlock =
 let scrollRestoreFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
-let pendingSavedScrollRestore = true
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const failedMarkdownImageKeys = ref<Set<string>>(new Set())
 const isFileLinkContextMenuVisible = ref(false)
@@ -1422,23 +1421,14 @@ function bindPendingImageHandlers(): void {
   }
 }
 
-async function scheduleScrollRestore(options: { restoreSavedState?: boolean } = {}): Promise<void> {
-  const shouldRestoreSavedState = options.restoreSavedState ?? pendingSavedScrollRestore
+async function scheduleScrollRestore(): Promise<void> {
   await nextTick()
   if (scrollRestoreFrame) {
     cancelAnimationFrame(scrollRestoreFrame)
   }
   scrollRestoreFrame = requestAnimationFrame(() => {
     scrollRestoreFrame = 0
-    const container = conversationListRef.value
-    if (shouldRestoreSavedState) {
-      applySavedScrollState()
-      pendingSavedScrollRestore = false
-    } else if (shouldLockToBottom()) {
-      enforceBottomState()
-    } else if (container) {
-      emitScrollState(container)
-    }
+    applySavedScrollState()
     bindPendingImageHandlers()
     scheduleBottomLock()
   })
@@ -1481,19 +1471,17 @@ watch(
   () => props.isLoading,
   async (loading) => {
     if (loading) return
-    await scheduleScrollRestore({ restoreSavedState: true })
+    await scheduleScrollRestore()
   },
 )
 
 watch(
   () => props.activeThreadId,
-  async () => {
-    pendingSavedScrollRestore = true
+  () => {
     localScrollState.value = null
     modalImageUrl.value = ''
     closeFileLinkContextMenu()
     failedMarkdownImageKeys.value = new Set()
-    await scheduleScrollRestore({ restoreSavedState: true })
   },
   { flush: 'post' },
 )
