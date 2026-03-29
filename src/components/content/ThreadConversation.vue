@@ -345,6 +345,86 @@
                         <div class="message-list-item-content" v-html="renderListItemContentAsHtml(item)" />
                       </li>
                     </ol>
+                    <div v-else-if="block.kind === 'table'" class="message-table-wrap">
+                      <table class="message-table">
+                        <thead>
+                          <tr>
+                            <th
+                              v-for="(cell, cellIndex) in block.headers"
+                              :key="`th-${blockIndex}-${cellIndex}`"
+                              class="message-table-head-cell"
+                              :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
+                            >
+                              <template v-for="(segment, segmentIndex) in parseInlineSegments(cell)" :key="`th-seg-${blockIndex}-${cellIndex}-${segmentIndex}`">
+                                <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                                <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                                <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                                <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                                <a
+                                  v-else-if="segment.kind === 'file'"
+                                  class="message-file-link"
+                                  :href="toBrowseUrl(segment.path)"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.path"
+                                >
+                                  {{ segment.displayPath }}
+                                </a>
+                                <a
+                                  v-else-if="segment.kind === 'url'"
+                                  class="message-file-link"
+                                  :href="segment.href"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.href"
+                                >
+                                  {{ segment.value }}
+                                </a>
+                                <code v-else class="message-inline-code">{{ segment.value }}</code>
+                              </template>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody v-if="block.rows.length > 0">
+                          <tr v-for="(row, rowIndex) in block.rows" :key="`tr-${blockIndex}-${rowIndex}`" class="message-table-body-row">
+                            <td
+                              v-for="(cell, cellIndex) in row"
+                              :key="`td-${blockIndex}-${rowIndex}-${cellIndex}`"
+                              class="message-table-cell"
+                              :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
+                            >
+                              <template v-for="(segment, segmentIndex) in parseInlineSegments(cell)" :key="`td-seg-${blockIndex}-${rowIndex}-${cellIndex}-${segmentIndex}`">
+                                <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                                <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
+                                <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
+                                <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
+                                <a
+                                  v-else-if="segment.kind === 'file'"
+                                  class="message-file-link"
+                                  :href="toBrowseUrl(segment.path)"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.path"
+                                >
+                                  {{ segment.displayPath }}
+                                </a>
+                                <a
+                                  v-else-if="segment.kind === 'url'"
+                                  class="message-file-link"
+                                  :href="segment.href"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.href"
+                                >
+                                  {{ segment.value }}
+                                </a>
+                                <code v-else class="message-inline-code">{{ segment.value }}</code>
+                              </template>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                     <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
                       <div v-if="block.language" class="message-code-language">{{ block.language }}</div>
                       <pre class="message-code-pre"><code>{{ block.value }}</code></pre>
@@ -846,6 +926,7 @@ type TaskListItem = {
   text: string
   checked: boolean
 }
+type TableAlignment = 'left' | 'center' | 'right' | null
 type ListItem = {
   paragraphs: string[]
   children?: MessageBlock[]
@@ -857,6 +938,7 @@ type MessageBlock =
   | { kind: 'unorderedList'; items: ListItem[] }
   | { kind: 'taskList'; items: TaskListItem[] }
   | { kind: 'orderedList'; items: ListItem[]; start: number }
+  | { kind: 'table'; headers: string[]; rows: string[][]; alignments: TableAlignment[] }
   | { kind: 'codeBlock'; language: string; value: string }
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
@@ -1692,6 +1774,108 @@ function readOrderedListItemMatch(line: string): { indent: number; text: string;
   return readOrderedListItemData(line)
 }
 
+function splitMarkdownTableRow(line: string): string[] | null {
+  const trimmed = line.trim()
+  if (!trimmed.includes('|')) return null
+
+  let content = trimmed
+  if (content.startsWith('|')) content = content.slice(1)
+  if (content.endsWith('|')) content = content.slice(0, -1)
+
+  const cells: string[] = []
+  let current = ''
+  let codeFenceLength = 0
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index]
+
+    if (character === '\\' && content[index + 1] === '|') {
+      current += '|'
+      index += 1
+      continue
+    }
+
+    if (character === '`') {
+      let runLength = 1
+      while (content[index + runLength] === '`') runLength += 1
+      current += content.slice(index, index + runLength)
+      if (codeFenceLength === 0) codeFenceLength = runLength
+      else if (codeFenceLength === runLength) codeFenceLength = 0
+      index += runLength - 1
+      continue
+    }
+
+    if (character === '|' && codeFenceLength === 0) {
+      cells.push(current.trim())
+      current = ''
+      continue
+    }
+
+    current += character
+  }
+
+  cells.push(current.trim())
+  return cells.some((cell) => cell.length > 0) ? cells : null
+}
+
+function readTableAlignmentRow(line: string): TableAlignment[] | null {
+  const cells = splitMarkdownTableRow(line)
+  if (!cells || cells.length === 0) return null
+
+  const alignments = cells.map((cell) => {
+    const trimmed = cell.replace(/\s+/gu, '')
+    if (!/^:?-{3,}:?$/u.test(trimmed)) return null
+    const startsWithColon = trimmed.startsWith(':')
+    const endsWithColon = trimmed.endsWith(':')
+    if (startsWithColon && endsWithColon) return 'center'
+    if (endsWithColon) return 'right'
+    if (startsWithColon) return 'left'
+    return null
+  })
+
+  return alignments.every((alignment, index) => alignment !== null || /^-+$/u.test(cells[index].replace(/\s+/gu, '')))
+    ? alignments
+    : null
+}
+
+function normalizeTableCells(cells: string[], width: number): string[] {
+  if (cells.length === width) return cells
+  if (cells.length > width) return cells.slice(0, width)
+  return [...cells, ...Array.from({ length: width - cells.length }, () => '')]
+}
+
+function readTableBlock(lines: string[], startIndex: number): Extract<MessageBlock, { kind: 'table' }> | null {
+  if (startIndex + 1 >= lines.length) return null
+
+  const headerLine = lines[startIndex]
+  const separatorLine = lines[startIndex + 1]
+  const headers = splitMarkdownTableRow(headerLine)
+  const alignments = readTableAlignmentRow(separatorLine)
+  if (!headers || !alignments) return null
+  if (headers.length !== alignments.length) return null
+
+  const trimmedHeader = headerLine.trim()
+  if (!trimmedHeader.startsWith('|') && (trimmedHeader.match(/\|/gu)?.length ?? 0) < 2) return null
+
+  const width = headers.length
+  const rows: string[][] = []
+  let index = startIndex + 2
+  while (index < lines.length) {
+    if (isBlankMarkdownLine(lines[index])) break
+    const row = splitMarkdownTableRow(lines[index])
+    if (!row) break
+    rows.push(normalizeTableCells(row, width))
+    index += 1
+  }
+
+  return {
+    kind: 'table',
+    headers: normalizeTableCells(headers, width),
+    rows,
+    alignments,
+  }
+}
+
 function isParagraphBreakingLine(line: string): boolean {
   return (
     isBlankMarkdownLine(line) ||
@@ -1930,6 +2114,13 @@ function parseTextBlocks(text: string): MessageBlock[] {
       continue
     }
 
+    const table = readTableBlock(lines, index)
+    if (table) {
+      blocks.push(table)
+      index += 2 + table.rows.length
+      continue
+    }
+
     const taskItem = readTaskListItem(lines[index])
     if (taskItem !== null) {
       const items: TaskListItem[] = []
@@ -1992,6 +2183,7 @@ function parseTextBlocks(text: string): MessageBlock[] {
         readFenceStart(lines[index]) ||
         isThematicBreakLine(lines[index]) ||
         readHeading(lines[index]) ||
+        readTableBlock(lines, index) ||
         readBlockquoteLine(lines[index]) !== null ||
         readTaskListItem(lines[index]) !== null ||
         readUnorderedListItem(lines[index]) !== null ||
@@ -2135,6 +2327,11 @@ function renderListItemContentAsHtml(item: ListItem): string {
   return paragraphsHtml + childrenHtml
 }
 
+function tableCellAlignmentStyle(alignment: TableAlignment): string {
+  if (!alignment) return ''
+  return ` style="text-align:${alignment}"`
+}
+
 function renderMessageBlockAsHtml(block: MessageBlock): string {
   if (block.kind === 'paragraph') {
     return `<p class="message-text">${renderInlineSegmentsAsHtml(block.value)}</p>`
@@ -2170,6 +2367,20 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
       .map((item) => `<li class="message-list-item"><div class="message-list-item-content">${renderListItemContentAsHtml(item)}</div></li>`)
       .join('')
     return `<ol class="message-list message-list-ordered" start="${block.start}">${items}</ol>`
+  }
+  if (block.kind === 'table') {
+    const headerCells = block.headers
+      .map((cell, index) => `<th class="message-table-head-cell"${tableCellAlignmentStyle(block.alignments[index] ?? null)}>${renderInlineSegmentsAsHtml(cell)}</th>`)
+      .join('')
+    const rows = block.rows
+      .map((row) => (
+        `<tr class="message-table-body-row">` +
+        row.map((cell, index) => `<td class="message-table-cell"${tableCellAlignmentStyle(block.alignments[index] ?? null)}>${renderInlineSegmentsAsHtml(cell)}</td>`).join('') +
+        `</tr>`
+      ))
+      .join('')
+    const body = rows ? `<tbody>${rows}</tbody>` : ''
+    return `<div class="message-table-wrap"><table class="message-table"><thead><tr>${headerCells}</tr></thead>${body}</table></div>`
   }
   if (block.kind === 'codeBlock') {
     const language = block.language
@@ -2874,6 +3085,7 @@ onBeforeUnmount(() => {
 .plan-card-markdown :deep(.message-heading),
 .plan-card-markdown :deep(.message-blockquote),
 .plan-card-markdown :deep(.message-list),
+.plan-card-markdown :deep(.message-table-wrap),
 .plan-card-markdown :deep(.message-code-block),
 .plan-card-markdown :deep(.message-divider) {
   @apply m-0;
@@ -2969,6 +3181,10 @@ onBeforeUnmount(() => {
 
 .plan-card-markdown :deep(.message-file-link) {
   @apply text-sky-700 underline decoration-sky-300 underline-offset-2;
+}
+
+.plan-card-markdown :deep(.message-table) {
+  @apply bg-white/90;
 }
 
 .plan-step-list {
@@ -3080,6 +3296,33 @@ onBeforeUnmount(() => {
 
 .message-task-checkbox {
   @apply mt-0.5 text-sm leading-none text-slate-500 select-none;
+}
+
+.message-table-wrap {
+  @apply w-full overflow-x-auto;
+}
+
+.message-table {
+  @apply min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-slate-200 bg-white text-sm text-slate-800;
+}
+
+.message-table-head-cell,
+.message-table-cell {
+  @apply border-b border-l border-slate-200 px-3 py-2 align-top whitespace-pre-wrap break-words;
+  overflow-wrap: anywhere;
+}
+
+.message-table-head-cell:first-child,
+.message-table-cell:first-child {
+  @apply border-l-0;
+}
+
+.message-table-head-cell {
+  @apply bg-slate-100 font-semibold text-slate-900;
+}
+
+.message-table-body-row:last-child .message-table-cell {
+  @apply border-b-0;
 }
 
 .message-bold-text {
