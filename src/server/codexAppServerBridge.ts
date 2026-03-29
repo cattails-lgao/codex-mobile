@@ -83,7 +83,8 @@ type GithubTrendingItem = {
   stars: number
 }
 
-const THREAD_READ_TURN_LIMIT = 1
+const THREAD_RESPONSE_TURN_LIMIT = 1
+const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -91,19 +92,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function trimThreadReadRpcResult(method: string, result: unknown): unknown {
-  if (method !== 'thread/read') return result
+function trimThreadTurnsInRpcResult(method: string, result: unknown): unknown {
+  if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
 
   const record = asRecord(result)
   const thread = asRecord(record?.thread)
   const turns = Array.isArray(thread?.turns) ? thread.turns : null
-  if (!record || !thread || !turns || turns.length <= THREAD_READ_TURN_LIMIT) return result
+  if (!record || !thread || !turns || turns.length <= THREAD_RESPONSE_TURN_LIMIT) return result
 
   return {
     ...record,
     thread: {
       ...thread,
-      turns: turns.slice(-THREAD_READ_TURN_LIMIT),
+      turns: turns.slice(-THREAD_RESPONSE_TURN_LIMIT),
     },
   }
 }
@@ -1586,7 +1587,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         const rpcResult = await appServer.rpc(body.method, body.params ?? null)
-        const result = trimThreadReadRpcResult(body.method, rpcResult)
+        const result = trimThreadTurnsInRpcResult(body.method, rpcResult)
         setJson(res, 200, { result })
         return
       }
