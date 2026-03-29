@@ -427,7 +427,7 @@
                     </div>
                     <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
                       <div v-if="block.language" class="message-code-language">{{ block.language }}</div>
-                      <pre class="message-code-pre"><code>{{ block.value }}</code></pre>
+                      <pre class="message-code-pre"><code class="hljs" v-html="renderHighlightedCodeAsHtml(block.language, block.value)"></code></pre>
                     </div>
                     <hr v-else-if="block.kind === 'thematicBreak'" class="message-divider" />
                     <p v-else-if="isMarkdownImageFailed(message.id, blockIndex)" class="message-text">{{ block.markdown }}</p>
@@ -618,6 +618,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import hljs from 'highlight.js/lib/common'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
@@ -914,6 +915,22 @@ const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
 const BOTTOM_THRESHOLD_PX = 16
+const CODE_LANGUAGE_ALIASES: Record<string, string> = {
+  js: 'javascript',
+  jsx: 'jsx',
+  ts: 'typescript',
+  tsx: 'tsx',
+  py: 'python',
+  rb: 'ruby',
+  sh: 'bash',
+  shell: 'bash',
+  zsh: 'bash',
+  yml: 'yaml',
+  md: 'markdown',
+  'c++': 'cpp',
+  'c#': 'csharp',
+  ps1: 'powershell',
+}
 type InlineSegment =
   | { kind: 'text'; value: string }
   | { kind: 'bold'; value: string }
@@ -2289,6 +2306,30 @@ function escapeHtml(value: string): string {
     .replace(/'/gu, '&#39;')
 }
 
+function normalizeCodeLanguage(language: string): string {
+  const token = language.trim().split(/\s+/u)[0]?.toLowerCase() ?? ''
+  if (!token) return ''
+  return CODE_LANGUAGE_ALIASES[token] ?? token
+}
+
+function renderHighlightedCodeAsHtml(language: string, value: string): string {
+  const normalizedLanguage = normalizeCodeLanguage(language)
+  if (!normalizedLanguage) return escapeHtml(value)
+
+  try {
+    if (hljs.getLanguage(normalizedLanguage)) {
+      return hljs.highlight(value, {
+        language: normalizedLanguage,
+        ignoreIllegals: true,
+      }).value
+    }
+  } catch {
+    // Fall back to plain escaped code when highlighting fails.
+  }
+
+  return escapeHtml(value)
+}
+
 function renderInlineSegmentsAsHtml(text: string): string {
   return parseInlineSegments(text)
     .map((segment) => {
@@ -2386,7 +2427,7 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
     const language = block.language
       ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
       : ''
-    return `<div class="message-code-block">${language}<pre class="message-code-pre"><code>${escapeHtml(block.value)}</code></pre></div>`
+    return `<div class="message-code-block">${language}<pre class="message-code-pre"><code class="hljs">${renderHighlightedCodeAsHtml(block.language, block.value)}</code></pre></div>`
   }
   if (block.kind === 'thematicBreak') {
     return '<hr class="message-divider">'
@@ -3355,6 +3396,10 @@ onBeforeUnmount(() => {
 
 .message-code-pre {
   @apply m-0 overflow-x-auto px-3 py-3 text-[13px] leading-relaxed font-mono whitespace-pre;
+}
+
+.message-code-pre :deep(.hljs) {
+  @apply block bg-transparent p-0 text-inherit;
 }
 
 .message-file-link {
