@@ -426,6 +426,19 @@
   @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
 }
 
+:root.dark .message-table {
+  @apply border-zinc-700 bg-zinc-900/90 text-zinc-100;
+}
+
+:root.dark .message-table-head-cell,
+:root.dark .message-table-cell {
+  @apply border-zinc-700;
+}
+
+:root.dark .message-table-head-cell {
+  @apply bg-zinc-800 text-zinc-100;
+}
+
 :root.dark .message-code-block {
   @apply border-zinc-700 bg-zinc-950 text-zinc-100;
 }
@@ -513,6 +526,10 @@
 
 :root.dark .plan-card-explanation {
   @apply text-zinc-300;
+}
+
+:root.dark .plan-card-markdown .message-table {
+  @apply bg-zinc-900/90;
 }
 
 :root.dark .plan-step-item {
