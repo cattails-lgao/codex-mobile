@@ -26,6 +26,8 @@ import {
 import type { SpeedMode, UiMessage, UiProjectGroup } from '../types/codex'
 import { normalizePathForUi } from '../pathUtils.js'
 
+const THREAD_INITIAL_TURN_LIMIT = 10
+
 type CurrentModelConfig = {
   model: string
   reasoningEffort: ReasoningEffort | ''
@@ -124,6 +126,19 @@ function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
     : ''
 }
 
+function trimThreadReadResponseTurns(payload: ThreadReadResponse, maxTurns: number): ThreadReadResponse {
+  const turns = Array.isArray(payload.thread?.turns) ? payload.thread.turns : []
+  if (turns.length <= maxTurns) return payload
+
+  return {
+    ...payload,
+    thread: {
+      ...payload.thread,
+      turns: turns.slice(-maxTurns),
+    },
+  }
+}
+
 function normalizeSpeedMode(value: unknown): SpeedMode {
   return typeof value === 'string' && value.trim().toLowerCase() === 'fast'
     ? 'fast'
@@ -144,7 +159,7 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
     threadId,
     includeTurns: true,
   })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(trimThreadReadResponseTurns(payload, THREAD_INITIAL_TURN_LIMIT))
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{ messages: UiMessage[]; inProgress: boolean; activeTurnId: string }> {
@@ -152,8 +167,9 @@ async function getThreadDetailV2(threadId: string): Promise<{ messages: UiMessag
     threadId,
     includeTurns: true,
   })
+  const trimmedPayload = trimThreadReadResponseTurns(payload, THREAD_INITIAL_TURN_LIMIT)
   return {
-    messages: normalizeThreadMessagesV2(payload),
+    messages: normalizeThreadMessagesV2(trimmedPayload),
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
   }
