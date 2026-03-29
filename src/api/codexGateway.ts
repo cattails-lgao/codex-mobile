@@ -26,7 +26,7 @@ import {
 import type { SpeedMode, UiMessage, UiProjectGroup } from '../types/codex'
 import { normalizePathForUi } from '../pathUtils.js'
 
-const THREAD_INITIAL_TURN_LIMIT = 10
+const THREAD_INITIAL_TURN_LIMIT = 1
 
 type CurrentModelConfig = {
   model: string
