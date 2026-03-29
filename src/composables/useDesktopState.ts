@@ -1382,6 +1382,20 @@ export function useDesktopState() {
     livePlanMessagesByThreadId.value = omitKey(livePlanMessagesByThreadId.value, threadId)
   }
 
+  function clearCompletedTurnLiveState(threadId: string): void {
+    if (!threadId) return
+    clearLivePlansForThread(threadId)
+    clearLiveReasoningForThread(threadId)
+    setTurnActivityForThread(threadId, null)
+    if (liveCommandsByThreadId.value[threadId]) {
+      liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+    }
+    if (activeTurnIdByThreadId.value[threadId]) {
+      activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, threadId)
+    }
+    clearPendingTurnRequest(threadId)
+  }
+
   function normalizePlanStepStatus(value: unknown): UiPlanStep['status'] {
     if (value === 'completed') return 'completed'
     if (value === 'inProgress' || value === 'in_progress') return 'inProgress'
@@ -2403,7 +2417,7 @@ export function useDesktopState() {
       }
       setThreadInProgress(threadId, inProgress)
       if (!inProgress) {
-        clearLivePlansForThread(threadId)
+        clearCompletedTurnLiveState(threadId)
       }
       markThreadAsRead(threadId)
     } finally {
