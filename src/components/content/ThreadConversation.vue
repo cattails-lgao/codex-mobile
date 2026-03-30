@@ -1118,6 +1118,7 @@ type ParsedToolQuestion = {
 type TurnFileChangeSummary = {
   changes: UiFileChange[]
   sourceMessageIds: string[]
+  source: 'assistant' | 'metadata'
 }
 
 function isFilePath(value: string): boolean {
@@ -1379,6 +1380,7 @@ const copyableResponseContentByAnchorId = computed<Record<string, string>>(() =>
   }
 
   for (const [anchorMessageId, summary] of Object.entries(anchoredFileChangeSummaryByAnchorId.value)) {
+    if (summary.source !== 'metadata') continue
     const fileChangeCopy = buildFileChangeCopyText(summary)
     if (!fileChangeCopy) continue
     const existing = next[anchorMessageId]?.trim()
@@ -1459,11 +1461,19 @@ function aggregateFileChanges(changes: UiFileChange[]): UiFileChange[] {
 
 const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChangeSummary>>(() => {
   const assistantAnchorIdByTurnKey = new Map<string, string>()
+  const assistantSummaryByAnchorId = new Map<string, TurnFileChangeSummary>()
   const fileChangeMessagesByTurnKey = new Map<string, UiMessage[]>()
 
   for (const message of props.messages) {
     if (isCopyableAssistantMessage(message) && typeof message.turnIndex === 'number') {
       assistantAnchorIdByTurnKey.set(`turn:${message.turnIndex}`, message.id)
+      if (Array.isArray(message.fileChanges) && message.fileChanges.length > 0) {
+        assistantSummaryByAnchorId.set(message.id, {
+          changes: aggregateFileChanges(message.fileChanges),
+          sourceMessageIds: [],
+          source: 'assistant',
+        })
+      }
     }
 
     if (!isFileChangeMessage(message)) continue
@@ -1480,6 +1490,13 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
     summaries[anchorId] = {
       changes: aggregateFileChanges(messages.flatMap((message) => message.fileChanges ?? [])),
       sourceMessageIds: messages.map((message) => message.id),
+      source: 'metadata',
+    }
+  }
+
+  for (const [anchorId, summary] of assistantSummaryByAnchorId.entries()) {
+    if (!summaries[anchorId]) {
+      summaries[anchorId] = summary
     }
   }
 
@@ -1510,6 +1527,7 @@ const standaloneFileChangeSummaryByMessageId = computed<Record<string, TurnFileC
     summaries[visibleMessage.id] = {
       changes: aggregateFileChanges(messages.flatMap((message) => message.fileChanges ?? [])),
       sourceMessageIds: messages.map((message) => message.id),
+      source: 'metadata',
     }
   }
 
