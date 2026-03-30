@@ -510,3 +510,10 @@ If a finding conflicts with current official docs or current official code, trea
   - switch to a single-column full-screen diff on narrow screens
   - move the changed-file list behind a top toolbar trigger and reveal it as a bottom sheet
   - keep line numbers visible but shrink their gutter widths on mobile so diff code keeps most of the screen width
+
+## Findings: Build Badge Placement On Mobile (2026-03-30)
+
+- The global top-right build badge in `App.vue` is acceptable on desktop but can overlap transient mobile overlays such as the diff viewer because it sits above content with a fixed viewport anchor.
+- A safer mobile fallback is:
+  - hide the floating badge on mobile
+  - expose the same version/worktree string inside the existing Settings panel instead of adding another mobile-only surface

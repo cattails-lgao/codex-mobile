@@ -157,6 +157,12 @@
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
               </button>
+              <div class="sidebar-settings-row sidebar-settings-row-static">
+                <span class="sidebar-settings-label">Version</span>
+                <span class="sidebar-settings-value sidebar-settings-value-version">
+                  nervmor {{ worktreeName }} · v{{ appVersion }}
+                </span>
+              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -271,7 +277,7 @@
       </section>
     </template>
   </DesktopLayout>
-  <div class="build-badge" aria-label="Author name, worktree name, and version">
+  <div v-if="!isMobile" class="build-badge" aria-label="Author name, worktree name, and version">
     nervmor {{ worktreeName }} · v{{ appVersion }}
   </div>
 </template>
@@ -1728,6 +1734,10 @@ async function submitFirstMessageForNewThread(
   @apply border-t border-zinc-100;
 }
 
+.sidebar-settings-row-static {
+  @apply cursor-default hover:bg-transparent items-start gap-3;
+}
+
 .sidebar-settings-account-section {
   @apply border-t border-zinc-100 bg-zinc-50/60 px-3 py-3;
 }
@@ -1830,6 +1840,10 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-value {
   @apply text-xs text-zinc-500 bg-zinc-100 rounded px-1.5 py-0.5;
+}
+
+.sidebar-settings-value-version {
+  @apply max-w-[60%] break-all text-right font-mono text-[11px];
 }
 
 .sidebar-settings-toggle {
