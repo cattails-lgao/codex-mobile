@@ -480,3 +480,14 @@ If a finding conflicts with current official docs or current official code, trea
 - Official Codex protocol marks transient stream failures separately from terminal failures: `stream_error` is documented as a notification the system is already handling with retry/backoff, and v2 `error` notifications expose `willRetry`.
 - In `openai/codex` TUI (`codex-rs/tui_app_server/src/chatwidget.rs`), retry-status UI is restored on the next non-retry notification instead of remaining visible for the rest of the turn.
 - For codexui parity, retry/reconnect overlays should be stored as transient state and cleared when follow-up non-retry events arrive or when the transport emits `ready` after reconnect.
+
+## Findings: File Diff Viewer Rendering (2026-03-30)
+
+- Official `openai/codex` TUI renders changed files as a compact summary first, then lets the user inspect per-file diffs from the change list instead of navigating away to a file URL.
+- The canonical per-file payload remains `fileChange.changes[*].diff`; `turn/diff/updated` is useful as turn-level supplemental state but is not required to render an individual file diff viewer.
+- For rename/move cases, the target syntax/language and display label should prefer `move_path` when present, while still keeping the original path visible in the header.
+- A safe web fallback is:
+  - open an in-app modal/panel from the changed-file summary row
+  - render unified diff hunks with separate old/new line gutters
+  - fall back to synthetic add/delete-only rendering when only raw file content is available
+  - show an explicit empty-state message when summaries were recovered from assistant text but no diff payload survived in thread history

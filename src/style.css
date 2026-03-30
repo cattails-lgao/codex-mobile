@@ -481,6 +481,10 @@
   @apply text-zinc-200;
 }
 
+:root.dark .file-change-path-button {
+  @apply text-sky-300 hover:text-sky-200;
+}
+
 :root.dark .file-change-summary-status {
   @apply text-zinc-400;
 }
@@ -514,6 +518,74 @@
 }
 
 :root.dark .file-change-delta {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .diff-viewer-shell {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-sidebar {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .diff-viewer-sidebar-header {
+  @apply border-zinc-700;
+}
+
+:root.dark .diff-viewer-sidebar-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-sidebar-count {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-file-button {
+  @apply hover:border-zinc-700 hover:bg-zinc-900;
+}
+
+:root.dark .diff-viewer-file-button[data-active='true'] {
+  @apply border-sky-800 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-file-label {
+  @apply text-zinc-200;
+}
+
+:root.dark .diff-viewer-file-delta {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .diff-viewer-main {
+  @apply bg-zinc-900;
+}
+
+:root.dark .diff-viewer-toolbar {
+  @apply border-zinc-700;
+}
+
+:root.dark .diff-viewer-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-subtitle {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-empty-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-empty-text {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-meta {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .diff-viewer-language {
   @apply bg-zinc-800 text-zinc-300;
 }
 
