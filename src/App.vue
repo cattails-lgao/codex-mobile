@@ -277,9 +277,6 @@
       </section>
     </template>
   </DesktopLayout>
-  <div v-if="!isMobile" class="build-badge" aria-label="Author name, worktree name, and version">
-    nervmor {{ worktreeName }} · v{{ appVersion }}
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -1872,10 +1869,6 @@ async function submitFirstMessageForNewThread(
 .settings-panel-leave-to {
   opacity: 0;
   transform: translateY(8px);
-}
-
-.build-badge {
-  @apply fixed top-3 right-3 z-50 rounded-md border border-zinc-200 bg-white/95 px-2 py-1 text-xs font-medium text-zinc-600 shadow-sm backdrop-blur;
 }
 
 </style>
