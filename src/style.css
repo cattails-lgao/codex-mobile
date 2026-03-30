@@ -477,6 +477,46 @@
   @apply text-zinc-300;
 }
 
+:root.dark .file-change-summary-label {
+  @apply text-zinc-200;
+}
+
+:root.dark .file-change-summary-status {
+  @apply text-zinc-400;
+}
+
+:root.dark .file-change-list {
+  @apply border-zinc-700 bg-zinc-900/70;
+}
+
+:root.dark .file-change-item {
+  @apply text-zinc-200;
+}
+
+:root.dark .file-change-badge[data-operation='add'] {
+  @apply bg-emerald-950/70 text-emerald-300;
+}
+
+:root.dark .file-change-badge[data-operation='update'] {
+  @apply bg-sky-950/70 text-sky-300;
+}
+
+:root.dark .file-change-badge[data-operation='delete'] {
+  @apply bg-rose-950/70 text-rose-300;
+}
+
+:root.dark .file-change-badge[data-operation='move'] {
+  @apply bg-amber-950/70 text-amber-300;
+}
+
+:root.dark .file-change-arrow {
+  @apply text-zinc-500;
+}
+
+:root.dark .file-change-delta {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
 :root.dark .worked-separator-text {
   @apply text-zinc-300;
 }

@@ -113,45 +113,57 @@
         >
           <div class="message-stack" :data-role="message.role">
             <article class="message-body" :data-role="message.role">
-              <section v-if="readStandaloneFileChangeSummary(message)" class="file-change-card">
-                <div class="file-change-card-header">
-                  <p class="file-change-card-title">Modified files</p>
-                  <span class="file-change-card-count">
-                    {{ formatFileChangeCountLabel(readStandaloneFileChangeSummary(message)?.changes.length ?? 0) }}
+              <section v-if="readStandaloneFileChangeSummary(message)" class="file-change-summary-block">
+                <button
+                  type="button"
+                  class="cmd-row cmd-row-group cmd-compact file-change-summary-row"
+                  :class="{ 'cmd-expanded': isFileChangeSummaryExpanded(message) }"
+                  @click="toggleFileChangeSummary(message)"
+                >
+                  <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isFileChangeSummaryExpanded(message) }">▶</span>
+                  <span class="file-change-summary-label">
+                    {{ fileChangeSummaryLabel(readStandaloneFileChangeSummary(message)) }}
                   </span>
+                  <span class="file-change-summary-status">
+                    {{ fileChangeSummaryStatus(readStandaloneFileChangeSummary(message)) }}
+                  </span>
+                </button>
+                <div class="cmd-group-wrap" :class="{ 'cmd-group-visible': isFileChangeSummaryExpanded(message) }">
+                  <div class="file-change-panel-inner">
+                    <ul class="file-change-list">
+                      <li
+                        v-for="change in readStandaloneFileChangeSummary(message)?.changes ?? []"
+                        :key="`file-change:${message.id}:${change.path}:${change.movedToPath || ''}`"
+                        class="file-change-item"
+                      >
+                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
+                          {{ fileChangeOperationLabel(change) }}
+                        </span>
+                        <a
+                          class="message-file-link file-change-path"
+                          :href="toBrowseUrl(change.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="change.path"
+                        >
+                          {{ displayFileChangePath(change.path) }}
+                        </a>
+                        <span v-if="change.movedToPath" class="file-change-arrow">→</span>
+                        <a
+                          v-if="change.movedToPath"
+                          class="message-file-link file-change-path"
+                          :href="toBrowseUrl(change.movedToPath)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="change.movedToPath"
+                        >
+                          {{ displayFileChangePath(change.movedToPath) }}
+                        </a>
+                        <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
-                <ul class="file-change-list">
-                  <li
-                    v-for="change in readStandaloneFileChangeSummary(message)?.changes ?? []"
-                    :key="`file-change:${message.id}:${change.path}:${change.movedToPath || ''}`"
-                    class="file-change-item"
-                  >
-                    <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
-                      {{ fileChangeOperationLabel(change) }}
-                    </span>
-                    <a
-                      class="message-file-link file-change-path"
-                      :href="toBrowseUrl(change.path)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="change.path"
-                    >
-                      {{ displayFileChangePath(change.path) }}
-                    </a>
-                    <span v-if="change.movedToPath" class="file-change-arrow">→</span>
-                    <a
-                      v-if="change.movedToPath"
-                      class="message-file-link file-change-path"
-                      :href="toBrowseUrl(change.movedToPath)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="change.movedToPath"
-                    >
-                      {{ displayFileChangePath(change.movedToPath) }}
-                    </a>
-                    <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
-                  </li>
-                </ul>
               </section>
             </article>
           </div>
@@ -501,45 +513,57 @@
                 </div>
               </article>
 
-              <section v-if="readAnchoredFileChangeSummary(message)" class="file-change-card file-change-card-inline">
-                <div class="file-change-card-header">
-                  <p class="file-change-card-title">Modified files</p>
-                  <span class="file-change-card-count">
-                    {{ formatFileChangeCountLabel(readAnchoredFileChangeSummary(message)?.changes.length ?? 0) }}
+              <section v-if="readAnchoredFileChangeSummary(message)" class="file-change-summary-block file-change-summary-block-inline">
+                <button
+                  type="button"
+                  class="cmd-row cmd-row-group cmd-compact file-change-summary-row"
+                  :class="{ 'cmd-expanded': isFileChangeSummaryExpanded(message) }"
+                  @click="toggleFileChangeSummary(message)"
+                >
+                  <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isFileChangeSummaryExpanded(message) }">▶</span>
+                  <span class="file-change-summary-label">
+                    {{ fileChangeSummaryLabel(readAnchoredFileChangeSummary(message)) }}
                   </span>
+                  <span class="file-change-summary-status">
+                    {{ fileChangeSummaryStatus(readAnchoredFileChangeSummary(message)) }}
+                  </span>
+                </button>
+                <div class="cmd-group-wrap" :class="{ 'cmd-group-visible': isFileChangeSummaryExpanded(message) }">
+                  <div class="file-change-panel-inner">
+                    <ul class="file-change-list">
+                      <li
+                        v-for="change in readAnchoredFileChangeSummary(message)?.changes ?? []"
+                        :key="`file-change:inline:${message.id}:${change.path}:${change.movedToPath || ''}`"
+                        class="file-change-item"
+                      >
+                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
+                          {{ fileChangeOperationLabel(change) }}
+                        </span>
+                        <a
+                          class="message-file-link file-change-path"
+                          :href="toBrowseUrl(change.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="change.path"
+                        >
+                          {{ displayFileChangePath(change.path) }}
+                        </a>
+                        <span v-if="change.movedToPath" class="file-change-arrow">→</span>
+                        <a
+                          v-if="change.movedToPath"
+                          class="message-file-link file-change-path"
+                          :href="toBrowseUrl(change.movedToPath)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="change.movedToPath"
+                        >
+                          {{ displayFileChangePath(change.movedToPath) }}
+                        </a>
+                        <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
-                <ul class="file-change-list">
-                  <li
-                    v-for="change in readAnchoredFileChangeSummary(message)?.changes ?? []"
-                    :key="`file-change:inline:${message.id}:${change.path}:${change.movedToPath || ''}`"
-                    class="file-change-item"
-                  >
-                    <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
-                      {{ fileChangeOperationLabel(change) }}
-                    </span>
-                    <a
-                      class="message-file-link file-change-path"
-                      :href="toBrowseUrl(change.path)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="change.path"
-                    >
-                      {{ displayFileChangePath(change.path) }}
-                    </a>
-                    <span v-if="change.movedToPath" class="file-change-arrow">→</span>
-                    <a
-                      v-if="change.movedToPath"
-                      class="message-file-link file-change-path"
-                      :href="toBrowseUrl(change.movedToPath)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="change.movedToPath"
-                    >
-                      {{ displayFileChangePath(change.movedToPath) }}
-                    </a>
-                    <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
-                  </li>
-                </ul>
               </section>
 
               <div
@@ -722,6 +746,7 @@ const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsedAutoCommandIds = ref<Set<string>>(new Set())
 const expandedCommandGroupIds = ref<Set<string>>(new Set())
 const expandedWorkedIds = ref<Set<string>>(new Set())
+const expandedFileChangeSummaryIds = ref<Set<string>>(new Set())
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
   const normalized = text.replace(/\r\n/g, '\n').trim()
@@ -948,6 +973,17 @@ function toggleWorkedExpand(message: UiMessage): void {
 
 function isWorkedExpanded(message: UiMessage): boolean {
   return expandedWorkedIds.value.has(message.id)
+}
+
+function toggleFileChangeSummary(message: UiMessage): void {
+  const next = new Set(expandedFileChangeSummaryIds.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedFileChangeSummaryIds.value = next
+}
+
+function isFileChangeSummaryExpanded(message: UiMessage): boolean {
+  return expandedFileChangeSummaryIds.value.has(message.id)
 }
 
 function commandStatusLabel(message: UiMessage): string {
@@ -1527,7 +1563,56 @@ function formatFileChangeDelta(change: UiFileChange): string {
 }
 
 function formatFileChangeCountLabel(count: number): string {
-  return count === 1 ? '1 file' : `${count} files`
+  return count === 1 ? '1 file changed' : `${count} files changed`
+}
+
+function summarizeFileChangeKinds(summary: TurnFileChangeSummary | null): string {
+  if (!summary || summary.changes.length === 0) return ''
+  let added = 0
+  let deleted = 0
+  let edited = 0
+  let moved = 0
+
+  for (const change of summary.changes) {
+    if (change.operation === 'add') {
+      added += 1
+      continue
+    }
+    if (change.operation === 'delete') {
+      deleted += 1
+      continue
+    }
+    if (change.movedToPath) {
+      moved += 1
+      continue
+    }
+    edited += 1
+  }
+
+  const parts: string[] = []
+  if (edited > 0) parts.push(`${edited} edited`)
+  if (added > 0) parts.push(`${added} added`)
+  if (deleted > 0) parts.push(`${deleted} deleted`)
+  if (moved > 0) parts.push(`${moved} moved`)
+  return parts.join(', ')
+}
+
+function fileChangeSummaryLabel(summary: TurnFileChangeSummary | null): string {
+  if (!summary || summary.changes.length === 0) return 'Modified files'
+  const countLabel = formatFileChangeCountLabel(summary.changes.length)
+  const kindSummary = summarizeFileChangeKinds(summary)
+  return kindSummary ? `${countLabel} · ${kindSummary}` : countLabel
+}
+
+function fileChangeSummaryStatus(summary: TurnFileChangeSummary | null): string {
+  if (!summary || summary.changes.length === 0) return ''
+  const totalAdded = summary.changes.reduce((sum, change) => sum + change.addedLineCount, 0)
+  const totalRemoved = summary.changes.reduce((sum, change) => sum + change.removedLineCount, 0)
+  const parts: string[] = []
+  if (totalAdded > 0) parts.push(`+${totalAdded}`)
+  if (totalRemoved > 0) parts.push(`-${totalRemoved}`)
+  if (parts.length > 0) return parts.join(' ')
+  return summary.changes.some((change) => change.movedToPath) ? 'Moved' : 'Ready'
 }
 
 function displayFileChangePath(pathValue: string): string {
@@ -3031,6 +3116,13 @@ watch(
       expandedCommandGroupIds.value,
       new Set(Object.keys(groupedCommandsByLatestId.value)),
     )
+    expandedFileChangeSummaryIds.value = pruneCommandIdSet(
+      expandedFileChangeSummaryIds.value,
+      new Set([
+        ...Object.keys(anchoredFileChangeSummaryByAnchorId.value),
+        ...Object.keys(standaloneFileChangeSummaryByMessageId.value),
+      ]),
+    )
 
     await scheduleScrollRestore()
   },
@@ -3869,32 +3961,36 @@ onBeforeUnmount(() => {
   max-height: 9rem;
 }
 
-.file-change-card {
-  @apply mt-3 rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 shadow-sm;
+.file-change-summary-block {
+  @apply mt-3 flex flex-col gap-0;
 }
 
-.file-change-card-inline {
+.file-change-summary-block-inline {
   @apply mt-4;
 }
 
-.file-change-card-header {
-  @apply flex items-center justify-between gap-3;
+.file-change-summary-row {
+  @apply border-dashed;
 }
 
-.file-change-card-title {
-  @apply m-0 text-sm font-semibold text-zinc-900;
+.file-change-summary-label {
+  @apply flex-1 min-w-0 truncate text-xs font-medium text-zinc-700;
 }
 
-.file-change-card-count {
-  @apply inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-600;
+.file-change-summary-status {
+  @apply max-w-24 truncate text-right text-[11px] font-medium text-zinc-500 flex-shrink-0;
+}
+
+.file-change-panel-inner {
+  @apply mb-1 min-h-0 overflow-hidden pl-2;
 }
 
 .file-change-list {
-  @apply mt-3 flex list-none flex-col gap-2 p-0;
+  @apply m-0 flex list-none flex-col gap-1 rounded-xl border border-zinc-200 bg-white/80 p-2;
 }
 
 .file-change-item {
-  @apply flex flex-wrap items-center gap-2 text-sm text-zinc-700;
+  @apply flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700;
 }
 
 .file-change-badge {
@@ -3918,7 +4014,7 @@ onBeforeUnmount(() => {
 }
 
 .file-change-path {
-  @apply break-all font-mono text-[13px];
+  @apply min-w-0 break-all font-mono text-[13px];
 }
 
 .file-change-arrow {
