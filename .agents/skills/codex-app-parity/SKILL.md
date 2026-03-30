@@ -491,3 +491,13 @@ If a finding conflicts with current official docs or current official code, trea
   - render unified diff hunks with separate old/new line gutters
   - fall back to synthetic add/delete-only rendering when only raw file content is available
   - show an explicit empty-state message when summaries were recovered from assistant text but no diff payload survived in thread history
+
+## Findings: Session JSONL Patch Recovery (2026-03-30)
+
+- In this workspace with Codex CLI `0.116.0`, `thread/read` can return full turn/item history while still omitting any persisted `fileChange` items for older turns.
+- The raw session JSONL referenced by `thread.path` can still preserve edit intent through `response_item.type = "custom_tool_call"` entries where `name = "apply_patch"` and `input` contains the patch body.
+- A practical parity fallback for historical diff viewing is:
+  - resolve the session JSONL from `thread/read`
+  - group `apply_patch` tool calls by `turn_context.turn_id`
+  - parse per-file sections from the patch body
+  - synthesize `fileChange`-like UI metadata only when canonical `fileChange` items are missing

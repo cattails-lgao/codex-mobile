@@ -67,6 +67,21 @@ type ThreadSearchIndex = {
   docsById: Map<string, ThreadSearchDocument>
 }
 
+type SessionRecoveredFileChange = {
+  path: string
+  operation: 'add' | 'delete' | 'update'
+  movedToPath: string | null
+  diff: string
+  addedLineCount: number
+  removedLineCount: number
+}
+
+type SessionRecoveredTurnFileChanges = {
+  turnId: string
+  turnIndex: number
+  fileChanges: SessionRecoveredFileChange[]
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -134,6 +149,229 @@ function extractThreadMessageText(threadReadPayload: unknown): string {
   }
 
   return parts.join('\n').trim()
+}
+
+function readNonEmptyString(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : ''
+}
+
+function countRecoveredContentLines(value: string): number {
+  if (!value) return 0
+  const normalized = value.replace(/\r\n/g, '\n')
+  const trimmed = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized
+  if (!trimmed) return 0
+  return trimmed.split('\n').length
+}
+
+function countRecoveredPatchLines(value: string): { addedLineCount: number; removedLineCount: number } {
+  let addedLineCount = 0
+  let removedLineCount = 0
+
+  for (const line of value.replace(/\r\n/g, '\n').split('\n')) {
+    if (!line) continue
+    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) continue
+    if (line.startsWith('+')) {
+      addedLineCount += 1
+      continue
+    }
+    if (line.startsWith('-')) {
+      removedLineCount += 1
+    }
+  }
+
+  return { addedLineCount, removedLineCount }
+}
+
+function mergeRecoveredDiff(first: string, second: string): string {
+  if (!first) return second
+  if (!second || first === second) return first
+  return `${first}\n${second}`.trim()
+}
+
+function mergeRecoveredFileChange(first: SessionRecoveredFileChange, second: SessionRecoveredFileChange): SessionRecoveredFileChange {
+  const operation = first.operation === 'add' || second.operation === 'add'
+    ? 'add'
+    : first.operation === 'delete' || second.operation === 'delete'
+      ? 'delete'
+      : 'update'
+
+  return {
+    path: second.path || first.path,
+    operation,
+    movedToPath: second.movedToPath ?? first.movedToPath ?? null,
+    diff: mergeRecoveredDiff(first.diff, second.diff),
+    addedLineCount: first.addedLineCount + second.addedLineCount,
+    removedLineCount: first.removedLineCount + second.removedLineCount,
+  }
+}
+
+function isApplyPatchSectionBoundary(value: string): boolean {
+  return value.startsWith('*** Update File: ')
+    || value.startsWith('*** Add File: ')
+    || value.startsWith('*** Delete File: ')
+    || value === '*** End Patch'
+}
+
+function parseApplyPatchInput(input: string): SessionRecoveredFileChange[] {
+  const normalized = input.replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
+  const changes: SessionRecoveredFileChange[] = []
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+
+    if (line.startsWith('*** Add File: ')) {
+      const path = line.slice('*** Add File: '.length).trim()
+      const contentLines: string[] = []
+      for (index += 1; index < lines.length; index += 1) {
+        const nextLine = lines[index] ?? ''
+        if (isApplyPatchSectionBoundary(nextLine)) {
+          index -= 1
+          break
+        }
+        contentLines.push(nextLine.startsWith('+') ? nextLine.slice(1) : nextLine)
+      }
+      const diff = contentLines.join('\n').trimEnd()
+      if (path) {
+        changes.push({
+          path,
+          operation: 'add',
+          movedToPath: null,
+          diff,
+          addedLineCount: countRecoveredContentLines(diff),
+          removedLineCount: 0,
+        })
+      }
+      continue
+    }
+
+    if (line.startsWith('*** Delete File: ')) {
+      const path = line.slice('*** Delete File: '.length).trim()
+      if (path) {
+        changes.push({
+          path,
+          operation: 'delete',
+          movedToPath: null,
+          diff: '',
+          addedLineCount: 0,
+          removedLineCount: 0,
+        })
+      }
+      continue
+    }
+
+    if (line.startsWith('*** Update File: ')) {
+      const path = line.slice('*** Update File: '.length).trim()
+      let movedToPath: string | null = null
+      const diffLines: string[] = []
+
+      for (index += 1; index < lines.length; index += 1) {
+        const nextLine = lines[index] ?? ''
+        if (nextLine.startsWith('*** Move to: ')) {
+          const moved = nextLine.slice('*** Move to: '.length).trim()
+          movedToPath = moved || null
+          continue
+        }
+        if (isApplyPatchSectionBoundary(nextLine)) {
+          index -= 1
+          break
+        }
+        diffLines.push(nextLine)
+      }
+
+      const diff = diffLines.join('\n').trimEnd()
+      const counts = countRecoveredPatchLines(diff)
+      if (path) {
+        changes.push({
+          path,
+          operation: 'update',
+          movedToPath,
+          diff,
+          ...counts,
+        })
+      }
+    }
+  }
+
+  return changes
+}
+
+function buildSessionFileChangeFallback(threadReadPayload: unknown, sessionLogRaw: string): SessionRecoveredTurnFileChanges[] {
+  const payload = asRecord(threadReadPayload)
+  const thread = asRecord(payload?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : []
+  const turnIndexById = new Map<string, number>()
+
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
+    const turnRecord = asRecord(turns[turnIndex])
+    const turnId = readNonEmptyString(turnRecord?.id)
+    if (turnId) {
+      turnIndexById.set(turnId, turnIndex)
+    }
+  }
+
+  const collectedByTurnId = new Map<string, SessionRecoveredFileChange[]>()
+  let currentTurnId = ''
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const payloadRecord = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(payloadRecord?.turn_id) || currentTurnId
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId || !turnIndexById.has(currentTurnId)) {
+      continue
+    }
+
+    const payloadRecord = asRecord(row.payload)
+    if (
+      payloadRecord?.type !== 'custom_tool_call'
+      || payloadRecord.name !== 'apply_patch'
+      || payloadRecord.status !== 'completed'
+    ) {
+      continue
+    }
+
+    const input = readNonEmptyString(payloadRecord.input)
+    if (!input) continue
+
+    const parsedChanges = parseApplyPatchInput(input)
+    if (parsedChanges.length === 0) continue
+
+    const previous = collectedByTurnId.get(currentTurnId) ?? []
+    previous.push(...parsedChanges)
+    collectedByTurnId.set(currentTurnId, previous)
+  }
+
+  const recovered: SessionRecoveredTurnFileChanges[] = []
+  for (const [turnId, fileChanges] of collectedByTurnId.entries()) {
+    const turnIndex = turnIndexById.get(turnId)
+    if (typeof turnIndex !== 'number' || fileChanges.length === 0) continue
+
+    const mergedByPath = new Map<string, SessionRecoveredFileChange>()
+    for (const fileChange of fileChanges) {
+      const key = `${fileChange.path}\u0000${fileChange.movedToPath ?? ''}`
+      const previous = mergedByPath.get(key)
+      mergedByPath.set(key, previous ? mergeRecoveredFileChange(previous, fileChange) : { ...fileChange })
+    }
+
+    recovered.push({
+      turnId,
+      turnIndex,
+      fileChanges: Array.from(mergedByPath.values()),
+    })
+  }
+
+  return recovered.sort((first, second) => first.turnIndex - second.turnIndex)
 }
 
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
@@ -1227,6 +1465,34 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const result = await appServer.rpc(body.method, body.params ?? null)
         setJson(res, 200, { result })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-file-change-fallback') {
+        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+
+        const threadReadResult = await appServer.rpc('thread/read', {
+          threadId,
+          includeTurns: true,
+        })
+        const threadReadRecord = asRecord(threadReadResult)
+        const threadRecord = asRecord(threadReadRecord?.thread)
+        const sessionPath = readNonEmptyString(threadRecord?.path)
+        if (!sessionPath || !isAbsolute(sessionPath)) {
+          setJson(res, 200, { data: [] })
+          return
+        }
+
+        try {
+          const sessionLogRaw = await readFile(sessionPath, 'utf8')
+          setJson(res, 200, { data: buildSessionFileChangeFallback(threadReadResult, sessionLogRaw) })
+        } catch {
+          setJson(res, 200, { data: [] })
+        }
         return
       }
 

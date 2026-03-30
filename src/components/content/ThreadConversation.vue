@@ -1521,6 +1521,12 @@ function showForkResponseButton(message: UiMessage): boolean {
   return typeof forkableTurnIndexByAnchorId.value[message.id] === 'number'
 }
 
+function mergeFileChangeDiff(first: string, second: string): string {
+  if (!first) return second
+  if (!second || first === second) return first
+  return `${first}\n${second}`.trim()
+}
+
 function mergeFileChangeEntry(first: UiFileChange, second: UiFileChange): UiFileChange {
   const operation = first.operation === 'add' || second.operation === 'add'
     ? 'add'
@@ -1531,7 +1537,7 @@ function mergeFileChangeEntry(first: UiFileChange, second: UiFileChange): UiFile
     path: second.path || first.path,
     operation,
     movedToPath: second.movedToPath ?? first.movedToPath ?? null,
-    diff: second.diff || first.diff,
+    diff: mergeFileChangeDiff(first.diff, second.diff),
     addedLineCount: first.addedLineCount + second.addedLineCount,
     removedLineCount: first.removedLineCount + second.removedLineCount,
   }
@@ -1766,7 +1772,7 @@ function inferDiffViewerLanguage(change: UiFileChange): string {
 }
 
 function hasStructuredUnifiedDiff(change: UiFileChange): boolean {
-  return /^diff --git |^@@ |^--- |^\+\+\+ /mu.test(change.diff)
+  return change.operation === 'update' && /^diff --git |^@@ |^--- |^\+\+\+ |^[ +-]|^\*\*\* (Move to:|End of File)/mu.test(change.diff)
 }
 
 function buildSyntheticDiffLines(change: UiFileChange): DiffViewerLine[] {
