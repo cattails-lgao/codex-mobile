@@ -1835,7 +1835,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .sidebar-settings-version-note {
-  @apply border-t border-zinc-100 px-3 py-1.5 flex justify-end bg-zinc-50/40;
+  @apply border-t border-zinc-100 px-3 py-1.5 flex justify-end;
 }
 
 .sidebar-settings-value-version {
