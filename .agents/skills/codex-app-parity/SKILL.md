@@ -501,3 +501,12 @@ If a finding conflicts with current official docs or current official code, trea
   - group `apply_patch` tool calls by `turn_context.turn_id`
   - parse per-file sections from the patch body
   - synthesize `fileChange`-like UI metadata only when canonical `fileChange` items are missing
+
+## Findings: Mobile Diff Viewer Layout (2026-03-30)
+
+- Official Codex references inspected here cover compact file summaries and per-file diff inspection, but do not provide a distinct mobile-web layout pattern for narrow viewports.
+- For this repo, a conservative mobile fallback is more usable than keeping the desktop split pane:
+  - preserve the desktop two-column viewer on wide screens
+  - switch to a single-column full-screen diff on narrow screens
+  - move the changed-file list behind a top toolbar trigger and reveal it as a bottom sheet
+  - keep line numbers visible but shrink their gutter widths on mobile so diff code keeps most of the screen width

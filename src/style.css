@@ -565,6 +565,10 @@
   @apply border-zinc-700;
 }
 
+:root.dark .diff-viewer-mobile-files-button {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-200;
+}
+
 :root.dark .diff-viewer-title {
   @apply text-zinc-100;
 }
@@ -587,6 +591,18 @@
 
 :root.dark .diff-viewer-language {
   @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .diff-viewer-mobile-sheet {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-mobile-sheet-handle {
+  @apply bg-zinc-700;
+}
+
+:root.dark .diff-viewer-mobile-sheet-header {
+  @apply border-zinc-700;
 }
 
 :root.dark .worked-separator-text {
