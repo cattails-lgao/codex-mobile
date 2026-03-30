@@ -218,6 +218,20 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: File Change Turn Summaries (2026-03-30)
+
+- Official app-server docs in `openai/codex` confirm that:
+  - `turn/diff/updated` carries `{ threadId, turnId, diff }` as the latest aggregated unified diff for the whole turn.
+  - `fileChange` thread items carry `{ id, changes, status }`.
+  - Each `changes` entry is `{ path, kind, diff }`.
+- For persisted/history-backed UI summaries, prefer `fileChange` thread items over reconstructing state from deltas:
+  - `kind` maps to add/delete/update.
+  - `update` may include `move_path` for rename/move handling.
+  - `item/completed` is the authoritative final state for whether edits actually applied.
+- For user-facing file summaries, treat `turn/diff/updated` as a supplemental aggregated diff source, not the only source:
+  - pure rename/move flows may not emit a meaningful turn diff payload for summary text.
+  - `fileChange` items are the more reliable source for per-file operation labels.
+
 ## Findings: Mobile Composer Submit Stabilization (2026-03-28)
 
 - In this workspace, mobile web send UX is more reliable when submit does two things together:
