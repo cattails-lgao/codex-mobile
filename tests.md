@@ -371,6 +371,7 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - Streaming updates do not force auto-scroll to the bottom when user has manually scrolled away.
 - User can continue reading older history while the response streams.
+- If the thread is already at the bottom when streaming starts, the latest streaming overlay remains visible.
 
 #### Rollback/Cleanup
-- Revert commit `bc5b7db` to restore previous behavior.
+- Revert the scroll-preservation change in `src/components/content/ThreadConversation.vue` if manual scroll locking needs to be removed.
