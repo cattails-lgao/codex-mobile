@@ -682,6 +682,12 @@ function pickWeeklyQuotaWindow(account: UiAccountEntry) {
   return quota.secondary ?? null
 }
 
+function formatResetDateCompact(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  const date = new Date(resetsAt * 1000)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
 function formatAccountQuota(account: UiAccountEntry): string {
   if (isAccountUnavailable(account)) {
     return account.quotaError || '402 Payment Required'
@@ -690,7 +696,10 @@ function formatAccountQuota(account: UiAccountEntry): string {
   const window = pickWeeklyQuotaWindow(account)
   if (window) {
     const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
-    return `${remainingPercent}% weekly remaining`
+    const refreshDate = formatResetDateCompact(window.resetsAt)
+    return refreshDate
+      ? `${remainingPercent}% weekly remaining · ${refreshDate}`
+      : `${remainingPercent}% weekly remaining`
   }
   if (quota?.credits?.unlimited) {
     return 'Unlimited credits'
