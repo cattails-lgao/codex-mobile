@@ -365,6 +365,7 @@ function areMessageFieldsEqual(first: UiMessage, second: UiMessage): boolean {
     first.isUnhandled === second.isUnhandled &&
     areCommandExecutionsEqual(first.commandExecution, second.commandExecution) &&
     arePlanDataEqual(first.plan, second.plan) &&
+    first.turnId === second.turnId &&
     first.turnIndex === second.turnIndex
   )
 }
@@ -797,6 +798,7 @@ export function useDesktopState() {
   const loadedVersionByThreadId = ref<Record<string, string>>({})
   const loadedMessagesByThreadId = ref<Record<string, boolean>>({})
   const resumedThreadById = ref<Record<string, boolean>>({})
+  const turnIndexByTurnIdByThreadId = ref<Record<string, Record<string, number>>>({})
   const turnSummaryByThreadId = ref<Record<string, TurnSummaryState>>({})
   const turnActivityByThreadId = ref<Record<string, TurnActivityState>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
@@ -1154,6 +1156,7 @@ export function useDesktopState() {
     loadedMessagesByThreadId.value = pruneThreadStateMap(loadedMessagesByThreadId.value, activeThreadIds)
     loadedVersionByThreadId.value = pruneThreadStateMap(loadedVersionByThreadId.value, activeThreadIds)
     resumedThreadById.value = pruneThreadStateMap(resumedThreadById.value, activeThreadIds)
+    turnIndexByTurnIdByThreadId.value = pruneThreadStateMap(turnIndexByTurnIdByThreadId.value, activeThreadIds)
     persistedMessagesByThreadId.value = pruneThreadStateMap(persistedMessagesByThreadId.value, activeThreadIds)
     liveAgentMessagesByThreadId.value = pruneThreadStateMap(liveAgentMessagesByThreadId.value, activeThreadIds)
     liveReasoningTextByThreadId.value = pruneThreadStateMap(liveReasoningTextByThreadId.value, activeThreadIds)
@@ -1879,6 +1882,70 @@ export function useDesktopState() {
     return `${reasoningItemId}:live-reasoning`
   }
 
+  function inferNextTurnIndex(threadId: string): number {
+    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+    let maxTurnIndex = -1
+    for (const message of persisted) {
+      if (typeof message.turnIndex === 'number' && Number.isFinite(message.turnIndex)) {
+        maxTurnIndex = Math.max(maxTurnIndex, message.turnIndex)
+      }
+    }
+    return maxTurnIndex + 1
+  }
+
+  function setTurnIndexForThread(threadId: string, turnId: string, turnIndex: number): void {
+    if (!threadId || !turnId || !Number.isInteger(turnIndex) || turnIndex < 0) return
+    const previous = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
+    if (previous[turnId] === turnIndex) return
+    turnIndexByTurnIdByThreadId.value = {
+      ...turnIndexByTurnIdByThreadId.value,
+      [threadId]: {
+        ...previous,
+        [turnId]: turnIndex,
+      },
+    }
+  }
+
+  function replaceTurnIndexLookupForThread(threadId: string, nextLookup: Record<string, number>): void {
+    const previous = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
+    const previousEntries = Object.entries(previous)
+    const nextEntries = Object.entries(nextLookup)
+    if (
+      previousEntries.length === nextEntries.length
+      && previousEntries.every(([turnId, turnIndex]) => nextLookup[turnId] === turnIndex)
+    ) {
+      return
+    }
+
+    turnIndexByTurnIdByThreadId.value = {
+      ...turnIndexByTurnIdByThreadId.value,
+      [threadId]: { ...nextLookup },
+    }
+  }
+
+  function rebindLiveFileChangeTurnIndices(threadId: string): void {
+    const current = liveFileChangeMessagesByThreadId.value[threadId]
+    if (!current || current.length === 0) return
+
+    const turnIndexByTurnId = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
+    let changed = false
+    const next = current.map((message) => {
+      if (typeof message.turnIndex === 'number' || !message.turnId) {
+        return message
+      }
+      const turnIndex = turnIndexByTurnId[message.turnId]
+      if (typeof turnIndex !== 'number') return message
+      changed = true
+      return { ...message, turnIndex }
+    })
+
+    if (!changed) return
+    liveFileChangeMessagesByThreadId.value = {
+      ...liveFileChangeMessagesByThreadId.value,
+      [threadId]: next,
+    }
+  }
+
   function readReasoningStartedItemId(notification: RpcNotification): string {
     const params = asRecord(notification.params)
     if (!params) return ''
@@ -2041,6 +2108,11 @@ export function useDesktopState() {
     if (!item || item.type !== 'fileChange') return null
     const id = readString(item.id)
     if (!id) return null
+    const threadId = readString(params?.threadId)
+    const turnId = readString(params?.turnId)
+    const turnIndex = threadId && turnId
+      ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
+      : undefined
 
     const fileChanges = toUiFileChanges(item.changes)
     const fileChangeStatus = normalizeFileChangeStatus(item.status)
@@ -2053,6 +2125,8 @@ export function useDesktopState() {
       messageType: 'fileChange',
       fileChangeStatus,
       fileChanges,
+      turnId: turnId || undefined,
+      turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     }
   }
 
@@ -2080,7 +2154,21 @@ export function useDesktopState() {
     const current = liveFileChangeMessagesByThreadId.value[threadId]
     if (!current || current.length === 0) return
     const persistedIds = new Set(persistedMessages.map((message) => message.id))
-    const next = current.filter((message) => !persistedIds.has(message.id))
+    const persistedTurnIds = new Set(
+      persistedMessages
+        .filter((message) => message.messageType === 'fileChange' && typeof message.turnId === 'string' && message.turnId.length > 0)
+        .map((message) => message.turnId as string),
+    )
+    const persistedTurnIndices = new Set(
+      persistedMessages
+        .filter((message) => message.messageType === 'fileChange' && typeof message.turnIndex === 'number')
+        .map((message) => message.turnIndex as number),
+    )
+    const next = current.filter((message) => (
+      !persistedIds.has(message.id)
+      && !(message.turnId && persistedTurnIds.has(message.turnId))
+      && !(typeof message.turnIndex === 'number' && persistedTurnIndices.has(message.turnIndex))
+    ))
     if (next.length === current.length) return
     if (next.length === 0) {
       liveFileChangeMessagesByThreadId.value = omitKey(liveFileChangeMessagesByThreadId.value, threadId)
@@ -2140,6 +2228,7 @@ export function useDesktopState() {
     const startedTurn = readTurnStartedInfo(notification)
     if (startedTurn) {
       pendingTurnStartsById.set(startedTurn.turnId, startedTurn)
+      setTurnIndexForThread(startedTurn.threadId, startedTurn.turnId, inferNextTurnIndex(startedTurn.threadId))
       activeTurnIdByThreadId.value = {
         ...activeTurnIdByThreadId.value,
         [startedTurn.threadId]: startedTurn.turnId,
@@ -2503,7 +2592,9 @@ export function useDesktopState() {
         }
       }
 
-      const { messages: nextMessages, inProgress } = await getThreadDetail(threadId)
+      const { messages: nextMessages, inProgress, turnIndexByTurnId } = await getThreadDetail(threadId)
+      replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
+      rebindLiveFileChangeTurnIndices(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
       const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
         preserveMissing: options.silent === true,
@@ -3352,6 +3443,7 @@ export function useDesktopState() {
     liveReasoningTextByThreadId.value = {}
     liveCommandsByThreadId.value = {}
     liveFileChangeMessagesByThreadId.value = {}
+    turnIndexByTurnIdByThreadId.value = {}
     turnActivityByThreadId.value = {}
     turnSummaryByThreadId.value = {}
     turnErrorByThreadId.value = {}

@@ -118,6 +118,7 @@ export type UiMessage = {
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData
   plan?: UiPlanData
+  turnId?: string
   turnIndex?: number
 }
 

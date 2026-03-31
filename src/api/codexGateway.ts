@@ -91,6 +91,8 @@ type ThreadFileChangeFallbackEntry = {
   fileChanges: UiFileChange[]
 }
 
+type ThreadTurnIndexById = Record<string, number>
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -256,6 +258,19 @@ function normalizeThreadFileChangeFallback(value: unknown): ThreadFileChangeFall
   return normalized
 }
 
+function buildTurnIndexByTurnId(payload: ThreadReadResponse): ThreadTurnIndexById {
+  const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
+  const lookup: ThreadTurnIndexById = {}
+
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
+    const turn = turns[turnIndex]
+    if (typeof turn?.id !== 'string' || turn.id.length === 0) continue
+    lookup[turn.id] = turnIndex
+  }
+
+  return lookup
+}
+
 async function fetchThreadFileChangeFallback(threadId: string): Promise<ThreadFileChangeFallbackEntry[]> {
   const response = await fetch(`/codex-api/thread-file-change-fallback?threadId=${encodeURIComponent(threadId)}`)
   if (!response.ok) {
@@ -282,6 +297,7 @@ function mergeRecoveredFileChangeMessages(messages: UiMessage[], fallbackEntries
       messageType: 'fileChange',
       fileChangeStatus: 'completed',
       fileChanges: entry.fileChanges,
+      turnId: entry.turnId,
       turnIndex: entry.turnIndex,
     }))
 
@@ -359,7 +375,11 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
   return await enrichThreadMessagesWithFallback(threadId, normalizeThreadMessagesV2(payload))
 }
 
-async function getThreadDetailV2(threadId: string): Promise<{ messages: UiMessage[]; inProgress: boolean }> {
+async function getThreadDetailV2(threadId: string): Promise<{
+  messages: UiMessage[]
+  inProgress: boolean
+  turnIndexByTurnId: ThreadTurnIndexById
+}> {
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
@@ -368,6 +388,7 @@ async function getThreadDetailV2(threadId: string): Promise<{ messages: UiMessag
   return {
     messages,
     inProgress: readThreadInProgressFromResponse(payload),
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
   }
 }
 
@@ -387,7 +408,11 @@ export async function getThreadMessages(threadId: string): Promise<UiMessage[]> 
   }
 }
 
-export async function getThreadDetail(threadId: string): Promise<{ messages: UiMessage[]; inProgress: boolean }> {
+export async function getThreadDetail(threadId: string): Promise<{
+  messages: UiMessage[]
+  inProgress: boolean
+  turnIndexByTurnId: ThreadTurnIndexById
+}> {
   try {
     return await getThreadDetailV2(threadId)
   } catch (error) {
