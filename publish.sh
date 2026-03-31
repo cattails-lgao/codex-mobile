@@ -57,7 +57,17 @@ current_version=$(node -p "require('./package.json').version")
 published_version=$(npm view "$package_name" dist-tags.latest 2>/dev/null || true)
 
 has_unpublished_commits=0
-if [[ "$local_commit" != "$remote_commit" ]]; then
+published_tag=""
+if [[ -n "$published_version" ]]; then
+  published_tag="v$published_version"
+fi
+
+if [[ -n "$published_tag" ]] && git rev-parse -q --verify "refs/tags/$published_tag" >/dev/null 2>&1; then
+  published_tag_commit=$(git rev-list -n 1 "$published_tag")
+  if [[ "$local_commit" != "$published_tag_commit" ]]; then
+    has_unpublished_commits=1
+  fi
+elif [[ "$local_commit" != "$remote_commit" ]]; then
   has_unpublished_commits=1
 fi
 
