@@ -521,6 +521,14 @@
   @apply bg-zinc-800 text-zinc-300;
 }
 
+:root.dark .file-change-signed-count[data-tone='add'] {
+  @apply text-emerald-300;
+}
+
+:root.dark .file-change-signed-count[data-tone='remove'] {
+  @apply text-rose-300;
+}
+
 :root.dark .diff-viewer-shell {
   @apply border-zinc-700 bg-zinc-900;
 }

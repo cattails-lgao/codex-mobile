@@ -125,7 +125,14 @@
                     {{ fileChangeSummaryLabel(readStandaloneFileChangeSummary(message)) }}
                   </span>
                   <span class="file-change-summary-status">
-                    {{ fileChangeSummaryStatus(readStandaloneFileChangeSummary(message)) }}
+                    <span
+                      v-for="part in fileChangeSummaryStatusParts(readStandaloneFileChangeSummary(message))"
+                      :key="`summary-status:${message.id}:${part.tone}:${part.label}`"
+                      class="file-change-signed-count"
+                      :data-tone="part.tone"
+                    >
+                      {{ part.label }}
+                    </span>
                   </span>
                 </button>
                 <div class="cmd-group-wrap" :class="{ 'cmd-group-visible': isFileChangeSummaryExpanded(message) }">
@@ -157,7 +164,16 @@
                         >
                           {{ displayFileChangePath(change.movedToPath) }}
                         </button>
-                        <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
+                        <span v-if="change.addedLineCount > 0 || change.removedLineCount > 0" class="file-change-delta">
+                          <span
+                            v-for="part in fileChangeDeltaParts(change)"
+                            :key="`change-delta:${message.id}:${change.path}:${part.tone}:${part.label}`"
+                            class="file-change-signed-count"
+                            :data-tone="part.tone"
+                          >
+                            {{ part.label }}
+                          </span>
+                        </span>
                       </li>
                     </ul>
                   </div>
@@ -523,7 +539,14 @@
                     {{ fileChangeSummaryLabel(readAnchoredFileChangeSummary(message)) }}
                   </span>
                   <span class="file-change-summary-status">
-                    {{ fileChangeSummaryStatus(readAnchoredFileChangeSummary(message)) }}
+                    <span
+                      v-for="part in fileChangeSummaryStatusParts(readAnchoredFileChangeSummary(message))"
+                      :key="`summary-status:${message.id}:${part.tone}:${part.label}`"
+                      class="file-change-signed-count"
+                      :data-tone="part.tone"
+                    >
+                      {{ part.label }}
+                    </span>
                   </span>
                 </button>
                 <div class="cmd-group-wrap" :class="{ 'cmd-group-visible': isFileChangeSummaryExpanded(message) }">
@@ -555,7 +578,16 @@
                         >
                           {{ displayFileChangePath(change.movedToPath) }}
                         </button>
-                        <span v-if="formatFileChangeDelta(change)" class="file-change-delta">{{ formatFileChangeDelta(change) }}</span>
+                        <span v-if="change.addedLineCount > 0 || change.removedLineCount > 0" class="file-change-delta">
+                          <span
+                            v-for="part in fileChangeDeltaParts(change)"
+                            :key="`change-delta:inline:${message.id}:${change.path}:${part.tone}:${part.label}`"
+                            class="file-change-signed-count"
+                            :data-tone="part.tone"
+                          >
+                            {{ part.label }}
+                          </span>
+                        </span>
                       </li>
                     </ul>
                   </div>
@@ -1744,6 +1776,25 @@ function formatFileChangeDelta(change: UiFileChange): string {
   return parts.join(' ')
 }
 
+type FileChangeDeltaTone = 'add' | 'remove' | 'neutral'
+
+type FileChangeDeltaPart = {
+  tone: FileChangeDeltaTone
+  label: string
+}
+
+function buildFileChangeDeltaParts(addedCount: number, removedCount: number, fallbackLabel = ''): FileChangeDeltaPart[] {
+  const parts: FileChangeDeltaPart[] = []
+  if (addedCount > 0) parts.push({ tone: 'add', label: `+${addedCount}` })
+  if (removedCount > 0) parts.push({ tone: 'remove', label: `-${removedCount}` })
+  if (parts.length > 0) return parts
+  return fallbackLabel ? [{ tone: 'neutral', label: fallbackLabel }] : []
+}
+
+function fileChangeDeltaParts(change: UiFileChange): FileChangeDeltaPart[] {
+  return buildFileChangeDeltaParts(change.addedLineCount, change.removedLineCount)
+}
+
 function formatFileChangeCountLabel(count: number): string {
   return count === 1 ? '1 file changed' : `${count} files changed`
 }
@@ -1786,15 +1837,12 @@ function fileChangeSummaryLabel(summary: TurnFileChangeSummary | null): string {
   return kindSummary ? `${countLabel} · ${kindSummary}` : countLabel
 }
 
-function fileChangeSummaryStatus(summary: TurnFileChangeSummary | null): string {
-  if (!summary || summary.changes.length === 0) return ''
+function fileChangeSummaryStatusParts(summary: TurnFileChangeSummary | null): FileChangeDeltaPart[] {
+  if (!summary || summary.changes.length === 0) return []
   const totalAdded = summary.changes.reduce((sum, change) => sum + change.addedLineCount, 0)
   const totalRemoved = summary.changes.reduce((sum, change) => sum + change.removedLineCount, 0)
-  const parts: string[] = []
-  if (totalAdded > 0) parts.push(`+${totalAdded}`)
-  if (totalRemoved > 0) parts.push(`-${totalRemoved}`)
-  if (parts.length > 0) return parts.join(' ')
-  return summary.changes.some((change) => change.movedToPath) ? 'Moved' : 'Ready'
+  const fallbackLabel = summary.changes.some((change) => change.movedToPath) ? 'Moved' : 'Ready'
+  return buildFileChangeDeltaParts(totalAdded, totalRemoved, fallbackLabel)
 }
 
 function displayFileChangePath(pathValue: string): string {
@@ -4289,7 +4337,7 @@ onBeforeUnmount(() => {
 }
 
 .file-change-summary-status {
-  @apply max-w-24 truncate text-right text-[11px] font-medium text-zinc-500 flex-shrink-0;
+  @apply inline-flex max-w-28 items-center justify-end gap-1.5 text-right text-[11px] font-semibold text-zinc-500 flex-shrink-0;
 }
 
 .file-change-panel-inner {
@@ -4297,11 +4345,11 @@ onBeforeUnmount(() => {
 }
 
 .file-change-list {
-  @apply m-0 flex list-none flex-col gap-1 rounded-xl border border-zinc-200 bg-white/80 p-2;
+  @apply m-0 flex list-none flex-col gap-0.5 rounded-xl border border-zinc-200 bg-white/80 p-1.5;
 }
 
 .file-change-item {
-  @apply flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700;
+  @apply flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-zinc-700;
 }
 
 .file-change-badge {
@@ -4337,7 +4385,19 @@ onBeforeUnmount(() => {
 }
 
 .file-change-delta {
-  @apply ml-auto rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-600;
+  @apply ml-auto inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-600;
+}
+
+.file-change-signed-count {
+  @apply inline-flex items-center whitespace-nowrap;
+}
+
+.file-change-signed-count[data-tone='add'] {
+  @apply text-emerald-600;
+}
+
+.file-change-signed-count[data-tone='remove'] {
+  @apply text-rose-600;
 }
 
 .diff-viewer-backdrop {
