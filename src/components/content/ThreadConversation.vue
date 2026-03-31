@@ -4409,7 +4409,7 @@ onBeforeUnmount(() => {
 }
 
 .diff-viewer-close {
-  @apply static shrink-0;
+  @apply static shrink-0 border-zinc-200 bg-zinc-100 text-zinc-700;
 }
 
 .diff-viewer-mobile-files-button {
