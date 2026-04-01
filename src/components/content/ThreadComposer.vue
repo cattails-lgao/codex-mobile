@@ -69,35 +69,33 @@
       </div>
 
       <div
-        v-if="quotaSummaryText"
+        v-if="quotaSummaryText || contextUsageSummaryText"
         class="thread-composer-rate-limit"
-        :title="quotaTooltipText"
         aria-live="polite"
       >
         <span class="thread-composer-rate-limit-row">
-          <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
+          <span
+            v-if="quotaSummaryText"
+            class="thread-composer-rate-limit-value"
+            :title="quotaTooltipText"
+          >{{ quotaSummaryText }}</span>
+          <span
+            v-if="contextUsageSummaryText"
+            class="thread-composer-context-usage-inline"
+            :class="`is-${contextUsageTone}`"
+            :title="contextUsageTooltipText"
+          >
+            <span class="thread-composer-context-usage-inline-value">{{ contextUsageSummaryText }}</span>
+            <span class="thread-composer-context-usage-inline-bar" aria-hidden="true">
+              <span
+                class="thread-composer-context-usage-inline-bar-fill"
+                :style="{ width: `${contextUsageRemainingPercent}%` }"
+              />
+            </span>
+          </span>
         </span>
         <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
           {{ quotaWeeklyRefreshText }}
-        </span>
-      </div>
-
-      <div
-        v-if="contextUsageSummaryText"
-        class="thread-composer-context-usage"
-        :class="`is-${contextUsageTone}`"
-        :title="contextUsageTooltipText"
-        aria-live="polite"
-      >
-        <div class="thread-composer-context-usage-row">
-          <span class="thread-composer-context-usage-label">Context</span>
-          <span class="thread-composer-context-usage-value">{{ contextUsageSummaryText }}</span>
-        </div>
-        <span class="thread-composer-context-usage-bar" aria-hidden="true">
-          <span
-            class="thread-composer-context-usage-bar-fill"
-            :style="{ width: `${contextUsageRemainingPercent}%` }"
-          />
         </span>
       </div>
 
@@ -1369,48 +1367,32 @@ watch(
 }
 
 .thread-composer-rate-limit-value {
-  @apply min-w-0 truncate;
+  @apply min-w-0 flex-1 truncate;
 }
 
-.thread-composer-context-usage {
+.thread-composer-context-usage-inline {
   --context-usage-accent: rgb(34 197 94);
-  --context-usage-border: rgb(187 247 208);
-  --context-usage-surface: rgb(240 253 244 / 0.95);
-  @apply mb-2 rounded-xl border px-2.5 py-2;
-  background: linear-gradient(180deg, var(--context-usage-surface), rgb(255 255 255 / 0.96));
-  border-color: var(--context-usage-border);
+  @apply ml-auto inline-flex min-w-0 max-w-[56%] items-center gap-2 text-right;
 }
 
-.thread-composer-context-usage.is-warning {
+.thread-composer-context-usage-inline.is-warning {
   --context-usage-accent: rgb(245 158 11);
-  --context-usage-border: rgb(253 230 138);
-  --context-usage-surface: rgb(255 251 235 / 0.95);
 }
 
-.thread-composer-context-usage.is-danger {
+.thread-composer-context-usage-inline.is-danger {
   --context-usage-accent: rgb(239 68 68);
-  --context-usage-border: rgb(254 202 202);
-  --context-usage-surface: rgb(254 242 242 / 0.95);
 }
 
-.thread-composer-context-usage-row {
-  @apply flex items-center justify-between gap-3 text-[11px] leading-4 text-zinc-600;
-}
-
-.thread-composer-context-usage-label {
-  @apply shrink-0 font-medium uppercase tracking-[0.14em];
+.thread-composer-context-usage-inline-value {
+  @apply min-w-0 truncate font-medium tabular-nums;
   color: var(--context-usage-accent);
 }
 
-.thread-composer-context-usage-value {
-  @apply min-w-0 truncate text-right font-medium tabular-nums text-zinc-700;
+.thread-composer-context-usage-inline-bar {
+  @apply block h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-zinc-200/80;
 }
 
-.thread-composer-context-usage-bar {
-  @apply mt-2 block h-1.5 overflow-hidden rounded-full bg-zinc-200/80;
-}
-
-.thread-composer-context-usage-bar-fill {
+.thread-composer-context-usage-inline-bar-fill {
   @apply block h-full rounded-full transition-[width] duration-200 ease-out;
   background: var(--context-usage-accent);
 }
