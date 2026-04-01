@@ -558,7 +558,7 @@ This file tracks manual regression and feature verification steps.
 
 #### Prerequisites
 - App server stopped.
-- Copy `.env.example` to `.env` and edit values.
+- Edit `.env` directly, and use `.env.local` for private local overrides.
 
 #### Steps
 1. Set `ROLLBACK_DEBUG=0` and `VITE_ROLLBACK_DEBUG=0` in `.env`.

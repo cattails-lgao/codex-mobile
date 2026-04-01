@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink, unlink } from 'node:fs/promises'
-import { createReadStream, existsSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -525,8 +525,30 @@ const ROLLBACK_MESSAGE_HASH_TRAILER = 'Rollback-User-Message-SHA256'
 const ROLLBACK_TURN_ID_TRAILER = 'Rollback-Turn-Id'
 
 function isRollbackDebugEnabled(): boolean {
-  const value = process.env.ROLLBACK_DEBUG?.trim().toLowerCase()
+  const fromProcessEnv = process.env.ROLLBACK_DEBUG?.trim()
+  const fromDotEnvLocal = readEnvValueFromFile('.env.local', 'ROLLBACK_DEBUG')
+  const fromDotEnv = readEnvValueFromFile('.env', 'ROLLBACK_DEBUG')
+  const value = (fromProcessEnv || fromDotEnvLocal || fromDotEnv).toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function readEnvValueFromFile(filePath: string, key: string): string {
+  if (!existsSync(filePath)) return ''
+  try {
+    const raw = readFileSync(filePath, 'utf8')
+    for (const line of raw.split(/\r?\n/gu)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const separator = trimmed.indexOf('=')
+      if (separator <= 0) continue
+      const currentKey = trimmed.slice(0, separator).trim()
+      if (currentKey !== key) continue
+      return trimmed.slice(separator + 1).trim()
+    }
+  } catch {
+    return ''
+  }
+  return ''
 }
 
 function logRollbackDebug(phase: string, details: Record<string, unknown>): void {

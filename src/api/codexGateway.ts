@@ -70,7 +70,11 @@ export type WorktreeMessageChangesResult = {
 }
 
 function isRollbackDebugEnabledInClient(): boolean {
-  const envValue = (import.meta.env.VITE_ROLLBACK_DEBUG ?? '').toString().trim().toLowerCase()
+  const envValue = (
+    import.meta.env.VITE_ROLLBACK_DEBUG ??
+    import.meta.env.VITE_ROLLBACK_DEBUG_FALLBACK ??
+    ''
+  ).toString().trim().toLowerCase()
   return envValue === '1' || envValue === 'true' || envValue === 'yes' || envValue === 'on'
 }
 
