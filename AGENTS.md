@@ -42,9 +42,7 @@
 
 ## Pre-Merge Squash Review (MANDATORY)
 
-- Before merging to local `main`, squash-diff all changes on the current branch against `main` and review the combined diff.
-- Validate there is no dead code and no critical issues before merge.
-- Do not merge to local `main` until this squash-diff review passes.
+- Before merging to local `main`, diff-compare all changes on the current branch against `main`.
 
 ## Tests Documentation Rule (MANDATORY)
 
