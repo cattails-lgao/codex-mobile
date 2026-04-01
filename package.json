@@ -13,6 +13,9 @@
   "bugs": {
     "url": "https://github.com/friuns2/codexui/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "codex",
     "openai",
@@ -44,6 +47,7 @@
     "commander": "^13.1.0",
     "express": "^5.1.0",
     "firebase": "^12.2.1",
+    "highlight.js": "^11.11.1",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.3"
   },

@@ -1,4 +1,4 @@
 interface:
   display_name: "Codex App Parity"
-  short_description: "Implement UI/behavior changes by matching Codex.app first"
-  default_prompt: "Implement this user-visible change by first inspecting Codex.app for equivalent behavior, then apply a minimal parity-focused patch and verify in headless Playwright with a screenshot."
+  short_description: "Implement UI/behavior changes by matching the latest official Codex docs/code first"
+  default_prompt: "Implement this user-visible change by first inspecting the latest official Codex docs and official code for equivalent behavior, using a local Codex.app bundle only if available as supplemental reference, then apply a minimal parity-focused patch and verify in headless Playwright with a screenshot."

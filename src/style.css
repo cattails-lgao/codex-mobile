@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
 
 :root.dark {
   color-scheme: dark;
@@ -62,6 +63,75 @@
 
 :root.dark .sidebar-settings-rate-limits {
   @apply border-zinc-700;
+}
+
+:root.dark .sidebar-settings-account-section {
+  @apply border-zinc-700 bg-zinc-800/70;
+}
+
+:root.dark .sidebar-settings-account-title {
+  @apply text-zinc-200;
+}
+
+:root.dark .sidebar-settings-account-count {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-error {
+  @apply bg-rose-950/40 text-rose-200;
+}
+
+:root.dark .sidebar-settings-account-refresh,
+:root.dark .sidebar-settings-account-switch {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
+:root.dark .sidebar-settings-account-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-account-item {
+  @apply border-zinc-700 bg-zinc-900/70;
+}
+
+:root.dark .sidebar-settings-account-item.is-active {
+  @apply border-emerald-500/35 bg-emerald-500/10;
+}
+
+:root.dark .sidebar-settings-account-item.is-unavailable {
+  @apply border-rose-500/35 bg-rose-500/10;
+}
+
+:root.dark .sidebar-settings-account-email {
+  @apply text-zinc-100;
+}
+
+:root.dark .sidebar-settings-account-meta {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-account-quota {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-id {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
+  @apply bg-emerald-500/15 text-emerald-200;
+}
+
+:root.dark .sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
+  @apply bg-rose-500/15 text-rose-200;
+}
+
+:root.dark .sidebar-settings-account-remove {
+  @apply border-amber-500/35 bg-zinc-700 text-zinc-400 hover:bg-amber-500/10;
+}
+
+:root.dark .sidebar-settings-account-remove.is-confirming {
+  @apply border-amber-400/50 bg-amber-500/10 text-amber-200;
 }
 
 :root.dark .sidebar-settings-value {
@@ -166,6 +236,10 @@
 
 :root.dark .composer-dropdown-trigger {
   @apply text-zinc-400;
+}
+
+:root.dark .thread-composer-plan-toggle {
+  @apply text-zinc-400 hover:text-zinc-200;
 }
 
 :root.dark .composer-dropdown-menu {
@@ -373,12 +447,77 @@
   @apply text-zinc-200;
 }
 
+:root.dark .message-heading {
+  @apply text-zinc-100;
+}
+
+:root.dark .message-heading-h6 {
+  @apply text-zinc-400;
+}
+
+:root.dark .message-bold-text {
+  @apply text-zinc-100;
+}
+
+:root.dark .message-italic-text {
+  @apply text-zinc-200;
+}
+
+:root.dark .message-strikethrough-text {
+  @apply text-zinc-400;
+}
+
+:root.dark .message-blockquote {
+  @apply border-zinc-600 bg-zinc-800/70 text-zinc-300;
+}
+
+:root.dark .message-list {
+  @apply text-zinc-200;
+}
+
+:root.dark .message-task-checkbox {
+  @apply text-zinc-400;
+}
+
 :root.dark .message-card[data-role='user'] {
   @apply bg-zinc-700;
 }
 
+:root.dark .message-copy-button {
+  @apply border-zinc-700 bg-zinc-800/90 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:root.dark .message-copy-button[data-copied='true'] {
+  @apply border-emerald-500/40 bg-emerald-500/10 text-emerald-200;
+}
+
 :root.dark .message-inline-code {
   @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
+}
+
+:root.dark .message-table {
+  @apply border-zinc-700 bg-zinc-900/90 text-zinc-100;
+}
+
+:root.dark .message-table-head-cell,
+:root.dark .message-table-cell {
+  @apply border-zinc-700;
+}
+
+:root.dark .message-table-head-cell {
+  @apply bg-zinc-800 text-zinc-100;
+}
+
+:root.dark .message-code-block {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .message-code-language {
+  @apply border-zinc-800 text-zinc-400;
+}
+
+:root.dark .message-divider {
+  @apply bg-zinc-700/80;
 }
 
 :root.dark .message-file-chip {
@@ -404,6 +543,146 @@
 
 :root.dark .cmd-label {
   @apply text-zinc-300;
+}
+
+:root.dark .file-change-summary-label {
+  @apply text-zinc-200;
+}
+
+:root.dark .file-change-path-button {
+  @apply text-sky-300 hover:text-sky-200;
+}
+
+:root.dark .file-change-summary-status {
+  @apply text-zinc-400;
+}
+
+:root.dark .file-change-list {
+  @apply border-zinc-700 bg-zinc-900/70;
+}
+
+:root.dark .file-change-item {
+  @apply text-zinc-200;
+}
+
+:root.dark .file-change-badge[data-operation='add'] {
+  @apply bg-emerald-950/70 text-emerald-300;
+}
+
+:root.dark .file-change-badge[data-operation='update'] {
+  @apply bg-sky-950/70 text-sky-300;
+}
+
+:root.dark .file-change-badge[data-operation='delete'] {
+  @apply bg-rose-950/70 text-rose-300;
+}
+
+:root.dark .file-change-badge[data-operation='move'] {
+  @apply bg-amber-950/70 text-amber-300;
+}
+
+:root.dark .file-change-arrow {
+  @apply text-zinc-500;
+}
+
+:root.dark .file-change-delta {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .file-change-signed-count[data-tone='add'] {
+  @apply text-emerald-300;
+}
+
+:root.dark .file-change-signed-count[data-tone='remove'] {
+  @apply text-rose-300;
+}
+
+:root.dark .diff-viewer-shell {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-sidebar {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .diff-viewer-sidebar-header {
+  @apply border-zinc-700;
+}
+
+:root.dark .diff-viewer-sidebar-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-sidebar-count {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-file-button {
+  @apply hover:border-zinc-700 hover:bg-zinc-900;
+}
+
+:root.dark .diff-viewer-file-button[data-active='true'] {
+  @apply border-sky-800 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-file-label {
+  @apply text-zinc-200;
+}
+
+:root.dark .diff-viewer-file-delta {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .diff-viewer-main {
+  @apply bg-zinc-900;
+}
+
+:root.dark .diff-viewer-toolbar {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-mobile-files-button {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-200;
+}
+
+:root.dark .diff-viewer-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-subtitle {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-empty-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .diff-viewer-empty-text {
+  @apply text-zinc-400;
+}
+
+:root.dark .diff-viewer-meta {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .diff-viewer-language {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .diff-viewer-mobile-sheet {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .diff-viewer-mobile-sheet-handle {
+  @apply bg-zinc-700;
+}
+
+:root.dark .diff-viewer-mobile-sheet-header {
+  @apply border-zinc-700;
+}
+
+:root.dark .diff-viewer-close {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
 :root.dark .worked-separator-text {
@@ -438,8 +717,52 @@
   @apply border-amber-600 bg-amber-600 text-white hover:bg-amber-700;
 }
 
-:root.dark .message-action-button {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300 hover:border-zinc-600;
+:root.dark .request-question-option-description {
+  @apply text-amber-400;
+}
+
+:root.dark .plan-card {
+  @apply border-sky-800 bg-sky-950/40;
+}
+
+:root.dark .plan-card-title {
+  @apply text-sky-200;
+}
+
+:root.dark .plan-card-badge {
+  @apply bg-sky-800 text-sky-100;
+}
+
+:root.dark .plan-card-explanation {
+  @apply text-zinc-300;
+}
+
+:root.dark .plan-card-markdown .message-table {
+  @apply bg-zinc-900/90;
+}
+
+:root.dark .plan-step-item {
+  @apply border-zinc-700 bg-zinc-900/70 text-zinc-200;
+}
+
+:root.dark .plan-step-item[data-status='completed'] {
+  @apply border-emerald-900 bg-emerald-950/40;
+}
+
+:root.dark .plan-step-item[data-status='inProgress'] {
+  @apply border-amber-900 bg-amber-950/40;
+}
+
+:root.dark .plan-step-status {
+  @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .plan-step-status[data-status='completed'] {
+  @apply bg-emerald-900 text-emerald-200;
+}
+
+:root.dark .plan-step-status[data-status='inProgress'] {
+  @apply bg-amber-900 text-amber-200;
 }
 
 :root.dark .message-image-button {
@@ -731,4 +1054,17 @@
 
 :root.dark .sdm-btn-secondary {
   @apply bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
+@media (max-width: 768px) {
+  .thread-composer-input,
+  .composer-dropdown-search-input,
+  .composer-dropdown-add-input,
+  .search-dropdown-search,
+  .sidebar-search-input,
+  .project-menu-input,
+  .rename-thread-input,
+  .request-input {
+    font-size: 16px !important;
+  }
 }

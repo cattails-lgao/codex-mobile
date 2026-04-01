@@ -6,7 +6,17 @@ import type {
   Turn,
   UserInput,
 } from '../appServerDtos'
-import type { CommandExecutionData, UiFileAttachment, UiMessage, UiProjectGroup, UiThread } from '../../types/codex'
+import type {
+  CommandExecutionData,
+  UiFileAttachment,
+  UiFileChange,
+  UiFileChangeStatus,
+  UiMessage,
+  UiPlanData,
+  UiPlanStep,
+  UiProjectGroup,
+  UiThread,
+} from '../../types/codex'
 import { normalizePathForComparison, normalizePathForUi, toProjectName } from '../../pathUtils.js'
 
 function toIso(seconds: number): string {
@@ -23,6 +33,7 @@ function toRawPayload(value: unknown): string {
 
 const FILE_ATTACHMENT_LINE = /^##\s+(.+?):\s+(.+?)\s*$/
 const FILES_MENTIONED_MARKER = /^#\s*files mentioned by the user\s*:?\s*$/i
+const ASSISTANT_FILE_CHANGE_HEADING = /^(?:#{1,6}\s*)?(?:本次修改文件(?:和操作)?(?:如下)?|修改文件和操作)\s*[:：]?\s*$/u
 
 function extractFileAttachments(value: string): UiFileAttachment[] {
   const markerIdx = value.split('\n').findIndex((line) => FILES_MENTIONED_MARKER.test(line.trim()))
@@ -98,14 +109,231 @@ function parseUserMessageContent(
   }
 }
 
+function parsePlanText(value: string): UiPlanData | null {
+  const normalized = value.replace(/\r\n/g, '\n').trim()
+  if (!normalized) return null
+
+  const lines = normalized.split('\n')
+  const steps: UiPlanStep[] = []
+  const explanationLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      if (steps.length === 0) explanationLines.push('')
+      continue
+    }
+
+    const match = trimmed.match(/^[-*]\s+\[([ xX~>|-])\]\s+(.+)$/)
+    if (match) {
+      const marker = (match[1] ?? ' ').toLowerCase()
+      const step = match[2]?.trim()
+      if (!step) continue
+      let status: UiPlanStep['status'] = 'pending'
+      if (marker === 'x') status = 'completed'
+      if (marker === '~' || marker === '>' || marker === '-') status = 'inProgress'
+      steps.push({ step, status })
+      continue
+    }
+
+    explanationLines.push(trimmed)
+  }
+
+  if (steps.length === 0) return null
+
+  return {
+    explanation: explanationLines.join('\n').trim() || undefined,
+    steps,
+  }
+}
+
+function inferAssistantFileChangeOperation(detailLines: string[]): UiFileChange['operation'] {
+  const detailText = detailLines.join(' ').toLowerCase()
+  if (
+    detailText.includes('重命名') ||
+    detailText.includes('移动') ||
+    detailText.includes('rename') ||
+    detailText.includes('renamed') ||
+    detailText.includes('move') ||
+    detailText.includes('moved')
+  ) {
+    return 'update'
+  }
+  if (
+    detailText.includes('删除') ||
+    detailText.includes('移除') ||
+    detailText.includes('delete') ||
+    detailText.includes('deleted') ||
+    detailText.includes('remove') ||
+    detailText.includes('removed')
+  ) {
+    return 'delete'
+  }
+  if (
+    detailText.includes('新增') ||
+    detailText.includes('添加') ||
+    detailText.includes('增加') ||
+    detailText.includes('add') ||
+    detailText.includes('added') ||
+    detailText.includes('create') ||
+    detailText.includes('created')
+  ) {
+    return 'add'
+  }
+  return 'update'
+}
+
+function extractAssistantFilePath(value: string): string {
+  const backtickMatch = value.match(/`([^`]+)`/u)
+  if (backtickMatch?.[1]) {
+    return backtickMatch[1].trim()
+  }
+  return value.replace(/^[-*]\s+/u, '').trim()
+}
+
+function looksLikeAssistantFilePath(value: string): boolean {
+  return /[\\/]/u.test(value) || /[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+$/u.test(value)
+}
+
+function extractAssistantFileChanges(value: string): UiFileChange[] {
+  const lines = value.replace(/\r\n/g, '\n').split('\n')
+  const headingIndex = lines.findIndex((line) => ASSISTANT_FILE_CHANGE_HEADING.test(line.trim()))
+  if (headingIndex < 0) return []
+
+  const collected: Array<{ path: string; details: string[] }> = []
+  let current: { path: string; details: string[] } | null = null
+
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index]
+    const trimmed = line.trim()
+    if (!trimmed) {
+      if (current) {
+        collected.push(current)
+        current = null
+      }
+      break
+    }
+
+    const bulletMatch = line.match(/^(\s*)[-*]\s+(.+)$/u)
+    if (!bulletMatch) {
+      if (current) {
+        collected.push(current)
+        current = null
+      }
+      break
+    }
+
+    const indent = bulletMatch[1]?.length ?? 0
+    const bulletText = bulletMatch[2]?.trim() ?? ''
+    if (indent <= 1) {
+      if (current) {
+        collected.push(current)
+      }
+      const path = extractAssistantFilePath(bulletText)
+      current = looksLikeAssistantFilePath(path)
+        ? { path, details: [] }
+        : null
+      continue
+    }
+
+    if (current && bulletText) {
+      current.details.push(bulletText)
+    }
+  }
+
+  if (current) {
+    collected.push(current)
+  }
+
+  return collected.map((entry) => ({
+    path: entry.path,
+    operation: inferAssistantFileChangeOperation(entry.details),
+    movedToPath: null,
+    diff: '',
+    addedLineCount: 0,
+    removedLineCount: 0,
+  }))
+}
+
+function countContentLines(value: string): number {
+  if (!value) return 0
+  const normalized = value.replace(/\r\n/g, '\n')
+  const trimmed = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized
+  if (!trimmed) return 0
+  return trimmed.split('\n').length
+}
+
+function countUnifiedDiffLines(value: string): { addedLineCount: number; removedLineCount: number } {
+  let addedLineCount = 0
+  let removedLineCount = 0
+
+  for (const line of value.replace(/\r\n/g, '\n').split('\n')) {
+    if (!line) continue
+    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) continue
+    if (line.startsWith('+')) {
+      addedLineCount += 1
+      continue
+    }
+    if (line.startsWith('-')) {
+      removedLineCount += 1
+    }
+  }
+
+  return { addedLineCount, removedLineCount }
+}
+
+export function normalizeFileChangeStatus(value: unknown): UiFileChangeStatus {
+  if (value === 'failed' || value === 'declined' || value === 'completed') return value
+  return 'inProgress'
+}
+
+export function toUiFileChanges(changes: unknown): UiFileChange[] {
+  const rows = Array.isArray(changes) ? changes : []
+  const normalized: UiFileChange[] = []
+
+  for (const row of rows) {
+    const change = row as Record<string, unknown>
+    const path = typeof change.path === 'string' ? change.path : ''
+    const diff = typeof change.diff === 'string' ? change.diff : ''
+    const kind = change.kind as Record<string, unknown> | undefined
+    const operationType = kind?.type
+    if (!path || (operationType !== 'add' && operationType !== 'delete' && operationType !== 'update')) {
+      continue
+    }
+
+    const movedToPath =
+      operationType === 'update' && typeof kind?.move_path === 'string'
+        ? kind.move_path
+        : null
+
+    const counts = operationType === 'update'
+      ? countUnifiedDiffLines(diff)
+      : operationType === 'add'
+        ? { addedLineCount: countContentLines(diff), removedLineCount: 0 }
+        : { addedLineCount: 0, removedLineCount: countContentLines(diff) }
+
+    normalized.push({
+      path,
+      operation: operationType,
+      movedToPath,
+      diff,
+      ...counts,
+    })
+  }
+
+  return normalized
+}
+
 function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'agentMessage') {
+    const fileChanges = extractAssistantFileChanges(item.text)
     return [
       {
         id: item.id,
         role: 'assistant',
         text: item.text,
         messageType: item.type,
+        fileChanges: fileChanges.length > 0 ? fileChanges : undefined,
       },
     ]
   }
@@ -138,6 +366,19 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     return []
   }
 
+  if (item.type === 'plan') {
+    const text = typeof item.text === 'string' ? item.text : ''
+    return [
+      {
+        id: item.id,
+        role: 'assistant',
+        text,
+        messageType: 'plan',
+        plan: parsePlanText(text) ?? undefined,
+      },
+    ]
+  }
+
   if (item.type === 'commandExecution') {
     const raw = item as Record<string, unknown>
     const status = normalizeCommandStatus(raw.status)
@@ -156,6 +397,24 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     ]
   }
 
+  if (item.type === 'fileChange') {
+    const fileChanges = toUiFileChanges(item.changes)
+    const fileChangeStatus = normalizeFileChangeStatus(item.status)
+    if (fileChanges.length === 0 || fileChangeStatus !== 'completed') {
+      return []
+    }
+    return [
+      {
+        id: item.id,
+        role: 'system',
+        text: '',
+        messageType: 'fileChange',
+        fileChangeStatus,
+        fileChanges,
+      },
+    ]
+  }
+
   return []
 }
 
@@ -167,7 +426,11 @@ function normalizeCommandStatus(value: unknown): CommandExecutionData['status'] 
 
 function pickThreadName(summary: Thread): string {
   const rawSummary = summary as Record<string, unknown>
-  const direct = [rawSummary.name, rawSummary.title, summary.preview]
+  const direct = [
+    rawSummary.name,
+    rawSummary.title,
+    summary.preview,
+  ]
   for (const candidate of direct) {
     if (typeof candidate === 'string' && candidate.trim().length > 0) {
       return candidate.trim()

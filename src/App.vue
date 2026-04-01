@@ -71,6 +71,77 @@
         <div v-if="!isSidebarCollapsed" class="sidebar-settings-area">
           <Transition name="settings-panel">
             <div v-if="isSettingsOpen" class="sidebar-settings-panel">
+              <div class="sidebar-settings-account-section">
+                <div class="sidebar-settings-account-header">
+                  <div class="sidebar-settings-account-header-main">
+                    <span class="sidebar-settings-account-title">Accounts</span>
+                    <span class="sidebar-settings-account-count">{{ accounts.length }}</span>
+                  </div>
+                  <button
+                    class="sidebar-settings-account-refresh"
+                    type="button"
+                    :disabled="isRefreshingAccounts || isSwitchingAccounts"
+                    @click="onRefreshAccounts"
+                  >
+                    {{ isRefreshingAccounts ? 'Reloading…' : 'Reload' }}
+                  </button>
+                </div>
+                <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
+                <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
+                  Run `codex login`, then click reload.
+                </p>
+                <div v-else class="sidebar-settings-account-list">
+                  <article
+                    v-for="account in accounts"
+                    :key="account.accountId"
+                    class="sidebar-settings-account-item"
+                    :class="{
+                      'is-active': account.isActive,
+                      'is-unavailable': isAccountUnavailable(account),
+                      'is-confirming-remove': isRemoveConfirmationActive(account),
+                      'is-remove-visible': isRemoveVisible(account),
+                    }"
+                    :title="buildAccountTitle(account)"
+                    @mouseenter="onAccountCardPointerEnter(account.accountId)"
+                    @mouseleave="onAccountCardPointerLeave(account.accountId)"
+                  >
+                    <div class="sidebar-settings-account-main">
+                      <p class="sidebar-settings-account-email">{{ account.email || 'Account' }}</p>
+                      <p class="sidebar-settings-account-meta">
+                        {{ formatAccountMeta(account) }}
+                      </p>
+                      <p class="sidebar-settings-account-quota">
+                        {{ formatAccountQuota(account) }}
+                      </p>
+                      <p class="sidebar-settings-account-id">
+                        Workspace {{ shortAccountId(account.accountId) }}
+                      </p>
+                    </div>
+                    <div class="sidebar-settings-account-actions">
+                      <button
+                        class="sidebar-settings-account-switch"
+                        type="button"
+                        :disabled="isAccountActionDisabled(account) || account.isActive || isAccountUnavailable(account)"
+                        @click="onSwitchAccount(account.accountId)"
+                      >
+                        {{ getAccountSwitchLabel(account) }}
+                      </button>
+                      <button
+                        class="sidebar-settings-account-remove"
+                        :class="{
+                          'is-visible': isRemoveVisible(account),
+                          'is-confirming': isRemoveConfirmationActive(account),
+                        }"
+                        type="button"
+                        :disabled="isAccountActionDisabled(account)"
+                        @click="onRemoveAccount(account.accountId)"
+                      >
+                        {{ getAccountRemoveLabel(account) }}
+                      </button>
+                    </div>
+                  </article>
+                </div>
+              </div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">Require ⌘ + enter to send</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -121,6 +192,11 @@
               </div>
               <div class="sidebar-settings-build-label" aria-label="Worktree name and version">
                 WT {{ worktreeName }} · v{{ appVersion }}
+              </div>
+              <div class="sidebar-settings-version-note">
+                <span class="sidebar-settings-value sidebar-settings-value-version">
+                  nervmor {{ worktreeName }} · v{{ appVersion }}
+                </span>
               </div>
             </div>
           </Transition>
@@ -222,35 +298,37 @@
               </div>
 
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
-                :cwd="composerCwd"
-                :models="availableModelIds" :selected-model="selectedModelId"
-                :selected-reasoning-effort="selectedReasoningEffort"
-                :selected-speed-mode="selectedSpeedMode"
-                :is-updating-speed-mode="isUpdatingSpeedMode"
-                :skills="installedSkills"
-                :is-turn-in-progress="false"
-                :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                :prepend-draft-request="rollbackDraftPrependRequest"
-                :dictation-language="dictationLanguage"
-                @submit="onSubmitThreadMessage"
-                @update:selected-model="onSelectModel"
-                @update:selected-reasoning-effort="onSelectReasoningEffort"
-                @update:selected-speed-mode="onSelectSpeedMode" />
+                  :cwd="composerCwd"
+                  :collaboration-modes="availableCollaborationModes"
+                  :selected-collaboration-mode="selectedCollaborationMode"
+                  :models="availableModelIds" :selected-model="selectedModelId"
+                  :selected-reasoning-effort="selectedReasoningEffort"
+                  :selected-speed-mode="selectedSpeedMode"
+                  :is-updating-speed-mode="isUpdatingSpeedMode"
+                  :skills="installedSkills"
+                  :codex-quota="codexQuota"
+                  :is-turn-in-progress="false"
+                  :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                  :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
+                  :prepend-draft-request="rollbackDraftPrependRequest"
+                  :dictation-language="dictationLanguage"
+                  @submit="onSubmitThreadMessage"
+                  @update:selected-collaboration-mode="onSelectCollaborationMode"
+                  @update:selected-model="onSelectModel"
+                  @update:selected-reasoning-effort="onSelectReasoningEffort"
+                  @update:selected-speed-mode="onSelectSpeedMode" />
             </div>
           </template>
           <template v-else>
             <div class="content-grid">
               <div class="content-thread">
-                <ThreadConversation :messages="filteredMessages" :is-loading="isLoadingMessages"
+                <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                   :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
-                  :is-turn-in-progress="isSelectedThreadInProgress"
-                  :is-rolling-back="isRollingBack"
                   @update-scroll-state="onUpdateThreadScrollState"
-                  @respond-server-request="onRespondServerRequest"
-                  @rollback="onRollback" />
+                  @fork-thread="onForkThreadFromMessage"
+                  @respond-server-request="onRespondServerRequest" />
               </div>
 
               <div class="composer-with-queue">
@@ -262,18 +340,22 @@
                 />
                 <ThreadComposer ref="threadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
+                  :collaboration-modes="availableCollaborationModes"
+                  :selected-collaboration-mode="selectedCollaborationMode"
                   :models="availableModelIds"
                   :selected-model="selectedModelId"
                   :selected-reasoning-effort="selectedReasoningEffort"
                   :selected-speed-mode="selectedSpeedMode"
                   :is-updating-speed-mode="isUpdatingSpeedMode"
                   :skills="installedSkills"
+                  :codex-quota="codexQuota"
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :prepend-draft-request="rollbackDraftPrependRequest"
                   :dictation-language="dictationLanguage"
+                  @update:selected-collaboration-mode="onSelectCollaborationMode"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
                   @update:selected-speed-mode="onSelectSpeedMode"
@@ -310,19 +392,24 @@ import {
   configureTelegramBot,
   createWorktree,
   getGithubProjectsForScope,
+  getAccounts,
   getHomeDirectory,
   getProjectRootSuggestion,
   getTelegramStatus,
   getWorkspaceRootsState,
   openProjectRoot,
+  removeAccount,
+  refreshAccountsFromAuth,
   searchThreads,
+  switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, ThreadScrollState } from './types/codex'
+import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
 import { getPathLeafName, getPathParent } from './pathUtils.js'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
+const LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY = 'codex-web-local.last-active-thread-route.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -445,8 +532,11 @@ const {
   selectedThreadScrollState,
   selectedThreadServerRequests,
   selectedLiveOverlay,
+  codexQuota,
   selectedThreadId,
+  availableCollaborationModes,
   availableModelIds,
+  selectedCollaborationMode,
   selectedModelId,
   selectedReasoningEffort,
   selectedSpeedMode,
@@ -461,18 +551,19 @@ const {
   refreshAll,
   refreshSkills,
   selectThread,
+  ensureThreadMessagesLoaded,
   setThreadScrollState,
   archiveThreadById,
   forkThreadById,
   renameThreadById,
+  forkThreadFromTurn,
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
-  rollbackSelectedThread,
-  isRollingBack,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
   steerQueuedMessage,
+  setSelectedCollaborationMode,
   setSelectedModelId,
   setWorktreeGitAutomationEnabled,
   setSelectedReasoningEffort,
@@ -484,6 +575,8 @@ const {
   pinProjectToTop,
   startPolling,
   stopPolling,
+  primeSelectedThread,
+  rollbackSelectedThread,
 } = useDesktopState()
 
 const route = useRoute()
@@ -491,6 +584,7 @@ const router = useRouter()
 const { isMobile } = useMobile()
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
+const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -514,6 +608,13 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const accounts = ref<UiAccountEntry[]>([])
+const isRefreshingAccounts = ref(false)
+const isSwitchingAccounts = ref(false)
+const removingAccountId = ref('')
+const confirmingRemoveAccountId = ref('')
+const hoveredAccountId = ref('')
+const accountActionError = ref('')
 const SEND_WITH_ENTER_KEY = 'codex-web-local.send-with-enter.v1'
 const IN_PROGRESS_SEND_MODE_KEY = 'codex-web-local.in-progress-send-mode.v1'
 const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
@@ -522,6 +623,7 @@ const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 const WORKTREE_GIT_AUTOMATION_KEY = 'codex-web-local.worktree-git-automation.v1'
 const GITHUB_TRENDING_PROJECTS_KEY = 'codex-web-local.github-trending-projects.v1'
+const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
@@ -540,6 +642,11 @@ const telegramStatus = ref<TelegramStatus>({
   mappedThreads: 0,
   lastError: '',
 })
+const mobileHiddenAtMs = ref<number | null>(null)
+const mobileResumeReloadTriggered = ref(false)
+const mobileResumeSyncInProgress = ref(false)
+let accountStatePollTimer: number | null = null
+let isAccountStatePollInFlight = false
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -595,6 +702,12 @@ const composerCwd = computed(() => {
   return selectedThread.value?.cwd?.trim() ?? ''
 })
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
+const isAccountSwitchBlocked = computed(() =>
+  isSendingMessage.value ||
+  isInterruptingTurn.value ||
+  isSelectedThreadInProgress.value ||
+  selectedThreadServerRequests.value.length > 0,
+)
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -648,6 +761,9 @@ const telegramStatusText = computed(() => {
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeyDown)
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+  window.addEventListener('pageshow', onWindowPageShow)
+  window.addEventListener('focus', onWindowFocus)
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
@@ -663,7 +779,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onWindowKeyDown)
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+  window.removeEventListener('pageshow', onWindowPageShow)
+  window.removeEventListener('focus', onWindowFocus)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
+  if (accountStatePollTimer !== null) {
+    window.clearInterval(accountStatePollTimer)
+    accountStatePollTimer = null
+  }
   if (threadSearchTimer) {
     clearTimeout(threadSearchTimer)
     threadSearchTimer = null
@@ -694,6 +817,26 @@ watch(sidebarSearchQuery, (value) => {
       })
   }, 220)
 })
+
+watch(accounts, () => {
+  if (typeof window === 'undefined') return
+  const shouldPoll = accounts.value.some((account) => account.quotaStatus === 'loading')
+  if (!shouldPoll) {
+    if (accountStatePollTimer !== null) {
+      window.clearInterval(accountStatePollTimer)
+      accountStatePollTimer = null
+    }
+    return
+  }
+  if (accountStatePollTimer !== null) return
+  accountStatePollTimer = window.setInterval(() => {
+    if (isAccountStatePollInFlight) return
+    isAccountStatePollInFlight = true
+    void loadAccountsState({ silent: true }).finally(() => {
+      isAccountStatePollInFlight = false
+    })
+  }, 1500)
+}, { deep: true })
 
 function onSkillsChanged(): void {
   void refreshSkills()
@@ -750,6 +893,231 @@ async function onExportThread(threadId: string): Promise<void> {
   }
   await nextTick()
   onExportChat()
+}
+
+function shortAccountId(accountId: string): string {
+  return accountId.length > 8 ? accountId.slice(-8) : accountId
+}
+
+function formatAccountMeta(account: UiAccountEntry): string {
+  const segments = [account.planType || 'unknown']
+  if (account.authMode) {
+    segments.unshift(account.authMode)
+  }
+  return segments.join(' · ')
+}
+
+function isPaymentRequiredErrorMessage(value: string | null): boolean {
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return normalized.includes('payment required') || /\b402\b/.test(normalized)
+}
+
+function isAccountUnavailable(account: UiAccountEntry): boolean {
+  return account.unavailableReason === 'payment_required' || isPaymentRequiredErrorMessage(account.quotaError)
+}
+
+function isAccountActionDisabled(account: UiAccountEntry): boolean {
+  return isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0
+    || (account.isActive && removingAccountId.value !== account.accountId && isAccountSwitchBlocked.value)
+}
+
+function isRemoveConfirmationActive(account: UiAccountEntry): boolean {
+  return confirmingRemoveAccountId.value === account.accountId
+}
+
+function isRemoveVisible(account: UiAccountEntry): boolean {
+  return hoveredAccountId.value === account.accountId || isRemoveConfirmationActive(account)
+}
+
+function getAccountSwitchLabel(account: UiAccountEntry): string {
+  if (isAccountUnavailable(account)) return 'Unavailable'
+  if (account.isActive) return 'Active'
+  if (isSwitchingAccounts.value) return 'Switching…'
+  return 'Switch'
+}
+
+function getAccountRemoveLabel(account: UiAccountEntry): string {
+  if (removingAccountId.value === account.accountId) return 'Removing…'
+  if (isRemoveConfirmationActive(account)) return 'Click again to remove'
+  return 'Remove'
+}
+
+function onAccountCardPointerEnter(accountId: string): void {
+  hoveredAccountId.value = accountId
+}
+
+function onAccountCardPointerLeave(accountId: string): void {
+  if (hoveredAccountId.value === accountId) {
+    hoveredAccountId.value = ''
+  }
+  if (removingAccountId.value === accountId) return
+  if (confirmingRemoveAccountId.value === accountId) {
+    confirmingRemoveAccountId.value = ''
+  }
+}
+
+function pickWeeklyQuotaWindow(account: UiAccountEntry) {
+  const quota = account.quotaSnapshot
+  if (!quota) return null
+  const windows = [quota?.primary, quota?.secondary].filter((quotaWindow): quotaWindow is UiRateLimitWindow => quotaWindow !== null)
+  const exactWeekly = windows.find((quotaWindow) => quotaWindow.windowMinutes === 7 * 24 * 60)
+  if (exactWeekly) {
+    return exactWeekly
+  }
+  const longerWindow = windows
+    .filter((quotaWindow) => typeof quotaWindow.windowMinutes === 'number' && quotaWindow.windowMinutes >= 7 * 24 * 60)
+    .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))[0] ?? null
+  if (longerWindow) {
+    return longerWindow
+  }
+  return quota.secondary ?? null
+}
+
+function formatResetDateCompact(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  const date = new Date(resetsAt * 1000)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function formatAccountQuota(account: UiAccountEntry): string {
+  if (isAccountUnavailable(account)) {
+    return account.quotaError || '402 Payment Required'
+  }
+  const quota = account.quotaSnapshot
+  const window = pickWeeklyQuotaWindow(account)
+  if (window) {
+    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+    const refreshDate = formatResetDateCompact(window.resetsAt)
+    return refreshDate
+      ? `${remainingPercent}% weekly remaining · ${refreshDate}`
+      : `${remainingPercent}% weekly remaining`
+  }
+  if (quota?.credits?.unlimited) {
+    return 'Unlimited credits'
+  }
+  if (quota?.credits?.hasCredits && quota.credits.balance) {
+    return `${quota.credits.balance} credits`
+  }
+  if (account.quotaStatus === 'loading') {
+    return 'Loading quota…'
+  }
+  if (account.quotaStatus === 'error') {
+    return account.quotaError || 'Quota unavailable'
+  }
+  return 'Fetching account details…'
+}
+
+function buildAccountTitle(account: UiAccountEntry): string {
+  return [
+    account.email || 'Account',
+    formatAccountMeta(account),
+    isAccountUnavailable(account) ? 'Unavailable account' : null,
+    formatAccountQuota(account),
+    `Workspace ${account.accountId}`,
+  ].filter(Boolean).join('\n')
+}
+
+async function loadAccountsState(options: { silent?: boolean } = {}): Promise<void> {
+  try {
+    const result = await getAccounts()
+    accounts.value = result.accounts
+    if (!result.accounts.some((account) => account.accountId === hoveredAccountId.value)) {
+      hoveredAccountId.value = ''
+    }
+    if (!result.accounts.some((account) => account.accountId === confirmingRemoveAccountId.value)) {
+      confirmingRemoveAccountId.value = ''
+    }
+  } catch (error) {
+    if (options.silent === true) return
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to load accounts'
+  }
+}
+
+async function onRefreshAccounts(): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
+  accountActionError.value = ''
+  hoveredAccountId.value = ''
+  confirmingRemoveAccountId.value = ''
+  isRefreshingAccounts.value = true
+  try {
+    const result = await refreshAccountsFromAuth()
+    accounts.value = result.accounts
+    stopPolling()
+    startPolling()
+    void refreshAll({
+      includeSelectedThreadMessages: true,
+    })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to refresh accounts'
+  } finally {
+    isRefreshingAccounts.value = false
+  }
+}
+
+async function onSwitchAccount(accountId: string): Promise<void> {
+  if (isSwitchingAccounts.value || isRefreshingAccounts.value) return
+  if (isAccountSwitchBlocked.value) {
+    accountActionError.value = 'Finish the current turn and pending requests before switching accounts.'
+    return
+  }
+  accountActionError.value = ''
+  hoveredAccountId.value = ''
+  confirmingRemoveAccountId.value = ''
+  isSwitchingAccounts.value = true
+  try {
+    const nextActiveAccount = await switchAccount(accountId)
+    accounts.value = accounts.value.map((account) => (
+      account.accountId === accountId
+        ? nextActiveAccount
+        : { ...account, isActive: false }
+    ))
+    stopPolling()
+    startPolling()
+    void refreshAll({
+      includeSelectedThreadMessages: true,
+    })
+    void loadAccountsState({ silent: true })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to switch account'
+  } finally {
+    isSwitchingAccounts.value = false
+  }
+}
+
+async function onRemoveAccount(accountId: string): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0) return
+  const targetAccount = accounts.value.find((account) => account.accountId === accountId) ?? null
+  if (!targetAccount) return
+  if (confirmingRemoveAccountId.value !== accountId) {
+    confirmingRemoveAccountId.value = accountId
+    return
+  }
+  if (targetAccount.isActive && isAccountSwitchBlocked.value) {
+    accountActionError.value = 'Finish the current turn and pending requests before removing the active account.'
+    return
+  }
+
+  const removedWasActive = targetAccount.isActive
+  accountActionError.value = ''
+  confirmingRemoveAccountId.value = ''
+  removingAccountId.value = accountId
+  try {
+    const result = await removeAccount(accountId)
+    accounts.value = result.accounts
+    stopPolling()
+    startPolling()
+    if (removedWasActive) {
+      void refreshAll({
+        includeSelectedThreadMessages: true,
+      })
+    }
+    void loadAccountsState({ silent: true })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : 'Failed to remove account'
+  } finally {
+    removingAccountId.value = ''
+  }
 }
 
 function onArchiveThread(threadId: string): void {
@@ -826,8 +1194,10 @@ function onRenameThread(payload: { threadId: string; title: string }): void {
   void renameThreadById(payload.threadId, payload.title)
 }
 
-function onRemoveProject(projectName: string): void {
-  removeProject(projectName)
+async function onRemoveProject(projectName: string): Promise<void> {
+  await removeProject(projectName)
+  await loadWorkspaceRootOptionsState()
+  void refreshDefaultProjectName()
 }
 
 function onReorderProject(payload: { projectName: string; toIndex: number }): void {
@@ -840,6 +1210,16 @@ function onUpdateThreadScrollState(payload: { threadId: string; state: ThreadScr
 
 function onRespondServerRequest(payload: { id: number; result?: unknown; error?: { code?: number; message: string } }): void {
   void respondToPendingServerRequest(payload)
+}
+
+async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: number }): Promise<void> {
+  const forkedThreadId = await forkThreadFromTurn(payload.threadId, payload.turnIndex)
+  if (!forkedThreadId) return
+  await router.push({ name: 'thread', params: { threadId: forkedThreadId } })
+  if (selectedThreadId.value !== forkedThreadId) {
+    await selectThread(forkedThreadId)
+  }
+  if (isMobile.value) setSidebarCollapsed(true)
 }
 
 function setSidebarCollapsed(nextValue: boolean): void {
@@ -857,8 +1237,62 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   setSidebarCollapsed(!isSidebarCollapsed.value)
 }
 
+function onDocumentVisibilityChange(): void {
+  if (typeof document === 'undefined') return
+  if (!isMobile.value) return
+
+  if (document.visibilityState === 'hidden') {
+    mobileHiddenAtMs.value = Date.now()
+    mobileResumeReloadTriggered.value = false
+    return
+  }
+
+  maybeSyncAfterMobileResume()
+}
+
+function onWindowPageShow(event: PageTransitionEvent): void {
+  if (!event.persisted) return
+  maybeSyncAfterMobileResume()
+}
+
+function onWindowFocus(): void {
+  maybeSyncAfterMobileResume()
+}
+
+function maybeSyncAfterMobileResume(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  if (!isMobile.value) return
+  if (document.visibilityState !== 'visible') return
+  if (mobileResumeReloadTriggered.value) return
+  if (mobileHiddenAtMs.value === null) return
+
+  const hiddenForMs = Date.now() - mobileHiddenAtMs.value
+  if (hiddenForMs < MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS) return
+
+  mobileResumeReloadTriggered.value = true
+  mobileHiddenAtMs.value = null
+  void syncAfterMobileResume()
+}
+
+async function syncAfterMobileResume(): Promise<void> {
+  if (mobileResumeSyncInProgress.value) return
+  mobileResumeSyncInProgress.value = true
+
+  try {
+    await refreshAll({
+      includeSelectedThreadMessages: true,
+      awaitAncillaryRefreshes: true,
+    })
+    await restoreLastActiveThreadRoute()
+    await syncThreadSelectionWithRoute()
+  } finally {
+    mobileResumeSyncInProgress.value = false
+  }
+}
+
 function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; rollbackLatestUserTurn?: boolean }): void {
   const text = payload.text
+  scheduleMobileConversationJumpToLatest()
   const editingState = editingQueuedMessageState.value
   const queueInsertIndex =
     payload.mode === 'queue'
@@ -964,6 +1398,24 @@ async function rollbackAndResendDictation(payload: {
     await rollbackSelectedThread(rollbackTargetTurnId)
   }
   await sendMessageToSelectedThread(payload.text, payload.imageUrls, payload.skills, 'steer', payload.fileAttachments)
+}
+
+function scheduleMobileConversationJumpToLatest(): void {
+  if (!isMobile.value || isHomeRoute.value) return
+
+  const jumpToLatest = () => {
+    threadConversationRef.value?.jumpToLatest()
+  }
+
+  jumpToLatest()
+  void nextTick(() => {
+    jumpToLatest()
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      jumpToLatest()
+      window.requestAnimationFrame(jumpToLatest)
+    })
+  })
 }
 
 function onSelectNewThreadFolder(cwd: string): void {
@@ -1364,11 +1816,90 @@ function normalizeMessageType(rawType: string | undefined, role: string): string
   return role.trim() || 'message'
 }
 
+function onSelectCollaborationMode(mode: 'default' | 'plan'): void {
+  setSelectedCollaborationMode(mode)
+}
+
 async function initialize(): Promise<void> {
-  await refreshAll()
+  await router.isReady()
+
+  if (route.name === 'thread' && routeThreadId.value) {
+    primeSelectedThread(routeThreadId.value)
+  }
+
+  startPolling()
+  await refreshAll({
+    includeSelectedThreadMessages: true,
+  })
+  void loadAccountsState({ silent: true })
+  await restoreLastActiveThreadRoute()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
-  startPolling()
+}
+
+type LastActiveThreadRoute = {
+  routeName: 'thread'
+  threadId: string
+  updatedAtIso: string
+}
+
+function loadLastActiveThreadRoute(): LastActiveThreadRoute | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.localStorage.getItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as Partial<LastActiveThreadRoute> | null
+    if (!parsed || parsed.routeName !== 'thread') return null
+    if (typeof parsed.threadId !== 'string' || parsed.threadId.trim().length === 0) return null
+    if (typeof parsed.updatedAtIso !== 'string' || parsed.updatedAtIso.trim().length === 0) return null
+
+    return {
+      routeName: 'thread',
+      threadId: parsed.threadId.trim(),
+      updatedAtIso: parsed.updatedAtIso,
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveLastActiveThreadRoute(threadId: string): void {
+  if (typeof window === 'undefined') return
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return
+
+  const payload: LastActiveThreadRoute = {
+    routeName: 'thread',
+    threadId: normalizedThreadId,
+    updatedAtIso: new Date().toISOString(),
+  }
+  window.localStorage.setItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY, JSON.stringify(payload))
+}
+
+function clearLastActiveThreadRoute(): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY)
+}
+
+async function restoreLastActiveThreadRoute(): Promise<boolean> {
+  if (route.name !== 'home') return false
+
+  const persistedRoute = loadLastActiveThreadRoute()
+  const fallbackThreadId = selectedThreadId.value.trim()
+  const candidateThreadId = persistedRoute?.threadId ?? fallbackThreadId
+  if (!candidateThreadId) return false
+
+  if (!knownThreadIdSet.value.has(candidateThreadId)) {
+    if (persistedRoute?.threadId === candidateThreadId) {
+      clearLastActiveThreadRoute()
+    }
+    return false
+  }
+
+  await router.replace({ name: 'thread', params: { threadId: candidateThreadId } })
+  return true
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
@@ -1394,6 +1925,8 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
 
       if (selectedThreadId.value !== threadId) {
         await selectThread(threadId)
+      } else {
+        void ensureThreadMessagesLoaded(threadId, { silent: true })
       }
       return
     }
@@ -1402,6 +1935,20 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
     isRouteSyncInProgress.value = false
   }
 }
+
+watch(
+  () => [route.name, routeThreadId.value, selectedThreadId.value, hasInitialized.value] as const,
+  ([routeName, threadIdFromRoute, threadIdFromSelection, ready]) => {
+    if (!ready) return
+    if (routeName !== 'thread') return
+
+    const threadId = (threadIdFromRoute || threadIdFromSelection).trim()
+    if (!threadId) return
+    if (!knownThreadIdSet.value.has(threadId)) return
+
+    saveLastActiveThreadRoute(threadId)
+  },
+)
 
 watch(
   () =>
@@ -1453,6 +2000,16 @@ watch(
       return
     }
     void loadTrendingProjects()
+  },
+)
+
+watch(
+  () => [hasInitialized.value, route.name, selectedThreadId.value] as const,
+  ([ready, routeName, threadId]) => {
+    if (!ready) return
+    if (routeName !== 'thread') return
+    if (!threadId) return
+    void ensureThreadMessagesLoaded(threadId, { silent: true })
   },
 )
 
@@ -1568,6 +2125,7 @@ async function submitFirstMessageForNewThread(
     const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return
     await router.replace({ name: 'thread', params: { threadId } })
+    scheduleMobileConversationJumpToLatest()
   } catch {
     // Error is already reflected in state.
   }
@@ -1591,7 +2149,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-root {
-  @apply h-full min-h-0 w-full flex flex-col overflow-y-hidden overflow-x-visible bg-white;
+  @apply h-full min-h-0 min-w-0 w-full flex flex-col overflow-y-hidden overflow-x-hidden bg-white;
 }
 
 .sidebar-thread-controls-host {
@@ -1643,7 +2201,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-body {
-  @apply flex-1 min-h-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-visible;
+  @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-hidden;
 }
 
 
@@ -1816,12 +2374,116 @@ async function submitFirstMessageForNewThread(
   @apply border-t border-zinc-100;
 }
 
+.sidebar-settings-account-section {
+  @apply border-t border-zinc-100 bg-zinc-50/60 px-3 py-3;
+}
+
+.sidebar-settings-account-header {
+  @apply mb-2 flex items-center justify-between gap-2;
+}
+
+.sidebar-settings-account-header-main {
+  @apply flex items-center gap-2;
+}
+
+.sidebar-settings-account-title {
+  @apply text-sm font-medium text-zinc-800;
+}
+
+.sidebar-settings-account-count {
+  @apply rounded bg-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-600;
+}
+
+.sidebar-settings-account-error {
+  @apply mb-2 rounded-md bg-rose-50 px-2 py-1.5 text-xs text-rose-700;
+}
+
+.sidebar-settings-account-refresh {
+  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-empty {
+  @apply text-xs text-zinc-500;
+}
+
+.sidebar-settings-account-list {
+  @apply flex max-h-56 flex-col gap-2 overflow-y-auto;
+}
+
+.sidebar-settings-account-item {
+  @apply flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2;
+}
+
+.sidebar-settings-account-item.is-active {
+  @apply border-emerald-200 bg-emerald-50;
+}
+
+.sidebar-settings-account-item.is-unavailable {
+  @apply border-rose-200 bg-rose-50;
+}
+
+.sidebar-settings-account-main {
+  @apply min-w-0 flex-1;
+}
+
+.sidebar-settings-account-actions {
+  @apply flex w-24 shrink-0 flex-col items-end gap-1.5;
+}
+
+.sidebar-settings-account-email {
+  @apply truncate text-sm text-zinc-800;
+}
+
+.sidebar-settings-account-meta {
+  @apply truncate text-[11px] text-zinc-500;
+}
+
+.sidebar-settings-account-quota {
+  @apply truncate text-[11px] text-zinc-600;
+}
+
+.sidebar-settings-account-id {
+  @apply mt-1 inline-flex max-w-full rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[11px] text-zinc-700;
+}
+
+.sidebar-settings-account-item.is-active .sidebar-settings-account-id {
+  @apply bg-emerald-100 text-emerald-800;
+}
+
+.sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
+  @apply bg-rose-100 text-rose-800;
+}
+
+.sidebar-settings-account-switch {
+  @apply min-w-[4.75rem] shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-center text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-remove {
+  @apply invisible shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition-colors hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-remove.is-visible {
+  @apply visible opacity-100 pointer-events-auto;
+}
+
+.sidebar-settings-account-remove.is-confirming {
+  @apply border-amber-300 bg-amber-50 text-amber-700 font-medium;
+}
+
 .sidebar-settings-label {
   @apply text-left;
 }
 
 .sidebar-settings-value {
   @apply text-xs text-zinc-500 bg-zinc-100 rounded px-1.5 py-0.5;
+}
+
+.sidebar-settings-version-note {
+  @apply flex justify-start border-t border-zinc-100 px-3 py-1.5;
+}
+
+.sidebar-settings-value-version {
+  @apply max-w-full truncate font-mono text-[11px] leading-4;
 }
 
 .sidebar-settings-toggle {

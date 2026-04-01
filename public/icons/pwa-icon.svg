@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="background" x1="74" y1="44" x2="444" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7FBFD" />
+      <stop offset="1" stop-color="#E7EEF5" />
+    </linearGradient>
+    <linearGradient id="cloud" x1="256" y1="96" x2="256" y2="424" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A9EFDB" />
+      <stop offset="0.48" stop-color="#58D2B3" />
+      <stop offset="1" stop-color="#12866F" />
+    </linearGradient>
+    <radialGradient id="sheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(226 156) rotate(57.6) scale(210 202)">
+      <stop offset="0" stop-color="#F2FFFB" stop-opacity="0.82" />
+      <stop offset="0.56" stop-color="#E6FFF8" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#E6FFF8" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#background)" />
+  <g>
+    <rect x="50" y="50" width="412" height="412" rx="116" fill="url(#background)" />
+    <rect x="51.5" y="51.5" width="409" height="409" rx="114.5" stroke="#D7E2EB" stroke-width="3" />
+  </g>
+
+  <g>
+    <circle cx="256" cy="174" r="104" fill="url(#cloud)" />
+    <circle cx="334" cy="204" r="96" fill="url(#cloud)" />
+    <circle cx="176" cy="248" r="118" fill="url(#cloud)" />
+    <circle cx="356" cy="294" r="98" fill="url(#cloud)" />
+    <circle cx="188" cy="336" r="106" fill="url(#cloud)" />
+    <circle cx="286" cy="360" r="98" fill="url(#cloud)" />
+    <circle cx="262" cy="262" r="122" fill="url(#cloud)" />
+    <circle cx="262" cy="262" r="122" fill="url(#sheen)" />
+  </g>
+
+  <path d="M170 214L214 286L170 352" stroke="#F8FBFC" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M274 318H354" stroke="#F8FBFC" stroke-width="28" stroke-linecap="round" />
+</svg>

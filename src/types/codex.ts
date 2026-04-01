@@ -4,6 +4,7 @@ export type RpcEnvelope<T> = {
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 export type SpeedMode = 'standard' | 'fast'
+export type CollaborationModeKind = 'default' | 'plan'
 
 export type RpcMethodCatalog = {
   data: string[]
@@ -81,6 +82,29 @@ export type CommandExecutionData = {
 }
 
 export type UiFileAttachment = { label: string; path: string }
+export type UiFileChangeOperation = 'add' | 'delete' | 'update'
+export type UiFileChangeStatus = 'inProgress' | 'completed' | 'failed' | 'declined'
+export type UiFileChange = {
+  path: string
+  operation: UiFileChangeOperation
+  movedToPath?: string | null
+  diff: string
+  addedLineCount: number
+  removedLineCount: number
+}
+
+export type UiPlanStepStatus = 'pending' | 'inProgress' | 'completed'
+
+export type UiPlanStep = {
+  step: string
+  status: UiPlanStepStatus
+}
+
+export type UiPlanData = {
+  explanation?: string
+  steps: UiPlanStep[]
+  isStreaming?: boolean
+}
 
 export type UiMessage = {
   id: string
@@ -88,10 +112,13 @@ export type UiMessage = {
   text: string
   images?: string[]
   fileAttachments?: UiFileAttachment[]
+  fileChanges?: UiFileChange[]
+  fileChangeStatus?: UiFileChangeStatus
   messageType?: string
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData
+  plan?: UiPlanData
   turnId?: string
   turnIndex?: number
 }
@@ -131,6 +158,7 @@ export type UiCreditsSnapshot = {
 export type UiRateLimitWindow = {
   usedPercent: number
   windowDurationMins: number | null
+  windowMinutes: number | null
   resetsAt: number | null
 }
 
@@ -146,6 +174,24 @@ export type UiRateLimitSnapshot = {
 export type UiProjectGroup = {
   projectName: string
   threads: UiThread[]
+}
+
+export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
+export type UiAccountUnavailableReason = 'payment_required'
+
+export type UiAccountEntry = {
+  accountId: string
+  authMode: string | null
+  email: string | null
+  planType: string | null
+  lastRefreshedAtIso: string
+  lastActivatedAtIso: string | null
+  quotaSnapshot: UiRateLimitSnapshot | null
+  quotaUpdatedAtIso: string | null
+  quotaStatus: UiAccountQuotaStatus
+  quotaError: string | null
+  unavailableReason: UiAccountUnavailableReason | null
+  isActive: boolean
 }
 
 export type ThreadScrollState = {
@@ -167,4 +213,9 @@ export type ChatThread = {
   projectName: string
   updatedAt: string | null
   messages: ChatMessage[]
+}
+
+export type CollaborationModeOption = {
+  value: CollaborationModeKind
+  label: string
 }

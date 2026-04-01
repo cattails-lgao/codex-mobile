@@ -68,6 +68,20 @@
         </span>
       </div>
 
+      <div
+        v-if="quotaSummaryText"
+        class="thread-composer-rate-limit"
+        :title="quotaTooltipText"
+        aria-live="polite"
+      >
+        <span class="thread-composer-rate-limit-row">
+          <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
+        </span>
+        <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
+          {{ quotaWeeklyRefreshText }}
+        </span>
+      </div>
+
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
@@ -104,6 +118,7 @@
           :disabled="isInteractionDisabled"
           @input="onInputChange"
           @keydown="onInputKeydown"
+          @paste="onInputPaste"
         />
         <ComposerSkillPicker
           :skills="skillOptions"
@@ -207,6 +222,21 @@
         </div>
 
         <template v-if="!isDictationRecording">
+          <button
+            class="thread-composer-plan-toggle"
+            :class="{ 'is-active': isPlanModeSelected }"
+            type="button"
+            :aria-label="isPlanModeSelected ? 'Disable plan mode' : 'Enable plan mode'"
+            :aria-pressed="isPlanModeSelected"
+            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            @click="toggleCollaborationMode"
+          >
+            <span class="thread-composer-plan-toggle-label">Plan</span>
+            <span class="thread-composer-plan-toggle-switch" aria-hidden="true">
+              <span class="thread-composer-plan-toggle-switch-thumb" />
+            </span>
+          </button>
+
           <ComposerDropdown
             class="thread-composer-control"
             :model-value="selectedModel"
@@ -332,8 +362,16 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ReasoningEffort, SpeedMode } from '../../types/codex'
+import type {
+  CollaborationModeKind,
+  CollaborationModeOption,
+  ReasoningEffort,
+  SpeedMode,
+  UiRateLimitSnapshot,
+  UiRateLimitWindow,
+} from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
+import { useMobile } from '../../composables/useMobile'
 import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
@@ -350,11 +388,14 @@ type SkillItem = { name: string; description: string; path: string }
 const props = defineProps<{
   activeThreadId: string
   cwd?: string
+  collaborationModes?: CollaborationModeOption[]
+  selectedCollaborationMode: CollaborationModeKind
   models: string[]
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
   selectedSpeedMode: SpeedMode
   skills?: SkillItem[]
+  codexQuota?: UiRateLimitSnapshot | null
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
   isUpdatingSpeedMode?: boolean
@@ -394,6 +435,7 @@ export type ThreadComposerExposed = {
 const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   interrupt: []
+  'update:selected-collaboration-mode': [mode: CollaborationModeKind]
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
   'update:selected-speed-mode': [mode: SpeedMode]
@@ -463,6 +505,7 @@ const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const { isMobile } = useMobile()
 const isAttachMenuOpen = ref(false)
 const isSlashMenuOpen = ref(false)
 const mentionStartIndex = ref<number | null>(null)
@@ -494,6 +537,11 @@ function formatModelLabel(modelId: string): string {
 const modelOptions = computed(() =>
   props.models.map((modelId) => ({ value: modelId, label: formatModelLabel(modelId) })),
 )
+const isPlanModeSelected = computed(() => props.selectedCollaborationMode === 'plan')
+
+const isPlanModeWaitingForModel = computed(() =>
+  props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
+)
 
 const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
 const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
@@ -509,6 +557,7 @@ const canSubmit = computed(() => {
   if (props.disabled) return false
   if (props.isUpdatingSpeedMode) return false
   if (!props.activeThreadId) return false
+  if (isPlanModeWaitingForModel.value) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const hasUnsavedDraft = computed(() =>
@@ -561,11 +610,151 @@ const dictationDurationLabel = computed(() => {
 })
 
 const placeholderText = computed(() =>
-  props.activeThreadId ? 'Type a message... (@ for files, / for skills)' : 'Select a thread to send a message',
+  !props.activeThreadId
+    ? 'Select a thread to send a message'
+    : isPlanModeWaitingForModel.value
+      ? 'Loading models for plan mode...'
+      : 'Type a message... (@ for files, / for skills)',
 )
 const hasSubmitContent = computed(() =>
   draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0,
 )
+const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
+const quotaWeeklyRefreshText = computed(() => '')
+const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))
+
+function formatPlanType(planType: string | null | undefined): string {
+  if (!planType || planType === 'unknown') return ''
+  if (planType === 'edu') return 'Education'
+  return `${planType.slice(0, 1).toUpperCase()}${planType.slice(1)}`
+}
+
+function formatWindowSpan(windowMinutes: number | null): string {
+  if (typeof windowMinutes !== 'number' || !Number.isFinite(windowMinutes) || windowMinutes <= 0) return ''
+  if (windowMinutes % 1440 === 0) return `${windowMinutes / 1440}d`
+  if (windowMinutes % 60 === 0) return `${windowMinutes / 60}h`
+  return `${windowMinutes}m`
+}
+
+function formatResetTime(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  const resetMs = resetsAt * 1000
+  const diffMs = resetMs - Date.now()
+  if (diffMs <= 0) return 'resetting now'
+
+  const totalMinutes = Math.round(diffMs / 60000)
+  if (totalMinutes < 60) return `resets in ${Math.max(1, totalMinutes)}m`
+
+  const totalHours = Math.round(totalMinutes / 60)
+  if (totalHours < 48) return `resets in ${Math.max(1, totalHours)}h`
+
+  const totalDays = Math.round(totalHours / 24)
+  return `resets in ${Math.max(1, totalDays)}d`
+}
+
+function formatResetDate(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(resetsAt * 1000))
+}
+
+function formatResetDateCompact(resetsAt: number | null): string {
+  if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return ''
+  const date = new Date(resetsAt * 1000)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function pickWeeklyQuotaWindow(quota: UiRateLimitSnapshot): UiRateLimitWindow | null {
+  const windows = [quota.primary, quota.secondary].filter((window): window is UiRateLimitWindow => window !== null)
+  const exactWeekly = windows.find((window) => window.windowMinutes === 7 * 24 * 60)
+  if (exactWeekly) return exactWeekly
+
+  const longerWindows = windows
+    .filter((window) => typeof window.windowMinutes === 'number' && window.windowMinutes >= 7 * 24 * 60)
+    .sort((first, second) => (first.windowMinutes ?? 0) - (second.windowMinutes ?? 0))
+
+  if (longerWindows[0]) return longerWindows[0]
+  return quota.secondary ?? null
+}
+
+function formatWindowSummary(window: UiRateLimitWindow): string {
+  const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
+  const span = formatWindowSpan(window.windowMinutes)
+  return span ? `${remainingPercent}% / ${span}` : `${remainingPercent}%`
+}
+
+function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+
+  const segments: string[] = []
+  const plan = formatPlanType(quota.planType)
+  if (plan) segments.push(plan)
+  if (quota.primary) segments.push(formatWindowSummary(quota.primary))
+  if (quota.secondary) segments.push(formatWindowSummary(quota.secondary))
+
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  const weeklyRefreshDate = formatResetDateCompact(weeklyWindow?.resetsAt ?? null)
+  if (weeklyRefreshDate) {
+    segments.push(weeklyRefreshDate)
+  }
+
+  if (segments.length === 0 && quota.credits?.unlimited) {
+    segments.push('Unlimited credits')
+  } else if (segments.length === 0 && quota.credits?.hasCredits && quota.credits.balance) {
+    segments.push(`${quota.credits.balance} credits`)
+  }
+
+  return segments.join(' · ')
+}
+
+function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+
+  const lines: string[] = []
+  const plan = formatPlanType(quota.planType)
+  if (plan) {
+    lines.push(`Plan: ${plan}`)
+  }
+
+  if (quota.primary) {
+    const reset = formatResetTime(quota.primary.resetsAt)
+    lines.push(`Primary window: ${formatWindowSummary(quota.primary)}${reset ? `, ${reset}` : ''}`)
+  }
+
+  if (quota.secondary) {
+    const reset = formatResetTime(quota.secondary.resetsAt)
+    lines.push(`Secondary window: ${formatWindowSummary(quota.secondary)}${reset ? `, ${reset}` : ''}`)
+  }
+
+  if (quota.credits?.unlimited) {
+    lines.push('Credits: unlimited')
+  } else if (quota.credits?.hasCredits && quota.credits.balance) {
+    lines.push(`Credits: ${quota.credits.balance}`)
+  }
+
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  if (weeklyWindow) {
+    const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
+    if (weeklyRefreshDate) {
+      lines.push(`Weekly refresh: ${weeklyRefreshDate}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+function buildQuotaWeeklyRefreshText(quota: UiRateLimitSnapshot | null): string {
+  if (!quota) return ''
+  const weeklyWindow = pickWeeklyQuotaWindow(quota)
+  if (!weeklyWindow) return ''
+  const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
+  return weeklyRefreshDate ? `Weekly refresh ${weeklyRefreshDate}` : ''
+}
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestUserTurn?: boolean }): void {
   const text = draft.value.trim()
@@ -580,7 +769,11 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
   })
   clearPersistedDraftForThread(props.activeThreadId)
   clearDraftState()
-  if (isAndroid) {
+  folderUploadGroups.value = []
+  isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
+  closeFileMention()
+  if (isAndroid || isMobile.value) {
     inputRef.value?.blur()
     return
   }
@@ -711,6 +904,10 @@ function onModelSelect(value: string): void {
   emit('update:selected-model', value)
 }
 
+function toggleCollaborationMode(): void {
+  emit('update:selected-collaboration-mode', isPlanModeSelected.value ? 'default' : 'plan')
+}
+
 function onReasoningEffortSelect(value: string): void {
   emit('update:selected-reasoning-effort', value as ReasoningEffort)
 }
@@ -821,28 +1018,68 @@ function isImageFile(file: File): boolean {
   return /\.(png|jpe?g|gif|webp)$/i.test(file.name)
 }
 
-function addFiles(files: FileList | null): void {
+function addImageFile(file: File): void {
+  const reader = new FileReader()
+  reader.onload = () => {
+    if (typeof reader.result !== 'string') return
+    selectedImages.value.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file.name || `Pasted image ${selectedImages.value.length + 1}`,
+      url: reader.result,
+    })
+  }
+  reader.readAsDataURL(file)
+}
+
+function addFiles(files: FileList | File[] | null): void {
   if (!files || files.length === 0) return
   const generation = draftGeneration.value
   for (const file of Array.from(files)) {
     if (isImageFile(file)) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (generation !== draftGeneration.value) return
-        if (typeof reader.result !== 'string') return
-        selectedImages.value.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          name: file.name,
-          url: reader.result,
-        })
-      }
-      reader.readAsDataURL(file)
-    } else {
-      void uploadFile(file).then((serverPath) => {
-        if (generation !== draftGeneration.value) return
-        if (serverPath) addFileAttachment(serverPath)
-      }).catch(() => {})
+      addImageFile(file)
+      continue
     }
+
+    void uploadFile(file).then((serverPath) => {
+      if (generation !== draftGeneration.value) return
+      if (serverPath) addFileAttachment(serverPath)
+    }).catch(() => {})
+  }
+}
+
+function readClipboardImageFiles(event: ClipboardEvent): File[] {
+  const clipboardItems = event.clipboardData?.items
+  if (clipboardItems && clipboardItems.length > 0) {
+    const imageFiles: File[] = []
+    for (const item of Array.from(clipboardItems)) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
+      const file = item.getAsFile()
+      if (file) {
+        imageFiles.push(file)
+      }
+    }
+    if (imageFiles.length > 0) {
+      return imageFiles
+    }
+  }
+
+  const clipboardFiles = event.clipboardData?.files
+  if (!clipboardFiles || clipboardFiles.length === 0) {
+    return []
+  }
+
+  return Array.from(clipboardFiles).filter((file) => isImageFile(file))
+}
+
+function onInputPaste(event: ClipboardEvent): void {
+  if (isInteractionDisabled.value) return
+  const imageFiles = readClipboardImageFiles(event)
+  if (imageFiles.length === 0) return
+  event.preventDefault()
+  addFiles(imageFiles)
+  isAttachMenuOpen.value = false
+  if (dictationFeedback.value) {
+    dictationFeedback.value = ''
   }
 }
 
@@ -1299,6 +1536,18 @@ watch(
   @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
 }
 
+.thread-composer-rate-limit {
+  @apply mb-1.5 px-1 text-[11px] leading-5 text-zinc-500;
+}
+
+.thread-composer-rate-limit-row {
+  @apply flex min-w-0 items-center gap-x-1.5 gap-y-1;
+}
+
+.thread-composer-rate-limit-value {
+  @apply min-w-0 truncate;
+}
+
 .thread-composer-input-wrap {
   @apply relative;
 }
@@ -1462,6 +1711,38 @@ watch(
 
 .thread-composer-control :deep(.composer-dropdown-value) {
   @apply truncate;
+}
+
+.thread-composer-plan-toggle {
+  @apply inline-flex h-7 shrink-0 items-center gap-1.5 border-0 bg-transparent p-0 text-sm leading-none text-zinc-500 transition hover:text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-plan-toggle.is-active {
+  @apply text-zinc-700;
+}
+
+.thread-composer-plan-toggle-label {
+  @apply leading-none;
+}
+
+.thread-composer-plan-toggle-switch {
+  @apply relative inline-flex h-4 w-7 shrink-0 rounded-full bg-zinc-200 transition;
+}
+
+.thread-composer-plan-toggle-switch-thumb {
+  @apply absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform;
+}
+
+.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch {
+  @apply bg-sky-500;
+}
+
+.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch-thumb {
+  transform: translateX(12px);
+}
+
+.thread-composer-plan-toggle:disabled .thread-composer-plan-toggle-switch {
+  @apply bg-zinc-200;
 }
 
 .thread-composer-actions {

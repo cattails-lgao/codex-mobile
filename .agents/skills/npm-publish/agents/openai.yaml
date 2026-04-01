@@ -1,0 +1,4 @@
+interface:
+  display_name: "NPM Publish"
+  short_description: "Publish this repo's npm package via the existing release script"
+  default_prompt: "Use $npm-publish to check, prepare, publish, or verify this repository's npm package by reusing the existing publish.sh workflow."
