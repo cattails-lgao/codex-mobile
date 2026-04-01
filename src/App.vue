@@ -200,11 +200,10 @@
                   :enable-search="true"
                   search-placeholder="Quick search project"
                   :show-add-action="true"
+                  add-action-mode="event"
                   add-action-label="+ Add new project"
-                  :default-add-value="defaultNewProjectName"
-                  add-placeholder="Project name or absolute path"
                   :disabled="false" @update:model-value="onSelectNewThreadFolder"
-                  @add="onAddNewProject" />
+                  @add-action="onStartAddNewProject" />
                 <ComposerRuntimeDropdown
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
@@ -996,31 +995,16 @@ function onSelectNewThreadFolder(cwd: string): void {
   newThreadCwd.value = cwd.trim()
 }
 
-async function onAddNewProject(rawInput: string): Promise<void> {
-  const normalizedInput = rawInput.trim()
-  if (!normalizedInput) return
-
-  const isPath = looksLikePath(normalizedInput)
+async function onStartAddNewProject(): Promise<void> {
   const baseDir = await resolveProjectBaseDirectory()
-  const targetPath = isPath
-    ? normalizedInput
-    : joinPath(baseDir, normalizedInput)
-  if (!targetPath) return
-
-  try {
-    const normalizedPath = await openProjectRoot(targetPath, {
-      createIfMissing: !isPath,
-      label: isPath ? '' : normalizedInput,
-    })
-    if (normalizedPath) {
-      newThreadCwd.value = normalizedPath
-      pinProjectToTop(getPathLeafName(normalizedPath))
-      void loadWorkspaceRootOptionsState()
-      void refreshDefaultProjectName()
-    }
-  } catch {
-    // Error is surfaced on next request if path is invalid.
+  const browseRoot = baseDir || homeDirectory.value.trim() || '/'
+  const search = new URLSearchParams()
+  const suggestedName = defaultNewProjectName.value.trim()
+  if (suggestedName) {
+    search.set('newProjectName', suggestedName)
   }
+  const query = search.toString()
+  window.location.assign(`/codex-local-browse${encodeURI(browseRoot)}${query ? `?${query}` : ''}`)
 }
 
 async function applyLaunchProjectPathFromUrl(): Promise<void> {
@@ -1058,13 +1042,6 @@ async function resolveProjectBaseDirectory(): Promise<string> {
     // Fallback handled by empty return.
   }
   return ''
-}
-
-function looksLikePath(value: string): boolean {
-  if (!value) return false
-  if (value.startsWith('~/')) return true
-  if (value.startsWith('/')) return true
-  return /^[a-zA-Z]:[\\/]/.test(value)
 }
 
 async function refreshDefaultProjectName(): Promise<void> {
@@ -1124,13 +1101,6 @@ function getPathLeafName(path: string): string {
   const slashIndex = trimmed.lastIndexOf('/')
   if (slashIndex < 0) return trimmed
   return trimmed.slice(slashIndex + 1)
-}
-
-function joinPath(parent: string, child: string): string {
-  const normalizedParent = parent.trim().replace(/\/+$/, '')
-  const normalizedChild = child.trim().replace(/^\/+/, '')
-  if (!normalizedParent || !normalizedChild) return ''
-  return `${normalizedParent}/${normalizedChild}`
 }
 
 function onSelectModel(modelId: string): void {

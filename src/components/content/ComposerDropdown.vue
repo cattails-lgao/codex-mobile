@@ -95,6 +95,7 @@ const props = defineProps<{
   searchPlaceholder?: string
   showAddAction?: boolean
   addActionLabel?: string
+  addActionMode?: 'inline' | 'event'
   defaultAddValue?: string
   addPlaceholder?: string
 }>()
@@ -102,6 +103,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   add: [value: string]
+  'add-action': []
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -123,6 +125,7 @@ const enableSearch = computed(() => props.enableSearch === true)
 const showAddAction = computed(() => props.showAddAction === true)
 const searchPlaceholderText = computed(() => props.searchPlaceholder?.trim() || 'Quick search projects')
 const addActionLabelText = computed(() => props.addActionLabel?.trim() || 'Add new project')
+const addActionMode = computed(() => props.addActionMode ?? 'inline')
 const addPlaceholderText = computed(() => props.addPlaceholder?.trim() || 'Project name or absolute path')
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -144,6 +147,12 @@ function onSelect(value: string): void {
 }
 
 function onStartAdd(): void {
+  if (addActionMode.value === 'event') {
+    emit('add-action')
+    isOpen.value = false
+    searchQuery.value = ''
+    return
+  }
   isAdding.value = true
   addDraft.value = props.defaultAddValue?.trim() || ''
   nextTick(() => addInputRef.value?.focus())
