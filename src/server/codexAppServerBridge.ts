@@ -524,7 +524,13 @@ const ROLLBACK_TURN_SUBJECT = 'Auto-commit from Codex rollback chat turn'
 const ROLLBACK_MESSAGE_HASH_TRAILER = 'Rollback-User-Message-SHA256'
 const ROLLBACK_TURN_ID_TRAILER = 'Rollback-Turn-Id'
 
+function isRollbackDebugEnabled(): boolean {
+  const value = process.env.ROLLBACK_DEBUG?.trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
 function logRollbackDebug(phase: string, details: Record<string, unknown>): void {
+  if (!isRollbackDebugEnabled()) return
   console.log('[rollback-debug]', phase, JSON.stringify(details))
 }
 

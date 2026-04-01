@@ -69,6 +69,16 @@ export type WorktreeMessageChangesResult = {
   files: WorktreeMessageChangedFile[]
 }
 
+function isRollbackDebugEnabledInClient(): boolean {
+  const envValue = (import.meta.env.VITE_ROLLBACK_DEBUG ?? '').toString().trim().toLowerCase()
+  return envValue === '1' || envValue === 'true' || envValue === 'yes' || envValue === 'on'
+}
+
+function logRollbackDebugClient(phase: string, details: Record<string, unknown>): void {
+  if (!isRollbackDebugEnabledInClient()) return
+  console.log('[rollback-debug]', phase, details)
+}
+
 export type ThreadSearchResult = {
   threadIds: string[]
   indexedThreadCount: number
@@ -485,7 +495,7 @@ export async function createWorktree(sourceCwd: string): Promise<WorktreeCreateR
 }
 
 export async function autoCommitWorktreeChanges(cwd: string, message: string, turnId?: string): Promise<WorktreeAutoCommitResult> {
-  console.log('[rollback-debug]', 'client-auto-commit-start', { cwd })
+  logRollbackDebugClient('client-auto-commit-start', { cwd })
   const response = await fetch('/codex-api/worktree/auto-commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -493,19 +503,19 @@ export async function autoCommitWorktreeChanges(cwd: string, message: string, tu
   })
   const payload = (await response.json()) as { data?: WorktreeAutoCommitResult; error?: string }
   if (!response.ok || !payload.data) {
-    console.log('[rollback-debug]', 'client-auto-commit-error', {
+    logRollbackDebugClient('client-auto-commit-error', {
       cwd,
       status: response.status,
       error: payload.error || 'Failed to auto-commit rollback changes',
     })
     throw new Error(payload.error || 'Failed to auto-commit rollback changes')
   }
-  console.log('[rollback-debug]', 'client-auto-commit-success', { cwd, data: payload.data })
+  logRollbackDebugClient('client-auto-commit-success', { cwd, data: payload.data })
   return payload.data
 }
 
 export async function rollbackWorktreeToMessage(cwd: string, message: string): Promise<WorktreeRollbackResult> {
-  console.log('[rollback-debug]', 'client-rollback-start', { cwd })
+  logRollbackDebugClient('client-rollback-start', { cwd })
   const response = await fetch('/codex-api/worktree/rollback-to-message', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -513,19 +523,19 @@ export async function rollbackWorktreeToMessage(cwd: string, message: string): P
   })
   const payload = (await response.json()) as { data?: WorktreeRollbackResult; error?: string }
   if (!response.ok || !payload.data) {
-    console.log('[rollback-debug]', 'client-rollback-error', {
+    logRollbackDebugClient('client-rollback-error', {
       cwd,
       status: response.status,
       error: payload.error || 'Failed to rollback project to message commit',
     })
     throw new Error(payload.error || 'Failed to rollback project to message commit')
   }
-  console.log('[rollback-debug]', 'client-rollback-success', { cwd, data: payload.data })
+  logRollbackDebugClient('client-rollback-success', { cwd, data: payload.data })
   return payload.data
 }
 
 export async function getWorktreeMessageChanges(cwd: string, message: string, turnId?: string): Promise<WorktreeMessageChangesResult> {
-  console.log('[rollback-debug]', 'client-message-changes-start', { cwd })
+  logRollbackDebugClient('client-message-changes-start', { cwd })
   const response = await fetch('/codex-api/worktree/message-changes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -533,19 +543,19 @@ export async function getWorktreeMessageChanges(cwd: string, message: string, tu
   })
   const payload = (await response.json()) as { data?: WorktreeMessageChangesResult; error?: string }
   if (!response.ok || !payload.data) {
-    console.log('[rollback-debug]', 'client-message-changes-error', {
+    logRollbackDebugClient('client-message-changes-error', {
       cwd,
       status: response.status,
       error: payload.error || 'Failed to load changed files for message',
     })
     throw new Error(payload.error || 'Failed to load changed files for message')
   }
-  console.log('[rollback-debug]', 'client-message-changes-success', { cwd, data: payload.data })
+  logRollbackDebugClient('client-message-changes-success', { cwd, data: payload.data })
   return payload.data
 }
 
 export async function getWorktreeMessageFileDiff(cwd: string, commitSha: string, path: string): Promise<string> {
-  console.log('[rollback-debug]', 'client-message-file-diff-start', { cwd, commitSha, path })
+  logRollbackDebugClient('client-message-file-diff-start', { cwd, commitSha, path })
   const response = await fetch('/codex-api/worktree/message-file-diff', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -553,7 +563,7 @@ export async function getWorktreeMessageFileDiff(cwd: string, commitSha: string,
   })
   const payload = (await response.json()) as { data?: { diff: string }; error?: string }
   if (!response.ok || !payload.data) {
-    console.log('[rollback-debug]', 'client-message-file-diff-error', {
+    logRollbackDebugClient('client-message-file-diff-error', {
       cwd,
       commitSha,
       path,
@@ -562,7 +572,7 @@ export async function getWorktreeMessageFileDiff(cwd: string, commitSha: string,
     })
     throw new Error(payload.error || 'Failed to load file diff for message')
   }
-  console.log('[rollback-debug]', 'client-message-file-diff-success', { cwd, commitSha, path })
+  logRollbackDebugClient('client-message-file-diff-success', { cwd, commitSha, path })
   return payload.data.diff
 }
 
