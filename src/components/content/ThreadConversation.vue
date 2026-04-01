@@ -1460,6 +1460,7 @@ watch(
   async (overlay) => {
     if (!overlay) return
     await nextTick()
+    if (!shouldLockToBottom()) return
     enforceBottomState()
     scheduleBottomLock(8)
   },
