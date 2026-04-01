@@ -1320,8 +1320,10 @@ function isFilePath(value: string): boolean {
   const looksLikeUnixAbsolute = value.startsWith('/')
   const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(value)
   const looksLikeRelative = value.startsWith('./') || value.startsWith('../') || value.startsWith('~/')
-  const hasPathSeparator = value.includes('/') || value.includes('\\')
-  return looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative || hasPathSeparator
+  if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative) return true
+
+  // Bare relative paths should look like actual path segments, not arbitrary prose containing "/".
+  return /^[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+$/u.test(value)
 }
 
 function getBasename(pathValue: string): string {
@@ -2063,7 +2065,7 @@ function forkResponse(anchorMessageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/\S+|file:\/\/\S+|\S*[\\/]\S+/gu
+  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -2077,7 +2079,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
 
     let token = match[0]
     let trailingPunctuation = ''
-    while (/[.,;:]$/u.test(token)) {
+    while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
       token = token.slice(0, -1)
     }
