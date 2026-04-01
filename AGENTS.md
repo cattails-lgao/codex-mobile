@@ -40,6 +40,12 @@
 - Do not batch multiple tasks into a single commit.
 - Each commit message should describe the specific change made.
 
+## Pre-Merge Squash Review (MANDATORY)
+
+- Before merging to local `main`, squash-diff all changes on the current branch against `main` and review the combined diff.
+- Validate there is no dead code and no critical issues before merge.
+- Do not merge to local `main` until this squash-diff review passes.
+
 ## Tests Documentation Rule (MANDATORY)
 
 - After every feature implementation, update `tests.md` in the repository root.
