@@ -375,3 +375,181 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Revert the scroll-preservation change in `src/components/content/ThreadConversation.vue` if manual scroll locking needs to be removed.
+
+### Feature: Rollback API/UI no longer requires turn index in rollback payload
+
+#### Prerequisites
+- App is running from this repository.
+- A thread exists with at least 2 completed turns.
+- Rollback control is visible in the thread conversation message actions.
+
+#### Steps
+1. Open any existing thread with multiple turns.
+2. In DevTools Network tab, keep `/codex-api/rpc` requests visible.
+3. Click rollback on a user or assistant message that is not the newest one.
+4. Confirm rollback succeeds and the thread is truncated to the selected turn.
+5. Inspect the UI event flow by repeating rollback from a different turn and confirm the selected message can rollback without relying on a numeric turn index.
+6. Use dictation resend flow (or "rollback latest user turn" flow) and confirm the latest user turn is rolled back correctly.
+
+#### Expected Results
+- Rollback works when triggered from message actions using `turnId` as the identifier.
+- No UI path depends on `turnIndex` in rollback event payloads.
+- Latest-user-turn rollback flow still works and targets the latest user `turnId`.
+- No TypeScript/runtime errors are introduced in rollback interaction.
+
+#### Rollback/Cleanup
+- Revert the updated files if this behavior is not desired:
+  - `src/types/codex.ts`
+  - `src/api/normalizers/v2.ts`
+  - `src/components/content/ThreadConversation.vue`
+  - `src/App.vue`
+  - `src/composables/useDesktopState.ts`
+
+### Feature: Rollback init commit includes `.codex/.gitignore`
+
+#### Prerequisites
+- App server is running from this repository.
+- Use a fresh temporary project directory with no existing `.codex/rollbacks/.git` history.
+
+#### Steps
+1. In a fresh test project folder, trigger rollback automation init by calling `/codex-api/worktree/auto-commit` with a valid commit message.
+2. Verify rollback repo exists at `.codex/rollbacks/.git`.
+3. In that rollback repo, run `git --git-dir .codex/rollbacks/.git --work-tree . show --name-only --pretty=format: HEAD`.
+4. Confirm `.codex/.gitignore` appears in the file list for the init commit.
+5. Open `.codex/.gitignore` and verify `rollbacks/` exists.
+
+#### Expected Results
+- First rollback-history commit is `Initialize rollback history`.
+- That commit includes `.codex/.gitignore`.
+- `.codex/.gitignore` contains `rollbacks/`.
+
+#### Rollback/Cleanup
+- Remove the temporary test folder after verification.
+
+### Feature: Deterministic rollback commit + exact lookup with debug logs
+
+#### Prerequisites
+- App server is running from this repository.
+- `worktree git automation` is enabled in UI settings.
+- Test thread available where you can send at least 3 user turns.
+
+#### Steps
+1. Send a user turn that changes files and completes.
+2. Send a user turn that produces no file edits and completes.
+3. Send a third user turn and complete it.
+4. In rollback git history (`.codex/rollbacks/.git`), verify each completed turn created a commit, including the no-edit turn.
+5. Inspect one rollback commit body and confirm it contains the user message text plus `Rollback-User-Message-SHA256: <hash>`.
+6. Trigger rollback to the second turn message via UI rollback action.
+7. Verify server logs contain `[rollback-debug]` entries for lookup, stash (if dirty), reset, and completion.
+8. Temporarily test missing-commit path by calling `/codex-api/worktree/rollback-to-message` with a non-existent message text.
+
+#### Expected Results
+- Auto-commit creates a rollback commit for every completed turn (`--allow-empty` behavior).
+- Commit body includes the user message and stable hash trailer.
+- Rollback uses exact hash-based commit lookup only.
+- If exact commit is missing, rollback returns error and does not continue.
+- Server logs include `[rollback-debug]` records for commit creation, lookup, stash, reset, and error paths.
+- Browser console includes `[rollback-debug]` client-side start/success/error logs for auto-commit and rollback API calls.
+- Rollback init no longer fails when `.codex` is ignored globally; init force-adds `.codex/.gitignore`.
+
+#### Rollback/Cleanup
+- Revert the changed files if you want previous non-deterministic behavior back.
+
+### Feature: Per-turn changed files panel with lazy diff loading
+
+#### Prerequisites
+- App server running from this repository.
+- Worktree git automation enabled.
+- A thread with at least one completed turn that touched files.
+
+#### Steps
+1. Open a thread and locate a `Worked for ...` separator message.
+2. Expand the worked separator.
+3. Verify a changed-files panel appears above command details.
+4. Confirm file list entries show file path and `+/-` counts.
+5. Click one changed file row to expand it.
+6. Verify diff content loads only after expansion (lazy load behavior).
+7. Collapse and re-expand the same file row; verify diff reuses loaded content.
+8. Switch to another thread and back; verify panel reloads for the active thread context.
+
+#### Expected Results
+- Each worked message can show changed files for its turn.
+- Diff for a file is fetched only on expand, not for all files upfront.
+- Errors (missing commit/diff load failure) are shown inline in the panel.
+- Existing command output expand/collapse behavior remains unchanged.
+- Changed-files panel still resolves after page refresh or app-server restart.
+- Changed-files panel appears at the end of the worked message block (after command rows).
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Worked separator is non-expandable
+
+#### Prerequisites
+- App server running from this repository.
+- A thread with at least one `Worked for ...` separator.
+
+#### Steps
+1. Open a thread and locate a `Worked for ...` message.
+2. Click the separator line/text area.
+3. Verify no expand/collapse behavior is triggered on the separator itself.
+4. Verify changed-files panel still appears below the separator when data exists.
+
+#### Expected Results
+- `Worked for ...` acts as a visual separator only (non-interactive).
+- Changed-files and command sections are not gated by a worked-separator expand toggle.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Changed-files lookup fallback when turnId metadata is missing
+
+#### Prerequisites
+- App server running from this repository.
+- Playwright CLI available.
+
+#### Steps
+1. Create/prepare a test workspace (example: `/tmp/rollback-pw`).
+2. Call `/codex-api/worktree/auto-commit` with:
+   - `cwd=/tmp/rollback-pw`
+   - `message='pw-msg-turn-1'`
+   - `turnId='turn-real-1'`
+3. Call `/codex-api/worktree/message-changes` with:
+   - same `cwd`
+   - same `message`
+   - mismatched `turnId='turn-wrong'`
+4. Verify response is still `200` and returns the matching commit data (message-hash fallback).
+5. Capture Playwright artifact screenshot.
+
+#### Expected Results
+- `message-changes` first attempts turnId lookup.
+- If turnId lookup misses, it falls back to exact message-hash lookup.
+- API returns commit data instead of `No matching commit found for this user message` when message matches.
+
+#### Rollback/Cleanup
+- Remove temporary test workspace if created.
+
+### Feature: Changed-files panel persists across refresh (assistant message level)
+
+#### Prerequisites
+- App server running from this repository.
+- Existing thread in `TestChat` project with completed assistant messages.
+- Worktree rollback auto-commit enabled.
+
+#### Steps
+1. Open a `TestChat` thread and confirm assistant message cards render.
+2. Verify changed-files panel is shown at the end of assistant messages that have rollback commit data.
+3. Hard refresh the page.
+4. Re-open the same `TestChat` thread.
+5. Verify changed-files panel is still shown for the same assistant message(s).
+6. Expand one file diff and verify diff content loads.
+
+#### Expected Results
+- Changed-files panel is attached to assistant messages (not transient worked separators).
+- Changed-files panel appears only once per turn (on the last assistant message in that turn).
+- Changed-files panel is hidden while a turn is still in progress.
+- Panels remain available after refresh/restart because lookup is turnId/message-hash based.
+- File diff expansion still lazy-loads and displays content.
+
+#### Rollback/Cleanup
+- No cleanup required.

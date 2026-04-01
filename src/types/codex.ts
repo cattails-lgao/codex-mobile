@@ -92,6 +92,7 @@ export type UiMessage = {
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData
+  turnId?: string
   turnIndex?: number
 }
 

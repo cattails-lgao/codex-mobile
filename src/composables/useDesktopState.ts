@@ -476,6 +476,7 @@ function buildTurnSummaryMessage(summary: TurnSummaryState): UiMessage {
     role: 'system',
     text: `Worked for ${formatTurnDuration(summary.durationMs)}`,
     messageType: WORKED_MESSAGE_TYPE,
+    turnId: summary.turnId,
   }
 }
 
@@ -792,7 +793,7 @@ export function useDesktopState() {
     pendingTurnRequestByThreadId.value = omitKey(pendingTurnRequestByThreadId.value, threadId)
   }
 
-  async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string): Promise<void> {
+  async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string, turnId: string): Promise<void> {
     if (!isWorktreeGitAutomationEnabled.value) return
     const normalizedMessage = commitMessage.trim()
     if (!normalizedMessage) return
@@ -800,11 +801,11 @@ export function useDesktopState() {
     if (!thread) return
     const cwd = thread.cwd.trim()
     if (!cwd) return
-    await autoCommitWorktreeChanges(cwd, normalizedMessage)
+    await autoCommitWorktreeChanges(cwd, normalizedMessage, turnId)
     pendingThreadsRefresh = true
   }
 
-  async function rollbackWorktreeGitToTurnMessage(threadId: string, turnIndex: number): Promise<void> {
+  async function rollbackWorktreeGitToTurnMessage(threadId: string, turnId: string): Promise<void> {
     if (!isWorktreeGitAutomationEnabled.value) return
     const thread = allThreads.value.find((row) => row.id === threadId)
     if (!thread) return
@@ -812,19 +813,11 @@ export function useDesktopState() {
     if (!cwd) return
 
     const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    const rollbackUserMessage = persisted.find((message) => message.role === 'user' && message.turnIndex === turnIndex)
+    const rollbackUserMessage = persisted.find((message) => message.role === 'user' && message.turnId === turnId)
     const rollbackMessageText = rollbackUserMessage?.text?.trim() ?? ''
     if (!rollbackMessageText) return
 
-    try {
-      await rollbackWorktreeToMessage(cwd, rollbackMessageText)
-    } catch (unknownError) {
-      const message = unknownError instanceof Error ? unknownError.message : ''
-      if (message.includes('No matching commit found')) {
-        return
-      }
-      throw unknownError
-    }
+    await rollbackWorktreeToMessage(cwd, rollbackMessageText)
     pendingThreadsRefresh = true
   }
 
@@ -1923,7 +1916,7 @@ export function useDesktopState() {
       }
       if (!turnErrorMessage && !shouldRetryWithFallback) {
         const commitMessage = pendingTurnRequest?.text?.trim() || AUTO_COMMIT_MESSAGE_FALLBACK
-        void autoCommitCompletedWorktreeTurn(completedTurn.threadId, commitMessage).catch(() => {
+        void autoCommitCompletedWorktreeTurn(completedTurn.threadId, commitMessage, completedTurn.turnId).catch(() => {
           // Keep chat flow resilient when auto-commit fails.
         })
       }
@@ -2647,12 +2640,16 @@ export function useDesktopState() {
     }
   }
 
-  async function rollbackSelectedThread(turnIndex: number): Promise<void> {
+  async function rollbackSelectedThread(turnId: string): Promise<void> {
     const threadId = selectedThreadId.value
     if (!threadId) return
     if (isRollingBack.value) return
+    if (!turnId.trim()) return
 
     const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+    const matchedMessage = persisted.find((message) => message.turnId === turnId)
+    const turnIndex = typeof matchedMessage?.turnIndex === 'number' ? matchedMessage.turnIndex : -1
+    if (turnIndex < 0) return
     const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
     if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
     const numTurns = maxTurnIndex - turnIndex + 1
@@ -2661,7 +2658,7 @@ export function useDesktopState() {
     isRollingBack.value = true
     error.value = ''
     try {
-      await rollbackWorktreeGitToTurnMessage(threadId, turnIndex)
+      await rollbackWorktreeGitToTurnMessage(threadId, turnId)
       const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])

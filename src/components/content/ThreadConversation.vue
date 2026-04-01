@@ -149,13 +149,12 @@
 
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
-                  <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
+                  <div class="worked-separator">
                     <span class="worked-separator-line" aria-hidden="true" />
-                    <span class="worked-chevron" :class="{ 'worked-chevron-open': isWorkedExpanded(message) }">▶</span>
                     <p class="worked-separator-text">{{ message.text }}</p>
                     <span class="worked-separator-line" aria-hidden="true" />
-                  </button>
-                  <div v-if="isWorkedExpanded(message)" class="worked-details">
+                  </div>
+                  <div class="worked-details">
                     <div
                       v-for="cmd in getCommandsForWorked(messages, messages.indexOf(message))"
                       :key="`worked-cmd-${cmd.id}`"
@@ -231,6 +230,37 @@
                     </button>
                   </template>
                 </div>
+                <section v-if="canShowChangedFilesPanel(message)" class="worked-files-panel message-files-panel">
+                  <p v-if="workedChangesLoadingByMessageId[message.id]" class="worked-files-meta">Loading changed files...</p>
+                  <p v-else-if="workedChangesErrorByMessageId[message.id]" class="worked-files-error">
+                    {{ workedChangesErrorByMessageId[message.id] }}
+                  </p>
+                  <template v-else-if="workedChangesByMessageId[message.id]">
+                    <p class="worked-files-meta">
+                      {{ workedChangesByMessageId[message.id].files.length }} file changed{{ workedChangesByMessageId[message.id].files.length === 1 ? '' : 's' }}
+                    </p>
+                    <ul v-if="workedChangesByMessageId[message.id].files.length > 0" class="worked-files-list">
+                      <li
+                        v-for="file in workedChangesByMessageId[message.id].files"
+                        :key="`worked-file-${message.id}-${file.path}`"
+                        class="worked-file-item"
+                      >
+                        <button type="button" class="worked-file-row" @click="toggleWorkedFileDiff(message, file)">
+                          <span class="worked-chevron" :class="{ 'worked-chevron-open': isWorkedFileExpanded(message.id, file.path) }">▶</span>
+                          <code class="worked-file-path">{{ file.path }}</code>
+                          <span class="worked-file-stats">+{{ formatDiffCount(file.additions) }} -{{ formatDiffCount(file.deletions) }}</span>
+                        </button>
+                        <div v-if="isWorkedFileExpanded(message.id, file.path)" class="worked-file-diff-wrap">
+                          <p v-if="isWorkedFileDiffLoading(message.id, file.path)" class="worked-files-meta">Loading diff...</p>
+                          <p v-else-if="getWorkedFileDiffError(message.id, file.path)" class="worked-files-error">
+                            {{ getWorkedFileDiffError(message.id, file.path) }}
+                          </p>
+                          <pre v-else class="worked-file-diff">{{ getWorkedFileDiff(message.id, file.path) }}</pre>
+                        </div>
+                      </li>
+                    </ul>
+                  </template>
+                </section>
               </article>
             </article>
 
@@ -316,14 +346,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
+import { getWorktreeMessageChanges, getWorktreeMessageFileDiff, type WorktreeMessageChangedFile } from '../../api/codexGateway'
 import IconTablerX from '../icons/IconTablerX.vue'
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsingCommandIds = ref<Set<string>>(new Set())
-const expandedWorkedIds = ref<Set<string>>(new Set())
 const prevCommandStatuses = ref<Record<string, string>>({})
+const workedChangesByMessageId = ref<Record<string, { commitSha: string; files: WorktreeMessageChangedFile[] }>>({})
+const workedChangesLoadingByMessageId = ref<Record<string, boolean>>({})
+const workedChangesErrorByMessageId = ref<Record<string, string>>({})
+const expandedWorkedFileKeys = ref<Set<string>>(new Set())
+const workedFileDiffByKey = ref<Record<string, string>>({})
+const workedFileDiffLoadingByKey = ref<Record<string, boolean>>({})
+const workedFileDiffErrorByKey = ref<Record<string, string>>({})
 
 function isCommandMessage(message: UiMessage): boolean {
   return message.messageType === 'commandExecution' && !!message.commandExecution
@@ -345,17 +382,6 @@ function toggleCommandExpand(message: UiMessage): void {
   if (next.has(message.id)) next.delete(message.id)
   else next.add(message.id)
   expandedCommandIds.value = next
-}
-
-function toggleWorkedExpand(message: UiMessage): void {
-  const next = new Set(expandedWorkedIds.value)
-  if (next.has(message.id)) next.delete(message.id)
-  else next.add(message.id)
-  expandedWorkedIds.value = next
-}
-
-function isWorkedExpanded(message: UiMessage): boolean {
-  return expandedWorkedIds.value.has(message.id)
 }
 
 function commandStatusLabel(message: UiMessage): string {
@@ -399,6 +425,142 @@ function getCommandsForWorked(messages: UiMessage[], workedIndex: number): UiMes
   return result
 }
 
+function getRelatedUserMessageForWorked(message: UiMessage): UiMessage | null {
+  const turnId = message.turnId?.trim() ?? ''
+  if (!turnId) return null
+  for (let index = props.messages.length - 1; index >= 0; index -= 1) {
+    const current = props.messages[index]
+    if (current.role !== 'user') continue
+    if ((current.turnId?.trim() ?? '') === turnId) return current
+  }
+  return null
+}
+
+function canShowChangedFilesPanel(message: UiMessage): boolean {
+  if (props.isTurnInProgress === true) return false
+  return isLastAssistantMessageInTurn(message)
+}
+
+function isLastAssistantMessageInTurn(message: UiMessage): boolean {
+  if (message.messageType === 'worked') return false
+  if (message.role !== 'assistant') return false
+  const turnId = message.turnId?.trim() ?? ''
+  if (!turnId) return false
+  const currentIndex = props.messages.findIndex((row) => row.id === message.id)
+  if (currentIndex < 0) return false
+  for (let index = currentIndex + 1; index < props.messages.length; index += 1) {
+    const next = props.messages[index]
+    if ((next.turnId?.trim() ?? '') !== turnId) continue
+    if (next.role === 'assistant' && next.messageType !== 'worked') {
+      return false
+    }
+  }
+  return true
+}
+
+function workedFileKey(messageId: string, filePath: string): string {
+  return `${messageId}::${filePath}`
+}
+
+function isWorkedFileExpanded(messageId: string, filePath: string): boolean {
+  return expandedWorkedFileKeys.value.has(workedFileKey(messageId, filePath))
+}
+
+function getWorkedFileDiff(messageId: string, filePath: string): string {
+  return workedFileDiffByKey.value[workedFileKey(messageId, filePath)] ?? ''
+}
+
+function getWorkedFileDiffError(messageId: string, filePath: string): string {
+  return workedFileDiffErrorByKey.value[workedFileKey(messageId, filePath)] ?? ''
+}
+
+function isWorkedFileDiffLoading(messageId: string, filePath: string): boolean {
+  return workedFileDiffLoadingByKey.value[workedFileKey(messageId, filePath)] === true
+}
+
+async function ensureWorkedChangesLoaded(message: UiMessage): Promise<void> {
+  if (workedChangesByMessageId.value[message.id]) return
+  if (workedChangesLoadingByMessageId.value[message.id]) return
+  const turnId = message.turnId?.trim() ?? ''
+  const relatedUserMessage = getRelatedUserMessageForWorked(message)
+  const messageText = relatedUserMessage?.text?.trim() ?? ''
+  if (!turnId && !messageText) return
+  workedChangesLoadingByMessageId.value = {
+    ...workedChangesLoadingByMessageId.value,
+    [message.id]: true,
+  }
+  workedChangesErrorByMessageId.value = {
+    ...workedChangesErrorByMessageId.value,
+    [message.id]: '',
+  }
+  try {
+    const result = await getWorktreeMessageChanges(props.cwd, messageText, turnId || undefined)
+    workedChangesByMessageId.value = {
+      ...workedChangesByMessageId.value,
+      [message.id]: result,
+    }
+  } catch (error) {
+    workedChangesErrorByMessageId.value = {
+      ...workedChangesErrorByMessageId.value,
+      [message.id]: error instanceof Error ? error.message : 'Failed to load changed files',
+    }
+  } finally {
+    workedChangesLoadingByMessageId.value = {
+      ...workedChangesLoadingByMessageId.value,
+      [message.id]: false,
+    }
+  }
+}
+
+function formatDiffCount(value: number | null): string {
+  if (value === null) return '?'
+  return String(value)
+}
+
+async function toggleWorkedFileDiff(message: UiMessage, file: WorktreeMessageChangedFile): Promise<void> {
+  const key = workedFileKey(message.id, file.path)
+  const next = new Set(expandedWorkedFileKeys.value)
+  if (next.has(key)) {
+    next.delete(key)
+    expandedWorkedFileKeys.value = next
+    return
+  }
+
+  next.add(key)
+  expandedWorkedFileKeys.value = next
+
+  if (workedFileDiffByKey.value[key] || workedFileDiffLoadingByKey.value[key]) return
+  const changes = workedChangesByMessageId.value[message.id]
+  const commitSha = changes?.commitSha?.trim() ?? ''
+  if (!commitSha) return
+
+  workedFileDiffLoadingByKey.value = {
+    ...workedFileDiffLoadingByKey.value,
+    [key]: true,
+  }
+  workedFileDiffErrorByKey.value = {
+    ...workedFileDiffErrorByKey.value,
+    [key]: '',
+  }
+  try {
+    const diff = await getWorktreeMessageFileDiff(props.cwd, commitSha, file.path)
+    workedFileDiffByKey.value = {
+      ...workedFileDiffByKey.value,
+      [key]: diff.trim().length > 0 ? diff : '(no diff output)',
+    }
+  } catch (error) {
+    workedFileDiffErrorByKey.value = {
+      ...workedFileDiffErrorByKey.value,
+      [key]: error instanceof Error ? error.message : 'Failed to load diff',
+    }
+  } finally {
+    workedFileDiffLoadingByKey.value = {
+      ...workedFileDiffLoadingByKey.value,
+      [key]: false,
+    }
+  }
+}
+
 const props = defineProps<{
   messages: UiMessage[]
   pendingRequests: UiServerRequest[]
@@ -414,7 +576,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
-  rollback: [payload: { turnIndex: number; prependText?: string }]
+  rollback: [payload: { turnId: string; prependText?: string }]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
@@ -1270,7 +1432,7 @@ function onRejectUnknownRequest(requestId: number): void {
 
 function canRollbackMessage(message: UiMessage): boolean {
   if (message.role !== 'user' && message.role !== 'assistant') return false
-  if (typeof message.turnIndex !== 'number') return false
+  if (typeof message.turnId !== 'string' || message.turnId.trim().length === 0) return false
   if (props.isTurnInProgress || props.isRollingBack) return false
   return true
 }
@@ -1306,7 +1468,7 @@ function onRollback(message: UiMessage): void {
   if (!canRollbackMessage(message)) return
   const prependText = message.role === 'user' ? message.text.trim() : ''
   emit('rollback', {
-    turnIndex: message.turnIndex!,
+    turnId: message.turnId!,
     prependText: prependText.length > 0 ? prependText : undefined,
   })
 }
@@ -1451,6 +1613,11 @@ watch(
       prevCommandStatuses.value[m.id] = cur
     }
 
+    for (const m of next) {
+      if (!canShowChangedFilesPanel(m)) continue
+      void ensureWorkedChangesLoaded(m)
+    }
+
     await scheduleScrollRestore()
   },
 )
@@ -1482,6 +1649,13 @@ watch(
     modalImageUrl.value = ''
     closeFileLinkContextMenu()
     failedMarkdownImageKeys.value = new Set()
+    workedChangesByMessageId.value = {}
+    workedChangesLoadingByMessageId.value = {}
+    workedChangesErrorByMessageId.value = {}
+    expandedWorkedFileKeys.value = new Set()
+    workedFileDiffByKey.value = {}
+    workedFileDiffLoadingByKey.value = {}
+    workedFileDiffErrorByKey.value = {}
   },
   { flush: 'post' },
 )
@@ -1803,7 +1977,7 @@ onBeforeUnmount(() => {
 }
 
 .worked-separator {
-  @apply w-full flex items-center gap-3 bg-transparent border-none cursor-pointer p-0;
+  @apply w-full flex items-center gap-3 bg-transparent border-none p-0;
 }
 
 .worked-chevron {
@@ -1828,6 +2002,50 @@ onBeforeUnmount(() => {
 
 .worked-cmd-item {
   @apply flex flex-col;
+}
+
+.worked-files-panel {
+  @apply rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 mb-1;
+}
+
+.message-files-panel {
+  @apply mt-2;
+}
+
+.worked-files-meta {
+  @apply m-0 text-xs text-zinc-600;
+}
+
+.worked-files-error {
+  @apply m-0 text-xs text-rose-600 whitespace-pre-wrap;
+}
+
+.worked-files-list {
+  @apply list-none m-0 mt-1 p-0 flex flex-col gap-1;
+}
+
+.worked-file-item {
+  @apply flex flex-col;
+}
+
+.worked-file-row {
+  @apply w-full flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1 text-left hover:bg-zinc-100;
+}
+
+.worked-file-path {
+  @apply text-xs text-zinc-700 flex-1 truncate;
+}
+
+.worked-file-stats {
+  @apply text-[11px] text-zinc-500 tabular-nums;
+}
+
+.worked-file-diff-wrap {
+  @apply mt-1 rounded-md border border-zinc-200 bg-zinc-950/95 p-2 overflow-auto;
+}
+
+.worked-file-diff {
+  @apply m-0 text-xs leading-5 text-zinc-100 whitespace-pre;
 }
 
 .image-modal-backdrop {
