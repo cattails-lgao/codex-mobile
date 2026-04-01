@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
-import { createReadStream, existsSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink, unlink } from 'node:fs/promises'
+import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -466,17 +466,37 @@ async function ensureRollbackGitRepo(cwd: string): Promise<string> {
     await mkdir(dirname(gitDir), { recursive: true })
   await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, 'init'])
   }
-  await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
-  await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
+  try {
+    await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
+    await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
+  } catch (error) {
+    const message = getErrorMessage(error, 'Unknown rollback config error')
+    const lockPath = join(gitDir, 'config.lock')
+    if (message.includes('could not lock config file') && message.includes('File exists')) {
+      logRollbackDebug('config-lock-retry', { cwd, gitDir, lockPath })
+      try {
+        await unlink(lockPath)
+      } catch {
+        // Best effort cleanup; retry below will surface any remaining issue.
+      }
+      await runCommand('git', ['--git-dir', gitDir, 'config', 'user.email', 'codex@local'])
+      await runCommand('git', ['--git-dir', gitDir, 'config', 'user.name', 'Codex Rollback'])
+    } else {
+      throw error
+    }
+  }
+  await ensureLocalCodexGitignoreHasRollbacks(cwd)
   try {
     await runCommandCapture('git', ['--git-dir', gitDir, '--work-tree', cwd, 'rev-parse', '--verify', 'HEAD'])
   } catch {
+    logRollbackDebug('init-start', { cwd, gitDir })
+    await runCommand('git', ['--git-dir', gitDir, '--work-tree', cwd, 'add', '-f', '.codex/.gitignore'])
     await runCommand(
       'git',
       ['--git-dir', gitDir, '--work-tree', cwd, 'commit', '--allow-empty', '-m', 'Initialize rollback history'],
     )
+    logRollbackDebug('init-done', { cwd, gitDir })
   }
-  await ensureLocalCodexGitignoreHasRollbacks(cwd)
   return gitDir
 }
 
@@ -500,19 +520,133 @@ async function hasRollbackGitWorkingTreeChanges(cwd: string): Promise<boolean> {
   return status.trim().length > 0
 }
 
-async function findRollbackCommitByExactMessage(cwd: string, message: string): Promise<string> {
-  const normalizedTarget = normalizeCommitMessage(message)
-  if (!normalizedTarget) return ''
+const ROLLBACK_TURN_SUBJECT = 'Auto-commit from Codex rollback chat turn'
+const ROLLBACK_MESSAGE_HASH_TRAILER = 'Rollback-User-Message-SHA256'
+const ROLLBACK_TURN_ID_TRAILER = 'Rollback-Turn-Id'
+
+function isRollbackDebugEnabled(): boolean {
+  const fromProcessEnv = process.env.ROLLBACK_DEBUG?.trim()
+  const fromDotEnvLocal = readEnvValueFromFile('.env.local', 'ROLLBACK_DEBUG')
+  const fromDotEnv = readEnvValueFromFile('.env', 'ROLLBACK_DEBUG')
+  const value = (fromProcessEnv || fromDotEnvLocal || fromDotEnv).toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function readEnvValueFromFile(filePath: string, key: string): string {
+  if (!existsSync(filePath)) return ''
+  try {
+    const raw = readFileSync(filePath, 'utf8')
+    for (const line of raw.split(/\r?\n/gu)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const separator = trimmed.indexOf('=')
+      if (separator <= 0) continue
+      const currentKey = trimmed.slice(0, separator).trim()
+      if (currentKey !== key) continue
+      return trimmed.slice(separator + 1).trim()
+    }
+  } catch {
+    return ''
+  }
+  return ''
+}
+
+function logRollbackDebug(phase: string, details: Record<string, unknown>): void {
+  if (!isRollbackDebugEnabled()) return
+  console.log('[rollback-debug]', phase, JSON.stringify(details))
+}
+
+function hashRollbackMessage(message: string): string {
+  return createHash('sha256').update(message, 'utf8').digest('hex')
+}
+
+function buildRollbackTurnCommitBody(message: string, turnId: string): string {
+  const messageHash = hashRollbackMessage(message)
+  const normalizedTurnId = turnId.trim()
+  const turnIdTrailer = normalizedTurnId ? `\n${ROLLBACK_TURN_ID_TRAILER}: ${normalizedTurnId}` : ''
+  return `${message}\n\n${ROLLBACK_MESSAGE_HASH_TRAILER}: ${messageHash}${turnIdTrailer}`
+}
+
+function extractRollbackMessageHashFromCommitBody(body: string): string {
+  const regex = new RegExp(`^${ROLLBACK_MESSAGE_HASH_TRAILER}:\\s*([0-9a-f]{64})\\s*$`, 'm')
+  const match = body.match(regex)
+  return match?.[1] ?? ''
+}
+
+function extractRollbackTurnIdFromCommitBody(body: string): string {
+  const regex = new RegExp(`^${ROLLBACK_TURN_ID_TRAILER}:\\s*(\\S+)\\s*$`, 'm')
+  const match = body.match(regex)
+  return match?.[1]?.trim() ?? ''
+}
+
+async function findRollbackCommitByTurnId(cwd: string, turnId: string): Promise<string> {
+  const normalizedTurnId = turnId.trim()
+  if (!normalizedTurnId) return ''
+  logRollbackDebug('lookup-turn-start', { cwd, turnId: normalizedTurnId })
   const raw = await runRollbackGitWithOutput(cwd, ['log', '--format=%H%x1f%B%x1e'])
   const entries = raw.split('\x1e')
   for (const entry of entries) {
     if (!entry.trim()) continue
     const [shaRaw, bodyRaw] = entry.split('\x1f')
     const sha = (shaRaw ?? '').trim()
-    const body = normalizeCommitMessage(bodyRaw ?? '')
+    const body = bodyRaw ?? ''
     if (!sha) continue
-    if (body === normalizedTarget) return sha
+    const commitTurnId = extractRollbackTurnIdFromCommitBody(body)
+    if (commitTurnId === normalizedTurnId) {
+      logRollbackDebug('lookup-turn-hit', { cwd, turnId: normalizedTurnId, commitSha: sha })
+      return sha
+    }
   }
+  logRollbackDebug('lookup-turn-miss', { cwd, turnId: normalizedTurnId })
+  return ''
+}
+
+type RollbackChangedFile = {
+  path: string
+  additions: number | null
+  deletions: number | null
+}
+
+function parseRollbackNumstat(raw: string): RollbackChangedFile[] {
+  const files: RollbackChangedFile[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const parts = line.split('\t')
+    if (parts.length < 3) continue
+    const additions = parts[0] === '-' ? null : Number(parts[0])
+    const deletions = parts[1] === '-' ? null : Number(parts[1])
+    const path = parts.slice(2).join('\t').trim()
+    if (!path) continue
+    files.push({
+      path,
+      additions: Number.isFinite(additions) ? additions : null,
+      deletions: Number.isFinite(deletions) ? deletions : null,
+    })
+  }
+  return files
+}
+
+async function findRollbackCommitByExactMessageHash(cwd: string, message: string): Promise<string> {
+  const normalizedTarget = normalizeCommitMessage(message)
+  if (!normalizedTarget) return ''
+  const targetHash = hashRollbackMessage(normalizedTarget)
+  logRollbackDebug('lookup-start', { cwd, targetHash })
+  const raw = await runRollbackGitWithOutput(cwd, ['log', '--format=%H%x1f%B%x1e'])
+  const entries = raw.split('\x1e')
+  for (const entry of entries) {
+    if (!entry.trim()) continue
+    const [shaRaw, bodyRaw] = entry.split('\x1f')
+    const sha = (shaRaw ?? '').trim()
+    const body = bodyRaw ?? ''
+    if (!sha) continue
+    const commitHash = extractRollbackMessageHashFromCommitBody(body)
+    if (commitHash === targetHash) {
+      logRollbackDebug('lookup-hit', { cwd, targetHash, commitSha: sha })
+      return sha
+    }
+  }
+  logRollbackDebug('lookup-miss', { cwd, targetHash })
   return ''
 }
 
@@ -1741,6 +1875,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const payload = asRecord(await readJsonBody(req))
         const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
         const commitMessage = normalizeCommitMessage(payload?.message)
+        const turnId = typeof payload?.turnId === 'string' ? payload.turnId.trim() : ''
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
           return
@@ -1764,22 +1899,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         try {
           await ensureRollbackGitRepo(cwd)
-          const beforeStatus = await runRollbackGitWithOutput(cwd, ['status', '--porcelain'])
-          if (!beforeStatus.trim()) {
-            setJson(res, 200, { data: { committed: false } })
-            return
-          }
-
+          const normalizedMessage = normalizeCommitMessage(commitMessage)
+          const commitBody = buildRollbackTurnCommitBody(normalizedMessage, turnId)
+          const messageHash = hashRollbackMessage(normalizedMessage)
+          const hadChanges = await hasRollbackGitWorkingTreeChanges(cwd)
+          logRollbackDebug('commit-start', { cwd, hadChanges, messageHash })
           await runRollbackGit(cwd, ['add', '-A'])
-          const stagedStatus = await runRollbackGitWithOutput(cwd, ['diff', '--cached', '--name-only'])
-          if (!stagedStatus.trim()) {
-            setJson(res, 200, { data: { committed: false } })
-            return
-          }
-
-          await runRollbackGit(cwd, ['commit', '-m', commitMessage])
-          setJson(res, 200, { data: { committed: true } })
+          await runRollbackGit(cwd, ['commit', '--allow-empty', '-m', ROLLBACK_TURN_SUBJECT, '-m', commitBody])
+          const commitSha = (await runRollbackGitCapture(cwd, ['rev-parse', 'HEAD'])).trim()
+          logRollbackDebug('commit-created', { cwd, commitSha, hadChanges, messageHash })
+          setJson(res, 200, { data: { committed: true, commitSha, hadChanges } })
         } catch (error) {
+          logRollbackDebug('commit-error', { cwd, error: getErrorMessage(error, 'Unknown rollback commit error') })
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to auto-commit rollback changes') })
         }
         return
@@ -1812,8 +1943,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         try {
           await ensureRollbackGitRepo(cwd)
-          const commitSha = await findRollbackCommitByExactMessage(cwd, commitMessage)
+          const commitSha = await findRollbackCommitByExactMessageHash(cwd, commitMessage)
           if (!commitSha) {
+            logRollbackDebug('rollback-error', { cwd, reason: 'exact-commit-missing' })
             setJson(res, 404, { error: 'No matching commit found for this user message' })
             return
           }
@@ -1821,6 +1953,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           try {
             resetTargetSha = await runRollbackGitCapture(cwd, ['rev-parse', `${commitSha}^`])
           } catch {
+            logRollbackDebug('rollback-error', { cwd, commitSha, reason: 'missing-parent' })
             setJson(res, 409, { error: 'Cannot rollback: matched commit has no parent commit' })
             return
           }
@@ -1828,14 +1961,108 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           let stashed = false
           if (await hasRollbackGitWorkingTreeChanges(cwd)) {
             const stashMessage = `codex-auto-stash-before-rollback-${Date.now()}`
+            logRollbackDebug('stash-start', { cwd, stashMessage })
             await runRollbackGit(cwd, ['stash', 'push', '-u', '-m', stashMessage])
             stashed = true
+            logRollbackDebug('stash-created', { cwd, stashMessage })
           }
 
+          logRollbackDebug('reset-start', { cwd, commitSha, resetTargetSha, stashed })
           await runRollbackGit(cwd, ['reset', '--hard', resetTargetSha])
+          logRollbackDebug('reset-done', { cwd, commitSha, resetTargetSha, stashed })
           setJson(res, 200, { data: { reset: true, commitSha, resetTargetSha, stashed } })
         } catch (error) {
+          logRollbackDebug('rollback-error', { cwd, error: getErrorMessage(error, 'Unknown rollback reset error') })
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to rollback project to user message commit') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/message-changes') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+        const commitMessage = normalizeCommitMessage(payload?.message)
+        const turnId = typeof payload?.turnId === 'string' ? payload.turnId.trim() : ''
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!commitMessage && !turnId) {
+          setJson(res, 400, { error: 'Missing message or turnId' })
+          return
+        }
+
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          await ensureRollbackGitRepo(cwd)
+          let commitSha = ''
+          if (turnId) {
+            commitSha = await findRollbackCommitByTurnId(cwd, turnId)
+          }
+          if (!commitSha && commitMessage) {
+            // Backward compatibility: older rollback commits may not have turn-id trailer.
+            commitSha = await findRollbackCommitByExactMessageHash(cwd, commitMessage)
+          }
+          if (!commitSha) {
+            setJson(res, 404, { error: 'No matching commit found for this user message' })
+            return
+          }
+          const numstat = await runRollbackGitWithOutput(cwd, ['show', '--format=', '--numstat', commitSha])
+          const files = parseRollbackNumstat(numstat)
+          setJson(res, 200, { data: { commitSha, files } })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load changed files for message') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/message-file-diff') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawCwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+        const commitSha = typeof payload?.commitSha === 'string' ? payload.commitSha.trim() : ''
+        const filePath = typeof payload?.path === 'string' ? payload.path.trim() : ''
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!commitSha) {
+          setJson(res, 400, { error: 'Missing commitSha' })
+          return
+        }
+        if (!filePath) {
+          setJson(res, 400, { error: 'Missing path' })
+          return
+        }
+
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          await ensureRollbackGitRepo(cwd)
+          const diff = await runRollbackGitWithOutput(cwd, ['show', '--format=', commitSha, '--', filePath])
+          setJson(res, 200, { data: { diff } })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load file diff for message') })
         }
         return
       }

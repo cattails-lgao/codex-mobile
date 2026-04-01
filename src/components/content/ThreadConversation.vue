@@ -87,7 +87,6 @@
         v-for="message in messages"
         :key="message.id"
         class="conversation-item"
-        :class="{ 'conversation-item-actionable': canShowMessageActions(message) }"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -100,8 +99,8 @@
               @click="toggleCommandExpand(message)"
             >
               <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
-              <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
               <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
+              <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
             </button>
             <div
               class="cmd-output-wrap"
@@ -124,28 +123,10 @@
               >
                 <li v-for="imageUrl in message.images" :key="imageUrl" class="message-image-item">
                   <button class="message-image-button" type="button" @click="openImageModal(imageUrl)">
-                    <img class="message-image-preview" :src="toRenderableImageUrl(imageUrl)" alt="Message image preview" loading="lazy" />
+                    <img class="message-image-preview" :src="imageUrl" alt="Message image preview" loading="lazy" />
                   </button>
                 </li>
               </ul>
-
-              <div v-if="message.fileAttachments && message.fileAttachments.length > 0" class="message-file-attachments">
-                <span v-for="att in message.fileAttachments" :key="att.path" class="message-file-chip">
-                  <span class="message-file-chip-icon">📄</span>
-                  <span class="message-file-link-wrap">
-                    <a
-                      class="message-file-link message-file-chip-name"
-                      :href="toBrowseUrl(att.path)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :title="att.path"
-                      @contextmenu.prevent="onFileLinkContextMenu($event, att.path)"
-                    >
-                      {{ att.path }}
-                    </a>
-                  </span>
-                </span>
-              </div>
 
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
@@ -168,8 +149,8 @@
                         @click="toggleCommandExpand(cmd)"
                       >
                         <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
-                        <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
                         <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
+                        <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
                       </button>
                       <div
                         class="cmd-output-wrap"
@@ -182,80 +163,17 @@
                     </div>
                   </div>
                 </div>
-                <div v-else class="message-text-flow">
-                  <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
-                    <p v-if="block.kind === 'text'" class="message-text">
-                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
-                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                        <span v-else-if="segment.kind === 'file'" class="message-file-link-wrap">
-                          <a
-                            class="message-file-link"
-                            :href="toBrowseUrl(segment.path)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="segment.path"
-                            @contextmenu.prevent="onFileLinkContextMenu($event, segment.path)"
-                          >
-                            {{ segment.displayPath }}
-                          </a>
-                        </span>
-                        <a
-                          v-else-if="segment.kind === 'url'"
-                          class="message-file-link"
-                          :href="segment.href"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.href"
-                          @contextmenu.prevent="onUrlLinkContextMenu($event, segment.href)"
-                        >
-                          {{ segment.value }}
-                        </a>
-                        <code v-else class="message-inline-code">{{ segment.value }}</code>
-                      </template>
-                    </p>
-                    <p v-else-if="isMarkdownImageFailed(message.id, blockIndex)" class="message-text">{{ block.markdown }}</p>
-                    <button
-                      v-else
-                      class="message-image-button"
-                      type="button"
-                      @click="openImageModal(block.url)"
-                    >
-                      <img
-                        class="message-image-preview message-markdown-image"
-                        :src="block.url"
-                        :alt="block.alt || 'Embedded message image'"
-                        loading="lazy"
-                        @error="onMarkdownImageError(message.id, blockIndex)"
-                      />
-                    </button>
+                <p v-else class="message-text">
+                  <template v-for="(segment, index) in parseInlineSegments(message.text)" :key="`seg-${index}`">
+                    <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
+                    <a v-else-if="segment.kind === 'file'" class="message-file-link" href="#" @click.prevent>
+                      {{ segment.displayName }}
+                    </a>
+                    <code v-else class="message-inline-code">{{ segment.value }}</code>
                   </template>
-                </div>
+                </p>
               </article>
             </article>
-
-            <div v-if="canShowMessageActions(message)" class="message-actions">
-              <button
-                v-if="canCopyMessage(message)"
-                class="message-action-button"
-                type="button"
-                title="Copy message text"
-                @click="onCopyMessage(message)"
-              >
-                <IconTablerCopy class="message-action-icon" />
-                <span class="message-action-label">Copy</span>
-              </button>
-              <button
-                v-if="canRollbackMessage(message)"
-                class="message-action-button"
-                type="button"
-                title="Rollback to this message (remove this turn and all after it)"
-                @click="onRollback(message)"
-              >
-                <IconTablerArrowBackUp class="message-action-icon" />
-                <span class="message-action-label">Rollback</span>
-              </button>
-            </div>
           </div>
         </div>
       </li>
@@ -267,7 +185,6 @@
               <p
                 v-if="liveOverlay.reasoningText"
                 class="live-overlay-reasoning"
-                ref="liveOverlayReasoningRef"
               >
                 {{ liveOverlay.reasoningText }}
               </p>
@@ -287,38 +204,13 @@
         <img class="image-modal-image" :src="modalImageUrl" alt="Expanded message image" />
       </div>
     </div>
-
-    <div
-      v-if="isFileLinkContextMenuVisible"
-      ref="fileLinkContextMenuRef"
-      class="file-link-context-menu"
-      :style="fileLinkContextMenuStyle"
-      @click.stop
-    >
-      <button type="button" class="file-link-context-menu-item" @click="openFileLinkContextBrowse">
-        Open link
-      </button>
-      <button type="button" class="file-link-context-menu-item" @click="copyFileLinkContextLink">
-        Copy link
-      </button>
-      <button
-        v-if="fileLinkContextEditUrl"
-        type="button"
-        class="file-link-context-menu-item"
-        @click="openFileLinkContextEdit"
-      >
-        Edit file
-      </button>
-    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ThreadScrollState, UiLiveOverlay, UiMessage, UiServerRequest } from '../../types/codex'
 import IconTablerX from '../icons/IconTablerX.vue'
-import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
-import IconTablerCopy from '../icons/IconTablerCopy.vue'
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsingCommandIds = ref<Set<string>>(new Set())
@@ -405,47 +297,30 @@ const props = defineProps<{
   liveOverlay: UiLiveOverlay | null
   isLoading: boolean
   activeThreadId: string
-  cwd: string
   scrollState: ThreadScrollState | null
-  isTurnInProgress?: boolean
-  isRollingBack?: boolean
 }>()
 
 const emit = defineEmits<{
   updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
-  rollback: [payload: { turnIndex: number; prependText?: string }]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
-const liveOverlayReasoningRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
-const fileLinkContextMenuRef = ref<HTMLElement | null>(null)
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const localScrollState = ref<ThreadScrollState | null>(null)
 const BOTTOM_THRESHOLD_PX = 16
 type InlineSegment =
   | { kind: 'text'; value: string }
-  | { kind: 'bold'; value: string }
   | { kind: 'code'; value: string }
-  | { kind: 'url'; value: string; href: string }
-  | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
-type MessageBlock =
-  | { kind: 'text'; value: string }
-  | { kind: 'image'; url: string; alt: string; markdown: string }
+  | { kind: 'file'; value: string; displayName: string }
 
 let scrollRestoreFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
-const failedMarkdownImageKeys = ref<Set<string>>(new Set())
-const isFileLinkContextMenuVisible = ref(false)
-const fileLinkContextMenuX = ref(0)
-const fileLinkContextMenuY = ref(0)
-const fileLinkContextBrowseUrl = ref('')
-const fileLinkContextEditUrl = ref('')
 
 type ParsedToolQuestion = {
   id: string
@@ -455,15 +330,9 @@ type ParsedToolQuestion = {
   options: string[]
 }
 
-type TextRange = {
-  start: number
-  end: number
-}
-
 function isFilePath(value: string): boolean {
-  if (!value) return false
+  if (!value || /\s/u.test(value)) return false
   if (value.endsWith('/') || value.endsWith('\\')) return false
-  if (value.startsWith('file://')) return true
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(value)) return false
 
   const looksLikeUnixAbsolute = value.startsWith('/')
@@ -479,89 +348,10 @@ function getBasename(pathValue: string): string {
   return name || pathValue
 }
 
-function normalizePathSeparators(pathValue: string): string {
-  return pathValue.replace(/\\/gu, '/')
-}
-
-function normalizeFileUrlToPath(pathValue: string): string {
-  if (!pathValue.startsWith('file://')) return pathValue
-  let stripped = pathValue.replace(/^file:\/\//u, '')
-  try {
-    stripped = decodeURIComponent(stripped)
-  } catch {
-    // Keep best-effort path if decoding fails.
-  }
-  if (/^\/[A-Za-z]:\//u.test(stripped)) {
-    stripped = stripped.slice(1)
-  }
-  return stripped
-}
-
-function inferHomeFromCwd(cwd: string): string {
-  const normalized = normalizePathSeparators(cwd)
-  const userMatch = normalized.match(/^\/Users\/([^/]+)/u)
-  if (userMatch) return `/Users/${userMatch[1]}`
-  const homeMatch = normalized.match(/^\/home\/([^/]+)/u)
-  if (homeMatch) return `/home/${homeMatch[1]}`
-  return ''
-}
-
-function normalizePathDots(pathValue: string): string {
-  const normalized = normalizePathSeparators(pathValue)
-  if (!normalized) return normalized
-
-  let root = ''
-  let rest = normalized
-  const driveMatch = rest.match(/^([A-Za-z]:)(\/.*)?$/u)
-  if (driveMatch) {
-    root = `${driveMatch[1]}/`
-    rest = (driveMatch[2] ?? '').replace(/^\/+/u, '')
-  } else if (rest.startsWith('/')) {
-    root = '/'
-    rest = rest.slice(1)
-  }
-
-  const parts = rest.split('/').filter(Boolean)
-  const stack: string[] = []
-  for (const part of parts) {
-    if (part === '.') continue
-    if (part === '..') {
-      if (stack.length > 0) stack.pop()
-      continue
-    }
-    stack.push(part)
-  }
-
-  const joined = stack.join('/')
-  if (root) return `${root}${joined}`.replace(/\/+$/u, '') || root
-  return joined || normalized
-}
-
-function resolveRelativePath(pathValue: string, cwd: string): string {
-  const normalizedPath = normalizePathSeparators(normalizeFileUrlToPath(pathValue.trim()))
-  if (!normalizedPath) return ''
-
-  const looksLikeAbsolute = normalizedPath.startsWith('/') || /^[A-Za-z]:\//u.test(normalizedPath)
-  if (looksLikeAbsolute) return normalizePathDots(normalizedPath)
-
-  if (normalizedPath.startsWith('~/')) {
-    const homeBase = inferHomeFromCwd(cwd)
-    if (homeBase) {
-      return normalizePathDots(`${homeBase}/${normalizedPath.slice(2)}`)
-    }
-  }
-
-  const base = normalizePathSeparators(cwd.trim())
-  if (!base) return normalizePathDots(normalizedPath)
-  return normalizePathDots(`${base.replace(/\/+$/u, '')}/${normalizedPath}`)
-}
-
 function parseFileReference(value: string): { path: string; line: number | null } | null {
   if (!value) return null
 
-  let pathValue = value.trim()
-  const wrapped = trimLinkWrappers(pathValue)
-  pathValue = wrapped.core.trim()
+  let pathValue = value
   let line: number | null = null
 
   const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C\d+)?$/u)
@@ -576,274 +366,19 @@ function parseFileReference(value: string): { path: string; line: number | null 
     }
   }
 
-  pathValue = normalizeFileUrlToPath(pathValue)
   if (!isFilePath(pathValue)) return null
   return { path: pathValue, line }
 }
 
-function trimLinkWrappers(value: string): { core: string; leading: string; trailing: string } {
-  let core = value
-  let leading = ''
-  let trailing = ''
-
-  while (/^['"`“‘]/u.test(core)) {
-    leading += core[0]
-    core = core.slice(1)
-  }
-  while (/['"`”’]$/u.test(core)) {
-    trailing = core.slice(-1) + trailing
-    core = core.slice(0, -1)
-  }
-
-  return { core, leading, trailing }
-}
-
-function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
-  const trimmed = value.trim()
-  const parsed = readMarkdownLinkAt(trimmed, 0)
-  if (!parsed || parsed.end !== trimmed.length) return null
-  const labelRaw = parsed.label.trim()
-  const targetRaw = parsed.target.trim()
-  const label = trimLinkWrappers(labelRaw).core.trim() || labelRaw
-  const target = trimLinkWrappers(targetRaw).core.trim()
-  if (!target) return null
-  return { label, target }
-}
-
-function readMarkdownLinkAt(
-  text: string,
-  startIndex: number,
-): { label: string; target: string; end: number } | null {
-  if (text[startIndex] !== '[') return null
-  const closeBracket = text.indexOf('](', startIndex + 1)
-  if (closeBracket < 0) return null
-
-  const label = text.slice(startIndex + 1, closeBracket)
-  if (!label || label.includes('\n')) return null
-
-  let cursor = closeBracket + 2
-  let depth = 1
-  while (cursor < text.length) {
-    const char = text[cursor]
-    if (char === '\n') return null
-    if (char === '(') depth += 1
-    else if (char === ')') {
-      depth -= 1
-      if (depth === 0) {
-        const target = text.slice(closeBracket + 2, cursor)
-        if (!target.trim()) return null
-        return { label, target, end: cursor + 1 }
-      }
-    }
-    cursor += 1
-  }
-
-  return null
-}
-
-function splitPlainTextByLinks(text: string): InlineSegment[] {
-  const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/\S+|file:\/\/\S+|\S*[\\/]\S+/gu
-  let cursor = 0
-
-  for (const match of text.matchAll(pattern)) {
-    if (typeof match.index !== 'number') continue
-    const start = match.index
-    const end = start + match[0].length
-
-    if (start > cursor) {
-      segments.push({ kind: 'text', value: text.slice(cursor, start) })
-    }
-
-    let token = match[0]
-    let trailingPunctuation = ''
-    while (/[.,;:]$/u.test(token)) {
-      trailingPunctuation = token.slice(-1) + trailingPunctuation
-      token = token.slice(0, -1)
-    }
-    const wrapped = trimLinkWrappers(token)
-    token = wrapped.core
-    const leading = wrapped.leading
-    const trailing = wrapped.trailing + trailingPunctuation
-
-    if (leading) {
-      segments.push({ kind: 'text', value: leading })
-    }
-
-    if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
-      segments.push({ kind: 'bold', value: token.slice(2, -2) })
-      if (trailing) {
-        segments.push({ kind: 'text', value: trailing })
-      }
-    } else if (/^https?:\/\//u.test(token)) {
-      segments.push({ kind: 'url', value: token, href: token })
-      if (trailing) {
-        segments.push({ kind: 'text', value: trailing })
-      }
-    } else {
-      const ref = parseFileReference(token)
-      if (ref) {
-        segments.push({
-          kind: 'file',
-          value: token,
-          path: ref.path,
-          displayPath: token,
-          downloadName: getBasename(ref.path),
-        })
-        if (trailing) {
-          segments.push({ kind: 'text', value: trailing })
-        }
-      } else {
-        segments.push({ kind: 'text', value: match[0] })
-      }
-    }
-
-    cursor = end
-  }
-
-  if (cursor < text.length) {
-    segments.push({ kind: 'text', value: text.slice(cursor) })
-  }
-
-  return applyBoldMarkersAcrossTextSegments(segments)
-}
-
-function applyBoldMarkersAcrossTextSegments(segments: InlineSegment[]): InlineSegment[] {
-  const output: InlineSegment[] = []
-  let inBold = false
-  let boldBuffer = ''
-
-  const pushText = (value: string): void => {
-    if (!value) return
-    output.push({ kind: 'text', value })
-  }
-
-  for (const segment of segments) {
-    if (segment.kind !== 'text') {
-      if (inBold) {
-        pushText(`**${boldBuffer}`)
-        inBold = false
-        boldBuffer = ''
-      }
-      output.push(segment)
-      continue
-    }
-
-    let remaining = segment.value
-    while (remaining.length > 0) {
-      const markerIndex = remaining.indexOf('**')
-      if (markerIndex < 0) {
-        if (inBold) boldBuffer += remaining
-        else pushText(remaining)
-        break
-      }
-
-      const before = remaining.slice(0, markerIndex)
-      if (inBold) boldBuffer += before
-      else pushText(before)
-
-      remaining = remaining.slice(markerIndex + 2)
-      if (inBold) {
-        if (boldBuffer.length > 0) output.push({ kind: 'bold', value: boldBuffer })
-        else pushText('****')
-        boldBuffer = ''
-        inBold = false
-      } else {
-        inBold = true
-      }
-    }
-  }
-
-  if (inBold) {
-    pushText(`**${boldBuffer}`)
-  }
-
-  return output
-}
-function splitTextByFileUrls(text: string): InlineSegment[] {
-  const segments: InlineSegment[] = []
-  let cursor = 0
-
-  while (cursor < text.length) {
-    const openBracket = text.indexOf('[', cursor)
-    if (openBracket < 0) break
-    const markdownToken = readMarkdownLinkAt(text, openBracket)
-    if (!markdownToken) {
-      cursor = openBracket + 1
-      continue
-    }
-
-    if (openBracket > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, openBracket)))
-    }
-
-    const label = trimLinkWrappers(markdownToken.label.trim()).core.trim() || markdownToken.label.trim()
-    const target = trimLinkWrappers(markdownToken.target.trim()).core.trim()
-
-    if (/^https?:\/\//u.test(target)) {
-      segments.push({ kind: 'url', value: label || target, href: target })
-    } else {
-      const ref = parseFileReference(target)
-      if (ref) {
-        segments.push({
-          kind: 'file',
-          value: target,
-          path: ref.path,
-          displayPath: label || target,
-          downloadName: getBasename(ref.path),
-        })
-      } else {
-        segments.push({ kind: 'text', value: text.slice(openBracket, markdownToken.end) })
-      }
-    }
-
-    cursor = markdownToken.end
-  }
-
-  if (cursor < text.length) {
-    segments.push(...splitPlainTextByLinks(text.slice(cursor)))
-  }
-
-  return segments
-}
-
-function collectMarkdownLinkRanges(text: string): TextRange[] {
-  const ranges: TextRange[] = []
-  let cursor = 0
-
-  while (cursor < text.length) {
-    const openBracket = text.indexOf('[', cursor)
-    if (openBracket < 0) break
-    const markdownToken = readMarkdownLinkAt(text, openBracket)
-    if (!markdownToken) {
-      cursor = openBracket + 1
-      continue
-    }
-    ranges.push({ start: openBracket, end: markdownToken.end })
-    cursor = markdownToken.end
-  }
-
-  return ranges
-}
-
-function isIndexInsideRanges(index: number, ranges: TextRange[]): boolean {
-  for (const range of ranges) {
-    if (index < range.start) return false
-    if (index < range.end) return true
-  }
-  return false
-}
-
 function parseInlineSegments(text: string): InlineSegment[] {
-  if (!text.includes('`')) return splitTextByFileUrls(text)
-  const markdownLinkRanges = collectMarkdownLinkRanges(text)
+  if (!text.includes('`')) return [{ kind: 'text', value: text }]
 
   const segments: InlineSegment[] = []
   let cursor = 0
   let textStart = 0
 
   while (cursor < text.length) {
-    if (text[cursor] !== '`' || isIndexInsideRanges(cursor, markdownLinkRanges)) {
+    if (text[cursor] !== '`') {
       cursor += 1
       continue
     }
@@ -859,10 +394,6 @@ function parseInlineSegments(text: string): InlineSegment[] {
     while (searchFrom < text.length) {
       const candidate = text.indexOf(delimiter, searchFrom)
       if (candidate < 0) break
-      if (isIndexInsideRanges(candidate, markdownLinkRanges)) {
-        searchFrom = candidate + 1
-        continue
-      }
 
       const hasBacktickBefore = candidate > 0 && text[candidate - 1] === '`'
       const hasBacktickAfter =
@@ -882,49 +413,18 @@ function parseInlineSegments(text: string): InlineSegment[] {
     }
 
     if (cursor > textStart) {
-      segments.push(...splitTextByFileUrls(text.slice(textStart, cursor)))
+      segments.push({ kind: 'text', value: text.slice(textStart, cursor) })
     }
 
     const token = text.slice(cursor + openLength, closingStart)
     if (token.length > 0) {
-      const markdownLink = parseMarkdownLinkToken(token)
-      if (markdownLink) {
-        if (/^https?:\/\//u.test(markdownLink.target)) {
-          segments.push({
-            kind: 'url',
-            value: markdownLink.label || markdownLink.target,
-            href: markdownLink.target,
-          })
-        } else {
-          const markdownFileReference = parseFileReference(markdownLink.target)
-          if (markdownFileReference) {
-            segments.push({
-              kind: 'file',
-              value: markdownLink.target,
-              path: markdownFileReference.path,
-              displayPath: markdownLink.label || markdownLink.target,
-              downloadName: getBasename(markdownFileReference.path),
-            })
-          } else {
-            segments.push({ kind: 'code', value: token })
-          }
-        }
+      const fileReference = parseFileReference(token)
+      if (fileReference) {
+        const basename = getBasename(fileReference.path)
+        const displayName = fileReference.line ? `${basename} (line ${String(fileReference.line)})` : basename
+        segments.push({ kind: 'file', value: token, displayName })
       } else {
-        const fileReference = parseFileReference(token)
-        if (fileReference) {
-          const displayPath = fileReference.line
-            ? `${fileReference.path}:${String(fileReference.line)}`
-            : fileReference.path
-          segments.push({
-            kind: 'file',
-            value: token,
-            path: fileReference.path,
-            displayPath,
-            downloadName: getBasename(fileReference.path),
-          })
-        } else {
-          segments.push({ kind: 'code', value: token })
-        }
+        segments.push({ kind: 'code', value: token })
       }
     } else {
       segments.push({ kind: 'text', value: `${delimiter}${delimiter}` })
@@ -935,187 +435,10 @@ function parseInlineSegments(text: string): InlineSegment[] {
   }
 
   if (textStart < text.length) {
-    segments.push(...splitTextByFileUrls(text.slice(textStart)))
+    segments.push({ kind: 'text', value: text.slice(textStart) })
   }
 
   return segments
-}
-
-function toRenderableImageUrl(value: string): string {
-  const normalized = value.trim()
-  if (!normalized) return ''
-  if (
-    normalized.startsWith('data:') ||
-    normalized.startsWith('blob:') ||
-    normalized.startsWith('http://') ||
-    normalized.startsWith('https://') ||
-    normalized.startsWith('/codex-local-image?')
-  ) {
-    return normalized
-  }
-
-  if (normalized.startsWith('file://')) {
-    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
-  }
-
-  const looksLikeUnixAbsolute = normalized.startsWith('/')
-  const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(normalized)
-  if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute) {
-    return `/codex-local-image?path=${encodeURIComponent(normalized)}`
-  }
-
-  return normalized
-}
-
-function toBrowseUrl(pathValue: string): string {
-  const normalized = pathValue.trim()
-  if (!normalized) return '#'
-  const looksLikeAbsolutePath = (candidate: string): boolean => (
-    candidate.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(candidate)
-  )
-
-  const parsed = parseFileReference(normalized)
-  const candidatePath = parsed?.path ?? normalized
-  const resolved = resolveRelativePath(candidatePath, props.cwd)
-
-  if (looksLikeAbsolutePath(resolved)) {
-    const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
-    return `/codex-local-browse${encodeURI(normalizedResolved)}`
-  }
-
-  return '#'
-}
-
-function toEditUrl(pathValue: string): string {
-  const normalized = pathValue.trim()
-  if (!normalized) return '#'
-  const parsed = parseFileReference(normalized)
-  const candidatePath = parsed?.path ?? normalized
-  const resolved = resolveRelativePath(candidatePath, props.cwd)
-  const looksLikeAbsolutePath = (candidate: string): boolean => (
-    candidate.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(candidate)
-  )
-  if (!looksLikeAbsolutePath(resolved)) return '#'
-  const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
-  return `/codex-local-edit${encodeURI(normalizedResolved)}`
-}
-
-const fileLinkContextMenuStyle = computed(() => ({
-  left: `${String(fileLinkContextMenuX.value)}px`,
-  top: `${String(fileLinkContextMenuY.value)}px`,
-}))
-
-function onFileLinkContextMenu(event: MouseEvent, pathValue: string): void {
-  const browseUrl = toBrowseUrl(pathValue)
-  if (browseUrl === '#') return
-  fileLinkContextBrowseUrl.value = browseUrl
-  const editUrl = toEditUrl(pathValue)
-  fileLinkContextEditUrl.value = editUrl === '#' ? '' : editUrl
-  fileLinkContextMenuX.value = event.clientX
-  fileLinkContextMenuY.value = event.clientY
-  isFileLinkContextMenuVisible.value = true
-}
-
-function onUrlLinkContextMenu(event: MouseEvent, href: string): void {
-  const normalizedHref = href.trim()
-  if (!normalizedHref) return
-  fileLinkContextBrowseUrl.value = normalizedHref
-  fileLinkContextEditUrl.value = ''
-  fileLinkContextMenuX.value = event.clientX
-  fileLinkContextMenuY.value = event.clientY
-  isFileLinkContextMenuVisible.value = true
-}
-
-function closeFileLinkContextMenu(): void {
-  if (!isFileLinkContextMenuVisible.value) return
-  isFileLinkContextMenuVisible.value = false
-}
-
-function openFileLinkContextBrowse(): void {
-  const href = fileLinkContextBrowseUrl.value
-  closeFileLinkContextMenu()
-  if (!href || href === '#') return
-  window.open(href, '_blank', 'noopener,noreferrer')
-}
-
-function openFileLinkContextEdit(): void {
-  const href = fileLinkContextEditUrl.value
-  closeFileLinkContextMenu()
-  if (!href || href === '#') return
-  window.open(href, '_blank', 'noopener,noreferrer')
-}
-
-async function copyFileLinkContextLink(): Promise<void> {
-  const href = fileLinkContextBrowseUrl.value
-  closeFileLinkContextMenu()
-  if (!href || href === '#') return
-  try {
-    await navigator.clipboard.writeText(href)
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = href
-    textarea.setAttribute('readonly', 'true')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-  }
-}
-
-function onWindowPointerDownForFileLinkContextMenu(event: PointerEvent): void {
-  if (!isFileLinkContextMenuVisible.value) return
-  const menu = fileLinkContextMenuRef.value
-  if (!menu) {
-    closeFileLinkContextMenu()
-    return
-  }
-  const target = event.target
-  if (target instanceof Node && menu.contains(target)) return
-  closeFileLinkContextMenu()
-}
-
-function onWindowBlurForFileLinkContextMenu(): void {
-  closeFileLinkContextMenu()
-}
-
-function onWindowKeydownForFileLinkContextMenu(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  closeFileLinkContextMenu()
-}
-
-function parseMessageBlocks(text: string): MessageBlock[] {
-  if (!text.includes('![') || !text.includes('](')) {
-    return [{ kind: 'text', value: text }]
-  }
-
-  const blocks: MessageBlock[] = []
-  const imagePattern = /!\[([^\]]*)\]\(([^)\n]+)\)/gu
-  let cursor = 0
-
-  for (const match of text.matchAll(imagePattern)) {
-    const [fullMatch, altRaw, urlRaw] = match
-    if (typeof match.index !== 'number') continue
-
-    const start = match.index
-    const end = start + fullMatch.length
-    const imageUrl = toRenderableImageUrl(urlRaw.trim())
-    if (!imageUrl) continue
-
-    if (start > cursor) {
-      blocks.push({ kind: 'text', value: text.slice(cursor, start) })
-    }
-
-    blocks.push({ kind: 'image', url: imageUrl, alt: altRaw.trim(), markdown: fullMatch })
-    cursor = end
-  }
-
-  if (cursor < text.length) {
-    blocks.push({ kind: 'text', value: text.slice(cursor) })
-  }
-
-  return blocks.length > 0 ? blocks : [{ kind: 'text', value: text }]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1265,49 +588,6 @@ function onRejectUnknownRequest(requestId: number): void {
       code: -32000,
       message: 'Rejected from codex-web-local UI.',
     },
-  })
-}
-
-function canRollbackMessage(message: UiMessage): boolean {
-  if (message.role !== 'user' && message.role !== 'assistant') return false
-  if (typeof message.turnIndex !== 'number') return false
-  if (props.isTurnInProgress || props.isRollingBack) return false
-  return true
-}
-
-function canCopyMessage(message: UiMessage): boolean {
-  if (message.role !== 'user' && message.role !== 'assistant') return false
-  return message.text.trim().length > 0
-}
-
-function canShowMessageActions(message: UiMessage): boolean {
-  return canCopyMessage(message) || canRollbackMessage(message)
-}
-
-async function onCopyMessage(message: UiMessage): Promise<void> {
-  if (!canCopyMessage(message)) return
-  const text = message.text.trim()
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.setAttribute('readonly', 'true')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-  }
-}
-
-function onRollback(message: UiMessage): void {
-  if (!canRollbackMessage(message)) return
-  const prependText = message.role === 'user' ? message.text.trim() : ''
-  emit('rollback', {
-    turnIndex: message.turnIndex!,
-    prependText: prependText.length > 0 ? prependText : undefined,
   })
 }
 
@@ -1480,24 +760,9 @@ watch(
   () => {
     localScrollState.value = null
     modalImageUrl.value = ''
-    closeFileLinkContextMenu()
-    failedMarkdownImageKeys.value = new Set()
   },
   { flush: 'post' },
 )
-
-watch(isFileLinkContextMenuVisible, (isVisible) => {
-  if (isVisible) {
-    window.addEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
-    window.addEventListener('blur', onWindowBlurForFileLinkContextMenu)
-    window.addEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
-    return
-  }
-
-  window.removeEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
-  window.removeEventListener('blur', onWindowBlurForFileLinkContextMenu)
-  window.removeEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
-})
 
 function onConversationScroll(): void {
   const container = conversationListRef.value
@@ -1506,41 +771,12 @@ function onConversationScroll(): void {
 }
 
 function openImageModal(imageUrl: string): void {
-  modalImageUrl.value = toRenderableImageUrl(imageUrl)
-}
-
-function markdownImageKey(messageId: string, blockIndex: number): string {
-  return `${messageId}:${String(blockIndex)}`
-}
-
-function onMarkdownImageError(messageId: string, blockIndex: number): void {
-  const next = new Set(failedMarkdownImageKeys.value)
-  next.add(markdownImageKey(messageId, blockIndex))
-  failedMarkdownImageKeys.value = next
-}
-
-function isMarkdownImageFailed(messageId: string, blockIndex: number): boolean {
-  return failedMarkdownImageKeys.value.has(markdownImageKey(messageId, blockIndex))
+  modalImageUrl.value = imageUrl
 }
 
 function closeImageModal(): void {
   modalImageUrl.value = ''
 }
-
-function alignLiveOverlayReasoningToBottom(): void {
-  const reasoning = liveOverlayReasoningRef.value
-  if (!reasoning) return
-  reasoning.scrollTop = reasoning.scrollHeight
-}
-
-watch(
-  () => props.liveOverlay?.reasoningText,
-  async (reasoningText) => {
-    if (!reasoningText) return
-    await nextTick()
-    alignLiveOverlayReasoningToBottom()
-  },
-)
 
 onBeforeUnmount(() => {
   if (scrollRestoreFrame) {
@@ -1549,9 +785,6 @@ onBeforeUnmount(() => {
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
   }
-  window.removeEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu, { capture: true })
-  window.removeEventListener('blur', onWindowBlurForFileLinkContextMenu)
-  window.removeEventListener('keydown', onWindowKeydownForFileLinkContextMenu)
 })
 </script>
 
@@ -1563,15 +796,15 @@ onBeforeUnmount(() => {
 }
 
 .conversation-loading {
-  @apply m-0 px-2 sm:px-6 text-sm text-slate-500;
+  @apply m-0 px-6 text-sm text-slate-500;
 }
 
 .conversation-empty {
-  @apply m-0 px-2 sm:px-6 text-sm text-slate-500;
+  @apply m-0 px-6 text-sm text-slate-500;
 }
 
 .conversation-list {
-  @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
+  @apply h-full min-h-0 list-none m-0 px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-3;
 }
 
 .conversation-item {
@@ -1608,7 +841,7 @@ onBeforeUnmount(() => {
 }
 
 .request-card {
-  @apply w-full max-w-180 rounded-xl border border-amber-300 bg-amber-50 px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2;
+  @apply w-full max-w-180 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2;
 }
 
 .request-title {
@@ -1624,7 +857,7 @@ onBeforeUnmount(() => {
 }
 
 .request-actions {
-  @apply flex flex-wrap gap-1.5 sm:gap-2;
+  @apply flex flex-wrap gap-2;
 }
 
 .request-button {
@@ -1669,16 +902,6 @@ onBeforeUnmount(() => {
 
 .live-overlay-reasoning {
   @apply m-0 text-sm leading-5 text-zinc-500 whitespace-pre-wrap;
-  display: block;
-  max-height: calc(1.25rem * 5);
-  overflow: auto;
-  scrollbar-width: none;
-  mask-image: linear-gradient(to top, black 75%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to top, black 75%, transparent 100%);
-}
-
-.live-overlay-reasoning::-webkit-scrollbar {
-  display: none;
 }
 
 .live-overlay-error {
@@ -1715,40 +938,12 @@ onBeforeUnmount(() => {
   @apply block w-16 h-16 object-cover;
 }
 
-.message-file-attachments {
-  @apply mb-2 flex flex-wrap gap-1.5;
-}
-
-.message-file-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600;
-}
-
-.message-file-chip-icon {
-  @apply text-[10px] leading-none;
-}
-
-.message-file-chip-name {
-  @apply truncate max-w-40 font-mono;
-}
-
 .message-card {
   @apply max-w-[min(76ch,100%)] px-0 py-0 bg-transparent border-none rounded-none;
 }
 
-.message-text-flow {
-  @apply flex flex-col gap-2;
-}
-
 .message-text {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
-}
-
-.message-bold-text {
-  @apply font-semibold text-slate-900;
-}
-
-.message-markdown-image {
-  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-white;
 }
 
 .message-inline-code {
@@ -1757,18 +952,6 @@ onBeforeUnmount(() => {
 
 .message-file-link {
   @apply text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
-}
-
-.message-file-link-wrap {
-  @apply inline-block align-baseline;
-}
-
-.file-link-context-menu {
-  @apply fixed z-50 min-w-28 rounded-md border border-zinc-200 bg-white p-1 shadow-lg;
-}
-
-.file-link-context-menu-item {
-  @apply block w-full rounded px-2 py-1 text-left text-xs text-zinc-700 hover:bg-zinc-100;
 }
 
 .message-stack[data-role='user'] {
@@ -1781,7 +964,7 @@ onBeforeUnmount(() => {
 }
 
 .message-card[data-role='user'] {
-  @apply rounded-2xl bg-slate-200 px-3 sm:px-4 py-2 sm:py-3 max-w-[min(560px,100%)];
+  @apply rounded-2xl bg-slate-200 px-4 py-3 max-w-[min(560px,100%)];
   width: fit-content;
   margin-left: auto;
   align-self: flex-end;
@@ -1831,7 +1014,7 @@ onBeforeUnmount(() => {
 }
 
 .image-modal-backdrop {
-  @apply fixed inset-0 z-50 bg-black/40 p-2 sm:p-6 flex items-center justify-center;
+  @apply fixed inset-0 z-50 bg-black/40 p-6 flex items-center justify-center;
 }
 
 .image-modal-content {
@@ -1850,37 +1033,12 @@ onBeforeUnmount(() => {
   @apply w-5 h-5;
 }
 
-.conversation-item-actionable:hover .message-action-button {
-  @apply opacity-100;
-}
-
-.message-actions {
-  @apply mt-1 inline-flex items-center gap-1 self-start;
-}
-
-.message-action-button {
-  @apply opacity-0 inline-flex items-center gap-1 self-start rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300;
-}
-
-.message-action-icon {
-  @apply w-3.5 h-3.5;
-}
-
-.message-action-label {
-  @apply leading-none;
-}
-
 .cmd-row {
   @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
 }
 
 .cmd-row.cmd-expanded {
-  @apply rounded-b-none border-b-0;
+  @apply rounded-b-none;
 }
 
 .cmd-chevron {
@@ -1892,9 +1050,7 @@ onBeforeUnmount(() => {
 }
 
 .cmd-label {
-  @apply text-xs font-mono text-zinc-700;
-  flex: 0 0 auto;
-  min-width: max-content;
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
 }
 
 .cmd-status {
@@ -1938,11 +1094,6 @@ onBeforeUnmount(() => {
 }
 
 .cmd-output {
-  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 max-h-60 overflow-x-auto overflow-y-auto;
-  white-space: pre;
-  word-break: normal;
-  overflow-wrap: normal;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
 }
 </style>

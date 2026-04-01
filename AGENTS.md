@@ -40,6 +40,10 @@
 - Do not batch multiple tasks into a single commit.
 - Each commit message should describe the specific change made.
 
+## Pre-Merge Squash Review (MANDATORY)
+
+- Before merging to local `main`, diff-compare all changes on the current branch against `main`.
+
 ## Tests Documentation Rule (MANDATORY)
 
 - After every feature implementation, update `tests.md` in the repository root.
@@ -112,3 +116,9 @@
   - UI assertion in Playwright (new project/folder appears in sidebar or selector).
   - Filesystem assertion on A1 (`test -d /home/ubuntu/<project-name>`).
 - Save screenshot artifact under `output/playwright/` and include it in the report.
+
+## Playwright Evidence For UI Fixes
+
+- When the user asks to test with Playwright, run the verification on the explicitly requested project/thread context (for example `TestChat`).
+- Screenshot artifacts must show complete passing evidence for the tested feature, not only the base page load.
+- For refresh-persistence fixes, include a post-refresh screenshot that still shows the expected UI state.

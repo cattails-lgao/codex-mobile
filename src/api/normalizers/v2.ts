@@ -253,10 +253,11 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse): UiMessag
   const messages: UiMessage[] = []
   for (let turnIndex = 0; turnIndex < turns.length; turnIndex++) {
     const turn = turns[turnIndex]
+    const turnId = typeof turn?.id === 'string' ? turn.id : undefined
     const items = Array.isArray(turn.items) ? turn.items : []
     for (const item of items) {
       for (const msg of toUiMessages(item)) {
-        messages.push({ ...msg, turnIndex })
+        messages.push({ ...msg, turnId, turnIndex })
       }
     }
   }

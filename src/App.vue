@@ -579,14 +579,14 @@ const filteredMessages = computed(() =>
     return true
   }),
 )
-const latestUserTurnIndex = computed(() => {
-  let latest = -1
-  for (const message of messages.value) {
+const latestUserTurnId = computed(() => {
+  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+    const message = messages.value[index]
     if (message.role !== 'user') continue
-    if (typeof message.turnIndex !== 'number') continue
-    if (message.turnIndex > latest) latest = message.turnIndex
+    const turnId = message.turnId?.trim() ?? ''
+    if (turnId.length > 0) return turnId
   }
-  return latest
+  return ''
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
@@ -959,9 +959,9 @@ async function rollbackAndResendDictation(payload: {
   if (isSelectedThreadInProgress.value) {
     await interruptSelectedThreadTurn()
   }
-  const rollbackTargetTurnIndex = latestUserTurnIndex.value
-  if (rollbackTargetTurnIndex >= 0) {
-    await rollbackSelectedThread(rollbackTargetTurnIndex)
+  const rollbackTargetTurnId = latestUserTurnId.value
+  if (rollbackTargetTurnId.length > 0) {
+    await rollbackSelectedThread(rollbackTargetTurnId)
   }
   await sendMessageToSelectedThread(payload.text, payload.imageUrls, payload.skills, 'steer', payload.fileAttachments)
 }
@@ -1117,13 +1117,13 @@ function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
 }
 
-function onRollback(payload: { turnIndex: number; prependText?: string }): void {
+function onRollback(payload: { turnId: string; prependText?: string }): void {
   const prependText = payload.prependText?.trim() ?? ''
   if (prependText.length > 0) {
     rollbackDraftPrependRequestId += 1
     rollbackDraftPrependRequest.value = { id: rollbackDraftPrependRequestId, text: prependText }
   }
-  void rollbackSelectedThread(payload.turnIndex)
+  void rollbackSelectedThread(payload.turnId)
 }
 
 function onExportChat(): void {
