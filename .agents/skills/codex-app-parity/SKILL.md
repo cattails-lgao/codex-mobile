@@ -218,6 +218,23 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Context Usage Meter (2026-04-01)
+
+- Official `openai/codex` app-server protocol exposes per-thread context telemetry via `thread/tokenUsage/updated` with:
+  - `tokenUsage.total`
+  - `tokenUsage.last`
+  - `tokenUsage.modelContextWindow`
+- In the official TUI, context-window percentage is derived from `last_token_usage`, not cumulative `total_token_usage`.
+- Official normalization subtracts a fixed `BASELINE_TOKENS = 12000` before computing remaining context percentage, so early turns do not look artificially "used".
+- Official status/context copy found in the TUI favors:
+  - `X% left`
+  - `Y used`
+  - `Z window`
+- When docs are blocked, the quickest parity trace for this feature is:
+  - `codex-rs/app-server-protocol/schema/typescript/v2/ThreadTokenUsage*.ts`
+  - `codex-rs/tui/src/chatwidget.rs`
+  - `codex-rs/protocol/src/protocol.rs`
+
 ## Findings: File Change Turn Summaries (2026-03-30)
 
 - Official app-server docs in `openai/codex` confirm that:

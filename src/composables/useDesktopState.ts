@@ -44,6 +44,8 @@ import type {
   UiRateLimitSnapshot,
   UiServerRequest,
   UiServerRequestReply,
+  UiThreadTokenUsage,
+  UiTokenUsageBreakdown,
   UiThread,
 } from '../types/codex'
 
@@ -806,6 +808,7 @@ export function useDesktopState() {
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
   const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
+  const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>({})
 
   const threadTitleById = ref<Record<string, string>>({})
 
@@ -863,6 +866,11 @@ export function useDesktopState() {
     }
   })
   const codexQuota = computed<UiRateLimitSnapshot | null>(() => codexRateLimit.value)
+  const selectedThreadTokenUsage = computed<UiThreadTokenUsage | null>(() => {
+    const threadId = selectedThreadId.value
+    if (!threadId) return null
+    return threadTokenUsageByThreadId.value[threadId] ?? null
+  })
   const messages = computed<UiMessage[]>(() => {
     const threadId = selectedThreadId.value
     if (!threadId) return []
@@ -1166,6 +1174,7 @@ export function useDesktopState() {
     turnActivityByThreadId.value = pruneThreadStateMap(turnActivityByThreadId.value, activeThreadIds)
     turnErrorByThreadId.value = pruneThreadStateMap(turnErrorByThreadId.value, activeThreadIds)
     activeTurnIdByThreadId.value = pruneThreadStateMap(activeTurnIdByThreadId.value, activeThreadIds)
+    threadTokenUsageByThreadId.value = pruneThreadStateMap(threadTokenUsageByThreadId.value, activeThreadIds)
     eventUnreadByThreadId.value = pruneThreadStateMap(eventUnreadByThreadId.value, activeThreadIds)
     inProgressById.value = pruneThreadStateMap(inProgressById.value, activeThreadIds)
     const nextPending: Record<string, UiServerRequest[]> = {}
@@ -1540,6 +1549,58 @@ export function useDesktopState() {
 
   function readNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+
+  function normalizeTokenUsageBreakdown(value: unknown): UiTokenUsageBreakdown | null {
+    const record = asRecord(value)
+    if (!record) return null
+
+    const totalTokens = readNumber(record.totalTokens ?? record.total_tokens)
+    const inputTokens = readNumber(record.inputTokens ?? record.input_tokens)
+    const cachedInputTokens = readNumber(record.cachedInputTokens ?? record.cached_input_tokens)
+    const outputTokens = readNumber(record.outputTokens ?? record.output_tokens)
+    const reasoningOutputTokens = readNumber(record.reasoningOutputTokens ?? record.reasoning_output_tokens)
+    if (
+      totalTokens === null ||
+      inputTokens === null ||
+      cachedInputTokens === null ||
+      outputTokens === null ||
+      reasoningOutputTokens === null
+    ) {
+      return null
+    }
+
+    return {
+      totalTokens,
+      inputTokens,
+      cachedInputTokens,
+      outputTokens,
+      reasoningOutputTokens,
+    }
+  }
+
+  function normalizeThreadTokenUsage(value: unknown): UiThreadTokenUsage | null {
+    const record = asRecord(value)
+    if (!record) return null
+
+    const total = normalizeTokenUsageBreakdown(record.total)
+    const last = normalizeTokenUsageBreakdown(record.last)
+    if (!total || !last) return null
+
+    return {
+      total,
+      last,
+      modelContextWindow: readNumber(record.modelContextWindow ?? record.model_context_window),
+    }
+  }
+
+  function readThreadTokenUsageUpdate(notification: RpcNotification): { threadId: string; usage: UiThreadTokenUsage } | null {
+    if (notification.method !== 'thread/tokenUsage/updated') return null
+    const params = asRecord(notification.params)
+    const threadId = extractThreadIdFromNotification(notification)
+    const usage = normalizeThreadTokenUsage(params?.tokenUsage ?? params?.token_usage)
+    if (!threadId || !usage) return null
+    return { threadId, usage }
   }
 
   function extractThreadIdFromNotification(notification: RpcNotification): string {
@@ -2214,6 +2275,15 @@ export function useDesktopState() {
       return
     }
 
+    const threadTokenUsageUpdate = readThreadTokenUsageUpdate(notification)
+    if (threadTokenUsageUpdate) {
+      threadTokenUsageByThreadId.value = {
+        ...threadTokenUsageByThreadId.value,
+        [threadTokenUsageUpdate.threadId]: threadTokenUsageUpdate.usage,
+      }
+      return
+    }
+
     const turnActivity = readTurnActivity(notification)
     if (turnActivity) {
       setTurnActivityForThread(turnActivity.threadId, turnActivity.activity)
@@ -2441,6 +2511,8 @@ export function useDesktopState() {
   }
 
   function queueEventDrivenSync(notification: RpcNotification): void {
+    if (notification.method === 'thread/tokenUsage/updated') return
+
     const threadId = extractThreadIdFromNotification(notification)
     if (threadId) {
       pendingThreadMessageRefresh.add(threadId)
@@ -3450,6 +3522,7 @@ export function useDesktopState() {
     activeTurnIdByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
     codexRateLimit.value = null
+    threadTokenUsageByThreadId.value = {}
   }
 
   const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {
@@ -3493,6 +3566,7 @@ export function useDesktopState() {
     selectedThreadServerRequests,
     selectedLiveOverlay,
     codexQuota,
+    selectedThreadTokenUsage,
     selectedThreadId,
     availableCollaborationModes,
     availableModelIds,

@@ -227,6 +227,7 @@
                   :selected-collaboration-mode="selectedCollaborationMode"
                   :models="availableModelIds" :selected-model="selectedModelId"
                   :selected-reasoning-effort="selectedReasoningEffort" :skills="installedSkills"
+                  :thread-token-usage="selectedThreadTokenUsage"
                   :codex-quota="codexQuota"
                   :is-turn-in-progress="false"
                   :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
@@ -260,6 +261,7 @@
                   :models="availableModelIds"
                   :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
                   :skills="installedSkills"
+                  :thread-token-usage="selectedThreadTokenUsage"
                   :codex-quota="codexQuota"
                   :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
@@ -322,6 +324,7 @@ const {
   selectedThreadServerRequests,
   selectedLiveOverlay,
   codexQuota,
+  selectedThreadTokenUsage,
   selectedThreadId,
   availableCollaborationModes,
   availableModelIds,

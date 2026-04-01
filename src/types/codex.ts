@@ -174,6 +174,20 @@ export type UiRateLimitSnapshot = {
   planType: string | null
 }
 
+export type UiTokenUsageBreakdown = {
+  totalTokens: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+}
+
+export type UiThreadTokenUsage = {
+  total: UiTokenUsageBreakdown
+  last: UiTokenUsageBreakdown
+  modelContextWindow: number | null
+}
+
 export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type UiAccountUnavailableReason = 'payment_required'
 

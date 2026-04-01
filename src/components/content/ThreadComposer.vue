@@ -82,6 +82,25 @@
         </span>
       </div>
 
+      <div
+        v-if="contextUsageSummaryText"
+        class="thread-composer-context-usage"
+        :class="`is-${contextUsageTone}`"
+        :title="contextUsageTooltipText"
+        aria-live="polite"
+      >
+        <div class="thread-composer-context-usage-row">
+          <span class="thread-composer-context-usage-label">Context</span>
+          <span class="thread-composer-context-usage-value">{{ contextUsageSummaryText }}</span>
+        </div>
+        <span class="thread-composer-context-usage-bar" aria-hidden="true">
+          <span
+            class="thread-composer-context-usage-bar-fill"
+            :style="{ width: `${contextUsageRemainingPercent}%` }"
+          />
+        </span>
+      </div>
+
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
@@ -320,6 +339,8 @@ import type {
   ReasoningEffort,
   UiRateLimitSnapshot,
   UiRateLimitWindow,
+  UiThreadTokenUsage,
+  UiTokenUsageBreakdown,
 } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
 import { useMobile } from '../../composables/useMobile'
@@ -344,6 +365,7 @@ const props = defineProps<{
   selectedModel: string
   selectedReasoningEffort: ReasoningEffort | ''
   skills?: SkillItem[]
+  threadTokenUsage?: UiThreadTokenUsage | null
   codexQuota?: UiRateLimitSnapshot | null
   isTurnInProgress?: boolean
   isInterruptingTurn?: boolean
@@ -437,6 +459,7 @@ const fileMentionHighlightedIndex = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
+const CONTEXT_WINDOW_BASELINE_TOKENS = 12000
 
 const reasoningOptions: Array<{ value: ReasoningEffort; label: string }> = [
   { value: 'none', label: 'None' },
@@ -508,6 +531,11 @@ const placeholderText = computed(() =>
 const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
 const quotaWeeklyRefreshText = computed(() => '')
 const quotaTooltipText = computed(() => buildQuotaTooltipText(props.codexQuota ?? null))
+const contextUsageView = computed(() => buildContextUsageView(props.threadTokenUsage ?? null))
+const contextUsageSummaryText = computed(() => contextUsageView.value?.summaryText ?? '')
+const contextUsageTooltipText = computed(() => contextUsageView.value?.tooltipText ?? '')
+const contextUsageRemainingPercent = computed(() => contextUsageView.value?.percentRemaining ?? 0)
+const contextUsageTone = computed(() => contextUsageView.value?.tone ?? 'healthy')
 
 function formatPlanType(planType: string | null | undefined): string {
   if (!planType || planType === 'unknown') return ''
@@ -640,6 +668,84 @@ function buildQuotaWeeklyRefreshText(quota: UiRateLimitSnapshot | null): string 
   if (!weeklyWindow) return ''
   const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
   return weeklyRefreshDate ? `Weekly refresh ${weeklyRefreshDate}` : ''
+}
+
+function formatCompactTokenCount(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  const absValue = Math.abs(value)
+  if (absValue >= 1_000_000) {
+    const compact = absValue >= 10_000_000 ? (value / 1_000_000).toFixed(0) : (value / 1_000_000).toFixed(1)
+    return `${compact.replace(/\.0$/, '')}M`
+  }
+  if (absValue >= 1_000) {
+    const compact = absValue >= 100_000 ? (value / 1_000).toFixed(0) : (value / 1_000).toFixed(1)
+    return `${compact.replace(/\.0$/, '')}k`
+  }
+  return String(Math.round(value))
+}
+
+function formatBreakdownSummary(breakdown: UiTokenUsageBreakdown): string {
+  const nonCachedInput = Math.max(0, breakdown.inputTokens - breakdown.cachedInputTokens)
+  const parts = [
+    `${formatCompactTokenCount(breakdown.totalTokens)} total`,
+    `${formatCompactTokenCount(nonCachedInput)} input`,
+  ]
+  if (breakdown.cachedInputTokens > 0) {
+    parts.push(`${formatCompactTokenCount(breakdown.cachedInputTokens)} cached`)
+  }
+  if (breakdown.outputTokens > 0) {
+    parts.push(`${formatCompactTokenCount(breakdown.outputTokens)} output`)
+  }
+  if (breakdown.reasoningOutputTokens > 0) {
+    parts.push(`${formatCompactTokenCount(breakdown.reasoningOutputTokens)} reasoning`)
+  }
+  return parts.join(' · ')
+}
+
+function calculateContextPercentRemaining(tokensInContext: number, contextWindow: number): number {
+  // Mirror official Codex normalization so the first prompt does not look artificially "used".
+  if (!Number.isFinite(tokensInContext) || !Number.isFinite(contextWindow) || contextWindow <= CONTEXT_WINDOW_BASELINE_TOKENS) {
+    return 0
+  }
+  const effectiveWindow = contextWindow - CONTEXT_WINDOW_BASELINE_TOKENS
+  const used = Math.max(0, tokensInContext - CONTEXT_WINDOW_BASELINE_TOKENS)
+  const remaining = Math.max(0, effectiveWindow - used)
+  return Math.max(0, Math.min(100, Math.round((remaining / effectiveWindow) * 100)))
+}
+
+function buildContextUsageView(
+  usage: UiThreadTokenUsage | null,
+): {
+    summaryText: string
+    tooltipText: string
+    percentRemaining: number
+    tone: 'healthy' | 'warning' | 'danger'
+  } | null {
+  if (!usage) return null
+
+  const contextWindow = usage.modelContextWindow ?? null
+  if (typeof contextWindow !== 'number' || !Number.isFinite(contextWindow) || contextWindow <= 0) return null
+
+  const tokensInContext = Math.max(0, usage.last.totalTokens)
+  const percentRemaining = calculateContextPercentRemaining(tokensInContext, contextWindow)
+  const percentUsed = Math.max(0, Math.min(100, 100 - percentRemaining))
+  const tone: 'healthy' | 'warning' | 'danger' = percentRemaining <= 15
+    ? 'danger'
+    : percentRemaining <= 35
+      ? 'warning'
+      : 'healthy'
+
+  return {
+    summaryText: `${percentRemaining}% left · ${formatCompactTokenCount(tokensInContext)} used / ${formatCompactTokenCount(contextWindow)}`,
+    tooltipText: [
+      `Context window: ${percentRemaining}% left (${percentUsed}% used)`,
+      `In context: ${tokensInContext.toLocaleString()} / ${contextWindow.toLocaleString()} tokens`,
+      `Last turn: ${formatBreakdownSummary(usage.last)}`,
+      `Session total: ${formatBreakdownSummary(usage.total)}`,
+    ].join('\n'),
+    percentRemaining,
+    tone,
+  }
 }
 
 function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
@@ -1264,6 +1370,49 @@ watch(
 
 .thread-composer-rate-limit-value {
   @apply min-w-0 truncate;
+}
+
+.thread-composer-context-usage {
+  --context-usage-accent: rgb(34 197 94);
+  --context-usage-border: rgb(187 247 208);
+  --context-usage-surface: rgb(240 253 244 / 0.95);
+  @apply mb-2 rounded-xl border px-2.5 py-2;
+  background: linear-gradient(180deg, var(--context-usage-surface), rgb(255 255 255 / 0.96));
+  border-color: var(--context-usage-border);
+}
+
+.thread-composer-context-usage.is-warning {
+  --context-usage-accent: rgb(245 158 11);
+  --context-usage-border: rgb(253 230 138);
+  --context-usage-surface: rgb(255 251 235 / 0.95);
+}
+
+.thread-composer-context-usage.is-danger {
+  --context-usage-accent: rgb(239 68 68);
+  --context-usage-border: rgb(254 202 202);
+  --context-usage-surface: rgb(254 242 242 / 0.95);
+}
+
+.thread-composer-context-usage-row {
+  @apply flex items-center justify-between gap-3 text-[11px] leading-4 text-zinc-600;
+}
+
+.thread-composer-context-usage-label {
+  @apply shrink-0 font-medium uppercase tracking-[0.14em];
+  color: var(--context-usage-accent);
+}
+
+.thread-composer-context-usage-value {
+  @apply min-w-0 truncate text-right font-medium tabular-nums text-zinc-700;
+}
+
+.thread-composer-context-usage-bar {
+  @apply mt-2 block h-1.5 overflow-hidden rounded-full bg-zinc-200/80;
+}
+
+.thread-composer-context-usage-bar-fill {
+  @apply block h-full rounded-full transition-[width] duration-200 ease-out;
+  background: var(--context-usage-accent);
 }
 
 .thread-composer-input-wrap {
