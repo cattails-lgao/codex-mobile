@@ -1167,14 +1167,44 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 767px) {
+  .review-pane-header {
+    @apply px-3 py-2;
+  }
+
+  .review-pane-eyebrow {
+    @apply text-[10px];
+  }
+
+  .review-pane-title {
+    @apply text-xs leading-5;
+  }
+
+  .review-pane-header-actions {
+    @apply gap-1.5;
+  }
+
+  .review-pane-close,
+  .review-pane-mobile-files-button,
+  .review-pane-refresh,
+  .review-pane-run,
+  .review-pane-tab,
+  .review-pane-scope,
+  .review-pane-view {
+    @apply px-2.5 py-1 text-[12px];
+  }
+
+  .review-pane-close {
+    @apply h-7 w-7;
+  }
+
   .review-pane-toolbar {
-    @apply gap-3;
+    @apply grid grid-cols-2 gap-2 px-3 py-2;
   }
 
   .review-pane-scopes,
   .review-pane-tabs,
   .review-pane-workspace-views {
-    @apply w-full justify-between;
+    @apply w-full justify-between bg-transparent p-0;
   }
 
   .review-pane-tab,
@@ -1184,12 +1214,32 @@ onBeforeUnmount(() => {
   }
 
   .review-pane-toolbar-actions {
-    @apply ml-0 w-full;
+    @apply ml-0 w-full gap-1.5;
   }
 
   .review-pane-refresh,
   .review-pane-run {
     @apply flex-1 justify-center text-center;
+  }
+
+  .review-pane-banner {
+    @apply mx-3 mt-2 px-2.5 py-1.5 text-xs;
+  }
+
+  .review-pane-meta {
+    @apply gap-1 px-3 pt-2;
+  }
+
+  .review-pane-meta span {
+    @apply px-1.75 py-0.75 text-[11px];
+  }
+
+  .review-pane-bulk-actions {
+    @apply gap-1 px-3 py-2;
+  }
+
+  .review-pane-bulk-button {
+    @apply px-2.5 py-1 text-[12px];
   }
 
   .review-pane-main {
@@ -1201,12 +1251,56 @@ onBeforeUnmount(() => {
   }
 
   .review-pane-diff {
-    @apply px-3 py-3;
+    @apply px-2 py-2.5;
   }
 
   .review-pane-file-header,
   .review-pane-hunk-header {
-    @apply px-3 py-3;
+    @apply px-2.5 py-2;
+  }
+
+  .review-pane-sheet {
+    @apply px-3 pb-4 pt-2.5;
+  }
+
+  .review-pane-sheet-handle {
+    @apply mb-2 h-1.25 w-11;
+  }
+
+  .review-pane-sheet-header {
+    @apply mb-2;
+  }
+
+  .review-pane-sheet-title {
+    @apply text-xs;
+  }
+
+  .review-pane-sheet-count {
+    @apply px-1.5 py-0.75 text-[10px];
+  }
+
+  .review-pane-sheet-list {
+    @apply gap-1.5 pb-2;
+  }
+
+  .review-pane-sheet-list .review-pane-file {
+    @apply gap-0.5 rounded-lg px-2 py-1.5;
+  }
+
+  .review-pane-sheet-list .review-pane-file-meta-row {
+    @apply gap-1.5;
+  }
+
+  .review-pane-sheet-list .review-pane-file-op {
+    @apply px-1.5 py-0.25 text-[9px];
+  }
+
+  .review-pane-sheet-list .review-pane-file-path {
+    @apply text-[13px] leading-5;
+  }
+
+  .review-pane-sheet-list .review-pane-file-delta {
+    @apply text-[11px];
   }
 }
 </style>
