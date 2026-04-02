@@ -145,7 +145,7 @@
           </p>
         </div>
 
-        <div v-else class="review-pane-main">
+        <div v-else class="review-pane-main" :style="reviewMainStyle">
           <aside v-if="!isMobile" class="review-pane-file-list">
             <button
               v-for="file in snapshot.files"
@@ -163,6 +163,15 @@
               <span class="review-pane-file-delta">+{{ file.addedLineCount }} / -{{ file.removedLineCount }}</span>
             </button>
           </aside>
+
+          <div
+            v-if="!isMobile"
+            class="review-pane-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize file list"
+            @pointerdown="onResizerPointerDown"
+          ></div>
 
           <section class="review-pane-diff">
             <template v-if="selectedFile">
@@ -363,6 +372,7 @@ const reviewResultsByKey = ref<Record<string, UiReviewResult | null>>({})
 const pendingReviewKey = ref('')
 const hunkRefs = new Map<string, HTMLElement>()
 let stopNotifications: (() => void) | null = null
+let stopResizeTracking: (() => void) | null = null
 
 const reviewTabs = [
   { value: 'changes' as const, label: 'Changes' },
@@ -433,6 +443,63 @@ const reviewBannerText = computed(() => (
   || reviewStatusLabel.value
 ))
 const reviewBannerIsError = computed(() => Boolean(reviewError.value || snapshotError.value))
+const REVIEW_FILE_LIST_WIDTH_KEY = 'codex-web-local.review-pane-file-list-width.v1'
+const MIN_FILE_LIST_WIDTH = 220
+const MAX_FILE_LIST_WIDTH = 420
+const DEFAULT_FILE_LIST_WIDTH = 288
+const fileListWidth = ref(loadFileListWidth())
+
+const reviewMainStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {}
+  if (!isMobile.value) {
+    style['--review-file-list-width'] = `${fileListWidth.value}px`
+  }
+  return style
+})
+
+function clampFileListWidth(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_FILE_LIST_WIDTH
+  return Math.min(MAX_FILE_LIST_WIDTH, Math.max(MIN_FILE_LIST_WIDTH, Math.round(value)))
+}
+
+function loadFileListWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_FILE_LIST_WIDTH
+  const raw = window.localStorage.getItem(REVIEW_FILE_LIST_WIDTH_KEY)
+  const parsed = raw ? Number(raw) : Number.NaN
+  return clampFileListWidth(parsed)
+}
+
+function persistFileListWidth(value: number): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(REVIEW_FILE_LIST_WIDTH_KEY, String(clampFileListWidth(value)))
+}
+
+function onResizerPointerDown(event: PointerEvent): void {
+  if (isMobile.value) return
+  event.preventDefault()
+  stopResizeTracking?.()
+  const startX = event.clientX
+  const startWidth = fileListWidth.value
+
+  const handleMove = (moveEvent: PointerEvent) => {
+    fileListWidth.value = clampFileListWidth(startWidth + (moveEvent.clientX - startX))
+  }
+
+  const cleanup = () => {
+    window.removeEventListener('pointermove', handleMove)
+    window.removeEventListener('pointerup', handleUp)
+    stopResizeTracking = null
+  }
+
+  const handleUp = () => {
+    cleanup()
+    persistFileListWidth(fileListWidth.value)
+  }
+
+  window.addEventListener('pointermove', handleMove)
+  window.addEventListener('pointerup', handleUp)
+  stopResizeTracking = cleanup
+}
 
 function lineMarker(kind: string): string {
   if (kind === 'add') return '+'
@@ -720,6 +787,7 @@ onBeforeUnmount(() => {
     stopNotifications()
     stopNotifications = null
   }
+  stopResizeTracking?.()
 })
 </script>
 
@@ -735,7 +803,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-header {
-  @apply flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3;
+  @apply flex items-start justify-between gap-3 border-b border-zinc-200 px-3 py-2.5;
 }
 
 .review-pane-heading {
@@ -764,15 +832,15 @@ onBeforeUnmount(() => {
 .review-pane-bulk-button,
 .review-pane-row-button,
 .review-pane-primary-cta {
-  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-50;
+  @apply rounded-full border border-zinc-200 bg-white px-2.5 py-1.25 text-[11px] text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-50;
 }
 
 .review-pane-close {
-  @apply flex h-8 w-8 items-center justify-center rounded-full p-0;
+  @apply flex h-7.5 w-7.5 items-center justify-center rounded-full p-0;
 }
 
 .review-pane-toolbar {
-  @apply flex flex-wrap items-center gap-2 border-b border-zinc-100 px-4 py-3;
+  @apply flex flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2.5;
 }
 
 .review-pane-tabs,
@@ -792,11 +860,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-run {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-sky-600 bg-sky-600 text-white hover:bg-sky-700;
 }
 
 .review-pane-banner {
-  @apply mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800;
+  @apply mx-3 mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800;
 }
 
 .review-pane-banner.is-error {
@@ -804,7 +872,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-meta {
-  @apply flex flex-wrap items-center gap-2 px-4 pt-3 text-[11px] text-zinc-500;
+  @apply flex flex-wrap items-center gap-1.5 px-3 pt-2.5 text-[11px] text-zinc-500;
 }
 
 .review-pane-meta span {
@@ -817,20 +885,33 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-bulk-actions {
-  @apply flex flex-wrap gap-2 border-b border-zinc-100 px-4 py-3;
+  @apply flex flex-wrap gap-1.5 border-b border-zinc-100 px-3 py-2.5;
 }
 
 .review-pane-main {
-  @apply flex h-full min-h-0;
+  @apply grid h-full min-h-0 grid-cols-[var(--review-file-list-width,18rem)_0.5rem_minmax(0,1fr)];
 }
 
 .review-pane-file-list {
-  @apply hidden w-56 shrink-0 overflow-y-auto border-r border-zinc-100 bg-zinc-50/60 p-3 md:flex md:flex-col md:gap-2;
+  @apply hidden min-w-0 overflow-y-auto border-r border-zinc-100 bg-zinc-50/60 p-2 md:flex md:flex-col md:gap-1.5;
+}
+
+.review-pane-resizer {
+  @apply relative hidden cursor-col-resize bg-zinc-100 md:block;
+}
+
+.review-pane-resizer::before {
+  content: '';
+  @apply absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-zinc-300 transition-colors;
+}
+
+.review-pane-resizer:hover::before {
+  @apply bg-sky-500;
 }
 
 .review-pane-file,
 .review-pane-finding {
-  @apply flex w-full flex-col gap-1 rounded-2xl border border-transparent px-3 py-2 text-left transition hover:border-zinc-200 hover:bg-white;
+  @apply flex w-full flex-col gap-0.75 rounded-xl border border-transparent px-2.5 py-2 text-left transition hover:border-zinc-200 hover:bg-white;
 }
 
 .review-pane-file[data-active='true'] {
@@ -854,7 +935,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-op[data-operation='update'] {
-  @apply bg-zinc-200 text-zinc-700;
+  @apply bg-amber-100 text-amber-800;
 }
 
 .review-pane-file-path {
@@ -866,7 +947,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-diff {
-  @apply min-h-0 flex-1 overflow-y-auto px-4 py-4;
+  @apply min-h-0 overflow-y-auto px-3 py-3;
 }
 
 .review-pane-file-header,
@@ -875,7 +956,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-header {
-  @apply mb-4 flex flex-wrap items-start justify-between gap-3 px-4 py-3;
+  @apply mb-3 flex flex-wrap items-start justify-between gap-2 px-3 py-2.5;
 }
 
 .review-pane-file-title {
@@ -889,11 +970,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-row-actions {
-  @apply flex flex-wrap gap-2;
+  @apply flex flex-wrap gap-1.5;
 }
 
 .review-pane-hunks {
-  @apply flex flex-col gap-3;
+  @apply flex flex-col gap-2.5;
 }
 
 .review-pane-hunk {
@@ -905,7 +986,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-hunk-header {
-  @apply flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 bg-zinc-50/70 px-4 py-3;
+  @apply flex flex-wrap items-start justify-between gap-2 border-b border-zinc-100 bg-zinc-50/70 px-3 py-2.5;
 }
 
 .review-pane-hunk-title {
@@ -921,7 +1002,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-line-number {
-  @apply px-3 py-1 text-right text-zinc-500;
+  @apply px-2.5 py-1 text-right text-zinc-500;
 }
 
 .review-pane-line-marker {
@@ -929,15 +1010,25 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-line-code {
-  @apply block px-3 py-1 whitespace-pre-wrap break-all;
+  @apply block px-2.5 py-1 whitespace-pre-wrap break-all;
 }
 
 .review-pane-line[data-kind='add'] {
-  @apply bg-emerald-950/60;
+  @apply bg-emerald-950/60 text-emerald-100;
 }
 
 .review-pane-line[data-kind='remove'] {
-  @apply bg-rose-950/60;
+  @apply bg-rose-950/60 text-rose-100;
+}
+
+.review-pane-line[data-kind='add'] .review-pane-line-marker,
+.review-pane-line[data-kind='add'] .review-pane-line-code {
+  @apply text-emerald-300;
+}
+
+.review-pane-line[data-kind='remove'] .review-pane-line-marker,
+.review-pane-line[data-kind='remove'] .review-pane-line-code {
+  @apply text-rose-300;
 }
 
 .review-pane-line[data-kind='hunk'] {
@@ -949,7 +1040,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-raw-diff {
-  @apply overflow-x-auto rounded-2xl border border-zinc-200 bg-zinc-950 p-4 text-xs text-zinc-100;
+  @apply overflow-x-auto rounded-2xl border border-zinc-200 bg-zinc-950 p-3 text-xs text-zinc-100;
 }
 
 .review-pane-raw-diff pre,
@@ -958,7 +1049,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-summary-card {
-  @apply mx-4 mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3;
+  @apply mx-3 mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2.5;
 }
 
 .review-pane-summary-title {
@@ -966,7 +1057,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-findings-list {
-  @apply flex h-full flex-col gap-3 overflow-y-auto px-4 py-4;
+  @apply flex h-full flex-col gap-2.5 overflow-y-auto px-3 py-3;
 }
 
 .review-pane-finding {
@@ -994,7 +1085,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-primary-cta {
-  @apply mt-4 border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply mt-4 border-sky-600 bg-sky-600 text-white hover:bg-sky-700;
 }
 
 .review-pane-sheet-backdrop {
@@ -1073,6 +1164,10 @@ onBeforeUnmount(() => {
 
   .review-pane-main {
     @apply block;
+  }
+
+  .review-pane-resizer {
+    @apply hidden;
   }
 
   .review-pane-diff {

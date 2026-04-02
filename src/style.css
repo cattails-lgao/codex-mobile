@@ -694,7 +694,7 @@
 
 :root.dark .review-pane-run,
 :root.dark .review-pane-primary-cta {
-  @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
+  @apply border-sky-500 bg-sky-500 text-white hover:bg-sky-400;
 }
 
 :root.dark .review-pane-meta span,
@@ -704,6 +704,18 @@
 
 :root.dark .review-pane-file-list {
   @apply border-zinc-700 bg-zinc-950/70;
+}
+
+:root.dark .review-pane-resizer {
+  @apply bg-zinc-800;
+}
+
+:root.dark .review-pane-resizer::before {
+  @apply bg-zinc-600;
+}
+
+:root.dark .review-pane-resizer:hover::before {
+  @apply bg-sky-400;
 }
 
 :root.dark .review-pane-file {
@@ -716,6 +728,22 @@
 
 :root.dark .review-pane-file-path {
   @apply text-zinc-100;
+}
+
+:root.dark .review-pane-file-op[data-operation='update'] {
+  @apply bg-amber-500/15 text-amber-200;
+}
+
+:root.dark .review-pane-file-op[data-operation='add'] {
+  @apply bg-emerald-500/15 text-emerald-200;
+}
+
+:root.dark .review-pane-file-op[data-operation='delete'] {
+  @apply bg-rose-500/15 text-rose-200;
+}
+
+:root.dark .review-pane-file-op[data-operation='rename'] {
+  @apply bg-sky-500/15 text-sky-200;
 }
 
 :root.dark .review-pane-file-delta,
@@ -743,6 +771,16 @@
 :root.dark .review-pane-line-number,
 :root.dark .review-pane-line-marker {
   @apply text-zinc-600;
+}
+
+:root.dark .review-pane-line[data-kind='add'] .review-pane-line-marker,
+:root.dark .review-pane-line[data-kind='add'] .review-pane-line-code {
+  @apply text-emerald-300;
+}
+
+:root.dark .review-pane-line[data-kind='remove'] .review-pane-line-marker,
+:root.dark .review-pane-line[data-kind='remove'] .review-pane-line-code {
+  @apply text-rose-300;
 }
 
 :root.dark .review-pane-sheet-handle {
