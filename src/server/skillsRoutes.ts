@@ -653,7 +653,7 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
   try { await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir }) } catch {}
   let pulledMtimes = new Map<string, number>()
   try {
-    await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: localDir })
+    await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
     pulledMtimes = await snapshotFileMtimes(localDir)
   } catch {
     await resolveMergeConflictsByNewerCommit(localDir, branch)
@@ -768,23 +768,14 @@ async function syncInstalledSkillsFolderToRepo(
     const maxAttempts = 3
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       await runCommand('git', ['fetch', 'origin'], { cwd: repoDir })
-      let hasLatestRemote = false
       try {
-        await runCommand('git', ['merge-base', '--is-ancestor', `origin/${branch}`, 'HEAD'], { cwd: repoDir })
-        hasLatestRemote = true
+        await runCommand('git', ['rebase', `origin/${branch}`], { cwd: repoDir })
       } catch {
-        hasLatestRemote = false
-      }
-      if (!hasLatestRemote) {
+        try { await runCommand('git', ['rebase', '--abort'], { cwd: repoDir }) } catch {}
         try {
-          await runCommand('git', ['pull', '--no-rebase', '--no-ff', 'origin', branch], { cwd: repoDir })
+          await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoDir })
         } catch {
           await resolveMergeConflictsByNewerCommit(repoDir, branch)
-        }
-        await runCommand('git', ['add', '.'], { cwd: repoDir })
-        const statusAfterReconcile = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
-        if (statusAfterReconcile) {
-          await runCommand('git', ['commit', '-m', 'Reconcile skills sync before push retry'], { cwd: repoDir })
         }
       }
       try {
