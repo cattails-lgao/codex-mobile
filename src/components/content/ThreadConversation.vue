@@ -619,6 +619,9 @@
                   <span class="message-copy-label">{{ copiedResponseAnchorId === message.id ? 'Copied' : 'Copy' }}</span>
                 </button>
               </div>
+              <div v-if="isRollbackDebug && rollbackDebugStatus(message)" class="rollback-debug-panel">
+                {{ rollbackDebugStatus(message) }}
+              </div>
             </article>
           </div>
         </div>
@@ -2100,8 +2103,11 @@ function rollbackResponse(anchorMessageId: string): void {
   emit('rollback', { turnId })
 }
 
+const isRollbackDebug = (import.meta.env.VITE_ROLLBACK_DEBUG ?? '').toString().trim() === '1'
+
 const commitChangesByTurnId = ref<Record<string, { commitSha: string; files: WorktreeMessageChangedFile[] }>>({})
 const commitChangesLoadingByTurnId = ref<Record<string, boolean>>({})
+const commitChangesErrorByTurnId = ref<Record<string, string>>({})
 const commitDiffByKey = ref<Record<string, string>>({})
 const commitDiffLoadingByKey = ref<Record<string, boolean>>({})
 
@@ -2118,14 +2124,40 @@ async function ensureCommitChangesLoaded(turnId: string): Promise<void> {
   if (!turnId && !messageText) return
 
   commitChangesLoadingByTurnId.value = { ...commitChangesLoadingByTurnId.value, [turnId]: true }
+  commitChangesErrorByTurnId.value = { ...commitChangesErrorByTurnId.value, [turnId]: '' }
   try {
     const result = await getWorktreeMessageChanges(props.cwd, messageText, turnId || undefined)
     commitChangesByTurnId.value = { ...commitChangesByTurnId.value, [turnId]: result }
-  } catch {
-    // silently fail — session fallback will remain
+  } catch (err) {
+    commitChangesErrorByTurnId.value = {
+      ...commitChangesErrorByTurnId.value,
+      [turnId]: err instanceof Error ? err.message : 'Failed to load commit changes',
+    }
   } finally {
     commitChangesLoadingByTurnId.value = { ...commitChangesLoadingByTurnId.value, [turnId]: false }
   }
+}
+
+function rollbackDebugStatus(message: UiMessage): string {
+  const turnId = rollbackTurnIdByAnchorId.value[message.id]
+  if (!turnId) return ''
+  const parts: string[] = []
+  parts.push(`turnId: ${turnId.slice(0, 12)}…`)
+  if (commitChangesLoadingByTurnId.value[turnId]) {
+    parts.push('⏳ loading commit changes')
+  } else if (commitChangesErrorByTurnId.value[turnId]) {
+    parts.push(`❌ ${commitChangesErrorByTurnId.value[turnId]}`)
+  } else if (commitChangesByTurnId.value[turnId]) {
+    const data = commitChangesByTurnId.value[turnId]
+    parts.push(`✅ commit ${data.commitSha.slice(0, 8)}, ${data.files.length} file(s)`)
+  } else {
+    parts.push(props.rollbackEnabled ? '⏳ pending' : '⚪ rollback commits off')
+  }
+  const fallback = readAnchoredFileChangeSummary(message)
+  if (fallback) {
+    parts.push(`fallback: ${fallback.changes.length} change(s) [${fallback.source}]`)
+  }
+  return parts.join(' | ')
 }
 
 async function fetchCommitDiff(turnId: string, filePath: string): Promise<string> {
@@ -3694,6 +3726,7 @@ watch(
     modalImageUrl.value = ''
     commitChangesByTurnId.value = {}
     commitChangesLoadingByTurnId.value = {}
+    commitChangesErrorByTurnId.value = {}
     commitDiffByKey.value = {}
     commitDiffLoadingByKey.value = {}
   },
@@ -3904,7 +3937,11 @@ onBeforeUnmount(() => {
 }
 
 .message-toolbar {
-  @apply mt-1 self-end flex items-center gap-1;
+  @apply mt-1 self-start flex items-center gap-1 opacity-[0.01] transition-opacity duration-200;
+}
+
+.message-row:hover .message-toolbar {
+  @apply opacity-100;
 }
 
 .message-copy-button {
@@ -3917,6 +3954,10 @@ onBeforeUnmount(() => {
 
 .message-rollback-button {
   @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-amber-600/70 transition hover:text-amber-700;
+}
+
+.rollback-debug-panel {
+  @apply text-[9px] leading-tight text-zinc-400 font-mono px-1 py-0.5 mt-0.5 bg-zinc-100 rounded border border-zinc-200 whitespace-pre-wrap;
 }
 
 .message-copy-button[data-copied='true'] {

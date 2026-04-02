@@ -14,7 +14,7 @@
             :data-pinned="isPinned(thread.id)"
             :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
             :force-right-hover="isThreadMenuOpen(thread.id)"
-            @mouseleave="onThreadRowLeave(thread.id)"
+            @mouseleave="onThreadRowLeave(thread.id, $event)"
             @contextmenu="onThreadRowContextMenu($event, thread.id)"
           >
             <template #left>
@@ -108,7 +108,7 @@
           :data-pinned="isPinned(thread.id)"
           :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
           :force-right-hover="isThreadMenuOpen(thread.id)"
-          @mouseleave="onThreadRowLeave(thread.id)"
+          @mouseleave="onThreadRowLeave(thread.id, $event)"
           @contextmenu="onThreadRowContextMenu($event, thread.id)"
         >
           <template #left>
@@ -256,7 +256,7 @@
                 :data-pinned="isPinned(thread.id)"
                 :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
                 :force-right-hover="isThreadMenuOpen(thread.id)"
-                @mouseleave="onThreadRowLeave(thread.id)"
+                @mouseleave="onThreadRowLeave(thread.id, $event)"
                 @contextmenu="onThreadRowContextMenu($event, thread.id)"
               >
                 <template #left>
@@ -747,10 +747,14 @@ function onBrowseThreadFiles(threadId: string): void {
   closeThreadMenu()
 }
 
-function onThreadRowLeave(threadId: string): void {
-  if (openThreadMenuId.value === threadId) {
-    closeThreadMenu()
+function onThreadRowLeave(threadId: string, event?: MouseEvent): void {
+  if (openThreadMenuId.value !== threadId) return
+  if (event) {
+    const relatedTarget = event.relatedTarget
+    const panelElement = openThreadMenuPanelRef.value
+    if (relatedTarget instanceof Node && panelElement && panelElement.contains(relatedTarget)) return
   }
+  closeThreadMenu()
 }
 
 function isThreadMenuOpen(threadId: string): boolean {
@@ -1101,8 +1105,14 @@ function isEventInsideOpenThreadMenu(event: Event): boolean {
   const eventPath = typeof event.composedPath === 'function' ? event.composedPath() : []
   if (eventPath.includes(openMenuWrapElement)) return true
 
+  const panelElement = openThreadMenuPanelRef.value
+  if (panelElement && eventPath.includes(panelElement)) return true
+
   const target = event.target
-  return target instanceof Node ? openMenuWrapElement.contains(target) : false
+  if (!(target instanceof Node)) return false
+  if (openMenuWrapElement.contains(target)) return true
+  if (panelElement && panelElement.contains(target)) return true
+  return false
 }
 
 function onProjectMenuPointerDown(event: PointerEvent): void {

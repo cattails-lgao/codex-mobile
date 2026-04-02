@@ -68,20 +68,6 @@
         </span>
       </div>
 
-      <div
-        v-if="quotaSummaryText"
-        class="thread-composer-rate-limit"
-        :title="quotaTooltipText"
-        aria-live="polite"
-      >
-        <span class="thread-composer-rate-limit-row">
-          <span class="thread-composer-rate-limit-value">{{ quotaSummaryText }}</span>
-        </span>
-        <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
-          {{ quotaWeeklyRefreshText }}
-        </span>
-      </div>
-
       <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
