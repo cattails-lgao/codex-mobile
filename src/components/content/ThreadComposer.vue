@@ -734,7 +734,7 @@ function buildContextUsageView(
       : 'healthy'
 
   return {
-    summaryText: `${percentRemaining}% left · ${formatCompactTokenCount(tokensInContext)} used / ${formatCompactTokenCount(contextWindow)}`,
+    summaryText: `${percentRemaining}% · ${formatCompactTokenCount(tokensInContext)} / ${formatCompactTokenCount(contextWindow)}`,
     tooltipText: [
       `Context window: ${percentRemaining}% left (${percentUsed}% used)`,
       `In context: ${tokensInContext.toLocaleString()} / ${contextWindow.toLocaleString()} tokens`,
