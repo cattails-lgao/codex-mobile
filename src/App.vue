@@ -185,6 +185,17 @@
               @start-new-thread="onStartNewThreadFromToolbar"
             />
           </template>
+          <template #actions>
+            <button
+              v-if="route.name === 'thread' && selectedThreadId"
+              type="button"
+              class="content-header-review-button"
+              :data-active="isReviewPaneOpen"
+              @click="isReviewPaneOpen = !isReviewPaneOpen"
+            >
+              Review
+            </button>
+          </template>
         </ContentHeader>
 
         <section class="content-body">
@@ -237,40 +248,50 @@
             </div>
           </template>
           <template v-else>
-            <div class="content-grid">
-              <div class="content-thread">
-                <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
-                  :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
-                  :live-overlay="liveOverlay"
-                  :pending-requests="selectedThreadServerRequests"
-                  @update-scroll-state="onUpdateThreadScrollState"
-                  @fork-thread="onForkThreadFromMessage"
-                  @respond-server-request="onRespondServerRequest" />
+            <div class="content-grid" :class="{ 'has-review-pane': isReviewPaneOpen && !isMobile }">
+              <div class="content-thread-column">
+                <div class="content-thread">
+                  <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
+                    :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
+                    :live-overlay="liveOverlay"
+                    :pending-requests="selectedThreadServerRequests"
+                    @update-scroll-state="onUpdateThreadScrollState"
+                    @fork-thread="onForkThreadFromMessage"
+                    @respond-server-request="onRespondServerRequest" />
+                </div>
+
+                <div class="composer-with-queue">
+                  <QueuedMessages
+                    :messages="selectedThreadQueuedMessages"
+                    @steer="steerQueuedMessage"
+                    @delete="removeQueuedMessage"
+                  />
+                  <ThreadComposer :active-thread-id="composerThreadContextId"
+                    :cwd="composerCwd"
+                    :collaboration-modes="availableCollaborationModes"
+                    :selected-collaboration-mode="selectedCollaborationMode"
+                    :models="availableModelIds"
+                    :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
+                    :skills="installedSkills"
+                    :thread-token-usage="selectedThreadTokenUsage"
+                    :codex-quota="codexQuota"
+                    :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
+                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                    :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                    :dictation-click-to-toggle="dictationClickToToggle"
+                    @update:selected-collaboration-mode="onSelectCollaborationMode"
+                    @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
+                    @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
+                </div>
               </div>
 
-              <div class="composer-with-queue">
-                <QueuedMessages
-                  :messages="selectedThreadQueuedMessages"
-                  @steer="steerQueuedMessage"
-                  @delete="removeQueuedMessage"
-                />
-                <ThreadComposer :active-thread-id="composerThreadContextId"
-                  :cwd="composerCwd"
-                  :collaboration-modes="availableCollaborationModes"
-                  :selected-collaboration-mode="selectedCollaborationMode"
-                  :models="availableModelIds"
-                  :selected-model="selectedModelId" :selected-reasoning-effort="selectedReasoningEffort"
-                  :skills="installedSkills"
-                  :thread-token-usage="selectedThreadTokenUsage"
-                  :codex-quota="codexQuota"
-                  :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
-                  :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                  :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                  :dictation-click-to-toggle="dictationClickToToggle"
-                  @update:selected-collaboration-mode="onSelectCollaborationMode"
-                  @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
-                  @update:selected-reasoning-effort="onSelectReasoningEffort" @interrupt="onInterruptTurn" />
-              </div>
+              <ReviewPane
+                v-if="isReviewPaneOpen && selectedThreadId && composerCwd"
+                :thread-id="selectedThreadId"
+                :cwd="composerCwd"
+                :is-thread-in-progress="isSelectedThreadInProgress"
+                @close="isReviewPaneOpen = false"
+              />
             </div>
           </template>
         </section>
@@ -290,6 +311,7 @@ import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
+import ReviewPane from './components/content/ReviewPane.vue'
 import SkillsHub from './components/content/SkillsHub.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
@@ -387,6 +409,7 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const isReviewPaneOpen = ref(false)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
@@ -1496,6 +1519,9 @@ watch(
     if (name !== 'home') {
       worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
     }
+    if (name !== 'thread') {
+      isReviewPaneOpen.value = false
+    }
   },
 )
 
@@ -1632,12 +1658,28 @@ async function submitFirstMessageForNewThread(
   @apply flex-1 min-h-0 flex flex-col gap-3;
 }
 
+.content-grid.has-review-pane {
+  @apply md:grid md:grid-cols-[minmax(0,1fr)_34rem] md:items-stretch;
+}
+
+.content-thread-column {
+  @apply flex min-h-0 flex-1 flex-col gap-3;
+}
+
 .content-thread {
   @apply flex-1 min-h-0;
 }
 
 .composer-with-queue {
   @apply w-full;
+}
+
+.content-header-review-button {
+  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+}
+
+.content-header-review-button[data-active='true'] {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
 }
 
 .new-thread-empty {
