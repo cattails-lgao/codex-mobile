@@ -906,7 +906,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-run {
-  @apply border-sky-600 bg-sky-600 text-white hover:bg-sky-700;
+  @apply border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700;
+}
+
+.review-pane-refresh {
+  @apply border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100;
 }
 
 .review-pane-banner {
@@ -1155,7 +1159,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-primary-cta {
-  @apply mt-4 border-sky-600 bg-sky-600 text-white hover:bg-sky-700;
+  @apply mt-4 border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700;
 }
 
 .review-pane-sheet-backdrop {

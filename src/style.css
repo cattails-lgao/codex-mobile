@@ -703,7 +703,11 @@
 
 :root.dark .review-pane-run,
 :root.dark .review-pane-primary-cta {
-  @apply border-sky-500 bg-sky-500 text-white hover:bg-sky-400;
+  @apply border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-400;
+}
+
+:root.dark .review-pane-refresh {
+  @apply border-amber-500/35 bg-amber-500/12 text-amber-200 hover:bg-amber-500/20;
 }
 
 :root.dark .review-pane-meta span,
