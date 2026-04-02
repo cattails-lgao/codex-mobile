@@ -1720,7 +1720,7 @@ watch(
 @reference "tailwindcss";
 
 .thread-composer {
-  @apply w-full max-w-175 mx-auto px-2 sm:px-6;
+  @apply w-full max-w-[min(var(--chat-column-max,72rem),100%)] mx-auto;
 }
 
 .thread-composer-shell {
