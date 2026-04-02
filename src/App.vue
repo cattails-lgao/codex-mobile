@@ -216,6 +216,18 @@
               @start-new-thread="onStartNewThreadFromToolbar"
             />
           </template>
+          <template #actions>
+            <div
+              v-if="showThreadContextBadge"
+              class="content-thread-context"
+              :data-state="threadContextBadgeState"
+              :title="threadContextTooltip"
+            >
+              <span class="content-thread-context-label">Context</span>
+              <span class="content-thread-context-value">{{ threadContextPrimaryText }}</span>
+              <span class="content-thread-context-meta">{{ threadContextSecondaryText }}</span>
+            </div>
+          </template>
         </ContentHeader>
 
         <section class="content-body">
@@ -400,7 +412,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow } from './types/codex'
+import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
 import { getPathLeafName, getPathParent } from './pathUtils.js'
@@ -526,6 +538,7 @@ const {
   projectGroups,
   projectDisplayNameById,
   selectedThread,
+  selectedThreadTokenUsage,
   selectedThreadScrollState,
   selectedThreadServerRequests,
   selectedLiveOverlay,
@@ -699,12 +712,69 @@ const composerCwd = computed(() => {
   return selectedThread.value?.cwd?.trim() ?? ''
 })
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
+const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
   isInterruptingTurn.value ||
   isSelectedThreadInProgress.value ||
   selectedThreadServerRequests.value.length > 0,
 )
+
+function formatCompactTokenCount(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  return new Intl.NumberFormat('en-US', {
+    notation: value >= 1000 ? 'compact' : 'standard',
+    maximumFractionDigits: value >= 100000 ? 0 : 1,
+  }).format(Math.max(0, Math.trunc(value)))
+}
+
+function buildThreadContextTooltip(usage: UiThreadTokenUsage | null): string {
+  if (!usage) {
+    return 'Waiting for Codex thread/tokenUsage/updated events for this thread.'
+  }
+
+  const lines = [
+    `Current context usage: ${usage.currentContextTokens.toLocaleString()} tokens`,
+    `Cumulative thread usage: ${usage.total.totalTokens.toLocaleString()} tokens`,
+  ]
+
+  if (typeof usage.modelContextWindow === 'number') {
+    lines.unshift(`Model context window: ${usage.modelContextWindow.toLocaleString()} tokens`)
+    lines.push(`Remaining context: ${(usage.remainingContextTokens ?? 0).toLocaleString()} tokens`)
+  } else {
+    lines.push('Model context window is unavailable in the latest usage event.')
+  }
+
+  return lines.join('\n')
+}
+
+const threadContextBadgeState = computed(() => {
+  const remainingPercent = selectedThreadTokenUsage.value?.remainingContextPercent
+  if (remainingPercent === null || typeof remainingPercent !== 'number') return 'pending'
+  if (remainingPercent <= 10) return 'danger'
+  if (remainingPercent <= 25) return 'warning'
+  return 'ok'
+})
+
+const threadContextPrimaryText = computed(() => {
+  const usage = selectedThreadTokenUsage.value
+  if (!usage) return 'Awaiting data'
+  if (typeof usage.remainingContextTokens === 'number') {
+    return `${formatCompactTokenCount(usage.remainingContextTokens)} left`
+  }
+  return `${formatCompactTokenCount(usage.currentContextTokens)} used`
+})
+
+const threadContextSecondaryText = computed(() => {
+  const usage = selectedThreadTokenUsage.value
+  if (!usage) return 'Updates after the next token usage event'
+  if (typeof usage.modelContextWindow === 'number') {
+    return `${formatCompactTokenCount(usage.currentContextTokens)} used / ${formatCompactTokenCount(usage.modelContextWindow)}`
+  }
+  return 'Window size unavailable'
+})
+
+const threadContextTooltip = computed(() => buildThreadContextTooltip(selectedThreadTokenUsage.value))
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -2199,6 +2269,38 @@ async function submitFirstMessageForNewThread(
 
 .content-body {
   @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-hidden;
+}
+
+.content-thread-context {
+  @apply hidden min-w-0 rounded-xl border px-2.5 py-1 text-left sm:flex sm:flex-col sm:items-end sm:gap-0.5;
+}
+
+.content-thread-context[data-state='ok'] {
+  @apply border-emerald-200 bg-emerald-50;
+}
+
+.content-thread-context[data-state='warning'] {
+  @apply border-amber-200 bg-amber-50;
+}
+
+.content-thread-context[data-state='danger'] {
+  @apply border-rose-200 bg-rose-50;
+}
+
+.content-thread-context[data-state='pending'] {
+  @apply border-zinc-200 bg-zinc-50;
+}
+
+.content-thread-context-label {
+  @apply text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500;
+}
+
+.content-thread-context-value {
+  @apply text-xs font-semibold text-zinc-900;
+}
+
+.content-thread-context-meta {
+  @apply text-[11px] text-zinc-500;
 }
 
 

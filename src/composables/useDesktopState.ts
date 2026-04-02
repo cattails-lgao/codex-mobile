@@ -48,6 +48,7 @@ import type {
   UiRateLimitSnapshot,
   UiServerRequest,
   UiServerRequestReply,
+  UiThreadTokenUsage,
   UiThread,
 } from '../types/codex'
 import { normalizePathForUi, toProjectName } from '../pathUtils.js'
@@ -58,6 +59,7 @@ function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
 
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
+const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const SELECTED_MODEL_STORAGE_KEY = 'codex-web-local.selected-model-id.v1'
 const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
@@ -198,6 +200,90 @@ function loadThreadScrollStateMap(): Record<string, ThreadScrollState> {
 function saveThreadScrollStateMap(state: Record<string, ThreadScrollState>): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(SCROLL_STATE_STORAGE_KEY, JSON.stringify(state))
+}
+
+function normalizeStoredTokenCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value))
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.trunc(parsed))
+    }
+  }
+
+  return null
+}
+
+function normalizeTokenUsageBreakdown(value: unknown): UiThreadTokenUsage['last'] | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const record = value as Record<string, unknown>
+  return {
+    totalTokens: normalizeStoredTokenCount(record.totalTokens) ?? 0,
+    inputTokens: normalizeStoredTokenCount(record.inputTokens) ?? 0,
+    cachedInputTokens: normalizeStoredTokenCount(record.cachedInputTokens) ?? 0,
+    outputTokens: normalizeStoredTokenCount(record.outputTokens) ?? 0,
+    reasoningOutputTokens: normalizeStoredTokenCount(record.reasoningOutputTokens) ?? 0,
+  }
+}
+
+function normalizeThreadTokenUsage(value: unknown): UiThreadTokenUsage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const record = value as Record<string, unknown>
+  const total = normalizeTokenUsageBreakdown(record.total)
+  const last = normalizeTokenUsageBreakdown(record.last)
+  if (!total || !last) return null
+
+  const modelContextWindow = normalizeStoredTokenCount(record.modelContextWindow)
+  const currentContextTokens = last.totalTokens
+  const remainingContextTokens = typeof modelContextWindow === 'number'
+    ? Math.max(modelContextWindow - currentContextTokens, 0)
+    : null
+  const remainingContextPercent = typeof modelContextWindow === 'number' && modelContextWindow > 0
+    ? clamp(Math.round((remainingContextTokens ?? 0) / modelContextWindow * 100), 0, 100)
+    : null
+
+  return {
+    total,
+    last,
+    modelContextWindow,
+    currentContextTokens,
+    remainingContextTokens,
+    remainingContextPercent,
+  }
+}
+
+function loadThreadTokenUsageMap(): Record<string, UiThreadTokenUsage> {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const raw = window.localStorage.getItem(THREAD_TOKEN_USAGE_STORAGE_KEY)
+    if (!raw) return {}
+
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+    const normalizedMap: Record<string, UiThreadTokenUsage> = {}
+    for (const [threadId, usage] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!threadId) continue
+      const normalizedUsage = normalizeThreadTokenUsage(usage)
+      if (normalizedUsage) {
+        normalizedMap[threadId] = normalizedUsage
+      }
+    }
+    return normalizedMap
+  } catch {
+    return {}
+  }
+}
+
+function saveThreadTokenUsageMap(state: Record<string, UiThreadTokenUsage>): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(THREAD_TOKEN_USAGE_STORAGE_KEY, JSON.stringify(state))
 }
 
 function loadSelectedThreadId(): string {
@@ -829,6 +915,7 @@ export function useDesktopState() {
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
   const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
+  const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
 
   const threadTitleById = ref<Record<string, string>>({})
 
@@ -892,6 +979,11 @@ export function useDesktopState() {
     }
   })
   const codexQuota = computed<UiRateLimitSnapshot | null>(() => codexRateLimit.value)
+  const selectedThreadTokenUsage = computed<UiThreadTokenUsage | null>(() => {
+    const threadId = selectedThreadId.value
+    if (!threadId) return null
+    return threadTokenUsageByThreadId.value[threadId] ?? null
+  })
   const messages = computed<UiMessage[]>(() => {
     const threadId = selectedThreadId.value
     if (!threadId) return []
@@ -923,6 +1015,27 @@ export function useDesktopState() {
   function setSelectedModelId(modelId: string): void {
     selectedModelId.value = modelId.trim()
     saveSelectedModelId(selectedModelId.value)
+  }
+
+  function setThreadTokenUsage(threadId: string, usage: UiThreadTokenUsage | null): void {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId) return
+
+    if (!usage) {
+      if (!(normalizedThreadId in threadTokenUsageByThreadId.value)) return
+      threadTokenUsageByThreadId.value = omitKey(threadTokenUsageByThreadId.value, normalizedThreadId)
+      saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
+      return
+    }
+
+    const current = threadTokenUsageByThreadId.value[normalizedThreadId]
+    if (current && JSON.stringify(current) === JSON.stringify(usage)) return
+
+    threadTokenUsageByThreadId.value = {
+      ...threadTokenUsageByThreadId.value,
+      [normalizedThreadId]: usage,
+    }
+    saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
   }
 
   function setWorktreeGitAutomationEnabled(enabled: boolean): void {
@@ -1756,6 +1869,20 @@ export function useDesktopState() {
     return ''
   }
 
+  function readThreadTokenUsageUpdate(
+    notification: RpcNotification,
+  ): { threadId: string; tokenUsage: UiThreadTokenUsage } | null {
+    if (notification.method !== 'thread/tokenUsage/updated') return null
+    const params = asRecord(notification.params)
+    const threadId = extractThreadIdFromNotification(notification)
+    if (!threadId) return null
+
+    const tokenUsage = normalizeThreadTokenUsage(params?.tokenUsage)
+    if (!tokenUsage) return null
+
+    return { threadId, tokenUsage }
+  }
+
   function readTurnErrorMessage(notification: RpcNotification): string {
     if (notification.method !== 'turn/completed') return ''
     const params = asRecord(notification.params)
@@ -2403,6 +2530,11 @@ export function useDesktopState() {
     if (notification.method === 'account/rateLimits/updated') {
       setCodexRateLimit(pickCodexRateLimitSnapshot(notification.params))
       return
+    }
+
+    const tokenUsageUpdate = readThreadTokenUsageUpdate(notification)
+    if (tokenUsageUpdate) {
+      setThreadTokenUsage(tokenUsageUpdate.threadId, tokenUsageUpdate.tokenUsage)
     }
 
     const turnActivity = readTurnActivity(notification)
@@ -3805,6 +3937,7 @@ export function useDesktopState() {
     projectGroups,
     projectDisplayNameById,
     selectedThread,
+    selectedThreadTokenUsage,
     selectedThreadScrollState,
     selectedThreadServerRequests,
     selectedLiveOverlay,
