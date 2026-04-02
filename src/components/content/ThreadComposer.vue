@@ -390,7 +390,6 @@ const props = defineProps<{
   sendWithEnter?: boolean
   inProgressSubmitMode?: 'steer' | 'queue'
   dictationClickToToggle?: boolean
-  prependDraftRequest?: { id: number; text: string } | null
   dictationAutoSend?: boolean
   dictationLanguage?: string
 }>()
@@ -410,7 +409,6 @@ export type SubmitPayload = {
   fileAttachments: FileAttachment[]
   skills: Array<{ name: string; path: string }>
   mode: 'steer' | 'queue'
-  rollbackLatestUserTurn?: boolean
 }
 
 export type ThreadComposerExposed = {
@@ -465,10 +463,7 @@ const {
     dictationFeedback.value = ''
     if (props.dictationAutoSend !== false) {
       const mode = props.isTurnInProgress ? activeInProgressMode.value : 'steer'
-      onSubmit(mode, {
-        rollbackLatestUserTurn: mode === 'steer' && dictationShouldRollbackLatestUserTurn,
-      })
-      dictationShouldRollbackLatestUserTurn = false
+      onSubmit(mode)
       return
     }
     nextTick(() => inputRef.value?.focus())
@@ -503,7 +498,7 @@ const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
-let dictationShouldRollbackLatestUserTurn = false
+
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
 let lastActiveThreadId = ''
@@ -742,7 +737,7 @@ function buildQuotaWeeklyRefreshText(quota: UiRateLimitSnapshot | null): string 
   return weeklyRefreshDate ? `Weekly refresh ${weeklyRefreshDate}` : ''
 }
 
-function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestUserTurn?: boolean }): void {
+function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   const text = draft.value.trim()
   if (!canSubmit.value) return
   emit('submit', {
@@ -751,7 +746,6 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer', options?: { rollbackLatestU
     fileAttachments: [...fileAttachments.value],
     skills: selectedSkills.value.map((s) => ({ name: s.name, path: s.path })),
     mode,
-    rollbackLatestUserTurn: options?.rollbackLatestUserTurn === true,
   })
   clearPersistedDraftForThread(props.activeThreadId)
   clearDraftState()
@@ -908,10 +902,6 @@ function onDictationToggle(): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
-  if (dictationState.value === 'idle') {
-    dictationShouldRollbackLatestUserTurn =
-      props.isTurnInProgress === true && activeInProgressMode.value === 'steer'
-  }
   toggleRecording()
 }
 
@@ -931,8 +921,6 @@ function onDictationPressStart(event: PointerEvent): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
-  dictationShouldRollbackLatestUserTurn =
-    props.isTurnInProgress === true && activeInProgressMode.value === 'steer'
   window.addEventListener('pointerup', onDictationPressEnd)
   window.addEventListener('pointercancel', onDictationPressEnd)
   window.addEventListener('blur', onDictationPressEnd)
@@ -1419,16 +1407,7 @@ watch(
   },
 )
 
-watch(
-  () => props.prependDraftRequest?.id,
-  () => {
-    const text = props.prependDraftRequest?.text?.trim() ?? ''
-    if (!text) return
-    draft.value = draft.value ? `${text}\n${draft.value}` : text
-    onInputChange()
-    nextTick(() => inputRef.value?.focus())
-  },
-)
+
 </script>
 
 <style scoped>

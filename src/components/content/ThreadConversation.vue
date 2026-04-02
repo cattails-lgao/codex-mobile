@@ -512,7 +512,7 @@
                 </div>
               </article>
 
-              <section v-if="effectiveAnchoredSummary(message)" class="file-change-summary-block file-change-summary-block-inline">
+              <section v-if="readAnchoredFileChangeSummary(message)" class="file-change-summary-block file-change-summary-block-inline">
                 <button
                   type="button"
                   class="cmd-row cmd-row-group cmd-compact file-change-summary-row"
@@ -521,11 +521,11 @@
                 >
                   <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isFileChangeSummaryExpanded(message) }">▶</span>
                   <span class="file-change-summary-label">
-                    {{ fileChangeSummaryLabel(effectiveAnchoredSummary(message)) }}
+                    {{ fileChangeSummaryLabel(readAnchoredFileChangeSummary(message)) }}
                   </span>
                   <span class="file-change-summary-status">
                     <span
-                      v-for="part in fileChangeSummaryStatusParts(effectiveAnchoredSummary(message))"
+                      v-for="part in fileChangeSummaryStatusParts(readAnchoredFileChangeSummary(message))"
                       :key="`summary-status:${message.id}:${part.tone}:${part.label}`"
                       class="file-change-signed-count"
                       :data-tone="part.tone"
@@ -538,7 +538,7 @@
                   <div class="file-change-panel-inner">
                     <ul class="file-change-list">
                       <li
-                        v-for="change in effectiveAnchoredSummary(message)?.changes ?? []"
+                        v-for="change in readAnchoredFileChangeSummary(message)?.changes ?? []"
                         :key="`file-change:inline:${message.id}:${change.path}:${change.movedToPath || ''}`"
                         class="file-change-item"
                       >
@@ -549,7 +549,7 @@
                           type="button"
                           class="file-change-path-button"
                           :title="change.path"
-                          @click="openDiffViewerWithCommitFallback(effectiveAnchoredSummary(message), change, message.id)"
+                          @click="openDiffViewer(readAnchoredFileChangeSummary(message), change)"
                         >
                           {{ displayFileChangePath(change.path) }}
                         </button>
@@ -559,7 +559,7 @@
                           type="button"
                           class="file-change-path-button"
                           :title="change.movedToPath"
-                          @click="openDiffViewerWithCommitFallback(effectiveAnchoredSummary(message), change, message.id)"
+                          @click="openDiffViewer(readAnchoredFileChangeSummary(message), change)"
                         >
                           {{ displayFileChangePath(change.movedToPath) }}
                         </button>
@@ -618,9 +618,6 @@
                   <IconTablerCopy class="icon-svg message-copy-icon" />
                   <span class="message-copy-label">{{ copiedResponseAnchorId === message.id ? 'Copied' : 'Copy' }}</span>
                 </button>
-              </div>
-              <div v-if="isRollbackDebug && rollbackDebugStatus(message)" class="rollback-debug-panel">
-                {{ rollbackDebugStatus(message) }}
               </div>
             </article>
           </div>
@@ -880,8 +877,8 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import hljs from 'highlight.js/lib/common'
 import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
-import { getWorktreeMessageChanges, getWorktreeMessageFileDiff, type WorktreeMessageChangedFile } from '../../api/codexGateway'
 import { useMobile } from '../../composables/useMobile'
+
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
@@ -1216,7 +1213,6 @@ const props = defineProps<{
   activeThreadId: string
   cwd: string
   scrollState: ThreadScrollState | null
-  rollbackEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -1571,13 +1567,6 @@ const copyableResponseContentByAnchorId = computed<Record<string, string>>(() =>
 
   for (const [anchorMessageId, summary] of Object.entries(anchoredFileChangeSummaryByAnchorId.value)) {
     if (summary.source !== 'metadata') continue
-    const fileChangeCopy = buildFileChangeCopyText(summary)
-    if (!fileChangeCopy) continue
-    const existing = next[anchorMessageId]?.trim()
-    next[anchorMessageId] = existing ? `${existing}\n\n${fileChangeCopy}` : fileChangeCopy
-  }
-  for (const [anchorMessageId, summary] of Object.entries(commitBasedSummaryByAnchorId.value)) {
-    if (next[anchorMessageId]) continue
     const fileChangeCopy = buildFileChangeCopyText(summary)
     if (!fileChangeCopy) continue
     const existing = next[anchorMessageId]?.trim()
@@ -2101,138 +2090,6 @@ function rollbackResponse(anchorMessageId: string): void {
   const turnId = rollbackTurnIdByAnchorId.value[anchorMessageId]
   if (!turnId) return
   emit('rollback', { turnId })
-}
-
-const isRollbackDebug = (import.meta.env.VITE_ROLLBACK_DEBUG ?? '').toString().trim() === '1'
-
-const commitChangesByTurnId = ref<Record<string, { commitSha: string; files: WorktreeMessageChangedFile[] }>>({})
-const commitChangesLoadingByTurnId = ref<Record<string, boolean>>({})
-const commitChangesErrorByTurnId = ref<Record<string, string>>({})
-const commitDiffByKey = ref<Record<string, string>>({})
-const commitDiffLoadingByKey = ref<Record<string, boolean>>({})
-
-function commitFileKey(turnId: string, filePath: string): string {
-  return `${turnId}::${filePath}`
-}
-
-async function ensureCommitChangesLoaded(turnId: string): Promise<void> {
-  if (!props.rollbackEnabled || !props.cwd) return
-  if (commitChangesByTurnId.value[turnId] || commitChangesLoadingByTurnId.value[turnId]) return
-
-  const userMsg = props.messages.find((m) => m.role === 'user' && m.turnId === turnId)
-  const messageText = userMsg?.text?.trim() ?? ''
-  if (!turnId && !messageText) return
-
-  commitChangesLoadingByTurnId.value = { ...commitChangesLoadingByTurnId.value, [turnId]: true }
-  commitChangesErrorByTurnId.value = { ...commitChangesErrorByTurnId.value, [turnId]: '' }
-  try {
-    const result = await getWorktreeMessageChanges(props.cwd, messageText, turnId || undefined)
-    commitChangesByTurnId.value = { ...commitChangesByTurnId.value, [turnId]: result }
-  } catch (err) {
-    commitChangesErrorByTurnId.value = {
-      ...commitChangesErrorByTurnId.value,
-      [turnId]: err instanceof Error ? err.message : 'Failed to load commit changes',
-    }
-  } finally {
-    commitChangesLoadingByTurnId.value = { ...commitChangesLoadingByTurnId.value, [turnId]: false }
-  }
-}
-
-function rollbackDebugStatus(message: UiMessage): string {
-  const turnId = rollbackTurnIdByAnchorId.value[message.id]
-  if (!turnId) return ''
-  const parts: string[] = []
-  parts.push(`turnId: ${turnId.slice(0, 12)}…`)
-  if (commitChangesLoadingByTurnId.value[turnId]) {
-    parts.push('⏳ loading commit changes')
-  } else if (commitChangesErrorByTurnId.value[turnId]) {
-    parts.push(`❌ ${commitChangesErrorByTurnId.value[turnId]}`)
-  } else if (commitChangesByTurnId.value[turnId]) {
-    const data = commitChangesByTurnId.value[turnId]
-    parts.push(`✅ commit ${data.commitSha.slice(0, 8)}, ${data.files.length} file(s)`)
-  } else {
-    parts.push(props.rollbackEnabled ? '⏳ pending' : '⚪ rollback commits off')
-  }
-  const fallback = readAnchoredFileChangeSummary(message)
-  if (fallback) {
-    parts.push(`fallback: ${fallback.changes.length} change(s) [${fallback.source}]`)
-  }
-  return parts.join(' | ')
-}
-
-async function fetchCommitDiff(turnId: string, filePath: string): Promise<string> {
-  const key = commitFileKey(turnId, filePath)
-  if (commitDiffByKey.value[key]) return commitDiffByKey.value[key]
-  if (commitDiffLoadingByKey.value[key]) return ''
-
-  const changes = commitChangesByTurnId.value[turnId]
-  const commitSha = changes?.commitSha?.trim() ?? ''
-  if (!commitSha || !props.cwd) return ''
-
-  commitDiffLoadingByKey.value = { ...commitDiffLoadingByKey.value, [key]: true }
-  try {
-    const diff = await getWorktreeMessageFileDiff(props.cwd, commitSha, filePath)
-    const result = diff.trim().length > 0 ? diff : '(no diff output)'
-    commitDiffByKey.value = { ...commitDiffByKey.value, [key]: result }
-    return result
-  } catch {
-    return ''
-  } finally {
-    commitDiffLoadingByKey.value = { ...commitDiffLoadingByKey.value, [key]: false }
-  }
-}
-
-const commitBasedSummaryByAnchorId = computed<Record<string, TurnFileChangeSummary>>(() => {
-  if (!props.rollbackEnabled) return {}
-  const result: Record<string, TurnFileChangeSummary> = {}
-
-  for (const [anchorId, turnId] of Object.entries(rollbackTurnIdByAnchorId.value)) {
-    const data = commitChangesByTurnId.value[turnId]
-    if (!data || data.files.length === 0) continue
-    result[anchorId] = {
-      changes: data.files.map<UiFileChange>((f) => ({
-        path: f.path,
-        operation: (f.additions !== null && f.deletions === null) ? 'add'
-          : (f.additions === null && f.deletions !== null) ? 'delete'
-          : 'update',
-        movedToPath: null,
-        diff: commitDiffByKey.value[commitFileKey(turnId, f.path)] ?? '',
-        addedLineCount: f.additions ?? 0,
-        removedLineCount: f.deletions ?? 0,
-      })),
-      sourceMessageIds: [],
-      source: 'metadata',
-    }
-  }
-  return result
-})
-
-function effectiveAnchoredSummary(message: UiMessage): TurnFileChangeSummary | null {
-  const commitSummary = commitBasedSummaryByAnchorId.value[message.id]
-  if (commitSummary) return commitSummary
-  return readAnchoredFileChangeSummary(message)
-}
-
-async function openDiffViewerWithCommitFallback(summary: TurnFileChangeSummary | null, change: UiFileChange, messageId: string): Promise<void> {
-  if (!summary) return
-  if (props.rollbackEnabled) {
-    const turnId = rollbackTurnIdByAnchorId.value[messageId]
-    if (turnId && commitChangesByTurnId.value[turnId]) {
-      const diff = await fetchCommitDiff(turnId, change.path)
-      if (diff) {
-        const enriched: TurnFileChangeSummary = {
-          ...summary,
-          changes: summary.changes.map((c) =>
-            c.path === change.path ? { ...c, diff } : c,
-          ),
-        }
-        const enrichedChange = enriched.changes.find((c) => c.path === change.path) ?? change
-        openDiffViewer(enriched, enrichedChange)
-        return
-      }
-    }
-  }
-  openDiffViewer(summary, change)
 }
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
@@ -3668,11 +3525,6 @@ watch(
       ]),
     )
 
-    if (props.rollbackEnabled) {
-      for (const [, turnId] of Object.entries(rollbackTurnIdByAnchorId.value)) {
-        void ensureCommitChangesLoaded(turnId)
-      }
-    }
 
     await scheduleScrollRestore()
   },
@@ -3724,11 +3576,6 @@ watch(
     localScrollState.value = null
     autoFollowOutput.value = props.scrollState?.isAtBottom !== false
     modalImageUrl.value = ''
-    commitChangesByTurnId.value = {}
-    commitChangesLoadingByTurnId.value = {}
-    commitChangesErrorByTurnId.value = {}
-    commitDiffByKey.value = {}
-    commitDiffLoadingByKey.value = {}
   },
   { flush: 'post' },
 )
@@ -3952,16 +3799,13 @@ onBeforeUnmount(() => {
   @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-slate-500 transition hover:text-slate-900;
 }
 
-.message-rollback-button {
-  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-amber-600/70 transition hover:text-amber-700;
-}
-
-.rollback-debug-panel {
-  @apply text-[9px] leading-tight text-zinc-400 font-mono px-1 py-0.5 mt-0.5 bg-zinc-100 rounded border border-zinc-200 whitespace-pre-wrap;
-}
 
 .message-copy-button[data-copied='true'] {
   @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+
+.message-rollback-button {
+  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-amber-600/70 transition hover:text-amber-700;
 }
 
 .message-fork-icon,

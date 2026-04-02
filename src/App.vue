@@ -162,10 +162,7 @@
                 <span class="sidebar-settings-label">Auto send dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
-              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.rollbackCommits" @click="toggleWorktreeGitAutomation">
-                <span class="sidebar-settings-label">Rollback commits</span>
-                <span class="sidebar-settings-toggle" :class="{ 'is-on': worktreeGitAutomationEnabled }" />
-              </button>
+
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.githubTrendingProjects" @click="toggleGithubTrendingProjects">
                 <span class="sidebar-settings-label">GitHub trending projects</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': showGithubTrendingProjects }" />
@@ -305,7 +302,6 @@
                   :is-turn-in-progress="false"
                   :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                  :prepend-draft-request="rollbackDraftPrependRequest"
                   :dictation-language="dictationLanguage"
                   @submit="onSubmitThreadMessage"
                   @update:selected-collaboration-mode="onSelectCollaborationMode"
@@ -321,7 +317,6 @@
                   :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
-                  :rollback-enabled="worktreeGitAutomationEnabled"
                   @update-scroll-state="onUpdateThreadScrollState"
                   @fork-thread="onForkThreadFromMessage"
                   @rollback="onRollback"
@@ -350,7 +345,6 @@
                   :has-queue-above="selectedThreadQueuedMessages.length > 0"
                   :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                  :prepend-draft-request="rollbackDraftPrependRequest"
                   :dictation-language="dictationLanguage"
                   @update:selected-collaboration-mode="onSelectCollaborationMode"
                   @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
@@ -415,7 +409,7 @@ const SETTINGS_HELP = {
   appearance: 'Switch between system theme, light mode, and dark mode.',
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
-  rollbackCommits: 'When enabled, each message creates a rollback Git commit. On rollback, it resets to the commit before that message.',
+
   githubTrendingProjects: 'Show or hide GitHub trending project cards on the new thread screen.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
@@ -562,7 +556,7 @@ const {
   steerQueuedMessage,
   setSelectedCollaborationMode,
   setSelectedModelId,
-  setWorktreeGitAutomationEnabled,
+
   setSelectedReasoningEffort,
   updateSelectedSpeedMode,
   respondToPendingServerRequest,
@@ -618,19 +612,17 @@ const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
 const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
-const WORKTREE_GIT_AUTOMATION_KEY = 'codex-web-local.worktree-git-automation.v1'
+
 const GITHUB_TRENDING_PROJECTS_KEY = 'codex-web-local.github-trending-projects.v1'
 const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
-const rollbackDraftPrependRequest = ref<{ id: number; text: string } | null>(null)
-let rollbackDraftPrependRequestId = 0
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
-const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, false))
+
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, true))
 const telegramStatus = ref<TelegramStatus>({
   configured: false,
@@ -1287,7 +1279,7 @@ async function syncAfterMobileResume(): Promise<void> {
   }
 }
 
-function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue'; rollbackLatestUserTurn?: boolean }): void {
+function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fileAttachments: Array<{ label: string; path: string; fsPath: string }>; skills: Array<{ name: string; path: string }>; mode: 'steer' | 'queue' }): void {
   const text = payload.text
   scheduleMobileConversationJumpToLatest()
   const editingState = editingQueuedMessageState.value
@@ -1300,10 +1292,6 @@ function onSubmitThreadMessage(payload: { text: string; imageUrls: string[]; fil
   editingQueuedMessageState.value = null
   if (isHomeRoute.value) {
     void submitFirstMessageForNewThread(text, payload.imageUrls, payload.skills, payload.fileAttachments)
-    return
-  }
-  if (payload.rollbackLatestUserTurn === true) {
-    void rollbackAndResendDictation(payload)
     return
   }
   void sendMessageToSelectedThread(text, payload.imageUrls, payload.skills, payload.mode, payload.fileAttachments, queueInsertIndex)
@@ -1381,21 +1369,6 @@ function onEditQueuedMessage(messageId: string): void {
   removeQueuedMessage(messageId)
 }
 
-async function rollbackAndResendDictation(payload: {
-  text: string
-  imageUrls: string[]
-  fileAttachments: Array<{ label: string; path: string; fsPath: string }>
-  skills: Array<{ name: string; path: string }>
-}): Promise<void> {
-  if (isSelectedThreadInProgress.value) {
-    await interruptSelectedThreadTurn()
-  }
-  const rollbackTargetTurnId = latestUserTurnId.value
-  if (rollbackTargetTurnId.length > 0) {
-    await rollbackSelectedThread(rollbackTargetTurnId)
-  }
-  await sendMessageToSelectedThread(payload.text, payload.imageUrls, payload.skills, 'steer', payload.fileAttachments)
-}
 
 function scheduleMobileConversationJumpToLatest(): void {
   if (!isMobile.value || isHomeRoute.value) return
@@ -1566,14 +1539,10 @@ function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
 }
 
-function onRollback(payload: { turnId: string; prependText?: string }): void {
-  const prependText = payload.prependText?.trim() ?? ''
-  if (prependText.length > 0) {
-    rollbackDraftPrependRequestId += 1
-    rollbackDraftPrependRequest.value = { id: rollbackDraftPrependRequestId, text: prependText }
-  }
+function onRollback(payload: { turnId: string }): void {
   void rollbackSelectedThread(payload.turnId)
 }
+
 
 function onExportChat(): void {
   if (isHomeRoute.value || isSkillsRoute.value || typeof document === 'undefined') return
@@ -1711,10 +1680,6 @@ function toggleDictationAutoSend(): void {
   window.localStorage.setItem(DICTATION_AUTO_SEND_KEY, dictationAutoSend.value ? '1' : '0')
 }
 
-function toggleWorktreeGitAutomation(): void {
-  worktreeGitAutomationEnabled.value = !worktreeGitAutomationEnabled.value
-  window.localStorage.setItem(WORKTREE_GIT_AUTOMATION_KEY, worktreeGitAutomationEnabled.value ? '1' : '0')
-}
 
 function toggleGithubTrendingProjects(): void {
   showGithubTrendingProjects.value = !showGithubTrendingProjects.value
@@ -2076,13 +2041,6 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => worktreeGitAutomationEnabled.value,
-  (enabled) => {
-    setWorktreeGitAutomationEnabled(enabled)
-  },
-  { immediate: true },
-)
 
 watch(isMobile, (mobile) => {
   if (mobile && !isSidebarCollapsed.value) {

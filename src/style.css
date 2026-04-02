@@ -495,10 +495,6 @@
   @apply text-amber-400/70 hover:text-amber-300;
 }
 
-:root.dark .rollback-debug-panel {
-  @apply bg-zinc-800 border-zinc-700 text-zinc-500;
-}
-
 :root.dark .message-inline-code {
   @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
 }

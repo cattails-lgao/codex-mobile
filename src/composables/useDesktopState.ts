@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import {
-  autoCommitWorktreeChanges,
+
   archiveThread,
   forkThread,
   getAvailableCollaborationModes,
@@ -24,7 +24,7 @@ import {
   persistThreadTitle,
   generateThreadTitle,
   resumeThread,
-  rollbackWorktreeToMessage,
+
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
@@ -70,7 +70,6 @@ const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
-const AUTO_COMMIT_MESSAGE_FALLBACK = 'Auto-commit from Codex rollback chat turn'
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -841,6 +840,7 @@ export function useDesktopState() {
   const isInterruptingTurn = ref(false)
   const isUpdatingSpeedMode = ref(false)
   const isRollingBack = ref(false)
+
   const error = ref('')
   const isPolling = ref(false)
   const hasLoadedThreads = ref(false)
@@ -855,7 +855,7 @@ export function useDesktopState() {
   let shouldAutoScrollOnNextAgentEvent = false
   const pendingTurnStartsById = new Map<string, TurnStartedInfo>()
   const fallbackRetryInFlightThreadIds = new Set<string>()
-  const isWorktreeGitAutomationEnabled = ref(true)
+
 
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
@@ -925,9 +925,6 @@ export function useDesktopState() {
     saveSelectedModelId(selectedModelId.value)
   }
 
-  function setWorktreeGitAutomationEnabled(enabled: boolean): void {
-    isWorktreeGitAutomationEnabled.value = enabled
-  }
 
   function setSelectedCollaborationMode(mode: CollaborationModeKind): void {
     const nextMode: CollaborationModeKind = mode === 'plan' ? 'plan' : 'default'
@@ -973,33 +970,7 @@ export function useDesktopState() {
     pendingTurnRequestByThreadId.value = omitKey(pendingTurnRequestByThreadId.value, threadId)
   }
 
-  async function autoCommitCompletedWorktreeTurn(threadId: string, commitMessage: string, turnId: string): Promise<void> {
-    if (!isWorktreeGitAutomationEnabled.value) return
-    const normalizedMessage = commitMessage.trim()
-    if (!normalizedMessage) return
-    const thread = allThreads.value.find((row) => row.id === threadId)
-    if (!thread) return
-    const cwd = thread.cwd.trim()
-    if (!cwd) return
-    await autoCommitWorktreeChanges(cwd, normalizedMessage, turnId)
-    pendingThreadsRefresh = true
-  }
 
-  async function rollbackWorktreeGitToTurnMessage(threadId: string, turnId: string): Promise<void> {
-    if (!isWorktreeGitAutomationEnabled.value) return
-    const thread = allThreads.value.find((row) => row.id === threadId)
-    if (!thread) return
-    const cwd = thread.cwd.trim()
-    if (!cwd) return
-
-    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    const rollbackUserMessage = persisted.find((message) => message.role === 'user' && message.turnId === turnId)
-    const rollbackMessageText = rollbackUserMessage?.text?.trim() ?? ''
-    if (!rollbackMessageText) return
-
-    await rollbackWorktreeToMessage(cwd, rollbackMessageText)
-    pendingThreadsRefresh = true
-  }
 
   async function retryPendingTurnWithFallback(threadId: string): Promise<void> {
     if (fallbackRetryInFlightThreadIds.has(threadId)) return
@@ -2472,12 +2443,6 @@ export function useDesktopState() {
         clearPendingTurnRequest(completedTurn.threadId)
         void processQueuedMessages(completedTurn.threadId)
       }
-      if (!turnErrorMessage && !shouldRetryWithFallback) {
-        const commitMessage = pendingTurnRequest?.text?.trim() || AUTO_COMMIT_MESSAGE_FALLBACK
-        void autoCommitCompletedWorktreeTurn(completedTurn.threadId, commitMessage, completedTurn.turnId).catch(() => {
-          // Keep chat flow resilient when auto-commit fails.
-        })
-      }
     }
 
     if (turnErrorMessage) {
@@ -3419,7 +3384,6 @@ export function useDesktopState() {
     isRollingBack.value = true
     error.value = ''
     try {
-      await rollbackWorktreeGitToTurnMessage(threadId, turnId)
       const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])
@@ -3825,6 +3789,7 @@ export function useDesktopState() {
     isInterruptingTurn,
     isUpdatingSpeedMode,
     isRollingBack,
+
     error,
     refreshAll,
     refreshSkills,
@@ -3837,6 +3802,7 @@ export function useDesktopState() {
     forkThreadById,
     forkThreadFromTurn,
     rollbackSelectedThread,
+
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,
@@ -3845,7 +3811,7 @@ export function useDesktopState() {
     steerQueuedMessage,
     setSelectedCollaborationMode,
     setSelectedModelId,
-    setWorktreeGitAutomationEnabled,
+
     setSelectedReasoningEffort,
     updateSelectedSpeedMode,
     respondToPendingServerRequest,
