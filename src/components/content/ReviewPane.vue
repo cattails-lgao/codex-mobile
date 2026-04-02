@@ -21,7 +21,7 @@
     </header>
 
     <div class="review-pane-toolbar">
-      <div class="review-pane-toolbar-main">
+      <div class="review-pane-toolbar-tabs">
         <div class="review-pane-segmented review-pane-segmented-primary">
           <button
             v-for="tab in reviewTabs"
@@ -32,20 +32,6 @@
             @click="activeTab = tab.value"
           >
             {{ tab.label }}
-          </button>
-        </div>
-
-        <div class="review-pane-toolbar-actions">
-          <button
-            type="button"
-            class="review-pane-run"
-            :disabled="!canRunReview || isRunningReview"
-            @click="runReview"
-          >
-            {{ isRunningReview ? 'Reviewing…' : 'Run review' }}
-          </button>
-          <button type="button" class="review-pane-refresh" :disabled="isLoadingSnapshot" @click="reloadAll">
-            Refresh
           </button>
         </div>
       </div>
@@ -113,6 +99,20 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <div class="review-pane-toolbar-actions">
+        <button
+          type="button"
+          class="review-pane-run"
+          :disabled="!canRunReview || isRunningReview"
+          @click="runReview"
+        >
+          {{ isRunningReview ? 'Reviewing…' : 'Run review' }}
+        </button>
+        <button type="button" class="review-pane-refresh" :disabled="isLoadingSnapshot" @click="reloadAll">
+          Refresh
+        </button>
       </div>
     </div>
 
@@ -1119,8 +1119,8 @@ onBeforeUnmount(() => {
   @apply flex flex-col gap-2 border-b border-zinc-100 px-3 py-2.5;
 }
 
-.review-pane-toolbar-main {
-  @apply flex items-center gap-2;
+.review-pane-toolbar-tabs {
+  @apply min-w-0;
 }
 
 .review-pane-toolbar-controls {
@@ -1173,7 +1173,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-toolbar-actions {
-  @apply ml-auto flex shrink-0 items-center gap-1.5;
+  @apply flex shrink-0 items-center gap-1.5;
 }
 
 .review-pane-run {
@@ -1555,10 +1555,6 @@ onBeforeUnmount(() => {
     @apply gap-1.5 px-3 py-2;
   }
 
-  .review-pane-toolbar-main {
-    @apply items-start;
-  }
-
   .review-pane-toolbar-controls {
     @apply grid grid-cols-1 gap-1.5;
   }
@@ -1687,6 +1683,28 @@ onBeforeUnmount(() => {
 
   .review-pane-sheet-list .review-pane-file-delta {
     @apply text-[11px];
+  }
+}
+
+@media (min-width: 768px) {
+  .review-pane-toolbar {
+    @apply flex-row items-center gap-2.5;
+  }
+
+  .review-pane-toolbar-tabs {
+    @apply flex-1;
+  }
+
+  .review-pane-toolbar-controls {
+    @apply min-w-0 flex-nowrap;
+  }
+
+  .review-pane-control-cluster {
+    @apply shrink-0;
+  }
+
+  .review-pane-toolbar-actions {
+    @apply ml-auto;
   }
 }
 </style>
