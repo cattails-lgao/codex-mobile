@@ -50,6 +50,7 @@ type ReviewSnapshot = {
   scope: ReviewScope
   workspaceView: ReviewWorkspaceView
   baseBranch: string | null
+  baseBranchOptions: string[]
   headBranch: string | null
   mergeBaseSha: string | null
   generatedAtIso: string
@@ -74,6 +75,12 @@ type CommandResult = {
 type DetectedBaseBranch = {
   displayName: string
   gitRef: string
+}
+
+function normalizeBaseBranchDisplayName(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return trimmed.startsWith('origin/') ? trimmed.slice('origin/'.length) : trimmed
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -217,6 +224,50 @@ async function detectBaseBranch(repoRoot: string): Promise<DetectedBaseBranch | 
   }
 
   return null
+}
+
+async function listBaseBranchOptions(repoRoot: string): Promise<string[]> {
+  const result = await runCommandResult(
+    'git',
+    ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes/origin'],
+    { cwd: repoRoot },
+  )
+  if (result.code !== 0) {
+    return []
+  }
+
+  const options: string[] = []
+  for (const line of result.stdout.split(/\r?\n/u)) {
+    const normalized = normalizeBaseBranchDisplayName(line)
+    if (!normalized || normalized === 'HEAD' || normalized.endsWith('/HEAD')) continue
+    if (!options.includes(normalized)) {
+      options.push(normalized)
+    }
+  }
+
+  for (const fallback of ['main', 'master']) {
+    if (!options.includes(fallback)) {
+      options.push(fallback)
+    }
+  }
+
+  return options
+}
+
+async function resolveBaseBranch(repoRoot: string, requestedBaseBranch = ''): Promise<DetectedBaseBranch | null> {
+  const normalizedRequested = normalizeBaseBranchDisplayName(requestedBaseBranch)
+  if (normalizedRequested) {
+    for (const candidate of [normalizedRequested, `origin/${normalizedRequested}`]) {
+      if (await gitRefExists(repoRoot, candidate)) {
+        return {
+          displayName: normalizedRequested,
+          gitRef: candidate,
+        }
+      }
+    }
+  }
+
+  return await detectBaseBranch(repoRoot)
 }
 
 async function detectHeadBranch(repoRoot: string): Promise<string | null> {
@@ -560,6 +611,7 @@ async function buildReviewSnapshot(
   cwd: string,
   scope: ReviewScope,
   workspaceView: ReviewWorkspaceView,
+  requestedBaseBranch = '',
 ): Promise<ReviewSnapshot> {
   const normalizedCwd = normalizeInputCwd(cwd)
   await ensureDirectory(normalizedCwd)
@@ -573,6 +625,7 @@ async function buildReviewSnapshot(
       scope,
       workspaceView,
       baseBranch: null,
+      baseBranchOptions: [],
       headBranch: null,
       mergeBaseSha: null,
       generatedAtIso: new Date().toISOString(),
@@ -585,8 +638,9 @@ async function buildReviewSnapshot(
     }
   }
 
-  const [baseBranch, headBranch] = await Promise.all([
-    detectBaseBranch(gitRoot),
+  const [baseBranch, baseBranchOptions, headBranch] = await Promise.all([
+    resolveBaseBranch(gitRoot, requestedBaseBranch),
+    listBaseBranchOptions(gitRoot),
     detectHeadBranch(gitRoot),
   ])
 
@@ -611,6 +665,7 @@ async function buildReviewSnapshot(
     scope,
     workspaceView,
     baseBranch: baseBranch?.displayName ?? null,
+    baseBranchOptions,
     headBranch,
     mergeBaseSha,
     generatedAtIso: new Date().toISOString(),
@@ -743,6 +798,7 @@ export async function handleReviewRoutes(
     const cwd = url.searchParams.get('cwd')?.trim() ?? ''
     const scope = url.searchParams.get('scope') === 'baseBranch' ? 'baseBranch' : 'workspace'
     const workspaceView = url.searchParams.get('workspaceView') === 'staged' ? 'staged' : 'unstaged'
+    const baseBranch = url.searchParams.get('baseBranch')?.trim() ?? ''
     if (!cwd) {
       setJson(res, 400, { error: 'Missing cwd' })
       return true
@@ -750,7 +806,7 @@ export async function handleReviewRoutes(
 
     try {
       setJson(res, 200, {
-        data: await buildReviewSnapshot(cwd, scope, workspaceView),
+        data: await buildReviewSnapshot(cwd, scope, workspaceView, baseBranch),
       })
     } catch (error) {
       setJson(res, 500, { error: getErrorMessage(error, 'Failed to load review snapshot') })

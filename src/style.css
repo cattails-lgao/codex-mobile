@@ -681,6 +681,14 @@
   @apply text-zinc-500;
 }
 
+:root.dark .review-pane-branch-select-wrap {
+  @apply border-zinc-600 bg-zinc-800;
+}
+
+:root.dark .review-pane-branch-select {
+  @apply text-zinc-200;
+}
+
 :root.dark .review-pane-segmented {
   @apply bg-zinc-800;
 }

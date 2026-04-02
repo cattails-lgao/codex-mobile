@@ -74,6 +74,24 @@
           </div>
         </div>
 
+        <div v-if="activeScope === 'baseBranch' && snapshot?.baseBranchOptions.length" class="review-pane-control-cluster">
+          <span class="review-pane-control-label">Branch</span>
+          <label class="review-pane-branch-select-wrap">
+            <select
+              v-model="selectedBaseBranch"
+              class="review-pane-branch-select"
+            >
+              <option
+                v-for="branch in snapshot.baseBranchOptions"
+                :key="branch"
+                :value="branch"
+              >
+                {{ branch }}
+              </option>
+            </select>
+          </label>
+        </div>
+
         <div v-if="activeScope === 'workspace'" class="review-pane-control-cluster">
           <span class="review-pane-control-label">Changes</span>
           <div class="review-pane-segmented">
@@ -374,6 +392,8 @@ const activeTab = ref<UiReviewTab>('changes')
 const activeScope = ref<UiReviewScope>('workspace')
 const workspaceView = ref<UiReviewWorkspaceView>('unstaged')
 const snapshot = ref<UiReviewSnapshot | null>(null)
+const selectedBaseBranch = ref('')
+const isSyncingBaseBranch = ref(false)
 const selectedFileId = ref('')
 const selectedHunkId = ref('')
 const isFileSheetOpen = ref(false)
@@ -551,7 +571,25 @@ async function loadSnapshot(): Promise<void> {
   isLoadingSnapshot.value = true
   snapshotError.value = ''
   try {
-    const nextSnapshot = await getReviewSnapshot(props.cwd, activeScope.value, workspaceView.value)
+    const desiredBaseBranch = activeScope.value === 'baseBranch' ? selectedBaseBranch.value.trim() : ''
+    const nextSnapshot = await getReviewSnapshot(
+      props.cwd,
+      activeScope.value,
+      workspaceView.value,
+      desiredBaseBranch || null,
+    )
+    if (nextSnapshot.baseBranchOptions.length > 0) {
+      const normalizedBaseBranch = nextSnapshot.baseBranch ?? nextSnapshot.baseBranchOptions[0] ?? ''
+      if (selectedBaseBranch.value !== normalizedBaseBranch) {
+        isSyncingBaseBranch.value = true
+        selectedBaseBranch.value = normalizedBaseBranch
+      }
+    } else {
+      if (selectedBaseBranch.value !== '') {
+        isSyncingBaseBranch.value = true
+        selectedBaseBranch.value = ''
+      }
+    }
     snapshot.value = nextSnapshot
     const hasSelectedFile = nextSnapshot.files.some((file) => file.id === selectedFileId.value)
     if (!hasSelectedFile) {
@@ -663,7 +701,7 @@ async function runReview(): Promise<void> {
       props.threadId,
       activeScope.value,
       workspaceView.value,
-      snapshot.value?.baseBranch ?? null,
+      selectedBaseBranch.value || (snapshot.value?.baseBranch ?? null),
     )
   } catch (error) {
     isRunningReview.value = false
@@ -782,6 +820,16 @@ watch(
   },
 )
 
+watch(selectedBaseBranch, (branch, previous) => {
+  if (isSyncingBaseBranch.value) {
+    isSyncingBaseBranch.value = false
+    return
+  }
+  if (activeScope.value !== 'baseBranch') return
+  if (!branch || branch === previous) return
+  void loadSnapshot()
+})
+
 watch(selectedFile, (file) => {
   if (!file) return
   if (!file.hunks.some((hunk) => hunk.id === selectedHunkId.value)) {
@@ -870,6 +918,14 @@ onBeforeUnmount(() => {
 
 .review-pane-control-label {
   @apply shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400;
+}
+
+.review-pane-branch-select-wrap {
+  @apply inline-flex min-w-[9rem] items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 shadow-sm;
+}
+
+.review-pane-branch-select {
+  @apply w-full appearance-none bg-transparent text-[11px] font-medium text-zinc-700 outline-none;
 }
 
 .review-pane-segmented {
@@ -1256,6 +1312,14 @@ onBeforeUnmount(() => {
 
   .review-pane-control-label {
     @apply text-[9px];
+  }
+
+  .review-pane-branch-select-wrap {
+    @apply min-w-0 flex-1 px-2 py-0.75;
+  }
+
+  .review-pane-branch-select {
+    @apply text-[12px];
   }
 
   .review-pane-segmented {

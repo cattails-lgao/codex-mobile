@@ -140,6 +140,7 @@ export type UiReviewSnapshot = {
   scope: UiReviewScope
   workspaceView: UiReviewWorkspaceView
   baseBranch: string | null
+  baseBranchOptions: string[]
   headBranch: string | null
   mergeBaseSha: string | null
   generatedAtIso: string

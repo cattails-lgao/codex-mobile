@@ -523,6 +523,11 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
     scope,
     workspaceView,
     baseBranch: readString(data?.baseBranch),
+    baseBranchOptions: Array.isArray(data?.baseBranchOptions)
+      ? data.baseBranchOptions
+        .map((entry) => readString(entry))
+        .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+      : [],
     headBranch: readString(data?.headBranch),
     mergeBaseSha: readString(data?.mergeBaseSha),
     generatedAtIso: readString(data?.generatedAtIso) ?? '',
@@ -1095,12 +1100,12 @@ export async function getReviewSnapshot(
   cwd: string,
   scope: UiReviewScope,
   workspaceView: UiReviewWorkspaceView,
+  baseBranch?: string | null,
 ): Promise<UiReviewSnapshot> {
-  const query = new URLSearchParams({
-    cwd,
-    scope,
-    workspaceView,
-  })
+  const query = new URLSearchParams({ cwd, scope, workspaceView })
+  if (baseBranch && baseBranch.trim()) {
+    query.set('baseBranch', baseBranch.trim())
+  }
   const response = await fetch(`/codex-api/review/snapshot?${query.toString()}`)
   const payload = (await response.json()) as unknown
   if (!response.ok) {
