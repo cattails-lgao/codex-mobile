@@ -880,13 +880,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import hljs from 'highlight.js/lib/common'
 import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { useMobile } from '../../composables/useMobile'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerX from '../icons/IconTablerX.vue'
+
+type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsedAutoCommandIds = ref<Set<string>>(new Set())
@@ -1284,10 +1285,26 @@ let bottomLockFramesLeft = 0
 let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const failedMarkdownImageKeys = ref<Set<string>>(new Set())
+const highlightJsModule = ref<HighlightJsModule | null>(null)
+let highlightJsLoader: Promise<void> | null = null
 
 const showJumpToLatestButton = computed(
   () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
 )
+
+function ensureHighlightJsLoaded(): Promise<void> {
+  if (highlightJsModule.value) return Promise.resolve()
+  if (!highlightJsLoader) {
+    highlightJsLoader = import('highlight.js/lib/common')
+      .then((module) => {
+        highlightJsModule.value = module.default
+      })
+      .finally(() => {
+        highlightJsLoader = null
+      })
+  }
+  return highlightJsLoader
+}
 
 type ParsedToolQuestion = {
   id: string
@@ -3037,10 +3054,12 @@ function normalizeCodeLanguage(language: string): string {
 function renderHighlightedCodeAsHtml(language: string, value: string): string {
   const normalizedLanguage = normalizeCodeLanguage(language)
   if (!normalizedLanguage) return escapeHtml(value)
+  const highlighter = highlightJsModule.value
+  if (!highlighter) return escapeHtml(value)
 
   try {
-    if (hljs.getLanguage(normalizedLanguage)) {
-      return hljs.highlight(value, {
+    if (highlighter.getLanguage(normalizedLanguage)) {
+      return highlighter.highlight(value, {
         language: normalizedLanguage,
         ignoreIllegals: true,
       }).value
@@ -3487,6 +3506,15 @@ watch(
 
     await scheduleScrollRestore()
   },
+)
+
+watch(
+  () => props.messages.some((message) => message.text.includes('```')),
+  (hasCodeBlocks) => {
+    if (!hasCodeBlocks || highlightJsModule.value) return
+    void ensureHighlightJsLoaded()
+  },
+  { immediate: true },
 )
 
 watch(

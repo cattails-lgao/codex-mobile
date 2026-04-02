@@ -1,6 +1,4 @@
 import { computed, ref } from 'vue'
-import { initializeApp, getApp, getApps } from 'firebase/app'
-import { getAuth, GithubAuthProvider, signInWithPopup } from 'firebase/auth'
 
 type ToastType = 'success' | 'error'
 
@@ -35,6 +33,19 @@ const firebaseConfig = {
   storageBucket: 'gptcall-416910.appspot.com',
   messagingSenderId: '99275526699',
   appId: '1:99275526699:web:3b623e1e2996108b52106e',
+}
+
+let firebaseGithubAuthLoader:
+  Promise<[typeof import('firebase/app'), typeof import('firebase/auth')]> | null = null
+
+function loadFirebaseGithubAuth() {
+  if (!firebaseGithubAuthLoader) {
+    firebaseGithubAuthLoader = Promise.all([
+      import('firebase/app'),
+      import('firebase/auth'),
+    ])
+  }
+  return firebaseGithubAuthLoader
 }
 
 export function useGithubSkillsSync(options: UseGithubSkillsSyncOptions) {
@@ -109,6 +120,9 @@ export function useGithubSkillsSync(options: UseGithubSkillsSyncOptions) {
 
   async function startGithubFirebaseLogin(): Promise<void> {
     try {
+      const [firebaseApp, firebaseAuth] = await loadFirebaseGithubAuth()
+      const { getApp, getApps, initializeApp } = firebaseApp
+      const { getAuth, GithubAuthProvider, signInWithPopup } = firebaseAuth
       const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
       const auth = getAuth(app)
       const provider = new GithubAuthProvider()
