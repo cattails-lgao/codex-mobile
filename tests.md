@@ -216,6 +216,37 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Return appearance and runtime selection to the previous user preference.
 
+### Feature: Home screen project picker improves project selection and creation UX
+
+#### Prerequisites
+- App is running from this repository.
+- Home/new-thread screen is open.
+- Access to the server filesystem used by codexUI.
+- At least one writable parent directory exists for creating a test folder.
+
+#### Steps
+1. On the home screen, verify the primary folder action is `Select folder`.
+2. Click `Select folder` and confirm codexUI opens an in-page folder picker card instead of navigating away from the home screen.
+3. Confirm the picker shows the current absolute folder with an `Open` action, a `Show hidden folders` toggle, a toggle-style `New folder` action, a folder filter input, and a scrollable single-line list of subfolders inside the same UI shell.
+4. Enter a substring in the filter input and verify the list narrows to folders whose names contain that text, while `..` remains available for navigation.
+5. When the current folder has a parent, confirm the first row in the list is `..`, use it to navigate upward, then browse into an existing subfolder and use the `Open` action without leaving the home screen.
+6. Confirm hidden folders are not shown by default, then enable `Show hidden folders` and verify hidden folders appear before regular folders in the list.
+7. Use `New folder` from inside the picker and confirm a compact inline create row appears below the controls without repeating the current directory path.
+8. Enter a single folder name and confirm the `Create` action sits on the same row as the text input.
+9. Click `New folder` again and confirm the inline create row collapses instead of showing a separate cancel action.
+10. Re-open the inline create row, submit a single folder name, and confirm codexUI creates the folder and navigates the picker into that new child directory without immediately opening it as the selected project.
+11. From that newly created directory, click `Open` and confirm it becomes the selected folder in codexUI.
+
+#### Expected Results
+- The home screen uses a single `Select folder` entry point for choosing or creating a local project.
+- Folder creation stays inside the same integrated picker card rather than using a separate browser-style or standalone create panel.
+- Large directory listings stay contained inside a scrollable picker area instead of overlapping the rest of the home screen or composer area.
+- Parent navigation appears as a `..` row in the list, folder names can be filtered by substring, and hidden folders remain hidden unless explicitly requested.
+- Creating a folder from the picker uses a compact single-row composer, can be dismissed by clicking `New folder` again, and creates the folder inside the current directory before navigating into it while keeping final project selection explicit via `Open`.
+
+#### Rollback/Cleanup
+- Delete any temporary test folder created during the manual check.
+
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
 #### Prerequisites

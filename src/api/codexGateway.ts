@@ -147,6 +147,17 @@ export type GithubTipsScope =
   | 'trending-weekly'
   | 'trending-monthly'
 
+export type LocalDirectoryEntry = {
+  name: string
+  path: string
+}
+
+export type LocalDirectoryListing = {
+  path: string
+  parentPath: string
+  entries: LocalDirectoryEntry[]
+}
+
 function normalizeGithubProjectDescription(fullName: string, rawDescription: string): string {
   const description = rawDescription.trim()
   if (!description) return ''
@@ -1133,6 +1144,51 @@ export async function getHomeDirectory(): Promise<string> {
   return typeof data.path === 'string' ? data.path.trim() : ''
 }
 
+export async function listLocalDirectories(path: string, options?: { showHidden?: boolean }): Promise<LocalDirectoryListing> {
+  const query = new URLSearchParams({ path })
+  if (options?.showHidden === true) {
+    query.set('showHidden', '1')
+  }
+  const response = await fetch(`/codex-local-directories?${query.toString()}`)
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to load local directories')
+    throw new Error(message)
+  }
+
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const entriesRaw = Array.isArray(data.entries) ? data.entries : []
+
+  return {
+    path: typeof data.path === 'string' ? normalizePathForUi(data.path) : '',
+    parentPath: typeof data.parentPath === 'string' ? normalizePathForUi(data.parentPath) : '',
+    entries: entriesRaw.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+      const record = item as Record<string, unknown>
+      const name = typeof record.name === 'string' ? record.name.trim() : ''
+      const entryPath = typeof record.path === 'string' ? normalizePathForUi(record.path) : ''
+      return name && entryPath ? [{ name, path: entryPath }] : []
+    }),
+  }
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  const raw = await response.text()
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    throw new Error(`Expected JSON response from ${response.url || 'request'}`)
+  }
+}
+
 export async function setWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
   const response = await fetch('/codex-api/workspace-roots-state', {
     method: 'PUT',
@@ -1169,6 +1225,28 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
       : {}
   const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
   return normalizedPath
+}
+
+export async function createLocalDirectory(path: string): Promise<string> {
+  const response = await fetch('/codex-api/local-directory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to create local directory')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  return typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
 }
 
 export async function getProjectRootSuggestion(basePath: string): Promise<{ name: string; path: string }> {
