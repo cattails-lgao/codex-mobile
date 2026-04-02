@@ -630,7 +630,7 @@ let rollbackDraftPrependRequestId = 0
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
-const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, true))
+const worktreeGitAutomationEnabled = ref(loadBoolPref(WORKTREE_GIT_AUTOMATION_KEY, false))
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, true))
 const telegramStatus = ref<TelegramStatus>({
   configured: false,
