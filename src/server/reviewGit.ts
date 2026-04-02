@@ -484,6 +484,11 @@ function parseDiffBlocks(diffText: string): string[][] {
   return blocks
 }
 
+function serializePatch(lines: string[]): string {
+  if (lines.length === 0) return ''
+  return `${lines.join('\n')}\n`
+}
+
 function parseReviewSnapshotFile(repoRoot: string, blockLines: string[], fileIndex: number): ReviewSnapshotFile | null {
   if (blockLines.length === 0) return null
 
@@ -557,7 +562,7 @@ function parseReviewSnapshotFile(repoRoot: string, blockLines: string[], fileInd
       hunks.push({
         id: hunkId,
         header,
-        patch: [...headerLines, ...currentHunk].join('\n').trimEnd(),
+        patch: serializePatch([...headerLines, ...currentHunk]),
         addedLineCount: rendered.addedLineCount,
         removedLineCount: rendered.removedLineCount,
         oldStart: match ? Number(match[1]) : null,
@@ -596,7 +601,7 @@ function parseReviewSnapshotFile(repoRoot: string, blockLines: string[], fileInd
     operation,
     addedLineCount,
     removedLineCount,
-    diff: blockLines.join('\n').trimEnd(),
+    diff: serializePatch(blockLines),
     hunks,
   }
 }
@@ -681,7 +686,8 @@ async function buildReviewSnapshot(
 async function writePatchFile(patch: string): Promise<string> {
   const dir = await mkdir(join(tmpdir(), 'codexui-review-patches'), { recursive: true }).then(() => join(tmpdir(), 'codexui-review-patches'))
   const filePath = join(dir, `${Date.now()}-${Math.random().toString(16).slice(2)}.patch`)
-  await writeFile(filePath, patch, 'utf8')
+  const normalizedPatch = patch.endsWith('\n') ? patch : `${patch}\n`
+  await writeFile(filePath, normalizedPatch, 'utf8')
   return filePath
 }
 
