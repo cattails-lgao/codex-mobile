@@ -491,6 +491,10 @@
   @apply border-emerald-500/40 bg-emerald-500/10 text-emerald-200;
 }
 
+:root.dark .message-rollback-button {
+  @apply text-amber-400/70 hover:text-amber-300;
+}
+
 :root.dark .message-inline-code {
   @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
 }

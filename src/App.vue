@@ -326,8 +326,10 @@
                   :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
                   :live-overlay="liveOverlay"
                   :pending-requests="selectedThreadServerRequests"
+                  :rollback-enabled="worktreeGitAutomationEnabled"
                   @update-scroll-state="onUpdateThreadScrollState"
                   @fork-thread="onForkThreadFromMessage"
+                  @rollback="onRollback"
                   @respond-server-request="onRespondServerRequest" />
               </div>
 

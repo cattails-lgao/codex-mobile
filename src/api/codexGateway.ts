@@ -467,7 +467,8 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
     threadId,
     includeTurns: true,
   })
-  return await enrichThreadMessagesWithFallback(threadId, normalizeThreadMessagesV2(payload))
+  const normalized = normalizeThreadMessagesV2(payload)
+  return await enrichThreadMessagesWithFallback(threadId, normalized)
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{
@@ -480,7 +481,8 @@ async function getThreadDetailV2(threadId: string): Promise<{
     threadId,
     includeTurns: true,
   })
-  const messages = await enrichThreadMessagesWithFallback(threadId, normalizeThreadMessagesV2(payload))
+  const normalized = normalizeThreadMessagesV2(payload)
+  const messages = await enrichThreadMessagesWithFallback(threadId, normalized)
   return {
     messages,
     inProgress: readThreadInProgressFromResponse(payload),
