@@ -93,6 +93,83 @@ export type UiFileChange = {
   removedLineCount: number
 }
 
+export type UiReviewTab = 'changes' | 'findings'
+export type UiReviewScope = 'workspace' | 'baseBranch'
+export type UiReviewWorkspaceView = 'unstaged' | 'staged'
+export type UiReviewAction = 'stage' | 'unstage' | 'revert'
+export type UiReviewActionLevel = 'all' | 'file' | 'hunk'
+export type UiReviewFileOperation = 'add' | 'delete' | 'update' | 'rename'
+
+export type UiReviewLine = {
+  key: string
+  kind: 'meta' | 'hunk' | 'add' | 'remove' | 'context'
+  text: string
+  oldLine: number | null
+  newLine: number | null
+}
+
+export type UiReviewHunk = {
+  id: string
+  header: string
+  patch: string
+  addedLineCount: number
+  removedLineCount: number
+  oldStart: number | null
+  oldLineCount: number
+  newStart: number | null
+  newLineCount: number
+  lines: UiReviewLine[]
+}
+
+export type UiReviewFile = {
+  id: string
+  path: string
+  absolutePath: string
+  previousPath: string | null
+  previousAbsolutePath: string | null
+  operation: UiReviewFileOperation
+  addedLineCount: number
+  removedLineCount: number
+  diff: string
+  hunks: UiReviewHunk[]
+}
+
+export type UiReviewSnapshot = {
+  cwd: string
+  gitRoot: string | null
+  isGitRepo: boolean
+  scope: UiReviewScope
+  workspaceView: UiReviewWorkspaceView
+  baseBranch: string | null
+  baseBranchOptions: string[]
+  headBranch: string | null
+  mergeBaseSha: string | null
+  generatedAtIso: string
+  summary: {
+    fileCount: number
+    addedLineCount: number
+    removedLineCount: number
+  }
+  files: UiReviewFile[]
+}
+
+export type UiReviewFinding = {
+  id: string
+  title: string
+  body: string
+  path: string | null
+  absolutePath: string | null
+  startLine: number | null
+  endLine: number | null
+  rawText: string
+}
+
+export type UiReviewResult = {
+  reviewText: string
+  summary: string
+  findings: UiReviewFinding[]
+}
+
 export type UiPlanStepStatus = 'pending' | 'inProgress' | 'completed'
 
 export type UiPlanStep = {
@@ -174,6 +251,20 @@ export type UiRateLimitSnapshot = {
 export type UiProjectGroup = {
   projectName: string
   threads: UiThread[]
+}
+
+export type UiTokenUsageBreakdown = {
+  totalTokens: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+}
+
+export type UiThreadTokenUsage = {
+  total: UiTokenUsageBreakdown
+  last: UiTokenUsageBreakdown
+  modelContextWindow: number | null
 }
 
 export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'

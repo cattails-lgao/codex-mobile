@@ -11,6 +11,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
+import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
@@ -1740,6 +1741,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (await handleSkillsRoutes(req, res, url, { appServer, readJsonBody })) {
+        return
+      }
+
+      if (await handleReviewRoutes(req, res, url, { readJsonBody })) {
         return
       }
 

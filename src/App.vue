@@ -195,6 +195,9 @@
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
             <IconTablerSettings class="sidebar-settings-icon" />
             <span>Settings</span>
+            <span class="sidebar-settings-button-version">
+              {{ worktreeName }} · v{{ appVersion }}
+            </span>
           </button>
         </div>
       </section>
@@ -213,6 +216,17 @@
               @start-new-thread="onStartNewThreadFromToolbar"
             />
           </template>
+          <template #actions>
+            <button
+              v-if="route.name === 'thread' && selectedThreadId"
+              type="button"
+              class="content-header-review-button"
+              :data-active="isReviewPaneOpen"
+              @click="isReviewPaneOpen = !isReviewPaneOpen"
+            >
+              Review
+            </button>
+          </template>
         </ContentHeader>
 
         <section class="content-body">
@@ -228,11 +242,10 @@
                   :enable-search="true"
                   search-placeholder="Quick search project"
                   :show-add-action="true"
+                  add-action-mode="event"
                   add-action-label="+ Add new project"
-                  :default-add-value="defaultNewProjectName"
-                  add-placeholder="Project name or absolute path"
                   :disabled="false" @update:model-value="onSelectNewThreadFolder"
-                  @add="onAddNewProject" />
+                  @add-action="onStartAddNewProject" />
                 <ComposerRuntimeDropdown
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
@@ -298,6 +311,7 @@
                   :selected-speed-mode="selectedSpeedMode"
                   :is-updating-speed-mode="isUpdatingSpeedMode"
                   :skills="installedSkills"
+                  :thread-token-usage="selectedThreadTokenUsage"
                   :codex-quota="codexQuota"
                   :is-turn-in-progress="false"
                   :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
@@ -312,46 +326,57 @@
           </template>
           <template v-else>
             <div class="content-grid">
-              <div class="content-thread">
-                <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
-                  :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
-                  :live-overlay="liveOverlay"
-                  :pending-requests="selectedThreadServerRequests"
-                  @update-scroll-state="onUpdateThreadScrollState"
-                  @fork-thread="onForkThreadFromMessage"
-                  @rollback="onRollback"
-                  @respond-server-request="onRespondServerRequest" />
-              </div>
+              <ReviewPane
+                v-if="isReviewPaneOpen && selectedThreadId && composerCwd"
+                :thread-id="selectedThreadId"
+                :cwd="composerCwd"
+                :is-thread-in-progress="isSelectedThreadInProgress"
+                @close="isReviewPaneOpen = false"
+              />
 
-              <div class="composer-with-queue">
-                <QueuedMessages
-                  :messages="selectedThreadQueuedMessages"
-                  @edit="onEditQueuedMessage"
-                  @steer="steerQueuedMessage"
-                  @delete="removeQueuedMessage"
-                />
-                <ThreadComposer ref="threadComposerRef" :active-thread-id="composerThreadContextId"
-                  :cwd="composerCwd"
-                  :collaboration-modes="availableCollaborationModes"
-                  :selected-collaboration-mode="selectedCollaborationMode"
-                  :models="availableModelIds"
-                  :selected-model="selectedModelId"
-                  :selected-reasoning-effort="selectedReasoningEffort"
-                  :selected-speed-mode="selectedSpeedMode"
-                  :is-updating-speed-mode="isUpdatingSpeedMode"
-                  :skills="installedSkills"
-                  :codex-quota="codexQuota"
-                  :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
-                  :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                  :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                  :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                  :dictation-language="dictationLanguage"
-                  @update:selected-collaboration-mode="onSelectCollaborationMode"
-                  @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
-                  @update:selected-reasoning-effort="onSelectReasoningEffort"
-                  @update:selected-speed-mode="onSelectSpeedMode"
-                  @interrupt="onInterruptTurn" />
-              </div>
+              <template v-else>
+                <div class="content-thread">
+                  <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
+                    :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
+                    :live-overlay="liveOverlay"
+                    :pending-requests="selectedThreadServerRequests"
+                    @update-scroll-state="onUpdateThreadScrollState"
+                    @fork-thread="onForkThreadFromMessage"
+                    @rollback="onRollback"
+                    @respond-server-request="onRespondServerRequest" />
+                </div>
+
+                <div class="composer-with-queue">
+                  <QueuedMessages
+                    :messages="selectedThreadQueuedMessages"
+                    @edit="onEditQueuedMessage"
+                    @steer="steerQueuedMessage"
+                    @delete="removeQueuedMessage"
+                  />
+                  <ThreadComposer ref="threadComposerRef" :active-thread-id="composerThreadContextId"
+                    :cwd="composerCwd"
+                    :collaboration-modes="availableCollaborationModes"
+                    :selected-collaboration-mode="selectedCollaborationMode"
+                    :models="availableModelIds"
+                    :selected-model="selectedModelId"
+                    :selected-reasoning-effort="selectedReasoningEffort"
+                    :selected-speed-mode="selectedSpeedMode"
+                    :is-updating-speed-mode="isUpdatingSpeedMode"
+                    :skills="installedSkills"
+                    :thread-token-usage="selectedThreadTokenUsage"
+                    :codex-quota="codexQuota"
+                    :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
+                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                    :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                    :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
+                    :dictation-language="dictationLanguage"
+                    @update:selected-collaboration-mode="onSelectCollaborationMode"
+                    @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
+                    @update:selected-reasoning-effort="onSelectReasoningEffort"
+                    @update:selected-speed-mode="onSelectSpeedMode"
+                    @interrupt="onInterruptTurn" />
+                </div>
+              </template>
             </div>
           </template>
         </section>
@@ -361,18 +386,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
-import ThreadConversation from './components/content/ThreadConversation.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
-import SkillsHub from './components/content/SkillsHub.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
@@ -398,6 +421,10 @@ import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiR
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
 import { getPathLeafName, getPathParent } from './pathUtils.js'
+
+const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
+const ReviewPane = defineAsyncComponent(() => import('./components/content/ReviewPane.vue'))
+const SkillsHub = defineAsyncComponent(() => import('./components/content/SkillsHub.vue'))
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const LAST_ACTIVE_THREAD_ROUTE_STORAGE_KEY = 'codex-web-local.last-active-thread-route.v1'
@@ -524,6 +551,7 @@ const {
   selectedThreadServerRequests,
   selectedLiveOverlay,
   codexQuota,
+  selectedThreadTokenUsage,
   selectedThreadId,
   availableCollaborationModes,
   availableModelIds,
@@ -599,6 +627,7 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const isReviewPaneOpen = ref(false)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
@@ -1392,31 +1421,16 @@ function onSelectNewThreadFolder(cwd: string): void {
   newThreadCwd.value = cwd.trim()
 }
 
-async function onAddNewProject(rawInput: string): Promise<void> {
-  const normalizedInput = rawInput.trim()
-  if (!normalizedInput) return
-
-  const isPath = looksLikePath(normalizedInput)
+async function onStartAddNewProject(): Promise<void> {
   const baseDir = await resolveProjectBaseDirectory()
-  const targetPath = isPath
-    ? normalizedInput
-    : joinPath(baseDir, normalizedInput)
-  if (!targetPath) return
-
-  try {
-    const normalizedPath = await openProjectRoot(targetPath, {
-      createIfMissing: !isPath,
-      label: isPath ? '' : normalizedInput,
-    })
-    if (normalizedPath) {
-      newThreadCwd.value = normalizedPath
-      pinProjectToTop(getPathLeafName(normalizedPath))
-      void loadWorkspaceRootOptionsState()
-      void refreshDefaultProjectName()
-    }
-  } catch {
-    // Error is surfaced on next request if path is invalid.
+  const browseRoot = baseDir || homeDirectory.value.trim() || '/'
+  const search = new URLSearchParams()
+  const suggestedName = defaultNewProjectName.value.trim()
+  if (suggestedName) {
+    search.set('newProjectName', suggestedName)
   }
+  const query = search.toString()
+  window.location.assign(`/codex-local-browse${encodeURI(browseRoot)}${query ? `?${query}` : ''}`)
 }
 
 async function applyLaunchProjectPathFromUrl(): Promise<void> {
@@ -1454,13 +1468,6 @@ async function resolveProjectBaseDirectory(): Promise<string> {
     // Fallback handled by empty return.
   }
   return ''
-}
-
-function looksLikePath(value: string): boolean {
-  if (!value) return false
-  if (value.startsWith('~/')) return true
-  if (value.startsWith('/')) return true
-  return /^[a-zA-Z]:[\\/]/.test(value)
 }
 
 async function refreshDefaultProjectName(): Promise<void> {
@@ -1521,6 +1528,14 @@ function joinPath(parent: string, child: string): string {
   const normalizedChild = child.trim().replace(/^\/+/, '')
   if (!normalizedParent || !normalizedChild) return ''
   return `${normalizedParent}/${normalizedChild}`
+}
+
+function getPathLeafName(path: string): string {
+  const trimmed = path.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  const slashIndex = trimmed.lastIndexOf('/')
+  if (slashIndex < 0) return trimmed
+  return trimmed.slice(slashIndex + 1)
 }
 
 function onSelectModel(modelId: string): void {
@@ -2022,6 +2037,9 @@ watch(
     if (name !== 'home') {
       worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
     }
+    if (name !== 'thread') {
+      isReviewPaneOpen.value = false
+    }
   },
 )
 
@@ -2176,6 +2194,14 @@ async function submitFirstMessageForNewThread(
   @apply w-full;
 }
 
+.content-header-review-button {
+  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+}
+
+.content-header-review-button[data-active='true'] {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+}
+
 .new-thread-empty {
   @apply flex-1 min-h-0 flex flex-col items-center justify-center gap-0.5 px-3 sm:px-6;
 }
@@ -2295,6 +2321,10 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-button {
   @apply flex items-center gap-2 w-full rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+}
+
+.sidebar-settings-button-version {
+  @apply ml-auto min-w-0 truncate text-right text-xs;
 }
 
 .sidebar-settings-icon {

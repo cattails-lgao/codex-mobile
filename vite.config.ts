@@ -233,6 +233,7 @@ export default defineConfig({
           if (!url.pathname.startsWith("/codex-local-browse/")) return next();
 
           const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-browse".length));
+          const newProjectName = url.searchParams.get("newProjectName") ?? "";
           if (!localPath || !isAbsolute(localPath)) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -244,7 +245,7 @@ export default defineConfig({
             const fileStat = await stat(localPath);
             res.setHeader("Cache-Control", "private, no-store");
             if (fileStat.isDirectory()) {
-              const html = await createDirectoryListingHtml(localPath);
+              const html = await createDirectoryListingHtml(localPath, { newProjectName });
               res.statusCode = 200;
               res.setHeader("Content-Type", "text/html; charset=utf-8");
               res.end(html);

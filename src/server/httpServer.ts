@@ -125,6 +125,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
   app.get('/codex-local-browse/*path', async (req, res) => {
     const rawPath = readWildcardPathParam(req.params.path)
     const localPath = decodeBrowsePath(`/${rawPath}`)
+    const newProjectName = typeof req.query.newProjectName === 'string' ? req.query.newProjectName : ''
     if (!localPath || !isAbsolute(localPath)) {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
@@ -134,7 +135,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       const fileStat = await stat(localPath)
       res.setHeader('Cache-Control', 'private, no-store')
       if (fileStat.isDirectory()) {
-        const html = await createDirectoryListingHtml(localPath)
+        const html = await createDirectoryListingHtml(localPath, { newProjectName })
         res.status(200).type('text/html; charset=utf-8').send(html)
         return
       }

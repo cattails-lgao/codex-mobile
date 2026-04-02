@@ -875,7 +875,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import hljs from 'highlight.js/lib/common'
 import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { useMobile } from '../../composables/useMobile'
 
@@ -884,6 +883,8 @@ import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerX from '../icons/IconTablerX.vue'
+
+type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsedAutoCommandIds = ref<Set<string>>(new Set())
@@ -1281,10 +1282,27 @@ let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
+const failedMarkdownImageKeys = ref<Set<string>>(new Set())
+const highlightJsModule = ref<HighlightJsModule | null>(null)
+let highlightJsLoader: Promise<void> | null = null
 
 const showJumpToLatestButton = computed(
   () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
 )
+
+function ensureHighlightJsLoaded(): Promise<void> {
+  if (highlightJsModule.value) return Promise.resolve()
+  if (!highlightJsLoader) {
+    highlightJsLoader = import('highlight.js/lib/common')
+      .then((module) => {
+        highlightJsModule.value = module.default
+      })
+      .finally(() => {
+        highlightJsLoader = null
+      })
+  }
+  return highlightJsLoader
+}
 
 type ParsedToolQuestion = {
   id: string
@@ -1316,8 +1334,10 @@ function isFilePath(value: string): boolean {
   const looksLikeUnixAbsolute = value.startsWith('/')
   const looksLikeWindowsAbsolute = /^[A-Za-z]:[\\/]/u.test(value)
   const looksLikeRelative = value.startsWith('./') || value.startsWith('../') || value.startsWith('~/')
-  const hasPathSeparator = value.includes('/') || value.includes('\\')
-  return looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative || hasPathSeparator
+  if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative) return true
+
+  // Bare relative paths should look like actual path segments, not arbitrary prose containing "/".
+  return /^[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+$/u.test(value)
 }
 
 function getBasename(pathValue: string): string {
@@ -2094,7 +2114,7 @@ function rollbackResponse(anchorMessageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/\S+|file:\/\/\S+|\S*[\\/]\S+/gu
+  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -2108,7 +2128,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
 
     let token = match[0]
     let trailingPunctuation = ''
-    while (/[.,;:]$/u.test(token)) {
+    while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
       token = token.slice(0, -1)
     }
@@ -3066,10 +3086,12 @@ function normalizeCodeLanguage(language: string): string {
 function renderHighlightedCodeAsHtml(language: string, value: string): string {
   const normalizedLanguage = normalizeCodeLanguage(language)
   if (!normalizedLanguage) return escapeHtml(value)
+  const highlighter = highlightJsModule.value
+  if (!highlighter) return escapeHtml(value)
 
   try {
-    if (hljs.getLanguage(normalizedLanguage)) {
-      return hljs.highlight(value, {
+    if (highlighter.getLanguage(normalizedLanguage)) {
+      return highlighter.highlight(value, {
         language: normalizedLanguage,
         ignoreIllegals: true,
       }).value
@@ -3528,6 +3550,15 @@ watch(
 
     await scheduleScrollRestore()
   },
+)
+
+watch(
+  () => props.messages.some((message) => message.text.includes('```')),
+  (hasCodeBlocks) => {
+    if (!hasCodeBlocks || highlightJsModule.value) return
+    void ensureHighlightJsLoaded()
+  },
+  { immediate: true },
 )
 
 watch(
