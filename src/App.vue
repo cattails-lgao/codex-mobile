@@ -193,11 +193,6 @@
               <div class="sidebar-settings-build-label" aria-label="Worktree name and version">
                 WT {{ worktreeName }} · v{{ appVersion }}
               </div>
-              <div class="sidebar-settings-version-note">
-                <span class="sidebar-settings-value sidebar-settings-value-version">
-                  nervmor {{ worktreeName }} · v{{ appVersion }}
-                </span>
-              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
@@ -2480,13 +2475,6 @@ async function submitFirstMessageForNewThread(
   @apply text-xs text-zinc-500 bg-zinc-100 rounded px-1.5 py-0.5;
 }
 
-.sidebar-settings-version-note {
-  @apply flex justify-start border-t border-zinc-100 px-3 py-1.5;
-}
-
-.sidebar-settings-value-version {
-  @apply max-w-full truncate font-mono text-[11px] leading-4;
-}
 
 .sidebar-settings-toggle {
   @apply relative w-9 h-5 rounded-full bg-zinc-300 transition-colors shrink-0;
