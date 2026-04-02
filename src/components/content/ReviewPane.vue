@@ -199,16 +199,18 @@
                 @click="selectFile(node.file.id)"
               >
                 <span class="review-pane-file-meta-row">
-                  <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                  <span class="review-pane-file-main">
+                    <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                    <span class="review-pane-file-path">
+                      {{ node.name }}
+                      <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
+                    </span>
+                  </span>
                   <span class="review-pane-file-delta">
                     <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
                     <span class="review-pane-delta-separator">/</span>
                     <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
                   </span>
-                </span>
-                <span class="review-pane-file-path">
-                  {{ node.name }}
-                  <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
                 </span>
               </button>
             </template>
@@ -369,16 +371,18 @@
                 @click="selectFile(node.file.id)"
               >
                 <span class="review-pane-file-meta-row">
-                  <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                  <span class="review-pane-file-main">
+                    <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                    <span class="review-pane-file-path">
+                      {{ node.name }}
+                      <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
+                    </span>
+                  </span>
                   <span class="review-pane-file-delta">
                     <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
                     <span class="review-pane-delta-separator">/</span>
                     <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
                   </span>
-                </span>
-                <span class="review-pane-file-path">
-                  {{ node.name }}
-                  <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
                 </span>
               </button>
             </template>
@@ -1278,7 +1282,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-meta-row {
-  @apply flex items-center justify-between gap-2;
+  @apply flex items-start justify-between gap-2;
+}
+
+.review-pane-file-main {
+  @apply flex min-w-0 items-center gap-1.5;
 }
 
 .review-pane-file[data-active='true'] {
@@ -1306,11 +1314,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-path {
-  @apply break-all text-sm text-zinc-800;
+  @apply min-w-0 break-all text-sm text-zinc-800;
 }
 
 .review-pane-file-delta {
-  @apply inline-flex items-center gap-1 text-[11px];
+  @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px];
 }
 
 .review-pane-delta-add {
@@ -1667,6 +1675,10 @@ onBeforeUnmount(() => {
 
   .review-pane-sheet-list .review-pane-file-op {
     @apply px-1.5 py-0.25 text-[9px];
+  }
+
+  .review-pane-sheet-list .review-pane-file-main {
+    @apply gap-1;
   }
 
   .review-pane-sheet-list .review-pane-file-path {
