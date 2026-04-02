@@ -21,70 +21,80 @@
     </header>
 
     <div class="review-pane-toolbar">
-      <div class="review-pane-tabs">
-        <button
-          v-for="tab in reviewTabs"
-          :key="tab.value"
-          type="button"
-          class="review-pane-tab"
-          :data-active="activeTab === tab.value"
-          @click="activeTab = tab.value"
-        >
-          {{ tab.label }}
-        </button>
+      <div class="review-pane-toolbar-main">
+        <div class="review-pane-segmented review-pane-segmented-primary">
+          <button
+            v-for="tab in reviewTabs"
+            :key="tab.value"
+            type="button"
+            class="review-pane-segmented-button review-pane-tab"
+            :data-active="activeTab === tab.value"
+            @click="activeTab = tab.value"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <div class="review-pane-toolbar-actions">
+          <button
+            type="button"
+            class="review-pane-run"
+            :disabled="!canRunReview || isRunningReview"
+            @click="runReview"
+          >
+            {{ isRunningReview ? 'Reviewing…' : 'Run review' }}
+          </button>
+          <button type="button" class="review-pane-refresh" :disabled="isLoadingSnapshot" @click="reloadAll">
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <div class="review-pane-scopes">
-        <button
-          type="button"
-          class="review-pane-scope"
-          :data-active="activeScope === 'workspace'"
-          @click="activeScope = 'workspace'"
-        >
-          Workspace
-        </button>
-        <button
-          type="button"
-          class="review-pane-scope"
-          :data-active="activeScope === 'baseBranch'"
-          :disabled="!snapshot?.baseBranch"
-          @click="activeScope = 'baseBranch'"
-        >
-          Base branch
-        </button>
-      </div>
+      <div class="review-pane-toolbar-controls">
+        <div class="review-pane-control-cluster">
+          <span class="review-pane-control-label">Compare</span>
+          <div class="review-pane-segmented">
+            <button
+              type="button"
+              class="review-pane-segmented-button review-pane-scope"
+              :data-active="activeScope === 'workspace'"
+              @click="activeScope = 'workspace'"
+            >
+              Workspace
+            </button>
+            <button
+              type="button"
+              class="review-pane-segmented-button review-pane-scope"
+              :data-active="activeScope === 'baseBranch'"
+              :disabled="!snapshot?.baseBranch"
+              @click="activeScope = 'baseBranch'"
+            >
+              Base branch
+            </button>
+          </div>
+        </div>
 
-      <div v-if="activeScope === 'workspace'" class="review-pane-workspace-views">
-        <button
-          type="button"
-          class="review-pane-view"
-          :data-active="workspaceView === 'unstaged'"
-          @click="workspaceView = 'unstaged'"
-        >
-          Unstaged
-        </button>
-        <button
-          type="button"
-          class="review-pane-view"
-          :data-active="workspaceView === 'staged'"
-          @click="workspaceView = 'staged'"
-        >
-          Staged
-        </button>
-      </div>
-
-      <div class="review-pane-toolbar-actions">
-        <button
-          type="button"
-          class="review-pane-run"
-          :disabled="!canRunReview || isRunningReview"
-          @click="runReview"
-        >
-          {{ isRunningReview ? 'Reviewing…' : 'Run review' }}
-        </button>
-        <button type="button" class="review-pane-refresh" :disabled="isLoadingSnapshot" @click="reloadAll">
-          Refresh
-        </button>
+        <div v-if="activeScope === 'workspace'" class="review-pane-control-cluster">
+          <span class="review-pane-control-label">Changes</span>
+          <div class="review-pane-segmented">
+            <button
+              type="button"
+              class="review-pane-segmented-button review-pane-view"
+              :data-active="workspaceView === 'unstaged'"
+              @click="workspaceView = 'unstaged'"
+            >
+              Unstaged
+            </button>
+            <button
+              type="button"
+              class="review-pane-segmented-button review-pane-view"
+              :data-active="workspaceView === 'staged'"
+              @click="workspaceView = 'staged'"
+            >
+              Staged
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -832,9 +842,6 @@ onBeforeUnmount(() => {
 .review-pane-mobile-files-button,
 .review-pane-refresh,
 .review-pane-run,
-.review-pane-tab,
-.review-pane-scope,
-.review-pane-view,
 .review-pane-bulk-button,
 .review-pane-row-button,
 .review-pane-primary-cta {
@@ -846,23 +853,56 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-toolbar {
-  @apply flex flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2.5;
+  @apply flex flex-col gap-2 border-b border-zinc-100 px-3 py-2.5;
 }
 
-.review-pane-tabs,
-.review-pane-scopes,
-.review-pane-workspace-views {
-  @apply flex items-center gap-1 rounded-full bg-zinc-100 p-1;
+.review-pane-toolbar-main {
+  @apply flex items-center gap-2;
 }
 
-.review-pane-tab[data-active='true'],
-.review-pane-scope[data-active='true'],
-.review-pane-view[data-active='true'] {
-  @apply border-zinc-300 bg-white text-zinc-900 shadow-sm;
+.review-pane-toolbar-controls {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.review-pane-control-cluster {
+  @apply flex min-w-0 items-center gap-1.5;
+}
+
+.review-pane-control-label {
+  @apply shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400;
+}
+
+.review-pane-segmented {
+  @apply inline-flex min-w-0 items-center gap-1 rounded-full bg-zinc-100 p-1;
+}
+
+.review-pane-segmented-primary {
+  @apply flex-1 bg-zinc-100/80;
+}
+
+.review-pane-segmented-button {
+  @apply relative min-w-0 rounded-full border border-transparent px-2.5 py-1.25 text-[11px] font-medium text-zinc-500 transition-colors;
+}
+
+.review-pane-segmented-button::before {
+  content: '';
+  @apply mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-zinc-300 align-middle transition-colors;
+}
+
+.review-pane-segmented-button[data-active='true'] {
+  @apply border-sky-200 bg-sky-600 text-white shadow-sm;
+}
+
+.review-pane-segmented-button[data-active='true']::before {
+  @apply bg-white;
+}
+
+.review-pane-segmented-button:disabled {
+  @apply opacity-45;
 }
 
 .review-pane-toolbar-actions {
-  @apply ml-auto flex items-center gap-2;
+  @apply ml-auto flex shrink-0 items-center gap-1.5;
 }
 
 .review-pane-run {
@@ -1186,10 +1226,7 @@ onBeforeUnmount(() => {
   .review-pane-close,
   .review-pane-mobile-files-button,
   .review-pane-refresh,
-  .review-pane-run,
-  .review-pane-tab,
-  .review-pane-scope,
-  .review-pane-view {
+  .review-pane-run {
     @apply px-2.5 py-1 text-[12px];
   }
 
@@ -1198,28 +1235,40 @@ onBeforeUnmount(() => {
   }
 
   .review-pane-toolbar {
-    @apply grid grid-cols-2 gap-2 px-3 py-2;
+    @apply gap-1.5 px-3 py-2;
   }
 
-  .review-pane-scopes,
-  .review-pane-tabs,
-  .review-pane-workspace-views {
-    @apply w-full justify-between bg-transparent p-0;
+  .review-pane-toolbar-main {
+    @apply items-start;
   }
 
-  .review-pane-tab,
-  .review-pane-scope,
-  .review-pane-view {
-    @apply flex-1 text-center;
+  .review-pane-toolbar-controls {
+    @apply grid grid-cols-1 gap-1.5;
+  }
+
+  .review-pane-control-cluster {
+    @apply gap-1;
+  }
+
+  .review-pane-control-label {
+    @apply text-[9px];
+  }
+
+  .review-pane-segmented {
+    @apply w-full justify-between gap-1 p-0.75;
+  }
+
+  .review-pane-segmented-button {
+    @apply flex-1 px-2 py-1 text-[12px];
   }
 
   .review-pane-toolbar-actions {
-    @apply ml-0 w-full gap-1.5;
+    @apply w-auto gap-1;
   }
 
   .review-pane-refresh,
   .review-pane-run {
-    @apply flex-1 justify-center text-center;
+    @apply px-2.5 py-1 text-[12px];
   }
 
   .review-pane-banner {

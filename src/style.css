@@ -671,25 +671,34 @@
 :root.dark .review-pane-close,
 :root.dark .review-pane-mobile-files-button,
 :root.dark .review-pane-refresh,
-:root.dark .review-pane-tab,
-:root.dark .review-pane-scope,
-:root.dark .review-pane-view,
 :root.dark .review-pane-bulk-button,
 :root.dark .review-pane-row-button,
 :root.dark .review-pane-primary-cta {
   @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
 }
 
-:root.dark .review-pane-tabs,
-:root.dark .review-pane-scopes,
-:root.dark .review-pane-workspace-views {
+:root.dark .review-pane-control-label {
+  @apply text-zinc-500;
+}
+
+:root.dark .review-pane-segmented {
   @apply bg-zinc-800;
 }
 
-:root.dark .review-pane-tab[data-active='true'],
-:root.dark .review-pane-scope[data-active='true'],
-:root.dark .review-pane-view[data-active='true'] {
-  @apply border-zinc-500 bg-zinc-700 text-zinc-100;
+:root.dark .review-pane-segmented-button {
+  @apply text-zinc-400;
+}
+
+:root.dark .review-pane-segmented-button::before {
+  @apply bg-zinc-600;
+}
+
+:root.dark .review-pane-segmented-button[data-active='true'] {
+  @apply border-sky-400/40 bg-sky-500 text-white;
+}
+
+:root.dark .review-pane-segmented-button[data-active='true']::before {
+  @apply bg-white;
 }
 
 :root.dark .review-pane-run,
