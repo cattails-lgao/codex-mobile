@@ -722,7 +722,10 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - Startup sync no longer fails with non-fast-forward push due to missing remote integration.
 - Local tracked skill edits remain after sync (not overwritten by remote state).
-- Sync path rebases/pulls with autostash and preserves local changes on top of upstream updates.
+- Sync path rebases/pulls with autostash and auto-resolves conflicts by mtime policy:
+  - choose remote (`theirs`) when remote file commit time is newer than local file mtime.
+  - choose local (`ours`) otherwise.
+- No manual conflict intervention is required during startup sync retries.
 
 #### Rollback/Cleanup
 - Revert test-only skill text changes if they were not intended to keep.

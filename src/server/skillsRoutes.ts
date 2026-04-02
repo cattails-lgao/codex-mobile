@@ -641,14 +641,15 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
 
   await runCommand('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: localDir })
   await runCommand('git', ['fetch', 'origin'], { cwd: localDir })
-  await resolveMergeConflictsByNewerCommit(localDir, branch)
+  const localMtimesBeforeSync = await snapshotFileMtimes(localDir)
+  await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforeSync)
   try {
     await runCommand('git', ['checkout', branch], { cwd: localDir })
   } catch {
-    await resolveMergeConflictsByNewerCommit(localDir, branch)
+    await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforeSync)
     await runCommand('git', ['checkout', '-B', branch], { cwd: localDir })
   }
-  await resolveMergeConflictsByNewerCommit(localDir, branch)
+  await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforeSync)
   const localMtimesBeforePull = await snapshotFileMtimes(localDir)
   try { await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir }) } catch {}
   let pulledMtimes = new Map<string, number>()
@@ -656,7 +657,7 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
     await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
     pulledMtimes = await snapshotFileMtimes(localDir)
   } catch {
-    await resolveMergeConflictsByNewerCommit(localDir, branch)
+    await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforePull)
     pulledMtimes = await snapshotFileMtimes(localDir)
   }
   try {
@@ -667,26 +668,46 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
   return localDir
 }
 
-async function resolveMergeConflictsByNewerCommit(repoDir: string, branch: string): Promise<void> {
-  const unmerged = (await runCommandWithOutput('git', ['diff', '--name-only', '--diff-filter=U'], { cwd: repoDir }))
-    .split(/\r?\n/)
-    .map((row) => row.trim())
-    .filter(Boolean)
-  if (unmerged.length === 0) return
-  for (const path of unmerged) {
-    const oursTime = await getCommitTime(repoDir, 'HEAD', path)
-    const theirsTime = await getCommitTime(repoDir, `origin/${branch}`, path)
-    if (theirsTime > oursTime) {
-      await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
-    } else {
-      await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
+async function resolveMergeConflictsByNewerCommit(
+  repoDir: string,
+  branch: string,
+  localMtimesBeforeSync: Map<string, number> = new Map<string, number>(),
+): Promise<void> {
+  // Keep resolving until merge/rebase no longer reports unmerged paths.
+  for (let i = 0; i < 20; i++) {
+    const unmerged = (await runCommandWithOutput('git', ['diff', '--name-only', '--diff-filter=U'], { cwd: repoDir }))
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter(Boolean)
+    if (unmerged.length === 0) return
+    for (const path of unmerged) {
+      const localMtimeMs = localMtimesBeforeSync.get(path) ?? 0
+      const localMtimeSec = Math.floor(localMtimeMs / 1000)
+      const remoteCommitTime = await getCommitTime(repoDir, `origin/${branch}`, path)
+      if (remoteCommitTime > localMtimeSec) {
+        await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
+      } else {
+        await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
+      }
+      await runCommand('git', ['add', '--', path], { cwd: repoDir })
     }
-    await runCommand('git', ['add', '--', path], { cwd: repoDir })
+    const rebaseHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'REBASE_HEAD'], { cwd: repoDir })).trim()
+    if (rebaseHead) {
+      try {
+        await runCommand('git', ['rebase', '--continue'], { cwd: repoDir })
+        continue
+      } catch {
+        // Continue loop and resolve next rebase-conflict batch.
+        continue
+      }
+    }
+    const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
+    if (mergeHead) {
+      await runCommand('git', ['commit', '-m', 'Auto-resolve skills merge by mtime policy'], { cwd: repoDir })
+      continue
+    }
   }
-  const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
-  if (mergeHead) {
-    await runCommand('git', ['commit', '-m', 'Auto-resolve skills merge by newer file'], { cwd: repoDir })
-  }
+  throw new Error('Auto-resolve exceeded retry limit while reconciling sync conflicts')
 }
 
 async function getCommitTime(repoDir: string, ref: string, path: string): Promise<number> {
@@ -767,6 +788,7 @@ async function syncInstalledSkillsFolderToRepo(
   async function pushWithNonFastForwardRetry(repoDir: string, branch: string): Promise<void> {
     const maxAttempts = 3
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const localMtimesBeforeReconcile = await snapshotFileMtimes(repoDir)
       await runCommand('git', ['fetch', 'origin'], { cwd: repoDir })
       try {
         await runCommand('git', ['rebase', `origin/${branch}`], { cwd: repoDir })
@@ -775,7 +797,7 @@ async function syncInstalledSkillsFolderToRepo(
         try {
           await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoDir })
         } catch {
-          await resolveMergeConflictsByNewerCommit(repoDir, branch)
+          await resolveMergeConflictsByNewerCommit(repoDir, branch, localMtimesBeforeReconcile)
         }
       }
       try {
