@@ -1,15 +1,15 @@
-# 🔥 @nervmor/codexui
+# 🔥 codexapp
 
-### 🚀 Run `@nervmor/codexui` Anywhere: Linux, Windows, or Termux on Android 🚀
+### 🚀 Run Codex App UI Anywhere: Linux, Windows, or Termux on Android 🚀
 
-[![npm](https://img.shields.io/npm/v/%40nervmor%2Fcodexui?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/@nervmor/codexui)
+[![npm](https://img.shields.io/npm/v/codexapp?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/codexapp)
 [![platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue?style=for-the-badge)](#-quick-start)
 [![node](https://img.shields.io/badge/Node-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
 
-> **`@nervmor/codexui` in your browser. No drama. One command.**
+> **Codex UI in your browser. No drama. One command.**
 >  
-> **This project exposes your Codex app-server workflow through a browser UI, and it runs cross-platform.**
+> **Yes, that is your Codex desktop app experience exposed over web UI. Yes, it runs cross-platform.**
 
 ```text
  ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗██╗   ██╗██╗
@@ -23,11 +23,11 @@
 ---
 
 ## 🤯 What Is This?
-**`@nervmor/codexui`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
+**`codexapp`** is a lightweight bridge that gives you a browser-accessible UI for Codex app-server workflows.
 
 You run one command. It starts a local web server. You open it from your machine, your LAN, or wherever your setup allows.  
 
-**TL;DR 🧠: `@nervmor/codexui` gives you the Codex browser UI flow on Linux, Windows, and Termux-powered Android setups.**
+**TL;DR 🧠: Codex app UI, unlocked for Linux, Windows, and Termux-powered Android setups.**
 
 ---
 
@@ -36,16 +36,13 @@ You run one command. It starts a local web server. You open it from your machine
 
 ```bash
 # 🔓 Run instantly (recommended)
-npx @nervmor/codexui
-
-# 📦 Or install globally
-npm install -g @nervmor/codexui
+npx codexapp
 
 # 🌐 Then open in browser
 # http://localhost:18923
 ```
 
-By default, `@nervmor/codexui` now also starts:
+By default, `codexapp` now also starts:
 
 ```bash
 cloudflared tunnel --url http://localhost:<port>
@@ -57,32 +54,32 @@ Use `--no-tunnel` to disable this behavior.
 ### Linux 🐧
 ```bash
 node -v   # should be 18+
-npx @nervmor/codexui
+npx codexapp
 ```
 
 ### Windows 🪟 (PowerShell)
 ```powershell
 node -v   # 18+
-npx @nervmor/codexui
+npx codexapp
 ```
 
 ### Termux (Android) 🤖
 ```bash
 pkg update && pkg upgrade -y
 pkg install nodejs -y
-npx @nervmor/codexui
+npx codexapp
 ```
 
 Android background requirements:
 
-1. Keep the `codexui` session running in the current Termux session (do not close it).
+1. Keep `codexapp` running in the current Termux session (do not close it).
 2. In Android settings, disable battery optimization for `Termux`.
 3. Keep the persistent Termux notification enabled so Android is less likely to kill it.
 4. Optional but recommended in Termux:
 ```bash
 termux-wake-lock
 ```
-5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx @nervmor/codexui` again.
+5. Open the shown URL in your Android browser. If the app is killed, return to Termux and run `npx codexapp` again.
 
 ---
 
@@ -123,7 +120,7 @@ Notes:
 ## ✨ Features
 > **The payload.**
 
-- 🚀 One-command launch with `npx @nervmor/codexui`
+- 🚀 One-command launch with `npx codexapp`
 - 🌍 Cross-platform support for Linux, Windows, and Termux on Android
 - 🖥️ Browser-first Codex UI flow on `http://localhost:18923`
 - 🌐 LAN-friendly access from other devices on the same network
@@ -172,7 +169,7 @@ Bot commands:
 
 | 🔥 Use Case | 💥 What You Get |
 |---|---|
-| 💻 Linux workstation | Run `@nervmor/codexui` in browser without depending on desktop shell |
+| 💻 Linux workstation | Run Codex UI in browser without depending on desktop shell |
 | 🪟 Windows machine | Launch web UI and access from Chrome/Edge quickly |
 | 📱 Termux on Android | Start service in Termux and control from mobile browser |
 | 🧪 Remote dev box | Keep Codex process on server, view UI from client device |
@@ -205,7 +202,7 @@ Bot commands:
 └──────────────┬──────────────┘
                │ HTTP/WebSocket
 ┌──────────────▼──────────────┐
-│         codexui             │
+│         codexapp            │
 │  (Express + Vue UI bridge)  │
 └──────────────┬──────────────┘
                │ RPC/Bridge calls
@@ -242,7 +239,7 @@ Bring bug reports, platform notes, and setup improvements.
 ---
 
 ## ⭐ Star This Repo
-If you believe **`@nervmor/codexui`** should be accessible from **any machine, any OS, any screen**, star this project and share it. ⭐
+If you believe Codex UI should be accessible from **any machine, any OS, any screen**, star this project and share it. ⭐
 
 <div align="center">
 Built for speed, portability, and a little bit of chaos 😏
