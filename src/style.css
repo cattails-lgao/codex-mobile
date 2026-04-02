@@ -735,6 +735,18 @@
   @apply border-zinc-700 bg-zinc-950/70;
 }
 
+:root.dark .review-pane-tree-folder {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:root.dark .review-pane-tree-folder-sheet {
+  @apply bg-zinc-800/80;
+}
+
+:root.dark .review-pane-tree-folder-count {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
 :root.dark .review-pane-resizer {
   @apply bg-zinc-800;
 }

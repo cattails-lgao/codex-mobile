@@ -175,27 +175,43 @@
 
         <div v-else class="review-pane-main" :style="reviewMainStyle">
           <aside v-if="!isMobile" class="review-pane-file-list">
-            <button
-              v-for="file in snapshot.files"
-              :key="file.id"
-              type="button"
-              class="review-pane-file"
-              :data-active="selectedFile?.id === file.id"
-              @click="selectFile(file.id)"
-            >
-              <span class="review-pane-file-meta-row">
-                <span class="review-pane-file-op" :data-operation="file.operation">{{ formatOperation(file.operation) }}</span>
-                <span class="review-pane-file-delta">
-                  <span class="review-pane-delta-add">+{{ file.addedLineCount }}</span>
-                  <span class="review-pane-delta-separator">/</span>
-                  <span class="review-pane-delta-remove">-{{ file.removedLineCount }}</span>
+            <template v-for="node in visibleFileTreeNodes" :key="node.treeKey">
+              <button
+                v-if="node.kind === 'folder'"
+                type="button"
+                class="review-pane-tree-folder"
+                :style="treeIndentStyle(node.depth)"
+                :data-expanded="isFolderExpanded(node.id)"
+                @click="toggleFolder(node.id)"
+              >
+                <span class="review-pane-tree-caret" :data-expanded="isFolderExpanded(node.id)"></span>
+                <span class="review-pane-tree-folder-name">{{ node.name }}</span>
+                <span class="review-pane-tree-folder-count">{{ node.fileCount }}</span>
+              </button>
+
+              <button
+                v-else
+                type="button"
+                class="review-pane-file review-pane-tree-file"
+                :style="treeIndentStyle(node.depth)"
+                :data-active="selectedFile?.id === node.file.id"
+                :title="node.file.path"
+                @click="selectFile(node.file.id)"
+              >
+                <span class="review-pane-file-meta-row">
+                  <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                  <span class="review-pane-file-delta">
+                    <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
+                    <span class="review-pane-delta-separator">/</span>
+                    <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
+                  </span>
                 </span>
-              </span>
-              <span class="review-pane-file-path">
-                {{ file.path }}
-                <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
-              </span>
-            </button>
+                <span class="review-pane-file-path">
+                  {{ node.name }}
+                  <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
+                </span>
+              </button>
+            </template>
           </aside>
 
           <div
@@ -329,21 +345,43 @@
             <p class="review-pane-sheet-count">{{ snapshot.files.length }}</p>
           </div>
           <div class="review-pane-sheet-list">
-            <button
-              v-for="file in snapshot.files"
-              :key="`sheet:${file.id}`"
-              type="button"
-              class="review-pane-file"
-              :data-active="selectedFile?.id === file.id"
-              @click="selectFile(file.id)"
-            >
-              <span class="review-pane-file-op" :data-operation="file.operation">{{ formatOperation(file.operation) }}</span>
-              <span class="review-pane-file-path">
-                {{ file.path }}
-                <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
-              </span>
-              <span class="review-pane-file-delta">+{{ file.addedLineCount }} / -{{ file.removedLineCount }}</span>
-            </button>
+            <template v-for="node in visibleFileTreeNodes" :key="`sheet:${node.treeKey}`">
+              <button
+                v-if="node.kind === 'folder'"
+                type="button"
+                class="review-pane-tree-folder review-pane-tree-folder-sheet"
+                :style="treeIndentStyle(node.depth)"
+                :data-expanded="isFolderExpanded(node.id)"
+                @click="toggleFolder(node.id)"
+              >
+                <span class="review-pane-tree-caret" :data-expanded="isFolderExpanded(node.id)"></span>
+                <span class="review-pane-tree-folder-name">{{ node.name }}</span>
+                <span class="review-pane-tree-folder-count">{{ node.fileCount }}</span>
+              </button>
+
+              <button
+                v-else
+                type="button"
+                class="review-pane-file review-pane-tree-file"
+                :style="treeIndentStyle(node.depth)"
+                :data-active="selectedFile?.id === node.file.id"
+                :title="node.file.path"
+                @click="selectFile(node.file.id)"
+              >
+                <span class="review-pane-file-meta-row">
+                  <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
+                  <span class="review-pane-file-delta">
+                    <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
+                    <span class="review-pane-delta-separator">/</span>
+                    <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
+                  </span>
+                </span>
+                <span class="review-pane-file-path">
+                  {{ node.name }}
+                  <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
+                </span>
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -415,9 +453,44 @@ const reviewTabs = [
   { value: 'findings' as const, label: 'Findings' },
 ]
 
+type ReviewTreeFolderNode = {
+  kind: 'folder'
+  treeKey: string
+  id: string
+  name: string
+  depth: number
+  fileCount: number
+}
+
+type ReviewTreeFileNode = {
+  kind: 'file'
+  treeKey: string
+  id: string
+  name: string
+  depth: number
+  file: UiReviewFile
+}
+
+type ReviewTreeNode = ReviewTreeFolderNode | ReviewTreeFileNode
+
+type MutableReviewTreeFile = {
+  file: UiReviewFile
+  name: string
+  depth: number
+}
+
+type MutableReviewTreeFolder = {
+  id: string
+  name: string
+  depth: number
+  folders: Map<string, MutableReviewTreeFolder>
+  files: MutableReviewTreeFile[]
+}
+
 const reviewKey = computed(() => `${activeScope.value}:${workspaceView.value}`)
 const currentReviewResult = computed(() => reviewResultsByKey.value[reviewKey.value] ?? null)
 const selectedFile = computed(() => snapshot.value?.files.find((file) => file.id === selectedFileId.value) ?? snapshot.value?.files[0] ?? null)
+const folderExpansionState = ref<Record<string, boolean>>({})
 
 const headerTitle = computed(() => {
   if (!snapshot.value?.isGitRepo) return 'Repository review'
@@ -493,6 +566,10 @@ const reviewMainStyle = computed<Record<string, string>>(() => {
   return style
 })
 
+const fileTreeData = computed(() => buildVisibleFileTree(snapshot.value?.files ?? [], folderExpansionState.value))
+const visibleFileTreeNodes = computed(() => fileTreeData.value.nodes)
+const fileTreeFolderIdsByFileId = computed(() => fileTreeData.value.folderIdsByFileId)
+
 function clampFileListWidth(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_FILE_LIST_WIDTH
   return Math.min(MAX_FILE_LIST_WIDTH, Math.max(MIN_FILE_LIST_WIDTH, Math.round(value)))
@@ -542,6 +619,137 @@ function lineMarker(kind: string): string {
   if (kind === 'remove') return '-'
   if (kind === 'hunk') return '@@'
   return ' '
+}
+
+function fileBaseName(path: string): string {
+  const segments = path.split('/').filter(Boolean)
+  return segments[segments.length - 1] ?? path
+}
+
+function sortTreeEntries(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function buildVisibleFileTree(
+  files: UiReviewFile[],
+  expansionState: Record<string, boolean>,
+): {
+  nodes: ReviewTreeNode[]
+  folderIdsByFileId: Record<string, string[]>
+} {
+  const root: MutableReviewTreeFolder = {
+    id: '',
+    name: '',
+    depth: -1,
+    folders: new Map(),
+    files: [],
+  }
+  const folderIdsByFileId: Record<string, string[]> = {}
+
+  for (const file of files) {
+    const segments = file.path.split('/').filter(Boolean)
+    const fileName = segments.pop() ?? file.path
+    let currentFolder = root
+    let folderPath = ''
+    const parentFolderIds: string[] = []
+
+    for (const [index, segment] of segments.entries()) {
+      folderPath = folderPath ? `${folderPath}/${segment}` : segment
+      let nextFolder = currentFolder.folders.get(segment)
+      if (!nextFolder) {
+        nextFolder = {
+          id: folderPath,
+          name: segment,
+          depth: index,
+          folders: new Map(),
+          files: [],
+        }
+        currentFolder.folders.set(segment, nextFolder)
+      }
+      currentFolder = nextFolder
+      parentFolderIds.push(nextFolder.id)
+    }
+
+    currentFolder.files.push({
+      file,
+      name: fileName,
+      depth: segments.length,
+    })
+    folderIdsByFileId[file.id] = parentFolderIds
+  }
+
+  const nodes: ReviewTreeNode[] = []
+  const countFiles = (folder: MutableReviewTreeFolder): number => (
+    folder.files.length + Array.from(folder.folders.values()).reduce((sum, child) => sum + countFiles(child), 0)
+  )
+
+  const visitFolder = (folder: MutableReviewTreeFolder) => {
+    const childFolders = Array.from(folder.folders.values()).sort((left, right) => sortTreeEntries(left.name, right.name))
+    const childFiles = [...folder.files].sort((left, right) => sortTreeEntries(left.name, right.name))
+
+    for (const childFolder of childFolders) {
+      nodes.push({
+        kind: 'folder',
+        treeKey: `folder:${childFolder.id}`,
+        id: childFolder.id,
+        name: childFolder.name,
+        depth: childFolder.depth,
+        fileCount: countFiles(childFolder),
+      })
+      if (expansionState[childFolder.id] !== false) {
+        visitFolder(childFolder)
+      }
+    }
+
+    for (const childFile of childFiles) {
+      nodes.push({
+        kind: 'file',
+        treeKey: `file:${childFile.file.id}`,
+        id: childFile.file.id,
+        name: childFile.name,
+        depth: childFile.depth,
+        file: childFile.file,
+      })
+    }
+  }
+
+  visitFolder(root)
+  return { nodes, folderIdsByFileId }
+}
+
+function isFolderExpanded(folderId: string): boolean {
+  return folderExpansionState.value[folderId] !== false
+}
+
+function toggleFolder(folderId: string): void {
+  folderExpansionState.value = {
+    ...folderExpansionState.value,
+    [folderId]: !isFolderExpanded(folderId),
+  }
+}
+
+function expandFileAncestors(fileId: string): void {
+  const folderIds = fileTreeFolderIdsByFileId.value[fileId] ?? []
+  if (folderIds.length === 0) return
+  const nextState = { ...folderExpansionState.value }
+  let changed = false
+  for (const folderId of folderIds) {
+    if (nextState[folderId] === false) {
+      nextState[folderId] = true
+      changed = true
+    }
+  }
+  if (changed) {
+    folderExpansionState.value = nextState
+  }
+}
+
+function treeIndentStyle(depth: number): Record<string, string> {
+  const base = isMobile.value ? 8 : 10
+  const step = isMobile.value ? 12 : 14
+  return {
+    paddingLeft: `${base + (depth * step)}px`,
+  }
 }
 
 function formatOperation(operation: string): string {
@@ -626,6 +834,7 @@ async function reloadAll(): Promise<void> {
 }
 
 function selectFile(fileId: string): void {
+  expandFileAncestors(fileId)
   selectedFileId.value = fileId
   const file = snapshot.value?.files.find((entry) => entry.id === fileId) ?? null
   selectedHunkId.value = file?.hunks[0]?.id ?? ''
@@ -749,6 +958,7 @@ async function openFinding(finding: UiReviewFinding): Promise<void> {
   )) ?? null
   if (!file) return
 
+  expandFileAncestors(file.id)
   selectedFileId.value = file.id
   const matchedHunk = findMatchingHunk(file, finding)
   selectedHunkId.value = matchedHunk?.id ?? ''
@@ -832,6 +1042,7 @@ watch(selectedBaseBranch, (branch, previous) => {
 
 watch(selectedFile, (file) => {
   if (!file) return
+  expandFileAncestors(file.id)
   if (!file.hunks.some((hunk) => hunk.id === selectedHunkId.value)) {
     selectedHunkId.value = file.hunks[0]?.id ?? ''
   }
@@ -1010,6 +1221,40 @@ onBeforeUnmount(() => {
   @apply hidden min-w-0 overflow-y-auto border-r border-zinc-100 bg-zinc-50/60 p-2 md:flex md:flex-col md:gap-1.5;
 }
 
+.review-pane-tree-folder {
+  @apply flex w-full items-center gap-1 rounded-lg border border-transparent px-2 py-1.5 text-left text-[12px] font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900;
+}
+
+.review-pane-tree-folder[data-expanded='false'] {
+  @apply text-zinc-500;
+}
+
+.review-pane-tree-folder-sheet {
+  @apply rounded-md bg-zinc-50/80;
+}
+
+.review-pane-tree-caret {
+  @apply relative h-3.5 w-3.5 shrink-0;
+}
+
+.review-pane-tree-caret::before {
+  content: '';
+  @apply absolute left-1 top-1 h-0 w-0 border-y-[4px] border-l-[5px] border-y-transparent border-l-current transition-transform;
+}
+
+.review-pane-tree-caret[data-expanded='true']::before {
+  transform: rotate(90deg);
+  transform-origin: 2px 4px;
+}
+
+.review-pane-tree-folder-name {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.review-pane-tree-folder-count {
+  @apply shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500;
+}
+
 .review-pane-resizer {
   @apply relative hidden cursor-col-resize bg-zinc-100 md:block;
 }
@@ -1026,6 +1271,10 @@ onBeforeUnmount(() => {
 .review-pane-file,
 .review-pane-finding {
   @apply flex w-full flex-col gap-0.75 rounded-xl border border-transparent px-2.5 py-2 text-left transition hover:border-zinc-200 hover:bg-white;
+}
+
+.review-pane-tree-file {
+  @apply rounded-lg px-2 py-1.75;
 }
 
 .review-pane-file-meta-row {
@@ -1398,6 +1647,14 @@ onBeforeUnmount(() => {
 
   .review-pane-sheet-list {
     @apply gap-1.5 pb-2;
+  }
+
+  .review-pane-sheet-list .review-pane-tree-folder {
+    @apply gap-1 rounded-md px-2 py-1 text-[12px];
+  }
+
+  .review-pane-sheet-list .review-pane-tree-folder-count {
+    @apply px-1.25 py-0.25 text-[9px];
   }
 
   .review-pane-sheet-list .review-pane-file {
