@@ -617,6 +617,142 @@
   @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
+:root.dark .content-header-review-button {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .content-header-review-button[data-active='true'] {
+  @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .review-pane {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .review-pane-header,
+:root.dark .review-pane-toolbar,
+:root.dark .review-pane-bulk-actions,
+:root.dark .review-pane-hunk-header {
+  @apply border-zinc-700;
+}
+
+:root.dark .review-pane-header,
+:root.dark .review-pane-toolbar,
+:root.dark .review-pane-hunk-header,
+:root.dark .review-pane-summary-card,
+:root.dark .review-pane-file-header,
+:root.dark .review-pane-hunk,
+:root.dark .review-pane-finding,
+:root.dark .review-pane-sheet {
+  @apply bg-zinc-900;
+}
+
+:root.dark .review-pane-eyebrow {
+  @apply text-zinc-500;
+}
+
+:root.dark .review-pane-title,
+:root.dark .review-pane-empty-title,
+:root.dark .review-pane-file-title,
+:root.dark .review-pane-summary-title,
+:root.dark .review-pane-finding-title,
+:root.dark .review-pane-sheet-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .review-pane-empty-text,
+:root.dark .review-pane-file-subtitle,
+:root.dark .review-pane-hunk-meta,
+:root.dark .review-pane-finding-location,
+:root.dark .review-pane-finding-body {
+  @apply text-zinc-400;
+}
+
+:root.dark .review-pane-close,
+:root.dark .review-pane-mobile-files-button,
+:root.dark .review-pane-refresh,
+:root.dark .review-pane-tab,
+:root.dark .review-pane-scope,
+:root.dark .review-pane-view,
+:root.dark .review-pane-bulk-button,
+:root.dark .review-pane-row-button,
+:root.dark .review-pane-primary-cta {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
+}
+
+:root.dark .review-pane-tabs,
+:root.dark .review-pane-scopes,
+:root.dark .review-pane-workspace-views {
+  @apply bg-zinc-800;
+}
+
+:root.dark .review-pane-tab[data-active='true'],
+:root.dark .review-pane-scope[data-active='true'],
+:root.dark .review-pane-view[data-active='true'] {
+  @apply border-zinc-500 bg-zinc-700 text-zinc-100;
+}
+
+:root.dark .review-pane-run,
+:root.dark .review-pane-primary-cta {
+  @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .review-pane-meta span,
+:root.dark .review-pane-sheet-count {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+:root.dark .review-pane-file-list {
+  @apply border-zinc-700 bg-zinc-950/70;
+}
+
+:root.dark .review-pane-file {
+  @apply hover:border-zinc-600 hover:bg-zinc-800;
+}
+
+:root.dark .review-pane-file[data-active='true'] {
+  @apply border-zinc-500 bg-zinc-800;
+}
+
+:root.dark .review-pane-file-path {
+  @apply text-zinc-100;
+}
+
+:root.dark .review-pane-file-delta,
+:root.dark .review-pane-meta {
+  @apply text-zinc-500;
+}
+
+:root.dark .review-pane-file-header,
+:root.dark .review-pane-hunk,
+:root.dark .review-pane-summary-card,
+:root.dark .review-pane-finding {
+  @apply border-zinc-700;
+}
+
+:root.dark .review-pane-hunk[data-active='true'] {
+  box-shadow: 0 0 0 1px rgba(244, 244, 245, 0.12);
+  @apply border-zinc-400;
+}
+
+:root.dark .review-pane-lines,
+:root.dark .review-pane-raw-diff {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .review-pane-line-number,
+:root.dark .review-pane-line-marker {
+  @apply text-zinc-600;
+}
+
+:root.dark .review-pane-sheet-handle {
+  @apply bg-zinc-700;
+}
+
+:root.dark .review-pane-sheet-backdrop {
+  @apply bg-black/55;
+}
+
 :root.dark .worked-separator-text {
   @apply text-zinc-300;
 }
