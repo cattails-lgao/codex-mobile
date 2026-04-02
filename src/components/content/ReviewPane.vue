@@ -94,8 +94,8 @@
 
     <div v-if="snapshot" class="review-pane-meta">
       <span>{{ snapshot.summary.fileCount }} files</span>
-      <span>+{{ snapshot.summary.addedLineCount }}</span>
-      <span>-{{ snapshot.summary.removedLineCount }}</span>
+      <span class="review-pane-summary-pill review-pane-summary-pill-add">+{{ snapshot.summary.addedLineCount }}</span>
+      <span class="review-pane-summary-pill review-pane-summary-pill-remove">-{{ snapshot.summary.removedLineCount }}</span>
       <span v-if="snapshot.headBranch">{{ snapshot.headBranch }}</span>
       <span v-if="activeScope === 'baseBranch' && snapshot.baseBranch">vs {{ snapshot.baseBranch }}</span>
     </div>
@@ -155,12 +155,18 @@
               :data-active="selectedFile?.id === file.id"
               @click="selectFile(file.id)"
             >
-              <span class="review-pane-file-op" :data-operation="file.operation">{{ formatOperation(file.operation) }}</span>
+              <span class="review-pane-file-meta-row">
+                <span class="review-pane-file-op" :data-operation="file.operation">{{ formatOperation(file.operation) }}</span>
+                <span class="review-pane-file-delta">
+                  <span class="review-pane-delta-add">+{{ file.addedLineCount }}</span>
+                  <span class="review-pane-delta-separator">/</span>
+                  <span class="review-pane-delta-remove">-{{ file.removedLineCount }}</span>
+                </span>
+              </span>
               <span class="review-pane-file-path">
                 {{ file.path }}
                 <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
               </span>
-              <span class="review-pane-file-delta">+{{ file.addedLineCount }} / -{{ file.removedLineCount }}</span>
             </button>
           </aside>
 
@@ -879,13 +885,21 @@ onBeforeUnmount(() => {
   @apply rounded-full bg-zinc-100 px-2 py-1;
 }
 
+.review-pane-summary-pill.review-pane-summary-pill-add {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.review-pane-summary-pill.review-pane-summary-pill-remove {
+  @apply bg-rose-100 text-rose-700;
+}
+
 .review-pane-content,
 .review-pane-findings {
   @apply min-h-0 flex-1 overflow-hidden;
 }
 
 .review-pane-bulk-actions {
-  @apply flex flex-wrap gap-1.5 border-b border-zinc-100 px-3 py-2.5;
+  @apply flex flex-nowrap gap-1.5 overflow-x-auto border-b border-zinc-100 px-3 py-2.5;
 }
 
 .review-pane-main {
@@ -912,6 +926,10 @@ onBeforeUnmount(() => {
 .review-pane-file,
 .review-pane-finding {
   @apply flex w-full flex-col gap-0.75 rounded-xl border border-transparent px-2.5 py-2 text-left transition hover:border-zinc-200 hover:bg-white;
+}
+
+.review-pane-file-meta-row {
+  @apply flex items-center justify-between gap-2;
 }
 
 .review-pane-file[data-active='true'] {
@@ -943,7 +961,19 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-delta {
-  @apply text-[11px] text-zinc-500;
+  @apply inline-flex items-center gap-1 text-[11px];
+}
+
+.review-pane-delta-add {
+  @apply text-emerald-600;
+}
+
+.review-pane-delta-remove {
+  @apply text-rose-600;
+}
+
+.review-pane-delta-separator {
+  @apply text-zinc-400;
 }
 
 .review-pane-diff {

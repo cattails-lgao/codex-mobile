@@ -702,6 +702,14 @@
   @apply bg-zinc-800 text-zinc-300;
 }
 
+:root.dark .review-pane-summary-pill.review-pane-summary-pill-add {
+  @apply bg-emerald-500/15 text-emerald-300;
+}
+
+:root.dark .review-pane-summary-pill.review-pane-summary-pill-remove {
+  @apply bg-rose-500/15 text-rose-300;
+}
+
 :root.dark .review-pane-file-list {
   @apply border-zinc-700 bg-zinc-950/70;
 }
@@ -748,6 +756,18 @@
 
 :root.dark .review-pane-file-delta,
 :root.dark .review-pane-meta {
+  @apply text-zinc-500;
+}
+
+:root.dark .review-pane-delta-add {
+  @apply text-emerald-300;
+}
+
+:root.dark .review-pane-delta-remove {
+  @apply text-rose-300;
+}
+
+:root.dark .review-pane-delta-separator {
   @apply text-zinc-500;
 }
 
