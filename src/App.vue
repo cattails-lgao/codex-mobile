@@ -157,16 +157,14 @@
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
               </button>
-              <div class="sidebar-settings-version-note">
-                <span class="sidebar-settings-value sidebar-settings-value-version">
-                  nervmor {{ worktreeName }} · v{{ appVersion }}
-                </span>
-              </div>
             </div>
           </Transition>
           <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
             <IconTablerSettings class="sidebar-settings-icon" />
             <span>Settings</span>
+            <span class="sidebar-settings-button-version">
+              nervmor {{ worktreeName }} · v{{ appVersion }}
+            </span>
           </button>
         </div>
       </section>
@@ -1730,6 +1728,10 @@ async function submitFirstMessageForNewThread(
   @apply flex items-center gap-2 w-full rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
 }
 
+.sidebar-settings-button-version {
+  @apply ml-auto min-w-0 truncate text-right;
+}
+
 .sidebar-settings-icon {
   @apply w-4.5 h-4.5;
 }
@@ -1848,14 +1850,6 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-value {
   @apply text-xs text-zinc-500 bg-zinc-100 rounded px-1.5 py-0.5;
-}
-
-.sidebar-settings-version-note {
-  @apply flex justify-start border-t border-zinc-100 px-3 py-1.5;
-}
-
-.sidebar-settings-value-version {
-  @apply max-w-full truncate font-mono text-[11px] leading-4;
 }
 
 .sidebar-settings-toggle {
