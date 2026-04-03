@@ -206,12 +206,36 @@
   @apply border-zinc-700 bg-zinc-800;
 }
 
+:root.dark .thread-composer-shell--drag-active {
+  @apply border-zinc-400 shadow-zinc-950/60;
+}
+
 :root.dark .thread-composer-input {
   @apply text-zinc-100;
 }
 
+:root.dark .thread-composer-input::placeholder {
+  @apply text-zinc-500;
+}
+
 :root.dark .thread-composer-input:disabled {
   @apply bg-zinc-700 text-zinc-500;
+}
+
+:root.dark .thread-composer-input-wrap--drag-active {
+  @apply bg-zinc-900/70;
+}
+
+:root.dark .thread-composer-drop-overlay {
+  @apply border-zinc-500 bg-zinc-900/92;
+}
+
+:root.dark .thread-composer-drop-overlay-copy {
+  @apply bg-zinc-100 text-zinc-900;
+}
+
+:root.dark .thread-composer-attachment-feedback {
+  @apply text-zinc-400;
 }
 
 :root.dark .thread-composer-attach-trigger {

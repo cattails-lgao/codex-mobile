@@ -4,7 +4,13 @@
       {{ dictationErrorText }}
     </p>
 
-    <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
+    <div
+      class="thread-composer-shell"
+      :class="{
+        'thread-composer-shell--no-top-radius': hasQueueAbove,
+        'thread-composer-shell--drag-active': isDragActive,
+      }"
+    >
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -69,37 +75,16 @@
       </div>
 
       <div
-        v-if="quotaSummaryText || contextUsageSummaryText"
-        class="thread-composer-rate-limit"
-        aria-live="polite"
+        class="thread-composer-input-wrap"
+        :class="{ 'thread-composer-input-wrap--drag-active': isDragActive }"
+        @dragenter="onInputDragEnter"
+        @dragover="onInputDragOver"
+        @dragleave="onInputDragLeave"
+        @drop="onInputDrop"
       >
-        <span class="thread-composer-rate-limit-row">
-          <span
-            v-if="quotaSummaryText"
-            class="thread-composer-rate-limit-value"
-            :title="quotaTooltipText"
-          >{{ quotaSummaryText }}</span>
-          <span
-            v-if="contextUsageSummaryText"
-            class="thread-composer-context-usage-inline"
-            :class="`is-${contextUsageTone}`"
-            :title="contextUsageTooltipText"
-          >
-            <span class="thread-composer-context-usage-inline-value">{{ contextUsageSummaryText }}</span>
-            <span class="thread-composer-context-usage-inline-bar" aria-hidden="true">
-              <span
-                class="thread-composer-context-usage-inline-bar-fill"
-                :style="{ width: `${contextUsageRemainingPercent}%` }"
-              />
-            </span>
-          </span>
-        </span>
-        <span v-if="quotaWeeklyRefreshText" class="thread-composer-rate-limit-refresh">
-          {{ quotaWeeklyRefreshText }}
-        </span>
-      </div>
-
-      <div class="thread-composer-input-wrap">
+        <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
+          <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
+        </div>
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
             <button
@@ -347,6 +332,9 @@
       </div>
 
     </div>
+    <p v-if="!dictationErrorText && attachmentFeedbackText" class="thread-composer-attachment-feedback">
+      {{ attachmentFeedbackText }}
+    </p>
     <input
       ref="photoLibraryInputRef"
       class="thread-composer-hidden-input"
@@ -474,6 +462,12 @@ type FolderUploadGroup = {
   isUploading: boolean
 }
 
+type AttachmentBatchStats = {
+  total: number
+  succeeded: number
+  failed: number
+}
+
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
@@ -481,6 +475,9 @@ const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
 const dictationFeedback = ref('')
+const pendingAttachmentCount = ref(0)
+const attachmentBatchStats = ref<AttachmentBatchStats | null>(null)
+const isDragActive = ref(false)
 const {
   state: dictationState,
   isSupported: isDictationSupported,
@@ -532,8 +529,8 @@ const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
-const CONTEXT_WINDOW_BASELINE_TOKENS = 12000
-
+let dragDepth = 0
+let attachmentSessionToken = 0
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
 let lastActiveThreadId = ''
@@ -574,6 +571,7 @@ const canSubmit = computed(() => {
   if (props.isUpdatingSpeedMode) return false
   if (!props.activeThreadId) return false
   if (isPlanModeWaitingForModel.value) return false
+  if (pendingAttachmentCount.value > 0) return false
   return draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0
 })
 const hasUnsavedDraft = computed(() =>
@@ -618,6 +616,29 @@ const dictationButtonLabel = computed(() => {
 const dictationErrorText = computed(() =>
   dictationState.value === 'idle' ? dictationFeedback.value.trim() : '',
 )
+const attachmentFeedbackText = computed(() => {
+  const stats = attachmentBatchStats.value
+  if (stats) {
+    const completed = stats.succeeded + stats.failed
+    const remaining = Math.max(0, stats.total - completed)
+    if (remaining > 0) {
+      if (stats.failed > 0) {
+        return `${stats.failed} failed, attaching ${formatAttachmentFileCount(remaining)}...`
+      }
+      return remaining === 1 ? 'Attaching file...' : `Attaching ${remaining} files...`
+    }
+    if (stats.failed > 0) {
+      if (stats.succeeded > 0) {
+        return `${stats.succeeded} attached, ${stats.failed} failed.`
+      }
+      return stats.failed === 1 ? 'Could not attach file.' : `Could not attach ${stats.failed} files.`
+    }
+  }
+  if (pendingAttachmentCount.value <= 0) return ''
+  return pendingAttachmentCount.value === 1
+    ? 'Attaching file...'
+    : `Attaching ${pendingAttachmentCount.value} files...`
+})
 const dictationDurationLabel = computed(() => {
   const totalSeconds = Math.max(0, Math.floor(recordingDurationMs.value / 1000))
   const minutes = Math.floor(totalSeconds / 60)
@@ -897,9 +918,13 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
   folderUploadGroups.value = []
   dictationFeedback.value = ''
+  attachmentBatchStats.value = null
+  pendingAttachmentCount.value = 0
+  resetDragState()
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
+  attachmentSessionToken += 1
 }
 
 function clearDraftState(): void {
@@ -1110,69 +1135,164 @@ function isImageFile(file: File): boolean {
   return /\.(png|jpe?g|gif|webp)$/i.test(file.name)
 }
 
-function addImageFile(file: File): void {
-  const reader = new FileReader()
-  reader.onload = () => {
-    if (typeof reader.result !== 'string') return
-    selectedImages.value.push({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: file.name || `Pasted image ${selectedImages.value.length + 1}`,
-      url: reader.result,
-    })
-  }
-  reader.readAsDataURL(file)
+function normalizeSelectedFiles(files: FileList | File[] | null | undefined): File[] {
+  if (!files) return []
+  return Array.from(files)
 }
 
-function addFiles(files: FileList | File[] | null): void {
-  if (!files || files.length === 0) return
-  const generation = draftGeneration.value
-  for (const file of Array.from(files)) {
-    if (isImageFile(file)) {
-      addImageFile(file)
-      continue
-    }
+function formatAttachmentFileCount(count: number): string {
+  return count === 1 ? '1 file' : `${count} files`
+}
 
-    void uploadFile(file).then((serverPath) => {
-      if (generation !== draftGeneration.value) return
-      if (serverPath) addFileAttachment(serverPath)
-    }).catch(() => {})
+function beginAttachmentWork(sessionToken: number): boolean {
+  if (sessionToken !== attachmentSessionToken) return false
+  pendingAttachmentCount.value += 1
+  return true
+}
+
+function finishAttachmentWork(sessionToken: number): void {
+  if (sessionToken !== attachmentSessionToken) return
+  pendingAttachmentCount.value = Math.max(0, pendingAttachmentCount.value - 1)
+}
+
+function beginAttachmentBatch(total: number): void {
+  if (total <= 0) return
+  const current = attachmentBatchStats.value
+  const completed = current ? current.succeeded + current.failed : 0
+  if (!current || completed >= current.total) {
+    attachmentBatchStats.value = { total, succeeded: 0, failed: 0 }
+    return
+  }
+  attachmentBatchStats.value = {
+    ...current,
+    total: current.total + total,
   }
 }
 
-function readClipboardImageFiles(event: ClipboardEvent): File[] {
-  const clipboardItems = event.clipboardData?.items
-  if (clipboardItems && clipboardItems.length > 0) {
-    const imageFiles: File[] = []
-    for (const item of Array.from(clipboardItems)) {
-      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
+function recordAttachmentBatchResult(result: 'success' | 'failure'): void {
+  const current = attachmentBatchStats.value
+  if (!current) return
+  attachmentBatchStats.value = {
+    ...current,
+    succeeded: current.succeeded + (result === 'success' ? 1 : 0),
+    failed: current.failed + (result === 'failure' ? 1 : 0),
+  }
+}
+
+function resetDragState(): void {
+  dragDepth = 0
+  isDragActive.value = false
+}
+
+function createAttachmentId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function createPastedImageName(file: File): string {
+  const now = new Date()
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('-')
+  const ext = file.type.startsWith('image/')
+    ? file.type.slice('image/'.length).replace(/[^a-z0-9]+/gi, '') || 'png'
+    : 'png'
+  return `pasted-image-${timestamp}.${ext}`
+}
+
+function ensureFileName(file: File): File {
+  if (file.name.trim()) return file
+  return new File([file], createPastedImageName(file), {
+    type: file.type || 'image/png',
+    lastModified: Date.now(),
+  })
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
       }
+      reject(new Error('Image read returned an unsupported result'))
     }
-    if (imageFiles.length > 0) {
-      return imageFiles
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Image read failed'))
     }
-  }
-
-  const clipboardFiles = event.clipboardData?.files
-  if (!clipboardFiles || clipboardFiles.length === 0) {
-    return []
-  }
-
-  return Array.from(clipboardFiles).filter((file) => isImageFile(file))
+    reader.readAsDataURL(file)
+  })
 }
 
-function onInputPaste(event: ClipboardEvent): void {
-  if (isInteractionDisabled.value) return
-  const imageFiles = readClipboardImageFiles(event)
-  if (imageFiles.length === 0) return
-  event.preventDefault()
-  addFiles(imageFiles)
-  isAttachMenuOpen.value = false
-  if (dictationFeedback.value) {
-    dictationFeedback.value = ''
+async function attachImageFile(file: File, sessionToken: number): Promise<void> {
+  if (!beginAttachmentWork(sessionToken)) return
+  try {
+    const normalizedFile = ensureFileName(file)
+    const dataUrl = await readFileAsDataUrl(normalizedFile)
+    if (sessionToken !== attachmentSessionToken) return
+    selectedImages.value = [
+      ...selectedImages.value,
+      {
+        id: createAttachmentId(),
+        name: normalizedFile.name,
+        url: dataUrl,
+      },
+    ]
+    recordAttachmentBatchResult('success')
+  } catch {
+    if (sessionToken === attachmentSessionToken) {
+      recordAttachmentBatchResult('failure')
+    }
+  } finally {
+    finishAttachmentWork(sessionToken)
   }
+}
+
+async function attachUploadedFile(file: File, sessionToken: number): Promise<void> {
+  if (!beginAttachmentWork(sessionToken)) return
+  try {
+    const serverPath = await uploadFile(file)
+    if (sessionToken !== attachmentSessionToken) return
+    if (!serverPath) {
+      recordAttachmentBatchResult('failure')
+      return
+    }
+    addFileAttachment(serverPath)
+    recordAttachmentBatchResult('success')
+  } catch {
+    if (sessionToken === attachmentSessionToken) {
+      recordAttachmentBatchResult('failure')
+    }
+  } finally {
+    finishAttachmentWork(sessionToken)
+  }
+}
+
+function attachIncomingFiles(files: FileList | File[] | null | undefined): void {
+  const normalizedFiles = normalizeSelectedFiles(files)
+  if (normalizedFiles.length === 0) return
+  beginAttachmentBatch(normalizedFiles.length)
+  isAttachMenuOpen.value = false
+  isSlashMenuOpen.value = false
+  closeFileMention()
+  const sessionToken = attachmentSessionToken
+  for (const file of normalizedFiles) {
+    if (isImageFile(file)) {
+      void attachImageFile(file, sessionToken)
+    } else {
+      void attachUploadedFile(file, sessionToken)
+    }
+  }
+}
+
+function hasFilePayload(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false
+  return Array.from(dataTransfer.types ?? []).includes('Files')
 }
 
 async function addFolderFiles(files: FileList | null): Promise<void> {
@@ -1230,14 +1350,14 @@ function clearInputValue(inputRefEl: HTMLInputElement | null): void {
 
 function onPhotoLibraryChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  addFiles(input?.files ?? null)
+  attachIncomingFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
 
 function onCameraCaptureChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  addFiles(input?.files ?? null)
+  attachIncomingFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
@@ -1247,6 +1367,59 @@ function onFolderPickerChange(event: Event): void {
   void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
+}
+
+function onInputPaste(event: ClipboardEvent): void {
+  if (isInteractionDisabled.value) return
+  const items = Array.from(event.clipboardData?.items ?? [])
+  if (items.length === 0) return
+  const hasPlainText = (event.clipboardData?.getData('text/plain') ?? '').length > 0
+  const imageFiles = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file instanceof File)
+  if (imageFiles.length === 0) return
+  if (!hasPlainText) {
+    event.preventDefault()
+  }
+  attachIncomingFiles(imageFiles)
+}
+
+function onInputDragEnter(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth += 1
+  isDragActive.value = true
+}
+
+function onInputDragOver(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  isDragActive.value = true
+}
+
+function onInputDragLeave(event: DragEvent): void {
+  if (!isDragActive.value) return
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) {
+    resetDragState()
+  }
+}
+
+function onInputDrop(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  resetDragState()
+  attachIncomingFiles(event.dataTransfer?.files ?? null)
+}
+
+function onWindowDragCleanup(): void {
+  if (!isDragActive.value && dragDepth === 0) return
+  resetDragState()
 }
 
 function onInputChange(): void {
@@ -1469,6 +1642,9 @@ function onDocumentClick(event: MouseEvent): void {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('drop', onWindowDragCleanup)
+  window.addEventListener('dragend', onWindowDragCleanup)
+  window.addEventListener('blur', onWindowDragCleanup)
 })
 
 defineExpose<ThreadComposerExposed>({
@@ -1478,6 +1654,9 @@ defineExpose<ThreadComposerExposed>({
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('drop', onWindowDragCleanup)
+  window.removeEventListener('dragend', onWindowDragCleanup)
+  window.removeEventListener('blur', onWindowDragCleanup)
   window.removeEventListener('pointerup', onDictationPressEnd)
   window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
@@ -1537,6 +1716,10 @@ watch(
 
 .thread-composer-shell {
   @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
+}
+
+.thread-composer-shell--drag-active {
+  @apply border-zinc-900 shadow-md;
 }
 
 .thread-composer-shell--no-top-radius {
@@ -1660,6 +1843,18 @@ watch(
 
 .thread-composer-input-wrap {
   @apply relative;
+}
+
+.thread-composer-input-wrap--drag-active {
+  @apply rounded-xl bg-zinc-50;
+}
+
+.thread-composer-drop-overlay {
+  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-zinc-900 bg-white/90;
+}
+
+.thread-composer-drop-overlay-copy {
+  @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
 }
 
 .thread-composer-file-mentions {
@@ -1890,6 +2085,10 @@ watch(
 
 .thread-composer-dictation-error {
   @apply mb-2 px-1 text-xs text-amber-700;
+}
+
+.thread-composer-attachment-feedback {
+  @apply mt-2 px-1 text-xs text-zinc-500;
 }
 
 .thread-composer-submit {
