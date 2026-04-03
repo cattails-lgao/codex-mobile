@@ -39,6 +39,30 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove `~/.codex/telegram-bridge.json` to clear saved Telegram token.
 
+### Feature: Current thread context remaining indicator
+
+#### Prerequisites
+- App is running from this repository.
+- At least one thread can send prompts to Codex successfully.
+- The selected model/app-server emits `thread/tokenUsage/updated` notifications.
+
+#### Steps
+1. Open an existing thread in the web UI.
+2. Note the header area on the right side of the thread title and confirm a `Context` badge is present.
+3. If the badge shows `Awaiting data`, send a prompt and wait for Codex to finish at least one turn.
+4. After the turn completes, inspect the `Context` badge again.
+5. Hover the badge and read the tooltip details.
+6. Refresh the page and reopen the same thread.
+
+#### Expected Results
+- The current thread header shows a `Context` badge for thread-specific usage state.
+- Once a token usage event arrives, the badge shows remaining context (for example `152K left`) and secondary text with used/window counts.
+- The tooltip includes current context usage, cumulative thread usage, and remaining context details.
+- After refresh, the last known context badge state for that thread is restored from local storage.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Telegram chatIds persisted for bot DM sending
 
 #### Prerequisites

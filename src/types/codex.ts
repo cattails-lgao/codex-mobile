@@ -248,11 +248,6 @@ export type UiRateLimitSnapshot = {
   planType: string | null
 }
 
-export type UiProjectGroup = {
-  projectName: string
-  threads: UiThread[]
-}
-
 export type UiTokenUsageBreakdown = {
   totalTokens: number
   inputTokens: number
@@ -265,6 +260,14 @@ export type UiThreadTokenUsage = {
   total: UiTokenUsageBreakdown
   last: UiTokenUsageBreakdown
   modelContextWindow: number | null
+  currentContextTokens: number
+  remainingContextTokens: number | null
+  remainingContextPercent: number | null
+}
+
+export type UiProjectGroup = {
+  projectName: string
+  threads: UiThread[]
 }
 
 export type UiAccountQuotaStatus = 'idle' | 'loading' | 'ready' | 'error'
