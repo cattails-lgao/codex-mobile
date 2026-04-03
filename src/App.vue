@@ -302,7 +302,7 @@
                       :class="{ 'new-thread-folder-action-primary': isCreateFolderOpen }"
                       type="button"
                       :aria-pressed="isCreateFolderOpen"
-                      :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder"
+                      :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder || (!!existingFolderError && !isCreateFolderOpen)"
                       @click="onOpenCreateFolderPanel"
                     >
                       New folder
@@ -336,12 +336,22 @@
                     type="text"
                     placeholder="Filter folders..."
                   />
-                  <p v-if="existingFolderError" class="new-thread-open-folder-error">{{ existingFolderError }}</p>
-                  <p v-else-if="isExistingFolderLoading" class="new-thread-open-folder-status">Loading folders…</p>
-                  <p v-else-if="existingFolderFilteredEntries.length === 0" class="new-thread-open-folder-status">
+                  <div v-if="existingFolderError" class="new-thread-open-folder-error-actions">
+                    <p class="new-thread-open-folder-error">{{ existingFolderError }}</p>
+                    <button
+                      class="new-thread-folder-action"
+                      type="button"
+                      :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                      @click="onRetryExistingFolderBrowse"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                  <p v-if="isExistingFolderLoading" class="new-thread-open-folder-status">Loading folders…</p>
+                  <p v-else-if="!existingFolderError && existingFolderFilteredEntries.length === 0" class="new-thread-open-folder-status">
                     {{ existingFolderFilter.trim() ? 'No folders match this filter.' : 'No subfolders found here.' }}
                   </p>
-                  <ul v-else class="new-thread-open-folder-list">
+                  <ul v-else-if="existingFolderFilteredEntries.length > 0" class="new-thread-open-folder-list">
                     <li v-for="entry in existingFolderFilteredEntries" :key="entry.key" class="new-thread-open-folder-item">
                       <button
                         class="new-thread-open-folder-item-main"
@@ -975,7 +985,7 @@ const isCreateFolderNameValid = computed(() => {
   return !/[\\/]/u.test(draft)
 })
 const canCreateFolder = computed(() => {
-  return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0
+  return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0 && !existingFolderError.value
 })
 const createFolderSubmitLabel = computed(() => {
   if (isCreatingFolder.value) return 'Creating…'
@@ -1732,6 +1742,12 @@ function onToggleHiddenFolders(): void {
   void loadExistingFolderListing(currentPath)
 }
 
+function onRetryExistingFolderBrowse(): void {
+  const currentPath = existingFolderBrowsePath.value.trim()
+  if (!isExistingFolderPickerOpen.value || !currentPath || isExistingFolderLoading.value) return
+  void loadExistingFolderListing(currentPath)
+}
+
 async function onConfirmExistingFolder(path = existingFolderBrowsePath.value): Promise<void> {
   const targetPath = path.trim()
   if (!targetPath) return
@@ -1761,8 +1777,11 @@ async function onConfirmExistingFolder(path = existingFolderBrowsePath.value): P
 }
 
 async function onOpenCreateFolderPanel(): Promise<void> {
-  existingFolderError.value = ''
   createFolderError.value = ''
+  if (isCreateFolderOpen.value) {
+    onCloseCreateFolderPanel()
+    return
+  }
   if (!isExistingFolderPickerOpen.value) {
     const startPath = newThreadCwd.value.trim() || await resolveProjectBaseDirectory()
     if (!startPath) return
@@ -1771,10 +1790,7 @@ async function onOpenCreateFolderPanel(): Promise<void> {
     await loadExistingFolderListing(startPath)
     if (existingFolderError.value) return
   }
-  if (isCreateFolderOpen.value) {
-    onCloseCreateFolderPanel()
-    return
-  }
+  if (existingFolderError.value) return
   createFolderDraft.value = defaultNewProjectName.value
   isCreateFolderOpen.value = true
   void nextTick(() => createFolderInputRef.value?.focus())
@@ -1791,6 +1807,10 @@ async function onCreateFolder(): Promise<void> {
   if (!normalizedInput) return
 
   createFolderError.value = ''
+  if (existingFolderError.value) {
+    createFolderError.value = 'Reload the current folder before creating a new one.'
+    return
+  }
   isCreatingFolder.value = true
 
   const baseDir = createFolderParentPath.value.trim()
@@ -1923,8 +1943,9 @@ async function loadExistingFolderListing(path: string): Promise<void> {
   } catch (error) {
     if (requestId !== existingFolderBrowseRequestId) return
     existingFolderError.value = error instanceof Error ? error.message : 'Failed to load local folders.'
-    existingFolderParentPath.value = ''
+    existingFolderParentPath.value = getPathParent(existingFolderBrowsePath.value)
     existingFolderEntries.value = []
+    onCloseCreateFolderPanel()
   } finally {
     if (requestId === existingFolderBrowseRequestId) {
       isExistingFolderLoading.value = false
@@ -1943,10 +1964,18 @@ async function loadTrendingProjects(): Promise<void> {
   }
 }
 function joinPath(parent: string, child: string): string {
-  const normalizedParent = normalizePathForUi(parent).trim().replace(/[\\/]+$/u, '')
+  const rawParent = normalizePathForUi(parent).trim()
   const normalizedChild = normalizePathForUi(child).trim().replace(/^[\\/]+/u, '')
-  if (!normalizedParent || !normalizedChild) return ''
-  const separator = normalizedParent.includes('\\') && !normalizedParent.includes('/') ? '\\' : '/'
+  if (!rawParent || !normalizedChild) return ''
+  const separator = rawParent.includes('\\') && !rawParent.includes('/') ? '\\' : '/'
+  if (/^[a-zA-Z]:[\\/]?$/u.test(rawParent)) {
+    return `${rawParent.slice(0, 2)}${separator}${normalizedChild}`
+  }
+  if (/^\/+$/u.test(rawParent)) {
+    return `/${normalizedChild}`
+  }
+  const normalizedParent = rawParent.replace(/[\\/]+$/u, '')
+  if (!normalizedParent) return ''
   return `${normalizedParent}${separator}${normalizedChild}`
 }
 
@@ -1993,14 +2022,6 @@ function collapsePathSegments(rawSegments: readonly string[]): string[] {
     segments.push(segment)
   }
   return segments
-}
-
-function getPathLeafName(path: string): string {
-  const trimmed = path.trim().replace(/\/+$/, '')
-  if (!trimmed) return ''
-  const slashIndex = trimmed.lastIndexOf('/')
-  if (slashIndex < 0) return trimmed
-  return trimmed.slice(slashIndex + 1)
 }
 
 function onSelectModel(modelId: string): void {
@@ -2811,6 +2832,10 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-open-folder-error {
   @apply m-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;
+}
+
+.new-thread-open-folder-error-actions {
+  @apply flex flex-wrap items-start gap-2;
 }
 
 .new-thread-open-folder-list {
