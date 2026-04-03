@@ -56,6 +56,12 @@ type CurrentModelConfig = {
   speedMode: SpeedMode
 }
 
+type ProviderModelsResponse = {
+  data?: unknown
+}
+
+const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
+
 type ResolvedCollaborationModeSettings = {
   model: string
   reasoningEffort: ReasoningEffort | null
@@ -1105,6 +1111,30 @@ export async function getAvailableModelIds(): Promise<string[]> {
     if (!candidate || ids.includes(candidate)) continue
     ids.push(candidate)
   }
+
+  try {
+    const response = await fetch('/codex-api/provider-models', {
+      signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+    })
+    let providerPayload: ProviderModelsResponse | null = null
+    try {
+      providerPayload = await response.json() as ProviderModelsResponse
+    } catch {
+      providerPayload = null
+    }
+
+    if (response.ok && Array.isArray(providerPayload?.data)) {
+      for (const candidate of providerPayload.data) {
+        if (typeof candidate !== 'string') continue
+        const normalized = candidate.trim()
+        if (!normalized || ids.includes(normalized)) continue
+        ids.push(normalized)
+      }
+    }
+  } catch {
+    // Keep Codex usable when the provider-models endpoint is unavailable.
+  }
+
   return ids
 }
 
