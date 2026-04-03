@@ -1,18 +1,5 @@
 # AGENTS.md
 
-## Build And Restart Runbook
-
-- Build the project with `npm run build`.
-- Port `4172` is retired and must not be used for debugging, testing, or deployment.
-- The only runtime environment is the `4173` instance.
-- After each change, do not run manual browser testing or Playwright verification unless the user explicitly asks for it.
-- The `4173` instance must run in an isolated `tmux` session in the background.
-- The `4173` instance must start without password protection; always include `--no-password` in the launch command.
-- Recommended update flow:
-  1. `npm run build`
-  2. `tmux has-session -t codexui-prod 2>/dev/null && tmux kill-session -t codexui-prod`
-  3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel --no-password'`
-
 ## "Push to main or commit to main" Means Merge To Local Main
 
 - When the user says "push", interpret it as: merge the current work into local `main`
@@ -109,7 +96,7 @@
   - viewport(s)
   - assertion/result summary
   - screenshot absolute path(s)
-  - CJS command/result (only when the user explicitly requested CJS verification)
+  - CJS command/result (when module-loading behavior was changed)
 
 ## NPX Testing Rule
 
@@ -120,7 +107,7 @@
 
 ## A1 Playwright Verification (From Mac via Tailscale)
 
-- Use this flow only when the user explicitly asks to validate UI behavior on Oracle A1 from the local Mac machine.
+- Use this flow when validating UI behavior on Oracle A1 from the local Mac machine.
 - On A1, start the app server with Codex CLI available in `PATH`:
   - `export PATH="$HOME/.npm-global/bin:$PATH"`
   - `pnpm run dev -- --host 0.0.0.0 --port 4173`
