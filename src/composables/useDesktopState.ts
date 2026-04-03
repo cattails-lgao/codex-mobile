@@ -1953,6 +1953,20 @@ export function useDesktopState() {
     return ''
   }
 
+  function readThreadTokenUsageUpdate(
+    notification: RpcNotification,
+  ): { threadId: string; tokenUsage: UiThreadTokenUsage } | null {
+    if (notification.method !== 'thread/tokenUsage/updated') return null
+    const params = asRecord(notification.params)
+    const threadId = extractThreadIdFromNotification(notification)
+    if (!threadId) return null
+
+    const tokenUsage = normalizeThreadTokenUsage(params?.tokenUsage)
+    if (!tokenUsage) return null
+
+    return { threadId, tokenUsage }
+  }
+
   function readTurnErrorMessage(notification: RpcNotification): string {
     if (notification.method !== 'turn/completed') return ''
     const params = asRecord(notification.params)

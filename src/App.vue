@@ -2645,6 +2645,38 @@ async function submitFirstMessageForNewThread(
   @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-x-hidden;
 }
 
+.content-thread-context {
+  @apply hidden min-w-0 rounded-xl border px-2.5 py-1 text-left sm:flex sm:flex-col sm:items-end sm:gap-0.5;
+}
+
+.content-thread-context[data-state='ok'] {
+  @apply border-emerald-200 bg-emerald-50;
+}
+
+.content-thread-context[data-state='warning'] {
+  @apply border-amber-200 bg-amber-50;
+}
+
+.content-thread-context[data-state='danger'] {
+  @apply border-rose-200 bg-rose-50;
+}
+
+.content-thread-context[data-state='pending'] {
+  @apply border-zinc-200 bg-zinc-50;
+}
+
+.content-thread-context-label {
+  @apply text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500;
+}
+
+.content-thread-context-value {
+  @apply text-xs font-semibold text-zinc-900;
+}
+
+.content-thread-context-meta {
+  @apply text-[11px] text-zinc-500;
+}
+
 
 
 .content-error {
