@@ -302,7 +302,7 @@
                       :class="{ 'new-thread-folder-action-primary': isCreateFolderOpen }"
                       type="button"
                       :aria-pressed="isCreateFolderOpen"
-                      :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder"
+                      :disabled="!existingFolderBrowsePath || !!existingFolderError || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder"
                       @click="onOpenCreateFolderPanel"
                     >
                       New folder
@@ -975,7 +975,7 @@ const isCreateFolderNameValid = computed(() => {
   return !/[\\/]/u.test(draft)
 })
 const canCreateFolder = computed(() => {
-  return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0
+  return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0 && !existingFolderError.value
 })
 const createFolderSubmitLabel = computed(() => {
   if (isCreatingFolder.value) return 'Creating…'
@@ -1761,7 +1761,6 @@ async function onConfirmExistingFolder(path = existingFolderBrowsePath.value): P
 }
 
 async function onOpenCreateFolderPanel(): Promise<void> {
-  existingFolderError.value = ''
   createFolderError.value = ''
   if (!isExistingFolderPickerOpen.value) {
     const startPath = newThreadCwd.value.trim() || await resolveProjectBaseDirectory()
@@ -1771,6 +1770,7 @@ async function onOpenCreateFolderPanel(): Promise<void> {
     await loadExistingFolderListing(startPath)
     if (existingFolderError.value) return
   }
+  if (existingFolderError.value) return
   if (isCreateFolderOpen.value) {
     onCloseCreateFolderPanel()
     return
@@ -1791,6 +1791,10 @@ async function onCreateFolder(): Promise<void> {
   if (!normalizedInput) return
 
   createFolderError.value = ''
+  if (existingFolderError.value) {
+    createFolderError.value = 'Reload the current folder before creating a new one.'
+    return
+  }
   isCreatingFolder.value = true
 
   const baseDir = createFolderParentPath.value.trim()
@@ -1925,6 +1929,7 @@ async function loadExistingFolderListing(path: string): Promise<void> {
     existingFolderError.value = error instanceof Error ? error.message : 'Failed to load local folders.'
     existingFolderParentPath.value = ''
     existingFolderEntries.value = []
+    onCloseCreateFolderPanel()
   } finally {
     if (requestId === existingFolderBrowseRequestId) {
       isExistingFolderLoading.value = false
@@ -1943,10 +1948,18 @@ async function loadTrendingProjects(): Promise<void> {
   }
 }
 function joinPath(parent: string, child: string): string {
-  const normalizedParent = normalizePathForUi(parent).trim().replace(/[\\/]+$/u, '')
+  const rawParent = normalizePathForUi(parent).trim()
   const normalizedChild = normalizePathForUi(child).trim().replace(/^[\\/]+/u, '')
-  if (!normalizedParent || !normalizedChild) return ''
-  const separator = normalizedParent.includes('\\') && !normalizedParent.includes('/') ? '\\' : '/'
+  if (!rawParent || !normalizedChild) return ''
+  const separator = rawParent.includes('\\') && !rawParent.includes('/') ? '\\' : '/'
+  if (/^[a-zA-Z]:[\\/]?$/u.test(rawParent)) {
+    return `${rawParent.slice(0, 2)}${separator}${normalizedChild}`
+  }
+  if (/^\/+$/u.test(rawParent)) {
+    return `/${normalizedChild}`
+  }
+  const normalizedParent = rawParent.replace(/[\\/]+$/u, '')
+  if (!normalizedParent) return ''
   return `${normalizedParent}${separator}${normalizedChild}`
 }
 

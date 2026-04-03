@@ -282,6 +282,7 @@ This file tracks manual regression and feature verification steps.
 9. Click `New folder` again and confirm the inline create row collapses instead of showing a separate cancel action.
 10. Re-open the inline create row, submit a single folder name, and confirm codexUI creates the folder and navigates the picker into that new child directory without immediately opening it as the selected project.
 11. From that newly created directory, click `Open` and confirm it becomes the selected folder in codexUI.
+12. Trigger a folder-listing failure for the current path if possible (for example by navigating to a directory that becomes unreadable), then confirm `New folder` is disabled and folder creation cannot proceed until the listing succeeds again.
 
 #### Expected Results
 - The home screen uses a single `Select folder` entry point for choosing or creating a local project.
@@ -289,6 +290,7 @@ This file tracks manual regression and feature verification steps.
 - Large directory listings stay contained inside a scrollable picker area instead of overlapping the rest of the home screen or composer area.
 - Parent navigation appears as a `..` row in the list, folder names can be filtered by substring, and hidden folders remain hidden unless explicitly requested.
 - Creating a folder from the picker uses a compact single-row composer, can be dismissed by clicking `New folder` again, and creates the folder inside the current directory before navigating into it while keeping final project selection explicit via `Open`.
+- When the current folder cannot be listed, the picker keeps the error visible and blocks folder creation until the browse state is valid again.
 
 #### Rollback/Cleanup
 - Delete any temporary test folder created during the manual check.
