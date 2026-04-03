@@ -184,6 +184,18 @@
                 <span class="sidebar-settings-label">Telegram</span>
                 <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
               </button>
+              <div
+                v-if="showThreadContextBadge"
+                class="sidebar-settings-row sidebar-settings-context-row"
+                :data-state="threadContextBadgeState"
+                :title="threadContextTooltip"
+              >
+                <span class="sidebar-settings-label">Context</span>
+                <span class="sidebar-settings-context-value" :data-state="threadContextBadgeState">
+                  {{ threadContextPrimaryText }}
+                  <span class="sidebar-settings-context-meta">{{ threadContextSecondaryText }}</span>
+                </span>
+              </div>
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
@@ -217,16 +229,6 @@
             />
           </template>
           <template #actions>
-            <div
-              v-if="showThreadContextBadge"
-              class="content-thread-context"
-              :data-state="threadContextBadgeState"
-              :title="threadContextTooltip"
-            >
-              <span class="content-thread-context-label">Context</span>
-              <span class="content-thread-context-value">{{ threadContextPrimaryText }}</span>
-              <span class="content-thread-context-meta">{{ threadContextSecondaryText }}</span>
-            </div>
             <button
               v-if="route.name === 'thread' && selectedThreadId"
               type="button"
@@ -244,7 +246,7 @@
             <SkillsHub @skills-changed="onSkillsChanged" />
           </template>
           <template v-else-if="isHomeRoute">
-            <div class="content-grid">
+            <div class="content-grid content-grid-home">
               <div class="new-thread-empty">
                 <p class="new-thread-hero">Let's build</p>
                 <ComposerDropdown class="new-thread-folder-dropdown" :model-value="newThreadCwd"
@@ -2640,40 +2642,9 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-body {
-  @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-auto overflow-x-hidden;
+  @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-x-hidden;
 }
 
-.content-thread-context {
-  @apply hidden min-w-0 rounded-xl border px-2.5 py-1 text-left sm:flex sm:flex-col sm:items-end sm:gap-0.5;
-}
-
-.content-thread-context[data-state='ok'] {
-  @apply border-emerald-200 bg-emerald-50;
-}
-
-.content-thread-context[data-state='warning'] {
-  @apply border-amber-200 bg-amber-50;
-}
-
-.content-thread-context[data-state='danger'] {
-  @apply border-rose-200 bg-rose-50;
-}
-
-.content-thread-context[data-state='pending'] {
-  @apply border-zinc-200 bg-zinc-50;
-}
-
-.content-thread-context-label {
-  @apply text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500;
-}
-
-.content-thread-context-value {
-  @apply text-xs font-semibold text-zinc-900;
-}
-
-.content-thread-context-meta {
-  @apply text-[11px] text-zinc-500;
-}
 
 
 .content-error {
@@ -2681,7 +2652,11 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-grid {
-  @apply flex flex-col gap-3;
+  @apply flex-1 min-h-0 flex flex-col gap-3;
+}
+
+.content-grid-home {
+  @apply overflow-y-auto;
 }
 
 .content-thread {
@@ -3153,6 +3128,30 @@ async function submitFirstMessageForNewThread(
 .settings-panel-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+.sidebar-settings-context-row {
+  @apply cursor-default;
+}
+
+.sidebar-settings-context-value {
+  @apply text-xs font-semibold text-zinc-700 text-right;
+}
+
+.sidebar-settings-context-value[data-state='ok'] {
+  @apply text-emerald-700;
+}
+
+.sidebar-settings-context-value[data-state='warning'] {
+  @apply text-amber-700;
+}
+
+.sidebar-settings-context-value[data-state='danger'] {
+  @apply text-rose-700;
+}
+
+.sidebar-settings-context-meta {
+  @apply block text-[11px] font-normal text-zinc-500;
 }
 
 .sidebar-settings-rate-limits {

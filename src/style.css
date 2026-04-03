@@ -1,6 +1,18 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
+html,
+body,
+#app {
+  min-height: 100%;
+  height: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  overflow: hidden;
+}
+
 :root.dark {
   color-scheme: dark;
 }
@@ -59,6 +71,26 @@
 
 :root.dark .sidebar-settings-row + .sidebar-settings-row {
   @apply border-zinc-700;
+}
+
+:root.dark .sidebar-settings-context-value {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-context-value[data-state='ok'] {
+  @apply text-emerald-300;
+}
+
+:root.dark .sidebar-settings-context-value[data-state='warning'] {
+  @apply text-amber-300;
+}
+
+:root.dark .sidebar-settings-context-value[data-state='danger'] {
+  @apply text-rose-300;
+}
+
+:root.dark .sidebar-settings-context-meta {
+  @apply text-zinc-400;
 }
 
 :root.dark .sidebar-settings-rate-limits {
@@ -262,9 +294,6 @@
   @apply text-zinc-400;
 }
 
-:root.dark .thread-composer-plan-toggle {
-  @apply text-zinc-400 hover:text-zinc-200;
-}
 
 :root.dark .composer-dropdown-menu {
   @apply border-zinc-600 bg-zinc-800;

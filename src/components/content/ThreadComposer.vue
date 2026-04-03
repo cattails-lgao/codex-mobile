@@ -220,25 +220,28 @@
                 }"
               />
             </button>
+            <button
+              class="thread-composer-attach-setting"
+              type="button"
+              role="switch"
+              :aria-checked="isPlanModeSelected"
+              :aria-label="isPlanModeSelected ? 'Disable plan mode' : 'Enable plan mode'"
+              :disabled="disabled || !activeThreadId || isTurnInProgress"
+              @click="toggleCollaborationMode"
+            >
+              <span class="thread-composer-attach-setting-copy">
+                <span class="thread-composer-attach-setting-label">Plan mode</span>
+                <span class="thread-composer-attach-setting-description">Agent proposes a plan before acting</span>
+              </span>
+              <span
+                class="thread-composer-attach-switch"
+                :class="{ 'is-on': isPlanModeSelected }"
+              />
+            </button>
           </div>
         </div>
 
         <template v-if="!isDictationRecording">
-          <button
-            class="thread-composer-plan-toggle"
-            :class="{ 'is-active': isPlanModeSelected }"
-            type="button"
-            :aria-label="isPlanModeSelected ? 'Disable plan mode' : 'Enable plan mode'"
-            :aria-pressed="isPlanModeSelected"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
-            @click="toggleCollaborationMode"
-          >
-            <span class="thread-composer-plan-toggle-label">Plan</span>
-            <span class="thread-composer-plan-toggle-switch" aria-hidden="true">
-              <span class="thread-composer-plan-toggle-switch-thumb" />
-            </span>
-          </button>
-
           <ComposerDropdown
             class="thread-composer-control"
             :model-value="selectedModel"
@@ -1911,6 +1914,7 @@ watch(
 
 .thread-composer-input {
   @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
+  overscroll-behavior-y: contain;
 }
 
 .thread-composer-input:focus {
@@ -2018,37 +2022,6 @@ watch(
   @apply truncate;
 }
 
-.thread-composer-plan-toggle {
-  @apply inline-flex h-7 shrink-0 items-center gap-1.5 border-0 bg-transparent p-0 text-sm leading-none text-zinc-500 transition hover:text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-plan-toggle.is-active {
-  @apply text-zinc-700;
-}
-
-.thread-composer-plan-toggle-label {
-  @apply leading-none;
-}
-
-.thread-composer-plan-toggle-switch {
-  @apply relative inline-flex h-4 w-7 shrink-0 rounded-full bg-zinc-200 transition;
-}
-
-.thread-composer-plan-toggle-switch-thumb {
-  @apply absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform;
-}
-
-.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch {
-  @apply bg-sky-500;
-}
-
-.thread-composer-plan-toggle.is-active .thread-composer-plan-toggle-switch-thumb {
-  transform: translateX(12px);
-}
-
-.thread-composer-plan-toggle:disabled .thread-composer-plan-toggle-switch {
-  @apply bg-zinc-200;
-}
 
 .thread-composer-actions {
   @apply ml-auto flex min-w-0 items-center gap-2;
