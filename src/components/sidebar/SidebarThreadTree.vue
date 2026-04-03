@@ -19,7 +19,7 @@
           >
             <template #left>
               <span class="thread-left-stack">
-                <span v-if="thread.inProgress || thread.unread" class="thread-status-indicator" :data-state="getThreadState(thread)" />
+                <span v-if="shouldShowThreadIndicator(thread)" class="thread-status-indicator" :data-state="getThreadState(thread)" />
                 <button class="thread-pin-button" type="button" title="pin" @click="togglePin(thread.id)">
                   <IconTablerPin class="thread-icon" />
                 </button>
@@ -27,8 +27,17 @@
             </template>
             <button class="thread-main-button" type="button" @click="onSelect(thread.id)">
               <span class="thread-row-title-wrap">
-                <span class="thread-row-title">{{ thread.title }}</span>
-                <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                <span class="thread-row-title-line">
+                  <span class="thread-row-title">{{ thread.title }}</span>
+                  <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                  <span
+                    v-if="thread.pendingRequestState"
+                    class="thread-row-request-chip"
+                    :data-state="thread.pendingRequestState"
+                  >
+                    {{ threadRequestLabel(thread) }}
+                  </span>
+                </span>
               </span>
             </button>
             <template #right>
@@ -114,7 +123,7 @@
           <template #left>
             <span class="thread-left-stack">
               <span
-                v-if="thread.inProgress || thread.unread"
+                v-if="shouldShowThreadIndicator(thread)"
                 class="thread-status-indicator"
                 :data-state="getThreadState(thread)"
               />
@@ -125,8 +134,17 @@
           </template>
           <button class="thread-main-button" type="button" @click="onSelect(thread.id)">
             <span class="thread-row-title-wrap">
-              <span class="thread-row-title">{{ thread.title }}</span>
-              <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+              <span class="thread-row-title-line">
+                <span class="thread-row-title">{{ thread.title }}</span>
+                <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                <span
+                  v-if="thread.pendingRequestState"
+                  class="thread-row-request-chip"
+                  :data-state="thread.pendingRequestState"
+                >
+                  {{ threadRequestLabel(thread) }}
+                </span>
+              </span>
             </span>
           </button>
           <template #right>
@@ -262,7 +280,7 @@
                 <template #left>
                   <span class="thread-left-stack">
                     <span
-                      v-if="thread.inProgress || thread.unread"
+                      v-if="shouldShowThreadIndicator(thread)"
                       class="thread-status-indicator"
                       :data-state="getThreadState(thread)"
                     />
@@ -273,8 +291,17 @@
                 </template>
                 <button class="thread-main-button" type="button" @click="onSelect(thread.id)">
                   <span class="thread-row-title-wrap">
-                    <span class="thread-row-title">{{ thread.title }}</span>
-                    <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                    <span class="thread-row-title-line">
+                      <span class="thread-row-title">{{ thread.title }}</span>
+                      <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" title="Worktree thread" />
+                      <span
+                        v-if="thread.pendingRequestState"
+                        class="thread-row-request-chip"
+                        :data-state="thread.pendingRequestState"
+                      >
+                        {{ threadRequestLabel(thread) }}
+                      </span>
+                    </span>
                   </span>
                 </button>
                 <template #right>
@@ -1459,7 +1486,17 @@ function hasThreads(group: UiProjectGroup): boolean {
   return projectThreads(group).length > 0
 }
 
-function getThreadState(thread: UiThread): 'working' | 'unread' | 'idle' {
+function shouldShowThreadIndicator(thread: UiThread): boolean {
+  return Boolean(thread.pendingRequestState) || thread.inProgress || thread.unread
+}
+
+function threadRequestLabel(thread: UiThread): string {
+  return thread.pendingRequestState === 'approval' ? 'Ожидает одобрения' : 'Ожидает ответа'
+}
+
+function getThreadState(thread: UiThread): 'awaiting-approval' | 'awaiting-response' | 'working' | 'unread' | 'idle' {
+  if (thread.pendingRequestState === 'approval') return 'awaiting-approval'
+  if (thread.pendingRequestState === 'response') return 'awaiting-response'
   if (thread.inProgress) return 'working'
   if (thread.unread) return 'unread'
   return 'idle'
@@ -1707,15 +1744,31 @@ onBeforeUnmount(() => {
 }
 
 .thread-row-title-wrap {
-  @apply min-w-0 inline-flex items-center gap-1;
+  @apply min-w-0 inline-flex w-full items-center;
+}
+
+.thread-row-title-line {
+  @apply min-w-0 inline-flex w-full items-center gap-1.5;
 }
 
 .thread-row-title {
-  @apply block text-sm leading-5 font-normal text-zinc-800 truncate whitespace-nowrap;
+  @apply min-w-0 block flex-1 text-sm leading-5 font-normal text-zinc-800 truncate whitespace-nowrap;
 }
 
 .thread-row-worktree-icon {
   @apply w-3 h-3 text-zinc-500 shrink-0;
+}
+
+.thread-row-request-chip {
+  @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
+}
+
+.thread-row-request-chip[data-state='approval'] {
+  @apply border-emerald-500/20 bg-emerald-500/15 text-emerald-700;
+}
+
+.thread-row-request-chip[data-state='response'] {
+  @apply border-sky-200 bg-sky-50 text-sky-700;
 }
 
 .thread-status-indicator {
@@ -1799,10 +1852,22 @@ onBeforeUnmount(() => {
   @apply border-2 border-zinc-500 border-t-transparent bg-transparent animate-spin;
 }
 
+.thread-status-indicator[data-state='awaiting-approval'] {
+  @apply bg-emerald-500;
+}
+
+.thread-status-indicator[data-state='awaiting-response'] {
+  @apply bg-sky-500;
+}
+
 .thread-row:hover .thread-status-indicator[data-state='unread'],
 .thread-row:hover .thread-status-indicator[data-state='working'],
+.thread-row:hover .thread-status-indicator[data-state='awaiting-approval'],
+.thread-row:hover .thread-status-indicator[data-state='awaiting-response'],
 .thread-row:focus-within .thread-status-indicator[data-state='unread'],
-.thread-row:focus-within .thread-status-indicator[data-state='working'] {
+.thread-row:focus-within .thread-status-indicator[data-state='working'],
+.thread-row:focus-within .thread-status-indicator[data-state='awaiting-approval'],
+.thread-row:focus-within .thread-status-indicator[data-state='awaiting-response'] {
   @apply opacity-0;
 }
 

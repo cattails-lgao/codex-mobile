@@ -36,6 +36,7 @@ import type {
   CollaborationModeKind,
   CollaborationModeOption,
   CommandExecutionData,
+  UiPendingRequestState,
   ReasoningEffort,
   SpeedMode,
   ThreadScrollState,
@@ -70,6 +71,7 @@ const LEGACY_COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mod
 const NEW_THREAD_COLLABORATION_MODE_CONTEXT = '__new-thread__'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
+const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
@@ -731,7 +733,8 @@ function areThreadFieldsEqual(first: UiThread, second: UiThread): boolean {
     first.updatedAtIso === second.updatedAtIso &&
     first.preview === second.preview &&
     first.unread === second.unread &&
-    first.inProgress === second.inProgress
+    first.inProgress === second.inProgress &&
+    first.pendingRequestState === second.pendingRequestState
   )
 }
 
@@ -935,6 +938,7 @@ export function useDesktopState() {
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
   let rateLimitRefreshTimer: number | null = null
+  const delayedTurnSyncTimerByThreadId = new Map<string, number>()
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -1275,6 +1279,25 @@ export function useDesktopState() {
     }, RATE_LIMIT_REFRESH_DEBOUNCE_MS)
   }
 
+  function clearDelayedTurnSync(threadId: string): void {
+    if (!threadId || typeof window === 'undefined') return
+    const timerId = delayedTurnSyncTimerByThreadId.get(threadId)
+    if (timerId === undefined) return
+    window.clearTimeout(timerId)
+    delayedTurnSyncTimerByThreadId.delete(threadId)
+  }
+
+  function scheduleDelayedTurnSync(threadId: string): void {
+    if (!threadId || typeof window === 'undefined') return
+    clearDelayedTurnSync(threadId)
+    const timerId = window.setTimeout(() => {
+      delayedTurnSyncTimerByThreadId.delete(threadId)
+      pendingThreadMessageRefresh.add(threadId)
+      void syncFromNotifications()
+    }, TURN_START_FOLLOW_UP_SYNC_DELAY_MS)
+    delayedTurnSyncTimerByThreadId.set(threadId, timerId)
+  }
+
   function applyCachedTitlesToGroups(groups: UiProjectGroup[]): UiProjectGroup[] {
     const titles = threadTitleById.value
     if (Object.keys(titles).length === 0) return groups
@@ -1287,12 +1310,36 @@ export function useDesktopState() {
     }))
   }
 
+  function getThreadPendingRequests(threadId: string): UiServerRequest[] {
+    if (!threadId) return []
+    return Array.isArray(pendingServerRequestsByThreadId.value[threadId])
+      ? pendingServerRequestsByThreadId.value[threadId]
+      : []
+  }
+
+  function isApprovalRequestMethod(method: string): boolean {
+    return (
+      method === 'item/commandExecution/requestApproval' ||
+      method === 'item/fileChange/requestApproval' ||
+      method === 'execCommandApproval' ||
+      method === 'applyPatchApproval'
+    )
+  }
+
+  function readPendingRequestState(requests: UiServerRequest[]): UiPendingRequestState | null {
+    if (requests.some((request) => isApprovalRequestMethod(request.method))) {
+      return 'approval'
+    }
+    return requests.length > 0 ? 'response' : null
+  }
+
   function applyThreadFlags(): void {
     const withTitles = applyCachedTitlesToGroups(sourceGroups.value)
     const flaggedGroups: UiProjectGroup[] = withTitles.map((group) => ({
       projectName: group.projectName,
       threads: group.threads.map((thread) => {
         const inProgress = inProgressById.value[thread.id] === true
+        const pendingRequestState = readPendingRequestState(getThreadPendingRequests(thread.id))
         const isSelected = selectedThreadId.value === thread.id
         const lastReadIso = readStateByThreadId.value[thread.id]
         const unreadByEvent = eventUnreadByThreadId.value[thread.id] === true
@@ -1302,6 +1349,7 @@ export function useDesktopState() {
           ...thread,
           inProgress,
           unread,
+          pendingRequestState,
         }
       }),
     }))
@@ -1989,6 +2037,7 @@ export function useDesktopState() {
       ...pendingServerRequestsByThreadId.value,
       [threadId]: nextRows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso)),
     }
+    applyThreadFlags()
   }
 
   function removePendingServerRequestById(requestId: number): void {
@@ -2000,6 +2049,7 @@ export function useDesktopState() {
       }
     }
     pendingServerRequestsByThreadId.value = next
+    applyThreadFlags()
   }
 
   function replacePendingServerRequests(requests: UiServerRequest[]): void {
@@ -3464,6 +3514,7 @@ export function useDesktopState() {
       pendingThreadMessageRefresh.add(threadId)
       pendingThreadsRefresh = true
       await syncFromNotifications()
+      scheduleDelayedTurnSync(threadId)
     } catch (unknownError) {
       throw unknownError
     }
@@ -3900,6 +3951,12 @@ export function useDesktopState() {
       window.clearTimeout(rateLimitRefreshTimer)
       rateLimitRefreshTimer = null
     }
+    if (typeof window !== 'undefined') {
+      for (const timerId of delayedTurnSyncTimerByThreadId.values()) {
+        window.clearTimeout(timerId)
+      }
+    }
+    delayedTurnSyncTimerByThreadId.clear()
     activeReasoningItemId = ''
     shouldAutoScrollOnNextAgentEvent = false
     persistedMessagesByThreadId.value = {}

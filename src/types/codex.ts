@@ -71,7 +71,10 @@ export type UiThread = {
   preview: string
   unread: boolean
   inProgress: boolean
+  pendingRequestState?: UiPendingRequestState | null
 }
+
+export type UiPendingRequestState = 'approval' | 'response'
 
 export type CommandExecutionData = {
   command: string
@@ -213,6 +216,7 @@ export type UiServerRequest = {
 export type UiServerRequestReply = {
   id: number
   result?: unknown
+  followUpMessageText?: string
   error?: {
     code?: number
     message: string

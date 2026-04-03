@@ -363,7 +363,14 @@
                     @steer="steerQueuedMessage"
                     @delete="removeQueuedMessage"
                   />
-                  <ThreadComposer ref="threadComposerRef" :active-thread-id="composerThreadContextId"
+                  <ThreadPendingRequestPanel
+                    v-if="selectedThreadPendingRequest"
+                    :request="selectedThreadPendingRequest"
+                    :request-count="selectedThreadServerRequests.length"
+                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                    @respond-server-request="onRespondServerRequest"
+                  />
+                  <ThreadComposer v-else ref="threadComposerRef" :active-thread-id="composerThreadContextId"
                     :cwd="composerCwd"
                     :collaboration-modes="availableCollaborationModes"
                     :selected-collaboration-mode="selectedCollaborationMode"
@@ -402,6 +409,7 @@ import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
+import ThreadPendingRequestPanel from './components/content/ThreadPendingRequestPanel.vue'
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
@@ -427,7 +435,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiThreadTokenUsage } from './types/codex'
+import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
 import { getPathLeafName, getPathParent } from './pathUtils.js'
@@ -725,6 +733,10 @@ const latestUserTurnId = computed(() => {
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
+const selectedThreadPendingRequest = computed<UiServerRequest | null>(() => {
+  const rows = selectedThreadServerRequests.value
+  return rows.length > 0 ? rows[rows.length - 1] : null
+})
 const composerCwd = computed(() => {
   if (isHomeRoute.value) return newThreadCwd.value.trim()
   return selectedThread.value?.cwd?.trim() ?? ''
@@ -1293,8 +1305,20 @@ function onUpdateThreadScrollState(payload: { threadId: string; state: ThreadScr
   setThreadScrollState(payload.threadId, payload.state)
 }
 
-function onRespondServerRequest(payload: { id: number; result?: unknown; error?: { code?: number; message: string } }): void {
-  void respondToPendingServerRequest(payload)
+function onRespondServerRequest(payload: UiServerRequestReply): void {
+  void handleServerRequestResponse(payload)
+}
+
+async function handleServerRequestResponse(payload: UiServerRequestReply): Promise<void> {
+  const responded = await respondToPendingServerRequest(payload)
+  const followUpMessageText = payload.followUpMessageText?.trim() ?? ''
+  if (!responded || !followUpMessageText || isHomeRoute.value) return
+
+  try {
+    await sendMessageToSelectedThread(followUpMessageText, [], [], 'steer', [])
+  } catch {
+    // sendMessageToSelectedThread already surfaces the error through shared state.
+  }
 }
 
 async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: number }): Promise<void> {
