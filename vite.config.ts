@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
 import tailwindcss from "@tailwindcss/vite";
 import { spawnSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
@@ -226,6 +226,39 @@ export default defineConfig({
             res.end(JSON.stringify({ error: "File not found." }));
           });
           stream.pipe(res);
+        });
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
+          const url = new URL(req.url, "http://localhost");
+          if (url.pathname !== "/codex-local-directories") return next();
+
+          const showHidden = ["1", "true", "yes", "on"].includes((url.searchParams.get("showHidden") ?? "").toLowerCase());
+          const localPath = normalizeLocalPath(url.searchParams.get("path") ?? "");
+          if (!localPath || !isAbsolute(localPath)) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Expected absolute local directory path." }));
+            return;
+          }
+
+          try {
+            const fileStat = await stat(localPath);
+            if (!fileStat.isDirectory()) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Expected directory path." }));
+              return;
+            }
+
+            const data = await getLocalDirectoryListing(localPath, { showHidden });
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ data }));
+          } catch {
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Directory not found." }));
+          }
         });
         server.middlewares.use(async (req, res, next) => {
           if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();

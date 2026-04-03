@@ -9,6 +9,21 @@ type DirectoryItem = {
   mtimeMs: number
 }
 
+export type LocalDirectoryListingEntry = {
+  name: string
+  path: string
+}
+
+export type LocalDirectoryListing = {
+  path: string
+  parentPath: string
+  entries: LocalDirectoryListingEntry[]
+}
+
+type LocalDirectoryListingOptions = {
+  showHidden?: boolean
+}
+
 const TEXT_EDITABLE_EXTENSIONS = new Set([
   '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
   '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
@@ -65,6 +80,10 @@ export function decodeBrowsePath(rawPath: string): string {
 
 export function isTextEditablePath(pathValue: string): boolean {
   return TEXT_EDITABLE_EXTENSIONS.has(extname(pathValue).toLowerCase())
+}
+
+function isHiddenName(value: string): boolean {
+  return value.startsWith('.')
 }
 
 function looksLikeTextBuffer(buffer: Buffer): boolean {
@@ -195,6 +214,32 @@ function actionButtonsHtml(localPath: string, newProjectName: string): string {
   return `${createButton}${openButton}`
 }
 
+export async function getLocalDirectoryListing(
+  localPath: string,
+  options: LocalDirectoryListingOptions = {},
+): Promise<LocalDirectoryListing> {
+  const entries = await readdir(localPath, { withFileTypes: true })
+  const directories = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      path: join(localPath, entry.name),
+    }))
+    .filter((entry) => options.showHidden === true || !isHiddenName(entry.name))
+    .sort((a, b) => {
+      const aHidden = isHiddenName(a.name)
+      const bHidden = isHiddenName(b.name)
+      if (aHidden !== bHidden) return aHidden ? -1 : 1
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    })
+
+  return {
+    path: localPath,
+    parentPath: dirname(localPath),
+    entries: directories,
+  }
+}
+
 export async function createDirectoryListingHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {
   const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
   const items = await getDirectoryItems(localPath)
@@ -300,7 +345,9 @@ export async function createDirectoryListingHtml(localPath: string, options?: { 
           button.disabled = false;
           return;
         }
-        window.location.assign('/#/');
+        status.textContent = 'Folder opened. Returning to Codex...';
+        const nextUrl = '/?openProjectPath=' + encodeURIComponent(path) + '#/';
+        window.location.assign(nextUrl);
       } catch {
         status.textContent = errorText;
         button.disabled = false;

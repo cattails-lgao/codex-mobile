@@ -256,10 +256,119 @@
                   add-action-label="+ Add new project"
                   :disabled="false" @update:model-value="onSelectNewThreadFolder"
                   @add-action="onStartAddNewProject" />
+                <p v-if="newThreadCwd" class="new-thread-folder-selected" :title="newThreadCwd">
+                  Selected folder: {{ newThreadCwd }}
+                </p>
+                <div class="new-thread-folder-actions">
+                  <button class="new-thread-folder-action new-thread-folder-action-primary" type="button" @click="onOpenExistingFolder">
+                    Select folder
+                  </button>
+                </div>
+                <div v-if="isExistingFolderPickerOpen" class="new-thread-open-folder">
+                  <div class="new-thread-open-folder-header">
+                    <p class="new-thread-open-folder-title">Select folder</p>
+                    <button class="new-thread-open-folder-close" type="button" @click="onCloseExistingFolderPanel">
+                      Cancel
+                    </button>
+                  </div>
+                  <p class="new-thread-open-folder-label">Current folder</p>
+                  <div class="new-thread-open-folder-current">
+                    <p class="new-thread-open-folder-path" :title="existingFolderBrowsePath || 'Unavailable'">
+                      {{ existingFolderBrowsePath || 'Unavailable' }}
+                    </p>
+                    <button
+                      class="new-thread-folder-action new-thread-folder-action-primary"
+                      type="button"
+                      :disabled="!existingFolderBrowsePath || !!existingFolderError || isExistingFolderLoading || isOpeningExistingFolder"
+                      @click="onConfirmExistingFolder()"
+                    >
+                      {{ isOpeningExistingFolder ? 'Opening…' : 'Open' }}
+                    </button>
+                  </div>
+                  <div class="new-thread-open-folder-actions">
+                    <label class="new-thread-open-folder-toggle">
+                      <input
+                        v-model="showHiddenFolders"
+                        class="new-thread-open-folder-toggle-input"
+                        type="checkbox"
+                        @change="onToggleHiddenFolders"
+                      />
+                      <span>Show hidden folders</span>
+                    </label>
+                    <button
+                      class="new-thread-folder-action"
+                      :class="{ 'new-thread-folder-action-primary': isCreateFolderOpen }"
+                      type="button"
+                      :aria-pressed="isCreateFolderOpen"
+                      :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder"
+                      @click="onOpenCreateFolderPanel"
+                    >
+                      New folder
+                    </button>
+                  </div>
+                  <div v-if="isCreateFolderOpen" class="new-thread-open-folder-create">
+                    <div class="new-thread-open-folder-create-composer">
+                      <input
+                        ref="createFolderInputRef"
+                        v-model="createFolderDraft"
+                        class="new-thread-open-folder-create-input"
+                        type="text"
+                        placeholder="Folder name"
+                        @keydown.enter.prevent="onCreateFolder"
+                        @keydown.esc.prevent="onCloseCreateFolderPanel"
+                      />
+                      <button
+                        class="new-thread-folder-action new-thread-folder-action-primary new-thread-open-folder-create-submit"
+                        type="button"
+                        :disabled="!canCreateFolder || isCreatingFolder"
+                        @click="onCreateFolder"
+                      >
+                        {{ createFolderSubmitLabel }}
+                      </button>
+                    </div>
+                    <p v-if="createFolderError" class="new-thread-open-folder-error">{{ createFolderError }}</p>
+                  </div>
+                  <input
+                    v-model="existingFolderFilter"
+                    class="new-thread-open-folder-filter"
+                    type="text"
+                    placeholder="Filter folders..."
+                  />
+                  <p v-if="existingFolderError" class="new-thread-open-folder-error">{{ existingFolderError }}</p>
+                  <p v-else-if="isExistingFolderLoading" class="new-thread-open-folder-status">Loading folders…</p>
+                  <p v-else-if="existingFolderFilteredEntries.length === 0" class="new-thread-open-folder-status">
+                    {{ existingFolderFilter.trim() ? 'No folders match this filter.' : 'No subfolders found here.' }}
+                  </p>
+                  <ul v-else class="new-thread-open-folder-list">
+                    <li v-for="entry in existingFolderFilteredEntries" :key="entry.key" class="new-thread-open-folder-item">
+                      <button
+                        class="new-thread-open-folder-item-main"
+                        type="button"
+                        :title="entry.path"
+                        :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                        @click="onBrowseExistingFolder(entry.path)"
+                      >
+                        <span class="new-thread-open-folder-item-name">{{ entry.name }}</span>
+                      </button>
+                      <button
+                        v-if="entry.kind === 'directory'"
+                        class="new-thread-open-folder-item-open"
+                        type="button"
+                        :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                        @click="onConfirmExistingFolder(entry.path)"
+                      >
+                        Open
+                      </button>
+                    </li>
+                  </ul>
+                </div>
                 <ComposerRuntimeDropdown
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
                 />
+                <p class="new-thread-runtime-help">
+                  <code>Local project</code> uses the selected folder directly. <code>New worktree</code> creates an isolated Git worktree before the first prompt.
+                </p>
                 <div
                   v-if="worktreeInitStatus.phase !== 'idle'"
                   class="worktree-init-status"
@@ -425,10 +534,12 @@ import {
   createWorktree,
   getGithubProjectsForScope,
   getAccounts,
+  createLocalDirectory,
   getHomeDirectory,
   getProjectRootSuggestion,
   getTelegramStatus,
   getWorkspaceRootsState,
+  listLocalDirectories,
   openProjectRoot,
   removeAccount,
   refreshAccountsFromAuth,
@@ -437,8 +548,8 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GithubTipsScope, GithubTrendingProject, TelegramStatus } from './api/codexGateway'
-import { getPathLeafName, getPathParent } from './pathUtils.js'
+import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus } from './api/codexGateway'
+import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ReviewPane = defineAsyncComponent(() => import('./components/content/ReviewPane.vue'))
@@ -646,6 +757,7 @@ const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isReviewPaneOpen = ref(false)
+const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
@@ -671,6 +783,19 @@ const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, true))
+const isCreateFolderOpen = ref(false)
+const createFolderDraft = ref('')
+const createFolderError = ref('')
+const isCreatingFolder = ref(false)
+const isExistingFolderPickerOpen = ref(false)
+const existingFolderBrowsePath = ref('')
+const existingFolderParentPath = ref('')
+const existingFolderEntries = ref<LocalDirectoryEntry[]>([])
+const existingFolderError = ref('')
+const isExistingFolderLoading = ref(false)
+const isOpeningExistingFolder = ref(false)
+const showHiddenFolders = ref(false)
+const existingFolderFilter = ref('')
 const telegramStatus = ref<TelegramStatus>({
   configured: false,
   active: false,
@@ -683,6 +808,7 @@ const mobileResumeReloadTriggered = ref(false)
 const mobileResumeSyncInProgress = ref(false)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
+let existingFolderBrowseRequestId = 0
 
 const routeThreadId = computed(() => {
   const rawThreadId = route.params.threadId
@@ -839,6 +965,52 @@ const newThreadFolderOptions = computed(() => {
 
   return options
 })
+const createFolderParentPath = computed(() => existingFolderBrowsePath.value.trim())
+const isCreateFolderNameValid = computed(() => {
+  const draft = createFolderDraft.value.trim()
+  if (!draft) return false
+  if (draft === '.' || draft === '..') return false
+  return !/[\\/]/u.test(draft)
+})
+const canCreateFolder = computed(() => {
+  return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0
+})
+const createFolderSubmitLabel = computed(() => {
+  if (isCreatingFolder.value) return 'Creating…'
+  return 'Create'
+})
+const canBrowseExistingFolderParent = computed(() => {
+  const current = existingFolderBrowsePath.value.trim()
+  const parent = existingFolderParentPath.value.trim()
+  return Boolean(current && parent && current !== parent)
+})
+const existingFolderDisplayEntries = computed(() => {
+  const entries: Array<{ key: string; name: string; path: string; kind: 'parent' | 'directory' }> = []
+  if (canBrowseExistingFolderParent.value) {
+    entries.push({
+      key: `parent:${existingFolderParentPath.value}`,
+      name: '..',
+      path: existingFolderParentPath.value,
+      kind: 'parent',
+    })
+  }
+  for (const entry of existingFolderEntries.value) {
+    entries.push({
+      key: `directory:${entry.path}`,
+      name: entry.name,
+      path: entry.path,
+      kind: 'directory',
+    })
+  }
+  return entries
+})
+const existingFolderFilteredEntries = computed(() => {
+  const filter = existingFolderFilter.value.trim().toLowerCase()
+  if (!filter) return existingFolderDisplayEntries.value
+  return existingFolderDisplayEntries.value.filter((entry) =>
+    entry.kind === 'parent' || entry.name.toLowerCase().includes(filter),
+  )
+})
 const darkModeMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
 const githubTipsScopeOptions = computed<Array<{ value: GithubTipsScope; label: string }>>(() => [
   { value: 'search-daily', label: 'Search daily' },
@@ -864,7 +1036,6 @@ onMounted(() => {
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
-  void applyLaunchProjectPathFromUrl()
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
@@ -1365,6 +1536,10 @@ function onWindowPageShow(event: PageTransitionEvent): void {
 }
 
 function onWindowFocus(): void {
+  if (route.name === 'home') {
+    void loadWorkspaceRootOptionsState()
+    void refreshDefaultProjectName()
+  }
   maybeSyncAfterMobileResume()
 }
 
@@ -1510,6 +1685,7 @@ function scheduleMobileConversationJumpToLatest(): void {
 
 function onSelectNewThreadFolder(cwd: string): void {
   newThreadCwd.value = cwd.trim()
+  createFolderError.value = ''
 }
 
 async function onStartAddNewProject(): Promise<void> {
@@ -1524,16 +1700,140 @@ async function onStartAddNewProject(): Promise<void> {
   window.location.assign(`/codex-local-browse${encodeURI(browseRoot)}${query ? `?${query}` : ''}`)
 }
 
-async function applyLaunchProjectPathFromUrl(): Promise<void> {
-  if (typeof window === 'undefined') return
+async function onOpenExistingFolder(): Promise<void> {
+  const startPath = newThreadCwd.value.trim() || await resolveProjectBaseDirectory()
+  if (!startPath) return
+  isCreateFolderOpen.value = false
+  isExistingFolderPickerOpen.value = true
+  existingFolderFilter.value = ''
+  await loadExistingFolderListing(startPath)
+}
+
+function onCloseExistingFolderPanel(): void {
+  existingFolderBrowseRequestId += 1
+  isExistingFolderPickerOpen.value = false
+  isExistingFolderLoading.value = false
+  existingFolderError.value = ''
+  existingFolderFilter.value = ''
+  onCloseCreateFolderPanel()
+}
+
+async function onBrowseExistingFolder(path: string): Promise<void> {
+  if (!path || isExistingFolderLoading.value) return
+  existingFolderFilter.value = ''
+  await loadExistingFolderListing(path)
+}
+
+function onToggleHiddenFolders(): void {
+  const currentPath = existingFolderBrowsePath.value.trim()
+  if (!isExistingFolderPickerOpen.value || !currentPath) return
+  void loadExistingFolderListing(currentPath)
+}
+
+async function onConfirmExistingFolder(path = existingFolderBrowsePath.value): Promise<void> {
+  const targetPath = path.trim()
+  if (!targetPath) return
+
+  existingFolderError.value = ''
+  isOpeningExistingFolder.value = true
+  try {
+    const normalizedPath = await openProjectRoot(targetPath, {
+      createIfMissing: false,
+      label: '',
+    })
+    if (!normalizedPath) {
+      existingFolderError.value = 'Failed to open the selected folder.'
+      return
+    }
+
+    newThreadCwd.value = normalizedPath
+    pinProjectToTop(getPathLeafName(normalizedPath))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+    onCloseExistingFolderPanel()
+  } catch (error) {
+    existingFolderError.value = error instanceof Error ? error.message : 'Failed to open the selected folder.'
+  } finally {
+    isOpeningExistingFolder.value = false
+  }
+}
+
+async function onOpenCreateFolderPanel(): Promise<void> {
+  existingFolderError.value = ''
+  createFolderError.value = ''
+  if (!isExistingFolderPickerOpen.value) {
+    const startPath = newThreadCwd.value.trim() || await resolveProjectBaseDirectory()
+    if (!startPath) return
+    isExistingFolderPickerOpen.value = true
+    existingFolderFilter.value = ''
+    await loadExistingFolderListing(startPath)
+    if (existingFolderError.value) return
+  }
+  if (isCreateFolderOpen.value) {
+    onCloseCreateFolderPanel()
+    return
+  }
+  createFolderDraft.value = defaultNewProjectName.value
+  isCreateFolderOpen.value = true
+  void nextTick(() => createFolderInputRef.value?.focus())
+}
+
+function onCloseCreateFolderPanel(): void {
+  createFolderError.value = ''
+  createFolderDraft.value = ''
+  isCreateFolderOpen.value = false
+}
+
+async function onCreateFolder(): Promise<void> {
+  const normalizedInput = createFolderDraft.value.trim()
+  if (!normalizedInput) return
+
+  createFolderError.value = ''
+  isCreatingFolder.value = true
+
+  const baseDir = createFolderParentPath.value.trim()
+  const targetPath = normalizeAbsolutePath(joinPath(baseDir, normalizedInput))
+
+  if (!targetPath) {
+    createFolderError.value = 'Unable to determine where the new folder should be created.'
+    isCreatingFolder.value = false
+    return
+  }
+
+  if (!isCreateFolderNameValid.value) {
+    createFolderError.value = 'Enter a single folder name.'
+    isCreatingFolder.value = false
+    return
+  }
+
+  try {
+    const normalizedPath = await createLocalDirectory(targetPath)
+    if (!normalizedPath) {
+      createFolderError.value = 'Failed to create the folder.'
+      return
+    }
+
+    createFolderError.value = ''
+    existingFolderFilter.value = ''
+    await loadExistingFolderListing(normalizedPath)
+    onCloseCreateFolderPanel()
+  } catch (error) {
+    createFolderError.value = error instanceof Error ? error.message : 'Failed to create folder.'
+  } finally {
+    isCreatingFolder.value = false
+  }
+}
+
+async function applyLaunchProjectPathFromUrl(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
   const launchProjectPath = new URLSearchParams(window.location.search).get('openProjectPath')?.trim() ?? ''
-  if (!launchProjectPath) return
+  if (!launchProjectPath) return false
   try {
     const normalizedPath = await openProjectRoot(launchProjectPath, {
       createIfMissing: false,
       label: '',
     })
-    if (!normalizedPath) return
+    if (!normalizedPath) return false
     newThreadCwd.value = normalizedPath
     pinProjectToTop(getPathLeafName(normalizedPath))
     await router.replace({ name: 'home' })
@@ -1541,8 +1841,10 @@ async function applyLaunchProjectPathFromUrl(): Promise<void> {
     const nextUrl = new URL(window.location.href)
     nextUrl.searchParams.delete('openProjectPath')
     window.history.replaceState({}, '', nextUrl.toString())
+    return true
   } catch {
     // If launch path is invalid, keep normal startup behavior.
+    return false
   }
 }
 
@@ -1604,6 +1906,30 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
   }
 }
 
+async function loadExistingFolderListing(path: string): Promise<void> {
+  const requestId = ++existingFolderBrowseRequestId
+  existingFolderBrowsePath.value = normalizePathForUi(path).trim()
+  existingFolderError.value = ''
+  isExistingFolderLoading.value = true
+
+  try {
+    const listing = await listLocalDirectories(path, { showHidden: showHiddenFolders.value })
+    if (requestId !== existingFolderBrowseRequestId) return
+    existingFolderBrowsePath.value = listing.path
+    existingFolderParentPath.value = listing.parentPath
+    existingFolderEntries.value = listing.entries
+  } catch (error) {
+    if (requestId !== existingFolderBrowseRequestId) return
+    existingFolderError.value = error instanceof Error ? error.message : 'Failed to load local folders.'
+    existingFolderParentPath.value = ''
+    existingFolderEntries.value = []
+  } finally {
+    if (requestId === existingFolderBrowseRequestId) {
+      isExistingFolderLoading.value = false
+    }
+  }
+}
+
 async function loadTrendingProjects(): Promise<void> {
   isTrendingProjectsLoading.value = true
   try {
@@ -1615,10 +1941,56 @@ async function loadTrendingProjects(): Promise<void> {
   }
 }
 function joinPath(parent: string, child: string): string {
-  const normalizedParent = parent.trim().replace(/\/+$/, '')
-  const normalizedChild = child.trim().replace(/^\/+/, '')
+  const normalizedParent = normalizePathForUi(parent).trim().replace(/[\\/]+$/u, '')
+  const normalizedChild = normalizePathForUi(child).trim().replace(/^[\\/]+/u, '')
   if (!normalizedParent || !normalizedChild) return ''
-  return `${normalizedParent}/${normalizedChild}`
+  const separator = normalizedParent.includes('\\') && !normalizedParent.includes('/') ? '\\' : '/'
+  return `${normalizedParent}${separator}${normalizedChild}`
+}
+
+function normalizeAbsolutePath(value: string): string {
+  const normalizedValue = normalizePathForUi(value).trim()
+  if (!normalizedValue) return ''
+
+  const uncMatch = normalizedValue.match(/^\\\\([^\\/]+)[\\/]+([^\\/]+)([\\/].*)?$/u)
+  if (uncMatch) {
+    const [, server, share, suffix = ''] = uncMatch
+    const segments = collapsePathSegments(suffix.split(/[\\/]+/u))
+    return segments.length > 0
+      ? `\\\\${server}\\${share}\\${segments.join('\\')}`
+      : `\\\\${server}\\${share}`
+  }
+
+  const driveMatch = normalizedValue.match(/^([a-zA-Z]:)([\\/].*)?$/u)
+  if (driveMatch) {
+    const [, drive, suffix = ''] = driveMatch
+    const separator = normalizedValue.includes('\\') && !normalizedValue.includes('/') ? '\\' : '/'
+    const segments = collapsePathSegments(suffix.split(/[\\/]+/u))
+    return segments.length > 0 ? `${drive}${separator}${segments.join(separator)}` : `${drive}${separator}`
+  }
+
+  if (normalizedValue.startsWith('/')) {
+    const segments = collapsePathSegments(normalizedValue.split('/'))
+    return segments.length > 0 ? `/${segments.join('/')}` : '/'
+  }
+
+  return normalizedValue
+}
+
+function collapsePathSegments(rawSegments: readonly string[]): string[] {
+  const segments: string[] = []
+  for (const rawSegment of rawSegments) {
+    const segment = rawSegment.trim()
+    if (!segment || segment === '.') continue
+    if (segment === '..') {
+      if (segments.length > 0) {
+        segments.pop()
+      }
+      continue
+    }
+    segments.push(segment)
+  }
+  return segments
 }
 
 function getPathLeafName(path: string): string {
@@ -1900,7 +2272,10 @@ async function initialize(): Promise<void> {
     includeSelectedThreadMessages: true,
   })
   void loadAccountsState({ silent: true })
-  await restoreLastActiveThreadRoute()
+  const appliedLaunchProjectPath = await applyLaunchProjectPathFromUrl()
+  if (!appliedLaunchProjectPath) {
+    await restoreLastActiveThreadRoute()
+  }
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
 }
@@ -2265,7 +2640,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-body {
-  @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-hidden overflow-x-hidden;
+  @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-y-auto overflow-x-hidden;
 }
 
 .content-thread-context {
@@ -2306,7 +2681,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-grid {
-  @apply flex-1 min-h-0 flex flex-col gap-3;
+  @apply flex flex-col gap-3;
 }
 
 .content-thread {
@@ -2314,7 +2689,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .composer-with-queue {
-  @apply w-full;
+  @apply w-full shrink-0 px-2 sm:px-6;
 }
 
 .content-header-review-button {
@@ -2326,7 +2701,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .new-thread-empty {
-  @apply flex-1 min-h-0 flex flex-col items-center justify-center gap-0.5 px-3 sm:px-6;
+  @apply flex flex-col items-center justify-start gap-0.5 px-3 py-4 sm:px-6 sm:py-6;
 }
 
 .new-thread-hero {
@@ -2349,8 +2724,173 @@ async function submitFirstMessageForNewThread(
   @apply h-4 w-4 sm:h-5 sm:w-5 mt-0;
 }
 
+.new-thread-folder-selected {
+  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-zinc-500 break-all;
+}
+
+.new-thread-folder-actions {
+  @apply mt-3 flex w-full max-w-3xl flex-wrap items-center justify-center gap-2;
+}
+
+.new-thread-folder-action {
+  @apply inline-flex h-9 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.new-thread-folder-action-primary {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+}
+
+.new-thread-open-folder {
+  @apply mt-3 flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-sm;
+}
+
+.new-thread-open-folder-header {
+  @apply flex items-center justify-between gap-3;
+}
+
+.new-thread-open-folder-title {
+  @apply m-0 text-sm font-semibold text-zinc-900;
+}
+
+.new-thread-open-folder-close {
+  @apply border-0 bg-transparent p-0 text-sm text-zinc-500 transition hover:text-zinc-800;
+}
+
+.new-thread-open-folder-label {
+  @apply m-0 text-xs font-medium uppercase tracking-wide text-zinc-500;
+}
+
+.new-thread-open-folder-current {
+  @apply flex items-start gap-2;
+}
+
+.new-thread-open-folder-path {
+  @apply m-0 min-w-0 flex-1 rounded-xl bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-700 break-all;
+}
+
+.new-thread-open-folder-actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.new-thread-open-folder-toggle {
+  @apply inline-flex items-center gap-2 text-sm text-zinc-600;
+}
+
+.new-thread-open-folder-toggle-input {
+  @apply relative h-4 w-4 shrink-0 appearance-none rounded-[4px] border border-zinc-300 bg-white outline-none transition;
+}
+
+.new-thread-open-folder-toggle-input:focus-visible {
+  box-shadow: 0 0 0 3px rgb(228 228 231);
+}
+
+.new-thread-open-folder-toggle-input:checked {
+  border-color: rgb(24 24 27);
+  background-color: rgb(255 255 255);
+}
+
+.new-thread-open-folder-toggle-input::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid rgb(24 24 27);
+  border-bottom: 2px solid rgb(24 24 27);
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+.new-thread-open-folder-toggle-input:checked::after {
+  opacity: 1;
+}
+
+.new-thread-open-folder-filter {
+  @apply w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400;
+}
+
+.new-thread-open-folder-create {
+  @apply flex flex-col gap-2;
+}
+
+.new-thread-open-folder-create-composer {
+  @apply flex items-center gap-2;
+}
+
+.new-thread-open-folder-create-input {
+  @apply w-full min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400;
+}
+
+.new-thread-open-folder-create-submit {
+  @apply shrink-0;
+}
+
+.new-thread-folder-action[aria-pressed='true'] {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+}
+
+.new-thread-open-folder-status {
+  @apply m-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600;
+}
+
+.new-thread-open-folder-error {
+  @apply m-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;
+}
+
+.new-thread-open-folder-list {
+  @apply m-0 flex max-h-72 list-none flex-col gap-1 overflow-y-auto p-0 pr-3;
+  scrollbar-gutter: stable;
+  scrollbar-color: rgb(161 161 170) rgb(244 244 245);
+  scrollbar-width: thin;
+}
+
+.new-thread-open-folder-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.new-thread-open-folder-list::-webkit-scrollbar-track {
+  background: rgb(244 244 245);
+  border-radius: 9999px;
+}
+
+.new-thread-open-folder-list::-webkit-scrollbar-thumb {
+  background: rgb(161 161 170);
+  border-radius: 9999px;
+  border: 2px solid rgb(244 244 245);
+}
+
+.new-thread-open-folder-list::-webkit-scrollbar-thumb:hover {
+  background: rgb(113 113 122);
+}
+
+.new-thread-open-folder-item {
+  @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1;
+}
+
+.new-thread-open-folder-item-main {
+  @apply min-w-0 truncate rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-left text-sm font-medium leading-5 text-zinc-900 transition hover:border-zinc-300 hover:bg-zinc-100;
+}
+
+.new-thread-open-folder-item-main:disabled,
+.new-thread-open-folder-item-open:disabled {
+  @apply cursor-default opacity-60;
+}
+
+.new-thread-open-folder-item-name {
+  @apply block truncate;
+}
+
+.new-thread-open-folder-item-open {
+  @apply inline-flex h-7 items-center justify-center rounded-xl border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50;
+}
+
 .new-thread-runtime-dropdown {
   @apply mt-3;
+}
+
+.new-thread-runtime-help {
+  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-zinc-500;
 }
 
 .new-thread-trending {

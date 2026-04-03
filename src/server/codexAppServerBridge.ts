@@ -2192,6 +2192,29 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'POST' && url.pathname === '/codex-api/local-directory') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawPath = typeof payload?.path === 'string' ? payload.path.trim() : ''
+        if (!rawPath) {
+          setJson(res, 400, { error: 'Missing path' })
+          return
+        }
+
+        const normalizedPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath)
+        try {
+          const info = await stat(normalizedPath)
+          if (!info.isDirectory()) {
+            setJson(res, 400, { error: 'Path exists but is not a directory' })
+            return
+          }
+        } catch {
+          await mkdir(normalizedPath, { recursive: true })
+        }
+
+        setJson(res, 200, { data: { path: normalizedPath } })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/project-root-suggestion') {
         const basePath = url.searchParams.get('basePath')?.trim() ?? ''
         if (!basePath) {
