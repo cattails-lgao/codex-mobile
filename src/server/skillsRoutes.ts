@@ -685,9 +685,9 @@ async function resolveMergeConflictsByNewerCommit(
       const localMtimeSec = Math.floor(localMtimeMs / 1000)
       const remoteCommitTime = await getCommitTime(repoDir, `origin/${branch}`, path)
       if (remoteCommitTime > localMtimeSec) {
-        await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
+        await checkoutConflictSideWithFallback(repoDir, path, '--theirs')
       } else {
-        await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
+        await checkoutConflictSideWithFallback(repoDir, path, '--ours')
       }
       await runCommand('git', ['add', '--', path], { cwd: repoDir })
     }
@@ -708,6 +708,42 @@ async function resolveMergeConflictsByNewerCommit(
     }
   }
   throw new Error('Auto-resolve exceeded retry limit while reconciling sync conflicts')
+}
+
+async function listUnmergedStages(repoDir: string, path: string): Promise<Set<number>> {
+  const raw = (await runCommandWithOutput('git', ['ls-files', '-u', '--', path], { cwd: repoDir })).trim()
+  const stages = new Set<number>()
+  if (!raw) return stages
+  for (const line of raw.split(/\r?\n/)) {
+    const parts = line.trim().split(/\s+/)
+    const stage = Number.parseInt(parts[2] ?? '', 10)
+    if (Number.isInteger(stage)) stages.add(stage)
+  }
+  return stages
+}
+
+async function checkoutConflictSideWithFallback(
+  repoDir: string,
+  path: string,
+  preferredSide: '--ours' | '--theirs',
+): Promise<void> {
+  const stages = await listUnmergedStages(repoDir, path)
+  const hasOurs = stages.has(2)
+  const hasTheirs = stages.has(3)
+  if (!hasOurs && !hasTheirs) return
+  if (preferredSide === '--ours') {
+    if (hasOurs) {
+      await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
+      return
+    }
+    await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
+    return
+  }
+  if (hasTheirs) {
+    await runCommand('git', ['checkout', '--theirs', '--', path], { cwd: repoDir })
+    return
+  }
+  await runCommand('git', ['checkout', '--ours', '--', path], { cwd: repoDir })
 }
 
 async function getCommitTime(repoDir: string, ref: string, path: string): Promise<number> {
@@ -733,7 +769,7 @@ async function resolveStashPopConflictsByFileTime(
     const localMtime = localMtimesBeforePull.get(path) ?? 0
     const pulledMtime = pulledMtimes.get(path) ?? 0
     const side = localMtime >= pulledMtime ? '--theirs' : '--ours'
-    await runCommand('git', ['checkout', side, '--', path], { cwd: repoDir })
+    await checkoutConflictSideWithFallback(repoDir, path, side)
     await runCommand('git', ['add', '--', path], { cwd: repoDir })
   }
   const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
