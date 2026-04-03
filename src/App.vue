@@ -2684,7 +2684,7 @@ async function submitFirstMessageForNewThread(
 }
 
 .content-grid {
-  @apply flex-1 min-h-0 flex flex-col gap-3;
+  @apply flex flex-col gap-3;
 }
 
 .content-grid-home {
