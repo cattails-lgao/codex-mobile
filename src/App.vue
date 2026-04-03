@@ -154,6 +154,10 @@
                 <span class="sidebar-settings-label">Appearance</span>
                 <span class="sidebar-settings-value">{{ darkMode === 'system' ? 'System' : darkMode === 'dark' ? 'Dark' : 'Light' }}</span>
               </button>
+              <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.chatWidth" @click="cycleChatWidth">
+                <span class="sidebar-settings-label">Chat width</span>
+                <span class="sidebar-settings-value">{{ chatWidthLabel }}</span>
+              </button>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.dictationClickToToggle" @click="toggleDictationClickToToggle">
                 <span class="sidebar-settings-label">Click to toggle dictation</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationClickToToggle }" />
@@ -216,7 +220,7 @@
     </template>
 
     <template #content>
-      <section class="content-root">
+      <section class="content-root" :style="contentStyle">
         <ContentHeader :title="contentTitle">
           <template #leading>
             <SidebarThreadControls
@@ -433,6 +437,7 @@
                 </div>
               </div>
 
+              <div class="composer-with-queue">
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :collaboration-modes="availableCollaborationModes"
@@ -453,6 +458,7 @@
                   @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
                   @update:selected-speed-mode="onSelectSpeedMode" />
+              </div>
             </div>
           </template>
           <template v-else>
@@ -575,12 +581,40 @@ const SETTINGS_HELP = {
   sendWithEnter: 'When enabled, press Enter to send. When disabled, use Command+Enter to send.',
   inProgressSendMode: 'If a turn is still running, choose whether a new prompt should steer the current turn or be queued.',
   appearance: 'Switch between system theme, light mode, and dark mode.',
+  chatWidth: 'Choose how wide the conversation column and composer can grow on desktop screens.',
   dictationClickToToggle: 'Use click-to-start and click-to-stop dictation instead of hold-to-talk.',
   dictationAutoSend: 'Automatically send transcribed dictation when recording stops.',
 
   githubTrendingProjects: 'Show or hide GitHub trending project cards on the new thread screen.',
   dictationLanguage: 'Choose transcription language or keep auto-detect.',
 } as const
+
+type ChatWidthMode = 'standard' | 'wide' | 'extra-wide'
+
+type ChatWidthPreset = {
+  label: string
+  columnMax: string
+  cardMax: string
+}
+
+const CHAT_WIDTH_PRESETS: Record<ChatWidthMode, ChatWidthPreset> = {
+  standard: {
+    label: 'Standard',
+    columnMax: '45rem',
+    cardMax: '76ch',
+  },
+  wide: {
+    label: 'Wide',
+    columnMax: '72rem',
+    cardMax: '88ch',
+  },
+  'extra-wide': {
+    label: 'Extra wide',
+    columnMax: '96rem',
+    cardMax: '96ch',
+  },
+}
+
 const WHISPER_LANGUAGES: Record<string, string> = {
   en: 'english',
   zh: 'chinese',
@@ -785,10 +819,12 @@ const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 
 const GITHUB_TRENDING_PROJECTS_KEY = 'codex-web-local.github-trending-projects.v1'
+const CHAT_WIDTH_KEY = 'codex-web-local.chat-width.v1'
 const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
+const chatWidth = ref<ChatWidthMode>(loadChatWidthPref())
 const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, false))
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
@@ -1032,6 +1068,14 @@ const githubTipsScopeOptions = computed<Array<{ value: GithubTipsScope; label: s
   { value: 'trending-weekly', label: 'Trending weekly' },
   { value: 'trending-monthly', label: 'Trending monthly' },
 ])
+const chatWidthLabel = computed(() => CHAT_WIDTH_PRESETS[chatWidth.value].label)
+const contentStyle = computed(() => {
+  const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
+  return {
+    '--chat-column-max': preset.columnMax,
+    '--chat-card-max': preset.cardMax,
+  }
+})
 const telegramStatusText = computed(() => {
   if (!telegramStatus.value.configured) return 'Not configured'
   const base = telegramStatus.value.active ? 'Online' : 'Configured (offline)'
@@ -2153,6 +2197,12 @@ function loadInProgressSendModePref(): 'steer' | 'queue' {
   return v === 'queue' ? 'queue' : 'steer'
 }
 
+function loadChatWidthPref(): ChatWidthMode {
+  if (typeof window === 'undefined') return 'standard'
+  const value = window.localStorage.getItem(CHAT_WIDTH_KEY)
+  return value === 'standard' || value === 'wide' || value === 'extra-wide' ? value : 'standard'
+}
+
 function toggleSendWithEnter(): void {
   sendWithEnter.value = !sendWithEnter.value
   window.localStorage.setItem(SEND_WITH_ENTER_KEY, sendWithEnter.value ? '1' : '0')
@@ -2169,6 +2219,13 @@ function cycleDarkMode(): void {
   darkMode.value = order[(idx + 1) % order.length]
   window.localStorage.setItem(DARK_MODE_KEY, darkMode.value)
   applyDarkMode()
+}
+
+function cycleChatWidth(): void {
+  const order: ChatWidthMode[] = ['standard', 'wide', 'extra-wide']
+  const idx = order.indexOf(chatWidth.value)
+  chatWidth.value = order[(idx + 1) % order.length]
+  window.localStorage.setItem(CHAT_WIDTH_KEY, chatWidth.value)
 }
 
 function toggleDictationClickToToggle(): void {

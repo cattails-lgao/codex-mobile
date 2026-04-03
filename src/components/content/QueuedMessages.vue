@@ -62,7 +62,7 @@ function getMessagePreview(message: QueuedMessageRow): string {
 @reference "tailwindcss";
 
 .queued-messages {
-  @apply w-full max-w-175 mx-auto px-2 sm:px-6;
+  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto;
 }
 
 .queued-messages-inner {

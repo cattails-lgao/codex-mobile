@@ -3678,6 +3678,7 @@ onBeforeUnmount(() => {
 .conversation-list {
   @apply h-full min-h-0 min-w-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-hidden flex flex-col gap-2 sm:gap-3;
   overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .conversation-item {
@@ -3693,7 +3694,7 @@ onBeforeUnmount(() => {
 }
 
 .message-row {
-  @apply relative w-full min-w-0 max-w-180 mx-auto flex;
+  @apply relative w-full min-w-0 max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto flex;
 }
 
 .message-row[data-role='user'] {
@@ -3722,7 +3723,7 @@ onBeforeUnmount(() => {
 }
 
 .request-card {
-  @apply w-full max-w-180 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2;
+  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2;
 }
 
 .request-title {
@@ -3779,7 +3780,7 @@ onBeforeUnmount(() => {
 }
 
 .live-overlay-inline {
-  @apply w-full max-w-180 px-0 py-1 flex flex-col gap-1;
+  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] px-0 py-1 flex flex-col gap-1;
 }
 
 .live-overlay-label {
@@ -3873,7 +3874,7 @@ onBeforeUnmount(() => {
 }
 
 .message-card {
-  @apply max-w-[min(76ch,100%)] px-0 py-0 bg-transparent border-none rounded-none;
+  @apply max-w-[min(var(--chat-card-max,76ch),100%)] px-0 py-0 bg-transparent border-none rounded-none;
 }
 
 .message-text-flow {
@@ -3881,7 +3882,7 @@ onBeforeUnmount(() => {
 }
 
 .plan-card {
-  @apply flex max-w-[min(76ch,100%)] flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-slate-900;
+  @apply flex max-w-[min(var(--chat-card-max,76ch),100%)] flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-slate-900;
 }
 
 .plan-card-header {

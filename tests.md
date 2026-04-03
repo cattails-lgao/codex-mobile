@@ -297,6 +297,35 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete any temporary test folder created during the manual check.
 
+### Feature: Configurable chat width keeps composer aligned with conversation
+
+#### Prerequisites
+- App is running from this repository.
+- Desktop viewport is wide enough to show noticeable horizontal margins.
+- At least one existing thread is available.
+- Settings panel can be opened from the bottom-left sidebar button.
+
+#### Steps
+1. Open an existing thread with enough messages to make the conversation area scroll.
+2. Open `Settings` and locate `Chat width`.
+3. Cycle through `Standard`, `Wide`, and `Extra wide`.
+4. After each change, confirm the conversation column width updates immediately.
+5. Compare the left and right edges of the composer shell against the message column above it.
+6. Scroll the conversation until a vertical scrollbar is visible, then re-check the composer/message-column alignment.
+7. Refresh the page.
+8. Re-open the same thread and confirm the previously selected `Chat width` value is still active.
+9. Navigate to the home/new-thread screen and confirm the home composer uses the same selected width and inset behavior.
+
+#### Expected Results
+- `Chat width` cycles through all three values and updates the layout immediately.
+- The conversation column and composer grow and shrink together.
+- The composer shell remains horizontally aligned with the chat column, even when the conversation list is scrollable.
+- The selected width persists after refresh.
+- The home/new-thread composer uses the same width behavior as the thread view.
+
+#### Rollback/Cleanup
+- Return `Chat width` to the previous user preference.
+
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
 #### Prerequisites

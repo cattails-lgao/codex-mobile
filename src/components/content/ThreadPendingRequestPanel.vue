@@ -472,7 +472,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 @reference "tailwindcss";
 
 .thread-pending-request {
-  @apply w-full px-2 sm:px-6;
+  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto;
 }
 
 .thread-pending-request-shell {
