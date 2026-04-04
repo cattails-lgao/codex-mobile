@@ -2649,10 +2649,6 @@ async function submitFirstMessageForNewThread(
   @apply flex-1 min-h-0 flex flex-col gap-3;
 }
 
-.content-grid-home {
-  @apply overflow-y-auto;
-}
-
 .content-thread {
   @apply flex-1 min-h-0;
 }
