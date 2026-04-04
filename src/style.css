@@ -566,6 +566,30 @@
   @apply text-zinc-300;
 }
 
+:root.dark .cmd-group-label {
+  @apply text-zinc-300;
+}
+
+:root.dark .cmd-status {
+  @apply text-zinc-400;
+}
+
+:root.dark .cmd-status-running .cmd-status {
+  @apply text-amber-300;
+}
+
+:root.dark .cmd-status-ok .cmd-status {
+  @apply text-emerald-300;
+}
+
+:root.dark .cmd-status-error .cmd-status {
+  @apply text-rose-300;
+}
+
+:root.dark .cmd-output-wrap.cmd-output-visible {
+  @apply border-zinc-700;
+}
+
 :root.dark .file-change-summary-label {
   @apply text-zinc-200;
 }
