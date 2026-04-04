@@ -28,6 +28,13 @@
    - `git checkout main`
    - `git merge --no-ff <your-branch>`
 
+## Never Blindly Merge (MANDATORY)
+
+- Never use automatic conflict-bias strategies blindly (for example: `git merge -X theirs`, `git merge -X ours`, `git checkout --theirs .`, `git checkout --ours .`).
+- If conflicts occur, inspect each conflicted file and resolve intentionally.
+- After conflict resolution, run required verification/tests before pushing.
+- If conflict intent is unclear, stop and ask the user before completing the merge.
+
 ## package.json Version Conflict Rule
 
 - For merge conflicts in `package.json` that only affect the `"version"` field, always ignore the conflict and keep the stashed/local `package.json` version value.
