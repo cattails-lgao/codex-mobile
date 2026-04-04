@@ -659,18 +659,9 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
     createdAutostash = !stashOutput.includes('No local changes to save')
   } catch {}
   let pulledMtimes = new Map<string, number>()
-  try {
-    await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
-    pulledMtimes = await snapshotFileMtimes(localDir)
-  } catch (error) {
-    await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforePull)
-    try {
-      await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
-      pulledMtimes = await snapshotFileMtimes(localDir)
-    } catch {
-      throw error
-    }
-  }
+  await runCommand('git', ['fetch', 'origin', branch], { cwd: localDir })
+  await runCommand('git', ['reset', '--hard', `origin/${branch}`], { cwd: localDir })
+  pulledMtimes = await snapshotFileMtimes(localDir)
   if (createdAutostash) {
     try {
       await runCommand('git', ['stash', 'pop'], { cwd: localDir })
