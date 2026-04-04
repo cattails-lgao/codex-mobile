@@ -4,7 +4,13 @@
       {{ dictationErrorText }}
     </p>
 
-    <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
+    <div
+      class="thread-composer-shell"
+      :class="{
+        'thread-composer-shell--no-top-radius': hasQueueAbove,
+        'thread-composer-shell--drag-active': isDragActive,
+      }"
+    >
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -68,7 +74,17 @@
         </span>
       </div>
 
-      <div class="thread-composer-input-wrap">
+      <div
+        class="thread-composer-input-wrap"
+        :class="{ 'thread-composer-input-wrap--drag-active': isDragActive }"
+        @dragenter="onInputDragEnter"
+        @dragover="onInputDragOver"
+        @dragleave="onInputDragLeave"
+        @drop="onInputDrop"
+      >
+        <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
+          <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
+        </div>
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
             <button
@@ -462,6 +478,7 @@ const folderUploadGroups = ref<FolderUploadGroup[]>([])
 const dictationFeedback = ref('')
 const pendingAttachmentCount = ref(0)
 const attachmentBatchStats = ref<AttachmentBatchStats | null>(null)
+const isDragActive = ref(false)
 const {
   state: dictationState,
   isSupported: isDictationSupported,
@@ -513,6 +530,7 @@ const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
+let dragDepth = 0
 let attachmentSessionToken = 0
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
@@ -1271,6 +1289,11 @@ function attachIncomingFiles(files: FileList | File[] | null | undefined): void 
   }
 }
 
+function resetDragState(): void {
+  dragDepth = 0
+  isDragActive.value = false
+}
+
 function addFiles(files: FileList | null): void {
   if (!files || files.length === 0) return
   const generation = draftGeneration.value
@@ -1294,6 +1317,11 @@ function addFiles(files: FileList | null): void {
       }).catch(() => {})
     }
   }
+}
+
+function hasFilePayload(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false
+  return Array.from(dataTransfer.types ?? []).includes('Files')
 }
 
 async function addFolderFiles(files: FileList | null): Promise<void> {
@@ -1368,6 +1396,43 @@ function onFolderPickerChange(event: Event): void {
   void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
+}
+
+function onInputDragEnter(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth += 1
+  isDragActive.value = true
+}
+
+function onInputDragOver(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  isDragActive.value = true
+}
+
+function onInputDragLeave(event: DragEvent): void {
+  if (!isDragActive.value) return
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) {
+    resetDragState()
+  }
+}
+
+function onInputDrop(event: DragEvent): void {
+  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
+  event.preventDefault()
+  resetDragState()
+  attachIncomingFiles(event.dataTransfer?.files ?? null)
+}
+
+function onWindowDragCleanup(): void {
+  if (!isDragActive.value && dragDepth === 0) return
+  resetDragState()
 }
 
 function onInputChange(): void {
@@ -1590,6 +1655,9 @@ function onDocumentClick(event: MouseEvent): void {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('drop', onWindowDragCleanup)
+  window.addEventListener('dragend', onWindowDragCleanup)
+  window.addEventListener('blur', onWindowDragCleanup)
 })
 
 defineExpose<ThreadComposerExposed>({
@@ -1599,6 +1667,9 @@ defineExpose<ThreadComposerExposed>({
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('drop', onWindowDragCleanup)
+  window.removeEventListener('dragend', onWindowDragCleanup)
+  window.removeEventListener('blur', onWindowDragCleanup)
   window.removeEventListener('pointerup', onDictationPressEnd)
   window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
@@ -1658,6 +1729,10 @@ watch(
 
 .thread-composer-shell {
   @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
+}
+
+.thread-composer-shell--drag-active {
+  @apply border-zinc-900 shadow-md;
 }
 
 .thread-composer-shell--no-top-radius {
@@ -1781,6 +1856,18 @@ watch(
 
 .thread-composer-input-wrap {
   @apply relative;
+}
+
+.thread-composer-input-wrap--drag-active {
+  @apply rounded-xl bg-zinc-50;
+}
+
+.thread-composer-drop-overlay {
+  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-zinc-900 bg-white/90;
+}
+
+.thread-composer-drop-overlay-copy {
+  @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
 }
 
 .thread-composer-file-mentions {
