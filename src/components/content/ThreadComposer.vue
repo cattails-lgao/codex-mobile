@@ -120,6 +120,7 @@
           :disabled="isInteractionDisabled"
           @input="onInputChange"
           @keydown="onInputKeydown"
+          @paste="onInputPaste"
         />
         <ComposerSkillPicker
           :skills="skillOptions"
@@ -1433,6 +1434,22 @@ function onInputDrop(event: DragEvent): void {
 function onWindowDragCleanup(): void {
   if (!isDragActive.value && dragDepth === 0) return
   resetDragState()
+}
+
+function onInputPaste(event: ClipboardEvent): void {
+  if (isInteractionDisabled.value) return
+  const items = Array.from(event.clipboardData?.items ?? [])
+  if (items.length === 0) return
+  const hasPlainText = (event.clipboardData?.getData('text/plain') ?? '').length > 0
+  const imageFiles = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file instanceof File)
+  if (imageFiles.length === 0) return
+  if (!hasPlainText) {
+    event.preventDefault()
+  }
+  attachIncomingFiles(imageFiles)
 }
 
 function onInputChange(): void {

@@ -1029,3 +1029,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove attached files/images from the composer before closing the test thread.
+
+### Feature: Restore clipboard image paste attachments in composer
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Open any thread where the composer is enabled.
+- Have an image copied to system clipboard (for example screenshot copy).
+
+#### Steps
+1. Focus the composer textarea.
+2. Paste clipboard content that contains only an image file payload.
+3. Confirm an image chip/preview is added to composer attachments.
+4. Copy plain text only and paste into composer.
+5. Copy mixed content (plain text + image, if source provides both) and paste once.
+6. Send the message with the pasted image attachment.
+
+#### Expected Results
+- Image-only clipboard paste adds an image attachment to composer.
+- Plain-text paste still inserts text into the composer and does not create an attachment.
+- Mixed payload paste attaches the image while preserving text paste behavior.
+- Sending proceeds with the attached pasted image.
+
+#### Rollback/Cleanup
+- Remove the attached image chip from composer if not needed.
