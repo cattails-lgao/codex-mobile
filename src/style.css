@@ -562,6 +562,14 @@
   @apply border-zinc-700 bg-zinc-800 hover:bg-zinc-700;
 }
 
+:root.dark .cmd-row.cmd-row-group {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700;
+}
+
+:root.dark .cmd-chevron {
+  @apply text-zinc-300;
+}
+
 :root.dark .cmd-label {
   @apply text-zinc-300;
 }
