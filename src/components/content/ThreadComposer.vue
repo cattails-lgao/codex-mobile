@@ -4,13 +4,7 @@
       {{ dictationErrorText }}
     </p>
 
-    <div
-      class="thread-composer-shell"
-      :class="{
-        'thread-composer-shell--no-top-radius': hasQueueAbove,
-        'thread-composer-shell--drag-active': isDragActive,
-      }"
-    >
+    <div class="thread-composer-shell" :class="{ 'thread-composer-shell--no-top-radius': hasQueueAbove }">
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -74,17 +68,7 @@
         </span>
       </div>
 
-      <div
-        class="thread-composer-input-wrap"
-        :class="{ 'thread-composer-input-wrap--drag-active': isDragActive }"
-        @dragenter="onInputDragEnter"
-        @dragover="onInputDragOver"
-        @dragleave="onInputDragLeave"
-        @drop="onInputDrop"
-      >
-        <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
-          <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
-        </div>
+      <div class="thread-composer-input-wrap">
         <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
           <template v-if="fileMentionSuggestions.length > 0">
             <button
@@ -120,7 +104,6 @@
           :disabled="isInteractionDisabled"
           @input="onInputChange"
           @keydown="onInputKeydown"
-          @paste="onInputPaste"
         />
         <ComposerSkillPicker
           :skills="skillOptions"
@@ -335,9 +318,6 @@
       </div>
 
     </div>
-    <p v-if="!dictationErrorText && attachmentFeedbackText" class="thread-composer-attachment-feedback">
-      {{ attachmentFeedbackText }}
-    </p>
     <input
       ref="photoLibraryInputRef"
       class="thread-composer-hidden-input"
@@ -482,7 +462,6 @@ const folderUploadGroups = ref<FolderUploadGroup[]>([])
 const dictationFeedback = ref('')
 const pendingAttachmentCount = ref(0)
 const attachmentBatchStats = ref<AttachmentBatchStats | null>(null)
-const isDragActive = ref(false)
 const {
   state: dictationState,
   isSupported: isDictationSupported,
@@ -534,7 +513,6 @@ const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let isHoldPressActive = false
-let dragDepth = 0
 let attachmentSessionToken = 0
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
@@ -929,7 +907,6 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   dictationFeedback.value = ''
   attachmentBatchStats.value = null
   pendingAttachmentCount.value = 0
-  resetDragState()
   isAttachMenuOpen.value = false
   isSlashMenuOpen.value = false
   closeFileMention()
@@ -1188,11 +1165,6 @@ function recordAttachmentBatchResult(result: 'success' | 'failure'): void {
   }
 }
 
-function resetDragState(): void {
-  dragDepth = 0
-  isDragActive.value = false
-}
-
 function createAttachmentId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
@@ -1299,9 +1271,29 @@ function attachIncomingFiles(files: FileList | File[] | null | undefined): void 
   }
 }
 
-function hasFilePayload(dataTransfer: DataTransfer | null): boolean {
-  if (!dataTransfer) return false
-  return Array.from(dataTransfer.types ?? []).includes('Files')
+function addFiles(files: FileList | null): void {
+  if (!files || files.length === 0) return
+  const generation = draftGeneration.value
+  for (const file of Array.from(files)) {
+    if (isImageFile(file)) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (generation !== draftGeneration.value) return
+        if (typeof reader.result !== 'string') return
+        selectedImages.value.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          name: file.name,
+          url: reader.result,
+        })
+      }
+      reader.readAsDataURL(file)
+    } else {
+      void uploadFile(file).then((serverPath) => {
+        if (generation !== draftGeneration.value) return
+        if (serverPath) addFileAttachment(serverPath)
+      }).catch(() => {})
+    }
+  }
 }
 
 async function addFolderFiles(files: FileList | null): Promise<void> {
@@ -1359,14 +1351,14 @@ function clearInputValue(inputRefEl: HTMLInputElement | null): void {
 
 function onPhotoLibraryChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  attachIncomingFiles(input?.files ?? null)
+  addFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
 
 function onCameraCaptureChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
-  attachIncomingFiles(input?.files ?? null)
+  addFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
 }
@@ -1376,59 +1368,6 @@ function onFolderPickerChange(event: Event): void {
   void addFolderFiles(input?.files ?? null)
   clearInputValue(input)
   isAttachMenuOpen.value = false
-}
-
-function onInputPaste(event: ClipboardEvent): void {
-  if (isInteractionDisabled.value) return
-  const items = Array.from(event.clipboardData?.items ?? [])
-  if (items.length === 0) return
-  const hasPlainText = (event.clipboardData?.getData('text/plain') ?? '').length > 0
-  const imageFiles = items
-    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => file instanceof File)
-  if (imageFiles.length === 0) return
-  if (!hasPlainText) {
-    event.preventDefault()
-  }
-  attachIncomingFiles(imageFiles)
-}
-
-function onInputDragEnter(event: DragEvent): void {
-  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
-  event.preventDefault()
-  dragDepth += 1
-  isDragActive.value = true
-}
-
-function onInputDragOver(event: DragEvent): void {
-  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'copy'
-  }
-  isDragActive.value = true
-}
-
-function onInputDragLeave(event: DragEvent): void {
-  if (!isDragActive.value) return
-  event.preventDefault()
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (dragDepth === 0) {
-    resetDragState()
-  }
-}
-
-function onInputDrop(event: DragEvent): void {
-  if (isInteractionDisabled.value || !hasFilePayload(event.dataTransfer)) return
-  event.preventDefault()
-  resetDragState()
-  attachIncomingFiles(event.dataTransfer?.files ?? null)
-}
-
-function onWindowDragCleanup(): void {
-  if (!isDragActive.value && dragDepth === 0) return
-  resetDragState()
 }
 
 function onInputChange(): void {
@@ -1651,9 +1590,6 @@ function onDocumentClick(event: MouseEvent): void {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
-  window.addEventListener('drop', onWindowDragCleanup)
-  window.addEventListener('dragend', onWindowDragCleanup)
-  window.addEventListener('blur', onWindowDragCleanup)
 })
 
 defineExpose<ThreadComposerExposed>({
@@ -1663,9 +1599,6 @@ defineExpose<ThreadComposerExposed>({
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
-  window.removeEventListener('drop', onWindowDragCleanup)
-  window.removeEventListener('dragend', onWindowDragCleanup)
-  window.removeEventListener('blur', onWindowDragCleanup)
   window.removeEventListener('pointerup', onDictationPressEnd)
   window.removeEventListener('pointercancel', onDictationPressEnd)
   window.removeEventListener('blur', onDictationPressEnd)
@@ -1725,10 +1658,6 @@ watch(
 
 .thread-composer-shell {
   @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
-}
-
-.thread-composer-shell--drag-active {
-  @apply border-zinc-900 shadow-md;
 }
 
 .thread-composer-shell--no-top-radius {
@@ -1854,18 +1783,6 @@ watch(
   @apply relative;
 }
 
-.thread-composer-input-wrap--drag-active {
-  @apply rounded-xl bg-zinc-50;
-}
-
-.thread-composer-drop-overlay {
-  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-zinc-900 bg-white/90;
-}
-
-.thread-composer-drop-overlay-copy {
-  @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
-}
-
 .thread-composer-file-mentions {
   @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
@@ -1920,7 +1837,6 @@ watch(
 
 .thread-composer-input {
   @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
-  overscroll-behavior-y: contain;
 }
 
 .thread-composer-input:focus {
@@ -2064,10 +1980,6 @@ watch(
 
 .thread-composer-dictation-error {
   @apply mb-2 px-1 text-xs text-amber-700;
-}
-
-.thread-composer-attachment-feedback {
-  @apply mt-2 px-1 text-xs text-zinc-500;
 }
 
 .thread-composer-submit {
