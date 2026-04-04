@@ -653,19 +653,30 @@ async function ensureSkillsWorkingTreeRepo(repoUrl: string, branch: string): Pro
   await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforeSync)
   const hasLocalChangesBeforePull = await hasLocalUncommittedChanges(localDir)
   const localMtimesBeforePull = hasLocalChangesBeforePull ? await snapshotFileMtimes(localDir) : new Map<string, number>()
-  try { await runCommand('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir }) } catch {}
+  let createdAutostash = false
+  try {
+    const stashOutput = await runCommandWithOutput('git', ['stash', 'push', '--include-untracked', '-m', 'codex-skills-autostash'], { cwd: localDir })
+    createdAutostash = !stashOutput.includes('No local changes to save')
+  } catch {}
   let pulledMtimes = new Map<string, number>()
   try {
     await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
     pulledMtimes = await snapshotFileMtimes(localDir)
-  } catch {
+  } catch (error) {
     await resolveMergeConflictsByNewerCommit(localDir, branch, localMtimesBeforePull)
-    pulledMtimes = await snapshotFileMtimes(localDir)
+    try {
+      await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: localDir })
+      pulledMtimes = await snapshotFileMtimes(localDir)
+    } catch {
+      throw error
+    }
   }
-  try {
-    await runCommand('git', ['stash', 'pop'], { cwd: localDir })
-  } catch {
-    await resolveStashPopConflictsByFileTime(localDir, localMtimesBeforePull, pulledMtimes)
+  if (createdAutostash) {
+    try {
+      await runCommand('git', ['stash', 'pop'], { cwd: localDir })
+    } catch {
+      await resolveStashPopConflictsByFileTime(localDir, localMtimesBeforePull, pulledMtimes)
+    }
   }
   return localDir
 }
@@ -829,9 +840,18 @@ async function syncInstalledSkillsFolderToRepo(
   repoName: string,
   _installedMap: Map<string, InstalledSkillInfo>,
 ): Promise<void> {
+  async function hasTrackedLocalFileChanges(repoDir: string, filePath: string): Promise<boolean> {
+    const diffHead = (await runCommandWithOutput('git', ['diff', '--name-only', 'HEAD', '--', filePath], { cwd: repoDir })).trim()
+    if (diffHead.length > 0) return true
+    const diffCached = (await runCommandWithOutput('git', ['diff', '--cached', '--name-only', '--', filePath], { cwd: repoDir })).trim()
+    return diffCached.length > 0
+  }
+
   async function restoreProtectedFilesFromOrigin(repoDir: string, branch: string): Promise<void> {
     const protectedFiles = ['AGENTS.md']
     for (const filePath of protectedFiles) {
+      const hasLocalEdits = await hasTrackedLocalFileChanges(repoDir, filePath)
+      if (hasLocalEdits) continue
       try {
         await runCommand('git', ['cat-file', '-e', `origin/${branch}:${filePath}`], { cwd: repoDir })
       } catch {
@@ -862,6 +882,7 @@ async function syncInstalledSkillsFolderToRepo(
           await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoDir })
         } catch {
           await resolveMergeConflictsByNewerCommit(repoDir, branch, localMtimesBeforeReconcile)
+          await runCommand('git', ['pull', '--rebase', '--autostash', 'origin', branch], { cwd: repoDir })
         }
       }
       try {
