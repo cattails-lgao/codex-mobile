@@ -218,7 +218,7 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
-### Feature: Restore last active thread only in PWA runtime
+### Feature: No automatic restore of last active thread on startup
 
 #### Prerequisites
 - App is running from this repository.
@@ -229,16 +229,15 @@ This file tracks manual regression and feature verification steps.
 1. Open the app in a regular browser tab (`http://localhost:<port>/`), select any thread, then navigate back to home route (`#/`).
 2. Refresh the browser tab.
 3. Confirm the app remains on home route and does not auto-switch to `#/thread/:threadId`.
-4. Install/open the app in PWA standalone mode (or emulate standalone display mode), select a thread, then navigate to home route.
-5. Relaunch or refresh the PWA.
+4. Install/open the app in PWA standalone mode, select any thread, navigate to `#/`, and relaunch the PWA.
 
 #### Expected Results
 - In regular browser-tab mode, startup does not restore and redirect to the last active thread.
-- In PWA standalone mode, startup restores and redirects to the last active thread when it exists.
-- Existing `openProjectPath` startup behavior still takes priority over thread restore.
+- In PWA standalone mode, startup also does not restore and redirect to the last active thread.
+- Existing `openProjectPath` startup behavior still opens the requested project on home.
 
 #### Rollback/Cleanup
-- Clear `codex-web-local.last-active-thread-route.v1` from local storage if you need to reset restore state.
+- Clear app local storage state if you need to reset startup behavior for retesting.
 
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
