@@ -691,7 +691,7 @@ async function resolveMergeConflictsByNewerCommit(
       }
       await runCommand('git', ['add', '--', path], { cwd: repoDir })
     }
-    const rebaseHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'REBASE_HEAD'], { cwd: repoDir })).trim()
+    const rebaseHead = await readOptionalGitRef(repoDir, 'REBASE_HEAD')
     if (rebaseHead) {
       try {
         await runCommand('git', ['rebase', '--continue'], { cwd: repoDir })
@@ -701,13 +701,21 @@ async function resolveMergeConflictsByNewerCommit(
         continue
       }
     }
-    const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
+    const mergeHead = await readOptionalGitRef(repoDir, 'MERGE_HEAD')
     if (mergeHead) {
       await runCommand('git', ['commit', '-m', 'Auto-resolve skills merge by mtime policy'], { cwd: repoDir })
       continue
     }
   }
   throw new Error('Auto-resolve exceeded retry limit while reconciling sync conflicts')
+}
+
+async function readOptionalGitRef(repoDir: string, ref: string): Promise<string> {
+  try {
+    return (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', ref], { cwd: repoDir })).trim()
+  } catch {
+    return ''
+  }
 }
 
 async function listUnmergedStages(repoDir: string, path: string): Promise<Set<number>> {
@@ -772,7 +780,7 @@ async function resolveStashPopConflictsByFileTime(
     await checkoutConflictSideWithFallback(repoDir, path, side)
     await runCommand('git', ['add', '--', path], { cwd: repoDir })
   }
-  const mergeHead = (await runCommandWithOutput('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoDir })).trim()
+  const mergeHead = await readOptionalGitRef(repoDir, 'MERGE_HEAD')
   if (mergeHead) {
     await runCommand('git', ['commit', '-m', 'Auto-resolve stash-pop conflicts by file time'], { cwd: repoDir })
   }
