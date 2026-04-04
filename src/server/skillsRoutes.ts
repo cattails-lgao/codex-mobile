@@ -829,6 +829,18 @@ async function syncInstalledSkillsFolderToRepo(
   repoName: string,
   _installedMap: Map<string, InstalledSkillInfo>,
 ): Promise<void> {
+  async function restoreProtectedFilesFromOrigin(repoDir: string, branch: string): Promise<void> {
+    const protectedFiles = ['AGENTS.md']
+    for (const filePath of protectedFiles) {
+      try {
+        await runCommand('git', ['cat-file', '-e', `origin/${branch}:${filePath}`], { cwd: repoDir })
+      } catch {
+        continue
+      }
+      await runCommand('git', ['checkout', `origin/${branch}`, '--', filePath], { cwd: repoDir })
+    }
+  }
+
   function isNonFastForwardPushError(error: unknown): boolean {
     const text = getErrorMessage(error, '').toLowerCase()
     return text.includes('non-fast-forward')
@@ -886,6 +898,7 @@ async function syncInstalledSkillsFolderToRepo(
   void _installedMap
   await runCommand('git', ['config', 'user.email', 'skills-sync@local'], { cwd: repoDir })
   await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: repoDir })
+  await restoreProtectedFilesFromOrigin(repoDir, branch)
   await runCommand('git', ['add', '.'], { cwd: repoDir })
   const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
   if (!status) return
@@ -957,6 +970,14 @@ async function autoPushSyncedSkills(appServer: AppServerLike): Promise<void> {
   if (isUpstreamSkillsRepo(state.repoOwner, state.repoName)) {
     throw new Error('Refusing to push to upstream skills repository')
   }
+  const repoDir = getSkillsInstallDir()
+  await runCommand('git', ['fetch', 'origin', PRIVATE_SYNC_BRANCH], { cwd: repoDir })
+  const head = (await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir })).trim()
+  const originHead = (await runCommandWithOutput('git', ['rev-parse', `origin/${PRIVATE_SYNC_BRANCH}`], { cwd: repoDir })).trim()
+  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+  // After a successful pull, if local tree is already clean and equal to remote,
+  // skip push entirely to avoid rewriting/deleting remote-only updates.
+  if (!status && head === originHead) return
   const local = await collectLocalSyncedSkills(appServer)
   const installedMap = await scanInstalledSkillsFromDisk()
   await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
