@@ -790,3 +790,53 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - None.
+
+### Feature: Bidirectional AGENTS.md sync via Startup Sync
+
+#### Prerequisites
+- Skills sync configured to `friuns2/codexskills`.
+- `~/.codex/skills` is a clean git working tree before each sub-test.
+- Skills Hub startup sync endpoint is reachable.
+
+#### Steps
+1. Remote -> Local:
+2. Add a unique marker to remote `AGENTS.md` on `main`.
+3. Confirm local `HEAD` is behind `origin/main`.
+4. Trigger `Startup Sync`.
+5. Verify local `AGENTS.md` contains the remote marker and local `HEAD == origin/main`.
+6. Local -> Remote:
+7. Add a different unique marker to local `~/.codex/skills/AGENTS.md`.
+8. Confirm local working tree shows `M AGENTS.md`.
+9. Trigger `Startup Sync`.
+10. Verify remote `origin/main:AGENTS.md` contains the local marker and local `HEAD == origin/main`.
+
+#### Expected Results
+- Remote-only AGENTS edits are pulled into local without deletion.
+- Local AGENTS edits are pushed to remote after startup sync.
+- After each sync direction, local and remote commit SHAs match.
+
+#### Rollback/Cleanup
+- Remove temporary test markers from `AGENTS.md` if required.
+
+### Feature: Mixed local+remote AGENTS edits do not stall Startup Sync
+
+#### Prerequisites
+- Skills sync configured and working.
+- Local skills repo clean before test start.
+
+#### Steps
+1. Add marker `A` to remote `AGENTS.md`.
+2. Add marker `B` to local `AGENTS.md` before syncing.
+3. Trigger `Startup Sync`.
+4. Wait for startup status to finish (`inProgress=false`).
+5. Verify sync outcome explicitly:
+6. If sync succeeds, local/remote SHAs match and expected merged marker result is present.
+7. If sync fails, status includes a concrete error message (not silent success).
+
+#### Expected Results
+- Startup sync must not report success while local remains behind remote.
+- No stale stash side-effects are introduced (no unexpected conflict from old stash entries).
+- Final state is either a valid synchronized result or an explicit failure status with actionable error.
+
+#### Rollback/Cleanup
+- Reset local skills repo to `origin/main` after test if needed.
