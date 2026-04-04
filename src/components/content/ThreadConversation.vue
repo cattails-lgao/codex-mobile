@@ -3397,27 +3397,17 @@ function isAtBottom(container: HTMLElement): boolean {
   return distance <= BOTTOM_THRESHOLD_PX
 }
 
-function readScrollState(container: HTMLElement): ThreadScrollState {
+function emitScrollState(container: HTMLElement): void {
+  if (!props.activeThreadId) return
   const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
   const scrollRatio = maxScrollTop > 0 ? Math.min(Math.max(container.scrollTop / maxScrollTop, 0), 1) : 1
-  return {
-    scrollTop: container.scrollTop,
-    isAtBottom: isAtBottom(container),
-    scrollRatio,
-  }
-}
-
-function resolveScrollState(): ThreadScrollState | null {
-  return localScrollState.value ?? props.scrollState
-}
-
-function emitScrollState(container: HTMLElement): void {
-  const nextState = readScrollState(container)
-  localScrollState.value = nextState
-  if (!props.activeThreadId) return
   emit('updateScrollState', {
     threadId: props.activeThreadId,
-    state: nextState,
+    state: {
+      scrollTop: container.scrollTop,
+      isAtBottom: isAtBottom(container),
+      scrollRatio,
+    },
   })
 }
 
@@ -3430,7 +3420,7 @@ function applySavedScrollState(): void {
     return
   }
 
-  const savedState = resolveScrollState()
+  const savedState = props.scrollState
   if (!savedState || savedState.isAtBottom) {
     emitScrollState(container)
     return
@@ -3586,7 +3576,6 @@ watch(
   async (overlay) => {
     if (!overlay) return
     await nextTick()
-    if (!shouldLockToBottom()) return
     enforceBottomState()
     scheduleBottomLock(8)
   },
@@ -3676,9 +3665,7 @@ onBeforeUnmount(() => {
 }
 
 .conversation-list {
-  @apply h-full min-h-0 min-w-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-hidden flex flex-col gap-2 sm:gap-3;
-  overscroll-behavior-y: contain;
-  scrollbar-gutter: stable both-edges;
+  @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
 }
 
 .conversation-item {
