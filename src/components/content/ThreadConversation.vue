@@ -2419,6 +2419,12 @@ function parseInlineSegments(text: string): InlineSegment[] {
             segments.push({ kind: 'code', value: token })
           }
         }
+      } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
+        segments.push({
+          kind: 'url',
+          value: token,
+          href: token,
+        })
       } else {
         const fileReference = parseFileReference(token)
         if (fileReference) {
