@@ -259,6 +259,27 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: Stop button interrupts active turn without missing turnId
 
+### Feature: Default runtime uses workspace-write sandbox with on-request approvals
+
+#### Prerequisites
+- App server is running from this repository.
+- No `CODEXUI_SANDBOX_MODE` or `CODEXUI_APPROVAL_POLICY` environment overrides are set for the launch shell.
+
+#### Steps
+1. Start the app normally from this repository without passing `--sandbox-mode` or `--approval-policy`.
+2. Open the startup logs or terminal output and find the runtime summary.
+3. Confirm the reported sandbox mode is `workspace-write`.
+4. Confirm the reported approval policy is `on-request`.
+5. Restart the app with explicit overrides, for example `--sandbox-mode danger-full-access --approval-policy never`, and confirm those override the defaults.
+
+#### Expected Results
+- Default launch uses `workspace-write` sandbox mode.
+- Default launch uses `on-request` approval policy.
+- Explicit CLI flags still override the defaults when provided.
+
+#### Rollback/Cleanup
+- Remove any temporary CLI overrides before leaving the environment.
+
 ### Feature: Backticked HTTP(S) URL renders as clickable link
 
 #### Prerequisites
@@ -276,6 +297,8 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - None.
+
+### Feature: Stop button interrupts active turn without missing turnId
 
 #### Prerequisites
 - App is running from this repository.

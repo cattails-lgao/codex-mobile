@@ -17,6 +17,11 @@ import {
   prependPathEntry,
   resolveCodexCommand,
 } from '../commandResolution.js'
+import {
+  parseApprovalPolicy,
+  parseSandboxMode,
+  resolveAppServerRuntimeConfig,
+} from '../server/appServerRuntimeConfig.js'
 import { createServer as createApp } from '../server/httpServer.js'
 import { generatePassword } from '../server/password.js'
 import { spawnSyncCommand } from '../utils/commandInvocation.js'
@@ -444,6 +449,8 @@ async function startServer(options: {
   tunnel: boolean
   open: boolean
   login: boolean
+  sandboxMode?: string
+  approvalPolicy?: string
   projectPath?: string
 }) {
   const version = await readCliVersion()
@@ -460,6 +467,13 @@ async function startServer(options: {
   if (codexCommand) {
     process.env.CODEXUI_CODEX_COMMAND = codexCommand
   }
+  if (options.sandboxMode) {
+    process.env.CODEXUI_SANDBOX_MODE = options.sandboxMode
+  }
+  if (options.approvalPolicy) {
+    process.env.CODEXUI_APPROVAL_POLICY = options.approvalPolicy
+  }
+  const runtimeConfig = resolveAppServerRuntimeConfig()
   if (options.login && !hasCodexAuth() && codexCommand) {
     console.log('\nCodex is not logged in. Starting `codex login`...\n')
     runOrFail(codexCommand, ['login'], 'Codex login')
@@ -495,6 +509,8 @@ async function startServer(options: {
     '  GitHub:   https://github.com/friuns2/codexui',
     '',
     `  Bind:     http://0.0.0.0:${String(port)}`,
+    `  Codex sandbox: ${runtimeConfig.sandboxMode}`,
+    `  Approval policy: ${runtimeConfig.approvalPolicy}`,
   ]
   const accessUrls = getAccessibleUrls(port)
   if (accessUrls.length > 0) {
@@ -564,6 +580,8 @@ program
   .option('--no-open', 'do not open browser on startup')
   .option('--login', 'run automatic Codex login bootstrap', true)
   .option('--no-login', 'skip automatic Codex login bootstrap')
+  .option('--sandbox-mode <mode>', 'Codex sandbox mode: read-only, workspace-write, danger-full-access')
+  .option('--approval-policy <policy>', 'Codex approval policy: untrusted, on-failure, on-request, never')
   .action(async (
     projectPath: string | undefined,
     opts: {
@@ -572,6 +590,8 @@ program
       tunnel: boolean
       open: boolean
       login: boolean
+      sandboxMode?: string
+      approvalPolicy?: string
       openProject?: string
     },
   ) => {
@@ -589,6 +609,20 @@ program
     }
 
     const launchProject = (projectPath ?? '').trim()
+    if (opts.sandboxMode) {
+      const parsedSandboxMode = parseSandboxMode(opts.sandboxMode)
+      if (!parsedSandboxMode) {
+        throw new Error(`Invalid sandbox mode: ${opts.sandboxMode}`)
+      }
+      opts.sandboxMode = parsedSandboxMode
+    }
+    if (opts.approvalPolicy) {
+      const parsedApprovalPolicy = parseApprovalPolicy(opts.approvalPolicy)
+      if (!parsedApprovalPolicy) {
+        throw new Error(`Invalid approval policy: ${opts.approvalPolicy}`)
+      }
+      opts.approvalPolicy = parsedApprovalPolicy
+    }
     await startServer({ ...opts, projectPath: launchProject })
   })
 

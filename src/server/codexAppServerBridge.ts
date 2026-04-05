@@ -11,6 +11,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
+import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
@@ -1351,13 +1352,7 @@ class AppServerProcess {
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>()
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
-  private readonly appServerArgs = [
-    'app-server',
-    '-c',
-    'approval_policy="never"',
-    '-c',
-    'sandbox_mode="danger-full-access"',
-  ]
+  private readonly appServerArgs = buildAppServerArgs()
 
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()

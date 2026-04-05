@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -77,13 +78,7 @@ type AccountInspection = {
   quotaSnapshot: StoredRateLimitSnapshot | null
 }
 
-const APP_SERVER_ARGS = [
-  'app-server',
-  '-c',
-  'approval_policy="never"',
-  '-c',
-  'sandbox_mode="danger-full-access"',
-] as const
+const APP_SERVER_ARGS = buildAppServerArgs()
 
 const ACCOUNT_QUOTA_REFRESH_TTL_MS = 5 * 60 * 1000
 
