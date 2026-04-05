@@ -43,7 +43,11 @@ function renderFrontendMissingHtml(message: string, details?: string[]): string 
     '<body>',
     `<h1>${message}</h1>`,
     lines,
+    '<p>Redirecting to chat in 3 seconds...</p>',
     '<p><a href="/">Back to chat</a></p>',
+    '<script>',
+    'setTimeout(() => { window.location.assign("/") }, 3000)',
+    '</script>',
     '</body>',
     '</html>',
   ].join('')
