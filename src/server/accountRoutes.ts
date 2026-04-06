@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -76,14 +77,6 @@ type AccountInspection = {
   metadata: TokenMetadata
   quotaSnapshot: StoredRateLimitSnapshot | null
 }
-
-const APP_SERVER_ARGS = [
-  'app-server',
-  '-c',
-  'approval_policy="never"',
-  '-c',
-  'sandbox_mode="danger-full-access"',
-] as const
 
 const ACCOUNT_QUOTA_REFRESH_TTL_MS = 5 * 60 * 1000
 
@@ -399,7 +392,7 @@ async function withTemporaryCodexAppServer<T>(
   const authPath = join(tempCodexHome, 'auth.json')
   await writeFile(authPath, authRaw, { encoding: 'utf8', mode: 0o600 })
 
-  const proc = spawn('codex', [...APP_SERVER_ARGS], {
+  const proc = spawn('codex', buildAppServerArgs(), {
     env: { ...process.env, CODEX_HOME: tempCodexHome },
     stdio: ['pipe', 'pipe', 'pipe'],
   })
