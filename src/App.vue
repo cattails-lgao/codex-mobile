@@ -74,6 +74,15 @@
               <div class="sidebar-settings-account-section">
                 <div class="sidebar-settings-account-header">
                   <div class="sidebar-settings-account-header-main">
+                    <button
+                      class="sidebar-settings-account-collapse"
+                      type="button"
+                      :aria-expanded="!isAccountsSectionCollapsed"
+                      :title="isAccountsSectionCollapsed ? 'Expand accounts' : 'Collapse accounts'"
+                      @click="toggleAccountsSectionCollapsed"
+                    >
+                      <span class="sidebar-settings-account-collapse-icon">{{ isAccountsSectionCollapsed ? '▸' : '▾' }}</span>
+                    </button>
                     <span class="sidebar-settings-account-title">Accounts</span>
                     <span class="sidebar-settings-account-count">{{ accounts.length }}</span>
                   </div>
@@ -86,11 +95,12 @@
                     {{ isRefreshingAccounts ? 'Reloading…' : 'Reload' }}
                   </button>
                 </div>
-                <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
-                <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
-                  Run `codex login`, then click reload.
-                </p>
-                <div v-else class="sidebar-settings-account-list">
+                <template v-if="!isAccountsSectionCollapsed">
+                  <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
+                  <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
+                    Run `codex login`, then click reload.
+                  </p>
+                  <div v-else class="sidebar-settings-account-list">
                   <article
                     v-for="account in accounts"
                     :key="account.accountId"
@@ -140,7 +150,8 @@
                       </button>
                     </div>
                   </article>
-                </div>
+                  </div>
+                </template>
               </div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">Require ⌘ + enter to send</span>
@@ -574,6 +585,7 @@ const ReviewPane = defineAsyncComponent(() => import('./components/content/Revie
 const SkillsHub = defineAsyncComponent(() => import('./components/content/SkillsHub.vue'))
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
+const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -801,6 +813,7 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
@@ -2326,6 +2339,22 @@ function saveSidebarCollapsed(value: boolean): void {
   window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value ? '1' : '0')
 }
 
+function loadAccountsSectionCollapsed(): boolean {
+  if (typeof window === 'undefined') return true
+  const value = window.localStorage.getItem(ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY)
+  if (value === null) return true
+  return value === '1'
+}
+
+function toggleAccountsSectionCollapsed(): void {
+  isAccountsSectionCollapsed.value = !isAccountsSectionCollapsed.value
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(
+    ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY,
+    isAccountsSectionCollapsed.value ? '1' : '0',
+  )
+}
+
 function normalizeMessageType(rawType: string | undefined, role: string): string {
   const normalized = (rawType ?? '').trim()
   if (normalized.length > 0) {
@@ -3005,6 +3034,14 @@ async function submitFirstMessageForNewThread(
 
 .sidebar-settings-account-header-main {
   @apply flex items-center gap-2;
+}
+
+.sidebar-settings-account-collapse {
+  @apply inline-flex h-5 w-5 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100;
+}
+
+.sidebar-settings-account-collapse-icon {
+  @apply text-[11px] leading-none;
 }
 
 .sidebar-settings-account-title {
