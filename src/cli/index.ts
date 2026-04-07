@@ -314,6 +314,34 @@ function getAccessibleUrls(port: number): string[] {
   return Array.from(urls)
 }
 
+function isTailscaleIPv4Address(address: string): boolean {
+  const parts = address.split('.')
+  if (parts.length !== 4) return false
+  const octets = parts.map((part) => Number.parseInt(part, 10))
+  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) return false
+  return octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127
+}
+
+function isTailscaleIPv6Address(address: string): boolean {
+  const normalized = address.toLowerCase()
+  return normalized.startsWith('fd7a:115c:a1e0:')
+}
+
+function hasDetectedTailscaleIp(): boolean {
+  try {
+    const interfaces = networkInterfaces()
+    for (const entries of Object.values(interfaces)) {
+      if (!entries) continue
+      for (const entry of entries) {
+        if (entry.internal) continue
+        if (entry.family === 'IPv4' && isTailscaleIPv4Address(entry.address)) return true
+        if (entry.family === 'IPv6' && isTailscaleIPv6Address(entry.address)) return true
+      }
+    }
+  } catch {}
+  return false
+}
+
 async function startCloudflaredTunnel(command: string, localPort: number): Promise<{
   process: ReturnType<typeof spawn>
   url: string
@@ -574,7 +602,7 @@ program
   .option('-p, --port <port>', 'port to listen on', '5999')
   .option('--password <pass>', 'set a specific password')
   .option('--no-password', 'disable password protection')
-  .option('--tunnel', 'start cloudflared tunnel', true)
+  .option('--tunnel', 'start cloudflared tunnel (default is auto by Tailscale detection)', true)
   .option('--no-tunnel', 'disable cloudflared tunnel startup')
   .option('--open', 'open browser on startup', true)
   .option('--no-open', 'do not open browser on startup')
@@ -597,6 +625,14 @@ program
   ) => {
     const rawArgv = process.argv.slice(2)
     const openProjectFlagIndex = rawArgv.findIndex((arg) => arg === '--open-project' || arg.startsWith('--open-project='))
+    const tunnelFlagExplicit = rawArgv.some((arg) => (
+      arg === '--tunnel'
+      || arg === '--no-tunnel'
+      || arg.startsWith('--tunnel=')
+      || arg.startsWith('--no-tunnel=')
+    ))
+    const effectiveTunnel = tunnelFlagExplicit ? opts.tunnel : hasDetectedTailscaleIp()
+
     let openProjectOnly = (opts.openProject ?? '').trim()
     if (!openProjectOnly && openProjectFlagIndex >= 0 && projectPath?.trim()) {
       // Commander may map "--open-project ." to the positional arg in this command layout.
@@ -623,7 +659,7 @@ program
       }
       opts.approvalPolicy = parsedApprovalPolicy
     }
-    await startServer({ ...opts, projectPath: launchProject })
+    await startServer({ ...opts, tunnel: effectiveTunnel, projectPath: launchProject })
   })
 
 program.command('login').description('Install/check Codex CLI and run `codex login`').action(runLogin)
