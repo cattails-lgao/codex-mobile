@@ -2,9 +2,12 @@
 
 ## Merge to local main flow for worktree:
 
-0. In the main worktree, **always stash first** before merge/rebase operations.
-   - `git stash push -u -m "temp-before-merge-<your-branch>"`
-   - After merge completes, restore with `git stash pop`.
+0. In the main worktree, **always create a temporary checkpoint commit first** before merge/rebase operations.
+   - Create checkpoint commit:
+     - `git add -A`
+     - `git commit -m "temp-before-merge-<your-branch>"`
+   - Keep this checkpoint as a permanent commit (do not reset, pop, or rewrite it automatically).
+   - If there were no local changes to checkpoint, skip this step (do not create empty commit).
 
 1. In the worktree, commit changes and create a branch.
    - `git add -A && git commit -m "<message>"`
@@ -32,9 +35,9 @@
 
 ## package.json Version Conflict Rule
 
-- For merge conflicts in `package.json` that only affect the `"version"` field, always ignore the conflict and keep the stashed/local `package.json` version value.
+- For merge conflicts in `package.json` that only affect the `"version"` field, always ignore the conflict and keep the checkpoint/local `package.json` version value.
 - Do not block merge completion on `package.json` version-only conflicts.
-- For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/stashed `package.json` entirely (full file replacement), then continue merge.
+- For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/checkpoint `package.json` entirely (full file replacement), then continue merge.
 
 ## Commit After Each Task
 
