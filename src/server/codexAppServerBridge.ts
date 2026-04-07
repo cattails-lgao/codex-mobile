@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -116,6 +116,226 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function isInlineDataUrl(value: string): boolean {
+  return /^data:/iu.test(value.trim())
+}
+
+function extensionFromMimeType(mimeType: string): string {
+  const normalized = mimeType.trim().toLowerCase()
+  if (normalized === 'image/png') return '.png'
+  if (normalized === 'image/jpeg') return '.jpg'
+  if (normalized === 'image/webp') return '.webp'
+  if (normalized === 'image/gif') return '.gif'
+  if (normalized === 'image/svg+xml') return '.svg'
+  if (normalized === 'application/pdf') return '.pdf'
+  return ''
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function toAttachmentLinkTarget(block: Record<string, unknown>, fallback: string): string {
+  const candidate = asNonEmptyString(block.path)
+    ?? asNonEmptyString(block.file_path)
+    ?? asNonEmptyString(block.filename)
+    ?? asNonEmptyString(block.file_id)
+    ?? fallback
+  if (candidate.startsWith('file://')) return candidate
+  if (candidate.startsWith('/')) return `file://${candidate}`
+  return `attachment://${candidate}`
+}
+
+async function persistInlineDataUrlToLocalFile(dataUrl: string, baseName: string): Promise<string | null> {
+  const trimmed = dataUrl.trim()
+  const match = /^data:([^;,]*)(;base64)?,(.*)$/isu.exec(trimmed)
+  if (!match) return null
+  const mimeType = (match[1] ?? '').trim().toLowerCase()
+  const encodedPayload = match[3] ?? ''
+  let bytes: Buffer
+  try {
+    bytes = match[2]
+      ? Buffer.from(encodedPayload, 'base64')
+      : Buffer.from(decodeURIComponent(encodedPayload), 'utf8')
+  } catch {
+    return null
+  }
+  if (bytes.length === 0) return null
+
+  const hash = createHash('sha1').update(bytes).digest('hex')
+  const ext = extensionFromMimeType(mimeType)
+  const mediaDir = join(tmpdir(), 'codex-web-inline-media')
+  await mkdir(mediaDir, { recursive: true })
+  const fileName = `${baseName}-${hash}${ext}`
+  const filePath = join(mediaDir, fileName)
+  try {
+    await stat(filePath)
+  } catch {
+    await writeFile(filePath, bytes)
+  }
+  return filePath
+}
+
+function toLocalImageProxyUrl(path: string): string {
+  return `/codex-local-image?path=${encodeURIComponent(path)}`
+}
+
+async function sanitizeInlineUserContentBlock(
+  block: unknown,
+  context: { turnId: string; itemId: string; blockIndex: number },
+): Promise<unknown> {
+  const record = asRecord(block)
+  if (!record) return block
+
+  const type = asNonEmptyString(record.type) ?? ''
+  const imageUrl = asNonEmptyString(record.url) ?? asNonEmptyString(record.image_url)
+  if (imageUrl && isInlineDataUrl(imageUrl)) {
+    const localUrl = await persistInlineDataUrlToLocalFile(imageUrl, `inline-image-${context.turnId}-${context.itemId}-${String(context.blockIndex)}`)
+    if (localUrl) {
+      return {
+        ...record,
+        type: 'image',
+        url: toLocalImageProxyUrl(localUrl),
+      }
+    }
+    const target = toAttachmentLinkTarget(record, `inline-image/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
+    return {
+      type: 'text',
+      text: `Image attachment: ${target}`,
+    }
+  }
+
+  const inlineFileData = asNonEmptyString(record.file_data)
+    ?? asNonEmptyString(record.data)
+    ?? asNonEmptyString(record.base64)
+  if ((type.includes('file') || type === 'input_file' || type === 'file') && inlineFileData) {
+    const mimeType = asNonEmptyString(record.mime_type) ?? 'application/octet-stream'
+    const fileDataUrl = `data:${mimeType};base64,${inlineFileData}`
+    const localUrl = await persistInlineDataUrlToLocalFile(fileDataUrl, `inline-file-${context.turnId}-${context.itemId}-${String(context.blockIndex)}`)
+    if (localUrl) {
+      return {
+        type: 'text',
+        text: `File attachment: ${localUrl}`,
+      }
+    }
+    const target = toAttachmentLinkTarget(record, `inline-file/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
+    return {
+      type: 'text',
+      text: `File attachment: ${target}`,
+    }
+  }
+
+  return block
+}
+
+async function sanitizeInlinePayloadDeep(
+  value: unknown,
+  context: { turnId: string; itemId: string; blockIndex: number },
+): Promise<{ value: unknown; changed: boolean }> {
+  const maybeBlock = await sanitizeInlineUserContentBlock(value, context)
+  if (maybeBlock !== value) {
+    return { value: maybeBlock, changed: true }
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false
+    const nextArray: unknown[] = []
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = await sanitizeInlinePayloadDeep(value[index], {
+        turnId: context.turnId,
+        itemId: context.itemId,
+        blockIndex: index,
+      })
+      if (nested.changed) changed = true
+      nextArray.push(nested.value)
+    }
+    return changed ? { value: nextArray, changed: true } : { value, changed: false }
+  }
+
+  const record = asRecord(value)
+  if (!record) return { value, changed: false }
+
+  let changed = false
+  const nextRecord: Record<string, unknown> = {}
+  for (const [key, nestedValue] of Object.entries(record)) {
+    const nested = await sanitizeInlinePayloadDeep(nestedValue, {
+      turnId: context.turnId,
+      itemId: context.itemId,
+      blockIndex: context.blockIndex,
+    })
+    if (nested.changed) changed = true
+    nextRecord[key] = nested.value
+  }
+
+  return changed ? { value: nextRecord, changed: true } : { value, changed: false }
+}
+
+async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
+  if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
+
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  if (!record || !thread || !turns || turns.length === 0) return result
+
+  let changed = false
+  const nextTurns: unknown[] = []
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
+    const turn = turns[turnIndex]
+    const turnRecord = asRecord(turn)
+    const turnId = asNonEmptyString(turnRecord?.id) ?? 'turn'
+    const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
+    if (!turnRecord || !items) {
+      nextTurns.push(turn)
+      continue
+    }
+
+    let itemChanged = false
+    const nextItems: unknown[] = []
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+      const item = items[itemIndex]
+      const itemRecord = asRecord(item)
+      const itemId = asNonEmptyString(itemRecord?.id) ?? 'item'
+      if (!itemRecord) {
+        nextItems.push(item)
+        continue
+      }
+      const sanitizedItem = await sanitizeInlinePayloadDeep(item, {
+        turnId,
+        itemId,
+        blockIndex: itemIndex + turnIndex,
+      })
+      if (!sanitizedItem.changed) {
+        nextItems.push(item)
+        continue
+      }
+      itemChanged = true
+      nextItems.push(sanitizedItem.value)
+    }
+
+    if (!itemChanged) {
+      nextTurns.push(turn)
+      continue
+    }
+    changed = true
+    nextTurns.push({
+      ...turnRecord,
+      items: nextItems,
+    })
+  }
+
+  if (!changed) return result
+  return {
+    ...record,
+    thread: {
+      ...thread,
+      turns: nextTurns,
+    },
+  }
 }
 
 function trimThreadTurnsInRpcResult(method: string, result: unknown): unknown {
@@ -1977,7 +2197,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         const rpcResult = await appServer.rpc(body.method, body.params ?? null)
-        const result = trimThreadTurnsInRpcResult(body.method, rpcResult)
+        const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
+        const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
         setJson(res, 200, { result })
         return
       }
