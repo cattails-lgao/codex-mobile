@@ -96,8 +96,8 @@ If you want to use codexUI from iPhone or iPad Safari, serving it over HTTPS is 
 A practical private setup is to run codexUI locally and publish it inside your tailnet with Tailscale Serve:
 
 ```powershell
-npx codexapp --no-tunnel --port 5999
-tailscale serve --bg 5999
+npx codexapp --no-tunnel --port 5900
+tailscale serve --bg 5900
 ```
 
 Then open:

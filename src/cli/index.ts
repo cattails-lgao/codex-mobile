@@ -605,7 +605,7 @@ async function runLogin() {
 program
   .argument('[projectPath]', 'project directory to open on launch')
   .option('--open-project <path>', 'open project directory on launch (Codex desktop parity)')
-  .option('-p, --port <port>', 'port to listen on', '5999')
+  .option('-p, --port <port>', 'port to listen on', '5900')
   .option('--password <pass>', 'set a specific password')
   .option('--no-password', 'disable password protection')
   .option('--tunnel', 'start cloudflared tunnel (default is auto by Tailscale detection)', true)

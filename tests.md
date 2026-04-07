@@ -280,11 +280,11 @@ This file tracks manual regression and feature verification steps.
 - `cloudflared` is installed only if testing `--tunnel`.
 
 #### Steps
-1. Start CLI without tunnel flag: `npx codexapp --port 5999`.
-2. From a Tailscale client, open `http://100.x.x.x:5999` using a host address in `100.64.0.0/10` (replace with host tailnet IP).
+1. Start CLI without tunnel flag: `npx codexapp --port 5900`.
+2. From a Tailscale client, open `http://100.x.x.x:5900` using a host address in `100.64.0.0/10` (replace with host tailnet IP).
 3. Confirm the app opens directly without the password login page.
 4. (Optional IPv6 check) Open the same service using the host Tailscale IPv6 address in `fd7a:115c:a1e0::/48` and confirm it also bypasses password.
-5. Stop the server and start again with tunnel enabled: `npx codexapp --port 5999 --tunnel`.
+5. Stop the server and start again with tunnel enabled: `npx codexapp --port 5900 --tunnel`.
 6. Confirm startup output now includes a `Tunnel:` URL only when `--tunnel` is provided.
 7. Stop and restart once more without `--tunnel`, and verify no tunnel URL is printed.
 
@@ -305,7 +305,7 @@ This file tracks manual regression and feature verification steps.
 - One environment with detected Tailscale IP (`100.64.0.0/10` or `fd7a:115c:a1e0::/48`) and one without (or simulated by disabling Tailscale).
 
 #### Steps
-1. Start server without explicit tunnel flags: `npx codexapp --port 5999`.
+1. Start server without explicit tunnel flags: `npx codexapp --port 5900`.
 2. In a host where Tailscale IP is detected, verify startup output includes `Tunnel:`.
 3. In a host where Tailscale IP is not detected, verify startup output does not include `Tunnel:`.
 4. Start server with explicit override `--no-tunnel` and verify no `Tunnel:` output even when Tailscale IP is present.
