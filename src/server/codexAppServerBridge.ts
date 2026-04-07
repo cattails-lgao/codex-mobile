@@ -885,6 +885,7 @@ function getCodexSessionIndexPath(): string {
 type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
 const MAX_THREAD_TITLES = 500
 const EMPTY_THREAD_TITLE_CACHE: ThreadTitleCache = { titles: {}, order: [] }
+const PINNED_THREAD_IDS_KEY = 'thread-pinned-ids'
 
 type SessionIndexThreadTitleCacheState = {
   fileSignature: string | null
@@ -913,6 +914,10 @@ function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
   }
   const order = normalizeStringArray(record.order)
   return { titles, order }
+}
+
+function normalizePinnedThreadIds(value: unknown): string[] {
+  return normalizeStringArray(value)
 }
 
 function updateThreadTitleCache(cache: ThreadTitleCache, id: string, title: string): ThreadTitleCache {
@@ -1008,6 +1013,31 @@ async function writeThreadTitleCache(cache: ThreadTitleCache): Promise<void> {
     payload = {}
   }
   payload['thread-titles'] = cache
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function readPinnedThreadIds(): Promise<string[]> {
+  const statePath = getCodexGlobalStatePath()
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const payload = asRecord(JSON.parse(raw)) ?? {}
+    return normalizePinnedThreadIds(payload[PINNED_THREAD_IDS_KEY])
+  } catch {
+    return []
+  }
+}
+
+async function writePinnedThreadIds(threadIds: string[]): Promise<void> {
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    payload = asRecord(JSON.parse(raw)) ?? {}
+  } catch {
+    payload = {}
+  }
+
+  payload[PINNED_THREAD_IDS_KEY] = normalizePinnedThreadIds(threadIds)
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
@@ -2289,6 +2319,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-pins') {
+        const threadIds = await readPinnedThreadIds()
+        setJson(res, 200, { data: { threadIds } })
+        return
+      }
+
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-search') {
         const payload = asRecord(await readJsonBody(req))
         const query = typeof payload?.query === 'string' ? payload.query.trim() : ''
@@ -2320,6 +2356,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const cache = await readThreadTitleCache()
         const next = title ? updateThreadTitleCache(cache, id, title) : removeFromThreadTitleCache(cache, id)
         await writeThreadTitleCache(next)
+        setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'PUT' && url.pathname === '/codex-api/thread-pins') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadIds = normalizePinnedThreadIds(payload?.threadIds)
+        await writePinnedThreadIds(threadIds)
         setJson(res, 200, { ok: true })
         return
       }

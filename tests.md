@@ -587,7 +587,7 @@ This file tracks manual regression and feature verification steps.
 5. Refresh the app page again.
 
 #### Expected Results
-- Pinned threads are restored after reload from local storage.
+- Pinned threads are restored after reload from Codex app global state (`~/.codex/.codex-global-state.json` key `thread-pinned-ids`).
 - Pin order is preserved between reloads.
 - Archived/removed pinned thread is automatically pruned and no stale pinned row remains.
 

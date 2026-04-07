@@ -408,8 +408,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
+import { getPinnedThreadState, persistPinnedThreadIds } from '../../api/codexGateway'
 import type { UiProjectGroup, UiThread } from '../../types/codex'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
@@ -479,6 +480,7 @@ const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const expandedProjects = ref<Record<string, boolean>>({})
 const collapsedProjects = ref<Record<string, boolean>>({})
 const PINNED_THREADS_STORAGE_KEY = 'codex-web-local.pinned-thread-ids.v1'
+let hasLoadedPinnedThreadState = false
 const pinnedThreadIds = ref<string[]>(loadPinnedThreadIds())
 const openProjectMenuId = ref('')
 const openThreadMenuId = ref('')
@@ -652,6 +654,8 @@ watch(
       return
     }
     window.localStorage.setItem(PINNED_THREADS_STORAGE_KEY, JSON.stringify(threadIds))
+    if (!hasLoadedPinnedThreadState) return
+    void persistPinnedThreadIds(threadIds)
   },
 )
 
@@ -659,6 +663,24 @@ watch(threadById, (threadsById) => {
   const filtered = pinnedThreadIds.value.filter((threadId) => threadsById.has(threadId))
   if (filtered.length === pinnedThreadIds.value.length) return
   pinnedThreadIds.value = filtered
+})
+
+onMounted(async () => {
+  const { threadIds } = await getPinnedThreadState()
+  const normalized = Array.isArray(threadIds)
+    ? threadIds
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item, index, rows) => item.length > 0 && rows.indexOf(item) === index)
+    : []
+
+  if (normalized.length > 0) {
+    pinnedThreadIds.value = normalized
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PINNED_THREADS_STORAGE_KEY, JSON.stringify(normalized))
+    }
+  }
+  hasLoadedPinnedThreadState = true
 })
 
 const threadProjectNameById = computed(() => {
