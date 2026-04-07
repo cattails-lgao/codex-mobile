@@ -1,30 +1,28 @@
 # AGENTS.md
 
-## Merge to local main flow for worktree:
+## Git Workflow (Compact)
 
-0. In the main worktree, **always create a temporary checkpoint commit first** before merge/rebase operations.
-   - Create checkpoint commit:
-     - `git add -A`
-     - `git commit -m "temp-before-merge-<your-branch>"`
-   - Keep this checkpoint as a permanent commit (do not reset, pop, or rewrite it automatically).
-   - If there were no local changes to checkpoint, skip this step (do not create empty commit).
-
-1. In the worktree, commit changes and create a branch.
-   - `git add -A && git commit -m "<message>"`
-   - `git switch -c <your-branch>`
-2. If the user asks for a **single merge commit**, do this exact sequence in the main worktree:
-   - find pre-merge `main` from reflog (example: `git reflog main`)
-   - `git checkout main`
-   - `git reset --hard <pre-merge-main-commit>`
-   - `git checkout <your-branch>`
-   - `git rebase main`
-   - `git checkout main`
-   - `git merge --no-ff <your-branch> -m "Merge branch '<your-branch>' into main"`
-3. Otherwise, merge into local `main` from the main worktree:
-   - `git checkout <your-branch>`
-   - `git rebase main`
-   - `git checkout main`
-   - `git merge --no-ff <your-branch>`
+- Keep both worktrees clean before merge/rebase:
+  - feature worktree: `git status --short`
+  - main worktree: `git status --short`
+- If any merge/rebase is already in progress, abort it first in that worktree:
+  - merge: `git merge --abort`
+  - rebase: `git rebase --abort`
+- Always checkpoint local changes in main worktree before merge/rebase:
+  - `git add -A && git commit -m "temp-before-merge-<branch>"`
+  - skip only if there are no local changes.
+- Standard merge path:
+  1. commit task in feature worktree
+  2. create/switch feature branch
+  3. rebase feature branch on `main`
+  4. from main worktree: `git checkout main && git merge --no-ff <feature-branch>`
+- If user explicitly asks for a single merge commit, use:
+  - `git checkout main`
+  - `git reset --hard <pre-merge-main-commit>`
+  - `git checkout <feature-branch>`
+  - `git rebase main`
+  - `git checkout main`
+  - `git merge --no-ff <feature-branch> -m "Merge branch '<feature-branch>' into main"`
 
 ## Never Blindly Merge (MANDATORY)
 
@@ -34,17 +32,10 @@
 
 ## Conflict Avoidance and Recovery (MANDATORY)
 
-- Before any rebase/merge, ensure both worktrees are clean:
-  - feature worktree: `git status --short`
-  - main worktree: `git status --short`
-- Never start a new merge/rebase while another is in progress. Detect and clear first:
-  - merge in progress: `git status` shows unmerged paths -> `git merge --abort` (in that worktree)
-  - rebase in progress: `git status` shows rebase state -> `git rebase --abort` (in that worktree)
-- Do not rebase long-lived branches with unrelated historical commits directly onto `main` when it causes avoidable conflicts.
-  - Prefer creating a fresh integration branch from `main` and cherry-picking only task-relevant commits.
-- If a branch is already checked out in another worktree, do not force checkout in main worktree.
-  - Rebase/commit in the branch’s own worktree, then merge from `main` worktree by branch name.
-- When a failed merge brought in unrelated files/conflicts, abort and retry with a narrower commit set instead of resolving broad unrelated conflicts.
+- Do not rebase long-lived mixed-history branches directly onto `main` if it creates broad unrelated conflicts.
+- Prefer a fresh branch from `main` + cherry-pick only task-relevant commits.
+- If a branch is already checked out in another worktree, rebase/commit there, then merge by branch name from main worktree.
+- If merge pulls unrelated conflicts, abort and retry with a narrower commit set.
 
 ## package.json Version Conflict Rule
 
