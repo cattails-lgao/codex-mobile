@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -122,6 +122,17 @@ function isInlineDataUrl(value: string): boolean {
   return /^data:/iu.test(value.trim())
 }
 
+function extensionFromMimeType(mimeType: string): string {
+  const normalized = mimeType.trim().toLowerCase()
+  if (normalized === 'image/png') return '.png'
+  if (normalized === 'image/jpeg') return '.jpg'
+  if (normalized === 'image/webp') return '.webp'
+  if (normalized === 'image/gif') return '.gif'
+  if (normalized === 'image/svg+xml') return '.svg'
+  if (normalized === 'application/pdf') return '.pdf'
+  return ''
+}
+
 function asNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -134,23 +145,63 @@ function toAttachmentLinkTarget(block: Record<string, unknown>, fallback: string
     ?? asNonEmptyString(block.filename)
     ?? asNonEmptyString(block.file_id)
     ?? fallback
-  return candidate.startsWith('file://') ? candidate : `attachment://${candidate}`
+  if (candidate.startsWith('file://')) return candidate
+  if (candidate.startsWith('/')) return `file://${candidate}`
+  return `attachment://${candidate}`
 }
 
-function sanitizeInlineUserContentBlock(
+async function persistInlineDataUrlToLocalFile(dataUrl: string, baseName: string): Promise<string | null> {
+  const trimmed = dataUrl.trim()
+  const match = /^data:([^;,]*)(;base64)?,(.*)$/isu.exec(trimmed)
+  if (!match) return null
+  const mimeType = (match[1] ?? '').trim().toLowerCase()
+  const encodedPayload = match[3] ?? ''
+  let bytes: Buffer
+  try {
+    bytes = match[2]
+      ? Buffer.from(encodedPayload, 'base64')
+      : Buffer.from(decodeURIComponent(encodedPayload), 'utf8')
+  } catch {
+    return null
+  }
+  if (bytes.length === 0) return null
+
+  const hash = createHash('sha1').update(bytes).digest('hex')
+  const ext = extensionFromMimeType(mimeType)
+  const mediaDir = join(tmpdir(), 'codex-web-inline-media')
+  await mkdir(mediaDir, { recursive: true })
+  const fileName = `${baseName}-${hash}${ext}`
+  const filePath = join(mediaDir, fileName)
+  try {
+    await stat(filePath)
+  } catch {
+    await writeFile(filePath, bytes)
+  }
+  return `file://${filePath}`
+}
+
+async function sanitizeInlineUserContentBlock(
   block: unknown,
   context: { turnId: string; itemId: string; blockIndex: number },
-): unknown {
+): Promise<unknown> {
   const record = asRecord(block)
   if (!record) return block
 
   const type = asNonEmptyString(record.type) ?? ''
   const imageUrl = asNonEmptyString(record.url) ?? asNonEmptyString(record.image_url)
   if (imageUrl && isInlineDataUrl(imageUrl)) {
+    const localUrl = await persistInlineDataUrlToLocalFile(imageUrl, `inline-image-${context.turnId}-${context.itemId}-${String(context.blockIndex)}`)
+    if (localUrl) {
+      return {
+        ...record,
+        type: 'image',
+        url: localUrl,
+      }
+    }
     const target = toAttachmentLinkTarget(record, `inline-image/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
     return {
       type: 'text',
-      text: `[Image attachment](${target})`,
+      text: `Image attachment: ${target}`,
     }
   }
 
@@ -158,17 +209,26 @@ function sanitizeInlineUserContentBlock(
     ?? asNonEmptyString(record.data)
     ?? asNonEmptyString(record.base64)
   if ((type.includes('file') || type === 'input_file' || type === 'file') && inlineFileData) {
+    const mimeType = asNonEmptyString(record.mime_type) ?? 'application/octet-stream'
+    const fileDataUrl = `data:${mimeType};base64,${inlineFileData}`
+    const localUrl = await persistInlineDataUrlToLocalFile(fileDataUrl, `inline-file-${context.turnId}-${context.itemId}-${String(context.blockIndex)}`)
+    if (localUrl) {
+      return {
+        type: 'text',
+        text: `File attachment: ${localUrl}`,
+      }
+    }
     const target = toAttachmentLinkTarget(record, `inline-file/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
     return {
       type: 'text',
-      text: `[File attachment](${target})`,
+      text: `File attachment: ${target}`,
     }
   }
 
   return block
 }
 
-function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): unknown {
+async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
   if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
 
   const record = asRecord(result)
@@ -177,42 +237,58 @@ function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): unk
   if (!record || !thread || !turns || turns.length === 0) return result
 
   let changed = false
-  const nextTurns = turns.map((turn) => {
+  const nextTurns: unknown[] = []
+  for (const turn of turns) {
     const turnRecord = asRecord(turn)
     const turnId = asNonEmptyString(turnRecord?.id) ?? 'turn'
     const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
-    if (!turnRecord || !items) return turn
+    if (!turnRecord || !items) {
+      nextTurns.push(turn)
+      continue
+    }
 
     let itemChanged = false
-    const nextItems = items.map((item) => {
+    const nextItems: unknown[] = []
+    for (const item of items) {
       const itemRecord = asRecord(item)
       const itemType = asNonEmptyString(itemRecord?.type) ?? ''
       const itemId = asNonEmptyString(itemRecord?.id) ?? 'item'
       const content = Array.isArray(itemRecord?.content) ? itemRecord.content : null
-      if (!itemRecord || itemType !== 'userMessage' || !content) return item
+      if (!itemRecord || itemType !== 'userMessage' || !content) {
+        nextItems.push(item)
+        continue
+      }
 
       let contentChanged = false
-      const nextContent = content.map((block, blockIndex) => {
-        const sanitized = sanitizeInlineUserContentBlock(block, { turnId, itemId, blockIndex })
+      const nextContent: unknown[] = []
+      for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
+        const block = content[blockIndex]
+        const sanitized = await sanitizeInlineUserContentBlock(block, { turnId, itemId, blockIndex })
         if (sanitized !== block) contentChanged = true
-        return sanitized
-      })
+        nextContent.push(sanitized)
+      }
 
-      if (!contentChanged) return item
+      if (!contentChanged) {
+        nextItems.push(item)
+        continue
+      }
       itemChanged = true
-      return {
+      nextItems.push({
         ...itemRecord,
         content: nextContent,
-      }
-    })
+      })
+    }
 
-    if (!itemChanged) return turn
+    if (!itemChanged) {
+      nextTurns.push(turn)
+      continue
+    }
     changed = true
-    return {
+    nextTurns.push({
       ...turnRecord,
       items: nextItems,
-    }
-  })
+    })
+  }
 
   if (!changed) return result
   return {
@@ -2084,7 +2160,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const rpcResult = await appServer.rpc(body.method, body.params ?? null)
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
-        const result = sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+        const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
         setJson(res, 200, { result })
         return
       }
