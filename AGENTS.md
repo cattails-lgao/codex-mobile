@@ -48,9 +48,8 @@
 
 ## package.json Version Conflict Rule
 
-- For merge conflicts in `package.json` that only affect the `"version"` field, always ignore the conflict and keep the checkpoint/local `package.json` version value.
-- Do not block merge completion on `package.json` version-only conflicts.
-- For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/checkpoint `package.json` entirely (full file replacement), then continue merge.
+- For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/checkpoint `package.json` entirely (full file replacement) without additional review, then continue merge.
+- Treat `package.json` as generated/low-priority for conflict resolution and do not block merge completion on its conflicts.
 
 ## Commit After Each Task
 
