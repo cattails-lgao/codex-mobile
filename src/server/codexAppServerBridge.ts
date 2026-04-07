@@ -177,7 +177,11 @@ async function persistInlineDataUrlToLocalFile(dataUrl: string, baseName: string
   } catch {
     await writeFile(filePath, bytes)
   }
-  return `file://${filePath}`
+  return filePath
+}
+
+function toLocalImageProxyUrl(path: string): string {
+  return `/codex-local-image?path=${encodeURIComponent(path)}`
 }
 
 async function sanitizeInlineUserContentBlock(
@@ -195,7 +199,7 @@ async function sanitizeInlineUserContentBlock(
       return {
         ...record,
         type: 'image',
-        url: localUrl,
+        url: toLocalImageProxyUrl(localUrl),
       }
     }
     const target = toAttachmentLinkTarget(record, `inline-image/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
@@ -228,6 +232,48 @@ async function sanitizeInlineUserContentBlock(
   return block
 }
 
+async function sanitizeInlinePayloadDeep(
+  value: unknown,
+  context: { turnId: string; itemId: string; blockIndex: number },
+): Promise<{ value: unknown; changed: boolean }> {
+  const maybeBlock = await sanitizeInlineUserContentBlock(value, context)
+  if (maybeBlock !== value) {
+    return { value: maybeBlock, changed: true }
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false
+    const nextArray: unknown[] = []
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = await sanitizeInlinePayloadDeep(value[index], {
+        turnId: context.turnId,
+        itemId: context.itemId,
+        blockIndex: index,
+      })
+      if (nested.changed) changed = true
+      nextArray.push(nested.value)
+    }
+    return changed ? { value: nextArray, changed: true } : { value, changed: false }
+  }
+
+  const record = asRecord(value)
+  if (!record) return { value, changed: false }
+
+  let changed = false
+  const nextRecord: Record<string, unknown> = {}
+  for (const [key, nestedValue] of Object.entries(record)) {
+    const nested = await sanitizeInlinePayloadDeep(nestedValue, {
+      turnId: context.turnId,
+      itemId: context.itemId,
+      blockIndex: context.blockIndex,
+    })
+    if (nested.changed) changed = true
+    nextRecord[key] = nested.value
+  }
+
+  return changed ? { value: nextRecord, changed: true } : { value, changed: false }
+}
+
 async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
   if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
 
@@ -238,7 +284,8 @@ async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown
 
   let changed = false
   const nextTurns: unknown[] = []
-  for (const turn of turns) {
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
+    const turn = turns[turnIndex]
     const turnRecord = asRecord(turn)
     const turnId = asNonEmptyString(turnRecord?.id) ?? 'turn'
     const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
@@ -249,34 +296,25 @@ async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown
 
     let itemChanged = false
     const nextItems: unknown[] = []
-    for (const item of items) {
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+      const item = items[itemIndex]
       const itemRecord = asRecord(item)
-      const itemType = asNonEmptyString(itemRecord?.type) ?? ''
       const itemId = asNonEmptyString(itemRecord?.id) ?? 'item'
-      const content = Array.isArray(itemRecord?.content) ? itemRecord.content : null
-      if (!itemRecord || itemType !== 'userMessage' || !content) {
+      if (!itemRecord) {
         nextItems.push(item)
         continue
       }
-
-      let contentChanged = false
-      const nextContent: unknown[] = []
-      for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
-        const block = content[blockIndex]
-        const sanitized = await sanitizeInlineUserContentBlock(block, { turnId, itemId, blockIndex })
-        if (sanitized !== block) contentChanged = true
-        nextContent.push(sanitized)
-      }
-
-      if (!contentChanged) {
+      const sanitizedItem = await sanitizeInlinePayloadDeep(item, {
+        turnId,
+        itemId,
+        blockIndex: itemIndex + turnIndex,
+      })
+      if (!sanitizedItem.changed) {
         nextItems.push(item)
         continue
       }
       itemChanged = true
-      nextItems.push({
-        ...itemRecord,
-        content: nextContent,
-      })
+      nextItems.push(sanitizedItem.value)
     }
 
     if (!itemChanged) {
