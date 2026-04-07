@@ -2192,23 +2192,30 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
           const output = await runCommandCapture(
             'git',
-            ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'],
+            ['for-each-ref', '--format=%(committerdate:unix)\t%(refname)', 'refs/heads', 'refs/remotes'],
             { cwd: gitRoot },
           )
-          const seen = new Set<string>()
-          const branches: Array<{ value: string; label: string }> = []
+          const branchActivityByName = new Map<string, number>()
           for (const line of output.split('\n')) {
-            const normalized = normalizeBranchRefName(line)
-            if (!normalized || normalized === 'origin/HEAD' || seen.has(normalized)) continue
-            seen.add(normalized)
-            branches.push({ value: normalized, label: normalized })
+            const [rawTimestamp = '', rawRefName = ''] = line.split('\t')
+            const normalized = normalizeBranchRefName(rawRefName)
+            if (!normalized || normalized === 'origin/HEAD') continue
+            const parsedTimestamp = Number.parseInt(rawTimestamp.trim(), 10)
+            const timestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0
+            const current = branchActivityByName.get(normalized) ?? Number.MIN_SAFE_INTEGER
+            if (timestamp > current) {
+              branchActivityByName.set(normalized, timestamp)
+            }
           }
-          branches.sort((a, b) => {
-            const aMain = a.value === 'main' || a.value === 'master'
-            const bMain = b.value === 'main' || b.value === 'master'
-            if (aMain !== bMain) return aMain ? -1 : 1
-            return a.value.localeCompare(b.value)
-          })
+
+          const branches = Array.from(branchActivityByName.entries())
+            .map(([value]) => ({ value, label: value }))
+            .sort((a, b) => {
+              const aActivity = branchActivityByName.get(a.value) ?? 0
+              const bActivity = branchActivityByName.get(b.value) ?? 0
+              if (bActivity !== aActivity) return bActivity - aActivity
+              return a.value.localeCompare(b.value)
+            })
           setJson(res, 200, { data: branches })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to list branches') })
