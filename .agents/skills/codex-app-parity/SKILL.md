@@ -174,6 +174,16 @@ After each feature implementation session that uses this skill:
 - In live MCP elicitation schemas, required fields without defaults should remain unset until the user provides a value; preselecting `false` or the first enum option changes the meaning of the user’s response.
 - For MCP `url` elicitation mode, treat the server-provided URL as untrusted input and only render clickable links for safe schemes such as `http:` and `https:`.
 
+## Findings: Pinned Thread Persistence (2026-04-07)
+
+- This workspace now persists pinned sidebar threads in Codex global state (`~/.codex/.codex-global-state.json`) under key `thread-pinned-ids`.
+- Bridge API endpoints added for web/client parity wiring:
+  - `GET /codex-api/thread-pins` -> `{ data: { threadIds: string[] } }`
+  - `PUT /codex-api/thread-pins` with body `{ threadIds: string[] }`
+- Frontend behavior:
+  - Sidebar bootstraps pins from `thread-pinned-ids` via the bridge endpoint.
+  - No `localStorage` persistence is used for pinned-thread state.
+
 ## Findings: Context Usage Meter (2026-04-01)
 
 - Official `openai/codex` app-server protocol exposes per-thread context telemetry via `thread/tokenUsage/updated` with:
