@@ -1491,7 +1491,7 @@ function shouldShowThreadIndicator(thread: UiThread): boolean {
 }
 
 function threadRequestLabel(thread: UiThread): string {
-  return thread.pendingRequestState === 'approval' ? 'Ожидает одобрения' : 'Ожидает ответа'
+  return thread.pendingRequestState === 'approval' ? 'Awaiting approval' : 'Awaiting response'
 }
 
 function getThreadState(thread: UiThread): 'awaiting-approval' | 'awaiting-response' | 'working' | 'unread' | 'idle' {
