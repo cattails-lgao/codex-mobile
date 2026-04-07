@@ -822,6 +822,7 @@ const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
+let hasPendingRouteSync = false
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
@@ -2527,33 +2528,39 @@ async function initialize(): Promise<void> {
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
-  if (isRouteSyncInProgress.value) return
+  if (isRouteSyncInProgress.value) {
+    hasPendingRouteSync = true
+    return
+  }
   isRouteSyncInProgress.value = true
 
   try {
-    if (route.name === 'home' || route.name === 'skills') {
-      if (selectedThreadId.value !== '') {
-        await selectThread('')
-      }
-      return
-    }
+    do {
+      hasPendingRouteSync = false
 
-    if (route.name === 'thread') {
-      const threadId = routeThreadId.value
-      if (!threadId) return
-
-      if (!knownThreadIdSet.value.has(threadId)) {
-        await router.replace({ name: 'home' })
-        return
+      if (route.name === 'home' || route.name === 'skills') {
+        if (selectedThreadId.value !== '') {
+          await selectThread('')
+        }
+        continue
       }
 
-      if (selectedThreadId.value !== threadId) {
-        await selectThread(threadId)
-      } else {
-        void ensureThreadMessagesLoaded(threadId, { silent: true })
+      if (route.name === 'thread') {
+        const threadId = routeThreadId.value
+        if (!threadId) continue
+
+        if (!knownThreadIdSet.value.has(threadId)) {
+          await router.replace({ name: 'home' })
+          continue
+        }
+
+        if (selectedThreadId.value !== threadId) {
+          await selectThread(threadId)
+        } else {
+          void ensureThreadMessagesLoaded(threadId, { silent: true })
+        }
       }
-      return
-    }
+    } while (hasPendingRouteSync)
 
   } finally {
     isRouteSyncInProgress.value = false
