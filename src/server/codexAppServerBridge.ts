@@ -885,7 +885,7 @@ function getCodexSessionIndexPath(): string {
 type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
 const MAX_THREAD_TITLES = 500
 const EMPTY_THREAD_TITLE_CACHE: ThreadTitleCache = { titles: {}, order: [] }
-const PINNED_THREAD_IDS_KEY = 'thread-pinned-ids'
+const PINNED_THREAD_IDS_KEY = 'pinned-thread-ids'
 
 type SessionIndexThreadTitleCacheState = {
   fileSignature: string | null

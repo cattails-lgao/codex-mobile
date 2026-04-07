@@ -479,9 +479,8 @@ const DRAG_START_THRESHOLD_PX = 4
 const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const expandedProjects = ref<Record<string, boolean>>({})
 const collapsedProjects = ref<Record<string, boolean>>({})
-const PINNED_THREADS_STORAGE_KEY = 'codex-web-local.pinned-thread-ids.v1'
 let hasLoadedPinnedThreadState = false
-const pinnedThreadIds = ref<string[]>(loadPinnedThreadIds())
+const pinnedThreadIds = ref<string[]>([])
 const openProjectMenuId = ref('')
 const openThreadMenuId = ref('')
 const projectMenuDirectionById = ref<Record<string, MenuDirection>>({})
@@ -524,29 +523,6 @@ const projectGroupResizeObserver =
       })
     : null
 const COLLAPSED_STORAGE_KEY = 'codex-web-local.collapsed-projects.v1'
-
-function loadPinnedThreadIds(): string[] {
-  if (typeof window === 'undefined') return []
-
-  try {
-    const raw = window.localStorage.getItem(PINNED_THREADS_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-
-    const uniqueIds: string[] = []
-    for (const item of parsed) {
-      if (typeof item !== 'string') continue
-      const normalized = item.trim()
-      if (!normalized || uniqueIds.includes(normalized)) continue
-      uniqueIds.push(normalized)
-    }
-
-    return uniqueIds
-  } catch {
-    return []
-  }
-}
 
 function loadCollapsedState(): Record<string, boolean> {
   if (typeof window === 'undefined') return {}
@@ -648,12 +624,6 @@ const threadById = computed(() => {
 watch(
   pinnedThreadIds,
   (threadIds) => {
-    if (typeof window === 'undefined') return
-    if (threadIds.length === 0) {
-      window.localStorage.removeItem(PINNED_THREADS_STORAGE_KEY)
-      return
-    }
-    window.localStorage.setItem(PINNED_THREADS_STORAGE_KEY, JSON.stringify(threadIds))
     if (!hasLoadedPinnedThreadState) return
     void persistPinnedThreadIds(threadIds)
   },
@@ -676,9 +646,6 @@ onMounted(async () => {
 
   if (normalized.length > 0) {
     pinnedThreadIds.value = normalized
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PINNED_THREADS_STORAGE_KEY, JSON.stringify(normalized))
-    }
   }
   hasLoadedPinnedThreadState = true
 })
