@@ -20,8 +20,8 @@ type AppServerRuntimeConfig = {
 }
 
 const DEFAULT_RUNTIME_CONFIG: AppServerRuntimeConfig = {
-  sandboxMode: 'workspace-write',
-  approvalPolicy: 'on-request',
+  sandboxMode: 'danger-full-access',
+  approvalPolicy: 'never',
 }
 
 function normalizeRuntimeValue(value: string | undefined): string {
