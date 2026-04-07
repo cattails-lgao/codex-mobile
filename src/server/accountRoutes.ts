@@ -79,6 +79,8 @@ type AccountInspection = {
 }
 
 const ACCOUNT_QUOTA_REFRESH_TTL_MS = 5 * 60 * 1000
+const ACCOUNT_QUOTA_LOADING_STALE_MS = 2 * 60 * 1000
+const ACCOUNT_INSPECTION_TIMEOUT_MS = 25 * 1000
 
 let backgroundRefreshPromise: Promise<void> | null = null
 
@@ -543,8 +545,29 @@ async function inspectStoredAccount(entry: StoredAccountEntry): Promise<AccountI
   })
 }
 
+async function inspectStoredAccountWithTimeout(entry: StoredAccountEntry): Promise<AccountInspection> {
+  let timeoutHandle: NodeJS.Timeout | null = null
+  try {
+    return await Promise.race<AccountInspection>([
+      inspectStoredAccount(entry),
+      new Promise<AccountInspection>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`Account quota inspection timed out after ${ACCOUNT_INSPECTION_TIMEOUT_MS}ms`))
+        }, ACCOUNT_INSPECTION_TIMEOUT_MS)
+        timeoutHandle.unref?.()
+      }),
+    ])
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+  }
+}
+
 function shouldRefreshAccountQuota(entry: StoredAccountEntry): boolean {
-  if (entry.quotaStatus === 'loading') return false
+  if (entry.quotaStatus === 'loading') {
+    const updatedAtMs = entry.quotaUpdatedAtIso ? Date.parse(entry.quotaUpdatedAtIso) : Number.NaN
+    if (!Number.isFinite(updatedAtMs)) return true
+    return Date.now() - updatedAtMs >= ACCOUNT_QUOTA_LOADING_STALE_MS
+  }
   if (!entry.quotaUpdatedAtIso) return true
   const updatedAtMs = Date.parse(entry.quotaUpdatedAtIso)
   if (!Number.isFinite(updatedAtMs)) return true
@@ -581,7 +604,7 @@ async function refreshAccountsInBackground(accountIds: string[], activeAccountId
     if (!entry) continue
 
     try {
-      const inspected = await inspectStoredAccount(entry)
+      const inspected = await inspectStoredAccountWithTimeout(entry)
       await replaceStoredAccount({
         ...entry,
         email: inspected.metadata.email ?? entry.email,

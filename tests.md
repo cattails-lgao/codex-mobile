@@ -1176,3 +1176,68 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove remote copied data if needed: delete `~/.codex/accounts` and `~/.codex/accounts.json` on Android host.
+
+### Feature: Accounts no longer stuck on "Fetching account details…"
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Have at least one imported account in the Accounts section.
+
+#### Steps
+1. Open Settings and expand `Accounts`.
+2. Ensure at least one account has no immediately available quota snapshot (for example right after import/refresh, or by waiting for quota read failure).
+3. Observe the quota/status line for that account after the initial fetch completes.
+4. Trigger `Reload` in the Accounts header and wait for account list update.
+5. Re-check accounts that are not in `Loading quota…` state.
+
+#### Expected Results
+- `Fetching account details…` appears only while the entry is truly in transient loading.
+- Accounts that are not loading and still have no quota snapshot show `Quota unavailable` instead of a perpetual fetching label.
+- Existing `Loading quota…` and explicit error messages continue to render correctly.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Account quota background refresh recovers from stale loading and inspection hangs
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Have multiple imported accounts in `~/.codex/accounts.json`.
+- At least one account previously left with `quotaStatus: "loading"` for longer than 2 minutes, or one account that causes quota inspection to hang.
+
+#### Steps
+1. Open Settings and expand `Accounts`.
+2. Trigger account list refresh by loading the page or clicking `Reload`.
+3. Monitor `~/.codex/accounts.json` and confirm stale `loading` accounts are re-picked for refresh (not ignored indefinitely).
+4. Wait at least 30 seconds when one account is slow/hanging.
+5. Verify other accounts continue progressing instead of all remaining blocked.
+6. Re-open the Accounts section and inspect final status labels for previously stuck accounts.
+
+#### Expected Results
+- `loading` states older than 2 minutes are retried automatically.
+- A single hanging account inspection times out (about 25 seconds) and transitions to `error` rather than blocking the whole queue forever.
+- Remaining accounts continue refreshing to `ready` as data becomes available.
+- UI no longer stays indefinitely stuck waiting on one blocked account refresh.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Account quota label uses primary snapshot when windowMinutes is missing
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Have accounts where `quotaSnapshot.primary` exists but `windowMinutes` can be null.
+
+#### Steps
+1. Open Settings and expand `Accounts`.
+2. Click `Reload` and wait for account statuses to settle to `ready`.
+3. Inspect account rows that previously showed `Quota unavailable` while backend had `quotaSnapshot.primary.usedPercent`.
+4. Verify displayed quota labels in UI and account card titles.
+
+#### Expected Results
+- Accounts with `quotaSnapshot.primary` show a remaining-percent quota label.
+- `Quota unavailable` appears only when there is truly no usable quota snapshot data.
+- Team/free accounts both render quota labels consistently when primary snapshot is present.
+
+#### Rollback/Cleanup
+- No cleanup required.

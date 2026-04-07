@@ -1322,9 +1322,11 @@ function formatAccountQuota(account: UiAccountEntry): string {
   }
   const quota = account.quotaSnapshot
   const window = pickWeeklyQuotaWindow(account)
-  if (window) {
-    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(window.usedPercent)))
-    const refreshDate = formatResetDateCompact(window.resetsAt)
+  const fallbackWindow = quota?.primary ?? quota?.secondary ?? null
+  const displayWindow = window ?? fallbackWindow
+  if (displayWindow) {
+    const remainingPercent = Math.max(0, Math.min(100, 100 - Math.round(displayWindow.usedPercent)))
+    const refreshDate = formatResetDateCompact(displayWindow.resetsAt)
     return refreshDate
       ? `${remainingPercent}% weekly remaining · ${refreshDate}`
       : `${remainingPercent}% weekly remaining`
@@ -1340,6 +1342,9 @@ function formatAccountQuota(account: UiAccountEntry): string {
   }
   if (account.quotaStatus === 'error') {
     return account.quotaError || 'Quota unavailable'
+  }
+  if (account.quotaStatus === 'ready' || account.quotaStatus === 'idle') {
+    return 'Quota unavailable'
   }
   return 'Fetching account details…'
 }
