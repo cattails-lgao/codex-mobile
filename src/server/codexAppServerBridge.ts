@@ -2138,22 +2138,21 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           if (!worktreeId || !worktreeParent || !worktreeCwd) {
             throw new Error('Failed to allocate a unique worktree id')
           }
-          const branch = `codex/${worktreeId}`
           const startPoint = baseBranch || 'HEAD'
 
           await mkdir(worktreeParent, { recursive: true })
           try {
-            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, startPoint], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '--detach', worktreeCwd, startPoint], { cwd: gitRoot })
           } catch (error) {
             if (!isMissingHeadError(error)) throw error
             await ensureRepoHasInitialCommit(gitRoot)
-            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, startPoint], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '--detach', worktreeCwd, startPoint], { cwd: gitRoot })
           }
 
           setJson(res, 200, {
             data: {
               cwd: worktreeCwd,
-              branch,
+              branch: null,
               gitRoot,
             },
           })

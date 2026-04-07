@@ -92,7 +92,7 @@ const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
 
 export type WorktreeCreateResult = {
   cwd: string
-  branch: string
+  branch: string | null
   gitRoot: string
 }
 

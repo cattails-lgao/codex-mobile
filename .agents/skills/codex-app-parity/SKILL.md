@@ -455,3 +455,13 @@ After each feature implementation session that uses this skill:
 - With Codex.app unavailable for inspection, message-action removals should be implemented as full UI deletion, not partial hiding.
 - In this codebase, message actions span both template nodes in `ThreadConversation.vue` and shared dark-theme overrides in `style.css`; removing only the button markup leaves dead hover/dark styles behind.
 - A safe fallback cleanup is to remove the template block, the helper functions/imports that feed it, and the corresponding `.message-action*` selectors together in the same change.
+
+## Findings: Detached HEAD Worktree Creation (2026-04-08)
+
+- Codex.app worker bundle creates new worktrees with detached HEAD semantics:
+  - `git worktree add --detach <worktreePath> <startRef>`
+- Evidence location in extracted app bundle:
+  - `/tmp/codex-app-extracted/.vite/build/worker.js` (`Xq(...)` flow)
+- Parity implication for this repo:
+  - New worktree creation should not create/switch to a new local branch by default.
+  - API responses should treat branch as nullable/absent for detached worktrees.
