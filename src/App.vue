@@ -2101,6 +2101,19 @@ function onInterruptTurn(): void {
 }
 
 function onRollback(payload: { turnId: string }): void {
+  const targetTurnId = payload.turnId.trim()
+  if (targetTurnId.length > 0) {
+    const rollbackUserMessage = [...filteredMessages.value]
+      .reverse()
+      .find((message) => (
+        message.role === 'user'
+        && (message.turnId?.trim() ?? '') === targetTurnId
+        && message.text.trim().length > 0
+      ))
+    if (rollbackUserMessage?.text && threadComposerRef.value) {
+      threadComposerRef.value.appendTextToDraft(rollbackUserMessage.text)
+    }
+  }
   void rollbackSelectedThread(payload.turnId)
 }
 

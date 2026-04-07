@@ -1430,3 +1430,46 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Stop running dev servers and unset temporary env overrides.
+
+### Feature: Approval request uses legacy in-conversation request card only
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Open a thread where Codex can trigger an approval request (for example a command or file-change approval).
+
+#### Steps
+1. Trigger an approval request in an existing thread.
+2. Observe the conversation timeline where server requests are rendered.
+3. Observe the composer area at the bottom of the thread.
+4. Confirm the approval controls are shown in the in-conversation request card.
+5. Confirm no separate composer waiting-state approval panel is rendered.
+
+#### Expected Results
+- Exactly one approval UI is visible for the active pending request.
+- The approval UI appears in the conversation request card.
+- Composer continues to show the standard composer UI without a separate approval panel.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Rollback appends rolled-back user text into composer input
+
+#### Prerequisites
+- App is running from this repository.
+- Open any non-home thread with at least one completed user/assistant turn.
+- Composer input is visible in the thread view.
+
+#### Steps
+1. In the selected thread, locate a message row with a visible rollback action.
+2. Click rollback for a specific turn whose user prompt text is known.
+3. Observe the composer input immediately after clicking rollback.
+4. If composer already had text, verify the rolled-back user text is appended on a new line.
+5. Confirm the thread rollback still completes and the turn is removed from the conversation.
+
+#### Expected Results
+- Before rollback completes, the original user message text from that turn is inserted into the composer input.
+- Existing composer draft text is preserved and the restored text is appended.
+- Rollback behavior still removes the selected turn(s) as before.
+
+#### Rollback/Cleanup
+- Clear composer input if restored text is no longer needed.
