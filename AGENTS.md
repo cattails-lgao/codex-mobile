@@ -41,6 +41,7 @@
 
 - For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/checkpoint `package.json` entirely (full file replacement) without additional review, then continue merge.
 - Treat `package.json` as generated/low-priority for conflict resolution and do not block merge completion on its conflicts.
+- If `package.json` has uncommitted changes during merge/rebase workflow, always discard those uncommitted changes and keep the current local/checkpoint `package.json` version.
 - For any merge/rebase conflict involving `tests.md`, always resolve by taking the current local/checkpoint `tests.md` entirely (full file replacement) without additional review, then continue merge.
 - Treat `tests.md` as low-priority for conflict resolution and do not block merge completion on its conflicts.
 

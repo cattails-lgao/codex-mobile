@@ -754,12 +754,16 @@
   @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
-:root.dark .content-header-review-button {
+:root.dark .content-header-branch-dropdown .composer-dropdown-trigger {
   @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
 }
 
-:root.dark .content-header-review-button[data-active='true'] {
+:root.dark .content-header-branch-dropdown.is-review-open .composer-dropdown-trigger {
   @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .content-header-branch-dropdown.is-review-open .composer-dropdown-chevron {
+  @apply text-zinc-900;
 }
 
 :root.dark .review-pane {

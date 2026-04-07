@@ -244,15 +244,17 @@
             />
           </template>
           <template #actions>
-            <button
+            <ComposerDropdown
               v-if="route.name === 'thread' && selectedThreadId"
-              type="button"
-              class="content-header-review-button"
-              :data-active="isReviewPaneOpen"
-              @click="isReviewPaneOpen = !isReviewPaneOpen"
-            >
-              Review
-            </button>
+              class="content-header-branch-dropdown"
+              :class="{ 'is-review-open': isReviewPaneOpen }"
+              :model-value="contentHeaderBranchDropdownValue"
+              :options="contentHeaderBranchDropdownOptions"
+              :disabled="isLoadingThreadBranches || isSwitchingThreadBranch"
+              :enable-search="true"
+              search-placeholder="Search branches..."
+              @update:model-value="onSelectContentHeaderBranch"
+            />
           </template>
         </ContentHeader>
 
@@ -581,8 +583,10 @@ import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import {
+  checkoutGitBranch,
   configureTelegramBot,
   createWorktree,
+  getGitBranchState,
   getWorktreeBranchOptions,
   getGithubProjectsForScope,
   getAccounts,
@@ -841,6 +845,10 @@ const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
+const threadBranchOptions = ref<WorktreeBranchOption[]>([])
+const currentThreadBranch = ref<string | null>(null)
+const isLoadingThreadBranches = ref(false)
+const isSwitchingThreadBranch = ref(false)
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
@@ -1064,6 +1072,30 @@ const selectedWorktreeBranchLabel = computed(() => {
   if (!selectedBranch) return ''
   const selected = newWorktreeBranchDropdownOptions.value.find((option) => option.value === selectedBranch)
   return selected?.label ?? selectedBranch
+})
+const contentHeaderBranchDropdownValue = computed(() => currentThreadBranch.value ?? '__detached_head__')
+const contentHeaderBranchDropdownOptions = computed<Array<{ value: string; label: string }>>(() => {
+  const options: Array<{ value: string; label: string }> = [
+    {
+      value: '__review__',
+      label: isReviewPaneOpen.value ? 'Review (Open)' : 'Review',
+    },
+  ]
+  const seen = new Set<string>()
+  const currentBranch = currentThreadBranch.value?.trim() ?? ''
+  if (currentBranch) {
+    options.push({ value: currentBranch, label: currentBranch })
+    seen.add(currentBranch)
+  } else {
+    options.push({ value: '__detached_head__', label: 'Detached HEAD' })
+    seen.add('__detached_head__')
+  }
+  for (const option of threadBranchOptions.value) {
+    if (!option.value || seen.has(option.value)) continue
+    seen.add(option.value)
+    options.push(option)
+  }
+  return options
 })
 const createFolderParentPath = computed(() => existingFolderBrowsePath.value.trim())
 const isCreateFolderNameValid = computed(() => {
@@ -1802,6 +1834,54 @@ function onSelectNewThreadFolder(cwd: string): void {
 
 function onSelectNewWorktreeBranch(branch: string): void {
   newWorktreeBaseBranch.value = branch.trim()
+}
+
+async function loadThreadBranches(cwd: string): Promise<void> {
+  const targetCwd = cwd.trim()
+  if (!targetCwd || route.name !== 'thread') {
+    threadBranchOptions.value = []
+    currentThreadBranch.value = null
+    return
+  }
+  isLoadingThreadBranches.value = true
+  try {
+    const state = await getGitBranchState(targetCwd)
+    threadBranchOptions.value = state.options
+    currentThreadBranch.value = state.currentBranch
+  } catch {
+    threadBranchOptions.value = []
+    currentThreadBranch.value = null
+  } finally {
+    isLoadingThreadBranches.value = false
+  }
+}
+
+function onSelectContentHeaderBranch(value: string): void {
+  if (value === '__review__') {
+    isReviewPaneOpen.value = !isReviewPaneOpen.value
+    return
+  }
+  if (value === '__detached_head__') return
+  if (isSwitchingThreadBranch.value) return
+  const targetBranch = value.trim()
+  if (!targetBranch || targetBranch === (currentThreadBranch.value ?? '')) return
+  const cwd = composerCwd.value.trim()
+  if (!cwd) return
+
+  isSwitchingThreadBranch.value = true
+  void checkoutGitBranch(cwd, targetBranch)
+    .then((branch) => {
+      currentThreadBranch.value = branch || targetBranch
+      isReviewPaneOpen.value = false
+      return loadThreadBranches(cwd)
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to switch branch'
+      window.alert(message)
+    })
+    .finally(() => {
+      isSwitchingThreadBranch.value = false
+    })
 }
 
 async function onStartAddNewProject(): Promise<void> {
@@ -2615,6 +2695,19 @@ watch(
 )
 
 watch(
+  () => [route.name, composerCwd.value] as const,
+  ([routeName, cwd]) => {
+    if (routeName !== 'thread') {
+      threadBranchOptions.value = []
+      currentThreadBranch.value = null
+      return
+    }
+    void loadThreadBranches(cwd)
+  },
+  { immediate: true },
+)
+
+watch(
   pageTitle,
   (value) => {
     if (typeof document === 'undefined') return
@@ -2786,12 +2879,25 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply w-full shrink-0 px-2 sm:px-6;
 }
 
-.content-header-review-button {
+.content-header-branch-dropdown :deep(.composer-dropdown-trigger) {
   @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
 }
 
-.content-header-review-button[data-active='true'] {
+.content-header-branch-dropdown :deep(.composer-dropdown-value) {
+  @apply max-w-40 truncate;
+}
+
+.content-header-branch-dropdown :deep(.composer-dropdown-menu-wrap) {
+  left: auto;
+  right: 0;
+}
+
+.content-header-branch-dropdown.is-review-open :deep(.composer-dropdown-trigger) {
   @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+}
+
+.content-header-branch-dropdown.is-review-open :deep(.composer-dropdown-chevron) {
+  @apply text-white;
 }
 
 .new-thread-empty {
