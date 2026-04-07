@@ -798,6 +798,14 @@ async function runCommandCapture(command: string, args: string[], options: { cwd
   })
 }
 
+function normalizeBranchRefName(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('refs/heads/')) return trimmed.slice('refs/heads/'.length)
+  if (trimmed.startsWith('refs/remotes/')) return trimmed.slice('refs/remotes/'.length)
+  return trimmed
+}
+
 async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -2078,6 +2086,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'POST' && url.pathname === '/codex-api/worktree/create') {
         const payload = asRecord(await readJsonBody(req))
         const rawSourceCwd = typeof payload?.sourceCwd === 'string' ? payload.sourceCwd.trim() : ''
+        const baseBranch = typeof payload?.baseBranch === 'string' ? payload.baseBranch.trim() : ''
         if (!rawSourceCwd) {
           setJson(res, 400, { error: 'Missing sourceCwd' })
           return
@@ -2130,14 +2139,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             throw new Error('Failed to allocate a unique worktree id')
           }
           const branch = `codex/${worktreeId}`
+          const startPoint = baseBranch || 'HEAD'
 
           await mkdir(worktreeParent, { recursive: true })
           try {
-            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, startPoint], { cwd: gitRoot })
           } catch (error) {
             if (!isMissingHeadError(error)) throw error
             await ensureRepoHasInitialCommit(gitRoot)
-            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '-b', branch, worktreeCwd, startPoint], { cwd: gitRoot })
           }
 
           setJson(res, 200, {
@@ -2149,6 +2159,59 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to create worktree') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/worktree/branches') {
+        const rawSourceCwd = (url.searchParams.get('sourceCwd') ?? '').trim()
+        if (!rawSourceCwd) {
+          setJson(res, 400, { error: 'Missing sourceCwd' })
+          return
+        }
+        const sourceCwd = isAbsolute(rawSourceCwd) ? rawSourceCwd : resolve(rawSourceCwd)
+        try {
+          const sourceInfo = await stat(sourceCwd)
+          if (!sourceInfo.isDirectory()) {
+            setJson(res, 400, { error: 'sourceCwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'sourceCwd does not exist' })
+          return
+        }
+
+        try {
+          let gitRoot = ''
+          try {
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          } catch (error) {
+            if (!isNotGitRepositoryError(error)) throw error
+            setJson(res, 200, { data: [] })
+            return
+          }
+          const output = await runCommandCapture(
+            'git',
+            ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'],
+            { cwd: gitRoot },
+          )
+          const seen = new Set<string>()
+          const branches: Array<{ value: string; label: string }> = []
+          for (const line of output.split('\n')) {
+            const normalized = normalizeBranchRefName(line)
+            if (!normalized || normalized === 'origin/HEAD' || seen.has(normalized)) continue
+            seen.add(normalized)
+            branches.push({ value: normalized, label: normalized })
+          }
+          branches.sort((a, b) => {
+            const aMain = a.value === 'main' || a.value === 'master'
+            const bMain = b.value === 'main' || b.value === 'master'
+            if (aMain !== bMain) return aMain ? -1 : 1
+            return a.value.localeCompare(b.value)
+          })
+          setJson(res, 200, { data: branches })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to list branches') })
         }
         return
       }

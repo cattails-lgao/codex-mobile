@@ -393,6 +393,28 @@
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
                 />
+                <div v-if="newThreadRuntime === 'worktree'" class="new-thread-branch-select">
+                  <p class="new-thread-branch-select-label">Base branch</p>
+                  <ComposerDropdown
+                    class="new-thread-branch-dropdown"
+                    :model-value="newWorktreeBaseBranch"
+                    :options="newWorktreeBranchDropdownOptions"
+                    placeholder="Select branch"
+                    :enable-search="true"
+                    search-placeholder="Search branches..."
+                    :disabled="isLoadingWorktreeBranches || newWorktreeBranchDropdownOptions.length === 0"
+                    @update:model-value="onSelectNewWorktreeBranch"
+                  />
+                  <p class="new-thread-branch-select-help">
+                    {{
+                      isLoadingWorktreeBranches
+                        ? 'Loading branches…'
+                        : selectedWorktreeBranchLabel
+                          ? `New worktree branch will start from ${selectedWorktreeBranchLabel}.`
+                          : 'No Git branches found for this folder.'
+                    }}
+                  </p>
+                </div>
                 <p class="new-thread-runtime-help">
                   <code>Local project</code> uses the selected folder directly. <code>New worktree</code> creates an isolated Git worktree before the first prompt.
                 </p>
@@ -561,6 +583,7 @@ import { useMobile } from './composables/useMobile'
 import {
   configureTelegramBot,
   createWorktree,
+  getWorktreeBranchOptions,
   getGithubProjectsForScope,
   getAccounts,
   createLocalDirectory,
@@ -577,7 +600,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus } from './api/codexGateway'
+import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -798,6 +821,9 @@ const isRouteSyncInProgress = ref(false)
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
+const newWorktreeBaseBranch = ref('')
+const worktreeBranchOptions = ref<WorktreeBranchOption[]>([])
+const isLoadingWorktreeBranches = ref(false)
 const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
@@ -1024,6 +1050,20 @@ const newThreadFolderOptions = computed(() => {
   }
 
   return options
+})
+const newWorktreeBranchDropdownOptions = computed<Array<{ value: string; label: string }>>(() => {
+  const selectedBranch = newWorktreeBaseBranch.value.trim()
+  const options = [...worktreeBranchOptions.value]
+  if (selectedBranch && !options.some((option) => option.value === selectedBranch)) {
+    options.unshift({ value: selectedBranch, label: selectedBranch })
+  }
+  return options
+})
+const selectedWorktreeBranchLabel = computed(() => {
+  const selectedBranch = newWorktreeBaseBranch.value.trim()
+  if (!selectedBranch) return ''
+  const selected = newWorktreeBranchDropdownOptions.value.find((option) => option.value === selectedBranch)
+  return selected?.label ?? selectedBranch
 })
 const createFolderParentPath = computed(() => existingFolderBrowsePath.value.trim())
 const isCreateFolderNameValid = computed(() => {
@@ -1758,6 +1798,10 @@ function scheduleMobileConversationJumpToLatest(): void {
 function onSelectNewThreadFolder(cwd: string): void {
   newThreadCwd.value = cwd.trim()
   createFolderError.value = ''
+}
+
+function onSelectNewWorktreeBranch(branch: string): void {
+  newWorktreeBaseBranch.value = branch.trim()
 }
 
 async function onStartAddNewProject(): Promise<void> {
@@ -2524,6 +2568,15 @@ watch(
 )
 
 watch(
+  () => [newThreadRuntime.value, newThreadCwd.value] as const,
+  ([runtime, cwd]) => {
+    if (runtime !== 'worktree') return
+    void loadWorktreeBranches(cwd)
+  },
+  { immediate: true },
+)
+
+watch(
   () => newThreadRuntime.value,
   (runtime) => {
     if (runtime === 'local') {
@@ -2536,7 +2589,9 @@ watch(
           newThreadCwd.value = localCwd
         }
       }
+      return
     }
+    void loadWorktreeBranches(newThreadCwd.value)
   },
 )
 
@@ -2591,7 +2646,7 @@ async function submitFirstMessageForNewThread(
         message: 'Creating a worktree and running setup.',
       }
       try {
-        const created = await createWorktree(newThreadCwd.value)
+        const created = await createWorktree(newThreadCwd.value, newWorktreeBaseBranch.value)
         targetCwd = created.cwd
         newThreadCwd.value = created.cwd
         worktreeInitStatus.value = { phase: 'idle', title: '', message: '' }
@@ -2610,6 +2665,29 @@ async function submitFirstMessageForNewThread(
     scheduleMobileConversationJumpToLatest()
   } catch {
     // Error is already reflected in state.
+  }
+}
+
+async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
+  const normalizedSourceCwd = sourceCwd.trim()
+  if (!normalizedSourceCwd) {
+    worktreeBranchOptions.value = []
+    newWorktreeBaseBranch.value = ''
+    return
+  }
+
+  isLoadingWorktreeBranches.value = true
+  try {
+    const options = await getWorktreeBranchOptions(normalizedSourceCwd)
+    worktreeBranchOptions.value = options
+    if (!newWorktreeBaseBranch.value.trim() && options.length > 0) {
+      newWorktreeBaseBranch.value = options[0].value
+    }
+  } catch {
+    worktreeBranchOptions.value = []
+    newWorktreeBaseBranch.value = ''
+  } finally {
+    isLoadingWorktreeBranches.value = false
   }
 }
 </script>
@@ -2907,6 +2985,22 @@ async function submitFirstMessageForNewThread(
 
 .new-thread-runtime-dropdown {
   @apply mt-3;
+}
+
+.new-thread-branch-select {
+  @apply mt-3 w-full max-w-3xl;
+}
+
+.new-thread-branch-select-label {
+  @apply m-0 mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500;
+}
+
+.new-thread-branch-dropdown :deep(.composer-dropdown-trigger) {
+  @apply h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-700;
+}
+
+.new-thread-branch-select-help {
+  @apply mt-1 mb-0 text-xs text-zinc-500;
 }
 
 .new-thread-runtime-help {
