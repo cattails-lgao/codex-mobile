@@ -101,6 +101,11 @@ export type WorktreeBranchOption = {
   label: string
 }
 
+export type GitBranchState = {
+  currentBranch: string | null
+  options: WorktreeBranchOption[]
+}
+
 
 
 export type ThreadSearchResult = {
@@ -1301,6 +1306,62 @@ export async function getWorktreeBranchOptions(sourceCwd: string): Promise<Workt
     })
   }
   return options
+}
+
+export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
+  const normalizedCwd = cwd.trim()
+  if (!normalizedCwd) {
+    return { currentBranch: null, options: [] }
+  }
+  const query = new URLSearchParams({ cwd: normalizedCwd })
+  const response = await fetch(`/codex-api/git/branches?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load Git branch state')
+  }
+  const record = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? (payload.data as Record<string, unknown>)
+    : {}
+  const currentBranchRaw = record.currentBranch
+  const currentBranch = typeof currentBranchRaw === 'string' && currentBranchRaw.trim()
+    ? currentBranchRaw.trim()
+    : null
+  const rawList = Array.isArray(record.options) ? record.options : []
+  const options: WorktreeBranchOption[] = []
+  const seen = new Set<string>()
+  for (const item of rawList) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const option = item as Record<string, unknown>
+    const value = typeof option.value === 'string' ? option.value.trim() : ''
+    const label = typeof option.label === 'string' ? option.label.trim() : ''
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    options.push({
+      value,
+      label: label || value,
+    })
+  }
+  if (currentBranch && !seen.has(currentBranch)) {
+    options.unshift({ value: currentBranch, label: currentBranch })
+  }
+  return { currentBranch, options }
+}
+
+export async function checkoutGitBranch(cwd: string, branch: string): Promise<string | null> {
+  const response = await fetch('/codex-api/git/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cwd: cwd.trim(),
+      branch: branch.trim(),
+    }),
+  })
+  const payload = (await response.json()) as { data?: { currentBranch?: string | null }; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to switch branch')
+  }
+  const branchName = payload.data?.currentBranch
+  return typeof branchName === 'string' && branchName.trim() ? branchName.trim() : null
 }
 
 export async function getReviewSnapshot(

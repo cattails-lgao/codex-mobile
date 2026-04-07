@@ -806,6 +806,15 @@ function normalizeBranchRefName(value: string): string {
   return trimmed
 }
 
+function extractBranchLockedWorktreePath(error: unknown, branchName: string): string {
+  const message = getErrorMessage(error, '')
+  if (!message || !branchName) return ''
+  const escapedBranch = branchName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const pattern = new RegExp(`'${escapedBranch}' is already checked out at '([^']+)'`, 'u')
+  const match = pattern.exec(message)
+  return match?.[1]?.trim() ?? ''
+}
+
 async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -2218,6 +2227,129 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: branches })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to list branches') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/git/branches') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          let gitRoot = ''
+          try {
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          } catch (error) {
+            if (!isNotGitRepositoryError(error)) throw error
+            setJson(res, 200, {
+              data: {
+                currentBranch: null,
+                options: [],
+              },
+            })
+            return
+          }
+
+          const currentBranchRaw = await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })
+          const currentBranch = currentBranchRaw.trim() || null
+          const output = await runCommandCapture(
+            'git',
+            ['for-each-ref', '--format=%(committerdate:unix)\t%(refname)', 'refs/heads', 'refs/remotes'],
+            { cwd: gitRoot },
+          )
+          const branchActivityByName = new Map<string, number>()
+          for (const line of output.split('\n')) {
+            const [rawTimestamp = '', rawRefName = ''] = line.split('\t')
+            const normalized = normalizeBranchRefName(rawRefName)
+            if (!normalized || normalized === 'origin/HEAD') continue
+            const parsedTimestamp = Number.parseInt(rawTimestamp.trim(), 10)
+            const timestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0
+            const current = branchActivityByName.get(normalized) ?? Number.MIN_SAFE_INTEGER
+            if (timestamp > current) {
+              branchActivityByName.set(normalized, timestamp)
+            }
+          }
+          if (currentBranch && !branchActivityByName.has(currentBranch)) {
+            branchActivityByName.set(currentBranch, Number.MAX_SAFE_INTEGER)
+          }
+          const options = Array.from(branchActivityByName.entries())
+            .map(([value]) => ({ value, label: value }))
+            .sort((a, b) => {
+              const aActivity = branchActivityByName.get(a.value) ?? 0
+              const bActivity = branchActivityByName.get(b.value) ?? 0
+              if (bActivity !== aActivity) return bActivity - aActivity
+              return a.value.localeCompare(b.value)
+            })
+          setJson(res, 200, {
+            data: {
+              currentBranch,
+              options,
+            },
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to read Git branches') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/git/checkout') {
+        const payload = await readJsonBody(req)
+        const record = asRecord(payload)
+        if (!record) {
+          setJson(res, 400, { error: 'Invalid body: expected object' })
+          return
+        }
+        const rawCwd = readNonEmptyString(record.cwd)
+        const targetBranch = readNonEmptyString(record.branch)
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!targetBranch) {
+          setJson(res, 400, { error: 'Missing branch' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          try {
+            await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
+          } catch (checkoutError) {
+            const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, targetBranch)
+            if (!blockingWorktreePath) {
+              throw checkoutError
+            }
+            await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
+            await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
+          }
+          const currentBranch = (await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })).trim() || null
+          setJson(res, 200, { data: { currentBranch } })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to switch branch') })
         }
         return
       }

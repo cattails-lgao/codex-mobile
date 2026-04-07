@@ -1616,3 +1616,55 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove test worktree when done: `git -C <repo-root> worktree remove <worktree-cwd>`.
+
+### Feature: Content header branch dropdown replaces review button
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Open an existing thread whose `cwd` is a Git repository.
+- Ensure repo has at least two branches for switch testing.
+
+#### Steps
+1. Open a thread route (not `New thread`).
+2. In the content header actions, confirm branch dropdown is shown instead of a standalone `Review` button.
+3. Open dropdown and verify current branch is selected.
+4. Use search in dropdown to find another branch.
+5. Select another branch and wait for checkout to complete.
+6. Verify current branch label updates in the dropdown trigger.
+7. Re-open dropdown and select `Review`.
+8. Confirm review pane toggles open.
+9. Re-open dropdown and select `Review` again.
+10. Confirm review pane closes.
+
+#### Expected Results
+- Header action shows current branch and supports branch search.
+- Selecting a branch performs Git checkout in thread `cwd`.
+- `Review` is available inside the same dropdown and toggles review pane state.
+- In detached HEAD state, dropdown trigger shows `Detached HEAD`.
+
+#### Rollback/Cleanup
+- Switch back to original branch from the same dropdown.
+
+### Feature: Branch switch auto-detaches blocking worktree
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Have two worktrees from the same repo.
+- In worktree A, check out branch `codex/e87a` (or any branch to be switched to from worktree B).
+- Open a thread in worktree B with header branch dropdown.
+
+#### Steps
+1. In worktree B thread, open branch dropdown.
+2. Select branch currently checked out in worktree A.
+3. Wait for switch completion.
+4. In terminal, run `git -C <worktree-a-path> rev-parse --abbrev-ref HEAD`.
+5. In terminal, run `git -C <worktree-b-path> rev-parse --abbrev-ref HEAD`.
+
+#### Expected Results
+- UI does not show `fatal: '<branch>' is already checked out at ...` error.
+- App auto-detaches worktree A from that branch.
+- Worktree B successfully checks out selected branch.
+- Worktree A reports `HEAD`; worktree B reports selected branch name.
+
+#### Rollback/Cleanup
+- Re-checkout preferred branch in worktree A if needed.

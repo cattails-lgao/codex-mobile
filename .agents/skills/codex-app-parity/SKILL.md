@@ -218,6 +218,15 @@ After each feature implementation session that uses this skill:
 ## Findings: Mobile Composer Submit Stabilization (2026-03-28)
 
 - In this workspace, mobile web send UX is more reliable when submit does two things together:
+
+## Findings: Header Branch Switcher Includes Review Action (2026-04-08)
+
+- Codex.app locale bundle includes explicit branch-search copy (`codex.composer.searchBranches`), which aligns with searchable branch selection controls in header/composer surfaces.
+- For parity in this repo, header-level branch control now combines:
+  - current branch display,
+  - branch switching via searchable dropdown,
+  - review-pane toggle action inside the same menu instead of a separate header button.
+- Detached HEAD should be represented explicitly in the dropdown trigger when no branch name is available.
   - blur the composer textarea immediately so the virtual keyboard dismisses
   - trigger the conversation `jumpToLatest()` immediately and again over the next animation frames so the viewport stays pinned after the keyboard resize
 - Relying on conversation auto-follow alone is not enough for the mobile keyboard-close transition because the viewport height change can land after the first bottom-lock pass.
