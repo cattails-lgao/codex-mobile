@@ -1,10 +1,5 @@
 # AGENTS.md
 
-## "Push to main or commit to main" Means Merge To Local Main
-
-- When the user says "push", interpret it as: merge the current work into local `main`
-- Do not push to any remote unless the user explicitly asks to push to a remote.
-
 ## Merge to local main flow for worktree:
 
 0. In the main worktree, **always stash first** before merge/rebase operations.
