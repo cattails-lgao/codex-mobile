@@ -218,6 +218,15 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Approval Request Payload Compatibility (2026-04-07)
+
+- This workspace bundles app-server schemas that still expose JSON-RPC server request methods such as `item/commandExecution/requestApproval` and `item/fileChange/requestApproval`, but the generated event typings also include newer approval event names such as `exec_approval_request` and `apply_patch_approval_request`.
+- Newer approval payloads may carry snake_case fields (`turn_id`, `call_id`, `grant_root`) or camelCase fields (`conversationId`, `callId`, `grantRoot`) instead of the older `threadId` / `itemId` request metadata.
+- For CodexUI parity work involving approvals, normalize both method aliases and payload field aliases before rendering the pending-request UI; otherwise valid approval requests can fall through to the generic unknown-request actions.
+- Live schema generated from `codex-cli 0.118.0` also includes JSON-RPC server requests for `mcpServer/elicitation/request` and `item/permissions/requestApproval`. The checked-in schema snapshot in this repo can lag behind the installed CLI, so for approval/request UI bugs it is worth generating fresh schemas locally via `codex app-server generate-json-schema --out <dir>` before deciding the app-server contract.
+- In live MCP elicitation schemas, required fields without defaults should remain unset until the user provides a value; preselecting `false` or the first enum option changes the meaning of the user’s response.
+- For MCP `url` elicitation mode, treat the server-provided URL as untrusted input and only render clickable links for safe schemes such as `http:` and `https:`.
+
 ## Findings: Context Usage Meter (2026-04-01)
 
 - Official `openai/codex` app-server protocol exposes per-thread context telemetry via `thread/tokenUsage/updated` with:

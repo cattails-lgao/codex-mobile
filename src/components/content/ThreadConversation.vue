@@ -655,97 +655,6 @@
           </div>
         </div>
       </li>
-      <li
-        v-for="request in pendingRequests"
-        :key="`server-request:${request.id}`"
-        class="conversation-item conversation-item-request"
-      >
-        <div class="message-row">
-          <div class="message-stack">
-            <article class="request-card">
-              <p class="request-title">{{ request.method }}</p>
-              <p class="request-meta">Request #{{ request.id }} · {{ formatIsoTime(request.receivedAtIso) }}</p>
-
-              <p v-if="readRequestReason(request)" class="request-reason">{{ readRequestReason(request) }}</p>
-
-              <section v-if="request.method === 'item/commandExecution/requestApproval'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
-              </section>
-
-              <section v-else-if="request.method === 'item/fileChange/requestApproval'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondApproval(request.id, 'accept')">Accept</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'acceptForSession')">Accept for Session</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'decline')">Decline</button>
-                <button type="button" class="request-button" @click="onRespondApproval(request.id, 'cancel')">Cancel</button>
-              </section>
-
-              <section v-else-if="request.method === 'item/tool/requestUserInput'" class="request-user-input">
-                <div
-                  v-for="question in readToolQuestions(request)"
-                  :key="`${request.id}:${question.id}`"
-                  class="request-question"
-                >
-                  <p class="request-question-title">{{ question.header || question.question }}</p>
-                  <p v-if="question.header && question.question" class="request-question-text">{{ question.question }}</p>
-                  <select
-                    v-if="question.options.length > 0"
-                    class="request-select"
-                    :value="readQuestionAnswer(request.id, question.id, question.options[0]?.label || '')"
-                    @change="onQuestionAnswerChange(request.id, question.id, $event)"
-                  >
-                    <option
-                      v-for="option in question.options"
-                      :key="`${request.id}:${question.id}:${option.label}`"
-                      :value="option.label"
-                    >
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <p
-                    v-if="question.options.length > 0 && readQuestionOptionDescription(request.id, question)"
-                    class="request-question-option-description"
-                  >
-                    {{ readQuestionOptionDescription(request.id, question) }}
-                  </p>
-                  <input
-                    v-else
-                    class="request-input"
-                    :type="question.isSecret ? 'password' : 'text'"
-                    :value="readQuestionAnswer(request.id, question.id, '')"
-                    :placeholder="question.isSecret ? 'Enter secret answer' : 'Enter answer'"
-                    @input="onQuestionAnswerInput(request.id, question.id, $event)"
-                  />
-                  <input
-                    v-if="question.isOther"
-                    class="request-input"
-                    :type="question.isSecret ? 'password' : 'text'"
-                    :value="readQuestionOtherAnswer(request.id, question.id)"
-                    placeholder="Other answer"
-                    @input="onQuestionOtherAnswerInput(request.id, question.id, $event)"
-                  />
-                </div>
-
-                <button type="button" class="request-button request-button-primary" @click="onRespondToolRequestUserInput(request)">
-                  Submit Answers
-                </button>
-              </section>
-
-              <section v-else-if="request.method === 'item/tool/call'" class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondToolCallFailure(request.id)">Fail Tool Call</button>
-                <button type="button" class="request-button" @click="onRespondToolCallSuccess(request.id)">Success (Empty)</button>
-              </section>
-
-              <section v-else class="request-actions">
-                <button type="button" class="request-button request-button-primary" @click="onRespondEmptyResult(request.id)">Return Empty Result</button>
-                <button type="button" class="request-button" @click="onRejectUnknownRequest(request.id)">Reject Request</button>
-              </section>
-            </article>
-          </div>
-        </div>
-      </li>
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
 
@@ -1273,6 +1182,7 @@ const modalImageUrl = ref('')
 const copiedResponseAnchorId = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
+const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
 const localScrollState = ref<ThreadScrollState | null>(null)
 const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
 const BOTTOM_THRESHOLD_PX = 16
@@ -1355,6 +1265,20 @@ type ParsedToolQuestion = {
   isSecret: boolean
   isOther: boolean
   options: Array<{ label: string; description: string }>
+}
+type McpElicitationFieldOption = {
+  value: string
+  label: string
+}
+type McpElicitationField = {
+  key: string
+  label: string
+  description: string
+  required: boolean
+  kind: 'string' | 'number' | 'boolean' | 'singleEnum' | 'multiEnum'
+  inputType: string
+  options: McpElicitationFieldOption[]
+  defaultValue: string | number | boolean | string[]
 }
 type TurnFileChangeSummary = {
   changes: UiFileChange[]
@@ -3376,8 +3300,162 @@ function formatIsoTime(value: string): string {
 
 function readRequestReason(request: UiServerRequest): string {
   const params = asRecord(request.params)
-  const reason = params?.reason
-  return typeof reason === 'string' ? reason.trim() : ''
+  const reason = typeof params?.reason === 'string' ? params.reason.trim() : ''
+  if (reason) return reason
+  const message = typeof params?.message === 'string' ? params.message.trim() : ''
+  if (message) return message
+  return typeof params?.prompt === 'string' ? params.prompt.trim() : ''
+}
+
+function requestDisplayTitle(request: UiServerRequest): string {
+  if (request.method === 'item/commandExecution/requestApproval') return 'Command approval required'
+  if (request.method === 'item/fileChange/requestApproval') return 'File change approval required'
+  if (request.method === 'item/permissions/requestApproval') return 'Permissions approval required'
+  if (request.method === 'mcpServer/elicitation/request') return 'MCP server input required'
+  if (request.method === 'item/tool/requestUserInput') return 'Input required'
+  if (request.method === 'item/tool/call') return 'Tool call waiting for response'
+  return request.method
+}
+
+function readMcpElicitationServerName(request: UiServerRequest): string {
+  const params = asRecord(request.params)
+  return typeof params?.serverName === 'string' ? params.serverName.trim() : ''
+}
+
+function readMcpElicitationUrl(request: UiServerRequest): string {
+  const params = asRecord(request.params)
+  return typeof params?.url === 'string' ? params.url.trim() : ''
+}
+
+function mcpElicitationAnswerKey(requestId: number, fieldKey: string): string {
+  return `${String(requestId)}:${fieldKey}`
+}
+
+function readMcpElicitationFields(request: UiServerRequest): McpElicitationField[] {
+  const params = asRecord(request.params)
+  const requestedSchema = asRecord(params?.requestedSchema)
+  const properties = asRecord(requestedSchema?.properties)
+  if (!properties) return []
+
+  const required = new Set(
+    Array.isArray(requestedSchema?.required)
+      ? requestedSchema.required.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+  )
+
+  return Object.entries(properties)
+    .map(([key, value]) => parseMcpElicitationField(key, asRecord(value), required.has(key)))
+    .filter((field): field is McpElicitationField => field !== null)
+}
+
+function parseMcpElicitationField(
+  key: string,
+  schema: Record<string, unknown> | null,
+  required: boolean,
+): McpElicitationField | null {
+  if (!schema) return null
+
+  const label = typeof schema.title === 'string' && schema.title.trim().length > 0 ? schema.title.trim() : key
+  const description = typeof schema.description === 'string' ? schema.description.trim() : ''
+  const type = typeof schema.type === 'string' ? schema.type.trim() : ''
+
+  if (type === 'boolean') {
+    return { key, label, description, required, kind: 'boolean', inputType: 'checkbox', options: [], defaultValue: schema.default === true }
+  }
+
+  if (type === 'number' || type === 'integer') {
+    return {
+      key,
+      label,
+      description,
+      required,
+      kind: 'number',
+      inputType: 'number',
+      options: [],
+      defaultValue: typeof schema.default === 'number' ? schema.default : '',
+    }
+  }
+
+  const options = readMcpElicitationOptions(schema)
+  if (type === 'array') {
+    return {
+      key,
+      label,
+      description,
+      required,
+      kind: 'multiEnum',
+      inputType: 'checkbox',
+      options,
+      defaultValue: Array.isArray(schema.default)
+        ? schema.default.filter((entry): entry is string => typeof entry === 'string')
+        : [],
+    }
+  }
+
+  if (options.length > 0) {
+    return {
+      key,
+      label,
+      description,
+      required,
+      kind: 'singleEnum',
+      inputType: 'select',
+      options,
+      defaultValue: (typeof schema.default === 'string' ? schema.default : '') || options[0]?.value || '',
+    }
+  }
+
+  return {
+    key,
+    label,
+    description,
+    required,
+    kind: 'string',
+    inputType: readMcpElicitationInputType(schema),
+    options: [],
+    defaultValue: typeof schema.default === 'string' ? schema.default : '',
+  }
+}
+
+function readMcpElicitationOptions(schema: Record<string, unknown>): McpElicitationFieldOption[] {
+  const titledSource = Array.isArray(schema.oneOf) ? schema.oneOf : Array.isArray(schema.anyOf) ? schema.anyOf : []
+  const titledOptions = titledSource
+    .map((option) => asRecord(option))
+    .map((option) => ({
+      value: typeof option?.const === 'string' ? option.const : '',
+      label: typeof option?.title === 'string' && option.title.trim().length > 0 ? option.title : (typeof option?.const === 'string' ? option.const : ''),
+    }))
+    .filter((option) => option.value.length > 0)
+  if (titledOptions.length > 0) return titledOptions
+
+  const items = asRecord(schema.items)
+  if (items) {
+    const nestedOptions = readMcpElicitationOptions(items)
+    if (nestedOptions.length > 0) return nestedOptions
+  }
+
+  const values = Array.isArray(schema.enum) ? schema.enum.filter((entry): entry is string => typeof entry === 'string') : []
+  const names = Array.isArray(schema.enumNames) ? schema.enumNames.filter((entry): entry is string => typeof entry === 'string') : []
+  return values.map((value, index) => ({ value, label: names[index] || value }))
+}
+
+function readMcpElicitationInputType(schema: Record<string, unknown>): string {
+  const format = typeof schema.format === 'string' ? schema.format.trim() : ''
+  if (format === 'email') return 'email'
+  if (format === 'uri') return 'url'
+  if (format === 'date') return 'date'
+  if (format === 'date-time') return 'datetime-local'
+  return 'text'
+}
+
+function readMcpElicitationFieldValue(requestId: number, field: McpElicitationField): string | number | boolean | string[] {
+  const saved = mcpElicitationAnswers.value[mcpElicitationAnswerKey(requestId, field.key)]
+  return saved === undefined ? field.defaultValue : saved
+}
+
+function readMcpElicitationMultiValue(requestId: number, field: McpElicitationField): string[] {
+  const value = readMcpElicitationFieldValue(requestId, field)
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
 }
 
 function toolQuestionKey(requestId: number, questionId: string): string {
@@ -3466,10 +3544,93 @@ function onQuestionOtherAnswerInput(requestId: number, questionId: string, event
   }
 }
 
+function onMcpElicitationFieldInput(requestId: number, field: McpElicitationField, event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) return
+  mcpElicitationAnswers.value = {
+    ...mcpElicitationAnswers.value,
+    [mcpElicitationAnswerKey(requestId, field.key)]: target.value,
+  }
+}
+
+function onMcpElicitationBooleanToggle(requestId: number, field: McpElicitationField, event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) return
+  mcpElicitationAnswers.value = {
+    ...mcpElicitationAnswers.value,
+    [mcpElicitationAnswerKey(requestId, field.key)]: target.checked,
+  }
+}
+
+function onMcpElicitationMultiToggle(
+  requestId: number,
+  field: McpElicitationField,
+  optionValue: string,
+  event: Event,
+): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) return
+  const next = new Set(readMcpElicitationMultiValue(requestId, field))
+  if (target.checked) next.add(optionValue)
+  else next.delete(optionValue)
+  mcpElicitationAnswers.value = {
+    ...mcpElicitationAnswers.value,
+    [mcpElicitationAnswerKey(requestId, field.key)]: Array.from(next),
+  }
+}
+
 function onRespondApproval(requestId: number, decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel'): void {
   emit('respondServerRequest', {
     id: requestId,
     result: { decision },
+  })
+}
+
+function onRespondPermissionsApproval(request: UiServerRequest, scope: 'turn' | 'session'): void {
+  const params = asRecord(request.params)
+  const permissions = asRecord(params?.permissions) ?? {}
+  emit('respondServerRequest', {
+    id: request.id,
+    result: {
+      permissions,
+      scope,
+    },
+  })
+}
+
+function buildMcpElicitationContent(request: UiServerRequest): Record<string, unknown> {
+  const content: Record<string, unknown> = {}
+  for (const field of readMcpElicitationFields(request)) {
+    const value = readMcpElicitationFieldValue(request.id, field)
+    if (field.kind === 'multiEnum') {
+      const arrayValue = Array.isArray(value) ? value : []
+      if (arrayValue.length > 0 || field.required) content[field.key] = arrayValue
+      continue
+    }
+    if (field.kind === 'boolean') {
+      content[field.key] = Boolean(value)
+      continue
+    }
+    if (field.kind === 'number') {
+      const numberValue = typeof value === 'number' ? value : Number(String(value).trim())
+      if (!Number.isNaN(numberValue)) content[field.key] = numberValue
+      continue
+    }
+    const textValue = String(value ?? '').trim()
+    if (textValue.length > 0 || field.required) content[field.key] = textValue
+  }
+  return content
+}
+
+function onRespondMcpElicitation(request: UiServerRequest, action: 'accept' | 'decline' | 'cancel'): void {
+  const params = asRecord(request.params)
+  const result: Record<string, unknown> = { action }
+  if (action === 'accept' && typeof params?.mode === 'string' && params.mode === 'form') {
+    result.content = buildMcpElicitationContent(request)
+  }
+  emit('respondServerRequest', {
+    id: request.id,
+    result,
   })
 }
 
@@ -3915,12 +4076,24 @@ onBeforeUnmount(() => {
   @apply m-0 text-xs leading-4 text-amber-700;
 }
 
+.request-link {
+  @apply inline-flex w-fit rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100 transition;
+}
+
 .request-select {
   @apply h-8 rounded-md border border-amber-300 bg-white px-2 text-sm text-amber-900;
 }
 
 .request-input {
   @apply h-8 rounded-md border border-amber-300 bg-white px-2 text-sm text-amber-900 placeholder:text-amber-500;
+}
+
+.request-checkbox-list {
+  @apply flex flex-col gap-1.5;
+}
+
+.request-checkbox-row {
+  @apply flex items-center gap-2 text-sm text-amber-900;
 }
 
 .live-overlay-inline {
