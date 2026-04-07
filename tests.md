@@ -290,6 +290,29 @@ This file tracks manual regression and feature verification steps.
 - Clear browser cookies for the app origin(s).
 - Stop the CLI process.
 
+### Feature: Cloudflare tunnel QR includes password auto-login path
+
+#### Prerequisites
+- App is running from this repository with password enabled.
+- Cloudflare tunnel startup is enabled (`--tunnel` or auto-enabled path).
+
+#### Steps
+1. Start CLI and wait for tunnel output.
+2. Verify the printed `Tunnel:` URL includes `/password=` suffix.
+3. Scan the terminal QR code from a phone/browser.
+4. Confirm first page load enters the app without showing password form.
+5. Open the tunnel base URL without `/password=` in a private window and verify login prompt still appears.
+
+#### Expected Results
+- Tunnel URL shown in startup output uses `/password=<encoded-password>`.
+- QR code encodes the same auto-login URL.
+- Visiting the auto-login URL sets session cookie and redirects to `/`.
+- Base tunnel URL still requires login when no trusted bypass applies.
+
+#### Rollback/Cleanup
+- Stop the CLI process.
+- Clear cookies for the tunnel origin if needed.
+
 ### Feature: No automatic restore of last active thread on startup
 
 #### Prerequisites
