@@ -31,7 +31,20 @@
 - Never use automatic conflict-bias strategies blindly (for example: `git merge -X theirs`, `git merge -X ours`, `git checkout --theirs .`, `git checkout --ours .`).
 - If conflicts occur, inspect each conflicted file and resolve intentionally.
 - After conflict resolution, run required verification/tests before pushing.
-- If conflict intent is unclear, stop and ask the user before completing the merge.
+
+## Conflict Avoidance and Recovery (MANDATORY)
+
+- Before any rebase/merge, ensure both worktrees are clean:
+  - feature worktree: `git status --short`
+  - main worktree: `git status --short`
+- Never start a new merge/rebase while another is in progress. Detect and clear first:
+  - merge in progress: `git status` shows unmerged paths -> `git merge --abort` (in that worktree)
+  - rebase in progress: `git status` shows rebase state -> `git rebase --abort` (in that worktree)
+- Do not rebase long-lived branches with unrelated historical commits directly onto `main` when it causes avoidable conflicts.
+  - Prefer creating a fresh integration branch from `main` and cherry-picking only task-relevant commits.
+- If a branch is already checked out in another worktree, do not force checkout in main worktree.
+  - Rebase/commit in the branch’s own worktree, then merge from `main` worktree by branch name.
+- When a failed merge brought in unrelated files/conflicts, abort and retry with a narrower commit set instead of resolving broad unrelated conflicts.
 
 ## package.json Version Conflict Rule
 
