@@ -857,9 +857,17 @@ function parseExecCommandOutput(output: string): { exitCode: number | null; wall
   return { exitCode, wallTime, cleanOutput: outputLines.join('\n').trimEnd() }
 }
 
+type SessionRecoveredFileChangeItem = {
+  id: string
+  type: 'fileChange'
+  status: 'completed'
+  changes: Record<string, unknown>[]
+}
+
 type SessionItemSlot = {
-  type: 'agentMessage' | 'commandExecution'
+  type: 'agentMessage' | 'commandExecution' | 'fileChange'
   command?: SessionRecoveredCommand
+  fileChange?: SessionRecoveredFileChangeItem
 }
 
 function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionItemSlot[]> {
@@ -939,6 +947,24 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
       existing.durationMs = parsed.wallTime
       existing.status = parsed.exitCode === 0 || parsed.exitCode === null ? 'completed' : 'failed'
     }
+
+    if (payload.type === 'custom_tool_call' && payload.name === 'apply_patch' && payload.status === 'completed') {
+      const input = typeof payload.input === 'string' ? payload.input : ''
+      const callId = readNonEmptyString(payload.call_id)
+      if (!input || !callId) continue
+      const parsedChanges = parseApplyPatchInput(input)
+      if (parsedChanges.length === 0) continue
+      const fcItem: SessionRecoveredFileChangeItem = {
+        id: `session-fc-${callId}`,
+        type: 'fileChange',
+        status: 'completed',
+        changes: parsedChanges.map((fc) => ({
+          ...fc,
+          kind: { type: fc.operation, ...(fc.movedToPath ? { move_path: fc.movedToPath } : {}) },
+        })),
+      }
+      slots.push({ type: 'fileChange', fileChange: fcItem })
+    }
   }
 
   return orderByTurnId
@@ -967,8 +993,8 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
     if (!slots || slots.length === 0) return turn
 
     const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
-    const hasCommands = existingItems.some((it) => it.type === 'commandExecution')
-    if (hasCommands) return turn
+    const alreadyHasRecoveredItems = existingItems.some((it) => it.type === 'commandExecution' || it.type === 'fileChange')
+    if (alreadyHasRecoveredItems) return turn
 
     const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
     const nonAgentNonUserItems = existingItems.filter((it) => it.type !== 'agentMessage' && it.type !== 'userMessage')
@@ -985,6 +1011,8 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
         }
       } else if (slot.type === 'commandExecution' && slot.command) {
         interleaved.push(slot.command as unknown as Record<string, unknown>)
+      } else if (slot.type === 'fileChange' && slot.fileChange) {
+        interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
       }
     }
 
