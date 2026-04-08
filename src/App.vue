@@ -2780,8 +2780,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   try {
     const options = await getWorktreeBranchOptions(normalizedSourceCwd)
     worktreeBranchOptions.value = options
-    if (!newWorktreeBaseBranch.value.trim() && options.length > 0) {
-      newWorktreeBaseBranch.value = options[0].value
+    const currentSelection = newWorktreeBaseBranch.value.trim()
+    const hasCurrentSelection = currentSelection.length > 0 && options.some((option) => option.value === currentSelection)
+    if (!hasCurrentSelection) {
+      const preferredMainOption = options.find((option) => option.value.trim() === 'main')
+      newWorktreeBaseBranch.value = preferredMainOption?.value ?? options[0]?.value ?? ''
     }
   } catch {
     worktreeBranchOptions.value = []
