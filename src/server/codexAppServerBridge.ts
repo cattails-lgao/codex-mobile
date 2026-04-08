@@ -814,6 +814,194 @@ function buildSessionFileChangeFallback(threadReadPayload: unknown, sessionLogRa
   return recovered.sort((first, second) => first.turnIndex - second.turnIndex)
 }
 
+type SessionRecoveredCommand = {
+  id: string
+  type: 'commandExecution'
+  command: string
+  cwd: string | null
+  status: 'completed' | 'failed'
+  aggregatedOutput: string
+  exitCode: number | null
+  durationMs: number | null
+}
+
+function parseExecCommandOutput(output: string): { exitCode: number | null; wallTime: number | null; cleanOutput: string } {
+  let exitCode: number | null = null
+  let wallTime: number | null = null
+  const outputLines: string[] = []
+  let pastHeader = false
+
+  for (const line of output.split('\n')) {
+    if (!pastHeader) {
+      const exitMatch = line.match(/^Process exited with code (\d+)/)
+      if (exitMatch) {
+        exitCode = Number.parseInt(exitMatch[1]!, 10)
+        continue
+      }
+      const wallMatch = line.match(/^Wall time:\s+([\d.]+)\s+seconds/)
+      if (wallMatch) {
+        wallTime = Math.round(Number.parseFloat(wallMatch[1]!) * 1000)
+        continue
+      }
+      if (line.startsWith('Command:') || line.startsWith('Chunk ID:') || line.startsWith('Original token count:')) {
+        continue
+      }
+      if (line === 'Output:') {
+        pastHeader = true
+        continue
+      }
+    }
+    outputLines.push(line)
+  }
+
+  return { exitCode, wallTime, cleanOutput: outputLines.join('\n').trimEnd() }
+}
+
+type SessionItemSlot = {
+  type: 'agentMessage' | 'commandExecution'
+  command?: SessionRecoveredCommand
+}
+
+function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionItemSlot[]> {
+  let currentTurnId = ''
+  const orderByTurnId = new Map<string, SessionItemSlot[]>()
+  const callIdToCommand = new Map<string, SessionRecoveredCommand>()
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const p = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(p?.turn_id) || currentTurnId
+      continue
+    }
+    if (row.type === 'event_msg') {
+      const p = asRecord(row.payload)
+      if (p?.type === 'task_started') {
+        currentTurnId = readNonEmptyString(p.turn_id) || currentTurnId
+      }
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId || !turnIds.has(currentTurnId)) continue
+    const payload = asRecord(row.payload)
+    if (!payload) continue
+
+    let slots = orderByTurnId.get(currentTurnId)
+    if (!slots) {
+      slots = []
+      orderByTurnId.set(currentTurnId, slots)
+    }
+
+    if (payload.type === 'message' && payload.role === 'assistant') {
+      slots.push({ type: 'agentMessage' })
+      continue
+    }
+
+    if (payload.type === 'function_call' && payload.name === 'exec_command') {
+      const callId = readNonEmptyString(payload.call_id)
+      if (!callId) continue
+      let cmd = ''
+      try {
+        const args = JSON.parse(payload.arguments as string) as Record<string, unknown>
+        cmd = typeof args.cmd === 'string' ? args.cmd : ''
+      } catch { /* empty */ }
+      const command: SessionRecoveredCommand = {
+        id: `session-cmd-${callId}`,
+        type: 'commandExecution',
+        command: cmd,
+        cwd: null,
+        status: 'completed',
+        aggregatedOutput: '',
+        exitCode: null,
+        durationMs: null,
+      }
+      callIdToCommand.set(callId, command)
+      slots.push({ type: 'commandExecution', command })
+      continue
+    }
+
+    if (payload.type === 'function_call_output') {
+      const callId = readNonEmptyString(payload.call_id)
+      if (!callId) continue
+      const existing = callIdToCommand.get(callId)
+      if (!existing) continue
+      const rawOutput = typeof payload.output === 'string' ? payload.output : ''
+      const parsed = parseExecCommandOutput(rawOutput)
+      existing.aggregatedOutput = parsed.cleanOutput
+      existing.exitCode = parsed.exitCode
+      existing.durationMs = parsed.wallTime
+      existing.status = parsed.exitCode === 0 || parsed.exitCode === null ? 'completed' : 'failed'
+    }
+  }
+
+  return orderByTurnId
+}
+
+function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  const turnIds = new Set<string>()
+  for (const turn of turns) {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    if (turnId) turnIds.add(turnId)
+  }
+
+  if (turnIds.size === 0) return turns
+
+  const orderByTurnId = buildSessionItemOrder(sessionLogRaw, turnIds)
+  if (orderByTurnId.size === 0) return turns
+
+  return turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    if (!turnRecord) return turn
+    const turnId = readNonEmptyString(turnRecord.id)
+    if (!turnId) return turn
+
+    const slots = orderByTurnId.get(turnId)
+    if (!slots || slots.length === 0) return turn
+
+    const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
+    const hasCommands = existingItems.some((it) => it.type === 'commandExecution')
+    if (hasCommands) return turn
+
+    const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
+    const nonAgentNonUserItems = existingItems.filter((it) => it.type !== 'agentMessage' && it.type !== 'userMessage')
+    const userMessages = existingItems.filter((it) => it.type === 'userMessage')
+
+    let agentIdx = 0
+    const interleaved: Record<string, unknown>[] = [...userMessages]
+
+    for (const slot of slots) {
+      if (slot.type === 'agentMessage') {
+        if (agentIdx < agentMessages.length) {
+          interleaved.push(agentMessages[agentIdx]!)
+          agentIdx++
+        }
+      } else if (slot.type === 'commandExecution' && slot.command) {
+        interleaved.push(slot.command as unknown as Record<string, unknown>)
+      }
+    }
+
+    while (agentIdx < agentMessages.length) {
+      interleaved.push(agentMessages[agentIdx]!)
+      agentIdx++
+    }
+
+    interleaved.push(...nonAgentNonUserItems)
+
+    return {
+      ...turnRecord,
+      items: interleaved,
+    }
+  })
+}
+
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return false
@@ -1617,6 +1805,19 @@ type StreamEventFrame = {
   atIso: string
 }
 
+type CapturedItem = {
+  id: string
+  type: string
+  turnId: string
+  data: Record<string, unknown>
+  completed: boolean
+}
+
+const MERGEABLE_ITEM_TYPES = new Set([
+  'commandExecution',
+  'fileChange',
+])
+
 class AppServerProcess {
   private process: ChildProcessWithoutNullStreams | null = null
   private initialized = false
@@ -1630,6 +1831,7 @@ class AppServerProcess {
   private readonly appServerArgs = buildAppServerArgs()
   private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
+  private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
 
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
@@ -1734,6 +1936,7 @@ class AppServerProcess {
 
   private emitNotification(notification: { method: string; params: unknown }): void {
     this.recordStreamEvent(notification)
+    this.captureItemFromNotification(notification)
     for (const listener of this.notificationListeners) {
       listener(notification)
     }
@@ -1791,6 +1994,86 @@ class AppServerProcess {
 
   getLastThreadReadSnapshot(threadId: string): unknown | null {
     return this.lastThreadReadSnapshotByThreadId.get(threadId) ?? null
+  }
+
+  private captureItemFromNotification(notification: { method: string; params: unknown }): void {
+    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return
+
+    const params = asRecord(notification.params)
+    if (!params) return
+    const item = asRecord(params.item)
+    if (!item) return
+    const itemType = typeof item.type === 'string' ? item.type : ''
+    if (!MERGEABLE_ITEM_TYPES.has(itemType)) return
+
+    const itemId = typeof item.id === 'string' ? item.id : ''
+    if (!itemId) return
+
+    const threadId = this.extractThreadIdFromParams(params)
+    if (!threadId) return
+
+    const turnId =
+      (typeof params.turnId === 'string' ? params.turnId : '') ||
+      (typeof params.turn_id === 'string' ? params.turn_id : '')
+    if (!turnId) return
+
+    let threadItems = this.capturedItemsByThreadId.get(threadId)
+    if (!threadItems) {
+      threadItems = new Map()
+      this.capturedItemsByThreadId.set(threadId, threadItems)
+    }
+
+    const isCompleted = notification.method === 'item/completed'
+    const existing = threadItems.get(itemId)
+
+    if (existing && existing.completed && !isCompleted) return
+
+    threadItems.set(itemId, {
+      id: itemId,
+      type: itemType,
+      turnId,
+      data: item as Record<string, unknown>,
+      completed: isCompleted,
+    })
+  }
+
+  mergeItemsIntoTurns(threadId: string, turns: unknown[]): unknown[] {
+    const capturedMap = this.capturedItemsByThreadId.get(threadId)
+    if (!capturedMap || capturedMap.size === 0) return turns
+
+    const itemsByTurnId = new Map<string, CapturedItem[]>()
+    for (const captured of capturedMap.values()) {
+      let group = itemsByTurnId.get(captured.turnId)
+      if (!group) {
+        group = []
+        itemsByTurnId.set(captured.turnId, group)
+      }
+      group.push(captured)
+    }
+
+    return turns.map((turn) => {
+      const turnRecord = asRecord(turn)
+      if (!turnRecord) return turn
+      const turnId = typeof turnRecord.id === 'string' ? turnRecord.id : ''
+      if (!turnId) return turn
+
+      const captured = itemsByTurnId.get(turnId)
+      if (!captured || captured.length === 0) return turn
+
+      const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
+      const existingIds = new Set(existingItems.map((it) => (typeof it.id === 'string' ? it.id : '')).filter(Boolean))
+
+      const newItems = captured
+        .filter((c) => !existingIds.has(c.id))
+        .map((c) => c.data)
+
+      if (newItems.length === 0) return turn
+
+      return {
+        ...turnRecord,
+        items: [...existingItems, ...newItems],
+      }
+    })
   }
 
   private sendServerRequestReply(requestId: number, reply: ServerRequestReply): void {
@@ -2345,7 +2628,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           const record = asRecord(sanitized)
           const thread = asRecord(record?.thread)
-          const turns = Array.isArray(thread?.turns) ? thread.turns : []
+          const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
+          let turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
+
+          const sessionPath = readNonEmptyString(thread?.path)
+          if (sessionPath && isAbsolute(sessionPath)) {
+            try {
+              const sessionLogRaw = await readFile(sessionPath, 'utf8')
+              turns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
+            } catch {
+              // Session log not available — continue without command recovery
+            }
+          }
+
           const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
           const isInProgress = lastTurn?.status === 'inProgress'
 
@@ -2363,7 +2658,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           if (snapshot) {
             const record = asRecord(snapshot)
             const thread = asRecord(record?.thread)
-            const turns = Array.isArray(thread?.turns) ? thread.turns : []
+            const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
+            const turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
             setJson(res, 200, {
               threadId,
               conversationState: { turns },
