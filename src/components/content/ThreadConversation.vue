@@ -1295,7 +1295,7 @@ type DiffViewerLine = {
 }
 
 function isFilePath(value: string): boolean {
-  if (!value || /\s/u.test(value)) return false
+  if (!value || /[\r\n]/u.test(value)) return false
   if (value.endsWith('/') || value.endsWith('\\')) return false
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(value)) return false
 
@@ -1305,7 +1305,7 @@ function isFilePath(value: string): boolean {
   if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative) return true
 
   // Bare relative paths should look like actual path segments, not arbitrary prose containing "/".
-  return /^[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+$/u.test(value)
+  return /^[A-Za-z0-9._@() -]+(?:[\\/][A-Za-z0-9._@() -]+)+$/u.test(value)
 }
 
 function getBasename(pathValue: string): string {
@@ -2085,7 +2085,7 @@ function rollbackResponse(anchorMessageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
+  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|[A-Za-z0-9._@() -]+(?:[\\/][A-Za-z0-9._@() -]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
