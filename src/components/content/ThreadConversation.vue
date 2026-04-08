@@ -1295,7 +1295,7 @@ type DiffViewerLine = {
 }
 
 function isFilePath(value: string): boolean {
-  if (!value || /\s/u.test(value)) return false
+  if (!value || /[\r\n]/u.test(value)) return false
   if (value.endsWith('/') || value.endsWith('\\')) return false
   if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(value)) return false
 
@@ -1305,7 +1305,7 @@ function isFilePath(value: string): boolean {
   if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative) return true
 
   // Bare relative paths should look like actual path segments, not arbitrary prose containing "/".
-  return /^[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+$/u.test(value)
+  return /^[A-Za-z0-9._@() -]+(?:[\\/][A-Za-z0-9._@() -]+)+$/u.test(value)
 }
 
 function getBasename(pathValue: string): string {
@@ -1435,10 +1435,13 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
 
 function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
   const trimmed = value.trim()
-  const match = trimmed.match(/^\[([^\]\n]+)\]\(([^)\n]+)\)$/u)
-  if (!match) return null
-  const labelRaw = (match[1] ?? '').trim()
-  const targetRaw = (match[2] ?? '').trim()
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(')')) return null
+  const labelCloseIndex = trimmed.indexOf(']')
+  if (labelCloseIndex <= 1) return null
+  if (trimmed[labelCloseIndex + 1] !== '(') return null
+  const labelRaw = trimmed.slice(1, labelCloseIndex).trim()
+  const targetRaw = trimmed.slice(labelCloseIndex + 2, -1).trim()
+  if (labelRaw.includes('\n') || targetRaw.includes('\n')) return null
   const label = trimLinkWrappers(labelRaw).core.trim() || labelRaw
   const target = trimLinkWrappers(targetRaw).core.trim()
   if (!target) return null
@@ -2082,7 +2085,7 @@ function rollbackResponse(anchorMessageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|[A-Za-z0-9._@-]+(?:[\\/][A-Za-z0-9._@-]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
+  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/)[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|(?<![\p{L}\p{N}_-])\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|[A-Za-z0-9._@() -]+(?:[\\/][A-Za-z0-9._@() -]+)+(?:#L\d+(?:C\d+)?|:\d+(?::\d+)?)?/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -2243,23 +2246,73 @@ function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[] 
 }
 
 function splitTextByFileUrls(text: string): InlineSegment[] {
-  const markdownLinkPattern = /\[([^\]\n]+)\]\(([^)\n]+)\)/gu
   const segments: InlineSegment[] = []
   let cursor = 0
+  let scanFrom = 0
 
-  for (const match of text.matchAll(markdownLinkPattern)) {
-    if (typeof match.index !== 'number') continue
-    const [fullMatch, labelRaw, targetRaw] = match
-    const start = match.index
-    const end = start + fullMatch.length
+  const findNextMarkdownLink = (
+    source: string,
+    fromIndex: number,
+  ): { start: number; end: number; token: string } | null => {
+    let linkStart = source.indexOf('[', fromIndex)
+    while (linkStart >= 0) {
+      const labelEnd = source.indexOf(']', linkStart + 1)
+      if (labelEnd < 0) return null
+      if (source[labelEnd + 1] !== '(') {
+        linkStart = source.indexOf('[', linkStart + 1)
+        continue
+      }
+
+      let depth = 1
+      let index = labelEnd + 2
+      let hasNewLine = false
+      while (index < source.length) {
+        const char = source[index]
+        if (char === '\n') {
+          hasNewLine = true
+          break
+        }
+        if (char === '(') depth += 1
+        if (char === ')') {
+          depth -= 1
+          if (depth === 0) {
+            const token = source.slice(linkStart, index + 1)
+            if (parseMarkdownLinkToken(token)) {
+              return { start: linkStart, end: index + 1, token }
+            }
+            break
+          }
+        }
+        index += 1
+      }
+
+      if (hasNewLine) {
+        linkStart = source.indexOf('[', linkStart + 1)
+        continue
+      }
+      linkStart = source.indexOf('[', linkStart + 1)
+    }
+    return null
+  }
+
+  while (scanFrom < text.length) {
+    const match = findNextMarkdownLink(text, scanFrom)
+    if (!match) break
+    const { start, end, token } = match
 
     if (start > cursor) {
       segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
     }
 
-    const markdownToken = parseMarkdownLinkToken(`[${labelRaw ?? ''}](${targetRaw ?? ''})`)
-    const label = markdownToken?.label ?? (labelRaw ?? '').trim()
-    const target = markdownToken?.target ?? (targetRaw ?? '').trim()
+    const markdownToken = parseMarkdownLinkToken(token)
+    if (!markdownToken) {
+      segments.push(...splitPlainTextByLinks(text.slice(start, end)))
+      cursor = end
+      scanFrom = end
+      continue
+    }
+    const label = markdownToken.label
+    const target = markdownToken.target
 
     if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
@@ -2274,11 +2327,12 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
           downloadName: getBasename(ref.path),
         })
       } else {
-        segments.push({ kind: 'text', value: fullMatch })
+        segments.push({ kind: 'text', value: token })
       }
     }
 
     cursor = end
+    scanFrom = end
   }
 
   if (cursor < text.length) {

@@ -133,3 +133,29 @@
 - When the user asks to test with Playwright, run the verification on the explicitly requested project/thread context (for example `TestChat`).
 - Screenshot artifacts must show complete passing evidence for the tested feature, not only the base page load.
 - For refresh-persistence fixes, include a post-refresh screenshot that still shows the expected UI state.
+
+## Mandatory CJS + TestChat Validation For Markdown/File-Link Features
+
+- For any markdown parsing, link parsing, file-link rendering, or browse-link encoding change, verification in `TestChat` is mandatory before reporting completion.
+- Use CJS Playwright scripts as the default verification implementation:
+  - `const { chromium } = require('playwright')`
+  - run from repository working directory so local `node_modules` resolves correctly.
+- Required validation flow:
+  1. Start dev server at `http://127.0.0.1:4173`.
+  2. Open project `TestChat`.
+  3. Open an existing TestChat thread, or create one if none exists.
+  4. Send a message with a unique marker plus target markdown link (example: ``<MARKER> [hosting_manager.py](/home/ubuntu/Documents/New Project (2)/hosting_manager.py)``).
+  5. Locate the rendered row by marker.
+  6. Assert a parsed file link exists (`a.message-file-link`) in that row.
+  7. Assert link metadata is correct:
+     - `href` includes encoded full path (example: `/codex-local-browse/home/ubuntu/Documents/New%20Project%20(2)/hosting_manager.py`)
+     - `title` equals the original full file path
+     - visible link text contains expected filename.
+  8. Save screenshot to `output/playwright/testchat-<feature>-cjs.png`.
+- Completion report must include:
+  - tested URL
+  - thread context (`TestChat`)
+  - viewport
+  - exact CJS command/script path
+  - assertion summary (`hrefOk`, `titleOk`, `textOk`)
+  - screenshot absolute path
