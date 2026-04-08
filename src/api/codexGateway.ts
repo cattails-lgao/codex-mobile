@@ -467,12 +467,61 @@ async function getThreadGroupsV2(): Promise<UiProjectGroup[]> {
 }
 
 async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
+  const liveState = await fetchThreadLiveState(threadId)
+  if (liveState && !liveState.liveStateError) {
+    const fromLive = normalizeMessagesFromLiveState(liveState)
+    if (fromLive && fromLive.messages.length > 0) {
+      return fromLive.messages
+    }
+  }
+
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
   })
-  const normalized = normalizeThreadMessagesV2(payload)
-  return await enrichThreadMessagesWithFallback(threadId, normalized)
+  return normalizeThreadMessagesV2(payload)
+}
+
+type LiveStateResponse = {
+  threadId: string
+  conversationState: { turns: unknown[] } | null
+  ownerClientId: string | null
+  liveStateError: { kind: string; message: string } | null
+  isInProgress: boolean
+}
+
+async function fetchThreadLiveState(threadId: string): Promise<LiveStateResponse | null> {
+  try {
+    const response = await fetch(
+      `/codex-api/thread-live-state?threadId=${encodeURIComponent(threadId)}`,
+    )
+    if (!response.ok) return null
+    return (await response.json()) as LiveStateResponse
+  } catch {
+    return null
+  }
+}
+
+function normalizeMessagesFromLiveState(
+  liveState: LiveStateResponse,
+): { messages: UiMessage[]; inProgress: boolean; activeTurnId: string; turnIndexByTurnId: ThreadTurnIndexById } | null {
+  const state = liveState.conversationState
+  if (!state || !Array.isArray(state.turns) || state.turns.length === 0) return null
+
+  const syntheticPayload: ThreadReadResponse = {
+    thread: {
+      id: liveState.threadId,
+      turns: state.turns,
+    } as ThreadReadResponse['thread'],
+  }
+
+  const messages = normalizeThreadMessagesV2(syntheticPayload)
+  return {
+    messages,
+    inProgress: liveState.isInProgress,
+    activeTurnId: readActiveTurnIdFromResponse(syntheticPayload),
+    turnIndexByTurnId: buildTurnIndexByTurnId(syntheticPayload),
+  }
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{
@@ -481,14 +530,21 @@ async function getThreadDetailV2(threadId: string): Promise<{
   activeTurnId: string
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
+  const liveState = await fetchThreadLiveState(threadId)
+  if (liveState && !liveState.liveStateError) {
+    const fromLive = normalizeMessagesFromLiveState(liveState)
+    if (fromLive && fromLive.messages.length > 0) {
+      return fromLive
+    }
+  }
+
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
   })
   const normalized = normalizeThreadMessagesV2(payload)
-  const messages = await enrichThreadMessagesWithFallback(threadId, normalized)
   return {
-    messages,
+    messages: normalized,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
     turnIndexByTurnId: buildTurnIndexByTurnId(payload),
