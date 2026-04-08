@@ -326,14 +326,12 @@ export function toUiFileChanges(changes: unknown): UiFileChange[] {
 
 function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'agentMessage') {
-    const fileChanges = extractAssistantFileChanges(item.text)
     return [
       {
         id: item.id,
         role: 'assistant',
         text: item.text,
         messageType: item.type,
-        fileChanges: fileChanges.length > 0 ? fileChanges : undefined,
       },
     ]
   }

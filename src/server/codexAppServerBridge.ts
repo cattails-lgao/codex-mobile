@@ -814,6 +814,222 @@ function buildSessionFileChangeFallback(threadReadPayload: unknown, sessionLogRa
   return recovered.sort((first, second) => first.turnIndex - second.turnIndex)
 }
 
+type SessionRecoveredCommand = {
+  id: string
+  type: 'commandExecution'
+  command: string
+  cwd: string | null
+  status: 'completed' | 'failed'
+  aggregatedOutput: string
+  exitCode: number | null
+  durationMs: number | null
+}
+
+function parseExecCommandOutput(output: string): { exitCode: number | null; wallTime: number | null; cleanOutput: string } {
+  let exitCode: number | null = null
+  let wallTime: number | null = null
+  const outputLines: string[] = []
+  let pastHeader = false
+
+  for (const line of output.split('\n')) {
+    if (!pastHeader) {
+      const exitMatch = line.match(/^Process exited with code (\d+)/)
+      if (exitMatch) {
+        exitCode = Number.parseInt(exitMatch[1]!, 10)
+        continue
+      }
+      const wallMatch = line.match(/^Wall time:\s+([\d.]+)\s+seconds/)
+      if (wallMatch) {
+        wallTime = Math.round(Number.parseFloat(wallMatch[1]!) * 1000)
+        continue
+      }
+      if (line.startsWith('Command:') || line.startsWith('Chunk ID:') || line.startsWith('Original token count:')) {
+        continue
+      }
+      if (line === 'Output:') {
+        pastHeader = true
+        continue
+      }
+    }
+    outputLines.push(line)
+  }
+
+  return { exitCode, wallTime, cleanOutput: outputLines.join('\n').trimEnd() }
+}
+
+type SessionRecoveredFileChangeItem = {
+  id: string
+  type: 'fileChange'
+  status: 'completed'
+  changes: Record<string, unknown>[]
+}
+
+type SessionItemSlot = {
+  type: 'agentMessage' | 'commandExecution' | 'fileChange'
+  command?: SessionRecoveredCommand
+  fileChange?: SessionRecoveredFileChangeItem
+}
+
+function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionItemSlot[]> {
+  let currentTurnId = ''
+  const orderByTurnId = new Map<string, SessionItemSlot[]>()
+  const callIdToCommand = new Map<string, SessionRecoveredCommand>()
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const p = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(p?.turn_id) || currentTurnId
+      continue
+    }
+    if (row.type === 'event_msg') {
+      const p = asRecord(row.payload)
+      if (p?.type === 'task_started') {
+        currentTurnId = readNonEmptyString(p.turn_id) || currentTurnId
+      }
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId || !turnIds.has(currentTurnId)) continue
+    const payload = asRecord(row.payload)
+    if (!payload) continue
+
+    let slots = orderByTurnId.get(currentTurnId)
+    if (!slots) {
+      slots = []
+      orderByTurnId.set(currentTurnId, slots)
+    }
+
+    if (payload.type === 'message' && payload.role === 'assistant') {
+      slots.push({ type: 'agentMessage' })
+      continue
+    }
+
+    if (payload.type === 'function_call' && payload.name === 'exec_command') {
+      const callId = readNonEmptyString(payload.call_id)
+      if (!callId) continue
+      let cmd = ''
+      try {
+        const args = JSON.parse(payload.arguments as string) as Record<string, unknown>
+        cmd = typeof args.cmd === 'string' ? args.cmd : ''
+      } catch { /* empty */ }
+      const command: SessionRecoveredCommand = {
+        id: `session-cmd-${callId}`,
+        type: 'commandExecution',
+        command: cmd,
+        cwd: null,
+        status: 'completed',
+        aggregatedOutput: '',
+        exitCode: null,
+        durationMs: null,
+      }
+      callIdToCommand.set(callId, command)
+      slots.push({ type: 'commandExecution', command })
+      continue
+    }
+
+    if (payload.type === 'function_call_output') {
+      const callId = readNonEmptyString(payload.call_id)
+      if (!callId) continue
+      const existing = callIdToCommand.get(callId)
+      if (!existing) continue
+      const rawOutput = typeof payload.output === 'string' ? payload.output : ''
+      const parsed = parseExecCommandOutput(rawOutput)
+      existing.aggregatedOutput = parsed.cleanOutput
+      existing.exitCode = parsed.exitCode
+      existing.durationMs = parsed.wallTime
+      existing.status = parsed.exitCode === 0 || parsed.exitCode === null ? 'completed' : 'failed'
+    }
+
+    if (payload.type === 'custom_tool_call' && payload.name === 'apply_patch' && payload.status === 'completed') {
+      const input = typeof payload.input === 'string' ? payload.input : ''
+      const callId = readNonEmptyString(payload.call_id)
+      if (!input || !callId) continue
+      const parsedChanges = parseApplyPatchInput(input)
+      if (parsedChanges.length === 0) continue
+      const fcItem: SessionRecoveredFileChangeItem = {
+        id: `session-fc-${callId}`,
+        type: 'fileChange',
+        status: 'completed',
+        changes: parsedChanges.map((fc) => ({
+          ...fc,
+          kind: { type: fc.operation, ...(fc.movedToPath ? { move_path: fc.movedToPath } : {}) },
+        })),
+      }
+      slots.push({ type: 'fileChange', fileChange: fcItem })
+    }
+  }
+
+  return orderByTurnId
+}
+
+function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  const turnIds = new Set<string>()
+  for (const turn of turns) {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    if (turnId) turnIds.add(turnId)
+  }
+
+  if (turnIds.size === 0) return turns
+
+  const orderByTurnId = buildSessionItemOrder(sessionLogRaw, turnIds)
+  if (orderByTurnId.size === 0) return turns
+
+  return turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    if (!turnRecord) return turn
+    const turnId = readNonEmptyString(turnRecord.id)
+    if (!turnId) return turn
+
+    const slots = orderByTurnId.get(turnId)
+    if (!slots || slots.length === 0) return turn
+
+    const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
+    const alreadyHasRecoveredItems = existingItems.some((it) => it.type === 'commandExecution' || it.type === 'fileChange')
+    if (alreadyHasRecoveredItems) return turn
+
+    const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
+    const nonAgentNonUserItems = existingItems.filter((it) => it.type !== 'agentMessage' && it.type !== 'userMessage')
+    const userMessages = existingItems.filter((it) => it.type === 'userMessage')
+
+    let agentIdx = 0
+    const interleaved: Record<string, unknown>[] = [...userMessages]
+
+    for (const slot of slots) {
+      if (slot.type === 'agentMessage') {
+        if (agentIdx < agentMessages.length) {
+          interleaved.push(agentMessages[agentIdx]!)
+          agentIdx++
+        }
+      } else if (slot.type === 'commandExecution' && slot.command) {
+        interleaved.push(slot.command as unknown as Record<string, unknown>)
+      } else if (slot.type === 'fileChange' && slot.fileChange) {
+        interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
+      }
+    }
+
+    while (agentIdx < agentMessages.length) {
+      interleaved.push(agentMessages[agentIdx]!)
+      agentIdx++
+    }
+
+    interleaved.push(...nonAgentNonUserItems)
+
+    return {
+      ...turnRecord,
+      items: interleaved,
+    }
+  })
+}
+
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return false
@@ -1609,6 +1825,27 @@ async function proxyTranscribe(
   return result
 }
 
+const STREAM_EVENT_BUFFER_LIMIT = 400
+
+type StreamEventFrame = {
+  method: string
+  params: unknown
+  atIso: string
+}
+
+type CapturedItem = {
+  id: string
+  type: string
+  turnId: string
+  data: Record<string, unknown>
+  completed: boolean
+}
+
+const MERGEABLE_ITEM_TYPES = new Set([
+  'commandExecution',
+  'fileChange',
+])
+
 class AppServerProcess {
   private process: ChildProcessWithoutNullStreams | null = null
   private initialized = false
@@ -1620,6 +1857,9 @@ class AppServerProcess {
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
   private readonly appServerArgs = buildAppServerArgs()
+  private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
+  private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
+  private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
 
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
@@ -1723,9 +1963,145 @@ class AppServerProcess {
   }
 
   private emitNotification(notification: { method: string; params: unknown }): void {
+    this.recordStreamEvent(notification)
+    this.captureItemFromNotification(notification)
     for (const listener of this.notificationListeners) {
       listener(notification)
     }
+  }
+
+  private extractThreadIdFromParams(params: unknown): string {
+    const record = asRecord(params)
+    if (!record) return ''
+    const threadId =
+      (typeof record.threadId === 'string' ? record.threadId : '') ||
+      (typeof record.thread_id === 'string' ? record.thread_id : '') ||
+      (typeof record.conversationId === 'string' ? record.conversationId : '') ||
+      (typeof record.conversation_id === 'string' ? record.conversation_id : '')
+    if (threadId) return threadId
+    const thread = asRecord(record.thread)
+    if (thread && typeof thread.id === 'string') return thread.id
+    const turn = asRecord(record.turn)
+    if (turn) {
+      const turnThreadId =
+        (typeof turn.threadId === 'string' ? turn.threadId : '') ||
+        (typeof turn.thread_id === 'string' ? turn.thread_id : '')
+      if (turnThreadId) return turnThreadId
+    }
+    return ''
+  }
+
+  private recordStreamEvent(notification: { method: string; params: unknown }): void {
+    const threadId = this.extractThreadIdFromParams(notification.params)
+    if (!threadId) return
+    const frame: StreamEventFrame = {
+      method: notification.method,
+      params: notification.params,
+      atIso: new Date().toISOString(),
+    }
+    let buffer = this.streamEventsByThreadId.get(threadId)
+    if (!buffer) {
+      buffer = []
+      this.streamEventsByThreadId.set(threadId, buffer)
+    }
+    buffer.push(frame)
+    if (buffer.length > STREAM_EVENT_BUFFER_LIMIT) {
+      buffer.splice(0, buffer.length - STREAM_EVENT_BUFFER_LIMIT)
+    }
+  }
+
+  getStreamEvents(threadId: string, limit: number): StreamEventFrame[] {
+    const buffer = this.streamEventsByThreadId.get(threadId)
+    if (!buffer || buffer.length === 0) return []
+    return buffer.slice(-limit)
+  }
+
+  storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
+    this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
+  }
+
+  getLastThreadReadSnapshot(threadId: string): unknown | null {
+    return this.lastThreadReadSnapshotByThreadId.get(threadId) ?? null
+  }
+
+  private captureItemFromNotification(notification: { method: string; params: unknown }): void {
+    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return
+
+    const params = asRecord(notification.params)
+    if (!params) return
+    const item = asRecord(params.item)
+    if (!item) return
+    const itemType = typeof item.type === 'string' ? item.type : ''
+    if (!MERGEABLE_ITEM_TYPES.has(itemType)) return
+
+    const itemId = typeof item.id === 'string' ? item.id : ''
+    if (!itemId) return
+
+    const threadId = this.extractThreadIdFromParams(params)
+    if (!threadId) return
+
+    const turnId =
+      (typeof params.turnId === 'string' ? params.turnId : '') ||
+      (typeof params.turn_id === 'string' ? params.turn_id : '')
+    if (!turnId) return
+
+    let threadItems = this.capturedItemsByThreadId.get(threadId)
+    if (!threadItems) {
+      threadItems = new Map()
+      this.capturedItemsByThreadId.set(threadId, threadItems)
+    }
+
+    const isCompleted = notification.method === 'item/completed'
+    const existing = threadItems.get(itemId)
+
+    if (existing && existing.completed && !isCompleted) return
+
+    threadItems.set(itemId, {
+      id: itemId,
+      type: itemType,
+      turnId,
+      data: item as Record<string, unknown>,
+      completed: isCompleted,
+    })
+  }
+
+  mergeItemsIntoTurns(threadId: string, turns: unknown[]): unknown[] {
+    const capturedMap = this.capturedItemsByThreadId.get(threadId)
+    if (!capturedMap || capturedMap.size === 0) return turns
+
+    const itemsByTurnId = new Map<string, CapturedItem[]>()
+    for (const captured of capturedMap.values()) {
+      let group = itemsByTurnId.get(captured.turnId)
+      if (!group) {
+        group = []
+        itemsByTurnId.set(captured.turnId, group)
+      }
+      group.push(captured)
+    }
+
+    return turns.map((turn) => {
+      const turnRecord = asRecord(turn)
+      if (!turnRecord) return turn
+      const turnId = typeof turnRecord.id === 'string' ? turnRecord.id : ''
+      if (!turnId) return turn
+
+      const captured = itemsByTurnId.get(turnId)
+      if (!captured || captured.length === 0) return turn
+
+      const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
+      const existingIds = new Set(existingItems.map((it) => (typeof it.id === 'string' ? it.id : '')).filter(Boolean))
+
+      const newItems = captured
+        .filter((c) => !existingIds.has(c.id))
+        .map((c) => c.data)
+
+      if (newItems.length === 0) return turn
+
+      return {
+        ...turnRecord,
+        items: [...existingItems, ...newItems],
+      }
+    })
   }
 
   private sendServerRequestReply(requestId: number, reply: ServerRequestReply): void {
@@ -2208,6 +2584,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const rpcResult = await appServer.rpc(body.method, body.params ?? null)
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+
+        if (THREAD_METHODS_WITH_TURNS.has(body.method)) {
+          const rpcRecord = asRecord(result)
+          const rpcThread = asRecord(rpcRecord?.thread)
+          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
+          if (rpcThreadId) {
+            appServer.storeThreadReadSnapshot(rpcThreadId, result)
+          }
+        }
+
         setJson(res, 200, { result })
         return
       }
@@ -2236,6 +2622,94 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: buildSessionFileChangeFallback(threadReadResult, sessionLogRaw) })
         } catch {
           setJson(res, 200, { data: [] })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-stream-events') {
+        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const limitRaw = url.searchParams.get('limit')?.trim() ?? '80'
+        const limit = Math.max(1, Math.min(400, Number.parseInt(limitRaw, 10) || 80))
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+        const events = appServer.getStreamEvents(threadId, limit)
+        setJson(res, 200, { events })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-live-state') {
+        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+
+        try {
+          const threadReadResult = await appServer.rpc('thread/read', {
+            threadId,
+            includeTurns: true,
+          })
+          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
+          appServer.storeThreadReadSnapshot(threadId, sanitized)
+
+          const record = asRecord(sanitized)
+          const thread = asRecord(record?.thread)
+          const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
+          let turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
+
+          const sessionPath = readNonEmptyString(thread?.path)
+          if (sessionPath && isAbsolute(sessionPath)) {
+            try {
+              const sessionLogRaw = await readFile(sessionPath, 'utf8')
+              turns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
+            } catch {
+              // Session log not available — continue without command recovery
+            }
+          }
+
+          const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
+          const isInProgress = lastTurn?.status === 'inProgress'
+
+          setJson(res, 200, {
+            threadId,
+            conversationState: {
+              turns,
+            },
+            ownerClientId: null,
+            liveStateError: null,
+            isInProgress,
+          })
+        } catch (error) {
+          const snapshot = appServer.getLastThreadReadSnapshot(threadId)
+          if (snapshot) {
+            const record = asRecord(snapshot)
+            const thread = asRecord(record?.thread)
+            const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
+            const turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
+            setJson(res, 200, {
+              threadId,
+              conversationState: { turns },
+              ownerClientId: null,
+              liveStateError: {
+                kind: 'readFailed',
+                message: getErrorMessage(error, 'thread/read failed'),
+              },
+              isInProgress: false,
+            })
+          } else {
+            setJson(res, 200, {
+              threadId,
+              conversationState: null,
+              ownerClientId: null,
+              liveStateError: {
+                kind: 'readFailed',
+                message: getErrorMessage(error, 'thread/read failed'),
+              },
+              isInProgress: false,
+            })
+          }
         }
         return
       }
