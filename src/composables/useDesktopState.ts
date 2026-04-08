@@ -14,6 +14,7 @@ import {
   interruptThreadTurn,
   pickCodexRateLimitSnapshot,
   replyToServerRequest,
+  revertThreadFileChanges,
   rollbackThread,
   getThreadGroups,
   getWorkspaceRootsState,
@@ -3937,6 +3938,10 @@ export function useDesktopState() {
     isRollingBack.value = true
     error.value = ''
     try {
+      const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
+      if (threadCwd) {
+        await revertThreadFileChanges(threadId, turnId, threadCwd)
+      }
       const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])

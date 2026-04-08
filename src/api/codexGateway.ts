@@ -927,6 +927,20 @@ export async function rollbackThread(threadId: string, numTurns: number): Promis
   return normalizeThreadMessagesV2(payload)
 }
 
+export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
+  try {
+    const response = await fetch('/codex-api/thread/rollback-files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId, turnId, cwd }),
+    })
+    if (!response.ok) return { reverted: 0, errors: ['Server error'] }
+    return (await response.json()) as { reverted: number; errors: string[] }
+  } catch {
+    return { reverted: 0, errors: ['Network error'] }
+  }
+}
+
 function normalizeThreadIdFromPayload(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return ''
   const record = payload as Record<string, unknown>

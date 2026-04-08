@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
@@ -968,6 +968,115 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
   }
 
   return orderByTurnId
+}
+
+type CollectedPatchEntry = {
+  turnId: string
+  callId: string
+  input: string
+}
+
+function collectApplyPatchInputsForTurns(sessionLogRaw: string, turnIdsToRevert: Set<string>): CollectedPatchEntry[] {
+  let currentTurnId = ''
+  const entries: CollectedPatchEntry[] = []
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const p = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(p?.turn_id) || currentTurnId
+      continue
+    }
+    if (row.type === 'event_msg') {
+      const p = asRecord(row.payload)
+      if (p?.type === 'task_started') {
+        currentTurnId = readNonEmptyString(p.turn_id) || currentTurnId
+      }
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId || !turnIdsToRevert.has(currentTurnId)) continue
+    const payload = asRecord(row.payload)
+    if (!payload) continue
+
+    if (payload.type === 'custom_tool_call' && payload.name === 'apply_patch' && payload.status === 'completed') {
+      const input = typeof payload.input === 'string' ? payload.input : ''
+      const callId = readNonEmptyString(payload.call_id)
+      if (input && callId) {
+        entries.push({ turnId: currentTurnId, callId, input })
+      }
+    }
+  }
+
+  return entries
+}
+
+async function revertApplyPatchEntries(cwd: string, entries: CollectedPatchEntry[]): Promise<{ reverted: number; errors: string[] }> {
+  if (entries.length === 0) return { reverted: 0, errors: [] }
+
+  let reverted = 0
+  const errors: string[] = []
+
+  const reversed = [...entries].reverse()
+
+  for (const entry of reversed) {
+    const changes = parseApplyPatchInput(entry.input)
+    if (changes.length === 0) continue
+
+    for (let ci = changes.length - 1; ci >= 0; ci--) {
+      const change = changes[ci]!
+      try {
+        if (change.operation === 'add') {
+          const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+          await rm(filePath, { force: true })
+          reverted++
+        } else if (change.operation === 'delete') {
+          const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+          try {
+            await runCommand('git', ['checkout', 'HEAD', '--', change.path], { cwd })
+            reverted++
+          } catch {
+            errors.push(`Could not restore deleted file: ${filePath}`)
+          }
+        } else if (change.operation === 'update') {
+          if (change.movedToPath) {
+            const movedPath = isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath)
+            const origPath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+            try {
+              await runCommand('git', ['mv', change.movedToPath, change.path], { cwd })
+            } catch {
+              try {
+                await rename(movedPath, origPath)
+              } catch {
+                errors.push(`Could not reverse move: ${change.movedToPath} -> ${change.path}`)
+              }
+            }
+          }
+          if (change.diff) {
+            try {
+              await runCommand('git', ['checkout', 'HEAD', '--', change.path], { cwd })
+              reverted++
+            } catch {
+              errors.push(`Could not revert update: ${change.path}`)
+            }
+          } else {
+            reverted++
+          }
+        }
+      } catch (err) {
+        errors.push(`Failed to revert ${change.path}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+  }
+
+  return { reverted, errors }
 }
 
 function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
@@ -2710,6 +2819,68 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               isInProgress: false,
             })
           }
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/thread/rollback-files') {
+        try {
+          const body = asRecord(await readJsonBody(req))
+          const threadId = readNonEmptyString(body?.threadId)
+          const turnId = readNonEmptyString(body?.turnId)
+          const cwd = readNonEmptyString(body?.cwd)
+          if (!threadId || !turnId || !cwd) {
+            setJson(res, 400, { error: 'Missing threadId, turnId, or cwd' })
+            return
+          }
+
+          const threadReadResult = await appServer.rpc('thread/read', { threadId, includeTurns: true })
+          const record = asRecord(threadReadResult)
+          const thread = asRecord(record?.thread)
+          const turns = Array.isArray(thread?.turns) ? thread.turns : []
+          const sessionPath = readNonEmptyString(thread?.path)
+
+          if (!sessionPath || !isAbsolute(sessionPath)) {
+            setJson(res, 200, { reverted: 0, errors: [], message: 'No session log available' })
+            return
+          }
+
+          let foundTurnIndex = -1
+          const turnIdsToRevert = new Set<string>()
+          for (let i = 0; i < turns.length; i++) {
+            const turnRecord = asRecord(turns[i])
+            const id = readNonEmptyString(turnRecord?.id)
+            if (id === turnId) {
+              foundTurnIndex = i
+            }
+            if (foundTurnIndex >= 0 && id) {
+              turnIdsToRevert.add(id)
+            }
+          }
+
+          if (turnIdsToRevert.size === 0) {
+            setJson(res, 200, { reverted: 0, errors: [], message: 'No turns to revert' })
+            return
+          }
+
+          let sessionLogRaw: string
+          try {
+            sessionLogRaw = await readFile(sessionPath, 'utf8')
+          } catch {
+            setJson(res, 200, { reverted: 0, errors: ['Could not read session log'], message: 'Session log unreadable' })
+            return
+          }
+
+          const patchEntries = collectApplyPatchInputsForTurns(sessionLogRaw, turnIdsToRevert)
+          if (patchEntries.length === 0) {
+            setJson(res, 200, { reverted: 0, errors: [], message: 'No file changes to revert' })
+            return
+          }
+
+          const result = await revertApplyPatchEntries(cwd, patchEntries)
+          setJson(res, 200, { ...result, message: `Reverted ${result.reverted} file change(s)` })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })
         }
         return
       }
