@@ -13,8 +13,11 @@ import type {
   GetAccountRateLimitsResponse,
   ModelListResponse,
   ReasoningEffort,
+  ThreadForkResponse,
   ThreadListResponse,
   ThreadReadResponse,
+  ThreadResumeResponse,
+  ThreadStartResponse,
   Turn,
 } from './appServerDtos'
 import { normalizeCodexApiError } from './codexErrors'
@@ -900,8 +903,15 @@ export async function removeAccount(accountId: string): Promise<AccountsListResu
   return normalizeAccountsListResult(envelope?.data)
 }
 
-export async function resumeThread(threadId: string): Promise<void> {
-  await callRpc('thread/resume', { threadId })
+export type ResumedThread = {
+  model: string
+}
+
+export async function resumeThread(threadId: string): Promise<ResumedThread> {
+  const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
+  return {
+    model: normalizeThreadModelFromPayload(payload),
+  }
 }
 
 export async function archiveThread(threadId: string): Promise<void> {
@@ -945,7 +955,25 @@ function normalizeThreadCwdFromPayload(payload: unknown): string {
   return ''
 }
 
-export async function startThread(cwd?: string, model?: string): Promise<string> {
+function normalizeThreadModelFromPayload(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const model = (payload as Record<string, unknown>).model
+  return typeof model === 'string' ? model.trim() : ''
+}
+
+export type StartedThread = {
+  threadId: string
+  model: string
+}
+
+export type ForkedThread = {
+  threadId: string
+  cwd: string
+  model: string
+  messages: UiMessage[]
+}
+
+export async function startThread(cwd?: string, model?: string): Promise<StartedThread> {
   try {
     const params: Record<string, unknown> = {}
     if (typeof cwd === 'string' && cwd.trim().length > 0) {
@@ -954,27 +982,30 @@ export async function startThread(cwd?: string, model?: string): Promise<string>
     if (typeof model === 'string' && model.trim().length > 0) {
       params.model = model.trim()
     }
-    const payload = await callRpc<{ thread?: { id?: string } }>('thread/start', params)
+    const payload = await callRpc<ThreadStartResponse>('thread/start', params)
     const threadId = normalizeThreadIdFromPayload(payload)
     if (!threadId) {
       throw new Error('thread/start did not return a thread id')
     }
-    return threadId
+    return {
+      threadId,
+      model: normalizeThreadModelFromPayload(payload),
+    }
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to start a new thread', 'thread/start')
   }
 }
 
-export async function forkThread(threadId: string): Promise<{ threadId: string; cwd: string; messages: UiMessage[] }>
-export async function forkThread(threadId: string, cwd: string | undefined, model: string | undefined): Promise<string>
+export async function forkThread(threadId: string): Promise<ForkedThread>
+export async function forkThread(threadId: string, cwd: string | undefined, model: string | undefined): Promise<StartedThread>
 export async function forkThread(
   threadId: string,
   cwd?: string,
   model?: string,
-): Promise<string | { threadId: string; cwd: string; messages: UiMessage[] }> {
+): Promise<StartedThread | ForkedThread> {
   if (arguments.length <= 1) {
     try {
-      const payload = await callRpc<ThreadReadResponse & { thread?: { id?: string; cwd?: string } }>('thread/fork', {
+      const payload = await callRpc<ThreadForkResponse & ThreadReadResponse & { thread?: { id?: string; cwd?: string } }>('thread/fork', {
         threadId,
         persistExtendedHistory: true,
       })
@@ -985,6 +1016,7 @@ export async function forkThread(
       return {
         threadId: forkedThreadId,
         cwd: normalizeThreadCwdFromPayload(payload),
+        model: normalizeThreadModelFromPayload(payload),
         messages: normalizeThreadMessagesV2(payload),
       }
     } catch (error) {
@@ -1006,12 +1038,15 @@ export async function forkThread(
     if (typeof model === 'string' && model.trim().length > 0) {
       params.model = model.trim()
     }
-    const payload = await callRpc<{ thread?: { id?: string } }>('thread/fork', params)
+    const payload = await callRpc<ThreadForkResponse>('thread/fork', params)
     const nextThreadId = normalizeThreadIdFromPayload(payload)
     if (!nextThreadId) {
       throw new Error('thread/fork did not return a thread id')
     }
-    return nextThreadId
+    return {
+      threadId: nextThreadId,
+      model: normalizeThreadModelFromPayload(payload),
+    }
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
   }
