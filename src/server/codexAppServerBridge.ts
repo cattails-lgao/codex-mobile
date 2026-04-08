@@ -1609,6 +1609,14 @@ async function proxyTranscribe(
   return result
 }
 
+const STREAM_EVENT_BUFFER_LIMIT = 400
+
+type StreamEventFrame = {
+  method: string
+  params: unknown
+  atIso: string
+}
+
 class AppServerProcess {
   private process: ChildProcessWithoutNullStreams | null = null
   private initialized = false
@@ -1620,6 +1628,8 @@ class AppServerProcess {
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
   private readonly appServerArgs = buildAppServerArgs()
+  private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
+  private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
 
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
@@ -1723,9 +1733,64 @@ class AppServerProcess {
   }
 
   private emitNotification(notification: { method: string; params: unknown }): void {
+    this.recordStreamEvent(notification)
     for (const listener of this.notificationListeners) {
       listener(notification)
     }
+  }
+
+  private extractThreadIdFromParams(params: unknown): string {
+    const record = asRecord(params)
+    if (!record) return ''
+    const threadId =
+      (typeof record.threadId === 'string' ? record.threadId : '') ||
+      (typeof record.thread_id === 'string' ? record.thread_id : '') ||
+      (typeof record.conversationId === 'string' ? record.conversationId : '') ||
+      (typeof record.conversation_id === 'string' ? record.conversation_id : '')
+    if (threadId) return threadId
+    const thread = asRecord(record.thread)
+    if (thread && typeof thread.id === 'string') return thread.id
+    const turn = asRecord(record.turn)
+    if (turn) {
+      const turnThreadId =
+        (typeof turn.threadId === 'string' ? turn.threadId : '') ||
+        (typeof turn.thread_id === 'string' ? turn.thread_id : '')
+      if (turnThreadId) return turnThreadId
+    }
+    return ''
+  }
+
+  private recordStreamEvent(notification: { method: string; params: unknown }): void {
+    const threadId = this.extractThreadIdFromParams(notification.params)
+    if (!threadId) return
+    const frame: StreamEventFrame = {
+      method: notification.method,
+      params: notification.params,
+      atIso: new Date().toISOString(),
+    }
+    let buffer = this.streamEventsByThreadId.get(threadId)
+    if (!buffer) {
+      buffer = []
+      this.streamEventsByThreadId.set(threadId, buffer)
+    }
+    buffer.push(frame)
+    if (buffer.length > STREAM_EVENT_BUFFER_LIMIT) {
+      buffer.splice(0, buffer.length - STREAM_EVENT_BUFFER_LIMIT)
+    }
+  }
+
+  getStreamEvents(threadId: string, limit: number): StreamEventFrame[] {
+    const buffer = this.streamEventsByThreadId.get(threadId)
+    if (!buffer || buffer.length === 0) return []
+    return buffer.slice(-limit)
+  }
+
+  storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
+    this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
+  }
+
+  getLastThreadReadSnapshot(threadId: string): unknown | null {
+    return this.lastThreadReadSnapshotByThreadId.get(threadId) ?? null
   }
 
   private sendServerRequestReply(requestId: number, reply: ServerRequestReply): void {
@@ -2208,6 +2273,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const rpcResult = await appServer.rpc(body.method, body.params ?? null)
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+
+        if (THREAD_METHODS_WITH_TURNS.has(body.method)) {
+          const rpcRecord = asRecord(result)
+          const rpcThread = asRecord(rpcRecord?.thread)
+          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
+          if (rpcThreadId) {
+            appServer.storeThreadReadSnapshot(rpcThreadId, result)
+          }
+        }
+
         setJson(res, 200, { result })
         return
       }
@@ -2236,6 +2311,81 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: buildSessionFileChangeFallback(threadReadResult, sessionLogRaw) })
         } catch {
           setJson(res, 200, { data: [] })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-stream-events') {
+        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const limitRaw = url.searchParams.get('limit')?.trim() ?? '80'
+        const limit = Math.max(1, Math.min(400, Number.parseInt(limitRaw, 10) || 80))
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+        const events = appServer.getStreamEvents(threadId, limit)
+        setJson(res, 200, { events })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-live-state') {
+        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+
+        try {
+          const threadReadResult = await appServer.rpc('thread/read', {
+            threadId,
+            includeTurns: true,
+          })
+          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
+          appServer.storeThreadReadSnapshot(threadId, sanitized)
+
+          const record = asRecord(sanitized)
+          const thread = asRecord(record?.thread)
+          const turns = Array.isArray(thread?.turns) ? thread.turns : []
+          const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
+          const isInProgress = lastTurn?.status === 'inProgress'
+
+          setJson(res, 200, {
+            threadId,
+            conversationState: {
+              turns,
+            },
+            ownerClientId: null,
+            liveStateError: null,
+            isInProgress,
+          })
+        } catch (error) {
+          const snapshot = appServer.getLastThreadReadSnapshot(threadId)
+          if (snapshot) {
+            const record = asRecord(snapshot)
+            const thread = asRecord(record?.thread)
+            const turns = Array.isArray(thread?.turns) ? thread.turns : []
+            setJson(res, 200, {
+              threadId,
+              conversationState: { turns },
+              ownerClientId: null,
+              liveStateError: {
+                kind: 'readFailed',
+                message: getErrorMessage(error, 'thread/read failed'),
+              },
+              isInProgress: false,
+            })
+          } else {
+            setJson(res, 200, {
+              threadId,
+              conversationState: null,
+              ownerClientId: null,
+              liveStateError: {
+                kind: 'readFailed',
+                message: getErrorMessage(error, 'thread/read failed'),
+              },
+              isInProgress: false,
+            })
+          }
         }
         return
       }
