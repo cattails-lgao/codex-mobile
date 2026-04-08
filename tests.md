@@ -1761,6 +1761,7 @@ This file tracks manual regression and feature verification steps.
 - Live command executions during an active turn include `turnId` for strict turn scoping.
 - Command execution items are recovered from the session log for old/completed threads.
 - Commands are interleaved with agent messages in correct chronological order (not appended at end).
+- File change items (from `apply_patch` tool calls) are recovered from the session log with diff data and `kind.type` format.
 
 #### Rollback/Cleanup
 - Revert commits on `thread-stream-parity` branch if behavior is not desired:
