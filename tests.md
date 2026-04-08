@@ -1713,3 +1713,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: New worktree base branch defaults to main
+
+#### Prerequisites
+- Start app from this repository (`pnpm run dev`).
+- Select a Git project that contains a `main` branch.
+
+#### Steps
+1. Open `New thread` screen.
+2. Set runtime to `New worktree`.
+3. Open the `Base branch` dropdown.
+4. Without manually changing branch, inspect selected branch value.
+5. Switch to another Git project that also has `main` and re-open `New worktree` runtime.
+
+#### Expected Results
+- Default selected base branch is `main` whenever `main` exists in branch options.
+- If current selection is invalid for the newly selected project, selection resets to `main`.
+- If `main` is unavailable, selection falls back to first available branch.
+
+#### Rollback/Cleanup
+- No cleanup required.
