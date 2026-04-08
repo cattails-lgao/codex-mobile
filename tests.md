@@ -1676,3 +1676,60 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: Thread auto-scrolls to latest message after load
+
+#### Prerequisites
+- Start app from this repository (`pnpm run dev`).
+- Have a thread with enough messages to require scrolling.
+
+#### Steps
+1. Open the long thread from the sidebar.
+2. Wait for `Loading messages...` to disappear.
+3. Observe the conversation viewport position immediately after load.
+4. Switch to another thread, then back to the same long thread.
+
+#### Expected Results
+- After each thread load, conversation snaps to the bottom-most/latest message.
+- The latest message is visible without manual scrolling.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Assistant streaming does not force-scroll when user is reading history
+
+#### Prerequisites
+- Start app from this repository (`pnpm run dev`).
+- Open a thread long enough to scroll.
+
+#### Steps
+1. Scroll up so latest message is not visible.
+2. Send a new prompt and wait for assistant reply to stream.
+3. Observe viewport while reply is in progress.
+4. Click `Jump to latest` (or manually scroll to bottom).
+5. Send another prompt and observe streaming behavior again.
+
+#### Expected Results
+- While scrolled up, streaming assistant output does not pull viewport to bottom.
+- After returning to bottom, streaming output auto-follows newest content.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: While reading older messages, stream growth keeps viewport pinned
+
+#### Prerequisites
+- Start app from this repository (`pnpm run dev`).
+- Open a long thread and scroll up away from bottom.
+
+#### Steps
+1. Keep viewport fixed on an older message section.
+2. Trigger a long assistant response so content height grows continuously.
+3. Observe viewport position for 10-20 seconds during streaming.
+
+#### Expected Results
+- Viewport stays pinned at the same absolute scroll location while streaming.
+- No gradual downward drift occurs until user manually jumps to latest/bottom.
+
+#### Rollback/Cleanup
+- No cleanup required.

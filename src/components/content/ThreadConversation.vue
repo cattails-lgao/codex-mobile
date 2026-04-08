@@ -3736,10 +3736,7 @@ function applySavedScrollState(): void {
   }
 
   const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const targetScrollTop =
-    typeof savedState.scrollRatio === 'number'
-      ? savedState.scrollRatio * maxScrollTop
-      : savedState.scrollTop
+  const targetScrollTop = savedState.scrollTop
   container.scrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop)
   emitScrollState(container)
 }
@@ -3884,6 +3881,7 @@ watch(
   () => props.liveOverlay,
   async (overlay) => {
     if (!overlay) return
+    if (!autoFollowOutput.value) return
     await nextTick()
     enforceBottomState()
     scheduleBottomLock(8)
@@ -3903,17 +3901,10 @@ watch(
   () => props.activeThreadId,
   () => {
     localScrollState.value = null
-    autoFollowOutput.value = props.scrollState?.isAtBottom !== false
+    autoFollowOutput.value = true
     modalImageUrl.value = ''
   },
   { flush: 'post' },
-)
-
-watch(
-  () => props.scrollState?.isAtBottom,
-  (isAtBottom) => {
-    autoFollowOutput.value = isAtBottom !== false
-  },
 )
 
 function onConversationScroll(): void {
