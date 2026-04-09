@@ -159,3 +159,34 @@
   - exact CJS command/script path
   - assertion summary (`hrefOk`, `titleOk`, `textOk`)
   - screenshot absolute path
+
+## LLM Wiki Schema
+
+This repository includes a persistent wiki under `llm-wiki/` maintained by an LLM agent.
+
+### Structure
+- `llm-wiki/raw/`: immutable source notes and captured material.
+- `llm-wiki/wiki/`: synthesized, interlinked markdown pages.
+- `llm-wiki/wiki/index.md`: catalog of pages.
+- `llm-wiki/wiki/log.md`: append-only operation log.
+
+### Conventions
+- Never edit files under `llm-wiki/raw/` after creation.
+- Prefer updating existing wiki pages over creating duplicates.
+- Add wiki links using relative markdown links.
+- Keep factual claims tied to one or more source files in `llm-wiki/raw/`.
+
+### Operations
+- Ingest:
+  1. Add a source under `llm-wiki/raw/`.
+  2. Create or update topic/entity pages under `llm-wiki/wiki/`.
+  3. Update `llm-wiki/wiki/index.md`.
+  4. Append one entry in `llm-wiki/wiki/log.md`.
+- Query:
+  1. Read `llm-wiki/wiki/index.md` first.
+  2. Read relevant linked pages.
+  3. Synthesize an answer and optionally file it back as a page.
+- Lint:
+  1. Check for orphan pages.
+  2. Check for stale or contradictory claims.
+  3. Add follow-up questions to the log.
