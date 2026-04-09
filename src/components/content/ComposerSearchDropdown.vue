@@ -175,7 +175,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .search-dropdown-trigger {
-  @apply inline-flex h-7 items-center gap-1 border-0 bg-transparent p-0 text-sm leading-none text-zinc-500 outline-none transition;
+  @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-zinc-500 outline-none transition;
 }
 
 .search-dropdown-trigger:disabled {
@@ -183,7 +183,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .search-dropdown-value {
-  @apply whitespace-nowrap text-left;
+  @apply whitespace-nowrap text-left truncate pb-px;
 }
 
 .search-dropdown-chevron {

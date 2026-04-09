@@ -82,6 +82,29 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove the selected skill chip(s) before leaving the thread, if needed.
 
+### Feature: Windows Chrome composer controls do not clip bottom text pixels
+
+#### Prerequisites
+- App is running from this repository.
+- Open an existing thread so the message composer footer controls are visible.
+- Use Windows Chrome at 100% zoom.
+
+#### Steps
+1. Open any existing thread with an enabled composer.
+2. Observe the footer row containing `Default`, `GPT-5.4`, `Skills`, and `High`/`Thinking`.
+3. Verify the bottom edge of each label is fully visible while the row is idle.
+4. Open the `Skills` dropdown and verify its trigger label still renders without bottom clipping.
+5. Resize the browser window narrower and wider once, then verify the same labels remain fully visible.
+6. Navigate to `New thread` and confirm the large folder dropdown hero text spacing still looks unchanged.
+
+#### Expected Results
+- No composer footer label has bottom-edge text clipping in Windows Chrome.
+- The `Skills` trigger follows the same non-clipping text rendering as the other composer controls.
+- The `New thread` hero folder dropdown does not gain extra vertical padding from the composer fix.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
 ### Feature: Skills Hub manual search trigger
 
 #### Prerequisites
