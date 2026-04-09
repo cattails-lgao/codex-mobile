@@ -1924,3 +1924,24 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 #### Rollback/Cleanup
 - Quit and relaunch Codex.app normally (without `--remote-debugging-port`) to remove CDP access.
 - The injected gate value persists only in memory for the current app session; restarting Codex.app resets it.
+
+### Feature: GitHub trending projects disabled by default on new chat
+
+#### Prerequisites
+- App is running from this repository.
+- Browser local storage key `codex-web-local.github-trending-projects.v1` is unset (fresh profile or manually removed).
+
+#### Steps
+1. Open the app to the new chat/home screen.
+2. Verify the `Trending GitHub projects` section is not shown.
+3. Open Settings and enable `GitHub trending projects`.
+4. Return to new chat/home and verify the trending section appears.
+5. Refresh the page and verify enabled state persists.
+
+#### Expected Results
+- With no saved preference, trending section is hidden by default.
+- Enabling the setting immediately shows trending projects.
+- Saved preference persists across refresh.
+
+#### Rollback/Cleanup
+- Reset `GitHub trending projects` setting to your preferred state.
