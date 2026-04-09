@@ -2343,6 +2343,13 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
 }
 
 function parseInlineSegments(text: string): InlineSegment[] {
+  if (text.includes('](')) {
+    const linkFirstSegments = splitTextByFileUrls(text)
+    if (linkFirstSegments.some((segment) => segment.kind === 'file' || segment.kind === 'url')) {
+      return linkFirstSegments
+    }
+  }
+
   if (!text.includes('`')) return splitTextByFileUrls(text)
 
   const segments: InlineSegment[] = []

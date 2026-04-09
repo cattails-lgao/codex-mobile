@@ -82,29 +82,6 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove the selected skill chip(s) before leaving the thread, if needed.
 
-### Feature: Windows Chrome composer controls do not clip bottom text pixels
-
-#### Prerequisites
-- App is running from this repository.
-- Open an existing thread so the message composer footer controls are visible.
-- Use Windows Chrome at 100% zoom.
-
-#### Steps
-1. Open any existing thread with an enabled composer.
-2. Observe the footer row containing `Default`, `GPT-5.4`, `Skills`, and `High`/`Thinking`.
-3. Verify the bottom edge of each label is fully visible while the row is idle.
-4. Open the `Skills` dropdown and verify its trigger label still renders without bottom clipping.
-5. Resize the browser window narrower and wider once, then verify the same labels remain fully visible.
-6. Navigate to `New thread` and confirm the large folder dropdown hero text spacing still looks unchanged.
-
-#### Expected Results
-- No composer footer label has bottom-edge text clipping in Windows Chrome.
-- The `Skills` trigger follows the same non-clipping text rendering as the other composer controls.
-- The `New thread` hero folder dropdown does not gain extra vertical padding from the composer fix.
-
-#### Rollback/Cleanup
-- No cleanup required.
-
 ### Feature: Skills Hub manual search trigger
 
 #### Prerequisites
@@ -1837,61 +1814,33 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Stop the dev server on A1: `pkill -f vite`.
 
-### Feature: Rollback undoes file changes (apply_patch + exec_command)
+### Feature: Rollback undoes apply_patch file changes
 
 #### Prerequisites
 - App is running from this repository (`pnpm run dev`).
-- A thread exists with at least one completed turn that applied file changes via `apply_patch` or `exec_command`.
+- A thread exists with at least one completed turn that applied file changes via `apply_patch`.
+- The thread's `cwd` points to a git-tracked directory.
 
 #### Steps
-1. Open a thread with file changes visible in the conversation.
-2. Note the current state of files modified by the agent.
-3. Click the rollback button on a turn.
-4. After rollback completes, check the files on disk:
-   - **apply_patch updates** (tracked or untracked): the V4A diff is reversed in-memory and the file is rewritten with the pre-patch content.
-   - **apply_patch adds**: the created file is deleted from disk.
-   - **apply_patch deletes** (tracked): the file is restored via `git checkout HEAD`.
-   - **exec_command modifications** (tracked): the file is restored via `git checkout HEAD`.
+1. Open a thread with file changes visible in the conversation (file change cards with diffs).
+2. Note the current state of a file that was modified by the agent in a recent turn.
+3. Click the rollback button on a turn that has file changes.
+4. After rollback completes, check the file on disk — it should be restored to the state before the agent modified it.
 5. Verify the thread conversation no longer shows the rolled-back turns.
+6. For turns that added new files: verify the added files are deleted from disk.
+7. For turns that deleted files: verify the deleted files are restored (if they were tracked in git).
 
 #### Expected Results
-- Clicking rollback reverts both thread history AND file system changes from that turn and all subsequent turns.
-- `apply_patch` update diffs are reversed precisely, even on untracked files (no git dependency for content reversal).
-- Files created by `apply_patch` are removed from disk.
-- Tracked files modified by `exec_command` (printf, sed, cat >, etc.) are restored from git HEAD.
-- Untracked files modified only by `exec_command` cannot be restored (no prior snapshot); no error is reported.
-- If reversal fails, the thread rollback still proceeds — file revert is best-effort.
+- Clicking rollback on a turn reverts both the thread history AND the file system changes from that turn and all subsequent turns.
+- Files modified by `apply_patch` in rolled-back turns are restored via `git checkout HEAD -- <path>`.
+- Files created by `apply_patch` in rolled-back turns are removed from disk.
+- Files deleted by `apply_patch` in rolled-back turns are restored from git HEAD.
+- File moves in rolled-back turns are reversed (moved file is renamed back to original path).
+- If file revert fails (e.g., not a git repo), the thread rollback still proceeds — file revert is best-effort.
 - The rollback-files endpoint (`POST /codex-api/thread/rollback-files`) can be called independently for testing.
-
-#### Test with thread 019d6c47-486f-72f1-bbfe-5894dacc6fb9
-1. Open the thread at `http://localhost:5173/#/thread/019d6c47-486f-72f1-bbfe-5894dacc6fb9`.
-2. Verify `test.txt` has content with `3423` lines added by `apply_patch`.
-3. Click rollback on the last turn.
-4. Confirm `test.txt` lost one `3423` line (the diff was reversed).
 
 #### Rollback/Cleanup
 - No cleanup required — rolled-back files are already restored.
-
-### Feature: Thread loading performance optimization
-
-#### Prerequisites
-- App is running from this repository (`pnpm run dev`).
-- At least one thread exists with messages.
-
-#### Steps
-1. Open the app and click on a thread in the sidebar.
-2. Observe how quickly messages appear in the chat view.
-3. Switch between threads multiple times.
-4. On second load of the same thread, messages should appear almost instantly (server-side cache).
-
-#### Expected Results
-- `thread/resume` and `thread-live-state` are fetched in parallel (not sequentially).
-- Server caches `thread-live-state` responses; cache is keyed by turn count and session log size.
-- Cache is invalidated when notifications arrive for a thread or when the thread is in progress.
-- Repeated loads of the same completed thread are near-instant (~50ms server-side).
-
-#### Rollback/Cleanup
-- No cleanup required.
 
 ### Feature: Markdown file links with spaces and parentheses in path
 
@@ -1915,42 +1864,24 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove test file if it was created only for this verification.
 
-### Feature: Project rename and delete persistence to global state
+### Feature: Markdown link with backticked label renders as file link
 
 #### Prerequisites
 - App is running from this repository.
-- At least one project is visible in the sidebar.
-- Access to `~/.codex/.codex-global-state.json`.
+- An active thread is open.
+- File exists at `/Users/igor/temp/TestChat/qwe.txt`.
 
-#### Steps — Rename persistence
-1. In the sidebar, hover over a project header to reveal the menu trigger.
-2. Click the menu trigger, then click "Edit name".
-3. Type a new display name (e.g., "My-Renamed-Project") and wait 1 second.
-4. Close the menu by clicking elsewhere.
-5. Open `~/.codex/.codex-global-state.json` and check the `electron-workspace-root-labels` key.
-6. Verify the new label is present for the corresponding workspace root path.
-7. Reload the page.
-8. Verify the renamed display name persists in the sidebar after reload.
+#### Steps
+1. Send this exact message:
+   [`/Users/igor/temp/TestChat/qwe.txt`](/Users/igor/temp/TestChat/qwe.txt)
+2. In the rendered message, confirm it appears as one clickable file link.
+3. Verify the visible link text is `/Users/igor/temp/TestChat/qwe.txt` (without backticks).
+4. Click the link and confirm it opens local browse for the full file path.
 
-#### Expected Results — Rename
-- The new display name appears immediately in the sidebar.
-- The label is written to `electron-workspace-root-labels` in global state (debounced 500ms).
-- After page reload, the renamed display name is still shown.
-
-#### Steps — Delete persistence
-1. In the sidebar, hover over a project header (e.g., "farfield") to reveal the menu trigger.
-2. Click the menu trigger, then click "Remove".
-3. Verify the project disappears from the sidebar.
-4. Open `~/.codex/.codex-global-state.json` and confirm the root path is removed from `electron-saved-workspace-roots`, `active-workspace-roots`, and `electron-workspace-root-labels`.
-5. Reload the page.
-6. Verify the removed project does NOT reappear in the sidebar.
-7. Re-check `~/.codex/.codex-global-state.json` to confirm the root path was not re-added.
-
-#### Expected Results — Delete
-- The project is immediately removed from the sidebar.
-- The root path is deleted from all three global state keys.
-- After page reload, the project stays removed (threads for that CWD are filtered out).
-- The global state file does not get re-polluted with the removed root.
+#### Expected Results
+- Backticks inside markdown label do not break markdown-link parsing.
+- The label renders as plain link text (no backtick glyphs).
+- Clicking opens `/codex-local-browse/Users/igor/temp/TestChat/qwe.txt`.
 
 #### Rollback/Cleanup
-- To restore a removed project, manually add its root path back to `electron-saved-workspace-roots` in `~/.codex/.codex-global-state.json` and reload.
+- Remove test file if it was created only for this verification.
