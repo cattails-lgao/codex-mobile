@@ -3235,6 +3235,19 @@ export function useDesktopState() {
     }
   }
 
+  async function filterGroupsByWorkspaceRoots(groups: UiProjectGroup[]): Promise<UiProjectGroup[]> {
+    try {
+      const rootsState = await getWorkspaceRootsState()
+      if (rootsState.order.length === 0) return groups
+      const allowedProjectNames = new Set(
+        rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
+      )
+      return groups.filter((group) => allowedProjectNames.has(group.projectName))
+    } catch {
+      return groups
+    }
+  }
+
   async function loadThreads() {
     if (!hasLoadedThreads.value) {
       isLoadingThreads.value = true
@@ -3244,13 +3257,15 @@ export function useDesktopState() {
       const [groups] = await Promise.all([getThreadGroups(), loadThreadTitleCacheIfNeeded()])
       await hydrateWorkspaceRootsStateIfNeeded(groups)
 
-      const nextProjectOrder = mergeProjectOrder(projectOrder.value, groups)
+      const visibleGroups = await filterGroupsByWorkspaceRoots(groups)
+
+      const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
       if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
         projectOrder.value = nextProjectOrder
         saveProjectOrder(projectOrder.value)
       }
 
-      const orderedGroups = orderGroupsByProjectOrder(groups, projectOrder.value)
+      const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
       const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
         sourceGroups.value,
         orderedGroups,
@@ -3964,6 +3979,38 @@ export function useDesktopState() {
     }
   }
 
+  let renameProjectTimer: ReturnType<typeof setTimeout> | null = null
+
+  async function persistProjectLabelToGlobalState(projectName: string, displayName: string): Promise<void> {
+    try {
+      const rootsState = await getWorkspaceRootsState()
+      const nextLabels = { ...rootsState.labels }
+      let changed = false
+      for (const rootPath of rootsState.order) {
+        if (toProjectNameFromWorkspaceRoot(rootPath) !== projectName) continue
+        const trimmed = displayName.trim()
+        if (trimmed.length === 0) {
+          if (nextLabels[rootPath] !== undefined) {
+            delete nextLabels[rootPath]
+            changed = true
+          }
+        } else if (nextLabels[rootPath] !== trimmed) {
+          nextLabels[rootPath] = trimmed
+          changed = true
+        }
+      }
+      if (changed) {
+        await setWorkspaceRootsState({
+          order: rootsState.order,
+          labels: nextLabels,
+          active: rootsState.active,
+        })
+      }
+    } catch {
+      // Keep localStorage-only rename when global state is unavailable.
+    }
+  }
+
   function renameProject(projectName: string, displayName: string): void {
     if (projectName.length === 0) return
 
@@ -3975,6 +4022,12 @@ export function useDesktopState() {
       [projectName]: displayName,
     }
     saveProjectDisplayNames(projectDisplayNameById.value)
+
+    if (renameProjectTimer !== null) clearTimeout(renameProjectTimer)
+    renameProjectTimer = setTimeout(() => {
+      renameProjectTimer = null
+      void persistProjectLabelToGlobalState(projectName, displayName)
+    }, 500)
   }
 
   async function removeProject(projectName: string): Promise<void> {
