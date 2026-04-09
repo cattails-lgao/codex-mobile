@@ -1814,33 +1814,61 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Stop the dev server on A1: `pkill -f vite`.
 
-### Feature: Rollback undoes apply_patch file changes
+### Feature: Rollback undoes file changes (apply_patch + exec_command)
 
 #### Prerequisites
 - App is running from this repository (`pnpm run dev`).
-- A thread exists with at least one completed turn that applied file changes via `apply_patch`.
-- The thread's `cwd` points to a git-tracked directory.
+- A thread exists with at least one completed turn that applied file changes via `apply_patch` or `exec_command`.
 
 #### Steps
-1. Open a thread with file changes visible in the conversation (file change cards with diffs).
-2. Note the current state of a file that was modified by the agent in a recent turn.
-3. Click the rollback button on a turn that has file changes.
-4. After rollback completes, check the file on disk — it should be restored to the state before the agent modified it.
+1. Open a thread with file changes visible in the conversation.
+2. Note the current state of files modified by the agent.
+3. Click the rollback button on a turn.
+4. After rollback completes, check the files on disk:
+   - **apply_patch updates** (tracked or untracked): the V4A diff is reversed in-memory and the file is rewritten with the pre-patch content.
+   - **apply_patch adds**: the created file is deleted from disk.
+   - **apply_patch deletes** (tracked): the file is restored via `git checkout HEAD`.
+   - **exec_command modifications** (tracked): the file is restored via `git checkout HEAD`.
 5. Verify the thread conversation no longer shows the rolled-back turns.
-6. For turns that added new files: verify the added files are deleted from disk.
-7. For turns that deleted files: verify the deleted files are restored (if they were tracked in git).
 
 #### Expected Results
-- Clicking rollback on a turn reverts both the thread history AND the file system changes from that turn and all subsequent turns.
-- Files modified by `apply_patch` in rolled-back turns are restored via `git checkout HEAD -- <path>`.
-- Files created by `apply_patch` in rolled-back turns are removed from disk.
-- Files deleted by `apply_patch` in rolled-back turns are restored from git HEAD.
-- File moves in rolled-back turns are reversed (moved file is renamed back to original path).
-- If file revert fails (e.g., not a git repo), the thread rollback still proceeds — file revert is best-effort.
+- Clicking rollback reverts both thread history AND file system changes from that turn and all subsequent turns.
+- `apply_patch` update diffs are reversed precisely, even on untracked files (no git dependency for content reversal).
+- Files created by `apply_patch` are removed from disk.
+- Tracked files modified by `exec_command` (printf, sed, cat >, etc.) are restored from git HEAD.
+- Untracked files modified only by `exec_command` cannot be restored (no prior snapshot); no error is reported.
+- If reversal fails, the thread rollback still proceeds — file revert is best-effort.
 - The rollback-files endpoint (`POST /codex-api/thread/rollback-files`) can be called independently for testing.
+
+#### Test with thread 019d6c47-486f-72f1-bbfe-5894dacc6fb9
+1. Open the thread at `http://localhost:5173/#/thread/019d6c47-486f-72f1-bbfe-5894dacc6fb9`.
+2. Verify `test.txt` has content with `3423` lines added by `apply_patch`.
+3. Click rollback on the last turn.
+4. Confirm `test.txt` lost one `3423` line (the diff was reversed).
 
 #### Rollback/Cleanup
 - No cleanup required — rolled-back files are already restored.
+
+### Feature: Thread loading performance optimization
+
+#### Prerequisites
+- App is running from this repository (`pnpm run dev`).
+- At least one thread exists with messages.
+
+#### Steps
+1. Open the app and click on a thread in the sidebar.
+2. Observe how quickly messages appear in the chat view.
+3. Switch between threads multiple times.
+4. On second load of the same thread, messages should appear almost instantly (server-side cache).
+
+#### Expected Results
+- `thread/resume` and `thread-live-state` are fetched in parallel (not sequentially).
+- Server caches `thread-live-state` responses; cache is keyed by turn count and session log size.
+- Cache is invalidated when notifications arrive for a thread or when the thread is in progress.
+- Repeated loads of the same completed thread are near-instant (~50ms server-side).
+
+#### Rollback/Cleanup
+- No cleanup required.
 
 ### Feature: Markdown file links with spaces and parentheses in path
 

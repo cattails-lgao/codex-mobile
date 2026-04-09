@@ -3289,8 +3289,13 @@ export function useDesktopState() {
     }
 
     try {
-      if (resumedThreadById.value[threadId] !== true) {
-        const resumedThread = await resumeThread(threadId)
+      const needsResume = resumedThreadById.value[threadId] !== true
+      const resumePromise = needsResume ? resumeThread(threadId) : null
+      const detailPromise = getThreadDetail(threadId)
+
+      const [resumedThread, detail] = await Promise.all([resumePromise, detailPromise])
+
+      if (resumedThread) {
         setThreadModelId(threadId, resumedThread.model)
         resumedThreadById.value = {
           ...resumedThreadById.value,
@@ -3298,7 +3303,7 @@ export function useDesktopState() {
         }
       }
 
-      const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = await getThreadDetail(threadId)
+      const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = detail
       replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
       rebindLiveFileChangeTurnIndices(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []

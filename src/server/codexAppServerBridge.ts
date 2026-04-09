@@ -970,15 +970,38 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
   return orderByTurnId
 }
 
-type CollectedPatchEntry = {
-  turnId: string
-  callId: string
-  input: string
+function extractFilePathsFromCommand(cmd: string, cwd: string): string[] {
+  const paths: string[] = []
+  const absPathPattern = /(?:^|\s|>>|>|<)(\/?(?:Users|home|tmp|var|etc|root)\/[^\s;|&><"']+)/g
+  let match: RegExpExecArray | null
+  while ((match = absPathPattern.exec(cmd)) !== null) {
+    const p = match[1]?.trim()
+    if (p && !p.endsWith('/') && !p.startsWith('-')) paths.push(p)
+  }
+
+  const redirectPattern = /(?:>>?|cat\s*>\s*)([^\s;|&><"']+)/g
+  while ((match = redirectPattern.exec(cmd)) !== null) {
+    const p = match[1]?.trim()
+    if (p && !p.startsWith('-') && !p.startsWith('/dev/')) {
+      paths.push(isAbsolute(p) ? p : join(cwd, p))
+    }
+  }
+
+  return [...new Set(paths)]
 }
 
-function collectApplyPatchInputsForTurns(sessionLogRaw: string, turnIdsToRevert: Set<string>): CollectedPatchEntry[] {
+type CollectedTurnFileInfo = {
+  patchInputs: { callId: string; input: string }[]
+  commandFilePaths: string[]
+}
+
+function collectFileChangesForTurns(
+  sessionLogRaw: string,
+  turnIdsToRevert: Set<string>,
+  cwd: string,
+): Map<string, CollectedTurnFileInfo> {
   let currentTurnId = ''
-  const entries: CollectedPatchEntry[] = []
+  const infoByTurnId = new Map<string, CollectedTurnFileInfo>()
 
   for (const line of sessionLogRaw.split('\n')) {
     if (!line.trim()) continue
@@ -1006,72 +1029,210 @@ function collectApplyPatchInputsForTurns(sessionLogRaw: string, turnIdsToRevert:
     const payload = asRecord(row.payload)
     if (!payload) continue
 
+    let info = infoByTurnId.get(currentTurnId)
+    if (!info) {
+      info = { patchInputs: [], commandFilePaths: [] }
+      infoByTurnId.set(currentTurnId, info)
+    }
+
     if (payload.type === 'custom_tool_call' && payload.name === 'apply_patch' && payload.status === 'completed') {
       const input = typeof payload.input === 'string' ? payload.input : ''
       const callId = readNonEmptyString(payload.call_id)
       if (input && callId) {
-        entries.push({ turnId: currentTurnId, callId, input })
+        info.patchInputs.push({ callId, input })
+      }
+    }
+
+    if (payload.type === 'function_call' && payload.name === 'exec_command') {
+      let cmd = ''
+      try {
+        const args = JSON.parse(payload.arguments as string) as Record<string, unknown>
+        cmd = typeof args.cmd === 'string' ? args.cmd : ''
+      } catch { /* empty */ }
+      if (cmd) {
+        const extracted = extractFilePathsFromCommand(cmd, cwd)
+        for (const p of extracted) {
+          if (!info.commandFilePaths.includes(p)) info.commandFilePaths.push(p)
+        }
       }
     }
   }
 
-  return entries
+  return infoByTurnId
 }
 
-async function revertApplyPatchEntries(cwd: string, entries: CollectedPatchEntry[]): Promise<{ reverted: number; errors: string[] }> {
-  if (entries.length === 0) return { reverted: 0, errors: [] }
+function reverseV4aDiff(fileContent: string, diffText: string): string | null {
+  const fileLines = fileContent.split('\n')
+  const rawDiffLines = diffText.split('\n')
+  while (rawDiffLines.length > 0 && rawDiffLines[rawDiffLines.length - 1]?.trim() === '') rawDiffLines.pop()
+  const diffLines = rawDiffLines
+  const result = [...fileLines]
+
+  type DiffEntry = { type: 'context' | 'add' | 'remove'; text: string }
+  const hunks: DiffEntry[][] = []
+  let currentHunk: DiffEntry[] | null = null
+
+  for (const dl of diffLines) {
+    if (dl.startsWith('@@')) {
+      if (currentHunk) hunks.push(currentHunk)
+      currentHunk = []
+      continue
+    }
+    if (!currentHunk) continue
+    if (dl.startsWith('+')) {
+      currentHunk.push({ type: 'add', text: dl.slice(1) })
+    } else if (dl.startsWith('-')) {
+      currentHunk.push({ type: 'remove', text: dl.slice(1) })
+    } else if (dl.startsWith(' ')) {
+      currentHunk.push({ type: 'context', text: dl.slice(1) })
+    } else {
+      currentHunk.push({ type: 'context', text: dl })
+    }
+  }
+  if (currentHunk) hunks.push(currentHunk)
+
+  for (let hi = hunks.length - 1; hi >= 0; hi--) {
+    const hunk = hunks[hi]!
+    const expectedSequence = hunk
+      .filter((e) => e.type === 'context' || e.type === 'add')
+      .map((e) => e.text)
+
+    if (expectedSequence.length === 0) continue
+
+    let seqStart = -1
+    outer: for (let ri = result.length - expectedSequence.length; ri >= 0; ri--) {
+      for (let si = 0; si < expectedSequence.length; si++) {
+        if (result[ri + si] !== expectedSequence[si]) continue outer
+      }
+      seqStart = ri
+      break
+    }
+
+    if (seqStart < 0) return null
+
+    const newLines: string[] = []
+    let seqIdx = 0
+    for (const entry of hunk) {
+      if (entry.type === 'context') {
+        newLines.push(result[seqStart + seqIdx]!)
+        seqIdx++
+      } else if (entry.type === 'add') {
+        seqIdx++
+      } else if (entry.type === 'remove') {
+        newLines.push(entry.text)
+      }
+    }
+
+    result.splice(seqStart, expectedSequence.length, ...newLines)
+  }
+
+  return result.join('\n')
+}
+
+async function revertTurnFileChanges(
+  cwd: string,
+  turnInfos: Map<string, CollectedTurnFileInfo>,
+): Promise<{ reverted: number; errors: string[] }> {
+  if (turnInfos.size === 0) return { reverted: 0, errors: [] }
 
   let reverted = 0
   const errors: string[] = []
 
-  const reversed = [...entries].reverse()
+  const allEntries = [...turnInfos.values()]
+  const allPatchInputs = allEntries.flatMap((info) => info.patchInputs).reverse()
+  const allCommandPaths = new Set(allEntries.flatMap((info) => info.commandFilePaths))
 
-  for (const entry of reversed) {
-    const changes = parseApplyPatchInput(entry.input)
-    if (changes.length === 0) continue
+  let isGitRepo = false
+  let gitRoot = ''
+  try {
+    gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+    isGitRepo = !!gitRoot
+  } catch { /* not a git repo */ }
 
+  const trackedFiles = new Set<string>()
+  if (isGitRepo) {
+    try {
+      const tracked = await runCommandCapture('git', ['ls-files', '--full-name'], { cwd: gitRoot })
+      for (const f of tracked.split('\n')) {
+        if (f.trim()) trackedFiles.add(join(gitRoot, f.trim()))
+      }
+    } catch { /* empty */ }
+  }
+
+  const patchRevertedPaths = new Set<string>()
+
+  for (const patch of allPatchInputs) {
+    const changes = parseApplyPatchInput(patch.input)
     for (let ci = changes.length - 1; ci >= 0; ci--) {
       const change = changes[ci]!
+      const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+
       try {
         if (change.operation === 'add') {
-          const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
-          await rm(filePath, { force: true })
-          reverted++
-        } else if (change.operation === 'delete') {
-          const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+          const fileStat = await stat(filePath).catch(() => null)
+          if (fileStat) {
+            await rm(filePath, { force: true })
+            reverted++
+            patchRevertedPaths.add(filePath)
+          }
+        } else if (change.operation === 'update' && change.diff) {
+          let reversed = false
           try {
-            await runCommand('git', ['checkout', 'HEAD', '--', change.path], { cwd })
-            reverted++
-          } catch {
-            errors.push(`Could not restore deleted file: ${filePath}`)
-          }
-        } else if (change.operation === 'update') {
-          if (change.movedToPath) {
-            const movedPath = isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath)
-            const origPath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
-            try {
-              await runCommand('git', ['mv', change.movedToPath, change.path], { cwd })
-            } catch {
-              try {
-                await rename(movedPath, origPath)
-              } catch {
-                errors.push(`Could not reverse move: ${change.movedToPath} -> ${change.path}`)
-              }
-            }
-          }
-          if (change.diff) {
-            try {
-              await runCommand('git', ['checkout', 'HEAD', '--', change.path], { cwd })
+            const currentContent = await readFile(filePath, 'utf8')
+            const newContent = reverseV4aDiff(currentContent, change.diff)
+            if (newContent !== null && newContent !== currentContent) {
+              const { writeFile } = await import('node:fs/promises')
+              await writeFile(filePath, newContent)
               reverted++
-            } catch {
-              errors.push(`Could not revert update: ${change.path}`)
+              patchRevertedPaths.add(filePath)
+              reversed = true
             }
-          } else {
-            reverted++
+          } catch { /* file read/write failed */ }
+
+          if (!reversed) {
+            const isTracked = trackedFiles.has(filePath)
+            if (isTracked && isGitRepo) {
+              const relativePath = filePath.startsWith(gitRoot + '/') ? filePath.slice(gitRoot.length + 1) : filePath
+              try {
+                await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
+                reverted++
+                patchRevertedPaths.add(filePath)
+              } catch {
+                errors.push(`Could not revert: ${filePath}`)
+              }
+            } else {
+              errors.push(`Could not reverse patch for untracked file: ${filePath}`)
+            }
+          }
+        } else if (change.operation === 'delete') {
+          const isTracked = trackedFiles.has(filePath)
+          if (isTracked && isGitRepo) {
+            const relativePath = filePath.startsWith(gitRoot + '/') ? filePath.slice(gitRoot.length + 1) : filePath
+            try {
+              await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
+              reverted++
+              patchRevertedPaths.add(filePath)
+            } catch {
+              errors.push(`Could not restore deleted file: ${filePath}`)
+            }
           }
         }
       } catch (err) {
-        errors.push(`Failed to revert ${change.path}: ${err instanceof Error ? err.message : String(err)}`)
+        errors.push(`Failed to revert patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+  }
+
+  for (const filePath of allCommandPaths) {
+    if (patchRevertedPaths.has(filePath)) continue
+    const isTracked = trackedFiles.has(filePath)
+    if (isTracked && isGitRepo) {
+      const relativePath = filePath.startsWith(gitRoot + '/') ? filePath.slice(gitRoot.length + 1) : filePath
+      try {
+        await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
+        reverted++
+      } catch {
+        errors.push(`Could not restore command-modified file: ${filePath}`)
       }
     }
   }
@@ -1969,6 +2130,7 @@ class AppServerProcess {
   private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
+  private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
 
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
@@ -2074,6 +2236,8 @@ class AppServerProcess {
   private emitNotification(notification: { method: string; params: unknown }): void {
     this.recordStreamEvent(notification)
     this.captureItemFromNotification(notification)
+    const nThreadId = this.extractThreadIdFromParams(notification.params)
+    if (nThreadId) this.invalidateLiveStateCache(nThreadId)
     for (const listener of this.notificationListeners) {
       listener(notification)
     }
@@ -2131,6 +2295,21 @@ class AppServerProcess {
 
   getLastThreadReadSnapshot(threadId: string): unknown | null {
     return this.lastThreadReadSnapshotByThreadId.get(threadId) ?? null
+  }
+
+  cacheLiveState(threadId: string, data: unknown, turnCount: number, sessionSize: number): void {
+    this.liveStateCache.set(threadId, { data, turnCount, sessionSize })
+  }
+
+  getCachedLiveState(threadId: string, turnCount: number, sessionSize: number): unknown | null {
+    const cached = this.liveStateCache.get(threadId)
+    if (!cached) return null
+    if (cached.turnCount !== turnCount || cached.sessionSize !== sessionSize) return null
+    return cached.data
+  }
+
+  invalidateLiveStateCache(threadId: string): void {
+    this.liveStateCache.delete(threadId)
   }
 
   private captureItemFromNotification(notification: { method: string; params: unknown }): void {
@@ -2766,10 +2945,25 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const record = asRecord(sanitized)
           const thread = asRecord(record?.thread)
           const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
-          let turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
 
           const sessionPath = readNonEmptyString(thread?.path)
+          let sessionSize = 0
           if (sessionPath && isAbsolute(sessionPath)) {
+            try {
+              const s = await stat(sessionPath)
+              sessionSize = s.size
+            } catch { /* missing */ }
+          }
+
+          const cached = appServer.getCachedLiveState(threadId, rawTurns.length, sessionSize)
+          if (cached) {
+            setJson(res, 200, cached)
+            return
+          }
+
+          let turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
+
+          if (sessionPath && isAbsolute(sessionPath) && sessionSize > 0) {
             try {
               const sessionLogRaw = await readFile(sessionPath, 'utf8')
               turns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
@@ -2781,7 +2975,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
           const isInProgress = lastTurn?.status === 'inProgress'
 
-          setJson(res, 200, {
+          const responseData = {
             threadId,
             conversationState: {
               turns,
@@ -2789,7 +2983,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ownerClientId: null,
             liveStateError: null,
             isInProgress,
-          })
+          }
+
+          if (!isInProgress) {
+            appServer.cacheLiveState(threadId, responseData, rawTurns.length, sessionSize)
+          }
+
+          setJson(res, 200, responseData)
         } catch (error) {
           const snapshot = appServer.getLastThreadReadSnapshot(threadId)
           if (snapshot) {
@@ -2871,13 +3071,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          const patchEntries = collectApplyPatchInputsForTurns(sessionLogRaw, turnIdsToRevert)
-          if (patchEntries.length === 0) {
+          const turnInfos = collectFileChangesForTurns(sessionLogRaw, turnIdsToRevert, cwd)
+          if (turnInfos.size === 0) {
             setJson(res, 200, { reverted: 0, errors: [], message: 'No file changes to revert' })
             return
           }
 
-          const result = await revertApplyPatchEntries(cwd, patchEntries)
+          const result = await revertTurnFileChanges(cwd, turnInfos)
           setJson(res, 200, { ...result, message: `Reverted ${result.reverted} file change(s)` })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })
