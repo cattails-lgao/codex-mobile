@@ -2923,7 +2923,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-auto text-2xl sm:text-[2.5rem] leading-[1.05];
+  @apply h-auto p-0 text-2xl sm:text-[2.5rem] leading-[1.05];
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-value) {
