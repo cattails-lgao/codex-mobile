@@ -1863,3 +1863,43 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove test file if it was created only for this verification.
+
+### Feature: Project rename and delete persistence to global state
+
+#### Prerequisites
+- App is running from this repository.
+- At least one project is visible in the sidebar.
+- Access to `~/.codex/.codex-global-state.json`.
+
+#### Steps — Rename persistence
+1. In the sidebar, hover over a project header to reveal the menu trigger.
+2. Click the menu trigger, then click "Edit name".
+3. Type a new display name (e.g., "My-Renamed-Project") and wait 1 second.
+4. Close the menu by clicking elsewhere.
+5. Open `~/.codex/.codex-global-state.json` and check the `electron-workspace-root-labels` key.
+6. Verify the new label is present for the corresponding workspace root path.
+7. Reload the page.
+8. Verify the renamed display name persists in the sidebar after reload.
+
+#### Expected Results — Rename
+- The new display name appears immediately in the sidebar.
+- The label is written to `electron-workspace-root-labels` in global state (debounced 500ms).
+- After page reload, the renamed display name is still shown.
+
+#### Steps — Delete persistence
+1. In the sidebar, hover over a project header (e.g., "farfield") to reveal the menu trigger.
+2. Click the menu trigger, then click "Remove".
+3. Verify the project disappears from the sidebar.
+4. Open `~/.codex/.codex-global-state.json` and confirm the root path is removed from `electron-saved-workspace-roots`, `active-workspace-roots`, and `electron-workspace-root-labels`.
+5. Reload the page.
+6. Verify the removed project does NOT reappear in the sidebar.
+7. Re-check `~/.codex/.codex-global-state.json` to confirm the root path was not re-added.
+
+#### Expected Results — Delete
+- The project is immediately removed from the sidebar.
+- The root path is deleted from all three global state keys.
+- After page reload, the project stays removed (threads for that CWD are filtered out).
+- The global state file does not get re-polluted with the removed root.
+
+#### Rollback/Cleanup
+- To restore a removed project, manually add its root path back to `electron-saved-workspace-roots` in `~/.codex/.codex-global-state.json` and reload.
