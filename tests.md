@@ -1863,3 +1863,29 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove test file if it was created only for this verification.
+
+---
+
+### Fix: Codex.app "New Worktree" Button Missing After Account Switch
+
+#### Prerequisites
+- `/Applications/Codex.app` installed
+- Script at `scripts/fix-codex-worktree-button.sh` or `~/.codex/scripts/fix-codex-worktree-button.sh`
+
+#### Steps
+1. Open Codex.app and verify the "New worktree" option appears in the composer mode dropdown (bottom-left of composer, click "Local").
+2. Switch accounts via profile dropdown (e.g. "Use Copilot account" or "Use OpenAI account").
+3. Verify the "New worktree" option is now missing from the mode dropdown.
+4. Run: `bash scripts/fix-codex-worktree-button.sh`
+5. Wait for Codex.app to relaunch automatically.
+6. Open the composer mode dropdown again.
+
+#### Expected Results
+- After running the script, Codex.app relaunches with fresh Statsig gate evaluations.
+- The "New worktree" option reappears in the composer mode dropdown.
+- Use `--dry-run` to preview actions without making changes.
+- Use `--no-relaunch` to clear cache without reopening the app.
+
+#### Rollback/Cleanup
+- The script creates a timestamped backup at `~/Library/Application Support/Codex/Local Storage.bak.<timestamp>/` before clearing.
+- To restore: quit Codex.app, delete `~/Library/Application Support/Codex/Local Storage/leveldb/`, rename the backup folder back to `Local Storage`.
