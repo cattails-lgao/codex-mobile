@@ -3943,6 +3943,15 @@ watch(
       ]),
     )
 
+    // While following output, advance the window start to keep rendered count bounded.
+    // When the user scrolls up (autoFollowOutput = false) we stop trimming so they
+    // can read history and use "Load earlier messages" to go further back.
+    if (autoFollowOutput.value) {
+      const desired = Math.max(0, next.length - RENDER_WINDOW_SIZE)
+      if (desired > renderWindowStart.value) {
+        renderWindowStart.value = desired
+      }
+    }
 
     await scheduleScrollRestore()
   },
