@@ -182,6 +182,16 @@
                 <span class="sidebar-settings-label">GitHub trending projects</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': showGithubTrendingProjects }" />
               </button>
+              <button
+                class="sidebar-settings-row"
+                type="button"
+                title="Use free OpenRouter models (no API key needed). Rotates through community keys."
+                :disabled="freeModeLoading"
+                @click="toggleFreeMode"
+              >
+                <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
+              </button>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -605,6 +615,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -878,6 +889,8 @@ const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, false))
+const freeModeEnabled = ref(false)
+const freeModeLoading = ref(false)
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -1181,6 +1194,7 @@ onMounted(() => {
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
   void refreshTelegramStatus()
+  void loadFreeModeStatus()
   if (showGithubTrendingProjects.value) {
     void loadTrendingProjects()
   }
@@ -2396,6 +2410,29 @@ function toggleDictationAutoSend(): void {
 function toggleGithubTrendingProjects(): void {
   showGithubTrendingProjects.value = !showGithubTrendingProjects.value
   window.localStorage.setItem(GITHUB_TRENDING_PROJECTS_KEY, showGithubTrendingProjects.value ? '1' : '0')
+}
+
+async function toggleFreeMode(): Promise<void> {
+  if (freeModeLoading.value) return
+  freeModeLoading.value = true
+  try {
+    const next = !freeModeEnabled.value
+    const result = await setFreeMode(next)
+    freeModeEnabled.value = result.enabled
+  } catch {
+    // Silently fail — state unchanged
+  } finally {
+    freeModeLoading.value = false
+  }
+}
+
+async function loadFreeModeStatus(): Promise<void> {
+  try {
+    const status = await getFreeModeStatus()
+    freeModeEnabled.value = status.enabled
+  } catch {
+    // Ignore — free mode status unknown
+  }
 }
 
 function onDictationLanguageChange(nextValue: string): void {

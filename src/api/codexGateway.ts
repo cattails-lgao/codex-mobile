@@ -1229,6 +1229,27 @@ export async function setCodexSpeedMode(mode: SpeedMode): Promise<void> {
   })
 }
 
+export interface FreeModeStatus {
+  enabled: boolean
+  keyCount: number
+  models: string[]
+  currentModel: string | null
+}
+
+export async function getFreeModeStatus(): Promise<FreeModeStatus> {
+  const response = await fetch('/codex-api/free-mode/status')
+  return await response.json() as FreeModeStatus
+}
+
+export async function setFreeMode(enable: boolean): Promise<{ ok: boolean; enabled: boolean; model?: string; models?: string[] }> {
+  const response = await fetch('/codex-api/free-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enable }),
+  })
+  return await response.json() as { ok: boolean; enabled: boolean; model?: string; models?: string[] }
+}
+
 export async function getAvailableModelIds(): Promise<string[]> {
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
