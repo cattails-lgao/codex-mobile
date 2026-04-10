@@ -3943,14 +3943,15 @@ watch(
       ]),
     )
 
-    // While following output, advance the window start to keep rendered count bounded.
-    // When the user scrolls up (autoFollowOutput = false) we stop trimming so they
-    // can read history and use "Load earlier messages" to go further back.
+    // Keep renderWindowStart in bounds whenever the message list changes length.
+    // Following output: always pin the window to the last RENDER_WINDOW_SIZE messages so
+    //   the rendered count stays bounded (handles both growth and shrink/rollback).
+    // Scrolled up: only clamp downward so renderWindowStart never exceeds the list length
+    //   (prevents visibleMessages from becoming empty after a rollback).
     if (autoFollowOutput.value) {
-      const desired = Math.max(0, next.length - RENDER_WINDOW_SIZE)
-      if (desired > renderWindowStart.value) {
-        renderWindowStart.value = desired
-      }
+      renderWindowStart.value = Math.max(0, next.length - RENDER_WINDOW_SIZE)
+    } else {
+      renderWindowStart.value = Math.min(renderWindowStart.value, Math.max(0, next.length - 1))
     }
 
     await scheduleScrollRestore()
