@@ -3874,6 +3874,7 @@ async function loadMoreAbove(): Promise<void> {
   if (!container || !hasMoreAbove.value || isLoadingMore.value) return
 
   isLoadingMore.value = true
+  const threadIdAtStart = props.activeThreadId
 
   const prevScrollHeight = container.scrollHeight
   const prevScrollTop = container.scrollTop
@@ -3882,10 +3883,11 @@ async function loadMoreAbove(): Promise<void> {
 
   await nextTick()
 
-  // Restore relative scroll position so the viewport doesn't jump.
-  container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
-
-  isLoadingMore.value = false
+  // Discard scroll restoration if the thread changed while we were awaiting.
+  if (props.activeThreadId === threadIdAtStart) {
+    container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
+    isLoadingMore.value = false
+  }
 }
 
 defineExpose({
@@ -4014,6 +4016,7 @@ watch(
     localScrollState.value = null
     autoFollowOutput.value = true
     modalImageUrl.value = ''
+    isLoadingMore.value = false
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
   },
