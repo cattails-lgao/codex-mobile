@@ -142,9 +142,18 @@ Set these environment variables before starting `codexapp`:
 
 ```bash
 export TELEGRAM_BOT_TOKEN="<your-telegram-bot-token>"
+export TELEGRAM_ALLOWED_USER_IDS="<your-telegram-user-id>,<optional-second-id>"
 export TELEGRAM_DEFAULT_CWD="$PWD" # optional, defaults to current working directory
 npx codexapp
 ```
+
+`TELEGRAM_ALLOWED_USER_IDS` is required for safe access. Only allowlisted Telegram user IDs can use the bridge. If no allowed user IDs are configured, incoming Telegram messages are rejected.
+
+To find your Telegram user ID:
+
+1. Send a message to your bot.
+2. Run `curl "https://api.telegram.org/bot<your-telegram-bot-token>/getUpdates"`.
+3. Read `message.from.id` from the returned update payload.
 
 Bot commands:
 

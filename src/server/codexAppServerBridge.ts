@@ -1623,6 +1623,7 @@ let sessionIndexThreadTitleCacheState: SessionIndexThreadTitleCacheState = {
 type TelegramBridgeConfigState = {
   botToken: string
   chatIds: number[]
+  allowedUserIds: number[]
 }
 
 function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
@@ -1877,13 +1878,26 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
 
 function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
   const record = asRecord(value)
-  if (!record) return { botToken: '', chatIds: [] }
+  if (!record) return { botToken: '', chatIds: [], allowedUserIds: [] }
   const botToken = typeof record.botToken === 'string' ? record.botToken.trim() : ''
   const rawChatIds = Array.isArray(record.chatIds) ? record.chatIds : []
   const chatIds = Array.from(new Set(rawChatIds
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
     .map((value) => Math.trunc(value)))).slice(0, 50)
-  return { botToken, chatIds }
+  const rawAllowedUserIds = Array.isArray(record.allowedUserIds) ? record.allowedUserIds : []
+  const allowedUserIds = Array.from(new Set(rawAllowedUserIds
+    .map((value) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
+      if (typeof value === 'string') {
+        const normalized = value.trim().replace(/^(telegram|tg):/i, '').trim()
+        if (/^-?\d+$/.test(normalized)) {
+          return Number.parseInt(normalized, 10)
+        }
+      }
+      return Number.NaN
+    })
+    .filter((value) => Number.isFinite(value)))).slice(0, 100)
+  return { botToken, chatIds, allowedUserIds }
 }
 
 async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
@@ -1893,7 +1907,7 @@ async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
     const payload = asRecord(JSON.parse(raw)) ?? {}
     return normalizeTelegramBridgeConfig(payload)
   } catch {
-    return { botToken: '', chatIds: [] }
+    return { botToken: '', chatIds: [], allowedUserIds: [] }
   }
 }
 
@@ -1903,6 +1917,7 @@ async function writeTelegramBridgeConfig(nextState: TelegramBridgeConfigState): 
   await writeFile(telegramConfigPath, JSON.stringify({
     botToken: normalized.botToken,
     chatIds: normalized.chatIds,
+    allowedUserIds: normalized.allowedUserIds,
   }), 'utf8')
 }
 
@@ -2830,6 +2845,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     .then((config) => {
       if (!config.botToken) return
       telegramBridge.configureToken(config.botToken)
+      telegramBridge.configureAllowedUserIds(config.allowedUserIds)
       telegramBridge.start()
     })
     .catch(() => {})
@@ -3638,17 +3654,28 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'POST' && url.pathname === '/codex-api/telegram/configure-bot') {
         const payload = asRecord(await readJsonBody(req))
         const botToken = typeof payload?.botToken === 'string' ? payload.botToken.trim() : ''
+        const rawAllowedUserIds = Array.isArray(payload?.allowedUserIds) ? payload.allowedUserIds : []
         if (!botToken) {
           setJson(res, 400, { error: 'Missing botToken' })
           return
         }
+        const config = normalizeTelegramBridgeConfig({
+          botToken,
+          allowedUserIds: rawAllowedUserIds,
+        })
+        if (config.allowedUserIds.length === 0) {
+          setJson(res, 400, { error: 'At least one allowed Telegram user ID is required' })
+          return
+        }
 
-        telegramBridge.configureToken(botToken)
+        telegramBridge.configureToken(config.botToken)
+        telegramBridge.configureAllowedUserIds(config.allowedUserIds)
         telegramBridge.start()
         const existingConfig = await readTelegramBridgeConfig()
         await writeTelegramBridgeConfig({
-          botToken,
+          botToken: config.botToken,
           chatIds: existingConfig.chatIds,
+          allowedUserIds: config.allowedUserIds,
         })
         setJson(res, 200, { ok: true })
         return

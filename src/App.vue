@@ -896,6 +896,7 @@ const telegramStatus = ref<TelegramStatus>({
   active: false,
   mappedChats: 0,
   mappedThreads: 0,
+  allowedUsers: 0,
   lastError: '',
 })
 const mobileHiddenAtMs = ref<number | null>(null)
@@ -1164,7 +1165,7 @@ const contentStyle = computed(() => {
 const telegramStatusText = computed(() => {
   if (!telegramStatus.value.configured) return 'Not configured'
   const base = telegramStatus.value.active ? 'Online' : 'Configured (offline)'
-  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s)`
+  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s), ${telegramStatus.value.allowedUsers} allowed user(s)`
   const error = telegramStatus.value.lastError ? `, error: ${telegramStatus.value.lastError}` : ''
   return `${base}, ${mapped}${error}`
 })
@@ -1261,6 +1262,7 @@ async function refreshTelegramStatus(): Promise<void> {
       active: false,
       mappedChats: 0,
       mappedThreads: 0,
+      allowedUsers: 0,
       lastError: message,
     }
   }
@@ -1761,10 +1763,24 @@ function onConnectTelegramBot(): void {
   if (typeof window === 'undefined') return
   const botToken = window.prompt('Telegram bot token')
   if (!botToken || !botToken.trim()) return
+  const allowedUserIdsInput = window.prompt('Allowed Telegram user IDs (comma-separated)')
+  if (!allowedUserIdsInput || !allowedUserIdsInput.trim()) {
+    window.alert('At least one Telegram user ID is required.')
+    return
+  }
+  const allowedUserIds = Array.from(new Set(allowedUserIdsInput
+    .split(',')
+    .map((value) => value.trim().replace(/^(telegram|tg):/i, '').trim())
+    .filter((value) => /^-?\d+$/.test(value))
+    .map((value) => Number.parseInt(value, 10))))
+  if (allowedUserIds.length === 0) {
+    window.alert('No valid Telegram user IDs were provided.')
+    return
+  }
 
-  void configureTelegramBot(botToken.trim())
+  void configureTelegramBot(botToken.trim(), allowedUserIds)
     .then(() => {
-      window.alert('Telegram bot configured. Open the bot DM and send /start.')
+      window.alert('Telegram bot configured. Only allowlisted Telegram users can use the bridge.')
       void refreshTelegramStatus()
     })
     .catch((error: unknown) => {
