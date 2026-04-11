@@ -1235,6 +1235,7 @@ export interface FreeModeStatus {
   models: string[]
   currentModel: string | null
   hasCustomKey?: boolean
+  customEndpoint?: string
 }
 
 export async function getFreeModeStatus(): Promise<FreeModeStatus> {
@@ -1256,6 +1257,15 @@ export async function setFreeModeCustomKey(apiKey: string): Promise<{ ok: boolea
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiKey }),
+  })
+  return await response.json() as { ok: boolean }
+}
+
+export async function setFreeModeCustomEndpoint(endpoint: string): Promise<{ ok: boolean }> {
+  const response = await fetch('/codex-api/free-mode/custom-endpoint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
   })
   return await response.json() as { ok: boolean }
 }
@@ -1574,7 +1584,7 @@ export async function startThreadReview(
   })
 }
 
-export async function getHomeDirectory(): Promise<string> {
+export async function getHomeDirectory(): Promise<{ path: string; codexHome: string }> {
   const response = await fetch('/codex-api/home-directory')
   const payload = (await response.json()) as unknown
   if (!response.ok) {
@@ -1588,7 +1598,10 @@ export async function getHomeDirectory(): Promise<string> {
     record.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
       : {}
-  return typeof data.path === 'string' ? data.path.trim() : ''
+  return {
+    path: typeof data.path === 'string' ? data.path.trim() : '',
+    codexHome: typeof data.codexHome === 'string' ? data.codexHome.trim() : '',
+  }
 }
 
 export async function listLocalDirectories(path: string, options?: { showHidden?: boolean }): Promise<LocalDirectoryListing> {

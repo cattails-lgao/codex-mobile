@@ -185,21 +185,31 @@
               <button
                 class="sidebar-settings-row"
                 type="button"
-                title="Use free OpenRouter models (no API key needed). Rotates through community keys."
+                title="Use free models via a community API."
                 :disabled="freeModeLoading"
                 @click="toggleFreeMode"
               >
-                <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
+                <span class="sidebar-settings-label">Free mode</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
               </button>
-              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Set your own OpenRouter API key (optional). Leave empty to use community keys.">
-                <span class="sidebar-settings-label">OpenRouter key</span>
+              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Set your own API key (optional). Leave empty to use community keys.">
+                <span class="sidebar-settings-label">API key</span>
                 <input
                   v-model="freeModeCustomKey"
                   class="sidebar-settings-input"
                   type="password"
-                  placeholder="sk-or-v1-..."
+                  placeholder="sk-..."
                   @change="onFreeModeCustomKeyChange"
+                />
+              </div>
+              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Custom API endpoint (optional). Leave empty for default.">
+                <span class="sidebar-settings-label">Endpoint</span>
+                <input
+                  v-model="freeModeCustomEndpoint"
+                  class="sidebar-settings-input"
+                  type="text"
+                  placeholder="https://..."
+                  @change="onFreeModeCustomEndpointChange"
                 />
               </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -625,7 +635,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setFreeModeCustomEndpoint } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -865,6 +875,7 @@ const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
+const codexHomeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
@@ -903,6 +914,7 @@ const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY
 const freeModeEnabled = ref(false)
 const freeModeLoading = ref(false)
 const freeModeCustomKey = ref('')
+const freeModeCustomEndpoint = ref('')
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -2085,10 +2097,11 @@ async function resolveProjectBaseDirectory(): Promise<string> {
   const baseDir = getProjectBaseDirectory()
   if (baseDir) return baseDir
   try {
-    const loadedHomeDirectory = await getHomeDirectory()
-    if (loadedHomeDirectory) {
-      homeDirectory.value = loadedHomeDirectory
-      return loadedHomeDirectory
+    const loaded = await getHomeDirectory()
+    if (loaded.path) {
+      homeDirectory.value = loaded.path
+      codexHomeDirectory.value = loaded.codexHome
+      return loaded.path
     }
   } catch {
     // Fallback handled by empty return.
@@ -2121,9 +2134,12 @@ function getProjectBaseDirectory(): string {
 
 async function loadHomeDirectory(): Promise<void> {
   try {
-    homeDirectory.value = await getHomeDirectory()
+    const loaded = await getHomeDirectory()
+    homeDirectory.value = loaded.path
+    codexHomeDirectory.value = loaded.codexHome
   } catch {
     homeDirectory.value = ''
+    codexHomeDirectory.value = ''
   }
 }
 
@@ -2451,11 +2467,22 @@ async function onFreeModeCustomKeyChange(): Promise<void> {
   }
 }
 
+async function onFreeModeCustomEndpointChange(): Promise<void> {
+  const raw = freeModeCustomEndpoint.value.trim()
+  try {
+    await setFreeModeCustomEndpoint(raw)
+    await refreshModelPreferences()
+  } catch {
+    // Silently fail
+  }
+}
+
 async function loadFreeModeStatus(): Promise<void> {
   try {
     const status = await getFreeModeStatus()
     freeModeEnabled.value = status.enabled
     freeModeCustomKey.value = status.hasCustomKey ? '••••••••' : ''
+    freeModeCustomEndpoint.value = status.customEndpoint ?? ''
   } catch {
     // Ignore — free mode status unknown
   }

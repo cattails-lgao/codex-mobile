@@ -2926,6 +2926,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               models: freeModels,
               currentModel: state.enabled ? state.model : null,
               hasCustomKey: Boolean(state.customKey),
+              customEndpoint: state.customEndpoint ?? '',
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -2971,6 +2972,25 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             setJson(res, 200, { ok: true, hasCustomKey: Boolean(apiKey) })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom key') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-endpoint') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const endpoint = typeof body?.endpoint === 'string' ? body.endpoint.trim() : ''
+            const current = readFreeModeState()
+            if (!current.enabled) {
+              setJson(res, 400, { error: 'Free mode is not enabled' })
+              return
+            }
+            const state: FreeModeState = { ...current, customEndpoint: endpoint || undefined }
+            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            appServer.dispose()
+            setJson(res, 200, { ok: true, customEndpoint: endpoint })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom endpoint') })
           }
           return
         }
@@ -3285,7 +3305,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/home-directory') {
-        setJson(res, 200, { data: { path: homedir() } })
+        setJson(res, 200, { data: { path: homedir(), codexHome: getCodexHomeDir() } })
         return
       }
 

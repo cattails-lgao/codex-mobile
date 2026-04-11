@@ -859,10 +859,13 @@ function mergeThreadGroups(
   incoming: UiProjectGroup[],
 ): UiProjectGroup[] {
   const previousGroupsByName = new Map(previous.map((group) => [group.projectName, group]))
+  const incomingGroupNames = new Set(incoming.map((g) => g.projectName))
+
   const mergedGroups: UiProjectGroup[] = incoming.map((incomingGroup) => {
     const previousGroup = previousGroupsByName.get(incomingGroup.projectName)
     const previousThreadsById = new Map(previousGroup?.threads.map((thread) => [thread.id, thread]) ?? [])
 
+    const incomingThreadIds = new Set(incomingGroup.threads.map((t) => t.id))
     const mergedThreads = incomingGroup.threads.map((incomingThread) => {
       const previousThread = previousThreadsById.get(incomingThread.id)
       if (previousThread && areThreadFieldsEqual(previousThread, incomingThread)) {
@@ -870,6 +873,11 @@ function mergeThreadGroups(
       }
       return incomingThread
     })
+    for (const [id, thread] of previousThreadsById) {
+      if (!incomingThreadIds.has(id)) {
+        mergedThreads.push(thread)
+      }
+    }
 
     if (
       previousGroup &&
@@ -884,6 +892,12 @@ function mergeThreadGroups(
       threads: mergedThreads,
     }
   })
+
+  for (const prevGroup of previous) {
+    if (!incomingGroupNames.has(prevGroup.projectName)) {
+      mergedGroups.push(prevGroup)
+    }
+  }
 
   return areGroupArraysEqual(previous, mergedGroups) ? previous : mergedGroups
 }

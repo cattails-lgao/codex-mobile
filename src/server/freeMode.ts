@@ -118,7 +118,7 @@ async function fetchFreeModelsFromOpenRouter(): Promise<string[]> {
     const sorted = ['openrouter/free', ...ids.filter((id) => id !== 'openrouter/free')]
     cachedFreeModels = sorted
     cacheTimestamp = Date.now()
-    return ids
+    return sorted
   } catch {
     return cachedFreeModels ?? FALLBACK_FREE_MODELS
   }
@@ -140,15 +140,17 @@ export interface FreeModeState {
   apiKey: string | null
   model: string
   customKey?: string
+  customEndpoint?: string
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState): string[] {
   if (!state.enabled || !state.apiKey) return []
+  const baseUrl = state.customEndpoint?.trim() || FREE_MODE_BASE_URL
   return [
     '-c', `model="${state.model}"`,
     '-c', `model_provider="${FREE_MODE_PROVIDER_ID}"`,
-    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.name="OpenRouter Free"`,
-    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.base_url="${FREE_MODE_BASE_URL}"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.name="Free Mode"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.base_url="${baseUrl}"`,
     '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.wire_api="responses"`,
     '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
   ]

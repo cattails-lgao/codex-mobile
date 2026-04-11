@@ -2039,10 +2039,10 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 
 ---
 
-### Free Mode (OpenRouter)
+### Free Mode
 
 #### Feature
-Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args.
+Toggle "Free mode" in settings to use free models without an API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free`. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args. Supports custom API key and custom endpoint for using any compatible provider.
 
 #### Prerequisites
 - Project built: `pnpm run build`.
@@ -2052,48 +2052,60 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 1. Start the server: `node dist-cli/index.js --no-tunnel --no-open --no-login`.
 2. Open the UI in a browser (default `http://localhost:5999`).
 3. Open the sidebar settings panel (gear icon).
-4. Toggle **Free mode (OpenRouter)** ON.
+4. Toggle **Free mode** ON.
 5. Verify the toggle turns on and model dropdown changes to `openrouter/free`.
 6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
 7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
 8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
 9. Open a new thread and send a message (e.g. "Say hello").
-10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
-11. Toggle **Free mode (OpenRouter)** OFF.
+10. Verify a response comes back from a free model.
+11. Toggle **Free mode** OFF.
 12. Verify the model dropdown reverts to GPT-5.3-codex (or default OpenAI model).
 13. Verify model dropdown shows normal OpenAI models (not free models).
 
 #### API Endpoints
 - `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode, restarts app-server.
-- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel, hasCustomKey }`.
+- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel, hasCustomKey, customEndpoint }`.
 - `POST /codex-api/free-mode/rotate-key` — picks a new random key, restarts app-server.
-- `POST /codex-api/free-mode/custom-key` — body `{ "apiKey": "sk-or-v1-..." }` — sets custom OpenRouter key (empty string reverts to community keys).
+- `POST /codex-api/free-mode/custom-key` — body `{ "apiKey": "sk-..." }` — sets custom API key (empty string reverts to community keys).
+- `POST /codex-api/free-mode/custom-endpoint` — body `{ "endpoint": "https://..." }` — sets custom API endpoint (empty string reverts to default).
 - `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
 
 #### Custom API Key
 1. Enable free mode.
-2. In settings, locate the `OpenRouter key` input below the free mode toggle.
-3. Enter a valid `sk-or-v1-...` key and press Enter or blur the field.
+2. In settings, locate the `API key` input below the free mode toggle.
+3. Enter a valid API key and press Enter or blur the field.
 4. Verify the key is saved (field shows `••••••••` placeholder after save).
 5. Clear the input and press Enter to revert to community keys.
 6. Verify model selector still works after key change.
+
+#### Custom Endpoint
+1. Enable free mode.
+2. In settings, locate the `Endpoint` input below the API key field.
+3. Enter a custom endpoint URL (e.g. `https://api.example.com/v1`) and press Enter or blur.
+4. Verify the endpoint is saved (value persists in field).
+5. Send a message — verify it goes to the custom endpoint.
+6. Clear the input and press Enter to revert to default endpoint.
 
 #### Thread Persistence on Toggle
 1. Open the app with free mode ON and existing threads in the sidebar.
 2. Toggle free mode OFF.
 3. Verify the same threads remain in the sidebar (not replaced by a different account's threads).
 4. Toggle free mode back ON and verify threads still remain.
+5. Refresh the page — verify threads persist across page refresh.
+6. Restart the server — verify threads persist after server restart.
 
 #### Known Limitations
 - `wire_api="chat"` is not supported by the codex CLI — must use `wire_api="responses"`.
-- Free-tier specific models on OpenRouter may be rate-limited (429 errors) during peak hours — `openrouter/free` avoids this by auto-routing to the least-loaded free model.
+- Free-tier models may be rate-limited (429 errors) during peak hours — `openrouter/free` avoids this by auto-routing to the least-loaded free model.
 
 #### Expected Results
-- Free mode ON: App-server is restarted with `-c` config args for openrouter-free provider. Model selector shows only free models.
+- Free mode ON: App-server is restarted with `-c` config args for the free provider. Model selector shows only free models.
 - Free mode OFF: App-server is restarted without free mode args. Model selector shows default models.
+- Threads persist across free mode toggles, page refreshes, and server restarts.
 - `~/.codex/config.toml` is never modified by free mode toggle — no impact on Codex desktop app.
 - 68 encrypted keys available, decrypted at runtime with XOR key `er54s4`.
-- Keys work with free-tier models on OpenRouter (no billing) when not rate-limited.
+- Custom endpoint overrides the default API base URL for the provider.
 
 #### Rollback/Cleanup
 - Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
