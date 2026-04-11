@@ -139,6 +139,7 @@ export interface FreeModeState {
   enabled: boolean
   apiKey: string | null
   model: string
+  customKey?: string
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState): string[] {

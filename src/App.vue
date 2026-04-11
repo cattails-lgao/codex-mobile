@@ -192,6 +192,16 @@
                 <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
               </button>
+              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Set your own OpenRouter API key (optional). Leave empty to use community keys.">
+                <span class="sidebar-settings-label">OpenRouter key</span>
+                <input
+                  v-model="freeModeCustomKey"
+                  class="sidebar-settings-input"
+                  type="password"
+                  placeholder="sk-or-v1-..."
+                  @change="onFreeModeCustomKeyChange"
+                />
+              </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -615,7 +625,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -792,6 +802,7 @@ const {
   isInterruptingTurn,
   isUpdatingSpeedMode,
   refreshAll,
+  refreshModelPreferences,
   refreshSkills,
   selectThread,
   ensureThreadMessagesLoaded,
@@ -891,6 +902,7 @@ const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, false))
 const freeModeEnabled = ref(false)
 const freeModeLoading = ref(false)
+const freeModeCustomKey = ref('')
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -2419,7 +2431,7 @@ async function toggleFreeMode(): Promise<void> {
     const next = !freeModeEnabled.value
     const result = await setFreeMode(next)
     freeModeEnabled.value = result.enabled
-    await refreshAll({ includeSelectedThreadMessages: false })
+    await refreshModelPreferences()
   } catch {
     // Silently fail — state unchanged
   } finally {
@@ -2427,10 +2439,23 @@ async function toggleFreeMode(): Promise<void> {
   }
 }
 
+async function onFreeModeCustomKeyChange(): Promise<void> {
+  const raw = freeModeCustomKey.value.trim()
+  if (raw === '••••••••') return
+  try {
+    await setFreeModeCustomKey(raw)
+    freeModeCustomKey.value = raw ? '••••••••' : ''
+    await refreshModelPreferences()
+  } catch {
+    // Silently fail
+  }
+}
+
 async function loadFreeModeStatus(): Promise<void> {
   try {
     const status = await getFreeModeStatus()
     freeModeEnabled.value = status.enabled
+    freeModeCustomKey.value = status.hasCustomKey ? '••••••••' : ''
   } catch {
     // Ignore — free mode status unknown
   }
@@ -3272,6 +3297,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-row--select {
   @apply cursor-default items-center gap-2;
+}
+
+.sidebar-settings-row--input {
+  @apply cursor-default items-center gap-2;
+}
+
+.sidebar-settings-input {
+  @apply text-sm px-2 py-1 border border-zinc-200 rounded bg-white text-zinc-700 w-36 text-right;
+}
+
+.sidebar-settings-input::placeholder {
+  @apply text-zinc-400;
 }
 
 .sidebar-settings-language-dropdown {

@@ -2065,9 +2065,24 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 
 #### API Endpoints
 - `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode, restarts app-server.
-- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel }`.
+- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel, hasCustomKey }`.
 - `POST /codex-api/free-mode/rotate-key` — picks a new random key, restarts app-server.
+- `POST /codex-api/free-mode/custom-key` — body `{ "apiKey": "sk-or-v1-..." }` — sets custom OpenRouter key (empty string reverts to community keys).
 - `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
+
+#### Custom API Key
+1. Enable free mode.
+2. In settings, locate the `OpenRouter key` input below the free mode toggle.
+3. Enter a valid `sk-or-v1-...` key and press Enter or blur the field.
+4. Verify the key is saved (field shows `••••••••` placeholder after save).
+5. Clear the input and press Enter to revert to community keys.
+6. Verify model selector still works after key change.
+
+#### Thread Persistence on Toggle
+1. Open the app with free mode ON and existing threads in the sidebar.
+2. Toggle free mode OFF.
+3. Verify the same threads remain in the sidebar (not replaced by a different account's threads).
+4. Toggle free mode back ON and verify threads still remain.
 
 #### Known Limitations
 - `wire_api="chat"` is not supported by the codex CLI — must use `wire_api="responses"`.

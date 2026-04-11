@@ -1,1 +1,0 @@
-when i switch to free mode, thread count do not match threads i had before, investigate

@@ -4414,6 +4414,7 @@ export function useDesktopState() {
 
     error,
     refreshAll,
+    refreshModelPreferences,
     refreshSkills,
     selectThread,
     loadMessages,

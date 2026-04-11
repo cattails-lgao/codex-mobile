@@ -1234,6 +1234,7 @@ export interface FreeModeStatus {
   keyCount: number
   models: string[]
   currentModel: string | null
+  hasCustomKey?: boolean
 }
 
 export async function getFreeModeStatus(): Promise<FreeModeStatus> {
@@ -1248,6 +1249,15 @@ export async function setFreeMode(enable: boolean): Promise<{ ok: boolean; enabl
     body: JSON.stringify({ enable }),
   })
   return await response.json() as { ok: boolean; enabled: boolean; model?: string; models?: string[] }
+}
+
+export async function setFreeModeCustomKey(apiKey: string): Promise<{ ok: boolean }> {
+  const response = await fetch('/codex-api/free-mode/custom-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey }),
+  })
+  return await response.json() as { ok: boolean }
 }
 
 export async function getAvailableModelIds(): Promise<string[]> {

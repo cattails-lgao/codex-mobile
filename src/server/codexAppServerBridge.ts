@@ -2925,6 +2925,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               keyCount: getFreeKeyCount(),
               models: freeModels,
               currentModel: state.enabled ? state.model : null,
+              hasCustomKey: Boolean(state.customKey),
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -2946,6 +2947,30 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             setJson(res, 200, { ok: true })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-key') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
+            const current = readFreeModeState()
+            if (!current.enabled) {
+              setJson(res, 400, { error: 'Free mode is not enabled' })
+              return
+            }
+            const nextKey = apiKey || getRandomFreeKey()
+            if (!nextKey) {
+              setJson(res, 500, { error: 'No key available' })
+              return
+            }
+            const state: FreeModeState = { ...current, apiKey: nextKey, customKey: apiKey || undefined }
+            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            appServer.dispose()
+            setJson(res, 200, { ok: true, hasCustomKey: Boolean(apiKey) })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom key') })
           }
           return
         }
