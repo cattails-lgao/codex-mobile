@@ -68,9 +68,19 @@
             @export-thread="onExportThread" />
         </div>
 
-        <div v-if="!isSidebarCollapsed" class="sidebar-settings-area">
+        <div
+          v-if="!isSidebarCollapsed"
+          ref="settingsAreaRef"
+          class="sidebar-settings-area"
+          @click="onSettingsAreaClick"
+        >
           <Transition name="settings-panel">
-            <div v-if="isSettingsOpen" class="sidebar-settings-panel">
+            <div
+              v-if="isSettingsOpen"
+              ref="settingsPanelRef"
+              class="sidebar-settings-panel"
+              @click.stop
+            >
               <div class="sidebar-settings-account-section">
                 <div class="sidebar-settings-account-header">
                   <div class="sidebar-settings-account-header-main">
@@ -195,10 +205,49 @@
                   @update:model-value="onDictationLanguageChange"
                 />
               </div>
-              <button class="sidebar-settings-row" type="button" aria-live="polite" @click="onConnectTelegramBot">
+              <button class="sidebar-settings-row" type="button" aria-live="polite" @click="isTelegramConfigOpen = !isTelegramConfigOpen">
                 <span class="sidebar-settings-label">Telegram</span>
                 <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
               </button>
+              <div v-if="isTelegramConfigOpen" class="sidebar-settings-telegram-panel">
+                <label class="sidebar-settings-field">
+                  <span class="sidebar-settings-field-label">Bot token</span>
+                  <input
+                    v-model="telegramBotTokenDraft"
+                    class="sidebar-settings-input"
+                    type="password"
+                    placeholder="123456:ABCDEF"
+                    autocomplete="off"
+                    spellcheck="false"
+                  >
+                </label>
+                <label class="sidebar-settings-field">
+                  <span class="sidebar-settings-field-label">Allowed Telegram user IDs</span>
+                  <textarea
+                    v-model="telegramAllowedUserIdsDraft"
+                    class="sidebar-settings-textarea"
+                    rows="3"
+                    placeholder="123456789&#10;987654321"
+                    spellcheck="false"
+                  />
+                </label>
+                <div class="sidebar-settings-field-help">
+                  Put one Telegram user ID per line or separate them with commas. Use `*` to allow all Telegram users. Unauthorized users will see their own ID in the rejection message so they can copy it here.
+                </div>
+                <div v-if="telegramConfigError" class="sidebar-settings-telegram-error">
+                  {{ telegramConfigError }}
+                </div>
+                <div class="sidebar-settings-telegram-actions">
+                  <button
+                    class="sidebar-settings-telegram-save"
+                    type="button"
+                    :disabled="isTelegramSaving"
+                    @click="saveTelegramConfig"
+                  >
+                    {{ isTelegramSaving ? 'Saving…' : 'Save Telegram config' }}
+                  </button>
+                </div>
+              </div>
               <div
                 v-if="showThreadContextBadge"
                 class="sidebar-settings-row sidebar-settings-context-row"
@@ -219,7 +268,12 @@
               </div>
             </div>
           </Transition>
-          <button class="sidebar-settings-button" type="button" @click="isSettingsOpen = !isSettingsOpen">
+          <button
+            ref="settingsButtonRef"
+            class="sidebar-settings-button"
+            type="button"
+            @click.stop="isSettingsOpen = !isSettingsOpen"
+          >
             <IconTablerSettings class="sidebar-settings-icon" />
             <span>Settings</span>
             <span class="sidebar-settings-button-version">
@@ -592,6 +646,7 @@ import {
   getAccounts,
   createLocalDirectory,
   getHomeDirectory,
+  getTelegramConfig,
   getProjectRootSuggestion,
   getTelegramStatus,
   getWorkspaceRootsState,
@@ -839,6 +894,9 @@ const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
 const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
+const settingsAreaRef = ref<HTMLElement | null>(null)
+const settingsPanelRef = ref<HTMLElement | null>(null)
+const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
@@ -878,6 +936,11 @@ const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, false))
+const isTelegramConfigOpen = ref(false)
+const telegramBotTokenDraft = ref('')
+const telegramAllowedUserIdsDraft = ref('')
+const telegramConfigError = ref('')
+const isTelegramSaving = ref(false)
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -897,6 +960,7 @@ const telegramStatus = ref<TelegramStatus>({
   mappedChats: 0,
   mappedThreads: 0,
   allowedUsers: 0,
+  allowAllUsers: false,
   lastError: '',
 })
 const mobileHiddenAtMs = ref<number | null>(null)
@@ -1165,12 +1229,16 @@ const contentStyle = computed(() => {
 const telegramStatusText = computed(() => {
   if (!telegramStatus.value.configured) return 'Not configured'
   const base = telegramStatus.value.active ? 'Online' : 'Configured (offline)'
-  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s), ${telegramStatus.value.allowedUsers} allowed user(s)`
+  const allowlist = telegramStatus.value.allowAllUsers
+    ? 'allow all users'
+    : `${telegramStatus.value.allowedUsers} allowed user(s)`
+  const mapped = `${telegramStatus.value.mappedChats} chat(s), ${telegramStatus.value.mappedThreads} thread(s), ${allowlist}`
   const error = telegramStatus.value.lastError ? `, error: ${telegramStatus.value.lastError}` : ''
   return `${base}, ${mapped}${error}`
 })
 
 onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('keydown', onWindowKeyDown)
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   window.addEventListener('pageshow', onWindowPageShow)
@@ -1181,6 +1249,7 @@ onMounted(() => {
   void loadHomeDirectory()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
+  void refreshTelegramConfig()
   void refreshTelegramStatus()
   if (showGithubTrendingProjects.value) {
     void loadTrendingProjects()
@@ -1188,6 +1257,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onWindowKeyDown)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
   window.removeEventListener('pageshow', onWindowPageShow)
@@ -1263,8 +1333,62 @@ async function refreshTelegramStatus(): Promise<void> {
       mappedChats: 0,
       mappedThreads: 0,
       allowedUsers: 0,
+      allowAllUsers: false,
       lastError: message,
     }
+  }
+}
+
+async function refreshTelegramConfig(): Promise<void> {
+  try {
+    const config = await getTelegramConfig()
+    telegramBotTokenDraft.value = config.botToken
+    telegramAllowedUserIdsDraft.value = config.allowedUserIds.map((value) => String(value)).join('\n')
+    telegramConfigError.value = ''
+  } catch (error) {
+    telegramConfigError.value = error instanceof Error ? error.message : 'Failed to load Telegram configuration'
+  }
+}
+
+function parseTelegramAllowedUserIdsInput(value: string): Array<number | '*'> {
+  const rawEntries = value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim().replace(/^(telegram|tg):/i, '').trim())
+    .filter(Boolean)
+  const allowAllUsers = rawEntries.includes('*')
+  const normalizedUserIds = Array.from(new Set(rawEntries
+    .filter((entry) => /^-?\d+$/.test(entry))
+    .map((entry) => Number.parseInt(entry, 10))))
+  return allowAllUsers ? ['*', ...normalizedUserIds] : normalizedUserIds
+}
+
+async function saveTelegramConfig(): Promise<void> {
+  const botToken = telegramBotTokenDraft.value.trim()
+  const allowedUserIds = parseTelegramAllowedUserIdsInput(telegramAllowedUserIdsDraft.value)
+  if (!botToken) {
+    telegramConfigError.value = 'Telegram bot token is required.'
+    return
+  }
+  if (allowedUserIds.length === 0) {
+    telegramConfigError.value = 'At least one allowed Telegram user ID or * is required.'
+    return
+  }
+
+  isTelegramSaving.value = true
+  telegramConfigError.value = ''
+  try {
+    await configureTelegramBot(botToken, allowedUserIds)
+    telegramAllowedUserIdsDraft.value = allowedUserIds.map((value) => String(value)).join('\n')
+    await Promise.all([
+      refreshTelegramConfig(),
+      refreshTelegramStatus(),
+    ])
+    window.alert('Telegram bot configured. Only allowlisted Telegram users can use the bridge.')
+  } catch (error) {
+    telegramConfigError.value = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
+    void refreshTelegramStatus()
+  } finally {
+    isTelegramSaving.value = false
   }
 }
 
@@ -1658,11 +1782,33 @@ function setSidebarCollapsed(nextValue: boolean): void {
 
 function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
+  if (event.key === 'Escape' && isSettingsOpen.value) {
+    isSettingsOpen.value = false
+    return
+  }
   if (!event.ctrlKey && !event.metaKey) return
   if (event.shiftKey || event.altKey) return
   if (event.key.toLowerCase() !== 'b') return
   event.preventDefault()
   setSidebarCollapsed(!isSidebarCollapsed.value)
+}
+
+function onDocumentPointerDown(event: PointerEvent): void {
+  if (!isSettingsOpen.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (settingsPanelRef.value?.contains(target)) return
+  if (settingsButtonRef.value?.contains(target)) return
+  isSettingsOpen.value = false
+}
+
+function onSettingsAreaClick(event: MouseEvent): void {
+  if (!isSettingsOpen.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (settingsPanelRef.value?.contains(target)) return
+  if (settingsButtonRef.value?.contains(target)) return
+  isSettingsOpen.value = false
 }
 
 function onDocumentVisibilityChange(): void {
@@ -1757,37 +1903,6 @@ function onGithubTipsScopeChange(nextValue: string): void {
   const scope = allowed.has(nextValue as GithubTipsScope) ? (nextValue as GithubTipsScope) : 'trending-daily'
   if (githubTipsScope.value === scope) return
   githubTipsScope.value = scope
-}
-
-function onConnectTelegramBot(): void {
-  if (typeof window === 'undefined') return
-  const botToken = window.prompt('Telegram bot token')
-  if (!botToken || !botToken.trim()) return
-  const allowedUserIdsInput = window.prompt('Allowed Telegram user IDs (comma-separated)')
-  if (!allowedUserIdsInput || !allowedUserIdsInput.trim()) {
-    window.alert('At least one Telegram user ID is required.')
-    return
-  }
-  const allowedUserIds = Array.from(new Set(allowedUserIdsInput
-    .split(',')
-    .map((value) => value.trim().replace(/^(telegram|tg):/i, '').trim())
-    .filter((value) => /^-?\d+$/.test(value))
-    .map((value) => Number.parseInt(value, 10))))
-  if (allowedUserIds.length === 0) {
-    window.alert('No valid Telegram user IDs were provided.')
-    return
-  }
-
-  void configureTelegramBot(botToken.trim(), allowedUserIds)
-    .then(() => {
-      window.alert('Telegram bot configured. Only allowlisted Telegram users can use the bridge.')
-      void refreshTelegramStatus()
-    })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Failed to connect Telegram bot'
-      window.alert(message)
-      void refreshTelegramStatus()
-    })
 }
 
 function onSelectTrendingProjectTip(project: GithubTrendingProject): void {
@@ -3241,7 +3356,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-panel {
-  @apply mb-1 rounded-lg border border-zinc-200 bg-white overflow-hidden;
+  @apply mb-1 max-h-[min(70vh,36rem)] overflow-y-auto rounded-lg border border-zinc-200 bg-white;
 }
 
 .sidebar-settings-row {
@@ -3266,6 +3381,47 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-row + .sidebar-settings-row {
   @apply border-t border-zinc-100;
+}
+
+.sidebar-settings-telegram-panel {
+  @apply border-t border-zinc-100 bg-zinc-50/70 px-3 py-3;
+}
+
+.sidebar-settings-field {
+  @apply flex flex-col gap-1.5;
+}
+
+.sidebar-settings-field + .sidebar-settings-field {
+  @apply mt-3;
+}
+
+.sidebar-settings-field-label {
+  @apply text-xs font-medium text-zinc-700;
+}
+
+.sidebar-settings-input,
+.sidebar-settings-textarea {
+  @apply w-full rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-800 outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200;
+}
+
+.sidebar-settings-textarea {
+  @apply min-h-20 resize-y font-mono text-xs;
+}
+
+.sidebar-settings-field-help {
+  @apply mt-2 text-xs leading-5 text-zinc-500;
+}
+
+.sidebar-settings-telegram-error {
+  @apply mt-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs text-rose-700;
+}
+
+.sidebar-settings-telegram-actions {
+  @apply mt-3 flex items-center justify-end;
+}
+
+.sidebar-settings-telegram-save {
+  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-section {

@@ -122,7 +122,13 @@ export type TelegramStatus = {
   mappedChats: number
   mappedThreads: number
   allowedUsers: number
+  allowAllUsers: boolean
   lastError: string
+}
+
+export type TelegramConfig = {
+  botToken: string
+  allowedUserIds: Array<number | '*'>
 }
 
 export type GithubTrendingProject = {
@@ -1737,7 +1743,7 @@ export async function searchThreads(
 
 export async function configureTelegramBot(
   botToken: string,
-  allowedUserIds: number[],
+  allowedUserIds: Array<number | '*'>,
 ): Promise<void> {
   const response = await fetch('/codex-api/telegram/configure-bot', {
     method: 'POST',
@@ -1751,6 +1757,38 @@ export async function configureTelegramBot(
   if (!response.ok) {
     const message = getErrorMessageFromPayload(payload, 'Failed to connect Telegram bot')
     throw new Error(message)
+  }
+}
+
+export async function getTelegramConfig(): Promise<TelegramConfig> {
+  const response = await fetch('/codex-api/telegram/config')
+  const payload = await response.json()
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to load Telegram configuration')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const rawAllowedUserIds = Array.isArray(data.allowedUserIds) ? data.allowedUserIds : []
+  const allowedUserIds: Array<number | '*'> = []
+  for (const value of rawAllowedUserIds) {
+    if (value === '*') {
+      allowedUserIds.push('*')
+      continue
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      allowedUserIds.push(Math.trunc(value))
+    }
+  }
+  return {
+    botToken: typeof data.botToken === 'string' ? data.botToken : '',
+    allowedUserIds,
   }
 }
 
@@ -1775,6 +1813,7 @@ export async function getTelegramStatus(): Promise<TelegramStatus> {
     mappedChats: typeof data.mappedChats === 'number' ? data.mappedChats : 0,
     mappedThreads: typeof data.mappedThreads === 'number' ? data.mappedThreads : 0,
     allowedUsers: typeof data.allowedUsers === 'number' ? data.allowedUsers : 0,
+    allowAllUsers: data.allowAllUsers === true,
     lastError: typeof data.lastError === 'string' ? data.lastError : '',
   }
 }

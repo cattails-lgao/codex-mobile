@@ -41,6 +41,7 @@ export type TelegramBridgeStatus = {
   mappedChats: number
   mappedThreads: number
   allowedUsers: number
+  allowAllUsers: boolean
   lastError: string
 }
 
@@ -69,9 +70,15 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
-function normalizeTelegramUserIds(values: unknown): number[] {
+type NormalizedTelegramAllowlist = {
+  allowAllUsers: boolean
+  allowedUserIds: number[]
+}
+
+function normalizeTelegramAllowlist(values: unknown): NormalizedTelegramAllowlist {
   const rawValues = Array.isArray(values) ? values : []
-  return Array.from(new Set(rawValues
+  const allowAllUsers = rawValues.some((value) => typeof value === 'string' && value.trim() === '*')
+  const allowedUserIds = Array.from(new Set(rawValues
     .map((value) => {
       if (typeof value === 'number' && Number.isFinite(value)) {
         return Math.trunc(value)
@@ -85,12 +92,14 @@ function normalizeTelegramUserIds(values: unknown): number[] {
       return Number.NaN
     })
     .filter((value) => Number.isFinite(value)))).slice(0, 100)
+  return { allowAllUsers, allowedUserIds }
 }
 
 export class TelegramThreadBridge {
   private token: string
   private readonly appServer: AppServerLike
   private readonly defaultCwd: string
+  private allowAllUsers = false
   private allowedUserIds = new Set<number>()
   private readonly threadIdByChatId = new Map<number, string>()
   private readonly chatIdsByThreadId = new Map<string, Set<number>>()
@@ -105,12 +114,12 @@ export class TelegramThreadBridge {
     this.appServer = appServer
     this.token = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? ''
     this.defaultCwd = process.env.TELEGRAM_DEFAULT_CWD?.trim() ?? process.cwd()
-    this.allowedUserIds = new Set(normalizeTelegramUserIds(
+    this.configureAllowedUserIds(
       (process.env.TELEGRAM_ALLOWED_USER_IDS ?? '')
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean),
-    ))
+    )
     this.onChatSeen = options.onChatSeen
   }
 
@@ -184,12 +193,15 @@ export class TelegramThreadBridge {
       mappedChats: this.threadIdByChatId.size,
       mappedThreads: this.chatIdsByThreadId.size,
       allowedUsers: this.allowedUserIds.size,
+      allowAllUsers: this.allowAllUsers,
       lastError: this.lastError,
     }
   }
 
   configureAllowedUserIds(allowedUserIds: unknown): void {
-    this.allowedUserIds = new Set(normalizeTelegramUserIds(allowedUserIds))
+    const normalized = normalizeTelegramAllowlist(allowedUserIds)
+    this.allowAllUsers = normalized.allowAllUsers
+    this.allowedUserIds = new Set(normalized.allowedUserIds)
   }
 
   connectThread(threadId: string, chatId: number, token?: string): void {
@@ -258,7 +270,7 @@ export class TelegramThreadBridge {
     const text = message?.text?.trim()
     if (typeof chatId !== 'number' || !text) return
     if (!this.isAllowedSender(senderId)) {
-      await this.sendTelegramMessage(chatId, this.unauthorizedMessage())
+      await this.sendTelegramMessage(chatId, this.unauthorizedMessage(senderId))
       return
     }
     this.markChatSeen(chatId)
@@ -301,10 +313,10 @@ export class TelegramThreadBridge {
     const senderId = callbackQuery.from?.id
     if (!this.isAllowedSender(senderId)) {
       if (callbackId) {
-        await this.answerCallbackQuery(callbackId, 'Unauthorized sender')
+        await this.answerCallbackQuery(callbackId, this.unauthorizedCallbackMessage(senderId))
       }
       if (typeof chatId === 'number') {
-        await this.sendTelegramMessage(chatId, this.unauthorizedMessage())
+        await this.sendTelegramMessage(chatId, this.unauthorizedMessage(senderId))
       }
       return
     }
@@ -334,13 +346,26 @@ export class TelegramThreadBridge {
   }
 
   private isAllowedSender(senderId: unknown): senderId is number {
+    if (this.allowAllUsers) {
+      return typeof senderId === 'number' && Number.isFinite(senderId)
+    }
     return typeof senderId === 'number'
       && Number.isFinite(senderId)
       && this.allowedUserIds.has(Math.trunc(senderId))
   }
 
-  private unauthorizedMessage(): string {
-    return 'Unauthorized sender. Add this Telegram user ID to the bot allowlist before using the bridge.'
+  private unauthorizedMessage(senderId: unknown): string {
+    const normalizedSenderId = typeof senderId === 'number' && Number.isFinite(senderId)
+      ? String(Math.trunc(senderId))
+      : 'unknown'
+    return `Unauthorized sender.\n\nYour Telegram user ID: ${normalizedSenderId}\nAdd this ID to the bot allowlist before using the bridge.`
+  }
+
+  private unauthorizedCallbackMessage(senderId: unknown): string {
+    if (typeof senderId === 'number' && Number.isFinite(senderId)) {
+      return `Unauthorized: ${String(Math.trunc(senderId))}`
+    }
+    return 'Unauthorized sender'
   }
 
   private async answerCallbackQuery(callbackQueryId: string, text: string): Promise<void> {

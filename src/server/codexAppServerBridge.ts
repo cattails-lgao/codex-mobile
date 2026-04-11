@@ -1623,7 +1623,7 @@ let sessionIndexThreadTitleCacheState: SessionIndexThreadTitleCacheState = {
 type TelegramBridgeConfigState = {
   botToken: string
   chatIds: number[]
-  allowedUserIds: number[]
+  allowedUserIds: Array<number | '*'>
 }
 
 function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
@@ -1885,7 +1885,8 @@ function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigStat
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
     .map((value) => Math.trunc(value)))).slice(0, 50)
   const rawAllowedUserIds = Array.isArray(record.allowedUserIds) ? record.allowedUserIds : []
-  const allowedUserIds = Array.from(new Set(rawAllowedUserIds
+  const allowAllUsers = rawAllowedUserIds.some((value) => typeof value === 'string' && value.trim() === '*')
+  const normalizedAllowedUserIds = Array.from(new Set(rawAllowedUserIds
     .map((value) => {
       if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
       if (typeof value === 'string') {
@@ -1897,6 +1898,9 @@ function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigStat
       return Number.NaN
     })
     .filter((value) => Number.isFinite(value)))).slice(0, 100)
+  const allowedUserIds: Array<number | '*'> = allowAllUsers
+    ? ['*' as const, ...normalizedAllowedUserIds]
+    : normalizedAllowedUserIds
   return { botToken, chatIds, allowedUserIds }
 }
 
@@ -3678,6 +3682,17 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           allowedUserIds: config.allowedUserIds,
         })
         setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/telegram/config') {
+        const config = await readTelegramBridgeConfig()
+        setJson(res, 200, {
+          data: {
+            botToken: config.botToken,
+            allowedUserIds: config.allowedUserIds,
+          },
+        })
         return
       }
 
