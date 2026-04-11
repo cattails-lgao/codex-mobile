@@ -1,2 +1,4 @@
-show only free models in free mode
-use openrouter/auto by default
+
+test again using curl api directly and if it works, then in browser
+
+

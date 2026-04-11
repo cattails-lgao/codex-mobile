@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -19,9 +19,11 @@ import {
   getRandomFreeKey,
   getFreeKeyCount,
   FREE_MODE_PROVIDER_ID,
-  FREE_MODE_BASE_URL,
   FREE_MODE_DEFAULT_MODEL,
   FREE_MODELS,
+  FREE_MODE_STATE_FILE,
+  getFreeModeConfigArgs,
+  type FreeModeState,
 } from './freeMode.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
@@ -2140,6 +2142,7 @@ class AppServerProcess {
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
 
+
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
     if (!codexCommand) {
@@ -2148,11 +2151,28 @@ class AppServerProcess {
     return codexCommand
   }
 
+  private buildAppServerArgs(): string[] {
+    const args = [
+      'app-server',
+      '-c', 'approval_policy="never"',
+      '-c', 'sandbox_mode="danger-full-access"',
+    ]
+    const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+    try {
+      const raw = readFileSync(statePath, 'utf8')
+      const state = JSON.parse(raw) as FreeModeState
+      args.push(...getFreeModeConfigArgs(state))
+    } catch {
+      // No free-mode state or invalid — use defaults
+    }
+    return args
+  }
+
   private start(): void {
     if (this.process) return
 
     this.stopping = false
-    const invocation = getSpawnInvocation(this.getCodexCommand(), this.appServerArgs)
+    const invocation = getSpawnInvocation(this.getCodexCommand(), this.buildAppServerArgs())
     const proc = spawn(invocation.command, invocation.args, { stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = proc
 
@@ -2851,39 +2871,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       const url = new URL(req.url, 'http://localhost')
       if (url.pathname.startsWith('/codex-api/free-mode')) {
-        const configPath = join(getCodexHomeDir(), 'config.toml')
+        const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
 
-        function setTopLevelKey(toml: string, key: string, value: string): string {
-          const firstSection = toml.search(/^\[/m)
-          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
-          const rest = firstSection >= 0 ? toml.slice(firstSection) : ''
-          const lineRegex = new RegExp(`^#?\\s*${key}\\s*=.*$`, 'gm')
-          const cleaned = topPart.replace(lineRegex, '').replace(/\n{3,}/g, '\n\n')
-          return `${key} = "${value}"\n${cleaned}${rest}`
-        }
-
-        function removeTopLevelKey(toml: string, key: string): string {
-          const firstSection = toml.search(/^\[/m)
-          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
-          const rest = firstSection >= 0 ? toml.slice(firstSection) : ''
-          const lineRegex = new RegExp(`^#?\\s*${key}\\s*=.*$`, 'gm')
-          const cleaned = topPart.replace(lineRegex, '').replace(/\n{3,}/g, '\n\n')
-          return `${cleaned}${rest}`
-        }
-
-        function readTopLevelKey(toml: string, key: string): string | null {
-          const firstSection = toml.search(/^\[/m)
-          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
-          const m = topPart.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, 'm'))
-          return m?.[1] ?? null
+        function readFreeModeState(): FreeModeState {
+          try {
+            return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+          } catch {
+            return { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
+          }
         }
 
         if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
           try {
             const body = await readJsonBody(req) as Record<string, unknown> | null
             const enable = Boolean(body?.enable)
-            let toml = ''
-            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
 
             if (enable) {
               const apiKey = getRandomFreeKey()
@@ -2892,18 +2893,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 return
               }
 
-              toml = setTopLevelKey(toml, 'model_provider', FREE_MODE_PROVIDER_ID)
-              toml = setTopLevelKey(toml, 'model', FREE_MODE_DEFAULT_MODEL)
-
-              const providerBlock = `[model_providers.${FREE_MODE_PROVIDER_ID}]\nname = "OpenRouter Free"\nbase_url = "${FREE_MODE_BASE_URL}"\nexperimental_bearer_token = "${apiKey}"\n`
-              const providerRegex = new RegExp(`\\[model_providers\\.${FREE_MODE_PROVIDER_ID}\\][\\s\\S]*?(?=\\n\\[|$)`)
-              if (providerRegex.test(toml)) {
-                toml = toml.replace(providerRegex, providerBlock)
-              } else {
-                toml = toml.trimEnd() + '\n\n' + providerBlock
-              }
-
-              await writeFile(configPath, toml, 'utf8')
+              const state: FreeModeState = { enabled: true, apiKey, model: FREE_MODE_DEFAULT_MODEL }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
               setJson(res, 200, {
                 ok: true,
                 enabled: true,
@@ -2912,9 +2904,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 models: FREE_MODELS,
               })
             } else {
-              toml = removeTopLevelKey(toml, 'model_provider')
-              toml = removeTopLevelKey(toml, 'model')
-              await writeFile(configPath, toml, 'utf8')
+              const state: FreeModeState = { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
               setJson(res, 200, { ok: true, enabled: false })
             }
           } catch (error) {
@@ -2925,16 +2917,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
           try {
-            let toml = ''
-            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
-            const provider = readTopLevelKey(toml, 'model_provider')
-            const model = readTopLevelKey(toml, 'model')
-            const isEnabled = provider === FREE_MODE_PROVIDER_ID
+            const state = readFreeModeState()
             setJson(res, 200, {
-              enabled: isEnabled,
+              enabled: state.enabled,
               keyCount: getFreeKeyCount(),
               models: FREE_MODELS,
-              currentModel: isEnabled ? model : null,
+              currentModel: state.enabled ? state.model : null,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -2949,11 +2937,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               setJson(res, 500, { error: 'No free keys available' })
               return
             }
-            let toml = ''
-            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
-            const providerRegex = new RegExp(`(\\[model_providers\\.${FREE_MODE_PROVIDER_ID}\\][\\s\\S]*?experimental_bearer_token\\s*=\\s*)"[^"]*"`)
-            toml = toml.replace(providerRegex, `$1"${apiKey}"`)
-            await writeFile(configPath, toml, 'utf8')
+            const current = readFreeModeState()
+            const state: FreeModeState = { ...current, apiKey }
+            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
@@ -3249,6 +3236,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
+        try {
+          const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
+          if (fmState.enabled) {
+            setJson(res, 200, { data: FREE_MODELS, exclusive: true })
+            return
+          }
+        } catch {
+          // No free-mode state — proceed normally
+        }
         const data = await readProviderBackedModelIds(appServer)
         setJson(res, 200, data)
         return

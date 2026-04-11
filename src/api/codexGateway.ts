@@ -1263,14 +1263,17 @@ export async function getAvailableModelIds(): Promise<string[]> {
     const response = await fetch('/codex-api/provider-models', {
       signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
     })
-    let providerPayload: ProviderModelsResponse | null = null
+    let providerPayload: (ProviderModelsResponse & { exclusive?: boolean }) | null = null
     try {
-      providerPayload = await response.json() as ProviderModelsResponse
+      providerPayload = await response.json() as ProviderModelsResponse & { exclusive?: boolean }
     } catch {
       providerPayload = null
     }
 
     if (response.ok && Array.isArray(providerPayload?.data)) {
+      if (providerPayload.exclusive) {
+        return providerPayload.data.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+      }
       for (const candidate of providerPayload.data) {
         if (typeof candidate !== 'string') continue
         const normalized = candidate.trim()

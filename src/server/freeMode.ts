@@ -95,6 +95,7 @@ export const FREE_MODE_PROVIDER_ID = 'openrouter-free'
 export const FREE_MODE_BASE_URL = 'https://openrouter.ai/api/v1'
 
 export const FREE_MODELS = [
+  'openrouter/auto',
   'google/gemma-4-31b-it:free',
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-3-27b-it:free',
@@ -107,4 +108,24 @@ export const FREE_MODELS = [
   'openai/gpt-oss-20b:free',
 ]
 
-export const FREE_MODE_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+export const FREE_MODE_DEFAULT_MODEL = 'openrouter/auto'
+
+export const FREE_MODE_STATE_FILE = 'webui-free-mode.json'
+
+export interface FreeModeState {
+  enabled: boolean
+  apiKey: string | null
+  model: string
+}
+
+export function getFreeModeConfigArgs(state: FreeModeState): string[] {
+  if (!state.enabled || !state.apiKey) return []
+  return [
+    '-c', `model="${state.model}"`,
+    '-c', `model_provider="${FREE_MODE_PROVIDER_ID}"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.name="OpenRouter Free"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.base_url="${FREE_MODE_BASE_URL}"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.wire_api="responses"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
+  ]
+}

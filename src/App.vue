@@ -2419,6 +2419,7 @@ async function toggleFreeMode(): Promise<void> {
     const next = !freeModeEnabled.value
     const result = await setFreeMode(next)
     freeModeEnabled.value = result.enabled
+    await refreshAll({ includeSelectedThreadMessages: false })
   } catch {
     // Silently fail — state unchanged
   } finally {
