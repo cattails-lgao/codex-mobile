@@ -2920,11 +2920,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           try {
             const state = readFreeModeState()
             const freeModels = await getFreeModels()
+            const maskedKey = state.apiKey && state.customKey
+              ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
+              : null
             setJson(res, 200, {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
               models: freeModels,
               currentModel: state.enabled ? state.model : null,
+              customKey: Boolean(state.customKey),
+              maskedKey,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -2940,12 +2945,36 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               return
             }
             const current = readFreeModeState()
-            const state: FreeModeState = { ...current, apiKey }
+            const state: FreeModeState = { ...current, apiKey, customKey: false }
             await writeFile(statePath, JSON.stringify(state), 'utf8')
             appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-key') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const key = typeof body?.key === 'string' ? body.key.trim() : ''
+            const current = readFreeModeState()
+
+            if (key.length > 0) {
+              const state: FreeModeState = { ...current, enabled: true, apiKey: key, customKey: true }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              setJson(res, 200, { ok: true, customKey: true })
+            } else {
+              const communityKey = getRandomFreeKey()
+              const state: FreeModeState = { ...current, apiKey: communityKey, customKey: false }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              setJson(res, 200, { ok: true, customKey: false })
+            }
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom key') })
           }
           return
         }

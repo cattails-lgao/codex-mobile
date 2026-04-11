@@ -2065,9 +2065,20 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 
 #### API Endpoints
 - `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode, restarts app-server.
-- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel }`.
+- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel, customKey, maskedKey }`.
 - `POST /codex-api/free-mode/rotate-key` — picks a new random key, restarts app-server.
+- `POST /codex-api/free-mode/custom-key` — body `{ "key": "sk-or-v1-..." }` — sets a custom OpenRouter API key. Send empty string to revert to community keys.
 - `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
+
+#### Custom API Key
+- When free mode is ON, an "OpenRouter API key" input appears below the toggle in settings.
+- Enter your own `sk-or-v1-...` key and click "Set" (or press Enter) to use your own OpenRouter key.
+- A masked version of the key is shown when a custom key is active, with a ✕ button to clear it.
+- Clearing the custom key reverts to community keys.
+
+#### Thread Persistence
+- Threads are stored in `~/.codex/` by the codex app-server, regardless of free mode state.
+- Toggling free mode ON/OFF preserves all threads — no data is lost.
 
 #### Known Limitations
 - `wire_api="chat"` is not supported by the codex CLI — must use `wire_api="responses"`.
@@ -2079,6 +2090,7 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 - `~/.codex/config.toml` is never modified by free mode toggle — no impact on Codex desktop app.
 - 68 encrypted keys available, decrypted at runtime with XOR key `er54s4`.
 - Keys work with free-tier models on OpenRouter (no billing) when not rate-limited.
+- Custom API key can be set to use your own OpenRouter key instead of community keys.
 
 #### Rollback/Cleanup
 - Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
