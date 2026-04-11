@@ -2042,7 +2042,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 ### Free Mode (OpenRouter)
 
 #### Feature
-Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request.
+Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `google/gemma-4-26b-a4b-it:free`. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args. Note: `openrouter/auto` is NOT included because it requires paid credits via the Responses API.
 
 #### Prerequisites
 - Project built: `pnpm run build`.
@@ -2053,22 +2053,34 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 2. Open the UI in a browser (default `http://localhost:5999`).
 3. Open the sidebar settings panel (gear icon).
 4. Toggle **Free mode (OpenRouter)** ON.
-5. Verify the toggle turns on (no error).
-6. Open a new thread and send a message (e.g. "Say hello").
-7. Verify a response comes back from a free OpenRouter model (e.g. `google/gemma-4-31b-it:free`).
-8. Toggle **Free mode (OpenRouter)** OFF.
-9. Verify the provider is reset (next message should use default Codex/OpenAI provider).
+5. Verify the toggle turns on and model dropdown changes to `google/gemma-4-26b-a4b-it:free`.
+6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
+7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
+8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"google/gemma-4-26b-a4b-it:free"}`.
+9. Open a new thread and send a message (e.g. "Say hello").
+10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
+11. Toggle **Free mode (OpenRouter)** OFF.
+12. Verify the model dropdown reverts to GPT-5.3-codex (or default OpenAI model).
+13. Verify model dropdown shows normal OpenAI models (not free models).
 
 #### API Endpoints
-- `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode.
+- `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode, restarts app-server.
 - `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel }`.
-- `POST /codex-api/free-mode/rotate-key` — picks a new random key without disabling free mode.
+- `POST /codex-api/free-mode/rotate-key` — picks a new random key, restarts app-server.
+- `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
+
+#### Known Limitations
+- `openrouter/auto` requires paid credits via the Responses API (402 error with free keys).
+- `wire_api="chat"` is no longer supported by the codex CLI — must use `wire_api="responses"`.
+- Free-tier models on OpenRouter are frequently rate-limited (429 errors) during peak hours.
 
 #### Expected Results
-- Free mode ON: Codex config is updated with `model_provider = "openrouter-free"`, `model = "google/gemma-4-31b-it:free"`, and a random OpenRouter bearer token.
-- Free mode OFF: `model_provider` and `model` are reset to null (Codex defaults).
+- Free mode ON: App-server is restarted with `-c` config args for openrouter-free provider. Model selector shows only free models.
+- Free mode OFF: App-server is restarted without free mode args. Model selector shows default models.
+- `~/.codex/config.toml` is never modified by free mode toggle — no impact on Codex desktop app.
 - 68 encrypted keys available, decrypted at runtime with XOR key `er54s4`.
-- Keys work with free-tier models on OpenRouter (no billing).
+- Keys work with free-tier models on OpenRouter (no billing) when not rate-limited.
 
 #### Rollback/Cleanup
 - Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
+- Delete `~/.codex/webui-free-mode.json` to clear free mode state.
