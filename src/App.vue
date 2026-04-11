@@ -185,33 +185,13 @@
               <button
                 class="sidebar-settings-row"
                 type="button"
-                title="Use free models via a community API."
+                title="Use free OpenRouter models (no API key needed). Rotates through community keys."
                 :disabled="freeModeLoading"
                 @click="toggleFreeMode"
               >
-                <span class="sidebar-settings-label">Free mode</span>
+                <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
               </button>
-              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Set your own API key (optional). Leave empty to use community keys.">
-                <span class="sidebar-settings-label">API key</span>
-                <input
-                  v-model="freeModeCustomKey"
-                  class="sidebar-settings-input"
-                  type="password"
-                  placeholder="sk-..."
-                  @change="onFreeModeCustomKeyChange"
-                />
-              </div>
-              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input" title="Custom API endpoint (optional). Leave empty for default.">
-                <span class="sidebar-settings-label">Endpoint</span>
-                <input
-                  v-model="freeModeCustomEndpoint"
-                  class="sidebar-settings-input"
-                  type="text"
-                  placeholder="https://..."
-                  @change="onFreeModeCustomEndpointChange"
-                />
-              </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -635,7 +615,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setFreeModeCustomEndpoint } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -812,7 +792,6 @@ const {
   isInterruptingTurn,
   isUpdatingSpeedMode,
   refreshAll,
-  refreshModelPreferences,
   refreshSkills,
   selectThread,
   ensureThreadMessagesLoaded,
@@ -875,7 +854,6 @@ const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
-const codexHomeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
@@ -913,8 +891,6 @@ const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, false))
 const freeModeEnabled = ref(false)
 const freeModeLoading = ref(false)
-const freeModeCustomKey = ref('')
-const freeModeCustomEndpoint = ref('')
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -2097,11 +2073,10 @@ async function resolveProjectBaseDirectory(): Promise<string> {
   const baseDir = getProjectBaseDirectory()
   if (baseDir) return baseDir
   try {
-    const loaded = await getHomeDirectory()
-    if (loaded.path) {
-      homeDirectory.value = loaded.path
-      codexHomeDirectory.value = loaded.codexHome
-      return loaded.path
+    const loadedHomeDirectory = await getHomeDirectory()
+    if (loadedHomeDirectory) {
+      homeDirectory.value = loadedHomeDirectory
+      return loadedHomeDirectory
     }
   } catch {
     // Fallback handled by empty return.
@@ -2134,12 +2109,9 @@ function getProjectBaseDirectory(): string {
 
 async function loadHomeDirectory(): Promise<void> {
   try {
-    const loaded = await getHomeDirectory()
-    homeDirectory.value = loaded.path
-    codexHomeDirectory.value = loaded.codexHome
+    homeDirectory.value = await getHomeDirectory()
   } catch {
     homeDirectory.value = ''
-    codexHomeDirectory.value = ''
   }
 }
 
@@ -2447,7 +2419,7 @@ async function toggleFreeMode(): Promise<void> {
     const next = !freeModeEnabled.value
     const result = await setFreeMode(next)
     freeModeEnabled.value = result.enabled
-    await refreshModelPreferences()
+    await refreshAll({ includeSelectedThreadMessages: false })
   } catch {
     // Silently fail — state unchanged
   } finally {
@@ -2455,34 +2427,10 @@ async function toggleFreeMode(): Promise<void> {
   }
 }
 
-async function onFreeModeCustomKeyChange(): Promise<void> {
-  const raw = freeModeCustomKey.value.trim()
-  if (raw === '••••••••') return
-  try {
-    await setFreeModeCustomKey(raw)
-    freeModeCustomKey.value = raw ? '••••••••' : ''
-    await refreshModelPreferences()
-  } catch {
-    // Silently fail
-  }
-}
-
-async function onFreeModeCustomEndpointChange(): Promise<void> {
-  const raw = freeModeCustomEndpoint.value.trim()
-  try {
-    await setFreeModeCustomEndpoint(raw)
-    await refreshModelPreferences()
-  } catch {
-    // Silently fail
-  }
-}
-
 async function loadFreeModeStatus(): Promise<void> {
   try {
     const status = await getFreeModeStatus()
     freeModeEnabled.value = status.enabled
-    freeModeCustomKey.value = status.hasCustomKey ? '••••••••' : ''
-    freeModeCustomEndpoint.value = status.customEndpoint ?? ''
   } catch {
     // Ignore — free mode status unknown
   }
@@ -3324,18 +3272,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-row--select {
   @apply cursor-default items-center gap-2;
-}
-
-.sidebar-settings-row--input {
-  @apply cursor-default items-center gap-2;
-}
-
-.sidebar-settings-input {
-  @apply text-sm px-2 py-1 border border-zinc-200 rounded bg-white text-zinc-700 w-36 text-right;
-}
-
-.sidebar-settings-input::placeholder {
-  @apply text-zinc-400;
 }
 
 .sidebar-settings-language-dropdown {

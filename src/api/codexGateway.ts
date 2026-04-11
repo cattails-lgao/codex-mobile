@@ -1234,8 +1234,6 @@ export interface FreeModeStatus {
   keyCount: number
   models: string[]
   currentModel: string | null
-  hasCustomKey?: boolean
-  customEndpoint?: string
 }
 
 export async function getFreeModeStatus(): Promise<FreeModeStatus> {
@@ -1250,24 +1248,6 @@ export async function setFreeMode(enable: boolean): Promise<{ ok: boolean; enabl
     body: JSON.stringify({ enable }),
   })
   return await response.json() as { ok: boolean; enabled: boolean; model?: string; models?: string[] }
-}
-
-export async function setFreeModeCustomKey(apiKey: string): Promise<{ ok: boolean }> {
-  const response = await fetch('/codex-api/free-mode/custom-key', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apiKey }),
-  })
-  return await response.json() as { ok: boolean }
-}
-
-export async function setFreeModeCustomEndpoint(endpoint: string): Promise<{ ok: boolean }> {
-  const response = await fetch('/codex-api/free-mode/custom-endpoint', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint }),
-  })
-  return await response.json() as { ok: boolean }
 }
 
 export async function getAvailableModelIds(): Promise<string[]> {
@@ -1584,7 +1564,7 @@ export async function startThreadReview(
   })
 }
 
-export async function getHomeDirectory(): Promise<{ path: string; codexHome: string }> {
+export async function getHomeDirectory(): Promise<string> {
   const response = await fetch('/codex-api/home-directory')
   const payload = (await response.json()) as unknown
   if (!response.ok) {
@@ -1598,10 +1578,7 @@ export async function getHomeDirectory(): Promise<{ path: string; codexHome: str
     record.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
       : {}
-  return {
-    path: typeof data.path === 'string' ? data.path.trim() : '',
-    codexHome: typeof data.codexHome === 'string' ? data.codexHome.trim() : '',
-  }
+  return typeof data.path === 'string' ? data.path.trim() : ''
 }
 
 export async function listLocalDirectories(path: string, options?: { showHidden?: boolean }): Promise<LocalDirectoryListing> {

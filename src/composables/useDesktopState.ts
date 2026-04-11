@@ -67,7 +67,6 @@ const SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY = 'codex-web-local.selected-model-by
 const LEGACY_SELECTED_MODEL_STORAGE_KEY = 'codex-web-local.selected-model-id.v1'
 const PROJECT_ORDER_STORAGE_KEY = 'codex-web-local.project-order.v1'
 const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v1'
-const THREAD_GROUPS_CACHE_KEY = 'codex-web-local.thread-groups-cache.v1'
 const COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode-by-context.v1'
 const LEGACY_COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode.v1'
 const NEW_THREAD_COLLABORATION_MODE_CONTEXT = '__new-thread__'
@@ -467,37 +466,6 @@ function saveProjectDisplayNames(displayNames: Record<string, string>): void {
   window.localStorage.setItem(PROJECT_DISPLAY_NAME_STORAGE_KEY, JSON.stringify(displayNames))
 }
 
-function loadCachedThreadGroups(): UiProjectGroup[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(THREAD_GROUPS_CACHE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed as UiProjectGroup[]
-  } catch {
-    return []
-  }
-}
-
-function saveCachedThreadGroups(groups: UiProjectGroup[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    const minimal = groups.map((g) => ({
-      projectName: g.projectName,
-      threads: g.threads.map((t) => ({
-        id: t.id, title: t.title, projectName: t.projectName,
-        cwd: t.cwd, hasWorktree: t.hasWorktree,
-        createdAtIso: t.createdAtIso, updatedAtIso: t.updatedAtIso,
-        preview: t.preview, unread: false, inProgress: false,
-      })),
-    }))
-    window.localStorage.setItem(THREAD_GROUPS_CACHE_KEY, JSON.stringify(minimal))
-  } catch {
-    // Storage quota exceeded or other error
-  }
-}
-
 function mergeProjectOrder(previousOrder: string[], incomingGroups: UiProjectGroup[]): string[] {
   const nextOrder: string[] = []
 
@@ -891,13 +859,10 @@ function mergeThreadGroups(
   incoming: UiProjectGroup[],
 ): UiProjectGroup[] {
   const previousGroupsByName = new Map(previous.map((group) => [group.projectName, group]))
-  const incomingGroupNames = new Set(incoming.map((g) => g.projectName))
-
   const mergedGroups: UiProjectGroup[] = incoming.map((incomingGroup) => {
     const previousGroup = previousGroupsByName.get(incomingGroup.projectName)
     const previousThreadsById = new Map(previousGroup?.threads.map((thread) => [thread.id, thread]) ?? [])
 
-    const incomingThreadIds = new Set(incomingGroup.threads.map((t) => t.id))
     const mergedThreads = incomingGroup.threads.map((incomingThread) => {
       const previousThread = previousThreadsById.get(incomingThread.id)
       if (previousThread && areThreadFieldsEqual(previousThread, incomingThread)) {
@@ -905,11 +870,6 @@ function mergeThreadGroups(
       }
       return incomingThread
     })
-    for (const [id, thread] of previousThreadsById) {
-      if (!incomingThreadIds.has(id)) {
-        mergedThreads.push(thread)
-      }
-    }
 
     if (
       previousGroup &&
@@ -924,12 +884,6 @@ function mergeThreadGroups(
       threads: mergedThreads,
     }
   })
-
-  for (const prevGroup of previous) {
-    if (!incomingGroupNames.has(prevGroup.projectName)) {
-      mergedGroups.push(prevGroup)
-    }
-  }
 
   return areGroupArraysEqual(previous, mergedGroups) ? previous : mergedGroups
 }
@@ -997,7 +951,7 @@ function toForkedThreadTitle(title: string): string {
 
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
-  const sourceGroups = ref<UiProjectGroup[]>(loadCachedThreadGroups())
+  const sourceGroups = ref<UiProjectGroup[]>([])
   const selectedThreadId = ref(loadSelectedThreadId())
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const livePlanMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
@@ -3318,7 +3272,6 @@ export function useDesktopState() {
         inProgressById.value,
       )
       sourceGroups.value = mergeThreadGroups(sourceGroups.value, mergedWithInProgress)
-      saveCachedThreadGroups(sourceGroups.value)
       inProgressById.value = pruneThreadStateMap(
         inProgressById.value,
         new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
@@ -4461,7 +4414,6 @@ export function useDesktopState() {
 
     error,
     refreshAll,
-    refreshModelPreferences,
     refreshSkills,
     selectThread,
     loadMessages,
