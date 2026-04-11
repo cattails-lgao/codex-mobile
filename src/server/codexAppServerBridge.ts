@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -15,6 +15,16 @@ import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
+import {
+  getRandomFreeKey,
+  getFreeKeyCount,
+  FREE_MODE_PROVIDER_ID,
+  FREE_MODE_DEFAULT_MODEL,
+  getFreeModels,
+  FREE_MODE_STATE_FILE,
+  getFreeModeConfigArgs,
+  type FreeModeState,
+} from './freeMode.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
   resolveCodexCommand,
@@ -2132,6 +2142,7 @@ class AppServerProcess {
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
 
+
   private getCodexCommand(): string {
     const codexCommand = resolveCodexCommand()
     if (!codexCommand) {
@@ -2140,11 +2151,28 @@ class AppServerProcess {
     return codexCommand
   }
 
+  private buildAppServerArgs(): string[] {
+    const args = [
+      'app-server',
+      '-c', 'approval_policy="never"',
+      '-c', 'sandbox_mode="danger-full-access"',
+    ]
+    const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+    try {
+      const raw = readFileSync(statePath, 'utf8')
+      const state = JSON.parse(raw) as FreeModeState
+      args.push(...getFreeModeConfigArgs(state))
+    } catch {
+      // No free-mode state or invalid — use defaults
+    }
+    return args
+  }
+
   private start(): void {
     if (this.process) return
 
     this.stopping = false
-    const invocation = getSpawnInvocation(this.getCodexCommand(), this.appServerArgs)
+    const invocation = getSpawnInvocation(this.getCodexCommand(), this.buildAppServerArgs())
     const proc = spawn(invocation.command, invocation.args, { stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = proc
 
@@ -2748,6 +2776,7 @@ async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<Thr
       archived: false,
       limit: 100,
       sortKey: 'updated_at',
+      modelProviders: [],
       cursor,
     }))
     const data = Array.isArray(response?.data) ? response.data : []
@@ -2842,6 +2871,118 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       const url = new URL(req.url, 'http://localhost')
+      if (url.pathname.startsWith('/codex-api/free-mode')) {
+        const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+
+        function readFreeModeState(): FreeModeState {
+          try {
+            return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+          } catch {
+            return { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
+          }
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const enable = Boolean(body?.enable)
+
+            if (enable) {
+              const apiKey = getRandomFreeKey()
+              if (!apiKey) {
+                setJson(res, 500, { error: 'No free keys available' })
+                return
+              }
+
+              const state: FreeModeState = { enabled: true, apiKey, model: FREE_MODE_DEFAULT_MODEL }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              const freeModels = await getFreeModels()
+              setJson(res, 200, {
+                ok: true,
+                enabled: true,
+                model: FREE_MODE_DEFAULT_MODEL,
+                keyCount: getFreeKeyCount(),
+                models: freeModels,
+              })
+            } else {
+              const state: FreeModeState = { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              setJson(res, 200, { ok: true, enabled: false })
+            }
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to toggle free mode') })
+          }
+          return
+        }
+
+        if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
+          try {
+            const state = readFreeModeState()
+            const freeModels = await getFreeModels()
+            const maskedKey = state.apiKey && state.customKey
+              ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
+              : null
+            setJson(res, 200, {
+              enabled: state.enabled,
+              keyCount: getFreeKeyCount(),
+              models: freeModels,
+              currentModel: state.enabled ? state.model : null,
+              customKey: Boolean(state.customKey),
+              maskedKey,
+            })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/rotate-key') {
+          try {
+            const apiKey = getRandomFreeKey()
+            if (!apiKey) {
+              setJson(res, 500, { error: 'No free keys available' })
+              return
+            }
+            const current = readFreeModeState()
+            const state: FreeModeState = { ...current, apiKey, customKey: false }
+            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            appServer.dispose()
+            setJson(res, 200, { ok: true })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-key') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const key = typeof body?.key === 'string' ? body.key.trim() : ''
+            const current = readFreeModeState()
+
+            if (key.length > 0) {
+              const state: FreeModeState = { ...current, enabled: true, apiKey: key, customKey: true }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              setJson(res, 200, { ok: true, customKey: true })
+            } else {
+              const communityKey = getRandomFreeKey()
+              const state: FreeModeState = { ...current, apiKey: communityKey, customKey: false }
+              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              appServer.dispose()
+              setJson(res, 200, { ok: true, customKey: false })
+            }
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom key') })
+          }
+          return
+        }
+
+        next()
+        return
+      }
 
       if (await handleAccountRoutes(req, res, url, { appServer })) {
         return
@@ -3127,6 +3268,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
+        try {
+          const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
+          if (fmState.enabled) {
+            const freeModels = await getFreeModels()
+            setJson(res, 200, { data: freeModels, exclusive: true })
+            return
+          }
+        } catch {
+          // No free-mode state — proceed normally
+        }
         const data = await readProviderBackedModelIds(appServer)
         setJson(res, 200, data)
         return

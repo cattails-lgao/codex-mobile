@@ -182,6 +182,46 @@
                 <span class="sidebar-settings-label">GitHub trending projects</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': showGithubTrendingProjects }" />
               </button>
+              <button
+                class="sidebar-settings-row"
+                type="button"
+                title="Use free OpenRouter models (no API key needed). Rotates through community keys."
+                :disabled="freeModeLoading"
+                @click="toggleFreeMode"
+              >
+                <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
+                <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
+              </button>
+              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input">
+                <span class="sidebar-settings-label">OpenRouter API key</span>
+                <div class="sidebar-settings-key-group">
+                  <template v-if="freeModeHasCustomKey && !freeModeCustomKey">
+                    <span class="sidebar-settings-key-masked">{{ freeModeCustomKeyMasked }}</span>
+                    <button
+                      class="sidebar-settings-key-clear"
+                      type="button"
+                      :disabled="freeModeCustomKeySaving"
+                      title="Remove custom key, use community keys"
+                      @click="clearFreeModeCustomKey"
+                    >✕</button>
+                  </template>
+                  <template v-else>
+                    <input
+                      v-model="freeModeCustomKey"
+                      class="sidebar-settings-key-input"
+                      type="password"
+                      placeholder="sk-or-v1-... (optional)"
+                      @keydown.enter="saveFreeModeCustomKey"
+                    />
+                    <button
+                      class="sidebar-settings-key-save"
+                      type="button"
+                      :disabled="freeModeCustomKeySaving || !freeModeCustomKey.trim()"
+                      @click="saveFreeModeCustomKey"
+                    >{{ freeModeCustomKeySaving ? '...' : 'Set' }}</button>
+                  </template>
+                </div>
+              </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
                 <span class="sidebar-settings-label">Dictation language</span>
                 <ComposerDropdown
@@ -605,6 +645,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -878,6 +919,12 @@ const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 
 const showGithubTrendingProjects = ref(loadBoolPref(GITHUB_TRENDING_PROJECTS_KEY, false))
+const freeModeEnabled = ref(false)
+const freeModeLoading = ref(false)
+const freeModeCustomKey = ref('')
+const freeModeHasCustomKey = ref(false)
+const freeModeCustomKeyMasked = ref<string | null>(null)
+const freeModeCustomKeySaving = ref(false)
 const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
@@ -1181,6 +1228,7 @@ onMounted(() => {
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
   void refreshTelegramStatus()
+  void loadFreeModeStatus()
   if (showGithubTrendingProjects.value) {
     void loadTrendingProjects()
   }
@@ -2398,6 +2446,63 @@ function toggleGithubTrendingProjects(): void {
   window.localStorage.setItem(GITHUB_TRENDING_PROJECTS_KEY, showGithubTrendingProjects.value ? '1' : '0')
 }
 
+async function toggleFreeMode(): Promise<void> {
+  if (freeModeLoading.value) return
+  freeModeLoading.value = true
+  try {
+    const next = !freeModeEnabled.value
+    const result = await setFreeMode(next)
+    freeModeEnabled.value = result.enabled
+    await refreshAll({ includeSelectedThreadMessages: false })
+  } catch {
+    // Silently fail — state unchanged
+  } finally {
+    freeModeLoading.value = false
+  }
+}
+
+async function saveFreeModeCustomKey(): Promise<void> {
+  if (freeModeCustomKeySaving.value) return
+  freeModeCustomKeySaving.value = true
+  try {
+    const key = freeModeCustomKey.value.trim()
+    await setFreeModeCustomKey(key)
+    freeModeCustomKey.value = ''
+    await loadFreeModeStatus()
+    await refreshAll({ includeSelectedThreadMessages: false })
+  } catch {
+    // Silently fail
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function clearFreeModeCustomKey(): Promise<void> {
+  if (freeModeCustomKeySaving.value) return
+  freeModeCustomKeySaving.value = true
+  try {
+    await setFreeModeCustomKey('')
+    freeModeCustomKey.value = ''
+    await loadFreeModeStatus()
+    await refreshAll({ includeSelectedThreadMessages: false })
+  } catch {
+    // Silently fail
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function loadFreeModeStatus(): Promise<void> {
+  try {
+    const status = await getFreeModeStatus()
+    freeModeEnabled.value = status.enabled
+    freeModeHasCustomKey.value = status.customKey ?? false
+    freeModeCustomKeyMasked.value = status.maskedKey ?? null
+  } catch {
+    // Ignore — free mode status unknown
+  }
+}
+
 function onDictationLanguageChange(nextValue: string): void {
   const normalized = normalizeToWhisperLanguage(nextValue.trim())
   const value = normalized || 'auto'
@@ -3380,6 +3485,54 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-toggle.is-on::after {
   transform: translateX(16px);
+}
+
+.sidebar-settings-row--input {
+  @apply flex flex-col gap-1 py-1.5;
+}
+
+.sidebar-settings-key-group {
+  @apply flex items-center gap-1.5 w-full;
+}
+
+.sidebar-settings-key-input {
+  @apply flex-1 min-w-0 text-xs rounded border border-zinc-200 bg-white px-2 py-1 outline-none transition-colors placeholder:text-zinc-400;
+}
+
+.sidebar-settings-key-input:focus {
+  @apply border-zinc-400;
+}
+
+.sidebar-settings-key-save {
+  @apply shrink-0 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-default;
+}
+
+.sidebar-settings-key-masked {
+  @apply flex-1 min-w-0 text-xs text-zinc-500 font-mono truncate;
+}
+
+.sidebar-settings-key-clear {
+  @apply shrink-0 w-6 h-6 flex items-center justify-center rounded-full border border-zinc-200 text-xs text-zinc-400 transition-colors hover:text-zinc-600 hover:border-zinc-300 disabled:opacity-40;
+}
+
+:root.dark .sidebar-settings-key-input {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200 placeholder:text-zinc-500;
+}
+
+:root.dark .sidebar-settings-key-input:focus {
+  @apply border-zinc-500;
+}
+
+:root.dark .sidebar-settings-key-save {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
+:root.dark .sidebar-settings-key-masked {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-key-clear {
+  @apply border-zinc-600 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500;
 }
 
 .settings-panel-enter-active,

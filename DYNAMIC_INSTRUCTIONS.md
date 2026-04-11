@@ -1,1 +1,1 @@
-check if there any dead code or duplicate code or duplciate features
+its possible force use only same profile threads so no need use merge or cache

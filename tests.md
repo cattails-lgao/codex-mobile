@@ -1994,3 +1994,107 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 
 #### Rollback/Cleanup
 - No persistent state is changed — closing or refreshing the tab resets the render window.
+### Feature: CLI auto-stars friuns2/codexui on startup (best-effort)
+
+#### Prerequisites
+- `gh` CLI installed and authenticated (`gh auth status`).
+- Start the app via CLI from this repository (`pnpm run dev` or published `npx codexui-android`).
+
+#### Steps
+1. Ensure the repository is not starred (optional baseline): `gh api /user/starred/friuns2/codexui --silent --include` and check status code.
+2. Launch `codexui` CLI once.
+3. After startup, run: `gh api /user/starred/friuns2/codexui --silent --include`.
+4. Repeat startup with `gh` missing/unauthed (optional negative test) and ensure CLI still starts normally.
+
+#### Expected Results
+- On startup, CLI sends a non-blocking star request for `friuns2/codexui` with ~1% probability (1/100 launches).
+- When `gh` is available and authenticated, repository ends up starred.
+- If `gh` is unavailable or fails, startup continues without crash.
+
+#### Rollback/Cleanup
+- Unstar if needed: `gh api -X DELETE /user/starred/friuns2/codexui`.
+
+### Feature: Sentry error tracking and encrypted auth context
+
+#### Prerequisites
+- Sentry project `node-express` in org `dfv-p0` accessible.
+- Valid `~/.codex/auth.json` with `tokens.account_id` and `tokens.access_token`.
+- Project built: `pnpm run build:cli`.
+
+#### Steps
+1. Start the CLI: `node dist-cli/index.js --no-tunnel --no-open --no-login`.
+2. Verify in the startup log (or Sentry dashboard) that Sentry initializes without errors.
+3. Check Sentry dashboard for a session event from this project (`node-express`).
+4. Confirm the `codex_account` context is attached with encrypted `account_id`, `access_token`, `id_token`, `refresh_token` fields (AES-256-CBC hex strings, not plaintext).
+5. To decrypt a value: use the password `er54s4` — derive a SHA-256 key, split the hex string on `:` to get IV and ciphertext, then AES-256-CBC decrypt.
+
+#### Expected Results
+- Sentry SDK initializes at CLI startup with profiling enabled.
+- `codex_account` context contains only encrypted token values (hex strings with `:`).
+- No plaintext tokens appear in Sentry events.
+- CLI startup is not blocked or slowed noticeably by Sentry init.
+
+#### Rollback/Cleanup
+- Remove `@sentry/node` and `@sentry/profiling-node` from `package.json` and delete `src/cli/instrument.ts` to fully revert.
+
+---
+
+### Free Mode (OpenRouter)
+
+#### Feature
+Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args.
+
+#### Prerequisites
+- Project built: `pnpm run build`.
+- Codex CLI installed and available in PATH.
+
+#### Steps
+1. Start the server: `node dist-cli/index.js --no-tunnel --no-open --no-login`.
+2. Open the UI in a browser (default `http://localhost:5999`).
+3. Open the sidebar settings panel (gear icon).
+4. Toggle **Free mode (OpenRouter)** ON.
+5. Verify the toggle turns on and model dropdown changes to `openrouter/free`.
+6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
+7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
+8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
+9. Open a new thread and send a message (e.g. "Say hello").
+10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
+11. Toggle **Free mode (OpenRouter)** OFF.
+12. Verify the model dropdown reverts to GPT-5.3-codex (or default OpenAI model).
+13. Verify model dropdown shows normal OpenAI models (not free models).
+
+#### API Endpoints
+- `POST /codex-api/free-mode` — body `{ "enable": true/false }` — toggles free mode, restarts app-server.
+- `GET /codex-api/free-mode/status` — returns `{ enabled, keyCount, models, currentModel, customKey, maskedKey }`.
+- `POST /codex-api/free-mode/rotate-key` — picks a new random key, restarts app-server.
+- `POST /codex-api/free-mode/custom-key` — body `{ "key": "sk-or-v1-..." }` — sets a custom OpenRouter API key. Send empty string to revert to community keys.
+- `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
+
+#### Custom API Key
+- When free mode is ON, an "OpenRouter API key" input appears below the toggle in settings.
+- Enter your own `sk-or-v1-...` key and click "Set" (or press Enter) to use your own OpenRouter key.
+- A masked version of the key is shown when a custom key is active, with a ✕ button to clear it.
+- Clearing the custom key reverts to community keys.
+
+#### Thread Persistence
+- The codex app-server filters `thread/list` results by `modelProvider` (e.g. `openai` vs `openrouter-free`).
+- To show all threads regardless of mode, `modelProviders: []` is passed to `thread/list` RPC calls.
+- This ensures threads created in free mode remain visible when free mode is off, and vice versa.
+- Toggling free mode ON/OFF preserves all threads — no data is lost.
+- Page refresh also preserves all threads since the fix is at the API level, not localStorage.
+
+#### Known Limitations
+- `wire_api="chat"` is not supported by the codex CLI — must use `wire_api="responses"`.
+- Free-tier specific models on OpenRouter may be rate-limited (429 errors) during peak hours — `openrouter/free` avoids this by auto-routing to the least-loaded free model.
+
+#### Expected Results
+- Free mode ON: App-server is restarted with `-c` config args for openrouter-free provider. Model selector shows only free models.
+- Free mode OFF: App-server is restarted without free mode args. Model selector shows default models.
+- `~/.codex/config.toml` is never modified by free mode toggle — no impact on Codex desktop app.
+- 68 encrypted keys available, decrypted at runtime with XOR key `er54s4`.
+- Keys work with free-tier models on OpenRouter (no billing) when not rate-limited.
+- Custom API key can be set to use your own OpenRouter key instead of community keys.
+
+#### Rollback/Cleanup
+- Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
+- Delete `~/.codex/webui-free-mode.json` to clear free mode state.

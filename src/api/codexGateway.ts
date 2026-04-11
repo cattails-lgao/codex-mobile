@@ -465,6 +465,7 @@ async function getThreadGroupsV2(): Promise<UiProjectGroup[]> {
     archived: false,
     limit: 100,
     sortKey: 'updated_at',
+    modelProviders: [],
   })
   return normalizeThreadGroupsV2(payload)
 }
@@ -1229,6 +1230,38 @@ export async function setCodexSpeedMode(mode: SpeedMode): Promise<void> {
   })
 }
 
+export interface FreeModeStatus {
+  enabled: boolean
+  keyCount: number
+  models: string[]
+  currentModel: string | null
+  customKey: boolean
+  maskedKey: string | null
+}
+
+export async function getFreeModeStatus(): Promise<FreeModeStatus> {
+  const response = await fetch('/codex-api/free-mode/status')
+  return await response.json() as FreeModeStatus
+}
+
+export async function setFreeMode(enable: boolean): Promise<{ ok: boolean; enabled: boolean; model?: string; models?: string[] }> {
+  const response = await fetch('/codex-api/free-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enable }),
+  })
+  return await response.json() as { ok: boolean; enabled: boolean; model?: string; models?: string[] }
+}
+
+export async function setFreeModeCustomKey(key: string): Promise<{ ok: boolean; customKey: boolean }> {
+  const response = await fetch('/codex-api/free-mode/custom-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  })
+  return await response.json() as { ok: boolean; customKey: boolean }
+}
+
 export async function getAvailableModelIds(): Promise<string[]> {
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
@@ -1242,14 +1275,17 @@ export async function getAvailableModelIds(): Promise<string[]> {
     const response = await fetch('/codex-api/provider-models', {
       signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
     })
-    let providerPayload: ProviderModelsResponse | null = null
+    let providerPayload: (ProviderModelsResponse & { exclusive?: boolean }) | null = null
     try {
-      providerPayload = await response.json() as ProviderModelsResponse
+      providerPayload = await response.json() as ProviderModelsResponse & { exclusive?: boolean }
     } catch {
       providerPayload = null
     }
 
     if (response.ok && Array.isArray(providerPayload?.data)) {
+      if (providerPayload.exclusive) {
+        return providerPayload.data.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+      }
       for (const candidate of providerPayload.data) {
         if (typeof candidate !== 'string') continue
         const normalized = candidate.trim()
