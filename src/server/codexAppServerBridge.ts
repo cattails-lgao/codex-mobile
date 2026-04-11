@@ -2850,6 +2850,120 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       const url = new URL(req.url, 'http://localhost')
+      if (url.pathname.startsWith('/codex-api/free-mode')) {
+        const configPath = join(getCodexHomeDir(), 'config.toml')
+
+        function setTopLevelKey(toml: string, key: string, value: string): string {
+          const firstSection = toml.search(/^\[/m)
+          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
+          const rest = firstSection >= 0 ? toml.slice(firstSection) : ''
+          const lineRegex = new RegExp(`^#?\\s*${key}\\s*=.*$`, 'gm')
+          const cleaned = topPart.replace(lineRegex, '').replace(/\n{3,}/g, '\n\n')
+          return `${key} = "${value}"\n${cleaned}${rest}`
+        }
+
+        function removeTopLevelKey(toml: string, key: string): string {
+          const firstSection = toml.search(/^\[/m)
+          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
+          const rest = firstSection >= 0 ? toml.slice(firstSection) : ''
+          const lineRegex = new RegExp(`^#?\\s*${key}\\s*=.*$`, 'gm')
+          const cleaned = topPart.replace(lineRegex, '').replace(/\n{3,}/g, '\n\n')
+          return `${cleaned}${rest}`
+        }
+
+        function readTopLevelKey(toml: string, key: string): string | null {
+          const firstSection = toml.search(/^\[/m)
+          const topPart = firstSection >= 0 ? toml.slice(0, firstSection) : toml
+          const m = topPart.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, 'm'))
+          return m?.[1] ?? null
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const enable = Boolean(body?.enable)
+            let toml = ''
+            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
+
+            if (enable) {
+              const apiKey = getRandomFreeKey()
+              if (!apiKey) {
+                setJson(res, 500, { error: 'No free keys available' })
+                return
+              }
+
+              toml = setTopLevelKey(toml, 'model_provider', FREE_MODE_PROVIDER_ID)
+              toml = setTopLevelKey(toml, 'model', FREE_MODE_DEFAULT_MODEL)
+
+              const providerBlock = `[model_providers.${FREE_MODE_PROVIDER_ID}]\nname = "OpenRouter Free"\nbase_url = "${FREE_MODE_BASE_URL}"\nexperimental_bearer_token = "${apiKey}"\n`
+              const providerRegex = new RegExp(`\\[model_providers\\.${FREE_MODE_PROVIDER_ID}\\][\\s\\S]*?(?=\\n\\[|$)`)
+              if (providerRegex.test(toml)) {
+                toml = toml.replace(providerRegex, providerBlock)
+              } else {
+                toml = toml.trimEnd() + '\n\n' + providerBlock
+              }
+
+              await writeFile(configPath, toml, 'utf8')
+              setJson(res, 200, {
+                ok: true,
+                enabled: true,
+                model: FREE_MODE_DEFAULT_MODEL,
+                keyCount: getFreeKeyCount(),
+                models: FREE_MODELS,
+              })
+            } else {
+              toml = removeTopLevelKey(toml, 'model_provider')
+              toml = removeTopLevelKey(toml, 'model')
+              await writeFile(configPath, toml, 'utf8')
+              setJson(res, 200, { ok: true, enabled: false })
+            }
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to toggle free mode') })
+          }
+          return
+        }
+
+        if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
+          try {
+            let toml = ''
+            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
+            const provider = readTopLevelKey(toml, 'model_provider')
+            const model = readTopLevelKey(toml, 'model')
+            const isEnabled = provider === FREE_MODE_PROVIDER_ID
+            setJson(res, 200, {
+              enabled: isEnabled,
+              keyCount: getFreeKeyCount(),
+              models: FREE_MODELS,
+              currentModel: isEnabled ? model : null,
+            })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/rotate-key') {
+          try {
+            const apiKey = getRandomFreeKey()
+            if (!apiKey) {
+              setJson(res, 500, { error: 'No free keys available' })
+              return
+            }
+            let toml = ''
+            try { toml = await readFile(configPath, 'utf8') } catch { toml = '' }
+            const providerRegex = new RegExp(`(\\[model_providers\\.${FREE_MODE_PROVIDER_ID}\\][\\s\\S]*?experimental_bearer_token\\s*=\\s*)"[^"]*"`)
+            toml = toml.replace(providerRegex, `$1"${apiKey}"`)
+            await writeFile(configPath, toml, 'utf8')
+            setJson(res, 200, { ok: true })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
+          }
+          return
+        }
+
+        next()
+        return
+      }
 
       if (await handleAccountRoutes(req, res, url, { appServer })) {
         return
@@ -3137,125 +3251,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
         const data = await readProviderBackedModelIds(appServer)
         setJson(res, 200, data)
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
-        try {
-          const body = await readJsonBody(req) as Record<string, unknown> | null
-          const enable = Boolean(body?.enable)
-
-          if (enable) {
-            const apiKey = getRandomFreeKey()
-            if (!apiKey) {
-              setJson(res, 500, { error: 'No free keys available' })
-              return
-            }
-
-            await appServer.rpc('config/batchWrite', {
-              edits: [
-                {
-                  keyPath: `model_providers.${FREE_MODE_PROVIDER_ID}.name`,
-                  value: 'OpenRouter Free',
-                  mergeStrategy: 'upsert',
-                },
-                {
-                  keyPath: `model_providers.${FREE_MODE_PROVIDER_ID}.base_url`,
-                  value: FREE_MODE_BASE_URL,
-                  mergeStrategy: 'upsert',
-                },
-                {
-                  keyPath: `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token`,
-                  value: apiKey,
-                  mergeStrategy: 'upsert',
-                },
-                {
-                  keyPath: 'model_provider',
-                  value: FREE_MODE_PROVIDER_ID,
-                  mergeStrategy: 'upsert',
-                },
-                {
-                  keyPath: 'model',
-                  value: FREE_MODE_DEFAULT_MODEL,
-                  mergeStrategy: 'upsert',
-                },
-              ],
-              filePath: null,
-              expectedVersion: null,
-            })
-
-            setJson(res, 200, {
-              ok: true,
-              enabled: true,
-              model: FREE_MODE_DEFAULT_MODEL,
-              keyCount: getFreeKeyCount(),
-              models: FREE_MODELS,
-            })
-          } else {
-            await appServer.rpc('config/batchWrite', {
-              edits: [
-                {
-                  keyPath: 'model_provider',
-                  value: null,
-                  mergeStrategy: 'replace',
-                },
-                {
-                  keyPath: 'model',
-                  value: null,
-                  mergeStrategy: 'replace',
-                },
-              ],
-              filePath: null,
-              expectedVersion: null,
-            })
-            setJson(res, 200, { ok: true, enabled: false })
-          }
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to toggle free mode') })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
-        try {
-          const configPayload = asRecord(await appServer.rpc('config/read', {}))
-          const config = asRecord(configPayload?.config)
-          const currentProvider = readNonEmptyString(config?.model_provider)
-          const isEnabled = currentProvider === FREE_MODE_PROVIDER_ID
-          setJson(res, 200, {
-            enabled: isEnabled,
-            keyCount: getFreeKeyCount(),
-            models: FREE_MODELS,
-            currentModel: isEnabled ? readNonEmptyString(config?.model) : null,
-          })
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
-        }
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/rotate-key') {
-        try {
-          const apiKey = getRandomFreeKey()
-          if (!apiKey) {
-            setJson(res, 500, { error: 'No free keys available' })
-            return
-          }
-          await appServer.rpc('config/batchWrite', {
-            edits: [
-              {
-                keyPath: `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token`,
-                value: apiKey,
-                mergeStrategy: 'upsert',
-              },
-            ],
-            filePath: null,
-            expectedVersion: null,
-          })
-          setJson(res, 200, { ok: true })
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to rotate key') })
-        }
         return
       }
 

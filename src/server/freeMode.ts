@@ -107,4 +107,4 @@ export const FREE_MODELS = [
   'openai/gpt-oss-20b:free',
 ]
 
-export const FREE_MODE_DEFAULT_MODEL = 'google/gemma-4-31b-it:free'
+export const FREE_MODE_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'

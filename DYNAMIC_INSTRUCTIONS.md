@@ -1,1 +1,2 @@
-check if there any dead code or duplicate code or duplciate features
+show only free models in free mode
+use openrouter/auto by default
