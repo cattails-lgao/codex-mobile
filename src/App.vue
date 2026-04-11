@@ -539,6 +539,7 @@
                   :thread-token-usage="selectedThreadTokenUsage"
                   :codex-quota="codexQuota"
                   :is-turn-in-progress="false"
+                  :is-stop-pending="false"
                   :is-interrupting-turn="false" :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                   :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
                   :dictation-language="dictationLanguage"
@@ -598,7 +599,9 @@
                     :skills="installedSkills"
                     :thread-token-usage="selectedThreadTokenUsage"
                     :codex-quota="codexQuota"
-                    :is-turn-in-progress="isSelectedThreadInProgress" :is-interrupting-turn="isInterruptingTurn"
+                    :is-turn-in-progress="isSelectedThreadInProgress"
+                    :is-stop-pending="isSelectedThreadInterruptPending"
+                    :is-interrupting-turn="isInterruptingTurn"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                     :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
@@ -834,6 +837,7 @@ const {
   isLoadingMessages,
   isSendingMessage,
   isInterruptingTurn,
+  isSelectedThreadInterruptPending,
   isUpdatingSpeedMode,
   refreshAll,
   refreshSkills,

@@ -1008,6 +1008,9 @@ export function useDesktopState() {
   const turnActivityByThreadId = ref<Record<string, TurnActivityState>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
+  const interruptBlockedUntilPersistedByThreadId = ref<Record<string, boolean>>({})
+  const threadListedByServerById = ref<Record<string, boolean>>({})
+  const persistedUserMessageByThreadId = ref<Record<string, boolean>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
   const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
@@ -1049,6 +1052,11 @@ export function useDesktopState() {
   const selectedThreadScrollState = computed<ThreadScrollState | null>(
     () => scrollStateByThreadId.value[selectedThreadId.value] ?? null,
   )
+  const isSelectedThreadInterruptPending = computed(() => {
+    const threadId = selectedThreadId.value
+    if (!threadId) return false
+    return interruptBlockedUntilPersistedByThreadId.value[threadId] === true
+  })
   const selectedThreadServerRequests = computed<UiServerRequest[]>(() => {
     const rows: UiServerRequest[] = []
     const selected = selectedThreadId.value
@@ -1588,6 +1596,12 @@ export function useDesktopState() {
     turnActivityByThreadId.value = pruneThreadStateMap(turnActivityByThreadId.value, activeThreadIds)
     turnErrorByThreadId.value = pruneThreadStateMap(turnErrorByThreadId.value, activeThreadIds)
     activeTurnIdByThreadId.value = pruneThreadStateMap(activeTurnIdByThreadId.value, activeThreadIds)
+    interruptBlockedUntilPersistedByThreadId.value = pruneThreadStateMap(
+      interruptBlockedUntilPersistedByThreadId.value,
+      activeThreadIds,
+    )
+    threadListedByServerById.value = pruneThreadStateMap(threadListedByServerById.value, activeThreadIds)
+    persistedUserMessageByThreadId.value = pruneThreadStateMap(persistedUserMessageByThreadId.value, activeThreadIds)
     threadTokenUsageByThreadId.value = pruneThreadStateMap(threadTokenUsageByThreadId.value, activeThreadIds)
     eventUnreadByThreadId.value = pruneThreadStateMap(eventUnreadByThreadId.value, activeThreadIds)
     inProgressById.value = pruneThreadStateMap(inProgressById.value, activeThreadIds)
@@ -1643,8 +1657,79 @@ export function useDesktopState() {
       }
     } else {
       inProgressById.value = omitKey(inProgressById.value, threadId)
+      clearInterruptPersistenceGate(threadId)
     }
     applyThreadFlags()
+  }
+
+  function clearInterruptPersistenceGate(threadId: string): void {
+    if (!threadId) return
+    if (interruptBlockedUntilPersistedByThreadId.value[threadId]) {
+      interruptBlockedUntilPersistedByThreadId.value = omitKey(interruptBlockedUntilPersistedByThreadId.value, threadId)
+    }
+    if (threadListedByServerById.value[threadId]) {
+      threadListedByServerById.value = omitKey(threadListedByServerById.value, threadId)
+    }
+    if (persistedUserMessageByThreadId.value[threadId]) {
+      persistedUserMessageByThreadId.value = omitKey(persistedUserMessageByThreadId.value, threadId)
+    }
+  }
+
+  function blockInterruptUntilThreadIsPersisted(threadId: string): void {
+    if (!threadId) return
+    interruptBlockedUntilPersistedByThreadId.value = {
+      ...interruptBlockedUntilPersistedByThreadId.value,
+      [threadId]: true,
+    }
+    if (threadListedByServerById.value[threadId]) {
+      threadListedByServerById.value = omitKey(threadListedByServerById.value, threadId)
+    }
+    if (persistedUserMessageByThreadId.value[threadId]) {
+      persistedUserMessageByThreadId.value = omitKey(persistedUserMessageByThreadId.value, threadId)
+    }
+  }
+
+  function maybeUnblockInterruptForPersistedThread(threadId: string): void {
+    if (!threadId) return
+    if (interruptBlockedUntilPersistedByThreadId.value[threadId] !== true) return
+    if (threadListedByServerById.value[threadId] !== true) return
+    if (persistedUserMessageByThreadId.value[threadId] !== true) return
+    clearInterruptPersistenceGate(threadId)
+  }
+
+  function markServerListedThreads(serverThreadIds: Set<string>): void {
+    const pendingThreadIds = Object.keys(interruptBlockedUntilPersistedByThreadId.value)
+    if (pendingThreadIds.length === 0) return
+
+    let nextListedState = threadListedByServerById.value
+    let changed = false
+    for (const threadId of pendingThreadIds) {
+      if (!serverThreadIds.has(threadId) || nextListedState[threadId] === true) continue
+      nextListedState = {
+        ...nextListedState,
+        [threadId]: true,
+      }
+      changed = true
+    }
+
+    if (!changed) return
+    threadListedByServerById.value = nextListedState
+    for (const threadId of pendingThreadIds) {
+      maybeUnblockInterruptForPersistedThread(threadId)
+    }
+  }
+
+  function markThreadMessagesPersisted(threadId: string, messages: UiMessage[]): void {
+    if (!threadId) return
+    if (interruptBlockedUntilPersistedByThreadId.value[threadId] !== true) return
+    if (!messages.some((message) => message.role === 'user')) return
+    if (persistedUserMessageByThreadId.value[threadId] !== true) {
+      persistedUserMessageByThreadId.value = {
+        ...persistedUserMessageByThreadId.value,
+        [threadId]: true,
+      }
+    }
+    maybeUnblockInterruptForPersistedThread(threadId)
   }
 
   function markThreadUnreadByEvent(threadId: string): void {
@@ -3266,6 +3351,7 @@ export function useDesktopState() {
       }
 
       const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
+      markServerListedThreads(new Set(flattenThreads(orderedGroups).map((thread) => thread.id)))
       const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
         sourceGroups.value,
         orderedGroups,
@@ -3319,6 +3405,7 @@ export function useDesktopState() {
       }
 
       const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = detail
+      markThreadMessagesPersisted(threadId, nextMessages)
       replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
       rebindLiveFileChangeTurnIndices(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
@@ -3712,6 +3799,7 @@ export function useDesktopState() {
       if (!threadId) return ''
 
       insertOptimisticThread(threadId, targetCwd, nextText || '[Image]')
+      blockInterruptUntilThreadIsPersisted(threadId)
       resumedThreadById.value = {
         ...resumedThreadById.value,
         [threadId]: true,
@@ -3901,6 +3989,7 @@ export function useDesktopState() {
     const threadId = selectedThreadId.value
     if (!threadId) return
     if (inProgressById.value[threadId] !== true) return
+    if (interruptBlockedUntilPersistedByThreadId.value[threadId] === true) return
     let turnId = activeTurnIdByThreadId.value[threadId]
     if (!turnId) {
       const { activeTurnId } = await getThreadDetail(threadId)
@@ -4347,6 +4436,9 @@ export function useDesktopState() {
     turnSummaryByThreadId.value = {}
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
+    interruptBlockedUntilPersistedByThreadId.value = {}
+    threadListedByServerById.value = {}
+    persistedUserMessageByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
     queueProcessingByThreadId.value = {}
     codexRateLimit.value = null
@@ -4392,6 +4484,7 @@ export function useDesktopState() {
     selectedThread,
     selectedThreadTokenUsage,
     selectedThreadScrollState,
+    isSelectedThreadInterruptPending,
     selectedThreadServerRequests,
     selectedLiveOverlay,
     codexQuota,
