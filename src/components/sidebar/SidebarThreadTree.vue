@@ -1908,23 +1908,24 @@ onBeforeUnmount(() => {
 }
 
 .rename-thread-panel {
-  @apply w-full max-w-sm rounded-xl bg-white p-4 shadow-xl;
+  @apply w-full max-w-sm rounded-xl bg-white p-4 shadow-xl
+         max-h-[90vh] flex flex-col overflow-hidden;
 }
 
 .rename-thread-title {
-  @apply m-0 text-base font-semibold text-zinc-900;
+  @apply m-0 text-base font-semibold text-zinc-900 shrink-0;
 }
 
 .rename-thread-subtitle {
-  @apply mt-1 mb-3 text-sm text-zinc-500;
+  @apply mt-1 mb-3 text-sm text-zinc-500 overflow-y-auto flex-1 min-h-0;
 }
 
 .rename-thread-input {
-  @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+  @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 shrink-0;
 }
 
 .rename-thread-actions {
-  @apply mt-3 flex items-center justify-end gap-2;
+  @apply mt-3 flex items-center justify-end gap-2 shrink-0;
 }
 
 .rename-thread-button {
