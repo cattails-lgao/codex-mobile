@@ -1917,7 +1917,7 @@ onBeforeUnmount(() => {
 }
 
 .rename-thread-subtitle {
-  @apply mt-1 mb-3 text-sm text-zinc-500 overflow-y-auto flex-1 min-h-0;
+  @apply mt-1 mb-3 text-sm text-zinc-500 overflow-y-auto flex-1 min-h-0 min-w-0 break-words;
 }
 
 .rename-thread-input {
