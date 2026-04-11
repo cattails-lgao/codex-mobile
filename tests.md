@@ -2042,7 +2042,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 ### Free Mode (OpenRouter)
 
 #### Feature
-Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `google/gemma-4-26b-a4b-it:free`. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args. Note: `openrouter/auto` is NOT included because it requires paid credits via the Responses API.
+Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args.
 
 #### Prerequisites
 - Project built: `pnpm run build`.
@@ -2053,10 +2053,10 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 2. Open the UI in a browser (default `http://localhost:5999`).
 3. Open the sidebar settings panel (gear icon).
 4. Toggle **Free mode (OpenRouter)** ON.
-5. Verify the toggle turns on and model dropdown changes to `google/gemma-4-26b-a4b-it:free`.
+5. Verify the toggle turns on and model dropdown changes to `openrouter/free`.
 6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
 7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
-8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"google/gemma-4-26b-a4b-it:free"}`.
+8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
 9. Open a new thread and send a message (e.g. "Say hello").
 10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
 11. Toggle **Free mode (OpenRouter)** OFF.
@@ -2070,9 +2070,8 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 - `GET /codex-api/provider-models` — returns `{ data: [...], exclusive: true }` when free mode is on (only free models shown).
 
 #### Known Limitations
-- `openrouter/auto` requires paid credits via the Responses API (402 error with free keys).
-- `wire_api="chat"` is no longer supported by the codex CLI — must use `wire_api="responses"`.
-- Free-tier models on OpenRouter are frequently rate-limited (429 errors) during peak hours.
+- `wire_api="chat"` is not supported by the codex CLI — must use `wire_api="responses"`.
+- Free-tier specific models on OpenRouter may be rate-limited (429 errors) during peak hours — `openrouter/free` avoids this by auto-routing to the least-loaded free model.
 
 #### Expected Results
 - Free mode ON: App-server is restarted with `-c` config args for openrouter-free provider. Model selector shows only free models.

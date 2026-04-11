@@ -95,6 +95,7 @@ export const FREE_MODE_PROVIDER_ID = 'openrouter-free'
 export const FREE_MODE_BASE_URL = 'https://openrouter.ai/api/v1'
 
 export const FREE_MODELS = [
+  'openrouter/free',
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
   'google/gemma-3-27b-it:free',
@@ -107,7 +108,7 @@ export const FREE_MODELS = [
   'openai/gpt-oss-20b:free',
 ]
 
-export const FREE_MODE_DEFAULT_MODEL = 'google/gemma-4-26b-a4b-it:free'
+export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
 
 export const FREE_MODE_STATE_FILE = 'webui-free-mode.json'
 
