@@ -1,2 +1,1 @@
-
-why curl openrouter/auto working, but from browser ui not work, investigate
+when i switch to free mode, thread count do not match threads i had before, investigate

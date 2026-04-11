@@ -20,7 +20,7 @@ import {
   getFreeKeyCount,
   FREE_MODE_PROVIDER_ID,
   FREE_MODE_DEFAULT_MODEL,
-  FREE_MODELS,
+  getFreeModels,
   FREE_MODE_STATE_FILE,
   getFreeModeConfigArgs,
   type FreeModeState,
@@ -2896,12 +2896,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               const state: FreeModeState = { enabled: true, apiKey, model: FREE_MODE_DEFAULT_MODEL }
               await writeFile(statePath, JSON.stringify(state), 'utf8')
               appServer.dispose()
+              const freeModels = await getFreeModels()
               setJson(res, 200, {
                 ok: true,
                 enabled: true,
                 model: FREE_MODE_DEFAULT_MODEL,
                 keyCount: getFreeKeyCount(),
-                models: FREE_MODELS,
+                models: freeModels,
               })
             } else {
               const state: FreeModeState = { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
@@ -2918,10 +2919,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
           try {
             const state = readFreeModeState()
+            const freeModels = await getFreeModels()
             setJson(res, 200, {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
-              models: FREE_MODELS,
+              models: freeModels,
               currentModel: state.enabled ? state.model : null,
             })
           } catch (error) {
@@ -3239,7 +3241,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
           if (fmState.enabled) {
-            setJson(res, 200, { data: FREE_MODELS, exclusive: true })
+            const freeModels = await getFreeModels()
+            setJson(res, 200, { data: freeModels, exclusive: true })
             return
           }
         } catch {

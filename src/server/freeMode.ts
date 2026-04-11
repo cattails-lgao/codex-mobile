@@ -94,19 +94,42 @@ export function getFreeKeyCount(): number {
 export const FREE_MODE_PROVIDER_ID = 'openrouter-free'
 export const FREE_MODE_BASE_URL = 'https://openrouter.ai/api/v1'
 
-export const FREE_MODELS = [
+const FALLBACK_FREE_MODELS = [
   'openrouter/free',
   'google/gemma-4-26b-a4b-it:free',
-  'google/gemma-4-31b-it:free',
   'google/gemma-3-27b-it:free',
-  'google/gemma-3-12b-it:free',
-  'google/gemma-3-4b-it:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'qwen/qwen3-coder:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'openai/gpt-oss-120b:free',
-  'openai/gpt-oss-20b:free',
 ]
+
+let cachedFreeModels: string[] | null = null
+let cacheTimestamp = 0
+const CACHE_TTL_MS = 10 * 60 * 1000
+
+async function fetchFreeModelsFromOpenRouter(): Promise<string[]> {
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/models')
+    if (!resp.ok) return cachedFreeModels ?? FALLBACK_FREE_MODELS
+    const json = (await resp.json()) as { data: Array<{ id: string }> }
+    const ids = json.data
+      .filter((m) => m.id.endsWith(':free') || m.id === 'openrouter/free')
+      .map((m) => m.id)
+    if (ids.length === 0) return cachedFreeModels ?? FALLBACK_FREE_MODELS
+    const sorted = ['openrouter/free', ...ids.filter((id) => id !== 'openrouter/free')]
+    cachedFreeModels = sorted
+    cacheTimestamp = Date.now()
+    return ids
+  } catch {
+    return cachedFreeModels ?? FALLBACK_FREE_MODELS
+  }
+}
+
+export async function getFreeModels(): Promise<string[]> {
+  if (cachedFreeModels && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedFreeModels
+  }
+  return fetchFreeModelsFromOpenRouter()
+}
 
 export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
 
