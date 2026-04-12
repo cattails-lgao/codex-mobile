@@ -2914,7 +2914,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 return
               }
 
-              const state: FreeModeState = { enabled: true, apiKey, model: FREE_MODE_DEFAULT_MODEL }
+              const state: FreeModeState = { enabled: true, apiKey, model: FREE_MODE_DEFAULT_MODEL, provider: 'openrouter' }
               await writeFile(statePath, JSON.stringify(state), 'utf8')
               appServer.dispose()
               const freeModels = await getFreeModels()
@@ -2951,6 +2951,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               currentModel: state.enabled ? state.model : null,
               customKey: Boolean(state.customKey),
               maskedKey,
+              provider: state.provider ?? 'openrouter',
+              customBaseUrl: state.customBaseUrl ?? null,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -2983,19 +2985,45 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             const current = readFreeModeState()
 
             if (key.length > 0) {
-              const state: FreeModeState = { ...current, enabled: true, apiKey: key, customKey: true }
+              const state: FreeModeState = { ...current, enabled: true, apiKey: key, customKey: true, provider: 'openrouter' }
               await writeFile(statePath, JSON.stringify(state), 'utf8')
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: true })
             } else {
               const communityKey = getRandomFreeKey()
-              const state: FreeModeState = { ...current, apiKey: communityKey, customKey: false }
+              const state: FreeModeState = { ...current, apiKey: communityKey, customKey: false, provider: 'openrouter' }
               await writeFile(statePath, JSON.stringify(state), 'utf8')
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: false })
             }
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom key') })
+          }
+          return
+        }
+
+        if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-provider') {
+          try {
+            const body = await readJsonBody(req) as Record<string, unknown> | null
+            const baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim() : ''
+            const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
+            if (!baseUrl) {
+              setJson(res, 400, { error: 'baseUrl is required' })
+              return
+            }
+            const state: FreeModeState = {
+              enabled: true,
+              apiKey: apiKey || 'dummy',
+              model: '',
+              customKey: true,
+              provider: 'custom',
+              customBaseUrl: baseUrl,
+            }
+            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            appServer.dispose()
+            setJson(res, 200, { ok: true })
+          } catch (error) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to set custom provider') })
           }
           return
         }
@@ -3291,6 +3319,26 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
           if (fmState.enabled) {
+            if (fmState.provider === 'custom' && fmState.customBaseUrl) {
+              try {
+                const modelsUrl = fmState.customBaseUrl.replace(/\/+$/, '') + '/models'
+                const headers: Record<string, string> = {}
+                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
+                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
+                }
+                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
+                if (resp.ok) {
+                  const json = await resp.json() as { data?: Array<{ id: string }> }
+                  const ids = (json.data ?? []).map(m => m.id).filter(Boolean)
+                  setJson(res, 200, { data: ids, exclusive: true, source: 'custom' })
+                  return
+                }
+              } catch {
+                // Custom endpoint model fetch failed — return empty list
+              }
+              setJson(res, 200, { data: [], exclusive: true, source: 'custom' })
+              return
+            }
             const freeModels = await getFreeModels()
             setJson(res, 200, { data: freeModels, exclusive: true })
             return

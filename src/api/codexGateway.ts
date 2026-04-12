@@ -1244,6 +1244,8 @@ export interface FreeModeStatus {
   currentModel: string | null
   customKey: boolean
   maskedKey: string | null
+  provider?: 'openrouter' | 'custom'
+  customBaseUrl?: string
 }
 
 export async function getFreeModeStatus(): Promise<FreeModeStatus> {
@@ -1267,6 +1269,15 @@ export async function setFreeModeCustomKey(key: string): Promise<{ ok: boolean; 
     body: JSON.stringify({ key }),
   })
   return await response.json() as { ok: boolean; customKey: boolean }
+}
+
+export async function setCustomProvider(baseUrl: string, apiKey: string): Promise<{ ok: boolean }> {
+  const response = await fetch('/codex-api/free-mode/custom-provider', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ baseUrl, apiKey }),
+  })
+  return await response.json() as { ok: boolean }
 }
 
 export async function getAvailableModelIds(): Promise<string[]> {

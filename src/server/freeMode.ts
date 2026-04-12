@@ -135,15 +135,30 @@ export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
 
 export const FREE_MODE_STATE_FILE = 'webui-free-mode.json'
 
+export const CUSTOM_PROVIDER_ID = 'custom-endpoint'
+
 export interface FreeModeState {
   enabled: boolean
   apiKey: string | null
   model: string
   customKey?: boolean
+  provider?: 'openrouter' | 'custom'
+  customBaseUrl?: string
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState): string[] {
   if (!state.enabled || !state.apiKey) return []
+
+  if (state.provider === 'custom' && state.customBaseUrl) {
+    return [
+      '-c', `model_provider="${CUSTOM_PROVIDER_ID}"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.name="Custom Endpoint"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.base_url="${state.customBaseUrl}"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.wire_api="responses"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
+    ]
+  }
+
   return [
     '-c', `model="${state.model}"`,
     '-c', `model_provider="${FREE_MODE_PROVIDER_ID}"`,
