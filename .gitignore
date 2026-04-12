@@ -11,3 +11,4 @@ pnpm-lock.yaml
 .env.local
 
 package.json
+DYNAMIC_INSTRUCTIONS.md

@@ -313,11 +313,13 @@
             v-if="isTurnInProgress && !hasSubmitContent"
             class="thread-composer-stop"
             type="button"
-            aria-label="Stop"
-            :disabled="disabled || !activeThreadId || isInterruptingTurn"
+            :aria-label="isStopPending ? 'Saving thread before stop is available' : 'Stop'"
+            :title="isStopPending ? 'Saving thread before stop is available' : 'Stop'"
+            :disabled="disabled || !activeThreadId || isInterruptingTurn || isStopPending"
             @click="onInterrupt"
           >
-            <IconTablerPlayerStopFilled class="thread-composer-stop-icon" />
+            <span v-if="isStopPending" class="thread-composer-stop-spinner" aria-hidden="true" />
+            <IconTablerPlayerStopFilled v-else class="thread-composer-stop-icon" />
           </button>
           <button
             v-else
@@ -405,6 +407,7 @@ const props = defineProps<{
   threadTokenUsage?: UiThreadTokenUsage | null
   codexQuota?: UiRateLimitSnapshot | null
   isTurnInProgress?: boolean
+  isStopPending?: boolean
   isInterruptingTurn?: boolean
   isUpdatingSpeedMode?: boolean
   disabled?: boolean
@@ -2142,6 +2145,10 @@ watch(
 
 .thread-composer-stop-icon {
   @apply h-5 w-5;
+}
+
+.thread-composer-stop-spinner {
+  @apply h-5 w-5 rounded-full border-2 border-current border-t-transparent animate-spin;
 }
 
 .thread-composer-hidden-input {

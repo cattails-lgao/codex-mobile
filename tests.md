@@ -24,16 +24,18 @@ This file tracks manual regression and feature verification steps.
 #### Prerequisites
 - App server is running from this repository.
 - A valid Telegram bot token is available.
+- At least one Telegram user ID is available for allowlisting.
 - Access to `~/.codex/` on the host machine.
 
 #### Steps
-1. In the app UI, open Telegram connection and submit a bot token.
+1. In the app UI, open Telegram connection and submit a bot token plus one or more allowed Telegram user IDs.
 2. Verify file `~/.codex/telegram-bridge.json` exists.
-3. Open `~/.codex/telegram-bridge.json` and confirm it contains a `botToken` field.
+3. Open `~/.codex/telegram-bridge.json` and confirm it contains `botToken` and `allowedUserIds` fields.
 4. Restart the app server and call Telegram status endpoint from UI to confirm it still reports configured.
 
 #### Expected Results
 - Telegram token is persisted in `~/.codex/telegram-bridge.json`.
+- Telegram allowlisted user IDs are persisted in `~/.codex/telegram-bridge.json`.
 - Telegram bridge remains configured after restart.
 
 #### Rollback/Cleanup
@@ -56,10 +58,31 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - `chatIds` is written after Telegram DM activity.
 - `chatIds` persists across bot reconfiguration.
-- `botToken` and `chatIds` are both present in `~/.codex/telegram-bridge.json`.
+- `botToken`, `chatIds`, and `allowedUserIds` are all present in `~/.codex/telegram-bridge.json`.
 
 #### Rollback/Cleanup
 - Remove `chatIds` or delete `~/.codex/telegram-bridge.json` to clear persisted chat targets.
+
+### Feature: Telegram bridge rejects unauthorized senders
+
+#### Prerequisites
+- App server is running from this repository.
+- Telegram bot is configured with a known `allowedUserIds` entry.
+- One Telegram account is allowlisted and one separate Telegram account is not.
+
+#### Steps
+1. From the allowlisted Telegram account, send `/start` to the bot.
+2. Confirm the bot responds normally.
+3. From the non-allowlisted Telegram account, send `/start` to the same bot.
+4. From the non-allowlisted account, send a normal text prompt.
+
+#### Expected Results
+- The allowlisted account can use the Telegram bridge normally.
+- The non-allowlisted account receives an unauthorized response.
+- No thread is created or updated for the non-allowlisted account.
+
+#### Rollback/Cleanup
+- Remove test chat mappings from `~/.codex/telegram-bridge.json` if needed.
 
 ### Feature: Skills dropdown closes after selection in composer
 
@@ -1994,6 +2017,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 
 #### Rollback/Cleanup
 - No persistent state is changed — closing or refreshing the tab resets the render window.
+<<<<<<< HEAD
 ### Feature: CLI auto-stars friuns2/codexui on startup (best-effort)
 
 #### Prerequisites
@@ -2124,3 +2148,40 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 #### Rollback/Cleanup
 - Run `bash scripts/fix-codex-thread-filter.sh --restore` to undo.
 - Backup is stored at `/Applications/Codex.app/Contents/Resources/app.asar.bak`.
+=======
+
+### Fix: Delete/rename thread dialog height cap
+
+#### Prerequisites
+- App is running from this repository.
+- At least one thread exists with a long title (can be achieved by renaming a thread to a very long string).
+
+#### Steps — Delete button visibility
+
+1. Right-click (or long-press) a thread in the sidebar to open the context menu.
+2. Click **Delete**.
+3. Verify the confirmation dialog appears and the **Delete** / **Cancel** buttons are fully visible without scrolling the page.
+4. Repeat with a thread whose title is very long (50+ characters); confirm buttons remain visible.
+5. On a small viewport (e.g. browser DevTools device emulation at 375 × 667), repeat steps 1–4 and confirm the dialog never exceeds the screen height.
+
+#### Steps — Long title wrapping
+
+6. Rename a thread to a string with no spaces (e.g. `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`).
+7. Open the Delete dialog for that thread.
+8. Verify the long title in the subtitle area wraps onto multiple lines rather than overflowing or being clipped horizontally.
+9. If the title is long enough to fill the subtitle area, verify a vertical scrollbar appears within the subtitle, and the title, input, and buttons remain visible outside the scroll area.
+
+#### Steps — Rename dialog
+
+10. Open the Rename dialog for a thread with a long title.
+11. Confirm the rename input field, title text, and **Save** / **Cancel** buttons are all fully visible.
+12. Type a very long string into the rename input and confirm it does not push the buttons off screen.
+
+#### Expected Results
+- Dialog is capped at 90 vh; action buttons are always pinned at the bottom.
+- Long unbroken thread titles wrap within the subtitle area; no horizontal clipping.
+- Vertical scrollbar appears in the subtitle region if the title exceeds available height.
+
+#### Rollback/Cleanup
+- Rename any test threads back to original names if desired.
+>>>>>>> 236ee352dc42b03dbdd711f7e2c7fd8d14c2eaee
