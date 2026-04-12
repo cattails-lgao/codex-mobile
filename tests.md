@@ -24,16 +24,18 @@ This file tracks manual regression and feature verification steps.
 #### Prerequisites
 - App server is running from this repository.
 - A valid Telegram bot token is available.
+- At least one Telegram user ID is available for allowlisting.
 - Access to `~/.codex/` on the host machine.
 
 #### Steps
-1. In the app UI, open Telegram connection and submit a bot token.
+1. In the app UI, open Telegram connection and submit a bot token plus one or more allowed Telegram user IDs.
 2. Verify file `~/.codex/telegram-bridge.json` exists.
-3. Open `~/.codex/telegram-bridge.json` and confirm it contains a `botToken` field.
+3. Open `~/.codex/telegram-bridge.json` and confirm it contains `botToken` and `allowedUserIds` fields.
 4. Restart the app server and call Telegram status endpoint from UI to confirm it still reports configured.
 
 #### Expected Results
 - Telegram token is persisted in `~/.codex/telegram-bridge.json`.
+- Telegram allowlisted user IDs are persisted in `~/.codex/telegram-bridge.json`.
 - Telegram bridge remains configured after restart.
 
 #### Rollback/Cleanup
@@ -56,10 +58,31 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - `chatIds` is written after Telegram DM activity.
 - `chatIds` persists across bot reconfiguration.
-- `botToken` and `chatIds` are both present in `~/.codex/telegram-bridge.json`.
+- `botToken`, `chatIds`, and `allowedUserIds` are all present in `~/.codex/telegram-bridge.json`.
 
 #### Rollback/Cleanup
 - Remove `chatIds` or delete `~/.codex/telegram-bridge.json` to clear persisted chat targets.
+
+### Feature: Telegram bridge rejects unauthorized senders
+
+#### Prerequisites
+- App server is running from this repository.
+- Telegram bot is configured with a known `allowedUserIds` entry.
+- One Telegram account is allowlisted and one separate Telegram account is not.
+
+#### Steps
+1. From the allowlisted Telegram account, send `/start` to the bot.
+2. Confirm the bot responds normally.
+3. From the non-allowlisted Telegram account, send `/start` to the same bot.
+4. From the non-allowlisted account, send a normal text prompt.
+
+#### Expected Results
+- The allowlisted account can use the Telegram bridge normally.
+- The non-allowlisted account receives an unauthorized response.
+- No thread is created or updated for the non-allowlisted account.
+
+#### Rollback/Cleanup
+- Remove test chat mappings from `~/.codex/telegram-bridge.json` if needed.
 
 ### Feature: Skills dropdown closes after selection in composer
 
