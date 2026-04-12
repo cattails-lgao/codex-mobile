@@ -192,18 +192,29 @@
                 <span class="sidebar-settings-label">GitHub trending projects</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': showGithubTrendingProjects }" />
               </button>
-              <button
-                class="sidebar-settings-row"
-                type="button"
-                title="Use free OpenRouter models (no API key needed). Rotates through community keys."
-                :disabled="freeModeLoading"
-                @click="toggleFreeMode"
-              >
-                <span class="sidebar-settings-label">Free mode (OpenRouter)</span>
-                <span class="sidebar-settings-toggle" :class="{ 'is-on': freeModeEnabled }" />
-              </button>
-              <div v-if="freeModeEnabled" class="sidebar-settings-row sidebar-settings-row--input">
-                <span class="sidebar-settings-label">OpenRouter API key</span>
+              <div class="sidebar-settings-row sidebar-settings-row--select" title="Choose the API provider for the Codex backend">
+                <span class="sidebar-settings-label">Provider</span>
+                <select
+                  class="sidebar-settings-provider-select"
+                  :value="selectedProvider"
+                  :disabled="freeModeLoading"
+                  @change="onProviderChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="codex">Codex</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="custom">Custom endpoint</option>
+                </select>
+              </div>
+              <div v-if="selectedProvider === 'openrouter'" class="sidebar-settings-row sidebar-settings-row--input">
+                <div class="sidebar-settings-provider-info">
+                  <span class="sidebar-settings-label">OpenRouter API key</span>
+                  <a
+                    class="sidebar-settings-provider-link"
+                    href="https://openrouter.ai/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >Get API key</a>
+                </div>
                 <div class="sidebar-settings-key-group">
                   <template v-if="freeModeHasCustomKey && !freeModeCustomKey">
                     <span class="sidebar-settings-key-masked">{{ freeModeCustomKeyMasked }}</span>
@@ -213,14 +224,14 @@
                       :disabled="freeModeCustomKeySaving"
                       title="Remove custom key, use community keys"
                       @click="clearFreeModeCustomKey"
-                    >✕</button>
+                    >&#x2715;</button>
                   </template>
                   <template v-else>
                     <input
                       v-model="freeModeCustomKey"
                       class="sidebar-settings-key-input"
                       type="password"
-                      placeholder="sk-or-v1-... (optional)"
+                      placeholder="sk-or-v1-... (optional, uses free keys if empty)"
                       @keydown.enter="saveFreeModeCustomKey"
                     />
                     <button
@@ -230,6 +241,34 @@
                       @click="saveFreeModeCustomKey"
                     >{{ freeModeCustomKeySaving ? '...' : 'Set' }}</button>
                   </template>
+                </div>
+              </div>
+              <div v-if="selectedProvider === 'custom'" class="sidebar-settings-row sidebar-settings-row--input">
+                <span class="sidebar-settings-label">Custom endpoint URL</span>
+                <div class="sidebar-settings-key-group">
+                  <input
+                    v-model="customEndpointUrl"
+                    class="sidebar-settings-key-input"
+                    type="url"
+                    placeholder="https://api.example.com/v1"
+                    @keydown.enter="saveCustomEndpoint"
+                  />
+                </div>
+                <span class="sidebar-settings-label" style="margin-top: 4px">API key</span>
+                <div class="sidebar-settings-key-group">
+                  <input
+                    v-model="customEndpointKey"
+                    class="sidebar-settings-key-input"
+                    type="password"
+                    placeholder="Bearer token (optional)"
+                    @keydown.enter="saveCustomEndpoint"
+                  />
+                  <button
+                    class="sidebar-settings-key-save"
+                    type="button"
+                    :disabled="freeModeCustomKeySaving || !customEndpointUrl.trim()"
+                    @click="saveCustomEndpoint"
+                  >{{ freeModeCustomKeySaving ? '...' : 'Save' }}</button>
                 </div>
               </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -703,7 +742,7 @@ import {
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GithubTipsScope, GithubTrendingProject, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -987,6 +1026,9 @@ const freeModeCustomKey = ref('')
 const freeModeHasCustomKey = ref(false)
 const freeModeCustomKeyMasked = ref<string | null>(null)
 const freeModeCustomKeySaving = ref(false)
+const selectedProvider = ref<'codex' | 'openrouter' | 'custom'>('codex')
+const customEndpointUrl = ref('')
+const customEndpointKey = ref('')
 const isTelegramConfigOpen = ref(false)
 const telegramBotTokenDraft = ref('')
 const telegramAllowedUserIdsDraft = ref('')
@@ -2581,18 +2623,42 @@ function toggleGithubTrendingProjects(): void {
   window.localStorage.setItem(GITHUB_TRENDING_PROJECTS_KEY, showGithubTrendingProjects.value ? '1' : '0')
 }
 
-async function toggleFreeMode(): Promise<void> {
+async function onProviderChange(provider: string): Promise<void> {
   if (freeModeLoading.value) return
   freeModeLoading.value = true
   try {
-    const next = !freeModeEnabled.value
-    const result = await setFreeMode(next)
-    freeModeEnabled.value = result.enabled
+    if (provider === 'codex') {
+      selectedProvider.value = 'codex'
+      const result = await setFreeMode(false)
+      freeModeEnabled.value = result.enabled
+    } else if (provider === 'openrouter') {
+      selectedProvider.value = 'openrouter'
+      const result = await setFreeMode(true)
+      freeModeEnabled.value = result.enabled
+    } else if (provider === 'custom') {
+      selectedProvider.value = 'custom'
+    }
     await refreshAll({ includeSelectedThreadMessages: false })
   } catch {
     // Silently fail — state unchanged
   } finally {
     freeModeLoading.value = false
+  }
+}
+
+async function saveCustomEndpoint(): Promise<void> {
+  if (freeModeCustomKeySaving.value) return
+  const url = customEndpointUrl.value.trim()
+  if (!url) return
+  freeModeCustomKeySaving.value = true
+  try {
+    await setCustomProvider(url, customEndpointKey.value.trim())
+    freeModeEnabled.value = true
+    await refreshAll({ includeSelectedThreadMessages: false })
+  } catch {
+    // Silently fail
+  } finally {
+    freeModeCustomKeySaving.value = false
   }
 }
 
@@ -2633,6 +2699,16 @@ async function loadFreeModeStatus(): Promise<void> {
     freeModeEnabled.value = status.enabled
     freeModeHasCustomKey.value = status.customKey ?? false
     freeModeCustomKeyMasked.value = status.maskedKey ?? null
+    if (status.enabled) {
+      if (status.provider === 'custom') {
+        selectedProvider.value = 'custom'
+        customEndpointUrl.value = status.customBaseUrl ?? ''
+      } else {
+        selectedProvider.value = 'openrouter'
+      }
+    } else {
+      selectedProvider.value = 'codex'
+    }
   } catch {
     // Ignore — free mode status unknown
   }
@@ -3574,7 +3650,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-account-list {
-  @apply flex max-h-56 flex-col gap-2 overflow-y-auto;
+  @apply flex flex-col gap-2;
 }
 
 .sidebar-settings-account-item {
@@ -3689,6 +3765,34 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-key-clear {
   @apply shrink-0 w-6 h-6 flex items-center justify-center rounded-full border border-zinc-200 text-xs text-zinc-400 transition-colors hover:text-zinc-600 hover:border-zinc-300 disabled:opacity-40;
+}
+
+.sidebar-settings-provider-select {
+  @apply min-w-0 max-w-40 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none transition-colors cursor-pointer;
+}
+
+.sidebar-settings-provider-select:focus {
+  @apply border-zinc-400 ring-2 ring-zinc-200;
+}
+
+.sidebar-settings-provider-info {
+  @apply flex items-center justify-between w-full;
+}
+
+.sidebar-settings-provider-link {
+  @apply text-xs text-blue-600 hover:text-blue-700 underline shrink-0;
+}
+
+:root.dark .sidebar-settings-provider-select {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-200;
+}
+
+:root.dark .sidebar-settings-provider-select:focus {
+  @apply border-zinc-500 ring-zinc-700;
+}
+
+:root.dark .sidebar-settings-provider-link {
+  @apply text-blue-400 hover:text-blue-300;
 }
 
 :root.dark .sidebar-settings-key-input {

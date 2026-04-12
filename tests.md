@@ -2017,7 +2017,6 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 
 #### Rollback/Cleanup
 - No persistent state is changed — closing or refreshing the tab resets the render window.
-<<<<<<< HEAD
 ### Feature: CLI auto-stars friuns2/codexui on startup (best-effort)
 
 #### Prerequisites
@@ -2148,7 +2147,6 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 #### Rollback/Cleanup
 - Run `bash scripts/fix-codex-thread-filter.sh --restore` to undo.
 - Backup is stored at `/Applications/Codex.app/Contents/Resources/app.asar.bak`.
-=======
 
 ### Fix: Delete/rename thread dialog height cap
 
@@ -2184,4 +2182,53 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 
 #### Rollback/Cleanup
 - Rename any test threads back to original names if desired.
->>>>>>> 236ee352dc42b03dbdd711f7e2c7fd8d14c2eaee
+
+### Feature: Provider dropdown in settings (replaces free mode toggle)
+
+#### Prerequisites
+- App is running from this repository (`pnpm run dev`).
+
+#### Steps
+1. Open Settings panel from the sidebar.
+2. Verify the settings panel is scrollable when content overflows.
+3. Verify the Accounts section does NOT have its own scrollbar — it flows naturally within the settings panel scroll.
+4. Locate the **Provider** dropdown (default: "Codex").
+5. Change provider to **OpenRouter**.
+6. Verify a "Get API key" link appears next to the OpenRouter API key label, pointing to `https://openrouter.ai/keys`.
+7. Verify the API key input field is shown with placeholder `sk-or-v1-... (optional, uses free keys if empty)`.
+8. Optionally enter an OpenRouter API key and click Set.
+9. Change provider to **Custom endpoint**.
+10. Verify URL and API key input fields appear.
+11. Enter a valid endpoint URL and click Save.
+12. Change provider back to **Codex**.
+13. Verify the config is reset and no provider-specific fields are shown.
+
+#### Expected Results
+- Provider dropdown shows three options: Codex, OpenRouter, Custom endpoint.
+- Selecting OpenRouter enables free mode with community keys (or custom key if provided).
+- Selecting Custom endpoint allows setting a custom API base URL and bearer token.
+- Selecting Codex disables external provider mode and uses the default Codex backend.
+- Settings panel scrolls as a whole; accounts section has no independent scrollbar.
+- OpenRouter option includes a "Get API key" link to openrouter.ai/keys.
+
+#### Rollback/Cleanup
+- Switch provider back to Codex to restore default behavior.
+
+### Feature: CLI no longer requires codex login on startup
+
+#### Prerequisites
+- Remove `~/.codex/auth.json` to simulate a first-time user.
+
+#### Steps
+1. Run `npx codexui` or `pnpm run dev`.
+2. Verify the CLI prints a message about not being logged in but does NOT block or prompt for login.
+3. Verify the server starts and the web UI loads successfully.
+4. Use the Provider dropdown in settings to select OpenRouter and start chatting without a Codex account.
+
+#### Expected Results
+- CLI does not run `codex login` on startup.
+- A friendly message is shown: "You can log in later via settings or run `codexui login`."
+- The app is fully usable without a Codex account when using OpenRouter or custom providers.
+
+#### Rollback/Cleanup
+- Run `codexui login` to restore Codex authentication if needed.

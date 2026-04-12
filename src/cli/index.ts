@@ -507,9 +507,8 @@ async function startServer(options: {
     process.env.CODEXUI_APPROVAL_POLICY = options.approvalPolicy
   }
   const runtimeConfig = resolveAppServerRuntimeConfig()
-  if (options.login && !hasCodexAuth() && codexCommand) {
-    console.log('\nCodex is not logged in. Starting `codex login`...\n')
-    runOrFail(codexCommand, ['login'], 'Codex login')
+  if (options.login && !hasCodexAuth()) {
+    console.log('\nCodex is not logged in. You can log in later via settings or run `codexui login`.\n')
   }
   const requestedPort = parseInt(options.port, 10)
   const password = resolvePassword(options.password)
