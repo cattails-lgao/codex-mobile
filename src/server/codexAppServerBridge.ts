@@ -3319,6 +3319,26 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
           if (fmState.enabled) {
+            if (fmState.provider === 'custom' && fmState.customBaseUrl) {
+              try {
+                const modelsUrl = fmState.customBaseUrl.replace(/\/+$/, '') + '/models'
+                const headers: Record<string, string> = {}
+                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
+                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
+                }
+                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
+                if (resp.ok) {
+                  const json = await resp.json() as { data?: Array<{ id: string }> }
+                  const ids = (json.data ?? []).map(m => m.id).filter(Boolean)
+                  setJson(res, 200, { data: ids, exclusive: true, source: 'custom' })
+                  return
+                }
+              } catch {
+                // Custom endpoint model fetch failed — return empty list
+              }
+              setJson(res, 200, { data: [], exclusive: true, source: 'custom' })
+              return
+            }
             const freeModels = await getFreeModels()
             setJson(res, 200, { data: freeModels, exclusive: true })
             return
