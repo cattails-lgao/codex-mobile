@@ -403,11 +403,7 @@
                   :options="newThreadFolderOptions" placeholder="Choose folder"
                   :enable-search="true"
                   search-placeholder="Quick search project"
-                  :show-add-action="true"
-                  add-action-mode="event"
-                  add-action-label="+ Add new project"
-                  :disabled="false" @update:model-value="onSelectNewThreadFolder"
-                  @add-action="onStartAddNewProject" />
+                  :disabled="false" @update:model-value="onSelectNewThreadFolder" />
                 <p v-if="newThreadCwd" class="new-thread-folder-selected" :title="newThreadCwd">
                   Selected folder: {{ newThreadCwd }}
                 </p>
@@ -415,115 +411,124 @@
                   <button class="new-thread-folder-action new-thread-folder-action-primary" type="button" @click="onOpenExistingFolder">
                     Select folder
                   </button>
+                  <button class="new-thread-folder-action" type="button" @click="onCreateProject">
+                    Create Project
+                  </button>
                 </div>
-                <div v-if="isExistingFolderPickerOpen" class="new-thread-open-folder">
-                  <div class="new-thread-open-folder-header">
-                    <p class="new-thread-open-folder-title">Select folder</p>
-                    <button class="new-thread-open-folder-close" type="button" @click="onCloseExistingFolderPanel">
-                      Cancel
-                    </button>
-                  </div>
-                  <p class="new-thread-open-folder-label">Current folder</p>
-                  <div class="new-thread-open-folder-current">
-                    <p class="new-thread-open-folder-path" :title="existingFolderBrowsePath || 'Unavailable'">
-                      {{ existingFolderBrowsePath || 'Unavailable' }}
-                    </p>
-                    <button
-                      class="new-thread-folder-action new-thread-folder-action-primary"
-                      type="button"
-                      :disabled="!existingFolderBrowsePath || !!existingFolderError || isExistingFolderLoading || isOpeningExistingFolder"
-                      @click="onConfirmExistingFolder()"
-                    >
-                      {{ isOpeningExistingFolder ? 'Opening…' : 'Open' }}
-                    </button>
-                  </div>
-                  <div class="new-thread-open-folder-actions">
-                    <label class="new-thread-open-folder-toggle">
+                <Teleport to="body">
+                  <div v-if="isExistingFolderPickerOpen" class="new-thread-open-folder-overlay" @click.self="onCloseExistingFolderPanel">
+                    <div class="new-thread-open-folder" role="dialog" aria-modal="true" aria-label="Select folder" @keydown.esc.prevent="onCloseExistingFolderPanel">
+                      <div class="new-thread-open-folder-header">
+                        <p class="new-thread-open-folder-title">Select folder</p>
+                        <button class="new-thread-open-folder-close" type="button" @click="onCloseExistingFolderPanel">
+                          Cancel
+                        </button>
+                      </div>
+                      <p class="new-thread-open-folder-label">Current folder</p>
+                      <div class="new-thread-open-folder-current">
+                        <p class="new-thread-open-folder-path" :title="existingFolderBrowsePath || 'Unavailable'">
+                          {{ existingFolderBrowsePath || 'Unavailable' }}
+                        </p>
+                        <button
+                          class="new-thread-folder-action new-thread-folder-action-primary"
+                          type="button"
+                          :disabled="!existingFolderBrowsePath || !!existingFolderError || isExistingFolderLoading || isOpeningExistingFolder"
+                          @click="onConfirmExistingFolder()"
+                        >
+                          {{ isOpeningExistingFolder ? 'Opening…' : 'Open' }}
+                        </button>
+                      </div>
+                      <div class="new-thread-open-folder-actions">
+                        <label class="new-thread-open-folder-toggle">
+                          <input
+                            v-model="showHiddenFolders"
+                            class="new-thread-open-folder-toggle-input"
+                            type="checkbox"
+                            @change="onToggleHiddenFolders"
+                          />
+                          <span>Show hidden folders</span>
+                        </label>
+                        <button
+                          class="new-thread-folder-action"
+                          :class="{ 'new-thread-folder-action-primary': isCreateFolderOpen }"
+                          type="button"
+                          :aria-pressed="isCreateFolderOpen"
+                          :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder || (!!existingFolderError && !isCreateFolderOpen)"
+                          @click="onOpenCreateFolderPanel"
+                        >
+                          New folder
+                        </button>
+                      </div>
+                      <div v-if="isCreateFolderOpen" class="new-thread-open-folder-create">
+                        <div class="new-thread-open-folder-create-composer">
+                          <input
+                            ref="createFolderInputRef"
+                            v-model="createFolderDraft"
+                            class="new-thread-open-folder-create-input"
+                            type="text"
+                            placeholder="Folder name"
+                            @keydown.enter.prevent="onCreateFolder"
+                            @keydown.esc.prevent="onCloseCreateFolderPanel"
+                          />
+                          <button
+                            class="new-thread-folder-action new-thread-folder-action-primary new-thread-open-folder-create-submit"
+                            type="button"
+                            :disabled="!canCreateFolder || isCreatingFolder"
+                            @click="onCreateFolder"
+                          >
+                            {{ createFolderSubmitLabel }}
+                          </button>
+                        </div>
+                        <p v-if="createFolderError" class="new-thread-open-folder-error">{{ createFolderError }}</p>
+                      </div>
                       <input
-                        v-model="showHiddenFolders"
-                        class="new-thread-open-folder-toggle-input"
-                        type="checkbox"
-                        @change="onToggleHiddenFolders"
-                      />
-                      <span>Show hidden folders</span>
-                    </label>
-                    <button
-                      class="new-thread-folder-action"
-                      :class="{ 'new-thread-folder-action-primary': isCreateFolderOpen }"
-                      type="button"
-                      :aria-pressed="isCreateFolderOpen"
-                      :disabled="!existingFolderBrowsePath || isExistingFolderLoading || isOpeningExistingFolder || isCreatingFolder || (!!existingFolderError && !isCreateFolderOpen)"
-                      @click="onOpenCreateFolderPanel"
-                    >
-                      New folder
-                    </button>
-                  </div>
-                  <div v-if="isCreateFolderOpen" class="new-thread-open-folder-create">
-                    <div class="new-thread-open-folder-create-composer">
-                      <input
-                        ref="createFolderInputRef"
-                        v-model="createFolderDraft"
-                        class="new-thread-open-folder-create-input"
+                        ref="existingFolderFilterInputRef"
+                        v-model="existingFolderFilter"
+                        class="new-thread-open-folder-filter"
                         type="text"
-                        placeholder="Folder name"
-                        @keydown.enter.prevent="onCreateFolder"
-                        @keydown.esc.prevent="onCloseCreateFolderPanel"
+                        placeholder="Filter folders..."
+                        @keydown.esc.prevent="onCloseExistingFolderPanel"
                       />
-                      <button
-                        class="new-thread-folder-action new-thread-folder-action-primary new-thread-open-folder-create-submit"
-                        type="button"
-                        :disabled="!canCreateFolder || isCreatingFolder"
-                        @click="onCreateFolder"
-                      >
-                        {{ createFolderSubmitLabel }}
-                      </button>
+                      <div v-if="existingFolderError" class="new-thread-open-folder-error-actions">
+                        <p class="new-thread-open-folder-error">{{ existingFolderError }}</p>
+                        <button
+                          class="new-thread-folder-action"
+                          type="button"
+                          :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                          @click="onRetryExistingFolderBrowse"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                      <p v-if="isExistingFolderLoading" class="new-thread-open-folder-status">Loading folders…</p>
+                      <p v-else-if="!existingFolderError && existingFolderFilteredEntries.length === 0" class="new-thread-open-folder-status">
+                        {{ existingFolderFilter.trim() ? 'No folders match this filter.' : 'No subfolders found here.' }}
+                      </p>
+                      <ul v-else-if="existingFolderFilteredEntries.length > 0" class="new-thread-open-folder-list">
+                        <li v-for="entry in existingFolderFilteredEntries" :key="entry.key" class="new-thread-open-folder-item">
+                          <button
+                            class="new-thread-open-folder-item-main"
+                            type="button"
+                            :title="entry.path"
+                            :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                            @click="onBrowseExistingFolder(entry.path)"
+                          >
+                            <span class="new-thread-open-folder-item-name">{{ entry.name }}</span>
+                          </button>
+                          <button
+                            v-if="entry.kind === 'directory'"
+                            class="new-thread-open-folder-item-open"
+                            type="button"
+                            :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                            @click="onConfirmExistingFolder(entry.path)"
+                          >
+                            Open
+                          </button>
+                        </li>
+                      </ul>
                     </div>
-                    <p v-if="createFolderError" class="new-thread-open-folder-error">{{ createFolderError }}</p>
                   </div>
-                  <input
-                    v-model="existingFolderFilter"
-                    class="new-thread-open-folder-filter"
-                    type="text"
-                    placeholder="Filter folders..."
-                  />
-                  <div v-if="existingFolderError" class="new-thread-open-folder-error-actions">
-                    <p class="new-thread-open-folder-error">{{ existingFolderError }}</p>
-                    <button
-                      class="new-thread-folder-action"
-                      type="button"
-                      :disabled="isExistingFolderLoading || isOpeningExistingFolder"
-                      @click="onRetryExistingFolderBrowse"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                  <p v-if="isExistingFolderLoading" class="new-thread-open-folder-status">Loading folders…</p>
-                  <p v-else-if="!existingFolderError && existingFolderFilteredEntries.length === 0" class="new-thread-open-folder-status">
-                    {{ existingFolderFilter.trim() ? 'No folders match this filter.' : 'No subfolders found here.' }}
-                  </p>
-                  <ul v-else-if="existingFolderFilteredEntries.length > 0" class="new-thread-open-folder-list">
-                    <li v-for="entry in existingFolderFilteredEntries" :key="entry.key" class="new-thread-open-folder-item">
-                      <button
-                        class="new-thread-open-folder-item-main"
-                        type="button"
-                        :title="entry.path"
-                        :disabled="isExistingFolderLoading || isOpeningExistingFolder"
-                        @click="onBrowseExistingFolder(entry.path)"
-                      >
-                        <span class="new-thread-open-folder-item-name">{{ entry.name }}</span>
-                      </button>
-                      <button
-                        v-if="entry.kind === 'directory'"
-                        class="new-thread-open-folder-item-open"
-                        type="button"
-                        :disabled="isExistingFolderLoading || isOpeningExistingFolder"
-                        @click="onConfirmExistingFolder(entry.path)"
-                      >
-                        Open
-                      </button>
-                    </li>
-                  </ul>
-                </div>
+                </Teleport>
                 <ComposerRuntimeDropdown
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
@@ -1039,6 +1044,7 @@ const createFolderDraft = ref('')
 const createFolderError = ref('')
 const isCreatingFolder = ref(false)
 const isExistingFolderPickerOpen = ref(false)
+const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderBrowsePath = ref('')
 const existingFolderParentPath = ref('')
 const existingFolderEntries = ref<LocalDirectoryEntry[]>([])
@@ -2110,16 +2116,20 @@ function onSelectContentHeaderBranch(value: string): void {
     })
 }
 
-async function onStartAddNewProject(): Promise<void> {
+async function onCreateProject(): Promise<void> {
   const baseDir = await resolveProjectBaseDirectory()
-  const browseRoot = baseDir || homeDirectory.value.trim() || '/'
-  const search = new URLSearchParams()
-  const suggestedName = defaultNewProjectName.value.trim()
-  if (suggestedName) {
-    search.set('newProjectName', suggestedName)
-  }
-  const query = search.toString()
-  window.location.assign(`/codex-local-browse${encodeURI(browseRoot)}${query ? `?${query}` : ''}`)
+  if (!baseDir) return
+
+  await refreshDefaultProjectName()
+  const suggestedName = defaultNewProjectName.value.trim() || 'New Project (1)'
+  const projectName = window.prompt(`Create project in ${baseDir}`, suggestedName)
+  if (projectName === null) return
+
+  const normalizedProjectName = projectName.trim()
+  if (!normalizedProjectName) return
+
+  const search = new URLSearchParams({ newProjectName: normalizedProjectName })
+  window.location.assign(`/codex-local-browse${encodeURI(baseDir)}?${search.toString()}`)
 }
 
 async function onOpenExistingFolder(): Promise<void> {
@@ -2129,6 +2139,9 @@ async function onOpenExistingFolder(): Promise<void> {
   isExistingFolderPickerOpen.value = true
   existingFolderFilter.value = ''
   await loadExistingFolderListing(startPath)
+  if (!existingFolderError.value) {
+    void nextTick(() => existingFolderFilterInputRef.value?.focus())
+  }
 }
 
 function onCloseExistingFolderPanel(): void {
@@ -3266,8 +3279,12 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
 }
 
+.new-thread-open-folder-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4;
+}
+
 .new-thread-open-folder {
-  @apply mt-3 flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-sm;
+  @apply flex w-full max-w-3xl max-h-[90vh] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-xl;
 }
 
 .new-thread-open-folder-header {

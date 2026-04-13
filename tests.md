@@ -528,7 +528,7 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: Revert PR #16 mobile viewport and chat scroll behavior changes
 
-### Feature: Revert new-project folder-browser flow to inline add flow
+### Feature: Select folder opens a modal
 
 #### Prerequisites
 - App is running from this repository.
@@ -536,19 +536,21 @@ This file tracks manual regression and feature verification steps.
 - At least one writable parent directory exists for creating a test project folder.
 
 #### Steps
-1. On the home/new-thread screen, open the `Choose folder` dropdown.
-2. Click `+ Add new project`.
-3. Enter a new folder name (for example `New Project Inline Test`) and click `Open`.
-4. Confirm the app selects the newly created/opened project folder.
-5. Repeat step 2, but enter an absolute path to an existing folder and click `Open`.
+1. On the home/new-thread screen, click `Select folder`.
+2. Confirm a modal overlay appears centered on the page.
+3. Press `Escape` and confirm the modal closes.
+4. Click `Select folder` again.
+5. Click outside the modal panel and confirm it closes.
+6. Click `Select folder` again, browse to a subfolder if needed, then click `Open`.
+7. Confirm the selected folder is applied to the new-thread screen.
 
 #### Expected Results
-- Clicking `+ Add new project` opens inline input inside the dropdown instead of navigating to `/codex-local-browse...`.
-- Entering a folder name creates/selects that project under the current base directory.
-- Entering an absolute path opens that existing folder without creating a nested directory.
+- `Select folder` opens a modal dialog instead of an inline panel.
+- Escape and backdrop click both dismiss the modal.
+- Selecting and opening a folder updates the new-thread folder selection.
 
 #### Rollback/Cleanup
-- Delete the test folder created in step 3 if it was created only for verification.
+- None.
 
 ### Feature: Disable auto-restore to last thread when opening home URL
 

@@ -1085,18 +1085,6 @@
   @apply text-zinc-500;
 }
 
-:root.dark .composer-dropdown-add {
-  @apply border-zinc-700 text-zinc-300 hover:bg-zinc-700;
-}
-
-:root.dark .composer-dropdown-add-input {
-  @apply border-zinc-600 bg-zinc-700 text-zinc-200;
-}
-
-:root.dark .composer-dropdown-add-btn {
-  @apply border-zinc-600 bg-zinc-700 text-zinc-300 hover:bg-zinc-600;
-}
-
 :root.dark .thread-composer-skill-chip {
   @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
 }
@@ -1359,7 +1347,6 @@
 @media (max-width: 768px) {
   .thread-composer-input,
   .composer-dropdown-search-input,
-  .composer-dropdown-add-input,
   .search-dropdown-search,
   .sidebar-search-input,
   .project-menu-input,
