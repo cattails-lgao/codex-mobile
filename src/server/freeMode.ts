@@ -136,25 +136,42 @@ export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
 export const FREE_MODE_STATE_FILE = 'webui-free-mode.json'
 
 export const CUSTOM_PROVIDER_ID = 'custom-endpoint'
+export const OPENCODE_ZEN_PROVIDER_ID = 'opencode-zen'
+export const OPENCODE_ZEN_BASE_URL = 'https://opencode.ai/zen/v1'
+
+export type WireApi = 'responses' | 'chat'
 
 export interface FreeModeState {
   enabled: boolean
   apiKey: string | null
   model: string
   customKey?: boolean
-  provider?: 'openrouter' | 'custom'
+  provider?: 'openrouter' | 'custom' | 'opencode-zen'
   customBaseUrl?: string
+  wireApi?: WireApi
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState): string[] {
   if (!state.enabled || !state.apiKey) return []
 
+  if (state.provider === 'opencode-zen') {
+    const wireApi = state.wireApi || 'chat'
+    return [
+      '-c', `model_provider="${OPENCODE_ZEN_PROVIDER_ID}"`,
+      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.name="OpenCode Zen"`,
+      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="${OPENCODE_ZEN_BASE_URL}"`,
+      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.wire_api="${wireApi}"`,
+      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
+    ]
+  }
+
   if (state.provider === 'custom' && state.customBaseUrl) {
+    const wireApi = state.wireApi || 'responses'
     return [
       '-c', `model_provider="${CUSTOM_PROVIDER_ID}"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.name="Custom Endpoint"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.base_url="${state.customBaseUrl}"`,
-      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.wire_api="responses"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.wire_api="${wireApi}"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
     ]
   }

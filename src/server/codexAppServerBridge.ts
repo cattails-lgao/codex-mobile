@@ -3088,6 +3088,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               maskedKey,
               provider: state.provider ?? 'openrouter',
               customBaseUrl: state.customBaseUrl ?? null,
+              wireApi: state.wireApi ?? null,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -3142,7 +3143,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             const body = await readJsonBody(req) as Record<string, unknown> | null
             const baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim() : ''
             const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
-            if (!baseUrl) {
+            const wireApi = body?.wireApi === 'chat' ? 'chat' as const : 'responses' as const
+            const providerType = body?.provider === 'opencode-zen' ? 'opencode-zen' as const : 'custom' as const
+            if (providerType === 'custom' && !baseUrl) {
               setJson(res, 400, { error: 'baseUrl is required' })
               return
             }
@@ -3151,8 +3154,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               apiKey: apiKey || 'dummy',
               model: '',
               customKey: true,
-              provider: 'custom',
-              customBaseUrl: baseUrl,
+              provider: providerType,
+              customBaseUrl: providerType === 'custom' ? baseUrl : undefined,
+              wireApi,
             }
             await writeFile(statePath, JSON.stringify(state), 'utf8')
             appServer.dispose()
@@ -3458,6 +3462,26 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
           if (fmState.enabled) {
+            if (fmState.provider === 'opencode-zen') {
+              try {
+                const modelsUrl = 'https://opencode.ai/zen/v1/models'
+                const headers: Record<string, string> = {}
+                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
+                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
+                }
+                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
+                if (resp.ok) {
+                  const json = await resp.json() as { data?: Array<{ id: string }> }
+                  const ids = (json.data ?? []).map(m => m.id).filter(Boolean)
+                  setJson(res, 200, { data: ids, exclusive: true, source: 'opencode-zen' })
+                  return
+                }
+              } catch {
+                // OpenCode Zen model fetch failed
+              }
+              setJson(res, 200, { data: ['big-pickle'], exclusive: true, source: 'opencode-zen' })
+              return
+            }
             if (fmState.provider === 'custom' && fmState.customBaseUrl) {
               try {
                 const modelsUrl = fmState.customBaseUrl.replace(/\/+$/, '') + '/models'

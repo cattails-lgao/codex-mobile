@@ -202,6 +202,7 @@
                 >
                   <option value="codex">Codex</option>
                   <option value="openrouter">OpenRouter</option>
+                  <option value="opencode-zen">OpenCode Zen</option>
                   <option value="custom">Custom endpoint</option>
                 </select>
               </div>
@@ -243,6 +244,32 @@
                   </template>
                 </div>
               </div>
+              <div v-if="selectedProvider === 'opencode-zen'" class="sidebar-settings-row sidebar-settings-row--input">
+                <div class="sidebar-settings-provider-info">
+                  <span class="sidebar-settings-label">OpenCode Zen API key</span>
+                  <a
+                    class="sidebar-settings-provider-link"
+                    href="https://opencode.ai/auth"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >Get API key</a>
+                </div>
+                <div class="sidebar-settings-key-group">
+                  <input
+                    v-model="opencodeZenKey"
+                    class="sidebar-settings-key-input"
+                    type="password"
+                    placeholder="sk-..."
+                    @keydown.enter="saveOpencodeZen"
+                  />
+                  <button
+                    class="sidebar-settings-key-save"
+                    type="button"
+                    :disabled="freeModeCustomKeySaving || !opencodeZenKey.trim()"
+                    @click="saveOpencodeZen"
+                  >{{ freeModeCustomKeySaving ? '...' : 'Save' }}</button>
+                </div>
+              </div>
               <div v-if="selectedProvider === 'custom'" class="sidebar-settings-row sidebar-settings-row--input">
                 <span class="sidebar-settings-label">Custom endpoint URL</span>
                 <div class="sidebar-settings-key-group">
@@ -269,6 +296,16 @@
                     :disabled="freeModeCustomKeySaving || !customEndpointUrl.trim()"
                     @click="saveCustomEndpoint"
                   >{{ freeModeCustomKeySaving ? '...' : 'Save' }}</button>
+                </div>
+                <div class="sidebar-settings-row sidebar-settings-row--select" style="margin-top: 4px; padding: 0">
+                  <span class="sidebar-settings-label">API format</span>
+                  <select
+                    v-model="customEndpointWireApi"
+                    class="sidebar-settings-provider-select"
+                  >
+                    <option value="responses">Responses API</option>
+                    <option value="chat">Chat Completions</option>
+                  </select>
                 </div>
               </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -1031,9 +1068,11 @@ const freeModeCustomKey = ref('')
 const freeModeHasCustomKey = ref(false)
 const freeModeCustomKeyMasked = ref<string | null>(null)
 const freeModeCustomKeySaving = ref(false)
-const selectedProvider = ref<'codex' | 'openrouter' | 'custom'>('codex')
+const selectedProvider = ref<'codex' | 'openrouter' | 'opencode-zen' | 'custom'>('codex')
 const customEndpointUrl = ref('')
 const customEndpointKey = ref('')
+const customEndpointWireApi = ref<'responses' | 'chat'>('responses')
+const opencodeZenKey = ref('')
 const isTelegramConfigOpen = ref(false)
 const telegramBotTokenDraft = ref('')
 const telegramAllowedUserIdsDraft = ref('')
@@ -2664,6 +2703,8 @@ async function onProviderChange(provider: string): Promise<void> {
       selectedProvider.value = 'openrouter'
       const result = await setFreeMode(true)
       freeModeEnabled.value = result.enabled
+    } else if (provider === 'opencode-zen') {
+      selectedProvider.value = 'opencode-zen'
     } else if (provider === 'custom') {
       selectedProvider.value = 'custom'
     }
@@ -2681,7 +2722,28 @@ async function saveCustomEndpoint(): Promise<void> {
   if (!url) return
   freeModeCustomKeySaving.value = true
   try {
-    await setCustomProvider(url, customEndpointKey.value.trim())
+    await setCustomProvider(url, customEndpointKey.value.trim(), {
+      wireApi: customEndpointWireApi.value,
+    })
+    freeModeEnabled.value = true
+    await refreshAll({ includeSelectedThreadMessages: false })
+  } catch {
+    // Silently fail
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function saveOpencodeZen(): Promise<void> {
+  if (freeModeCustomKeySaving.value) return
+  const key = opencodeZenKey.value.trim()
+  if (!key) return
+  freeModeCustomKeySaving.value = true
+  try {
+    await setCustomProvider('', key, {
+      wireApi: 'chat',
+      provider: 'opencode-zen',
+    })
     freeModeEnabled.value = true
     await refreshAll({ includeSelectedThreadMessages: false })
   } catch {
@@ -2729,9 +2791,12 @@ async function loadFreeModeStatus(): Promise<void> {
     freeModeHasCustomKey.value = status.customKey ?? false
     freeModeCustomKeyMasked.value = status.maskedKey ?? null
     if (status.enabled) {
-      if (status.provider === 'custom') {
+      if (status.provider === 'opencode-zen') {
+        selectedProvider.value = 'opencode-zen'
+      } else if (status.provider === 'custom') {
         selectedProvider.value = 'custom'
         customEndpointUrl.value = status.customBaseUrl ?? ''
+        customEndpointWireApi.value = status.wireApi === 'chat' ? 'chat' : 'responses'
       } else {
         selectedProvider.value = 'openrouter'
       }
