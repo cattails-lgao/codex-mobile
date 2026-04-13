@@ -26,6 +26,7 @@ import {
   getFreeModeEnvVars,
   type FreeModeState,
 } from './freeMode.js'
+import { handleZenProxyRequest } from './zenProxy.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
   resolveCodexCommand,
@@ -2264,11 +2265,12 @@ class AppServerProcess {
       '-c', 'sandbox_mode="danger-full-access"',
     ]
     let extraEnv: Record<string, string> = {}
+    const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
     const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
     try {
       const raw = readFileSync(statePath, 'utf8')
       const state = JSON.parse(raw) as FreeModeState
-      args.push(...getFreeModeConfigArgs(state))
+      args.push(...getFreeModeConfigArgs(state, serverPort))
       extraEnv = getFreeModeEnvVars(state)
     } catch {
       // No free-mode state or invalid — use defaults
@@ -3033,6 +3035,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       const url = new URL(req.url, 'http://localhost')
+
+      if (url.pathname === '/codex-api/zen-proxy/v1/responses' && req.method === 'POST') {
+        const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+        let bearerToken = ''
+        try {
+          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+          bearerToken = state.apiKey ?? ''
+        } catch { /* use empty */ }
+        handleZenProxyRequest(req, res, bearerToken)
+        return
+      }
+
       if (url.pathname.startsWith('/codex-api/free-mode')) {
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
 

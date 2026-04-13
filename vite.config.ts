@@ -128,6 +128,7 @@ export default defineConfig({
     {
       name: "codex-bridge",
       configureServer(server) {
+        process.env.CODEXUI_SERVER_PORT = String(server.config.server.port ?? 5173);
         const bridge = createCodexBridgeMiddleware();
         const httpServer = server.httpServer;
         if (httpServer) {

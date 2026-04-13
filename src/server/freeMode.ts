@@ -165,17 +165,23 @@ export function getFreeModeEnvVars(state: FreeModeState): Record<string, string>
   return {}
 }
 
-export function getFreeModeConfigArgs(state: FreeModeState): string[] {
+export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number): string[] {
   if (!state.enabled || !state.apiKey) return []
 
   if (state.provider === 'opencode-zen') {
-    const wireApi = state.wireApi || 'chat'
+    const baseUrl = serverPort
+      ? `http://127.0.0.1:${serverPort}/codex-api/zen-proxy/v1`
+      : OPENCODE_ZEN_BASE_URL
+    const wireApi = serverPort ? 'responses' : (state.wireApi || 'chat')
+    const authArgs: string[] = serverPort
+      ? ['-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="zen-proxy-token"`]
+      : ['-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.env_key="OPENCODE_ZEN_API_KEY"`]
     return [
       '-c', `model_provider="${OPENCODE_ZEN_PROVIDER_ID}"`,
       '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.name="OpenCode Zen"`,
-      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="${OPENCODE_ZEN_BASE_URL}"`,
+      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="${baseUrl}"`,
       '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.wire_api="${wireApi}"`,
-      '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.env_key="OPENCODE_ZEN_API_KEY"`,
+      ...authArgs,
     ]
   }
 
