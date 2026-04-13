@@ -2705,10 +2705,23 @@ async function onProviderChange(provider: string): Promise<void> {
       freeModeEnabled.value = result.enabled
     } else if (provider === 'opencode-zen') {
       selectedProvider.value = 'opencode-zen'
+      if (opencodeZenKey.value.trim()) {
+        await setCustomProvider('', opencodeZenKey.value.trim(), {
+          wireApi: 'chat',
+          provider: 'opencode-zen',
+        })
+        freeModeEnabled.value = true
+      }
     } else if (provider === 'custom') {
       selectedProvider.value = 'custom'
+      if (customEndpointUrl.value.trim() && customEndpointKey.value.trim()) {
+        await setCustomProvider(customEndpointUrl.value.trim(), customEndpointKey.value.trim(), {
+          wireApi: customEndpointWireApi.value,
+        })
+        freeModeEnabled.value = true
+      }
     }
-    await refreshAll({ includeSelectedThreadMessages: false })
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true })
   } catch {
     // Silently fail — state unchanged
   } finally {
@@ -2726,7 +2739,7 @@ async function saveCustomEndpoint(): Promise<void> {
       wireApi: customEndpointWireApi.value,
     })
     freeModeEnabled.value = true
-    await refreshAll({ includeSelectedThreadMessages: false })
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true })
   } catch {
     // Silently fail
   } finally {
@@ -2745,7 +2758,7 @@ async function saveOpencodeZen(): Promise<void> {
       provider: 'opencode-zen',
     })
     freeModeEnabled.value = true
-    await refreshAll({ includeSelectedThreadMessages: false })
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true })
   } catch {
     // Silently fail
   } finally {

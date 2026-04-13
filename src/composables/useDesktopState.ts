@@ -1395,7 +1395,7 @@ export function useDesktopState() {
     return [`Mode: ${modeLabel}`, `Model: ${modelLabel}`, `Thinking: ${effortLabel}`, `Speed: ${speedLabel}`]
   }
 
-  async function refreshModelPreferences(): Promise<void> {
+  async function refreshModelPreferences(options?: { providerChanged?: boolean }): Promise<void> {
     try {
       const [modelIds, currentConfig] = await Promise.all([
         getAvailableModelIds(),
@@ -1413,8 +1413,10 @@ export function useDesktopState() {
       availableModelIds.value = nextModelIds
 
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
-      if (!normalizedSelectedModelId || !currentModelInNewList) {
-        if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
+      if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
+        if (options?.providerChanged && nextModelIds.length > 0) {
+          setSelectedModelId(nextModelIds[0])
+        } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
           setSelectedModelId(currentConfig.model)
         } else if (nextModelIds.length > 0) {
           setSelectedModelId(nextModelIds[0])
@@ -3526,7 +3528,7 @@ export function useDesktopState() {
   }
 
   async function refreshAll(
-    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean } = {},
+    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean } = {},
   ) {
     error.value = ''
     const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
@@ -3535,7 +3537,7 @@ export function useDesktopState() {
     try {
       await loadThreads()
       const ancillaryRefresh = Promise.allSettled([
-        refreshModelPreferences(),
+        refreshModelPreferences({ providerChanged: options.providerChanged }),
         refreshRateLimits(),
         refreshCollaborationModes(),
         refreshSkills(),
