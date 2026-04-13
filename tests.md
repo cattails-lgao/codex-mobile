@@ -552,6 +552,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: Create Project creates and selects the new root directly
+
+#### Prerequisites
+- App is running from this repository.
+- Home/new-thread screen is open.
+- At least one writable parent directory exists for creating a test project folder.
+
+#### Steps
+1. Click `Create Project`.
+2. Accept the suggested folder name or type a new one.
+3. Confirm the browser stays on the app home screen and does not navigate to `/codex-local-browse/...`.
+4. Verify the new folder appears as the selected folder in the home/new-thread screen.
+
+#### Expected Results
+- `Create Project` creates the project root directly through the app.
+- The browser URL does not switch to the deprecated browse page.
+- The newly created folder becomes the active selected project.
+
+#### Rollback/Cleanup
+- Delete the test project folder if it was created only for verification.
+
 ### Feature: Disable auto-restore to last thread when opening home URL
 
 #### Prerequisites

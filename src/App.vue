@@ -2128,8 +2128,24 @@ async function onCreateProject(): Promise<void> {
   const normalizedProjectName = projectName.trim()
   if (!normalizedProjectName) return
 
-  const search = new URLSearchParams({ newProjectName: normalizedProjectName })
-  window.location.assign(`/codex-local-browse${encodeURI(baseDir)}?${search.toString()}`)
+  const targetPath = normalizeAbsolutePath(joinPath(baseDir, normalizedProjectName))
+  if (!targetPath) return
+
+  try {
+    const normalizedPath = await openProjectRoot(targetPath, {
+      createIfMissing: true,
+      label: '',
+    })
+    if (!normalizedPath) return
+
+    newThreadCwd.value = normalizedPath
+    pinProjectToTop(getPathLeafName(normalizedPath))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create the project.'
+    window.alert(message)
+  }
 }
 
 async function onOpenExistingFolder(): Promise<void> {
