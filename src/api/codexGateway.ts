@@ -1219,7 +1219,7 @@ export async function startThreadTurn(
     if (typeof effort === 'string' && effort.length > 0) {
       params.effort = effort
     }
-    if (collaborationMode) {
+    if (collaborationMode && collaborationMode !== 'default') {
       const collaborationModeSettings = await resolveCollaborationModeSettings(collaborationMode, normalizedModel, effort)
       params.collaborationMode = {
         mode: collaborationMode,
