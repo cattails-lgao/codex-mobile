@@ -167,7 +167,7 @@ Bot commands:
 > **Not just launch. Actual UX upgrades.**
 
 - 🗂️ Searchable project picker in new-thread flow
-- ➕ Inline "Add new project" input inside picker (no browser prompt)
+- ➕ "Create Project" button next to "Select folder" with browser prompt
 - 📌 New projects get pinned to top automatically
 - 🧠 Smart default new-project name suggestion via server-side free-directory scan (`New Project (N)`)
 - 🔄 Project order persisted globally to workspace roots state
