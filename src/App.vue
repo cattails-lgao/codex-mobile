@@ -2720,6 +2720,9 @@ async function onProviderChange(provider: string): Promise<void> {
       }
     }
     await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+    if (route.name === 'thread') {
+      void router.push({ name: 'home' })
+    }
   } catch {
     // Silently fail — state unchanged
   } finally {
