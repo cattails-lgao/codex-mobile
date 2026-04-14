@@ -239,6 +239,47 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Return appearance and runtime selection to the previous user preference.
 
+### Feature: Local path link validation and text-file browser preview
+
+#### Prerequisites
+- App is running from this repository.
+- An existing thread is open.
+- You can create temporary files on the host machine.
+
+#### Steps
+1. Create a temporary folder such as `/tmp/codexui-file-browser-test` with these files: `sample.rs`, `sample.toml`, `sample.lua`, `sample.js`, `sample.ts`, `sample.vue`, `BUILD.bazel`, `notes.txt`.
+2. In the open thread, send one message containing:
+   `/tmp/codexui-file-browser-test/sample.rs`
+   `/tmp/codexui-file-browser-test/sample.toml`
+   `/tmp/codexui-file-browser-test/BUILD.bazel`
+   `/tmp/codexui-file-browser-test/notes.txt`
+   `/tmp/codexui-file-browser-test/missing.rs`
+   `/tmp/codexui-file-browser-test/sample.rs --flag`
+   `[missing report](/tmp/codexui-file-browser-test/missing.rs)`
+3. Wait for the message to render completely.
+4. Confirm the real file paths become clickable links, but `missing.rs` and `sample.rs --flag` remain plain text.
+5. Confirm the unresolved markdown example stays plain text and still shows both `missing report` and `/tmp/codexui-file-browser-test/missing.rs`.
+6. Open each real file link and verify it opens a browser preview page instead of a download dialog.
+7. On the preview page, verify `Raw`, `Download`, and `Edit` controls exist.
+8. Click `Raw` and confirm the file opens as plain text in the browser.
+9. Click `Download` and confirm the browser downloads the file using the original basename (for example `sample.rs`, not `codex-local-file`).
+10. Click `Edit` and confirm the editor opens with matching syntax mode coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text.
+11. Open a text preview page on a desktop-sized viewport and verify the preview panel extends to the bottom of the browser window below the toolbar, instead of stopping at a shorter fixed-height box.
+
+#### Expected Results
+- Path-like text is only linkified after the server confirms the local path exists.
+- Nonexistent paths and command-like strings that do not map to a real file stay as plain text.
+- Unresolved markdown file references preserve the human-readable label and the original target path.
+- Text/code files open in an inline preview page with syntax coloring rather than forcing a download.
+- Preview falls back to plain text rendering if the syntax highlighter is unavailable.
+- Preview and edit pages expose the same language coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text files.
+- The preview panel fills the remaining viewport height below the toolbar on desktop layouts.
+- `Raw` serves the file contents directly and `Download` forces a file download.
+
+#### Rollback/Cleanup
+- Remove `/tmp/codexui-file-browser-test` after testing.
+- Delete the test thread message if it is no longer useful.
+
 ### Feature: Per-thread model selection
 
 #### Prerequisites
