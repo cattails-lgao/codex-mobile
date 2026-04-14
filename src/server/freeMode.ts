@@ -149,16 +149,17 @@ export interface FreeModeState {
   provider?: 'openrouter' | 'custom' | 'opencode-zen'
   customBaseUrl?: string
   wireApi?: WireApi
+  providerKeys?: Record<string, string>
 }
 
 export function getFreeModeEnvVars(state: FreeModeState): Record<string, string> {
-  if (!state.enabled || !state.apiKey) return {}
+  if (!state.enabled) return {}
 
-  if (state.provider === 'opencode-zen') {
+  if (state.provider === 'opencode-zen' && state.apiKey) {
     return { OPENCODE_ZEN_API_KEY: state.apiKey }
   }
 
-  if (state.provider === 'custom' && state.customBaseUrl) {
+  if (state.provider === 'custom' && state.customBaseUrl && state.apiKey) {
     return { CUSTOM_ENDPOINT_API_KEY: state.apiKey }
   }
 
@@ -166,7 +167,7 @@ export function getFreeModeEnvVars(state: FreeModeState): Record<string, string>
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number): string[] {
-  if (!state.enabled || !state.apiKey) return []
+  if (!state.enabled) return []
 
   if (state.provider === 'opencode-zen') {
     const baseUrl = serverPort
@@ -196,6 +197,7 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
     ]
   }
 
+  if (!state.apiKey) return []
   return [
     '-c', `model="${state.model}"`,
     '-c', `model_provider="${FREE_MODE_PROVIDER_ID}"`,
