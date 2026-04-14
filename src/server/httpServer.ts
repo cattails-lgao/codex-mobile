@@ -1,12 +1,22 @@
 import { fileURLToPath } from 'node:url'
-import { dirname, extname, isAbsolute, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import type { Server as HttpServer, IncomingMessage } from 'node:http'
 import { existsSync } from 'node:fs'
 import { writeFile, stat } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from './localBrowseUi.js'
+import {
+  createDirectoryListingHtml,
+  createTextEditorHtml,
+  createTextPreviewHtml,
+  decodeBrowsePath,
+  getLocalDirectoryListing,
+  getLocalTextFileMetadata,
+  isTextEditableFile,
+  normalizeLocalPath,
+} from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -72,6 +82,41 @@ function readWildcardPathParam(value: unknown): string {
   return ''
 }
 
+function readBooleanQueryFlag(value: unknown): boolean {
+  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
+}
+
+function localFileErrorResponse(error: unknown): { status: number, body: { error: string } } {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : ''
+  const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+    ? Number((error as { statusCode?: unknown }).statusCode)
+    : NaN
+
+  if (code === 'ENOENT' || statusCode === 404) {
+    return { status: 404, body: { error: 'File not found.' } }
+  }
+  if (code === 'EACCES' || code === 'EPERM' || statusCode === 403) {
+    return { status: 403, body: { error: 'Access denied.' } }
+  }
+  return { status: 500, body: { error: 'Failed to read file.' } }
+}
+
+function sendLocalFileJsonError(
+  res: express.Response,
+  error: unknown,
+): void {
+  if (res.headersSent) return
+  const response = localFileErrorResponse(error)
+  res.status(response.status).json(response.body)
+}
+
+function attachmentContentDisposition(pathValue: string): string {
+  const fileName = basename(pathValue).replace(/["\\]/gu, '_')
+  return `attachment; filename="${fileName}"`
+}
+
 export function createServer(options: ServerOptions = {}): ServerInstance {
   const app = express()
   const bridge = createCodexBridgeMiddleware()
@@ -108,24 +153,104 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     })
   })
 
-  // 4. Serve local files inline for direct file open.
-  app.get('/codex-local-file', (req, res) => {
+  // 4. Probe local paths so the client only linkifies paths that exist on the server.
+  app.post('/codex-api/local-paths/probe', express.json({ limit: '64kb' }), async (req, res) => {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? (req.body as Record<string, unknown>)
+      : {}
+    const rawPaths = Array.isArray(body.paths) ? body.paths : []
+    const normalizedPaths: string[] = []
+    const seen = new Set<string>()
+
+    for (const candidate of rawPaths.slice(0, 200)) {
+      if (typeof candidate !== 'string') continue
+      const normalized = normalizeLocalPath(candidate)
+      if (!normalized || seen.has(normalized)) continue
+      seen.add(normalized)
+      normalizedPaths.push(normalized)
+    }
+
+    const entries = await Promise.all(normalizedPaths.map(async (pathValue) => {
+      if (!isAbsolute(pathValue)) {
+        return {
+          path: pathValue,
+          exists: false,
+          isDirectory: false,
+        }
+      }
+
+      try {
+        const fileStat = await stat(pathValue)
+        return {
+          path: pathValue,
+          exists: true,
+          isDirectory: fileStat.isDirectory(),
+        }
+      } catch {
+        return {
+          path: pathValue,
+          exists: false,
+          isDirectory: false,
+        }
+      }
+    }))
+
+    res.status(200).json({ data: { entries } })
+  })
+
+  // 5. Serve local files inline or as forced downloads.
+  app.get('/codex-local-file', async (req, res) => {
     const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
     const localPath = normalizeLocalPath(rawPath)
+    const wantsDownload = readBooleanQueryFlag(req.query.download)
     if (!localPath || !isAbsolute(localPath)) {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
     }
 
-    res.setHeader('Cache-Control', 'private, no-store')
-    res.setHeader('Content-Disposition', 'inline')
-    res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
-      if (!error) return
-      if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
-    })
+    try {
+      const fileStat = await stat(localPath)
+      if (!fileStat.isFile()) {
+        res.status(400).json({ error: 'Expected file path.' })
+        return
+      }
+
+      const textMetadata = await getLocalTextFileMetadata(localPath)
+      res.setHeader('Cache-Control', 'private, no-store')
+
+      if (wantsDownload) {
+        res.setHeader('Content-Disposition', attachmentContentDisposition(localPath))
+        res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
+          if (!error) return
+          sendLocalFileJsonError(res, error)
+        })
+        return
+      }
+
+      if (textMetadata) {
+        const stream = createReadStream(localPath, { encoding: 'utf8' })
+        stream.on('open', () => {
+          res.status(200).type('text/plain; charset=utf-8')
+        })
+        stream.on('error', (error) => {
+          stream.destroy()
+          sendLocalFileJsonError(res, error)
+        })
+        stream.pipe(res)
+        return
+      }
+
+      res.setHeader('Content-Disposition', 'inline')
+      res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
+        if (!error) return
+        sendLocalFileJsonError(res, error)
+      })
+    } catch (error) {
+      sendLocalFileJsonError(res, error)
+    }
   })
 
-  // 5. Return JSON directory listings for the integrated folder picker.
+  // 6. Return JSON directory listings for the integrated folder picker.
   app.get('/codex-local-directories', async (req, res) => {
     const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
     const showHidden = typeof req.query.showHidden === 'string'
@@ -149,7 +274,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     }
   })
 
-  // 6. Serve local files by path to preserve relative asset loading for HTML.
+  // 7. Serve local files by path with directory listings and text previews.
   app.get('/codex-local-browse/*path', async (req, res) => {
     const rawPath = readWildcardPathParam(req.params.path)
     const localPath = decodeBrowsePath(`/${rawPath}`)
@@ -168,6 +293,14 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         return
       }
 
+      const textMetadata = await getLocalTextFileMetadata(localPath)
+      if (textMetadata) {
+        const html = await createTextPreviewHtml(localPath, { newProjectName })
+        res.status(200).type('text/html; charset=utf-8').send(html)
+        return
+      }
+
+      res.setHeader('Content-Disposition', 'attachment')
       res.sendFile(localPath, { dotfiles: 'allow' }, (error) => {
         if (!error) return
         if (!res.headersSent) res.status(404).json({ error: 'File not found.' })
@@ -177,10 +310,11 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     }
   })
 
-  // 7. Edit text-like local files.
+  // 8. Edit text-like local files.
   app.get('/codex-local-edit/*path', async (req, res) => {
     const rawPath = readWildcardPathParam(req.params.path)
     const localPath = decodeBrowsePath(`/${rawPath}`)
+    const newProjectName = typeof req.query.newProjectName === 'string' ? req.query.newProjectName : ''
     if (!localPath || !isAbsolute(localPath)) {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
@@ -191,7 +325,11 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         res.status(400).json({ error: 'Expected file path.' })
         return
       }
-      const html = await createTextEditorHtml(localPath)
+      if (!(await isTextEditableFile(localPath))) {
+        res.status(415).json({ error: 'Only text-like files are editable.' })
+        return
+      }
+      const html = await createTextEditorHtml(localPath, { newProjectName })
       res.status(200).type('text/html; charset=utf-8').send(html)
     } catch {
       res.status(404).json({ error: 'File not found.' })
@@ -220,12 +358,12 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
 
   const hasFrontendAssets = existsSync(spaEntryFile)
 
-  // 8. Static files from Vue build
+  // 9. Static files from Vue build
   if (hasFrontendAssets) {
     app.use(express.static(distDir))
   }
 
-  // 9. SPA fallback
+  // 10. SPA fallback
   app.use((_req, res) => {
     if (!hasFrontendAssets) {
       res

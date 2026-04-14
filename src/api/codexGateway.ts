@@ -161,6 +161,12 @@ export type LocalDirectoryListing = {
   entries: LocalDirectoryEntry[]
 }
 
+export type LocalPathProbeEntry = {
+  path: string
+  exists: boolean
+  isDirectory: boolean
+}
+
 function normalizeGithubProjectDescription(fullName: string, rawDescription: string): string {
   const description = rawDescription.trim()
   if (!description) return ''
@@ -1644,6 +1650,49 @@ export async function listLocalDirectories(path: string, options?: { showHidden?
       return name && entryPath ? [{ name, path: entryPath }] : []
     }),
   }
+}
+
+export async function probeLocalPaths(paths: string[]): Promise<LocalPathProbeEntry[]> {
+  const normalizedPaths = Array.from(new Set(
+    paths
+      .map((pathValue) => normalizePathForUi(pathValue).trim())
+      .filter((pathValue) => pathValue.length > 0),
+  ))
+
+  if (normalizedPaths.length === 0) return []
+
+  const response = await fetch('/codex-api/local-paths/probe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths: normalizedPaths }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to probe local paths')
+    throw new Error(message)
+  }
+
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const entriesRaw = Array.isArray(data.entries) ? data.entries : []
+
+  return entriesRaw.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const entry = item as Record<string, unknown>
+    const path = typeof entry.path === 'string' ? normalizePathForUi(entry.path) : ''
+    if (!path) return []
+    return [{
+      path,
+      exists: entry.exists === true,
+      isDirectory: entry.isDirectory === true,
+    }]
+  })
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

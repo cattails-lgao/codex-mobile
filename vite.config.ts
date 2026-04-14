@@ -1,7 +1,16 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { createCodexBridgeMiddleware } from "./src/server/codexAppServerBridge";
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from "./src/server/localBrowseUi";
+import {
+  createDirectoryListingHtml,
+  createTextEditorHtml,
+  createTextPreviewHtml,
+  decodeBrowsePath,
+  getLocalDirectoryListing,
+  getLocalTextFileMetadata,
+  isTextEditableFile,
+  normalizeLocalPath,
+} from "./src/server/localBrowseUi";
 import tailwindcss from "@tailwindcss/vite";
 import { spawnSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
@@ -32,6 +41,40 @@ function normalizeLocalImagePath(rawPath: string): string {
     }
   }
   return trimmed;
+}
+
+function readBooleanQueryFlag(value: string | null): boolean {
+  return ["1", "true", "yes", "on"].includes((value ?? "").toLowerCase());
+}
+
+function localFileErrorResponse(error: unknown): { status: number; body: { error: string } } {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
+  const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+    ? Number((error as { statusCode?: unknown }).statusCode)
+    : Number.NaN;
+
+  if (code === "ENOENT" || statusCode === 404) {
+    return { status: 404, body: { error: "File not found." } };
+  }
+  if (code === "EACCES" || code === "EPERM" || statusCode === 403) {
+    return { status: 403, body: { error: "Access denied." } };
+  }
+  return { status: 500, body: { error: "Failed to read file." } };
+}
+
+function sendLocalFileJsonError(res: import("node:http").ServerResponse, error: unknown): void {
+  if (res.headersSent) return;
+  const response = localFileErrorResponse(error);
+  res.statusCode = response.status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(response.body));
+}
+
+function attachmentContentDisposition(pathValue: string): string {
+  const fileName = basename(pathValue).replace(/["\\]/gu, "_");
+  return `attachment; filename="${fileName}"`;
 }
 
 function getWorktreeName(): string {
@@ -202,11 +245,76 @@ export default defineConfig({
           stream.pipe(res);
         });
         server.middlewares.use((req, res, next) => {
+          if (!req.url || req.method !== "POST") return next();
+          const url = new URL(req.url, "http://localhost");
+          if (url.pathname !== "/codex-api/local-paths/probe") return next();
+
+          const chunks: Buffer[] = [];
+          req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+          req.on("end", async () => {
+            let paths: string[] = [];
+            try {
+              const raw = Buffer.concat(chunks).toString("utf8");
+              const parsed = raw ? JSON.parse(raw) as { paths?: unknown } : {};
+              const rawPaths = Array.isArray(parsed.paths) ? parsed.paths : [];
+              const seen = new Set<string>();
+              paths = rawPaths
+                .slice(0, 200)
+                .flatMap((item) => {
+                  if (typeof item !== "string") return [];
+                  const normalized = normalizeLocalPath(item);
+                  if (!normalized || seen.has(normalized)) return [];
+                  seen.add(normalized);
+                  return [normalized];
+                });
+            } catch {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Expected JSON body." }));
+              return;
+            }
+
+            const entries = await Promise.all(paths.map(async (pathValue) => {
+              if (!isAbsolute(pathValue)) {
+                return {
+                  path: pathValue,
+                  exists: false,
+                  isDirectory: false,
+                };
+              }
+              try {
+                const fileStat = await stat(pathValue);
+                return {
+                  path: pathValue,
+                  exists: true,
+                  isDirectory: fileStat.isDirectory(),
+                };
+              } catch {
+                return {
+                  path: pathValue,
+                  exists: false,
+                  isDirectory: false,
+                };
+              }
+            }));
+
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ data: { entries } }));
+          });
+          req.on("error", () => {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Failed to read request." }));
+          });
+        });
+        server.middlewares.use(async (req, res, next) => {
           if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
           const url = new URL(req.url, "http://localhost");
           if (url.pathname !== "/codex-local-file") return next();
 
           const localPath = normalizeLocalPath(url.searchParams.get("path") ?? "");
+          const wantsDownload = readBooleanQueryFlag(url.searchParams.get("download"));
           if (!localPath || !isAbsolute(localPath)) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -214,18 +322,59 @@ export default defineConfig({
             return;
           }
 
-          res.statusCode = 200;
-          res.setHeader("Cache-Control", "private, no-store");
-          res.setHeader("Content-Disposition", `inline; filename="${basename(localPath)}"`);
+          try {
+            const fileStat = await stat(localPath);
+            if (!fileStat.isFile()) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Expected file path." }));
+              return;
+            }
 
-          const stream = createReadStream(localPath);
-          stream.on("error", () => {
-            if (res.headersSent) return;
-            res.statusCode = 404;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ error: "File not found." }));
-          });
-          stream.pipe(res);
+            const textMetadata = await getLocalTextFileMetadata(localPath);
+            res.setHeader("Cache-Control", "private, no-store");
+
+            if (wantsDownload) {
+              const stream = createReadStream(localPath);
+              stream.on("open", () => {
+                res.statusCode = 200;
+                res.setHeader("Content-Disposition", attachmentContentDisposition(localPath));
+              });
+              stream.on("error", (error) => {
+                stream.destroy();
+                sendLocalFileJsonError(res, error);
+              });
+              stream.pipe(res);
+              return;
+            }
+
+            if (textMetadata) {
+              const stream = createReadStream(localPath, { encoding: "utf8" });
+              stream.on("open", () => {
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              });
+              stream.on("error", (error) => {
+                stream.destroy();
+                sendLocalFileJsonError(res, error);
+              });
+              stream.pipe(res);
+              return;
+            }
+
+            const stream = createReadStream(localPath);
+            stream.on("open", () => {
+              res.statusCode = 200;
+              res.setHeader("Content-Disposition", "inline");
+            });
+            stream.on("error", (error) => {
+              stream.destroy();
+              sendLocalFileJsonError(res, error);
+            });
+            stream.pipe(res);
+          } catch (error) {
+            sendLocalFileJsonError(res, error);
+          }
         });
         server.middlewares.use(async (req, res, next) => {
           if (!req.url || (req.method !== "GET" && req.method !== "HEAD")) return next();
@@ -285,7 +434,17 @@ export default defineConfig({
               return;
             }
 
+            const textMetadata = await getLocalTextFileMetadata(localPath);
+            if (textMetadata) {
+              const html = await createTextPreviewHtml(localPath, { newProjectName });
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "text/html; charset=utf-8");
+              res.end(html);
+              return;
+            }
+
             res.statusCode = 200;
+            res.setHeader("Content-Disposition", "attachment");
             const stream = createReadStream(localPath);
             stream.on("error", () => {
               if (res.headersSent) return;
@@ -305,6 +464,7 @@ export default defineConfig({
           const url = new URL(req.url, "http://localhost");
           if (!url.pathname.startsWith("/codex-local-edit/")) return next();
           const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-edit".length));
+          const newProjectName = url.searchParams.get("newProjectName") ?? "";
           if (!localPath || !isAbsolute(localPath)) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -319,7 +479,13 @@ export default defineConfig({
               res.end(JSON.stringify({ error: "Expected file path." }));
               return;
             }
-            const html = await createTextEditorHtml(localPath);
+            if (!(await isTextEditableFile(localPath))) {
+              res.statusCode = 415;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Only text-like files are editable." }));
+              return;
+            }
+            const html = await createTextEditorHtml(localPath, { newProjectName });
             res.statusCode = 200;
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             res.end(html);

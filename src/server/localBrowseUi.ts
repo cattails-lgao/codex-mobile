@@ -1,4 +1,4 @@
-import { dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 
 type DirectoryItem = {
@@ -24,36 +24,106 @@ type LocalDirectoryListingOptions = {
   showHidden?: boolean
 }
 
-const TEXT_EDITABLE_EXTENSIONS = new Set([
-  '.txt', '.md', '.json', '.js', '.ts', '.tsx', '.jsx', '.css', '.scss',
-  '.html', '.htm', '.xml', '.yml', '.yaml', '.log', '.csv', '.env', '.py',
-  '.sh', '.toml', '.ini', '.conf', '.sql', '.bat', '.cmd', '.ps1',
+type LocalFileLanguageConfig = {
+  label: string
+  aceMode: string
+}
+
+type LocalTextFileMetadata = {
+  language: LocalFileLanguageConfig
+  sizeBytes: number
+}
+
+const TEXT_LANGUAGE: LocalFileLanguageConfig = {
+  label: 'text',
+  aceMode: 'text',
+}
+
+const BAZEL_LANGUAGE: LocalFileLanguageConfig = {
+  label: 'bazel',
+  aceMode: 'python',
+}
+
+const FILE_LANGUAGE_RULES_BY_NAME = new Map<string, LocalFileLanguageConfig>([
+  ['build', BAZEL_LANGUAGE],
+  ['build.bazel', BAZEL_LANGUAGE],
+  ['workspace', BAZEL_LANGUAGE],
+  ['workspace.bazel', BAZEL_LANGUAGE],
+  ['module.bazel', BAZEL_LANGUAGE],
+  ['.bazelrc', BAZEL_LANGUAGE],
+  ['.env', TEXT_LANGUAGE],
+  ['.gitignore', TEXT_LANGUAGE],
+  ['.npmrc', TEXT_LANGUAGE],
 ])
 
-function languageForPath(pathValue: string): string {
-  const extension = extname(pathValue).toLowerCase()
-  switch (extension) {
-    case '.js': return 'javascript'
-    case '.ts': return 'typescript'
-    case '.jsx': return 'javascript'
-    case '.tsx': return 'typescript'
-    case '.py': return 'python'
-    case '.sh': return 'sh'
-    case '.css':
-    case '.scss': return 'css'
-    case '.html':
-    case '.htm': return 'html'
-    case '.json': return 'json'
-    case '.md': return 'markdown'
-    case '.yaml':
-    case '.yml': return 'yaml'
-    case '.xml': return 'xml'
-    case '.sql': return 'sql'
-    case '.toml': return 'ini'
-    case '.ini':
-    case '.conf': return 'ini'
-    default: return 'plaintext'
+const FILE_LANGUAGE_RULES_BY_EXTENSION = new Map<string, LocalFileLanguageConfig>([
+  ['.txt', TEXT_LANGUAGE],
+  ['.log', TEXT_LANGUAGE],
+  ['.csv', TEXT_LANGUAGE],
+  ['.md', { label: 'markdown', aceMode: 'markdown' }],
+  ['.markdown', { label: 'markdown', aceMode: 'markdown' }],
+  ['.json', { label: 'json', aceMode: 'json' }],
+  ['.jsonc', { label: 'json', aceMode: 'json' }],
+  ['.yaml', { label: 'yaml', aceMode: 'yaml' }],
+  ['.yml', { label: 'yaml', aceMode: 'yaml' }],
+  ['.lua', { label: 'lua', aceMode: 'lua' }],
+  ['.rs', { label: 'rust', aceMode: 'rust' }],
+  ['.py', { label: 'python', aceMode: 'python' }],
+  ['.c', { label: 'c', aceMode: 'c_cpp' }],
+  ['.h', { label: 'c/c++', aceMode: 'c_cpp' }],
+  ['.cpp', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.cc', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.cxx', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.hpp', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.hh', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.hxx', { label: 'c++', aceMode: 'c_cpp' }],
+  ['.toml', { label: 'toml', aceMode: 'toml' }],
+  ['.bzl', BAZEL_LANGUAGE],
+  ['.bazel', BAZEL_LANGUAGE],
+  ['.js', { label: 'javascript', aceMode: 'javascript' }],
+  ['.mjs', { label: 'javascript', aceMode: 'javascript' }],
+  ['.cjs', { label: 'javascript', aceMode: 'javascript' }],
+  ['.jsx', { label: 'jsx', aceMode: 'jsx' }],
+  ['.ts', { label: 'typescript', aceMode: 'typescript' }],
+  ['.mts', { label: 'typescript', aceMode: 'typescript' }],
+  ['.cts', { label: 'typescript', aceMode: 'typescript' }],
+  ['.tsx', { label: 'tsx', aceMode: 'tsx' }],
+  ['.vue', { label: 'vue', aceMode: 'vue' }],
+  ['.css', { label: 'css', aceMode: 'css' }],
+  ['.scss', { label: 'scss', aceMode: 'scss' }],
+  ['.html', { label: 'html', aceMode: 'html' }],
+  ['.htm', { label: 'html', aceMode: 'html' }],
+  ['.xml', { label: 'xml', aceMode: 'xml' }],
+  ['.sql', { label: 'sql', aceMode: 'sql' }],
+  ['.sh', { label: 'shell', aceMode: 'sh' }],
+  ['.bash', { label: 'shell', aceMode: 'sh' }],
+  ['.zsh', { label: 'shell', aceMode: 'sh' }],
+  ['.ini', { label: 'ini', aceMode: 'ini' }],
+  ['.conf', { label: 'ini', aceMode: 'ini' }],
+  ['.ps1', { label: 'powershell', aceMode: 'powershell' }],
+  ['.bat', TEXT_LANGUAGE],
+  ['.cmd', TEXT_LANGUAGE],
+])
+
+const MAX_INLINE_PREVIEW_BYTES = 1024 * 1024
+
+function getLanguageConfigForPath(pathValue: string): { language: LocalFileLanguageConfig; recognized: boolean } {
+  const fileName = basename(pathValue).toLowerCase()
+  if (fileName === '.env' || fileName.startsWith('.env.')) {
+    return { language: TEXT_LANGUAGE, recognized: true }
   }
+
+  const exactMatch = FILE_LANGUAGE_RULES_BY_NAME.get(fileName)
+  if (exactMatch) {
+    return { language: exactMatch, recognized: true }
+  }
+
+  const extensionMatch = FILE_LANGUAGE_RULES_BY_EXTENSION.get(extname(fileName))
+  if (extensionMatch) {
+    return { language: extensionMatch, recognized: true }
+  }
+
+  return { language: TEXT_LANGUAGE, recognized: false }
 }
 
 export function normalizeLocalPath(rawPath: string): string {
@@ -79,7 +149,7 @@ export function decodeBrowsePath(rawPath: string): string {
 }
 
 export function isTextEditablePath(pathValue: string): boolean {
-  return TEXT_EDITABLE_EXTENSIONS.has(extname(pathValue).toLowerCase())
+  return getLanguageConfigForPath(pathValue).recognized
 }
 
 function isHiddenName(value: string): boolean {
@@ -118,6 +188,29 @@ export async function isTextEditableFile(localPath: string): Promise<boolean> {
   }
 }
 
+export async function getLocalTextFileMetadata(localPath: string): Promise<LocalTextFileMetadata | null> {
+  const { language, recognized } = getLanguageConfigForPath(localPath)
+  try {
+    const fileStat = await stat(localPath)
+    if (!fileStat.isFile()) return null
+    if (recognized) {
+      return {
+        language,
+        sizeBytes: fileStat.size,
+      }
+    }
+
+    const isText = await probeFileIsText(localPath)
+    if (!isText) return null
+    return {
+      language,
+      sizeBytes: fileStat.size,
+    }
+  } catch {
+    return null
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -141,6 +234,14 @@ function toEditHref(pathValue: string, newProjectName = ''): string {
   const normalizedName = normalizeNewProjectName(newProjectName)
   const query = normalizedName ? `?newProjectName=${encodeURIComponent(normalizedName)}` : ''
   return `/codex-local-edit${encodeURI(pathValue)}${query}`
+}
+
+function toRawFileHref(pathValue: string, options?: { download?: boolean }): string {
+  const query = new URLSearchParams({ path: pathValue })
+  if (options?.download === true) {
+    query.set('download', '1')
+  }
+  return `/codex-local-file?${query.toString()}`
 }
 
 function escapeForInlineScriptString(value: string): string {
@@ -212,6 +313,28 @@ function actionButtonsHtml(localPath: string, newProjectName: string): string {
     : ''
   const openButton = `<button class="header-open-btn open-folder-btn" type="button" aria-label="Open current folder in Codex" title="Open folder in Codex" data-path="${escapeHtml(localPath)}" data-label="" data-status="${escapeHtml(openFolderStatusText(normalizedName))}" data-error="${escapeHtml(failureStatusText(normalizedName))}">Open folder in Codex</button>`
   return `${createButton}${openButton}`
+}
+
+function renderTextPreviewToolbar(
+  localPath: string,
+  newProjectName: string,
+): string {
+  const backHref = toBrowseHref(dirname(localPath), newProjectName)
+  const rawHref = toRawFileHref(localPath)
+  const downloadHref = toRawFileHref(localPath, { download: true })
+
+  return [
+    `<a href="${escapeHtml(backHref)}">Back</a>`,
+    `<a href="${escapeHtml(rawHref)}" target="_blank" rel="noopener noreferrer">Raw</a>`,
+    `<a href="${escapeHtml(downloadHref)}">Download</a>`,
+    `<a href="${escapeHtml(toEditHref(localPath, newProjectName))}">Edit</a>`,
+  ].filter(Boolean).join('')
+}
+
+function formatPreviewSize(sizeBytes: number): string {
+  if (sizeBytes >= 1024 * 1024) return `${(sizeBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/u, '')} MiB`
+  if (sizeBytes >= 1024) return `${Math.round(sizeBytes / 1024)} KiB`
+  return `${sizeBytes} B`
 }
 
 export async function getLocalDirectoryListing(
@@ -358,10 +481,125 @@ export async function createDirectoryListingHtml(localPath: string, options?: { 
 </html>`
 }
 
-export async function createTextEditorHtml(localPath: string): Promise<string> {
+export async function createTextPreviewHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {
+  const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const metadata = await getLocalTextFileMetadata(localPath)
+  if (!metadata) {
+    throw new Error('Only text-like files can be previewed inline.')
+  }
+
+  const toolbar = renderTextPreviewToolbar(localPath, newProjectName)
+  const previewMeta = `${localPath} · ${metadata.language.label} · ${formatPreviewSize(metadata.sizeBytes)}`
+  const previewUnavailable = metadata.sizeBytes > MAX_INLINE_PREVIEW_BYTES
+  const previewContent = previewUnavailable
+    ? ''
+    : await readFile(localPath, 'utf8')
+  const previewPlainHtml = escapeHtml(previewContent)
+  const safePreviewLiteral = escapeForInlineScriptString(previewContent)
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(basename(localPath))}</title>
+  <style>
+    html, body { margin: 0; width: 100%; min-height: 100%; }
+    body { min-height: 100vh; font-family: ui-monospace, Menlo, Monaco, monospace; background: #09111f; color: #dbe6ff; display: flex; flex-direction: column; }
+    a { color: inherit; text-decoration: none; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; background: rgba(9, 17, 31, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid #233958; }
+    .toolbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .toolbar-row a { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 12px; border: 1px solid #36557a; border-radius: 10px; background: #13233d; }
+    .toolbar-row a:hover { filter: brightness(1.08); }
+    .meta { color: #8fb8ec; font-size: 12px; overflow-wrap: anywhere; line-height: 1.5; }
+    .preview-shell { flex: 1 1 auto; min-height: 0; display: flex; padding: 18px 16px 24px; }
+    .preview-card { flex: 1 1 auto; min-height: 0; max-width: 100%; border: 1px solid #20324d; border-radius: 14px; background: #0d182b; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.24); display: flex; flex-direction: column; }
+    .preview-notice { margin: 0; padding: 12px 16px; border-bottom: 1px solid #20324d; color: #f0cf78; background: rgba(240, 207, 120, 0.08); }
+    .preview-unavailable { padding: 26px 20px; }
+    .preview-unavailable-title { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+    .preview-unavailable-text { margin: 0; color: #aac5e6; line-height: 1.6; }
+    .preview-plain {
+      flex: 1 1 auto;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 18px 20px 24px;
+      min-height: 0;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      tab-size: 2;
+      line-height: 1.55;
+      color: #dbe6ff;
+      background: #07101f;
+    }
+    #previewEditor { flex: 1 1 auto; width: 100%; min-height: 0; }
+    .ace_editor { background: #07101f !important; color: #dbe6ff !important; width: 100% !important; height: 100% !important; }
+    .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
+    .ace_marker-layer .ace_active-line { background: transparent !important; }
+    .ace_marker-layer .ace_selection { background: rgba(140, 194, 255, 0.16) !important; }
+    @media (max-width: 640px) {
+      .toolbar { padding: 12px; }
+      .preview-shell { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="toolbar-row">${toolbar}</div>
+    <div class="meta">${escapeHtml(previewMeta)}</div>
+  </div>
+  <main class="preview-shell">
+    <section class="preview-card">
+      ${previewUnavailable
+        ? `<div class="preview-unavailable">
+  <p class="preview-unavailable-title">Inline preview disabled</p>
+  <p class="preview-unavailable-text">This file is larger than ${String(Math.floor(MAX_INLINE_PREVIEW_BYTES / 1024))} KiB. Use <strong>Raw</strong> or <strong>Download</strong> instead.</p>
+</div>`
+        : `<pre id="previewFallback" class="preview-plain">${previewPlainHtml}</pre>
+<div id="previewEditor" hidden></div>`}
+    </section>
+  </main>
+  ${previewUnavailable ? '' : `<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
+  <script>
+    const previewFallback = document.getElementById('previewFallback');
+    const previewEditor = document.getElementById('previewEditor');
+    if (window.ace && previewEditor) {
+      previewEditor.hidden = false;
+      if (previewFallback) previewFallback.hidden = true;
+      ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
+      const editor = ace.edit('previewEditor');
+      editor.setTheme('ace/theme/tomorrow_night');
+      editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
+      editor.session.setUseWorker(false);
+      editor.setValue(${safePreviewLiteral}, -1);
+      editor.setOptions({
+        readOnly: true,
+        highlightActiveLine: false,
+        highlightGutterLine: false,
+        showPrintMargin: false,
+        fontSize: '13px',
+        wrap: true,
+        behavioursEnabled: false,
+        displayIndentGuides: true,
+      });
+      editor.renderer.setShowGutter(true);
+      editor.renderer.$cursorLayer.element.style.display = 'none';
+      editor.resize();
+    }
+  </script>`}
+</body>
+</html>`
+}
+
+export async function createTextEditorHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {
+  const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const metadata = await getLocalTextFileMetadata(localPath)
+  if (!metadata) {
+    throw new Error('Only text-like files are editable.')
+  }
+
   const content = await readFile(localPath, 'utf8')
   const parentPath = dirname(localPath)
-  const language = languageForPath(localPath)
   const safeContentLiteral = escapeForInlineScriptString(content)
   return `<!doctype html>
 <html lang="en">
@@ -388,20 +626,25 @@ export async function createTextEditorHtml(localPath: string): Promise<string> {
 <body>
   <div class="toolbar">
     <div class="row">
-      <a href="${escapeHtml(toBrowseHref(parentPath))}">Back</a>
+      <a href="${escapeHtml(toBrowseHref(parentPath, newProjectName))}">Back</a>
+      <a href="${escapeHtml(toBrowseHref(localPath, newProjectName))}">Preview</a>
+      <a href="${escapeHtml(toRawFileHref(localPath))}" target="_blank" rel="noopener noreferrer">Raw</a>
+      <a href="${escapeHtml(toRawFileHref(localPath, { download: true }))}">Download</a>
       <button id="saveBtn" type="button">Save</button>
       <span id="status"></span>
     </div>
-    <div class="meta">${escapeHtml(localPath)} · ${escapeHtml(language)}</div>
+    <div class="meta">${escapeHtml(localPath)} · ${escapeHtml(metadata.language.label)}</div>
   </div>
   <div id="editor"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
   <script>
     const saveBtn = document.getElementById('saveBtn');
     const status = document.getElementById('status');
+    ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
     const editor = ace.edit('editor');
     editor.setTheme('ace/theme/tomorrow_night');
-    editor.session.setMode('ace/mode/${escapeHtml(language)}');
+    editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
+    editor.session.setUseWorker(false);
     editor.setValue(${safeContentLiteral}, -1);
     editor.setOptions({
       fontSize: '13px',
