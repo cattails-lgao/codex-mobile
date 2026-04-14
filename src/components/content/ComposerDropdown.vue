@@ -43,7 +43,7 @@
             </button>
           </li>
           <li v-if="filteredOptions.length === 0" class="composer-dropdown-empty">
-            No matching projects
+            {{ emptyText }}
           </li>
         </ul>
 
@@ -70,6 +70,7 @@ const props = defineProps<{
   openDirection?: 'up' | 'down'
   enableSearch?: boolean
   searchPlaceholder?: string
+  emptyLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -90,6 +91,7 @@ const selectedLabel = computed(() => {
 const openDirection = computed(() => props.openDirection ?? 'down')
 const enableSearch = computed(() => props.enableSearch === true)
 const searchPlaceholderText = computed(() => props.searchPlaceholder?.trim() || 'Quick search projects')
+const emptyText = computed(() => props.emptyLabel?.trim() || 'No results')
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return props.options
