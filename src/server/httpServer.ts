@@ -86,6 +86,12 @@ function readBooleanQueryFlag(value: unknown): boolean {
   return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
 }
 
+function readPositiveIntegerQueryParam(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
 function localFileErrorResponse(error: unknown): { status: number, body: { error: string } } {
   const code = typeof error === 'object' && error !== null && 'code' in error
     ? String((error as { code?: unknown }).code ?? '')
@@ -279,6 +285,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     const rawPath = readWildcardPathParam(req.params.path)
     const localPath = decodeBrowsePath(`/${rawPath}`)
     const newProjectName = typeof req.query.newProjectName === 'string' ? req.query.newProjectName : ''
+    const line = readPositiveIntegerQueryParam(req.query.line)
+    const column = line ? readPositiveIntegerQueryParam(req.query.column) : null
     if (!localPath || !isAbsolute(localPath)) {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
@@ -295,7 +303,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
 
       const textMetadata = await getLocalTextFileMetadata(localPath)
       if (textMetadata) {
-        const html = await createTextPreviewHtml(localPath, { newProjectName })
+        const html = await createTextPreviewHtml(localPath, { newProjectName, line, column })
         res.status(200).type('text/html; charset=utf-8').send(html)
         return
       }
@@ -315,6 +323,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
     const rawPath = readWildcardPathParam(req.params.path)
     const localPath = decodeBrowsePath(`/${rawPath}`)
     const newProjectName = typeof req.query.newProjectName === 'string' ? req.query.newProjectName : ''
+    const line = readPositiveIntegerQueryParam(req.query.line)
+    const column = line ? readPositiveIntegerQueryParam(req.query.column) : null
     if (!localPath || !isAbsolute(localPath)) {
       res.status(400).json({ error: 'Expected absolute local file path.' })
       return
@@ -329,7 +339,7 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         res.status(415).json({ error: 'Only text-like files are editable.' })
         return
       }
-      const html = await createTextEditorHtml(localPath, { newProjectName })
+      const html = await createTextEditorHtml(localPath, { newProjectName, line, column })
       res.status(200).type('text/html; charset=utf-8').send(html)
     } catch {
       res.status(404).json({ error: 'File not found.' })

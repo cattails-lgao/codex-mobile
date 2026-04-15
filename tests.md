@@ -247,12 +247,13 @@ This file tracks manual regression and feature verification steps.
 - You can create temporary files on the host machine.
 
 #### Steps
-1. Create a temporary folder such as `/tmp/codexui-file-browser-test` with these files: `sample.rs`, `sample.toml`, `sample.lua`, `sample.js`, `sample.ts`, `sample.vue`, `BUILD.bazel`, `notes.txt`.
+1. Create a temporary folder such as `/tmp/codexui-file-browser-test` with these files: `sample.rs`, `sample.toml`, `sample.lua`, `sample.js`, `sample.ts`, `sample.vue`, `BUILD.bazel`, `notes.txt`, and a multi-line file such as `jump.ts` with at least 20 lines.
 2. In the open thread, send one message containing:
    `/tmp/codexui-file-browser-test/sample.rs`
    `/tmp/codexui-file-browser-test/sample.toml`
    `/tmp/codexui-file-browser-test/BUILD.bazel`
    `/tmp/codexui-file-browser-test/notes.txt`
+   `/tmp/codexui-file-browser-test/jump.ts:12:3`
    `/tmp/codexui-file-browser-test/missing.rs`
    `/tmp/codexui-file-browser-test/sample.rs --flag`
    `[missing report](/tmp/codexui-file-browser-test/missing.rs)`
@@ -264,13 +265,25 @@ This file tracks manual regression and feature verification steps.
 8. Click `Raw` and confirm the file opens as plain text in the browser.
 9. Click `Download` and confirm the browser downloads the file using the original basename (for example `sample.rs`, not `codex-local-file`).
 10. Click `Edit` and confirm the editor opens with matching syntax mode coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text.
-11. Open a text preview page on a desktop-sized viewport and verify the preview panel extends to the bottom of the browser window below the toolbar, instead of stopping at a shorter fixed-height box.
+11. Open the `jump.ts:12:3` link and verify the generated preview URL includes `line=12` and `column=3`.
+12. In preview, verify the view opens centered around line 12 and that line is selected the same way Ace selects a line when you click its gutter line number.
+13. Click `Edit` from that targeted preview and verify the editor opens at the same line/column target with the full target line selected.
+14. On hosts that allow `:` or `#` in filenames, create a literal file such as `/tmp/codexui-file-browser-test/literal:12:3.txt`, send that exact path in the thread, and confirm it opens the literal file instead of stripping the suffix into line-target metadata.
+15. Open a text preview page on a desktop-sized viewport and verify the preview panel extends to the bottom of the browser window below the toolbar, instead of stopping at a shorter fixed-height box.
+16. In the main app, switch Appearance to `Light`, then open a local directory listing, a preview page, and an editor page in new tabs/windows and confirm all three use a light theme with readable syntax colors.
+17. Switch Appearance to `Dark` and repeat the same three local browsing views, confirming they switch to dark mode and keep readable syntax colors.
+18. Set Appearance to `System`, change the OS/browser preferred color scheme if available, then reload one of the standalone local browsing pages and confirm it follows the resolved system theme.
 
 #### Expected Results
 - Path-like text is only linkified after the server confirms the local path exists.
 - Nonexistent paths and command-like strings that do not map to a real file stay as plain text.
 - Unresolved markdown file references preserve the human-readable label and the original target path.
 - Text/code files open in an inline preview page with syntax coloring rather than forcing a download.
+- File references with `:line[:column]` or `#Lline[Ccolumn]` open preview/editor at the requested location.
+- Targeted line opens with a full-line Ace selection, not only cursor placement.
+- On hosts that allow those characters in filenames, exact existing paths still win over interpreted line-target syntax.
+- Standalone local directory, preview, and editor pages follow the same `Light`/`Dark`/`System` appearance preference as the main app.
+- Ace syntax highlighting remains readable in both light and dark themes.
 - Preview falls back to plain text rendering if the syntax highlighter is unavailable.
 - Preview and edit pages expose the same language coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text files.
 - The preview panel fills the remaining viewport height below the toolbar on desktop layouts.
