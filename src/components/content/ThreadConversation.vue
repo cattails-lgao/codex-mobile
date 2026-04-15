@@ -301,12 +301,12 @@
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                         <template v-else-if="segment.kind === 'file'">
                           <a
-                            v-if="confirmedBrowseUrl(segment.path)"
+                            v-if="browseUrlForInlineFile(segment)"
                             class="message-file-link"
-                            :href="confirmedBrowseUrl(segment.path)"
+                            :href="browseUrlForInlineFile(segment)"
                             target="_blank"
                             rel="noopener noreferrer"
-                            :title="segment.path"
+                            :title="fileLinkTitle(segment)"
                           >
                             {{ segment.displayPath }}
                           </a>
@@ -338,12 +338,12 @@
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                         <template v-else-if="segment.kind === 'file'">
                           <a
-                            v-if="confirmedBrowseUrl(segment.path)"
+                            v-if="browseUrlForInlineFile(segment)"
                             class="message-file-link"
-                            :href="confirmedBrowseUrl(segment.path)"
+                            :href="browseUrlForInlineFile(segment)"
                             target="_blank"
                             rel="noopener noreferrer"
-                            :title="segment.path"
+                            :title="fileLinkTitle(segment)"
                           >
                             {{ segment.displayPath }}
                           </a>
@@ -370,12 +370,12 @@
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                         <template v-else-if="segment.kind === 'file'">
                           <a
-                            v-if="confirmedBrowseUrl(segment.path)"
+                            v-if="browseUrlForInlineFile(segment)"
                             class="message-file-link"
-                            :href="confirmedBrowseUrl(segment.path)"
+                            :href="browseUrlForInlineFile(segment)"
                             target="_blank"
                             rel="noopener noreferrer"
-                            :title="segment.path"
+                            :title="fileLinkTitle(segment)"
                           >
                             {{ segment.displayPath }}
                           </a>
@@ -410,12 +410,12 @@
                             <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                             <template v-else-if="segment.kind === 'file'">
                               <a
-                                v-if="confirmedBrowseUrl(segment.path)"
+                                v-if="browseUrlForInlineFile(segment)"
                                 class="message-file-link"
-                                :href="confirmedBrowseUrl(segment.path)"
+                                :href="browseUrlForInlineFile(segment)"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                :title="segment.path"
+                                :title="fileLinkTitle(segment)"
                               >
                                 {{ segment.displayPath }}
                               </a>
@@ -462,12 +462,12 @@
                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                                 <template v-else-if="segment.kind === 'file'">
                                   <a
-                                    v-if="confirmedBrowseUrl(segment.path)"
+                                    v-if="browseUrlForInlineFile(segment)"
                                     class="message-file-link"
-                                    :href="confirmedBrowseUrl(segment.path)"
+                                    :href="browseUrlForInlineFile(segment)"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    :title="segment.path"
+                                    :title="fileLinkTitle(segment)"
                                   >
                                     {{ segment.displayPath }}
                                   </a>
@@ -503,12 +503,12 @@
                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
                                 <template v-else-if="segment.kind === 'file'">
                                   <a
-                                    v-if="confirmedBrowseUrl(segment.path)"
+                                    v-if="browseUrlForInlineFile(segment)"
                                     class="message-file-link"
-                                    :href="confirmedBrowseUrl(segment.path)"
+                                    :href="browseUrlForInlineFile(segment)"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    :title="segment.path"
+                                    :title="fileLinkTitle(segment)"
                                   >
                                     {{ segment.displayPath }}
                                   </a>
@@ -1239,7 +1239,8 @@ type InlineSegment =
   | { kind: 'strikethrough'; value: string }
   | { kind: 'code'; value: string }
   | { kind: 'url'; value: string; href: string }
-  | { kind: 'file'; value: string; path: string; displayPath: string; fallbackText: string; downloadName: string }
+  | { kind: 'file'; value: string; path: string; line: number | null; column: number | null; displayPath: string; fallbackText: string; downloadName: string }
+type FileInlineSegment = Extract<InlineSegment, { kind: 'file' }>
 type TaskListItem = {
   text: string
   checked: boolean
@@ -1435,29 +1436,37 @@ function resolveRelativePath(pathValue: string, cwd: string): string {
   return normalizePathDots(`${base.replace(/\/+$/u, '')}/${normalizedPath}`)
 }
 
-function parseFileReference(value: string): { path: string; line: number | null } | null {
+function normalizePositiveInteger(value: string | undefined): number | null {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function parseFileReference(value: string): { path: string; line: number | null; column: number | null } | null {
   if (!value) return null
 
   let pathValue = value.trim()
   const wrapped = trimLinkWrappers(pathValue)
   pathValue = wrapped.core.trim()
   let line: number | null = null
+  let column: number | null = null
 
-  const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C\d+)?$/u)
+  const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C(\d+))?$/u)
   if (hashLineMatch) {
     pathValue = hashLineMatch[1]
-    line = Number(hashLineMatch[2])
+    line = normalizePositiveInteger(hashLineMatch[2])
+    column = normalizePositiveInteger(hashLineMatch[3])
   } else {
-    const colonLineMatch = pathValue.match(/^(.*):(\d+)(?::\d+)?$/u)
+    const colonLineMatch = pathValue.match(/^(.*?):(\d+)(?::(\d+))?$/u)
     if (colonLineMatch) {
       pathValue = colonLineMatch[1]
-      line = Number(colonLineMatch[2])
+      line = normalizePositiveInteger(colonLineMatch[2])
+      column = normalizePositiveInteger(colonLineMatch[3])
     }
   }
 
   pathValue = normalizeFileUrlToPath(pathValue)
   if (!isFilePath(pathValue)) return null
-  return { path: pathValue, line }
+  return { path: pathValue, line, column }
 }
 
 function trimLinkWrappers(value: string): { core: string; leading: string; trailing: string } {
@@ -2173,6 +2182,8 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
           kind: 'file',
           value: token,
           path: ref.path,
+          line: ref.line,
+          column: ref.column,
           displayPath: token,
           fallbackText: token,
           downloadName: getBasename(ref.path),
@@ -2377,6 +2388,8 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
           kind: 'file',
           value: target,
           path: ref.path,
+          line: ref.line,
+          column: ref.column,
           displayPath,
           fallbackText: fileLinkFallbackText(displayPath, target),
           downloadName: getBasename(ref.path),
@@ -2468,6 +2481,8 @@ function parseInlineSegments(text: string): InlineSegment[] {
               kind: 'file',
               value: markdownLink.target,
               path: markdownFileReference.path,
+              line: markdownFileReference.line,
+              column: markdownFileReference.column,
               displayPath,
               fallbackText: fileLinkFallbackText(displayPath, markdownLink.target),
               downloadName: getBasename(markdownFileReference.path),
@@ -2486,12 +2501,14 @@ function parseInlineSegments(text: string): InlineSegment[] {
         const fileReference = parseFileReference(token)
         if (fileReference) {
           const displayPath = fileReference.line
-            ? `${fileReference.path}:${String(fileReference.line)}`
+            ? `${fileReference.path}:${String(fileReference.line)}${fileReference.column ? `:${String(fileReference.column)}` : ''}`
             : fileReference.path
           segments.push({
             kind: 'file',
             value: token,
             path: fileReference.path,
+            line: fileReference.line,
+            column: fileReference.column,
             displayPath,
             fallbackText: displayPath,
             downloadName: getBasename(fileReference.path),
@@ -2529,6 +2546,18 @@ function resolveAbsoluteLocalPath(pathValue: string): string {
   return ''
 }
 
+function resolveAbsoluteLocalPathLiteral(pathValue: string): string {
+  const normalized = pathValue.trim()
+  if (!normalized) return ''
+
+  const resolved = normalizePathDots(normalizePathSeparators(resolveRelativePath(normalizeFileUrlToPath(normalized), props.cwd)))
+  if (!resolved) return ''
+  if (resolved.startsWith('/') || /^[A-Za-z]:\//u.test(resolved)) {
+    return resolved
+  }
+  return ''
+}
+
 function toRenderableImageUrl(value: string): string {
   const normalized = value.trim()
   if (!normalized) return ''
@@ -2555,20 +2584,47 @@ function toRenderableImageUrl(value: string): string {
   return normalized
 }
 
-function toBrowseUrl(pathValue: string): string {
-  const resolved = resolveAbsoluteLocalPath(pathValue)
-  if (resolved) {
-    const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
-    return `/codex-local-browse${encodeURI(normalizedResolved)}`
-  }
-  return '#'
+function buildBrowseUrl(resolvedPath: string, line: number | null = null, column: number | null = null): string {
+  const normalizedResolved = resolvedPath.startsWith('/') ? resolvedPath : `/${resolvedPath}`
+  const query = new URLSearchParams()
+  if (line) query.set('line', String(line))
+  if (column) query.set('column', String(column))
+  const encodedQuery = query.toString()
+  return `/codex-local-browse${encodeURI(normalizedResolved)}${encodedQuery ? `?${encodedQuery}` : ''}`
 }
 
-function confirmedBrowseUrl(pathValue: string): string {
+function toBrowseUrl(pathValue: string): string {
+  const resolved = resolveAbsoluteLocalPathLiteral(pathValue)
+  return resolved ? buildBrowseUrl(resolved) : '#'
+}
+
+function confirmedBrowseUrl(
+  pathValue: string,
+  line: number | null = null,
+  column: number | null = null,
+  rawValue: string = pathValue,
+): string {
+  const literalResolved = resolveAbsoluteLocalPathLiteral(rawValue)
   const resolved = resolveAbsoluteLocalPath(pathValue)
+
+  if (
+    literalResolved
+    && literalResolved !== resolved
+    && localPathProbeResults.value[literalResolved] === true
+  ) {
+    return buildBrowseUrl(literalResolved)
+  }
+
   if (!resolved || localPathProbeResults.value[resolved] !== true) return ''
-  const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
-  return `/codex-local-browse${encodeURI(normalizedResolved)}`
+  return buildBrowseUrl(resolved, line, column)
+}
+
+function browseUrlForInlineFile(segment: FileInlineSegment): string {
+  return confirmedBrowseUrl(segment.path, segment.line, segment.column, segment.value)
+}
+
+function fileLinkTitle(segment: FileInlineSegment): string {
+  return segment.value.trim() || segment.path
 }
 
 const fileLinkContextMenuStyle = computed(() => ({
@@ -3273,8 +3329,10 @@ function parseMessageBlocks(text: string): MessageBlock[] {
 function collectInlineLocalPathCandidates(text: string, output: Set<string>): void {
   for (const segment of parseInlineSegments(text)) {
     if (segment.kind !== 'file') continue
+    const literalResolved = resolveAbsoluteLocalPathLiteral(segment.value)
     const resolved = resolveAbsoluteLocalPath(segment.path)
-    if (resolved) output.add(resolved)
+    if (literalResolved) output.add(literalResolved)
+    if (resolved && resolved !== literalResolved) output.add(resolved)
   }
 }
 
@@ -3444,11 +3502,11 @@ function renderInlineSegmentsAsHtml(text: string): string {
         return `<s class="message-strikethrough-text">${escapeHtml(segment.value)}</s>`
       }
       if (segment.kind === 'file') {
-        const browseUrl = confirmedBrowseUrl(segment.path)
+        const browseUrl = browseUrlForInlineFile(segment)
         if (!browseUrl) {
           return escapeHtml(segment.fallbackText)
         }
-        return `<a class="message-file-link" href="${escapeHtml(browseUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.path)}">${escapeHtml(segment.displayPath)}</a>`
+        return `<a class="message-file-link" href="${escapeHtml(browseUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(fileLinkTitle(segment))}">${escapeHtml(segment.displayPath)}</a>`
       }
       if (segment.kind === 'url') {
         return `<a class="message-file-link" href="${escapeHtml(segment.href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.href)}">${escapeHtml(segment.value)}</a>`

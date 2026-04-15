@@ -47,6 +47,11 @@ function readBooleanQueryFlag(value: string | null): boolean {
   return ["1", "true", "yes", "on"].includes((value ?? "").toLowerCase());
 }
 
+function readPositiveIntegerQueryParam(value: string | null): number | null {
+  const parsed = Number(value ?? "");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function localFileErrorResponse(error: unknown): { status: number; body: { error: string } } {
   const code = typeof error === "object" && error !== null && "code" in error
     ? String((error as { code?: unknown }).code ?? "")
@@ -416,6 +421,8 @@ export default defineConfig({
 
           const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-browse".length));
           const newProjectName = url.searchParams.get("newProjectName") ?? "";
+          const line = readPositiveIntegerQueryParam(url.searchParams.get("line"));
+          const column = line ? readPositiveIntegerQueryParam(url.searchParams.get("column")) : null;
           if (!localPath || !isAbsolute(localPath)) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -436,7 +443,7 @@ export default defineConfig({
 
             const textMetadata = await getLocalTextFileMetadata(localPath);
             if (textMetadata) {
-              const html = await createTextPreviewHtml(localPath, { newProjectName });
+              const html = await createTextPreviewHtml(localPath, { newProjectName, line, column });
               res.statusCode = 200;
               res.setHeader("Content-Type", "text/html; charset=utf-8");
               res.end(html);
@@ -465,6 +472,8 @@ export default defineConfig({
           if (!url.pathname.startsWith("/codex-local-edit/")) return next();
           const localPath = decodeBrowsePath(url.pathname.slice("/codex-local-edit".length));
           const newProjectName = url.searchParams.get("newProjectName") ?? "";
+          const line = readPositiveIntegerQueryParam(url.searchParams.get("line"));
+          const column = line ? readPositiveIntegerQueryParam(url.searchParams.get("column")) : null;
           if (!localPath || !isAbsolute(localPath)) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
@@ -485,7 +494,7 @@ export default defineConfig({
               res.end(JSON.stringify({ error: "Only text-like files are editable." }));
               return;
             }
-            const html = await createTextEditorHtml(localPath, { newProjectName });
+            const html = await createTextEditorHtml(localPath, { newProjectName, line, column });
             res.statusCode = 200;
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             res.end(html);

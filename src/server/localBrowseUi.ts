@@ -34,6 +34,12 @@ type LocalTextFileMetadata = {
   sizeBytes: number
 }
 
+type LocalBrowseLocationOptions = {
+  newProjectName?: string
+  line?: number | null
+  column?: number | null
+}
+
 const TEXT_LANGUAGE: LocalFileLanguageConfig = {
   label: 'text',
   aceMode: 'text',
@@ -224,16 +230,30 @@ function normalizeNewProjectName(value: string): string {
   return value.trim().replace(/[\\/]+/gu, '').trim()
 }
 
-function toBrowseHref(pathValue: string, newProjectName = ''): string {
-  const normalizedName = normalizeNewProjectName(newProjectName)
-  const query = normalizedName ? `?newProjectName=${encodeURIComponent(normalizedName)}` : ''
-  return `/codex-local-browse${encodeURI(pathValue)}${query}`
+function normalizeLineTarget(value: number | null | undefined): number | null {
+  return Number.isInteger(value) && Number(value) > 0 ? Number(value) : null
 }
 
-function toEditHref(pathValue: string, newProjectName = ''): string {
-  const normalizedName = normalizeNewProjectName(newProjectName)
-  const query = normalizedName ? `?newProjectName=${encodeURIComponent(normalizedName)}` : ''
-  return `/codex-local-edit${encodeURI(pathValue)}${query}`
+function buildLocationQuery(options?: LocalBrowseLocationOptions): string {
+  const query = new URLSearchParams()
+  const normalizedName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const line = normalizeLineTarget(options?.line)
+  const column = line ? normalizeLineTarget(options?.column) : null
+
+  if (normalizedName) query.set('newProjectName', normalizedName)
+  if (line) query.set('line', String(line))
+  if (column) query.set('column', String(column))
+
+  const encoded = query.toString()
+  return encoded ? `?${encoded}` : ''
+}
+
+function toBrowseHref(pathValue: string, options?: LocalBrowseLocationOptions): string {
+  return `/codex-local-browse${encodeURI(pathValue)}${buildLocationQuery(options)}`
+}
+
+function toEditHref(pathValue: string, options?: LocalBrowseLocationOptions): string {
+  return `/codex-local-edit${encodeURI(pathValue)}${buildLocationQuery(options)}`
 }
 
 function toRawFileHref(pathValue: string, options?: { download?: boolean }): string {
@@ -317,24 +337,67 @@ function actionButtonsHtml(localPath: string, newProjectName: string): string {
 
 function renderTextPreviewToolbar(
   localPath: string,
-  newProjectName: string,
+  options?: LocalBrowseLocationOptions,
 ): string {
-  const backHref = toBrowseHref(dirname(localPath), newProjectName)
+  const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const line = normalizeLineTarget(options?.line)
+  const column = line ? normalizeLineTarget(options?.column) : null
+  const backHref = toBrowseHref(dirname(localPath), { newProjectName })
   const rawHref = toRawFileHref(localPath)
   const downloadHref = toRawFileHref(localPath, { download: true })
+  const lineLocation = line ? { newProjectName, line, column } : { newProjectName }
 
   return [
     `<a href="${escapeHtml(backHref)}">Back</a>`,
     `<a href="${escapeHtml(rawHref)}" target="_blank" rel="noopener noreferrer">Raw</a>`,
     `<a href="${escapeHtml(downloadHref)}">Download</a>`,
-    `<a href="${escapeHtml(toEditHref(localPath, newProjectName))}">Edit</a>`,
+    `<a href="${escapeHtml(toEditHref(localPath, lineLocation))}">Edit</a>`,
   ].filter(Boolean).join('')
+}
+
+function formatLineTargetLabel(line: number | null, column: number | null): string {
+  if (!line) return ''
+  if (column) return `line ${String(line)}:${String(column)}`
+  return `line ${String(line)}`
+}
+
+function renderPlainPreviewContent(content: string, targetLine: number | null): string {
+  if (!targetLine || targetLine < 1) return escapeHtml(content)
+
+  const trailingNewline = content.endsWith('\n')
+  const lines = content.split('\n')
+  if (trailingNewline) lines.pop()
+  if (targetLine > lines.length) return escapeHtml(content)
+
+  return lines
+    .map((line, index) => {
+      const escapedLine = escapeHtml(line || ' ')
+      if (index + 1 === targetLine) {
+        return `<span id="previewTargetLine" class="preview-target-line">${escapedLine}</span>`
+      }
+      return escapedLine
+    })
+    .join('\n') + (trailingNewline ? '\n' : '')
 }
 
 function formatPreviewSize(sizeBytes: number): string {
   if (sizeBytes >= 1024 * 1024) return `${(sizeBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/u, '')} MiB`
   if (sizeBytes >= 1024) return `${Math.round(sizeBytes / 1024)} KiB`
   return `${sizeBytes} B`
+}
+
+function renderAceLineTargetScript(): string {
+  return [
+    'function selectTargetLine(editorInstance, lineNumber, columnNumber) {',
+    '  if (!lineNumber) return;',
+    '  const zeroBasedRow = lineNumber - 1;',
+    '  const zeroBasedColumn = Math.max(0, (columnNumber ?? 1) - 1);',
+    '  editorInstance.gotoLine(lineNumber, zeroBasedColumn, true);',
+    '  editorInstance.scrollToLine(lineNumber, true, true, function() {});',
+    '  editorInstance.selection.moveCursorToPosition({ row: zeroBasedRow, column: zeroBasedColumn });',
+    '  editorInstance.selection.selectLine();',
+    '}',
+  ].join('\n')
 }
 
 export async function getLocalDirectoryListing(
@@ -371,14 +434,14 @@ export async function createDirectoryListingHtml(localPath: string, options?: { 
     .map((item) => {
       const suffix = item.isDirectory ? '/' : ''
       const editAction = item.editable
-        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(item.name)}" href="${escapeHtml(toEditHref(item.path, newProjectName))}" title="Edit">✏️</a>`
+        ? ` <a class="icon-btn" aria-label="Edit ${escapeHtml(item.name)}" href="${escapeHtml(toEditHref(item.path, { newProjectName }))}" title="Edit">✏️</a>`
         : ''
-      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path, newProjectName))}">${escapeHtml(item.name)}${suffix}</a><span class="row-actions">${editAction}</span></li>`
+      return `<li class="file-row"><a class="file-link" href="${escapeHtml(toBrowseHref(item.path, { newProjectName }))}">${escapeHtml(item.name)}${suffix}</a><span class="row-actions">${editAction}</span></li>`
     })
     .join('\n')
 
   const parentLink = localPath !== parentPath
-    ? `<a class="header-parent-link" href="${escapeHtml(toBrowseHref(parentPath, newProjectName))}">..</a>`
+    ? `<a class="header-parent-link" href="${escapeHtml(toBrowseHref(parentPath, { newProjectName }))}">..</a>`
     : ''
   const pickerSummary = newProjectName
     ? `<p class="picker-summary">Browse to the parent folder where you want to create <strong>${escapeHtml(newProjectName)}</strong>, or open the current folder directly.</p>`
@@ -481,20 +544,25 @@ export async function createDirectoryListingHtml(localPath: string, options?: { 
 </html>`
 }
 
-export async function createTextPreviewHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {
+export async function createTextPreviewHtml(localPath: string, options?: LocalBrowseLocationOptions): Promise<string> {
   const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const line = normalizeLineTarget(options?.line)
+  const column = line ? normalizeLineTarget(options?.column) : null
   const metadata = await getLocalTextFileMetadata(localPath)
   if (!metadata) {
     throw new Error('Only text-like files can be previewed inline.')
   }
 
-  const toolbar = renderTextPreviewToolbar(localPath, newProjectName)
-  const previewMeta = `${localPath} · ${metadata.language.label} · ${formatPreviewSize(metadata.sizeBytes)}`
+  const toolbar = renderTextPreviewToolbar(localPath, { newProjectName, line, column })
+  const lineTargetLabel = formatLineTargetLabel(line, column)
+  const previewMeta = [localPath, metadata.language.label, formatPreviewSize(metadata.sizeBytes), lineTargetLabel]
+    .filter(Boolean)
+    .join(' · ')
   const previewUnavailable = metadata.sizeBytes > MAX_INLINE_PREVIEW_BYTES
   const previewContent = previewUnavailable
     ? ''
     : await readFile(localPath, 'utf8')
-  const previewPlainHtml = escapeHtml(previewContent)
+  const previewPlainHtml = renderPlainPreviewContent(previewContent, line)
   const safePreviewLiteral = escapeForInlineScriptString(previewContent)
 
   return `<!doctype html>
@@ -532,6 +600,14 @@ export async function createTextPreviewHtml(localPath: string, options?: { newPr
       color: #dbe6ff;
       background: #07101f;
     }
+    .preview-target-line {
+      display: inline-block;
+      min-width: 100%;
+      margin: 0 -20px;
+      padding: 0 20px;
+      background: rgba(140, 194, 255, 0.16);
+      box-shadow: inset 3px 0 0 #8cc2ff;
+    }
     #previewEditor { flex: 1 1 auto; width: 100%; min-height: 0; }
     .ace_editor { background: #07101f !important; color: #dbe6ff !important; width: 100% !important; height: 100% !important; }
     .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
@@ -559,11 +635,18 @@ export async function createTextPreviewHtml(localPath: string, options?: { newPr
 <div id="previewEditor" hidden></div>`}
     </section>
   </main>
-  ${previewUnavailable ? '' : `<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
-  <script>
-    const previewFallback = document.getElementById('previewFallback');
-    const previewEditor = document.getElementById('previewEditor');
-    if (window.ace && previewEditor) {
+	  ${previewUnavailable ? '' : `<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
+	  <script>
+	    const targetLineNumber = ${line ?? 'null'};
+	    const targetColumnNumber = ${column ?? 'null'};
+	    const previewFallback = document.getElementById('previewFallback');
+	    const previewTargetLine = document.getElementById('previewTargetLine');
+	    const previewEditor = document.getElementById('previewEditor');
+	    ${renderAceLineTargetScript()}
+	    if (previewTargetLine) {
+	      previewTargetLine.scrollIntoView({ block: 'center' });
+	    }
+	    if (window.ace && previewEditor) {
       previewEditor.hidden = false;
       if (previewFallback) previewFallback.hidden = true;
       ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
@@ -574,25 +657,30 @@ export async function createTextPreviewHtml(localPath: string, options?: { newPr
       editor.setValue(${safePreviewLiteral}, -1);
       editor.setOptions({
         readOnly: true,
-        highlightActiveLine: false,
+        highlightActiveLine: !!targetLineNumber,
         highlightGutterLine: false,
         showPrintMargin: false,
         fontSize: '13px',
         wrap: true,
         behavioursEnabled: false,
         displayIndentGuides: true,
-      });
-      editor.renderer.setShowGutter(true);
-      editor.renderer.$cursorLayer.element.style.display = 'none';
-      editor.resize();
-    }
-  </script>`}
+	      });
+	      editor.renderer.setShowGutter(true);
+	      editor.renderer.$cursorLayer.element.style.display = 'none';
+	      if (targetLineNumber) {
+	        selectTargetLine(editor, targetLineNumber, targetColumnNumber);
+	      }
+	      editor.resize();
+	    }
+	  </script>`}
 </body>
 </html>`
 }
 
-export async function createTextEditorHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {
+export async function createTextEditorHtml(localPath: string, options?: LocalBrowseLocationOptions): Promise<string> {
   const newProjectName = normalizeNewProjectName(options?.newProjectName ?? '')
+  const line = normalizeLineTarget(options?.line)
+  const column = line ? normalizeLineTarget(options?.column) : null
   const metadata = await getLocalTextFileMetadata(localPath)
   if (!metadata) {
     throw new Error('Only text-like files are editable.')
@@ -626,22 +714,25 @@ export async function createTextEditorHtml(localPath: string, options?: { newPro
 <body>
   <div class="toolbar">
     <div class="row">
-      <a href="${escapeHtml(toBrowseHref(parentPath, newProjectName))}">Back</a>
-      <a href="${escapeHtml(toBrowseHref(localPath, newProjectName))}">Preview</a>
+      <a href="${escapeHtml(toBrowseHref(parentPath, { newProjectName }))}">Back</a>
+      <a href="${escapeHtml(toBrowseHref(localPath, { newProjectName, line, column }))}">Preview</a>
       <a href="${escapeHtml(toRawFileHref(localPath))}" target="_blank" rel="noopener noreferrer">Raw</a>
       <a href="${escapeHtml(toRawFileHref(localPath, { download: true }))}">Download</a>
       <button id="saveBtn" type="button">Save</button>
       <span id="status"></span>
     </div>
-    <div class="meta">${escapeHtml(localPath)} · ${escapeHtml(metadata.language.label)}</div>
+    <div class="meta">${escapeHtml([localPath, metadata.language.label, formatLineTargetLabel(line, column)].filter(Boolean).join(' · '))}</div>
   </div>
   <div id="editor"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
-  <script>
-    const saveBtn = document.getElementById('saveBtn');
-    const status = document.getElementById('status');
-    ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
-    const editor = ace.edit('editor');
+	  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
+	  <script>
+	    const targetLineNumber = ${line ?? 'null'};
+	    const targetColumnNumber = ${column ?? 'null'};
+	    const saveBtn = document.getElementById('saveBtn');
+	    const status = document.getElementById('status');
+	    ${renderAceLineTargetScript()}
+	    ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
+	    const editor = ace.edit('editor');
     editor.setTheme('ace/theme/tomorrow_night');
     editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
     editor.session.setUseWorker(false);
@@ -652,9 +743,12 @@ export async function createTextEditorHtml(localPath: string, options?: { newPro
       showPrintMargin: false,
       useSoftTabs: true,
       tabSize: 2,
-      behavioursEnabled: true,
-    });
-    editor.resize();
+	      behavioursEnabled: true,
+	    });
+	    if (targetLineNumber) {
+	      selectTargetLine(editor, targetLineNumber, targetColumnNumber);
+	    }
+	    editor.resize();
 
     saveBtn.addEventListener('click', async () => {
       status.textContent = 'Saving...';
