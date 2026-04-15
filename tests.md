@@ -270,6 +270,9 @@ This file tracks manual regression and feature verification steps.
 13. Click `Edit` from that targeted preview and verify the editor opens at the same line/column target with the full target line selected.
 14. On hosts that allow `:` or `#` in filenames, create a literal file such as `/tmp/codexui-file-browser-test/literal:12:3.txt`, send that exact path in the thread, and confirm it opens the literal file instead of stripping the suffix into line-target metadata.
 15. Open a text preview page on a desktop-sized viewport and verify the preview panel extends to the bottom of the browser window below the toolbar, instead of stopping at a shorter fixed-height box.
+16. In the main app, switch Appearance to `Light`, then open a local directory listing, a preview page, and an editor page in new tabs/windows and confirm all three use a light theme with readable syntax colors.
+17. Switch Appearance to `Dark` and repeat the same three local browsing views, confirming they switch to dark mode and keep readable syntax colors.
+18. Set Appearance to `System`, change the OS/browser preferred color scheme if available, then reload one of the standalone local browsing pages and confirm it follows the resolved system theme.
 
 #### Expected Results
 - Path-like text is only linkified after the server confirms the local path exists.
@@ -279,6 +282,8 @@ This file tracks manual regression and feature verification steps.
 - File references with `:line[:column]` or `#Lline[Ccolumn]` open preview/editor at the requested location.
 - Targeted line opens with a full-line Ace selection, not only cursor placement.
 - On hosts that allow those characters in filenames, exact existing paths still win over interpreted line-target syntax.
+- Standalone local directory, preview, and editor pages follow the same `Light`/`Dark`/`System` appearance preference as the main app.
+- Ace syntax highlighting remains readable in both light and dark themes.
 - Preview falls back to plain text rendering if the syntax highlighter is unavailable.
 - Preview and edit pages expose the same language coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text files.
 - The preview panel fills the remaining viewport height below the toolbar on desktop layouts.

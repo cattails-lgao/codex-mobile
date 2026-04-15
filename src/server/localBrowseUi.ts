@@ -112,6 +112,8 @@ const FILE_LANGUAGE_RULES_BY_EXTENSION = new Map<string, LocalFileLanguageConfig
 ])
 
 const MAX_INLINE_PREVIEW_BYTES = 1024 * 1024
+const DARK_MODE_STORAGE_KEY = 'codex-web-local.dark-mode.v1'
+const ACE_CDN_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2'
 
 function getLanguageConfigForPath(pathValue: string): { language: LocalFileLanguageConfig; recognized: boolean } {
   const fileName = basename(pathValue).toLowerCase()
@@ -273,6 +275,102 @@ function escapeForInlineScriptString(value: string): string {
     .replace(/\u2029/gu, '\\u2029')
 }
 
+function renderStandaloneThemeBootstrapScript(): string {
+  return [
+    '(function() {',
+    `  const storageKey = ${JSON.stringify(DARK_MODE_STORAGE_KEY)};`,
+    '  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");',
+    '  function readStoredPreference() {',
+    '    try {',
+    '      const value = window.localStorage.getItem(storageKey);',
+    '      return value === "light" || value === "dark" ? value : "system";',
+    '    } catch {',
+    '      return "system";',
+    '    }',
+    '  }',
+    '  function resolveTheme(preference) {',
+    '    if (preference === "light" || preference === "dark") return preference;',
+    '    return mediaQuery.matches ? "dark" : "light";',
+    '  }',
+    '  function applyTheme() {',
+    '    const preference = readStoredPreference();',
+    '    const resolvedTheme = resolveTheme(preference);',
+    '    document.documentElement.dataset.theme = resolvedTheme;',
+    '    document.documentElement.style.colorScheme = resolvedTheme;',
+    '    window.__codexLocalBrowseTheme = { preference, resolvedTheme };',
+    '    window.dispatchEvent(new CustomEvent("codex-local-browse-themechange", { detail: window.__codexLocalBrowseTheme }));',
+    '  }',
+    '  applyTheme();',
+    '  window.__codexApplyLocalBrowseTheme = applyTheme;',
+    '  window.addEventListener("storage", function(event) {',
+    '    if (event.key !== storageKey) return;',
+    '    applyTheme();',
+    '  });',
+    '  mediaQuery.addEventListener("change", function() {',
+    '    if (readStoredPreference() !== "system") return;',
+    '    applyTheme();',
+    '  });',
+    '})();',
+  ].join('\n')
+}
+
+function renderStandaloneThemeCss(): string {
+  return `
+    :root {
+      color-scheme: light;
+      --lb-bg: #f3f6fb;
+      --lb-surface: #ffffff;
+      --lb-surface-muted: #eef3fb;
+      --lb-surface-strong: #e7edf8;
+      --lb-toolbar-bg: rgba(243, 246, 251, 0.96);
+      --lb-border: #cfd9ea;
+      --lb-border-strong: #b6c4db;
+      --lb-text: #172033;
+      --lb-text-muted: #52607a;
+      --lb-link: #2457b8;
+      --lb-button-text: #172033;
+      --lb-accent-bg: #dfeafe;
+      --lb-accent-border: #9db8ef;
+      --lb-primary-bg: linear-gradient(135deg, #2f67d8 0%, #4b88ff 100%);
+      --lb-primary-border: #2f67d8;
+      --lb-primary-text: #f8fbff;
+      --lb-selection: rgba(77, 124, 255, 0.18);
+      --lb-selection-strong: rgba(77, 124, 255, 0.24);
+      --lb-target-line: rgba(77, 124, 255, 0.14);
+      --lb-target-stripe: #4d7cff;
+      --lb-warning-text: #8a5a00;
+      --lb-warning-bg: rgba(194, 136, 18, 0.12);
+      --lb-shadow: 0 16px 40px rgba(31, 49, 82, 0.12);
+    }
+    :root[data-theme='dark'] {
+      color-scheme: dark;
+      --lb-bg: #09111f;
+      --lb-surface: #0d182b;
+      --lb-surface-muted: #101f3a;
+      --lb-surface-strong: #13233d;
+      --lb-toolbar-bg: rgba(9, 17, 31, 0.96);
+      --lb-border: #20324d;
+      --lb-border-strong: #36557a;
+      --lb-text: #dbe6ff;
+      --lb-text-muted: #8fb8ec;
+      --lb-link: #8cc2ff;
+      --lb-button-text: #dbe6ff;
+      --lb-accent-bg: #162643;
+      --lb-accent-border: #36557a;
+      --lb-primary-bg: linear-gradient(135deg, #2e6ee6 0%, #3d8cff 100%);
+      --lb-primary-border: #4f8de0;
+      --lb-primary-text: #eef6ff;
+      --lb-selection: rgba(140, 194, 255, 0.16);
+      --lb-selection-strong: rgba(140, 194, 255, 0.3);
+      --lb-target-line: rgba(140, 194, 255, 0.16);
+      --lb-target-stripe: #8cc2ff;
+      --lb-warning-text: #f0cf78;
+      --lb-warning-bg: rgba(240, 207, 120, 0.08);
+      --lb-shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
+    }
+  `
+}
+
 async function getDirectoryItems(localPath: string): Promise<DirectoryItem[]> {
   const entries = await readdir(localPath, { withFileTypes: true })
   const withMeta = await Promise.all(entries.map(async (entry) => {
@@ -397,6 +495,12 @@ function renderAceLineTargetScript(): string {
     '  editorInstance.selection.moveCursorToPosition({ row: zeroBasedRow, column: zeroBasedColumn });',
     '  editorInstance.selection.selectLine();',
     '}',
+    'function currentAceThemeName() {',
+    '  return document.documentElement.dataset.theme === "light" ? "tomorrow" : "tomorrow_night";',
+    '}',
+    'function applyAceTheme(editorInstance) {',
+    '  editorInstance.setTheme("ace/theme/" + currentAceThemeName());',
+    '}',
   ].join('\n')
 }
 
@@ -454,35 +558,37 @@ export async function createDirectoryListingHtml(localPath: string, options?: { 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Index of ${escapeHtml(localPath)}</title>
+  <script>${renderStandaloneThemeBootstrapScript()}</script>
   <style>
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: #0b1020; color: #dbe6ff; }
-    a { color: #8cc2ff; text-decoration: none; }
+    ${renderStandaloneThemeCss()}
+    body { font-family: ui-monospace, Menlo, Monaco, monospace; margin: 16px; background: var(--lb-bg); color: var(--lb-text); }
+    a { color: var(--lb-link); text-decoration: none; }
     a:hover { text-decoration: underline; }
     ul { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
     .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }
-    .file-link { display: block; padding: 10px 12px; border: 1px solid #28405f; border-radius: 10px; background: #0f1b33; overflow-wrap: anywhere; }
+    .file-link { display: block; padding: 10px 12px; border: 1px solid var(--lb-border); border-radius: 10px; background: var(--lb-surface); color: var(--lb-text); overflow-wrap: anywhere; box-shadow: var(--lb-shadow); }
     .header-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-    .header-parent-link { color: #9ec8ff; font-size: 14px; padding: 8px 10px; border: 1px solid #2a4569; border-radius: 10px; background: #101f3a; }
+    .header-parent-link { color: var(--lb-link); font-size: 14px; padding: 8px 10px; border: 1px solid var(--lb-border); border-radius: 10px; background: var(--lb-surface-muted); }
     .header-parent-link:hover { text-decoration: none; filter: brightness(1.08); }
     .header-open-btn {
       height: 42px;
       padding: 0 14px;
-      border: 1px solid #4f8de0;
+      border: 1px solid var(--lb-primary-border);
       border-radius: 10px;
-      background: linear-gradient(135deg, #2e6ee6 0%, #3d8cff 100%);
-      color: #eef6ff;
+      background: var(--lb-primary-bg);
+      color: var(--lb-primary-text);
       font-weight: 700;
       letter-spacing: 0.01em;
       cursor: pointer;
-      box-shadow: 0 6px 18px rgba(33, 90, 199, 0.35);
+      box-shadow: var(--lb-shadow);
     }
     .header-open-btn:hover { filter: brightness(1.08); }
     .header-open-btn:disabled { opacity: 0.6; cursor: default; }
-    .picker-summary { margin: 10px 0 0; color: #b8d5ff; max-width: 60rem; line-height: 1.45; }
+    .picker-summary { margin: 10px 0 0; color: var(--lb-text-muted); max-width: 60rem; line-height: 1.45; }
     .row-actions { display: inline-flex; align-items: center; gap: 8px; min-width: 42px; justify-content: flex-end; }
-    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid #36557a; border-radius: 10px; background: #162643; color: #dbe6ff; text-decoration: none; cursor: pointer; }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid var(--lb-accent-border); border-radius: 10px; background: var(--lb-accent-bg); color: var(--lb-button-text); text-decoration: none; cursor: pointer; }
     .icon-btn:hover { filter: brightness(1.08); text-decoration: none; }
-    .status { margin: 10px 0 0; color: #8cc2ff; min-height: 1.25em; }
+    .status { margin: 10px 0 0; color: var(--lb-text-muted); min-height: 1.25em; }
     h1 { font-size: 18px; margin: 0; word-break: break-all; }
     @media (max-width: 640px) {
       body { margin: 12px; }
@@ -571,21 +677,23 @@ export async function createTextPreviewHtml(localPath: string, options?: LocalBr
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(basename(localPath))}</title>
+  <script>${renderStandaloneThemeBootstrapScript()}</script>
   <style>
+    ${renderStandaloneThemeCss()}
     html, body { margin: 0; width: 100%; min-height: 100%; }
-    body { min-height: 100vh; font-family: ui-monospace, Menlo, Monaco, monospace; background: #09111f; color: #dbe6ff; display: flex; flex-direction: column; }
+    body { min-height: 100vh; font-family: ui-monospace, Menlo, Monaco, monospace; background: var(--lb-bg); color: var(--lb-text); display: flex; flex-direction: column; }
     a { color: inherit; text-decoration: none; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; background: rgba(9, 17, 31, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid #233958; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; background: var(--lb-toolbar-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--lb-border); }
     .toolbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .toolbar-row a { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 12px; border: 1px solid #36557a; border-radius: 10px; background: #13233d; }
+    .toolbar-row a { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 12px; border: 1px solid var(--lb-accent-border); border-radius: 10px; background: var(--lb-accent-bg); color: var(--lb-button-text); }
     .toolbar-row a:hover { filter: brightness(1.08); }
-    .meta { color: #8fb8ec; font-size: 12px; overflow-wrap: anywhere; line-height: 1.5; }
+    .meta { color: var(--lb-text-muted); font-size: 12px; overflow-wrap: anywhere; line-height: 1.5; }
     .preview-shell { flex: 1 1 auto; min-height: 0; display: flex; padding: 18px 16px 24px; }
-    .preview-card { flex: 1 1 auto; min-height: 0; max-width: 100%; border: 1px solid #20324d; border-radius: 14px; background: #0d182b; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.24); display: flex; flex-direction: column; }
-    .preview-notice { margin: 0; padding: 12px 16px; border-bottom: 1px solid #20324d; color: #f0cf78; background: rgba(240, 207, 120, 0.08); }
+    .preview-card { flex: 1 1 auto; min-height: 0; max-width: 100%; border: 1px solid var(--lb-border); border-radius: 14px; background: var(--lb-surface); overflow: hidden; box-shadow: var(--lb-shadow); display: flex; flex-direction: column; }
+    .preview-notice { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--lb-border); color: var(--lb-warning-text); background: var(--lb-warning-bg); }
     .preview-unavailable { padding: 26px 20px; }
     .preview-unavailable-title { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
-    .preview-unavailable-text { margin: 0; color: #aac5e6; line-height: 1.6; }
+    .preview-unavailable-text { margin: 0; color: var(--lb-text-muted); line-height: 1.6; }
     .preview-plain {
       flex: 1 1 auto;
       box-sizing: border-box;
@@ -597,22 +705,21 @@ export async function createTextPreviewHtml(localPath: string, options?: LocalBr
       overflow-wrap: anywhere;
       tab-size: 2;
       line-height: 1.55;
-      color: #dbe6ff;
-      background: #07101f;
+      color: var(--lb-text);
+      background: var(--lb-surface);
     }
     .preview-target-line {
       display: inline-block;
       min-width: 100%;
       margin: 0 -20px;
       padding: 0 20px;
-      background: rgba(140, 194, 255, 0.16);
-      box-shadow: inset 3px 0 0 #8cc2ff;
+      background: var(--lb-target-line);
+      box-shadow: inset 3px 0 0 var(--lb-target-stripe);
     }
     #previewEditor { flex: 1 1 auto; width: 100%; min-height: 0; }
-    .ace_editor { background: #07101f !important; color: #dbe6ff !important; width: 100% !important; height: 100% !important; }
-    .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
+    .ace_editor { width: 100% !important; height: 100% !important; }
     .ace_marker-layer .ace_active-line { background: transparent !important; }
-    .ace_marker-layer .ace_selection { background: rgba(140, 194, 255, 0.16) !important; }
+    .ace_marker-layer .ace_selection { background: var(--lb-selection) !important; }
     @media (max-width: 640px) {
       .toolbar { padding: 12px; }
       .preview-shell { padding: 12px; }
@@ -635,7 +742,7 @@ export async function createTextPreviewHtml(localPath: string, options?: LocalBr
 <div id="previewEditor" hidden></div>`}
     </section>
   </main>
-	  ${previewUnavailable ? '' : `<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
+	  ${previewUnavailable ? '' : `<script src="${ACE_CDN_BASE}/ace.min.js"></script>
 	  <script>
 	    const targetLineNumber = ${line ?? 'null'};
 	    const targetColumnNumber = ${column ?? 'null'};
@@ -647,14 +754,14 @@ export async function createTextPreviewHtml(localPath: string, options?: LocalBr
 	      previewTargetLine.scrollIntoView({ block: 'center' });
 	    }
 	    if (window.ace && previewEditor) {
-      previewEditor.hidden = false;
-      if (previewFallback) previewFallback.hidden = true;
-      ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
-      const editor = ace.edit('previewEditor');
-      editor.setTheme('ace/theme/tomorrow_night');
-      editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
-      editor.session.setUseWorker(false);
-      editor.setValue(${safePreviewLiteral}, -1);
+	      previewEditor.hidden = false;
+	      if (previewFallback) previewFallback.hidden = true;
+	      ace.config.set('basePath', '${ACE_CDN_BASE}/');
+	      const editor = ace.edit('previewEditor');
+	      applyAceTheme(editor);
+	      editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
+	      editor.session.setUseWorker(false);
+	      editor.setValue(${safePreviewLiteral}, -1);
       editor.setOptions({
         readOnly: true,
         highlightActiveLine: !!targetLineNumber,
@@ -670,6 +777,9 @@ export async function createTextPreviewHtml(localPath: string, options?: LocalBr
 	      if (targetLineNumber) {
 	        selectTargetLine(editor, targetLineNumber, targetColumnNumber);
 	      }
+	      window.addEventListener('codex-local-browse-themechange', function() {
+	        applyAceTheme(editor);
+	      });
 	      editor.resize();
 	    }
 	  </script>`}
@@ -695,20 +805,21 @@ export async function createTextEditorHtml(localPath: string, options?: LocalBro
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Edit ${escapeHtml(localPath)}</title>
+  <script>${renderStandaloneThemeBootstrapScript()}</script>
   <style>
+    ${renderStandaloneThemeCss()}
     html, body { width: 100%; height: 100%; margin: 0; }
-    body { font-family: ui-monospace, Menlo, Monaco, monospace; background: #0b1020; color: #dbe6ff; display: flex; flex-direction: column; overflow: hidden; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #0b1020; border-bottom: 1px solid #243a5a; }
+    body { font-family: ui-monospace, Menlo, Monaco, monospace; background: var(--lb-bg); color: var(--lb-text); display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--lb-bg); border-bottom: 1px solid var(--lb-border); }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    button, a { background: #1b2a4a; color: #dbe6ff; border: 1px solid #345; padding: 6px 10px; border-radius: 6px; text-decoration: none; cursor: pointer; }
+    button, a { background: var(--lb-accent-bg); color: var(--lb-button-text); border: 1px solid var(--lb-accent-border); padding: 6px 10px; border-radius: 6px; text-decoration: none; cursor: pointer; }
     button:hover, a:hover { filter: brightness(1.08); }
     #editor { flex: 1 1 auto; min-height: 0; width: 100%; border: none; overflow: hidden; }
-    #status { margin-left: 8px; color: #8cc2ff; }
-    .ace_editor { background: #07101f !important; color: #dbe6ff !important; width: 100% !important; height: 100% !important; }
-    .ace_gutter { background: #07101f !important; color: #6f8eb5 !important; }
-    .ace_marker-layer .ace_active-line { background: #10213c !important; }
-    .ace_marker-layer .ace_selection { background: rgba(140, 194, 255, 0.3) !important; }
-    .meta { opacity: 0.9; font-size: 12px; overflow-wrap: anywhere; }
+    #status { margin-left: 8px; color: var(--lb-text-muted); }
+    .ace_editor { width: 100% !important; height: 100% !important; }
+    .ace_marker-layer .ace_active-line { background: var(--lb-target-line) !important; }
+    .ace_marker-layer .ace_selection { background: var(--lb-selection-strong) !important; }
+    .meta { opacity: 0.9; font-size: 12px; overflow-wrap: anywhere; color: var(--lb-text-muted); }
   </style>
 </head>
 <body>
@@ -724,19 +835,19 @@ export async function createTextEditorHtml(localPath: string, options?: LocalBro
     <div class="meta">${escapeHtml([localPath, metadata.language.label, formatLineTargetLabel(line, column)].filter(Boolean).join(' · '))}</div>
   </div>
   <div id="editor"></div>
-	  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.min.js"></script>
+	  <script src="${ACE_CDN_BASE}/ace.min.js"></script>
 	  <script>
 	    const targetLineNumber = ${line ?? 'null'};
 	    const targetColumnNumber = ${column ?? 'null'};
 	    const saveBtn = document.getElementById('saveBtn');
 	    const status = document.getElementById('status');
 	    ${renderAceLineTargetScript()}
-	    ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/');
+	    ace.config.set('basePath', '${ACE_CDN_BASE}/');
 	    const editor = ace.edit('editor');
-    editor.setTheme('ace/theme/tomorrow_night');
-    editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
-    editor.session.setUseWorker(false);
-    editor.setValue(${safeContentLiteral}, -1);
+	    applyAceTheme(editor);
+	    editor.session.setMode('ace/mode/${escapeHtml(metadata.language.aceMode)}');
+	    editor.session.setUseWorker(false);
+	    editor.setValue(${safeContentLiteral}, -1);
     editor.setOptions({
       fontSize: '13px',
       wrap: true,
@@ -748,6 +859,9 @@ export async function createTextEditorHtml(localPath: string, options?: LocalBro
 	    if (targetLineNumber) {
 	      selectTargetLine(editor, targetLineNumber, targetColumnNumber);
 	    }
+	    window.addEventListener('codex-local-browse-themechange', function() {
+	      applyAceTheme(editor);
+	    });
 	    editor.resize();
 
     saveBtn.addEventListener('click', async () => {
