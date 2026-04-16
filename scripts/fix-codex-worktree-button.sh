@@ -18,7 +18,7 @@ set -euo pipefail
 ###############################################################################
 
 CODEX_APP="/Applications/Codex.app"
-CDP_PORT="${CDP_PORT:-9339}"
+CDP_PORT="${CDP_PORT:-3434}"
 MAX_WAIT=30
 
 RED='\033[0;31m'
@@ -38,7 +38,7 @@ feature gate value via Chrome DevTools Protocol.
 
 Options:
   --dry-run           Show what would be done without doing it
-  --port PORT         CDP port to use (default: 9339)
+  --port PORT         CDP port to use (default: 3434)
   -h, --help          Show this help
 EOF
 }

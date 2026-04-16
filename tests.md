@@ -2018,7 +2018,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 - After running the script, the "New worktree" option reappears in the composer mode dropdown immediately (no app restart needed after injection).
 - Gate `505458` returns `true` from `checkGate()`.
 - Use `--dry-run` to preview actions without making changes.
-- Use `--port PORT` to specify a custom CDP port (default: 9339).
+- Use `--port PORT` to specify a custom CDP port (default: 3434).
 - If Codex.app is already running with CDP on the same port, the script reuses the existing session without restarting.
 
 #### Rollback/Cleanup
