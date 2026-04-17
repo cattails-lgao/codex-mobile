@@ -2449,3 +2449,26 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 
 #### Rollback/Cleanup
 - Stop dev server when finished.
+
+### Feature: API perf logging toggle + body size + RPC method
+
+#### Prerequisites
+- `.env.local` contains `CODEXUI_API_PERF_LOGGING=true`.
+- App server is running from this repository.
+
+#### Steps
+1. Call a non-RPC API endpoint:
+   - `curl -s -o /dev/null http://127.0.0.1:4173/codex-api/meta/methods`
+2. Call RPC endpoint:
+   - `curl -s -o /dev/null -X POST http://127.0.0.1:4173/codex-api/rpc -H "content-type: application/json" -d '{"method":"thread/list","params":{}}'`
+3. Check server logs for `[codex-api-perf]` entries.
+
+#### Expected Results
+- Non-RPC log includes duration and body size:
+  - `[codex-api-perf] GET /codex-api/meta/methods -> 200 (...ms, bodyMB=n/a)`
+- RPC log includes duration, body size, and method name:
+  - `[codex-api-perf] POST /codex-api/rpc -> 200 (...ms, bodyMB=..., rpcMethod=thread/list)`
+- Setting `CODEXUI_API_PERF_LOGGING=false` suppresses these perf log lines.
+
+#### Rollback/Cleanup
+- Set `CODEXUI_API_PERF_LOGGING=false` (or remove it) to disable perf logs.

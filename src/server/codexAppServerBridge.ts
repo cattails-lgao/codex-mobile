@@ -107,6 +107,7 @@ const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
+const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
 
 type SessionRecoveredFileChange = {
   path: string
@@ -122,6 +123,46 @@ type SessionRecoveredTurnFileChanges = {
   turnIndex: number
   fileChanges: SessionRecoveredFileChange[]
 }
+
+function readEnvValueFromFile(filePath: string, key: string): string | null {
+  try {
+    const content = readFileSync(filePath, 'utf8')
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const match = content.match(new RegExp(`^\\s*${escapedKey}\\s*=\\s*(.+)\\s*$`, 'm'))
+    if (!match) return null
+    const rawValue = match[1]?.trim() ?? ''
+    if (!rawValue) return null
+    if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith('\'') && rawValue.endsWith('\''))) {
+      return rawValue.slice(1, -1).trim()
+    }
+    return rawValue
+  } catch {
+    return null
+  }
+}
+
+function parseBooleanEnvFlag(value: string | null | undefined): boolean | null {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return null
+}
+
+function resolveApiPerfLoggingEnabled(): boolean {
+  const explicitValue = parseBooleanEnvFlag(process.env[API_PERF_LOGGING_ENV_KEY])
+  if (explicitValue !== null) return explicitValue
+
+  const fromEnvLocal = parseBooleanEnvFlag(readEnvValueFromFile('.env.local', API_PERF_LOGGING_ENV_KEY))
+  if (fromEnvLocal !== null) return fromEnvLocal
+
+  const fromEnv = parseBooleanEnvFlag(readEnvValueFromFile('.env', API_PERF_LOGGING_ENV_KEY))
+  if (fromEnv !== null) return fromEnv
+
+  return false
+}
+
+const API_PERF_LOGGING_ENABLED = resolveApiPerfLoggingEnabled()
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -2898,12 +2939,22 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     const parsedRequestUrl = rawUrl ? new URL(rawUrl, 'http://localhost') : null
     const requestPath = parsedRequestUrl?.pathname ?? ''
     const requestMethod = req.method ?? 'UNKNOWN'
+    const rawContentLength = Array.isArray(req.headers['content-length'])
+      ? req.headers['content-length'][0]
+      : req.headers['content-length']
+    const parsedContentLength = rawContentLength ? Number.parseInt(rawContentLength, 10) : NaN
+    let requestBodyBytes: number | null = Number.isFinite(parsedContentLength) && parsedContentLength >= 0
+      ? parsedContentLength
+      : null
+    let rpcMethod: string | null = null
     let didLog = false
     const logApiRequestDuration = () => {
-      if (didLog || !requestPath.startsWith('/codex-api/')) return
+      if (!API_PERF_LOGGING_ENABLED || didLog || !requestPath.startsWith('/codex-api/')) return
       didLog = true
       const durationMs = Number((process.hrtime.bigint() - requestStartNs) / 1_000_000n)
-      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms)`)
+      const bodyMb = requestBodyBytes !== null ? (requestBodyBytes / (1024 * 1024)).toFixed(4) : 'n/a'
+      const rpcPart = rpcMethod ? `, rpcMethod=${rpcMethod}` : ''
+      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms, bodyMB=${bodyMb}${rpcPart})`)
     }
     res.once('finish', logApiRequestDuration)
     res.once('close', logApiRequestDuration)
@@ -3076,6 +3127,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'POST' && url.pathname === '/codex-api/rpc') {
         const payload = await readJsonBody(req)
         const body = asRecord(payload) as RpcProxyRequest | null
+        if (payload !== null && payload !== undefined) {
+          requestBodyBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
+        }
+        rpcMethod = body?.method && typeof body.method === 'string' ? body.method : null
 
         if (!body || typeof body.method !== 'string' || body.method.length === 0) {
           setJson(res, 400, { error: 'Invalid body: expected { method, params? }' })
