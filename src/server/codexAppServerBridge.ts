@@ -2884,6 +2884,21 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     .catch(() => {})
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const requestStartNs = process.hrtime.bigint()
+    const rawUrl = req.url ?? ''
+    const parsedRequestUrl = rawUrl ? new URL(rawUrl, 'http://localhost') : null
+    const requestPath = parsedRequestUrl?.pathname ?? ''
+    const requestMethod = req.method ?? 'UNKNOWN'
+    let didLog = false
+    const logApiRequestDuration = () => {
+      if (didLog || !requestPath.startsWith('/codex-api/')) return
+      didLog = true
+      const durationMs = Number((process.hrtime.bigint() - requestStartNs) / 1_000_000n)
+      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms)`)
+    }
+    res.once('finish', logApiRequestDuration)
+    res.once('close', logApiRequestDuration)
+
     try {
       if (!req.url) {
         next()
