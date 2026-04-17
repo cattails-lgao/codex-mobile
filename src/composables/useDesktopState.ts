@@ -1033,36 +1033,6 @@ export function useDesktopState() {
   const error = ref('')
   const isPolling = ref(false)
   const hasLoadedThreads = ref(false)
-
-  function extractLocalImagePathFromUrl(value: string): string {
-    try {
-      const parsed = new URL(value, 'http://localhost')
-      if (parsed.pathname !== '/codex-local-image') return ''
-      return parsed.searchParams.get('path')?.trim() ?? ''
-    } catch {
-      return ''
-    }
-  }
-
-  function shouldReuseAttachedImageFromPrompt(promptText: string): boolean {
-    const normalized = promptText.trim().toLowerCase()
-    if (!normalized) return false
-    return /\b(attached image|attached screenshot|save the attached|copy (the )?screenshot|save screenshot)\b/i.test(normalized)
-  }
-
-  function findLatestUserLocalImageUrl(threadId: string): string {
-    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    for (let index = persisted.length - 1; index >= 0; index -= 1) {
-      const message = persisted[index]
-      if (message.role !== 'user' || !Array.isArray(message.images) || message.images.length === 0) continue
-      for (let imageIndex = message.images.length - 1; imageIndex >= 0; imageIndex -= 1) {
-        const imageUrl = message.images[imageIndex]?.trim() ?? ''
-        if (!imageUrl) continue
-        if (extractLocalImagePathFromUrl(imageUrl)) return imageUrl
-      }
-    }
-    return ''
-  }
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
   let rateLimitRefreshTimer: number | null = null
@@ -3912,22 +3882,12 @@ export function useDesktopState() {
     const reasoningEffort = selectedReasoningEffort.value
     const collaborationMode = selectedCollaborationMode.value
     const normalizedText = nextText.trim()
-    const normalizedImageUrls = [...imageUrls]
-    if (
-      normalizedImageUrls.length === 0
-      && shouldReuseAttachedImageFromPrompt(normalizedText)
-    ) {
-      const latestAttachedImageUrl = findLatestUserLocalImageUrl(threadId)
-      if (latestAttachedImageUrl) {
-        normalizedImageUrls.push(latestAttachedImageUrl)
-      }
-    }
     const normalizedSkills = skills.map((skill) => ({ name: skill.name, path: skill.path }))
     const normalizedFileAttachments = fileAttachments.map((file) => ({ ...file }))
 
     setPendingTurnRequest(threadId, {
       text: normalizedText,
-      imageUrls: [...normalizedImageUrls],
+      imageUrls: [...imageUrls],
       skills: normalizedSkills,
       fileAttachments: normalizedFileAttachments,
       effort: reasoningEffort,
@@ -3947,7 +3907,7 @@ export function useDesktopState() {
         startedTurnId = await startThreadTurn(
           threadId,
           nextText,
-          normalizedImageUrls,
+          imageUrls,
           modelId || undefined,
           reasoningEffort || undefined,
           skills.length > 0 ? skills : undefined,
@@ -3959,7 +3919,7 @@ export function useDesktopState() {
           await applyFallbackModelSelection(threadId)
           setPendingTurnRequest(threadId, {
             text: normalizedText,
-            imageUrls: [...normalizedImageUrls],
+            imageUrls: [...imageUrls],
             skills: normalizedSkills,
             fileAttachments: normalizedFileAttachments,
             effort: reasoningEffort,
@@ -3969,7 +3929,7 @@ export function useDesktopState() {
           startedTurnId = await startThreadTurn(
             threadId,
             nextText,
-            normalizedImageUrls,
+            imageUrls,
             MODEL_FALLBACK_ID,
             reasoningEffort || undefined,
             skills.length > 0 ? skills : undefined,
