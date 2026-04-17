@@ -3007,23 +3007,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     let didLog = false
     const logApiRequestDuration = () => {
       if (!API_PERF_LOGGING_ENABLED || didLog || !requestPath.startsWith('/codex-api/')) return
-      didLog = true
       const durationMs = Number((process.hrtime.bigint() - requestStartNs) / 1_000_000n)
       const requestBytes = requestBodyBytes ?? 0
       const bodyMbValue = (requestBytes + responseBodyBytes) / MB_DIVISOR
+      const shouldLog = durationMs > API_PERF_MS_THRESHOLD || bodyMbValue > API_PERF_BODY_MB_THRESHOLD
+      if (!shouldLog) return
+      didLog = true
       const rpcPart = rpcMethod ? `, rpcMethod=${rpcMethod}` : ''
-      const parts: string[] = []
-      if (durationMs > API_PERF_MS_THRESHOLD) {
-        parts.push(`${durationMs}ms`)
-      }
-      if (bodyMbValue > API_PERF_BODY_MB_THRESHOLD) {
-        parts.push(`bodyMB=${bodyMbValue.toFixed(4)}`)
-      }
-      if (rpcMethod) {
-        parts.push(`rpcMethod=${rpcMethod}`)
-      }
-      const details = parts.length > 0 ? ` (${parts.join(', ')})` : ''
-      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode}${details}`)
+      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms, bodyMB=${bodyMbValue.toFixed(4)}${rpcPart})`)
     }
     res.once('finish', logApiRequestDuration)
     res.once('close', logApiRequestDuration)

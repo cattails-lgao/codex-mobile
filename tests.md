@@ -2467,10 +2467,13 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 3. Check server logs for `[codex-api-perf]` entries.
 
 #### Expected Results
-- `ms` is shown only when elapsed time is greater than `CODEXUI_API_PERF_MS_THRESHOLD`.
-- `bodyMB` is shown only when combined request+response payload is greater than `CODEXUI_API_PERF_BODY_MB_THRESHOLD`.
+- A perf log line is emitted only when either condition is true:
+  - elapsed time is greater than `CODEXUI_API_PERF_MS_THRESHOLD`, or
+  - combined request+response payload is greater than `CODEXUI_API_PERF_BODY_MB_THRESHOLD`.
+- When a log line is emitted, it always includes both fields:
+  - `... (<durationMs>ms, bodyMB=<combinedMb>...)`
 - RPC log still includes method name:
-  - `[codex-api-perf] POST /codex-api/rpc -> 200 (..., rpcMethod=thread/list)`
+  - `[codex-api-perf] POST /codex-api/rpc -> 200 (...ms, bodyMB=..., rpcMethod=thread/list)`
 - `bodyMB` is the combined payload size of request + response bodies.
 - Setting `CODEXUI_API_PERF_LOGGING=false` suppresses these perf log lines.
 
