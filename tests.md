@@ -2465,9 +2465,10 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 
 #### Expected Results
 - Non-RPC log includes duration and body size:
-  - `[codex-api-perf] GET /codex-api/meta/methods -> 200 (...ms, bodyMB=n/a)`
+  - `[codex-api-perf] GET /codex-api/meta/methods -> 200 (...ms, bodyMB=...)`
 - RPC log includes duration, body size, and method name:
   - `[codex-api-perf] POST /codex-api/rpc -> 200 (...ms, bodyMB=..., rpcMethod=thread/list)`
+- `bodyMB` is the combined payload size of request + response bodies.
 - Setting `CODEXUI_API_PERF_LOGGING=false` suppresses these perf log lines.
 
 #### Rollback/Cleanup

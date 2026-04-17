@@ -108,6 +108,7 @@ const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
+const MB_DIVISOR = 1024 * 1024
 
 type SessionRecoveredFileChange = {
   path: string
@@ -163,6 +164,22 @@ function resolveApiPerfLoggingEnabled(): boolean {
 }
 
 const API_PERF_LOGGING_ENABLED = resolveApiPerfLoggingEnabled()
+
+function getChunkByteLength(chunk: unknown, encoding?: BufferEncoding): number {
+  if (typeof chunk === 'string') {
+    return Buffer.byteLength(chunk, encoding)
+  }
+  if (chunk instanceof Uint8Array) {
+    return chunk.byteLength
+  }
+  if (ArrayBuffer.isView(chunk)) {
+    return chunk.byteLength
+  }
+  if (chunk instanceof ArrayBuffer) {
+    return chunk.byteLength
+  }
+  return 0
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -2946,13 +2963,27 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     let requestBodyBytes: number | null = Number.isFinite(parsedContentLength) && parsedContentLength >= 0
       ? parsedContentLength
       : null
+    let responseBodyBytes = 0
     let rpcMethod: string | null = null
+    const originalWrite = res.write.bind(res)
+    const originalEnd = res.end.bind(res)
+    res.write = ((chunk: unknown, encoding?: unknown, cb?: unknown) => {
+      const resolvedEncoding = typeof encoding === 'string' ? encoding as BufferEncoding : undefined
+      responseBodyBytes += getChunkByteLength(chunk, resolvedEncoding)
+      return originalWrite(chunk as never, encoding as never, cb as never)
+    }) as typeof res.write
+    res.end = ((chunk?: unknown, encoding?: unknown, cb?: unknown) => {
+      const resolvedEncoding = typeof encoding === 'string' ? encoding as BufferEncoding : undefined
+      responseBodyBytes += getChunkByteLength(chunk, resolvedEncoding)
+      return originalEnd(chunk as never, encoding as never, cb as never)
+    }) as typeof res.end
     let didLog = false
     const logApiRequestDuration = () => {
       if (!API_PERF_LOGGING_ENABLED || didLog || !requestPath.startsWith('/codex-api/')) return
       didLog = true
       const durationMs = Number((process.hrtime.bigint() - requestStartNs) / 1_000_000n)
-      const bodyMb = requestBodyBytes !== null ? (requestBodyBytes / (1024 * 1024)).toFixed(4) : 'n/a'
+      const requestBytes = requestBodyBytes ?? 0
+      const bodyMb = ((requestBytes + responseBodyBytes) / MB_DIVISOR).toFixed(4)
       const rpcPart = rpcMethod ? `, rpcMethod=${rpcMethod}` : ''
       console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms, bodyMB=${bodyMb}${rpcPart})`)
     }
