@@ -106,6 +106,7 @@ const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 
 const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
+const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 
 type SessionRecoveredFileChange = {
   path: string
@@ -2812,10 +2813,22 @@ async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<Thr
     cursor = typeof response?.nextCursor === 'string' && response.nextCursor.length > 0 ? response.nextCursor : null
   } while (cursor)
 
-  const docs: ThreadSearchDocument[] = []
+  const docs: ThreadSearchDocument[] = threads.map((thread) => {
+    const searchableText = [thread.title, thread.preview].filter(Boolean).join('\n')
+    return {
+      id: thread.id,
+      title: thread.title,
+      preview: thread.preview,
+      messageText: '',
+      searchableText,
+    } satisfies ThreadSearchDocument
+  })
+
+  const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
+  const fullTextThreads = threads.slice(0, THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT)
   const concurrency = 4
-  for (let offset = 0; offset < threads.length; offset += concurrency) {
-    const batch = threads.slice(offset, offset + concurrency)
+  for (let offset = 0; offset < fullTextThreads.length; offset += concurrency) {
+    const batch = fullTextThreads.slice(offset, offset + concurrency)
     const loaded = await Promise.all(batch.map(async (thread) => {
       try {
         const readResponse = await appServer.rpc('thread/read', {
@@ -2824,28 +2837,24 @@ async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<Thr
         })
         const messageText = extractThreadMessageText(readResponse)
         const searchableText = [thread.title, thread.preview, messageText].filter(Boolean).join('\n')
-        return {
+        return [thread.id, {
           id: thread.id,
           title: thread.title,
           preview: thread.preview,
           messageText,
           searchableText,
-        } satisfies ThreadSearchDocument
+        } satisfies ThreadSearchDocument] as const
       } catch {
-        const searchableText = [thread.title, thread.preview].filter(Boolean).join('\n')
-        return {
-          id: thread.id,
-          title: thread.title,
-          preview: thread.preview,
-          messageText: '',
-          searchableText,
-        } satisfies ThreadSearchDocument
+        return null
       }
     }))
-    docs.push(...loaded)
+    for (const row of loaded) {
+      if (!row) continue
+      docsById.set(row[0], row[1])
+    }
   }
 
-  return docs
+  return Array.from(docsById.values())
 }
 
 async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<ThreadSearchIndex> {

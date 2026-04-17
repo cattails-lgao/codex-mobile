@@ -2403,24 +2403,49 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 #### Rollback/Cleanup
 - Delete the temporary test prompts or threads if they were created only for this regression test.
 
-### Feature: Stale partial live assistant text clears after turn completion
+### Feature: API performance logging for `/codex-api/*` requests
 
 #### Prerequisites
-- App is running from this repository.
-- At least one thread can produce streaming assistant text for several seconds.
+- App server is running from this repository (for example, `pnpm run dev`).
+- Terminal output is visible.
 
 #### Steps
-1. Open a thread and send a prompt that causes the assistant response to stream progressively.
-2. While the assistant text is still streaming, note a distinctive partial sentence near the bottom of the conversation.
-3. Let the turn finish normally.
-4. Confirm the final persisted assistant response remains in the conversation.
-5. Switch to a different thread, then return to the original thread.
-6. Trigger a reload path if needed by refreshing thread data or waiting for the normal thread sync.
+1. Trigger a couple of backend API calls from the UI (for example, open a thread, refresh thread list, or open settings that load API metadata).
+2. In a separate terminal, optionally run:
+   - `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/codex-api/meta/methods`
+   - `curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:4173/codex-api/rpc -H "content-type: application/json" -d '{"method":"thread/list","params":{}}'`
+3. Inspect the server terminal logs.
 
 #### Expected Results
-- The partial live assistant fragment does not remain pinned at the bottom after the turn has completed.
-- Returning to the thread does not resurrect a stale partial assistant sentence beneath the persisted messages.
-- Only the final persisted assistant response remains visible.
+- Each completed `/codex-api/*` request writes a performance log line in this format:
+  - `[codex-api-perf] <METHOD> <PATH> -> <STATUS> (<DURATION>ms)`
+- Example entries include:
+  - `[codex-api-perf] GET /codex-api/meta/methods -> 200 (Xms)`
+  - `[codex-api-perf] POST /codex-api/rpc -> 200 (Xms)`
+- Non-API routes (for example static assets) do not emit this log line.
 
 #### Rollback/Cleanup
-- Delete the temporary test prompt or thread if it was created only for this regression test.
+- Stop the dev server when finished.
+
+### Feature: Thread search cold-start performance guardrail (issue #46)
+
+#### Prerequisites
+- App server is running from this repository.
+- A profile with many threads exists in `~/.codex` so `/codex-api/thread-search` performs indexing.
+
+#### Steps
+1. Start the app and wait for server readiness.
+2. Trigger first-time thread search with a non-empty query:
+   - `curl -s -X POST http://127.0.0.1:4173/codex-api/thread-search -H "content-type: application/json" -d '{"query":"perf_issue_46_marker","limit":200}'`
+3. Verify response includes `data.indexedThreadCount`.
+4. Confirm server remains responsive during/after first search.
+5. Optional: run the same request again and verify subsequent request is significantly faster due to warm index cache.
+
+#### Expected Results
+- First search no longer requires full `thread/read includeTurns=true` on every thread.
+- Index still covers all threads by `title + preview`.
+- Full message-body indexing is limited to a bounded recent subset for responsiveness.
+- Cold-start `/codex-api/thread-search` latency is materially lower than before on large histories.
+
+#### Rollback/Cleanup
+- Stop dev server when finished.
