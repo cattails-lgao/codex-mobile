@@ -108,6 +108,10 @@ const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
+const API_PERF_MS_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_MS_THRESHOLD'
+const API_PERF_BODY_MB_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_BODY_MB_THRESHOLD'
+const DEFAULT_API_PERF_MS_THRESHOLD = 300
+const DEFAULT_API_PERF_BODY_MB_THRESHOLD = 1
 const MB_DIVISOR = 1024 * 1024
 
 type SessionRecoveredFileChange = {
@@ -164,6 +168,29 @@ function resolveApiPerfLoggingEnabled(): boolean {
 }
 
 const API_PERF_LOGGING_ENABLED = resolveApiPerfLoggingEnabled()
+
+function parseNumberEnvFlag(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = Number.parseFloat(value.trim())
+  if (!Number.isFinite(parsed)) return null
+  return parsed
+}
+
+function resolveNumericEnvConfig(envKey: string, fallback: number): number {
+  const fromProcess = parseNumberEnvFlag(process.env[envKey])
+  if (fromProcess !== null) return fromProcess
+
+  const fromEnvLocal = parseNumberEnvFlag(readEnvValueFromFile('.env.local', envKey))
+  if (fromEnvLocal !== null) return fromEnvLocal
+
+  const fromEnv = parseNumberEnvFlag(readEnvValueFromFile('.env', envKey))
+  if (fromEnv !== null) return fromEnv
+
+  return fallback
+}
+
+const API_PERF_MS_THRESHOLD = resolveNumericEnvConfig(API_PERF_MS_THRESHOLD_ENV_KEY, DEFAULT_API_PERF_MS_THRESHOLD)
+const API_PERF_BODY_MB_THRESHOLD = resolveNumericEnvConfig(API_PERF_BODY_MB_THRESHOLD_ENV_KEY, DEFAULT_API_PERF_BODY_MB_THRESHOLD)
 
 function getChunkByteLength(chunk: unknown, encoding?: BufferEncoding): number {
   if (typeof chunk === 'string') {
@@ -2983,9 +3010,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       didLog = true
       const durationMs = Number((process.hrtime.bigint() - requestStartNs) / 1_000_000n)
       const requestBytes = requestBodyBytes ?? 0
-      const bodyMb = ((requestBytes + responseBodyBytes) / MB_DIVISOR).toFixed(4)
+      const bodyMbValue = (requestBytes + responseBodyBytes) / MB_DIVISOR
       const rpcPart = rpcMethod ? `, rpcMethod=${rpcMethod}` : ''
-      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode} (${durationMs}ms, bodyMB=${bodyMb}${rpcPart})`)
+      const parts: string[] = []
+      if (durationMs > API_PERF_MS_THRESHOLD) {
+        parts.push(`${durationMs}ms`)
+      }
+      if (bodyMbValue > API_PERF_BODY_MB_THRESHOLD) {
+        parts.push(`bodyMB=${bodyMbValue.toFixed(4)}`)
+      }
+      if (rpcMethod) {
+        parts.push(`rpcMethod=${rpcMethod}`)
+      }
+      const details = parts.length > 0 ? ` (${parts.join(', ')})` : ''
+      console.info(`[codex-api-perf] ${requestMethod} ${requestPath} -> ${res.statusCode}${details}`)
     }
     res.once('finish', logApiRequestDuration)
     res.once('close', logApiRequestDuration)

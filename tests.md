@@ -2454,6 +2454,9 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 
 #### Prerequisites
 - `.env.local` contains `CODEXUI_API_PERF_LOGGING=true`.
+- `.env.local` may optionally set:
+  - `CODEXUI_API_PERF_MS_THRESHOLD=300`
+  - `CODEXUI_API_PERF_BODY_MB_THRESHOLD=1`
 - App server is running from this repository.
 
 #### Steps
@@ -2464,10 +2467,10 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 3. Check server logs for `[codex-api-perf]` entries.
 
 #### Expected Results
-- Non-RPC log includes duration and body size:
-  - `[codex-api-perf] GET /codex-api/meta/methods -> 200 (...ms, bodyMB=...)`
-- RPC log includes duration, body size, and method name:
-  - `[codex-api-perf] POST /codex-api/rpc -> 200 (...ms, bodyMB=..., rpcMethod=thread/list)`
+- `ms` is shown only when elapsed time is greater than `CODEXUI_API_PERF_MS_THRESHOLD`.
+- `bodyMB` is shown only when combined request+response payload is greater than `CODEXUI_API_PERF_BODY_MB_THRESHOLD`.
+- RPC log still includes method name:
+  - `[codex-api-perf] POST /codex-api/rpc -> 200 (..., rpcMethod=thread/list)`
 - `bodyMB` is the combined payload size of request + response bodies.
 - Setting `CODEXUI_API_PERF_LOGGING=false` suppresses these perf log lines.
 
