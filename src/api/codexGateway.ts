@@ -1082,6 +1082,18 @@ export async function forkThread(
 
 export type FileAttachmentParam = { label: string; path: string; fsPath: string }
 
+function extractLocalImagePathFromUrl(value: string): string | null {
+  if (!value) return null
+  try {
+    const parsed = new URL(value, 'http://localhost')
+    if (parsed.pathname !== '/codex-local-image') return null
+    const path = parsed.searchParams.get('path')?.trim() ?? ''
+    return path.length > 0 ? path : null
+  } catch {
+    return null
+  }
+}
+
 function buildTextWithAttachments(
   prompt: string,
   files: FileAttachmentParam[],
@@ -1092,6 +1104,12 @@ function buildTextWithAttachments(
     prefix += `\n## ${f.label}: ${f.path}\n`
   }
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
+}
+
+function fileNameFromPath(pathValue: string): string {
+  const normalized = pathValue.replace(/\\/g, '/')
+  const segments = normalized.split('/').filter(Boolean)
+  return segments.at(-1) ?? normalized
 }
 
 async function resolveCollaborationModeSettings(
@@ -1158,11 +1176,32 @@ export async function startThreadTurn(
 ): Promise<string> {
   try {
     const normalizedModel = model?.trim() ?? ''
-    const finalText = buildTextWithAttachments(text, fileAttachments)
+    const localImageAttachments: FileAttachmentParam[] = []
+    for (const imageUrl of imageUrls) {
+      const localImagePath = extractLocalImagePathFromUrl(imageUrl.trim())
+      if (!localImagePath) continue
+      localImageAttachments.push({
+        label: fileNameFromPath(localImagePath),
+        path: localImagePath,
+        fsPath: localImagePath,
+      })
+    }
+    const allFileAttachments = [...fileAttachments, ...localImageAttachments]
+    const dedupedFileAttachments = allFileAttachments.filter((entry, index) =>
+      allFileAttachments.findIndex((candidate) => candidate.fsPath === entry.fsPath) === index)
+    const finalText = buildTextWithAttachments(text, dedupedFileAttachments)
     const input: Array<Record<string, unknown>> = [{ type: 'text', text: finalText }]
     for (const imageUrl of imageUrls) {
       const normalizedUrl = imageUrl.trim()
       if (!normalizedUrl) continue
+      const localImagePath = extractLocalImagePathFromUrl(normalizedUrl)
+      if (localImagePath) {
+        input.push({
+          type: 'localImage',
+          path: localImagePath,
+        })
+        continue
+      }
       input.push({
         type: 'image',
         url: normalizedUrl,
@@ -1174,7 +1213,7 @@ export async function startThreadTurn(
         input.push({ type: 'skill', name: skill.name, path: skill.path })
       }
     }
-    const attachments = fileAttachments.map((f) => ({ label: f.label, path: f.path, fsPath: f.fsPath }))
+    const attachments = dedupedFileAttachments.map((f) => ({ label: f.label, path: f.path, fsPath: f.fsPath }))
     const params: Record<string, unknown> = {
       threadId,
       input,
