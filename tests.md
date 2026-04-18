@@ -2490,3 +2490,21 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 
 #### Rollback/Cleanup notes
 - Remove any copied image files created only for the test.
+
+### Feature: Plain sentence fragments with slash are not auto-linked as file paths
+
+#### Prerequisites/Setup
+- App is running from this repository.
+- Open any chat thread.
+
+#### Step-by-step actions
+1. Send a plain sentence containing a slash-separated phrase, for example: `Next I’m adding a single-file Vue/Tailwind app with local persistence.`
+2. Send a real file path in a separate message, for example: `/Users/igor/Git-projects/New Project (4)`.
+3. Inspect both rendered messages.
+
+#### Expected result(s)
+- The prose fragment `Vue/Tailwind app with local persistence` remains normal text and is not rendered as a clickable file link.
+- The real filesystem path still renders as a clickable file link.
+
+#### Rollback/Cleanup notes
+- No cleanup required.
