@@ -2046,6 +2046,31 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 #### Rollback/Cleanup
 - Reset `GitHub trending projects` setting to your preferred state.
 
+### Feature: New project thread survives opening the UI on a different port
+
+#### Prerequisites
+- App is running from this repository.
+- You can create a new local project folder from the Home screen.
+- You can open a second UI instance on a different port/origin that points at the same Codex state.
+
+#### Steps
+1. Open the Home/new thread screen.
+2. Create a brand new project folder and select it for the new thread.
+3. Send the first message in that new project.
+4. Wait until the app navigates into the new thread and the response has started.
+5. Open the UI from a different port/origin backed by the same Codex state.
+6. Verify the new project appears in the sidebar there.
+7. Verify the new thread is visible under that project without relying on the first port's localStorage.
+
+#### Expected Results
+- The new project root is written into workspace roots before the first thread starts.
+- Opening the app on a different port/origin still shows the new project in the sidebar.
+- The new thread remains visible under that project after the second UI instance loads.
+
+#### Rollback/Cleanup
+- Delete the temporary test thread if you do not want to keep it.
+- Remove the temporary test project folder if it is no longer needed.
+
 ### Feature: Lazy message rendering (windowed conversation)
 
 #### Prerequisites

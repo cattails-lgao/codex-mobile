@@ -3831,6 +3831,7 @@ export function useDesktopState() {
     let threadId = ''
 
     try {
+      await ensureWorkspaceRootTracked(targetCwd)
       try {
         const startedThread = await startThread(targetCwd || undefined, selectedModel || undefined)
         threadId = startedThread.threadId
@@ -3872,18 +3873,8 @@ export function useDesktopState() {
       const capturedThreadId = threadId
       const capturedCwd = targetCwd || null
       const capturedPrompt = nextText
-      void startTurnForThread(threadId, nextText, imageUrls, skills, fileAttachments)
-        .catch((unknownError) => {
-          shouldAutoScrollOnNextAgentEvent = false
-          setThreadInProgress(threadId, false)
-          setTurnActivityForThread(threadId, null)
-          const errorMessage = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
-          setTurnErrorForThread(threadId, errorMessage)
-          error.value = errorMessage
-        })
-        .finally(() => {
-          isSendingMessage.value = false
-        })
+      await startTurnForThread(threadId, nextText, imageUrls, skills, fileAttachments)
+      isSendingMessage.value = false
       void requestThreadTitleGeneration(capturedThreadId, capturedPrompt, capturedCwd)
       return threadId
     } catch (unknownError) {
@@ -4284,6 +4275,24 @@ export function useDesktopState() {
     sourceGroups.value = mergeThreadGroups(sourceGroups.value, orderedGroups)
     applyThreadFlags()
     void persistProjectOrderToWorkspaceRoots()
+  }
+
+  async function ensureWorkspaceRootTracked(cwd: string): Promise<void> {
+    const normalizedCwd = normalizePathForUi(cwd).trim()
+    if (!normalizedCwd) return
+
+    try {
+      const rootsState = await getWorkspaceRootsState()
+      if (rootsState.order.includes(normalizedCwd)) return
+
+      await setWorkspaceRootsState({
+        order: [normalizedCwd, ...rootsState.order],
+        labels: rootsState.labels,
+        active: [normalizedCwd, ...rootsState.active.filter((rootPath) => rootPath !== normalizedCwd)],
+      })
+    } catch {
+      // Keep thread creation usable when workspace-root persistence is unavailable.
+    }
   }
 
   async function persistProjectOrderToWorkspaceRoots(): Promise<void> {
