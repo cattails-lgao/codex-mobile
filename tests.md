@@ -2483,3 +2483,25 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 
 #### Rollback/Cleanup notes
 - No cleanup required.
+
+### Feature: Plain filesystem paths are never auto-linked
+
+#### Prerequisites/Setup
+- App is running from this repository.
+- Open any chat thread.
+
+#### Step-by-step actions
+1. Send: `add add /Users/igor/Git-projects/New Project (9) back to order`.
+2. Send: `/Users/igor/Git-projects/codex-web-local/src/App.vue`.
+3. Send: `file:///Users/igor/Git-projects/New Project (9)`.
+4. Send: `"/Users/igor/Git-projects/New Project (9)"`.
+5. Send: `` `/Users/igor/Git-projects/New Project (9)` ``.
+
+#### Expected result(s)
+- In the first message, `/Users/igor/Git-projects/New Project (9)` is not rendered as a clickable link.
+- In the second message, the plain absolute path is also not auto-linked.
+- In the third message, `file://...` is rendered as a clickable link.
+- In the fourth and fifth messages, quoted or backtick-wrapped paths are still rendered as links.
+
+#### Rollback/Cleanup notes
+- No cleanup required.
