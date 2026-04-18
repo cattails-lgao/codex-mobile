@@ -1441,13 +1441,25 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   let leading = ''
   let trailing = ''
 
-  while (/^[('"`[{<“‘]/u.test(core)) {
-    leading += core[0]
-    core = core.slice(1)
+  const wrapperPairs: Record<string, string> = {
+    '(': ')',
+    '[': ']',
+    '{': '}',
+    '<': '>',
+    '"': '"',
+    '\'': '\'',
+    '`': '`',
+    '“': '”',
+    '‘': '’',
   }
-  while (/[)"'`\]}>”’]$/u.test(core)) {
-    trailing = core.slice(-1) + trailing
-    core = core.slice(0, -1)
+
+  while (core.length > 0) {
+    const opening = core[0]
+    const closing = Object.hasOwn(wrapperPairs, opening) ? wrapperPairs[opening] : ''
+    if (!closing || !core.endsWith(closing)) break
+    leading += opening
+    trailing += closing
+    core = core.slice(1, -1)
   }
 
   return { core, leading, trailing }
