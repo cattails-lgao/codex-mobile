@@ -299,19 +299,16 @@
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <template v-else-if="segment.kind === 'file'">
-                          <a
-                            v-if="browseUrlForInlineFile(segment)"
-                            class="message-file-link"
-                            :href="browseUrlForInlineFile(segment)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="fileLinkTitle(segment)"
-                          >
-                            {{ segment.displayPath }}
-                          </a>
-                          <span v-else>{{ segment.fallbackText }}</span>
-                        </template>
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toBrowseUrl(segment.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
+                        </a>
                         <a
                           v-else-if="segment.kind === 'url'"
                           class="message-file-link"
@@ -336,19 +333,16 @@
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <template v-else-if="segment.kind === 'file'">
-                          <a
-                            v-if="browseUrlForInlineFile(segment)"
-                            class="message-file-link"
-                            :href="browseUrlForInlineFile(segment)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="fileLinkTitle(segment)"
-                          >
-                            {{ segment.displayPath }}
-                          </a>
-                          <span v-else>{{ segment.fallbackText }}</span>
-                        </template>
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toBrowseUrl(segment.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
+                        </a>
                         <a
                           v-else-if="segment.kind === 'url'"
                           class="message-file-link"
@@ -368,19 +362,16 @@
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                         <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <template v-else-if="segment.kind === 'file'">
-                          <a
-                            v-if="browseUrlForInlineFile(segment)"
-                            class="message-file-link"
-                            :href="browseUrlForInlineFile(segment)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="fileLinkTitle(segment)"
-                          >
-                            {{ segment.displayPath }}
-                          </a>
-                          <span v-else>{{ segment.fallbackText }}</span>
-                        </template>
+                        <a
+                          v-else-if="segment.kind === 'file'"
+                          class="message-file-link"
+                          :href="toBrowseUrl(segment.path)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          :title="segment.path"
+                        >
+                          {{ segment.displayPath }}
+                        </a>
                         <a
                           v-else-if="segment.kind === 'url'"
                           class="message-file-link"
@@ -408,19 +399,16 @@
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                             <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                             <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                            <template v-else-if="segment.kind === 'file'">
-                              <a
-                                v-if="browseUrlForInlineFile(segment)"
-                                class="message-file-link"
-                                :href="browseUrlForInlineFile(segment)"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                :title="fileLinkTitle(segment)"
-                              >
-                                {{ segment.displayPath }}
-                              </a>
-                              <span v-else>{{ segment.fallbackText }}</span>
-                            </template>
+                            <a
+                              v-else-if="segment.kind === 'file'"
+                              class="message-file-link"
+                              :href="toBrowseUrl(segment.path)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              :title="segment.path"
+                            >
+                              {{ segment.displayPath }}
+                            </a>
                             <a
                               v-else-if="segment.kind === 'url'"
                               class="message-file-link"
@@ -460,19 +448,16 @@
                                 <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                                 <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                                <template v-else-if="segment.kind === 'file'">
-                                  <a
-                                    v-if="browseUrlForInlineFile(segment)"
-                                    class="message-file-link"
-                                    :href="browseUrlForInlineFile(segment)"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    :title="fileLinkTitle(segment)"
-                                  >
-                                    {{ segment.displayPath }}
-                                  </a>
-                                  <span v-else>{{ segment.fallbackText }}</span>
-                                </template>
+                                <a
+                                  v-else-if="segment.kind === 'file'"
+                                  class="message-file-link"
+                                  :href="toBrowseUrl(segment.path)"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.path"
+                                >
+                                  {{ segment.displayPath }}
+                                </a>
                                 <a
                                   v-else-if="segment.kind === 'url'"
                                   class="message-file-link"
@@ -501,19 +486,16 @@
                                 <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                                 <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
                                 <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                                <template v-else-if="segment.kind === 'file'">
-                                  <a
-                                    v-if="browseUrlForInlineFile(segment)"
-                                    class="message-file-link"
-                                    :href="browseUrlForInlineFile(segment)"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    :title="fileLinkTitle(segment)"
-                                  >
-                                    {{ segment.displayPath }}
-                                  </a>
-                                  <span v-else>{{ segment.fallbackText }}</span>
-                                </template>
+                                <a
+                                  v-else-if="segment.kind === 'file'"
+                                  class="message-file-link"
+                                  :href="toBrowseUrl(segment.path)"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  :title="segment.path"
+                                >
+                                  {{ segment.displayPath }}
+                                </a>
                                 <a
                                   v-else-if="segment.kind === 'url'"
                                   class="message-file-link"
@@ -850,7 +832,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { probeLocalPaths } from '../../api/codexGateway'
 import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { useMobile } from '../../composables/useMobile'
 
@@ -876,7 +857,6 @@ const fileLinkContextMenuX = ref(0)
 const fileLinkContextMenuY = ref(0)
 const fileLinkContextBrowseUrl = ref('')
 const fileLinkContextEditUrl = ref('')
-const localPathProbeResults = ref<Record<string, boolean>>({})
 const { isMobile } = useMobile()
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
@@ -1239,8 +1219,7 @@ type InlineSegment =
   | { kind: 'strikethrough'; value: string }
   | { kind: 'code'; value: string }
   | { kind: 'url'; value: string; href: string }
-  | { kind: 'file'; value: string; path: string; line: number | null; column: number | null; displayPath: string; fallbackText: string; downloadName: string }
-type FileInlineSegment = Extract<InlineSegment, { kind: 'file' }>
+  | { kind: 'file'; value: string; path: string; displayPath: string; downloadName: string }
 type TaskListItem = {
   text: string
   checked: boolean
@@ -1270,14 +1249,10 @@ const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const failedMarkdownImageKeys = ref<Set<string>>(new Set())
 const highlightJsModule = ref<HighlightJsModule | null>(null)
 let highlightJsLoader: Promise<void> | null = null
-const localPathProbeTimestamps = new Map<string, number>()
-const pendingLocalPathProbes = new Set<string>()
-let localPathProbeGeneration = 0
 
 const RENDER_WINDOW_SIZE = 50
 const LOAD_MORE_CHUNK = 30
 const LOAD_MORE_SCROLL_THRESHOLD_PX = 200
-const LOCAL_PATH_PROBE_TTL_MS = 15_000
 
 const renderWindowStart = ref(0)
 const isLoadingMore = ref(false)
@@ -1436,37 +1411,29 @@ function resolveRelativePath(pathValue: string, cwd: string): string {
   return normalizePathDots(`${base.replace(/\/+$/u, '')}/${normalizedPath}`)
 }
 
-function normalizePositiveInteger(value: string | undefined): number | null {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function parseFileReference(value: string): { path: string; line: number | null; column: number | null } | null {
+function parseFileReference(value: string): { path: string; line: number | null } | null {
   if (!value) return null
 
   let pathValue = value.trim()
   const wrapped = trimLinkWrappers(pathValue)
   pathValue = wrapped.core.trim()
   let line: number | null = null
-  let column: number | null = null
 
-  const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C(\d+))?$/u)
+  const hashLineMatch = pathValue.match(/^(.*)#L(\d+)(?:C\d+)?$/u)
   if (hashLineMatch) {
     pathValue = hashLineMatch[1]
-    line = normalizePositiveInteger(hashLineMatch[2])
-    column = normalizePositiveInteger(hashLineMatch[3])
+    line = Number(hashLineMatch[2])
   } else {
-    const colonLineMatch = pathValue.match(/^(.*?):(\d+)(?::(\d+))?$/u)
+    const colonLineMatch = pathValue.match(/^(.*):(\d+)(?::\d+)?$/u)
     if (colonLineMatch) {
       pathValue = colonLineMatch[1]
-      line = normalizePositiveInteger(colonLineMatch[2])
-      column = normalizePositiveInteger(colonLineMatch[3])
+      line = Number(colonLineMatch[2])
     }
   }
 
   pathValue = normalizeFileUrlToPath(pathValue)
   if (!isFilePath(pathValue)) return null
-  return { path: pathValue, line, column }
+  return { path: pathValue, line }
 }
 
 function trimLinkWrappers(value: string): { core: string; leading: string; trailing: string } {
@@ -2182,10 +2149,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
           kind: 'file',
           value: token,
           path: ref.path,
-          line: ref.line,
-          column: ref.column,
           displayPath: token,
-          fallbackText: token,
           downloadName: getBasename(ref.path),
         })
         if (trailing) {
@@ -2301,14 +2265,6 @@ function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[] 
   return next
 }
 
-function fileLinkFallbackText(displayPath: string, originalTarget: string): string {
-  const normalizedDisplayPath = displayPath.trim()
-  const normalizedTarget = originalTarget.trim()
-  if (!normalizedDisplayPath) return normalizedTarget
-  if (!normalizedTarget || normalizedDisplayPath === normalizedTarget) return normalizedDisplayPath
-  return `${normalizedDisplayPath} (${normalizedTarget})`
-}
-
 function splitTextByFileUrls(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
   let cursor = 0
@@ -2383,15 +2339,11 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     } else {
       const ref = parseFileReference(target)
       if (ref) {
-        const displayPath = label || target
         segments.push({
           kind: 'file',
           value: target,
           path: ref.path,
-          line: ref.line,
-          column: ref.column,
-          displayPath,
-          fallbackText: fileLinkFallbackText(displayPath, target),
+          displayPath: label || target,
           downloadName: getBasename(ref.path),
         })
       } else {
@@ -2476,15 +2428,11 @@ function parseInlineSegments(text: string): InlineSegment[] {
         } else {
           const markdownFileReference = parseFileReference(markdownLink.target)
           if (markdownFileReference) {
-            const displayPath = markdownLink.label || markdownLink.target
             segments.push({
               kind: 'file',
               value: markdownLink.target,
               path: markdownFileReference.path,
-              line: markdownFileReference.line,
-              column: markdownFileReference.column,
-              displayPath,
-              fallbackText: fileLinkFallbackText(displayPath, markdownLink.target),
+              displayPath: markdownLink.label || markdownLink.target,
               downloadName: getBasename(markdownFileReference.path),
             })
           } else {
@@ -2501,16 +2449,13 @@ function parseInlineSegments(text: string): InlineSegment[] {
         const fileReference = parseFileReference(token)
         if (fileReference) {
           const displayPath = fileReference.line
-            ? `${fileReference.path}:${String(fileReference.line)}${fileReference.column ? `:${String(fileReference.column)}` : ''}`
+            ? `${fileReference.path}:${String(fileReference.line)}`
             : fileReference.path
           segments.push({
             kind: 'file',
             value: token,
             path: fileReference.path,
-            line: fileReference.line,
-            column: fileReference.column,
             displayPath,
-            fallbackText: displayPath,
             downloadName: getBasename(fileReference.path),
           })
         } else {
@@ -2530,32 +2475,6 @@ function parseInlineSegments(text: string): InlineSegment[] {
   }
 
   return segments
-}
-
-function resolveAbsoluteLocalPath(pathValue: string): string {
-  const normalized = pathValue.trim()
-  if (!normalized) return ''
-
-  const parsed = parseFileReference(normalized)
-  const candidatePath = parsed?.path ?? normalized
-  const resolved = normalizePathDots(normalizePathSeparators(resolveRelativePath(candidatePath, props.cwd)))
-  if (!resolved) return ''
-  if (resolved.startsWith('/') || /^[A-Za-z]:\//u.test(resolved)) {
-    return resolved
-  }
-  return ''
-}
-
-function resolveAbsoluteLocalPathLiteral(pathValue: string): string {
-  const normalized = pathValue.trim()
-  if (!normalized) return ''
-
-  const resolved = normalizePathDots(normalizePathSeparators(resolveRelativePath(normalizeFileUrlToPath(normalized), props.cwd)))
-  if (!resolved) return ''
-  if (resolved.startsWith('/') || /^[A-Za-z]:\//u.test(resolved)) {
-    return resolved
-  }
-  return ''
 }
 
 function toRenderableImageUrl(value: string): string {
@@ -2584,47 +2503,23 @@ function toRenderableImageUrl(value: string): string {
   return normalized
 }
 
-function buildBrowseUrl(resolvedPath: string, line: number | null = null, column: number | null = null): string {
-  const normalizedResolved = resolvedPath.startsWith('/') ? resolvedPath : `/${resolvedPath}`
-  const query = new URLSearchParams()
-  if (line) query.set('line', String(line))
-  if (column) query.set('column', String(column))
-  const encodedQuery = query.toString()
-  return `/codex-local-browse${encodeURI(normalizedResolved)}${encodedQuery ? `?${encodedQuery}` : ''}`
-}
-
 function toBrowseUrl(pathValue: string): string {
-  const resolved = resolveAbsoluteLocalPathLiteral(pathValue)
-  return resolved ? buildBrowseUrl(resolved) : '#'
-}
+  const normalized = pathValue.trim()
+  if (!normalized) return '#'
+  const looksLikeAbsolutePath = (candidate: string): boolean => (
+    candidate.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(candidate)
+  )
 
-function confirmedBrowseUrl(
-  pathValue: string,
-  line: number | null = null,
-  column: number | null = null,
-  rawValue: string = pathValue,
-): string {
-  const literalResolved = resolveAbsoluteLocalPathLiteral(rawValue)
-  const resolved = resolveAbsoluteLocalPath(pathValue)
+  const parsed = parseFileReference(normalized)
+  const candidatePath = parsed?.path ?? normalized
+  const resolved = resolveRelativePath(candidatePath, props.cwd)
 
-  if (
-    literalResolved
-    && literalResolved !== resolved
-    && localPathProbeResults.value[literalResolved] === true
-  ) {
-    return buildBrowseUrl(literalResolved)
+  if (looksLikeAbsolutePath(resolved)) {
+    const normalizedResolved = resolved.startsWith('/') ? resolved : `/${resolved}`
+    return `/codex-local-browse${encodeURI(normalizedResolved)}`
   }
 
-  if (!resolved || localPathProbeResults.value[resolved] !== true) return ''
-  return buildBrowseUrl(resolved, line, column)
-}
-
-function browseUrlForInlineFile(segment: FileInlineSegment): string {
-  return confirmedBrowseUrl(segment.path, segment.line, segment.column, segment.value)
-}
-
-function fileLinkTitle(segment: FileInlineSegment): string {
-  return segment.value.trim() || segment.path
+  return '#'
 }
 
 const fileLinkContextMenuStyle = computed(() => ({
@@ -3326,131 +3221,6 @@ function parseMessageBlocks(text: string): MessageBlock[] {
   return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
 }
 
-function collectInlineLocalPathCandidates(text: string, output: Set<string>): void {
-  for (const segment of parseInlineSegments(text)) {
-    if (segment.kind !== 'file') continue
-    const literalResolved = resolveAbsoluteLocalPathLiteral(segment.value)
-    const resolved = resolveAbsoluteLocalPath(segment.path)
-    if (literalResolved) output.add(literalResolved)
-    if (resolved && resolved !== literalResolved) output.add(resolved)
-  }
-}
-
-function collectLocalPathCandidatesFromListItem(item: ListItem, output: Set<string>): void {
-  for (const paragraph of item.paragraphs) {
-    collectInlineLocalPathCandidates(paragraph, output)
-  }
-  for (const child of item.children ?? []) {
-    collectLocalPathCandidatesFromBlock(child, output)
-  }
-}
-
-function collectLocalPathCandidatesFromBlock(block: MessageBlock, output: Set<string>): void {
-  if (block.kind === 'paragraph' || block.kind === 'heading' || block.kind === 'blockquote') {
-    collectInlineLocalPathCandidates(block.value, output)
-    return
-  }
-  if (block.kind === 'unorderedList' || block.kind === 'orderedList') {
-    for (const item of block.items) {
-      collectLocalPathCandidatesFromListItem(item, output)
-    }
-    return
-  }
-  if (block.kind === 'taskList') {
-    for (const item of block.items) {
-      collectInlineLocalPathCandidates(item.text, output)
-    }
-    return
-  }
-  if (block.kind === 'table') {
-    for (const header of block.headers) {
-      collectInlineLocalPathCandidates(header, output)
-    }
-    for (const row of block.rows) {
-      for (const cell of row) {
-        collectInlineLocalPathCandidates(cell, output)
-      }
-    }
-  }
-}
-
-function collectLocalPathCandidatesFromMessage(message: UiMessage, output: Set<string>): void {
-  const collectRenderedText = (text: string): void => {
-    if (!text.trim()) return
-    for (const block of parseMessageBlocks(text)) {
-      collectLocalPathCandidatesFromBlock(block, output)
-    }
-  }
-
-  if (isPlanMessage(message)) {
-    const explanation = readPlanExplanation(message)
-    const steps = readPlanSteps(message)
-    if (explanation) collectRenderedText(explanation)
-    if (steps.length > 0) {
-      for (const step of steps) {
-        if (step.step) collectRenderedText(step.step)
-      }
-      return
-    }
-    collectRenderedText(message.text)
-    return
-  }
-
-  collectRenderedText(message.text)
-}
-
-const visibleInlineLocalPathCandidates = computed(() => {
-  const next = new Set<string>()
-  for (const message of visibleMessages.value) {
-    collectLocalPathCandidatesFromMessage(message, next)
-  }
-  return Array.from(next)
-})
-
-async function ensureLocalPathProbeResults(paths: string[]): Promise<void> {
-  const generation = localPathProbeGeneration
-  const now = Date.now()
-  const pathsToProbe = paths.filter((pathValue) => {
-    if (pendingLocalPathProbes.has(pathValue)) return false
-    const lastProbedAt = localPathProbeTimestamps.get(pathValue) ?? 0
-    return (now - lastProbedAt) > LOCAL_PATH_PROBE_TTL_MS
-  })
-
-  if (pathsToProbe.length === 0) return
-
-  for (const pathValue of pathsToProbe) {
-    pendingLocalPathProbes.add(pathValue)
-  }
-
-  try {
-    const entries = await probeLocalPaths(pathsToProbe)
-    if (generation !== localPathProbeGeneration) return
-
-    const nextResults = { ...localPathProbeResults.value }
-    const seen = new Set<string>()
-    const probedAt = Date.now()
-    for (const entry of entries) {
-      nextResults[entry.path] = entry.exists
-      localPathProbeTimestamps.set(entry.path, probedAt)
-      seen.add(entry.path)
-    }
-
-    for (const pathValue of pathsToProbe) {
-      if (seen.has(pathValue)) continue
-      nextResults[pathValue] = false
-      localPathProbeTimestamps.set(pathValue, probedAt)
-    }
-
-    localPathProbeResults.value = nextResults
-  } catch {
-    // Leave unresolved paths as plain text if probing fails.
-  } finally {
-    for (const pathValue of pathsToProbe) {
-      pendingLocalPathProbes.delete(pathValue)
-    }
-  }
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -3502,11 +3272,7 @@ function renderInlineSegmentsAsHtml(text: string): string {
         return `<s class="message-strikethrough-text">${escapeHtml(segment.value)}</s>`
       }
       if (segment.kind === 'file') {
-        const browseUrl = browseUrlForInlineFile(segment)
-        if (!browseUrl) {
-          return escapeHtml(segment.fallbackText)
-        }
-        return `<a class="message-file-link" href="${escapeHtml(browseUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(fileLinkTitle(segment))}">${escapeHtml(segment.displayPath)}</a>`
+        return `<a class="message-file-link" href="${escapeHtml(toBrowseUrl(segment.path))}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.path)}">${escapeHtml(segment.displayPath)}</a>`
       }
       if (segment.kind === 'url') {
         return `<a class="message-file-link" href="${escapeHtml(segment.href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(segment.href)}">${escapeHtml(segment.value)}</a>`
@@ -4204,14 +3970,6 @@ watch(
 )
 
 watch(
-  visibleInlineLocalPathCandidates,
-  (paths) => {
-    void ensureLocalPathProbeResults(paths)
-  },
-  { immediate: true },
-)
-
-watch(
   activeCommandMessageId,
   (nextId, prevId) => {
     if (!prevId || prevId === nextId) return
@@ -4259,10 +4017,6 @@ watch(
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
-    localPathProbeGeneration += 1
-    localPathProbeResults.value = {}
-    localPathProbeTimestamps.clear()
-    pendingLocalPathProbes.clear()
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
   },
