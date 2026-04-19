@@ -3040,11 +3040,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (url.pathname === '/codex-api/zen-proxy/v1/responses' && req.method === 'POST') {
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
         let bearerToken = ''
+        let wireApi: 'responses' | 'chat' = 'chat'
         try {
           const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
           bearerToken = state.apiKey ?? ''
+          wireApi = state.wireApi === 'responses' ? 'responses' : 'chat'
         } catch { /* use empty */ }
-        handleZenProxyRequest(req, res, bearerToken)
+        handleZenProxyRequest(req, res, bearerToken, wireApi)
         return
       }
 

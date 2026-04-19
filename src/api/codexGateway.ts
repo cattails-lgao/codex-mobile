@@ -55,6 +55,7 @@ import { normalizePathForUi } from '../pathUtils.js'
 
 type CurrentModelConfig = {
   model: string
+  providerId: string
   reasoningEffort: ReasoningEffort | ''
   speedMode: SpeedMode
 }
@@ -1370,9 +1371,10 @@ export async function getAvailableModelIds(): Promise<string[]> {
 export async function getCurrentModelConfig(): Promise<CurrentModelConfig> {
   const payload = await callRpc<ConfigReadResponse>('config/read', {})
   const model = payload.config.model ?? ''
+  const providerId = typeof payload.config.model_provider === 'string' ? payload.config.model_provider : ''
   const reasoningEffort = normalizeReasoningEffort(payload.config.model_reasoning_effort)
   const speedMode = normalizeSpeedMode(payload.config.service_tier)
-  return { model, reasoningEffort, speedMode }
+  return { model, providerId, reasoningEffort, speedMode }
 }
 
 export async function getAccountRateLimitsResponse(): Promise<GetAccountRateLimitsResponse> {
