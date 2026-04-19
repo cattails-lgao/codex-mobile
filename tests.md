@@ -239,60 +239,6 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Return appearance and runtime selection to the previous user preference.
 
-### Feature: Local path link validation and text-file browser preview
-
-#### Prerequisites
-- App is running from this repository.
-- An existing thread is open.
-- You can create temporary files on the host machine.
-
-#### Steps
-1. Create a temporary folder such as `/tmp/codexui-file-browser-test` with these files: `sample.rs`, `sample.toml`, `sample.lua`, `sample.js`, `sample.ts`, `sample.vue`, `BUILD.bazel`, `notes.txt`, and a multi-line file such as `jump.ts` with at least 20 lines.
-2. In the open thread, send one message containing:
-   `/tmp/codexui-file-browser-test/sample.rs`
-   `/tmp/codexui-file-browser-test/sample.toml`
-   `/tmp/codexui-file-browser-test/BUILD.bazel`
-   `/tmp/codexui-file-browser-test/notes.txt`
-   `/tmp/codexui-file-browser-test/jump.ts:12:3`
-   `/tmp/codexui-file-browser-test/missing.rs`
-   `/tmp/codexui-file-browser-test/sample.rs --flag`
-   `[missing report](/tmp/codexui-file-browser-test/missing.rs)`
-3. Wait for the message to render completely.
-4. Confirm the real file paths become clickable links, but `missing.rs` and `sample.rs --flag` remain plain text.
-5. Confirm the unresolved markdown example stays plain text and still shows both `missing report` and `/tmp/codexui-file-browser-test/missing.rs`.
-6. Open each real file link and verify it opens a browser preview page instead of a download dialog.
-7. On the preview page, verify `Raw`, `Download`, and `Edit` controls exist.
-8. Click `Raw` and confirm the file opens as plain text in the browser.
-9. Click `Download` and confirm the browser downloads the file using the original basename (for example `sample.rs`, not `codex-local-file`).
-10. Click `Edit` and confirm the editor opens with matching syntax mode coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text.
-11. Open the `jump.ts:12:3` link and verify the generated preview URL includes `line=12` and `column=3`.
-12. In preview, verify the view opens centered around line 12 and that line is selected the same way Ace selects a line when you click its gutter line number.
-13. Click `Edit` from that targeted preview and verify the editor opens at the same line/column target with the full target line selected.
-14. On hosts that allow `:` or `#` in filenames, create a literal file such as `/tmp/codexui-file-browser-test/literal:12:3.txt`, send that exact path in the thread, and confirm it opens the literal file instead of stripping the suffix into line-target metadata.
-15. Open a text preview page on a desktop-sized viewport and verify the preview panel extends to the bottom of the browser window below the toolbar, instead of stopping at a shorter fixed-height box.
-16. In the main app, switch Appearance to `Light`, then open a local directory listing, a preview page, and an editor page in new tabs/windows and confirm all three use a light theme with readable syntax colors.
-17. Switch Appearance to `Dark` and repeat the same three local browsing views, confirming they switch to dark mode and keep readable syntax colors.
-18. Set Appearance to `System`, change the OS/browser preferred color scheme if available, then reload one of the standalone local browsing pages and confirm it follows the resolved system theme.
-
-#### Expected Results
-- Path-like text is only linkified after the server confirms the local path exists.
-- Nonexistent paths and command-like strings that do not map to a real file stay as plain text.
-- Unresolved markdown file references preserve the human-readable label and the original target path.
-- Text/code files open in an inline preview page with syntax coloring rather than forcing a download.
-- File references with `:line[:column]` or `#Lline[Ccolumn]` open preview/editor at the requested location.
-- Targeted line opens with a full-line Ace selection, not only cursor placement.
-- On hosts that allow those characters in filenames, exact existing paths still win over interpreted line-target syntax.
-- Standalone local directory, preview, and editor pages follow the same `Light`/`Dark`/`System` appearance preference as the main app.
-- Ace syntax highlighting remains readable in both light and dark themes.
-- Preview falls back to plain text rendering if the syntax highlighter is unavailable.
-- Preview and edit pages expose the same language coverage for Rust, JavaScript, TypeScript, Vue, TOML, Lua, Bazel/Starlark fallback, and plain text files.
-- The preview panel fills the remaining viewport height below the toolbar on desktop layouts.
-- `Raw` serves the file contents directly and `Download` forces a file download.
-
-#### Rollback/Cleanup
-- Remove `/tmp/codexui-file-browser-test` after testing.
-- Delete the test thread message if it is no longer useful.
-
 ### Feature: Per-thread model selection
 
 #### Prerequisites
@@ -582,7 +528,7 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: Revert PR #16 mobile viewport and chat scroll behavior changes
 
-### Feature: Select folder opens a modal
+### Feature: Revert new-project folder-browser flow to inline add flow
 
 #### Prerequisites
 - App is running from this repository.
@@ -590,42 +536,19 @@ This file tracks manual regression and feature verification steps.
 - At least one writable parent directory exists for creating a test project folder.
 
 #### Steps
-1. On the home/new-thread screen, click `Select folder`.
-2. Confirm a modal overlay appears centered on the page.
-3. Press `Escape` and confirm the modal closes.
-4. Click `Select folder` again.
-5. Click outside the modal panel and confirm it closes.
-6. Click `Select folder` again, browse to a subfolder if needed, then click `Open`.
-7. Confirm the selected folder is applied to the new-thread screen.
+1. On the home/new-thread screen, open the `Choose folder` dropdown.
+2. Click `+ Add new project`.
+3. Enter a new folder name (for example `New Project Inline Test`) and click `Open`.
+4. Confirm the app selects the newly created/opened project folder.
+5. Repeat step 2, but enter an absolute path to an existing folder and click `Open`.
 
 #### Expected Results
-- `Select folder` opens a modal dialog instead of an inline panel.
-- Escape and backdrop click both dismiss the modal.
-- Selecting and opening a folder updates the new-thread folder selection.
+- Clicking `+ Add new project` opens inline input inside the dropdown instead of navigating to `/codex-local-browse...`.
+- Entering a folder name creates/selects that project under the current base directory.
+- Entering an absolute path opens that existing folder without creating a nested directory.
 
 #### Rollback/Cleanup
-- None.
-
-### Feature: Create Project creates and selects the new root directly
-
-#### Prerequisites
-- App is running from this repository.
-- Home/new-thread screen is open.
-- At least one writable parent directory exists for creating a test project folder.
-
-#### Steps
-1. Click `Create Project`.
-2. Accept the suggested folder name or type a new one.
-3. Confirm the browser stays on the app home screen and does not navigate to `/codex-local-browse/...`.
-4. Verify the new folder appears as the selected folder in the home/new-thread screen.
-
-#### Expected Results
-- `Create Project` creates the project root directly through the app.
-- The browser URL does not switch to the deprecated browse page.
-- The newly created folder becomes the active selected project.
-
-#### Rollback/Cleanup
-- Delete the test project folder if it was created only for verification.
+- Delete the test folder created in step 3 if it was created only for verification.
 
 ### Feature: Disable auto-restore to last thread when opening home URL
 
@@ -2018,7 +1941,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 - After running the script, the "New worktree" option reappears in the composer mode dropdown immediately (no app restart needed after injection).
 - Gate `505458` returns `true` from `checkGate()`.
 - Use `--dry-run` to preview actions without making changes.
-- Use `--port PORT` to specify a custom CDP port (default: 3434).
+- Use `--port PORT` to specify a custom CDP port (default: 9339).
 - If Codex.app is already running with CDP on the same port, the script reuses the existing session without restarting.
 
 #### Rollback/Cleanup
@@ -2379,129 +2302,375 @@ Test Codex CLI with Big Pickle model via OpenCode Zen provider.
 - Remove `[model_providers.opencode-zen]` and `[profiles.pickle]` from `~/.codex/config.toml`.
 - Remove API key from environment.
 
-### Feature: Live overlay clears when a turn stops
+---
 
-#### Prerequisites
-- App is running from this repository.
-- At least two threads exist, or one thread can be interrupted and later revisited.
-- Use a prompt that produces visible live activity near the bottom of the thread, such as reasoning text or command execution.
+### OpenCode Zen Provider & Wire API Selector in codexui
 
-#### Steps
-1. Open a thread and send a prompt that causes the bottom live overlay to appear with `Thinking`, `Running command`, or visible reasoning text.
-2. While the overlay is still visible, interrupt the turn from the UI.
-3. Wait for the interrupt flow to settle and the thread to leave the in-progress state.
-4. Start another prompt that produces live overlay content again.
-5. Before that second turn finishes, switch to a different thread.
-6. After the second turn has completed in the background, switch back to the original thread.
+#### Feature/Change Name
+OpenCode Zen as built-in provider + API format selector for custom endpoints
+
+#### Prerequisites/Setup
+- Project built (`pnpm run build`)
+- Dev server running (`pnpm run dev`)
+- OpenCode Zen API key (from https://opencode.ai/auth)
+
+#### Step-by-Step Actions
+
+**Test 1: Select OpenCode Zen provider**
+1. Open the app in browser
+2. Click the provider dropdown in the sidebar settings
+3. Select "OpenCode Zen"
+4. Verify: An API key input field appears with "Get API key" link
+5. Enter a valid OpenCode Zen API key (sk-...)
+6. Click "Save"
+7. Verify: Provider is saved, model list fetches from OpenCode Zen `/models` endpoint
+8. Send a message — it should use `wire_api = "chat"` (Chat Completions API)
+
+**Test 2: Select Custom endpoint with API format selector**
+1. Select "Custom endpoint" from the provider dropdown
+2. Enter a custom base URL (e.g., `https://opencode.ai/zen/v1`)
+3. Enter an API key
+4. Verify: An "API format" dropdown appears with "Responses API" (default) and "Chat Completions"
+5. Select "Chat Completions"
+6. Click "Save"
+7. Verify: Provider is saved with `wireApi = "chat"`
+8. Refresh the page — verify the API format dropdown retains "Chat Completions"
+
+**Test 3: Provider persistence**
+1. Select "OpenCode Zen", enter key, save
+2. Refresh the page
+3. Verify: Provider dropdown shows "OpenCode Zen" (not "Codex" or "OpenRouter")
+
+**Test 4: Switch back to Codex**
+1. From OpenCode Zen, select "Codex" provider
+2. Verify: Free mode is disabled, standard Codex flow resumes
 
 #### Expected Results
-- Once the interrupted turn stops, the bottom live overlay row disappears instead of leaving faded or truncated reasoning text behind.
-- Revisiting a thread after it finishes in the background does not show stale truncated live reasoning or stale activity labels at the bottom.
-- Persisted assistant output remains visible as normal.
-- If a real turn error exists, only the error text may remain in the overlay area; stale live reasoning should not.
+- OpenCode Zen appears in provider dropdown alongside Codex/OpenRouter/Custom
+- OpenCode Zen defaults to `wire_api = "chat"` (Chat Completions API)
+- Custom endpoints show an API format selector; default is "Responses API"
+- Provider selection and wireApi are persisted in `~/.codex/webui-free-mode.json`
+- Model list for OpenCode Zen is fetched from `https://opencode.ai/zen/v1/models`
 
 #### Rollback/Cleanup
-- Delete the temporary test prompts or threads if they were created only for this regression test.
+- Switch provider back to "Codex" to disable free mode
+- No config files outside the project are modified (state stored in `~/.codex/webui-free-mode.json`)
 
-### Feature: Stale partial live assistant text clears after turn completion
+### env_key Authentication for Custom Providers (codex CLI v0.93.0)
 
-#### Prerequisites
-- App is running from this repository.
-- At least one thread can produce streaming assistant text for several seconds.
+#### Feature/Change
+Use `env_key` instead of `experimental_bearer_token` for API key injection when spawning the codex `app-server` subprocess. API keys are passed as environment variables to the subprocess rather than CLI config arguments.
 
-#### Steps
-1. Open a thread and send a prompt that causes the assistant response to stream progressively.
-2. While the assistant text is still streaming, note a distinctive partial sentence near the bottom of the conversation.
-3. Let the turn finish normally.
-4. Confirm the final persisted assistant response remains in the conversation.
-5. Switch to a different thread, then return to the original thread.
-6. Trigger a reload path if needed by refreshing thread data or waiting for the normal thread sync.
+#### Prerequisites/Setup
+- codex CLI v0.93.0 installed
+- Dev server running (`pnpm run dev`)
+- OpenCode Zen API key: any valid key from opencode.ai
+
+#### Step-by-Step Actions
+
+**Test 1: OpenCode Zen with big-pickle model**
+1. Open Settings, select "OpenCode Zen" provider
+2. Enter a valid API key, save
+3. In the model dropdown, select `big-pickle`
+4. Type "say SUCCESSTEST in one word" and click Send
+5. Wait for response (typically 3-5 seconds)
+6. Verify: AI responds with "SUCCESSTEST"
+
+**Test 2: Verify env var is set on subprocess**
+1. After step 1-2 above, run: `ps -p $(pgrep -f "codex app-server" | tail -1) -E | tr ' ' '\n' | grep OPENCODE`
+2. Verify: `OPENCODE_ZEN_API_KEY=sk-...` appears in the process environment
+
+**Test 3: Model mismatch causes 401 (expected)**
+1. With OpenCode Zen provider active, select a paid model like `gpt-5.4-mini`
+2. Send a message
+3. Verify: 401 Unauthorized error appears (OpenCode Zen returns 401 for paid models without billing)
+4. Switch to `big-pickle` and retry — should succeed
+
+**Test 4: wire_api deprecation awareness**
+1. Run: `OPENCODE_ZEN_API_KEY="<key>" codex -c 'model_providers.oz.wire_api="chat"' -c 'model_providers.oz.base_url="https://opencode.ai/zen/v1"' -c 'model_providers.oz.env_key="OPENCODE_ZEN_API_KEY"' -c 'model_provider="oz"' -m big-pickle exec "say hi"`
+2. Verify: Warning about `wire_api="chat"` being deprecated appears, but command succeeds
 
 #### Expected Results
-- The partial live assistant fragment does not remain pinned at the bottom after the turn has completed.
-- Returning to the thread does not resurrect a stale partial assistant sentence beneath the persisted messages.
-- Only the final persisted assistant response remains visible.
+- API key is passed via `OPENCODE_ZEN_API_KEY` env var (not `experimental_bearer_token`)
+- `big-pickle` model works and returns responses
+- Paid models return 401 (billing-related, not auth-related)
+- `wire_api="chat"` still works but shows deprecation warning
 
 #### Rollback/Cleanup
-- Delete the temporary test prompt or thread if it was created only for this regression test.
+- Switch provider back to "Codex"
+- No permanent changes to `~/.codex/config.toml`
 
-### Feature: Image attachments send as localImage paths (Codex parity)
+---
 
-#### Prerequisites/Setup
-- Run the app from this repository (`pnpm run dev -- --host 0.0.0.0 --port 4173`).
-- Open a thread (for example the thread URL provided in this task).
-- Have an image available to attach (clipboard screenshot or file picker image).
+### Provider Switch Model List Isolation
 
-#### Step-by-step actions
-1. Attach an image in the composer.
-2. Send a prompt like `copy screenshot to ./`.
-3. Wait for the model response.
-4. Refresh the thread or re-open it from the sidebar.
-5. Confirm the sent user image still renders in the conversation.
-
-#### Expected result(s)
-- The turn uses a filesystem-backed image attachment (`localImage`) instead of inline `data:` image payload.
-- The model can resolve the attachment as a local file path and perform file copy actions without asking for an ambiguous `<image>` target.
-- After thread reload, the user image remains visible in the message history.
-
-#### Rollback/Cleanup notes
-- Remove copied screenshot files created in the workspace during the test (for example `./Screenshot*.png`) if they were only for verification.
-
-### Feature: Reuse latest attached image on follow-up "attached image" requests
+#### Feature/Change Name
+When switching providers, the model dropdown should only show models from the new provider — no stale models from the previous provider should leak into the list.
 
 #### Prerequisites/Setup
-- Open an existing thread.
-- Have an image ready to attach.
+1. Dev server running at `http://localhost:5173`
+2. Access to at least two providers (e.g., "Codex" and "OpenRouter")
 
-#### Step-by-step actions
-1. Attach one image and send: `copy to ./`.
-2. Without attaching a new image, send: `save the attached image into the current directory`.
-3. Observe the `turn/start` payload in network logs (optional) and assistant behavior.
+#### Steps
+1. Open the app sidebar settings
+2. Select "OpenRouter" provider — model list should show OpenRouter free models (e.g., `openrouter/free`, `google/gemma-3-27b-it:free`)
+3. Select a model like `openrouter/free`
+4. Switch provider back to "Codex"
+5. Open the model dropdown
 
-#### Expected result(s)
-- Follow-up message reuses the most recent user local image attachment for that thread.
-- The second turn should not fail with "I don't have a file handle" due to missing attachment context.
-- Assistant can proceed to copy/save using the reused attachment path.
+#### Expected Results
+- Model list shows only Codex models (e.g., `gpt-5.2-codex`, `gpt-5.2`, `gpt-5.1-codex-max`, `gpt-5.1-codex-mini`)
+- No OpenRouter models (e.g., `openrouter/free`) appear in the list
+- Selected model auto-switches to the first Codex model
+- Switching back to OpenRouter shows only OpenRouter models again
 
-#### Rollback/Cleanup notes
-- Remove any copied image files created only for the test.
+#### Rollback/Cleanup
+- No permanent changes needed
 
-### Feature: Plain sentence fragments with slash are not auto-linked as file paths
 
-#### Prerequisites/Setup
-- App is running from this repository.
-- Open any chat thread.
+---
 
-#### Step-by-step actions
-1. Send a plain sentence containing a slash-separated phrase, for example: `Next I’m adding a single-file Vue/Tailwind app with local persistence.`
-2. Send a real file path in a separate message, for example: `/Users/igor/Git-projects/New Project (4)`.
-3. Inspect both rendered messages.
+### Zen Proxy Port Resolution When Vite Auto-Increments
 
-#### Expected result(s)
-- The prose fragment `Vue/Tailwind app with local persistence` remains normal text and is not rendered as a clickable file link.
-- The real filesystem path still renders as a clickable file link.
-
-#### Rollback/Cleanup notes
-- No cleanup required.
-
-### Feature: Plain filesystem paths are never auto-linked
+#### Feature/Change Name
+When the default Vite port (5173) is occupied, the zen-proxy URL must use the actual listening port, not the configured default.
 
 #### Prerequisites/Setup
-- App is running from this repository.
-- Open any chat thread.
+1. Another process already occupying port 5173
+2. Dev server started (will auto-bind to 5174 or next available)
+3. OpenCode Zen provider configured with API key
 
-#### Step-by-step actions
-1. Send: `add add /Users/igor/Git-projects/New Project (9) back to order`.
-2. Send: `/Users/igor/Git-projects/codex-web-local/src/App.vue`.
-3. Send: `file:///Users/igor/Git-projects/New Project (9)`.
-4. Send: `"/Users/igor/Git-projects/New Project (9)"`.
-5. Send: `` `/Users/igor/Git-projects/New Project (9)` ``.
+#### Steps
+1. Start any process on port 5173 (e.g., another dev server)
+2. Run `pnpm run dev` — Vite auto-binds to 5174
+3. Open the app at `http://localhost:5174`
+4. Switch to "OpenCode Zen" provider, enter API key, save
+5. Send a message using big-pickle or any OpenCode Zen model
 
-#### Expected result(s)
-- In the first message, `/Users/igor/Git-projects/New Project (9)` is not rendered as a clickable link.
-- In the second message, the plain absolute path is also not auto-linked.
-- In the third message, `file://...` is rendered as a clickable link.
-- In the fourth and fifth messages, quoted or backtick-wrapped paths are still rendered as links.
+#### Expected Results
+- The zen-proxy request goes to `http://127.0.0.1:5174/codex-api/zen-proxy/v1/responses` (actual port)
+- No 404 errors referencing port 5173
+- Message receives a successful response from the model
 
-#### Rollback/Cleanup notes
-- No cleanup required.
+#### Rollback/Cleanup
+- Stop the extra process on port 5173 if it was started for testing
+
+---
+
+### Model List Search / Filter
+
+#### Feature/Change Name
+Search/filter input in the model selection dropdown.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Any provider configured with available models
+
+#### Steps
+1. Open any thread or new-thread view
+2. Click the model selector button in the composer bar
+3. Observe the search input at the top of the dropdown
+4. Type a partial model name (e.g., "pickle")
+5. Observe filtered results
+
+#### Expected Results
+- A text input with placeholder "Search models..." appears at the top of the dropdown
+- Typing filters the model list to only matching models (case-insensitive, matches label or value)
+- Clearing the search shows all models again
+- Pressing Escape clears the search text first, then closes the dropdown on second press
+- "No results" shown when no models match the query
+
+#### Rollback/Cleanup
+- No permanent changes needed
+
+---
+
+### OpenRouter "hi" request should not return invalid_prompt
+
+#### Feature/Change Name
+OpenRouter provider keeps Responses API but sanitizes unsupported tool entries via local proxy so simple prompts (for example `hi`) do not fail with tool-schema validation errors.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. OpenRouter provider selected in Settings
+3. Valid OpenRouter API key configured (custom key or community key)
+4. Any OpenRouter model selected
+
+#### Steps
+1. Open any thread
+2. Send `hi`
+3. Wait for assistant output to complete
+4. Check the response area for any JSON error block mentioning `invalid_prompt` or `Invalid Responses API request`
+
+#### Expected Results
+- Assistant returns a normal text reply to `hi`
+- No `invalid_prompt` error JSON is shown in the message stream
+- No message about invalid tool discriminator/type appears
+
+#### Rollback/Cleanup
+- Switch provider back to previous setting if needed
+
+---
+
+### Custom Endpoint API switch shows Responses vs Completions
+
+#### Feature/Change Name
+Custom endpoint settings present an API format switch with `Responses API` and `Completions API` options.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open Settings panel
+3. Select provider `Custom endpoint`
+
+#### Steps
+1. In Custom endpoint settings, locate `API format` dropdown
+2. Open the dropdown
+3. Verify available options
+4. Select `Completions API`
+5. Select `Responses API`
+
+#### Expected Results
+- Dropdown options are exactly `Responses API` and `Completions API`
+- Selecting either option updates the visible selected value correctly
+
+#### Rollback/Cleanup
+- Leave the preferred API format selected for your endpoint
+
+---
+
+### Custom Endpoint API format uses segmented toggle control
+
+#### Feature/Change Name
+Custom endpoint API format is presented as a two-button toggle (`Responses` / `Completions`) instead of a dropdown.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open Settings panel
+3. Select provider `Custom endpoint`
+
+#### Steps
+1. Locate `API format` in Custom endpoint settings
+2. Click `Completions`
+3. Confirm the `Completions` button becomes active
+4. Click `Responses`
+5. Confirm the `Responses` button becomes active
+6. In dark mode, verify active/inactive contrast remains readable
+
+#### Expected Results
+- API format control is a segmented two-button toggle
+- Exactly two choices are available: `Responses` and `Completions`
+- Active option is visually highlighted and switches immediately on click
+- Control remains readable in both light and dark themes
+
+#### Rollback/Cleanup
+- Keep the desired API format selected
+
+---
+
+### OpenRouter API format toggle (Responses vs Completions)
+
+#### Feature/Change Name
+OpenRouter settings expose a two-option API format toggle and persist the selected mode.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open Settings panel
+3. Select provider `OpenRouter`
+4. OpenRouter key configured (community or custom key)
+
+#### Steps
+1. In OpenRouter settings, find `API format` toggle
+2. Click `Completions`
+3. Send `hi` in a thread and wait for response
+4. Re-open Settings and confirm `Completions` remains selected
+5. Click `Responses`
+6. Send `hi` again and wait for response
+7. Re-open Settings and confirm `Responses` remains selected
+
+#### Expected Results
+- OpenRouter API format control is a segmented toggle with `Responses` and `Completions`
+- Both modes save successfully without provider switch errors
+- Sending `hi` works in both modes (assistant reply, no `invalid_prompt` error block)
+- Selected mode persists in status after refresh/reload
+
+#### Rollback/Cleanup
+- Leave OpenRouter on the preferred API format
+
+---
+
+### Provider-scoped model defaults + OpenRouter completions bash fallback
+
+#### Feature/Change Name
+Model defaults are stored per provider (no cross-provider leakage), and OpenRouter `Completions` mode preserves shell-tool execution by routing tool-capable requests through Responses compatibility.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open Settings panel
+3. OpenRouter key configured
+
+#### Steps
+1. Switch provider to `OpenRouter` and choose a specific OpenRouter model in composer selector
+2. Switch provider to `Codex`
+3. Choose a Codex model different from the OpenRouter one
+4. Switch back to `OpenRouter`
+5. Verify previous OpenRouter model selection is restored
+6. In OpenRouter settings, set API format to `Completions`
+7. Send: `what codex cli version is? it should run bash commands`
+
+#### Expected Results
+- Provider switch restores the last model used for that provider
+- OpenRouter model does not leak into Codex provider model list/selection, and vice versa
+- In `Completions` mode, the assistant can still invoke bash/tool execution flow and return the CLI version result
+
+#### Rollback/Cleanup
+- Set provider/model/api format back to preferred defaults
+
+---
+
+### Unified provider proxy: OpenRouter + OpenCode Zen tool-capable completions
+
+#### Feature/Change Name
+Both OpenRouter and OpenCode Zen routes use a unified Responses proxy layer that preserves tool-capable behavior when using Completions mode.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Valid OpenRouter and/or OpenCode Zen API keys configured
+3. Existing thread open
+
+#### Steps
+1. Select `OpenRouter`, set API format to `Completions`, and send: `what codex cli version is? it should run bash commands`
+2. Confirm shell execution appears and includes `codex --version`
+3. Select `OpenCode Zen`, set API format to `Completions`, and send the same prompt
+4. Confirm shell execution appears and includes `codex --version`
+5. Repeat each provider once with simple `hi` to verify non-tool path still returns assistant text normally
+
+#### Expected Results
+- Both providers work through a common proxy path without provider-specific regressions
+- In Completions mode, tool-capable prompt triggers command execution for both providers
+- `codex --version` output is returned in the assistant response flow
+- Simple text prompt (`hi`) continues to work in Completions mode
+
+#### Rollback/Cleanup
+- Switch provider/API format back to preferred defaults
+
+---
+
+### Auth conflict error normalization (refresh token reuse)
+
+#### Feature/Change Name
+Normalize upstream refresh-token reuse/auth-refresh failure messages into a clear actionable error for Codex app-server session conflicts.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Two or more Codex app-server/dev sessions active with the same Codex auth profile
+
+#### Steps
+1. Trigger a request that causes an upstream auth refresh conflict (for example, run turns from overlapping sessions)
+2. Observe the surfaced error text in the UI/failed RPC path
+
+#### Expected Results
+- Error text is normalized to a clear session-conflict message, not the raw backend phrase
+- Message includes remediation: close duplicate sessions, sign out/in again, and retry
+
+#### Rollback/Cleanup
+- Stop duplicate app-server processes if started for repro

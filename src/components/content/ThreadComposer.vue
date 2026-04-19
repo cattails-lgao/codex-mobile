@@ -250,6 +250,8 @@
             placeholder="Model"
             open-direction="up"
             :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
+            enable-search
+            search-placeholder="Search models..."
             @update:model-value="onModelSelect"
           />
 

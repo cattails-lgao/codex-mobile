@@ -202,8 +202,12 @@
                 >
                   <option value="codex">Codex</option>
                   <option value="openrouter">OpenRouter</option>
+                  <option value="opencode-zen">OpenCode Zen</option>
                   <option value="custom">Custom endpoint</option>
                 </select>
+              </div>
+              <div v-if="providerError" class="sidebar-settings-row sidebar-settings-error">
+                {{ providerError }}
               </div>
               <div v-if="selectedProvider === 'openrouter'" class="sidebar-settings-row sidebar-settings-row--input">
                 <div class="sidebar-settings-provider-info">
@@ -242,6 +246,55 @@
                     >{{ freeModeCustomKeySaving ? '...' : 'Set' }}</button>
                   </template>
                 </div>
+                <div class="sidebar-settings-row sidebar-settings-row--select" style="margin-top: 4px; padding: 0">
+                  <span class="sidebar-settings-label">API format</span>
+                  <div class="sidebar-settings-segmented" role="group" aria-label="OpenRouter API format">
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': openRouterWireApi === 'responses' }"
+                      :disabled="freeModeCustomKeySaving || freeModeLoading"
+                      @click="setOpenRouterWireApi('responses')"
+                    >
+                      Responses
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': openRouterWireApi === 'chat' }"
+                      :disabled="freeModeCustomKeySaving || freeModeLoading"
+                      @click="setOpenRouterWireApi('chat')"
+                    >
+                      Completions
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedProvider === 'opencode-zen'" class="sidebar-settings-row sidebar-settings-row--input">
+                <div class="sidebar-settings-provider-info">
+                  <span class="sidebar-settings-label">OpenCode Zen API key</span>
+                  <a
+                    class="sidebar-settings-provider-link"
+                    href="https://opencode.ai/auth"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >Get API key</a>
+                </div>
+                <div class="sidebar-settings-key-group">
+                  <input
+                    v-model="opencodeZenKey"
+                    class="sidebar-settings-key-input"
+                    type="password"
+                    placeholder="sk-..."
+                    @keydown.enter="saveOpencodeZen"
+                  />
+                  <button
+                    class="sidebar-settings-key-save"
+                    type="button"
+                    :disabled="freeModeCustomKeySaving || !opencodeZenKey.trim()"
+                    @click="saveOpencodeZen"
+                  >{{ freeModeCustomKeySaving ? '...' : 'Save' }}</button>
+                </div>
               </div>
               <div v-if="selectedProvider === 'custom'" class="sidebar-settings-row sidebar-settings-row--input">
                 <span class="sidebar-settings-label">Custom endpoint URL</span>
@@ -269,6 +322,27 @@
                     :disabled="freeModeCustomKeySaving || !customEndpointUrl.trim()"
                     @click="saveCustomEndpoint"
                   >{{ freeModeCustomKeySaving ? '...' : 'Save' }}</button>
+                </div>
+                <div class="sidebar-settings-row sidebar-settings-row--select" style="margin-top: 4px; padding: 0">
+                  <span class="sidebar-settings-label">API format</span>
+                  <div class="sidebar-settings-segmented" role="group" aria-label="Custom endpoint API format">
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': customEndpointWireApi === 'responses' }"
+                      @click="customEndpointWireApi = 'responses'"
+                    >
+                      Responses
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': customEndpointWireApi === 'chat' }"
+                      @click="customEndpointWireApi = 'chat'"
+                    >
+                      Completions
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -1031,9 +1105,13 @@ const freeModeCustomKey = ref('')
 const freeModeHasCustomKey = ref(false)
 const freeModeCustomKeyMasked = ref<string | null>(null)
 const freeModeCustomKeySaving = ref(false)
-const selectedProvider = ref<'codex' | 'openrouter' | 'custom'>('codex')
+const providerError = ref('')
+const selectedProvider = ref<'codex' | 'openrouter' | 'opencode-zen' | 'custom'>('codex')
 const customEndpointUrl = ref('')
 const customEndpointKey = ref('')
+const customEndpointWireApi = ref<'responses' | 'chat'>('responses')
+const openRouterWireApi = ref<'responses' | 'chat'>('responses')
+const opencodeZenKey = ref('')
 const isTelegramConfigOpen = ref(false)
 const telegramBotTokenDraft = ref('')
 const telegramAllowedUserIdsDraft = ref('')
@@ -2664,12 +2742,33 @@ async function onProviderChange(provider: string): Promise<void> {
       selectedProvider.value = 'openrouter'
       const result = await setFreeMode(true)
       freeModeEnabled.value = result.enabled
+      await setCustomProvider('', '', {
+        wireApi: openRouterWireApi.value,
+        provider: 'openrouter',
+      })
+    } else if (provider === 'opencode-zen') {
+      selectedProvider.value = 'opencode-zen'
+      await setCustomProvider('', opencodeZenKey.value.trim(), {
+        wireApi: 'chat',
+        provider: 'opencode-zen',
+      })
+      freeModeEnabled.value = true
     } else if (provider === 'custom') {
       selectedProvider.value = 'custom'
+      if (customEndpointUrl.value.trim() && customEndpointKey.value.trim()) {
+        await setCustomProvider(customEndpointUrl.value.trim(), customEndpointKey.value.trim(), {
+          wireApi: customEndpointWireApi.value,
+        })
+        freeModeEnabled.value = true
+      }
     }
-    await refreshAll({ includeSelectedThreadMessages: false })
-  } catch {
-    // Silently fail — state unchanged
+    providerError.value = ''
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+    if (route.name === 'thread') {
+      void router.push({ name: 'home' })
+    }
+  } catch (err) {
+    providerError.value = err instanceof Error ? err.message : 'Failed to switch provider'
   } finally {
     freeModeLoading.value = false
   }
@@ -2681,11 +2780,56 @@ async function saveCustomEndpoint(): Promise<void> {
   if (!url) return
   freeModeCustomKeySaving.value = true
   try {
-    await setCustomProvider(url, customEndpointKey.value.trim())
+    providerError.value = ''
+    await setCustomProvider(url, customEndpointKey.value.trim(), {
+      wireApi: customEndpointWireApi.value,
+    })
     freeModeEnabled.value = true
-    await refreshAll({ includeSelectedThreadMessages: false })
-  } catch {
-    // Silently fail
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+  } catch (err) {
+    providerError.value = err instanceof Error ? err.message : 'Failed to save custom endpoint'
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function setOpenRouterWireApi(nextWireApi: 'responses' | 'chat'): Promise<void> {
+  if (freeModeCustomKeySaving.value || freeModeLoading.value) return
+  if (openRouterWireApi.value === nextWireApi) return
+  const previousWireApi = openRouterWireApi.value
+  openRouterWireApi.value = nextWireApi
+  freeModeCustomKeySaving.value = true
+  try {
+    providerError.value = ''
+    await setCustomProvider('', '', {
+      wireApi: nextWireApi,
+      provider: 'openrouter',
+    })
+    freeModeEnabled.value = true
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+  } catch (err) {
+    openRouterWireApi.value = previousWireApi
+    providerError.value = err instanceof Error ? err.message : 'Failed to save OpenRouter API format'
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function saveOpencodeZen(): Promise<void> {
+  if (freeModeCustomKeySaving.value) return
+  const key = opencodeZenKey.value.trim()
+  if (!key) return
+  freeModeCustomKeySaving.value = true
+  try {
+    providerError.value = ''
+    await setCustomProvider('', key, {
+      wireApi: 'chat',
+      provider: 'opencode-zen',
+    })
+    freeModeEnabled.value = true
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+  } catch (err) {
+    providerError.value = err instanceof Error ? err.message : 'Failed to save OpenCode Zen config'
   } finally {
     freeModeCustomKeySaving.value = false
   }
@@ -2729,11 +2873,15 @@ async function loadFreeModeStatus(): Promise<void> {
     freeModeHasCustomKey.value = status.customKey ?? false
     freeModeCustomKeyMasked.value = status.maskedKey ?? null
     if (status.enabled) {
-      if (status.provider === 'custom') {
+      if (status.provider === 'opencode-zen') {
+        selectedProvider.value = 'opencode-zen'
+      } else if (status.provider === 'custom') {
         selectedProvider.value = 'custom'
         customEndpointUrl.value = status.customBaseUrl ?? ''
+        customEndpointWireApi.value = status.wireApi === 'chat' ? 'chat' : 'responses'
       } else {
         selectedProvider.value = 'openrouter'
+        openRouterWireApi.value = status.wireApi === 'chat' ? 'chat' : 'responses'
       }
     } else {
       selectedProvider.value = 'codex'
@@ -3776,6 +3924,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply flex flex-col gap-1 py-1.5;
 }
 
+.sidebar-settings-error {
+  @apply text-xs text-red-600 bg-red-50 rounded px-2 py-1.5 break-words;
+}
+
 .sidebar-settings-key-group {
   @apply flex items-center gap-1.5 w-full;
 }
@@ -3808,6 +3960,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-zinc-400 ring-2 ring-zinc-200;
 }
 
+.sidebar-settings-segmented {
+  @apply inline-flex items-center rounded-md border border-zinc-200 bg-white p-0.5;
+}
+
+.sidebar-settings-segmented-option {
+  @apply rounded px-2 py-1 text-xs text-zinc-600 transition-colors;
+}
+
+.sidebar-settings-segmented-option.is-active {
+  @apply bg-zinc-800 text-white;
+}
+
 .sidebar-settings-provider-info {
   @apply flex items-center justify-between w-full;
 }
@@ -3822,6 +3986,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 :root.dark .sidebar-settings-provider-select:focus {
   @apply border-zinc-500 ring-zinc-700;
+}
+
+:root.dark .sidebar-settings-segmented {
+  @apply border-zinc-600 bg-zinc-800;
+}
+
+:root.dark .sidebar-settings-segmented-option {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-segmented-option.is-active {
+  @apply bg-zinc-100 text-zinc-900;
 }
 
 :root.dark .sidebar-settings-provider-link {

@@ -55,6 +55,7 @@ import { normalizePathForUi } from '../pathUtils.js'
 
 type CurrentModelConfig = {
   model: string
+  providerId: string
   reasoningEffort: ReasoningEffort | ''
   speedMode: SpeedMode
 }
@@ -1219,7 +1220,7 @@ export async function startThreadTurn(
     if (typeof effort === 'string' && effort.length > 0) {
       params.effort = effort
     }
-    if (collaborationMode) {
+    if (collaborationMode && collaborationMode !== 'default') {
       const collaborationModeSettings = await resolveCollaborationModeSettings(collaborationMode, normalizedModel, effort)
       params.collaborationMode = {
         mode: collaborationMode,
@@ -1283,8 +1284,9 @@ export interface FreeModeStatus {
   currentModel: string | null
   customKey: boolean
   maskedKey: string | null
-  provider?: 'openrouter' | 'custom'
+  provider?: 'openrouter' | 'custom' | 'opencode-zen'
   customBaseUrl?: string
+  wireApi?: 'responses' | 'chat' | null
 }
 
 export async function getFreeModeStatus(): Promise<FreeModeStatus> {
@@ -1310,11 +1312,20 @@ export async function setFreeModeCustomKey(key: string): Promise<{ ok: boolean; 
   return await response.json() as { ok: boolean; customKey: boolean }
 }
 
-export async function setCustomProvider(baseUrl: string, apiKey: string): Promise<{ ok: boolean }> {
+export async function setCustomProvider(
+  baseUrl: string,
+  apiKey: string,
+  options?: { wireApi?: 'responses' | 'chat'; provider?: 'custom' | 'opencode-zen' | 'openrouter' },
+): Promise<{ ok: boolean }> {
   const response = await fetch('/codex-api/free-mode/custom-provider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ baseUrl, apiKey }),
+    body: JSON.stringify({
+      baseUrl,
+      apiKey,
+      wireApi: options?.wireApi,
+      provider: options?.provider,
+    }),
   })
   return await response.json() as { ok: boolean }
 }
@@ -1360,9 +1371,10 @@ export async function getAvailableModelIds(): Promise<string[]> {
 export async function getCurrentModelConfig(): Promise<CurrentModelConfig> {
   const payload = await callRpc<ConfigReadResponse>('config/read', {})
   const model = payload.config.model ?? ''
+  const providerId = typeof payload.config.model_provider === 'string' ? payload.config.model_provider : ''
   const reasoningEffort = normalizeReasoningEffort(payload.config.model_reasoning_effort)
   const speedMode = normalizeSpeedMode(payload.config.service_tier)
-  return { model, reasoningEffort, speedMode }
+  return { model, providerId, reasoningEffort, speedMode }
 }
 
 export async function getAccountRateLimitsResponse(): Promise<GetAccountRateLimitsResponse> {

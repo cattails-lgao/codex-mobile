@@ -128,9 +128,16 @@ export default defineConfig({
     {
       name: "codex-bridge",
       configureServer(server) {
+        process.env.CODEXUI_SERVER_PORT = String(server.config.server.port ?? 5173);
         const bridge = createCodexBridgeMiddleware();
         const httpServer = server.httpServer;
         if (httpServer) {
+          httpServer.once("listening", () => {
+            const addr = httpServer.address();
+            if (addr && typeof addr === "object" && addr.port) {
+              process.env.CODEXUI_SERVER_PORT = String(addr.port);
+            }
+          });
           const hostScope = httpServer as typeof httpServer & {
             [WS_UPGRADE_ATTACHED_KEY]?: boolean;
           };

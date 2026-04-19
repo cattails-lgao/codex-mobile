@@ -70,6 +70,7 @@ const PROJECT_DISPLAY_NAME_STORAGE_KEY = 'codex-web-local.project-display-name.v
 const COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode-by-context.v1'
 const LEGACY_COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mode.v1'
 const NEW_THREAD_COLLABORATION_MODE_CONTEXT = '__new-thread__'
+const NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX = '__new-thread-provider__::'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
@@ -135,13 +136,28 @@ function pruneThreadContextStateMap<T>(
   let changed = false
   const next = createStringKeyedRecord<T>()
   for (const [contextId, value] of Object.entries(stateMap)) {
-    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT || threadIds.has(contextId)) {
+    if (
+      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT
+      || contextId.startsWith(NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX)
+      || threadIds.has(contextId)
+    ) {
       next[contextId] = value
       continue
     }
     changed = true
   }
   return changed ? next : stateMap
+}
+
+function normalizeProviderContextId(providerId: string): string {
+  const normalized = providerId.trim().toLowerCase()
+  return normalized || 'codex'
+}
+
+function toProviderModelContextId(providerId: string): string {
+  const normalizedProviderId = normalizeProviderContextId(providerId)
+  if (!normalizedProviderId) return ''
+  return `${NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX}${normalizedProviderId}`
 }
 
 function toThreadContextId(threadId: string): string {
@@ -998,6 +1014,7 @@ export function useDesktopState() {
   const selectedModelId = ref(readSelectedModel(selectedModelIdByContext.value, selectedThreadId.value))
   const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
   const selectedSpeedMode = ref<SpeedMode>('standard')
+  const activeProviderId = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const scrollStateByThreadId = ref<Record<string, ThreadScrollState>>(loadThreadScrollStateMap())
   const projectOrder = ref<string[]>(loadProjectOrder())
@@ -1184,6 +1201,18 @@ export function useDesktopState() {
     }
     selectedModelId.value = readModelIdForThread(selectedThreadId.value)
     ensureAvailableModelIds(selectedModelId.value)
+    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
+      const providerContextId = toProviderModelContextId(activeProviderId.value)
+      if (providerContextId) {
+        if (normalizedModelId) {
+          const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
+          nextModelMap[providerContextId] = normalizedModelId
+          selectedModelIdByContext.value = nextModelMap
+        } else {
+          selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, providerContextId)
+        }
+      }
+    }
     saveSelectedModelMap(selectedModelIdByContext.value)
   }
 
@@ -1395,7 +1424,7 @@ export function useDesktopState() {
     return [`Mode: ${modeLabel}`, `Model: ${modelLabel}`, `Thinking: ${effortLabel}`, `Speed: ${speedLabel}`]
   }
 
-  async function refreshModelPreferences(): Promise<void> {
+  async function refreshModelPreferences(options?: { providerChanged?: boolean }): Promise<void> {
     try {
       const [modelIds, currentConfig] = await Promise.all([
         getAvailableModelIds(),
@@ -1404,22 +1433,45 @@ export function useDesktopState() {
 
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
       const normalizedConfiguredModelId = currentConfig.model.trim()
+      const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
+      activeProviderId.value = normalizedProviderId
+      const providerModelContextId = toProviderModelContextId(normalizedProviderId)
+      const providerScopedModelId = providerModelContextId
+        ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
+        : ''
       const nextModelIds = [...modelIds]
-      for (const modelId of [normalizedSelectedModelId, normalizedConfiguredModelId]) {
-        if (modelId && !nextModelIds.includes(modelId)) {
-          nextModelIds.push(modelId)
+      if (!options?.providerChanged) {
+        for (const modelId of [normalizedSelectedModelId, normalizedConfiguredModelId]) {
+          if (modelId && !nextModelIds.includes(modelId)) {
+            nextModelIds.push(modelId)
+          }
         }
       }
       availableModelIds.value = nextModelIds
 
-      if (!normalizedSelectedModelId) {
-        if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
+      const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
+      if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
+        if (options?.providerChanged && nextModelIds.length > 0) {
+          if (providerScopedModelId && nextModelIds.includes(providerScopedModelId)) {
+            setSelectedModelId(providerScopedModelId)
+          } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
+            setSelectedModelId(normalizedConfiguredModelId)
+          } else {
+            setSelectedModelId(nextModelIds[0])
+          }
+        } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
           setSelectedModelId(currentConfig.model)
         } else if (nextModelIds.length > 0) {
           setSelectedModelId(nextModelIds[0])
         } else {
           setSelectedModelId('')
         }
+      }
+      if (providerModelContextId && selectedModelId.value.trim().length > 0) {
+        const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
+        nextModelMap[providerModelContextId] = selectedModelId.value.trim()
+        selectedModelIdByContext.value = nextModelMap
+        saveSelectedModelMap(selectedModelIdByContext.value)
       }
 
       if (
@@ -3525,7 +3577,7 @@ export function useDesktopState() {
   }
 
   async function refreshAll(
-    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean } = {},
+    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean } = {},
   ) {
     error.value = ''
     const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
@@ -3534,7 +3586,7 @@ export function useDesktopState() {
     try {
       await loadThreads()
       const ancillaryRefresh = Promise.allSettled([
-        refreshModelPreferences(),
+        refreshModelPreferences({ providerChanged: options.providerChanged }),
         refreshRateLimits(),
         refreshCollaborationModes(),
         refreshSkills(),
