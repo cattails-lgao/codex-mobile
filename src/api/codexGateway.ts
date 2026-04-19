@@ -1314,7 +1314,7 @@ export async function setFreeModeCustomKey(key: string): Promise<{ ok: boolean; 
 export async function setCustomProvider(
   baseUrl: string,
   apiKey: string,
-  options?: { wireApi?: 'responses' | 'chat'; provider?: 'custom' | 'opencode-zen' },
+  options?: { wireApi?: 'responses' | 'chat'; provider?: 'custom' | 'opencode-zen' | 'openrouter' },
 ): Promise<{ ok: boolean }> {
   const response = await fetch('/codex-api/free-mode/custom-provider', {
     method: 'POST',

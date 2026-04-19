@@ -246,6 +246,29 @@
                     >{{ freeModeCustomKeySaving ? '...' : 'Set' }}</button>
                   </template>
                 </div>
+                <div class="sidebar-settings-row sidebar-settings-row--select" style="margin-top: 4px; padding: 0">
+                  <span class="sidebar-settings-label">API format</span>
+                  <div class="sidebar-settings-segmented" role="group" aria-label="OpenRouter API format">
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': openRouterWireApi === 'responses' }"
+                      :disabled="freeModeCustomKeySaving || freeModeLoading"
+                      @click="setOpenRouterWireApi('responses')"
+                    >
+                      Responses
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': openRouterWireApi === 'chat' }"
+                      :disabled="freeModeCustomKeySaving || freeModeLoading"
+                      @click="setOpenRouterWireApi('chat')"
+                    >
+                      Completions
+                    </button>
+                  </div>
+                </div>
               </div>
               <div v-if="selectedProvider === 'opencode-zen'" class="sidebar-settings-row sidebar-settings-row--input">
                 <div class="sidebar-settings-provider-info">
@@ -302,13 +325,24 @@
                 </div>
                 <div class="sidebar-settings-row sidebar-settings-row--select" style="margin-top: 4px; padding: 0">
                   <span class="sidebar-settings-label">API format</span>
-                  <select
-                    v-model="customEndpointWireApi"
-                    class="sidebar-settings-provider-select"
-                  >
-                    <option value="responses">Responses API</option>
-                    <option value="chat">Chat Completions</option>
-                  </select>
+                  <div class="sidebar-settings-segmented" role="group" aria-label="Custom endpoint API format">
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': customEndpointWireApi === 'responses' }"
+                      @click="customEndpointWireApi = 'responses'"
+                    >
+                      Responses
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar-settings-segmented-option"
+                      :class="{ 'is-active': customEndpointWireApi === 'chat' }"
+                      @click="customEndpointWireApi = 'chat'"
+                    >
+                      Completions
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
@@ -1076,6 +1110,7 @@ const selectedProvider = ref<'codex' | 'openrouter' | 'opencode-zen' | 'custom'>
 const customEndpointUrl = ref('')
 const customEndpointKey = ref('')
 const customEndpointWireApi = ref<'responses' | 'chat'>('responses')
+const openRouterWireApi = ref<'responses' | 'chat'>('responses')
 const opencodeZenKey = ref('')
 const isTelegramConfigOpen = ref(false)
 const telegramBotTokenDraft = ref('')
@@ -2707,6 +2742,10 @@ async function onProviderChange(provider: string): Promise<void> {
       selectedProvider.value = 'openrouter'
       const result = await setFreeMode(true)
       freeModeEnabled.value = result.enabled
+      await setCustomProvider('', '', {
+        wireApi: openRouterWireApi.value,
+        provider: 'openrouter',
+      })
     } else if (provider === 'opencode-zen') {
       selectedProvider.value = 'opencode-zen'
       await setCustomProvider('', opencodeZenKey.value.trim(), {
@@ -2749,6 +2788,28 @@ async function saveCustomEndpoint(): Promise<void> {
     await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : 'Failed to save custom endpoint'
+  } finally {
+    freeModeCustomKeySaving.value = false
+  }
+}
+
+async function setOpenRouterWireApi(nextWireApi: 'responses' | 'chat'): Promise<void> {
+  if (freeModeCustomKeySaving.value || freeModeLoading.value) return
+  if (openRouterWireApi.value === nextWireApi) return
+  const previousWireApi = openRouterWireApi.value
+  openRouterWireApi.value = nextWireApi
+  freeModeCustomKeySaving.value = true
+  try {
+    providerError.value = ''
+    await setCustomProvider('', '', {
+      wireApi: nextWireApi,
+      provider: 'openrouter',
+    })
+    freeModeEnabled.value = true
+    await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
+  } catch (err) {
+    openRouterWireApi.value = previousWireApi
+    providerError.value = err instanceof Error ? err.message : 'Failed to save OpenRouter API format'
   } finally {
     freeModeCustomKeySaving.value = false
   }
@@ -2820,6 +2881,7 @@ async function loadFreeModeStatus(): Promise<void> {
         customEndpointWireApi.value = status.wireApi === 'chat' ? 'chat' : 'responses'
       } else {
         selectedProvider.value = 'openrouter'
+        openRouterWireApi.value = status.wireApi === 'chat' ? 'chat' : 'responses'
       }
     } else {
       selectedProvider.value = 'codex'
@@ -3898,6 +3960,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-zinc-400 ring-2 ring-zinc-200;
 }
 
+.sidebar-settings-segmented {
+  @apply inline-flex items-center rounded-md border border-zinc-200 bg-white p-0.5;
+}
+
+.sidebar-settings-segmented-option {
+  @apply rounded px-2 py-1 text-xs text-zinc-600 transition-colors;
+}
+
+.sidebar-settings-segmented-option.is-active {
+  @apply bg-zinc-800 text-white;
+}
+
 .sidebar-settings-provider-info {
   @apply flex items-center justify-between w-full;
 }
@@ -3912,6 +3986,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 :root.dark .sidebar-settings-provider-select:focus {
   @apply border-zinc-500 ring-zinc-700;
+}
+
+:root.dark .sidebar-settings-segmented {
+  @apply border-zinc-600 bg-zinc-800;
+}
+
+:root.dark .sidebar-settings-segmented-option {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-segmented-option.is-active {
+  @apply bg-zinc-100 text-zinc-900;
 }
 
 :root.dark .sidebar-settings-provider-link {

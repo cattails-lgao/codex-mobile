@@ -198,12 +198,16 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
   }
 
   if (!state.apiKey) return []
+  const baseUrl = serverPort
+    ? `http://127.0.0.1:${serverPort}/codex-api/openrouter-proxy/v1`
+    : FREE_MODE_BASE_URL
+  const bearerToken = serverPort ? 'openrouter-proxy-token' : state.apiKey
   return [
     '-c', `model="${state.model}"`,
     '-c', `model_provider="${FREE_MODE_PROVIDER_ID}"`,
     '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.name="OpenRouter Free"`,
-    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.base_url="${FREE_MODE_BASE_URL}"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.base_url="${baseUrl}"`,
     '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.wire_api="responses"`,
-    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token="${state.apiKey}"`,
+    '-c', `model_providers.${FREE_MODE_PROVIDER_ID}.experimental_bearer_token="${bearerToken}"`,
   ]
 }
