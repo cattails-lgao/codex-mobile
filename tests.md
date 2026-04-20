@@ -2696,14 +2696,19 @@ Custom endpoint `Completions` mode uses a local Responses-compatible proxy so cu
 6. Save
 7. Select model `claude-sonnet-4.5`
 8. Send `hi`
+9. Select model `glm-5`
+10. Send `hi`
+11. In the same thread, ask `what is latest codex cli version?`
 
 #### Expected Results
 - The Codex app-server starts with `wire_api="responses"` against `/codex-api/custom-proxy/v1`
 - The custom provider save records a usable default model from `/models` when available
 - The Codex app-server receives the custom default model via runtime config
-- Unusable `auto-*` aliases are not offered ahead of concrete custom models
+- The model list preserves endpoint-advertised models, including `auto-*` aliases
 - The local proxy forwards the request to `/v1/chat/completions`
 - The UI renders an assistant greeting such as `Hey! How can I help you today?`
+- `glm-5` returns a successful assistant response
+- Follow-up tool-output turns do not fail with Kiro Gateway's generic `payload size exceeded ~615KB` error when the payload is small
 
 #### Rollback/Cleanup
 - Switch provider/API format back to preferred defaults

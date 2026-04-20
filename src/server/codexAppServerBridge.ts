@@ -551,7 +551,7 @@ async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string):
     if (!response.ok) return ''
     const payload = await response.json() as unknown
     const modelIds = normalizeProviderModelsData(payload)
-    return modelIds.find((modelId) => !/^auto[-_]/iu.test(modelId)) ?? modelIds[0] ?? ''
+    return modelIds[0] ?? ''
   } catch {
     return ''
   }
@@ -3619,7 +3619,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
                 if (resp.ok) {
                   const json = await resp.json() as unknown
-                  const ids = normalizeProviderModelsData(json).filter((id) => !/^auto[-_]/iu.test(id))
+                  const ids = normalizeProviderModelsData(json)
                   const currentModel = fmState.model?.trim() ?? ''
                   const orderedIds = currentModel && ids.includes(currentModel)
                     ? [currentModel, ...ids.filter((id) => id !== currentModel)]

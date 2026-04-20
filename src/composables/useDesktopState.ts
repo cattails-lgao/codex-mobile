@@ -1159,6 +1159,14 @@ export function useDesktopState() {
   })
 
   function readModelIdForThread(threadId: string): string {
+    const contextId = toThreadContextId(threadId)
+    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
+      const providerContextId = toProviderModelContextId(activeProviderId.value)
+      const providerModelId = providerContextId
+        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
+        : ''
+      if (providerModelId) return providerModelId
+    }
     return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
   }
 
@@ -1189,9 +1197,9 @@ export function useDesktopState() {
     shouldAutoScrollOnNextAgentEvent = false
   }
 
-  function setSelectedModelId(modelId: string): void {
+  function setSelectedModelIdForThread(threadId: string, modelId: string): void {
     const normalizedModelId = modelId.trim()
-    const contextId = toThreadContextId(selectedThreadId.value)
+    const contextId = toThreadContextId(threadId)
     if (normalizedModelId) {
       const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
       nextModelMap[contextId] = normalizedModelId
@@ -1199,8 +1207,12 @@ export function useDesktopState() {
     } else {
       selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, contextId)
     }
-    selectedModelId.value = readModelIdForThread(selectedThreadId.value)
-    ensureAvailableModelIds(selectedModelId.value)
+    if (threadId.trim() === selectedThreadId.value) {
+      selectedModelId.value = readModelIdForThread(selectedThreadId.value)
+      ensureAvailableModelIds(selectedModelId.value)
+    } else {
+      ensureAvailableModelIds(normalizedModelId)
+    }
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
       const providerContextId = toProviderModelContextId(activeProviderId.value)
       if (providerContextId) {
@@ -1214,6 +1226,10 @@ export function useDesktopState() {
       }
     }
     saveSelectedModelMap(selectedModelIdByContext.value)
+  }
+
+  function setSelectedModelId(modelId: string): void {
+    setSelectedModelIdForThread(selectedThreadId.value, modelId)
   }
 
   function setThreadModelId(threadId: string, modelId: string): void {
@@ -4636,6 +4652,8 @@ export function useDesktopState() {
     removeQueuedMessage,
     steerQueuedMessage,
     setSelectedCollaborationMode,
+    readModelIdForThread,
+    setSelectedModelIdForThread,
     setSelectedModelId,
 
     setSelectedReasoningEffort,

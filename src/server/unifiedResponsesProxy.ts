@@ -79,6 +79,34 @@ function safeStringifyUnknown(value: unknown): string {
   }
 }
 
+function appendAssistantText(messages: ChatMessage[], text: string): void {
+  const trimmedText = text.trim()
+  if (!trimmedText) return
+
+  const lastMessage = messages[messages.length - 1]
+  if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.tool_calls)) {
+    lastMessage.content = lastMessage.content
+      ? `${lastMessage.content}\n${trimmedText}`
+      : trimmedText
+    return
+  }
+
+  messages.push({ role: 'assistant', content: trimmedText })
+}
+
+function appendAssistantToolCall(
+  messages: ChatMessage[],
+  toolCall: NonNullable<ChatMessage['tool_calls']>[number],
+): void {
+  const lastMessage = messages[messages.length - 1]
+  if (lastMessage?.role === 'assistant' && !lastMessage.tool_call_id) {
+    lastMessage.tool_calls = [...(lastMessage.tool_calls ?? []), toolCall]
+    return
+  }
+
+  messages.push({ role: 'assistant', tool_calls: [toolCall] })
+}
+
 function responsesInputToMessages(input: string | ResponsesApiInput[], instructions?: string): ChatMessage[] {
   const messages: ChatMessage[] = []
   if (instructions) {
@@ -103,7 +131,11 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
               .join('\n')
           : (typeof item.text === 'string' ? item.text : '')
       const role = item.role === 'developer' ? 'system' : item.role
-      messages.push({ role, content: text })
+      if (role === 'assistant') {
+        appendAssistantText(messages, text)
+      } else {
+        messages.push({ role, content: text })
+      }
       continue
     }
 
@@ -117,16 +149,13 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
     }
 
     if (item.type === 'function_call' && item.call_id && item.name) {
-      messages.push({
-        role: 'assistant',
-        tool_calls: [{
-          id: item.call_id,
-          type: 'function',
-          function: {
-            name: item.name,
-            arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
-          },
-        }],
+      appendAssistantToolCall(messages, {
+        id: item.call_id,
+        type: 'function',
+        function: {
+          name: item.name,
+          arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+        },
       })
     }
   }
