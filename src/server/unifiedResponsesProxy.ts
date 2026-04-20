@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 
 type ResponsesApiInput = {
@@ -398,9 +399,10 @@ export function handleUnifiedResponsesProxyRequest(
         upstreamUrl = new URL(options.responsesEndpoint)
       }
 
-      const proxyReq = httpsRequest({
+      const requestFn = upstreamUrl.protocol === 'http:' ? httpRequest : httpsRequest
+      const proxyReq = requestFn({
         hostname: upstreamUrl.hostname,
-        port: upstreamUrl.port || 443,
+        port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),
         path: upstreamUrl.pathname,
         method: 'POST',
         headers: {

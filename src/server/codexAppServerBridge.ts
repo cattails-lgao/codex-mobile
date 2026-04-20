@@ -28,6 +28,7 @@ import {
 } from './freeMode.js'
 import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
 import { handleZenProxyRequest } from './zenProxy.js'
+import { handleCustomEndpointProxyRequest } from './customEndpointProxy.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
   resolveCodexCommand,
@@ -3060,6 +3061,21 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
         } catch { /* use empty */ }
         handleOpenRouterProxyRequest(req, res, bearerToken, wireApi)
+        return
+      }
+
+      if (url.pathname === '/codex-api/custom-proxy/v1/responses' && req.method === 'POST') {
+        const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+        let bearerToken = ''
+        let wireApi: 'responses' | 'chat' = 'responses'
+        let baseUrl = ''
+        try {
+          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+          bearerToken = state.apiKey ?? ''
+          wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
+          baseUrl = state.customBaseUrl ?? ''
+        } catch { /* use empty */ }
+        handleCustomEndpointProxyRequest(req, res, { baseUrl, bearerToken, wireApi })
         return
       }
 

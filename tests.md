@@ -2655,22 +2655,52 @@ Both OpenRouter and OpenCode Zen routes use a unified Responses proxy layer that
 
 ---
 
-### Auth conflict error normalization (refresh token reuse)
+### Raw auth/provider error messages
 
 #### Feature/Change Name
-Normalize upstream refresh-token reuse/auth-refresh failure messages into a clear actionable error for Codex app-server session conflicts.
+Surface upstream auth/provider errors without rewriting them in the client normalizer.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
-2. Two or more Codex app-server/dev sessions active with the same Codex auth profile
+2. A provider/backend request that can return an error
 
 #### Steps
-1. Trigger a request that causes an upstream auth refresh conflict (for example, run turns from overlapping sessions)
+1. Trigger a provider/backend error, such as an auth refresh failure or invalid custom-provider response
 2. Observe the surfaced error text in the UI/failed RPC path
 
 #### Expected Results
-- Error text is normalized to a clear session-conflict message, not the raw backend phrase
-- Message includes remediation: close duplicate sessions, sign out/in again, and retry
+- Error text matches the original upstream/backend error message
+- No replacement copy like `Authentication session conflict detected...` is injected
 
 #### Rollback/Cleanup
-- Stop duplicate app-server processes if started for repro
+- Restore provider/session settings to the preferred state
+
+---
+
+### Custom endpoint Completions via local Responses proxy
+
+#### Feature/Change Name
+Custom endpoint `Completions` mode uses a local Responses-compatible proxy so current Codex CLI versions do not reject `wire_api="chat"`.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Local OpenAI-compatible endpoint running at `http://127.0.0.1:8666/v1`
+3. API key `pwd`
+
+#### Steps
+1. Open Settings
+2. Set Provider to `Custom endpoint`
+3. Enter Custom endpoint URL `http://127.0.0.1:8666/v1`
+4. Enter API key `pwd`
+5. Set API format to `Completions`
+6. Save
+7. Select model `claude-sonnet-4.5`
+8. Send `hi`
+
+#### Expected Results
+- The Codex app-server starts with `wire_api="responses"` against `/codex-api/custom-proxy/v1`
+- The local proxy forwards the request to `/v1/chat/completions`
+- The UI renders an assistant greeting such as `Hey! How can I help you today?`
+
+#### Rollback/Cleanup
+- Switch provider/API format back to preferred defaults
