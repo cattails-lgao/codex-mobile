@@ -58,6 +58,7 @@ export type UnifiedProxyOptions = {
   chatCompletionsEndpoint: string
   missingKeyMessage: string
   allowToolFallbackToResponses: boolean
+  responsesPayloadFormat?: 'raw' | 'chat'
   sanitizeResponsesRequest?: (payload: Record<string, unknown>) => Record<string, unknown>
 }
 
@@ -397,17 +398,18 @@ export function handleUnifiedResponsesProxyRequest(
       const hasToolOutputs = hasToolOutputsInInput(parsedBody.input)
       const useResponsesFallback = options.allowToolFallbackToResponses && (hasTools || hasToolOutputs)
       const useChatCompletions = options.wireApi === 'chat' && !useResponsesFallback
+      const useChatPayload = useChatCompletions || options.responsesPayloadFormat === 'chat'
       const isStreaming = parsedBody.stream === true
       const effectiveStreaming = useChatCompletions && isStreaming && !(hasTools || hasToolOutputs)
 
       let payload = ''
       let upstreamUrl: URL
 
-      if (useChatCompletions) {
+      if (useChatPayload) {
         const chatReq: ChatCompletionsRequest = {
           model: parsedBody.model,
           messages: responsesInputToMessages(parsedBody.input, parsedBody.instructions),
-          stream: effectiveStreaming,
+          stream: useChatCompletions ? effectiveStreaming : isStreaming,
         }
         if (parsedBody.temperature != null) chatReq.temperature = parsedBody.temperature
         if (parsedBody.top_p != null) chatReq.top_p = parsedBody.top_p
@@ -417,7 +419,7 @@ export function handleUnifiedResponsesProxyRequest(
         if (chatTools) chatReq.tools = chatTools
         if (chatToolChoice) chatReq.tool_choice = chatToolChoice
         payload = JSON.stringify(chatReq)
-        upstreamUrl = new URL(options.chatCompletionsEndpoint)
+        upstreamUrl = new URL(useChatCompletions ? options.chatCompletionsEndpoint : options.responsesEndpoint)
       } else {
         const requestBody =
           parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
