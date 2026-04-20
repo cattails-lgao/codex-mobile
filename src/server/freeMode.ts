@@ -194,7 +194,11 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
     const authArgs: string[] = serverPort
       ? ['-c', `model_providers.${CUSTOM_PROVIDER_ID}.experimental_bearer_token="custom-proxy-token"`]
       : ['-c', `model_providers.${CUSTOM_PROVIDER_ID}.env_key="CUSTOM_ENDPOINT_API_KEY"`]
+    const modelArgs: string[] = state.model?.trim()
+      ? ['-c', `model="${state.model.trim()}"`]
+      : []
     return [
+      ...modelArgs,
       '-c', `model_provider="${CUSTOM_PROVIDER_ID}"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.name="Custom Endpoint"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.base_url="${baseUrl}"`,

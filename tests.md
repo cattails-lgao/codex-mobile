@@ -2699,6 +2699,9 @@ Custom endpoint `Completions` mode uses a local Responses-compatible proxy so cu
 
 #### Expected Results
 - The Codex app-server starts with `wire_api="responses"` against `/codex-api/custom-proxy/v1`
+- The custom provider save records a usable default model from `/models` when available
+- The Codex app-server receives the custom default model via runtime config
+- Unusable `auto-*` aliases are not offered ahead of concrete custom models
 - The local proxy forwards the request to `/v1/chat/completions`
 - The UI renders an assistant greeting such as `Hey! How can I help you today?`
 
