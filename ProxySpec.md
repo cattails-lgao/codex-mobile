@@ -218,12 +218,37 @@ Rules:
 - Network/proxy failures return `502` with `Proxy error: <message>`.
 - The proxy must not replace provider errors with unrelated auth-refresh errors.
 
-## Known Limits
+## Caveats
 
-- Non-function tools are not converted into Chat Completions tools.
-- Streaming tool-call deltas from Chat Completions are not fully reconstructed; tool-capable turns should rely on non-streaming or provider behavior that returns complete tool calls.
-- Provider-specific built-in tools need explicit wrapper support.
-- If a provider only supports a non-OpenAI-compatible schema, it needs a new wrapper or adapter.
+The proxy is a compatibility adapter, not a guarantee that every provider behaves identically to OpenAI Responses API.
+
+- No custom prompts are injected by the proxy. Behavior changes come from request/response translation only.
+- Completions mode still presents a local Responses API surface to Codex. This is intentional because Codex tool execution depends on Responses-shaped tool-loop semantics.
+- OpenRouter Responses mode sanitizes unsupported tool entries. This avoids schema rejection, but it also means unsupported provider tools are not available unless explicitly allowed by the OpenRouter wrapper.
+- Non-function tools are not converted into Chat Completions tools. Standard Chat Completions only supports function tools in the shape this proxy emits.
+- Streaming tool-call deltas from Chat Completions are not fully reconstructed. Tool-capable turns should rely on non-streaming responses or providers that return complete tool calls.
+- Provider-specific built-in tools need explicit wrapper support. Adding a provider does not automatically make its custom tool types work.
+- Custom endpoints are assumed to be OpenAI-compatible. If a custom provider has a non-OpenAI schema, it needs a dedicated wrapper or adapter.
+- The proxy cannot make a weak model use tools correctly. It can preserve the protocol path, but tool-call quality still depends on the selected model.
+- Large context, provider rate limits, provider payload limits, and provider-side safety/filtering errors are still upstream constraints.
+- Chat Completions translation is intentionally conservative. Unknown Responses fields are not all mirrored into Chat payloads because sending provider-unsupported fields can break otherwise valid requests.
+- Error forwarding depends on upstream response shape. JSON provider errors are preserved best; HTML/plain-text failures are wrapped into a JSON error for Codex.
+- Local proxy placeholder bearer tokens are not security boundaries. They prevent Codex from needing direct provider keys, but the app server still holds and forwards the real key.
+
+## TODO
+
+- Add automated unit tests for Responses-to-Chat message conversion, including `function_call`, `function_call_output`, and `developer` role mapping.
+- Add automated unit tests for Chat-to-Responses conversion, including assistant text, tool calls, usage mapping, and empty choices.
+- Add integration tests with mocked upstream providers for OpenRouter, OpenCode Zen, and custom endpoint modes.
+- Add a regression test for the OpenRouter invalid tool discriminator failure.
+- Add a regression test that asks for `codex --version` in Completions mode and verifies a bash/tool call is emitted and completed.
+- Add explicit handling for Chat Completions streaming tool-call deltas if providers used in practice stream tool calls instead of returning complete tool calls.
+- Add structured proxy diagnostics in development mode that show selected upstream protocol, sanitized tool count, and upstream status without logging secrets.
+- Add provider capability metadata so the UI can warn when a selected mode/provider combination has known limitations.
+- Add a small compatibility matrix to the settings UI or docs for tested models/providers.
+- Add stricter validation for custom endpoint base URLs before saving settings.
+- Add opt-in debug capture for raw upstream request/response metadata with API keys and payload content redacted.
+- Revisit OpenCode Zen `responsesPayloadFormat: "chat"` after upstream behavior stabilizes or official docs clarify the expected payload.
 
 ## Manual Verification
 
