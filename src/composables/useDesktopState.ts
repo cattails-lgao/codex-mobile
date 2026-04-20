@@ -3891,7 +3891,7 @@ export function useDesktopState() {
 
     const nextText = text.trim()
     const targetCwd = cwd.trim()
-    const selectedModel = selectedModelId.value.trim()
+    const selectedModel = readModelIdForThread(NEW_THREAD_COLLABORATION_MODE_CONTEXT).trim()
     if (!nextText && imageUrls.length === 0 && fileAttachments.length === 0) return ''
 
     isSendingMessage.value = true
@@ -3929,7 +3929,7 @@ export function useDesktopState() {
         {
           label: 'Thinking',
           details: buildPendingTurnDetails(
-            selectedModelId.value,
+            readModelIdForThread(threadId),
             selectedReasoningEffort.value,
             selectedCollaborationMode.value,
           ),
