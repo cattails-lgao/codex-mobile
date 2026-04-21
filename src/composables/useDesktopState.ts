@@ -30,6 +30,7 @@ import {
   startThreadTurn,
   type RpcNotification,
   type SkillInfo,
+  type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
 import type {
@@ -3365,12 +3366,15 @@ export function useDesktopState() {
     }, EVENT_SYNC_DEBOUNCE_MS)
   }
 
-  async function hydrateWorkspaceRootsStateIfNeeded(groups: UiProjectGroup[]): Promise<void> {
+  async function hydrateWorkspaceRootsStateIfNeeded(
+    groups: UiProjectGroup[],
+    rootsState: WorkspaceRootsState | null,
+  ): Promise<void> {
     if (hasHydratedWorkspaceRootsState) return
     hasHydratedWorkspaceRootsState = true
 
     try {
-      const rootsState = await getWorkspaceRootsState()
+      if (!rootsState) return
       const hydratedOrder: string[] = []
       for (const rootPath of rootsState.order) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
@@ -3417,6 +3421,14 @@ export function useDesktopState() {
     }
   }
 
+  async function loadWorkspaceRootsStateForThreadList(): Promise<WorkspaceRootsState | null> {
+    try {
+      return await getWorkspaceRootsState()
+    } catch {
+      return null
+    }
+  }
+
   async function requestThreadTitleGeneration(threadId: string, prompt: string, cwd: string | null): Promise<void> {
     if (threadTitleById.value[threadId]) return
     const trimmed = prompt.trim()
@@ -3433,17 +3445,15 @@ export function useDesktopState() {
     }
   }
 
-  async function filterGroupsByWorkspaceRoots(groups: UiProjectGroup[]): Promise<UiProjectGroup[]> {
-    try {
-      const rootsState = await getWorkspaceRootsState()
-      if (rootsState.order.length === 0) return groups
-      const allowedProjectNames = new Set(
-        rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-      )
-      return groups.filter((group) => allowedProjectNames.has(group.projectName))
-    } catch {
-      return groups
-    }
+  function filterGroupsByWorkspaceRoots(
+    groups: UiProjectGroup[],
+    rootsState: WorkspaceRootsState | null,
+  ): UiProjectGroup[] {
+    if (!rootsState || rootsState.order.length === 0) return groups
+    const allowedProjectNames = new Set(
+      rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
+    )
+    return groups.filter((group) => allowedProjectNames.has(group.projectName))
   }
 
   async function loadThreads() {
@@ -3452,10 +3462,14 @@ export function useDesktopState() {
     }
 
     try {
-      const [groups] = await Promise.all([getThreadGroups(), loadThreadTitleCacheIfNeeded()])
-      await hydrateWorkspaceRootsStateIfNeeded(groups)
+      const [groups, rootsState] = await Promise.all([
+        getThreadGroups(),
+        loadWorkspaceRootsStateForThreadList(),
+        loadThreadTitleCacheIfNeeded(),
+      ])
+      await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
-      const visibleGroups = await filterGroupsByWorkspaceRoots(groups)
+      const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
 
       const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
       if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {

@@ -3014,7 +3014,7 @@ async function initialize(): Promise<void> {
 
   startPolling()
   await refreshAll({
-    includeSelectedThreadMessages: true,
+    includeSelectedThreadMessages: route.name === 'thread',
   })
   void loadAccountsState({ silent: true })
   await applyLaunchProjectPathFromUrl()

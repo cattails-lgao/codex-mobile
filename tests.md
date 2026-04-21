@@ -2848,3 +2848,30 @@ Cold thread message loading reuses the `thread/resume` response instead of also 
 
 #### Rollback/Cleanup
 - None
+
+---
+
+### First app start avoids unnecessary selected-thread message load
+
+#### Feature/Change Name
+Initial home-route startup skips loading the previously selected thread's messages and loads workspace-root state only once for the first thread list.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. A saved selected thread exists from a previous app session
+
+#### Steps
+1. Open the app at the home route (`/`)
+2. Inspect startup network/RPC calls
+3. Open the app directly at `/thread/<threadId>` for an existing thread
+4. Inspect startup network/RPC calls again
+
+#### Expected Results
+- Home-route startup loads the thread list but does not load messages for the previous selected thread
+- Direct thread-route startup still loads that thread's messages
+- First thread-list loading performs a single workspace roots state request for ordering and filtering
+- Thread groups still respect saved workspace root ordering/filtering after startup
+
+#### Rollback/Cleanup
+- None
