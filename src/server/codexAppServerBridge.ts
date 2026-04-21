@@ -222,6 +222,15 @@ function isInlineDataUrl(value: string): boolean {
   return /^data:/iu.test(value.trim())
 }
 
+function normalizeBase64ImageDataUrl(value: string, mimeType: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (isInlineDataUrl(trimmed)) return trimmed
+  const compact = trimmed.replace(/\s+/gu, '')
+  if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return null
+  return `data:${mimeType};base64,${compact}`
+}
+
 function extensionFromMimeType(mimeType: string): string {
   const normalized = mimeType.trim().toLowerCase()
   if (normalized === 'image/png') return '.png'
@@ -306,6 +315,26 @@ async function sanitizeInlineUserContentBlock(
     return {
       type: 'text',
       text: `Image attachment: ${target}`,
+    }
+  }
+
+  if (type === 'imageGeneration' || type === 'image_generation') {
+    const rawResult = asNonEmptyString(record.result)
+      ?? asNonEmptyString(record.b64_json)
+      ?? asNonEmptyString(record.image)
+    const mimeType = asNonEmptyString(record.mime_type)
+      ?? asNonEmptyString(record.mimeType)
+      ?? 'image/png'
+    const dataUrl = rawResult ? normalizeBase64ImageDataUrl(rawResult, mimeType) : null
+    if (dataUrl) {
+      const localUrl = await persistInlineDataUrlToLocalFile(dataUrl, `generated-image-${context.turnId}-${context.itemId}`)
+      if (localUrl) {
+        return {
+          ...record,
+          type: 'imageView',
+          path: localUrl,
+        }
+      }
     }
   }
 
