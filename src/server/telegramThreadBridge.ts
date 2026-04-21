@@ -45,6 +45,24 @@ export type TelegramBridgeStatus = {
   lastError: string
 }
 
+type TelegramBotCommand = {
+  command: string
+  description: string
+}
+
+const TELEGRAM_MESSAGE_MAX_LENGTH = 3500
+const TELEGRAM_BOT_COMMANDS: TelegramBotCommand[] = [
+  { command: 'start', description: 'Show quick start and thread picker' },
+  { command: 'threads', description: 'List recent threads to connect' },
+  { command: 'newthread', description: 'Create and connect a new thread' },
+  { command: 'thread', description: 'Connect existing thread: /thread <id>' },
+  { command: 'current', description: 'Show currently connected thread' },
+  { command: 'history', description: 'Show recent history for current thread' },
+  { command: 'status', description: 'Show bridge and mapping status' },
+  { command: 'whoami', description: 'Show your Telegram IDs' },
+  { command: 'help', description: 'Show available commands' },
+]
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -95,6 +113,89 @@ function normalizeTelegramAllowlist(values: unknown): NormalizedTelegramAllowlis
   return { allowAllUsers, allowedUserIds }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function renderMarkdownInlineToTelegramHtml(value: string): string {
+  let rendered = escapeHtml(value)
+  rendered = rendered.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
+  rendered = rendered.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  rendered = rendered.replace(/\*\*([^*\n][^*\n]*?)\*\*/g, '<b>$1</b>')
+  rendered = rendered.replace(/__([^_\n][^_\n]*?)__/g, '<b>$1</b>')
+  rendered = rendered.replace(/\*([^*\n][^*\n]*?)\*/g, '<i>$1</i>')
+  rendered = rendered.replace(/_([^_\n][^_\n]*?)_/g, '<i>$1</i>')
+  rendered = rendered.replace(/^(#{1,6})\s+(.+)$/gm, (_match, _hashes, content: string) => `<b>${content}</b>`)
+  return rendered
+}
+
+function renderMarkdownToTelegramHtml(markdown: string): string {
+  const normalized = markdown.replace(/\r\n/g, '\n')
+  const fencedCodeRegex = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g
+  let cursor = 0
+  const parts: string[] = []
+  let match = fencedCodeRegex.exec(normalized)
+
+  while (match) {
+    const [fullMatch, lang, code] = match
+    const matchIndex = match.index
+    const before = normalized.slice(cursor, matchIndex)
+    if (before) {
+      parts.push(renderMarkdownInlineToTelegramHtml(before))
+    }
+
+    const escapedCode = escapeHtml((code ?? '').replace(/\n+$/g, ''))
+    const escapedLang = typeof lang === 'string' ? escapeHtml(lang) : ''
+    if (escapedLang) {
+      parts.push(`<pre><code class="language-${escapedLang}">${escapedCode}</code></pre>`)
+    } else {
+      parts.push(`<pre>${escapedCode}</pre>`)
+    }
+
+    cursor = matchIndex + fullMatch.length
+    match = fencedCodeRegex.exec(normalized)
+  }
+
+  const tail = normalized.slice(cursor)
+  if (tail) {
+    parts.push(renderMarkdownInlineToTelegramHtml(tail))
+  }
+
+  return parts.join('')
+}
+
+function splitTelegramText(text: string, maxLength = TELEGRAM_MESSAGE_MAX_LENGTH): string[] {
+  const normalized = text.replace(/\r\n/g, '\n').trim()
+  if (!normalized) return []
+  if (normalized.length <= maxLength) return [normalized]
+
+  const chunks: string[] = []
+  let remaining = normalized
+
+  while (remaining.length > maxLength) {
+    let splitIndex = remaining.lastIndexOf('\n\n', maxLength)
+    if (splitIndex < Math.floor(maxLength * 0.5)) {
+      splitIndex = remaining.lastIndexOf('\n', maxLength)
+    }
+    if (splitIndex < Math.floor(maxLength * 0.5)) {
+      splitIndex = remaining.lastIndexOf(' ', maxLength)
+    }
+    if (splitIndex <= 0) {
+      splitIndex = maxLength
+    }
+
+    const chunk = remaining.slice(0, splitIndex).trim()
+    if (chunk) chunks.push(chunk)
+    remaining = remaining.slice(splitIndex).trim()
+  }
+
+  if (remaining) chunks.push(remaining)
+  return chunks
+}
+
 export class TelegramThreadBridge {
   private token: string
   private readonly appServer: AppServerLike
@@ -126,6 +227,7 @@ export class TelegramThreadBridge {
   start(): void {
     if (!this.token || this.active) return
     this.active = true
+    void this.syncBotCommands().catch(() => {})
     void this.notifyOnlineForKnownChats().catch(() => {})
     this.pollingTask = this.pollLoop()
     this.appServer.onNotification((notification) => {
@@ -184,6 +286,7 @@ export class TelegramThreadBridge {
       throw new Error('Telegram bot token is required')
     }
     this.token = normalizedToken
+    void this.syncBotCommands().catch(() => {})
   }
 
   getStatus(): TelegramBridgeStatus {
@@ -234,17 +337,57 @@ export class TelegramThreadBridge {
     text: string,
     options: { replyMarkup?: unknown } = {},
   ): Promise<void> {
-    const message = text.trim()
-    if (!message) return
-    const payload: Record<string, unknown> = { chat_id: chatId, text: message }
+    const chunks = splitTelegramText(text)
+    if (chunks.length === 0) return
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index]
+      const replyMarkup = index === 0 ? options.replyMarkup : undefined
+      const htmlChunk = renderMarkdownToTelegramHtml(chunk)
+      try {
+        await this.sendMessageRequest(chatId, htmlChunk, { replyMarkup, parseMode: 'HTML' })
+      } catch {
+        await this.sendMessageRequest(chatId, chunk, { replyMarkup })
+      }
+    }
+  }
+
+  private async sendMessageRequest(
+    chatId: number,
+    text: string,
+    options: { replyMarkup?: unknown; parseMode?: 'HTML' } = {},
+  ): Promise<void> {
+    const payload: Record<string, unknown> = { chat_id: chatId, text }
     if (options.replyMarkup) {
       payload.reply_markup = options.replyMarkup
     }
-    await fetch(this.apiUrl('sendMessage'), {
+    if (options.parseMode) {
+      payload.parse_mode = options.parseMode
+    }
+    await this.callTelegramApi('sendMessage', payload)
+  }
+
+  private async syncBotCommands(): Promise<void> {
+    if (!this.token) return
+    await this.callTelegramApi('setMyCommands', {
+      commands: TELEGRAM_BOT_COMMANDS,
+    })
+  }
+
+  private async callTelegramApi(method: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await fetch(this.apiUrl(method), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
+    const parsed = asRecord(await response.json())
+    const ok = parsed?.ok === true
+    if (!response.ok || !ok) {
+      const description = typeof parsed?.description === 'string' ? parsed.description : ''
+      const statusPart = `${String(response.status)} ${response.statusText}`.trim()
+      throw new Error(description || statusPart || `Telegram API ${method} failed`)
+    }
+    return parsed ?? {}
   }
 
   private async sendOnlineMessage(chatId: number): Promise<void> {
@@ -276,6 +419,12 @@ export class TelegramThreadBridge {
     this.markChatSeen(chatId)
 
     if (text === '/start') {
+      await this.sendTelegramMessage(chatId, this.helpMessage())
+      await this.sendThreadPicker(chatId)
+      return
+    }
+
+    if (text === '/threads') {
       await this.sendThreadPicker(chatId)
       return
     }
@@ -291,6 +440,68 @@ export class TelegramThreadBridge {
       const threadId = threadCommand[1]
       this.bindChatToThread(chatId, threadId)
       await this.sendTelegramMessage(chatId, `Mapped to thread: ${threadId}`)
+      return
+    }
+
+    if (text === '/current') {
+      const threadId = this.threadIdByChatId.get(chatId)
+      await this.sendTelegramMessage(chatId, threadId
+        ? `Current thread: \`${threadId}\``
+        : 'No thread is connected for this chat yet. Use /threads, /newthread, or /thread <id>.')
+      return
+    }
+
+    if (text === '/history') {
+      const threadId = this.threadIdByChatId.get(chatId)
+      if (!threadId) {
+        await this.sendTelegramMessage(chatId, 'No thread is connected for this chat yet. Use /threads or /newthread first.')
+        return
+      }
+      const history = await this.readThreadHistorySummary(threadId)
+      await this.sendTelegramMessage(chatId, history)
+      return
+    }
+
+    if (text === '/status') {
+      const status = this.getStatus()
+      const mappedThreadId = this.threadIdByChatId.get(chatId) ?? 'none'
+      await this.sendTelegramMessage(
+        chatId,
+        [
+          '**Bridge status**',
+          `configured: ${String(status.configured)}`,
+          `active: ${String(status.active)}`,
+          `mapped chats: ${String(status.mappedChats)}`,
+          `mapped threads: ${String(status.mappedThreads)}`,
+          `allowed users: ${String(status.allowedUsers)}`,
+          `allow all users: ${String(status.allowAllUsers)}`,
+          `chat ${String(chatId)} thread: \`${mappedThreadId}\``,
+          status.lastError ? `last error: ${status.lastError}` : '',
+        ].filter(Boolean).join('\n'),
+      )
+      return
+    }
+
+    if (text === '/whoami') {
+      const normalizedSenderId = typeof senderId === 'number' && Number.isFinite(senderId)
+        ? String(Math.trunc(senderId))
+        : 'unknown'
+      const normalizedChatId = String(Math.trunc(chatId))
+      await this.sendTelegramMessage(
+        chatId,
+        [
+          '**Identity**',
+          `telegram user id: \`${normalizedSenderId}\``,
+          `chat id: \`${normalizedChatId}\``,
+          `authorized: ${String(this.isAllowedSender(senderId))}`,
+          this.allowAllUsers ? 'allowlist mode: `*`' : 'allowlist mode: explicit ids',
+        ].join('\n'),
+      )
+      return
+    }
+
+    if (text === '/help') {
+      await this.sendTelegramMessage(chatId, this.helpMessage())
       return
     }
 
@@ -368,14 +579,15 @@ export class TelegramThreadBridge {
     return 'Unauthorized sender'
   }
 
+  private helpMessage(): string {
+    const rows = TELEGRAM_BOT_COMMANDS.map((command) => `/${command.command} - ${command.description}`)
+    return ['**Available commands**', ...rows].join('\n')
+  }
+
   private async answerCallbackQuery(callbackQueryId: string, text: string): Promise<void> {
-    await fetch(this.apiUrl('answerCallbackQuery'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        callback_query_id: callbackQueryId,
-        text,
-      }),
+    await this.callTelegramApi('answerCallbackQuery', {
+      callback_query_id: callbackQueryId,
+      text,
     })
   }
 
