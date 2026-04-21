@@ -2653,24 +2653,120 @@ Both OpenRouter and OpenCode Zen routes use a unified Responses proxy layer that
 #### Rollback/Cleanup
 - Switch provider/API format back to preferred defaults
 
----
-
-### Auth conflict error normalization (refresh token reuse)
+### OpenCode Zen Responses Payload Normalization
 
 #### Feature/Change Name
-Normalize upstream refresh-token reuse/auth-refresh failure messages into a clear actionable error for Codex app-server session conflicts.
+OpenCode Zen `Responses` mode converts Codex Responses `input` payloads to Zen-compatible `messages` payloads.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
-2. Two or more Codex app-server/dev sessions active with the same Codex auth profile
+2. OpenCode Zen API key configured
 
 #### Steps
-1. Trigger a request that causes an upstream auth refresh conflict (for example, run turns from overlapping sessions)
+1. Open Settings
+2. Set Provider to `OpenCode Zen`
+3. Set API format to `Responses`
+4. Save
+5. Select model `trinity-large-preview-free`
+6. Send `hi`
+7. Switch API format to `Completions`
+8. Save
+9. Select model `trinity-large-preview-free`
+10. Send `hi`
+
+#### Expected Results
+- `Responses` mode posts to `/zen/v1/responses` with a `messages` payload derived from Codex Responses `input`
+- `trinity-large-preview-free` returns a successful assistant greeting in `Responses` mode
+- `Completions` mode still posts through `/zen/v1/chat/completions` and returns a successful assistant greeting
+- Models unsupported by Zen for a chosen format, such as `minimax-m2.5-free` in `Responses` mode, surface the upstream error without being hidden
+
+#### Rollback/Cleanup
+- Switch provider/API format back to preferred defaults
+
+---
+
+### Raw auth/provider error messages
+
+#### Feature/Change Name
+Surface upstream auth/provider errors without rewriting them in the client normalizer.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A provider/backend request that can return an error
+
+#### Steps
+1. Trigger a provider/backend error, such as an auth refresh failure or invalid custom-provider response
 2. Observe the surfaced error text in the UI/failed RPC path
 
 #### Expected Results
-- Error text is normalized to a clear session-conflict message, not the raw backend phrase
-- Message includes remediation: close duplicate sessions, sign out/in again, and retry
+- Error text matches the original upstream/backend error message
+- No replacement copy like `Authentication session conflict detected...` is injected
 
 #### Rollback/Cleanup
-- Stop duplicate app-server processes if started for repro
+- Restore provider/session settings to the preferred state
+
+---
+
+### Custom endpoint Completions via local Responses proxy
+
+#### Feature/Change Name
+Custom endpoint `Completions` mode uses a local Responses-compatible proxy so current Codex CLI versions do not reject `wire_api="chat"`.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Local OpenAI-compatible endpoint running at `http://127.0.0.1:8666/v1`
+3. API key `pwd`
+
+#### Steps
+1. Open Settings
+2. Set Provider to `Custom endpoint`
+3. Enter Custom endpoint URL `http://127.0.0.1:8666/v1`
+4. Enter API key `pwd`
+5. Set API format to `Completions`
+6. Save
+7. Select model `claude-sonnet-4.5`
+8. Send `hi`
+9. Select model `glm-5`
+10. Send `hi`
+11. In the same thread, ask `what is latest codex cli version?`
+
+#### Expected Results
+- The Codex app-server starts with `wire_api="responses"` against `/codex-api/custom-proxy/v1`
+- The custom provider save records a usable default model from `/models` when available
+- The Codex app-server receives the custom default model via runtime config
+- The model list preserves endpoint-advertised models, including `auto-*` aliases
+- The local proxy forwards the request to `/v1/chat/completions`
+- The UI renders an assistant greeting such as `Hey! How can I help you today?`
+- `glm-5` returns a successful assistant response
+- Follow-up tool-output turns do not fail with Kiro Gateway's generic `payload size exceeded ~615KB` error when the payload is small
+
+#### Rollback/Cleanup
+- Switch provider/API format back to preferred defaults
+
+---
+
+### TestChat GLM-5 new-thread model selection
+
+#### Feature/Change Name
+New TestChat threads use the provider-scoped model selected in the new-thread composer.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Custom endpoint provider configured for `http://127.0.0.1:8666/v1`
+3. Custom endpoint API format set to `Completions`
+4. The local endpoint advertises model `glm-5`
+
+#### Steps
+1. Open the app home page
+2. Select project `TestChat`
+3. Select model `glm-5` in the new-thread composer
+4. Send `create todo list app`
+5. Inspect the created session metadata or UI model selector for the new thread
+
+#### Expected Results
+- The new thread starts with model `glm-5`, not the previous model from another provider or context
+- The running turn uses the custom endpoint completions proxy
+- The UI keeps `glm-5` selected after the thread is created
+
+#### Rollback/Cleanup
+- Switch provider/model settings back to preferred defaults if needed

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 
 type ResponsesApiInput = {
@@ -57,6 +58,7 @@ export type UnifiedProxyOptions = {
   chatCompletionsEndpoint: string
   missingKeyMessage: string
   allowToolFallbackToResponses: boolean
+  responsesPayloadFormat?: 'raw' | 'chat'
   sanitizeResponsesRequest?: (payload: Record<string, unknown>) => Record<string, unknown>
 }
 
@@ -76,6 +78,34 @@ function safeStringifyUnknown(value: unknown): string {
   } catch {
     return String(value ?? '')
   }
+}
+
+function appendAssistantText(messages: ChatMessage[], text: string): void {
+  const trimmedText = text.trim()
+  if (!trimmedText) return
+
+  const lastMessage = messages[messages.length - 1]
+  if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.tool_calls)) {
+    lastMessage.content = lastMessage.content
+      ? `${lastMessage.content}\n${trimmedText}`
+      : trimmedText
+    return
+  }
+
+  messages.push({ role: 'assistant', content: trimmedText })
+}
+
+function appendAssistantToolCall(
+  messages: ChatMessage[],
+  toolCall: NonNullable<ChatMessage['tool_calls']>[number],
+): void {
+  const lastMessage = messages[messages.length - 1]
+  if (lastMessage?.role === 'assistant' && !lastMessage.tool_call_id) {
+    lastMessage.tool_calls = [...(lastMessage.tool_calls ?? []), toolCall]
+    return
+  }
+
+  messages.push({ role: 'assistant', tool_calls: [toolCall] })
 }
 
 function responsesInputToMessages(input: string | ResponsesApiInput[], instructions?: string): ChatMessage[] {
@@ -102,7 +132,11 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
               .join('\n')
           : (typeof item.text === 'string' ? item.text : '')
       const role = item.role === 'developer' ? 'system' : item.role
-      messages.push({ role, content: text })
+      if (role === 'assistant') {
+        appendAssistantText(messages, text)
+      } else {
+        messages.push({ role, content: text })
+      }
       continue
     }
 
@@ -116,16 +150,13 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
     }
 
     if (item.type === 'function_call' && item.call_id && item.name) {
-      messages.push({
-        role: 'assistant',
-        tool_calls: [{
-          id: item.call_id,
-          type: 'function',
-          function: {
-            name: item.name,
-            arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
-          },
-        }],
+      appendAssistantToolCall(messages, {
+        id: item.call_id,
+        type: 'function',
+        function: {
+          name: item.name,
+          arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+        },
       })
     }
   }
@@ -367,17 +398,18 @@ export function handleUnifiedResponsesProxyRequest(
       const hasToolOutputs = hasToolOutputsInInput(parsedBody.input)
       const useResponsesFallback = options.allowToolFallbackToResponses && (hasTools || hasToolOutputs)
       const useChatCompletions = options.wireApi === 'chat' && !useResponsesFallback
+      const useChatPayload = useChatCompletions || options.responsesPayloadFormat === 'chat'
       const isStreaming = parsedBody.stream === true
       const effectiveStreaming = useChatCompletions && isStreaming && !(hasTools || hasToolOutputs)
 
       let payload = ''
       let upstreamUrl: URL
 
-      if (useChatCompletions) {
+      if (useChatPayload) {
         const chatReq: ChatCompletionsRequest = {
           model: parsedBody.model,
           messages: responsesInputToMessages(parsedBody.input, parsedBody.instructions),
-          stream: effectiveStreaming,
+          stream: useChatCompletions ? effectiveStreaming : isStreaming,
         }
         if (parsedBody.temperature != null) chatReq.temperature = parsedBody.temperature
         if (parsedBody.top_p != null) chatReq.top_p = parsedBody.top_p
@@ -387,7 +419,7 @@ export function handleUnifiedResponsesProxyRequest(
         if (chatTools) chatReq.tools = chatTools
         if (chatToolChoice) chatReq.tool_choice = chatToolChoice
         payload = JSON.stringify(chatReq)
-        upstreamUrl = new URL(options.chatCompletionsEndpoint)
+        upstreamUrl = new URL(useChatCompletions ? options.chatCompletionsEndpoint : options.responsesEndpoint)
       } else {
         const requestBody =
           parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
@@ -398,9 +430,10 @@ export function handleUnifiedResponsesProxyRequest(
         upstreamUrl = new URL(options.responsesEndpoint)
       }
 
-      const proxyReq = httpsRequest({
+      const requestFn = upstreamUrl.protocol === 'http:' ? httpRequest : httpsRequest
+      const proxyReq = requestFn({
         hostname: upstreamUrl.hostname,
-        port: upstreamUrl.port || 443,
+        port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),
         path: upstreamUrl.pathname,
         method: 'POST',
         headers: {

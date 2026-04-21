@@ -187,13 +187,23 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
   }
 
   if (state.provider === 'custom' && state.customBaseUrl) {
-    const wireApi = state.wireApi || 'responses'
+    const baseUrl = serverPort
+      ? `http://127.0.0.1:${serverPort}/codex-api/custom-proxy/v1`
+      : state.customBaseUrl
+    const wireApi = serverPort ? 'responses' : (state.wireApi || 'responses')
+    const authArgs: string[] = serverPort
+      ? ['-c', `model_providers.${CUSTOM_PROVIDER_ID}.experimental_bearer_token="custom-proxy-token"`]
+      : ['-c', `model_providers.${CUSTOM_PROVIDER_ID}.env_key="CUSTOM_ENDPOINT_API_KEY"`]
+    const modelArgs: string[] = state.model?.trim()
+      ? ['-c', `model="${state.model.trim()}"`]
+      : []
     return [
+      ...modelArgs,
       '-c', `model_provider="${CUSTOM_PROVIDER_ID}"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.name="Custom Endpoint"`,
-      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.base_url="${state.customBaseUrl}"`,
+      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.base_url="${baseUrl}"`,
       '-c', `model_providers.${CUSTOM_PROVIDER_ID}.wire_api="${wireApi}"`,
-      '-c', `model_providers.${CUSTOM_PROVIDER_ID}.env_key="CUSTOM_ENDPOINT_API_KEY"`,
+      ...authArgs,
     ]
   }
 

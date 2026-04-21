@@ -689,7 +689,7 @@
                   :cwd="composerCwd"
                   :collaboration-modes="availableCollaborationModes"
                   :selected-collaboration-mode="selectedCollaborationMode"
-                  :models="availableModelIds" :selected-model="selectedModelId"
+                  :models="availableModelIds" :selected-model="composerSelectedModelId"
                   :selected-reasoning-effort="selectedReasoningEffort"
                   :selected-speed-mode="selectedSpeedMode"
                   :is-updating-speed-mode="isUpdatingSpeedMode"
@@ -750,7 +750,7 @@
                     :collaboration-modes="availableCollaborationModes"
                     :selected-collaboration-mode="selectedCollaborationMode"
                     :models="availableModelIds"
-                    :selected-model="selectedModelId"
+                    :selected-model="composerSelectedModelId"
                     :selected-reasoning-effort="selectedReasoningEffort"
                     :selected-speed-mode="selectedSpeedMode"
                     :is-updating-speed-mode="isUpdatingSpeedMode"
@@ -1014,7 +1014,8 @@ const {
   removeQueuedMessage,
   steerQueuedMessage,
   setSelectedCollaborationMode,
-  setSelectedModelId,
+  readModelIdForThread,
+  setSelectedModelIdForThread,
 
   setSelectedReasoningEffort,
   updateSelectedSpeedMode,
@@ -1196,6 +1197,7 @@ const latestUserTurnId = computed(() => {
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
+const composerSelectedModelId = computed(() => readModelIdForThread(composerThreadContextId.value))
 const selectedThreadPendingRequest = computed<UiServerRequest | null>(() => {
   const rows = selectedThreadServerRequests.value
   return rows.length > 0 ? rows[rows.length - 1] : null
@@ -2542,7 +2544,7 @@ function collapsePathSegments(rawSegments: readonly string[]): string[] {
 }
 
 function onSelectModel(modelId: string): void {
-  setSelectedModelId(modelId)
+  setSelectedModelIdForThread(composerThreadContextId.value, modelId)
 }
 
 function onSelectReasoningEffort(effort: ReasoningEffort | ''): void {

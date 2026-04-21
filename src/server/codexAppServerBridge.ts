@@ -28,6 +28,7 @@ import {
 } from './freeMode.js'
 import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
 import { handleZenProxyRequest } from './zenProxy.js'
+import { handleCustomEndpointProxyRequest } from './customEndpointProxy.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
   resolveCodexCommand,
@@ -537,6 +538,23 @@ function normalizeProviderModelsData(payload: unknown): string[] {
     ids.push(candidate)
   }
   return ids
+}
+
+async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string): Promise<string> {
+  const normalizedBaseUrl = baseUrl.trim()
+  if (!normalizedBaseUrl) return ''
+
+  try {
+    const modelsUrl = buildProviderModelsUrl(normalizedBaseUrl, null)
+    const headers: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}` } : {}
+    const response = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS) })
+    if (!response.ok) return ''
+    const payload = await response.json() as unknown
+    const modelIds = normalizeProviderModelsData(payload)
+    return modelIds[0] ?? ''
+  } catch {
+    return ''
+  }
 }
 
 async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<ProviderModelsResponse> {
@@ -3063,6 +3081,21 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (url.pathname === '/codex-api/custom-proxy/v1/responses' && req.method === 'POST') {
+        const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
+        let bearerToken = ''
+        let wireApi: 'responses' | 'chat' = 'responses'
+        let baseUrl = ''
+        try {
+          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+          bearerToken = state.apiKey ?? ''
+          wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
+          baseUrl = state.customBaseUrl ?? ''
+        } catch { /* use empty */ }
+        handleCustomEndpointProxyRequest(req, res, { baseUrl, bearerToken, wireApi })
+        return
+      }
+
       if (url.pathname.startsWith('/codex-api/free-mode')) {
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
 
@@ -3237,7 +3270,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             const resolvedModel = providerType === 'openrouter'
               ? (current.model || FREE_MODE_DEFAULT_MODEL)
-              : ''
+              : providerType === 'custom'
+                ? await fetchCustomEndpointDefaultModel(baseUrl, resolvedKey)
+                : ''
             const state: FreeModeState = {
               enabled: true,
               apiKey: resolvedKey,
@@ -3583,9 +3618,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 }
                 const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
                 if (resp.ok) {
-                  const json = await resp.json() as { data?: Array<{ id: string }> }
-                  const ids = (json.data ?? []).map(m => m.id).filter(Boolean)
-                  setJson(res, 200, { data: ids, exclusive: true, source: 'custom' })
+                  const json = await resp.json() as unknown
+                  const ids = normalizeProviderModelsData(json)
+                  const currentModel = fmState.model?.trim() ?? ''
+                  const orderedIds = currentModel && ids.includes(currentModel)
+                    ? [currentModel, ...ids.filter((id) => id !== currentModel)]
+                    : ids
+                  setJson(res, 200, { data: orderedIds, exclusive: true, source: 'custom' })
                   return
                 }
               } catch {
