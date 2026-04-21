@@ -3504,10 +3504,8 @@ export function useDesktopState() {
 
     try {
       const needsResume = resumedThreadById.value[threadId] !== true
-      const resumePromise = needsResume ? resumeThread(threadId) : null
-      const detailPromise = getThreadDetail(threadId)
-
-      const [resumedThread, detail] = await Promise.all([resumePromise, detailPromise])
+      const resumedThread = needsResume ? await resumeThread(threadId) : null
+      const detail = resumedThread ?? await getThreadDetail(threadId)
 
       if (resumedThread) {
         setThreadModelId(threadId, resumedThread.model)

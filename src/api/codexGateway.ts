@@ -914,12 +914,20 @@ export async function removeAccount(accountId: string): Promise<AccountsListResu
 
 export type ResumedThread = {
   model: string
+  messages: UiMessage[]
+  inProgress: boolean
+  activeTurnId: string
+  turnIndexByTurnId: ThreadTurnIndexById
 }
 
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
   const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
   return {
     model: normalizeThreadModelFromPayload(payload),
+    messages: normalizeThreadMessagesV2(payload),
+    inProgress: readThreadInProgressFromResponse(payload),
+    activeTurnId: readActiveTurnIdFromResponse(payload),
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
   }
 }
 

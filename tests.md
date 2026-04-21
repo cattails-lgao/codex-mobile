@@ -2821,3 +2821,30 @@ The old rollback button is replaced with an `Edit message` action under each eli
 
 #### Rollback/Cleanup
 - None
+
+---
+
+### Cold thread load avoids duplicate history fetch
+
+#### Feature/Change Name
+Cold thread message loading reuses the `thread/resume` response instead of also issuing `thread/read`.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open, filtered to Codex RPC or `/codex-api`
+3. An existing thread that has not been opened in the current browser session
+
+#### Steps
+1. Refresh the app
+2. Open the existing thread
+3. Inspect the network/RPC calls made during the initial thread load
+4. Open the same thread again or switch away and back
+
+#### Expected Results
+- The first cold open performs `thread/resume` for that thread and renders its messages
+- The first cold open does not also perform a redundant `thread/read` for the same thread load
+- Returning to an already resumed thread can use `thread/read` when a refresh is needed
+- Messages, in-progress state, active turn tracking, and model selection still populate correctly
+
+#### Rollback/Cleanup
+- None
