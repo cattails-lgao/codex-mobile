@@ -11,12 +11,13 @@ import {
   getPendingServerRequests,
   getSkillsList,
   getThreadDetail,
+  getBackgroundThreadListLimit,
   interruptThreadTurn,
   pickCodexRateLimitSnapshot,
   replyToServerRequest,
   revertThreadFileChanges,
   rollbackThread,
-  getThreadGroups,
+  getThreadGroupsPage,
   getWorkspaceRootsState,
   setCodexSpeedMode,
   setWorkspaceRootsState,
@@ -1088,6 +1089,9 @@ export function useDesktopState() {
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
+  let threadListNextCursor: string | null = null
+  let isLoadingRemainingThreadPages = false
+  let loadedThreadListGroups: UiProjectGroup[] = []
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
@@ -3456,41 +3460,99 @@ export function useDesktopState() {
     return groups.filter((group) => allowedProjectNames.has(group.projectName))
   }
 
+  function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
+    const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
+
+    const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
+    if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
+      projectOrder.value = nextProjectOrder
+      saveProjectOrder(projectOrder.value)
+    }
+
+    const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
+    markServerListedThreads(new Set(flattenThreads(orderedGroups).map((thread) => thread.id)))
+    const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
+      sourceGroups.value,
+      orderedGroups,
+      inProgressById.value,
+    )
+    sourceGroups.value = mergeThreadGroups(sourceGroups.value, mergedWithInProgress)
+    inProgressById.value = pruneThreadStateMap(
+      inProgressById.value,
+      new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
+    )
+    applyThreadFlags()
+  }
+
+  function mergeThreadGroupPages(previous: UiProjectGroup[], incoming: UiProjectGroup[]): UiProjectGroup[] {
+    if (previous.length === 0) return incoming
+    if (incoming.length === 0) return previous
+
+    const threadById = new Map<string, UiThread>()
+    for (const thread of flattenThreads(previous)) {
+      threadById.set(thread.id, thread)
+    }
+    for (const thread of flattenThreads(incoming)) {
+      threadById.set(thread.id, thread)
+    }
+    const groupsByProject = new Map<string, UiThread[]>()
+    for (const thread of threadById.values()) {
+      const existing = groupsByProject.get(thread.projectName)
+      if (existing) existing.push(thread)
+      else groupsByProject.set(thread.projectName, [thread])
+    }
+
+    return Array.from(groupsByProject.entries())
+      .map(([projectName, threads]) => ({
+        projectName,
+        threads: threads.sort(
+          (first, second) => new Date(second.updatedAtIso).getTime() - new Date(first.updatedAtIso).getTime(),
+        ),
+      }))
+      .sort((first, second) => {
+        const firstUpdated = new Date(first.threads[0]?.updatedAtIso ?? 0).getTime()
+        const secondUpdated = new Date(second.threads[0]?.updatedAtIso ?? 0).getTime()
+        return secondUpdated - firstUpdated
+      })
+  }
+
+  async function loadRemainingThreadPages(rootsState: WorkspaceRootsState | null): Promise<void> {
+    if (isLoadingRemainingThreadPages || !threadListNextCursor) return
+    isLoadingRemainingThreadPages = true
+
+    try {
+      while (threadListNextCursor) {
+        const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
+        threadListNextCursor = page.nextCursor
+        loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
+        applyThreadGroups(loadedThreadListGroups, rootsState)
+      }
+    } catch {
+      // Keep the first page usable; a later refresh can retry remaining pages.
+    } finally {
+      isLoadingRemainingThreadPages = false
+    }
+  }
+
   async function loadThreads() {
     if (!hasLoadedThreads.value) {
       isLoadingThreads.value = true
     }
 
     try {
-      const [groups, rootsState] = await Promise.all([
-        getThreadGroups(),
+      const [page, rootsState] = await Promise.all([
+        getThreadGroupsPage(),
         loadWorkspaceRootsStateForThreadList(),
         loadThreadTitleCacheIfNeeded(),
       ])
+      const groups = page.groups
+      loadedThreadListGroups = groups
+      threadListNextCursor = page.nextCursor
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
-      const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
-
-      const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
-      if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
-        projectOrder.value = nextProjectOrder
-        saveProjectOrder(projectOrder.value)
-      }
-
-      const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
-      markServerListedThreads(new Set(flattenThreads(orderedGroups).map((thread) => thread.id)))
-      const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
-        sourceGroups.value,
-        orderedGroups,
-        inProgressById.value,
-      )
-      sourceGroups.value = mergeThreadGroups(sourceGroups.value, mergedWithInProgress)
-      inProgressById.value = pruneThreadStateMap(
-        inProgressById.value,
-        new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
-      )
-      applyThreadFlags()
+      applyThreadGroups(groups, rootsState)
       hasLoadedThreads.value = true
+      void loadRemainingThreadPages(rootsState)
 
       const flatThreads = flattenThreads(projectGroups.value)
       pruneThreadScopedState(flatThreads)
