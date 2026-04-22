@@ -94,6 +94,7 @@ type QuickCommand = {
 }
 
 const QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
+const TERMINAL_TABS_STORAGE_KEY = 'codex-web-local.terminal-tabs.v1'
 const ADD_QUICK_COMMAND_VALUE = '__add_quick_command__'
 const MAX_VISIBLE_QUICK_COMMANDS = 5
 const BUILT_IN_QUICK_COMMANDS: QuickCommand[] = [
@@ -123,6 +124,7 @@ const quickCommands = computed<QuickCommand[]>(() => {
 })
 
 onMounted(() => {
+  restoreSavedTabs()
   createTerminal()
   unsubscribeNotifications = subscribeCodexNotifications(handleNotification)
   void attachToThread(false)
@@ -145,8 +147,7 @@ onBeforeUnmount(() => {
 watch(
   () => [props.threadId, props.cwd] as const,
   () => {
-    tabs.value = []
-    activeSessionId.value = ''
+    restoreSavedTabs()
     void attachToThread(false)
   },
 )
@@ -211,6 +212,7 @@ async function attachToThread(newSession: boolean, targetSessionId = ''): Promis
       status: 'attached',
     })
     activeSessionId.value = session.id
+    saveTabsState()
     renderSessionBuffer(session.buffer)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Terminal attach failed'
@@ -227,6 +229,7 @@ function handleNotification(notification: RpcNotification): void {
       shell: readString(params?.shell) || undefined,
       status: 'attached',
     })
+    saveTabsState()
     return
   }
   if (notification.method === 'terminal-init-log') {
@@ -242,6 +245,7 @@ function handleNotification(notification: RpcNotification): void {
   }
   if (notification.method === 'terminal-exit') {
     patchTab(notificationSessionId, { status: 'exited' })
+    saveTabsState()
     if (notificationSessionId !== activeSessionId.value) return
     terminal.writeln('')
     terminal.writeln('[terminal exited]')
@@ -249,6 +253,7 @@ function handleNotification(notification: RpcNotification): void {
   }
   if (notification.method === 'terminal-error') {
     patchTab(notificationSessionId, { status: 'error' })
+    saveTabsState()
     if (notificationSessionId !== activeSessionId.value) return
     errorMessage.value = readString(params?.message) || 'Terminal error'
   }
@@ -300,11 +305,14 @@ function onCloseTerminal(): void {
     })
   }
   if (nextTab) {
+    activeSessionId.value = nextTab.id
+    saveTabsState()
     void attachToThread(false, nextTab.id)
     return
   }
   activeSessionId.value = ''
   terminal?.clear()
+  saveTabsState()
   emit('hide')
 }
 
@@ -331,6 +339,7 @@ function upsertTab(tab: TerminalTab): void {
   const existingIndex = tabs.value.findIndex((row) => row.id === tab.id)
   if (existingIndex < 0) {
     tabs.value = [...tabs.value, tab]
+    saveTabsState()
     return
   }
   const next = [...tabs.value]
@@ -339,6 +348,7 @@ function upsertTab(tab: TerminalTab): void {
     ...tab,
   })
   tabs.value = next
+  saveTabsState()
 }
 
 function patchTab(tabId: string, patch: Partial<TerminalTab>): void {
@@ -350,6 +360,7 @@ function patchTab(tabId: string, patch: Partial<TerminalTab>): void {
     ...patch,
   })
   tabs.value = next
+  saveTabsState()
 }
 
 function renderSessionBuffer(buffer: string): void {
@@ -363,6 +374,76 @@ function renderSessionBuffer(buffer: string): void {
 function terminalTabTitle(tab: TerminalTab, index: number): string {
   const shell = tab.shell && tab.shell !== 'terminal' ? tab.shell : 'Terminal'
   return tabs.value.length > 1 ? `${shell} ${index + 1}` : shell
+}
+
+function restoreSavedTabs(): void {
+  const stored = readStoredTabs()[tabStorageKey()]
+  if (!stored || stored.tabs.length === 0) {
+    tabs.value = []
+    activeSessionId.value = ''
+    return
+  }
+  tabs.value = stored.tabs
+  activeSessionId.value = stored.activeSessionId && stored.tabs.some((tab) => tab.id === stored.activeSessionId)
+    ? stored.activeSessionId
+    : stored.tabs[0]?.id ?? ''
+}
+
+function saveTabsState(): void {
+  if (typeof window === 'undefined') return
+  const allTabs = readStoredTabs()
+  const key = tabStorageKey()
+  if (tabs.value.length === 0 || !activeSessionId.value) {
+    delete allTabs[key]
+  } else {
+    allTabs[key] = {
+      activeSessionId: activeSessionId.value,
+      tabs: tabs.value.map((tab) => ({ ...tab })),
+    }
+  }
+  window.localStorage.setItem(TERMINAL_TABS_STORAGE_KEY, JSON.stringify(allTabs))
+}
+
+function tabStorageKey(): string {
+  return `${props.threadId}::${props.cwd}`
+}
+
+function readStoredTabs(): Record<string, { activeSessionId: string, tabs: TerminalTab[] }> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(TERMINAL_TABS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const output: Record<string, { activeSessionId: string, tabs: TerminalTab[] }> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const record = asRecord(value)
+      const activeSessionId = readString(record?.activeSessionId)
+      const rawTabs = Array.isArray(record?.tabs) ? record.tabs : []
+      const nextTabs: TerminalTab[] = []
+      for (const rawTab of rawTabs) {
+        const tab = asRecord(rawTab)
+        const id = readString(tab?.id)
+        if (!id) continue
+        const rawStatus = readString(tab?.status)
+        const status: TerminalTab['status'] =
+          rawStatus === 'attached' || rawStatus === 'exited' || rawStatus === 'error'
+            ? rawStatus
+            : 'connecting'
+        nextTabs.push({
+          id,
+          shell: readString(tab?.shell) || 'terminal',
+          status,
+        })
+      }
+      if (nextTabs.length > 0) {
+        output[key] = { activeSessionId, tabs: nextTabs }
+      }
+    }
+    return output
+  } catch {
+    return {}
+  }
 }
 
 function normalizeQuickCommandValue(value: string): string {
