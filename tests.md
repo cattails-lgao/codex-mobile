@@ -2901,7 +2901,7 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 14. Confirm the JSON `session.buffer` contains `terminal-ok`
 15. Refresh the page and reopen the same thread
 16. Toggle the terminal open again
-17. Click `New terminal`
+17. Click `New`
 18. Confirm a second terminal tab appears and becomes active
 19. Click the first terminal tab
 20. Confirm its previous output is restored
@@ -2917,7 +2917,7 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
 - Custom quick commands can be added from the `Run...` menu prompt and run immediately
 - The `Run...` menu shows only the five most-used/recent commands before `Add command...`
-- `New terminal` adds another tab without killing the previous PTY
+- `New` adds another tab without killing the previous PTY
 - `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
 #### Rollback/Cleanup
@@ -2945,7 +2945,7 @@ Automated unit coverage for terminal manager edge cases that do not require a br
 - PTY env normalizes `TERM`, locale, and strips `TERMINFO` variables
 - Output snapshots truncate to the last 16 KiB and set `truncated`
 - Existing session reattach emits init/attached events and safely syncs changed cwd
-- New terminal adds a new tab without killing the previous session, and close/exit removes snapshots for the active session
+- `New` adds a new tab without killing the previous session, and close/exit removes snapshots for the active session
 
 #### Rollback/Cleanup
 - None

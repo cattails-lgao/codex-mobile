@@ -28,8 +28,8 @@
           </option>
           <option :value="ADD_QUICK_COMMAND_VALUE">Add command...</option>
         </select>
-        <button class="thread-terminal-action" type="button" title="New terminal" @click="onNewTerminal">
-          New terminal
+        <button class="thread-terminal-action" type="button" title="New" @click="onNewTerminal">
+          New
         </button>
         <button class="thread-terminal-action" type="button" title="Hide terminal" @click="$emit('hide')">
           Hide

@@ -33,7 +33,7 @@
 4. Confirm the terminal can reattach and continue accepting input.
 5. Use the `Run...` menu several times.
 6. Confirm only the five most-used/recent commands are shown before `Add command...`.
-7. Click `New terminal`.
+7. Click `New`.
 8. Confirm a second terminal tab appears and becomes active.
 9. Click the first terminal tab.
 10. Confirm its previous output is restored.
