@@ -146,6 +146,7 @@ until curl -fsS "http://127.0.0.1:$CDP_PORT/json/list" >/tmp/codex-cdp-list.json
 done
 ```
 
+If Codex.app is already running without CDP, `open -a "Codex" --args --remote-debugging-port=3434` usually does **not** enable CDP because Electron reuses the existing app instance. Restart Codex.app with the port enabled.
 Fallback only when a separate instance cannot be used: restart all Codex.app processes and launch the binary with `nohup`.
 
 ```bash
