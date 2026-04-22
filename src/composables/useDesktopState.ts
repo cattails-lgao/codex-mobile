@@ -76,6 +76,7 @@ const NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX = '__new-thread-provider__::'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
+const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
@@ -1092,6 +1093,7 @@ export function useDesktopState() {
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
+  const lastMessageLoadAtByThreadId = new Map<string, number>()
   let threadListNextCursor: string | null = null
   let isLoadingRemainingThreadPages = false
   let hasLoadedAllThreadPages = false
@@ -3611,10 +3613,17 @@ export function useDesktopState() {
       try {
       const version = currentThreadVersion(threadId)
       const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
+      const loadedRecently =
+        Date.now() - (lastMessageLoadAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
       const canReuseLoadedMessages =
         alreadyLoaded &&
-        (version.length === 0 || loadedVersion === version) &&
-        inProgressById.value[threadId] !== true
+        (
+          loadedRecently ||
+          (
+            (version.length === 0 || loadedVersion === version) &&
+            inProgressById.value[threadId] !== true
+          )
+        )
 
       if (canReuseLoadedMessages) {
         markThreadAsRead(threadId)
@@ -3657,6 +3666,7 @@ export function useDesktopState() {
         ...loadedMessagesByThreadId.value,
         [threadId]: true,
       }
+      lastMessageLoadAtByThreadId.set(threadId, Date.now())
 
       if (version) {
         loadedVersionByThreadId.value = {
@@ -4586,7 +4596,13 @@ export function useDesktopState() {
       const loadedVersion = loadedVersionByThreadId.value[activeThreadId] ?? ''
       const hasVersionChange = currentVersion.length > 0 && currentVersion !== loadedVersion
 
-      if (isActiveDirty || isInProgress || hasVersionChange || shouldRefreshThreads) {
+      const shouldRefreshActiveThread =
+        hasVersionChange ||
+        (isInProgress && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
+        (isActiveDirty && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
+        (shouldRefreshThreads && loadedMessagesByThreadId.value[activeThreadId] !== true)
+
+      if (shouldRefreshActiveThread) {
         await loadMessages(activeThreadId, { silent: true })
       }
     } catch {
