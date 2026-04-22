@@ -3546,11 +3546,13 @@ export function useDesktopState() {
         loadThreadTitleCacheIfNeeded(),
       ])
       const groups = page.groups
-      loadedThreadListGroups = groups
+      loadedThreadListGroups = hasLoadedThreads.value
+        ? mergeThreadGroupPages(loadedThreadListGroups, groups)
+        : groups
       threadListNextCursor = page.nextCursor
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
-      applyThreadGroups(groups, rootsState)
+      applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
       void loadRemainingThreadPages(rootsState)
 
