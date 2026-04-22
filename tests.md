@@ -2907,10 +2907,17 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 20. Confirm its previous output is restored
 21. Resize the browser window
 22. Click `Close`
+23. Open the new-chat screen
+24. Confirm a working folder is selected
+25. Click the terminal button in the top-right header
+26. Confirm the terminal opens below the new-chat composer before a thread exists
+27. Run `pwd` and confirm it matches the selected folder
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
 - The terminal is scoped to the selected thread working directory
+- The terminal button is also available on new-chat when a working folder is selected
+- New-chat terminal sessions use the selected folder before a thread exists
 - Recent output is restored after hiding/reopening or refreshing the thread
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists

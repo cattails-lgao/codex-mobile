@@ -20,6 +20,13 @@
 11. Choose `Add command...` from the `Run...` menu.
 12. Enter a custom command in the prompt and confirm it runs immediately.
 
+### New Chat Flow
+1. Open the new-chat screen.
+2. Choose or confirm a working folder.
+3. Click the terminal button in the top-right header.
+4. Confirm the terminal opens below the new-chat composer before a thread exists.
+5. Run `pwd` and confirm it matches the selected folder.
+
 ### Snapshot API
 1. With the terminal session still running, request:
    `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
