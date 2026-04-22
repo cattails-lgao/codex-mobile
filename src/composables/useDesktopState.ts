@@ -3579,6 +3579,19 @@ export function useDesktopState() {
     }
 
     try {
+      const version = currentThreadVersion(threadId)
+      const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
+      const canReuseLoadedMessages =
+        alreadyLoaded &&
+        version.length > 0 &&
+        loadedVersion === version &&
+        inProgressById.value[threadId] !== true
+
+      if (canReuseLoadedMessages) {
+        markThreadAsRead(threadId)
+        return
+      }
+
       const needsResume = resumedThreadById.value[threadId] !== true
       const resumedThread = needsResume ? await resumeThread(threadId) : null
       const detail = resumedThread ?? await getThreadDetail(threadId)
@@ -3616,7 +3629,6 @@ export function useDesktopState() {
         [threadId]: true,
       }
 
-      const version = currentThreadVersion(threadId)
       if (version) {
         loadedVersionByThreadId.value = {
           ...loadedVersionByThreadId.value,
