@@ -468,72 +468,36 @@ function normalizeSpeedMode(value: unknown): SpeedMode {
     : 'standard'
 }
 
-async function getThreadGroupsV2(): Promise<UiProjectGroup[]> {
+const INITIAL_THREAD_LIST_LIMIT = 50
+const BACKGROUND_THREAD_LIST_LIMIT = 100
+
+export type ThreadGroupsPage = {
+  groups: UiProjectGroup[]
+  nextCursor: string | null
+}
+
+async function getThreadGroupsPageV2(cursor: string | null, limit: number): Promise<ThreadGroupsPage> {
   const payload = await callRpc<ThreadListResponse>('thread/list', {
     archived: false,
-    limit: 100,
+    limit,
     sortKey: 'updated_at',
     modelProviders: [],
+    cursor,
   })
-  return normalizeThreadGroupsV2(payload)
+  return {
+    groups: normalizeThreadGroupsV2(payload),
+    nextCursor: typeof payload.nextCursor === 'string' && payload.nextCursor.length > 0
+      ? payload.nextCursor
+      : null,
+  }
 }
 
 async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
-  const liveState = await fetchThreadLiveState(threadId)
-  if (liveState && !liveState.liveStateError) {
-    const fromLive = normalizeMessagesFromLiveState(liveState)
-    if (fromLive && fromLive.messages.length > 0) {
-      return fromLive.messages
-    }
-  }
-
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
   })
   return normalizeThreadMessagesV2(payload)
-}
-
-type LiveStateResponse = {
-  threadId: string
-  conversationState: { turns: unknown[] } | null
-  ownerClientId: string | null
-  liveStateError: { kind: string; message: string } | null
-  isInProgress: boolean
-}
-
-async function fetchThreadLiveState(threadId: string): Promise<LiveStateResponse | null> {
-  try {
-    const response = await fetch(
-      `/codex-api/thread-live-state?threadId=${encodeURIComponent(threadId)}`,
-    )
-    if (!response.ok) return null
-    return (await response.json()) as LiveStateResponse
-  } catch {
-    return null
-  }
-}
-
-function normalizeMessagesFromLiveState(
-  liveState: LiveStateResponse,
-): { messages: UiMessage[]; inProgress: boolean; activeTurnId: string; turnIndexByTurnId: ThreadTurnIndexById } | null {
-  const state = liveState.conversationState
-  if (!state || !Array.isArray(state.turns) || state.turns.length === 0) return null
-
-  const syntheticPayload: ThreadReadResponse = {
-    thread: {
-      id: liveState.threadId,
-      turns: state.turns,
-    } as ThreadReadResponse['thread'],
-  }
-
-  const messages = normalizeThreadMessagesV2(syntheticPayload)
-  return {
-    messages,
-    inProgress: liveState.isInProgress,
-    activeTurnId: readActiveTurnIdFromResponse(syntheticPayload),
-    turnIndexByTurnId: buildTurnIndexByTurnId(syntheticPayload),
-  }
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{
@@ -542,14 +506,6 @@ async function getThreadDetailV2(threadId: string): Promise<{
   activeTurnId: string
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
-  const liveState = await fetchThreadLiveState(threadId)
-  if (liveState && !liveState.liveStateError) {
-    const fromLive = normalizeMessagesFromLiveState(liveState)
-    if (fromLive && fromLive.messages.length > 0) {
-      return fromLive
-    }
-  }
-
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
@@ -565,10 +521,25 @@ async function getThreadDetailV2(threadId: string): Promise<{
 
 export async function getThreadGroups(): Promise<UiProjectGroup[]> {
   try {
-    return await getThreadGroupsV2()
+    return (await getThreadGroupsPageV2(null, INITIAL_THREAD_LIST_LIMIT)).groups
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to load thread groups', 'thread/list')
   }
+}
+
+export async function getThreadGroupsPage(
+  cursor: string | null = null,
+  limit = INITIAL_THREAD_LIST_LIMIT,
+): Promise<ThreadGroupsPage> {
+  try {
+    return await getThreadGroupsPageV2(cursor, limit)
+  } catch (error) {
+    throw normalizeCodexApiError(error, 'Failed to load thread groups', 'thread/list')
+  }
+}
+
+export function getBackgroundThreadListLimit(): number {
+  return BACKGROUND_THREAD_LIST_LIMIT
 }
 
 export async function getThreadMessages(threadId: string): Promise<UiMessage[]> {
@@ -914,12 +885,20 @@ export async function removeAccount(accountId: string): Promise<AccountsListResu
 
 export type ResumedThread = {
   model: string
+  messages: UiMessage[]
+  inProgress: boolean
+  activeTurnId: string
+  turnIndexByTurnId: ThreadTurnIndexById
 }
 
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
   const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
   return {
     model: normalizeThreadModelFromPayload(payload),
+    messages: normalizeThreadMessagesV2(payload),
+    inProgress: readThreadInProgressFromResponse(payload),
+    activeTurnId: readActiveTurnIdFromResponse(payload),
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
   }
 }
 
@@ -1330,13 +1309,17 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-export async function getAvailableModelIds(): Promise<string[]> {
+export async function getAvailableModelIds(options: { includeProviderModels?: boolean } = {}): Promise<string[]> {
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
   for (const row of payload.data) {
     const candidate = row.id || row.model
     if (!candidate || ids.includes(candidate)) continue
     ids.push(candidate)
+  }
+
+  if (options.includeProviderModels === false) {
+    return ids
   }
 
   try {

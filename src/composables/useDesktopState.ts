@@ -11,12 +11,13 @@ import {
   getPendingServerRequests,
   getSkillsList,
   getThreadDetail,
+  getBackgroundThreadListLimit,
   interruptThreadTurn,
   pickCodexRateLimitSnapshot,
   replyToServerRequest,
   revertThreadFileChanges,
   rollbackThread,
-  getThreadGroups,
+  getThreadGroupsPage,
   getWorkspaceRootsState,
   setCodexSpeedMode,
   setWorkspaceRootsState,
@@ -30,6 +31,7 @@ import {
   startThreadTurn,
   type RpcNotification,
   type SkillInfo,
+  type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
 import type {
@@ -74,6 +76,7 @@ const NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX = '__new-thread-provider__::'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
+const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.2-codex'
@@ -1084,9 +1087,17 @@ export function useDesktopState() {
   let eventSyncTimer: number | null = null
   let rateLimitRefreshTimer: number | null = null
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
+  let loadThreadsPromise: Promise<void> | null = null
+  const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
+  let refreshSkillsPromise: Promise<void> | null = null
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
+  const lastMessageLoadAtByThreadId = new Map<string, number>()
+  let threadListNextCursor: string | null = null
+  let isLoadingRemainingThreadPages = false
+  let hasLoadedAllThreadPages = false
+  let loadedThreadListGroups: UiProjectGroup[] = []
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
@@ -1440,10 +1451,10 @@ export function useDesktopState() {
     return [`Mode: ${modeLabel}`, `Model: ${modelLabel}`, `Thinking: ${effortLabel}`, `Speed: ${speedLabel}`]
   }
 
-  async function refreshModelPreferences(options?: { providerChanged?: boolean }): Promise<void> {
+  async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
     try {
       const [modelIds, currentConfig] = await Promise.all([
-        getAvailableModelIds(),
+        getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
         getCurrentModelConfig(),
       ])
 
@@ -1510,7 +1521,9 @@ export function useDesktopState() {
 
     rateLimitRefreshPromise = (async () => {
       try {
-        accountRateLimitSnapshots.value = normalizeRateLimitSnapshotsPayload(await getAccountRateLimits())
+        const snapshot = await getAccountRateLimits()
+        setCodexRateLimit(snapshot)
+        accountRateLimitSnapshots.value = snapshot ? [snapshot] : []
       } catch {
         // Keep the last known rate-limit state if the endpoint is temporarily unavailable.
       } finally {
@@ -3421,12 +3434,15 @@ export function useDesktopState() {
     }, EVENT_SYNC_DEBOUNCE_MS)
   }
 
-  async function hydrateWorkspaceRootsStateIfNeeded(groups: UiProjectGroup[]): Promise<void> {
+  async function hydrateWorkspaceRootsStateIfNeeded(
+    groups: UiProjectGroup[],
+    rootsState: WorkspaceRootsState | null,
+  ): Promise<void> {
     if (hasHydratedWorkspaceRootsState) return
     hasHydratedWorkspaceRootsState = true
 
     try {
-      const rootsState = await getWorkspaceRootsState()
+      if (!rootsState) return
       const hydratedOrder: string[] = []
       for (const rootPath of rootsState.order) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
@@ -3473,6 +3489,14 @@ export function useDesktopState() {
     }
   }
 
+  async function loadWorkspaceRootsStateForThreadList(): Promise<WorkspaceRootsState | null> {
+    try {
+      return await getWorkspaceRootsState()
+    } catch {
+      return null
+    }
+  }
+
   async function requestThreadTitleGeneration(threadId: string, prompt: string, cwd: string | null): Promise<void> {
     if (threadTitleById.value[threadId]) return
     const trimmed = prompt.trim()
@@ -3489,66 +3513,149 @@ export function useDesktopState() {
     }
   }
 
-  async function filterGroupsByWorkspaceRoots(groups: UiProjectGroup[]): Promise<UiProjectGroup[]> {
+  function filterGroupsByWorkspaceRoots(
+    groups: UiProjectGroup[],
+    rootsState: WorkspaceRootsState | null,
+  ): UiProjectGroup[] {
+    if (!rootsState || rootsState.order.length === 0) return groups
+    const allowedProjectNames = new Set(
+      rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
+    )
+    return groups.filter((group) => allowedProjectNames.has(group.projectName))
+  }
+
+  function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
+    const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
+
+    const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
+    if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
+      projectOrder.value = nextProjectOrder
+      saveProjectOrder(projectOrder.value)
+    }
+
+    const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
+    markServerListedThreads(new Set(flattenThreads(orderedGroups).map((thread) => thread.id)))
+    const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
+      sourceGroups.value,
+      orderedGroups,
+      inProgressById.value,
+    )
+    sourceGroups.value = mergeThreadGroups(sourceGroups.value, mergedWithInProgress)
+    inProgressById.value = pruneThreadStateMap(
+      inProgressById.value,
+      new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
+    )
+    applyThreadFlags()
+  }
+
+  function mergeThreadGroupPages(previous: UiProjectGroup[], incoming: UiProjectGroup[]): UiProjectGroup[] {
+    if (previous.length === 0) return incoming
+    if (incoming.length === 0) return previous
+
+    const threadById = new Map<string, UiThread>()
+    for (const thread of flattenThreads(previous)) {
+      threadById.set(thread.id, thread)
+    }
+    for (const thread of flattenThreads(incoming)) {
+      threadById.set(thread.id, thread)
+    }
+    const groupsByProject = new Map<string, UiThread[]>()
+    for (const thread of threadById.values()) {
+      const existing = groupsByProject.get(thread.projectName)
+      if (existing) existing.push(thread)
+      else groupsByProject.set(thread.projectName, [thread])
+    }
+
+    return Array.from(groupsByProject.entries())
+      .map(([projectName, threads]) => ({
+        projectName,
+        threads: threads.sort(
+          (first, second) => new Date(second.updatedAtIso).getTime() - new Date(first.updatedAtIso).getTime(),
+        ),
+      }))
+      .sort((first, second) => {
+        const firstUpdated = new Date(first.threads[0]?.updatedAtIso ?? 0).getTime()
+        const secondUpdated = new Date(second.threads[0]?.updatedAtIso ?? 0).getTime()
+        return secondUpdated - firstUpdated
+      })
+  }
+
+  async function loadRemainingThreadPages(rootsState: WorkspaceRootsState | null): Promise<void> {
+    if (isLoadingRemainingThreadPages || !threadListNextCursor) return
+    isLoadingRemainingThreadPages = true
+
     try {
-      const rootsState = await getWorkspaceRootsState()
-      if (rootsState.order.length === 0) return groups
-      const allowedProjectNames = new Set(
-        rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-      )
-      return groups.filter((group) => allowedProjectNames.has(group.projectName))
+      const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
+      threadListNextCursor = page.nextCursor
+      hasLoadedAllThreadPages = page.nextCursor === null
+      loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
+      applyThreadGroups(loadedThreadListGroups, rootsState)
     } catch {
-      return groups
+      // Keep the first page usable; a later refresh can retry remaining pages.
+    } finally {
+      isLoadingRemainingThreadPages = false
     }
   }
 
   async function loadThreads() {
+    if (loadThreadsPromise) {
+      await loadThreadsPromise
+      return
+    }
+
+    loadThreadsPromise = (async () => {
     if (!hasLoadedThreads.value) {
       isLoadingThreads.value = true
     }
 
     try {
-      const [groups] = await Promise.all([getThreadGroups(), loadThreadTitleCacheIfNeeded()])
-      await hydrateWorkspaceRootsStateIfNeeded(groups)
+      const [page, rootsState] = await Promise.all([
+        getThreadGroupsPage(),
+        loadWorkspaceRootsStateForThreadList(),
+        loadThreadTitleCacheIfNeeded(),
+      ])
+      const groups = page.groups
+      loadedThreadListGroups = hasLoadedThreads.value
+        ? mergeThreadGroupPages(loadedThreadListGroups, groups)
+        : groups
+      threadListNextCursor = hasLoadedThreads.value && !hasLoadedAllThreadPages
+        ? threadListNextCursor
+        : page.nextCursor
+      hasLoadedAllThreadPages = page.nextCursor === null
+      await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
-      const visibleGroups = await filterGroupsByWorkspaceRoots(groups)
-
-      const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
-      if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
-        projectOrder.value = nextProjectOrder
-        saveProjectOrder(projectOrder.value)
-      }
-
-      const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
-      markServerListedThreads(new Set(flattenThreads(orderedGroups).map((thread) => thread.id)))
-      const mergedWithInProgress = mergeIncomingWithLocalInProgressThreads(
-        sourceGroups.value,
-        orderedGroups,
-        inProgressById.value,
-      )
-      sourceGroups.value = mergeThreadGroups(sourceGroups.value, mergedWithInProgress)
-      inProgressById.value = pruneThreadStateMap(
-        inProgressById.value,
-        new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
-      )
-      applyThreadFlags()
+      applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
+      if (!hasLoadedAllThreadPages) {
+        void loadRemainingThreadPages(rootsState)
+      }
 
       const flatThreads = flattenThreads(projectGroups.value)
       pruneThreadScopedState(flatThreads)
 
       const currentExists = flatThreads.some((thread) => thread.id === selectedThreadId.value)
 
-      if (!currentExists) {
+      if (!currentExists && !selectedThreadId.value) {
         setSelectedThreadId(flatThreads[0]?.id ?? '')
       }
     } finally {
       isLoadingThreads.value = false
     }
+    })().finally(() => {
+      loadThreadsPromise = null
+    })
+
+    await loadThreadsPromise
   }
 
   async function loadMessages(threadId: string, options: { silent?: boolean } = {}) {
     if (!threadId) {
+      return
+    }
+
+    const existingLoad = loadMessagePromiseByThreadId.get(threadId)
+    if (existingLoad) {
+      await existingLoad
       return
     }
 
@@ -3558,12 +3665,30 @@ export function useDesktopState() {
       isLoadingMessages.value = true
     }
 
-    try {
-      const needsResume = resumedThreadById.value[threadId] !== true
-      const resumePromise = needsResume ? resumeThread(threadId) : null
-      const detailPromise = getThreadDetail(threadId)
+    const loadPromise = (async () => {
+      try {
+      const version = currentThreadVersion(threadId)
+      const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
+      const loadedRecently =
+        Date.now() - (lastMessageLoadAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
+      const canReuseLoadedMessages =
+        alreadyLoaded &&
+        (
+          loadedRecently ||
+          (
+            (version.length === 0 || loadedVersion === version) &&
+            inProgressById.value[threadId] !== true
+          )
+        )
 
-      const [resumedThread, detail] = await Promise.all([resumePromise, detailPromise])
+      if (canReuseLoadedMessages) {
+        markThreadAsRead(threadId)
+        return
+      }
+
+      const needsResume = resumedThreadById.value[threadId] !== true
+      const resumedThread = needsResume ? await resumeThread(threadId) : null
+      const detail = resumedThread ?? await getThreadDetail(threadId)
 
       if (resumedThread) {
         setThreadModelId(threadId, resumedThread.model)
@@ -3597,8 +3722,8 @@ export function useDesktopState() {
         ...loadedMessagesByThreadId.value,
         [threadId]: true,
       }
+      lastMessageLoadAtByThreadId.set(threadId, Date.now())
 
-      const version = currentThreadVersion(threadId)
       if (version) {
         loadedVersionByThreadId.value = {
           ...loadedVersionByThreadId.value,
@@ -3618,11 +3743,17 @@ export function useDesktopState() {
         clearCompletedTurnLiveState(threadId)
       }
       markThreadAsRead(threadId)
-    } finally {
+      } finally {
       if (shouldShowLoading) {
         isLoadingMessages.value = false
       }
-    }
+      }
+    })().finally(() => {
+      loadMessagePromiseByThreadId.delete(threadId)
+    })
+
+    loadMessagePromiseByThreadId.set(threadId, loadPromise)
+    await loadPromise
   }
 
   async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
@@ -3632,20 +3763,27 @@ export function useDesktopState() {
   }
 
   async function refreshSkills(): Promise<void> {
-    try {
-      const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
-      installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
-    } catch {
-      // keep previous skills on failure
+    if (refreshSkillsPromise) {
+      await refreshSkillsPromise
+      return
     }
+
+    refreshSkillsPromise = (async () => {
+      try {
+        const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
+        installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
+      } catch {
+        // keep previous skills on failure
+      } finally {
+        refreshSkillsPromise = null
+      }
+    })()
+
+    await refreshSkillsPromise
   }
 
   async function refreshCodexRateLimits(): Promise<void> {
-    try {
-      setCodexRateLimit(await getAccountRateLimits())
-    } catch {
-      // Keep the last known quota snapshot on transient failures.
-    }
+    await refreshRateLimits()
   }
 
   async function refreshAll(
@@ -3658,7 +3796,10 @@ export function useDesktopState() {
     try {
       await loadThreads()
       const ancillaryRefresh = Promise.allSettled([
-        refreshModelPreferences({ providerChanged: options.providerChanged }),
+        refreshModelPreferences({
+          providerChanged: options.providerChanged,
+          includeProviderModels: options.providerChanged === true || awaitAncillaryRefreshes,
+        }),
         refreshRateLimits(),
         refreshCollaborationModes(),
         refreshSkills(),
@@ -4511,7 +4652,13 @@ export function useDesktopState() {
       const loadedVersion = loadedVersionByThreadId.value[activeThreadId] ?? ''
       const hasVersionChange = currentVersion.length > 0 && currentVersion !== loadedVersion
 
-      if (isActiveDirty || isInProgress || hasVersionChange || shouldRefreshThreads) {
+      const shouldRefreshActiveThread =
+        hasVersionChange ||
+        (isInProgress && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
+        (isActiveDirty && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
+        (shouldRefreshThreads && loadedMessagesByThreadId.value[activeThreadId] !== true)
+
+      if (shouldRefreshActiveThread) {
         await loadMessages(activeThreadId, { silent: true })
       }
     } catch {
@@ -4534,8 +4681,11 @@ export function useDesktopState() {
 
   async function recoverBridgeState(): Promise<void> {
     await loadPendingServerRequestsFromBridge()
-    pendingThreadsRefresh = true
-    if (selectedThreadId.value) {
+    pendingThreadsRefresh = !hasLoadedThreads.value
+    if (
+      selectedThreadId.value &&
+      loadedMessagesByThreadId.value[selectedThreadId.value] !== true
+    ) {
       pendingThreadMessageRefresh.add(selectedThreadId.value)
     }
     await syncFromNotifications()

@@ -41,7 +41,9 @@
     "build:cli": "tsup",
     "build": "pnpm run build:frontend && pnpm run build:cli",
     "preview": "vite preview",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "profile:browser": "node scripts/profile-browser-runtime.cjs",
+    "profile:thread": "PROFILE_ROUTE='#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c' node scripts/profile-browser-runtime.cjs"
   },
   "dependencies": {
     "commander": "^13.1.0",
