@@ -619,3 +619,20 @@ After each feature implementation session that uses this skill:
   - `<instructions>`
 - Local automation storage uses `$CODEX_HOME/automations/<id>/automation.toml`; heartbeat records include `kind = "heartbeat"` and `target_thread_id`.
 
+## Findings: Integrated Terminal (2026-04-22)
+
+- Codex.app `26.417.41555` ships `node-pty@1.1.0` in `/tmp/codex-app-extracted/package.json`.
+- Renderer bundle terminal UI strings:
+  - `threadPage.toggleTerminal` -> `Toggle terminal`
+  - `terminal.bottomPanel.new` -> `New terminal`
+  - `terminal.bottomPanel.close` -> `Close`
+  - `codex.command.toggleTerminal` -> `Toggle terminal`
+- Shortcut mapping in packaged build includes `toggleTerminal: CmdOrCtrl+J`.
+- Main process terminal manager in `/tmp/codex-app-extracted/.vite/build/main-CUDSf52Z.js`:
+  - creates local terminal sessions with `node-pty.spawn`
+  - maps sessions by window/conversation id
+  - keeps a rolling terminal buffer capped at `16 * 1024` bytes
+  - uses `TERM=xterm-256color`
+  - exposes a conversation snapshot shape `{ cwd, shell, buffer, truncated }`
+  - emits renderer messages including `terminal-data`, `terminal-init-log`, `terminal-attached`, `terminal-exit`, and `terminal-error`
+- Web parity implementation should use `/codex-api/ws` and HTTP endpoints instead of Electron IPC, but preserve the same event names and snapshot shape where practical.
