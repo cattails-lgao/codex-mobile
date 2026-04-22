@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
-import { spawn as spawnPty, type IPty } from 'node-pty'
+import { spawn as spawnPty, type IPty, type IPtyForkOptions } from 'node-pty'
 
 const TERMINAL_BUFFER_LIMIT = 16 * 1024
 const DEFAULT_COLS = 80
@@ -30,9 +30,27 @@ type TerminalSession = {
   threadId: string
   cwd: string
   shell: string
-  pty: IPty
+  pty: TerminalPty
   buffer: string
   truncated: boolean
+}
+
+export type TerminalPty = Pick<IPty, 'write' | 'resize' | 'kill' | 'onData' | 'onExit'>
+
+type SpawnTerminal = (
+  file: string,
+  args: string[],
+  opt: IPtyForkOptions,
+) => TerminalPty
+
+export type TerminalManagerOptions = {
+  spawn?: SpawnTerminal
+  exists?: (path: string) => boolean
+  homeDir?: () => string
+  cwd?: () => string
+  platform?: NodeJS.Platform
+  shell?: string
+  ensureSpawnHelperExecutable?: () => void
 }
 
 export type TerminalAttachParams = {
@@ -48,6 +66,23 @@ export class ThreadTerminalManager {
   private readonly sessions = new Map<string, TerminalSession>()
   private readonly activeSessionIdByThreadId = new Map<string, string>()
   private readonly listeners = new Set<(notification: TerminalNotification) => void>()
+  private readonly spawn: SpawnTerminal
+  private readonly exists: (path: string) => boolean
+  private readonly homeDir: () => string
+  private readonly cwd: () => string
+  private readonly platform: NodeJS.Platform
+  private readonly shell: string | null
+  private readonly ensureSpawnHelperExecutable: () => void
+
+  constructor(options: TerminalManagerOptions = {}) {
+    this.spawn = options.spawn ?? spawnPty
+    this.exists = options.exists ?? existsSync
+    this.homeDir = options.homeDir ?? homedir
+    this.cwd = options.cwd ?? process.cwd
+    this.platform = options.platform ?? process.platform
+    this.shell = options.shell ?? null
+    this.ensureSpawnHelperExecutable = options.ensureSpawnHelperExecutable ?? ensureNodePtySpawnHelperExecutable
+  }
 
   subscribe(listener: (notification: TerminalNotification) => void): () => void {
     this.listeners.add(listener)
@@ -163,8 +198,8 @@ export class ThreadTerminalManager {
     delete env.TERMINFO
     delete env.TERMINFO_DIRS
 
-    ensureNodePtySpawnHelperExecutable()
-    const pty = spawnPty(shell, [], {
+    this.ensureSpawnHelperExecutable()
+    const pty = this.spawn(shell, [], {
       name: TERMINAL_NAME,
       cols: normalizeDimension(params.cols, DEFAULT_COLS),
       rows: normalizeDimension(params.rows, DEFAULT_ROWS),
@@ -264,7 +299,8 @@ export class ThreadTerminalManager {
   }
 
   private resolveShell(): string {
-    if (process.platform === 'win32') {
+    if (this.shell) return this.shell
+    if (this.platform === 'win32') {
       return process.env.COMSPEC || 'cmd.exe'
     }
     return process.env.SHELL || '/bin/zsh'
@@ -272,14 +308,14 @@ export class ThreadTerminalManager {
 
   private resolveCwd(value: string): string {
     const cwd = value.trim()
-    if (cwd && existsSync(cwd)) {
+    if (cwd && this.exists(cwd)) {
       return cwd
     }
-    const home = homedir()
-    if (home && existsSync(home)) {
+    const home = this.homeDir()
+    if (home && this.exists(home)) {
       return home
     }
-    return process.cwd()
+    return this.cwd()
   }
 
   private toSnapshot(session: TerminalSession): TerminalSessionSnapshot {
