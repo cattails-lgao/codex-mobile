@@ -53,6 +53,14 @@
           >
             A-Z
           </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': pluginSortMode === 'date' }"
+            type="button"
+            @click="pluginSortMode = 'date'"
+          >
+            Date
+          </button>
         </div>
       </div>
       <div v-if="!supportsPlugins" class="directory-empty">
@@ -125,6 +133,14 @@
           >
             A-Z
           </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': appSortMode === 'date' }"
+            type="button"
+            @click="appSortMode = 'date'"
+          >
+            Date
+          </button>
         </div>
       </div>
       <div v-if="!supportsApps" class="directory-empty">
@@ -189,6 +205,14 @@
             @click="mcpSortMode = 'name'"
           >
             A-Z
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': mcpSortMode === 'date' }"
+            type="button"
+            @click="mcpSortMode = 'date'"
+          >
+            Date
           </button>
         </div>
         <button v-if="supportsMcpReload" class="directory-action" type="button" :disabled="isReloadingMcps" @click="reloadMcps">
@@ -348,33 +372,33 @@ import {
 import SkillsHub from './SkillsHub.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'mcps' | 'skills'
-type DirectorySortMode = 'popular' | 'name'
+type DirectorySortMode = 'popular' | 'name' | 'date'
 
 const POPULAR_LIMIT = 100
 const POPULAR_APP_NAME_BONUSES: Array<[RegExp, number]> = [
   [/^github$/i, 11_000],
   [/^gmail$/i, 10_700],
   [/^google drive$/i, 10_400],
-  [/^slack$/i, 10_100],
+  [/^google calendar$/i, 10_250],
+  [/^outlook( email| calendar)?$/i, 10_100],
+  [/^slack$/i, 9_950],
   [/^asana$/i, 9_800],
   [/^basecamp$/i, 9_500],
   [/^figma$/i, 9_200],
-  [/^google calendar$/i, 8_900],
-  [/^notion$/i, 8_600],
-  [/^linear$/i, 8_300],
-  [/^gitlab( issues)?$/i, 8_000],
-  [/^jira$/i, 7_700],
-  [/^trello$/i, 7_400],
-  [/^clickup$/i, 7_100],
-  [/^dropbox$/i, 6_800],
-  [/^box$/i, 6_500],
-  [/^outlook( email| calendar)?$/i, 6_200],
-  [/^canva$/i, 5_900],
-  [/^netlify$/i, 5_600],
-  [/^vercel$/i, 5_300],
-  [/^hubspot$/i, 5_000],
-  [/^salesforce$/i, 4_700],
-  [/^zapier$/i, 4_400],
+  [/^notion$/i, 8_900],
+  [/^linear$/i, 8_600],
+  [/^gitlab( issues)?$/i, 8_300],
+  [/^jira$/i, 8_000],
+  [/^trello$/i, 7_700],
+  [/^clickup$/i, 7_400],
+  [/^dropbox$/i, 7_100],
+  [/^box$/i, 6_800],
+  [/^canva$/i, 6_500],
+  [/^netlify$/i, 6_200],
+  [/^vercel$/i, 5_900],
+  [/^hubspot$/i, 5_600],
+  [/^salesforce$/i, 5_300],
+  [/^zapier$/i, 5_000],
 ]
 const POPULAR_APP_KEYWORD_BONUSES: Array<[RegExp, number]> = [
   [/(calendar|email|drive|docs|sheets|tasks|project|issue|repository|design|deploy|search)/i, 35],
@@ -582,21 +606,21 @@ function mcpPopularScore(server: DirectoryMcpServerStatus): number {
 }
 
 function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
-  return [...rows].sort((a, b) => sortMode === 'name'
-    ? a.displayName.localeCompare(b.displayName)
-    : (pluginPopularScore(b) - pluginPopularScore(a)) || a.displayName.localeCompare(b.displayName))
+  if (sortMode === 'name') return [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName))
+  if (sortMode === 'date') return [...rows]
+  return [...rows].sort((a, b) => (pluginPopularScore(b) - pluginPopularScore(a)) || a.displayName.localeCompare(b.displayName))
 }
 
 function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): DirectoryAppInfo[] {
-  return [...rows].sort((a, b) => sortMode === 'name'
-    ? a.name.localeCompare(b.name)
-    : (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
+  if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
+  if (sortMode === 'date') return [...rows].sort((a, b) => a.catalogRank - b.catalogRank)
+  return [...rows].sort((a, b) => (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
-  return [...rows].sort((a, b) => sortMode === 'name'
-    ? a.name.localeCompare(b.name)
-    : (mcpPopularScore(b) - mcpPopularScore(a)) || a.name.localeCompare(b.name))
+  if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
+  if (sortMode === 'date') return [...rows]
+  return [...rows].sort((a, b) => (mcpPopularScore(b) - mcpPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function showToast(text: string, type: 'success' | 'error' = 'success'): void {
