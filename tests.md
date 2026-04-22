@@ -3129,19 +3129,22 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 2. Verify the page title is `Skills & Apps` and the tab row contains `Plugins`, `Apps`, `MCPs`, and `Skills`
 3. On `Plugins`, verify plugin cards load, the default sort is `Popular`, and `A-Z`, `Date`, and search controls work
 4. Open a plugin card when one is available and verify description, capabilities, included apps/skills/MCPs, and install/uninstall or enable/disable actions are visible
-5. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
-6. On `Apps`, verify the default sort control is `Popular`, app icons render, and the `Manage` button opens the app management URL
-7. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
-8. Search Apps and verify matching results are not capped to the Popular top 100 list
-9. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-10. Verify MCPs also support `Popular`, `A-Z`, `Date`, and search
-11. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
+5. For an installed plugin with bundled MCP servers, such as Cloudflare, verify each MCP row shows auth status (`Logged in`, `Bearer token`, `Login required`, `Auth unsupported`, or `Status unknown`)
+6. If a bundled MCP server shows `Login required`, click `Authenticate` and verify the browser opens the returned MCP OAuth authorization URL
+7. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
+8. On `Apps`, verify the default sort control is `Popular`, app icons render, and the `Manage` button opens the app management URL
+9. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
+10. Search Apps and verify matching results are not capped to the Popular top 100 list
+11. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+12. Verify MCPs also support `Popular`, `A-Z`, `Date`, and search
+13. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
 
 #### Expected Results
 - The directory tabs render without a full-page error
 - Plugin/app/MCP API failures are isolated to their tab
 - Existing Skills Hub behavior remains available under the `Skills` tab
 - App and plugin enable/disable actions update their local card state after a successful config write
+- Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Plugins, Apps, and MCPs default to local popularity-style ordering because app-server does not expose numeric popularity fields
 - `Date` uses the app-server/catalog order as the available freshness proxy because app/plugin/MCP APIs do not expose created or published timestamps
 - Popular views show only the top 100 when no search is active; search results can show all matches

@@ -151,6 +151,10 @@ export type DirectoryMcpServerStatus = {
   resourceTemplates: Array<{ name: string; title: string; uriTemplate: string; description: string }>
 }
 
+export type DirectoryMcpLoginResult = {
+  authorizationUrl: string
+}
+
 type ProviderModelsResponse = {
   data?: unknown
 }
@@ -1901,6 +1905,13 @@ export async function listDirectoryMcpServers(): Promise<DirectoryMcpServerStatu
 
 export async function reloadDirectoryMcpServers(): Promise<void> {
   await callRpc('config/mcpServer/reload', {})
+}
+
+export async function startDirectoryMcpLogin(name: string): Promise<DirectoryMcpLoginResult> {
+  const payload = await callRpc<{ authorizationUrl?: string; authorization_url?: string }>('mcpServer/oauth/login', { name })
+  return {
+    authorizationUrl: readString(payload.authorizationUrl ?? payload.authorization_url) ?? '',
+  }
 }
 
 export async function getAccountRateLimitsResponse(): Promise<GetAccountRateLimitsResponse> {

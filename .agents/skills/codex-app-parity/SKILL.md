@@ -659,3 +659,15 @@ After each feature implementation session that uses this skill:
 - Plugin list responses are grouped by marketplace; each plugin summary carries `id`, `name`, `installed`, `enabled`, `installPolicy`, `authPolicy`, `source`, and an optional `interface`.
 - Plugin detail responses include `summary`, `apps`, `skills`, and `mcpServers`. Install responses include `authPolicy` and `appsNeedingAuth`.
 - For web parity, feature-detect these methods through `/codex-api/meta/methods` and degrade gracefully when older Codex CLI versions do not expose them.
+
+## Findings: Plugin MCP Authentication (2026-04-23)
+
+- Codex.app MCP settings renders an `Authenticate` action when an MCP server `authStatus` is `notLoggedIn`.
+- The renderer starts login through app-server method `mcpServer/oauth/login` with `{ name }`; the response is `{ authorizationUrl }`.
+- Codex.app opens the returned URL in the browser via its `open-in-browser` bridge.
+- `mcpServer/oauth/login/completed` notifications carry `{ name, success, error? }`; after success, invalidate/refetch MCP status.
+- For plugin detail parity, bundled `mcpServers` from `plugin/read` should be cross-referenced with `mcpServerStatus/list` and display auth state:
+  - `oAuth` -> logged in
+  - `bearerToken` -> bearer token
+  - `notLoggedIn` -> login required + authenticate action
+  - `unsupported` -> auth unsupported

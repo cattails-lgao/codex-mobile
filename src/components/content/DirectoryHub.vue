@@ -297,7 +297,22 @@
                 </div>
                 <div v-if="selectedPluginDetail.mcpServers.length > 0" class="directory-detail-block">
                   <h4 class="directory-detail-heading">MCP servers</h4>
-                  <p class="directory-mini-list">{{ selectedPluginDetail.mcpServers.join(', ') }}</p>
+                  <div v-for="serverName in selectedPluginDetail.mcpServers" :key="serverName" class="directory-include-row">
+                    <span>
+                      {{ serverName }}
+                      <span class="directory-auth-status" :class="mcpAuthStatusClass(serverName)">
+                        {{ formatMcpAuthStatus(serverName) }}
+                      </span>
+                    </span>
+                    <button
+                      v-if="shouldShowMcpLogin(serverName)"
+                      type="button"
+                      :disabled="mcpLoginServerName === serverName"
+                      @click="loginMcpServer(serverName)"
+                    >
+                      {{ mcpLoginServerName === serverName ? 'Opening...' : 'Authenticate' }}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -362,6 +377,7 @@ import {
   reloadDirectoryMcpServers,
   setDirectoryAppEnabled,
   setDirectoryPluginEnabled,
+  startDirectoryMcpLogin,
   uninstallDirectoryPlugin,
   type DirectoryAppInfo,
   type DirectoryMcpServerStatus,
@@ -463,6 +479,7 @@ const pluginDetailError = ref('')
 const isPluginActionInFlight = ref(false)
 const appActionId = ref('')
 const installAuthApps = ref<DirectoryPluginAppSummary[]>([])
+const mcpLoginServerName = ref('')
 const expandedMcpNames = ref<Set<string>>(new Set())
 const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -475,6 +492,7 @@ const supportsPlugins = computed(() =>
 const supportsApps = computed(() => !methodsLoaded.value || methodSet.value.has('app/list'))
 const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has('mcpServerStatus/list'))
 const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
+const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/login'))
 const isActiveLoading = computed(() =>
   activeTab.value === 'plugins' ? isLoadingPlugins.value
     : activeTab.value === 'apps' ? isLoadingApps.value
@@ -495,6 +513,7 @@ const selectedPluginScreenshots = computed(() => {
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
 const visibleMcpServers = computed(() => limitPopularRows(sortMcpServers(filterMcpServers(mcpServers.value, mcpSearchQuery.value), mcpSortMode.value), mcpSortMode.value, mcpSearchQuery.value))
+const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
 
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
@@ -525,6 +544,30 @@ function formatDistributionChannel(value: string): string {
 
 function appMetaLabel(app: DirectoryAppInfo): string {
   return app.developer || formatDistributionChannel(app.distributionChannel) || 'App'
+}
+
+function getMcpAuthStatus(serverName: string): string {
+  return mcpStatusByName.value.get(serverName)?.authStatus ?? 'unknown'
+}
+
+function formatMcpAuthStatus(serverName: string): string {
+  const status = getMcpAuthStatus(serverName)
+  if (status === 'oAuth') return 'Logged in'
+  if (status === 'bearerToken') return 'Bearer token'
+  if (status === 'notLoggedIn') return 'Login required'
+  if (status === 'unsupported') return 'Auth unsupported'
+  return 'Status unknown'
+}
+
+function mcpAuthStatusClass(serverName: string): string {
+  const status = getMcpAuthStatus(serverName)
+  if (status === 'oAuth' || status === 'bearerToken') return 'is-ok'
+  if (status === 'notLoggedIn') return 'is-warning'
+  return 'is-muted'
+}
+
+function shouldShowMcpLogin(serverName: string): boolean {
+  return supportsMcpLogin.value && getMcpAuthStatus(serverName) === 'notLoggedIn'
 }
 
 function limitPopularRows<T>(rows: T[], sortMode: DirectorySortMode, query: string): T[] {
@@ -714,6 +757,15 @@ async function loadMcps(): Promise<void> {
   }
 }
 
+async function refreshMcpStatusesForPluginDetail(): Promise<void> {
+  if (!supportsMcps.value || !selectedPluginDetail.value?.mcpServers.length) return
+  try {
+    mcpServers.value = await listDirectoryMcpServers()
+  } catch {
+    // Keep plugin detail usable even if status lookup is temporarily unavailable.
+  }
+}
+
 function refreshActiveTab(): void {
   if (activeTab.value === 'plugins') void loadPlugins()
   if (activeTab.value === 'apps') void loadApps()
@@ -730,10 +782,38 @@ async function openPluginDetail(plugin: DirectoryPluginSummary): Promise<void> {
   try {
     selectedPluginDetail.value = await readDirectoryPlugin(plugin)
     selectedPlugin.value = selectedPluginDetail.value.summary
+    await refreshMcpStatusesForPluginDetail()
   } catch (error) {
     pluginDetailError.value = error instanceof Error ? error.message : 'Failed to load plugin'
   } finally {
     isLoadingPluginDetail.value = false
+  }
+}
+
+async function loginMcpServer(serverName: string): Promise<boolean> {
+  if (!supportsMcpLogin.value) return false
+  mcpLoginServerName.value = serverName
+  try {
+    const result = await startDirectoryMcpLogin(serverName)
+    if (!result.authorizationUrl) {
+      showToast(`No login URL returned for ${serverName}`, 'error')
+      return false
+    }
+    openExternalUrl(result.authorizationUrl)
+    return true
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : `Failed to start login for ${serverName}`, 'error')
+    return false
+  } finally {
+    mcpLoginServerName.value = ''
+  }
+}
+
+async function openFirstMcpLoginIfNeeded(detail: DirectoryPluginDetail): Promise<void> {
+  await refreshMcpStatusesForPluginDetail()
+  const serverName = detail.mcpServers.find((name) => shouldShowMcpLogin(name))
+  if (serverName) {
+    await loginMcpServer(serverName)
   }
 }
 
@@ -750,7 +830,12 @@ async function installSelectedPlugin(): Promise<void> {
     showToast(`${selectedPlugin.value.displayName} plugin installed`)
     await loadPlugins()
     const updated = plugins.value.find((plugin) => plugin.id === selectedPlugin.value?.id)
-    if (updated) await openPluginDetail(updated)
+    if (updated) {
+      await openPluginDetail(updated)
+      if (selectedPluginDetail.value) {
+        await openFirstMcpLoginIfNeeded(selectedPluginDetail.value)
+      }
+    }
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Failed to install plugin', 'error')
   } finally {
@@ -1069,6 +1154,22 @@ button.directory-card {
   @apply mt-2 flex items-center justify-between gap-3 text-xs text-zinc-600;
 }
 
+.directory-auth-status {
+  @apply ml-2 inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none;
+}
+
+.directory-auth-status.is-ok {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+
+.directory-auth-status.is-warning {
+  @apply border-amber-200 bg-amber-50 text-amber-700;
+}
+
+.directory-auth-status.is-muted {
+  @apply border-zinc-200 bg-white text-zinc-500;
+}
+
 .directory-include-row button {
   @apply border-0 bg-transparent p-0 text-xs font-medium text-blue-600 hover:underline;
 }
@@ -1124,5 +1225,9 @@ button.directory-card {
 
 :global(:root.dark) .directory-sort-group {
   @apply border-zinc-700 bg-zinc-950;
+}
+
+:global(:root.dark) .directory-auth-status.is-muted {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-400;
 }
 </style>
