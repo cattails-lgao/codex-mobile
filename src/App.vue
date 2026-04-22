@@ -452,13 +452,13 @@
           </template>
           <template #actions>
             <button
-              v-if="route.name === 'thread' && selectedThreadId"
+              v-if="canShowTerminalToggle"
               class="content-header-terminal-toggle"
               type="button"
-              :aria-pressed="selectedThreadTerminalOpen"
+              :aria-pressed="isComposerTerminalOpen"
               :title="`Toggle terminal (${terminalShortcutLabel})`"
               aria-label="Toggle terminal"
-              @click="toggleSelectedThreadTerminal"
+              @click="toggleComposerTerminal"
             >
               <IconTablerTerminal class="content-header-terminal-toggle-icon" />
               <span class="content-header-terminal-shortcut">{{ terminalShortcutLabel }}</span>
@@ -697,6 +697,13 @@
               </div>
 
               <div class="composer-with-queue">
+                <ThreadTerminalPanel
+                  v-if="homeTerminalOpen && composerCwd"
+                  class="content-thread-terminal-panel"
+                  :thread-id="composerThreadContextId"
+                  :cwd="composerCwd"
+                  @hide="homeTerminalOpen = false"
+                />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :collaboration-modes="availableCollaborationModes"
@@ -1063,6 +1070,7 @@ const { isMobile } = useMobile()
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
+const homeTerminalOpen = ref(false)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -1223,6 +1231,13 @@ const composerCwd = computed(() => {
   if (isHomeRoute.value) return newThreadCwd.value.trim()
   return selectedThread.value?.cwd?.trim() ?? ''
 })
+const canShowTerminalToggle = computed(() => (
+  (isHomeRoute.value && composerCwd.value.length > 0) ||
+  (route.name === 'thread' && selectedThreadId.value.length > 0)
+))
+const isComposerTerminalOpen = computed(() => (
+  isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
+))
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
@@ -1999,8 +2014,22 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   }
   if (key === 'j' && route.name === 'thread' && selectedThreadId.value) {
     event.preventDefault()
-    toggleSelectedThreadTerminal()
+    toggleComposerTerminal()
+    return
   }
+  if (key === 'j' && isHomeRoute.value && composerCwd.value) {
+    event.preventDefault()
+    toggleComposerTerminal()
+  }
+}
+
+function toggleComposerTerminal(): void {
+  if (isHomeRoute.value) {
+    if (!composerCwd.value) return
+    homeTerminalOpen.value = !homeTerminalOpen.value
+    return
+  }
+  toggleSelectedThreadTerminal()
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
