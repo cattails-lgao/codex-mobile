@@ -8,6 +8,17 @@
         </button>
       </div>
       <div class="thread-terminal-actions">
+        <select
+          class="thread-terminal-quick-command"
+          aria-label="Run quick command"
+          title="Run quick command"
+          @change="onQuickCommandSelect"
+        >
+          <option value="">Run...</option>
+          <option v-for="command in quickCommands" :key="command.value" :value="command.value">
+            {{ command.label }}
+          </option>
+        </select>
         <button class="thread-terminal-action" type="button" title="New terminal" @click="onNewTerminal">
           New terminal
         </button>
@@ -58,6 +69,13 @@ let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let unsubscribeNotifications: (() => void) | null = null
 let resizeFrame = 0
+
+const quickCommands = [
+  { label: 'npm run dev', value: 'npm run dev' },
+  { label: 'pnpm run dev', value: 'pnpm run dev' },
+  { label: 'pnpm run test:unit', value: 'pnpm run test:unit' },
+  { label: 'pnpm run build', value: 'pnpm run build' },
+]
 
 const terminalStatus = computed(() => {
   if (errorMessage.value) return 'error'
@@ -196,6 +214,23 @@ function onNewTerminal(): void {
   void attachToThread(true)
 }
 
+function onQuickCommandSelect(event: Event): void {
+  const select = event.target instanceof HTMLSelectElement ? event.target : null
+  const command = select?.value.trim() ?? ''
+  if (select) {
+    select.value = ''
+  }
+  if (!command) return
+  if (!sessionId.value) {
+    errorMessage.value = 'Terminal is not connected'
+    return
+  }
+  terminal?.focus()
+  void sendThreadTerminalInput(sessionId.value, `${command}\r`).catch((error: unknown) => {
+    errorMessage.value = error instanceof Error ? error.message : 'Quick command failed'
+  })
+}
+
 function onCloseTerminal(): void {
   const currentSessionId = sessionId.value
   sessionId.value = ''
@@ -280,6 +315,10 @@ function readString(value: unknown): string {
   @apply flex shrink-0 items-center gap-1;
 }
 
+.thread-terminal-quick-command {
+  @apply h-7 max-w-32 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white focus:border-zinc-600;
+}
+
 .thread-terminal-action {
   @apply rounded-md border border-transparent px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white;
 }
@@ -316,6 +355,10 @@ function readString(value: unknown): string {
 
   .thread-terminal-action {
     @apply px-1.5 text-[11px];
+  }
+
+  .thread-terminal-quick-command {
+    @apply max-w-24 px-1 text-[11px];
   }
 
   .thread-terminal-host {

@@ -2893,12 +2893,14 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 6. Confirm the printed path matches the thread/project working directory
 7. Run `echo terminal-ok`
 8. Confirm `terminal-ok` appears in the xterm output
-9. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
-10. Confirm the JSON `session.buffer` contains `terminal-ok`
-11. Refresh the page and reopen the same thread
-12. Toggle the terminal open again
-13. Resize the browser window
-14. Click `Close`
+9. Choose `npm run dev` from the `Run...` quick-command menu
+10. Confirm the command is submitted to the active terminal
+11. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
+12. Confirm the JSON `session.buffer` contains `terminal-ok`
+13. Refresh the page and reopen the same thread
+14. Toggle the terminal open again
+15. Resize the browser window
+16. Click `Close`
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
@@ -2906,6 +2908,7 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - Recent output is restored after hiding/reopening or refreshing the thread
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
+- The quick-command menu sends common project commands such as `npm run dev` into the current PTY
 - `Close` terminates the PTY and hides the drawer
 
 #### Rollback/Cleanup
