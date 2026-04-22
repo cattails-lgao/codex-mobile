@@ -1086,6 +1086,10 @@ export function useDesktopState() {
   let eventSyncTimer: number | null = null
   let rateLimitRefreshTimer: number | null = null
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
+  let loadThreadsPromise: Promise<void> | null = null
+  const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
+  let refreshSkillsPromise: Promise<void> | null = null
+  let codexRateLimitRefreshPromise: Promise<void> | null = null
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -3535,6 +3539,12 @@ export function useDesktopState() {
   }
 
   async function loadThreads() {
+    if (loadThreadsPromise) {
+      await loadThreadsPromise
+      return
+    }
+
+    loadThreadsPromise = (async () => {
     if (!hasLoadedThreads.value) {
       isLoadingThreads.value = true
     }
@@ -3567,10 +3577,21 @@ export function useDesktopState() {
     } finally {
       isLoadingThreads.value = false
     }
+    })().finally(() => {
+      loadThreadsPromise = null
+    })
+
+    await loadThreadsPromise
   }
 
   async function loadMessages(threadId: string, options: { silent?: boolean } = {}) {
     if (!threadId) {
+      return
+    }
+
+    const existingLoad = loadMessagePromiseByThreadId.get(threadId)
+    if (existingLoad) {
+      await existingLoad
       return
     }
 
@@ -3580,7 +3601,8 @@ export function useDesktopState() {
       isLoadingMessages.value = true
     }
 
-    try {
+    const loadPromise = (async () => {
+      try {
       const version = currentThreadVersion(threadId)
       const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
       const canReuseLoadedMessages =
@@ -3650,11 +3672,17 @@ export function useDesktopState() {
         clearCompletedTurnLiveState(threadId)
       }
       markThreadAsRead(threadId)
-    } finally {
+      } finally {
       if (shouldShowLoading) {
         isLoadingMessages.value = false
       }
-    }
+      }
+    })().finally(() => {
+      loadMessagePromiseByThreadId.delete(threadId)
+    })
+
+    loadMessagePromiseByThreadId.set(threadId, loadPromise)
+    await loadPromise
   }
 
   async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
@@ -3664,20 +3692,42 @@ export function useDesktopState() {
   }
 
   async function refreshSkills(): Promise<void> {
-    try {
-      const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
-      installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
-    } catch {
-      // keep previous skills on failure
+    if (refreshSkillsPromise) {
+      await refreshSkillsPromise
+      return
     }
+
+    refreshSkillsPromise = (async () => {
+      try {
+        const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
+        installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
+      } catch {
+        // keep previous skills on failure
+      } finally {
+        refreshSkillsPromise = null
+      }
+    })()
+
+    await refreshSkillsPromise
   }
 
   async function refreshCodexRateLimits(): Promise<void> {
-    try {
-      setCodexRateLimit(await getAccountRateLimits())
-    } catch {
-      // Keep the last known quota snapshot on transient failures.
+    if (codexRateLimitRefreshPromise) {
+      await codexRateLimitRefreshPromise
+      return
     }
+
+    codexRateLimitRefreshPromise = (async () => {
+      try {
+        setCodexRateLimit(await getAccountRateLimits())
+      } catch {
+        // Keep the last known quota snapshot on transient failures.
+      } finally {
+        codexRateLimitRefreshPromise = null
+      }
+    })()
+
+    await codexRateLimitRefreshPromise
   }
 
   async function refreshAll(

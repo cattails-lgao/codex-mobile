@@ -3002,7 +3002,6 @@ async function initialize(): Promise<void> {
     primeSelectedThread(routeThreadId.value)
   }
 
-  startPolling()
   await refreshAll({
     includeSelectedThreadMessages: route.name === 'thread',
   })
@@ -3010,6 +3009,7 @@ async function initialize(): Promise<void> {
   await applyLaunchProjectPathFromUrl()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
+  startPolling()
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
