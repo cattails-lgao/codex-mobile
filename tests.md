@@ -2918,6 +2918,7 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal is scoped to the selected thread working directory
 - The terminal button is also available on new-chat when a working folder is selected
 - New-chat terminal sessions use the selected folder before a thread exists
+- The terminal frontend resolves `@xterm/*` through the local modified xterm checkout (`CODEXUI_XTERM_ROOT`, default `/Users/igor/Git-projects/xter3`)
 - Recent output is restored after hiding/reopening or refreshing the thread
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists

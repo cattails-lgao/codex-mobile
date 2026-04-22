@@ -7,7 +7,8 @@ The integrated terminal feature adds a Codex.app-style xterm panel to local/work
 - [Integrated terminal implementation source](../../raw/features/integrated-terminal.md)
 
 ## Architecture
-- The browser renders the terminal with `@xterm/xterm` and `@xterm/addon-fit` in `ThreadTerminalPanel.vue`.
+- The browser renders the terminal through `@xterm/xterm` and `@xterm/addon-fit` imports in `ThreadTerminalPanel.vue`.
+- Vite aliases those imports to the local modified xterm checkout (`/Users/igor/Git-projects/xter3` by default, override with `CODEXUI_XTERM_ROOT`).
 - The server bridge manages PTYs with `node-pty` in `terminalManager.ts`.
 - Terminal notifications reuse the existing `/codex-api/ws` stream with Codex.app-style event names:
   - `terminal-attached`
