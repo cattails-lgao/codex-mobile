@@ -1309,13 +1309,17 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-export async function getAvailableModelIds(): Promise<string[]> {
+export async function getAvailableModelIds(options: { includeProviderModels?: boolean } = {}): Promise<string[]> {
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
   for (const row of payload.data) {
     const candidate = row.id || row.model
     if (!candidate || ids.includes(candidate)) continue
     ids.push(candidate)
+  }
+
+  if (options.includeProviderModels === false) {
+    return ids
   }
 
   try {
