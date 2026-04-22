@@ -72,6 +72,22 @@ function toLocalImageUrl(path: string): string {
   return `/codex-local-image?path=${encodeURIComponent(path)}`
 }
 
+function toImageGenerationUrl(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('/codex-local-image?')
+  ) {
+    return trimmed
+  }
+  const compact = trimmed.replace(/\s+/gu, '')
+  if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return ''
+  return `data:image/png;base64,${compact}`
+}
+
 function parseUserMessageContent(
   itemId: string,
   content: UserInput[] | undefined,
@@ -365,6 +381,37 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     }
 
     return messages
+  }
+
+  if (item.type === 'imageView') {
+    const path = typeof item.path === 'string' ? item.path.trim() : ''
+    if (!path) return []
+    return [
+      {
+        id: item.id,
+        role: 'assistant',
+        text: '',
+        images: [toLocalImageUrl(path)],
+        messageType: 'imageView',
+      },
+    ]
+  }
+
+  {
+    const rawItem = item as unknown as Record<string, unknown>
+    if (rawItem.type === 'imageGeneration' || rawItem.type === 'image_generation') {
+      const result = typeof rawItem.result === 'string' ? toImageGenerationUrl(rawItem.result) : ''
+      if (!result) return []
+      return [
+        {
+          id: item.id,
+          role: 'assistant',
+          text: '',
+          images: [result],
+          messageType: 'imageView',
+        },
+      ]
+    }
   }
 
   if (item.type === 'reasoning') {

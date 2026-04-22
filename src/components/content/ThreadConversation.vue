@@ -199,11 +199,18 @@
               <ul
                 v-if="message.images && message.images.length > 0"
                 class="message-image-list"
+                :class="{ 'message-generated-image-list': message.messageType === 'imageView' }"
                 :data-role="message.role"
               >
                 <li v-for="imageUrl in message.images" :key="imageUrl" class="message-image-item">
                   <button class="message-image-button" type="button" @click="openImageModal(imageUrl)">
-                    <img class="message-image-preview" :src="imageUrl" alt="Message image preview" loading="lazy" />
+                    <img
+                      class="message-image-preview"
+                      :class="{ 'message-generated-image-preview': message.messageType === 'imageView' }"
+                      :src="imageUrl"
+                      :alt="message.messageType === 'imageView' ? 'Generated image' : 'Message image preview'"
+                      loading="lazy"
+                    />
                   </button>
                 </li>
               </ul>
@@ -4298,6 +4305,10 @@ onBeforeUnmount(() => {
   @apply ml-auto justify-end;
 }
 
+.message-generated-image-list {
+  @apply gap-3;
+}
+
 .message-image-item {
   @apply m-0;
 }
@@ -4308,6 +4319,10 @@ onBeforeUnmount(() => {
 
 .message-image-preview {
   @apply block w-16 h-16 object-cover;
+}
+
+.message-generated-image-preview {
+  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-white;
 }
 
 .message-file-attachments {

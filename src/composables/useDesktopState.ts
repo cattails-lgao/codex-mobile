@@ -2924,6 +2924,57 @@ export function useDesktopState() {
     return null
   }
 
+  function toLocalImageUrl(path: string): string {
+    return `/codex-local-image?path=${encodeURIComponent(path)}`
+  }
+
+  function toImageGenerationUrl(value: string): string {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (
+      trimmed.startsWith('data:') ||
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('/codex-local-image?')
+    ) {
+      return trimmed
+    }
+    const compact = trimmed.replace(/\s+/gu, '')
+    if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return ''
+    return `data:image/png;base64,${compact}`
+  }
+
+  function readCompletedImageView(notification: RpcNotification): UiMessage | null {
+    if (notification.method !== 'item/completed') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item) return null
+    const id = readString(item.id)
+    if (!id) return null
+    if (item.type === 'imageView') {
+      const path = readString(item.path)
+      if (!path) return null
+      return {
+        id,
+        role: 'assistant',
+        text: '',
+        images: [toLocalImageUrl(path)],
+        messageType: 'imageView',
+      }
+    }
+    if (item.type !== 'imageGeneration' && item.type !== 'image_generation') return null
+    const result = readString(item.result)
+    const imageUrl = result ? toImageGenerationUrl(result) : ''
+    if (!imageUrl) return null
+    return {
+      id,
+      role: 'assistant',
+      text: '',
+      images: [imageUrl],
+      messageType: 'imageView',
+    }
+  }
+
   function readCommandExecutionStarted(notification: RpcNotification): UiMessage | null {
     if (notification.method !== 'item/started') return null
     const params = asRecord(notification.params)
@@ -3254,6 +3305,11 @@ export function useDesktopState() {
     const completedAgentMessage = readAgentMessageCompleted(notification)
     if (completedAgentMessage) {
       upsertLiveAgentMessage(notificationThreadId, completedAgentMessage)
+    }
+
+    const completedImageView = readCompletedImageView(notification)
+    if (completedImageView) {
+      upsertLiveAgentMessage(notificationThreadId, completedImageView)
     }
 
     const startedReasoningItemId = readReasoningStartedItemId(notification)
