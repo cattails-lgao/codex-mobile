@@ -3,7 +3,7 @@ import App from './App.vue'
 import router from './router'
 import './style.css'
 
-console.log('Welcome to codexui. npm: https://www.npmjs.com/package/@nervmor/codexui')
+console.log('Welcome to codexui. npm: https://www.npmjs.com/package/codexapp')
 
 createApp(App).use(router).mount('#app')
 

@@ -2956,3 +2956,25 @@ Automated unit coverage for terminal manager edge cases that do not require a br
 
 #### Rollback/Cleanup
 - None
+
+---
+
+### Startup welcome log uses repository package URL
+
+#### Feature/Change Name
+Remove legacy `@nervmor/codexui` package reference from the startup welcome log.
+
+#### Prerequisites/Setup
+1. Run the app from this repository.
+
+#### Steps
+1. Start the app (for example via `pnpm run dev`).
+2. Open the browser devtools console.
+3. Locate the startup welcome message.
+
+#### Expected Results
+- The welcome log points to `https://www.npmjs.com/package/codexapp`.
+- The welcome log does not contain `@nervmor/codexui`.
+
+#### Rollback/Cleanup
+- None
