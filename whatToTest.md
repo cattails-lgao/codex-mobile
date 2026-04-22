@@ -30,9 +30,11 @@
 3. Refresh the browser and reopen the same thread.
 4. Confirm the terminal can reattach and continue accepting input.
 5. Click `New terminal`.
-6. Confirm the active terminal session is replaced.
-7. Click `Close`.
-8. Confirm the PTY exits and the drawer hides.
+6. Confirm a second terminal tab appears and becomes active.
+7. Click the first terminal tab.
+8. Confirm its previous output is restored.
+9. Click `Close`.
+10. Confirm the active PTY exits and the drawer hides only when the last tab is closed.
 
 ### Layout
 1. Resize the desktop browser window.

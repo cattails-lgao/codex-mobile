@@ -103,6 +103,7 @@ export class ThreadTerminalManager {
       : requestedSessionId || this.activeSessionIdByThreadId.get(threadId) || ''
     const existing = existingSessionId ? this.sessions.get(existingSessionId) : null
     if (existing) {
+      this.activeSessionIdByThreadId.set(threadId, existing.id)
       this.resize(existing.id, params.cols, params.rows)
       const nextCwd = this.resolveCwd(params.cwd)
       if (nextCwd !== existing.cwd) {
@@ -112,13 +113,6 @@ export class ThreadTerminalManager {
       this.emitInit(existing)
       this.emitAttached(existing)
       return this.toSnapshot(existing)
-    }
-
-    if (params.newSession) {
-      const previousSessionId = this.activeSessionIdByThreadId.get(threadId)
-      if (previousSessionId) {
-        this.close(previousSessionId)
-      }
     }
 
     const session = this.createSession({

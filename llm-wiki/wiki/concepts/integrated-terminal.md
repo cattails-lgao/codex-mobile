@@ -38,7 +38,7 @@ The integrated terminal feature adds a Codex.app-style xterm panel to local/work
 - `node-pty` `spawn-helper` may need executable permissions restored when pnpm skips native build scripts.
 - Reattach must emit init log before attached state so hidden/reopened terminals restore recent output.
 - Changed cwd on reattach must be shell-quoted before writing `cd <path>`.
-- `New terminal` replaces the active thread PTY in the current web implementation.
+- `New terminal` creates another tab without killing the previous PTY; the snapshot endpoint follows whichever tab is active.
 - Close and PTY exit must clear the active thread snapshot.
 
 ## UI Lessons

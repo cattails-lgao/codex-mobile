@@ -183,21 +183,25 @@ describe('ThreadTerminalManager edge cases', () => {
     ])
   })
 
-  it('replaces active sessions and removes snapshots on close/exit', () => {
+  it('creates new tab sessions and removes active snapshots on close/exit', () => {
     const { manager, ptys, notifications } = createHarness()
     const first = manager.attach({ threadId: 'thread-1', cwd: '/repo', sessionId: 'first' })
     const second = manager.attach({ threadId: 'thread-1', cwd: '/repo', sessionId: 'second', newSession: true })
 
     expect(first.id).toBe('first')
     expect(second.id).toBe('second')
-    expect(ptys[0]?.killed).toBe(true)
+    expect(ptys[0]?.killed).toBe(false)
     expect(manager.getSnapshotForThread('thread-1')?.id).toBe('second')
-    expect(notifications.some((notification) => notification.method === 'terminal-exit')).toBe(true)
 
     manager.close('second')
 
     expect(ptys[1]?.killed).toBe(true)
     expect(manager.getSnapshotForThread('thread-1')).toBeNull()
+    expect(notifications.some((notification) => notification.method === 'terminal-exit')).toBe(true)
+
+    const reattached = manager.attach({ threadId: 'thread-1', cwd: '/repo', sessionId: 'first' })
+    expect(reattached.id).toBe('first')
+    expect(manager.getSnapshotForThread('thread-1')?.id).toBe('first')
 
     const third = manager.attach({ threadId: 'thread-1', cwd: '/repo', sessionId: 'third' })
     expect(third.id).toBe('third')
