@@ -2896,8 +2896,8 @@ Thread loading uses a smaller initial list page, hydrates later pages in the bac
 
 #### Expected Results
 - The first `thread/list` request uses a smaller initial limit instead of 100
-- Later thread pages load in the background using `nextCursor`
-- The sidebar gains older threads as background pages complete
+- One later thread page loads in the background using `nextCursor`
+- The sidebar gains older threads without draining every remaining page during initial route load
 - The direct older thread URL stays on the thread route and loads messages instead of redirecting home
 
 #### Rollback/Cleanup
@@ -3002,6 +3002,7 @@ Playwright browser runtime profiler captures route timing, Codex API network cou
 
 #### Expected Results
 - The profiler prints final URL, title, total observed time, duplicate request counts, and slowest Codex API calls
+- The profiler prints warnings for unexpected duplicate/slow paths such as extra first-page thread lists, thread reads, duplicate resumes, duplicate quota reads, slow provider model calls, or high total API payload
 - JSON report includes raw API rows, grouped summaries, Performance API data, and artifact paths
 - Screenshot is saved under `output/playwright/browser-runtime-profile-*.png`
 - Trace is saved under `output/playwright/browser-runtime-profile-*-trace.zip`

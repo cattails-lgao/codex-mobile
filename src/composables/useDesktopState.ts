@@ -1089,7 +1089,6 @@ export function useDesktopState() {
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let refreshSkillsPromise: Promise<void> | null = null
-  let codexRateLimitRefreshPromise: Promise<void> | null = null
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -1450,10 +1449,10 @@ export function useDesktopState() {
     return [`Mode: ${modeLabel}`, `Model: ${modelLabel}`, `Thinking: ${effortLabel}`, `Speed: ${speedLabel}`]
   }
 
-  async function refreshModelPreferences(options?: { providerChanged?: boolean }): Promise<void> {
+  async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
     try {
       const [modelIds, currentConfig] = await Promise.all([
-        getAvailableModelIds(),
+        getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
         getCurrentModelConfig(),
       ])
 
@@ -1520,7 +1519,9 @@ export function useDesktopState() {
 
     rateLimitRefreshPromise = (async () => {
       try {
-        accountRateLimitSnapshots.value = normalizeRateLimitSnapshotsPayload(await getAccountRateLimits())
+        const snapshot = await getAccountRateLimits()
+        setCodexRateLimit(snapshot)
+        accountRateLimitSnapshots.value = snapshot ? [snapshot] : []
       } catch {
         // Keep the last known rate-limit state if the endpoint is temporarily unavailable.
       } finally {
@@ -3526,13 +3527,11 @@ export function useDesktopState() {
     isLoadingRemainingThreadPages = true
 
     try {
-      while (threadListNextCursor) {
-        const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
-        threadListNextCursor = page.nextCursor
-        hasLoadedAllThreadPages = page.nextCursor === null
-        loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
-        applyThreadGroups(loadedThreadListGroups, rootsState)
-      }
+      const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
+      threadListNextCursor = page.nextCursor
+      hasLoadedAllThreadPages = page.nextCursor === null
+      loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
+      applyThreadGroups(loadedThreadListGroups, rootsState)
     } catch {
       // Keep the first page usable; a later refresh can retry remaining pages.
     } finally {
@@ -3561,7 +3560,9 @@ export function useDesktopState() {
       loadedThreadListGroups = hasLoadedThreads.value
         ? mergeThreadGroupPages(loadedThreadListGroups, groups)
         : groups
-      threadListNextCursor = page.nextCursor
+      threadListNextCursor = hasLoadedThreads.value && !hasLoadedAllThreadPages
+        ? threadListNextCursor
+        : page.nextCursor
       hasLoadedAllThreadPages = page.nextCursor === null
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
@@ -3576,7 +3577,7 @@ export function useDesktopState() {
 
       const currentExists = flatThreads.some((thread) => thread.id === selectedThreadId.value)
 
-      if (!currentExists) {
+      if (!currentExists && !selectedThreadId.value) {
         setSelectedThreadId(flatThreads[0]?.id ?? '')
       }
     } finally {
@@ -3612,8 +3613,7 @@ export function useDesktopState() {
       const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
       const canReuseLoadedMessages =
         alreadyLoaded &&
-        version.length > 0 &&
-        loadedVersion === version &&
+        (version.length === 0 || loadedVersion === version) &&
         inProgressById.value[threadId] !== true
 
       if (canReuseLoadedMessages) {
@@ -3717,22 +3717,7 @@ export function useDesktopState() {
   }
 
   async function refreshCodexRateLimits(): Promise<void> {
-    if (codexRateLimitRefreshPromise) {
-      await codexRateLimitRefreshPromise
-      return
-    }
-
-    codexRateLimitRefreshPromise = (async () => {
-      try {
-        setCodexRateLimit(await getAccountRateLimits())
-      } catch {
-        // Keep the last known quota snapshot on transient failures.
-      } finally {
-        codexRateLimitRefreshPromise = null
-      }
-    })()
-
-    await codexRateLimitRefreshPromise
+    await refreshRateLimits()
   }
 
   async function refreshAll(
@@ -3745,7 +3730,10 @@ export function useDesktopState() {
     try {
       await loadThreads()
       const ancillaryRefresh = Promise.allSettled([
-        refreshModelPreferences({ providerChanged: options.providerChanged }),
+        refreshModelPreferences({
+          providerChanged: options.providerChanged,
+          includeProviderModels: options.providerChanged === true || awaitAncillaryRefreshes,
+        }),
         refreshRateLimits(),
         refreshCollaborationModes(),
         refreshSkills(),
@@ -4622,7 +4610,10 @@ export function useDesktopState() {
   async function recoverBridgeState(): Promise<void> {
     await loadPendingServerRequestsFromBridge()
     pendingThreadsRefresh = !hasLoadedThreads.value
-    if (selectedThreadId.value) {
+    if (
+      selectedThreadId.value &&
+      loadedMessagesByThreadId.value[selectedThreadId.value] !== true
+    ) {
       pendingThreadMessageRefresh.add(selectedThreadId.value)
     }
     await syncFromNotifications()

@@ -40,6 +40,22 @@ function summarize(rows) {
   }
 }
 
+function buildWarnings(duplicateCounts, apiSummary, apiRows) {
+  const warnings = []
+  const providerModels = apiSummary.find((row) => row.key === '/codex-api/provider-models')
+  const totalApiKB = round(apiRows.reduce((sum, row) => sum + row.responseBytes, 0) / 1024)
+
+  if (duplicateCounts.threadListFirstPage > 1) warnings.push(`threadListFirstPage=${duplicateCounts.threadListFirstPage}`)
+  if (duplicateCounts.threadResume > 1) warnings.push(`threadResume=${duplicateCounts.threadResume}`)
+  if (duplicateCounts.threadRead > 0) warnings.push(`threadRead=${duplicateCounts.threadRead}`)
+  if (duplicateCounts.skillsList > 1) warnings.push(`skillsList=${duplicateCounts.skillsList}`)
+  if (duplicateCounts.rateLimitsRead > 1) warnings.push(`rateLimitsRead=${duplicateCounts.rateLimitsRead}`)
+  if (providerModels && providerModels.maxMs > 1000) warnings.push(`providerModels=${providerModels.maxMs}ms`)
+  if (totalApiKB > 750) warnings.push(`totalApiKB=${totalApiKB}`)
+
+  return { warnings, totalApiKB }
+}
+
 function requestKey(row) {
   if (row.rpc === 'thread/list') {
     return row.cursor ? 'thread/list:cursor' : 'thread/list:first-page'
@@ -185,6 +201,7 @@ async function main() {
     rateLimitsRead: apiRows.filter((row) => row.rpc === 'account/rateLimits/read').length,
     providerModels: apiRows.filter((row) => row.path === '/codex-api/provider-models').length,
   }
+  const diagnostics = buildWarnings(duplicateCounts, apiSummary, apiRows)
 
   const report = {
     targetUrl,
@@ -194,6 +211,8 @@ async function main() {
     screenshotPath,
     tracePath,
     duplicateCounts,
+    warnings: diagnostics.warnings,
+    totalApiKB: diagnostics.totalApiKB,
     bodyTextHead: bodyText.slice(0, 1000),
     performance: performanceData,
     apiSummary,
@@ -213,6 +232,8 @@ async function main() {
     title,
     totalMs,
     duplicateCounts,
+    warnings: diagnostics.warnings,
+    totalApiKB: diagnostics.totalApiKB,
     topApiSummary: apiSummary.slice(0, 12),
     slowestApiRows: report.slowestApiRows.slice(0, 10),
   }, null, 2))
