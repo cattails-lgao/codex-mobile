@@ -2,9 +2,17 @@
   <section class="thread-terminal-panel" :class="{ 'is-error': Boolean(errorMessage) }">
     <header class="thread-terminal-header">
       <div class="thread-terminal-tabs">
-        <button class="thread-terminal-tab" type="button" :title="terminalTitle">
-          <span class="thread-terminal-dot" :data-status="terminalStatus" />
-          <span class="thread-terminal-title">{{ terminalTitle }}</span>
+        <button
+          v-for="(tab, index) in tabs"
+          :key="tab.id"
+          class="thread-terminal-tab"
+          :class="{ 'is-active': tab.id === activeSessionId }"
+          type="button"
+          :title="terminalTabTitle(tab, index)"
+          @click="onSelectTab(tab.id)"
+        >
+          <span class="thread-terminal-dot" :data-status="tab.status" />
+          <span class="thread-terminal-title">{{ terminalTabTitle(tab, index) }}</span>
         </button>
       </div>
       <div class="thread-terminal-actions">
@@ -59,16 +67,21 @@ const emit = defineEmits<{
 }>()
 
 const terminalHostRef = ref<HTMLElement | null>(null)
-const sessionId = ref('')
-const shellLabel = ref('terminal')
+const activeSessionId = ref('')
 const errorMessage = ref('')
-const isAttached = ref(false)
+const tabs = ref<TerminalTab[]>([])
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let unsubscribeNotifications: (() => void) | null = null
 let resizeFrame = 0
+
+type TerminalTab = {
+  id: string
+  shell: string
+  status: 'connecting' | 'attached' | 'exited' | 'error'
+}
 
 const quickCommands = [
   { label: 'npm run dev', value: 'npm run dev' },
@@ -77,15 +90,7 @@ const quickCommands = [
   { label: 'pnpm run build', value: 'pnpm run build' },
 ]
 
-const terminalStatus = computed(() => {
-  if (errorMessage.value) return 'error'
-  return isAttached.value ? 'attached' : 'connecting'
-})
-
-const terminalTitle = computed(() => {
-  if (shellLabel.value && shellLabel.value !== 'terminal') return shellLabel.value
-  return 'Terminal'
-})
+const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeSessionId.value) ?? null)
 
 onMounted(() => {
   createTerminal()
@@ -110,6 +115,8 @@ onBeforeUnmount(() => {
 watch(
   () => [props.threadId, props.cwd] as const,
   () => {
+    tabs.value = []
+    activeSessionId.value = ''
     void attachToThread(false)
   },
 )
@@ -141,8 +148,8 @@ function createTerminal(): void {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalHostRef.value)
   terminal.onData((data) => {
-    if (!sessionId.value) return
-    void sendThreadTerminalInput(sessionId.value, data).catch((error: unknown) => {
+    if (!activeSessionId.value) return
+    void sendThreadTerminalInput(activeSessionId.value, data).catch((error: unknown) => {
       errorMessage.value = error instanceof Error ? error.message : 'Terminal input failed'
     })
   })
@@ -154,27 +161,27 @@ function createTerminal(): void {
   scheduleFitAndResize()
 }
 
-async function attachToThread(newSession: boolean): Promise<void> {
+async function attachToThread(newSession: boolean, targetSessionId = ''): Promise<void> {
   if (!props.threadId || !props.cwd || !terminal) return
   errorMessage.value = ''
-  isAttached.value = false
   await nextTick()
   fitTerminal()
   try {
     const session = await attachThreadTerminal({
       threadId: props.threadId,
       cwd: props.cwd,
-      sessionId: newSession ? undefined : sessionId.value || undefined,
+      sessionId: newSession ? undefined : targetSessionId || activeSessionId.value || undefined,
       cols: terminal.cols,
       rows: terminal.rows,
       newSession,
     })
-    sessionId.value = session.id
-    shellLabel.value = session.shell || 'terminal'
-    if (newSession) {
-      terminal.clear()
-    }
-    isAttached.value = true
+    upsertTab({
+      id: session.id,
+      shell: session.shell || 'terminal',
+      status: 'attached',
+    })
+    activeSessionId.value = session.id
+    renderSessionBuffer(session.buffer)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Terminal attach failed'
   }
@@ -183,35 +190,47 @@ async function attachToThread(newSession: boolean): Promise<void> {
 function handleNotification(notification: RpcNotification): void {
   const params = asRecord(notification.params)
   const notificationSessionId = readString(params?.sessionId)
-  if (!notificationSessionId || notificationSessionId !== sessionId.value || !terminal) return
+  if (!notificationSessionId || !terminal) return
 
   if (notification.method === 'terminal-attached') {
-    shellLabel.value = readString(params?.shell) || shellLabel.value
-    isAttached.value = true
+    patchTab(notificationSessionId, {
+      shell: readString(params?.shell) || undefined,
+      status: 'attached',
+    })
     return
   }
   if (notification.method === 'terminal-init-log') {
+    if (notificationSessionId !== activeSessionId.value) return
     terminal.clear()
     terminal.write(readString(params?.log) || '')
     return
   }
   if (notification.method === 'terminal-data') {
+    if (notificationSessionId !== activeSessionId.value) return
     terminal.write(readString(params?.data) || '')
     return
   }
   if (notification.method === 'terminal-exit') {
-    isAttached.value = false
+    patchTab(notificationSessionId, { status: 'exited' })
+    if (notificationSessionId !== activeSessionId.value) return
     terminal.writeln('')
     terminal.writeln('[terminal exited]')
     return
   }
   if (notification.method === 'terminal-error') {
+    patchTab(notificationSessionId, { status: 'error' })
+    if (notificationSessionId !== activeSessionId.value) return
     errorMessage.value = readString(params?.message) || 'Terminal error'
   }
 }
 
 function onNewTerminal(): void {
   void attachToThread(true)
+}
+
+function onSelectTab(tabId: string): void {
+  if (!tabId || tabId === activeSessionId.value) return
+  void attachToThread(false, tabId)
 }
 
 function onQuickCommandSelect(event: Event): void {
@@ -221,26 +240,37 @@ function onQuickCommandSelect(event: Event): void {
     select.value = ''
   }
   if (!command) return
-  if (!sessionId.value) {
+  if (!activeSessionId.value) {
     errorMessage.value = 'Terminal is not connected'
     return
   }
   terminal?.focus()
-  void sendThreadTerminalInput(sessionId.value, `${command}\r`).catch((error: unknown) => {
+  void sendThreadTerminalInput(activeSessionId.value, `${command}\r`).catch((error: unknown) => {
     errorMessage.value = error instanceof Error ? error.message : 'Quick command failed'
   })
 }
 
 function onCloseTerminal(): void {
-  const currentSessionId = sessionId.value
-  sessionId.value = ''
-  isAttached.value = false
-  terminal?.clear()
+  const currentSessionId = activeSessionId.value
+  if (!currentSessionId) {
+    emit('hide')
+    return
+  }
+  const currentIndex = tabs.value.findIndex((tab) => tab.id === currentSessionId)
+  const nextTabs = tabs.value.filter((tab) => tab.id !== currentSessionId)
+  tabs.value = nextTabs
+  const nextTab = nextTabs[Math.max(0, Math.min(currentIndex, nextTabs.length - 1))]
   if (currentSessionId) {
     void closeThreadTerminal(currentSessionId).catch((error: unknown) => {
       errorMessage.value = error instanceof Error ? error.message : 'Terminal close failed'
     })
   }
+  if (nextTab) {
+    void attachToThread(false, nextTab.id)
+    return
+  }
+  activeSessionId.value = ''
+  terminal?.clear()
   emit('hide')
 }
 
@@ -249,8 +279,8 @@ function scheduleFitAndResize(): void {
   resizeFrame = window.requestAnimationFrame(() => {
     resizeFrame = 0
     fitTerminal()
-    if (terminal && sessionId.value) {
-      void resizeThreadTerminal(sessionId.value, terminal.cols, terminal.rows).catch(() => {})
+    if (terminal && activeSessionId.value) {
+      void resizeThreadTerminal(activeSessionId.value, terminal.cols, terminal.rows).catch(() => {})
     }
   })
 }
@@ -261,6 +291,44 @@ function fitTerminal(): void {
   } catch {
     // xterm-fit can throw before fonts/layout settle; the next resize observer tick retries.
   }
+}
+
+function upsertTab(tab: TerminalTab): void {
+  const existingIndex = tabs.value.findIndex((row) => row.id === tab.id)
+  if (existingIndex < 0) {
+    tabs.value = [...tabs.value, tab]
+    return
+  }
+  const next = [...tabs.value]
+  next.splice(existingIndex, 1, {
+    ...next[existingIndex],
+    ...tab,
+  })
+  tabs.value = next
+}
+
+function patchTab(tabId: string, patch: Partial<TerminalTab>): void {
+  const existingIndex = tabs.value.findIndex((row) => row.id === tabId)
+  if (existingIndex < 0) return
+  const next = [...tabs.value]
+  next.splice(existingIndex, 1, {
+    ...next[existingIndex],
+    ...patch,
+  })
+  tabs.value = next
+}
+
+function renderSessionBuffer(buffer: string): void {
+  if (!terminal) return
+  terminal.clear()
+  if (buffer) {
+    terminal.write(buffer)
+  }
+}
+
+function terminalTabTitle(tab: TerminalTab, index: number): string {
+  const shell = tab.shell && tab.shell !== 'terminal' ? tab.shell : 'Terminal'
+  return tabs.value.length > 1 ? `${shell} ${index + 1}` : shell
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -288,11 +356,15 @@ function readString(value: unknown): string {
 }
 
 .thread-terminal-tabs {
-  @apply min-w-0 flex-1;
+  @apply flex min-w-0 flex-1 items-center gap-1 overflow-x-auto;
 }
 
 .thread-terminal-tab {
-  @apply flex h-7 min-w-0 max-w-full items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-200;
+  @apply flex h-7 min-w-20 max-w-36 shrink-0 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-300 transition hover:border-zinc-700 hover:text-white;
+}
+
+.thread-terminal-tab.is-active {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
 .thread-terminal-dot {

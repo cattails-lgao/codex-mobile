@@ -2899,8 +2899,12 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 12. Confirm the JSON `session.buffer` contains `terminal-ok`
 13. Refresh the page and reopen the same thread
 14. Toggle the terminal open again
-15. Resize the browser window
-16. Click `Close`
+15. Click `New terminal`
+16. Confirm a second terminal tab appears and becomes active
+17. Click the first terminal tab
+18. Confirm its previous output is restored
+19. Resize the browser window
+20. Click `Close`
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
@@ -2909,7 +2913,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
-- `Close` terminates the PTY and hides the drawer
+- `New terminal` adds another tab without killing the previous PTY
+- `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
 #### Rollback/Cleanup
 - Close the terminal session with the `Close` button
@@ -2936,7 +2941,7 @@ Automated unit coverage for terminal manager edge cases that do not require a br
 - PTY env normalizes `TERM`, locale, and strips `TERMINFO` variables
 - Output snapshots truncate to the last 16 KiB and set `truncated`
 - Existing session reattach emits init/attached events and safely syncs changed cwd
-- New terminal replaces the active session, and close/exit removes snapshots
+- New terminal adds a new tab without killing the previous session, and close/exit removes snapshots for the active session
 
 #### Rollback/Cleanup
 - None

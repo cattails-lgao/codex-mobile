@@ -46,7 +46,7 @@ The `codex-web-local` project added a Codex.app-style integrated terminal for lo
   - `POST /codex-api/thread-terminal/close`
   - `GET /codex-api/thread-terminal-snapshot?threadId=<id>`
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } | null }`.
-- The current web UI keeps one active terminal session per thread; `New terminal` replaces the active PTY.
+- The web UI supports multiple terminal tabs per thread; `New terminal` creates and switches to a new PTY without killing existing tabs.
 - `ThreadTerminalManager` has dependency injection for tests, including PTY spawn, filesystem existence checks, cwd/home fallback, platform, shell, and helper setup.
 
 ## Fixes From Visual Review
@@ -66,7 +66,7 @@ The `codex-web-local` project added a Codex.app-style integrated terminal for lo
   - snapshot buffer contains command output
   - no locale startup warnings
   - hide/reopen and refresh/reopen reattach behavior
-  - `New terminal` replacement behavior
+  - `New terminal` tab creation and tab switching behavior
   - close cleanup
   - desktop/mobile/tablet layout without horizontal overflow
 

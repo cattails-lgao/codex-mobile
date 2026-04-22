@@ -642,4 +642,4 @@ After each feature implementation session that uses this skill:
   - Normalize PTY locale (`en_US.UTF-8` on macOS) and remove `TERMINFO` / `TERMINFO_DIRS` to avoid visible shell startup warnings.
   - Restore executable permissions on `node-pty` `spawn-helper` at runtime when pnpm ignores native package build scripts.
   - Unit-test terminal manager behavior through dependency injection instead of spawning real shells for every edge case.
-  - Edge cases worth preserving in tests: missing thread id rejection, cwd fallback, dimension clamping, 16 KiB buffer truncation, reattach init-log emission, shell-quoted cwd sync, new-session replacement, and close/exit snapshot cleanup.
+  - Edge cases worth preserving in tests: missing thread id rejection, cwd fallback, dimension clamping, 16 KiB buffer truncation, reattach init-log emission, shell-quoted cwd sync, new-session tab creation without killing previous PTYs, and close/exit snapshot cleanup.
