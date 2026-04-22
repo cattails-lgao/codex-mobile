@@ -3127,20 +3127,23 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 #### Steps
 1. Open `http://127.0.0.1:4173/#/skills`
 2. Verify the page title is `Skills & Apps` and the tab row contains `Plugins`, `Apps`, `MCPs`, and `Skills`
-3. On `Plugins`, verify plugin cards load, or a non-blocking unavailable message appears on older Codex CLI versions
+3. On `Plugins`, verify plugin cards load, the default sort is `Popular`, and search filters plugin cards without limiting results to the first 100
 4. Open a plugin card when one is available and verify description, capabilities, included apps/skills/MCPs, and install/uninstall or enable/disable actions are visible
 5. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
 6. On `Apps`, verify the default sort control is `Popular`, app icons render, and the `Manage` button opens the app management URL
-7. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch back to `Popular` and verify connected/default/plugin-backed apps are prioritized
-8. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-9. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
+7. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
+8. Search Apps and verify matching results are not capped to the Popular top 100 list
+9. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+10. Verify MCPs also support `Popular`, `A-Z`, and search
+11. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
 
 #### Expected Results
 - The directory tabs render without a full-page error
 - Plugin/app/MCP API failures are isolated to their tab
 - Existing Skills Hub behavior remains available under the `Skills` tab
 - App and plugin enable/disable actions update their local card state after a successful config write
-- Apps default to the best available popularity-style ordering because app-server does not expose a numeric popularity field
+- Plugins, Apps, and MCPs default to local popularity-style ordering because app-server does not expose numeric popularity fields
+- Popular views show only the top 100 when no search is active; search results can show all matches
 
 #### Rollback/Cleanup
 - Re-enable any app or plugin disabled during testing

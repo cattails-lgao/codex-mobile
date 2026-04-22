@@ -28,15 +28,42 @@
     <div v-if="toast" class="directory-toast" :class="{ 'is-error': toast.type === 'error' }">{{ toast.text }}</div>
 
     <section v-if="activeTab === 'plugins'" class="directory-section">
+      <div class="directory-toolbar">
+        <input
+          v-model="pluginSearchQuery"
+          class="directory-search"
+          type="search"
+          placeholder="Search plugins..."
+          aria-label="Search plugins"
+        />
+        <div class="directory-sort-group" role="group" aria-label="Sort plugins">
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': pluginSortMode === 'popular' }"
+            type="button"
+            @click="pluginSortMode = 'popular'"
+          >
+            Popular
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': pluginSortMode === 'name' }"
+            type="button"
+            @click="pluginSortMode = 'name'"
+          >
+            A-Z
+          </button>
+        </div>
+      </div>
       <div v-if="!supportsPlugins" class="directory-empty">
         Plugin APIs unavailable in this Codex CLI. Update Codex CLI to use plugin catalog features.
       </div>
       <div v-else-if="pluginError" class="directory-error">{{ pluginError }}</div>
       <div v-else-if="isLoadingPlugins" class="directory-loading">Loading plugins...</div>
-      <div v-else-if="plugins.length === 0" class="directory-empty">No plugins found.</div>
+      <div v-else-if="visiblePlugins.length === 0" class="directory-empty">No plugins found.</div>
       <div v-else class="directory-grid">
         <button
-          v-for="plugin in plugins"
+          v-for="plugin in visiblePlugins"
           :key="plugin.id"
           class="directory-card"
           :class="{ 'is-disabled': plugin.installed && !plugin.enabled }"
@@ -73,7 +100,14 @@
     </section>
 
     <section v-else-if="activeTab === 'apps'" class="directory-section">
-      <div class="directory-section-actions">
+      <div class="directory-toolbar">
+        <input
+          v-model="appSearchQuery"
+          class="directory-search"
+          type="search"
+          placeholder="Search apps..."
+          aria-label="Search apps"
+        />
         <div class="directory-sort-group" role="group" aria-label="Sort apps">
           <button
             class="directory-sort-button"
@@ -98,9 +132,9 @@
       </div>
       <div v-else-if="appError" class="directory-error">{{ appError }}</div>
       <div v-else-if="isLoadingApps" class="directory-loading">Loading apps...</div>
-      <div v-else-if="apps.length === 0" class="directory-empty">No apps found.</div>
+      <div v-else-if="visibleApps.length === 0" class="directory-empty">No apps found.</div>
       <div v-else class="directory-grid">
-        <article v-for="app in sortedApps" :key="app.id" class="directory-card">
+        <article v-for="app in visibleApps" :key="app.id" class="directory-card">
           <div class="directory-card-top">
             <img v-if="appLogoSrc(app)" class="directory-card-icon" :src="appLogoSrc(app)" :alt="app.name" loading="lazy" />
             <div v-else class="directory-card-fallback">{{ app.name.charAt(0) }}</div>
@@ -131,7 +165,32 @@
     </section>
 
     <section v-else-if="activeTab === 'mcps'" class="directory-section">
-      <div class="directory-section-actions">
+      <div class="directory-toolbar">
+        <input
+          v-model="mcpSearchQuery"
+          class="directory-search"
+          type="search"
+          placeholder="Search MCPs..."
+          aria-label="Search MCPs"
+        />
+        <div class="directory-sort-group" role="group" aria-label="Sort MCPs">
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': mcpSortMode === 'popular' }"
+            type="button"
+            @click="mcpSortMode = 'popular'"
+          >
+            Popular
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': mcpSortMode === 'name' }"
+            type="button"
+            @click="mcpSortMode = 'name'"
+          >
+            A-Z
+          </button>
+        </div>
         <button v-if="supportsMcpReload" class="directory-action" type="button" :disabled="isReloadingMcps" @click="reloadMcps">
           {{ isReloadingMcps ? 'Reloading...' : 'Reload MCPs' }}
         </button>
@@ -141,9 +200,9 @@
       </div>
       <div v-else-if="mcpError" class="directory-error">{{ mcpError }}</div>
       <div v-else-if="isLoadingMcps" class="directory-loading">Loading MCP servers...</div>
-      <div v-else-if="mcpServers.length === 0" class="directory-empty">No MCP servers configured.</div>
+      <div v-else-if="visibleMcpServers.length === 0" class="directory-empty">No MCP servers configured.</div>
       <div v-else class="directory-list">
-        <article v-for="server in mcpServers" :key="server.name" class="directory-card directory-card-wide">
+        <article v-for="server in visibleMcpServers" :key="server.name" class="directory-card directory-card-wide">
           <button class="directory-card-toggle" type="button" @click="toggleMcpExpanded(server.name)">
             <span class="directory-card-title">{{ server.name }}</span>
             <span class="directory-card-meta">{{ server.authStatus }} · {{ server.tools.length }} tools · {{ server.resources.length + server.resourceTemplates.length }} resources</span>
@@ -289,6 +348,23 @@ import {
 import SkillsHub from './SkillsHub.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'mcps' | 'skills'
+type DirectorySortMode = 'popular' | 'name'
+
+const POPULAR_LIMIT = 100
+const POPULAR_APP_NAME_BONUSES: Array<[RegExp, number]> = [
+  [/^(github|gitlab|linear|slack|notion|gmail|google drive|google calendar|google docs)$/i, 120],
+  [/^(jira|asana|trello|clickup|basecamp|azure boards|monday|figma|canva)$/i, 95],
+  [/^(dropbox|box|onedrive|outlook|hubspot|salesforce|zapier|netlify|vercel)$/i, 80],
+  [/(calendar|email|drive|docs|sheets|tasks|project|issue|repository|design|deploy|search)/i, 35],
+]
+const POPULAR_PLUGIN_NAME_BONUSES: Array<[RegExp, number]> = [
+  [/(computer use|github|gitlab|linear|slack|notion|browser|web|filesystem|terminal)/i, 120],
+  [/(calendar|email|drive|docs|design|deploy|project|issue|search|database)/i, 55],
+]
+const POPULAR_MCP_NAME_BONUSES: Array<[RegExp, number]> = [
+  [/(github|gitlab|linear|slack|notion|filesystem|browser|computer|web|postgres|sqlite|database)/i, 120],
+  [/(search|drive|docs|calendar|terminal|shell|deploy|cloud|memory)/i, 55],
+]
 
 const props = defineProps<{
   cwd?: string
@@ -312,7 +388,12 @@ const methodsLoaded = ref(false)
 const plugins = ref<DirectoryPluginSummary[]>([])
 const apps = ref<DirectoryAppInfo[]>([])
 const mcpServers = ref<DirectoryMcpServerStatus[]>([])
-const appSortMode = ref<'popular' | 'name'>('popular')
+const pluginSortMode = ref<DirectorySortMode>('popular')
+const appSortMode = ref<DirectorySortMode>('popular')
+const mcpSortMode = ref<DirectorySortMode>('popular')
+const pluginSearchQuery = ref('')
+const appSearchQuery = ref('')
+const mcpSearchQuery = ref('')
 const isLoadingPlugins = ref(false)
 const isLoadingApps = ref(false)
 const isLoadingMcps = ref(false)
@@ -357,21 +438,111 @@ const selectedPluginScreenshots = computed(() => {
   if (!summary) return []
   return [...summary.screenshotUrls, ...summary.screenshots.map(localAssetSrc)].filter(Boolean)
 })
-const sortedApps = computed(() => {
-  const rows = [...apps.value]
-  if (appSortMode.value === 'name') {
-    return rows.sort((a, b) => a.name.localeCompare(b.name))
-  }
-  return rows.sort((a, b) => {
-    const connectedDelta = Number(b.isAccessible) - Number(a.isAccessible)
-    if (connectedDelta !== 0) return connectedDelta
-    const pluginDelta = Number(b.pluginDisplayNames.length > 0) - Number(a.pluginDisplayNames.length > 0)
-    if (pluginDelta !== 0) return pluginDelta
-    const catalogDelta = Number(b.distributionChannel === 'DEFAULT_OAI_CATALOG') - Number(a.distributionChannel === 'DEFAULT_OAI_CATALOG')
-    if (catalogDelta !== 0) return catalogDelta
-    return a.catalogRank - b.catalogRank
-  })
-})
+const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
+const visibleApps = computed(() => limitPopularRows(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
+const visibleMcpServers = computed(() => limitPopularRows(sortMcpServers(filterMcpServers(mcpServers.value, mcpSearchQuery.value), mcpSortMode.value), mcpSortMode.value, mcpSearchQuery.value))
+
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function includesSearch(parts: Array<string | null | undefined>, query: string): boolean {
+  const normalized = normalizeSearch(query)
+  if (!normalized) return true
+  return parts.some((part) => part?.toLowerCase().includes(normalized))
+}
+
+function bonusForName(name: string, rows: Array<[RegExp, number]>): number {
+  return rows.reduce((score, [pattern, bonus]) => score + (pattern.test(name) ? bonus : 0), 0)
+}
+
+function limitPopularRows<T>(rows: T[], sortMode: DirectorySortMode, query: string): T[] {
+  return sortMode === 'popular' && normalizeSearch(query).length === 0 ? rows.slice(0, POPULAR_LIMIT) : rows
+}
+
+function filterPlugins(rows: DirectoryPluginSummary[], query: string): DirectoryPluginSummary[] {
+  return rows.filter((plugin) => includesSearch([
+    plugin.displayName,
+    plugin.name,
+    plugin.description,
+    plugin.developerName,
+    plugin.category,
+    plugin.marketplaceDisplayName,
+    ...plugin.capabilities,
+  ], query))
+}
+
+function filterApps(rows: DirectoryAppInfo[], query: string): DirectoryAppInfo[] {
+  return rows.filter((app) => includesSearch([
+    app.name,
+    app.description,
+    app.developer,
+    app.category,
+    app.distributionChannel,
+    ...app.pluginDisplayNames,
+  ], query))
+}
+
+function filterMcpServers(rows: DirectoryMcpServerStatus[], query: string): DirectoryMcpServerStatus[] {
+  return rows.filter((server) => includesSearch([
+    server.name,
+    server.authStatus,
+    ...server.tools.map((tool) => `${tool.title} ${tool.name} ${tool.description}`),
+    ...server.resources.map((resource) => `${resource.title} ${resource.name} ${resource.uri} ${resource.description}`),
+    ...server.resourceTemplates.map((resource) => `${resource.title} ${resource.name} ${resource.uriTemplate} ${resource.description}`),
+  ], query))
+}
+
+function pluginPopularScore(plugin: DirectoryPluginSummary): number {
+  return (
+    (plugin.installed ? 500 : 0) +
+    (plugin.enabled ? 40 : 0) +
+    (plugin.developerName.toLowerCase().includes('openai') ? 140 : 0) +
+    (plugin.sourceType === 'local' ? 80 : 0) +
+    (plugin.capabilities.length * 12) +
+    bonusForName(`${plugin.displayName} ${plugin.name} ${plugin.description} ${plugin.category}`, POPULAR_PLUGIN_NAME_BONUSES)
+  )
+}
+
+function appPopularScore(app: DirectoryAppInfo): number {
+  return (
+    (app.isAccessible ? 1000 : 0) +
+    (app.pluginDisplayNames.length > 0 ? 260 : 0) +
+    (app.distributionChannel === 'DEFAULT_OAI_CATALOG' ? 180 : 0) +
+    (app.isEnabled ? 40 : 0) +
+    (app.installUrl ? 20 : 0) +
+    bonusForName(`${app.name} ${app.description} ${app.category} ${app.pluginDisplayNames.join(' ')}`, POPULAR_APP_NAME_BONUSES) -
+    (app.catalogRank * 0.001)
+  )
+}
+
+function mcpPopularScore(server: DirectoryMcpServerStatus): number {
+  return (
+    (server.authStatus === 'oAuth' ? 180 : 0) +
+    (server.authStatus === 'bearerToken' ? 140 : 0) +
+    Math.min(server.tools.length, 50) * 6 +
+    Math.min(server.resources.length + server.resourceTemplates.length, 30) * 3 +
+    bonusForName(server.name, POPULAR_MCP_NAME_BONUSES)
+  )
+}
+
+function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
+  return [...rows].sort((a, b) => sortMode === 'name'
+    ? a.displayName.localeCompare(b.displayName)
+    : (pluginPopularScore(b) - pluginPopularScore(a)) || a.displayName.localeCompare(b.displayName))
+}
+
+function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): DirectoryAppInfo[] {
+  return [...rows].sort((a, b) => sortMode === 'name'
+    ? a.name.localeCompare(b.name)
+    : (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
+}
+
+function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
+  return [...rows].sort((a, b) => sortMode === 'name'
+    ? a.name.localeCompare(b.name)
+    : (mcpPopularScore(b) - mcpPopularScore(a)) || a.name.localeCompare(b.name))
+}
 
 function showToast(text: string, type: 'success' | 'error' = 'success'): void {
   toast.value = { text, type }
@@ -640,6 +811,14 @@ onMounted(async () => {
   @apply flex justify-end;
 }
 
+.directory-toolbar {
+  @apply flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between;
+}
+
+.directory-search {
+  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400;
+}
+
 .directory-sort-group {
   @apply inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1;
 }
@@ -832,6 +1011,7 @@ button.directory-card {
 }
 
 :global(:root.dark) .directory-tabs,
+:global(:root.dark) .directory-search,
 :global(:root.dark) .directory-card,
 :global(:root.dark) .directory-loading,
 :global(:root.dark) .directory-empty,
@@ -841,6 +1021,10 @@ button.directory-card {
 :global(:root.dark) .directory-action-link,
 :global(:root.dark) .directory-modal-close {
   @apply border-zinc-700 bg-zinc-900;
+}
+
+:global(:root.dark) .directory-search {
+  @apply text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500;
 }
 
 :global(:root.dark) .directory-tab.is-active,
