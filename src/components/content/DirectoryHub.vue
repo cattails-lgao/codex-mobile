@@ -1,0 +1,797 @@
+<template>
+  <div class="directory-hub">
+    <div class="directory-header">
+      <div>
+        <h2 class="directory-title">Skills & Apps</h2>
+        <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
+      </div>
+      <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab">
+        {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
+      </button>
+    </div>
+
+    <div class="directory-tabs" role="tablist" aria-label="Directory sections">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="directory-tab"
+        :class="{ 'is-active': activeTab === tab.id }"
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === tab.id"
+        @click="activeTab = tab.id"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <div v-if="toast" class="directory-toast" :class="{ 'is-error': toast.type === 'error' }">{{ toast.text }}</div>
+
+    <section v-if="activeTab === 'plugins'" class="directory-section">
+      <div v-if="!supportsPlugins" class="directory-empty">
+        Plugin APIs unavailable in this Codex CLI. Update Codex CLI to use plugin catalog features.
+      </div>
+      <div v-else-if="pluginError" class="directory-error">{{ pluginError }}</div>
+      <div v-else-if="isLoadingPlugins" class="directory-loading">Loading plugins...</div>
+      <div v-else-if="plugins.length === 0" class="directory-empty">No plugins found.</div>
+      <div v-else class="directory-grid">
+        <button
+          v-for="plugin in plugins"
+          :key="plugin.id"
+          class="directory-card"
+          :class="{ 'is-disabled': plugin.installed && !plugin.enabled }"
+          type="button"
+          @click="openPluginDetail(plugin)"
+        >
+          <div class="directory-card-top">
+            <img
+              v-if="pluginIconSrc(plugin)"
+              class="directory-card-icon"
+              :src="pluginIconSrc(plugin)"
+              :alt="plugin.displayName"
+              loading="lazy"
+            />
+            <div v-else class="directory-card-fallback" :style="fallbackStyle(plugin)">
+              {{ plugin.displayName.charAt(0) }}
+            </div>
+            <div class="directory-card-main">
+              <div class="directory-card-title-row">
+                <span class="directory-card-title">{{ plugin.displayName }}</span>
+                <span v-if="plugin.installed && !plugin.enabled" class="directory-badge is-muted">Disabled</span>
+                <span v-else-if="plugin.installed" class="directory-badge">Installed</span>
+              </div>
+              <span class="directory-card-meta">{{ plugin.developerName || plugin.marketplaceDisplayName || plugin.marketplaceName || 'Plugin' }}</span>
+            </div>
+          </div>
+          <p v-if="plugin.description" class="directory-card-description">{{ plugin.description }}</p>
+          <div class="directory-chip-row">
+            <span v-if="plugin.category" class="directory-chip">{{ plugin.category }}</span>
+            <span v-for="capability in plugin.capabilities.slice(0, 2)" :key="capability" class="directory-chip">{{ capability }}</span>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'apps'" class="directory-section">
+      <div v-if="!supportsApps" class="directory-empty">
+        Apps APIs unavailable in this Codex CLI. Update Codex CLI to manage apps.
+      </div>
+      <div v-else-if="appError" class="directory-error">{{ appError }}</div>
+      <div v-else-if="isLoadingApps" class="directory-loading">Loading apps...</div>
+      <div v-else-if="apps.length === 0" class="directory-empty">No apps found.</div>
+      <div v-else class="directory-grid">
+        <article v-for="app in apps" :key="app.id" class="directory-card">
+          <div class="directory-card-top">
+            <img v-if="appLogoSrc(app)" class="directory-card-icon" :src="appLogoSrc(app)" :alt="app.name" loading="lazy" />
+            <div v-else class="directory-card-fallback">{{ app.name.charAt(0) }}</div>
+            <div class="directory-card-main">
+              <div class="directory-card-title-row">
+                <span class="directory-card-title">{{ app.name }}</span>
+                <span v-if="!app.isEnabled" class="directory-badge is-muted">Disabled</span>
+                <span v-else-if="app.isAccessible" class="directory-badge">Connected</span>
+              </div>
+              <span class="directory-card-meta">{{ app.developer || app.distributionChannel || 'App' }}</span>
+            </div>
+          </div>
+          <p v-if="app.description" class="directory-card-description">{{ app.description }}</p>
+          <div class="directory-chip-row">
+            <span v-if="app.category" class="directory-chip">{{ app.category }}</span>
+            <span v-for="name in app.pluginDisplayNames.slice(0, 2)" :key="name" class="directory-chip">{{ name }}</span>
+          </div>
+          <div class="directory-card-actions">
+            <button class="directory-action" type="button" :disabled="appActionId === app.id" @click="toggleApp(app)">
+              {{ app.isEnabled ? 'Disable' : 'Enable' }}
+            </button>
+            <a v-if="app.installUrl" class="directory-action-link" :href="app.installUrl" target="_blank" rel="noopener noreferrer">
+              Manage
+            </a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'mcps'" class="directory-section">
+      <div class="directory-section-actions">
+        <button v-if="supportsMcpReload" class="directory-action" type="button" :disabled="isReloadingMcps" @click="reloadMcps">
+          {{ isReloadingMcps ? 'Reloading...' : 'Reload MCPs' }}
+        </button>
+      </div>
+      <div v-if="!supportsMcps" class="directory-empty">
+        MCP status APIs unavailable in this Codex CLI. Update Codex CLI to inspect MCP servers.
+      </div>
+      <div v-else-if="mcpError" class="directory-error">{{ mcpError }}</div>
+      <div v-else-if="isLoadingMcps" class="directory-loading">Loading MCP servers...</div>
+      <div v-else-if="mcpServers.length === 0" class="directory-empty">No MCP servers configured.</div>
+      <div v-else class="directory-list">
+        <article v-for="server in mcpServers" :key="server.name" class="directory-card directory-card-wide">
+          <button class="directory-card-toggle" type="button" @click="toggleMcpExpanded(server.name)">
+            <span class="directory-card-title">{{ server.name }}</span>
+            <span class="directory-card-meta">{{ server.authStatus }} · {{ server.tools.length }} tools · {{ server.resources.length + server.resourceTemplates.length }} resources</span>
+          </button>
+          <div v-if="expandedMcpNames.has(server.name)" class="directory-mcp-detail">
+            <div v-if="server.tools.length > 0">
+              <h3 class="directory-mini-heading">Tools</h3>
+              <p class="directory-mini-list">{{ server.tools.map((tool) => tool.title || tool.name).join(', ') }}</p>
+            </div>
+            <div v-if="server.resources.length > 0 || server.resourceTemplates.length > 0">
+              <h3 class="directory-mini-heading">Resources</h3>
+              <p class="directory-mini-list">
+                {{ [...server.resources.map((r) => r.title || r.name || r.uri), ...server.resourceTemplates.map((r) => r.title || r.name || r.uriTemplate)].join(', ') }}
+              </p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <SkillsHub v-else @skills-changed="$emit('skills-changed')" />
+
+    <Teleport to="body">
+      <div v-if="isPluginDetailOpen" class="directory-modal-overlay" @click.self="closePluginDetail">
+        <article class="directory-modal">
+          <div class="directory-modal-header">
+            <div class="directory-card-top">
+              <img
+                v-if="selectedPlugin && pluginIconSrc(selectedPlugin)"
+                class="directory-card-icon"
+                :src="pluginIconSrc(selectedPlugin)"
+                :alt="selectedPlugin.displayName"
+                loading="lazy"
+              />
+              <div v-else class="directory-card-fallback">{{ selectedPlugin?.displayName.charAt(0) }}</div>
+              <div class="directory-card-main">
+                <h3 class="directory-modal-title">{{ selectedPlugin?.displayName || 'Plugin' }}</h3>
+                <span class="directory-card-meta">{{ selectedPlugin?.developerName || selectedPlugin?.marketplaceDisplayName || selectedPlugin?.marketplaceName }}</span>
+              </div>
+            </div>
+            <button class="directory-modal-close" type="button" aria-label="Close plugin detail" @click="closePluginDetail">Close</button>
+          </div>
+
+          <div class="directory-modal-body">
+            <div v-if="pluginDetailError" class="directory-error">{{ pluginDetailError }}</div>
+            <div v-else-if="isLoadingPluginDetail" class="directory-loading">Loading plugin...</div>
+            <template v-else-if="selectedPluginDetail">
+              <p v-if="selectedPluginDescription" class="directory-detail-description">{{ selectedPluginDescription }}</p>
+
+              <div v-if="selectedPluginDetail.summary.capabilities.length > 0" class="directory-detail-block">
+                <h4 class="directory-detail-heading">Capabilities</h4>
+                <div class="directory-chip-row">
+                  <span v-for="capability in selectedPluginDetail.summary.capabilities" :key="capability" class="directory-chip">{{ capability }}</span>
+                </div>
+              </div>
+
+              <div class="directory-detail-grid">
+                <div v-if="selectedPluginDetail.apps.length > 0" class="directory-detail-block">
+                  <h4 class="directory-detail-heading">Apps</h4>
+                  <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
+                    <span>{{ app.name }}</span>
+                    <a v-if="app.installUrl" :href="app.installUrl" target="_blank" rel="noopener noreferrer">Manage</a>
+                  </div>
+                </div>
+                <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
+                  <h4 class="directory-detail-heading">Skills</h4>
+                  <p class="directory-mini-list">{{ selectedPluginDetail.skills.map((skill) => skill.displayName || skill.name).join(', ') }}</p>
+                </div>
+                <div v-if="selectedPluginDetail.mcpServers.length > 0" class="directory-detail-block">
+                  <h4 class="directory-detail-heading">MCP servers</h4>
+                  <p class="directory-mini-list">{{ selectedPluginDetail.mcpServers.join(', ') }}</p>
+                </div>
+              </div>
+
+              <div v-if="selectedPluginScreenshots.length > 0" class="directory-screenshots">
+                <img v-for="src in selectedPluginScreenshots" :key="src" :src="src" alt="" loading="lazy" />
+              </div>
+
+              <div v-if="installAuthApps.length > 0" class="directory-auth-panel">
+                <strong>Apps needing auth</strong>
+                <div v-for="app in installAuthApps" :key="app.id" class="directory-include-row">
+                  <span>{{ app.name }}</span>
+                  <a v-if="app.installUrl" :href="app.installUrl" target="_blank" rel="noopener noreferrer">Open</a>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="directory-modal-footer">
+            <button
+              v-if="selectedPlugin && selectedPlugin.installed"
+              class="directory-action danger"
+              type="button"
+              :disabled="isPluginActionInFlight"
+              @click="uninstallSelectedPlugin"
+            >
+              {{ isPluginActionInFlight ? 'Uninstalling...' : 'Uninstall' }}
+            </button>
+            <button
+              v-else-if="selectedPlugin"
+              class="directory-action primary"
+              type="button"
+              :disabled="isPluginActionInFlight || selectedPlugin.installPolicy === 'NOT_AVAILABLE'"
+              @click="installSelectedPlugin"
+            >
+              {{ isPluginActionInFlight ? 'Installing...' : 'Install' }}
+            </button>
+            <button
+              v-if="selectedPlugin && selectedPlugin.installed"
+              class="directory-action"
+              type="button"
+              :disabled="isPluginActionInFlight"
+              @click="toggleSelectedPlugin"
+            >
+              {{ selectedPlugin.enabled ? 'Disable' : 'Enable' }}
+            </button>
+          </div>
+        </article>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import {
+  getMethodCatalog,
+  installDirectoryPlugin,
+  listDirectoryApps,
+  listDirectoryMcpServers,
+  listDirectoryPlugins,
+  readDirectoryPlugin,
+  reloadDirectoryMcpServers,
+  setDirectoryAppEnabled,
+  setDirectoryPluginEnabled,
+  uninstallDirectoryPlugin,
+  type DirectoryAppInfo,
+  type DirectoryMcpServerStatus,
+  type DirectoryPluginAppSummary,
+  type DirectoryPluginDetail,
+  type DirectoryPluginSummary,
+} from '../../api/codexGateway'
+import SkillsHub from './SkillsHub.vue'
+
+type DirectoryTab = 'plugins' | 'apps' | 'mcps' | 'skills'
+
+const props = defineProps<{
+  cwd?: string
+  threadId?: string
+}>()
+
+defineEmits<{
+  'skills-changed': []
+}>()
+
+const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
+  { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
+  { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
+  { id: 'mcps', label: 'MCPs', subtitle: 'Inspect configured MCP servers, tools, and resources.' },
+  { id: 'skills', label: 'Skills', subtitle: 'Browse and discover skills from the OpenClaw community.' },
+]
+
+const activeTab = ref<DirectoryTab>('plugins')
+const methodSet = ref<Set<string>>(new Set())
+const methodsLoaded = ref(false)
+const plugins = ref<DirectoryPluginSummary[]>([])
+const apps = ref<DirectoryAppInfo[]>([])
+const mcpServers = ref<DirectoryMcpServerStatus[]>([])
+const isLoadingPlugins = ref(false)
+const isLoadingApps = ref(false)
+const isLoadingMcps = ref(false)
+const isReloadingMcps = ref(false)
+const pluginError = ref('')
+const appError = ref('')
+const mcpError = ref('')
+const selectedPlugin = ref<DirectoryPluginSummary | null>(null)
+const selectedPluginDetail = ref<DirectoryPluginDetail | null>(null)
+const isPluginDetailOpen = ref(false)
+const isLoadingPluginDetail = ref(false)
+const pluginDetailError = ref('')
+const isPluginActionInFlight = ref(false)
+const appActionId = ref('')
+const installAuthApps = ref<DirectoryPluginAppSummary[]>([])
+const expandedMcpNames = ref<Set<string>>(new Set())
+const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+const activeCopy = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
+const supportsPlugins = computed(() =>
+  !methodsLoaded.value ||
+  ['plugin/list', 'plugin/read', 'plugin/install', 'plugin/uninstall'].every((method) => methodSet.value.has(method)),
+)
+const supportsApps = computed(() => !methodsLoaded.value || methodSet.value.has('app/list'))
+const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has('mcpServerStatus/list'))
+const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
+const isActiveLoading = computed(() =>
+  activeTab.value === 'plugins' ? isLoadingPlugins.value
+    : activeTab.value === 'apps' ? isLoadingApps.value
+      : activeTab.value === 'mcps' ? isLoadingMcps.value
+        : false,
+)
+const selectedPluginDescription = computed(() =>
+  selectedPluginDetail.value?.description ||
+  selectedPluginDetail.value?.summary.longDescription ||
+  selectedPluginDetail.value?.summary.description ||
+  '',
+)
+const selectedPluginScreenshots = computed(() => {
+  const summary = selectedPluginDetail.value?.summary
+  if (!summary) return []
+  return [...summary.screenshotUrls, ...summary.screenshots.map(localAssetSrc)].filter(Boolean)
+})
+
+function showToast(text: string, type: 'success' | 'error' = 'success'): void {
+  toast.value = { text, type }
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toast.value = null }, 3000)
+}
+
+function localAssetSrc(path: string): string {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path) || path.startsWith('data:')) return path
+  if (!path.startsWith('/')) return ''
+  return `/codex-local-image?path=${encodeURIComponent(path)}`
+}
+
+function pluginIconSrc(plugin: DirectoryPluginSummary | null): string {
+  if (!plugin) return ''
+  return plugin.logoUrl || localAssetSrc(plugin.logoPath) || plugin.composerIconUrl || localAssetSrc(plugin.composerIconPath)
+}
+
+function appLogoSrc(app: DirectoryAppInfo): string {
+  return app.logoUrlDark || app.logoUrl
+}
+
+function fallbackStyle(plugin: DirectoryPluginSummary): Record<string, string> {
+  return plugin.brandColor ? { backgroundColor: plugin.brandColor, color: '#fff' } : {}
+}
+
+async function loadMethods(): Promise<void> {
+  try {
+    methodSet.value = new Set(await getMethodCatalog())
+  } catch {
+    methodSet.value = new Set()
+  } finally {
+    methodsLoaded.value = true
+  }
+}
+
+async function loadPlugins(): Promise<void> {
+  if (!supportsPlugins.value) return
+  isLoadingPlugins.value = true
+  pluginError.value = ''
+  try {
+    const cwd = props.cwd?.trim()
+    plugins.value = await listDirectoryPlugins(cwd ? [cwd] : undefined)
+  } catch (error) {
+    pluginError.value = error instanceof Error ? error.message : 'Failed to load plugins'
+  } finally {
+    isLoadingPlugins.value = false
+  }
+}
+
+async function loadApps(): Promise<void> {
+  if (!supportsApps.value) return
+  isLoadingApps.value = true
+  appError.value = ''
+  try {
+    apps.value = await listDirectoryApps(props.threadId?.trim() || undefined)
+  } catch (error) {
+    appError.value = error instanceof Error ? error.message : 'Failed to load apps'
+  } finally {
+    isLoadingApps.value = false
+  }
+}
+
+async function loadMcps(): Promise<void> {
+  if (!supportsMcps.value) return
+  isLoadingMcps.value = true
+  mcpError.value = ''
+  try {
+    mcpServers.value = await listDirectoryMcpServers()
+  } catch (error) {
+    mcpError.value = error instanceof Error ? error.message : 'Failed to load MCP servers'
+  } finally {
+    isLoadingMcps.value = false
+  }
+}
+
+function refreshActiveTab(): void {
+  if (activeTab.value === 'plugins') void loadPlugins()
+  if (activeTab.value === 'apps') void loadApps()
+  if (activeTab.value === 'mcps') void loadMcps()
+}
+
+async function openPluginDetail(plugin: DirectoryPluginSummary): Promise<void> {
+  selectedPlugin.value = plugin
+  selectedPluginDetail.value = null
+  pluginDetailError.value = ''
+  installAuthApps.value = []
+  isPluginDetailOpen.value = true
+  isLoadingPluginDetail.value = true
+  try {
+    selectedPluginDetail.value = await readDirectoryPlugin(plugin)
+    selectedPlugin.value = selectedPluginDetail.value.summary
+  } catch (error) {
+    pluginDetailError.value = error instanceof Error ? error.message : 'Failed to load plugin'
+  } finally {
+    isLoadingPluginDetail.value = false
+  }
+}
+
+function closePluginDetail(): void {
+  isPluginDetailOpen.value = false
+}
+
+async function installSelectedPlugin(): Promise<void> {
+  if (!selectedPlugin.value) return
+  isPluginActionInFlight.value = true
+  try {
+    const result = await installDirectoryPlugin(selectedPlugin.value)
+    installAuthApps.value = result.appsNeedingAuth
+    showToast(`${selectedPlugin.value.displayName} plugin installed`)
+    await loadPlugins()
+    const updated = plugins.value.find((plugin) => plugin.id === selectedPlugin.value?.id)
+    if (updated) await openPluginDetail(updated)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to install plugin', 'error')
+  } finally {
+    isPluginActionInFlight.value = false
+  }
+}
+
+async function uninstallSelectedPlugin(): Promise<void> {
+  if (!selectedPlugin.value) return
+  isPluginActionInFlight.value = true
+  try {
+    const name = selectedPlugin.value.displayName
+    await uninstallDirectoryPlugin(selectedPlugin.value.id)
+    showToast(`${name} plugin uninstalled`)
+    closePluginDetail()
+    await loadPlugins()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to uninstall plugin', 'error')
+  } finally {
+    isPluginActionInFlight.value = false
+  }
+}
+
+async function toggleSelectedPlugin(): Promise<void> {
+  if (!selectedPlugin.value) return
+  isPluginActionInFlight.value = true
+  try {
+    const next = !selectedPlugin.value.enabled
+    await setDirectoryPluginEnabled(selectedPlugin.value.id, next)
+    selectedPlugin.value = { ...selectedPlugin.value, enabled: next }
+    if (selectedPluginDetail.value) {
+      selectedPluginDetail.value = {
+        ...selectedPluginDetail.value,
+        summary: { ...selectedPluginDetail.value.summary, enabled: next },
+      }
+    }
+    showToast(`${selectedPlugin.value.displayName} plugin ${next ? 'enabled' : 'disabled'}`)
+    await loadPlugins()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to update plugin', 'error')
+  } finally {
+    isPluginActionInFlight.value = false
+  }
+}
+
+async function toggleApp(app: DirectoryAppInfo): Promise<void> {
+  appActionId.value = app.id
+  try {
+    const next = !app.isEnabled
+    await setDirectoryAppEnabled(app.id, next)
+    apps.value = apps.value.map((row) => row.id === app.id ? { ...row, isEnabled: next } : row)
+    showToast(`${app.name} app ${next ? 'enabled' : 'disabled'}`)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to update app', 'error')
+  } finally {
+    appActionId.value = ''
+  }
+}
+
+async function reloadMcps(): Promise<void> {
+  isReloadingMcps.value = true
+  try {
+    await reloadDirectoryMcpServers()
+    await loadMcps()
+    showToast('MCP servers reloaded')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to reload MCP servers', 'error')
+  } finally {
+    isReloadingMcps.value = false
+  }
+}
+
+function toggleMcpExpanded(name: string): void {
+  const next = new Set(expandedMcpNames.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  expandedMcpNames.value = next
+}
+
+watch(activeTab, () => refreshActiveTab())
+watch(() => props.cwd, () => {
+  if (activeTab.value === 'plugins') void loadPlugins()
+})
+watch(() => props.threadId, () => {
+  if (activeTab.value === 'apps') void loadApps()
+})
+
+onMounted(async () => {
+  await loadMethods()
+  await loadPlugins()
+})
+</script>
+
+<style scoped>
+@reference "tailwindcss";
+
+.directory-hub {
+  @apply flex h-full w-full flex-col gap-3 overflow-y-auto p-3 sm:p-6;
+}
+
+.directory-header {
+  @apply mx-auto flex w-full max-w-5xl items-start justify-between gap-3;
+}
+
+.directory-title {
+  @apply m-0 text-xl font-semibold text-zinc-900 sm:text-2xl;
+}
+
+.directory-subtitle {
+  @apply m-0 mt-1 text-sm text-zinc-500;
+}
+
+.directory-refresh,
+.directory-action,
+.directory-action-link,
+.directory-modal-close {
+  @apply shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 no-underline transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.directory-action.primary {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-black;
+}
+
+.directory-action.danger {
+  @apply border-rose-600 bg-rose-600 text-white hover:bg-rose-700;
+}
+
+.directory-tabs {
+  @apply mx-auto grid w-full max-w-5xl grid-cols-4 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+}
+
+.directory-tab {
+  @apply rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-zinc-500 transition hover:text-zinc-800;
+}
+
+.directory-tab.is-active {
+  @apply bg-white text-zinc-900 shadow-sm;
+}
+
+.directory-section {
+  @apply mx-auto flex w-full max-w-5xl flex-col gap-3;
+}
+
+.directory-section-actions {
+  @apply flex justify-end;
+}
+
+.directory-grid {
+  @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
+}
+
+.directory-list {
+  @apply flex flex-col gap-3;
+}
+
+.directory-card {
+  @apply flex min-h-36 flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-300 hover:shadow-sm;
+}
+
+button.directory-card {
+  @apply cursor-pointer;
+}
+
+.directory-card.is-disabled {
+  @apply opacity-60;
+}
+
+.directory-card-wide {
+  @apply min-h-0;
+}
+
+.directory-card-top {
+  @apply flex min-w-0 items-start gap-3;
+}
+
+.directory-card-icon,
+.directory-card-fallback {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 object-cover text-sm font-semibold uppercase text-zinc-500;
+}
+
+.directory-card-main {
+  @apply min-w-0 flex-1;
+}
+
+.directory-card-title-row {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.directory-card-title {
+  @apply truncate text-sm font-semibold text-zinc-900;
+}
+
+.directory-card-meta {
+  @apply mt-0.5 block truncate text-xs text-zinc-400;
+}
+
+.directory-card-description {
+  @apply m-0 line-clamp-3 text-xs leading-relaxed text-zinc-500;
+}
+
+.directory-badge {
+  @apply shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium leading-none text-emerald-700;
+}
+
+.directory-badge.is-muted {
+  @apply border-zinc-200 bg-zinc-100 text-zinc-500;
+}
+
+.directory-chip-row {
+  @apply flex flex-wrap gap-1.5;
+}
+
+.directory-chip {
+  @apply rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500;
+}
+
+.directory-card-actions {
+  @apply mt-auto flex items-center gap-2 pt-1;
+}
+
+.directory-loading,
+.directory-empty,
+.directory-error {
+  @apply rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500;
+}
+
+.directory-error,
+.directory-toast.is-error {
+  @apply border-rose-200 bg-rose-50 text-rose-700;
+}
+
+.directory-toast {
+  @apply mx-auto w-full max-w-5xl rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700;
+}
+
+.directory-card-toggle {
+  @apply flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left;
+}
+
+.directory-mcp-detail {
+  @apply flex flex-col gap-3 border-t border-zinc-100 pt-3;
+}
+
+.directory-mini-heading,
+.directory-detail-heading {
+  @apply m-0 text-xs font-semibold text-zinc-700;
+}
+
+.directory-mini-list {
+  @apply m-0 text-xs leading-relaxed text-zinc-500;
+}
+
+.directory-modal-overlay {
+  @apply fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center;
+}
+
+.directory-modal {
+  @apply flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[82vh] sm:rounded-2xl;
+}
+
+.directory-modal-header,
+.directory-modal-footer {
+  @apply flex shrink-0 items-center justify-between gap-3 p-4 sm:p-5;
+}
+
+.directory-modal-header {
+  @apply border-b border-zinc-100;
+}
+
+.directory-modal-footer {
+  @apply justify-end border-t border-zinc-100;
+}
+
+.directory-modal-title {
+  @apply m-0 truncate text-lg font-semibold text-zinc-900;
+}
+
+.directory-modal-body {
+  @apply flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-5;
+}
+
+.directory-detail-description {
+  @apply m-0 text-sm leading-relaxed text-zinc-600;
+}
+
+.directory-detail-grid {
+  @apply grid grid-cols-1 gap-3 sm:grid-cols-2;
+}
+
+.directory-detail-block,
+.directory-auth-panel {
+  @apply rounded-xl border border-zinc-200 bg-zinc-50 p-3;
+}
+
+.directory-include-row {
+  @apply mt-2 flex items-center justify-between gap-3 text-xs text-zinc-600;
+}
+
+.directory-include-row a {
+  @apply text-blue-600 no-underline hover:underline;
+}
+
+.directory-screenshots {
+  @apply grid grid-cols-1 gap-3 sm:grid-cols-2;
+}
+
+.directory-screenshots img {
+  @apply max-h-56 w-full rounded-xl border border-zinc-200 object-cover;
+}
+
+:global(:root.dark) .directory-title,
+:global(:root.dark) .directory-card-title,
+:global(:root.dark) .directory-modal-title,
+:global(:root.dark) .directory-mini-heading,
+:global(:root.dark) .directory-detail-heading {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .directory-subtitle,
+:global(:root.dark) .directory-card-meta,
+:global(:root.dark) .directory-card-description,
+:global(:root.dark) .directory-mini-list,
+:global(:root.dark) .directory-detail-description {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .directory-tabs,
+:global(:root.dark) .directory-card,
+:global(:root.dark) .directory-loading,
+:global(:root.dark) .directory-empty,
+:global(:root.dark) .directory-modal,
+:global(:root.dark) .directory-refresh,
+:global(:root.dark) .directory-action,
+:global(:root.dark) .directory-action-link,
+:global(:root.dark) .directory-modal-close {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:global(:root.dark) .directory-tab.is-active,
+:global(:root.dark) .directory-detail-block,
+:global(:root.dark) .directory-auth-panel,
+:global(:root.dark) .directory-chip {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
+}
+</style>

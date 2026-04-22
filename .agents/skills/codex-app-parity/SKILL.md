@@ -644,3 +644,18 @@ After each feature implementation session that uses this skill:
   - Restore executable permissions on `node-pty` `spawn-helper` at runtime when pnpm ignores native package build scripts.
   - Unit-test terminal manager behavior through dependency injection instead of spawning real shells for every edge case.
   - Edge cases worth preserving in tests: missing thread id rejection, cwd fallback, dimension clamping, 16 KiB buffer truncation, reattach init-log emission, shell-quoted cwd sync, new-session tab creation without killing previous PTYs, and close/exit snapshot cleanup.
+## Findings: Plugins Directory API Surface (2026-04-22)
+
+- Codex.app plugin directory UI lives in extracted renderer chunks named like:
+  - `plugins-page-*.js`
+  - `plugins-cards-grid-*.js`
+  - `plugins-settings-*.js`
+- Desktop copy and tab structure use a full “Skills & Apps” surface with Plugins, Apps, MCPs, and Skills tabs; plugin copy includes “Plugins make Codex work your way.”
+- Live `codex app-server generate-json-schema` exposes slash-style methods for this surface:
+  - `plugin/list`, `plugin/read`, `plugin/install`, `plugin/uninstall`
+  - `app/list`
+  - `mcpServerStatus/list`
+  - `config/mcpServer/reload`
+- Plugin list responses are grouped by marketplace; each plugin summary carries `id`, `name`, `installed`, `enabled`, `installPolicy`, `authPolicy`, `source`, and an optional `interface`.
+- Plugin detail responses include `summary`, `apps`, `skills`, and `mcpServers`. Install responses include `authPolicy` and `appsNeedingAuth`.
+- For web parity, feature-detect these methods through `/codex-api/meta/methods` and degrade gracefully when older Codex CLI versions do not expose them.
