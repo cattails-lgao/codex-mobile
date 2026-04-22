@@ -144,7 +144,7 @@
                 <span v-if="!app.isEnabled" class="directory-badge is-muted">Disabled</span>
                 <span v-else-if="app.isAccessible" class="directory-badge">Connected</span>
               </div>
-              <span class="directory-card-meta">{{ app.developer || app.distributionChannel || 'App' }}</span>
+              <span class="directory-card-meta">{{ appMetaLabel(app) }}</span>
             </div>
           </div>
           <p v-if="app.description" class="directory-card-description">{{ app.description }}</p>
@@ -352,9 +352,31 @@ type DirectorySortMode = 'popular' | 'name'
 
 const POPULAR_LIMIT = 100
 const POPULAR_APP_NAME_BONUSES: Array<[RegExp, number]> = [
-  [/^(github|gitlab|linear|slack|notion|gmail|google drive|google calendar|google docs)$/i, 120],
-  [/^(jira|asana|trello|clickup|basecamp|azure boards|monday|figma|canva)$/i, 95],
-  [/^(dropbox|box|onedrive|outlook|hubspot|salesforce|zapier|netlify|vercel)$/i, 80],
+  [/^github$/i, 11_000],
+  [/^gmail$/i, 10_700],
+  [/^google drive$/i, 10_400],
+  [/^slack$/i, 10_100],
+  [/^asana$/i, 9_800],
+  [/^basecamp$/i, 9_500],
+  [/^figma$/i, 9_200],
+  [/^google calendar$/i, 8_900],
+  [/^notion$/i, 8_600],
+  [/^linear$/i, 8_300],
+  [/^gitlab( issues)?$/i, 8_000],
+  [/^jira$/i, 7_700],
+  [/^trello$/i, 7_400],
+  [/^clickup$/i, 7_100],
+  [/^dropbox$/i, 6_800],
+  [/^box$/i, 6_500],
+  [/^outlook( email| calendar)?$/i, 6_200],
+  [/^canva$/i, 5_900],
+  [/^netlify$/i, 5_600],
+  [/^vercel$/i, 5_300],
+  [/^hubspot$/i, 5_000],
+  [/^salesforce$/i, 4_700],
+  [/^zapier$/i, 4_400],
+]
+const POPULAR_APP_KEYWORD_BONUSES: Array<[RegExp, number]> = [
   [/(calendar|email|drive|docs|sheets|tasks|project|issue|repository|design|deploy|search)/i, 35],
 ]
 const POPULAR_PLUGIN_NAME_BONUSES: Array<[RegExp, number]> = [
@@ -439,7 +461,7 @@ const selectedPluginScreenshots = computed(() => {
   return [...summary.screenshotUrls, ...summary.screenshots.map(localAssetSrc)].filter(Boolean)
 })
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
-const visibleApps = computed(() => limitPopularRows(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
+const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
 const visibleMcpServers = computed(() => limitPopularRows(sortMcpServers(filterMcpServers(mcpServers.value, mcpSearchQuery.value), mcpSortMode.value), mcpSortMode.value, mcpSearchQuery.value))
 
 function normalizeSearch(value: string): string {
@@ -456,8 +478,39 @@ function bonusForName(name: string, rows: Array<[RegExp, number]>): number {
   return rows.reduce((score, [pattern, bonus]) => score + (pattern.test(name) ? bonus : 0), 0)
 }
 
+function normalizeAppNameForRanking(name: string): string {
+  return name
+    .replace(/\s+\((synced|legacy)\)\s*$/iu, '')
+    .replace(/\s+\(.*?\)\s*$/u, '')
+    .trim()
+}
+
+function formatDistributionChannel(value: string): string {
+  if (value === 'DEFAULT_OAI_CATALOG') return 'OpenAI catalog'
+  if (value === 'ECOSYSTEM_DIRECTORY') return 'Ecosystem directory'
+  return value ? value.replace(/_/gu, ' ').toLowerCase().replace(/\b\w/gu, (char) => char.toUpperCase()) : ''
+}
+
+function appMetaLabel(app: DirectoryAppInfo): string {
+  return app.developer || formatDistributionChannel(app.distributionChannel) || 'App'
+}
+
 function limitPopularRows<T>(rows: T[], sortMode: DirectorySortMode, query: string): T[] {
   return sortMode === 'popular' && normalizeSearch(query).length === 0 ? rows.slice(0, POPULAR_LIMIT) : rows
+}
+
+function limitPopularApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode, query: string): DirectoryAppInfo[] {
+  if (sortMode !== 'popular' || normalizeSearch(query).length > 0) return rows
+  const seen = new Set<string>()
+  const uniqueRows: DirectoryAppInfo[] = []
+  for (const app of rows) {
+    const key = normalizeAppNameForRanking(app.name).toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    uniqueRows.push(app)
+    if (uniqueRows.length >= POPULAR_LIMIT) break
+  }
+  return uniqueRows
 }
 
 function filterPlugins(rows: DirectoryPluginSummary[], query: string): DirectoryPluginSummary[] {
@@ -505,13 +558,15 @@ function pluginPopularScore(plugin: DirectoryPluginSummary): number {
 }
 
 function appPopularScore(app: DirectoryAppInfo): number {
+  const normalizedName = normalizeAppNameForRanking(app.name)
   return (
-    (app.isAccessible ? 1000 : 0) +
+    (app.isAccessible ? 10_000 : 0) +
+    bonusForName(normalizedName, POPULAR_APP_NAME_BONUSES) +
     (app.pluginDisplayNames.length > 0 ? 260 : 0) +
-    (app.distributionChannel === 'DEFAULT_OAI_CATALOG' ? 180 : 0) +
+    (app.distributionChannel === 'DEFAULT_OAI_CATALOG' ? 120 : 0) +
     (app.isEnabled ? 40 : 0) +
     (app.installUrl ? 20 : 0) +
-    bonusForName(`${app.name} ${app.description} ${app.category} ${app.pluginDisplayNames.join(' ')}`, POPULAR_APP_NAME_BONUSES) -
+    bonusForName(`${app.name} ${app.description} ${app.category} ${app.pluginDisplayNames.join(' ')}`, POPULAR_APP_KEYWORD_BONUSES) -
     (app.catalogRank * 0.001)
   )
 }
