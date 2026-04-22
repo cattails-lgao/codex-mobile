@@ -2895,8 +2895,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 8. Confirm `terminal-ok` appears in the xterm output
 9. Choose `npm run dev` from the `Run...` quick-command menu
 10. Confirm the command is submitted to the active terminal
-11. Open `Commands`, add a custom quick command, run it from `Run...`, then delete it
-12. Confirm the deleted custom command disappears from the `Run...` menu
+11. Choose `Add command...` from the `Run...` menu
+12. Enter a custom command in the prompt and confirm it runs immediately
 13. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
 14. Confirm the JSON `session.buffer` contains `terminal-ok`
 15. Refresh the page and reopen the same thread
@@ -2915,7 +2915,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
-- Custom quick commands can be created, run from the quick-command menu, and deleted
+- Custom quick commands can be added from the `Run...` menu prompt and run immediately
+- The `Run...` menu shows only the five most-used/recent commands before `Add command...`
 - `New terminal` adds another tab without killing the previous PTY
 - `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
