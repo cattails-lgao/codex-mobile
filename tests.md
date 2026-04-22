@@ -2770,3 +2770,241 @@ New TestChat threads use the provider-scoped model selected in the new-thread co
 
 #### Rollback/Cleanup
 - Switch provider/model settings back to preferred defaults if needed
+
+---
+
+### User message edit action replaces rollback button
+
+#### Feature/Change Name
+The old rollback button is replaced with an `Edit message` action under each eligible user message, while keeping the existing behavior that appends the original text into the composer and rolls the thread back from that turn.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. An existing thread with at least one completed user/assistant turn
+
+#### Steps
+1. Open a thread with multiple completed turns
+2. Hover a completed user message
+3. Confirm `Edit message` appears under that user message
+4. Confirm assistant responses no longer show the old `Rollback` button
+5. Click `Edit message` on an earlier user message with recognizable text
+6. Observe the composer draft after the click
+7. Confirm the thread rolls back from the selected turn
+
+#### Expected Results
+- The action under eligible user messages is labeled `Edit message`
+- Assistant responses no longer render the old rollback action
+- Clicking `Edit message` appends the original user text into the composer
+- The existing rollback behavior still truncates the selected turn and later turns
+
+#### Rollback/Cleanup
+- Re-send the edited message if you want to recreate the conversation path
+
+---
+
+### API perf log bodyMB uses one decimal place
+
+#### Feature/Change Name
+`[codex-api-perf]` log entries format `bodyMB` with one decimal place instead of four.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A request large enough to trigger `[codex-api-perf]` logging
+
+#### Steps
+1. Trigger a `/codex-api/` request that exceeds the perf logging threshold
+2. Inspect the server log line that includes `bodyMB=...`
+
+#### Expected Results
+- `bodyMB` is formatted with one decimal place, such as `bodyMB=3.4`
+- The log does not print extra precision such as `bodyMB=3.4489`
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Cold thread load avoids duplicate history fetch
+
+#### Feature/Change Name
+Cold thread message loading reuses the `thread/resume` response instead of also issuing `thread/read`.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open, filtered to Codex RPC or `/codex-api`
+3. An existing thread that has not been opened in the current browser session
+
+#### Steps
+1. Refresh the app
+2. Open the existing thread
+3. Inspect the network/RPC calls made during the initial thread load
+4. Open the same thread again or switch away and back
+
+#### Expected Results
+- The first cold open performs `thread/resume` for that thread and renders its messages
+- The first cold open does not also perform a redundant `thread/read` for the same thread load
+- Returning to an already resumed thread can use `thread/read` when a refresh is needed
+- Messages, in-progress state, active turn tracking, and model selection still populate correctly
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### First app start avoids unnecessary selected-thread message load
+
+#### Feature/Change Name
+Initial home-route startup skips loading the previously selected thread's messages and loads workspace-root state only once for the first thread list.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. A saved selected thread exists from a previous app session
+
+#### Steps
+1. Open the app at the home route (`/`)
+2. Inspect startup network/RPC calls
+3. Open the app directly at `/thread/<threadId>` for an existing thread
+4. Inspect startup network/RPC calls again
+
+#### Expected Results
+- Home-route startup loads the thread list but does not load messages for the previous selected thread
+- Direct thread-route startup still loads that thread's messages
+- First thread-list loading performs a single workspace roots state request for ordering and filtering
+- Thread groups still respect saved workspace root ordering/filtering after startup
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread list startup pagination and direct older-thread links
+
+#### Feature/Change Name
+Thread loading uses a smaller initial list page, hydrates later pages in the background, and direct thread URLs are not rejected just because the thread is outside the first page.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. More than 50 existing threads, including a valid older thread outside the first updated page
+
+#### Steps
+1. Open the app home route
+2. Inspect the first `thread/list` RPC request
+3. Keep the app open and watch subsequent `thread/list` RPC requests
+4. Open `/thread/<older-thread-id>` directly for a valid thread outside the first page
+
+#### Expected Results
+- The first `thread/list` request uses a smaller initial limit instead of 100
+- Later thread pages load in the background using `nextCursor`
+- The sidebar gains older threads as background pages complete
+- The direct older thread URL stays on the thread route and loads messages instead of redirecting home
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread detail load avoids duplicate live-state history fetch
+
+#### Feature/Change Name
+Normal thread detail loading calls `thread/read` directly instead of first calling `/codex-api/thread-live-state`, whose server path also reads full thread history.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. An existing thread with a large history
+
+#### Steps
+1. Open the existing thread
+2. Inspect network/RPC calls during the message load
+
+#### Expected Results
+- The message load performs `thread/read` or `thread/resume` for the thread
+- It does not first call `/codex-api/thread-live-state` for the same normal message load
+- Messages and active/in-progress state still render correctly
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread message cache skips unchanged refetches
+
+#### Feature/Change Name
+Loaded thread messages are reused when the thread list version has not changed and the thread is not in progress.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. An existing completed thread
+
+#### Steps
+1. Open the completed thread and wait for messages to render
+2. Switch to another thread or home
+3. Return to the same completed thread without new turn or thread update events
+4. Inspect network/RPC calls during the return
+
+#### Expected Results
+- The first open loads messages normally
+- Returning to the unchanged completed thread reuses cached messages
+- No additional `thread/read` or `thread/resume` call is made for that unchanged return
+- If the thread version changes or the thread is in progress, messages still refresh from the server
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread selection keeps sidebar list stable during refresh
+
+#### Feature/Change Name
+Selecting a thread does not briefly hide older/sidebar threads while thread list refresh and background pagination run.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. More than one page of threads available in the sidebar
+3. Background pagination has loaded older threads
+
+#### Steps
+1. Open the app and wait until older thread pages appear in the sidebar
+2. Select a different thread
+3. Watch the sidebar while the selected thread loads and any thread list refresh occurs
+4. Repeat selection between recent and older threads
+
+#### Expected Results
+- The sidebar does not collapse to only the first page of recent threads
+- Previously loaded older threads remain visible during refresh
+- The selected thread stays highlighted and messages load normally
+- Background pagination can still add newly loaded older threads without hiding existing ones
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Browser runtime profiling with Playwright
+
+#### Feature/Change Name
+Playwright browser runtime profiler captures route timing, Codex API network counts, screenshots, and trace files.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://localhost:5173`
+2. Dependencies installed (`pnpm install`)
+3. Target route available, such as `#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c`
+
+#### Steps
+1. Run `pnpm run profile:browser`
+2. Run `PROFILE_ROUTE='#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c' pnpm run profile:browser`
+3. Inspect console output for duplicate counts and slowest API rows
+4. Open the generated `output/playwright/browser-runtime-profile-*.json`
+5. Open the generated `output/playwright/browser-runtime-profile-*-trace.zip` with `npx playwright show-trace`
+
+#### Expected Results
+- The profiler prints final URL, title, total observed time, duplicate request counts, and slowest Codex API calls
+- JSON report includes raw API rows, grouped summaries, Performance API data, and artifact paths
+- Screenshot is saved under `output/playwright/browser-runtime-profile-*.png`
+- Trace is saved under `output/playwright/browser-runtime-profile-*-trace.zip`
+
+#### Rollback/Cleanup
+- Delete generated files under `output/playwright/` if local artifacts are no longer needed

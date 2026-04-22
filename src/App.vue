@@ -1153,16 +1153,6 @@ const routeThreadId = computed(() => {
   return typeof rawThreadId === 'string' ? rawThreadId : ''
 })
 
-const knownThreadIdSet = computed(() => {
-  const ids = new Set<string>()
-  for (const group of projectGroups.value) {
-    for (const thread of group.threads) {
-      ids.add(thread.id)
-    }
-  }
-  return ids
-})
-
 const isHomeRoute = computed(() => route.name === 'home')
 const isSkillsRoute = computed(() => route.name === 'skills')
 const contentTitle = computed(() => {
@@ -3012,14 +3002,14 @@ async function initialize(): Promise<void> {
     primeSelectedThread(routeThreadId.value)
   }
 
-  startPolling()
   await refreshAll({
-    includeSelectedThreadMessages: true,
+    includeSelectedThreadMessages: route.name === 'thread',
   })
   void loadAccountsState({ silent: true })
   await applyLaunchProjectPathFromUrl()
   hasInitialized.value = true
   await syncThreadSelectionWithRoute()
+  startPolling()
 }
 
 async function syncThreadSelectionWithRoute(): Promise<void> {
@@ -3044,11 +3034,6 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
         const threadId = routeThreadId.value
         if (!threadId) continue
 
-        if (!knownThreadIdSet.value.has(threadId)) {
-          await router.replace({ name: 'home' })
-          continue
-        }
-
         if (selectedThreadId.value !== threadId) {
           await selectThread(threadId)
         } else {
@@ -3068,7 +3053,6 @@ watch(
       route.name,
       routeThreadId.value,
       isLoadingThreads.value,
-      knownThreadIdSet.value.has(routeThreadId.value),
       selectedThreadId.value,
     ] as const,
   async () => {
