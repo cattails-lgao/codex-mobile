@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { spawnSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
-import { basename, extname, isAbsolute } from "node:path";
+import { basename, extname, isAbsolute, resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import pkg from "./package.json";
 
@@ -78,6 +78,7 @@ function getWorktreeName(): string {
 const worktreeName = getWorktreeName();
 const appVersion = typeof pkg.version === "string" ? pkg.version : "unknown";
 const WS_UPGRADE_ATTACHED_KEY = "__codexBridgeWsAttached__";
+const LOCAL_XTERM_ROOT = process.env.CODEXUI_XTERM_ROOT || "/Users/igor/Git-projects/xter3";
 
 function readEnvValueFromFile(filePath: string, key: string): string {
   if (!existsSync(filePath)) return "";
@@ -107,6 +108,22 @@ export default defineConfig({
     "import.meta.env.VITE_WORKTREE_NAME": JSON.stringify(worktreeName),
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
     "import.meta.env.VITE_ROLLBACK_DEBUG_FALLBACK": JSON.stringify(viteRollbackDebugFallback),
+  },
+  resolve: {
+    alias: [
+      {
+        find: "@xterm/xterm/css/xterm.css",
+        replacement: resolve(LOCAL_XTERM_ROOT, "css/xterm.css"),
+      },
+      {
+        find: "@xterm/xterm",
+        replacement: resolve(LOCAL_XTERM_ROOT, "lib/xterm.mjs"),
+      },
+      {
+        find: "@xterm/addon-fit",
+        replacement: resolve(LOCAL_XTERM_ROOT, "addons/addon-fit/lib/addon-fit.mjs"),
+      },
+    ],
   },
   server: {
     host: "0.0.0.0",

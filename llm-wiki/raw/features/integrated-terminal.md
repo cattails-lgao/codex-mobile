@@ -6,9 +6,11 @@ Date captured: 2026-04-22
 The `codex-web-local` project added a Codex.app-style integrated terminal for local/worktree threads.
 
 ## Implementation Facts
-- Runtime dependencies:
+- Runtime dependencies/imports:
   - `@xterm/xterm`
   - `@xterm/addon-fit`
+  - Vite aliases resolve those imports to the local modified xterm checkout by default: `/Users/igor/Git-projects/xter3`
+  - The alias root can be overridden with `CODEXUI_XTERM_ROOT`
   - `node-pty`
 - Server entry point:
   - `src/server/terminalManager.ts`
@@ -48,6 +50,7 @@ The `codex-web-local` project added a Codex.app-style integrated terminal for lo
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } | null }`.
 - The web UI supports multiple terminal tabs per thread; `New terminal` creates and switches to a new PTY without killing existing tabs.
 - `ThreadTerminalManager` has dependency injection for tests, including PTY spawn, filesystem existence checks, cwd/home fallback, platform, shell, and helper setup.
+- The terminal frontend intentionally uses the local modified `xter3` checkout instead of stock npm xterm at runtime.
 
 ## Fixes From Visual Review
 - The terminal panel must not be part of the pending-request/composer `v-if`/`v-else` pair; otherwise the composer disappears when the terminal is open.
