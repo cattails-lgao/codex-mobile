@@ -1095,6 +1095,7 @@ export function useDesktopState() {
   const pendingThreadMessageRefresh = new Set<string>()
   let threadListNextCursor: string | null = null
   let isLoadingRemainingThreadPages = false
+  let hasLoadedAllThreadPages = false
   let loadedThreadListGroups: UiProjectGroup[] = []
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
@@ -3528,6 +3529,7 @@ export function useDesktopState() {
       while (threadListNextCursor) {
         const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
         threadListNextCursor = page.nextCursor
+        hasLoadedAllThreadPages = page.nextCursor === null
         loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
         applyThreadGroups(loadedThreadListGroups, rootsState)
       }
@@ -3560,11 +3562,14 @@ export function useDesktopState() {
         ? mergeThreadGroupPages(loadedThreadListGroups, groups)
         : groups
       threadListNextCursor = page.nextCursor
+      hasLoadedAllThreadPages = page.nextCursor === null
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
       applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
-      void loadRemainingThreadPages(rootsState)
+      if (!hasLoadedAllThreadPages) {
+        void loadRemainingThreadPages(rootsState)
+      }
 
       const flatThreads = flattenThreads(projectGroups.value)
       pruneThreadScopedState(flatThreads)
@@ -4616,7 +4621,7 @@ export function useDesktopState() {
 
   async function recoverBridgeState(): Promise<void> {
     await loadPendingServerRequestsFromBridge()
-    pendingThreadsRefresh = true
+    pendingThreadsRefresh = !hasLoadedThreads.value
     if (selectedThreadId.value) {
       pendingThreadMessageRefresh.add(selectedThreadId.value)
     }

@@ -7,6 +7,14 @@ const route = process.env.PROFILE_ROUTE || '/'
 const waitMs = Number.parseInt(process.env.PROFILE_WAIT_MS || '7000', 10)
 const headless = process.env.PROFILE_HEADLESS !== 'false'
 const outputDir = resolve(process.cwd(), 'output/playwright')
+const runStamp = new Date().toISOString().replace(/[:.]/g, '-')
+
+function routeSlug() {
+  const raw = route.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return raw || 'home'
+}
+
+const artifactPrefix = `browser-runtime-profile-${routeSlug()}-${runStamp}`
 
 function round(value) {
   return Math.round(value * 10) / 10
@@ -33,6 +41,9 @@ function summarize(rows) {
 }
 
 function requestKey(row) {
+  if (row.rpc === 'thread/list') {
+    return row.cursor ? 'thread/list:cursor' : 'thread/list:first-page'
+  }
   return row.rpc || row.path
 }
 
@@ -103,6 +114,9 @@ async function main() {
     request.__profile = {
       startedAt: performance.now(),
       rpc: parsedBody && typeof parsedBody.method === 'string' ? parsedBody.method : '',
+      cursor: parsedBody?.params && typeof parsedBody.params === 'object' && typeof parsedBody.params.cursor === 'string'
+        ? parsedBody.params.cursor
+        : '',
       requestBytes: body ? Buffer.byteLength(body, 'utf8') : 0,
     }
   })
@@ -123,6 +137,7 @@ async function main() {
       method: request.method(),
       path: new URL(response.url()).pathname,
       rpc: profile.rpc,
+      cursor: profile.cursor,
       status: response.status(),
       ms: round(performance.now() - profile.startedAt),
       requestBytes: profile.requestBytes,
@@ -131,7 +146,7 @@ async function main() {
     })
   })
 
-  const tracePath = resolve(outputDir, 'browser-runtime-profile-trace.zip')
+  const tracePath = resolve(outputDir, `${artifactPrefix}-trace.zip`)
   await context.tracing.start({ screenshots: true, snapshots: true })
 
   const startedAt = performance.now()
@@ -143,7 +158,7 @@ async function main() {
   const title = await page.title()
   const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '')
   const performanceData = await collectPerformance(page)
-  const screenshotPath = resolve(outputDir, 'browser-runtime-profile.png')
+  const screenshotPath = resolve(outputDir, `${artifactPrefix}.png`)
   await page.screenshot({ path: screenshotPath, fullPage: true })
   await context.tracing.stop({ path: tracePath })
   await browser.close()
@@ -162,6 +177,8 @@ async function main() {
 
   const duplicateCounts = {
     threadList: apiRows.filter((row) => row.rpc === 'thread/list').length,
+    threadListFirstPage: apiRows.filter((row) => row.rpc === 'thread/list' && !row.cursor).length,
+    threadListCursor: apiRows.filter((row) => row.rpc === 'thread/list' && row.cursor).length,
     threadResume: apiRows.filter((row) => row.rpc === 'thread/resume').length,
     threadRead: apiRows.filter((row) => row.rpc === 'thread/read').length,
     skillsList: apiRows.filter((row) => row.rpc === 'skills/list').length,
@@ -184,7 +201,7 @@ async function main() {
     apiRows,
   }
 
-  const reportPath = resolve(outputDir, 'browser-runtime-profile.json')
+  const reportPath = resolve(outputDir, `${artifactPrefix}.json`)
   writeFileSync(reportPath, JSON.stringify(report, null, 2))
 
   console.log(JSON.stringify({
