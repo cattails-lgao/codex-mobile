@@ -73,6 +73,26 @@
     </section>
 
     <section v-else-if="activeTab === 'apps'" class="directory-section">
+      <div class="directory-section-actions">
+        <div class="directory-sort-group" role="group" aria-label="Sort apps">
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': appSortMode === 'popular' }"
+            type="button"
+            @click="appSortMode = 'popular'"
+          >
+            Popular
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': appSortMode === 'name' }"
+            type="button"
+            @click="appSortMode = 'name'"
+          >
+            A-Z
+          </button>
+        </div>
+      </div>
       <div v-if="!supportsApps" class="directory-empty">
         Apps APIs unavailable in this Codex CLI. Update Codex CLI to manage apps.
       </div>
@@ -80,7 +100,7 @@
       <div v-else-if="isLoadingApps" class="directory-loading">Loading apps...</div>
       <div v-else-if="apps.length === 0" class="directory-empty">No apps found.</div>
       <div v-else class="directory-grid">
-        <article v-for="app in apps" :key="app.id" class="directory-card">
+        <article v-for="app in sortedApps" :key="app.id" class="directory-card">
           <div class="directory-card-top">
             <img v-if="appLogoSrc(app)" class="directory-card-icon" :src="appLogoSrc(app)" :alt="app.name" loading="lazy" />
             <div v-else class="directory-card-fallback">{{ app.name.charAt(0) }}</div>
@@ -102,9 +122,9 @@
             <button class="directory-action" type="button" :disabled="appActionId === app.id" @click="toggleApp(app)">
               {{ app.isEnabled ? 'Disable' : 'Enable' }}
             </button>
-            <a v-if="app.installUrl" class="directory-action-link" :href="app.installUrl" target="_blank" rel="noopener noreferrer">
+            <button v-if="app.installUrl" class="directory-action-link" type="button" @click="openExternalUrl(app.installUrl)">
               Manage
-            </a>
+            </button>
           </div>
         </article>
       </div>
@@ -185,7 +205,7 @@
                   <h4 class="directory-detail-heading">Apps</h4>
                   <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
                     <span>{{ app.name }}</span>
-                    <a v-if="app.installUrl" :href="app.installUrl" target="_blank" rel="noopener noreferrer">Manage</a>
+                    <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Manage</button>
                   </div>
                 </div>
                 <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
@@ -206,7 +226,7 @@
                 <strong>Apps needing auth</strong>
                 <div v-for="app in installAuthApps" :key="app.id" class="directory-include-row">
                   <span>{{ app.name }}</span>
-                  <a v-if="app.installUrl" :href="app.installUrl" target="_blank" rel="noopener noreferrer">Open</a>
+                  <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Open</button>
                 </div>
               </div>
             </template>
@@ -292,6 +312,7 @@ const methodsLoaded = ref(false)
 const plugins = ref<DirectoryPluginSummary[]>([])
 const apps = ref<DirectoryAppInfo[]>([])
 const mcpServers = ref<DirectoryMcpServerStatus[]>([])
+const appSortMode = ref<'popular' | 'name'>('popular')
 const isLoadingPlugins = ref(false)
 const isLoadingApps = ref(false)
 const isLoadingMcps = ref(false)
@@ -336,6 +357,21 @@ const selectedPluginScreenshots = computed(() => {
   if (!summary) return []
   return [...summary.screenshotUrls, ...summary.screenshots.map(localAssetSrc)].filter(Boolean)
 })
+const sortedApps = computed(() => {
+  const rows = [...apps.value]
+  if (appSortMode.value === 'name') {
+    return rows.sort((a, b) => a.name.localeCompare(b.name))
+  }
+  return rows.sort((a, b) => {
+    const connectedDelta = Number(b.isAccessible) - Number(a.isAccessible)
+    if (connectedDelta !== 0) return connectedDelta
+    const pluginDelta = Number(b.pluginDisplayNames.length > 0) - Number(a.pluginDisplayNames.length > 0)
+    if (pluginDelta !== 0) return pluginDelta
+    const catalogDelta = Number(b.distributionChannel === 'DEFAULT_OAI_CATALOG') - Number(a.distributionChannel === 'DEFAULT_OAI_CATALOG')
+    if (catalogDelta !== 0) return catalogDelta
+    return a.catalogRank - b.catalogRank
+  })
+})
 
 function showToast(text: string, type: 'success' | 'error' = 'success'): void {
   toast.value = { text, type }
@@ -345,6 +381,7 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
 
 function localAssetSrc(path: string): string {
   if (!path) return ''
+  if (path.startsWith('connectors://')) return `/codex-api/connector-logo?src=${encodeURIComponent(path)}`
   if (/^https?:\/\//i.test(path) || path.startsWith('data:')) return path
   if (!path.startsWith('/')) return ''
   return `/codex-local-image?path=${encodeURIComponent(path)}`
@@ -356,7 +393,13 @@ function pluginIconSrc(plugin: DirectoryPluginSummary | null): string {
 }
 
 function appLogoSrc(app: DirectoryAppInfo): string {
-  return app.logoUrlDark || app.logoUrl
+  return localAssetSrc(app.logoUrlDark || app.logoUrl)
+}
+
+function openExternalUrl(rawUrl: string): void {
+  const url = rawUrl.trim()
+  if (!/^https?:\/\//i.test(url)) return
+  window.location.assign(url)
 }
 
 function fallbackStyle(plugin: DirectoryPluginSummary): Record<string, string> {
@@ -597,6 +640,18 @@ onMounted(async () => {
   @apply flex justify-end;
 }
 
+.directory-sort-group {
+  @apply inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+}
+
+.directory-sort-button {
+  @apply rounded-md border-0 bg-transparent px-2.5 py-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-800;
+}
+
+.directory-sort-button.is-active {
+  @apply bg-white text-zinc-900 shadow-sm;
+}
+
 .directory-grid {
   @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
 }
@@ -748,8 +803,8 @@ button.directory-card {
   @apply mt-2 flex items-center justify-between gap-3 text-xs text-zinc-600;
 }
 
-.directory-include-row a {
-  @apply text-blue-600 no-underline hover:underline;
+.directory-include-row button {
+  @apply border-0 bg-transparent p-0 text-xs font-medium text-blue-600 hover:underline;
 }
 
 .directory-screenshots {
@@ -789,9 +844,14 @@ button.directory-card {
 }
 
 :global(:root.dark) .directory-tab.is-active,
+:global(:root.dark) .directory-sort-button.is-active,
 :global(:root.dark) .directory-detail-block,
 :global(:root.dark) .directory-auth-panel,
 :global(:root.dark) .directory-chip {
   @apply border-zinc-700 bg-zinc-800 text-zinc-100;
+}
+
+:global(:root.dark) .directory-sort-group {
+  @apply border-zinc-700 bg-zinc-950;
 }
 </style>

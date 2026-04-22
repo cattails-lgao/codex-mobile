@@ -3130,14 +3130,17 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 3. On `Plugins`, verify plugin cards load, or a non-blocking unavailable message appears on older Codex CLI versions
 4. Open a plugin card when one is available and verify description, capabilities, included apps/skills/MCPs, and install/uninstall or enable/disable actions are visible
 5. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
-6. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-7. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
+6. On `Apps`, verify the default sort control is `Popular`, app icons render, and the `Manage` button opens the app management URL
+7. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch back to `Popular` and verify connected/default/plugin-backed apps are prioritized
+8. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+9. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
 
 #### Expected Results
 - The directory tabs render without a full-page error
 - Plugin/app/MCP API failures are isolated to their tab
 - Existing Skills Hub behavior remains available under the `Skills` tab
 - App and plugin enable/disable actions update their local card state after a successful config write
+- Apps default to the best available popularity-style ordering because app-server does not expose a numeric popularity field
 
 #### Rollback/Cleanup
 - Re-enable any app or plugin disabled during testing
