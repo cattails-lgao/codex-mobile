@@ -474,3 +474,31 @@ After each feature implementation session that uses this skill:
 - Parity implication for this repo:
   - New worktree creation should not create/switch to a new local branch by default.
   - API responses should treat branch as nullable/absent for detached worktrees.
+
+## Findings: Desktop-visible Parity Surfaces (2026-04-22)
+
+- Codex.app `26.417.41555` renderer bundle contains first-class automation UI strings and routes:
+  - automation list labels under `inbox.automations.*`
+  - automation side panel navigation to `/automations?automationId=<id>`
+  - missing automation fallback copy: `Automation unavailable`
+- Codex.app archive confirmation is automation-aware:
+  - `threadHeader.archiveConfirmHeartbeatTitle`
+  - named/unnamed heartbeat subtitles explain that archiving the chat also removes the active heartbeat automation.
+- Codex.app thread file command menu exposes workspace file search:
+  - key: `thread.fileCommandMenu.searchFiles`
+  - group label: `thread.fileCommandMenu.filesGroup`
+  - implementation pairs command-menu entry with workspace file results rather than only passive text autocomplete.
+- Codex.app composer has a background terminal panel:
+  - `composer.backgroundTerminals.runningLabel`
+  - `composer.backgroundTerminals.stop`
+  - `composer.backgroundTerminals.stopTooltip`
+  - Web parity should expose `thread/backgroundTerminals/clean` near the composer/header and disable while pending.
+- Codex.app handles app-server app list updates from `app/list/updated` by refreshing cached app list data.
+- Useful protocol-backed parity surfaces for web implementation:
+  - `app/list`
+  - `mcpServerStatus/list`
+  - `config/mcpServer/reload`
+  - `mcpServer/oauth/login`
+  - `thread/compact/start`
+  - `feedback/upload`
+  - `fuzzyFileSearch`
