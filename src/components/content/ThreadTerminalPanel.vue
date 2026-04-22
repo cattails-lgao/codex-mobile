@@ -303,4 +303,23 @@ function readString(value: unknown): string {
 .thread-terminal-host :deep(.xterm-viewport) {
   @apply bg-black;
 }
+
+@media (max-width: 767px) {
+  .thread-terminal-panel {
+    height: min(28vh, 14rem);
+    min-height: 9rem;
+  }
+
+  .thread-terminal-header {
+    @apply px-1.5;
+  }
+
+  .thread-terminal-action {
+    @apply px-1.5 text-[11px];
+  }
+
+  .thread-terminal-host {
+    @apply px-1.5 py-1.5;
+  }
+}
 </style>

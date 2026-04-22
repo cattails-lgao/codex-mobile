@@ -159,6 +159,7 @@ export class ThreadTerminalManager {
       ...process.env,
       TERM: TERMINAL_NAME,
     } as Record<string, string>
+    normalizeLocaleEnv(env)
     delete env.TERMINFO
     delete env.TERMINFO_DIRS
 
@@ -311,6 +312,13 @@ function ensureNodePtySpawnHelperExecutable(): void {
   } catch {
     // If node-pty changes layout, let node-pty surface its own spawn error.
   }
+}
+
+function normalizeLocaleEnv(env: Record<string, string>): void {
+  const locale = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8'
+  env.LANG = locale
+  env.LC_ALL = locale
+  env.LC_CTYPE = locale
 }
 
 function shellQuote(value: string): string {

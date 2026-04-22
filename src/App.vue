@@ -757,6 +757,13 @@
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     @respond-server-request="onRespondServerRequest"
                   />
+                  <ThreadTerminalPanel
+                    v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
+                    class="content-thread-terminal-panel"
+                    :thread-id="selectedThreadId"
+                    :cwd="composerCwd"
+                    @hide="setThreadTerminalOpen(selectedThreadId, false)"
+                  />
                   <ThreadComposer v-else ref="threadComposerRef" :active-thread-id="composerThreadContextId"
                     :cwd="composerCwd"
                     :collaboration-modes="availableCollaborationModes"
@@ -781,13 +788,6 @@
                     @update:selected-reasoning-effort="onSelectReasoningEffort"
                     @update:selected-speed-mode="onSelectSpeedMode"
                     @interrupt="onInterruptTurn" />
-                  <ThreadTerminalPanel
-                    v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
-                    class="content-thread-terminal-panel"
-                    :thread-id="selectedThreadId"
-                    :cwd="composerCwd"
-                    @hide="setThreadTerminalOpen(selectedThreadId, false)"
-                  />
                 </div>
               </template>
             </div>
