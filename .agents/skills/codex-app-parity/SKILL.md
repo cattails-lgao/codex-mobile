@@ -124,7 +124,29 @@ Use task-specific screenshot names under `output/playwright/`, for example:
 
 ### Reliable CDP Launch Pattern
 
-If Codex.app is already running without CDP, `open -a "Codex" --args --remote-debugging-port=3434` usually does **not** enable CDP because Electron reuses the existing app instance. Restart Codex.app with the port enabled.
+Prefer running a separate Codex.app debug instance so the user's normal Codex session is not interrupted and the CDP target can stay alive after tests.
+
+Use a fresh app instance with its own profile directory:
+
+```bash
+CDP_PORT=3434
+while lsof -i :"$CDP_PORT" >/dev/null 2>&1; do
+  CDP_PORT=$((CDP_PORT + 1))
+done
+
+CDP_PROFILE_DIR="/tmp/codex-cdp-$CDP_PORT"
+mkdir -p "$CDP_PROFILE_DIR"
+
+open -na "Codex" --args \
+  --remote-debugging-port="$CDP_PORT" \
+  --user-data-dir="$CDP_PROFILE_DIR"
+
+until curl -fsS "http://127.0.0.1:$CDP_PORT/json/list" >/tmp/codex-cdp-list.json; do
+  sleep 1
+done
+```
+
+Fallback only when a separate instance cannot be used: restart all Codex.app processes and launch the binary with `nohup`.
 
 ```bash
 pkill -TERM -f "/Applications/Codex.app" 2>/dev/null || true
@@ -134,26 +156,20 @@ if pgrep -f "/Applications/Codex.app" >/dev/null 2>&1; then
   sleep 1
 fi
 
-CDP_PORT=3434
-while lsof -i :"$CDP_PORT" >/dev/null 2>&1; do
-  CDP_PORT=$((CDP_PORT + 1))
-done
-
 nohup "/Applications/Codex.app/Contents/MacOS/Codex" \
   --remote-debugging-port="$CDP_PORT" \
   >/tmp/codex-cdp.log 2>&1 &
-
-until curl -fsS "http://127.0.0.1:$CDP_PORT/json/list" >/tmp/codex-cdp-list.json; do
-  sleep 1
-done
 ```
 
 Pick the page target from `/json/list` where `type == "page"` and `url` starts with `app://-/index.html`. For Playwright screenshots, prefer `chromium.connectOverCDP("http://127.0.0.1:$CDP_PORT")`, select that page, wait briefly for React/app-server hydration, and save the screenshot.
 
 Important caveats:
 
-- Use `nohup` or a long-lived shell; short one-shot launches can drop the CDP listener when the shell exits.
-- `browser.close()` may close or drop the CDP endpoint. Use `browser.disconnect()` when the Codex.app session should remain open.
+- `open -na "Codex"` is required for a true separate instance; `open -a "Codex"` reuses an existing app process and often does not enable CDP flags.
+- Always pass an isolated `--user-data-dir` for the debug instance to avoid profile lock contention and cross-session side effects.
+- If launched via raw binary, use `nohup` or a long-lived shell; short one-shot launches can drop the CDP listener when the shell exits.
+- Do not call `browser.close()` when the Codex.app session should remain open.
+- In Playwright builds where `browser.disconnect()` is unavailable for CDP sessions, connect, inspect/capture, and exit the test process without `close()`; this preserves the running Codex.app instance.
 - Existing helper processes can keep stale non-CDP state alive; killing all `/Applications/Codex.app` processes is more reliable than only `pkill -x Codex`.
 - CDP inspection can expose local thread titles and workspace names. Avoid pasting sensitive screenshot contents into public artifacts.
 
