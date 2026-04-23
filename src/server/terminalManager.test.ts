@@ -131,7 +131,7 @@ describe('ThreadTerminalManager edge cases', () => {
     expect(ptys[0]?.resizes).toEqual([{ cols: 1, rows: 500 }])
   })
 
-  it('normalizes PTY environment for macOS locale and node-pty helper', () => {
+  it('normalizes PTY environment for macOS locale and PTY helper', () => {
     const harness = createHarness()
     const { manager, spawnCalls } = harness
 
