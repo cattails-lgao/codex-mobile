@@ -1555,7 +1555,7 @@ onUnmounted(() => {
 
 function updateVisualViewportState(): void {
   if (typeof window === 'undefined') return
-  layoutViewportHeight.value = window.innerHeight
+  layoutViewportHeight.value = Math.max(layoutViewportHeight.value, window.innerHeight)
   visualViewportHeight.value = window.visualViewport?.height ?? window.innerHeight
   visualViewportOffsetTop.value = window.visualViewport?.offsetTop ?? 0
 }
@@ -2095,9 +2095,31 @@ function toggleComposerTerminal(): void {
   if (isHomeRoute.value) {
     if (!composerCwd.value) return
     homeTerminalOpen.value = !homeTerminalOpen.value
+    if (!homeTerminalOpen.value) {
+      isTerminalInputFocused.value = false
+    }
     return
   }
   toggleSelectedThreadTerminal()
+  if (!selectedThreadTerminalOpen.value) {
+    isTerminalInputFocused.value = false
+  }
+}
+
+function onTerminalFocusChange(focused: boolean): void {
+  isTerminalInputFocused.value = focused
+}
+
+function onHideHomeTerminal(): void {
+  homeTerminalOpen.value = false
+  isTerminalInputFocused.value = false
+}
+
+function onHideSelectedThreadTerminal(): void {
+  if (selectedThreadId.value) {
+    setThreadTerminalOpen(selectedThreadId.value, false)
+  }
+  isTerminalInputFocused.value = false
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {

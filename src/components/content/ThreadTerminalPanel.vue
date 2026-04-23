@@ -40,7 +40,12 @@
       </div>
     </header>
     <p v-if="errorMessage" class="thread-terminal-error">{{ errorMessage }}</p>
-    <div ref="terminalHostRef" class="thread-terminal-host" />
+    <div
+      ref="terminalHostRef"
+      class="thread-terminal-host"
+      @pointerdown="emit('terminalFocusChange', true)"
+      @focusin="emit('terminalFocusChange', true)"
+    />
   </section>
 </template>
 
@@ -181,12 +186,6 @@ function createTerminal(): void {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(terminalHostRef.value)
-  terminal.onFocus(() => {
-    emit('terminalFocusChange', true)
-  })
-  terminal.onBlur(() => {
-    emit('terminalFocusChange', false)
-  })
   terminal.onData((data) => {
     if (!activeSessionId.value) return
     void sendThreadTerminalInput(activeSessionId.value, data).catch((error: unknown) => {
