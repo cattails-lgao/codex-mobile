@@ -57,4 +57,3 @@
 - Terminal behavior matches Codex.app-style integrated terminal basics: per-thread terminal, project-scoped cwd, header toggle, keyboard shortcut, recent output buffer, and readable snapshot endpoint.
 - Quick-command menu submits common project commands to the active terminal without replacing the session.
 - Custom quick commands are added via the `Run...` menu prompt and sorted by most-used/recent history.
-- Terminal frontend uses the local modified xterm checkout through `CODEXUI_XTERM_ROOT` (default `/Users/igor/Git-projects/xter3`).
