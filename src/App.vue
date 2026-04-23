@@ -1587,6 +1587,11 @@ watch(sidebarSearchQuery, (value) => {
   }, 220)
 })
 
+watch(isVirtualKeyboardOpen, (open) => {
+  if (open) return
+  isTerminalKeyboardFocusFallbackActive.value = false
+})
+
 watch(accounts, () => {
   if (typeof window === 'undefined') return
   const shouldPoll = accounts.value.some((account) => account.quotaStatus === 'loading')
