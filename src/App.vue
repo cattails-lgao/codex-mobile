@@ -439,6 +439,7 @@
 
     <template #content>
       <section class="content-root" :style="contentStyle">
+        <span v-if="isVirtualKeyboardOpen" class="content-keyboard-spacer" aria-hidden="true" />
         <ContentHeader :title="contentTitle">
           <template #leading>
             <SidebarThreadControls
@@ -1179,6 +1180,8 @@ const telegramStatus = ref<TelegramStatus>({
 const mobileHiddenAtMs = ref<number | null>(null)
 const mobileResumeReloadTriggered = ref(false)
 const mobileResumeSyncInProgress = ref(false)
+const visualViewportHeight = ref(typeof window !== 'undefined' ? window.visualViewport?.height ?? window.innerHeight : 0)
+const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
 let existingFolderBrowseRequestId = 0
@@ -1238,6 +1241,11 @@ const canShowTerminalToggle = computed(() => (
 const isComposerTerminalOpen = computed(() => (
   isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
 ))
+const isVirtualKeyboardOpen = computed(() => {
+  if (!isMobile.value) return false
+  if (visualViewportHeight.value <= 0 || layoutViewportHeight.value <= 0) return false
+  return layoutViewportHeight.value - visualViewportHeight.value > 120
+})
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
@@ -1441,6 +1449,7 @@ const contentStyle = computed(() => {
   return {
     '--chat-column-max': preset.columnMax,
     '--chat-card-max': preset.cardMax,
+    '--visual-viewport-height': visualViewportHeight.value > 0 ? `${visualViewportHeight.value}px` : '100dvh',
   }
 })
 const telegramStatusText = computed(() => {
@@ -1460,6 +1469,10 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   window.addEventListener('pageshow', onWindowPageShow)
   window.addEventListener('focus', onWindowFocus)
+  window.addEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.addEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.addEventListener('scroll', updateVisualViewportState)
+  updateVisualViewportState()
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
@@ -1480,6 +1493,9 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
   window.removeEventListener('pageshow', onWindowPageShow)
   window.removeEventListener('focus', onWindowFocus)
+  window.removeEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.removeEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.removeEventListener('scroll', updateVisualViewportState)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
   if (accountStatePollTimer !== null) {
     window.clearInterval(accountStatePollTimer)
@@ -1491,6 +1507,12 @@ onUnmounted(() => {
   }
   stopPolling()
 })
+
+function updateVisualViewportState(): void {
+  if (typeof window === 'undefined') return
+  layoutViewportHeight.value = window.innerHeight
+  visualViewportHeight.value = window.visualViewport?.height ?? window.innerHeight
+}
 
 watch(sidebarSearchQuery, (value) => {
   const query = value.trim()
