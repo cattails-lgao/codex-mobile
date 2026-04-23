@@ -66,6 +66,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   hide: []
+  terminalFocusChange: [focused: boolean]
 }>()
 
 const terminalHostRef = ref<HTMLElement | null>(null)
@@ -180,6 +181,12 @@ function createTerminal(): void {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(terminalHostRef.value)
+  terminal.onFocus(() => {
+    emit('terminalFocusChange', true)
+  })
+  terminal.onBlur(() => {
+    emit('terminalFocusChange', false)
+  })
   terminal.onData((data) => {
     if (!activeSessionId.value) return
     void sendThreadTerminalInput(activeSessionId.value, data).catch((error: unknown) => {
@@ -659,9 +666,9 @@ function readString(value: unknown): string {
     @apply px-1.5 py-1.5;
   }
 
-  :global(.content-root.is-virtual-keyboard-open) .thread-terminal-panel {
-    height: clamp(7.5rem, 34vh, 11rem);
-    min-height: 7.5rem;
+  :global(.content-root.is-virtual-keyboard-open.is-terminal-open) .thread-terminal-panel {
+    height: 100%;
+    min-height: 13rem;
   }
 }
 </style>

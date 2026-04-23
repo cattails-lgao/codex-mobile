@@ -450,7 +450,10 @@
     <template #content>
       <section
         class="content-root"
-        :class="{ 'is-virtual-keyboard-open': isVirtualKeyboardOpen }"
+        :class="{
+          'is-virtual-keyboard-open': isTerminalKeyboardLayoutActive,
+          'is-terminal-open': isComposerTerminalOpen,
+        }"
         :style="contentStyle"
       >
         <span v-if="isVirtualKeyboardOpen" class="content-keyboard-spacer" aria-hidden="true" />
@@ -722,7 +725,8 @@
                   class="content-thread-terminal-panel"
                   :thread-id="composerThreadContextId"
                   :cwd="composerCwd"
-                  @hide="homeTerminalOpen = false"
+                  @hide="onHideHomeTerminal"
+                  @terminal-focus-change="onTerminalFocusChange"
                 />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
@@ -782,7 +786,8 @@
                     class="content-thread-terminal-panel"
                     :thread-id="selectedThreadId"
                     :cwd="composerCwd"
-                    @hide="setThreadTerminalOpen(selectedThreadId, false)"
+                    @hide="onHideSelectedThreadTerminal"
+                    @terminal-focus-change="onTerminalFocusChange"
                   />
                   <ThreadPendingRequestPanel
                     v-if="selectedThreadPendingRequest"
@@ -1099,6 +1104,7 @@ const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const homeTerminalOpen = ref(false)
+const isTerminalInputFocused = ref(false)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -1274,6 +1280,10 @@ const isVirtualKeyboardOpen = computed(() => {
   if (visualViewportHeight.value <= 0 || layoutViewportHeight.value <= 0) return false
   return layoutViewportHeight.value - visualViewportHeight.value > 120
 })
+const isTerminalKeyboardLayoutActive = computed(() => (
+  isVirtualKeyboardOpen.value ||
+  (isMobile.value && isComposerTerminalOpen.value && isTerminalInputFocused.value)
+))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
@@ -3513,13 +3523,28 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   min-height: 0;
 }
 
+.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread,
+.content-root.is-virtual-keyboard-open.is-terminal-open .new-thread-empty {
+  display: none;
+}
+
 .content-root.is-virtual-keyboard-open .composer-with-queue {
   gap: 0.375rem;
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
 }
 
+.content-root.is-virtual-keyboard-open.is-terminal-open .composer-with-queue {
+  flex: 1 1 auto;
+  min-height: 0;
+  justify-content: flex-end;
+}
+
 .content-root.is-virtual-keyboard-open .content-thread-terminal-panel {
   min-height: 0;
+}
+
+.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread-terminal-panel {
+  flex: 1 1 auto;
 }
 
 .content-root.is-virtual-keyboard-open .content-keyboard-spacer {
