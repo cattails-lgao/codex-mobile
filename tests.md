@@ -2863,12 +2863,14 @@ The integrated terminal stays inside the visible viewport when the mobile virtua
 2. Tap inside the xterm terminal so the mobile keyboard opens
 3. Type `echo terminal-keyboard-ok`
 4. Rotate or resize the browser while the keyboard is still open
-5. Hide the keyboard, then tap the terminal again
+5. Repeat on a wide/tablet layout where the sidebar remains visible
+6. Hide the keyboard, then tap the terminal again
 
 #### Expected Results
 - The terminal panel resizes into the visual viewport instead of being covered by the keyboard
 - The xterm prompt and typed command remain visible above the keyboard
 - The composer/terminal stack stays compact without overlapping the header or conversation
+- On wide/tablet layouts, terminal focus still activates the protected keyboard layout even when the mobile breakpoint is not active
 - The terminal remains usable after resize/orientation changes
 
 #### Rollback/Cleanup

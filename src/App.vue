@@ -1282,7 +1282,7 @@ const isVirtualKeyboardOpen = computed(() => {
 })
 const isTerminalKeyboardLayoutActive = computed(() => (
   isVirtualKeyboardOpen.value ||
-  (isMobile.value && isComposerTerminalOpen.value && isTerminalInputFocused.value)
+  (isComposerTerminalOpen.value && isTerminalInputFocused.value)
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
