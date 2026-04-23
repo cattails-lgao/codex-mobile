@@ -449,6 +449,7 @@
 
     <template #content>
       <section class="content-root" :style="contentStyle">
+        <span v-if="isVirtualKeyboardOpen" class="content-keyboard-spacer" aria-hidden="true" />
         <ContentHeader :title="contentTitle">
           <template #leading>
             <SidebarThreadControls
@@ -462,13 +463,13 @@
           </template>
           <template #actions>
             <button
-              v-if="route.name === 'thread' && selectedThreadId"
+              v-if="canShowTerminalToggle"
               class="content-header-terminal-toggle"
               type="button"
-              :aria-pressed="selectedThreadTerminalOpen"
+              :aria-pressed="isComposerTerminalOpen"
               :title="`${t('Toggle terminal')} (${terminalShortcutLabel})`"
               :aria-label="t('Toggle terminal')"
-              @click="toggleSelectedThreadTerminal"
+              @click="toggleComposerTerminal"
             >
               <IconTablerTerminal class="content-header-terminal-toggle-icon" />
               <span class="content-header-terminal-shortcut">{{ terminalShortcutLabel }}</span>
@@ -707,6 +708,13 @@
               </div>
 
               <div class="composer-with-queue">
+                <ThreadTerminalPanel
+                  v-if="homeTerminalOpen && composerCwd"
+                  class="content-thread-terminal-panel"
+                  :thread-id="composerThreadContextId"
+                  :cwd="composerCwd"
+                  @hide="homeTerminalOpen = false"
+                />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :collaboration-modes="availableCollaborationModes"
@@ -1074,6 +1082,7 @@ const { isMobile } = useMobile()
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
+const homeTerminalOpen = ref(false)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -1182,6 +1191,8 @@ const telegramStatus = ref<TelegramStatus>({
 const mobileHiddenAtMs = ref<number | null>(null)
 const mobileResumeReloadTriggered = ref(false)
 const mobileResumeSyncInProgress = ref(false)
+const visualViewportHeight = ref(typeof window !== 'undefined' ? window.visualViewport?.height ?? window.innerHeight : 0)
+const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
 let existingFolderBrowseRequestId = 0
@@ -1233,6 +1244,18 @@ const selectedThreadPendingRequest = computed<UiServerRequest | null>(() => {
 const composerCwd = computed(() => {
   if (isHomeRoute.value) return newThreadCwd.value.trim()
   return selectedThread.value?.cwd?.trim() ?? ''
+})
+const canShowTerminalToggle = computed(() => (
+  (isHomeRoute.value && composerCwd.value.length > 0) ||
+  (route.name === 'thread' && selectedThreadId.value.length > 0)
+))
+const isComposerTerminalOpen = computed(() => (
+  isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
+))
+const isVirtualKeyboardOpen = computed(() => {
+  if (!isMobile.value) return false
+  if (visualViewportHeight.value <= 0 || layoutViewportHeight.value <= 0) return false
+  return layoutViewportHeight.value - visualViewportHeight.value > 120
 })
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
@@ -1437,6 +1460,7 @@ const contentStyle = computed(() => {
   return {
     '--chat-column-max': preset.columnMax,
     '--chat-card-max': preset.cardMax,
+    '--visual-viewport-height': visualViewportHeight.value > 0 ? `${visualViewportHeight.value}px` : '100dvh',
   }
 })
 const telegramStatusText = computed(() => {
@@ -1456,6 +1480,10 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   window.addEventListener('pageshow', onWindowPageShow)
   window.addEventListener('focus', onWindowFocus)
+  window.addEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.addEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.addEventListener('scroll', updateVisualViewportState)
+  updateVisualViewportState()
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
   void initialize()
@@ -1476,6 +1504,9 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
   window.removeEventListener('pageshow', onWindowPageShow)
   window.removeEventListener('focus', onWindowFocus)
+  window.removeEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.removeEventListener('resize', updateVisualViewportState)
+  window.visualViewport?.removeEventListener('scroll', updateVisualViewportState)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
   if (accountStatePollTimer !== null) {
     window.clearInterval(accountStatePollTimer)
@@ -1487,6 +1518,12 @@ onUnmounted(() => {
   }
   stopPolling()
 })
+
+function updateVisualViewportState(): void {
+  if (typeof window === 'undefined') return
+  layoutViewportHeight.value = window.innerHeight
+  visualViewportHeight.value = window.visualViewport?.height ?? window.innerHeight
+}
 
 watch(sidebarSearchQuery, (value) => {
   const query = value.trim()
@@ -2010,8 +2047,22 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   }
   if (key === 'j' && route.name === 'thread' && selectedThreadId.value) {
     event.preventDefault()
-    toggleSelectedThreadTerminal()
+    toggleComposerTerminal()
+    return
   }
+  if (key === 'j' && isHomeRoute.value && composerCwd.value) {
+    event.preventDefault()
+    toggleComposerTerminal()
+  }
+}
+
+function toggleComposerTerminal(): void {
+  if (isHomeRoute.value) {
+    if (!composerCwd.value) return
+    homeTerminalOpen.value = !homeTerminalOpen.value
+    return
+  }
+  toggleSelectedThreadTerminal()
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {

@@ -4,7 +4,7 @@ import router from './router'
 import './style.css'
 import { t } from './composables/useUiLanguage'
 
-console.log(t('Welcome to codexui. npm: https://www.npmjs.com/package/@nervmor/codexui'))
+console.log('Welcome to codexui. github: https://github.com/friuns2/codexUI')
 
 createApp(App).use(router).mount('#app')
 
