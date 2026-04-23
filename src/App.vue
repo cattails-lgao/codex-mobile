@@ -494,6 +494,7 @@
               :cwd="directoryCwd"
               :thread-id="routeThreadId"
               @skills-changed="onSkillsChanged"
+              @try-item="onTryDirectoryItem"
             />
           </template>
           <template v-else-if="isHomeRoute">
@@ -892,6 +893,13 @@ const SETTINGS_HELP = {
 } as const
 
 type ChatWidthMode = 'standard' | 'wide' | 'extra-wide'
+
+type DirectoryTryItemPayload = {
+  kind: 'app' | 'plugin' | 'skill'
+  name: string
+  displayName: string
+  skillPath?: string
+}
 
 type ChatWidthPreset = {
   label: string
@@ -3351,6 +3359,28 @@ async function submitFirstMessageForNewThread(
     scheduleMobileConversationJumpToLatest()
   } catch {
     // Error is already reflected in state.
+  }
+}
+
+function buildDirectoryTryPrompt(payload: DirectoryTryItemPayload): string {
+  const label = payload.displayName.trim() || payload.name.trim()
+  const itemType = payload.kind === 'skill' ? 'skill' : payload.kind === 'plugin' ? 'plugin' : 'app'
+  return `Test ${label} ${itemType}. Give me a list of what it can do and one useful example.`
+}
+
+async function onTryDirectoryItem(payload: DirectoryTryItemPayload): Promise<void> {
+  const text = buildDirectoryTryPrompt(payload)
+  const skills = payload.kind === 'skill' && payload.skillPath
+    ? [{ name: payload.name, path: payload.skillPath }]
+    : []
+  try {
+    const targetCwd = directoryCwd.value.trim() || composerCwd.value.trim()
+    const threadId = await sendMessageToNewThread(text, targetCwd, [], skills, [])
+    if (!threadId) return
+    await router.replace({ name: 'thread', params: { threadId } })
+    scheduleMobileConversationJumpToLatest()
+  } catch {
+    // Error is already reflected in shared thread state.
   }
 }
 

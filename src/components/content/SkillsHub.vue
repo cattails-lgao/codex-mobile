@@ -109,6 +109,7 @@
       @install="handleInstall"
       @uninstall="handleUninstall"
       @toggle-enabled="handleToggleEnabled"
+      @try="handleTrySkill"
     />
   </div>
 </template>
@@ -147,6 +148,7 @@ const { t } = useUiLanguage()
 
 const emit = defineEmits<{
   'skills-changed': []
+  'try-item': [payload: { kind: 'skill'; name: string; displayName: string; skillPath?: string }]
 }>()
 
 const sortLabel = computed(() => sortMode.value === 'date' ? t('Newest') : t('A-Z'))
@@ -342,6 +344,17 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
   } catch (e) {
     showToast(e instanceof Error ? e.message : 'Failed to update skill', 'error')
   }
+}
+
+function handleTrySkill(skill: HubSkill): void {
+  if (!skill.installed || skill.enabled === false) return
+  emit('try-item', {
+    kind: 'skill',
+    name: skill.name,
+    displayName: skill.displayName || skill.name,
+    skillPath: skill.path,
+  })
+  isDetailOpen.value = false
 }
 
 const {

@@ -175,6 +175,9 @@
             <button v-if="app.installUrl" class="directory-action-link" type="button" @click="openExternalUrl(app.installUrl)">
               {{ app.isAccessible ? 'Manage' : 'Login' }}
             </button>
+            <button v-if="app.isAccessible" class="directory-action" type="button" @click="tryApp(app)">
+              Try it!
+            </button>
           </div>
         </article>
       </div>
@@ -247,7 +250,11 @@
       </div>
     </section>
 
-    <SkillsHub v-else @skills-changed="$emit('skills-changed')" />
+    <SkillsHub
+      v-else
+      @skills-changed="emit('skills-changed')"
+      @try-item="(payload) => emit('try-item', payload)"
+    />
 
     <Teleport to="body">
       <div v-if="isPluginDetailOpen" class="directory-modal-overlay" @click.self="closePluginDetail">
@@ -358,6 +365,15 @@
             >
               {{ selectedPlugin.enabled ? 'Disable' : 'Enable' }}
             </button>
+            <button
+              v-if="selectedPlugin && selectedPlugin.installed && selectedPlugin.enabled"
+              class="directory-action primary"
+              type="button"
+              :disabled="isPluginActionInFlight"
+              @click="tryPlugin(selectedPlugin)"
+            >
+              Try it!
+            </button>
           </div>
         </article>
       </div>
@@ -441,8 +457,16 @@ const props = defineProps<{
   threadId?: string
 }>()
 
-defineEmits<{
+export type DirectoryTryItemPayload = {
+  kind: 'app' | 'plugin' | 'skill'
+  name: string
+  displayName: string
+  skillPath?: string
+}
+
+const emit = defineEmits<{
   'skills-changed': []
+  'try-item': [payload: DirectoryTryItemPayload]
 }>()
 
 const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
@@ -695,6 +719,22 @@ function pluginIconSrc(plugin: DirectoryPluginSummary | null): string {
 
 function appLogoSrc(app: DirectoryAppInfo): string {
   return localAssetSrc(app.logoUrlDark || app.logoUrl)
+}
+
+function tryApp(app: DirectoryAppInfo): void {
+  emit('try-item', {
+    kind: 'app',
+    name: app.id,
+    displayName: app.name,
+  })
+}
+
+function tryPlugin(plugin: DirectoryPluginSummary): void {
+  emit('try-item', {
+    kind: 'plugin',
+    name: plugin.name,
+    displayName: plugin.displayName,
+  })
 }
 
 function openExternalUrl(rawUrl: string): void {

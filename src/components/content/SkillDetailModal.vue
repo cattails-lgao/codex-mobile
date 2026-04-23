@@ -65,6 +65,16 @@
             </button>
 
             <button
+              v-if="skill.installed && effectiveEnabled"
+              class="sdm-btn sdm-btn-primary"
+              type="button"
+              :disabled="isActing"
+              @click="onTry"
+            >
+              Try it!
+            </button>
+
+            <button
               v-if="skill.installed && skillDirPath"
               class="sdm-btn sdm-btn-secondary"
               type="button"
@@ -109,6 +119,7 @@ const emit = defineEmits<{
   install: [skill: HubSkill]
   uninstall: [skill: HubSkill]
   'toggle-enabled': [skill: HubSkill, enabled: boolean]
+  try: [skill: HubSkill]
 }>()
 
 const localEnabled = ref<boolean | null>(null)
@@ -192,6 +203,10 @@ function onToggleEnabled(): void {
   const next = !effectiveEnabled.value
   localEnabled.value = next
   emit('toggle-enabled', props.skill, next)
+}
+
+function onTry(): void {
+  emit('try', props.skill)
 }
 
 function onBrowseFiles(): void {
