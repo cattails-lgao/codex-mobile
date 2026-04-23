@@ -1105,6 +1105,7 @@ const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const homeTerminalOpen = ref(false)
 const isTerminalInputFocused = ref(false)
+const isTerminalKeyboardFocusFallbackActive = ref(false)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -1132,6 +1133,7 @@ const settingsPanelRef = ref<HTMLElement | null>(null)
 const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
+let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
@@ -1282,7 +1284,7 @@ const isVirtualKeyboardOpen = computed(() => {
 })
 const isTerminalKeyboardLayoutActive = computed(() => (
   isVirtualKeyboardOpen.value ||
-  (isComposerTerminalOpen.value && isTerminalInputFocused.value)
+  (isComposerTerminalOpen.value && isTerminalKeyboardFocusFallbackActive.value)
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
@@ -1550,6 +1552,7 @@ onUnmounted(() => {
     clearTimeout(threadSearchTimer)
     threadSearchTimer = null
   }
+  clearTerminalKeyboardFocusFallbackTimer()
   stopPolling()
 })
 
@@ -2096,36 +2099,67 @@ function toggleComposerTerminal(): void {
     if (!composerCwd.value) return
     homeTerminalOpen.value = !homeTerminalOpen.value
     if (!homeTerminalOpen.value) {
-      isTerminalInputFocused.value = false
+      resetTerminalKeyboardFocusState()
     }
     return
   }
   toggleSelectedThreadTerminal()
   if (!selectedThreadTerminalOpen.value) {
-    isTerminalInputFocused.value = false
+    resetTerminalKeyboardFocusState()
   }
 }
 
 function onTerminalFocusChange(focused: boolean): void {
   isTerminalInputFocused.value = focused
+  if (!focused) {
+    isTerminalKeyboardFocusFallbackActive.value = false
+    clearTerminalKeyboardFocusFallbackTimer()
+    return
+  }
+  isTerminalKeyboardFocusFallbackActive.value = true
+  clearTerminalKeyboardFocusFallbackTimer()
+  terminalKeyboardFocusFallbackTimer = setTimeout(() => {
+    terminalKeyboardFocusFallbackTimer = null
+    if (!isVirtualKeyboardOpen.value) {
+      isTerminalKeyboardFocusFallbackActive.value = false
+    }
+  }, 1500)
 }
 
 function onHideHomeTerminal(): void {
   homeTerminalOpen.value = false
-  isTerminalInputFocused.value = false
+  resetTerminalKeyboardFocusState()
 }
 
 function onHideSelectedThreadTerminal(): void {
   if (selectedThreadId.value) {
     setThreadTerminalOpen(selectedThreadId.value, false)
   }
+  resetTerminalKeyboardFocusState()
+}
+
+function resetTerminalKeyboardFocusState(): void {
   isTerminalInputFocused.value = false
+  isTerminalKeyboardFocusFallbackActive.value = false
+  clearTerminalKeyboardFocusFallbackTimer()
+}
+
+function clearTerminalKeyboardFocusFallbackTimer(): void {
+  if (!terminalKeyboardFocusFallbackTimer) return
+  clearTimeout(terminalKeyboardFocusFallbackTimer)
+  terminalKeyboardFocusFallbackTimer = null
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
-  if (!isSettingsOpen.value) return
   const target = event.target
   if (!(target instanceof Node)) return
+  if (isTerminalInputFocused.value) {
+    const targetElement = target instanceof Element ? target : target.parentElement
+    if (!targetElement?.closest('.thread-terminal-panel')) {
+      resetTerminalKeyboardFocusState()
+    }
+  }
+  if (!isSettingsOpen.value) return
   if (settingsPanelRef.value?.contains(target)) return
   if (settingsButtonRef.value?.contains(target)) return
   isSettingsOpen.value = false

@@ -45,6 +45,7 @@
       class="thread-terminal-host"
       @pointerdown="emit('terminalFocusChange', true)"
       @focusin="emit('terminalFocusChange', true)"
+      @focusout="onTerminalFocusOut"
     />
   </section>
 </template>
@@ -269,6 +270,14 @@ function handleNotification(notification: RpcNotification): void {
 
 function onNewTerminal(): void {
   void attachToThread(true)
+}
+
+function onTerminalFocusOut(): void {
+  window.setTimeout(() => {
+    const activeElement = document.activeElement
+    if (activeElement instanceof Node && terminalHostRef.value?.contains(activeElement)) return
+    emit('terminalFocusChange', false)
+  }, 100)
 }
 
 function onSelectTab(tabId: string): void {
