@@ -448,7 +448,11 @@
     </template>
 
     <template #content>
-      <section class="content-root" :style="contentStyle">
+      <section
+        class="content-root"
+        :class="{ 'is-virtual-keyboard-open': isVirtualKeyboardOpen }"
+        :style="contentStyle"
+      >
         <span v-if="isVirtualKeyboardOpen" class="content-keyboard-spacer" aria-hidden="true" />
         <ContentHeader :title="contentTitle">
           <template #leading>
@@ -1204,6 +1208,7 @@ const mobileHiddenAtMs = ref<number | null>(null)
 const mobileResumeReloadTriggered = ref(false)
 const mobileResumeSyncInProgress = ref(false)
 const visualViewportHeight = ref(typeof window !== 'undefined' ? window.visualViewport?.height ?? window.innerHeight : 0)
+const visualViewportOffsetTop = ref(typeof window !== 'undefined' ? window.visualViewport?.offsetTop ?? 0 : 0)
 const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
@@ -1470,10 +1475,16 @@ const terminalShortcutLabel = computed(() => {
 })
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
+  const keyboardInset = Math.max(
+    0,
+    layoutViewportHeight.value - visualViewportHeight.value - visualViewportOffsetTop.value,
+  )
   return {
     '--chat-column-max': preset.columnMax,
     '--chat-card-max': preset.cardMax,
     '--visual-viewport-height': visualViewportHeight.value > 0 ? `${visualViewportHeight.value}px` : '100dvh',
+    '--visual-viewport-offset-top': `${Math.max(0, visualViewportOffsetTop.value)}px`,
+    '--virtual-keyboard-inset': `${keyboardInset}px`,
   }
 })
 const telegramStatusText = computed(() => {
@@ -1536,6 +1547,7 @@ function updateVisualViewportState(): void {
   if (typeof window === 'undefined') return
   layoutViewportHeight.value = window.innerHeight
   visualViewportHeight.value = window.visualViewport?.height ?? window.innerHeight
+  visualViewportOffsetTop.value = window.visualViewport?.offsetTop ?? 0
 }
 
 watch(sidebarSearchQuery, (value) => {
@@ -3431,6 +3443,12 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply h-full min-h-0 min-w-0 w-full flex flex-col overflow-y-hidden overflow-x-hidden bg-white;
 }
 
+.content-root.is-virtual-keyboard-open {
+  height: var(--visual-viewport-height);
+  max-height: var(--visual-viewport-height);
+  transform: translateY(var(--visual-viewport-offset-top));
+}
+
 .sidebar-thread-controls-host {
   @apply mt-1 -translate-y-px px-2 pb-1;
 }
@@ -3481,6 +3499,31 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .content-body {
   @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-x-hidden;
+}
+
+.content-root.is-virtual-keyboard-open .content-body {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.content-root.is-virtual-keyboard-open .content-grid {
+  gap: 0.5rem;
+}
+
+.content-root.is-virtual-keyboard-open .content-thread {
+  min-height: 0;
+}
+
+.content-root.is-virtual-keyboard-open .composer-with-queue {
+  gap: 0.375rem;
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+}
+
+.content-root.is-virtual-keyboard-open .content-thread-terminal-panel {
+  min-height: 0;
+}
+
+.content-root.is-virtual-keyboard-open .content-keyboard-spacer {
+  display: none;
 }
 
 
