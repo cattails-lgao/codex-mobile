@@ -2978,3 +2978,181 @@ Remove legacy `@nervmor/codexui` package reference from the startup welcome log 
 
 #### Rollback/Cleanup
 - None
+
+---
+
+### Thread list startup pagination and direct older-thread links
+
+#### Feature/Change Name
+Thread loading uses a smaller initial list page, hydrates later pages in the background, and direct thread URLs are not rejected just because the thread is outside the first page.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. More than 50 existing threads, including a valid older thread outside the first updated page
+
+#### Steps
+1. Open the app home route
+2. Inspect the first `thread/list` RPC request
+3. Keep the app open and watch subsequent `thread/list` RPC requests
+4. Open `/thread/<older-thread-id>` directly for a valid thread outside the first page
+
+#### Expected Results
+- The first `thread/list` request uses a smaller initial limit instead of 100
+- Later thread pages load in the background using `nextCursor`
+- The sidebar gains older threads as background pages complete
+- The direct older thread URL stays on the thread route and loads messages instead of redirecting home
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread detail load avoids duplicate live-state history fetch
+
+#### Feature/Change Name
+Normal thread detail loading calls `thread/read` directly instead of first calling `/codex-api/thread-live-state`, whose server path also reads full thread history.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. An existing thread with a large history
+
+#### Steps
+1. Open the existing thread
+2. Inspect network/RPC calls during the message load
+
+#### Expected Results
+- The message load performs `thread/read` or `thread/resume` for the thread
+- It does not first call `/codex-api/thread-live-state` for the same normal message load
+- Messages and active/in-progress state still render correctly
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread message cache skips unchanged refetches
+
+#### Feature/Change Name
+Loaded thread messages are reused when the thread list version has not changed and the thread is not in progress.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Browser dev tools Network panel open
+3. An existing completed thread
+
+#### Steps
+1. Open the completed thread and wait for messages to render
+2. Switch to another thread or home
+3. Return to the same completed thread without new turn or thread update events
+4. Inspect network/RPC calls during the return
+
+#### Expected Results
+- The first open loads messages normally
+- Returning to the unchanged completed thread reuses cached messages
+- No additional `thread/read` or `thread/resume` call is made for that unchanged return
+- If the thread version changes or the thread is in progress, messages still refresh from the server
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Thread selection keeps sidebar list stable during refresh
+
+#### Feature/Change Name
+Selecting a thread does not briefly hide older/sidebar threads while thread list refresh and background pagination run.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. More than one page of threads available in the sidebar
+3. Background pagination has loaded older threads
+
+#### Steps
+1. Open the app and wait until older thread pages appear in the sidebar
+2. Select a different thread
+3. Watch the sidebar while the selected thread loads and any thread list refresh occurs
+4. Repeat selection between recent and older threads
+
+#### Expected Results
+- The sidebar does not collapse to only the first page of recent threads
+- Previously loaded older threads remain visible during refresh
+- The selected thread stays highlighted and messages load normally
+- Background pagination can still add newly loaded older threads without hiding existing ones
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Browser runtime profiling with Playwright
+
+#### Feature/Change Name
+Playwright browser runtime profiler captures route timing, Codex API network counts, screenshots, and trace files.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://localhost:5173`
+2. Dependencies installed (`pnpm install`)
+3. Target route available, such as `#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c`
+
+#### Steps
+1. Run `pnpm run profile:browser`
+2. Run `PROFILE_ROUTE='#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c' pnpm run profile:browser`
+3. Inspect console output for duplicate counts and slowest API rows
+4. Open the generated `output/playwright/browser-runtime-profile-*.json`
+5. Open the generated `output/playwright/browser-runtime-profile-*-trace.zip` with `npx playwright show-trace`
+
+#### Expected Results
+- The profiler prints final URL, title, total observed time, duplicate request counts, and slowest Codex API calls
+- JSON report includes raw API rows, grouped summaries, Performance API data, and artifact paths
+- Screenshot is saved under `output/playwright/browser-runtime-profile-*.png`
+- Trace is saved under `output/playwright/browser-runtime-profile-*-trace.zip`
+
+#### Rollback/Cleanup
+- Delete generated files under `output/playwright/` if local artifacts are no longer needed
+
+---
+
+### Codex.app-style Plugins Directory
+
+#### Feature/Change Name
+The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MCPs, and Skills tabs.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Codex CLI available in `PATH`
+3. Optional: a Codex CLI version with `plugin/list`, `app/list`, and `mcpServerStatus/list` app-server APIs
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/skills`
+2. Verify the page title is `Skills & Apps` and the tab row contains `Plugins`, `Apps`, `MCPs`, and `Skills`
+3. On `Plugins`, verify plugin cards load, the default sort is `Popular`, and `A-Z`, `Date`, and search controls work
+4. Open a plugin card when one is available and verify description, capabilities, included apps/skills/MCPs, and install/uninstall or enable/disable actions are visible
+5. For an installed plugin with bundled MCP servers, such as Cloudflare, verify each MCP row shows auth status (`Logged in`, `Bearer token`, `Login required`, `Auth unsupported`, or `Status unknown`)
+6. If a bundled MCP server shows `Login required`, click `Authenticate` and verify the browser opens the returned MCP OAuth authorization URL
+7. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
+8. On `Apps`, verify the default sort control is `Popular`, app icons render, connected apps show `Manage`, and disconnected apps show `Login`
+9. Click a disconnected app `Login` button and verify it opens the app login/manage URL
+10. Install a plugin whose install response includes `appsNeedingAuth`, and verify the first required app login/manage URL opens automatically
+11. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
+12. Search Apps and verify matching results are not capped to the Popular top 100 list
+13. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+14. Verify MCPs also support `Popular`, `A-Z`, `Date`, and search
+15. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
+
+#### Expected Results
+- The directory tabs render without a full-page error
+- Plugin/app/MCP API failures are isolated to their tab
+- Existing Skills Hub behavior remains available under the `Skills` tab
+- App and plugin enable/disable actions update their local card state after a successful config write
+- Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
+- Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
+- Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
+- Plugins, Apps, and MCPs default to local popularity-style ordering because app-server does not expose numeric popularity fields
+- `Date` uses the app-server/catalog order as the available freshness proxy because app/plugin/MCP APIs do not expose created or published timestamps
+- Popular views show only the top 100 when no search is active; search results can show all matches
+
+#### Rollback/Cleanup
+- Re-enable any app or plugin disabled during testing
+- Uninstall any plugin installed only for this test

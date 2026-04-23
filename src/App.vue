@@ -51,7 +51,7 @@
             type="button"
             @click="router.push({ name: 'skills' }); isMobile && setSidebarCollapsed(true)"
           >
-            {{ t('Skills Hub') }}
+            {{ t('Directory') }}
           </button>
 
           <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
@@ -490,7 +490,11 @@
 
         <section class="content-body">
           <template v-if="isSkillsRoute">
-            <SkillsHub @skills-changed="onSkillsChanged" />
+            <DirectoryHub
+              :cwd="directoryCwd"
+              :thread-id="routeThreadId"
+              @skills-changed="onSkillsChanged"
+            />
           </template>
           <template v-else-if="isHomeRoute">
             <div class="content-grid content-grid-home">
@@ -869,7 +873,7 @@ import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
 const ReviewPane = defineAsyncComponent(() => import('./components/content/ReviewPane.vue'))
-const SkillsHub = defineAsyncComponent(() => import('./components/content/SkillsHub.vue'))
+const DirectoryHub = defineAsyncComponent(() => import('./components/content/DirectoryHub.vue'))
 const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -1205,7 +1209,7 @@ const routeThreadId = computed(() => {
 const isHomeRoute = computed(() => route.name === 'home')
 const isSkillsRoute = computed(() => route.name === 'skills')
 const contentTitle = computed(() => {
-  if (isSkillsRoute.value) return t('Skills Hub')
+  if (isSkillsRoute.value) return t('Directory')
   if (isHomeRoute.value) return t('Start new thread')
   return selectedThread.value?.title ?? t('Choose a thread')
 })
@@ -1257,6 +1261,7 @@ const isVirtualKeyboardOpen = computed(() => {
   if (visualViewportHeight.value <= 0 || layoutViewportHeight.value <= 0) return false
   return layoutViewportHeight.value - visualViewportHeight.value > 120
 })
+const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
