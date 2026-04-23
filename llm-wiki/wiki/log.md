@@ -1,5 +1,11 @@
 # Log
 
+## [2026-04-23] ingest | realtime chat rendering and inline media
+- Added source: `raw/features/realtime-chat-rendering-inline-media.md`.
+- Created wiki page: `concepts/realtime-chat-rendering.md`.
+- Documents: chat render caching, realtime sync-churn reduction, large JSONL inline media findings, bridge-side media sanitization, and verification results.
+- Updated `overview.md`, `entities/codex-web-local.md`, and `index.md`.
+
 ## [2026-04-22] ingest | integrated terminal implementation
 - Added source: `raw/features/integrated-terminal.md`.
 - Created wiki page: `concepts/integrated-terminal.md`.

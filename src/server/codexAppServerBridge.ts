@@ -223,13 +223,74 @@ function isInlineDataUrl(value: string): boolean {
   return /^data:/iu.test(value.trim())
 }
 
+function inferImageMimeTypeFromBytes(bytes: Uint8Array): string | null {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'image/png'
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  ) {
+    return 'image/gif'
+  }
+  return null
+}
+
+function inferImageMimeTypeFromBase64(value: string): string | null {
+  const compact = value.trim().replace(/\s+/gu, '')
+  if (compact.length < 32 || !/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return null
+  try {
+    return inferImageMimeTypeFromBytes(Buffer.from(compact.slice(0, 64), 'base64'))
+  } catch {
+    return null
+  }
+}
+
 function normalizeBase64ImageDataUrl(value: string, mimeType: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null
-  if (isInlineDataUrl(trimmed)) return trimmed
+  if (isInlineDataUrl(trimmed)) {
+    return /^data:image\//iu.test(trimmed) ? trimmed : null
+  }
   const compact = trimmed.replace(/\s+/gu, '')
-  if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return null
-  return `data:${mimeType};base64,${compact}`
+  const inferredMimeType = inferImageMimeTypeFromBase64(compact)
+  if (!inferredMimeType) return null
+  const normalizedMimeType = mimeType.trim().toLowerCase()
+  const finalMimeType = normalizedMimeType.startsWith('image/') && normalizedMimeType !== 'image/*'
+    ? normalizedMimeType
+    : inferredMimeType
+  return `data:${finalMimeType};base64,${compact}`
 }
 
 function extensionFromMimeType(mimeType: string): string {
@@ -294,9 +355,49 @@ function toLocalImageProxyUrl(path: string): string {
   return `/codex-local-image?path=${encodeURIComponent(path)}`
 }
 
+const INLINE_IMAGE_FIELD_NAMES = new Set([
+  'b64_json',
+  'image',
+  'image_url',
+  'images',
+  'result',
+  'url',
+])
+
+type InlinePayloadSanitizeContext = {
+  turnId: string
+  itemId: string
+  blockIndex: number
+  fieldName?: string
+}
+
+function isPotentialInlineImageField(fieldName: string | undefined): boolean {
+  return typeof fieldName === 'string' && INLINE_IMAGE_FIELD_NAMES.has(fieldName)
+}
+
+async function sanitizeInlineImageString(
+  value: string,
+  context: InlinePayloadSanitizeContext,
+): Promise<{ value: string; changed: boolean }> {
+  if (!isPotentialInlineImageField(context.fieldName)) {
+    return { value, changed: false }
+  }
+
+  const dataUrl = normalizeBase64ImageDataUrl(value, 'image/*')
+  if (!dataUrl) return { value, changed: false }
+
+  const localUrl = await persistInlineDataUrlToLocalFile(
+    dataUrl,
+    `inline-image-${context.turnId}-${context.itemId}-${context.fieldName}-${String(context.blockIndex)}`,
+  )
+  if (!localUrl) return { value, changed: false }
+
+  return { value: toLocalImageProxyUrl(localUrl), changed: true }
+}
+
 async function sanitizeInlineUserContentBlock(
   block: unknown,
-  context: { turnId: string; itemId: string; blockIndex: number },
+  context: InlinePayloadSanitizeContext,
 ): Promise<unknown> {
   const record = asRecord(block)
   if (!record) return block
@@ -306,10 +407,16 @@ async function sanitizeInlineUserContentBlock(
   if (imageUrl && isInlineDataUrl(imageUrl)) {
     const localUrl = await persistInlineDataUrlToLocalFile(imageUrl, `inline-image-${context.turnId}-${context.itemId}-${String(context.blockIndex)}`)
     if (localUrl) {
+      const nextRecord = { ...record }
+      if (typeof record.url === 'string') {
+        nextRecord.url = toLocalImageProxyUrl(localUrl)
+      }
+      if (typeof record.image_url === 'string') {
+        nextRecord.image_url = toLocalImageProxyUrl(localUrl)
+      }
       return {
-        ...record,
+        ...nextRecord,
         type: 'image',
-        url: toLocalImageProxyUrl(localUrl),
       }
     }
     const target = toAttachmentLinkTarget(record, `inline-image/${context.turnId}/${context.itemId}/${String(context.blockIndex)}`)
@@ -364,11 +471,15 @@ async function sanitizeInlineUserContentBlock(
 
 async function sanitizeInlinePayloadDeep(
   value: unknown,
-  context: { turnId: string; itemId: string; blockIndex: number },
+  context: InlinePayloadSanitizeContext,
 ): Promise<{ value: unknown; changed: boolean }> {
   const maybeBlock = await sanitizeInlineUserContentBlock(value, context)
   if (maybeBlock !== value) {
     return { value: maybeBlock, changed: true }
+  }
+
+  if (typeof value === 'string') {
+    return sanitizeInlineImageString(value, context)
   }
 
   if (Array.isArray(value)) {
@@ -379,6 +490,7 @@ async function sanitizeInlinePayloadDeep(
         turnId: context.turnId,
         itemId: context.itemId,
         blockIndex: index,
+        fieldName: context.fieldName,
       })
       if (nested.changed) changed = true
       nextArray.push(nested.value)
@@ -396,6 +508,7 @@ async function sanitizeInlinePayloadDeep(
       turnId: context.turnId,
       itemId: context.itemId,
       blockIndex: context.blockIndex,
+      fieldName: key,
     })
     if (nested.changed) changed = true
     nextRecord[key] = nested.value
@@ -404,7 +517,7 @@ async function sanitizeInlinePayloadDeep(
   return changed ? { value: nextRecord, changed: true } : { value, changed: false }
 }
 
-async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
+export async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
   if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
 
   const record = asRecord(result)

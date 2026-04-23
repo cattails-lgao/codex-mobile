@@ -298,10 +298,14 @@
                   </ol>
                   <div v-else class="plan-card-markdown" v-html="renderMarkdownBlocksAsHtml(message.text)" />
                 </div>
-                <div v-else class="message-text-flow">
-                  <template v-for="(block, blockIndex) in parseMessageBlocks(message.text)" :key="`block-${blockIndex}`">
+                <div
+                  v-else
+                  class="message-text-flow"
+                  v-memo="[message.id, message.text, props.cwd, highlightCacheVersion, markdownImageFailureVersion]"
+                >
+                  <template v-for="(block, blockIndex) in getMessageBlocks(message)" :key="`block-${blockIndex}`">
                     <p v-if="block.kind === 'paragraph'" class="message-text">
-                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
+                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -335,7 +339,7 @@
                       class="message-heading"
                       :class="headingClass(block.level)"
                     >
-                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`heading-seg-${blockIndex}-${segmentIndex}`">
+                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`heading-seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -364,7 +368,7 @@
                       </template>
                     </component>
                     <blockquote v-else-if="block.kind === 'blockquote'" class="message-blockquote">
-                      <template v-for="(segment, segmentIndex) in parseInlineSegments(block.value)" :key="`quote-seg-${blockIndex}-${segmentIndex}`">
+                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`quote-seg-${blockIndex}-${segmentIndex}`">
                         <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                         <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                         <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -401,7 +405,7 @@
                       <li v-for="(item, itemIndex) in block.items" :key="`task-${blockIndex}-${itemIndex}`" class="message-task-item">
                         <span class="message-task-checkbox" :data-checked="item.checked">{{ item.checked ? '☑' : '☐' }}</span>
                         <div class="message-list-item-text">
-                          <template v-for="(segment, segmentIndex) in parseInlineSegments(item.text)" :key="`task-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
+                          <template v-for="(segment, segmentIndex) in getInlineSegments(item.text)" :key="`task-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
                             <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                             <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                             <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -450,7 +454,7 @@
                               class="message-table-head-cell"
                               :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
                             >
-                              <template v-for="(segment, segmentIndex) in parseInlineSegments(cell)" :key="`th-seg-${blockIndex}-${cellIndex}-${segmentIndex}`">
+                              <template v-for="(segment, segmentIndex) in getInlineSegments(cell)" :key="`th-seg-${blockIndex}-${cellIndex}-${segmentIndex}`">
                                 <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                                 <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                                 <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -488,7 +492,7 @@
                               class="message-table-cell"
                               :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
                             >
-                              <template v-for="(segment, segmentIndex) in parseInlineSegments(cell)" :key="`td-seg-${blockIndex}-${rowIndex}-${cellIndex}-${segmentIndex}`">
+                              <template v-for="(segment, segmentIndex) in getInlineSegments(cell)" :key="`td-seg-${blockIndex}-${rowIndex}-${cellIndex}-${segmentIndex}`">
                                 <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
                                 <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
                                 <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
@@ -522,7 +526,7 @@
                     </div>
                     <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
                       <div v-if="block.language" class="message-code-language">{{ block.language }}</div>
-                      <pre class="message-code-pre"><code class="hljs" v-html="renderHighlightedCodeAsHtml(block.language, block.value)"></code></pre>
+                      <pre class="message-code-pre"><code class="hljs" v-html="renderCachedHighlightedCodeAsHtml(block.language, block.value)"></code></pre>
                     </div>
                     <hr v-else-if="block.kind === 'thematicBreak'" class="message-divider" />
                     <p v-else-if="isMarkdownImageFailed(message.id, blockIndex)" class="message-text">{{ block.markdown }}</p>
@@ -1252,10 +1256,45 @@ let scrollRestoreFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
+let scrollRestorePromise: Promise<void> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
-const failedMarkdownImageKeys = ref<Set<string>>(new Set())
 const highlightJsModule = ref<HighlightJsModule | null>(null)
+const highlightCacheVersion = ref(0)
+const markdownImageFailureVersion = ref(0)
 let highlightJsLoader: Promise<void> | null = null
+const MESSAGE_BLOCK_CACHE_LIMIT = 300
+const INLINE_SEGMENT_CACHE_LIMIT = 1200
+const MARKDOWN_HTML_CACHE_LIMIT = 300
+const HIGHLIGHT_HTML_CACHE_LIMIT = 250
+
+type MessageBlockCacheEntry = {
+  text: string
+  cwd: string
+  blocks: MessageBlock[]
+}
+
+type MarkdownHtmlCacheEntry = {
+  text: string
+  cwd: string
+  highlightVersion: number
+  html: string
+}
+
+const messageBlockCache = new Map<string, MessageBlockCacheEntry>()
+const inlineSegmentCache = new Map<string, InlineSegment[]>()
+const markdownHtmlCache = new Map<string, MarkdownHtmlCacheEntry>()
+const highlightHtmlCache = new Map<string, string>()
+
+function setBoundedCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, limit: number): V {
+  if (cache.has(key)) cache.delete(key)
+  cache.set(key, value)
+  while (cache.size > limit) {
+    const oldestKey = cache.keys().next().value as K | undefined
+    if (oldestKey === undefined) break
+    cache.delete(oldestKey)
+  }
+  return value
+}
 
 const RENDER_WINDOW_SIZE = 50
 const LOAD_MORE_CHUNK = 30
@@ -1277,6 +1316,9 @@ function ensureHighlightJsLoaded(): Promise<void> {
     highlightJsLoader = import('highlight.js/lib/common')
       .then((module) => {
         highlightJsModule.value = module.default
+        highlightHtmlCache.clear()
+        markdownHtmlCache.clear()
+        highlightCacheVersion.value += 1
       })
       .finally(() => {
         highlightJsLoader = null
@@ -2367,10 +2409,10 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
   return segments
 }
 
-function parseInlineSegments(text: string): InlineSegment[] {
+function parseInlineSegmentsUncached(text: string): InlineSegment[] {
   if (text.includes('](')) {
     const linkFirstSegments = splitTextByFileUrls(text)
-    if (linkFirstSegments.some((segment) => segment.kind === 'file' || segment.kind === 'url')) {
+    if (linkFirstSegments.some((segment) => segment.kind === 'file' || segment.kind === 'url') && !text.includes('`')) {
       return linkFirstSegments
     }
   }
@@ -2480,6 +2522,16 @@ function parseInlineSegments(text: string): InlineSegment[] {
   }
 
   return segments
+}
+
+function getInlineSegments(text: string): InlineSegment[] {
+  const cached = inlineSegmentCache.get(text)
+  if (cached) {
+    inlineSegmentCache.delete(text)
+    inlineSegmentCache.set(text, cached)
+    return cached
+  }
+  return setBoundedCacheEntry(inlineSegmentCache, text, parseInlineSegmentsUncached(text), INLINE_SEGMENT_CACHE_LIMIT)
 }
 
 function toRenderableImageUrl(value: string): string {
@@ -3226,6 +3278,22 @@ function parseMessageBlocks(text: string): MessageBlock[] {
   return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }]
 }
 
+function getMessageBlocks(message: UiMessage): MessageBlock[] {
+  const cached = messageBlockCache.get(message.id)
+  if (cached && cached.text === message.text && cached.cwd === props.cwd) {
+    messageBlockCache.delete(message.id)
+    messageBlockCache.set(message.id, cached)
+    return cached.blocks
+  }
+  const blocks = parseMessageBlocks(message.text)
+  return setBoundedCacheEntry(
+    messageBlockCache,
+    message.id,
+    { text: message.text, cwd: props.cwd, blocks },
+    MESSAGE_BLOCK_CACHE_LIMIT,
+  ).blocks
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -3241,7 +3309,7 @@ function normalizeCodeLanguage(language: string): string {
   return CODE_LANGUAGE_ALIASES[token] ?? token
 }
 
-function renderHighlightedCodeAsHtml(language: string, value: string): string {
+function renderHighlightedCodeAsHtmlUncached(language: string, value: string): string {
   const normalizedLanguage = normalizeCodeLanguage(language)
   if (!normalizedLanguage) return escapeHtml(value)
   const highlighter = highlightJsModule.value
@@ -3261,8 +3329,24 @@ function renderHighlightedCodeAsHtml(language: string, value: string): string {
   return escapeHtml(value)
 }
 
+function renderCachedHighlightedCodeAsHtml(language: string, value: string): string {
+  const cacheKey = `${highlightCacheVersion.value}\u0000${normalizeCodeLanguage(language)}\u0000${language}\u0000${value}`
+  const cached = highlightHtmlCache.get(cacheKey)
+  if (cached !== undefined) {
+    highlightHtmlCache.delete(cacheKey)
+    highlightHtmlCache.set(cacheKey, cached)
+    return cached
+  }
+  return setBoundedCacheEntry(
+    highlightHtmlCache,
+    cacheKey,
+    renderHighlightedCodeAsHtmlUncached(language, value),
+    HIGHLIGHT_HTML_CACHE_LIMIT,
+  )
+}
+
 function renderInlineSegmentsAsHtml(text: string): string {
-  return parseInlineSegments(text)
+  return getInlineSegments(text)
     .map((segment) => {
       if (segment.kind === 'text') {
         return escapeHtml(segment.value)
@@ -3358,7 +3442,7 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
     const language = block.language
       ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
       : ''
-    return `<div class="message-code-block">${language}<pre class="message-code-pre"><code class="hljs">${renderHighlightedCodeAsHtml(block.language, block.value)}</code></pre></div>`
+    return `<div class="message-code-block">${language}<pre class="message-code-pre"><code class="hljs">${renderCachedHighlightedCodeAsHtml(block.language, block.value)}</code></pre></div>`
   }
   if (block.kind === 'thematicBreak') {
     return '<hr class="message-divider">'
@@ -3367,9 +3451,27 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
 }
 
 function renderMarkdownBlocksAsHtml(text: string): string {
-  return parseMessageBlocks(text)
+  const cacheKey = `${props.cwd}\u0000${highlightCacheVersion.value}\u0000${text}`
+  const cached = markdownHtmlCache.get(cacheKey)
+  if (cached && cached.text === text && cached.cwd === props.cwd && cached.highlightVersion === highlightCacheVersion.value) {
+    markdownHtmlCache.delete(cacheKey)
+    markdownHtmlCache.set(cacheKey, cached)
+    return cached.html
+  }
+  const html = parseMessageBlocks(text)
     .map((block) => renderMessageBlockAsHtml(block))
     .join('')
+  return setBoundedCacheEntry(
+    markdownHtmlCache,
+    cacheKey,
+    {
+      text,
+      cwd: props.cwd,
+      highlightVersion: highlightCacheVersion.value,
+      html,
+    },
+    MARKDOWN_HTML_CACHE_LIMIT,
+  ).html
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -3914,16 +4016,30 @@ function bindPendingImageHandlers(): void {
 }
 
 async function scheduleScrollRestore(): Promise<void> {
-  await nextTick()
-  if (scrollRestoreFrame) {
-    cancelAnimationFrame(scrollRestoreFrame)
-  }
-  scrollRestoreFrame = requestAnimationFrame(() => {
-    scrollRestoreFrame = 0
-    applySavedScrollState()
-    bindPendingImageHandlers()
-    scheduleBottomLock()
-  })
+  if (scrollRestorePromise) return scrollRestorePromise
+
+  scrollRestorePromise = nextTick().then(() => new Promise<void>((resolve) => {
+    if (scrollRestoreFrame) {
+      cancelAnimationFrame(scrollRestoreFrame)
+    }
+    scrollRestoreFrame = requestAnimationFrame(() => {
+      scrollRestoreFrame = 0
+      scrollRestorePromise = null
+      applySavedScrollState()
+      bindPendingImageHandlers()
+      scheduleBottomLock()
+      resolve()
+    })
+  }))
+
+  return scrollRestorePromise
+}
+
+function clearRenderCaches(): void {
+  messageBlockCache.clear()
+  inlineSegmentCache.clear()
+  markdownHtmlCache.clear()
+  highlightHtmlCache.clear()
 }
 
 watch(
@@ -4049,7 +4165,10 @@ function isMarkdownImageFailed(messageId: string, blockIndex: number): boolean {
 }
 
 function onMarkdownImageError(messageId: string, blockIndex: number): void {
-  failedMarkdownImages.value.add(markdownImageKey(messageId, blockIndex))
+  const next = new Set(failedMarkdownImages.value)
+  next.add(markdownImageKey(messageId, blockIndex))
+  failedMarkdownImages.value = next
+  markdownImageFailureVersion.value += 1
 }
 
 function openImageModal(imageUrl: string): void {
@@ -4067,14 +4186,18 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearRenderCaches()
   if (scrollRestoreFrame) {
     cancelAnimationFrame(scrollRestoreFrame)
+    scrollRestoreFrame = 0
   }
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
+    bottomLockFrame = 0
   }
   if (copiedMessageResetTimer) {
     clearTimeout(copiedMessageResetTimer)
+    copiedMessageResetTimer = null
   }
   window.removeEventListener('pointerdown', onWindowPointerDownForFileLinkContextMenu)
   window.removeEventListener('blur', onWindowBlurForFileLinkContextMenu)

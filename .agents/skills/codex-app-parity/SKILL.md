@@ -671,3 +671,22 @@ After each feature implementation session that uses this skill:
   - `bearerToken` -> bearer token
   - `notLoggedIn` -> login required + authenticate action
   - `unsupported` -> auth unsupported
+
+## Findings: Chat Stream Rendering Performance (2026-04-22)
+
+- Codex.app `26.417.41555` renderer derives chat content into renderable turn entries such as `visibleTurnEntries` before rendering, rather than parsing every message directly in JSX on each stream tick.
+- Stream deltas update only the active item text (`item/agentMessage/delta`, `item/plan/delta`, reasoning deltas), while unchanged turn/item render output is protected by React memo-cache patterns.
+- Code highlighting is lazy-loaded through a Shiki highlight provider, with the provider imported separately from the main renderer bundle.
+- Parity implication for this Vue repo: keep chat rows derived and cacheable, memoize unchanged markdown/text-flow rows during streaming, and invalidate code-highlight HTML only when the highlighter becomes available or the code/language changes.
+
+## Findings: Inline Media Sanitization For Thread Loads (2026-04-23)
+
+- Large local Codex JSONL sessions can be dominated by inline image/base64 strings rather than text chat content.
+- Observed heavy fields include `payload.output[].image_url`, `payload.result`, `payload.content[].image_url`, `payload.images[]`, and `payload.replacement_history[].content[].image_url`.
+- Browser thread loads should never pass those raw strings through directly; bridge responses for `thread/read`, `thread/resume`, `thread/fork`, and `thread/rollback` should sanitize turns before returning JSON to the client.
+- Safe sanitizer behavior:
+  - persist inline image data to local temp files
+  - rewrite UI-facing image fields to `/codex-local-image?path=...`
+  - infer bare base64 image MIME only from byte signatures such as PNG/JPEG/WebP/GIF
+  - leave non-image base64 and non-image data URLs untouched
+- This is a read-path/UI-payload mitigation. Historical `.jsonl` files written by Codex app-server remain unchanged unless a separate compaction tool is introduced.

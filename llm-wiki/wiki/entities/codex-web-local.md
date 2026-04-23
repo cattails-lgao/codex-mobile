@@ -13,9 +13,12 @@
 - Strong conflict-resolution policy (intentional per-file merges)
 - Manual regression documentation in `tests.md`
 - Integrated terminal uses a Node PTY bridge plus an xterm frontend for local/worktree threads
+- Realtime chat rendering uses cached markdown/highlight output and bridge-side inline media sanitization to keep browser payloads bounded
 
 ## Source links
 - [Source snapshot](../../raw/projects/codex-web-local.md)
 - [Integrated terminal source](../../raw/features/integrated-terminal.md)
+- [Realtime chat rendering source](../../raw/features/realtime-chat-rendering-inline-media.md)
 - [Integrated terminal concept](../concepts/integrated-terminal.md)
+- [Realtime chat rendering concept](../concepts/realtime-chat-rendering.md)
 - [Merge-to-main workflow concept](../concepts/merge-to-main-workflow.md)

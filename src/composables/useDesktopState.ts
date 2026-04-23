@@ -75,6 +75,7 @@ const LEGACY_COLLABORATION_MODE_STORAGE_KEY = 'codex-web-local.collaboration-mod
 const NEW_THREAD_COLLABORATION_MODE_CONTEXT = '__new-thread__'
 const NEW_THREAD_PROVIDER_MODEL_CONTEXT_PREFIX = '__new-thread-provider__::'
 const EVENT_SYNC_DEBOUNCE_MS = 220
+const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
@@ -1132,9 +1133,11 @@ export function useDesktopState() {
   const pendingThreadMessageRefresh = new Set<string>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   let threadListNextCursor: string | null = null
+  let threadListBackgroundTimer: number | null = null
   let isLoadingRemainingThreadPages = false
   let hasLoadedAllThreadPages = false
   let loadedThreadListGroups: UiProjectGroup[] = []
+  let loadedThreadListRootsState: WorkspaceRootsState | null = null
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
@@ -1427,7 +1430,6 @@ export function useDesktopState() {
 
       scheduleRateLimitRefresh()
       pendingThreadMessageRefresh.add(threadId)
-      pendingThreadsRefresh = true
       await syncFromNotifications()
     } catch (unknownError) {
       const errorMessage = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
@@ -1818,6 +1820,9 @@ export function useDesktopState() {
       clearInterruptPersistenceGate(threadId)
     }
     applyThreadFlags()
+    if (!nextInProgress && !hasActiveInProgressThreads() && threadListNextCursor) {
+      scheduleRemainingThreadPages()
+    }
   }
 
   function clearInterruptPersistenceGate(threadId: string): void {
@@ -3474,17 +3479,23 @@ export function useDesktopState() {
   function queueEventDrivenSync(notification: RpcNotification): void {
     if (notification.method === 'thread/tokenUsage/updated') return
 
+    const method = notification.method
+    const shouldRefreshMessages =
+      method === 'turn/started' ||
+      method === 'turn/completed' ||
+      method === 'error'
+    const shouldRefreshThreads =
+      method.startsWith('thread/') ||
+      method === 'turn/completed'
+
+    if (!shouldRefreshMessages && !shouldRefreshThreads) return
+
     const threadId = extractThreadIdFromNotification(notification)
-    if (threadId) {
+    if (threadId && shouldRefreshMessages) {
       pendingThreadMessageRefresh.add(threadId)
     }
 
-    const method = notification.method
-    if (
-      method.startsWith('thread/') ||
-      method.startsWith('turn/') ||
-      method.startsWith('item/')
-    ) {
+    if (shouldRefreshThreads) {
       pendingThreadsRefresh = true
     }
 
@@ -3641,8 +3652,33 @@ export function useDesktopState() {
       })
   }
 
+  function hasActiveInProgressThreads(): boolean {
+    return Object.values(inProgressById.value).some((value) => value === true)
+  }
+
+  function scheduleRemainingThreadPages(rootsState: WorkspaceRootsState | null = loadedThreadListRootsState): void {
+    if (!threadListNextCursor || isLoadingRemainingThreadPages || hasActiveInProgressThreads()) return
+
+    loadedThreadListRootsState = rootsState
+
+    if (typeof window === 'undefined') {
+      void loadRemainingThreadPages(rootsState)
+      return
+    }
+
+    if (threadListBackgroundTimer !== null) {
+      window.clearTimeout(threadListBackgroundTimer)
+    }
+
+    threadListBackgroundTimer = window.setTimeout(() => {
+      threadListBackgroundTimer = null
+      if (!threadListNextCursor || hasActiveInProgressThreads()) return
+      void loadRemainingThreadPages(loadedThreadListRootsState)
+    }, BACKGROUND_THREAD_PAGINATION_DELAY_MS)
+  }
+
   async function loadRemainingThreadPages(rootsState: WorkspaceRootsState | null): Promise<void> {
-    if (isLoadingRemainingThreadPages || !threadListNextCursor) return
+    if (isLoadingRemainingThreadPages || !threadListNextCursor || hasActiveInProgressThreads()) return
     isLoadingRemainingThreadPages = true
 
     try {
@@ -3655,6 +3691,9 @@ export function useDesktopState() {
       // Keep the first page usable; a later refresh can retry remaining pages.
     } finally {
       isLoadingRemainingThreadPages = false
+      if (threadListNextCursor && !hasActiveInProgressThreads()) {
+        scheduleRemainingThreadPages(rootsState)
+      }
     }
   }
 
@@ -3675,6 +3714,7 @@ export function useDesktopState() {
         loadWorkspaceRootsStateForThreadList(),
         loadThreadTitleCacheIfNeeded(),
       ])
+      loadedThreadListRootsState = rootsState
       const groups = page.groups
       loadedThreadListGroups = hasLoadedThreads.value
         ? mergeThreadGroupPages(loadedThreadListGroups, groups)
@@ -3688,7 +3728,7 @@ export function useDesktopState() {
       applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
       if (!hasLoadedAllThreadPages) {
-        void loadRemainingThreadPages(rootsState)
+        scheduleRemainingThreadPages(rootsState)
       }
 
       const flatThreads = flattenThreads(projectGroups.value)
@@ -3843,8 +3883,33 @@ export function useDesktopState() {
     await refreshSkillsPromise
   }
 
-  async function refreshCodexRateLimits(): Promise<void> {
-    await refreshRateLimits()
+  async function refreshAncillaryState(
+    options: { providerChanged?: boolean; includeProviderModels?: boolean } = {},
+  ): Promise<void> {
+    await Promise.allSettled([
+      refreshModelPreferences({
+        providerChanged: options.providerChanged,
+        includeProviderModels: options.includeProviderModels,
+      }),
+      refreshRateLimits(),
+      refreshCollaborationModes(),
+      refreshSkills(),
+    ])
+  }
+
+  function scheduleAncillaryStateRefresh(
+    options: { providerChanged?: boolean; includeProviderModels?: boolean } = {},
+  ): void {
+    const run = () => {
+      void refreshAncillaryState(options)
+    }
+
+    if (typeof window === 'undefined') {
+      run()
+      return
+    }
+
+    window.setTimeout(run, 0)
   }
 
   async function refreshAll(
@@ -3856,23 +3921,19 @@ export function useDesktopState() {
 
     try {
       await loadThreads()
-      const ancillaryRefresh = Promise.allSettled([
-        refreshModelPreferences({
-          providerChanged: options.providerChanged,
-          includeProviderModels: options.providerChanged === true || awaitAncillaryRefreshes,
-        }),
-        refreshRateLimits(),
-        refreshCollaborationModes(),
-        refreshSkills(),
-        refreshCodexRateLimits(),
-      ]).then(() => undefined)
       if (includeSelectedThreadMessages) {
         await loadMessages(selectedThreadId.value)
       }
       if (awaitAncillaryRefreshes) {
-        await ancillaryRefresh
+        await refreshAncillaryState({
+          providerChanged: options.providerChanged,
+          includeProviderModels: options.providerChanged === true || awaitAncillaryRefreshes,
+        })
       } else {
-        void ancillaryRefresh
+        scheduleAncillaryStateRefresh({
+          providerChanged: options.providerChanged,
+          includeProviderModels: false,
+        })
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
@@ -3883,10 +3944,8 @@ export function useDesktopState() {
     setSelectedThreadId(threadId)
 
     try {
-      await Promise.all([
-        loadMessages(threadId),
-        refreshSkills(),
-      ])
+      await loadMessages(threadId)
+      void refreshSkills()
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
     }
@@ -4320,7 +4379,6 @@ export function useDesktopState() {
       }
 
       pendingThreadMessageRefresh.add(threadId)
-      pendingThreadsRefresh = true
       await syncFromNotifications()
       scheduleDelayedTurnSync(threadId)
     } catch (unknownError) {
@@ -4810,6 +4868,10 @@ export function useDesktopState() {
     if (rateLimitRefreshTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(rateLimitRefreshTimer)
       rateLimitRefreshTimer = null
+    }
+    if (threadListBackgroundTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(threadListBackgroundTimer)
+      threadListBackgroundTimer = null
     }
     if (typeof window !== 'undefined') {
       for (const timerId of delayedTurnSyncTimerByThreadId.values()) {
