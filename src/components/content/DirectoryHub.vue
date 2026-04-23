@@ -173,7 +173,7 @@
               {{ app.isEnabled ? 'Disable' : 'Enable' }}
             </button>
             <button v-if="app.installUrl" class="directory-action-link" type="button" @click="openExternalUrl(app.installUrl)">
-              Manage
+              {{ app.isAccessible ? 'Manage' : 'Login' }}
             </button>
           </div>
         </article>
@@ -288,7 +288,7 @@
                   <h4 class="directory-detail-heading">Apps</h4>
                   <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
                     <span>{{ app.name }}</span>
-                    <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Manage</button>
+                    <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ app.needsAuth ? 'Login' : 'Manage' }}</button>
                   </div>
                 </div>
                 <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
@@ -324,7 +324,7 @@
                 <strong>Apps needing auth</strong>
                 <div v-for="app in installAuthApps" :key="app.id" class="directory-include-row">
                   <span>{{ app.name }}</span>
-                  <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Open</button>
+                  <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Login</button>
                 </div>
               </div>
             </template>
@@ -703,6 +703,13 @@ function openExternalUrl(rawUrl: string): void {
   window.location.assign(url)
 }
 
+function openFirstAppLoginIfNeeded(apps: DirectoryPluginAppSummary[]): boolean {
+  const app = apps.find((row) => row.needsAuth && row.installUrl.trim().length > 0)
+  if (!app) return false
+  openExternalUrl(app.installUrl)
+  return true
+}
+
 function fallbackStyle(plugin: DirectoryPluginSummary): Record<string, string> {
   return plugin.brandColor ? { backgroundColor: plugin.brandColor, color: '#fff' } : {}
 }
@@ -828,11 +835,12 @@ async function installSelectedPlugin(): Promise<void> {
     const result = await installDirectoryPlugin(selectedPlugin.value)
     installAuthApps.value = result.appsNeedingAuth
     showToast(`${selectedPlugin.value.displayName} plugin installed`)
+    const openedAppLogin = openFirstAppLoginIfNeeded(result.appsNeedingAuth)
     await loadPlugins()
     const updated = plugins.value.find((plugin) => plugin.id === selectedPlugin.value?.id)
     if (updated) {
       await openPluginDetail(updated)
-      if (selectedPluginDetail.value) {
+      if (!openedAppLogin && selectedPluginDetail.value) {
         await openFirstMcpLoginIfNeeded(selectedPluginDetail.value)
       }
     }
