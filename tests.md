@@ -3134,7 +3134,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 7. Switch to `Apps` and verify app cards load, or the unavailable/empty state appears without breaking the page
 8. On `Apps`, verify the default sort control is `Popular`, app icons render, connected apps show `Manage`, and disconnected apps show `Login`
 9. Click a disconnected app `Login` button and verify it opens the app login/manage URL
-10. Click `Try it!` for a connected app and verify a new thread opens with an auto-submitted prompt asking what the app can do
+10. Click `Try it!` for a connected and enabled app and verify a new thread opens with an auto-submitted prompt asking what the app can do
 11. Open an installed/enabled plugin detail, click `Try it!`, and verify a new thread opens with an auto-submitted plugin test prompt
 12. Open an installed/enabled skill detail, click `Try it!`, and verify a new thread opens with an auto-submitted skill test prompt and the skill attached
 13. Install a plugin whose install response includes `appsNeedingAuth`, and verify the first required app login/manage URL opens automatically
@@ -3152,7 +3152,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 - Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
-- Connected apps and installed/enabled plugins/skills expose `Try it!`, creating a new chat with an auto-submitted test prompt
+- Connected and enabled apps, plus installed/enabled plugins/skills, expose `Try it!`, creating a new chat with an auto-submitted test prompt
 - Plugins, Apps, and MCPs default to local popularity-style ordering because app-server does not expose numeric popularity fields
 - `Date` uses the app-server/catalog order as the available freshness proxy because app/plugin/MCP APIs do not expose created or published timestamps
 - Popular views show only the top 100 when no search is active; search results can show all matches

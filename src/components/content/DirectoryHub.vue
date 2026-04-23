@@ -175,7 +175,7 @@
             <button v-if="app.installUrl" class="directory-action-link" type="button" @click="openExternalUrl(app.installUrl)">
               {{ app.isAccessible ? 'Manage' : 'Login' }}
             </button>
-            <button v-if="app.isAccessible" class="directory-action" type="button" @click="tryApp(app)">
+            <button v-if="app.isAccessible && app.isEnabled" class="directory-action" type="button" @click="tryApp(app)">
               Try it!
             </button>
           </div>
