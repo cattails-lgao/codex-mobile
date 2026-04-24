@@ -22,7 +22,7 @@
           @click="$emit('select', skill)"
           @pointerenter="highlightIndex = idx"
         >
-          <span class="skill-picker-name">{{ skill.name }}</span>
+          <span class="skill-picker-name">{{ skill.displayName || skill.name }}</span>
           <span v-if="skill.description" class="skill-picker-desc">{{ skill.description }}</span>
         </button>
       </li>
@@ -37,6 +37,7 @@ import { useUiLanguage } from '../../composables/useUiLanguage'
 
 export type SkillOption = {
   name: string
+  displayName?: string
   description: string
   path: string
 }
@@ -63,7 +64,10 @@ const filtered = computed(() => {
   const q = query.value.toLowerCase().trim()
   if (!q) return props.skills
   return props.skills.filter(
-    (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
+    (s) =>
+      s.name.toLowerCase().includes(q)
+      || (s.displayName ?? '').toLowerCase().includes(q)
+      || s.description.toLowerCase().includes(q),
   )
 })
 
