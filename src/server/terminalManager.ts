@@ -361,11 +361,19 @@ function loadOptionalTerminalSpawn(spawn: SpawnTerminal | null | undefined): { s
     return { spawn: loadTerminalSpawn(), reason: null }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const suffix = message.includes('Cannot find module')
+      ? 'Native PTY support is not installed.'
+      : sanitizeUnavailableReason(message)
     return {
       spawn: null,
-      reason: `Integrated terminal is unavailable on this host: ${message}`,
+      reason: `Integrated terminal is unavailable on this host. ${suffix}`,
     }
   }
+}
+
+function sanitizeUnavailableReason(message: string): string {
+  const firstLine = message.split('\n')[0]?.trim() || ''
+  return firstLine ? firstLine : 'Native PTY support could not be loaded.'
 }
 
 function normalizeDimension(value: unknown, fallback: number): number {
