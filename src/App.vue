@@ -3596,28 +3596,13 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   min-height: 0;
 }
 
-.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread,
-.content-root.is-virtual-keyboard-open.is-terminal-open .new-thread-empty {
-  display: none;
-}
-
 .content-root.is-virtual-keyboard-open .composer-with-queue {
   gap: 0.375rem;
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
 }
 
-.content-root.is-virtual-keyboard-open.is-terminal-open .composer-with-queue {
-  flex: 1 1 auto;
-  min-height: 0;
-  justify-content: flex-end;
-}
-
 .content-root.is-virtual-keyboard-open .content-thread-terminal-panel {
   min-height: 0;
-}
-
-.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread-terminal-panel {
-  flex: 1 1 auto;
 }
 
 .content-root.is-virtual-keyboard-open .content-keyboard-spacer {
