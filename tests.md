@@ -1556,6 +1556,26 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Stop running dev servers and unset temporary env overrides.
 
+### Feature: npm run dev uses CLI server on Android
+
+#### Prerequisites
+- Android SSH helper exists and is executable: `/Users/igor/Git-projects/codex-web-local-android/andClaw/ssh.sh`.
+- Dependencies are installed on the Android clone.
+
+#### Steps
+1. On Android, run `npm run dev -- --port 4173`.
+2. Confirm startup logs show `Codex Web Local is running!`.
+3. In a second Android shell, run `curl -fsS http://127.0.0.1:4173/ | head -5`.
+4. Stop the dev server.
+
+#### Expected Results
+- Android starts `node dist-cli/index.js`, not raw Vite.
+- The server binds successfully and returns the app HTML.
+- The Vite `uv_interface_addresses` Android error does not occur.
+
+#### Rollback/Cleanup
+- Stop the Android dev server.
+
 ### Feature: Approval request uses legacy in-conversation request card only
 
 #### Prerequisites
@@ -3269,3 +3289,31 @@ Thread and new-chat header action buttons stay pinned to the right edge while lo
 
 #### Rollback/Cleanup
 - Remove generated screenshots under `output/playwright/` if they are not needed
+
+---
+
+### Terminal focus does not fullscreen panel
+
+#### Feature/Change Name
+Terminal focus on mobile keeps the terminal as a bottom panel instead of expanding it to full screen.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. A thread or new-chat project with the terminal toggle available
+3. Mobile viewport or Android device browser
+
+#### Steps
+1. Open a thread or new chat with a valid project path
+2. Tap the terminal toggle
+3. Tap inside the terminal area
+4. If the virtual keyboard appears, keep focus in the terminal
+5. Hide and reopen the terminal
+
+#### Expected Results
+- Terminal remains a bottom panel and does not take over the full viewport
+- Conversation/new-chat content is not forcibly hidden by terminal focus
+- Composer keeps its normal compact placement instead of stretching above the terminal
+- Terminal can still fit within the available viewport when the keyboard changes size
+
+#### Rollback/Cleanup
+- Close the terminal panel

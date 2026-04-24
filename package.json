@@ -32,14 +32,26 @@
   },
   "files": [
     "dist/",
-    "dist-cli/"
+    "dist-cli/",
+    "scripts/dev.cjs",
+    "scripts/fix-pty-native-build.cjs"
   ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@firebase/util",
+      "esbuild",
+      "node-pty",
+      "node-pty-prebuilt-multiarch",
+      "protobufjs"
+    ]
+  },
   "scripts": {
-    "dev": "pnpm install && CODEXUI_SANDBOX_MODE=danger-full-access CODEXUI_APPROVAL_POLICY=never vite",
+    "dev": "node scripts/dev.cjs",
     "dev:open": "pnpm run build:cli && sh -c 'pnpm run dev & VPID=$!; node dist-cli/index.js --open-project \"${1:-.}\"; wait $VPID' --",
     "build:frontend": "vue-tsc --noEmit && vite build",
     "build:cli": "tsup",
     "build": "pnpm run build:frontend && pnpm run build:cli",
+    "postinstall": "node scripts/fix-pty-native-build.cjs",
     "test:unit": "vitest run",
     "preview": "vite preview",
     "prepublishOnly": "pnpm run build",
@@ -54,6 +66,7 @@
     "firebase": "^12.2.1",
     "highlight.js": "^11.11.1",
     "node-pty": "^1.1.0",
+    "node-pty-prebuilt-multiarch": "0.10.1-pre.5",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.3"
   },

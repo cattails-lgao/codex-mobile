@@ -3682,7 +3682,17 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-terminal/status') {
+        setJson(res, 200, terminalManager.getAvailability())
+        return
+      }
+
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-terminal/attach') {
+        const availability = terminalManager.getAvailability()
+        if (!availability.available) {
+          setJson(res, 503, { error: availability.reason || 'Integrated terminal is unavailable on this host' })
+          return
+        }
         const body = asRecord(await readJsonBody(req))
         const threadId = readNonEmptyString(body?.threadId)
         const cwd = readNonEmptyString(body?.cwd)
@@ -3703,6 +3713,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-terminal/input') {
+        const availability = terminalManager.getAvailability()
+        if (!availability.available) {
+          setJson(res, 503, { error: availability.reason || 'Integrated terminal is unavailable on this host' })
+          return
+        }
         const body = asRecord(await readJsonBody(req))
         const sessionId = readNonEmptyString(body?.sessionId)
         const data = typeof body?.data === 'string' ? body.data : ''
@@ -3716,6 +3731,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-terminal/resize') {
+        const availability = terminalManager.getAvailability()
+        if (!availability.available) {
+          setJson(res, 503, { error: availability.reason || 'Integrated terminal is unavailable on this host' })
+          return
+        }
         const body = asRecord(await readJsonBody(req))
         const sessionId = readNonEmptyString(body?.sessionId)
         if (!sessionId) {
@@ -3728,6 +3748,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-terminal/close') {
+        const availability = terminalManager.getAvailability()
+        if (!availability.available) {
+          setJson(res, 503, { error: availability.reason || 'Integrated terminal is unavailable on this host' })
+          return
+        }
         const body = asRecord(await readJsonBody(req))
         const sessionId = readNonEmptyString(body?.sessionId)
         if (!sessionId) {

@@ -674,9 +674,5 @@ function readString(value: unknown): string {
     @apply px-1.5 py-1.5;
   }
 
-  :global(.content-root.is-virtual-keyboard-open.is-terminal-open) .thread-terminal-panel {
-    height: 100%;
-    min-height: 13rem;
-  }
 }
 </style>

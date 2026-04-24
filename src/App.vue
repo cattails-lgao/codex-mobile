@@ -866,6 +866,7 @@ import {
   getTelegramConfig,
   getProjectRootSuggestion,
   getTelegramStatus,
+  getThreadTerminalStatus,
   getWorkspaceRootsState,
   listLocalDirectories,
   openProjectRoot,
@@ -1106,6 +1107,7 @@ const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const homeTerminalOpen = ref(false)
 const isTerminalInputFocused = ref(false)
 const isTerminalKeyboardFocusFallbackActive = ref(false)
+const isThreadTerminalAvailable = ref(true)
 const trendingProjects = ref<GithubTrendingProject[]>([])
 const isTrendingProjectsLoading = ref(false)
 const githubTipsScope = ref<GithubTipsScope>('trending-daily')
@@ -1271,8 +1273,10 @@ const composerCwd = computed(() => {
   return selectedThread.value?.cwd?.trim() ?? ''
 })
 const canShowTerminalToggle = computed(() => (
-  (isHomeRoute.value && composerCwd.value.length > 0) ||
-  (route.name === 'thread' && selectedThreadId.value.length > 0)
+  isThreadTerminalAvailable.value && (
+    (isHomeRoute.value && composerCwd.value.length > 0) ||
+    (route.name === 'thread' && selectedThreadId.value.length > 0)
+  )
 ))
 const isComposerTerminalOpen = computed(() => (
   isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
@@ -1529,6 +1533,7 @@ onMounted(() => {
   void refreshTelegramConfig()
   void refreshTelegramStatus()
   void loadFreeModeStatus()
+  void refreshThreadTerminalStatus()
   if (showGithubTrendingProjects.value) {
     void loadTrendingProjects()
   }
@@ -2100,6 +2105,7 @@ function onWindowKeyDown(event: KeyboardEvent): void {
 }
 
 function toggleComposerTerminal(): void {
+  if (!isThreadTerminalAvailable.value) return
   if (isHomeRoute.value) {
     if (!composerCwd.value) return
     homeTerminalOpen.value = !homeTerminalOpen.value
@@ -2153,6 +2159,22 @@ function clearTerminalKeyboardFocusFallbackTimer(): void {
   if (!terminalKeyboardFocusFallbackTimer) return
   clearTimeout(terminalKeyboardFocusFallbackTimer)
   terminalKeyboardFocusFallbackTimer = null
+}
+
+async function refreshThreadTerminalStatus(): Promise<void> {
+  try {
+    const status = await getThreadTerminalStatus()
+    isThreadTerminalAvailable.value = status.available
+    if (!status.available) {
+      homeTerminalOpen.value = false
+      if (selectedThreadId.value) {
+        setThreadTerminalOpen(selectedThreadId.value, false)
+      }
+    }
+  } catch {
+    isThreadTerminalAvailable.value = false
+    homeTerminalOpen.value = false
+  }
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -3574,28 +3596,13 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   min-height: 0;
 }
 
-.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread,
-.content-root.is-virtual-keyboard-open.is-terminal-open .new-thread-empty {
-  display: none;
-}
-
 .content-root.is-virtual-keyboard-open .composer-with-queue {
   gap: 0.375rem;
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
 }
 
-.content-root.is-virtual-keyboard-open.is-terminal-open .composer-with-queue {
-  flex: 1 1 auto;
-  min-height: 0;
-  justify-content: flex-end;
-}
-
 .content-root.is-virtual-keyboard-open .content-thread-terminal-panel {
   min-height: 0;
-}
-
-.content-root.is-virtual-keyboard-open.is-terminal-open .content-thread-terminal-panel {
-  flex: 1 1 auto;
 }
 
 .content-root.is-virtual-keyboard-open .content-keyboard-spacer {
