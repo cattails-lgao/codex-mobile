@@ -52,6 +52,13 @@ packageJson.bin = {
   ...(packageJson.bin || {}),
   'codexui-android': 'dist-cli/index.js',
 };
+packageJson.bundleDependencies = [
+  'nan',
+  'node-addon-api',
+  'node-pty',
+  'node-pty-prebuilt-multiarch',
+  'prebuild-install',
+];
 packageJson.scripts = {
   ...(packageJson.scripts || {}),
 };
@@ -59,6 +66,11 @@ delete packageJson.scripts.prepublishOnly;
 
 fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 NODE
+
+(
+  cd "$publish_dir"
+  npm install --ignore-scripts --package-lock=false
+)
 
 echo "Publishing $package_name@$next_version"
 (cd "$publish_dir" && pnpm publish --access public --no-git-checks)
