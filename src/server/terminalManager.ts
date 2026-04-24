@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import type { IPty, IPtyForkOptions } from 'node-pty-prebuilt-multiarch'
 
 const TERMINAL_BUFFER_LIMIT = 16 * 1024
@@ -337,24 +338,28 @@ function loadTerminalSpawn(): SpawnTerminal {
 
   if (resolveNodePtyPrebuiltPath()) {
     try {
-      const terminal = require('node-pty-prebuilt-multiarch') as { spawn: SpawnTerminal }
+      const terminal = requirePtyPackage('node-pty-prebuilt-multiarch')
       return terminal.spawn
     } catch {
       // Fall back to maintained node-pty when the legacy prebuild exists but cannot load.
     }
   }
-  const terminal = require('node-pty') as { spawn: SpawnTerminal }
+  const terminal = requirePtyPackage('node-pty')
   return terminal.spawn
 }
 
 function repairNativePtyBuild(packageName: string): void {
   try {
-    const packageJson = require.resolve(`${packageName}/package.json`)
-    const packageRoot = dirname(packageJson)
+    const packageRoot = resolvePtyPackageRoot(packageName)
+    if (!packageRoot) return
     const buildDir = join(packageRoot, 'build')
     const makefile = join(buildDir, 'Makefile')
     const binary = join(buildDir, 'Release', 'pty.node')
-    if (!existsSync(makefile) || !isBrokenSymlink(binary)) return
+    if (!existsSync(binary) && !existsSync(makefile)) {
+      runNodeGypRebuild(packageRoot)
+    }
+    if (existsSync(binary) && !isBrokenSymlink(binary)) return
+    if (!existsSync(makefile)) return
 
     const source = readFileSync(makefile, 'utf8')
     const patched = source.replace(
@@ -369,6 +374,62 @@ function repairNativePtyBuild(packageName: string): void {
   } catch {
     // Native PTY load below will surface the actionable error if repair fails.
   }
+}
+
+function requirePtyPackage(packageName: string): { spawn: SpawnTerminal } {
+  const vendorRoot = resolveVendorPtyPackageRoot(packageName)
+  if (vendorRoot) {
+    try {
+      return require(vendorRoot) as { spawn: SpawnTerminal }
+    } catch {
+      // Prefer the regular dependency if the vendored package is present but unusable.
+    }
+  }
+  return require(packageName) as { spawn: SpawnTerminal }
+}
+
+function resolvePtyPackageRoot(packageName: string): string | null {
+  try {
+    return dirname(require.resolve(`${packageName}/package.json`))
+  } catch {
+    return resolveVendorPtyPackageRoot(packageName)
+  }
+}
+
+function resolveVendorPtyPackageRoot(packageName: string): string | null {
+  try {
+    const moduleDir = dirname(fileURLToPath(import.meta.url))
+    const candidate = join(moduleDir, '..', 'vendor', 'node_modules', packageName)
+    return existsSync(join(candidate, 'package.json')) ? candidate : null
+  } catch {
+    return null
+  }
+}
+
+function runNodeGypRebuild(packageRoot: string): void {
+  const nodeGyp = resolveNodeGypCli()
+  if (!nodeGyp) return
+  spawnSync(process.execPath, [nodeGyp, 'rebuild'], {
+    cwd: packageRoot,
+    stdio: 'ignore',
+  })
+}
+
+function resolveNodeGypCli(): string | null {
+  if (process.env.npm_config_node_gyp && existsSync(process.env.npm_config_node_gyp)) {
+    return process.env.npm_config_node_gyp
+  }
+  try {
+    return require.resolve('node-gyp/bin/node-gyp.js')
+  } catch {
+    // npm commonly vendors node-gyp without exposing it as a regular package.
+  }
+  const npmRoot = spawnSync('npm', ['root', '-g'], { encoding: 'utf8' }).stdout.trim()
+  const candidates = [
+    join(npmRoot, 'node-gyp', 'bin', 'node-gyp.js'),
+    join(npmRoot, 'npm', 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
+  ]
+  return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
 function isBrokenSymlink(path: string): boolean {
@@ -386,8 +447,8 @@ function isBrokenSymlink(path: string): boolean {
 
 function resolveNodePtyPrebuiltPath(): string | null {
   try {
-    const packageJson = require.resolve('node-pty-prebuilt-multiarch/package.json')
-    const packageRoot = dirname(packageJson)
+    const packageRoot = resolvePtyPackageRoot('node-pty-prebuilt-multiarch')
+    if (!packageRoot) return null
     const builtPath = join(packageRoot, 'build', 'Release', 'pty.node')
     if (existsSync(builtPath)) {
       return builtPath
@@ -405,8 +466,8 @@ function resolveNodePtyPrebuiltPath(): string | null {
 function ensureNodePtyPrebuiltExecutable(): void {
   if (process.platform !== 'darwin' && process.platform !== 'linux') return
   try {
-    const nodePtyEntry = require.resolve('node-pty-prebuilt-multiarch')
-    const packageRoot = join(dirname(nodePtyEntry), '..')
+    const packageRoot = resolvePtyPackageRoot('node-pty-prebuilt-multiarch')
+    if (!packageRoot) return
     const helperPath = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
     if (existsSync(helperPath)) {
       chmodSync(helperPath, 0o755)
