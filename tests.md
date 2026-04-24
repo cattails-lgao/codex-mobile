@@ -3036,7 +3036,7 @@ Automated unit coverage for terminal manager edge cases that do not require a br
 ### Startup welcome log uses repository GitHub URL
 
 #### Feature/Change Name
-Remove legacy `@nervmor/codexui` package reference from the startup welcome log and point users to the upstream GitHub repository.
+Remove the legacy npm package reference from the startup welcome log and point users to the upstream GitHub repository.
 
 #### Prerequisites/Setup
 1. Run the app from this repository.
@@ -3048,7 +3048,7 @@ Remove legacy `@nervmor/codexui` package reference from the startup welcome log 
 
 #### Expected Results
 - The welcome log points to `https://github.com/friuns2/codexUI`.
-- The welcome log does not contain `@nervmor/codexui`.
+- The welcome log does not contain the legacy npm package URL.
 
 #### Rollback/Cleanup
 - None

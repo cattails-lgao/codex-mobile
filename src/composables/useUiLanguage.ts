@@ -90,7 +90,6 @@ const zhCN: Record<string, string> = {
   'Loading trending projects...': '加载热门项目中...',
   'Trending repos are unavailable right now.': '当前无法获取热门仓库。',
   'No description available.': '暂无描述。',
-  'Welcome to codexui. npm: https://www.npmjs.com/package/@nervmor/codexui': '欢迎使用 codexui。npm: https://www.npmjs.com/package/@nervmor/codexui',
   'Service worker registration failed.': 'Service Worker 注册失败。',
   'No matching files': '没有匹配的文件',
   'Add photos & files': '添加图片和文件',
