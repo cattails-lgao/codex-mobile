@@ -50,6 +50,65 @@ function getCodexHomeDir(): string {
   return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
 }
 
+function splitAbsolutePath(pathValue: string): string[] {
+  return pathValue.split('/').filter(Boolean)
+}
+
+function buildAbsolutePath(parts: string[]): string {
+  return `/${parts.join('/')}`
+}
+
+function normalizeSkillMarkdownPath(skillPath: string): string {
+  if (!skillPath) return ''
+  return skillPath.endsWith('/SKILL.md') ? skillPath : `${skillPath}/SKILL.md`
+}
+
+function deriveSkillPathInfo(
+  skillPath: string,
+  knownPaths: Set<string> = new Set(),
+): {
+  normalizedPath: string
+  rootSkillPath: string
+  rootSkillName: string
+  installDir: string
+  isNestedSkill: boolean
+} | null {
+  const normalizedPath = normalizeSkillMarkdownPath(skillPath)
+  const parts = splitAbsolutePath(normalizedPath)
+  if (parts.length < 2) return null
+
+  const pluginSkillsIndex = parts.lastIndexOf('skills')
+  if (pluginSkillsIndex >= 2) {
+    const pluginName = parts[pluginSkillsIndex - 2] ?? ''
+    if (pluginName) {
+      const rootSkillPath = buildAbsolutePath([...parts.slice(0, pluginSkillsIndex + 1), pluginName, 'SKILL.md'])
+      if (knownPaths.has(rootSkillPath)) {
+        return {
+          normalizedPath,
+          rootSkillPath,
+          rootSkillName: pluginName,
+          installDir: buildAbsolutePath(parts.slice(0, pluginSkillsIndex + 1)),
+          isNestedSkill: normalizedPath !== rootSkillPath,
+        }
+      }
+    }
+  }
+
+  const firstSkillsIndex = parts.indexOf('skills')
+  if (firstSkillsIndex < 0 || firstSkillsIndex + 1 >= parts.length - 1) return null
+  const rootSkillName = parts[firstSkillsIndex + 1] ?? ''
+  if (!rootSkillName) return null
+  const rootParts = parts.slice(0, firstSkillsIndex + 2)
+  const installDirParts = parts.slice(0, firstSkillsIndex + 1)
+  return {
+    normalizedPath,
+    rootSkillPath: buildAbsolutePath([...rootParts, 'SKILL.md']),
+    rootSkillName,
+    installDir: buildAbsolutePath(installDirParts),
+    isNestedSkill: normalizedPath !== buildAbsolutePath([...rootParts, 'SKILL.md']),
+  }
+}
+
 function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
 }
@@ -154,9 +213,9 @@ async function detectUserSkillsDir(appServer: AppServerLike): Promise<string> {
     for (const entry of result.data ?? []) {
       for (const skill of entry.skills ?? []) {
         if (skill.scope !== 'user' || !skill.path) continue
-        const parts = skill.path.split('/').filter(Boolean)
-        if (parts.length < 2) continue
-        return `/${parts.slice(0, -2).join('/')}`
+        const skillInfo = deriveSkillPathInfo(skill.path)
+        if (!skillInfo) continue
+        return skillInfo.installDir
       }
     }
   } catch {}
@@ -298,6 +357,78 @@ function buildHubEntry(e: SkillsTreeEntry): SkillHubEntry {
     url: e.url,
     installed: false,
   }
+}
+
+type RpcSkillRecord = {
+  name?: string
+  description?: string
+  shortDescription?: string
+  path?: string
+  scope?: string
+  enabled?: boolean
+}
+
+function groupRpcSkillRecords<T extends RpcSkillRecord>(skills: T[]): T[] {
+  const normalizedPathSet = new Set(
+    skills
+      .map((skill) => normalizeSkillMarkdownPath(typeof skill.path === 'string' ? skill.path : ''))
+      .filter(Boolean),
+  )
+  const grouped = new Map<string, { preferred: T; hasRoot: boolean; anyEnabled: boolean }>()
+
+  for (const skill of skills) {
+    const rawPath = typeof skill.path === 'string' ? skill.path : ''
+    const pathInfo = rawPath ? deriveSkillPathInfo(rawPath, normalizedPathSet) : null
+    const groupingKey = pathInfo && pathInfo.isNestedSkill && normalizedPathSet.has(pathInfo.rootSkillPath)
+      ? pathInfo.rootSkillPath
+      : (pathInfo?.normalizedPath || rawPath || `${skill.scope ?? ''}:${skill.name ?? ''}`)
+    const existing = grouped.get(groupingKey)
+    const isRootEntry = pathInfo?.normalizedPath === groupingKey
+    const groupedName = pathInfo && groupingKey === pathInfo.rootSkillPath
+      ? pathInfo.rootSkillName
+      : skill.name
+
+    if (!existing) {
+      grouped.set(groupingKey, {
+        preferred: isRootEntry
+          ? {
+              ...skill,
+              name: groupedName,
+              path: groupingKey,
+            }
+          : {
+              ...skill,
+              name: groupedName,
+              path: groupingKey,
+            },
+        hasRoot: isRootEntry,
+        anyEnabled: skill.enabled !== false,
+      })
+      continue
+    }
+
+    existing.anyEnabled = existing.anyEnabled || skill.enabled !== false
+    if (!existing.hasRoot && isRootEntry) {
+      existing.preferred = {
+        ...skill,
+        name: groupedName,
+        path: groupingKey,
+      }
+      existing.hasRoot = true
+      continue
+    }
+    if (!existing.preferred.description && skill.description) {
+      existing.preferred = { ...existing.preferred, description: skill.description }
+    }
+    if (!existing.preferred.shortDescription && skill.shortDescription) {
+      existing.preferred = { ...existing.preferred, shortDescription: skill.shortDescription }
+    }
+  }
+
+  return Array.from(grouped.values()).map(({ preferred, anyEnabled }) => ({
+    ...preferred,
+    enabled: preferred.enabled ?? anyEnabled,
+  }))
 }
 
 type InstalledSkillInfo = { name: string; path: string; enabled: boolean }
@@ -949,14 +1080,16 @@ async function collectLocalSyncedSkills(appServer: AppServerLike): Promise<Synce
     }
   }
 
-  const skills = (await appServer.rpc('skills/list', {})) as { data?: Array<{ skills?: Array<{ name?: string; enabled?: boolean }> }> }
+  const skills = (await appServer.rpc('skills/list', {})) as {
+    data?: Array<{ skills?: Array<{ name?: string; enabled?: boolean; path?: string; scope?: string }> }>
+  }
   const seen = new Set<string>()
   const synced: SyncedSkill[] = []
   let ownersChanged = false
   for (const entry of skills.data ?? []) {
-    for (const skill of entry.skills ?? []) {
+    for (const skill of groupRpcSkillRecords(entry.skills ?? [])) {
       const name = typeof skill.name === 'string' ? skill.name : ''
-      if (!name || seen.has(name)) continue
+      if (!name || skill.scope !== 'user' || seen.has(name)) continue
       seen.add(name)
       let owner = owners[name]
       if (!owner) {
@@ -1148,9 +1281,11 @@ export async function handleSkillsRoutes(
 
       const installedMap = await scanInstalledSkillsFromDisk()
       try {
-        const result = (await appServer.rpc('skills/list', {})) as { data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }> }
+        const result = (await appServer.rpc('skills/list', {})) as {
+          data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }>
+        }
         for (const entry of result.data ?? []) {
-          for (const skill of entry.skills ?? []) {
+          for (const skill of groupRpcSkillRecords(entry.skills ?? [])) {
             if (skill.name) {
               installedMap.set(skill.name, { name: skill.name, path: skill.path ?? '', enabled: skill.enabled !== false })
             }

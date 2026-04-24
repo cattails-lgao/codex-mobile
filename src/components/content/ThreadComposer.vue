@@ -64,11 +64,11 @@
 
       <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
         <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
-          <span class="thread-composer-skill-chip-name">{{ skill.name }}</span>
+          <span class="thread-composer-skill-chip-name">{{ skill.displayName || skill.name }}</span>
           <button
             class="thread-composer-skill-chip-remove"
             type="button"
-            :aria-label="`Remove skill ${skill.name}`"
+            :aria-label="`Remove skill ${skill.displayName || skill.name}`"
             @click="removeSkill(skill.path)"
           >×</button>
         </span>
@@ -395,7 +395,7 @@ import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 import ComposerSkillPicker from './ComposerSkillPicker.vue'
 
-type SkillItem = { name: string; description: string; path: string }
+type SkillItem = { name: string; displayName?: string; description: string; path: string }
 
 const props = defineProps<{
   activeThreadId: string
@@ -928,7 +928,7 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   }))
   selectedSkills.value = payload.skills.map((skill) => (
     (props.skills ?? []).find((item) => item.path === skill.path)
-    ?? { name: skill.name, description: '', path: skill.path }
+    ?? { name: skill.name, displayName: undefined, description: '', path: skill.path }
   ))
   fileAttachments.value = payload.fileAttachments.map((attachment) => ({ ...attachment }))
   folderUploadGroups.value = []
