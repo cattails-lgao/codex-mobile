@@ -3294,6 +3294,116 @@ Thread and new-chat header action buttons stay pinned to the right edge while lo
 
 ---
 
+### Stop button activates promptly for new threads
+
+#### Feature/Change Name
+The composer stop control switches from the temporary saving spinner to a real stop button as soon as the active turn id is available for a newly created thread.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Home route available with a writable project/folder selected
+3. Codex can start a normal assistant turn
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/`
+2. Send a short prompt from the new-thread composer
+3. Immediately watch the right-side composer control after routing into the new thread
+4. Before the full response finishes, verify the temporary saving spinner transitions into the stop icon/button
+5. Click `Stop` while the turn is still running
+
+#### Expected Results
+- A new thread may briefly show the saving spinner while the turn starts
+- The control becomes an actual stop button as soon as the active turn id is known, without waiting for thread-list persistence
+- Clicking stop interrupts the running turn
+
+#### Rollback/Cleanup
+- Archive or delete the test thread if it was created only for this check
+
+---
+
+### New-thread plan mode persists and toggles correctly
+
+#### Feature/Change Name
+New threads started from the home composer honor the selected plan mode for the first turn, and turning plan mode off on the created thread switches later turns back to default mode.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Home route available with a writable project/folder selected
+3. At least one model is available for plan mode
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/`
+2. Enable `Plan mode` in the new-thread composer
+3. Send a prompt that produces a visible plan response
+4. After routing into the new thread, confirm the composer still shows `Plan mode` enabled
+5. Toggle `Plan mode` off in that thread
+6. Send another prompt in the same thread
+7. Confirm the next turn runs in default mode rather than generating another plan-first response
+
+#### Expected Results
+- The very first turn of a newly created thread uses the plan-mode setting chosen on the home composer
+- The newly created thread retains that plan-mode selection after route transition
+- Turning plan mode off updates the thread-scoped mode, and later turns in that thread no longer use plan mode
+
+#### Rollback/Cleanup
+- Archive or delete any test thread created only for this check
+
+---
+
+### Completed plan cards expose implement action
+
+#### Feature/Change Name
+Completed plan cards show an `Implement plan` button that turns plan mode off and sends an implementation prompt built from the plan content.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. An existing thread contains a completed persisted plan card
+3. The thread composer is available for follow-up messages
+
+#### Steps
+1. Open a thread containing a completed plan card
+2. Verify the plan card shows `Implement plan` at the bottom
+3. Click `Implement plan`
+4. Confirm the composer thread switches back to default mode
+5. Inspect the next `turn/start` request or the resulting assistant behavior
+
+#### Expected Results
+- Completed plan cards render the `Implement plan` action even when the plan body is structured as headings/lists instead of checkbox steps
+- Clicking the button sends a simple implementation follow-up message instead of copying the whole plan body into chat
+- The next turn runs in default mode rather than plan mode
+
+#### Rollback/Cleanup
+- Archive or delete any test thread created only for this check
+
+---
+
+### Dark theme plan card contrast
+
+#### Feature/Change Name
+Plan cards in dark mode keep readable contrast and a lighter surface than the surrounding page background, including the `Implement plan` action.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. A thread contains a visible plan card
+3. Appearance is set to `Dark`
+
+#### Steps
+1. Open a thread containing a plan card in dark mode
+2. Inspect the card background, title, explanation text, headings, lists, inline code, and blockquote styling
+3. Verify the `Implement plan` button is readable and visually distinct
+4. Hover the `Implement plan` button and confirm the hover state remains visible
+
+#### Expected Results
+- The plan card surface is distinguishable from the page background without looking crushed into near-black
+- Plan text and headings stay readable in dark mode
+- Inline code, file links, and blockquotes keep enough contrast to scan comfortably
+- The `Implement plan` button remains readable and clickable in dark mode
+
+#### Rollback/Cleanup
+- Reset appearance to the previous user preference
+
+---
+
 ### Terminal focus does not fullscreen panel
 
 #### Feature/Change Name
