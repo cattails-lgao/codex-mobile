@@ -189,6 +189,126 @@
       </div>
     </section>
 
+    <section v-else-if="activeTab === 'composio'" class="directory-section">
+      <div class="directory-toolbar">
+        <input
+          v-model="composioSearchQuery"
+          class="directory-search"
+          type="search"
+          placeholder="Search Composio connectors..."
+          aria-label="Search Composio connectors"
+        />
+        <div class="directory-sort-group" role="group" aria-label="Sort Composio connectors">
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': composioSortMode === 'popular' }"
+            type="button"
+            @click="composioSortMode = 'popular'"
+          >
+            Popular
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': composioSortMode === 'name' }"
+            type="button"
+            @click="composioSortMode = 'name'"
+          >
+            A-Z
+          </button>
+          <button
+            class="directory-sort-button"
+            :class="{ 'is-active': composioSortMode === 'date' }"
+            type="button"
+            @click="composioSortMode = 'date'"
+          >
+            Date
+          </button>
+        </div>
+      </div>
+      <div v-if="composioError" class="directory-error">{{ composioError }}</div>
+      <div v-else-if="isLoadingComposio" class="directory-loading">Loading Composio connectors...</div>
+      <div v-else-if="!composioStatus?.available" class="directory-empty">
+        Composio CLI is not installed in this environment.
+      </div>
+      <div v-else-if="!composioStatus.authenticated" class="directory-empty">
+        Composio CLI is installed but not logged in. Run `composio login` or log in from your terminal, then refresh this tab.
+      </div>
+      <div v-else class="directory-section composio-section">
+        <article class="directory-card directory-card-wide composio-status-card">
+          <div class="directory-card-top">
+            <div class="directory-card-fallback composio-fallback">C</div>
+            <div class="directory-card-main">
+              <div class="directory-card-title-row">
+                <span class="directory-card-title">Composio workspace</span>
+                <span class="directory-badge">Connected</span>
+              </div>
+              <span class="directory-card-meta">{{ composioStatus.email || composioStatus.defaultOrgName || 'Authenticated' }}</span>
+            </div>
+          </div>
+          <p class="directory-card-description">
+            {{ composioWorkspaceSummary }}
+          </p>
+          <div class="directory-chip-row">
+            <span v-if="composioStatus.defaultOrgName" class="directory-chip">{{ composioStatus.defaultOrgName }}</span>
+            <span v-if="composioStatus.cliVersion" class="directory-chip">CLI {{ composioStatus.cliVersion }}</span>
+            <span v-if="composioConnectors.length" class="directory-chip">{{ composioConnectors.length }} connectors</span>
+          </div>
+          <div class="directory-card-actions">
+            <button class="directory-action-link" type="button" @click="openExternalUrl(composioStatus.webUrl)">
+              Open dashboard
+            </button>
+          </div>
+        </article>
+
+        <div v-if="visibleComposioConnectors.length === 0" class="directory-empty">No Composio connectors found.</div>
+        <div v-else class="directory-grid">
+          <article v-for="connector in visibleComposioConnectors" :key="connector.slug" class="directory-card">
+            <div class="directory-card-top">
+              <img v-if="connector.logoUrl" class="directory-card-icon" :src="connector.logoUrl" :alt="connector.name" loading="lazy" />
+              <div v-else class="directory-card-fallback composio-fallback">{{ connector.name.charAt(0) }}</div>
+              <div class="directory-card-main">
+                <div class="directory-card-title-row">
+                  <span class="directory-card-title">{{ connector.name }}</span>
+                  <span v-if="connector.activeCount > 0" class="directory-badge">Connected</span>
+                  <span v-else-if="connector.isNoAuth" class="directory-badge">No auth</span>
+                </div>
+                <span class="directory-card-meta">{{ composioMetaLabel(connector) }}</span>
+              </div>
+            </div>
+            <p v-if="connector.description" class="directory-card-description">{{ connector.description }}</p>
+            <div class="directory-chip-row">
+              <span class="directory-chip">{{ connector.toolsCount }} tools</span>
+              <span v-if="connector.triggersCount > 0" class="directory-chip">{{ connector.triggersCount }} triggers</span>
+              <span v-if="connector.authModes.length > 0" class="directory-chip">{{ connector.authModes.join(', ') }}</span>
+            </div>
+            <div class="directory-card-actions">
+              <button class="directory-action" type="button" @click="openComposioDetail(connector.slug)">
+                Details
+              </button>
+              <button
+                v-if="composioPrimaryActionLabel(connector)"
+                class="directory-action-link"
+                type="button"
+                :disabled="composioActionSlug === connector.slug"
+                @click="runComposioPrimaryAction(connector)"
+              >
+                {{ composioActionSlug === connector.slug ? 'Opening...' : composioPrimaryActionLabel(connector) }}
+              </button>
+              <button
+                v-if="canTryComposio(connector)"
+                class="directory-action primary"
+                type="button"
+                :disabled="isTryActionInFlight"
+                @click="tryComposio(connector)"
+              >
+                {{ props.tryInFlightKey === composioTryKey(connector.slug) ? 'Starting...' : 'Try it!' }}
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section v-else-if="activeTab === 'mcps'" class="directory-section">
       <div class="directory-toolbar">
         <input
@@ -385,24 +505,133 @@
         </article>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div v-if="isComposioDetailOpen" class="directory-modal-overlay" @click.self="closeComposioDetail">
+        <article class="directory-modal">
+          <div class="directory-modal-header">
+            <div class="directory-card-top">
+              <img
+                v-if="selectedComposioDetail?.connector.logoUrl"
+                class="directory-card-icon"
+                :src="selectedComposioDetail.connector.logoUrl"
+                :alt="selectedComposioDetail.connector.name"
+                loading="lazy"
+              />
+              <div v-else class="directory-card-fallback composio-fallback">{{ selectedComposioDetail?.connector.name.charAt(0) }}</div>
+              <div class="directory-card-main">
+                <h3 class="directory-modal-title">{{ selectedComposioDetail?.connector.name || 'Composio' }}</h3>
+                <span class="directory-card-meta">{{ selectedComposioDetail ? composioMetaLabel(selectedComposioDetail.connector) : 'Connector' }}</span>
+              </div>
+            </div>
+            <button class="directory-modal-close" type="button" aria-label="Close Composio detail" @click="closeComposioDetail">Close</button>
+          </div>
+
+          <div class="directory-modal-body">
+            <div v-if="composioDetailError" class="directory-error">{{ composioDetailError }}</div>
+            <div v-else-if="isLoadingComposioDetail" class="directory-loading">Loading connector...</div>
+            <template v-else-if="selectedComposioDetail">
+              <p v-if="selectedComposioDetail.connector.description" class="directory-detail-description">
+                {{ selectedComposioDetail.connector.description }}
+              </p>
+
+              <div class="directory-detail-grid">
+                <div class="directory-detail-block">
+                  <h4 class="directory-detail-heading">Overview</h4>
+                  <div class="directory-chip-row">
+                    <span class="directory-chip">{{ selectedComposioDetail.connector.toolsCount }} tools</span>
+                    <span v-if="selectedComposioDetail.connector.triggersCount > 0" class="directory-chip">{{ selectedComposioDetail.connector.triggersCount }} triggers</span>
+                    <span v-if="selectedComposioDetail.connector.latestVersion" class="directory-chip">v{{ selectedComposioDetail.connector.latestVersion }}</span>
+                    <span v-if="selectedComposioDetail.connector.authModes.length > 0" class="directory-chip">{{ selectedComposioDetail.connector.authModes.join(', ') }}</span>
+                  </div>
+                </div>
+
+                <div class="directory-detail-block">
+                  <h4 class="directory-detail-heading">Connections</h4>
+                  <div v-if="selectedComposioDetail.connections.length === 0" class="directory-mini-list">
+                    No linked accounts yet.
+                  </div>
+                  <div v-else>
+                    <div v-for="connection in selectedComposioDetail.connections" :key="connection.id" class="directory-include-row">
+                      <span>
+                        {{ connection.alias || connection.wordId || connection.id }}
+                        <span class="directory-auth-status" :class="composioConnectionStatusClass(connection.status)">
+                          {{ composioConnectionStatusLabel(connection.status) }}
+                        </span>
+                      </span>
+                      <span class="directory-card-meta">{{ connection.authScheme || 'Auth' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="selectedComposioDetail.tools.length > 0" class="directory-detail-block">
+                <h4 class="directory-detail-heading">Useful tools</h4>
+                <div v-for="tool in selectedComposioDetail.tools.slice(0, 8)" :key="tool.slug" class="directory-include-row">
+                  <span>{{ tool.name || tool.slug }}</span>
+                  <span class="directory-card-meta">{{ tool.slug }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="directory-modal-footer">
+            <button
+              v-if="selectedComposioDetail"
+              class="directory-action-link"
+              type="button"
+              @click="openExternalUrl(selectedComposioDetail.dashboardUrl)"
+            >
+              Open dashboard
+            </button>
+            <button
+              v-if="selectedComposioDetail && composioPrimaryActionLabel(selectedComposioDetail.connector)"
+              class="directory-action"
+              type="button"
+              :disabled="composioActionSlug === selectedComposioDetail.connector.slug"
+              @click="runComposioPrimaryAction(selectedComposioDetail.connector)"
+            >
+              {{ composioActionSlug === selectedComposioDetail?.connector.slug ? 'Opening...' : composioPrimaryActionLabel(selectedComposioDetail.connector) }}
+            </button>
+            <button
+              v-if="selectedComposioDetail && canTryComposio(selectedComposioDetail.connector)"
+              class="directory-action primary"
+              type="button"
+              :disabled="isTryActionInFlight"
+              @click="tryComposio(selectedComposioDetail.connector, selectedComposioDetail.connections)"
+            >
+              {{ props.tryInFlightKey === composioTryKey(selectedComposioDetail.connector.slug) ? 'Starting...' : 'Try it!' }}
+            </button>
+          </div>
+        </article>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  getDirectoryComposioStatus,
   getMethodCatalog,
   installDirectoryPlugin,
+  listDirectoryComposioConnectors,
   listDirectoryApps,
   listDirectoryMcpServers,
   listDirectoryPlugins,
+  readDirectoryComposioConnector,
   readDirectoryPlugin,
   reloadDirectoryMcpServers,
   setDirectoryAppEnabled,
   setDirectoryPluginEnabled,
+  startDirectoryComposioLogin,
   startDirectoryMcpLogin,
   uninstallDirectoryPlugin,
   type DirectoryAppInfo,
+  type DirectoryComposioConnection,
+  type DirectoryComposioConnector,
+  type DirectoryComposioConnectorDetail,
+  type DirectoryComposioStatus,
   type DirectoryMcpServerStatus,
   type DirectoryPluginAppSummary,
   type DirectoryPluginDetail,
@@ -410,8 +639,9 @@ import {
 } from '../../api/codexGateway'
 import SkillsHub from './SkillsHub.vue'
 
-type DirectoryTab = 'plugins' | 'apps' | 'mcps' | 'skills'
+type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'mcps' | 'skills'
 type DirectorySortMode = 'popular' | 'name' | 'date'
+const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
 
 const POPULAR_LIMIT = 100
 const POPULAR_APP_NAME_BONUSES: Array<[RegExp, number]> = [
@@ -458,6 +688,10 @@ const POPULAR_MCP_NAME_BONUSES: Array<[RegExp, number]> = [
   [/(github|gitlab|linear|slack|notion|filesystem|browser|computer|web|postgres|sqlite|database)/i, 120],
   [/(search|drive|docs|calendar|terminal|shell|deploy|cloud|memory)/i, 55],
 ]
+const POPULAR_COMPOSIO_NAME_BONUSES: Array<[RegExp, number]> = [
+  [/(gmail|google calendar|google docs|google sheets|google drive|github|slack|notion|linear|outlook|supabase)/i, 140],
+  [/(email|calendar|document|sheet|drive|repo|issue|message|project|database|crm|deploy)/i, 50],
+]
 
 const props = defineProps<{
   cwd?: string
@@ -466,10 +700,12 @@ const props = defineProps<{
 }>()
 
 export type DirectoryTryItemPayload = {
-  kind: 'app' | 'plugin' | 'skill'
+  kind: 'app' | 'plugin' | 'skill' | 'composio'
   name: string
   displayName: string
   skillPath?: string
+  prompt?: string
+  attachedSkills?: Array<{ name: string; path: string }>
 }
 
 const emit = defineEmits<{
@@ -480,6 +716,7 @@ const emit = defineEmits<{
 const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
   { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
+  { id: 'composio', label: 'Composio', subtitle: 'Browse Composio connectors, auth state, and ready-to-try integrations.' },
   { id: 'mcps', label: 'MCPs', subtitle: 'Inspect configured MCP servers, tools, and resources.' },
   { id: 'skills', label: 'Skills', subtitle: 'Browse and discover skills from the OpenClaw community.' },
 ]
@@ -489,27 +726,38 @@ const methodSet = ref<Set<string>>(new Set())
 const methodsLoaded = ref(false)
 const plugins = ref<DirectoryPluginSummary[]>([])
 const apps = ref<DirectoryAppInfo[]>([])
+const composioStatus = ref<DirectoryComposioStatus | null>(null)
+const composioConnectors = ref<DirectoryComposioConnector[]>([])
 const mcpServers = ref<DirectoryMcpServerStatus[]>([])
 const pluginSortMode = ref<DirectorySortMode>('popular')
 const appSortMode = ref<DirectorySortMode>('popular')
+const composioSortMode = ref<DirectorySortMode>('popular')
 const mcpSortMode = ref<DirectorySortMode>('popular')
 const pluginSearchQuery = ref('')
 const appSearchQuery = ref('')
+const composioSearchQuery = ref('')
 const mcpSearchQuery = ref('')
 const isLoadingPlugins = ref(false)
 const isLoadingApps = ref(false)
+const isLoadingComposio = ref(false)
 const isLoadingMcps = ref(false)
 const isReloadingMcps = ref(false)
 const pluginError = ref('')
 const appError = ref('')
+const composioError = ref('')
 const mcpError = ref('')
 const selectedPlugin = ref<DirectoryPluginSummary | null>(null)
 const selectedPluginDetail = ref<DirectoryPluginDetail | null>(null)
 const isPluginDetailOpen = ref(false)
 const isLoadingPluginDetail = ref(false)
 const pluginDetailError = ref('')
+const selectedComposioDetail = ref<DirectoryComposioConnectorDetail | null>(null)
+const isComposioDetailOpen = ref(false)
+const isLoadingComposioDetail = ref(false)
+const composioDetailError = ref('')
 const isPluginActionInFlight = ref(false)
 const appActionId = ref('')
+const composioActionSlug = ref('')
 const installAuthApps = ref<DirectoryPluginAppSummary[]>([])
 const mcpLoginServerName = ref('')
 const expandedMcpNames = ref<Set<string>>(new Set())
@@ -529,6 +777,7 @@ const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length >
 const isActiveLoading = computed(() =>
   activeTab.value === 'plugins' ? isLoadingPlugins.value
     : activeTab.value === 'apps' ? isLoadingApps.value
+      : activeTab.value === 'composio' ? isLoadingComposio.value
       : activeTab.value === 'mcps' ? isLoadingMcps.value
         : false,
 )
@@ -545,8 +794,19 @@ const selectedPluginScreenshots = computed(() => {
 })
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
+const visibleComposioConnectors = computed(() => limitPopularRows(sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value), composioSortMode.value, composioSearchQuery.value))
 const visibleMcpServers = computed(() => limitPopularRows(sortMcpServers(filterMcpServers(mcpServers.value, mcpSearchQuery.value), mcpSortMode.value), mcpSortMode.value, mcpSearchQuery.value))
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
+const composioWorkspaceSummary = computed(() => {
+  const status = composioStatus.value
+  if (!status) return 'Composio CLI shares the login and connections from this machine.'
+  const parts = [
+    status.email || status.defaultOrgName,
+    status.defaultOrgId ? `org ${status.defaultOrgId}` : '',
+    status.baseUrl || '',
+  ].filter(Boolean)
+  return parts.join(' · ') || 'Composio CLI shares the login and connections from this machine.'
+})
 
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
@@ -644,6 +904,16 @@ function filterApps(rows: DirectoryAppInfo[], query: string): DirectoryAppInfo[]
   ], query))
 }
 
+function filterComposioConnectors(rows: DirectoryComposioConnector[], query: string): DirectoryComposioConnector[] {
+  return rows.filter((connector) => includesSearch([
+    connector.name,
+    connector.slug,
+    connector.description,
+    ...connector.authModes,
+    ...connector.connectionStatuses,
+  ], query))
+}
+
 function filterMcpServers(rows: DirectoryMcpServerStatus[], query: string): DirectoryMcpServerStatus[] {
   return rows.filter((server) => includesSearch([
     server.name,
@@ -689,6 +959,16 @@ function mcpPopularScore(server: DirectoryMcpServerStatus): number {
   )
 }
 
+function composioPopularScore(connector: DirectoryComposioConnector): number {
+  return (
+    (connector.activeCount * 1_000) +
+    (connector.isNoAuth ? 300 : 0) +
+    (connector.toolsCount * 3) +
+    (connector.triggersCount * 4) +
+    bonusForName(`${connector.name} ${connector.slug} ${connector.description}`, POPULAR_COMPOSIO_NAME_BONUSES)
+  )
+}
+
 function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
   if (sortMode === 'name') return [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName))
   if (sortMode === 'date') return [...rows]
@@ -699,6 +979,12 @@ function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): Direct
   if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
   if (sortMode === 'date') return [...rows].sort((a, b) => a.catalogRank - b.catalogRank)
   return [...rows].sort((a, b) => (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
+}
+
+function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode): DirectoryComposioConnector[] {
+  if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
+  if (sortMode === 'date') return [...rows]
+  return [...rows].sort((a, b) => (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
@@ -730,6 +1016,43 @@ function appLogoSrc(app: DirectoryAppInfo): string {
   return localAssetSrc(app.logoUrlDark || app.logoUrl)
 }
 
+function composioMetaLabel(connector: DirectoryComposioConnector): string {
+  if (connector.activeCount > 0) {
+    return `${connector.activeCount} connected ${connector.activeCount === 1 ? 'account' : 'accounts'}`
+  }
+  if (connector.isNoAuth) return 'No auth required'
+  if (connector.connectionStatuses.length > 0) return connector.connectionStatuses.join(', ')
+  return connector.authModes.join(', ') || 'Connection required'
+}
+
+function composioHasUsableConnection(connector: DirectoryComposioConnector): boolean {
+  return connector.isNoAuth || connector.activeCount > 0
+}
+
+function composioPrimaryActionLabel(connector: DirectoryComposioConnector): string {
+  if (connector.isNoAuth) return ''
+  if (connector.activeCount > 0) return 'Manage'
+  if (connector.totalConnections > 0) return 'Reconnect'
+  return 'Connect'
+}
+
+function composioConnectionStatusLabel(status: string): string {
+  const normalized = status.trim().toUpperCase()
+  if (normalized === 'ACTIVE') return 'Active'
+  if (normalized === 'EXPIRED') return 'Expired'
+  if (normalized === 'FAILED') return 'Failed'
+  if (normalized === 'INITIATED') return 'Pending'
+  return normalized || 'Unknown'
+}
+
+function composioConnectionStatusClass(status: string): string {
+  const normalized = status.trim().toUpperCase()
+  if (normalized === 'ACTIVE') return 'is-ok'
+  if (normalized === 'INITIATED') return 'is-warning'
+  if (normalized === 'EXPIRED' || normalized === 'FAILED') return 'is-error'
+  return 'is-muted'
+}
+
 function appTryKey(app: DirectoryAppInfo): string {
   return `app:${app.id}:`
 }
@@ -747,12 +1070,39 @@ function pluginTryKey(plugin: DirectoryPluginSummary): string {
   return `plugin:${plugin.name}:`
 }
 
+function composioTryKey(slug: string): string {
+  return `composio:${slug}:`
+}
+
 function tryPlugin(plugin: DirectoryPluginSummary): void {
   if (isTryActionInFlight.value) return
   emit('try-item', {
     kind: 'plugin',
     name: plugin.name,
     displayName: plugin.displayName,
+  })
+}
+
+function canTryComposio(connector: DirectoryComposioConnector): boolean {
+  return composioHasUsableConnection(connector)
+}
+
+function buildComposioTryPrompt(connector: DirectoryComposioConnector, connections: DirectoryComposioConnection[] = []): string {
+  const firstActive = connections.find((connection) => connection.status === 'ACTIVE' && !connection.isDisabled)
+  const accountHint = firstActive?.wordId
+    ? ` If there are multiple accounts, prefer \`${firstActive.wordId}\`.`
+    : ''
+  return `Use the Composio CLI skill with the ${connector.name} connector (${connector.slug}). Start by listing what it can do here, mention the current connection status, and suggest one safe command I can run now.${accountHint}`
+}
+
+function tryComposio(connector: DirectoryComposioConnector, connections: DirectoryComposioConnection[] = []): void {
+  if (isTryActionInFlight.value) return
+  emit('try-item', {
+    kind: 'composio',
+    name: connector.slug,
+    displayName: connector.name,
+    prompt: buildComposioTryPrompt(connector, connections),
+    attachedSkills: [{ name: 'composio-cli', path: COMPOSIO_SKILL_PATH }],
   })
 }
 
@@ -810,6 +1160,25 @@ async function loadApps(): Promise<void> {
   }
 }
 
+async function loadComposio(): Promise<void> {
+  isLoadingComposio.value = true
+  composioError.value = ''
+  try {
+    const status = await getDirectoryComposioStatus()
+    composioStatus.value = status
+    if (!status.available || !status.authenticated) {
+      composioConnectors.value = []
+      return
+    }
+    const connectors = await listDirectoryComposioConnectors(composioSearchQuery.value)
+    composioConnectors.value = connectors
+  } catch (error) {
+    composioError.value = error instanceof Error ? error.message : 'Failed to load Composio connectors'
+  } finally {
+    isLoadingComposio.value = false
+  }
+}
+
 async function loadMcps(): Promise<void> {
   if (!supportsMcps.value) return
   isLoadingMcps.value = true
@@ -835,6 +1204,7 @@ async function refreshMcpStatusesForPluginDetail(): Promise<void> {
 function refreshActiveTab(): void {
   if (activeTab.value === 'plugins') void loadPlugins()
   if (activeTab.value === 'apps') void loadApps()
+  if (activeTab.value === 'composio') void loadComposio()
   if (activeTab.value === 'mcps') void loadMcps()
 }
 
@@ -885,6 +1255,53 @@ async function openFirstMcpLoginIfNeeded(detail: DirectoryPluginDetail): Promise
 
 function closePluginDetail(): void {
   isPluginDetailOpen.value = false
+}
+
+async function openComposioDetail(slug: string): Promise<void> {
+  isComposioDetailOpen.value = true
+  isLoadingComposioDetail.value = true
+  composioDetailError.value = ''
+  selectedComposioDetail.value = null
+  try {
+    selectedComposioDetail.value = await readDirectoryComposioConnector(slug)
+  } catch (error) {
+    composioDetailError.value = error instanceof Error ? error.message : 'Failed to load Composio connector'
+  } finally {
+    isLoadingComposioDetail.value = false
+  }
+}
+
+function closeComposioDetail(): void {
+  isComposioDetailOpen.value = false
+}
+
+async function startComposioConnect(connector: DirectoryComposioConnector): Promise<void> {
+  composioActionSlug.value = connector.slug
+  try {
+    const result = await startDirectoryComposioLogin(connector.slug)
+    if (!result.redirectUrl) {
+      showToast(`No login URL returned for ${connector.name}`, 'error')
+      return
+    }
+    openExternalUrl(result.redirectUrl)
+    showToast(`Opened ${connector.name} authorization`)
+    await loadComposio()
+    if (isComposioDetailOpen.value && selectedComposioDetail.value?.connector.slug === connector.slug) {
+      await openComposioDetail(connector.slug)
+    }
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : `Failed to connect ${connector.name}`, 'error')
+  } finally {
+    composioActionSlug.value = ''
+  }
+}
+
+async function runComposioPrimaryAction(connector: DirectoryComposioConnector): Promise<void> {
+  if (connector.activeCount > 0 && composioStatus.value?.webUrl) {
+    openExternalUrl(composioStatus.value.webUrl)
+    return
+  }
+  await startComposioConnect(connector)
 }
 
 async function installSelectedPlugin(): Promise<void> {
@@ -1031,7 +1448,7 @@ onMounted(async () => {
 }
 
 .directory-tabs {
-  @apply mx-auto grid w-full max-w-5xl grid-cols-4 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+  @apply mx-auto grid w-full max-w-5xl grid-cols-5 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
 }
 
 .directory-tab {
@@ -1154,6 +1571,10 @@ button.directory-card {
   @apply border-rose-200 bg-rose-50 text-rose-700;
 }
 
+.directory-auth-status.is-error {
+  @apply border-rose-200 bg-rose-50 text-rose-700;
+}
+
 .directory-toast {
   @apply mx-auto w-full max-w-5xl rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700;
 }
@@ -1249,6 +1670,14 @@ button.directory-card {
   @apply max-h-56 w-full rounded-xl border border-zinc-200 object-cover;
 }
 
+.composio-status-card {
+  @apply min-h-0;
+}
+
+.composio-fallback {
+  @apply bg-sky-100 text-sky-700;
+}
+
 :global(:root.dark) .directory-title,
 :global(:root.dark) .directory-card-title,
 :global(:root.dark) .directory-modal-title,
@@ -1296,5 +1725,15 @@ button.directory-card {
 
 :global(:root.dark) .directory-auth-status.is-muted {
   @apply border-zinc-700 bg-zinc-900 text-zinc-400;
+}
+
+:global(:root.dark) .directory-auth-status.is-error,
+:global(:root.dark) .directory-error,
+:global(:root.dark) .directory-toast.is-error {
+  @apply border-rose-900/60 bg-rose-950/60 text-rose-300;
+}
+
+:global(:root.dark) .composio-fallback {
+  @apply bg-sky-950 text-sky-300;
 }
 </style>
