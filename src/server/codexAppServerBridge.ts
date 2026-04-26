@@ -1215,16 +1215,25 @@ async function startComposioLink(slug: string): Promise<ComposioLinkResult> {
 }
 
 async function startComposioLogin(): Promise<ComposioLoginResult> {
-  const payload = asRecord(await runComposioJson<Record<string, unknown>>(
-    ['login', '--no-wait', '--no-skill-install', '-y'],
-    'Failed to start Composio login',
-  ))
+  const command = resolveComposioCommand()
+  if (!command) {
+    throw new Error('Composio CLI is not installed')
+  }
+  const invocation = getSpawnInvocation(command, ['login', '-y'])
+  const proc = spawn(invocation.command, invocation.args, {
+    cwd: process.cwd(),
+    env: process.env,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+  proc.unref()
   return {
-    status: readNonEmptyString(payload?.status),
-    message: readNonEmptyString(payload?.message),
-    loginUrl: readNonEmptyString(payload?.login_url),
-    cliKey: readNonEmptyString(payload?.cli_key),
-    expiresAt: readNonEmptyString(payload?.expires_at),
+    status: 'started',
+    message: 'Composio CLI login started',
+    loginUrl: '',
+    cliKey: '',
+    expiresAt: '',
   }
 }
 
