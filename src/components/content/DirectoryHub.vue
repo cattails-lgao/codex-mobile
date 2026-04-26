@@ -5,9 +5,11 @@
         <h2 class="directory-title">Skills & Apps</h2>
         <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
       </div>
-      <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab">
-        {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
-      </button>
+      <div class="directory-header-actions">
+        <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab">
+          {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
+        </button>
+      </div>
     </div>
 
     <div class="directory-tabs" role="tablist" aria-label="Directory sections">
@@ -323,79 +325,60 @@
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'mcps'" class="directory-section">
-      <div class="directory-toolbar">
-        <input
-          v-model="mcpSearchQuery"
-          class="directory-search"
-          type="search"
-          placeholder="Search MCPs..."
-          aria-label="Search MCPs"
-        />
-        <div class="directory-sort-group" role="group" aria-label="Sort MCPs">
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': mcpSortMode === 'popular' }"
-            type="button"
-            @click="mcpSortMode = 'popular'"
-          >
-            Popular
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': mcpSortMode === 'name' }"
-            type="button"
-            @click="mcpSortMode = 'name'"
-          >
-            A-Z
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': mcpSortMode === 'date' }"
-            type="button"
-            @click="mcpSortMode = 'date'"
-          >
-            Date
-          </button>
-        </div>
-        <button v-if="supportsMcpReload" class="directory-action" type="button" :disabled="isReloadingMcps" @click="reloadMcps">
-          {{ isReloadingMcps ? 'Reloading...' : 'Reload MCPs' }}
-        </button>
-      </div>
-      <div v-if="!supportsMcps" class="directory-empty">
-        MCP status APIs unavailable in this Codex CLI. Update Codex CLI to inspect MCP servers.
-      </div>
-      <div v-else-if="mcpError" class="directory-error">{{ mcpError }}</div>
-      <div v-else-if="isLoadingMcps" class="directory-loading">Loading MCP servers...</div>
-      <div v-else-if="visibleMcpServers.length === 0" class="directory-empty">No MCP servers configured.</div>
-      <div v-else class="directory-list">
-        <article v-for="server in visibleMcpServers" :key="server.name" class="directory-card directory-card-wide">
-          <button class="directory-card-toggle" type="button" @click="toggleMcpExpanded(server.name)">
-            <span class="directory-card-title">{{ server.name }}</span>
-            <span class="directory-card-meta">{{ server.authStatus }} · {{ server.tools.length }} tools · {{ server.resources.length + server.resourceTemplates.length }} resources</span>
-          </button>
-          <div v-if="expandedMcpNames.has(server.name)" class="directory-mcp-detail">
-            <div v-if="server.tools.length > 0">
-              <h3 class="directory-mini-heading">Tools</h3>
-              <p class="directory-mini-list">{{ server.tools.map((tool) => tool.title || tool.name).join(', ') }}</p>
-            </div>
-            <div v-if="server.resources.length > 0 || server.resourceTemplates.length > 0">
-              <h3 class="directory-mini-heading">Resources</h3>
-              <p class="directory-mini-list">
-                {{ [...server.resources.map((r) => r.title || r.name || r.uri), ...server.resourceTemplates.map((r) => r.title || r.name || r.uriTemplate)].join(', ') }}
-              </p>
+    <section v-else-if="activeTab === 'skills'" class="directory-section">
+      <SkillsHub
+        :try-in-flight-key="props.tryInFlightKey"
+        @skills-changed="emit('skills-changed')"
+        @try-item="(payload) => emit('try-item', payload)"
+      >
+        <template #before-installed>
+          <div class="skills-embedded-section">
+            <button class="skills-embedded-toggle" type="button" @click="isMcpSectionOpen = !isMcpSectionOpen">
+              <span class="skills-embedded-title">MCPs({{ visibleMcpServers.length }})</span>
+              <span class="skills-embedded-chevron" :class="{ 'is-open': isMcpSectionOpen }">›</span>
+            </button>
+            <div v-if="isMcpSectionOpen" class="skills-embedded-body">
+              <div v-if="!supportsMcps" class="directory-empty">
+                MCP status APIs unavailable in this Codex CLI. Update Codex CLI to inspect MCP servers.
+              </div>
+              <div v-else-if="mcpError" class="directory-error">{{ mcpError }}</div>
+              <div v-else-if="isLoadingMcps" class="directory-loading">Loading MCP servers...</div>
+              <div v-else-if="visibleMcpServers.length === 0" class="directory-empty">No MCP servers configured.</div>
+              <div v-else class="mcp-skill-grid">
+                <article v-for="server in visibleMcpServers" :key="server.name">
+                  <button class="mcp-skill-card skill-card" type="button" @click="toggleMcpExpanded(server.name)">
+                    <div class="mcp-skill-card-top">
+                      <div class="mcp-skill-avatar-fallback">{{ server.name.charAt(0) }}</div>
+                      <div class="mcp-skill-info">
+                        <div class="mcp-skill-header">
+                          <span class="mcp-skill-name">{{ server.name }}</span>
+                          <span class="mcp-skill-badge" :class="mcpCardBadgeClass(server.authStatus)">{{ formatMcpAuthStatus(server.name) }}</span>
+                        </div>
+                        <span class="mcp-skill-owner">mcp</span>
+                      </div>
+                      <span class="mcp-skill-chevron" :class="{ 'is-open': expandedMcpNames.has(server.name) }">›</span>
+                    </div>
+                    <p class="mcp-skill-meta">{{ server.tools.length }} tools · {{ server.resources.length + server.resourceTemplates.length }} resources</p>
+                    <div v-if="expandedMcpNames.has(server.name)" class="directory-mcp-detail">
+                      <div v-if="server.tools.length > 0">
+                        <h3 class="directory-mini-heading">Tools</h3>
+                        <p class="directory-mini-list">{{ server.tools.map((tool) => tool.title || tool.name).join(', ') }}</p>
+                      </div>
+                      <div v-if="server.resources.length > 0 || server.resourceTemplates.length > 0">
+                        <h3 class="directory-mini-heading">Resources</h3>
+                        <p class="directory-mini-list">
+                          {{ [...server.resources.map((r) => r.title || r.name || r.uri), ...server.resourceTemplates.map((r) => r.title || r.name || r.uriTemplate)].join(', ') }}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </article>
+              </div>
             </div>
           </div>
-        </article>
-      </div>
+        </template>
+      </SkillsHub>
     </section>
-
-    <SkillsHub
-      v-else
-      :try-in-flight-key="props.tryInFlightKey"
-      @skills-changed="emit('skills-changed')"
-      @try-item="(payload) => emit('try-item', payload)"
-    />
 
     <Teleport to="body">
       <div v-if="isPluginDetailOpen" class="directory-modal-overlay" @click.self="closePluginDetail">
@@ -655,7 +638,7 @@ import {
 } from '../../api/codexGateway'
 import SkillsHub from './SkillsHub.vue'
 
-type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'mcps' | 'skills'
+type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
 type DirectorySortMode = 'popular' | 'name' | 'date'
 const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
 
@@ -733,8 +716,7 @@ const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
   { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
   { id: 'composio', label: 'Composio', subtitle: 'Browse Composio connectors, auth state, and ready-to-try integrations.' },
-  { id: 'mcps', label: 'MCPs', subtitle: 'Inspect configured MCP servers, tools, and resources.' },
-  { id: 'skills', label: 'Skills', subtitle: 'Manage installed skills and GitHub sync state.' },
+  { id: 'skills', label: 'Skills', subtitle: 'MCPs first, then installed skills and GitHub sync state.' },
 ]
 
 const activeTab = ref<DirectoryTab>('plugins')
@@ -748,16 +730,15 @@ const mcpServers = ref<DirectoryMcpServerStatus[]>([])
 const pluginSortMode = ref<DirectorySortMode>('popular')
 const appSortMode = ref<DirectorySortMode>('popular')
 const composioSortMode = ref<DirectorySortMode>('popular')
-const mcpSortMode = ref<DirectorySortMode>('popular')
 const pluginSearchQuery = ref('')
 const appSearchQuery = ref('')
 const composioSearchQuery = ref('')
-const mcpSearchQuery = ref('')
 const isLoadingPlugins = ref(false)
 const isLoadingApps = ref(false)
 const isLoadingComposio = ref(false)
 const isLoadingMcps = ref(false)
 const isReloadingMcps = ref(false)
+const isMcpSectionOpen = ref(true)
 const pluginError = ref('')
 const appError = ref('')
 const composioError = ref('')
@@ -796,7 +777,7 @@ const isActiveLoading = computed(() =>
   activeTab.value === 'plugins' ? isLoadingPlugins.value
     : activeTab.value === 'apps' ? isLoadingApps.value
       : activeTab.value === 'composio' ? isLoadingComposio.value
-      : activeTab.value === 'mcps' ? isLoadingMcps.value
+      : activeTab.value === 'skills' ? isLoadingMcps.value
         : false,
 )
 const selectedPluginDescription = computed(() =>
@@ -813,7 +794,7 @@ const selectedPluginScreenshots = computed(() => {
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
 const visibleComposioConnectors = computed(() => limitPopularRows(sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value), composioSortMode.value, composioSearchQuery.value))
-const visibleMcpServers = computed(() => limitPopularRows(sortMcpServers(filterMcpServers(mcpServers.value, mcpSearchQuery.value), mcpSortMode.value), mcpSortMode.value, mcpSearchQuery.value))
+const visibleMcpServers = computed(() => sortMcpServers(mcpServers.value, 'popular'))
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
 const composioWorkspaceSummary = computed(() => {
   const status = composioStatus.value
@@ -877,6 +858,12 @@ function mcpAuthStatusClass(serverName: string): string {
   return 'is-muted'
 }
 
+function mcpCardBadgeClass(status: string): string {
+  if (status === 'oAuth' || status === 'bearerToken') return 'mcp-skill-badge-ok'
+  if (status === 'notLoggedIn') return 'mcp-skill-badge-warning'
+  return 'mcp-skill-badge-muted'
+}
+
 function shouldShowMcpLogin(serverName: string): boolean {
   return supportsMcpLogin.value && getMcpAuthStatus(serverName) === 'notLoggedIn'
 }
@@ -929,16 +916,6 @@ function filterComposioConnectors(rows: DirectoryComposioConnector[], query: str
     connector.description,
     ...connector.authModes,
     ...connector.connectionStatuses,
-  ], query))
-}
-
-function filterMcpServers(rows: DirectoryMcpServerStatus[], query: string): DirectoryMcpServerStatus[] {
-  return rows.filter((server) => includesSearch([
-    server.name,
-    server.authStatus,
-    ...server.tools.map((tool) => `${tool.title} ${tool.name} ${tool.description}`),
-    ...server.resources.map((resource) => `${resource.title} ${resource.name} ${resource.uri} ${resource.description}`),
-    ...server.resourceTemplates.map((resource) => `${resource.title} ${resource.name} ${resource.uriTemplate} ${resource.description}`),
   ], query))
 }
 
@@ -1238,7 +1215,10 @@ function refreshActiveTab(): void {
   if (activeTab.value === 'plugins') void loadPlugins()
   if (activeTab.value === 'apps') void loadApps()
   if (activeTab.value === 'composio') void loadComposio()
-  if (activeTab.value === 'mcps') void loadMcps()
+  if (activeTab.value === 'skills') {
+    if (supportsMcpReload.value) void reloadMcps()
+    else void loadMcps()
+  }
 }
 
 async function openPluginDetail(plugin: DirectoryPluginSummary): Promise<void> {
@@ -1482,6 +1462,10 @@ onMounted(async () => {
   @apply mx-auto flex w-full max-w-5xl items-start justify-between gap-3;
 }
 
+.directory-header-actions {
+  @apply flex items-center gap-2;
+}
+
 .directory-title {
   @apply m-0 text-xl font-semibold text-zinc-900 sm:text-2xl;
 }
@@ -1506,7 +1490,7 @@ onMounted(async () => {
 }
 
 .directory-tabs {
-  @apply mx-auto grid w-full max-w-5xl grid-cols-5 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+  @apply mx-auto grid w-full max-w-5xl grid-cols-4 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
 }
 
 .directory-tab {
@@ -1519,6 +1503,94 @@ onMounted(async () => {
 
 .directory-section {
   @apply mx-auto flex w-full max-w-5xl flex-col gap-3;
+}
+
+.directory-section-group {
+  @apply flex flex-col gap-3;
+}
+
+.skills-embedded-section {
+  @apply flex flex-col gap-2;
+}
+
+.skills-embedded-toggle {
+  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 cursor-pointer;
+}
+
+.skills-embedded-title {
+  @apply text-sm font-medium;
+}
+
+.skills-embedded-chevron {
+  @apply inline-block text-base leading-none transition-transform;
+}
+
+.skills-embedded-chevron.is-open {
+  @apply rotate-90;
+}
+
+.skills-embedded-body {
+  @apply flex flex-col gap-3;
+}
+
+.mcp-skill-grid {
+  @apply grid grid-cols-1 gap-3 md:grid-cols-2;
+}
+
+.mcp-skill-card {
+  @apply flex w-full flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-300 hover:shadow-sm cursor-pointer;
+}
+
+.mcp-skill-card-top {
+  @apply flex items-start gap-2.5;
+}
+
+.mcp-skill-avatar-fallback {
+  @apply w-8 h-8 rounded-full shrink-0 bg-zinc-200 text-zinc-500 flex items-center justify-center text-xs font-medium uppercase;
+}
+
+.mcp-skill-info {
+  @apply flex flex-col gap-0.5 min-w-0 flex-1;
+}
+
+.mcp-skill-header {
+  @apply flex items-center gap-2;
+}
+
+.mcp-skill-name {
+  @apply text-sm font-medium text-zinc-900 truncate;
+}
+
+.mcp-skill-owner {
+  @apply text-xs text-zinc-400;
+}
+
+.mcp-skill-meta {
+  @apply m-0 text-xs text-zinc-500;
+}
+
+.mcp-skill-chevron {
+  @apply inline-block text-base leading-none text-zinc-400 transition-transform;
+}
+
+.mcp-skill-chevron.is-open {
+  @apply rotate-90;
+}
+
+.mcp-skill-badge {
+  @apply shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none border;
+}
+
+.mcp-skill-badge-ok {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+
+.mcp-skill-badge-warning {
+  @apply border-amber-200 bg-amber-50 text-amber-700;
+}
+
+.mcp-skill-badge-muted {
+  @apply border-zinc-200 bg-zinc-100 text-zinc-500;
 }
 
 .directory-section-actions {
@@ -1758,6 +1830,85 @@ button.directory-card {
 :global(:root.dark) .directory-mini-list,
 :global(:root.dark) .directory-detail-description {
   @apply text-zinc-400;
+}
+
+:global(:root.dark) .skills-embedded-toggle,
+:global(:root.dark) .skills-embedded-title {
+  @apply text-zinc-300 hover:text-zinc-100;
+}
+
+:global(:root.dark) .mcp-skill-card {
+  @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
+}
+
+:global(.dark) .mcp-skill-card {
+  @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
+}
+
+:global(:root.dark) .mcp-skill-avatar-fallback {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
+:global(.dark) .mcp-skill-avatar-fallback {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
+:global(:root.dark) .mcp-skill-name {
+  @apply text-zinc-100;
+}
+
+:global(.dark) .mcp-skill-name {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .mcp-skill-owner {
+  @apply text-zinc-400;
+}
+
+:global(.dark) .mcp-skill-owner {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .mcp-skill-meta {
+  @apply text-zinc-300;
+}
+
+:global(.dark) .mcp-skill-meta {
+  @apply text-zinc-300;
+}
+
+:global(:root.dark) .mcp-skill-chevron {
+  @apply text-zinc-500;
+}
+
+:global(.dark) .mcp-skill-chevron {
+  @apply text-zinc-500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mcp-skill-card {
+    @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
+  }
+
+  .mcp-skill-avatar-fallback {
+    @apply bg-zinc-700 text-zinc-300;
+  }
+
+  .mcp-skill-name {
+    @apply text-zinc-100;
+  }
+
+  .mcp-skill-owner {
+    @apply text-zinc-400;
+  }
+
+  .mcp-skill-meta {
+    @apply text-zinc-300;
+  }
+
+  .mcp-skill-chevron {
+    @apply text-zinc-500;
+  }
 }
 
 :global(:root.dark) .directory-tabs,

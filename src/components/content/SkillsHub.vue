@@ -50,9 +50,11 @@
 
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
 
+    <slot name="before-installed" />
+
     <div v-if="filteredInstalled.length > 0" class="skills-hub-section">
       <button class="skills-hub-section-toggle" type="button" @click="isInstalledOpen = !isInstalledOpen">
-        <span class="skills-hub-section-title">{{ t('Installed ({count})', { count: filteredInstalled.length }) }}</span>
+        <span class="skills-hub-section-title">{{ t('Installed skills ({count})', { count: filteredInstalled.length }) }}</span>
         <IconTablerChevronRight class="skills-hub-section-chevron" :class="{ 'is-open': isInstalledOpen }" />
       </button>
       <div v-if="isInstalledOpen" class="skills-hub-grid">
