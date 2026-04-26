@@ -228,10 +228,24 @@
       <div v-if="composioError" class="directory-error">{{ composioError }}</div>
       <div v-else-if="isLoadingComposio" class="directory-loading">Loading Composio connectors...</div>
       <div v-else-if="!composioStatus?.available" class="directory-empty">
-        Composio CLI is not installed in this environment.
+        <div class="directory-empty-copy">
+          <p class="directory-empty-text">Composio CLI is not installed in this environment.</p>
+          <div class="directory-card-actions">
+            <button class="directory-action primary" type="button" :disabled="isInstallingComposio" @click="installComposioCli">
+              {{ isInstallingComposio ? 'Installing...' : 'Install' }}
+            </button>
+          </div>
+        </div>
       </div>
       <div v-else-if="!composioStatus.authenticated" class="directory-empty">
-        Composio CLI is installed but not logged in. Run `composio login` or log in from your terminal, then refresh this tab.
+        <div class="directory-empty-copy">
+          <p class="directory-empty-text">Composio CLI is installed but not logged in.</p>
+          <div class="directory-card-actions">
+            <button class="directory-action primary" type="button" :disabled="isStartingComposioLogin" @click="startComposioCliLogin">
+              {{ isStartingComposioLogin ? 'Opening...' : 'Login' }}
+            </button>
+          </div>
+        </div>
       </div>
       <div v-else class="directory-section composio-section">
         <article class="directory-card directory-card-wide composio-status-card">
@@ -615,6 +629,7 @@ import {
   getDirectoryComposioStatus,
   getMethodCatalog,
   installDirectoryPlugin,
+  installDirectoryComposioCli,
   listDirectoryComposioConnectors,
   listDirectoryApps,
   listDirectoryMcpServers,
@@ -624,6 +639,7 @@ import {
   reloadDirectoryMcpServers,
   setDirectoryAppEnabled,
   setDirectoryPluginEnabled,
+  startDirectoryComposioCliLogin,
   startDirectoryComposioLogin,
   startDirectoryMcpLogin,
   uninstallDirectoryPlugin,
@@ -755,6 +771,8 @@ const selectedComposioDetail = ref<DirectoryComposioConnectorDetail | null>(null
 const isComposioDetailOpen = ref(false)
 const isLoadingComposioDetail = ref(false)
 const composioDetailError = ref('')
+const isInstallingComposio = ref(false)
+const isStartingComposioLogin = ref(false)
 const isPluginActionInFlight = ref(false)
 const appActionId = ref('')
 const composioActionSlug = ref('')
@@ -969,6 +987,13 @@ function composioPopularScore(connector: DirectoryComposioConnector): number {
   )
 }
 
+function composioConnectionRank(connector: DirectoryComposioConnector): number {
+  if (connector.activeCount > 0) return 0
+  if (connector.totalConnections > 0) return 1
+  if (connector.isNoAuth) return 2
+  return 3
+}
+
 function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
   if (sortMode === 'name') return [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName))
   if (sortMode === 'date') return [...rows]
@@ -982,9 +1007,17 @@ function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): Direct
 }
 
 function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode): DirectoryComposioConnector[] {
-  if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
-  if (sortMode === 'date') return [...rows]
-  return [...rows].sort((a, b) => (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
+  if (sortMode === 'name') {
+    return [...rows].sort((a, b) => (
+      composioConnectionRank(a) - composioConnectionRank(b)
+    ) || a.name.localeCompare(b.name))
+  }
+  if (sortMode === 'date') {
+    return [...rows].sort((a, b) => composioConnectionRank(a) - composioConnectionRank(b))
+  }
+  return [...rows].sort((a, b) => (
+    composioConnectionRank(a) - composioConnectionRank(b)
+  ) || (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
@@ -1304,6 +1337,36 @@ async function runComposioPrimaryAction(connector: DirectoryComposioConnector): 
   await startComposioConnect(connector)
 }
 
+async function startComposioCliLogin(): Promise<void> {
+  isStartingComposioLogin.value = true
+  try {
+    const result = await startDirectoryComposioCliLogin()
+    if (!result.loginUrl) {
+      showToast('No login URL returned by Composio CLI', 'error')
+      return
+    }
+    openExternalUrl(result.loginUrl)
+    showToast('Opened Composio login')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to start Composio login', 'error')
+  } finally {
+    isStartingComposioLogin.value = false
+  }
+}
+
+async function installComposioCli(): Promise<void> {
+  isInstallingComposio.value = true
+  try {
+    await installDirectoryComposioCli()
+    showToast('Composio CLI installed')
+    await loadComposio()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to install Composio CLI', 'error')
+  } finally {
+    isInstallingComposio.value = false
+  }
+}
+
 async function installSelectedPlugin(): Promise<void> {
   if (!selectedPlugin.value) return
   isPluginActionInFlight.value = true
@@ -1564,6 +1627,14 @@ button.directory-card {
 .directory-empty,
 .directory-error {
   @apply rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500;
+}
+
+.directory-empty-copy {
+  @apply flex flex-col gap-3;
+}
+
+.directory-empty-text {
+  @apply m-0;
 }
 
 .directory-error,

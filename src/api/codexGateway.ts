@@ -217,6 +217,20 @@ export type DirectoryComposioLinkResult = {
   projectType: string
 }
 
+export type DirectoryComposioLoginResult = {
+  status: string
+  message: string
+  loginUrl: string
+  cliKey: string
+  expiresAt: string
+}
+
+export type DirectoryComposioInstallResult = {
+  ok: boolean
+  command: string
+  output: string
+}
+
 type ProviderModelsResponse = {
   data?: unknown
 }
@@ -2023,6 +2037,26 @@ export async function startDirectoryComposioLogin(slug: string): Promise<Directo
     throw new Error(`Failed to start Composio login (${response.status})`)
   }
   return await response.json() as DirectoryComposioLinkResult
+}
+
+export async function startDirectoryComposioCliLogin(): Promise<DirectoryComposioLoginResult> {
+  const response = await fetch('/codex-api/composio/login', {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to start Composio CLI login (${response.status})`)
+  }
+  return await response.json() as DirectoryComposioLoginResult
+}
+
+export async function installDirectoryComposioCli(): Promise<DirectoryComposioInstallResult> {
+  const response = await fetch('/codex-api/composio/install', {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to install Composio CLI (${response.status})`)
+  }
+  return await response.json() as DirectoryComposioInstallResult
 }
 
 export async function getAccountRateLimitsResponse(): Promise<GetAccountRateLimitsResponse> {

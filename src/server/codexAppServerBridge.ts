@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
-import Composio from '@composio/client'
 import { handleAccountRoutes } from './accountRoutes.js'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 import { handleReviewRoutes } from './reviewGit.js'
@@ -176,6 +175,20 @@ type ComposioLinkResult = {
   redirectUrl: string
   toolkit: string
   projectType: string
+}
+
+type ComposioLoginResult = {
+  status: string
+  message: string
+  loginUrl: string
+  cliKey: string
+  expiresAt: string
+}
+
+type ComposioInstallResult = {
+  ok: boolean
+  command: string
+  output: string
 }
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
@@ -1021,33 +1034,6 @@ async function readComposioUserData(): Promise<ComposioUserData | null> {
   }
 }
 
-function getComposioConsumerUserIds(userData: ComposioUserData | null): string[] {
-  if (!userData?.testUserId || !userData.orgId) return []
-  const candidates = [
-    userData.testUserId.replace(/^pg-test-/u, ''),
-    userData.testUserId,
-  ]
-  const ids: string[] = []
-  for (const candidate of candidates) {
-    const normalized = candidate.trim()
-    if (!normalized) continue
-    const consumerId = `consumer-${normalized}-${userData.orgId}`
-    if (!ids.includes(consumerId)) ids.push(consumerId)
-  }
-  return ids
-}
-
-function createComposioClient(userData: ComposioUserData): Composio {
-  return new Composio({
-    apiKey: null,
-    baseURL: userData.baseUrl || 'https://backend.composio.dev',
-    defaultHeaders: {
-      'x-user-api-key': userData.apiKey,
-    },
-    logLevel: 'off',
-  })
-}
-
 function normalizeComposioConnection(value: unknown): ComposioConnectionSummary | null {
   const record = asRecord(value)
   if (!record) return null
@@ -1070,23 +1056,18 @@ function normalizeComposioToolkit(value: unknown, connectionsBySlug: Map<string,
   if (!record) return null
   const slug = readNonEmptyString(record.slug)
   if (!slug) return null
-  const meta = asRecord(record.meta)
   const connectionRows = connectionsBySlug.get(slug) ?? []
   return {
     slug,
     name: readNonEmptyString(record.name),
-    description: readNonEmptyString(record.description || meta?.description),
-    logoUrl: readNonEmptyString(record.logo || meta?.logo),
-    latestVersion: readNonEmptyString(record.latest_version || record.latestVersion || meta?.version),
-    toolsCount: readNumber(record.tools_count ?? meta?.tools_count),
-    triggersCount: readNumber(record.triggers_count ?? meta?.triggers_count),
-    isNoAuth: readBoolean(record.is_no_auth ?? record.no_auth ?? meta?.isNoAuth),
+    description: readNonEmptyString(record.description),
+    logoUrl: readNonEmptyString(record.logo || record.meta && asRecord(record.meta)?.logo),
+    latestVersion: readNonEmptyString(record.latest_version || record.latestVersion),
+    toolsCount: readNumber(record.tools_count),
+    triggersCount: readNumber(record.triggers_count),
+    isNoAuth: readBoolean(record.is_no_auth),
     enabled: record.enabled !== false,
-    authModes: Array.isArray(record.auth_modes)
-      ? record.auth_modes.map(readNonEmptyString).filter(Boolean)
-      : Array.isArray(record.auth_schemes)
-        ? record.auth_schemes.map(readNonEmptyString).filter(Boolean)
-        : [],
+    authModes: Array.isArray(record.auth_modes) ? record.auth_modes.map(readNonEmptyString).filter(Boolean) : [],
     activeCount: connectionRows.filter((row) => row.status === 'ACTIVE' && !row.isDisabled).length,
     totalConnections: connectionRows.length,
     connectionStatuses: [...new Set(connectionRows.map((row) => row.status).filter(Boolean))],
@@ -1172,20 +1153,16 @@ async function readComposioStatus(): Promise<ComposioStatusResponse> {
 }
 
 async function listComposioConnectors(query: string): Promise<ComposioConnectorSummary[]> {
-  const userData = await readComposioUserData()
-  if (!userData?.apiKey) {
-    throw new Error('Composio user data is unavailable')
-  }
-  const client = createComposioClient(userData)
+  const args = ['dev', 'toolkits', 'list', '--limit', '250']
   const trimmedQuery = query.trim()
+  if (trimmedQuery) {
+    args.push('--query', trimmedQuery)
+  }
   const [payload, connectionsBySlug] = await Promise.all([
-    client.toolkits.list({
-      limit: 250,
-      search: trimmedQuery || undefined,
-    }),
+    runComposioJson<unknown[]>(args, 'Failed to list Composio toolkits'),
     readComposioConnectionsBySlug(),
   ])
-  return (Array.isArray(payload.items) ? payload.items : [])
+  return payload
     .map((item) => normalizeComposioToolkit(item, connectionsBySlug))
     .filter((row): row is ComposioConnectorSummary => row !== null)
 }
@@ -1195,16 +1172,14 @@ async function readComposioConnectorDetail(slug: string): Promise<ComposioConnec
   if (!normalizedSlug) {
     throw new Error('Missing Composio connector slug')
   }
-  const userData = await readComposioUserData()
-  if (!userData?.apiKey) {
-    throw new Error('Composio user data is unavailable')
-  }
-  const client = createComposioClient(userData)
-  const [infoPayload, toolsPayload, connectionsPayload] = await Promise.all([
-    client.toolkits.retrieve(normalizedSlug),
-    client.tools.list({ toolkit_slug: normalizedSlug, limit: 10 }),
+
+  const [infoPayload, toolsPayload, connectionsPayload, userData] = await Promise.all([
+    runComposioJson<Record<string, unknown>>(['dev', 'toolkits', 'info', normalizedSlug], `Failed to load Composio toolkit ${normalizedSlug}`),
+    runComposioJson<unknown[]>(['tools', 'list', normalizedSlug, '--limit', '10'], `Failed to list tools for ${normalizedSlug}`),
     runComposioJson<{ toolkit?: string; items?: unknown[] }>(['link', normalizedSlug, '--list'], `Failed to list connections for ${normalizedSlug}`),
+    readComposioUserData(),
   ])
+
   const connections = Array.isArray(connectionsPayload.items)
     ? connectionsPayload.items.map(normalizeComposioConnection).filter((row): row is ComposioConnectionSummary => row !== null)
     : []
@@ -1216,8 +1191,8 @@ async function readComposioConnectorDetail(slug: string): Promise<ComposioConnec
   return {
     connector,
     connections,
-    tools: Array.isArray(toolsPayload.items)
-      ? toolsPayload.items.map(normalizeComposioTool).filter((row): row is ComposioToolSummary => row !== null)
+    tools: Array.isArray(toolsPayload)
+      ? toolsPayload.map(normalizeComposioTool).filter((row): row is ComposioToolSummary => row !== null)
       : [],
     dashboardUrl: userData?.webUrl || 'https://dashboard.composio.dev/',
   }
@@ -1228,24 +1203,54 @@ async function startComposioLink(slug: string): Promise<ComposioLinkResult> {
   if (!normalizedSlug) {
     throw new Error('Missing Composio connector slug')
   }
-  const userData = await readComposioUserData()
-  if (!userData?.apiKey) {
-    throw new Error('Composio user data is unavailable')
-  }
-  const consumerUserId = getComposioConsumerUserIds(userData)[0] ?? ''
-  if (!consumerUserId) {
-    throw new Error('Composio consumer user id is unavailable')
-  }
-  const client = createComposioClient(userData)
-  const session = await client.toolRouter.session.create({ user_id: consumerUserId })
-  const payload = await client.toolRouter.session.link(session.session_id, { toolkit: normalizedSlug })
+  const payload = asRecord(await runComposioJson<Record<string, unknown>>(['link', normalizedSlug, '--no-wait'], `Failed to start Composio link for ${normalizedSlug}`))
   return {
-    status: 'pending',
-    message: 'Complete authorization by opening the URL',
-    connectedAccountId: readNonEmptyString(payload.connected_account_id),
-    redirectUrl: readNonEmptyString(payload.redirect_url),
-    toolkit: normalizedSlug,
-    projectType: 'CONSUMER',
+    status: readNonEmptyString(payload?.status),
+    message: readNonEmptyString(payload?.message),
+    connectedAccountId: readNonEmptyString(payload?.connected_account_id),
+    redirectUrl: readNonEmptyString(payload?.redirect_url),
+    toolkit: readNonEmptyString(payload?.toolkit),
+    projectType: readNonEmptyString(payload?.project_type),
+  }
+}
+
+async function startComposioLogin(): Promise<ComposioLoginResult> {
+  const payload = asRecord(await runComposioJson<Record<string, unknown>>(
+    ['login', '--no-wait', '--no-skill-install', '-y'],
+    'Failed to start Composio login',
+  ))
+  return {
+    status: readNonEmptyString(payload?.status),
+    message: readNonEmptyString(payload?.message),
+    loginUrl: readNonEmptyString(payload?.login_url),
+    cliKey: readNonEmptyString(payload?.cli_key),
+    expiresAt: readNonEmptyString(payload?.expires_at),
+  }
+}
+
+async function installComposioCli(): Promise<ComposioInstallResult> {
+  const homeBin = join(homedir(), '.npm-global', 'bin')
+  const command = 'npm'
+  const args = ['install', '-g', '@composio/cli@latest']
+  const invocation = getSpawnInvocation(command, args)
+  const env = {
+    ...process.env,
+    npm_config_prefix: process.env.npm_config_prefix?.trim() || join(homedir(), '.npm-global'),
+    PATH: process.env.PATH ? `${homeBin}:${process.env.PATH}` : homeBin,
+  }
+  const result = spawnSync(invocation.command, invocation.args, {
+    encoding: 'utf8',
+    env,
+    windowsHide: true,
+  })
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+  if (result.error || result.status !== 0) {
+    throw new Error(output || result.error?.message || 'Failed to install Composio CLI')
+  }
+  return {
+    ok: true,
+    command: `${command} ${args.join(' ')}`,
+    output,
   }
 }
 
@@ -4455,6 +4460,24 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, await startComposioLink(slug))
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to start Composio login') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/composio/login') {
+        try {
+          setJson(res, 200, await startComposioLogin())
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to start Composio CLI login') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/composio/install') {
+        try {
+          setJson(res, 200, await installComposioCli())
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to install Composio CLI') })
         }
         return
       }
