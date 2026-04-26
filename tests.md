@@ -3029,6 +3029,28 @@ Remove the legacy npm package reference from the startup welcome log and point u
 
 ---
 
+### Home route no longer crashes on dev startup
+
+#### Feature/Change Name
+Restore the missing GitHub trending preference key so the app mounts correctly on `#/` in dev mode.
+
+#### Prerequisites/Setup
+1. Run the app from this repository with `npm run dev`.
+
+#### Steps
+1. Open `http://localhost:5173/#/`.
+2. Wait for the app shell to finish loading.
+3. Open the browser devtools console.
+
+#### Expected Results
+- The home screen renders instead of a black screen.
+- The console does not show `ReferenceError: GITHUB_TRENDING_PROJECTS_KEY is not defined`.
+
+#### Rollback/Cleanup
+- None
+
+---
+
 ### Thread list startup pagination and direct older-thread links
 
 #### Feature/Change Name

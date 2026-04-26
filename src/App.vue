@@ -1157,6 +1157,7 @@ const DARK_MODE_KEY = 'codex-web-local.dark-mode.v1'
 const DICTATION_CLICK_TO_TOGGLE_KEY = 'codex-web-local.dictation-click-to-toggle.v1'
 const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
+const GITHUB_TRENDING_PROJECTS_KEY = 'codex-web-local.github-trending-projects.v1'
 
 const CHAT_WIDTH_KEY = 'codex-web-local.chat-width.v1'
 const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
