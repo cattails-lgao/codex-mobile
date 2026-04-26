@@ -10,48 +10,87 @@
       <IconTablerChevronDown class="search-dropdown-chevron" />
     </button>
 
-    <div
-      v-if="isOpen"
-      ref="menuRef"
-      class="search-dropdown-menu-wrap"
-      :class="{
-        'search-dropdown-menu-wrap-up': openDirection === 'up',
-        'search-dropdown-menu-wrap-down': openDirection === 'down',
-      }"
-    >
-      <div class="search-dropdown-search-wrap">
-        <input
-          ref="searchRef"
-          v-model="searchQuery"
-          class="search-dropdown-search"
-          type="text"
-          :placeholder="searchPlaceholder"
-          @keydown.escape.prevent="isOpen = false"
-          @keydown.enter.prevent="selectHighlighted"
-          @keydown.arrow-down.prevent="moveHighlight(1)"
-          @keydown.arrow-up.prevent="moveHighlight(-1)"
-        />
-      </div>
-      <ul v-if="filtered.length > 0" class="search-dropdown-list" role="listbox">
-        <li v-for="(opt, idx) in filtered" :key="opt.value">
+    <Teleport to="body">
+      <div
+        v-if="isOpen"
+        ref="menuRef"
+        class="search-dropdown-menu-wrap"
+        :class="{
+          'search-dropdown-menu-wrap-up': openDirection === 'up',
+          'search-dropdown-menu-wrap-down': openDirection === 'down',
+        }"
+        :style="menuStyle"
+      >
+        <div class="search-dropdown-search-wrap">
+          <div class="search-dropdown-search-row">
+            <input
+              ref="searchRef"
+              v-model="searchQuery"
+              class="search-dropdown-search"
+              type="text"
+              :placeholder="searchPlaceholder"
+              @keydown.escape.prevent="isOpen = false"
+              @keydown.enter.prevent="selectHighlighted"
+              @keydown.arrow-down.prevent="moveHighlight(1)"
+              @keydown.arrow-up.prevent="moveHighlight(-1)"
+            />
+            <button
+              v-if="createLabel"
+              class="search-dropdown-create-icon"
+              type="button"
+              :aria-label="createLabel"
+              :title="createLabel"
+              @click="emit('create')"
+            >
+              +
+            </button>
+          </div>
           <button
-            class="search-dropdown-option"
-            :class="{
-              'is-selected': selected.has(opt.value),
-              'is-highlighted': idx === highlightIdx,
-            }"
+            v-if="createLabel"
+            class="search-dropdown-create"
             type="button"
-            @click="onSelect(opt)"
-            @pointerenter="highlightIdx = idx"
+            @click="emit('create')"
           >
-            <span class="search-dropdown-option-check">{{ selected.has(opt.value) ? '✓' : '' }}</span>
-            <span class="search-dropdown-option-label">{{ opt.label }}</span>
-            <span v-if="opt.description" class="search-dropdown-option-desc">{{ opt.description }}</span>
+            {{ createLabel }}
           </button>
-        </li>
-      </ul>
-      <div v-else class="search-dropdown-empty">{{ t('No results') }}</div>
-    </div>
+        </div>
+        <ul v-if="filtered.length > 0" class="search-dropdown-list" role="listbox">
+          <li v-for="(opt, idx) in filtered" :key="opt.value">
+            <div
+              class="search-dropdown-option"
+              :class="{
+                'is-selected': selected.has(opt.value),
+                'is-highlighted': idx === highlightIdx,
+              }"
+              @pointerenter="highlightIdx = idx"
+            >
+              <button
+                class="search-dropdown-option-main"
+                type="button"
+                @click="onSelect(opt)"
+              >
+                <span class="search-dropdown-option-check">{{ selected.has(opt.value) ? '✓' : '' }}</span>
+                <span class="search-dropdown-option-copy">
+                  <span class="search-dropdown-option-label">{{ opt.label }}</span>
+                  <span v-if="opt.description" class="search-dropdown-option-desc">{{ opt.description }}</span>
+                </span>
+              </button>
+              <button
+                v-if="allowRemove"
+                class="search-dropdown-option-remove"
+                type="button"
+                :aria-label="`${removeLabel} ${opt.label}`"
+                :title="`${removeLabel} ${opt.label}`"
+                @click.stop="emit('remove', opt.value)"
+              >
+                ×
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="search-dropdown-empty">{{ t('No results') }}</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -73,10 +112,16 @@ const props = defineProps<{
   searchPlaceholder?: string
   disabled?: boolean
   openDirection?: 'up' | 'down'
+  createLabel?: string
+  allowRemove?: boolean
+  removeLabel?: string
+  displayLabelOverride?: string
 }>()
 
 const emit = defineEmits<{
   toggle: [value: string, checked: boolean]
+  create: []
+  remove: [value: string]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -85,12 +130,14 @@ const searchRef = ref<HTMLInputElement | null>(null)
 const isOpen = ref(false)
 const searchQuery = ref('')
 const highlightIdx = ref(0)
+const menuStyle = ref<Record<string, string>>({})
 const { t } = useUiLanguage()
 
 const openDirection = computed(() => props.openDirection ?? 'down')
 const selected = computed(() => new Set(props.selectedValues))
 
 const displayLabel = computed(() => {
+  if (props.displayLabelOverride?.trim()) return props.displayLabelOverride.trim()
   if (props.selectedValues.length === 0) return props.placeholder || t('Select...')
   if (props.selectedValues.length === 1) {
     const opt = props.options.find((o) => o.value === props.selectedValues[0])
@@ -109,17 +156,36 @@ const filtered = computed(() => {
   )
 })
 
-function positionMenuForMobile(): void {
+function updateMenuPosition(): void {
   const menu = menuRef.value
   const root = rootRef.value
-  if (!menu || !root || window.innerWidth >= 640) return
+  if (!menu || !root) return
   const rect = root.getBoundingClientRect()
-  if (openDirection.value === 'up') {
-    menu.style.setProperty('bottom', `${window.innerHeight - rect.top + 8}px`, 'important')
-    menu.style.setProperty('top', 'auto', 'important')
-  } else {
-    menu.style.setProperty('top', `${rect.bottom + 8}px`, 'important')
-    menu.style.setProperty('bottom', 'auto', 'important')
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const desiredWidth = Math.min(384, viewportWidth - 16)
+  const left = Math.max(8, Math.min(rect.right - desiredWidth, viewportWidth - desiredWidth - 8))
+
+  if (viewportWidth < 640) {
+    menuStyle.value = {
+      position: 'fixed',
+      left: '0.5rem',
+      right: '0.5rem',
+      width: 'auto',
+      top: openDirection.value === 'up' ? 'auto' : `${rect.bottom + 8}px`,
+      bottom: openDirection.value === 'up' ? `${viewportHeight - rect.top + 8}px` : 'auto',
+      zIndex: '120',
+    }
+    return
+  }
+
+  menuStyle.value = {
+    position: 'fixed',
+    width: `${desiredWidth}px`,
+    left: `${left}px`,
+    top: openDirection.value === 'up' ? 'auto' : `${rect.bottom + 8}px`,
+    bottom: openDirection.value === 'up' ? `${viewportHeight - rect.top + 8}px` : 'auto',
+    zIndex: '120',
   }
 }
 
@@ -131,7 +197,7 @@ function onToggle(): void {
     highlightIdx.value = 0
     nextTick(() => {
       nextTick(() => {
-        positionMenuForMobile()
+        updateMenuPosition()
       })
       searchRef.value?.focus()
     })
@@ -156,17 +222,32 @@ function selectHighlighted(): void {
 function onDocumentPointerDown(event: PointerEvent): void {
   if (!isOpen.value) return
   const root = rootRef.value
+  const menu = menuRef.value
   if (!root) return
   const target = event.target
   if (!(target instanceof Node)) return
   if (root.contains(target)) return
+  if (menu?.contains(target)) return
   isOpen.value = false
 }
 
 watch(searchQuery, () => { highlightIdx.value = 0 })
 
-onMounted(() => window.addEventListener('pointerdown', onDocumentPointerDown))
-onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointerDown))
+function onWindowLayoutChange(): void {
+  if (!isOpen.value) return
+  updateMenuPosition()
+}
+
+onMounted(() => {
+  window.addEventListener('pointerdown', onDocumentPointerDown)
+  window.addEventListener('resize', onWindowLayoutChange)
+  window.addEventListener('scroll', onWindowLayoutChange, true)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', onDocumentPointerDown)
+  window.removeEventListener('resize', onWindowLayoutChange)
+  window.removeEventListener('scroll', onWindowLayoutChange, true)
+})
 </script>
 
 <style scoped>
@@ -193,48 +274,41 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .search-dropdown-menu-wrap {
-  @apply absolute left-0 z-50 w-64;
-}
-
-.search-dropdown-menu-wrap-down {
-  @apply top-[calc(100%+8px)];
-}
-
-.search-dropdown-menu-wrap-up {
-  @apply bottom-[calc(100%+8px)];
+  @apply z-[120];
 }
 
 @media (max-width: 639px) {
   .search-dropdown-menu-wrap {
-    position: fixed;
-    left: 0.5rem;
-    right: 0.5rem;
-    width: auto;
-  }
-
-  .search-dropdown-menu-wrap-up {
-    bottom: auto !important;
-  }
-
-  .search-dropdown-menu-wrap-down {
-    top: auto !important;
+    max-width: none;
   }
 }
 
 .search-dropdown-search-wrap {
-  @apply p-1.5 border-b border-zinc-100;
+  @apply p-2 border-b border-zinc-100;
+}
+
+.search-dropdown-search-row {
+  @apply flex items-center gap-2;
+}
+
+.search-dropdown-create {
+  @apply hidden;
+}
+
+.search-dropdown-create-icon {
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-lg leading-none text-zinc-700 transition hover:bg-zinc-50;
 }
 
 .search-dropdown-search {
-  @apply w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
+  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
 }
 
 .search-dropdown-list {
-  @apply m-0 max-h-48 list-none overflow-y-auto p-1;
+  @apply m-0 max-h-64 list-none overflow-y-auto p-1;
 }
 
 .search-dropdown-option {
-  @apply flex w-full items-start gap-1.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sm text-zinc-700 transition hover:bg-zinc-100;
+  @apply relative flex min-w-0 items-start gap-1 rounded-lg text-zinc-700 transition;
 }
 
 .search-dropdown-option.is-highlighted {
@@ -245,16 +319,28 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply text-zinc-900;
 }
 
+.search-dropdown-option-main {
+  @apply flex min-w-0 flex-1 items-start gap-2 rounded-lg border-0 bg-transparent px-2.5 py-1.5 pr-8 text-left hover:bg-zinc-50;
+}
+
 .search-dropdown-option-check {
-  @apply w-4 shrink-0 text-center text-xs leading-5 text-emerald-600;
+  @apply mt-0.5 w-4 shrink-0 text-center text-[10px] leading-4 text-emerald-600;
+}
+
+.search-dropdown-option-copy {
+  @apply flex min-w-0 flex-1 flex-col overflow-hidden pr-1;
 }
 
 .search-dropdown-option-label {
-  @apply flex-1 min-w-0 truncate;
+  @apply block min-w-0 truncate text-sm font-medium text-zinc-800;
 }
 
 .search-dropdown-option-desc {
-  @apply text-xs text-zinc-400 truncate max-w-32 max-sm:max-w-none max-sm:flex-1;
+  @apply mt-0.5 block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-zinc-500;
+}
+
+.search-dropdown-option-remove {
+  @apply absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent text-lg font-medium leading-none text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-800;
 }
 
 .search-dropdown-empty {
@@ -264,5 +350,59 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 .search-dropdown-menu-wrap-up,
 .search-dropdown-menu-wrap-down {
   @apply rounded-xl border border-zinc-200 bg-white shadow-lg;
+}
+
+:global(:root.dark) .search-dropdown-trigger,
+:global(:root.dark) .search-dropdown-trigger:disabled,
+:global(:root.dark) .search-dropdown-value,
+:global(:root.dark) .search-dropdown-chevron {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .search-dropdown-menu-wrap-up,
+:global(:root.dark) .search-dropdown-menu-wrap-down {
+  @apply border-zinc-700 bg-zinc-900 shadow-[0_18px_48px_rgba(0,0,0,0.45)];
+}
+
+:global(:root.dark) .search-dropdown-search-wrap {
+  @apply border-zinc-800;
+}
+
+:global(:root.dark) .search-dropdown-search,
+:global(:root.dark) .search-dropdown-create {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100 placeholder-zinc-500;
+}
+
+:global(:root.dark) .search-dropdown-create:hover {
+  @apply bg-zinc-900;
+}
+
+:global(:root.dark) .search-dropdown-option {
+  @apply text-zinc-200;
+}
+
+:global(:root.dark) .search-dropdown-option.is-highlighted,
+:global(:root.dark) .search-dropdown-option-main:hover {
+  @apply bg-zinc-800;
+}
+
+:global(:root.dark) .search-dropdown-option-label {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .search-dropdown-option-desc {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .search-dropdown-option-remove {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .search-dropdown-option-remove:hover {
+  @apply bg-zinc-700 text-zinc-200;
+}
+
+:global(:root.dark) .search-dropdown-empty {
+  @apply text-zinc-500;
 }
 </style>
