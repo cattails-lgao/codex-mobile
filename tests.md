@@ -3032,7 +3032,7 @@ Remove the legacy npm package reference from the startup welcome log and point u
 ### Home route no longer crashes on dev startup
 
 #### Feature/Change Name
-Restore the missing GitHub trending preference key so the app mounts correctly on `#/` in dev mode.
+Keep the home route mount path working in dev mode.
 
 #### Prerequisites/Setup
 1. Run the app from this repository with `npm run dev`.
@@ -3044,7 +3044,7 @@ Restore the missing GitHub trending preference key so the app mounts correctly o
 
 #### Expected Results
 - The home screen renders instead of a black screen.
-- The console does not show `ReferenceError: GITHUB_TRENDING_PROJECTS_KEY is not defined`.
+- The console does not show an app setup `ReferenceError` during initial mount.
 
 #### Rollback/Cleanup
 - None
