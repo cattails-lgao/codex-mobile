@@ -907,10 +907,12 @@ const SETTINGS_HELP = {
 type ChatWidthMode = 'standard' | 'wide' | 'extra-wide'
 
 type DirectoryTryItemPayload = {
-  kind: 'app' | 'plugin' | 'skill'
+  kind: 'app' | 'plugin' | 'skill' | 'composio'
   name: string
   displayName: string
   skillPath?: string
+  prompt?: string
+  attachedSkills?: Array<{ name: string; path: string }>
 }
 
 type ChatWidthPreset = {
@@ -3468,8 +3470,15 @@ async function submitFirstMessageForNewThread(
 }
 
 function buildDirectoryTryPrompt(payload: DirectoryTryItemPayload): string {
+  if (payload.prompt?.trim()) return payload.prompt.trim()
   const label = payload.displayName.trim() || payload.name.trim()
-  const itemType = payload.kind === 'skill' ? 'skill' : payload.kind === 'plugin' ? 'plugin' : 'app'
+  const itemType = payload.kind === 'skill'
+    ? 'skill'
+    : payload.kind === 'plugin'
+      ? 'plugin'
+      : payload.kind === 'composio'
+        ? 'Composio connector'
+        : 'app'
   return `Test ${label} ${itemType}. Give me a list of what it can do and one useful example.`
 }
 
@@ -3481,7 +3490,9 @@ async function onTryDirectoryItem(payload: DirectoryTryItemPayload): Promise<voi
   if (directoryTryInFlightKey.value) return
   directoryTryInFlightKey.value = getDirectoryTryItemKey(payload)
   const text = buildDirectoryTryPrompt(payload)
-  const skills = payload.kind === 'skill' && payload.skillPath
+  const skills = payload.attachedSkills?.length
+    ? payload.attachedSkills
+    : payload.kind === 'skill' && payload.skillPath
     ? [{ name: payload.name, path: payload.skillPath }]
     : []
   try {

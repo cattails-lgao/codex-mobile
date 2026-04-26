@@ -59,6 +59,7 @@
     "profile:thread": "PROFILE_ROUTE='#/thread/019da7c0-4e12-7a91-837c-f7c11cc8ab6c' node scripts/profile-browser-runtime.cjs"
   },
   "dependencies": {
+    "@composio/client": "0.1.0-alpha.66",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "commander": "^13.1.0",

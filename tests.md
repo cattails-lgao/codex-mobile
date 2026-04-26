@@ -3191,7 +3191,7 @@ Playwright browser runtime profiler captures route timing, Codex API network cou
 ### Codex.app-style Plugins Directory
 
 #### Feature/Change Name
-The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MCPs, and Skills tabs.
+The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Composio, MCPs, and Skills tabs.
 
 #### Prerequisites/Setup
 1. Dev server running at `http://127.0.0.1:4173`
@@ -3200,7 +3200,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 
 #### Steps
 1. Open `http://127.0.0.1:4173/#/skills`
-2. Verify the page title is `Skills & Apps` and the tab row contains `Plugins`, `Apps`, `MCPs`, and `Skills`
+2. Verify the page title is `Skills & Apps` and the tab row contains `Plugins`, `Apps`, `Composio`, `MCPs`, and `Skills`
 3. On `Plugins`, verify plugin cards load, the default sort is `Popular`, and `A-Z`, `Date`, and search controls work
 4. Open a plugin card when one is available and verify description, capabilities, included apps/skills/MCPs, and install/uninstall or enable/disable actions are visible
 5. For an installed plugin with bundled MCP servers, such as Cloudflare, verify each MCP row shows auth status (`Logged in`, `Bearer token`, `Login required`, `Auth unsupported`, or `Status unknown`)
@@ -3215,9 +3215,14 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 14. Install a plugin whose install response includes `appsNeedingAuth`, and verify the first required app login/manage URL opens automatically
 15. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
 16. Search Apps and verify matching results are not capped to the Popular top 100 list
-17. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-18. Verify MCPs also support `Popular`, `A-Z`, `Date`, and search
-19. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
+17. Switch to `Composio` and verify the workspace summary card shows the current Composio CLI login state, or a clear not-installed / not-authenticated message appears
+18. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
+19. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
+20. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
+21. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
+22. Switch to `MCPs` and verify MCP server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+23. Verify MCPs also support `Popular`, `A-Z`, `Date`, and search
+24. Switch to `Skills` and verify existing Skills Hub search, install, uninstall, sync, and enable/disable behavior still works
 
 #### Expected Results
 - The directory tabs render without a full-page error
@@ -3226,6 +3231,9 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, MC
 - App and plugin enable/disable actions update their local card state after a successful config write
 - Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
+- The Composio tab reuses the authenticated local Composio CLI state and does not require a separate app-specific login
+- Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
+- Connected or no-auth Composio connectors expose `Try it!`, creating a new chat with the `composio-cli` skill attached
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
 - Connected and enabled apps, plus installed/enabled plugins/skills, expose `Try it!`, creating a new chat with an auto-submitted test prompt
 - Repeated `Try it!` clicks during startup are ignored until the first request resolves, so duplicate threads are not created
