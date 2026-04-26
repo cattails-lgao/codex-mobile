@@ -1112,6 +1112,62 @@
   @apply text-zinc-500;
 }
 
+:root.dark .search-dropdown-trigger,
+:root.dark .search-dropdown-trigger:disabled,
+:root.dark .search-dropdown-value,
+:root.dark .search-dropdown-chevron {
+  @apply text-zinc-400;
+}
+
+:root.dark .search-dropdown-menu-wrap-up,
+:root.dark .search-dropdown-menu-wrap-down {
+  @apply border-zinc-700 bg-zinc-900 shadow-[0_18px_48px_rgba(0,0,0,0.45)];
+}
+
+:root.dark .search-dropdown-search-wrap {
+  @apply border-zinc-800;
+}
+
+:root.dark .search-dropdown-search,
+:root.dark .search-dropdown-create,
+:root.dark .search-dropdown-create-icon {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100 placeholder-zinc-500;
+}
+
+:root.dark .search-dropdown-create:hover,
+:root.dark .search-dropdown-create-icon:hover {
+  @apply bg-zinc-900;
+}
+
+:root.dark .search-dropdown-option {
+  @apply text-zinc-200;
+}
+
+:root.dark .search-dropdown-option.is-highlighted,
+:root.dark .search-dropdown-option-main:hover {
+  @apply bg-zinc-800;
+}
+
+:root.dark .search-dropdown-option-label {
+  @apply text-zinc-100;
+}
+
+:root.dark .search-dropdown-option-desc {
+  @apply text-zinc-400;
+}
+
+:root.dark .search-dropdown-option-remove {
+  @apply text-zinc-300;
+}
+
+:root.dark .search-dropdown-option-remove:hover {
+  @apply bg-zinc-700 text-zinc-100;
+}
+
+:root.dark .search-dropdown-empty {
+  @apply text-zinc-500;
+}
+
 :root.dark .thread-composer-skill-chip {
   @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
 }

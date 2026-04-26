@@ -122,14 +122,6 @@
           @keydown="onInputKeydown"
           @paste="onInputPaste"
         />
-        <ComposerSkillPicker
-          :skills="skillOptions"
-          :visible="isSlashMenuOpen"
-          :anchor-bottom="44"
-          :anchor-left="0"
-          @select="onSlashSkillSelect"
-          @close="closeSlashMenu"
-        />
       </div>
 
       <div
@@ -266,6 +258,23 @@
             @toggle="onSkillDropdownToggle"
           />
 
+          <ComposerSearchDropdown
+            class="thread-composer-control"
+            :options="promptDropdownOptions"
+            :selected-values="[]"
+            :placeholder="t('Prompt')"
+            :display-label-override="t('Prompt')"
+            :search-placeholder="t('Search prompt...')"
+            :create-label="t('Add new prompt')"
+            :allow-remove="true"
+            :remove-label="t('Remove prompt')"
+            open-direction="up"
+            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            @toggle="onPromptDropdownToggle"
+            @create="onCreatePrompt"
+            @remove="onRemovePrompt"
+          />
+
           <ComposerDropdown
             class="thread-composer-control"
             :model-value="selectedReasoningEffort"
@@ -384,7 +393,15 @@ import type {
 import { useDictation } from '../../composables/useDictation'
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import { searchComposerFiles, uploadFile, type ComposerFileSuggestion } from '../../api/codexGateway'
+import {
+  createComposerPrompt,
+  getComposerPrompts,
+  removeComposerPrompt,
+  searchComposerFiles,
+  uploadFile,
+  type ComposerFileSuggestion,
+  type ComposerPromptInfo,
+} from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
@@ -393,7 +410,6 @@ import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
-import ComposerSkillPicker from './ComposerSkillPicker.vue'
 
 type SkillItem = { name: string; displayName?: string; description: string; path: string }
 
@@ -482,6 +498,7 @@ const PASTED_TEXT_FILE_THRESHOLD = 2000
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
+const savedPrompts = ref<ComposerPromptInfo[]>([])
 const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
@@ -530,7 +547,6 @@ const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const { isMobile } = useMobile()
 const isAttachMenuOpen = ref(false)
-const isSlashMenuOpen = ref(false)
 const mentionStartIndex = ref<number | null>(null)
 const mentionQuery = ref('')
 const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
@@ -567,13 +583,19 @@ const isPlanModeWaitingForModel = computed(() =>
   props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
 )
 
-const skillOptions = computed<SkillItem[]>(() => props.skills ?? [])
 const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
 const skillDropdownOptions = computed(() =>
   (props.skills ?? []).map((s) => ({
     value: s.path,
     label: s.name,
     description: s.description,
+  })),
+)
+const promptDropdownOptions = computed(() =>
+  savedPrompts.value.map((prompt) => ({
+    value: prompt.path,
+    label: prompt.name,
+    description: prompt.description,
   })),
 )
 
@@ -662,7 +684,7 @@ const placeholderText = computed(() =>
     ? t('Select a thread to send a message')
     : isPlanModeWaitingForModel.value
       ? t('Loading models for plan mode...')
-      : t('Type a message... (@ for files, / for skills)'),
+      : t('Type a message... (@ for files)'),
 )
 const hasSubmitContent = computed(() =>
   draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0,
@@ -905,7 +927,6 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   clearDraftState()
   folderUploadGroups.value = []
   isAttachMenuOpen.value = false
-  isSlashMenuOpen.value = false
   closeFileMention()
   if (isAndroid || isMobile.value) {
     inputRef.value?.blur()
@@ -936,7 +957,6 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   attachmentBatchStats.value = null
   pendingAttachmentCount.value = 0
   isAttachMenuOpen.value = false
-  isSlashMenuOpen.value = false
   closeFileMention()
   attachmentSessionToken += 1
 }
@@ -1287,7 +1307,6 @@ function attachIncomingFiles(files: FileList | File[] | null | undefined): void 
   if (normalizedFiles.length === 0) return
   beginAttachmentBatch(normalizedFiles.length)
   isAttachMenuOpen.value = false
-  isSlashMenuOpen.value = false
   closeFileMention()
   const sessionToken = attachmentSessionToken
   for (const file of normalizedFiles) {
@@ -1450,11 +1469,6 @@ function onInputChange(): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
-  const text = draft.value
-  const shouldShowSlashMenu = text.startsWith('/')
-  if (shouldShowSlashMenu !== isSlashMenuOpen.value) {
-    isSlashMenuOpen.value = shouldShowSlashMenu
-  }
   updateFileMentionState()
 }
 
@@ -1501,23 +1515,6 @@ function onInputKeydown(event: KeyboardEvent): void {
     onSubmit(props.isTurnInProgress ? activeInProgressMode.value : 'steer')
     return
   }
-
-  if (isSlashMenuOpen.value) {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      closeSlashMenu()
-      return
-    }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      return
-    }
-  }
-}
-
-function closeSlashMenu(): void {
-  isSlashMenuOpen.value = false
-  inputRef.value?.focus()
 }
 
 function closeFileMention(): void {
@@ -1605,6 +1602,36 @@ function appendTextToDraft(text: string): void {
   nextTick(() => inputRef.value?.focus())
 }
 
+async function reloadPrompts(): Promise<void> {
+  savedPrompts.value = await getComposerPrompts()
+}
+
+async function onCreatePrompt(): Promise<void> {
+  const name = window.prompt(t('Prompt name'))?.trim() ?? ''
+  if (!name) return
+  const content = window.prompt(t('Prompt content')) ?? ''
+  if (!content.trim()) return
+  const created = await createComposerPrompt(name, content)
+  if (!created) return
+  await reloadPrompts()
+  appendTextToDraft(created.content)
+}
+
+async function onRemovePrompt(path: string): Promise<void> {
+  const target = savedPrompts.value.find((prompt) => prompt.path === path)
+  const confirmed = window.confirm(target ? `${t('Remove prompt')} "${target.name}"?` : t('Remove prompt'))
+  if (!confirmed) return
+  const removed = await removeComposerPrompt(path)
+  if (!removed) return
+  await reloadPrompts()
+}
+
+function onPromptDropdownToggle(path: string): void {
+  const prompt = savedPrompts.value.find((entry) => entry.path === path)
+  if (!prompt) return
+  appendTextToDraft(prompt.content)
+}
+
 function getMentionFileName(path: string): string {
   const idx = path.lastIndexOf('/')
   if (idx < 0) return path
@@ -1647,15 +1674,6 @@ function isMarkdownFile(path: string): boolean {
   return ext === 'md' || ext === 'mdx'
 }
 
-function onSlashSkillSelect(skill: SkillItem): void {
-  if (!selectedSkills.value.some((s) => s.path === skill.path)) {
-    selectedSkills.value = [...selectedSkills.value, skill]
-  }
-  draft.value = draft.value.startsWith('/') ? '' : draft.value
-  isSlashMenuOpen.value = false
-  inputRef.value?.focus()
-}
-
 function onSkillDropdownToggle(path: string, checked: boolean): void {
   if (checked) {
     const skill = (props.skills ?? []).find((s) => s.path === path)
@@ -1681,6 +1699,7 @@ onMounted(() => {
   window.addEventListener('drop', onWindowDragCleanup)
   window.addEventListener('dragend', onWindowDragCleanup)
   window.addEventListener('blur', onWindowDragCleanup)
+  void reloadPrompts()
 })
 
 defineExpose<ThreadComposerExposed>({
