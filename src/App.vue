@@ -570,13 +570,22 @@
                       </div>
                       <p class="new-thread-open-folder-label">{{ t('Current folder') }}</p>
                       <div class="new-thread-open-folder-current">
-                        <p class="new-thread-open-folder-path" :title="existingFolderBrowsePath || t('Unavailable')">
-                          {{ existingFolderBrowsePath || t('Unavailable') }}
-                        </p>
+                        <input
+                          ref="existingFolderPathInputRef"
+                          v-model="existingFolderPathDraft"
+                          class="new-thread-open-folder-path"
+                          type="text"
+                          :placeholder="t('Current folder')"
+                          :title="existingFolderPathDraft || t('Unavailable')"
+                          :disabled="isExistingFolderLoading || isOpeningExistingFolder"
+                          @blur="onExistingFolderPathBlur"
+                          @keydown.enter.prevent="onSubmitExistingFolderPath"
+                          @keydown.esc.prevent="onCloseExistingFolderPanel"
+                        />
                         <button
                           class="new-thread-folder-action new-thread-folder-action-primary"
                           type="button"
-                          :disabled="!existingFolderBrowsePath || !!existingFolderError || isExistingFolderLoading || isOpeningExistingFolder"
+                          :disabled="!resolvedExistingFolderPath || isExistingFolderLoading || isOpeningExistingFolder"
                           @click="onConfirmExistingFolder()"
                         >
                           {{ isOpeningExistingFolder ? t('Opening…') : t('Open') }}
@@ -1192,7 +1201,9 @@ const createFolderDraft = ref('')
 const createFolderError = ref('')
 const isCreatingFolder = ref(false)
 const isExistingFolderPickerOpen = ref(false)
+const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
+const existingFolderPathDraft = ref('')
 const existingFolderBrowsePath = ref('')
 const existingFolderParentPath = ref('')
 const existingFolderEntries = ref<LocalDirectoryEntry[]>([])
@@ -1443,6 +1454,11 @@ const isCreateFolderNameValid = computed(() => {
 })
 const canCreateFolder = computed(() => {
   return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0 && !existingFolderError.value
+})
+const resolvedExistingFolderPath = computed(() => {
+  const draftedPath = normalizePathForUi(existingFolderPathDraft.value).trim()
+  if (draftedPath) return draftedPath
+  return existingFolderBrowsePath.value.trim()
 })
 const createFolderSubmitLabel = computed(() => {
   if (isCreatingFolder.value) return 'Creating…'
@@ -2417,7 +2433,7 @@ async function onOpenExistingFolder(): Promise<void> {
   existingFolderFilter.value = ''
   await loadExistingFolderListing(startPath)
   if (!existingFolderError.value) {
-    void nextTick(() => existingFolderFilterInputRef.value?.focus())
+    void nextTick(() => existingFolderPathInputRef.value?.focus())
   }
 }
 
@@ -2427,6 +2443,7 @@ function onCloseExistingFolderPanel(): void {
   isExistingFolderLoading.value = false
   existingFolderError.value = ''
   existingFolderFilter.value = ''
+  existingFolderPathDraft.value = ''
   onCloseCreateFolderPanel()
 }
 
@@ -2443,13 +2460,32 @@ function onToggleHiddenFolders(): void {
 }
 
 function onRetryExistingFolderBrowse(): void {
-  const currentPath = existingFolderBrowsePath.value.trim()
+  const currentPath = resolvedExistingFolderPath.value
   if (!isExistingFolderPickerOpen.value || !currentPath || isExistingFolderLoading.value) return
   void loadExistingFolderListing(currentPath)
 }
 
-async function onConfirmExistingFolder(path = existingFolderBrowsePath.value): Promise<void> {
-  const targetPath = path.trim()
+function onExistingFolderPathBlur(): void {
+  if (!isExistingFolderPickerOpen.value || isExistingFolderLoading.value || isOpeningExistingFolder.value) return
+  const draftedPath = resolvedExistingFolderPath.value
+  const currentPath = existingFolderBrowsePath.value.trim()
+  if (!draftedPath || draftedPath === currentPath) return
+  void loadExistingFolderListing(draftedPath)
+}
+
+function onSubmitExistingFolderPath(): void {
+  const draftedPath = resolvedExistingFolderPath.value
+  const currentPath = existingFolderBrowsePath.value.trim()
+  if (!draftedPath) return
+  if (draftedPath !== currentPath) {
+    void loadExistingFolderListing(draftedPath)
+    return
+  }
+  void onConfirmExistingFolder(draftedPath)
+}
+
+async function onConfirmExistingFolder(path = resolvedExistingFolderPath.value): Promise<void> {
+  const targetPath = normalizePathForUi(path).trim()
   if (!targetPath) return
 
   existingFolderError.value = ''
@@ -2630,13 +2666,16 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
 
 async function loadExistingFolderListing(path: string): Promise<void> {
   const requestId = ++existingFolderBrowseRequestId
-  existingFolderBrowsePath.value = normalizePathForUi(path).trim()
+  const normalizedRequestedPath = normalizePathForUi(path).trim()
+  existingFolderPathDraft.value = normalizedRequestedPath
+  existingFolderBrowsePath.value = normalizedRequestedPath
   existingFolderError.value = ''
   isExistingFolderLoading.value = true
 
   try {
     const listing = await listLocalDirectories(path, { showHidden: showHiddenFolders.value })
     if (requestId !== existingFolderBrowseRequestId) return
+    existingFolderPathDraft.value = listing.path
     existingFolderBrowsePath.value = listing.path
     existingFolderParentPath.value = listing.parentPath
     existingFolderEntries.value = listing.entries
@@ -3822,7 +3861,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-path {
-  @apply m-0 min-w-0 flex-1 rounded-xl bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-700 break-all;
+  @apply min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 font-mono text-xs text-zinc-700 outline-none transition focus:border-zinc-400;
 }
 
 .new-thread-open-folder-actions {

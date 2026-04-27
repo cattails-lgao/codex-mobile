@@ -1735,6 +1735,10 @@ export function useDesktopState() {
 
   function pruneThreadScopedState(flatThreads: UiThread[]): void {
     const activeThreadIds = new Set(flatThreads.map((thread) => thread.id))
+    const currentThreadId = selectedThreadId.value.trim()
+    if (currentThreadId) {
+      activeThreadIds.add(currentThreadId)
+    }
     const nextSelectedModelMap = pruneThreadContextStateMap(selectedModelIdByContext.value, activeThreadIds)
     if (nextSelectedModelMap !== selectedModelIdByContext.value) {
       selectedModelIdByContext.value = nextSelectedModelMap
