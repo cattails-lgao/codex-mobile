@@ -264,11 +264,13 @@
           <p class="directory-card-description">
             {{ composioWorkspaceSummary }}
           </p>
-          <div class="directory-chip-row">
-            <span v-if="composioStatus.defaultOrgName" class="directory-chip">{{ composioStatus.defaultOrgName }}</span>
-            <span v-if="composioStatus.cliVersion" class="directory-chip">CLI {{ composioStatus.cliVersion }}</span>
-            <span v-if="composioConnectors.length" class="directory-chip">{{ composioConnectors.length }} connectors</span>
-          </div>
+            <div class="directory-chip-row">
+              <span v-if="composioStatus.defaultOrgName" class="directory-chip">{{ composioStatus.defaultOrgName }}</span>
+              <span v-if="composioStatus.cliVersion" class="directory-chip">CLI {{ composioStatus.cliVersion }}</span>
+              <span v-if="composioConnectors.length" class="directory-chip">
+                Showing {{ composioConnectors.length }}{{ composioTotal ? ` / ${composioTotal}` : '' }} connectors
+              </span>
+            </div>
           <div class="directory-card-actions">
             <button class="directory-action-link" type="button" @click="openExternalUrl(composioStatus.webUrl)">
               Open dashboard
@@ -321,6 +323,16 @@
               </button>
             </div>
           </article>
+        </div>
+        <div v-if="hasMoreComposioConnectors" class="directory-section-actions">
+          <button
+            class="directory-action"
+            type="button"
+            :disabled="isLoadingComposio"
+            @click="loadMoreComposio"
+          >
+            {{ isLoadingComposio ? 'Loading...' : 'Load more' }}
+          </button>
         </div>
       </div>
     </section>
@@ -641,6 +653,7 @@ import SkillsHub from './SkillsHub.vue'
 type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
 type DirectorySortMode = 'popular' | 'name' | 'date'
 const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
+const COMPOSIO_PAGE_LIMIT = 50
 
 const POPULAR_LIMIT = 100
 const POPULAR_APP_NAME_BONUSES: Array<[RegExp, number]> = [
@@ -726,6 +739,8 @@ const plugins = ref<DirectoryPluginSummary[]>([])
 const apps = ref<DirectoryAppInfo[]>([])
 const composioStatus = ref<DirectoryComposioStatus | null>(null)
 const composioConnectors = ref<DirectoryComposioConnector[]>([])
+const composioNextCursor = ref<string | null>(null)
+const composioTotal = ref(0)
 const mcpServers = ref<DirectoryMcpServerStatus[]>([])
 const pluginSortMode = ref<DirectorySortMode>('popular')
 const appSortMode = ref<DirectorySortMode>('popular')
@@ -795,8 +810,9 @@ const selectedPluginScreenshots = computed(() => {
 })
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
-const visibleComposioConnectors = computed(() => limitPopularRows(sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value), composioSortMode.value, composioSearchQuery.value))
+const visibleComposioConnectors = computed(() => sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value))
 const visibleMcpServers = computed(() => sortMcpServers(mcpServers.value, 'popular'))
+const hasMoreComposioConnectors = computed(() => composioNextCursor.value !== null)
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
 const composioWorkspaceSummary = computed(() => {
   const status = composioStatus.value
@@ -1172,7 +1188,7 @@ async function loadApps(): Promise<void> {
   }
 }
 
-async function loadComposio(): Promise<void> {
+async function loadComposio(append = false): Promise<void> {
   if (isLoadingComposio.value) {
     isComposioLoadQueued = true
     return
@@ -1185,12 +1201,20 @@ async function loadComposio(): Promise<void> {
     composioStatus.value = status
     if (!status.available || !status.authenticated) {
       composioConnectors.value = []
+      composioNextCursor.value = null
+      composioTotal.value = 0
       return
     }
-    const connectors = await listDirectoryComposioConnectors(composioSearchQuery.value)
-    composioConnectors.value = connectors
+    const cursor = append ? composioNextCursor.value : null
+    const page = await listDirectoryComposioConnectors(composioSearchQuery.value, cursor, COMPOSIO_PAGE_LIMIT)
+    composioConnectors.value = append ? [...composioConnectors.value, ...page.data] : page.data
+    composioNextCursor.value = page.nextCursor
+    composioTotal.value = page.total
   } catch (error) {
     composioError.value = error instanceof Error ? error.message : 'Failed to load Composio connectors'
+    composioConnectors.value = []
+    composioNextCursor.value = null
+    composioTotal.value = 0
   } finally {
     isLoadingComposio.value = false
     if (isComposioLoadQueued) {
@@ -1198,6 +1222,11 @@ async function loadComposio(): Promise<void> {
       void loadComposio()
     }
   }
+}
+
+async function loadMoreComposio(): Promise<void> {
+  if (!hasMoreComposioConnectors.value || isLoadingComposio.value) return
+  await loadComposio(true)
 }
 
 async function loadMcps(): Promise<void> {
@@ -1451,6 +1480,9 @@ function toggleMcpExpanded(name: string): void {
 watch(activeTab, () => refreshActiveTab())
 watch(composioSearchQuery, () => {
   if (activeTab.value !== 'composio') return
+  composioConnectors.value = []
+  composioNextCursor.value = null
+  composioTotal.value = 0
   if (composioSearchTimer) {
     clearTimeout(composioSearchTimer)
   }

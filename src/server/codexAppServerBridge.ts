@@ -182,6 +182,14 @@ type ComposioInstallResult = {
   output: string
 }
 
+type ComposioConnectorPage = {
+  data: ComposioConnectorSummary[]
+  nextCursor: string | null
+  total: number
+}
+
+const COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX = 1000
+
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 
 const THREAD_RESPONSE_TURN_LIMIT = 10
@@ -1143,9 +1151,8 @@ async function readComposioStatus(): Promise<ComposioStatusResponse> {
   }
 }
 
-async function listComposioConnectors(query: string): Promise<ComposioConnectorSummary[]> {
-  const limit = query.trim().length > 0 ? '50' : '250'
-  const args = ['dev', 'toolkits', 'list', '--limit', limit]
+async function listComposioConnectors(query: string, cursor: string | null = null, limit = 50): Promise<ComposioConnectorPage> {
+  const args = ['dev', 'toolkits', 'list', '--limit', String(COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX)]
   const trimmedQuery = query.trim()
   if (trimmedQuery) {
     args.push('--query', trimmedQuery)
@@ -1154,9 +1161,30 @@ async function listComposioConnectors(query: string): Promise<ComposioConnectorS
     runComposioJson<unknown[]>(args, 'Failed to list Composio toolkits'),
     readComposioConnectionsBySlug(),
   ])
-  return payload
+  const allRows = payload
     .map((item) => normalizeComposioToolkit(item, connectionsBySlug))
     .filter((row): row is ComposioConnectorSummary => row !== null)
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX, Math.floor(limit))) : 50
+  const safeCursor = parseComposioCursor(cursor, allRows.length)
+  return {
+    data: allRows.slice(safeCursor, safeCursor + safeLimit),
+    nextCursor: safeCursor + safeLimit < allRows.length ? String(safeCursor + safeLimit) : null,
+    total: allRows.length,
+  }
+}
+
+function parseComposioCursor(cursor: string | null | undefined, maxLength: number): number {
+  const trimmed = cursor?.trim() ?? ''
+  const parsed = Number.parseInt(trimmed, 10)
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) return 0
+  if (parsed >= maxLength) return maxLength
+  return parsed
+}
+
+function parseComposioLimit(rawLimit: string | null): number {
+  const parsed = Number.parseInt((rawLimit ?? '').trim(), 10)
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) return 50
+  return Math.max(1, Math.min(COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX, parsed))
 }
 
 async function readComposioConnectorDetail(slug: string): Promise<ComposioConnectorDetail> {
@@ -4402,7 +4430,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'GET' && url.pathname === '/codex-api/composio/connectors') {
         try {
           const query = url.searchParams.get('query') ?? ''
-          setJson(res, 200, { data: await listComposioConnectors(query) })
+          const cursor = url.searchParams.get('cursor')?.trim() ?? null
+          const limit = parseComposioLimit(url.searchParams.get('limit'))
+          setJson(res, 200, await listComposioConnectors(query, cursor, limit))
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to list Composio connectors') })
         }

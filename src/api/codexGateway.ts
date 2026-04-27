@@ -231,6 +231,12 @@ export type DirectoryComposioInstallResult = {
   output: string
 }
 
+type DirectoryComposioConnectorPage = {
+  data: DirectoryComposioConnector[]
+  nextCursor: string | null
+  total: number
+}
+
 type ProviderModelsResponse = {
   data?: unknown
 }
@@ -1969,16 +1975,26 @@ export async function getDirectoryComposioStatus(): Promise<DirectoryComposioSta
   return await response.json() as DirectoryComposioStatus
 }
 
-export async function listDirectoryComposioConnectors(query = ''): Promise<DirectoryComposioConnector[]> {
+export async function listDirectoryComposioConnectors(
+  query = '',
+  cursor: string | null = null,
+  limit = 50,
+): Promise<DirectoryComposioConnectorPage> {
   const params = new URLSearchParams()
   if (query.trim()) params.set('query', query.trim())
+  if (cursor) params.set('cursor', cursor)
+  if (limit && Number.isFinite(limit)) params.set('limit', String(Math.max(1, Math.floor(limit))))
   const suffix = params.toString()
   const response = await fetch(`/codex-api/composio/connectors${suffix ? `?${suffix}` : ''}`)
   if (!response.ok) {
     throw new Error(`Failed to list Composio connectors (${response.status})`)
   }
-  const payload = await response.json() as { data?: DirectoryComposioConnector[] }
-  return Array.isArray(payload.data) ? payload.data : []
+  const payload = await response.json() as DirectoryComposioConnectorPage | { data?: DirectoryComposioConnector[]; nextCursor?: string | null; total?: number }
+  return {
+    data: Array.isArray(payload.data) ? payload.data : [],
+    nextCursor: typeof payload.nextCursor === 'string' && payload.nextCursor.length > 0 ? payload.nextCursor : null,
+    total: typeof payload.total === 'number' && Number.isFinite(payload.total) ? Math.max(0, Math.floor(payload.total)) : 0,
+  }
 }
 
 export async function readDirectoryComposioConnector(slug: string): Promise<DirectoryComposioConnectorDetail> {
