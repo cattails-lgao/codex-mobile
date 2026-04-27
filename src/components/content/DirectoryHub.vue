@@ -762,6 +762,8 @@ const mcpLoginServerName = ref('')
 const expandedMcpNames = ref<Set<string>>(new Set())
 const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
+let composioSearchTimer: ReturnType<typeof setTimeout> | null = null
+let isComposioLoadQueued = false
 
 const activeCopy = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
 const supportsPlugins = computed(() =>
@@ -1171,6 +1173,11 @@ async function loadApps(): Promise<void> {
 }
 
 async function loadComposio(): Promise<void> {
+  if (isLoadingComposio.value) {
+    isComposioLoadQueued = true
+    return
+  }
+
   isLoadingComposio.value = true
   composioError.value = ''
   try {
@@ -1186,6 +1193,10 @@ async function loadComposio(): Promise<void> {
     composioError.value = error instanceof Error ? error.message : 'Failed to load Composio connectors'
   } finally {
     isLoadingComposio.value = false
+    if (isComposioLoadQueued) {
+      isComposioLoadQueued = false
+      void loadComposio()
+    }
   }
 }
 
@@ -1438,6 +1449,15 @@ function toggleMcpExpanded(name: string): void {
 }
 
 watch(activeTab, () => refreshActiveTab())
+watch(composioSearchQuery, () => {
+  if (activeTab.value !== 'composio') return
+  if (composioSearchTimer) {
+    clearTimeout(composioSearchTimer)
+  }
+  composioSearchTimer = setTimeout(() => {
+    void loadComposio()
+  }, 250)
+})
 watch(() => props.cwd, () => {
   if (activeTab.value === 'plugins') void loadPlugins()
 })

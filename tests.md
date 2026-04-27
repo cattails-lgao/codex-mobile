@@ -3213,17 +3213,19 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 16. Search Apps and verify matching results are not capped to the Popular top 100 list
 17. Switch to `Composio` and verify the workspace summary card shows the current Composio CLI login state, or a clear not-installed / not-authenticated message appears
 18. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
-19. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
-20. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
-21. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
-22. Switch to `Skills` and verify the view shows an `MCPs(count)` collapsible section immediately before the `Installed skills (count)` section
-23. Expand `MCPs(count)` and verify server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-24. Click header `Refresh` while on `Skills` and verify MCP state reloads (it should perform MCP reload behavior on this tab instead of using a separate `Reload MCPs` button)
-25. Verify no separate `Reload MCPs` button is shown in the header or inside the MCP section body
-26. Verify the `MCPs(count)` section does not show its own search or sort controls
-27. Verify MCP cards use the same visual card/grid layout pattern as Installed skills cards (avatar circle, title row, badge, secondary text)
-28. Verify the `Installed skills (count)` section below MCPs still supports the existing Skills Hub behavior
-29. In dark theme, verify MCP cards use the same dark card surface styling as Installed skills cards (not a light/white card)
+19. In Composio search, type `instagram` and verify the Instagram connector appears in the results
+20. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
+21. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
+22. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
+23. Switch to `Skills` and verify the view shows an `MCPs(count)` collapsible section immediately before the `Installed skills (count)` section
+24. Expand `MCPs(count)` and verify server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+25. Click header `Refresh` while on `Skills` and verify MCP state reloads (it should perform MCP reload behavior on this tab instead of using a separate `Reload MCPs` button)
+26. Verify no separate `Reload MCPs` button is shown in the header or inside the MCP section body
+27. Verify the `MCPs(count)` section does not show its own search or sort controls
+28. Verify MCP cards use the same visual card/grid layout pattern as Installed skills cards (avatar circle, title row, badge, secondary text)
+29. Verify the `Installed skills (count)` section below MCPs still supports the existing Skills Hub behavior
+30. Verify both light and dark themes render Composio cards and status/detail actions with readable contrast
+31. In dark mode, verify MCP cards use the same dark card surface styling as Installed skills cards (not a light/white card)
 
 #### Expected Results
 - The directory tabs render without a full-page error

@@ -1144,7 +1144,8 @@ async function readComposioStatus(): Promise<ComposioStatusResponse> {
 }
 
 async function listComposioConnectors(query: string): Promise<ComposioConnectorSummary[]> {
-  const args = ['dev', 'toolkits', 'list', '--limit', '250']
+  const limit = query.trim().length > 0 ? '50' : '250'
+  const args = ['dev', 'toolkits', 'list', '--limit', limit]
   const trimmedQuery = query.trim()
   if (trimmedQuery) {
     args.push('--query', trimmedQuery)
