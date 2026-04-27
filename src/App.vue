@@ -2898,7 +2898,8 @@ function loadDarkModePref(): 'system' | 'light' | 'dark' {
 function loadInProgressSendModePref(): 'steer' | 'queue' {
   if (typeof window === 'undefined') return 'steer'
   const v = window.localStorage.getItem(IN_PROGRESS_SEND_MODE_KEY)
-  return v === 'queue' ? 'queue' : 'steer'
+  if (v === 'steer' || v === 'queue') return v
+  return 'queue'
 }
 
 function loadChatWidthPref(): ChatWidthMode {
