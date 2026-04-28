@@ -18,8 +18,10 @@ import {
   revertThreadFileChanges,
   rollbackThread,
   getThreadGroupsPage,
+  getThreadQueueState,
   getWorkspaceRootsState,
   setCodexSpeedMode,
+  setThreadQueueState,
   setWorkspaceRootsState,
   getThreadTitleCache,
   persistThreadTitle,
@@ -31,6 +33,7 @@ import {
   startThreadTurn,
   type RpcNotification,
   type SkillInfo,
+  type ThreadQueueState,
   type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
@@ -1053,6 +1056,7 @@ export function useDesktopState() {
   }
   const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
   const queueProcessingByThreadId = ref<Record<string, boolean>>({})
+  let hasLoadedPersistedQueueState = false
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
   const availableCollaborationModes = ref<CollaborationModeOption[]>([
@@ -1788,6 +1792,11 @@ export function useDesktopState() {
     )
     threadListedByServerById.value = pruneThreadStateMap(threadListedByServerById.value, activeThreadIds)
     persistedUserMessageByThreadId.value = pruneThreadStateMap(persistedUserMessageByThreadId.value, activeThreadIds)
+    const nextQueuedMessages = pruneThreadStateMap(queuedMessagesByThreadId.value, activeThreadIds)
+    if (nextQueuedMessages !== queuedMessagesByThreadId.value) {
+      queuedMessagesByThreadId.value = nextQueuedMessages
+      persistQueueState()
+    }
     threadTokenUsageByThreadId.value = pruneThreadStateMap(threadTokenUsageByThreadId.value, activeThreadIds)
     eventUnreadByThreadId.value = pruneThreadStateMap(eventUnreadByThreadId.value, activeThreadIds)
     inProgressById.value = pruneThreadStateMap(inProgressById.value, activeThreadIds)
@@ -3654,6 +3663,43 @@ export function useDesktopState() {
     applyThreadFlags()
   }
 
+  function normalizeQueueStateForPersistence(state: Record<string, QueuedMessage[]>): ThreadQueueState {
+    const next: ThreadQueueState = {}
+    for (const [threadId, queue] of Object.entries(state)) {
+      const normalizedThreadId = threadId.trim()
+      if (!normalizedThreadId || queue.length === 0) continue
+      next[normalizedThreadId] = queue.map((message) => ({
+        id: message.id,
+        text: message.text,
+        imageUrls: [...message.imageUrls],
+        skills: message.skills.map((skill) => ({ name: skill.name, path: skill.path })),
+        fileAttachments: message.fileAttachments.map((attachment) => ({
+          label: attachment.label,
+          path: attachment.path,
+          fsPath: attachment.fsPath,
+        })),
+        collaborationMode: message.collaborationMode,
+      }))
+    }
+    return next
+  }
+
+  function persistQueueState(): void {
+    void setThreadQueueState(normalizeQueueStateForPersistence(queuedMessagesByThreadId.value)).catch(() => {
+      // Queue persistence is best-effort; keep the current in-memory queue usable.
+    })
+  }
+
+  async function loadPersistedQueueStateIfNeeded(): Promise<void> {
+    if (hasLoadedPersistedQueueState) return
+    hasLoadedPersistedQueueState = true
+    try {
+      queuedMessagesByThreadId.value = await getThreadQueueState()
+    } catch {
+      // Backend queue state is optional during startup.
+    }
+  }
+
   function mergeThreadGroupPages(previous: UiProjectGroup[], incoming: UiProjectGroup[]): UiProjectGroup[] {
     if (previous.length === 0) return incoming
     if (incoming.length === 0) return previous
@@ -3954,6 +4000,7 @@ export function useDesktopState() {
     const awaitAncillaryRefreshes = options.awaitAncillaryRefreshes === true
 
     try {
+      await loadPersistedQueueStateIfNeeded()
       await loadThreads()
       if (includeSelectedThreadMessages) {
         await loadMessages(selectedThreadId.value)
@@ -4193,6 +4240,7 @@ export function useDesktopState() {
         ...queuedMessagesByThreadId.value,
         [threadId]: nextQueue,
       }
+      persistQueueState()
       return
     }
 
@@ -4465,6 +4513,7 @@ export function useDesktopState() {
     queuedMessagesByThreadId.value = rest.length > 0
       ? { ...queuedMessagesByThreadId.value, [threadId]: rest }
       : omitKey(queuedMessagesByThreadId.value, threadId)
+    persistQueueState()
     isSendingMessage.value = true
     error.value = ''
     shouldAutoScrollOnNextAgentEvent = true
@@ -4964,6 +5013,7 @@ export function useDesktopState() {
     persistedUserMessageByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
     queueProcessingByThreadId.value = {}
+    persistQueueState()
     codexRateLimit.value = null
     threadTokenUsageByThreadId.value = {}
   }
@@ -4983,6 +5033,7 @@ export function useDesktopState() {
     queuedMessagesByThreadId.value = next.length > 0
       ? { ...queuedMessagesByThreadId.value, [threadId]: next }
       : omitKey(queuedMessagesByThreadId.value, threadId)
+    persistQueueState()
   }
 
   function reorderQueuedMessage(draggedId: string, targetId: string): void {
@@ -5002,6 +5053,7 @@ export function useDesktopState() {
       ...queuedMessagesByThreadId.value,
       [threadId]: next,
     }
+    persistQueueState()
   }
 
   function steerQueuedMessage(messageId: string): void {
