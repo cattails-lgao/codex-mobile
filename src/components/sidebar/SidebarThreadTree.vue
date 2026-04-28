@@ -966,7 +966,7 @@ const globalThreads = computed<UiThread[]>(() => {
 })
 
 const chatThreads = computed(() => {
-  const rows = globalThreads.value.slice()
+  const rows = globalThreads.value.filter((thread) => isProjectlessChatPath(thread.cwd))
   const timestampKey = chatSortMode.value === 'created' ? 'createdAtIso' : 'updatedAtIso'
   return rows
     .sort((first, second) => {
