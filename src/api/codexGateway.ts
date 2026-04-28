@@ -348,7 +348,7 @@ export type ThreadTerminalAttachInput = {
 export type ThreadTerminalQuickCommand = {
   label: string
   value: string
-  source: 'package' | 'script'
+  source: 'package' | 'script' | 'make'
 }
 
 export type AccountsListResult = {
@@ -1104,7 +1104,7 @@ export async function getThreadTerminalQuickCommands(cwd: string): Promise<Threa
     const label = readString(record?.label)
     const value = readString(record?.value)
     const source = readString(record?.source)
-    if (!label || !value || (source !== 'package' && source !== 'script')) return []
+    if (!label || !value || (source !== 'package' && source !== 'script' && source !== 'make')) return []
     return [{ label, value, source }]
   })
 }
