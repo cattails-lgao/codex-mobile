@@ -58,7 +58,7 @@ import type {
   UiTokenUsageBreakdown,
   UiThread,
 } from '../types/codex'
-import { normalizePathForUi, toProjectName } from '../pathUtils.js'
+import { isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 
 function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
@@ -3636,7 +3636,10 @@ export function useDesktopState() {
     const allowedProjectNames = new Set(
       rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
     )
-    return groups.filter((group) => allowedProjectNames.has(group.projectName))
+    return groups.filter((group) => {
+      if (allowedProjectNames.has(group.projectName)) return true
+      return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
+    })
   }
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {

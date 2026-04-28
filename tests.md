@@ -63,6 +63,7 @@ This file tracks manual regression and feature verification steps.
 - Sending the first message creates a real directory under `~/Documents/Codex/<YYYY-MM-DD>/`.
 - Folder names are derived from the prompt using lowercase alphanumeric tokens, with suffixes for duplicates.
 - Projectless chat rows appear in the `Chats` section and do not create a separate project group from the generated folder name.
+- Short projectless prompts such as `hi` remain visible in `Chats` after the thread list refreshes and workspace-root filtering runs.
 - If the selected model returns `requires a newer version of Codex`, the turn retries with `gpt-5.4-mini` instead of leaving the new chat failed on 5.5.
 - Light and dark theme composer surfaces remain readable and unchanged apart from the folder behavior.
 

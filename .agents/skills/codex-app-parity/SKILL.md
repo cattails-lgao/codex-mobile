@@ -731,3 +731,11 @@ After each feature implementation session that uses this skill:
 - Duplicate slugs retry as `slug-2`, `slug-3`, and so on for up to 100 attempts.
 - Both the workspace root and date directory are created recursively and verified as real directories, not symlinks.
 - The app-server start payload for projectless chats uses the created directory as `cwd` and `outputDirectory`, with `workspaceRoot` set to `~/Documents/Codex`.
+
+## Findings: Projectless Chats Sidebar Visibility (2026-04-28)
+
+- Codex.app keeps projectless chats separate from Projects; when there are no projectless chats, the sidebar Chats section renders `No chats` even if many project threads exist.
+- Web parity needs two filters working together:
+  - workspace-root/project filtering must preserve projectless thread groups from `thread/list`, otherwise they disappear after the optimistic row is replaced by server state
+  - the rendered Projects section must still hide those projectless groups, while the Chats section lists them
+- A projectless thread cwd under `~/Documents/Codex/YYYY-MM-DD/<slug>` should remain in the sidebar Chats section after title generation and thread-list refreshes.
