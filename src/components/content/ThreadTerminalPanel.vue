@@ -59,10 +59,12 @@ import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
   attachThreadTerminal,
   closeThreadTerminal,
+  getThreadTerminalQuickCommands,
   resizeThreadTerminal,
   sendThreadTerminalInput,
   subscribeCodexNotifications,
   type RpcNotification,
+  type ThreadTerminalQuickCommand,
 } from '../../api/codexGateway'
 
 const props = defineProps<{
@@ -99,31 +101,29 @@ type QuickCommand = {
   custom?: boolean
   usageCount: number
   lastUsedAt: number
-  builtInIndex?: number
+  sourceIndex?: number
 }
 
 const QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
 const TERMINAL_TABS_STORAGE_KEY = 'codex-web-local.terminal-tabs.v1'
 const ADD_QUICK_COMMAND_VALUE = '__add_quick_command__'
 const MAX_VISIBLE_QUICK_COMMANDS = 5
-const BUILT_IN_QUICK_COMMANDS: QuickCommand[] = [
-  { label: 'npm run dev', value: 'npm run dev', usageCount: 0, lastUsedAt: 0, builtInIndex: 0 },
-  { label: 'pnpm run dev', value: 'pnpm run dev', usageCount: 0, lastUsedAt: 0, builtInIndex: 1 },
-  { label: 'pnpm run test:unit', value: 'pnpm run test:unit', usageCount: 0, lastUsedAt: 0, builtInIndex: 2 },
-  { label: 'pnpm run build', value: 'pnpm run build', usageCount: 0, lastUsedAt: 0, builtInIndex: 3 },
-]
 
 const storedQuickCommands = ref<QuickCommand[]>(loadStoredQuickCommands())
+const projectQuickCommands = ref<ThreadTerminalQuickCommand[]>([])
 
 const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeSessionId.value) ?? null)
 const quickCommands = computed<QuickCommand[]>(() => {
   const storedByValue = new Map(storedQuickCommands.value.map((command) => [command.value, command]))
   const combined = [
-    ...BUILT_IN_QUICK_COMMANDS.map((command) => ({
-      ...command,
+    ...projectQuickCommands.value.map((command, index) => ({
+      label: command.label,
+      value: command.value,
+      usageCount: 0,
+      lastUsedAt: 0,
       ...(storedByValue.get(command.value) ?? {}),
       custom: false,
-      builtInIndex: command.builtInIndex,
+      sourceIndex: index,
     })),
     ...storedQuickCommands.value.filter((command) => command.custom === true),
   ]
@@ -136,6 +136,7 @@ onMounted(() => {
   restoreSavedTabs()
   createTerminal()
   unsubscribeNotifications = subscribeCodexNotifications(handleNotification)
+  void refreshProjectQuickCommands()
   void attachToThread(false)
 })
 
@@ -157,6 +158,7 @@ watch(
   () => [props.threadId, props.cwd] as const,
   () => {
     restoreSavedTabs()
+    void refreshProjectQuickCommands()
     void attachToThread(false)
   },
 )
@@ -467,6 +469,19 @@ function normalizeQuickCommandValue(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 
+async function refreshProjectQuickCommands(): Promise<void> {
+  const cwd = props.cwd.trim()
+  if (!cwd) {
+    projectQuickCommands.value = []
+    return
+  }
+  try {
+    projectQuickCommands.value = await getThreadTerminalQuickCommands(cwd)
+  } catch {
+    projectQuickCommands.value = []
+  }
+}
+
 function runQuickCommand(command: string, custom: boolean): void {
   const value = normalizeQuickCommandValue(command)
   if (!value) return
@@ -485,14 +500,15 @@ function recordQuickCommandUse(value: string, custom: boolean): void {
   const normalized = normalizeQuickCommandValue(value)
   if (!normalized) return
   const existing = storedQuickCommands.value.find((command) => command.value === normalized)
-  const builtIn = BUILT_IN_QUICK_COMMANDS.find((command) => command.value === normalized)
+  const projectCommandIndex = projectQuickCommands.value.findIndex((command) => command.value === normalized)
+  const projectCommand = projectCommandIndex >= 0 ? projectQuickCommands.value[projectCommandIndex] : null
   const nextCommand: QuickCommand = {
-    label: existing?.label || builtIn?.label || normalized,
+    label: existing?.label || projectCommand?.label || normalized,
     value: normalized,
-    custom: existing?.custom === true || (!builtIn && custom),
+    custom: existing?.custom === true || (!projectCommand && custom),
     usageCount: (existing?.usageCount ?? 0) + 1,
     lastUsedAt: Date.now(),
-    builtInIndex: builtIn?.builtInIndex,
+    sourceIndex: projectCommandIndex >= 0 ? projectCommandIndex : undefined,
   }
   const next = [
     ...storedQuickCommands.value.filter((command) => command.value !== normalized),
@@ -505,9 +521,9 @@ function recordQuickCommandUse(value: string, custom: boolean): void {
 function compareQuickCommands(first: QuickCommand, second: QuickCommand): number {
   if (second.usageCount !== first.usageCount) return second.usageCount - first.usageCount
   if (second.lastUsedAt !== first.lastUsedAt) return second.lastUsedAt - first.lastUsedAt
-  const firstBuiltIn = typeof first.builtInIndex === 'number' ? first.builtInIndex : Number.MAX_SAFE_INTEGER
-  const secondBuiltIn = typeof second.builtInIndex === 'number' ? second.builtInIndex : Number.MAX_SAFE_INTEGER
-  return firstBuiltIn - secondBuiltIn
+  const firstSource = typeof first.sourceIndex === 'number' ? first.sourceIndex : Number.MAX_SAFE_INTEGER
+  const secondSource = typeof second.sourceIndex === 'number' ? second.sourceIndex : Number.MAX_SAFE_INTEGER
+  return firstSource - secondSource
 }
 
 function loadStoredQuickCommands(): QuickCommand[] {
@@ -517,22 +533,20 @@ function loadStoredQuickCommands(): QuickCommand[] {
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    const seen = new Set(BUILT_IN_QUICK_COMMANDS.map((command) => command.value))
+    const seen = new Set<string>()
     const commands: QuickCommand[] = []
     for (const row of parsed) {
       const record = asRecord(row)
       const value = normalizeQuickCommandValue(readString(record?.value))
       if (!value) continue
-      const builtIn = BUILT_IN_QUICK_COMMANDS.find((command) => command.value === value)
-      if (seen.has(value) && !builtIn) continue
+      if (seen.has(value)) continue
       seen.add(value)
       commands.push({
-        label: readString(record?.label) || builtIn?.label || value,
+        label: readString(record?.label) || value,
         value,
-        custom: !builtIn,
+        custom: record?.custom !== false,
         usageCount: readPositiveInteger(record?.usageCount),
         lastUsedAt: readPositiveInteger(record?.lastUsedAt),
-        builtInIndex: builtIn?.builtInIndex,
       })
     }
     return commands

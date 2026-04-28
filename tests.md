@@ -3693,3 +3693,41 @@ The thread overflow menu includes a `Copy path` item that copies the selected th
 
 #### Rollback/Cleanup
 - Restore any previous clipboard contents manually if needed
+
+---
+
+### Terminal quick commands from project files
+
+#### Feature/Change Name
+Terminal quick commands are discovered from the current project instead of using a static built-in npm list.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:5174` or the active Vite dev URL
+2. Open a thread or new chat whose working directory has a `package.json` with scripts
+3. Optionally create executable candidates under the project root and `scripts/`, such as `check.sh`, `scripts/check.sh`, or `scripts/build.cmd`
+4. Optionally add `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, or `bun.lockb` to verify package-manager detection
+5. Optionally add a `Makefile` with simple targets such as `test:` or `build:`
+
+#### Steps
+1. Open the terminal panel for that project
+2. Open the `Run...` dropdown
+3. Verify each `package.json` script appears with the detected package manager, such as `pnpm run <script>`, `yarn <script>`, `bun run <script>`, or `npm run <script>`
+4. Verify simple `Makefile` targets appear as `make <target>`
+5. Verify root-level `*.sh` / `*.cmd` files appear as `./<file>`
+6. Verify `scripts/*.sh` and `scripts/*.cmd` files appear as `./scripts/<file>`
+7. Select one discovered command and confirm it is sent to the terminal
+8. Use `Add command...` to add a custom command
+9. Reopen the dropdown after running commands multiple times
+
+#### Expected Results
+- The dropdown is based on the current project `cwd`
+- Static defaults like `npm run dev` do not appear unless they exist in that project's `package.json`
+- Package script commands use the lockfile-preferred package manager
+- Make targets are listed after package scripts
+- Root and `scripts/` script-file commands are listed after Make targets
+- Only the top five commands are shown, sorted by most-used and then most-recent usage
+- Custom commands still work and are included in the same usage sorting
+
+#### Rollback/Cleanup
+- Remove any temporary files created under the project root or `scripts/`
+- Remove custom quick commands from browser local storage if needed
