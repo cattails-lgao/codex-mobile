@@ -3760,3 +3760,32 @@ When a turn is already running, the in-progress message path defaults to `Queue`
 
 #### Rollback/Cleanup
 - Clear the queue by sending/steering queued items or deleting queued rows
+
+---
+
+### Drag reorder queued messages
+
+#### Feature/Change Name
+Queued messages can be reordered by dragging a queued row before another queued row.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a thread where a turn is actively running
+3. Queue at least three messages while the turn is running
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, confirm each queued row has a drag handle at the start of the row
+2. Drag the third queued message onto the first queued message
+3. Confirm the third message moves to the first position and the remaining queued messages keep their relative order
+4. Let the active turn finish and confirm the next sent queued message is the first reordered item
+5. Queue at least two more messages, switch to dark theme, and repeat the drag reorder check
+
+#### Expected Results
+- Dragging a queued row onto another queued row immediately reorders the queue
+- The reordered queue order controls which message sends next after the active turn finishes
+- Edit, Steer, and Delete actions still operate on the correct queued row after reordering
+- Drag handle, hover/drop target, and row text remain readable in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Delete any queued test messages that should not be sent

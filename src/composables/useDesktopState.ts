@@ -4985,6 +4985,25 @@ export function useDesktopState() {
       : omitKey(queuedMessagesByThreadId.value, threadId)
   }
 
+  function reorderQueuedMessage(draggedId: string, targetId: string): void {
+    const threadId = selectedThreadId.value
+    if (!threadId) return
+    const queue = queuedMessagesByThreadId.value[threadId]
+    if (!queue) return
+
+    const fromIndex = queue.findIndex((m) => m.id === draggedId)
+    const toIndex = queue.findIndex((m) => m.id === targetId)
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
+
+    const next = [...queue]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    queuedMessagesByThreadId.value = {
+      ...queuedMessagesByThreadId.value,
+      [threadId]: next,
+    }
+  }
+
   function steerQueuedMessage(messageId: string): void {
     const threadId = selectedThreadId.value
     if (!threadId) return
@@ -5049,6 +5068,7 @@ export function useDesktopState() {
     interruptSelectedThreadTurn,
     selectedThreadQueuedMessages,
     removeQueuedMessage,
+    reorderQueuedMessage,
     steerQueuedMessage,
     setSelectedCollaborationMode,
     readModelIdForThread,

@@ -1,7 +1,31 @@
 <template>
   <div v-if="messages.length > 0" class="queued-messages">
     <div class="queued-messages-inner">
-    <div v-for="msg in messages" :key="msg.id" class="queued-row">
+    <div
+      v-for="msg in messages"
+      :key="msg.id"
+      class="queued-row"
+      :class="{
+        'is-dragging': draggedMessageId === msg.id,
+        'is-drop-target': dropTargetMessageId === msg.id && draggedMessageId !== msg.id,
+      }"
+      draggable="true"
+      @dragstart="onDragStart($event, msg.id)"
+      @dragover.prevent="onDragOver(msg.id)"
+      @dragleave="onDragLeave(msg.id)"
+      @drop.prevent="onDrop(msg.id)"
+      @dragend="resetDragState"
+    >
+      <button
+        class="queued-row-drag"
+        type="button"
+        :aria-label="t('Drag to reorder queued message')"
+        :title="t('Drag to reorder queued message')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M9 5.5A1.5 1.5 0 1 1 6 5.5a1.5 1.5 0 0 1 3 0m0 6.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0m-1.5 8A1.5 1.5 0 1 0 7.5 17a1.5 1.5 0 0 0 0 3m10-13A1.5 1.5 0 1 0 17.5 4a1.5 1.5 0 0 0 0 3m1.5 5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0m-1.5 8a1.5 1.5 0 1 0 0-3a1.5 1.5 0 0 0 0 3" />
+        </svg>
+      </button>
       <svg class="queued-row-icon" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
         <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -23,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 
 type QueuedMessageRow = {
@@ -37,13 +62,48 @@ defineProps<{
   messages: QueuedMessageRow[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   edit: [messageId: string]
   steer: [messageId: string]
   delete: [messageId: string]
+  reorder: [payload: { draggedId: string; targetId: string }]
 }>()
 
 const { t } = useUiLanguage()
+const draggedMessageId = ref('')
+const dropTargetMessageId = ref('')
+
+function onDragStart(event: DragEvent, messageId: string): void {
+  draggedMessageId.value = messageId
+  dropTargetMessageId.value = ''
+  event.dataTransfer?.setData('text/plain', messageId)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+function onDragOver(messageId: string): void {
+  if (!draggedMessageId.value || draggedMessageId.value === messageId) return
+  dropTargetMessageId.value = messageId
+}
+
+function onDragLeave(messageId: string): void {
+  if (dropTargetMessageId.value === messageId) {
+    dropTargetMessageId.value = ''
+  }
+}
+
+function onDrop(targetId: string): void {
+  const draggedId = draggedMessageId.value
+  resetDragState()
+  if (!draggedId || draggedId === targetId) return
+  emit('reorder', { draggedId, targetId })
+}
+
+function resetDragState(): void {
+  draggedMessageId.value = ''
+  dropTargetMessageId.value = ''
+}
 
 function getMessagePreview(message: QueuedMessageRow): string {
   const text = message.text.trim()
@@ -74,7 +134,19 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-row {
-  @apply flex min-w-0 items-center gap-2 rounded-lg py-1 text-sm;
+  @apply flex min-w-0 items-center gap-2 rounded-lg py-1 text-sm transition;
+}
+
+.queued-row.is-dragging {
+  @apply opacity-50;
+}
+
+.queued-row.is-drop-target {
+  @apply bg-zinc-200/70;
+}
+
+.queued-row-drag {
+  @apply inline-flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-md border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 active:cursor-grabbing;
 }
 
 .queued-row-icon {

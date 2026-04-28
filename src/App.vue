@@ -789,6 +789,7 @@
                     @edit="onEditQueuedMessage"
                     @steer="steerQueuedMessage"
                     @delete="removeQueuedMessage"
+                    @reorder="onReorderQueuedMessage"
                   />
                   <ThreadTerminalPanel
                     v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
@@ -1093,6 +1094,7 @@ const {
   interruptSelectedThreadTurn,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
+  reorderQueuedMessage,
   steerQueuedMessage,
   setSelectedCollaborationMode,
   readModelIdForThread,
@@ -2750,6 +2752,10 @@ function collapsePathSegments(rawSegments: readonly string[]): string[] {
     segments.push(segment)
   }
   return segments
+}
+
+function onReorderQueuedMessage(payload: { draggedId: string; targetId: string }): void {
+  reorderQueuedMessage(payload.draggedId, payload.targetId)
 }
 
 function onSelectModel(modelId: string): void {
