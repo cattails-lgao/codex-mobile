@@ -416,6 +416,10 @@
   @apply bg-zinc-700 text-zinc-100;
 }
 
+:root.dark .organize-menu-separator {
+  @apply bg-zinc-700;
+}
+
 :root.dark .project-menu-panel {
   @apply border-zinc-600 bg-zinc-800;
 }

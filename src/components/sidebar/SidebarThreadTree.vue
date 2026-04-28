@@ -1,5 +1,5 @@
 <template>
-  <section class="thread-tree-root">
+  <section class="thread-tree-root" :class="{ 'chats-first': showChatsFirst }">
     <section v-if="pinnedThreads.length > 0" class="pinned-section">
       <SidebarMenuRow
         as="button"
@@ -82,62 +82,92 @@
       </ul>
     </section>
 
-    <SidebarMenuRow
-      as="button"
-      class="thread-tree-header-row section-toggle-row"
-      type="button"
-      :aria-expanded="isProjectsSectionExpanded"
-      @click="toggleProjectsSection"
-    >
-      <template #left>
-        <IconTablerChevronRight v-if="!isProjectsSectionExpanded" class="thread-icon" />
-        <IconTablerChevronDown v-else class="thread-icon" />
-      </template>
-      <span class="thread-tree-header">{{ t('Projects') }}</span>
-      <template #right>
-        <div ref="organizeMenuWrapRef" class="organize-menu-wrap">
-          <button
-            class="organize-menu-trigger"
-            type="button"
-            :aria-expanded="isOrganizeMenuOpen"
-            :aria-label="t('Organize threads')"
-            :title="t('Organize threads')"
-            @click.stop="toggleOrganizeMenu"
-          >
-            <IconTablerDots class="thread-icon" />
-          </button>
+    <section class="projects-section">
+      <SidebarMenuRow
+        as="button"
+        class="thread-tree-header-row section-toggle-row"
+        type="button"
+        :aria-expanded="isProjectsSectionExpanded"
+        @click="toggleProjectsSection"
+      >
+        <template #left>
+          <IconTablerChevronRight v-if="!isProjectsSectionExpanded" class="thread-icon" />
+          <IconTablerChevronDown v-else class="thread-icon" />
+        </template>
+        <span class="thread-tree-header">{{ t('Projects') }}</span>
+        <template #right>
+          <div ref="organizeMenuWrapRef" class="organize-menu-wrap">
+            <button
+              class="organize-menu-trigger"
+              type="button"
+              :aria-expanded="isOrganizeMenuOpen"
+              :aria-label="t('Organize threads')"
+              :title="t('Organize threads')"
+              @click.stop="toggleOrganizeMenu"
+            >
+              <IconTablerDots class="thread-icon" />
+            </button>
 
-          <div v-if="isOrganizeMenuOpen" class="organize-menu-panel" @click.stop>
-            <p class="organize-menu-title">{{ t('Organize') }}</p>
-            <button
-              class="organize-menu-item"
-              :data-active="threadViewMode === 'project'"
-              type="button"
-              @click="setThreadViewMode('project')"
-            >
-              <span>{{ t('By project') }}</span>
-              <span v-if="threadViewMode === 'project'">✓</span>
-            </button>
-            <button
-              class="organize-menu-item"
-              :data-active="threadViewMode === 'chronological'"
-              type="button"
-              @click="setThreadViewMode('chronological')"
-            >
-              <span>{{ t('Chronological list') }}</span>
-              <span v-if="threadViewMode === 'chronological'">✓</span>
-            </button>
+            <div v-if="isOrganizeMenuOpen" class="organize-menu-panel" @click.stop>
+              <p class="organize-menu-title">{{ t('Organize') }}</p>
+              <button
+                class="organize-menu-item"
+                :data-active="threadViewMode === 'project'"
+                type="button"
+                @click="setThreadViewMode('project')"
+              >
+                <span>{{ t('By project') }}</span>
+                <span v-if="threadViewMode === 'project'">✓</span>
+              </button>
+              <button
+                class="organize-menu-item"
+                :data-active="threadViewMode === 'chronological'"
+                type="button"
+                @click="setThreadViewMode('chronological')"
+              >
+                <span>{{ t('Chronological list') }}</span>
+                <span v-if="threadViewMode === 'chronological'">✓</span>
+              </button>
+              <button
+                class="organize-menu-item"
+                :data-active="showChatsFirst"
+                type="button"
+                @click="toggleShowChatsFirst"
+              >
+                <span>{{ t('Chats first') }}</span>
+                <span v-if="showChatsFirst">✓</span>
+              </button>
+              <div class="organize-menu-separator" />
+              <p class="organize-menu-title">{{ t('Sort by') }}</p>
+              <button
+                class="organize-menu-item"
+                :data-active="chatSortMode === 'created'"
+                type="button"
+                @click="setChatSortMode('created')"
+              >
+                <span>{{ t('Created') }}</span>
+                <span v-if="chatSortMode === 'created'">✓</span>
+              </button>
+              <button
+                class="organize-menu-item"
+                :data-active="chatSortMode === 'updated'"
+                type="button"
+                @click="setChatSortMode('updated')"
+              >
+                <span>{{ t('Updated') }}</span>
+                <span v-if="chatSortMode === 'updated'">✓</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </template>
-    </SidebarMenuRow>
+        </template>
+      </SidebarMenuRow>
 
-    <template v-if="isProjectsSectionExpanded">
-    <p v-if="isSearchActive && filteredGroups.length === 0" class="thread-tree-no-results">{{ t('No matching threads') }}</p>
+      <template v-if="isProjectsSectionExpanded">
+      <p v-if="isSearchActive && filteredGroups.length === 0" class="thread-tree-no-results">{{ t('No matching threads') }}</p>
 
-    <p v-else-if="isLoading && groups.length === 0" class="thread-tree-loading">{{ t('Loading threads...') }}</p>
+      <p v-else-if="isLoading && groups.length === 0" class="thread-tree-loading">{{ t('Loading threads...') }}</p>
 
-    <ul v-else-if="isChronologicalView" class="thread-list thread-list-global">
+      <ul v-else-if="isChronologicalView" class="thread-list thread-list-global">
       <li
         v-for="thread in globalThreads"
         :key="thread.id"
@@ -389,7 +419,8 @@
           </SidebarMenuRow>
       </article>
     </div>
-    </template>
+      </template>
+    </section>
 
     <section class="chats-section">
       <SidebarMenuRow
@@ -717,15 +748,20 @@ type DragPointerSample = {
 }
 
 type MenuDirection = 'up' | 'down'
+type ChatSortMode = 'created' | 'updated'
 
 const DRAG_START_THRESHOLD_PX = 4
 const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const SECTION_EXPANSION_STORAGE_KEY = 'codex-web-local.sidebar-section-expansion.v1'
+const CHATS_FIRST_STORAGE_KEY = 'codex-web-local.sidebar-chats-first.v1'
+const CHAT_SORT_MODE_STORAGE_KEY = 'codex-web-local.sidebar-chat-sort-mode.v1'
 const expandedProjects = ref<Record<string, boolean>>({})
 const collapsedProjects = ref<Record<string, boolean>>({})
 const isPinnedSectionExpanded = ref(true)
 const isProjectsSectionExpanded = ref(true)
 const isChatsSectionExpanded = ref(true)
+const showChatsFirst = ref(loadBooleanStorage(CHATS_FIRST_STORAGE_KEY, false))
+const chatSortMode = ref<ChatSortMode>(loadChatSortMode())
 let hasLoadedPinnedThreadState = false
 const pinnedThreadIds = ref<string[]>([])
 const openProjectMenuId = ref('')
@@ -809,6 +845,19 @@ function loadThreadViewMode(): 'project' | 'chronological' {
   return raw === 'chronological' ? 'chronological' : 'project'
 }
 
+function loadBooleanStorage(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback
+  const raw = window.localStorage.getItem(key)
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  return fallback
+}
+
+function loadChatSortMode(): ChatSortMode {
+  if (typeof window === 'undefined') return 'updated'
+  return window.localStorage.getItem(CHAT_SORT_MODE_STORAGE_KEY) === 'created' ? 'created' : 'updated'
+}
+
 collapsedProjects.value = loadCollapsedState()
 
 function loadSectionExpansionState(): void {
@@ -854,6 +903,16 @@ watch(
 watch(threadViewMode, (value) => {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(THREAD_VIEW_MODE_STORAGE_KEY, value)
+})
+
+watch(showChatsFirst, (value) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(CHATS_FIRST_STORAGE_KEY, String(value))
+})
+
+watch(chatSortMode, (value) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(CHAT_SORT_MODE_STORAGE_KEY, value)
 })
 
 watch([isPinnedSectionExpanded, isProjectsSectionExpanded, isChatsSectionExpanded], persistSectionExpansionState)
@@ -906,7 +965,17 @@ const globalThreads = computed<UiThread[]>(() => {
   })
 })
 
-const chatThreads = computed(() => globalThreads.value.slice(0, 4))
+const chatThreads = computed(() => {
+  const rows = globalThreads.value.slice()
+  const timestampKey = chatSortMode.value === 'created' ? 'createdAtIso' : 'updatedAtIso'
+  return rows
+    .sort((first, second) => {
+      const firstTimestamp = new Date(first[timestampKey] || first.updatedAtIso || first.createdAtIso).getTime()
+      const secondTimestamp = new Date(second[timestampKey] || second.updatedAtIso || second.createdAtIso).getTime()
+      return secondTimestamp - firstTimestamp
+    })
+    .slice(0, 4)
+})
 
 const threadById = computed(() => {
   const map = new Map<string, UiThread>()
@@ -1333,6 +1402,14 @@ function toggleOrganizeMenu(): void {
 function setThreadViewMode(mode: 'project' | 'chronological'): void {
   threadViewMode.value = mode
   isOrganizeMenuOpen.value = false
+}
+
+function toggleShowChatsFirst(): void {
+  showChatsFirst.value = !showChatsFirst.value
+}
+
+function setChatSortMode(mode: ChatSortMode): void {
+  chatSortMode.value = mode
 }
 
 function toggleProjectMenu(projectName: string): void {
@@ -2015,7 +2092,23 @@ onBeforeUnmount(() => {
 }
 
 .pinned-section {
-  @apply mb-1;
+  @apply order-1 mb-1;
+}
+
+.projects-section {
+  @apply order-2;
+}
+
+.chats-section {
+  @apply order-3 mt-1;
+}
+
+.thread-tree-root.chats-first .chats-section {
+  @apply order-2;
+}
+
+.thread-tree-root.chats-first .projects-section {
+  @apply order-3;
 }
 
 .thread-tree-header-row {
@@ -2028,10 +2121,6 @@ onBeforeUnmount(() => {
 
 .thread-tree-header {
   @apply text-sm font-normal text-zinc-500 select-none;
-}
-
-.chats-section {
-  @apply mt-1;
 }
 
 .chats-section-actions {
@@ -2060,6 +2149,10 @@ onBeforeUnmount(() => {
 
 .organize-menu-title {
   @apply px-2 py-1 text-xs text-zinc-500;
+}
+
+.organize-menu-separator {
+  @apply my-1 h-px bg-zinc-200;
 }
 
 .organize-menu-item {
