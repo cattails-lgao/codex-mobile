@@ -1430,20 +1430,54 @@ async function startComposioLogin(): Promise<ComposioLoginResult> {
   if (!command) {
     throw new Error('Composio CLI is not installed')
   }
-  const invocation = getSpawnInvocation(command, ['login', '-y'])
+  const invocation = getSpawnInvocation(command, ['login', '--no-browser', '-y'])
   const proc = spawn(invocation.command, invocation.args, {
     cwd: process.cwd(),
     env: process.env,
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
   proc.unref()
+
+  let stdout = ''
+  let stderr = ''
+  proc.stdout.setEncoding('utf8')
+  proc.stderr.setEncoding('utf8')
+  proc.stderr.on('data', (chunk) => { stderr += chunk })
+
+  const loginUrl = await new Promise<string>((resolveLoginUrl, reject) => {
+    const timeout = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(stderr.trim() || stdout.trim() || 'Timed out waiting for Composio CLI login URL'))
+    }, 10_000)
+    const finish = (url: string) => {
+      clearTimeout(timeout)
+      proc.stdout.destroy()
+      proc.stderr.destroy()
+      resolveLoginUrl(url)
+    }
+    proc.once('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    proc.once('close', (code) => {
+      clearTimeout(timeout)
+      reject(new Error(stderr.trim() || stdout.trim() || `Composio CLI login exited with code ${code ?? 0}`))
+    })
+    proc.stdout.on('data', (chunk) => {
+      stdout += chunk
+      const url = stdout.match(/https?:\/\/\S+/)?.[0] ?? ''
+      if (url) finish(url)
+    })
+  })
+
+  const cliKey = loginUrl ? (new URL(loginUrl).searchParams.get('cliKey') ?? '') : ''
   return {
     status: 'started',
-    message: 'Composio CLI login started',
-    loginUrl: '',
-    cliKey: '',
+    message: 'Composio CLI login URL created',
+    loginUrl,
+    cliKey,
     expiresAt: '',
   }
 }

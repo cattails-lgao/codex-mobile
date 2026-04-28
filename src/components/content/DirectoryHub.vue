@@ -1359,10 +1359,22 @@ async function runComposioPrimaryAction(connector: DirectoryComposioConnector): 
 
 async function startComposioCliLogin(): Promise<void> {
   isStartingComposioLogin.value = true
+  const loginTab = window.open('about:blank', '_blank')
+  if (loginTab) {
+    loginTab.opener = null
+  }
   try {
-    await startDirectoryComposioCliLogin()
+    const result = await startDirectoryComposioCliLogin()
+    if (result.loginUrl && loginTab) {
+      loginTab.location.href = result.loginUrl
+    } else if (result.loginUrl) {
+      openExternalUrl(result.loginUrl)
+    } else {
+      loginTab?.close()
+    }
     showToast('Composio CLI login started')
   } catch (error) {
+    loginTab?.close()
     showToast(error instanceof Error ? error.message : 'Failed to start Composio login', 'error')
   } finally {
     isStartingComposioLogin.value = false
