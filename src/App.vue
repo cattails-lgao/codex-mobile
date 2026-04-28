@@ -789,6 +789,7 @@
                     @edit="onEditQueuedMessage"
                     @steer="steerQueuedMessage"
                     @delete="removeQueuedMessage"
+                    @reorder="onReorderQueuedMessage"
                   />
                   <ThreadTerminalPanel
                     v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
@@ -1093,6 +1094,7 @@ const {
   interruptSelectedThreadTurn,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
+  reorderQueuedMessage,
   steerQueuedMessage,
   setSelectedCollaborationMode,
   readModelIdForThread,
@@ -2752,6 +2754,10 @@ function collapsePathSegments(rawSegments: readonly string[]): string[] {
   return segments
 }
 
+function onReorderQueuedMessage(payload: { draggedId: string; targetId: string }): void {
+  reorderQueuedMessage(payload.draggedId, payload.targetId)
+}
+
 function onSelectModel(modelId: string): void {
   setSelectedModelIdForThread(composerThreadContextId.value, modelId)
 }
@@ -2898,7 +2904,8 @@ function loadDarkModePref(): 'system' | 'light' | 'dark' {
 function loadInProgressSendModePref(): 'steer' | 'queue' {
   if (typeof window === 'undefined') return 'steer'
   const v = window.localStorage.getItem(IN_PROGRESS_SEND_MODE_KEY)
-  return v === 'queue' ? 'queue' : 'steer'
+  if (v === 'steer' || v === 'queue') return v
+  return 'queue'
 }
 
 function loadChatWidthPref(): ChatWidthMode {

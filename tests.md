@@ -3731,3 +3731,66 @@ Terminal quick commands are discovered from the current project instead of using
 #### Rollback/Cleanup
 - Remove any temporary files created under the project root or `scripts/`
 - Remove custom quick commands from browser local storage if needed
+
+---
+
+### Queue mode is default for in-progress messages
+
+#### Feature/Change Name
+When a turn is already running, the in-progress message path defaults to `Queue` for new sessions and existing users without a saved preference.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open any existing thread with message composer enabled
+3. Start from a clean setting state by clearing localStorage key `codex-web-local.in-progress-send-mode` if present
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. Open a thread and ensure no previous turn is running
+2. Confirm settings shows `When busy` line labeled as `Queue`
+3. Send a message that triggers an in-progress response
+4. While the response is running, submit a second message and observe submit mode label / destination behavior
+5. Open the queue list and confirm the second message is queued
+6. Switch to dark theme and repeat step 4 using another thread
+
+#### Expected Results
+- The in-progress setting defaults to `Queue` when no saved preference exists
+- A second message sent during an active turn is queued, not used as steer
+- Queue order and queued item actions remain functional in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Clear the queue by sending/steering queued items or deleting queued rows
+
+---
+
+### Backend-persisted queued messages and drag reorder
+
+#### Feature/Change Name
+Queued messages are saved through the backend, survive page refresh, and can be reordered by dragging a queued row before another queued row.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a thread where a turn is actively running
+3. Queue at least three messages while the turn is running
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, confirm each queued row has a drag handle at the start of the row
+2. Refresh the page and reopen the same thread
+3. Confirm all queued rows are still visible in the same order
+4. Drag the third queued message onto the first queued message
+5. Confirm the third message moves to the first position and the remaining queued messages keep their relative order
+6. Refresh again and confirm the reordered queue order is preserved
+7. Let the active turn finish and confirm the next sent queued message is the first reordered item
+8. Queue at least two more messages, switch to dark theme, and repeat the drag reorder check
+
+#### Expected Results
+- Queued rows survive a page refresh because they are restored from backend state
+- Dragging a queued row onto another queued row immediately reorders the queue
+- The reordered queue order survives page refresh
+- The reordered queue order controls which message sends next after the active turn finishes
+- Edit, Steer, and Delete actions still operate on the correct queued row after reordering
+- Drag handle, hover/drop target, and row text remain readable in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Delete any queued test messages that should not be sent

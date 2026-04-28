@@ -2860,6 +2860,106 @@ async function writePinnedThreadIds(threadIds: string[]): Promise<void> {
 }
 
 const FIRST_LAUNCH_PLUGINS_CARD_DISMISSED_KEY = 'first-launch-plugins-card-dismissed'
+const THREAD_QUEUE_STATE_KEY = 'thread-queue-state'
+
+type StoredQueuedMessage = {
+  id: string
+  text: string
+  imageUrls: string[]
+  skills: Array<{ name: string; path: string }>
+  fileAttachments: Array<{ label: string; path: string; fsPath: string }>
+  collaborationMode: 'default' | 'plan'
+}
+
+type ThreadQueueState = Record<string, StoredQueuedMessage[]>
+
+function normalizeStoredQueuedMessage(value: unknown): StoredQueuedMessage | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const id = typeof record.id === 'string' ? record.id.trim() : ''
+  if (!id) return null
+
+  const normalizeNamedPathItems = (items: unknown): Array<{ name: string; path: string }> => {
+    if (!Array.isArray(items)) return []
+    return items.flatMap((item) => {
+      const itemRecord = asRecord(item)
+      if (!itemRecord) return []
+      const name = typeof itemRecord.name === 'string' ? itemRecord.name.trim() : ''
+      const path = typeof itemRecord.path === 'string' ? itemRecord.path.trim() : ''
+      return name && path ? [{ name, path }] : []
+    })
+  }
+
+  const normalizeFileAttachments = (items: unknown): Array<{ label: string; path: string; fsPath: string }> => {
+    if (!Array.isArray(items)) return []
+    return items.flatMap((item) => {
+      const itemRecord = asRecord(item)
+      if (!itemRecord) return []
+      const label = typeof itemRecord.label === 'string' ? itemRecord.label.trim() : ''
+      const path = typeof itemRecord.path === 'string' ? itemRecord.path.trim() : ''
+      const fsPath = typeof itemRecord.fsPath === 'string' ? itemRecord.fsPath.trim() : ''
+      return label && path && fsPath ? [{ label, path, fsPath }] : []
+    })
+  }
+
+  return {
+    id,
+    text: typeof record.text === 'string' ? record.text : '',
+    imageUrls: normalizeStringArray(record.imageUrls),
+    skills: normalizeNamedPathItems(record.skills),
+    fileAttachments: normalizeFileAttachments(record.fileAttachments),
+    collaborationMode: record.collaborationMode === 'plan' ? 'plan' : 'default',
+  }
+}
+
+function normalizeThreadQueueState(value: unknown): ThreadQueueState {
+  const record = asRecord(value)
+  if (!record) return {}
+
+  const state: ThreadQueueState = {}
+  for (const [threadId, rawMessages] of Object.entries(record)) {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId || !Array.isArray(rawMessages)) continue
+    const messages = rawMessages.flatMap((item) => {
+      const message = normalizeStoredQueuedMessage(item)
+      return message ? [message] : []
+    })
+    if (messages.length > 0) {
+      state[normalizedThreadId] = messages
+    }
+  }
+  return state
+}
+
+async function readThreadQueueState(): Promise<ThreadQueueState> {
+  const statePath = getCodexGlobalStatePath()
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const payload = asRecord(JSON.parse(raw)) ?? {}
+    return normalizeThreadQueueState(payload[THREAD_QUEUE_STATE_KEY])
+  } catch {
+    return {}
+  }
+}
+
+async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    payload = asRecord(JSON.parse(raw)) ?? {}
+  } catch {
+    payload = {}
+  }
+  const normalized = normalizeThreadQueueState(nextState)
+  if (Object.keys(normalized).length > 0) {
+    payload[THREAD_QUEUE_STATE_KEY] = normalized
+  } else {
+    delete payload[THREAD_QUEUE_STATE_KEY]
+  }
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
 
 async function readFirstLaunchPluginsCardDismissed(): Promise<boolean> {
   const statePath = getCodexGlobalStatePath()
@@ -4887,6 +4987,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-queue-state') {
+        const state = await readThreadQueueState()
+        setJson(res, 200, { data: state })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/home-directory') {
         setJson(res, 200, { data: { path: homedir() } })
         return
@@ -5169,6 +5275,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           active: normalizeStringArray(record.active),
         }
         await writeWorkspaceRootsState(nextState)
+        setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'PUT' && url.pathname === '/codex-api/thread-queue-state') {
+        const payload = await readJsonBody(req)
+        const record = asRecord(payload)
+        if (!record) {
+          setJson(res, 400, { error: 'Invalid body: expected object' })
+          return
+        }
+        await writeThreadQueueState(normalizeThreadQueueState(record))
         setJson(res, 200, { ok: true })
         return
       }
