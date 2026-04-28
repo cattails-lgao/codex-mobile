@@ -3597,3 +3597,34 @@ The `Select folder` dialog now lets the user edit the current folder path direct
 
 #### Rollback/Cleanup
 - Return the chooser to the original folder if the test changed the selected project path
+
+---
+
+### Codex.app-style bottom Chats shelf
+
+#### Feature/Change Name
+The sidebar includes a Codex.app-style bottom `Chats` shelf above Settings with recent global chats, a filter toggle, and a new-chat button.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:5173` or the active Vite dev URL
+2. At least one existing thread is available in the sidebar
+3. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the app with the sidebar expanded
+2. Verify a `Chats` section appears fixed near the bottom above Settings
+3. Verify recent chats show truncated titles and relative timestamps
+4. Click a chat row and verify the selected thread opens
+5. Click the filter icon and verify the existing sidebar search field opens and the filter button shows active state
+6. Click the compose icon and verify the app navigates to the new-chat/home composer
+7. Switch to dark theme and repeat the visual checks for the shelf, buttons, active row, and row text
+
+#### Expected Results
+- The bottom `Chats` shelf remains visible while the main grouped thread list scrolls
+- The shelf shows globally recent chats regardless of project grouping
+- The filter icon toggles the sidebar search without losing the recent chat rows
+- The compose icon starts a new chat using the existing new-thread flow
+- Light theme and dark theme both keep the shelf aligned with the surrounding sidebar colors and readable
+
+#### Rollback/Cleanup
+- Clear the sidebar search query if the filter step left it open
