@@ -65,13 +65,16 @@
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
             :search-matched-thread-ids="serverMatchedThreadIds"
+            :filter-active="isSidebarSearchVisible"
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-thread-files="onBrowseThreadFiles"
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
-            @export-thread="onExportThread" />
+            @export-thread="onExportThread"
+            @start-new-chat="onStartNewThreadFromToolbar"
+            @toggle-filter="toggleSidebarSearch" />
         </div>
 
         <div
@@ -864,6 +867,7 @@ import {
   checkoutGitBranch,
   configureTelegramBot,
   createWorktree,
+  createProjectlessThreadDirectory,
   getGitBranchState,
   getWorktreeBranchOptions,
   getAccounts,
@@ -887,7 +891,7 @@ import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiR
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
-import { getPathLeafName, getPathParent, normalizePathForUi } from './pathUtils.js'
+import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
@@ -1389,7 +1393,7 @@ const newThreadFolderOptions = computed(() => {
 
   for (const group of projectGroups.value) {
     const cwd = group.threads[0]?.cwd?.trim() ?? ''
-    if (!cwd || seenCwds.has(cwd)) continue
+    if (!cwd || seenCwds.has(cwd) || isProjectlessChatPath(cwd)) continue
     seenCwds.add(cwd)
     options.push({
       value: cwd,
@@ -2031,13 +2035,8 @@ function onBrowseThreadFiles(threadId: string): void {
 }
 
 function onStartNewThreadFromToolbar(): void {
-  const selected = selectedThread.value
-  const cwd = selected
-    ? resolvePreferredLocalCwd(selected.projectName, selected.cwd?.trim() ?? '')
-    : ''
-  if (cwd) {
-    newThreadCwd.value = cwd
-  }
+  newThreadCwd.value = ''
+  newThreadRuntime.value = 'local'
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
   void router.push({ name: 'home' })
@@ -3307,11 +3306,15 @@ watch(
   (options) => {
     if (options.length === 0) {
       newThreadCwd.value = ''
+      void refreshDefaultProjectName()
       return
     }
-    const hasSelected = options.some((option) => option.value === newThreadCwd.value)
-    if (!hasSelected) {
-      newThreadCwd.value = options[0].value
+    const selected = newThreadCwd.value.trim()
+    if (selected) {
+      const hasSelected = options.some((option) => option.value === selected)
+      if (!hasSelected) {
+        newThreadCwd.value = ''
+      }
     }
     void refreshDefaultProjectName()
   },
@@ -3430,6 +3433,10 @@ async function submitFirstMessageForNewThread(
         }
         return
       }
+    } else if (!targetCwd.trim()) {
+      const directory = await createProjectlessThreadDirectory(text)
+      targetCwd = directory.cwd
+      newThreadCwd.value = directory.cwd
     }
     const threadId = await sendMessageToNewThread(text, targetCwd, imageUrls, skills, fileAttachments)
     if (!threadId) return

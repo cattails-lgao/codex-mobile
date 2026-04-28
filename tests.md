@@ -43,6 +43,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove any test automation from the thread automation dialog or delete its folder under `$CODEX_HOME/automations/<automation-id>/`.
 
+### Feature: Projectless new chat folders
+
+#### Prerequisites
+- App server is running from this repository.
+- Home directory is writable.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the app in light theme and click the sidebar `New chat` action while an existing thread is selected.
+2. Confirm the home composer does not inherit the selected thread folder.
+3. Send a first message with a unique prompt such as `Projectless folder smoke test`.
+4. Confirm the new thread starts in `~/Documents/Codex/<YYYY-MM-DD>/projectless-folder-smoke-test`.
+5. Start another new chat with the same prompt and confirm the folder receives a numeric suffix.
+6. Switch to dark theme and repeat steps 1-3 with a different unique prompt.
+
+#### Expected Results
+- `New chat` starts as a projectless chat instead of reusing the current thread cwd.
+- Sending the first message creates a real directory under `~/Documents/Codex/<YYYY-MM-DD>/`.
+- Folder names are derived from the prompt using lowercase alphanumeric tokens, with suffixes for duplicates.
+- Projectless chat rows appear in the `Chats` section and do not create a separate project group from the generated folder name.
+- If the selected model returns `requires a newer version of Codex`, the turn retries with `gpt-5.4-mini` instead of leaving the new chat failed on 5.5.
+- Light and dark theme composer surfaces remain readable and unchanged apart from the folder behavior.
+
+#### Rollback/Cleanup
+- Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
+
 ### Feature: Telegram bot token stored in dedicated global file
 
 #### Prerequisites
@@ -3597,3 +3623,73 @@ The `Select folder` dialog now lets the user edit the current folder path direct
 
 #### Rollback/Cleanup
 - Return the chooser to the original folder if the test changed the selected project path
+
+---
+
+### Expandable Projects, Pinned, and Chats sidebar sections
+
+#### Feature/Change Name
+The sidebar labels the grouped thread area as `Projects`, makes `Projects`, `Pinned`, and `Chats` independently expandable, and places `Chats` after `Projects` in the same scrollable sidebar area.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:5174` or the active Vite dev URL
+2. At least one existing thread is available in the sidebar
+3. At least one pinned thread exists to verify the `Pinned` section
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the app with the sidebar expanded
+2. Verify the grouped thread header reads `Projects` instead of `Threads`
+3. Verify `Pinned`, `Projects`, and `Chats` each show a chevron when present
+4. Collapse and expand `Pinned`, confirming pinned rows hide and return
+5. Collapse and expand `Projects`, confirming project groups hide and return
+6. Confirm `Chats` appears after `Projects` and scrolls with the same sidebar content, not as a fixed bottom shelf
+7. Collapse and expand `Chats`, confirming recent chat rows hide and return
+8. Click the `Chats` filter icon and verify the existing sidebar search field opens and the filter button shows active state
+9. Click the `Chats` compose icon and verify the app navigates to the new-chat/home composer
+10. Open the Projects organize menu, enable `Chats first`, and verify `Chats` moves above `Projects`
+11. In the same menu, switch `Sort by` between `Created` and `Updated`, then verify the active checkmark moves and the chat rows reorder by the selected timestamp
+12. Refresh the page and verify `Chats first` and the selected sort mode persist
+13. Switch to dark theme and repeat the visibility checks for section headers, chevrons, active filter state, sort menu state, and row text
+
+#### Expected Results
+- The sidebar uses `Projects` for the grouped project/thread area
+- `Pinned`, `Projects`, and `Chats` expansion state changes immediately and persists across reload
+- `Chats` is appended after `Projects` in the same scroll space
+- `Chats first` moves the `Chats` section before `Projects` and persists across reload
+- `Created` and `Updated` sort options update only the `Chats` ordering and persist across reload
+- The filter icon toggles the sidebar search without losing the `Chats` section
+- The compose icon starts a new chat using the existing new-thread flow
+- Light theme and dark theme both keep section headers, controls, and rows readable
+
+#### Rollback/Cleanup
+- Clear the sidebar search query if the filter step left it open
+
+---
+
+### Thread menu copy path action
+
+#### Feature/Change Name
+The thread overflow menu includes a `Copy path` item that copies the selected thread's working directory path.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:5174` or the active Vite dev URL
+2. Open any existing thread with a known project path
+3. Browser clipboard access is available
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, hover a thread row in the sidebar and open its overflow menu
+2. Verify `Copy path` appears after `Browse files`
+3. Click `Copy path`
+4. Paste the clipboard contents into a text field or clipboard inspector
+5. Reopen the same menu in dark theme and verify the item remains readable and in the same position
+
+#### Expected Results
+- The menu order is `Add automation...`, `Browse files`, `Copy path`, `Export chat`, `Create chat fork`, `Rename thread`, `Delete thread`
+- Clicking `Copy path` closes the menu
+- Clipboard contents equal the thread's `cwd` path
+- Light theme and dark theme both keep the menu item readable
+
+#### Rollback/Cleanup
+- Restore any previous clipboard contents manually if needed

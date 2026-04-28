@@ -198,6 +198,18 @@
   @apply text-zinc-500;
 }
 
+:root.dark .section-toggle-row {
+  @apply hover:bg-zinc-800 focus-visible:ring-zinc-600;
+}
+
+:root.dark .chats-section-action {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200;
+}
+
+:root.dark .chats-section-action[aria-pressed='true'] {
+  @apply bg-zinc-800 text-zinc-200;
+}
+
 :root.dark .thread-row {
   @apply hover:bg-zinc-800;
 }
@@ -402,6 +414,10 @@
 
 :root.dark .organize-menu-item[data-active='true'] {
   @apply bg-zinc-700 text-zinc-100;
+}
+
+:root.dark .organize-menu-separator {
+  @apply bg-zinc-700;
 }
 
 :root.dark .project-menu-panel {
