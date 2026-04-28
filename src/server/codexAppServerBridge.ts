@@ -992,6 +992,81 @@ function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value : ''
 }
 
+type TerminalQuickCommand = {
+  label: string
+  value: string
+  source: 'package' | 'script'
+}
+
+async function listTerminalQuickCommands(cwd: string): Promise<TerminalQuickCommand[]> {
+  const normalizedCwd = isAbsolute(cwd) ? cwd : resolve(cwd)
+  const info = await stat(normalizedCwd)
+  if (!info.isDirectory()) {
+    throw new Error('Terminal cwd is not a directory')
+  }
+
+  const commands: TerminalQuickCommand[] = []
+  const seen = new Set<string>()
+  const addCommand = (command: TerminalQuickCommand) => {
+    if (!command.value || seen.has(command.value)) return
+    seen.add(command.value)
+    commands.push(command)
+  }
+
+  await addPackageJsonCommands(normalizedCwd, addCommand)
+  await addScriptsDirectoryCommands(normalizedCwd, addCommand)
+  return commands
+}
+
+async function addPackageJsonCommands(
+  cwd: string,
+  addCommand: (command: TerminalQuickCommand) => void,
+): Promise<void> {
+  try {
+    const raw = await readFile(join(cwd, 'package.json'), 'utf8')
+    const parsed = JSON.parse(raw) as unknown
+    const record = asRecord(parsed)
+    const scripts = asRecord(record?.scripts)
+    if (!scripts) return
+    for (const scriptName of Object.keys(scripts)) {
+      if (typeof scripts[scriptName] !== 'string') continue
+      addCommand({
+        label: `npm run ${scriptName}`,
+        value: `npm run ${quoteShellTokenIfNeeded(scriptName)}`,
+        source: 'package',
+      })
+    }
+  } catch {
+    // A project without package.json simply has no package quick commands.
+  }
+}
+
+async function addScriptsDirectoryCommands(
+  cwd: string,
+  addCommand: (command: TerminalQuickCommand) => void,
+): Promise<void> {
+  try {
+    const scriptsDir = join(cwd, 'scripts')
+    const entries = await readdir(scriptsDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isFile()) continue
+      if (!entry.name.endsWith('.sh') && !entry.name.endsWith('.cmd')) continue
+      const value = `./scripts/${quoteShellTokenIfNeeded(entry.name)}`
+      addCommand({
+        label: value,
+        value,
+        source: 'script',
+      })
+    }
+  } catch {
+    // A project without scripts/ simply has no script-file quick commands.
+  }
+}
+
+function quoteShellTokenIfNeeded(value: string): string {
+  return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`
+}
+
 function readBoolean(value: unknown): boolean {
   return value === true
 }
@@ -4224,6 +4299,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-terminal/status') {
         setJson(res, 200, terminalManager.getAvailability())
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-terminal/quick-commands') {
+        const cwd = url.searchParams.get('cwd')?.trim() ?? ''
+        if (!cwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        try {
+          setJson(res, 200, { commands: await listTerminalQuickCommands(cwd) })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load terminal quick commands') })
+        }
         return
       }
 

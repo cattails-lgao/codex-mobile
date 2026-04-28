@@ -345,6 +345,12 @@ export type ThreadTerminalAttachInput = {
   newSession?: boolean
 }
 
+export type ThreadTerminalQuickCommand = {
+  label: string
+  value: string
+  source: 'package' | 'script'
+}
+
 export type AccountsListResult = {
   activeAccountId: string | null
   accounts: UiAccountEntry[]
@@ -1087,6 +1093,20 @@ export async function getThreadTerminalStatus(): Promise<{ available: boolean, r
     available: readBoolean(record?.available) ?? false,
     reason: readString(record?.reason) || null,
   }
+}
+
+export async function getThreadTerminalQuickCommands(cwd: string): Promise<ThreadTerminalQuickCommand[]> {
+  const payload = await fetchTerminalJson(`/codex-api/thread-terminal/quick-commands?cwd=${encodeURIComponent(cwd)}`)
+  const payloadRecord = asRecord(payload)
+  const rows: unknown[] = Array.isArray(payloadRecord?.commands) ? payloadRecord.commands : []
+  return rows.flatMap((row: unknown) => {
+    const record = asRecord(row)
+    const label = readString(record?.label)
+    const value = readString(record?.value)
+    const source = readString(record?.source)
+    if (!label || !value || (source !== 'package' && source !== 'script')) return []
+    return [{ label, value, source }]
+  })
 }
 
 export async function sendThreadTerminalInput(sessionId: string, data: string): Promise<void> {
