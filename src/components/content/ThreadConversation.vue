@@ -1408,6 +1408,9 @@ function isFilePath(value: string): boolean {
   const looksLikeRelative = value.startsWith('./') || value.startsWith('../') || value.startsWith('~/')
   if (looksLikeUnixAbsolute || looksLikeWindowsAbsolute || looksLikeRelative) return true
 
+  const looksLikeBareFilename = /^[A-Za-z0-9._@() -]+\.[A-Za-z0-9]{1,12}$/u.test(value)
+  if (looksLikeBareFilename) return true
+
   // Bare relative paths should look like actual path segments, not arbitrary prose containing "/".
   return /^[A-Za-z0-9._@() -]+(?:[\\/][A-Za-z0-9._@() -]+)+$/u.test(value)
 }
