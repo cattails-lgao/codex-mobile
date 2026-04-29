@@ -70,13 +70,25 @@
                 @click="onSelect(opt)"
               >
                 <span class="search-dropdown-option-check">{{ selected.has(opt.value) ? '✓' : '' }}</span>
+                <span
+                  v-if="opt.badge"
+                  class="search-dropdown-option-badge"
+                  :class="opt.badgeTone ? `is-${opt.badgeTone}` : ''"
+                  :title="opt.badgeLabel || opt.badge"
+                  aria-hidden="true"
+                >
+                  {{ opt.badge }}
+                </span>
                 <span class="search-dropdown-option-copy">
-                  <span class="search-dropdown-option-label">{{ opt.label }}</span>
+                  <span class="search-dropdown-option-label-row">
+                    <span class="search-dropdown-option-label">{{ opt.label }}</span>
+                    <span v-if="opt.badgeLabel" class="search-dropdown-option-type">{{ opt.badgeLabel }}</span>
+                  </span>
                   <span v-if="opt.description" class="search-dropdown-option-desc">{{ opt.description }}</span>
                 </span>
               </button>
               <button
-                v-if="allowRemove"
+                v-if="allowRemove && opt.removable"
                 class="search-dropdown-option-remove"
                 type="button"
                 :aria-label="`${removeLabel} ${opt.label}`"
@@ -103,6 +115,10 @@ export type SearchDropdownOption = {
   value: string
   label: string
   description?: string
+  badge?: string
+  badgeLabel?: string
+  badgeTone?: 'repo' | 'system' | 'plugin' | 'user' | 'prompt'
+  removable?: boolean
 }
 
 const props = defineProps<{
@@ -327,12 +343,44 @@ onBeforeUnmount(() => {
   @apply mt-0.5 w-4 shrink-0 text-center text-[10px] leading-4 text-emerald-600;
 }
 
+.search-dropdown-option-badge {
+  @apply mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-100 text-[9px] font-semibold leading-none text-zinc-600;
+}
+
+.search-dropdown-option-badge.is-repo {
+  @apply border-sky-200 bg-sky-50 text-sky-700;
+}
+
+.search-dropdown-option-badge.is-system {
+  @apply border-zinc-300 bg-zinc-100 text-zinc-700;
+}
+
+.search-dropdown-option-badge.is-plugin {
+  @apply border-amber-200 bg-amber-50 text-amber-700;
+}
+
+.search-dropdown-option-badge.is-user {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+
+.search-dropdown-option-badge.is-prompt {
+  @apply border-violet-200 bg-violet-50 text-violet-700;
+}
+
 .search-dropdown-option-copy {
   @apply flex min-w-0 flex-1 flex-col overflow-hidden pr-1;
 }
 
+.search-dropdown-option-label-row {
+  @apply flex min-w-0 items-center gap-2;
+}
+
 .search-dropdown-option-label {
   @apply block min-w-0 truncate text-sm font-medium text-zinc-800;
+}
+
+.search-dropdown-option-type {
+  @apply shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-400;
 }
 
 .search-dropdown-option-desc {
@@ -388,6 +436,34 @@ onBeforeUnmount(() => {
 
 :global(:root.dark) .search-dropdown-option-label {
   @apply text-zinc-100;
+}
+
+:global(:root.dark) .search-dropdown-option-badge {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-repo {
+  @apply border-sky-900/70 bg-sky-950 text-sky-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-system {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-plugin {
+  @apply border-amber-900/70 bg-amber-950 text-amber-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-user {
+  @apply border-emerald-900/70 bg-emerald-950 text-emerald-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-prompt {
+  @apply border-violet-900/70 bg-violet-950 text-violet-300;
+}
+
+:global(:root.dark) .search-dropdown-option-type {
+  @apply text-zinc-500;
 }
 
 :global(:root.dark) .search-dropdown-option-desc {
