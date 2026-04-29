@@ -254,6 +254,7 @@
             role="button"
             tabindex="0"
             @click="toggleProjectCollapse(group.projectName)"
+            @contextmenu.prevent="openProjectContextMenu(group.projectName)"
             @keydown="onProjectHeaderKeyDown($event, group.projectName)"
             @keydown.enter.prevent="toggleProjectCollapse(group.projectName)"
             @keydown.space.prevent="toggleProjectCollapse(group.projectName)"
@@ -296,8 +297,14 @@
                     @click.stop
                   >
                     <template v-if="projectMenuMode === 'actions'">
+                      <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
+                        Browse files
+                      </button>
+                      <button class="project-menu-item" type="button" @click="onCreateProjectWorktree(group.projectName)">
+                        New worktree
+                      </button>
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group.projectName)">
-                        Edit name
+                        Rename project
                       </button>
                       <button
                         class="project-menu-item project-menu-item-danger"
@@ -709,6 +716,8 @@ const emit = defineEmits<{
   archive: [threadId: string]
   'start-new-thread': [projectName: string]
   'browse-thread-files': [threadId: string]
+  'browse-project-files': [projectName: string]
+  'create-project-worktree': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
@@ -1428,6 +1437,17 @@ function toggleProjectMenu(projectName: string): void {
   })
 }
 
+function openProjectContextMenu(projectName: string): void {
+  closeThreadMenu()
+  isOrganizeMenuOpen.value = false
+  openProjectMenuId.value = projectName
+  projectMenuMode.value = 'actions'
+  projectRenameDraft.value = getProjectDisplayName(projectName)
+  nextTick(() => {
+    updateProjectMenuDirection(projectName)
+  })
+}
+
 function openRenameProjectMenu(projectName: string): void {
   closeThreadMenu()
   openProjectMenuId.value = projectName
@@ -1436,6 +1456,16 @@ function openRenameProjectMenu(projectName: string): void {
   nextTick(() => {
     updateProjectMenuDirection(projectName)
   })
+}
+
+function onBrowseProjectFiles(projectName: string): void {
+  emit('browse-project-files', projectName)
+  closeProjectMenu()
+}
+
+function onCreateProjectWorktree(projectName: string): void {
+  emit('create-project-worktree', projectName)
+  closeProjectMenu()
 }
 
 function onProjectNameInput(projectName: string): void {
@@ -1585,7 +1615,7 @@ function updateProjectMenuDirection(projectName: string): void {
 
   projectMenuDirectionById.value = {
     ...projectMenuDirectionById.value,
-    [projectName]: resolveMenuDirection(menuWrapElement, 112),
+    [projectName]: resolveMenuDirection(menuWrapElement, 176),
   }
 }
 
