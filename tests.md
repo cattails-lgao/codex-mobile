@@ -3601,7 +3601,7 @@ The composer control row uses one `Skills` dropdown for both skills and saved pr
 #### Steps
 1. In light theme, open the composer controls and confirm `Skills` appears and no separate `Prompt` control is present
 2. Open `Skills` and verify the popup matches the wider card-like layout with large stacked label/description rows
-3. Confirm skill rows have compact source markers, such as `R` for repo, `U` for user, `S` for system, `P` for plugin, or `C` for Composio
+3. Confirm skill rows have compact source markers, such as `R` for repo, `U` for user, `S` for system, or `P` for plugin
 4. Click the `+` action in the `Skills` dropdown, enter a unique prompt name such as `ui-test-prompt`, and enter sample content such as `Prompt dropdown smoke test`
 5. Reopen `Skills` and confirm the new prompt appears with a `Prompt` marker and an inline `×` remove action
 6. Click the prompt row and confirm the prompt text is inserted into the composer draft without toggling a skill
@@ -3613,7 +3613,7 @@ The composer control row uses one `Skills` dropdown for both skills and saved pr
 #### Expected Results
 - The composer shows one `Skills` dropdown for skills and prompts; no standalone `Prompt` dropdown is rendered
 - The combined `Skills` popup uses the wider rounded layout with vertically stacked label/description rows
-- Skill rows show readable source markers that distinguish repo, user, system, plugin-provided, and Composio skills
+- Skill rows show readable source markers that distinguish repo, user, system, and plugin-provided skills
 - Prompt rows show a readable `Prompt` marker and are the only rows with an inline remove action
 - Typing `/` in the composer does not open a skill picker
 - The `+` action creates a markdown file in the Codex prompt store and adds it to the `Skills` dropdown immediately

@@ -117,7 +117,7 @@ export type SearchDropdownOption = {
   description?: string
   badge?: string
   badgeLabel?: string
-  badgeTone?: 'repo' | 'system' | 'plugin' | 'composio' | 'user' | 'prompt'
+  badgeTone?: 'repo' | 'system' | 'plugin' | 'user' | 'prompt'
   removable?: boolean
 }
 
@@ -359,10 +359,6 @@ onBeforeUnmount(() => {
   @apply border-amber-200 bg-amber-50 text-amber-700;
 }
 
-.search-dropdown-option-badge.is-composio {
-  @apply border-cyan-200 bg-cyan-50 text-cyan-700;
-}
-
 .search-dropdown-option-badge.is-user {
   @apply border-emerald-200 bg-emerald-50 text-emerald-700;
 }
@@ -456,10 +452,6 @@ onBeforeUnmount(() => {
 
 :global(:root.dark) .search-dropdown-option-badge.is-plugin {
   @apply border-amber-900/70 bg-amber-950 text-amber-300;
-}
-
-:global(:root.dark) .search-dropdown-option-badge.is-composio {
-  @apply border-cyan-900/70 bg-cyan-950 text-cyan-300;
 }
 
 :global(:root.dark) .search-dropdown-option-badge.is-user {

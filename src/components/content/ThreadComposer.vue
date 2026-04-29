@@ -402,7 +402,7 @@ import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 type SkillSourceBadge = {
   badge: string
   badgeLabel: string
-  badgeTone: 'repo' | 'system' | 'plugin' | 'composio' | 'user' | 'prompt'
+  badgeTone: 'repo' | 'system' | 'plugin' | 'user' | 'prompt'
 }
 
 type SkillItem = { name: string; displayName?: string; description: string; path: string; scope?: string; enabled?: boolean }
@@ -1691,10 +1691,6 @@ function isMarkdownFile(path: string): boolean {
 
 function skillSourceBadge(skill: SkillItem): SkillSourceBadge {
   const path = skill.path.toLowerCase()
-  const name = skill.name.toLowerCase()
-  if (name.includes('composio') || path.includes('/composio-cli/')) {
-    return { badge: 'C', badgeLabel: 'Composio', badgeTone: 'composio' }
-  }
   if (path.includes('/plugins/cache/')) {
     return { badge: 'P', badgeLabel: 'Plugin', badgeTone: 'plugin' }
   }
