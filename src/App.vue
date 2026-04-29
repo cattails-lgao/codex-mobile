@@ -2048,6 +2048,15 @@ function getProjectDisplayNameForWorktree(projectName: string): string {
   return (projectDisplayNameById.value[projectName] ?? projectName).trim() || projectName
 }
 
+function toWorktreeFolderNameDraft(projectName: string): string {
+  const displayName = getProjectDisplayNameForWorktree(projectName)
+  const sanitized = displayName
+    .replace(/[\\/]+/gu, '-')
+    .replace(/[\u0000-\u001f]+/gu, '')
+    .trim()
+  return sanitized || 'worktree'
+}
+
 function onBrowseProjectFiles(projectName: string): void {
   const targetCwd = getProjectCwd(projectName)
   if (!targetCwd || typeof window === 'undefined') return
@@ -2058,12 +2067,16 @@ async function onCreateProjectWorktree(projectName: string): Promise<void> {
   const sourceCwd = getProjectCwd(projectName)
   if (!sourceCwd || typeof window === 'undefined') return
 
-  const suggestedName = `${getProjectDisplayNameForWorktree(projectName)}-`
+  const suggestedName = `${toWorktreeFolderNameDraft(projectName)}-`
   const worktreeName = window.prompt('New worktree folder name', suggestedName)
   if (worktreeName === null) return
 
   const normalizedWorktreeName = worktreeName.trim()
   if (!normalizedWorktreeName) return
+  if (normalizedWorktreeName.includes('/') || normalizedWorktreeName.includes('\\') || normalizedWorktreeName === '.' || normalizedWorktreeName === '..') {
+    window.alert('Worktree name must be a single folder name.')
+    return
+  }
 
   try {
     const created = await createPermanentWorktree(sourceCwd, normalizedWorktreeName)
