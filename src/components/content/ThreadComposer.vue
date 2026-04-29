@@ -252,25 +252,13 @@
             :options="skillDropdownOptions"
             :selected-values="selectedSkillPaths"
             :placeholder="t('Skills')"
-            :search-placeholder="t('Search skills...')"
-            open-direction="up"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
-            @toggle="onSkillDropdownToggle"
-          />
-
-          <ComposerSearchDropdown
-            class="thread-composer-control"
-            :options="promptDropdownOptions"
-            :selected-values="[]"
-            :placeholder="t('Prompt')"
-            :display-label-override="t('Prompt')"
-            :search-placeholder="t('Search prompt...')"
+            :search-placeholder="t('Search skills and prompts...')"
             :create-label="t('Add new prompt')"
             :allow-remove="true"
             :remove-label="t('Remove prompt')"
             open-direction="up"
             :disabled="disabled || !activeThreadId || isTurnInProgress"
-            @toggle="onPromptDropdownToggle"
+            @toggle="onSkillDropdownToggle"
             @create="onCreatePrompt"
             @remove="onRemovePrompt"
           />
@@ -414,7 +402,7 @@ import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 type SkillSourceBadge = {
   badge: string
   badgeLabel: string
-  badgeTone: 'repo' | 'system' | 'plugin' | 'composio' | 'user'
+  badgeTone: 'repo' | 'system' | 'plugin' | 'composio' | 'user' | 'prompt'
 }
 
 type SkillItem = { name: string; displayName?: string; description: string; path: string; scope?: string; enabled?: boolean }
@@ -500,6 +488,7 @@ type AttachmentBatchStats = {
 
 const CONTEXT_WINDOW_BASELINE_TOKENS = 12000
 const PASTED_TEXT_FILE_THRESHOLD = 2000
+const PROMPT_OPTION_PREFIX = 'prompt:'
 
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
@@ -591,24 +580,29 @@ const isPlanModeWaitingForModel = computed(() =>
 
 const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
 const skillDropdownOptions = computed(() =>
-  (props.skills ?? []).map((s) => {
-    const source = skillSourceBadge(s)
-    return {
-      value: s.path,
-      label: s.name,
-      description: s.description,
-      badge: source.badge,
-      badgeLabel: source.badgeLabel,
-      badgeTone: source.badgeTone,
-    }
-  }),
-)
-const promptDropdownOptions = computed(() =>
-  savedPrompts.value.map((prompt) => ({
-    value: prompt.path,
-    label: prompt.name,
-    description: prompt.description,
-  })),
+  [
+    ...(props.skills ?? []).map((s) => {
+      const source = skillSourceBadge(s)
+      return {
+        value: s.path,
+        label: s.name,
+        description: s.description,
+        badge: source.badge,
+        badgeLabel: source.badgeLabel,
+        badgeTone: source.badgeTone,
+        removable: false,
+      }
+    }),
+    ...savedPrompts.value.map((prompt) => ({
+      value: promptOptionValue(prompt.path),
+      label: prompt.name,
+      description: prompt.description,
+      badge: 'T',
+      badgeLabel: 'Prompt',
+      badgeTone: 'prompt' as const,
+      removable: true,
+    })),
+  ],
 )
 
 const canSubmit = computed(() => {
@@ -1618,6 +1612,14 @@ async function reloadPrompts(): Promise<void> {
   savedPrompts.value = await getComposerPrompts()
 }
 
+function promptOptionValue(path: string): string {
+  return `${PROMPT_OPTION_PREFIX}${path}`
+}
+
+function promptPathFromOptionValue(value: string): string | null {
+  return value.startsWith(PROMPT_OPTION_PREFIX) ? value.slice(PROMPT_OPTION_PREFIX.length) : null
+}
+
 async function onCreatePrompt(): Promise<void> {
   const name = window.prompt(t('Prompt name'))?.trim() ?? ''
   if (!name) return
@@ -1630,10 +1632,11 @@ async function onCreatePrompt(): Promise<void> {
 }
 
 async function onRemovePrompt(path: string): Promise<void> {
-  const target = savedPrompts.value.find((prompt) => prompt.path === path)
+  const promptPath = promptPathFromOptionValue(path) ?? path
+  const target = savedPrompts.value.find((prompt) => prompt.path === promptPath)
   const confirmed = window.confirm(target ? `${t('Remove prompt')} "${target.name}"?` : t('Remove prompt'))
   if (!confirmed) return
-  const removed = await removeComposerPrompt(path)
+  const removed = await removeComposerPrompt(promptPath)
   if (!removed) return
   await reloadPrompts()
 }
@@ -1705,6 +1708,12 @@ function skillSourceBadge(skill: SkillItem): SkillSourceBadge {
 }
 
 function onSkillDropdownToggle(path: string, checked: boolean): void {
+  const promptPath = promptPathFromOptionValue(path)
+  if (promptPath) {
+    onPromptDropdownToggle(promptPath)
+    return
+  }
+
   if (checked) {
     const skill = (props.skills ?? []).find((s) => s.path === path)
     if (skill && !selectedSkills.value.some((s) => s.path === path)) {

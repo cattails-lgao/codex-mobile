@@ -88,7 +88,7 @@
                 </span>
               </button>
               <button
-                v-if="allowRemove"
+                v-if="allowRemove && opt.removable"
                 class="search-dropdown-option-remove"
                 type="button"
                 :aria-label="`${removeLabel} ${opt.label}`"
@@ -117,7 +117,8 @@ export type SearchDropdownOption = {
   description?: string
   badge?: string
   badgeLabel?: string
-  badgeTone?: 'repo' | 'system' | 'plugin' | 'composio' | 'user'
+  badgeTone?: 'repo' | 'system' | 'plugin' | 'composio' | 'user' | 'prompt'
+  removable?: boolean
 }
 
 const props = defineProps<{
@@ -366,6 +367,10 @@ onBeforeUnmount(() => {
   @apply border-emerald-200 bg-emerald-50 text-emerald-700;
 }
 
+.search-dropdown-option-badge.is-prompt {
+  @apply border-violet-200 bg-violet-50 text-violet-700;
+}
+
 .search-dropdown-option-copy {
   @apply flex min-w-0 flex-1 flex-col overflow-hidden pr-1;
 }
@@ -459,6 +464,10 @@ onBeforeUnmount(() => {
 
 :global(:root.dark) .search-dropdown-option-badge.is-user {
   @apply border-emerald-900/70 bg-emerald-950 text-emerald-300;
+}
+
+:global(:root.dark) .search-dropdown-option-badge.is-prompt {
+  @apply border-violet-900/70 bg-violet-950 text-violet-300;
 }
 
 :global(:root.dark) .search-dropdown-option-type {
