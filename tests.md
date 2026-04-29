@@ -3601,17 +3601,19 @@ The composer control row shows a `Prompt` dropdown next to `Skills`, both menus 
 #### Steps
 1. In light theme, open the composer controls and confirm `Skills` and `Prompt` appear as separate controls
 2. Open `Skills` and verify the popup matches the wider card-like layout with large stacked label/description rows
-3. Type `/` into the composer and verify no slash skill picker appears
-4. Open `Prompt`, click `Add new prompt`, enter a unique name such as `ui-test-prompt`, and enter sample content such as `Prompt dropdown smoke test`
-5. Reopen `Prompt` and click the new prompt entry
-6. Confirm the prompt text is inserted into the composer draft
-7. Reopen `Prompt`, click the `×` button for `ui-test-prompt`, and confirm the removal dialog
-8. Confirm the prompt disappears from the dropdown
-9. Switch to dark theme and repeat the visibility check for the `Skills` and `Prompt` dropdown contents
+3. Confirm each Skills row has a compact source marker, such as `R` for repo, `U` for user, `S` for system, `P` for plugin, or `C` for Composio
+4. Type `/` into the composer and verify no slash skill picker appears
+5. Open `Prompt`, click `Add new prompt`, enter a unique name such as `ui-test-prompt`, and enter sample content such as `Prompt dropdown smoke test`
+6. Reopen `Prompt` and click the new prompt entry
+7. Confirm the prompt text is inserted into the composer draft
+8. Reopen `Prompt`, click the `×` button for `ui-test-prompt`, and confirm the removal dialog
+9. Confirm the prompt disappears from the dropdown
+10. Switch to dark theme and repeat the visibility check for the `Skills` and `Prompt` dropdown contents
 
 #### Expected Results
 - The composer shows `Skills` and `Prompt` as separate dropdown controls in the same row
 - The `Skills` and `Prompt` popups use the wider rounded layout with vertically stacked label/description rows
+- Skill rows show readable source markers that distinguish repo, user, system, plugin-provided, and Composio skills
 - Typing `/` in the composer does not open a skill picker
 - `Add new prompt` creates a markdown file in the Codex prompt store and adds it to the dropdown immediately
 - Selecting a saved prompt appends its content into the draft without sending the message

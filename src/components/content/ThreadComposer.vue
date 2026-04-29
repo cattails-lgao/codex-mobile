@@ -411,7 +411,13 @@ import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 
-type SkillItem = { name: string; displayName?: string; description: string; path: string }
+type SkillSourceBadge = {
+  badge: string
+  badgeLabel: string
+  badgeTone: 'repo' | 'system' | 'plugin' | 'composio' | 'user'
+}
+
+type SkillItem = { name: string; displayName?: string; description: string; path: string; scope?: string; enabled?: boolean }
 
 const props = defineProps<{
   activeThreadId: string
@@ -585,11 +591,17 @@ const isPlanModeWaitingForModel = computed(() =>
 
 const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
 const skillDropdownOptions = computed(() =>
-  (props.skills ?? []).map((s) => ({
-    value: s.path,
-    label: s.name,
-    description: s.description,
-  })),
+  (props.skills ?? []).map((s) => {
+    const source = skillSourceBadge(s)
+    return {
+      value: s.path,
+      label: s.name,
+      description: s.description,
+      badge: source.badge,
+      badgeLabel: source.badgeLabel,
+      badgeTone: source.badgeTone,
+    }
+  }),
 )
 const promptDropdownOptions = computed(() =>
   savedPrompts.value.map((prompt) => ({
@@ -1672,6 +1684,24 @@ function getMentionBadgeClass(path: string): string {
 function isMarkdownFile(path: string): boolean {
   const ext = getFileExtension(path)
   return ext === 'md' || ext === 'mdx'
+}
+
+function skillSourceBadge(skill: SkillItem): SkillSourceBadge {
+  const path = skill.path.toLowerCase()
+  const name = skill.name.toLowerCase()
+  if (name.includes('composio') || path.includes('/composio-cli/')) {
+    return { badge: 'C', badgeLabel: 'Composio', badgeTone: 'composio' }
+  }
+  if (path.includes('/plugins/cache/')) {
+    return { badge: 'P', badgeLabel: 'Plugin', badgeTone: 'plugin' }
+  }
+  if (skill.scope === 'repo') {
+    return { badge: 'R', badgeLabel: 'Repo', badgeTone: 'repo' }
+  }
+  if (skill.scope === 'system') {
+    return { badge: 'S', badgeLabel: 'System', badgeTone: 'system' }
+  }
+  return { badge: 'U', badgeLabel: 'User', badgeTone: 'user' }
 }
 
 function onSkillDropdownToggle(path: string, checked: boolean): void {
