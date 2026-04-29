@@ -1025,6 +1025,21 @@ function toForkedThreadTitle(title: string): string {
   return /^fork:\s+/iu.test(normalizedTitle) ? normalizedTitle : `Fork: ${normalizedTitle}`
 }
 
+function isProjectlessGroup(group: UiProjectGroup): boolean {
+  return group.threads.some((thread) => thread.cwd.trim().length === 0)
+}
+
+export function filterGroupsByWorkspaceRoots(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  if (!rootsState || rootsState.order.length === 0) return groups
+  const allowedProjectNames = new Set(
+    rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
+  )
+  return groups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
