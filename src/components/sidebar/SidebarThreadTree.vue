@@ -291,7 +291,7 @@
               @mousedown.left="onProjectHandleMouseDown($event, group.projectName)"
             >
               <span class="project-title" :title="getProjectDisplayName(group.projectName)">
-                {{ getProjectVisibleName(group.projectName) }}
+                {{ getProjectVisibleName(group) }}
               </span>
             </span>
             <template #right>
@@ -729,7 +729,7 @@ import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerFilter from '../icons/IconTablerFilter.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import { getPathLeafName, isProjectlessChatPath } from '../../pathUtils.js'
+import { getPathLeafName, getPathParent, isProjectlessChatPath } from '../../pathUtils.js'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 
 const props = defineProps<{
@@ -988,7 +988,7 @@ const filteredGroups = computed<UiProjectGroup[]>(() => {
       ...group,
       threads: group.threads.filter((thread) => !isProjectlessChatPath(thread.cwd) && threadMatchesSearch(thread)),
     }))
-    .filter((group) => group.threads.length > 0)
+    .filter((group) => group.threads.length > 0 || !isSearchActive.value)
 })
 
 const isChronologicalView = computed(() => threadViewMode.value === 'chronological')
@@ -1457,10 +1457,31 @@ function getProjectDisplayName(projectName: string): string {
   return props.projectDisplayNameById[projectName] ?? projectName
 }
 
-function getProjectVisibleName(projectName: string): string {
-  const displayName = getProjectDisplayName(projectName)
+function isPathLikeProjectName(value: string): boolean {
+  return value.includes('/') || value.includes('\\')
+}
+
+function isDuplicatePathLeafName(value: string): boolean {
+  const leafName = getPathLeafName(value)
+  if (!leafName) return false
+  let matchingCount = 0
+  for (const group of props.groups) {
+    const displayName = getProjectDisplayName(group.projectName)
+    if (!isPathLikeProjectName(displayName)) continue
+    if (getPathLeafName(displayName) !== leafName) continue
+    matchingCount += 1
+    if (matchingCount > 1) return true
+  }
+  return false
+}
+
+function getProjectVisibleName(group: UiProjectGroup): string {
+  const displayName = getProjectDisplayName(group.projectName)
   if (!displayName.includes('/') && !displayName.includes('\\')) return displayName
-  return getPathLeafName(displayName) || displayName
+  const leafName = getPathLeafName(displayName) || displayName
+  if (group.threads.length > 0 || !isDuplicatePathLeafName(displayName)) return leafName
+  const parentLeafName = getPathLeafName(getPathParent(displayName))
+  return parentLeafName ? `${leafName} ${parentLeafName}` : leafName
 }
 
 function isProjectMenuOpen(projectName: string): boolean {

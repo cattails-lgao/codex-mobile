@@ -553,7 +553,7 @@ function orderGroupsByProjectOrder(incoming: UiProjectGroup[], projectOrder: str
   const incomingByName = new Map(incoming.map((group) => [group.projectName, group]))
   const ordered: UiProjectGroup[] = projectOrder
     .map((projectName) => incomingByName.get(projectName) ?? null)
-    .filter((group): group is UiProjectGroup => group !== null && group.threads.length > 0)
+    .filter((group): group is UiProjectGroup => group !== null)
 
   for (const group of incoming) {
     if (!projectOrder.includes(group.projectName)) {
@@ -1100,6 +1100,28 @@ function disambiguateProjectGroupsByCwd(
   return disambiguatedGroups
 }
 
+function addWorkspaceRootPlaceholderGroups(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  if (!rootsState || rootsState.order.length === 0) return groups
+  const existingProjectNames = new Set(groups.map((group) => group.projectName))
+  const nextGroups = [...groups]
+
+  for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    const projectName = duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+    if (existingProjectNames.has(projectName)) continue
+    nextGroups.push({ projectName, threads: [] })
+    existingProjectNames.add(projectName)
+  }
+
+  return nextGroups
+}
+
 function toOptimisticThreadTitle(message: string): string {
   const firstLine = message
     .split('\n')
@@ -1123,14 +1145,15 @@ export function filterGroupsByWorkspaceRoots(
   groups: UiProjectGroup[],
   rootsState: WorkspaceRootsState | null,
 ): UiProjectGroup[] {
-  const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
-  if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
-  const allowedProjectNames = new Set<string>()
   const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+  const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+  if (!rootsState || rootsState.order.length === 0) return groupsWithWorkspaceRoots
+  const allowedProjectNames = new Set<string>()
   for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
     allowedProjectNames.add(projectName)
   }
-  const filteredGroups = disambiguatedGroups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  const filteredGroups = groupsWithWorkspaceRoots.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
   return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
 }
 
@@ -3744,14 +3767,15 @@ export function useDesktopState() {
     groups: UiProjectGroup[],
     rootsState: WorkspaceRootsState | null,
   ): UiProjectGroup[] {
-    const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
-    if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
-    const allowedProjectNames = new Set<string>()
     const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+    const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+    const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+    if (!rootsState || rootsState.order.length === 0) return groupsWithWorkspaceRoots
+    const allowedProjectNames = new Set<string>()
     for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
       allowedProjectNames.add(projectName)
     }
-    const filteredGroups = disambiguatedGroups.filter((group) => {
+    const filteredGroups = groupsWithWorkspaceRoots.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
       return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
     })

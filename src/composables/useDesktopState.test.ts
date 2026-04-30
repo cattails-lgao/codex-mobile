@@ -93,4 +93,24 @@ describe('filterGroupsByWorkspaceRoots', () => {
       'alpha',
     ])
   })
+
+  it('keeps empty duplicate workspace roots visible in Codex project order', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'TestChat',
+        threads: [thread('testchat-chat', '/Users/igor/temp/TestChat')],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
+      labels: {},
+      active: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
+      projectOrder: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.length])).toEqual([
+      ['/Users/igor/Documents/New project 2/TestChat', 0],
+      ['/Users/igor/temp/TestChat', 1],
+    ])
+  })
 })
