@@ -669,6 +669,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove the temporary same-name folders if they were created only for verification.
 
+### Feature: Show project folder names for long sidebar project paths
+
+#### Prerequisites
+- App is running from this repository.
+- Sidebar contains at least one project group whose display name is a long absolute path.
+
+#### Steps
+1. Open the home/new-thread screen in light theme.
+2. Inspect the `Projects` section in the sidebar.
+3. Confirm a long absolute project path is shown as only the final folder name, for example `New project 4` or `codex-web-local`, instead of `/Users/igor/...`.
+4. Hover the shortened project title.
+5. Switch to dark theme and repeat steps 2-4.
+
+#### Expected Results
+- Long path-like project titles show only the final project folder name.
+- The full path remains available in the title tooltip.
+- Light theme and dark theme both keep the shortened project title readable and aligned with the existing project row controls.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Disable auto-restore to last thread when opening home URL
 
 #### Prerequisites

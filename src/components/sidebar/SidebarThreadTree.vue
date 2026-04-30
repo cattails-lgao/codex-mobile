@@ -290,7 +290,9 @@
               :data-dragging-handle="isDraggingProject(group.projectName)"
               @mousedown.left="onProjectHandleMouseDown($event, group.projectName)"
             >
-              <span class="project-title">{{ getProjectDisplayName(group.projectName) }}</span>
+              <span class="project-title" :title="getProjectDisplayName(group.projectName)">
+                {{ getProjectVisibleName(group.projectName) }}
+              </span>
             </span>
             <template #right>
               <div class="project-hover-controls">
@@ -727,7 +729,7 @@ import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerFilter from '../icons/IconTablerFilter.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import { isProjectlessChatPath } from '../../pathUtils.js'
+import { getPathLeafName, isProjectlessChatPath } from '../../pathUtils.js'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 
 const props = defineProps<{
@@ -1453,6 +1455,12 @@ async function onDeleteAutomationFromDialog(): Promise<void> {
 
 function getProjectDisplayName(projectName: string): string {
   return props.projectDisplayNameById[projectName] ?? projectName
+}
+
+function getProjectVisibleName(projectName: string): string {
+  const displayName = getProjectDisplayName(projectName)
+  if (!displayName.includes('/') && !displayName.includes('\\')) return displayName
+  return getPathLeafName(displayName) || displayName
 }
 
 function isProjectMenuOpen(projectName: string): boolean {
