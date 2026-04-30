@@ -113,4 +113,25 @@ describe('filterGroupsByWorkspaceRoots', () => {
       ['/Users/igor/temp/TestChat', 1],
     ])
   })
+
+  it('keeps remote projects from Codex project order visible as empty project rows', () => {
+    const groups: UiProjectGroup[] = []
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/local-project'],
+      labels: {},
+      active: ['/tmp/local-project'],
+      projectOrder: ['remote-project-id', '/tmp/local-project'],
+      remoteProjects: [{
+        id: 'remote-project-id',
+        hostId: 'remote-ssh-discovered:a1',
+        remotePath: '/home/ubuntu',
+        label: 'ubuntu',
+      }],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.length])).toEqual([
+      ['remote-project-id', 0],
+      ['local-project', 0],
+    ])
+  })
 })

@@ -73,6 +73,12 @@ type WorkspaceRootsState = {
   labels: Record<string, string>
   active: string[]
   projectOrder: string[]
+  remoteProjects: Array<{
+    id: string
+    hostId: string
+    remotePath: string
+    label: string
+  }>
 }
 
 type PendingServerRequest = {
@@ -2526,6 +2532,26 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
   return next
 }
 
+function normalizeRemoteProjects(value: unknown): WorkspaceRootsState['remoteProjects'] {
+  if (!Array.isArray(value)) return []
+  const next: WorkspaceRootsState['remoteProjects'] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    const record = asRecord(item)
+    if (!record) continue
+    const id = typeof record.id === 'string' ? record.id.trim() : ''
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    next.push({
+      id,
+      hostId: typeof record.hostId === 'string' ? record.hostId.trim() : '',
+      remotePath: typeof record.remotePath === 'string' ? record.remotePath.trim() : '',
+      label: typeof record.label === 'string' ? record.label.trim() : '',
+    })
+  }
+  return next
+}
+
 
 
 function getCodexAuthPath(): string {
@@ -3332,6 +3358,7 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
     projectOrder: normalizeStringArray(payload['project-order']),
+    remoteProjects: normalizeRemoteProjects(payload['remote-projects']),
   }
 }
 
@@ -5872,6 +5899,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           projectOrder: Array.isArray(record.projectOrder)
             ? normalizeStringArray(record.projectOrder)
             : existingState.projectOrder,
+          remoteProjects: existingState.remoteProjects,
         }
         await writeWorkspaceRootsState(nextState)
         setJson(res, 200, { ok: true })
@@ -5932,6 +5960,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           labels: nextLabels,
           active: nextActive,
           projectOrder: [normalizedPath, ...existingState.projectOrder.filter((item) => item !== normalizedPath)],
+          remoteProjects: existingState.remoteProjects,
         })
         setJson(res, 200, { data: { path: normalizedPath } })
         return

@@ -716,6 +716,7 @@ This file tracks manual regression and feature verification steps.
 - Hovering a shortened duplicate project title shows the full project path.
 - Editing a duplicate path-backed project name opens the rename input with the visible project name, not the full path.
 - Projectless chat folders created under `Documents/Codex/YYYY-MM-DD/<slug>` stay out of `Projects` and appear under `Chats`.
+- Remote projects from Codex global `remote-projects` stay in the same `project-order`, for example `ubuntu a1`, even when they have no local chats.
 - Light theme and dark theme both preserve readable project rows and dropdown options.
 
 #### Rollback/Cleanup

@@ -1465,9 +1465,8 @@ function isDuplicatePathLeafName(value: string): boolean {
   if (!leafName) return false
   let matchingCount = 0
   for (const group of props.groups) {
-    const displayName = getProjectDisplayName(group.projectName)
-    if (!isPathLikeProjectName(displayName)) continue
-    if (getPathLeafName(displayName) !== leafName) continue
+    if (!isPathLikeProjectName(group.projectName)) continue
+    if (getPathLeafName(group.projectName) !== leafName) continue
     matchingCount += 1
     if (matchingCount > 1) return true
   }
@@ -1475,11 +1474,24 @@ function isDuplicatePathLeafName(value: string): boolean {
 }
 
 function getProjectVisibleName(group: UiProjectGroup): string {
+  const customDisplayName = props.projectDisplayNameById[group.projectName]
   const displayName = getProjectDisplayName(group.projectName)
+  const projectName = group.projectName
+  if (customDisplayName && !isPathLikeProjectName(projectName) && projectName !== displayName) {
+    if (displayName.includes(projectName) || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(projectName)) return displayName
+    return `${displayName} ${projectName}`
+  }
+  if (customDisplayName && isPathLikeProjectName(projectName)) {
+    const leafName = getPathLeafName(projectName)
+    const parentLeafName = getPathLeafName(getPathParent(projectName))
+    const contextName = isDuplicatePathLeafName(projectName) ? parentLeafName : leafName
+    return contextName && contextName !== displayName ? `${displayName} ${contextName}` : displayName
+  }
   if (!displayName.includes('/') && !displayName.includes('\\')) return displayName
   const leafName = getPathLeafName(displayName) || displayName
-  if (group.threads.length > 0 || !isDuplicatePathLeafName(displayName)) return leafName
   const parentLeafName = getPathLeafName(getPathParent(displayName))
+  if (parentLeafName.startsWith('.') && parentLeafName !== leafName) return `${leafName} ${parentLeafName}`
+  if (group.threads.length > 0 || !isDuplicatePathLeafName(projectName)) return leafName
   return parentLeafName ? `${leafName} ${parentLeafName}` : leafName
 }
 
