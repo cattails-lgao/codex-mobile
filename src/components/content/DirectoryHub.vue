@@ -490,7 +490,7 @@
               :disabled="isPluginActionInFlight || selectedPlugin.installPolicy === 'NOT_AVAILABLE' || selectedPluginRequiresMissingApp"
               @click="installSelectedPlugin"
             >
-              {{ selectedPluginRequiresMissingApp ? 'Gpt plus required' : isPluginActionInFlight ? 'Installing...' : 'Install' }}
+              {{ selectedPluginRequiresMissingApp ? 'ChatGPT Plus' : isPluginActionInFlight ? 'Installing...' : 'Install' }}
             </button>
             <button
               v-if="selectedPlugin && selectedPlugin.installed"
