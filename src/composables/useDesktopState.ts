@@ -3735,7 +3735,6 @@ export function useDesktopState() {
           : mergeProjectOrder(projectOrder.value, groups)
         if (!areStringArraysEqual(projectOrder.value, mergedOrder)) {
           projectOrder.value = mergedOrder
-          saveProjectOrder(projectOrder.value)
         }
       }
 
@@ -3769,7 +3768,6 @@ export function useDesktopState() {
         }
         if (changed) {
           projectDisplayNameById.value = nextLabels
-          saveProjectDisplayNames(nextLabels)
         }
       }
     } catch {
@@ -3834,6 +3832,9 @@ export function useDesktopState() {
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
     const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
+    const hasWorkspaceRootsState = Boolean(
+      rootsState && (rootsState.order.length > 0 || rootsState.projectOrder.length > 0 || (rootsState.remoteProjects ?? []).length > 0),
+    )
 
     const nextProjectOrder = rootsState?.projectOrder.length
       ? mergeProjectOrder(
@@ -3843,7 +3844,9 @@ export function useDesktopState() {
       : mergeProjectOrder(projectOrder.value, visibleGroups)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
       projectOrder.value = nextProjectOrder
-      saveProjectOrder(projectOrder.value)
+      if (!hasWorkspaceRootsState) {
+        saveProjectOrder(projectOrder.value)
+      }
     }
 
     const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
