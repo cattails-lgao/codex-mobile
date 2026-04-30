@@ -1010,6 +1010,58 @@ function toProjectNameFromWorkspaceRoot(value: string): string {
   return toProjectName(value)
 }
 
+function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): Set<string> {
+  const rootByLeafName = new Map<string, Set<string>>()
+  const addPath = (value: string): void => {
+    const normalizedPath = normalizePathForUi(value).trim()
+    if (!normalizedPath) return
+    const leafName = toProjectName(normalizedPath)
+    const existing = rootByLeafName.get(leafName) ?? new Set<string>()
+    existing.add(normalizedPath)
+    rootByLeafName.set(leafName, existing)
+  }
+
+  for (const rootPath of rootsState?.order ?? []) addPath(rootPath)
+  for (const group of groups) {
+    for (const thread of group.threads) addPath(thread.cwd)
+  }
+
+  const duplicateLeafNames = new Set<string>()
+  for (const [leafName, paths] of rootByLeafName.entries()) {
+    if (paths.size > 1) duplicateLeafNames.add(leafName)
+  }
+  return duplicateLeafNames
+}
+
+function disambiguateProjectGroupsByCwd(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  if (duplicateLeafNames.size === 0) return groups
+
+  const disambiguatedGroups: UiProjectGroup[] = []
+  const groupsByProjectName = new Map<string, UiProjectGroup>()
+  for (const group of groups) {
+    for (const thread of group.threads) {
+      const normalizedCwd = normalizePathForUi(thread.cwd).trim()
+      const leafName = toProjectName(normalizedCwd)
+      const projectName = normalizedCwd && duplicateLeafNames.has(leafName) ? normalizedCwd : group.projectName
+      const nextThread = thread.projectName === projectName ? thread : { ...thread, projectName }
+      const existingGroup = groupsByProjectName.get(projectName)
+      if (existingGroup) {
+        existingGroup.threads.push(nextThread)
+      } else {
+        const nextGroup = { projectName, threads: [nextThread] }
+        groupsByProjectName.set(projectName, nextGroup)
+        disambiguatedGroups.push(nextGroup)
+      }
+    }
+  }
+
+  return disambiguatedGroups
+}
+
 function toOptimisticThreadTitle(message: string): string {
   const firstLine = message
     .split('\n')
@@ -1033,11 +1085,16 @@ export function filterGroupsByWorkspaceRoots(
   groups: UiProjectGroup[],
   rootsState: WorkspaceRootsState | null,
 ): UiProjectGroup[] {
-  if (!rootsState || rootsState.order.length === 0) return groups
-  const allowedProjectNames = new Set(
-    rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-  )
-  return groups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+  if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
+  const allowedProjectNames = new Set<string>()
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  for (const rootPath of rootsState.order) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    allowedProjectNames.add(duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName)
+  }
+  return disambiguatedGroups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
 }
 
 export function useDesktopState() {
@@ -3648,11 +3705,16 @@ export function useDesktopState() {
     groups: UiProjectGroup[],
     rootsState: WorkspaceRootsState | null,
   ): UiProjectGroup[] {
-    if (!rootsState || rootsState.order.length === 0) return groups
-    const allowedProjectNames = new Set(
-      rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-    )
-    return groups.filter((group) => {
+    const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+    if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
+    const allowedProjectNames = new Set<string>()
+    const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+    for (const rootPath of rootsState.order) {
+      const normalizedRootPath = normalizePathForUi(rootPath).trim()
+      const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+      allowedProjectNames.add(duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName)
+    }
+    return disambiguatedGroups.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
       return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
     })

@@ -647,6 +647,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete the test folder created in step 3 if it was created only for verification.
 
+### Feature: Keep same-name project folders separate
+
+#### Prerequisites
+- App is running from this repository.
+- Home/new-thread screen is open.
+- Two writable parent directories are available.
+
+#### Steps
+1. Create or select two project folders with the same leaf name under different parents, for example `/tmp/first/api` and `/tmp/second/api`.
+2. On the home/new-thread screen, add/select both folders through `Select folder` or `Create Project`.
+3. Open the `Choose folder` dropdown in light theme.
+4. Switch to dark theme and open the `Choose folder` dropdown again.
+5. Start or open a thread in each same-name folder and confirm both projects appear independently in the sidebar.
+
+#### Expected Results
+- Both same-name folders remain selectable as distinct projects instead of merging into one `api` project.
+- Duplicate folder names display their full paths in the folder picker so the targets are distinguishable.
+- Light theme and dark theme both keep the dropdown and sidebar readable with no same-name project collision.
+
+#### Rollback/Cleanup
+- Remove the temporary same-name folders if they were created only for verification.
+
 ### Feature: Disable auto-restore to last thread when opening home URL
 
 #### Prerequisites

@@ -1382,6 +1382,38 @@ const threadContextSecondaryText = computed(() => {
 })
 
 const threadContextTooltip = computed(() => buildThreadContextTooltip(selectedThreadTokenUsage.value))
+
+function hasDuplicateFolderLeaf(path: string, knownPaths: string[]): boolean {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const leafName = getPathLeafName(normalizedPath)
+  if (!normalizedPath || !leafName) return false
+  return knownPaths.some((knownPath) => {
+    const normalizedKnownPath = normalizePathForUi(knownPath).trim()
+    return normalizedKnownPath !== normalizedPath && getPathLeafName(normalizedKnownPath) === leafName
+  })
+}
+
+function getFolderOptionLabel(path: string, fallbackLabel = ''): string {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const explicitLabel = fallbackLabel.trim()
+  if (explicitLabel) return explicitLabel
+  const leafName = getPathLeafName(normalizedPath)
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : leafName
+}
+
+function getProjectOrderNameForPath(path: string): string {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : getPathLeafName(normalizedPath)
+}
+
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -1392,7 +1424,7 @@ const newThreadFolderOptions = computed(() => {
     seenCwds.add(cwd)
     options.push({
       value: cwd,
-      label: workspaceRootOptionsState.value.labels[cwd] || getPathLeafName(cwd),
+      label: getFolderOptionLabel(cwd, workspaceRootOptionsState.value.labels[cwd]),
     })
   }
 
@@ -1402,7 +1434,7 @@ const newThreadFolderOptions = computed(() => {
     seenCwds.add(cwd)
     options.push({
       value: cwd,
-      label: projectDisplayNameById.value[group.projectName] ?? group.projectName,
+      label: getFolderOptionLabel(cwd, projectDisplayNameById.value[group.projectName]),
     })
   }
 
@@ -1410,7 +1442,7 @@ const newThreadFolderOptions = computed(() => {
   if (selectedCwd && !seenCwds.has(selectedCwd)) {
     options.unshift({
       value: selectedCwd,
-      label: getPathLeafName(selectedCwd),
+      label: getFolderOptionLabel(selectedCwd),
     })
   }
 
@@ -2482,7 +2514,7 @@ async function onCreateProject(): Promise<void> {
     if (!normalizedPath) return
 
     newThreadCwd.value = normalizedPath
-    pinProjectToTop(getPathLeafName(normalizedPath))
+    pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
   } catch (error) {

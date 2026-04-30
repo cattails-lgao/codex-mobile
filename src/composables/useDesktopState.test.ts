@@ -45,4 +45,26 @@ describe('filterGroupsByWorkspaceRoots', () => {
       'allowed-project',
     ])
   })
+
+  it('keeps workspace roots with the same folder name as separate projects', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'api',
+        threads: [
+          thread('first-api-chat', '/tmp/first/api'),
+          thread('second-api-chat', '/tmp/second/api'),
+        ],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/first/api', '/tmp/second/api'],
+      labels: {},
+      active: ['/tmp/first/api', '/tmp/second/api'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
+      '/tmp/first/api',
+      '/tmp/second/api',
+    ])
+  })
 })
