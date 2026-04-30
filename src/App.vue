@@ -1136,7 +1136,11 @@ const newThreadRuntime = ref<'local' | 'worktree'>('local')
 const newWorktreeBaseBranch = ref('')
 const worktreeBranchOptions = ref<WorktreeBranchOption[]>([])
 const isLoadingWorktreeBranches = ref(false)
-const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
+const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string>; projectOrder: string[] }>({
+  order: [],
+  labels: {},
+  projectOrder: [],
+})
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
   title: '',
@@ -1405,6 +1409,15 @@ function getFolderOptionLabel(path: string, fallbackLabel = ''): string {
   return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : leafName
 }
 
+function getOrderedWorkspaceRootOptions(): string[] {
+  const savedRoots = new Set(workspaceRootOptionsState.value.order)
+  const orderedRoots = workspaceRootOptionsState.value.projectOrder.filter((item) => savedRoots.has(item))
+  for (const rootPath of workspaceRootOptionsState.value.order) {
+    if (!orderedRoots.includes(rootPath)) orderedRoots.push(rootPath)
+  }
+  return orderedRoots
+}
+
 function getProjectOrderNameForPath(path: string): string {
   const normalizedPath = normalizePathForUi(path).trim()
   const knownPaths = [
@@ -1418,7 +1431,7 @@ const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
 
-  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+  for (const cwdRaw of getOrderedWorkspaceRootOptions()) {
     const cwd = cwdRaw.trim()
     if (!cwd || seenCwds.has(cwd)) continue
     seenCwds.add(cwd)
@@ -2756,9 +2769,10 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
     workspaceRootOptionsState.value = {
       order: [...state.order],
       labels: { ...state.labels },
+      projectOrder: [...state.projectOrder],
     }
   } catch {
-    workspaceRootOptionsState.value = { order: [], labels: {} }
+    workspaceRootOptionsState.value = { order: [], labels: {}, projectOrder: [] }
   }
 }
 

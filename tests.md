@@ -690,6 +690,29 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: Match Codex.app project order source
+
+#### Prerequisites
+- App is running from this repository.
+- Codex global state contains `electron-saved-workspace-roots` and `project-order`.
+- At least one workspace root appears in a different position in `project-order` than in `electron-saved-workspace-roots`.
+
+#### Steps
+1. Open the home/new-thread screen.
+2. Expand the sidebar and inspect the `Projects` section.
+3. Open the `Choose folder` dropdown.
+4. Compare the visible project order against Codex.app for the same Codex global state.
+5. Repeat in dark theme.
+
+#### Expected Results
+- Sidebar project order follows Codex.app's `project-order` key rather than raw saved-root insertion order.
+- The folder dropdown follows the same project order as the sidebar/Codex.app.
+- Projects that are lower in Codex.app, such as older labeled roots, do not jump to the top only because they appear early in `electron-saved-workspace-roots`.
+- Light theme and dark theme both preserve readable project rows and dropdown options.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Disable auto-restore to last thread when opening home URL
 
 #### Prerequisites

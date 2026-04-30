@@ -267,6 +267,7 @@ export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
+  projectOrder: string[]
 }
 
 export type StoredQueuedMessage = {
@@ -2152,6 +2153,7 @@ function normalizeWorkspaceRootsState(payload: unknown): WorkspaceRootsState {
     order: normalizeArray(record.order).map((value) => normalizePathForUi(value)),
     labels,
     active: normalizeArray(record.active).map((value) => normalizePathForUi(value)),
+    projectOrder: normalizeArray(record.projectOrder).map((value) => normalizePathForUi(value)),
   }
 }
 

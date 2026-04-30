@@ -38,6 +38,7 @@ describe('filterGroupsByWorkspaceRoots', () => {
       order: ['/tmp/allowed-project'],
       labels: {},
       active: ['/tmp/allowed-project'],
+      projectOrder: [],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
@@ -60,11 +61,36 @@ describe('filterGroupsByWorkspaceRoots', () => {
       order: ['/tmp/first/api', '/tmp/second/api'],
       labels: {},
       active: ['/tmp/first/api', '/tmp/second/api'],
+      projectOrder: [],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
       '/tmp/first/api',
       '/tmp/second/api',
+    ])
+  })
+
+  it('uses Codex project-order when workspace roots are hydrated', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('alpha-chat', '/tmp/alpha')],
+      },
+      {
+        projectName: 'beta',
+        threads: [thread('beta-chat', '/tmp/beta')],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/alpha', '/tmp/beta'],
+      labels: {},
+      active: ['/tmp/alpha'],
+      projectOrder: ['/tmp/beta', '/tmp/alpha'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
+      'beta',
+      'alpha',
     ])
   })
 })

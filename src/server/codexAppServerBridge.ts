@@ -72,6 +72,7 @@ type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
+  projectOrder: string[]
 }
 
 type PendingServerRequest = {
@@ -3330,6 +3331,7 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     order: normalizeStringArray(payload['electron-saved-workspace-roots']),
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
+    projectOrder: normalizeStringArray(payload['project-order']),
   }
 }
 
@@ -3346,6 +3348,7 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   payload['electron-saved-workspace-roots'] = normalizeStringArray(nextState.order)
   payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels)
   payload['active-workspace-roots'] = normalizeStringArray(nextState.active)
+  payload['project-order'] = normalizeStringArray(nextState.projectOrder)
 
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
@@ -5861,10 +5864,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'Invalid body: expected object' })
           return
         }
+        const existingState = await readWorkspaceRootsState()
         const nextState: WorkspaceRootsState = {
           order: normalizeStringArray(record.order),
           labels: normalizeStringRecord(record.labels),
           active: normalizeStringArray(record.active),
+          projectOrder: Array.isArray(record.projectOrder)
+            ? normalizeStringArray(record.projectOrder)
+            : existingState.projectOrder,
         }
         await writeWorkspaceRootsState(nextState)
         setJson(res, 200, { ok: true })
@@ -5924,6 +5931,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           order: nextOrder,
           labels: nextLabels,
           active: nextActive,
+          projectOrder: [normalizedPath, ...existingState.projectOrder.filter((item) => item !== normalizedPath)],
         })
         setJson(res, 200, { data: { path: normalizedPath } })
         return

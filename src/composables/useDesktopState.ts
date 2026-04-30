@@ -1010,6 +1010,44 @@ function toProjectNameFromWorkspaceRoot(value: string): string {
   return toProjectName(value)
 }
 
+function getWorkspaceProjectOrderPaths(rootsState: WorkspaceRootsState | null): string[] {
+  if (!rootsState) return []
+  const savedRoots = new Set(rootsState.order)
+  const orderedRoots = rootsState.projectOrder.filter((item) => savedRoots.has(item))
+  for (const rootPath of rootsState.order) {
+    if (!orderedRoots.includes(rootPath)) orderedRoots.push(rootPath)
+  }
+  return orderedRoots
+}
+
+function getWorkspaceProjectOrderNames(
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): string[] {
+  return getWorkspaceProjectOrderPaths(rootsState).map((rootPath) => {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    return duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+  })
+}
+
+function orderGroupsByWorkspaceProjectOrder(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  const order = getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)
+  if (order.length === 0) return groups
+  const orderIndexByName = new Map(order.map((name, index) => [name, index]))
+  return [...groups].sort((first, second) => {
+    if (isProjectlessGroup(first) || isProjectlessGroup(second)) return 0
+    const firstIndex = orderIndexByName.get(first.projectName) ?? Number.POSITIVE_INFINITY
+    const secondIndex = orderIndexByName.get(second.projectName) ?? Number.POSITIVE_INFINITY
+    if (firstIndex === secondIndex) return 0
+    return firstIndex - secondIndex
+  })
+}
+
 function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): Set<string> {
   const rootByLeafName = new Map<string, Set<string>>()
   const addPath = (value: string): void => {
@@ -1089,12 +1127,11 @@ export function filterGroupsByWorkspaceRoots(
   if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
   const allowedProjectNames = new Set<string>()
   const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
-  for (const rootPath of rootsState.order) {
-    const normalizedRootPath = normalizePathForUi(rootPath).trim()
-    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
-    allowedProjectNames.add(duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName)
+  for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+    allowedProjectNames.add(projectName)
   }
-  return disambiguatedGroups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  const filteredGroups = disambiguatedGroups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
 }
 
 export function useDesktopState() {
@@ -3632,14 +3669,16 @@ export function useDesktopState() {
     try {
       if (!rootsState) return
       const hydratedOrder: string[] = []
-      for (const rootPath of rootsState.order) {
+      for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
         if (hydratedOrder.includes(projectName)) continue
         hydratedOrder.push(projectName)
       }
 
       if (hydratedOrder.length > 0) {
-        const mergedOrder = mergeProjectOrder(hydratedOrder, groups)
+        const mergedOrder = rootsState.projectOrder.length > 0
+          ? mergeProjectOrder(hydratedOrder, groups)
+          : mergeProjectOrder(projectOrder.value, groups)
         if (!areStringArraysEqual(projectOrder.value, mergedOrder)) {
           projectOrder.value = mergedOrder
           saveProjectOrder(projectOrder.value)
@@ -3709,21 +3748,25 @@ export function useDesktopState() {
     if (!rootsState || rootsState.order.length === 0) return disambiguatedGroups
     const allowedProjectNames = new Set<string>()
     const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
-    for (const rootPath of rootsState.order) {
-      const normalizedRootPath = normalizePathForUi(rootPath).trim()
-      const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
-      allowedProjectNames.add(duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName)
+    for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+      allowedProjectNames.add(projectName)
     }
-    return disambiguatedGroups.filter((group) => {
+    const filteredGroups = disambiguatedGroups.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
       return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
     })
+    return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
   }
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
     const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
 
-    const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
+    const nextProjectOrder = rootsState?.projectOrder.length
+      ? mergeProjectOrder(
+        getWorkspaceProjectOrderNames(rootsState, collectDuplicateProjectLeafNames(groups, rootsState)),
+        visibleGroups,
+      )
+      : mergeProjectOrder(projectOrder.value, visibleGroups)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
       projectOrder.value = nextProjectOrder
       saveProjectOrder(projectOrder.value)
@@ -4713,6 +4756,7 @@ export function useDesktopState() {
           order: rootsState.order,
           labels: nextLabels,
           active: rootsState.active,
+          projectOrder: rootsState.projectOrder,
         })
       }
     } catch {
@@ -4801,6 +4845,7 @@ export function useDesktopState() {
           order: nextOrder,
           labels: omitKeys(rootsState.labels, removedRootPaths),
           active: fallbackActive,
+          projectOrder: rootsState.projectOrder.filter((item) => !removedRootPaths.has(item)),
         })
         return
       } catch {
@@ -4885,6 +4930,7 @@ export function useDesktopState() {
         order: nextOrder,
         labels: rootsState.labels,
         active: nextActive,
+        projectOrder: [...nextOrder, ...rootsState.projectOrder.filter((item) => !nextOrder.includes(item))],
       })
     } catch {
       // Keep local project order when global state persistence is unavailable.
