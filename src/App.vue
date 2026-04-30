@@ -69,6 +69,8 @@
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-thread-files="onBrowseThreadFiles"
+            @browse-project-files="onBrowseProjectFiles"
+            @create-project-worktree="onCreateProjectWorktree"
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
@@ -867,6 +869,7 @@ import { useUiLanguage } from './composables/useUiLanguage'
 import {
   checkoutGitBranch,
   configureTelegramBot,
+  createPermanentWorktree,
   createWorktree,
   createProjectlessThreadDirectory,
   getGitBranchState,
@@ -2034,6 +2037,68 @@ function onBrowseThreadFiles(threadId: string): void {
   }
   if (!targetCwd || typeof window === 'undefined') return
   window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
+}
+
+function getProjectCwd(projectName: string): string {
+  const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
+  return resolvePreferredLocalCwd(projectName, projectGroup?.threads[0]?.cwd?.trim() ?? '')
+}
+
+function getProjectDisplayNameForWorktree(projectName: string): string {
+  return (projectDisplayNameById.value[projectName] ?? projectName).trim() || projectName
+}
+
+function toWorktreeFolderNameDraft(projectName: string): string {
+  const displayName = getProjectDisplayNameForWorktree(projectName)
+  const sanitized = displayName
+    .replace(/[\\/]+/gu, '-')
+    .replace(/[\u0000-\u001f]+/gu, '')
+    .trim()
+  return sanitized || 'worktree'
+}
+
+function onBrowseProjectFiles(projectName: string): void {
+  const targetCwd = getProjectCwd(projectName)
+  if (!targetCwd || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
+}
+
+async function onCreateProjectWorktree(projectName: string): Promise<void> {
+  const sourceCwd = getProjectCwd(projectName)
+  if (!sourceCwd || typeof window === 'undefined') return
+
+  const suggestedName = `${toWorktreeFolderNameDraft(projectName)}-`
+  const worktreeName = window.prompt('New worktree folder name', suggestedName)
+  if (worktreeName === null) return
+
+  const normalizedWorktreeName = worktreeName.trim()
+  if (!normalizedWorktreeName) return
+  if (normalizedWorktreeName.includes('/') || normalizedWorktreeName.includes('\\') || normalizedWorktreeName === '.' || normalizedWorktreeName === '..') {
+    window.alert('Worktree name must be a single folder name.')
+    return
+  }
+
+  try {
+    const created = await createPermanentWorktree(sourceCwd, normalizedWorktreeName)
+    const normalizedPath = await openProjectRoot(created.cwd, {
+      createIfMissing: false,
+      label: '',
+    })
+    if (!normalizedPath) return
+
+    newThreadCwd.value = normalizedPath
+    newThreadRuntime.value = 'local'
+    pinProjectToTop(getPathLeafName(normalizedPath))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+    if (isMobile.value) setSidebarCollapsed(true)
+    if (!isHomeRoute.value) {
+      await router.push({ name: 'home' })
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create worktree.'
+    window.alert(message)
+  }
 }
 
 function onStartNewThreadFromToolbar(): void {

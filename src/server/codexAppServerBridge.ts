@@ -5543,6 +5543,74 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'POST' && url.pathname === '/codex-api/worktree/create-permanent') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawSourceCwd = typeof payload?.sourceCwd === 'string' ? payload.sourceCwd.trim() : ''
+        const rawWorktreeName = typeof payload?.worktreeName === 'string' ? payload.worktreeName.trim() : ''
+        if (!rawSourceCwd) {
+          setJson(res, 400, { error: 'Missing sourceCwd' })
+          return
+        }
+        if (!rawWorktreeName) {
+          setJson(res, 400, { error: 'Missing worktreeName' })
+          return
+        }
+        if (rawWorktreeName.includes('/') || rawWorktreeName.includes('\\') || rawWorktreeName === '.' || rawWorktreeName === '..') {
+          setJson(res, 400, { error: 'Worktree name must be a single folder name' })
+          return
+        }
+
+        const sourceCwd = isAbsolute(rawSourceCwd) ? rawSourceCwd : resolve(rawSourceCwd)
+        try {
+          const sourceInfo = await stat(sourceCwd)
+          if (!sourceInfo.isDirectory()) {
+            setJson(res, 400, { error: 'sourceCwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'sourceCwd does not exist' })
+          return
+        }
+
+        try {
+          let gitRoot = ''
+          try {
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          } catch (error) {
+            if (!isNotGitRepositoryError(error)) throw error
+            await runCommand('git', ['init'], { cwd: sourceCwd })
+            gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: sourceCwd })
+          }
+          const worktreeCwd = join(dirname(gitRoot), rawWorktreeName)
+          try {
+            await stat(worktreeCwd)
+            setJson(res, 409, { error: 'Worktree folder already exists' })
+            return
+          } catch {
+            // Expected for a new worktree path.
+          }
+
+          try {
+            await runCommand('git', ['worktree', 'add', worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          } catch (error) {
+            if (!isMissingHeadError(error)) throw error
+            await ensureRepoHasInitialCommit(gitRoot)
+            await runCommand('git', ['worktree', 'add', worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          }
+
+          setJson(res, 200, {
+            data: {
+              cwd: worktreeCwd,
+              branch: null,
+              gitRoot,
+            },
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to create worktree') })
+        }
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/worktree/branches') {
         const rawSourceCwd = (url.searchParams.get('sourceCwd') ?? '').trim()
         if (!rawSourceCwd) {

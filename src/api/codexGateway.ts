@@ -2269,6 +2269,26 @@ export async function createWorktree(sourceCwd: string, baseBranch?: string): Pr
   }
 }
 
+export async function createPermanentWorktree(sourceCwd: string, worktreeName: string): Promise<WorktreeCreateResult> {
+  const response = await fetch('/codex-api/worktree/create-permanent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sourceCwd,
+      worktreeName,
+    }),
+  })
+  const payload = (await response.json()) as { data?: WorktreeCreateResult; error?: string }
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error || 'Failed to create worktree')
+  }
+  return {
+    ...payload.data,
+    cwd: normalizePathForUi(payload.data.cwd),
+    gitRoot: normalizePathForUi(payload.data.gitRoot),
+  }
+}
+
 export async function getWorktreeBranchOptions(sourceCwd: string): Promise<WorktreeBranchOption[]> {
   const normalizedSourceCwd = sourceCwd.trim()
   if (!normalizedSourceCwd) return []
