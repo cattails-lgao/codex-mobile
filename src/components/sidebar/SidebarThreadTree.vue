@@ -319,7 +319,7 @@
                       <button class="project-menu-item" type="button" @click="onCreateProjectWorktree(group.projectName)">
                         New worktree
                       </button>
-                      <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group.projectName)">
+                      <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group)">
                         Rename project
                       </button>
                       <button
@@ -983,12 +983,11 @@ function threadMatchesSearch(thread: UiThread): boolean {
 }
 
 const filteredGroups = computed<UiProjectGroup[]>(() => {
-  return props.groups
-    .map((group) => ({
-      ...group,
-      threads: group.threads.filter((thread) => !isProjectlessChatPath(thread.cwd) && threadMatchesSearch(thread)),
-    }))
-    .filter((group) => group.threads.length > 0 || !isSearchActive.value)
+  return props.groups.flatMap((group) => {
+    const threads = group.threads.filter((thread) => !isProjectlessChatPath(thread.cwd) && threadMatchesSearch(thread))
+    if (threads.length > 0) return [{ ...group, threads }]
+    return !isSearchActive.value && group.threads.length === 0 ? [{ ...group, threads }] : []
+  })
 })
 
 const isChronologicalView = computed(() => threadViewMode.value === 'chronological')
@@ -1543,11 +1542,16 @@ function openProjectContextMenu(projectName: string): void {
   })
 }
 
-function openRenameProjectMenu(projectName: string): void {
+function getProjectRenameDraftName(group: UiProjectGroup): string {
+  return props.projectDisplayNameById[group.projectName] ?? getProjectVisibleName(group)
+}
+
+function openRenameProjectMenu(group: UiProjectGroup): void {
   closeThreadMenu()
+  const projectName = group.projectName
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'rename'
-  projectRenameDraft.value = getProjectDisplayName(projectName)
+  projectRenameDraft.value = getProjectRenameDraftName(group)
   nextTick(() => {
     updateProjectMenuDirection(projectName)
   })

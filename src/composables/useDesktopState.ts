@@ -1138,7 +1138,7 @@ function toForkedThreadTitle(title: string): string {
 }
 
 function isProjectlessGroup(group: UiProjectGroup): boolean {
-  return group.threads.some((thread) => thread.cwd.trim().length === 0)
+  return group.threads.some((thread) => thread.cwd.trim().length === 0 || isProjectlessChatPath(thread.cwd))
 }
 
 export function filterGroupsByWorkspaceRoots(
@@ -4763,7 +4763,8 @@ export function useDesktopState() {
       const nextLabels = { ...rootsState.labels }
       let changed = false
       for (const rootPath of rootsState.order) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) !== projectName) continue
+        const normalizedRootPath = normalizePathForUi(rootPath).trim()
+        if (normalizedRootPath !== projectName && toProjectNameFromWorkspaceRoot(rootPath) !== projectName) continue
         const trimmed = displayName.trim()
         if (trimmed.length === 0) {
           if (nextLabels[rootPath] !== undefined) {

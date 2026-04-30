@@ -714,6 +714,8 @@ This file tracks manual regression and feature verification steps.
 - Empty saved roots remain visible with a `No threads` row.
 - Empty duplicate project names include the parent folder suffix, such as `TestChat New project 2`, while thread-backed duplicate project names keep the plain final folder name.
 - Hovering a shortened duplicate project title shows the full project path.
+- Editing a duplicate path-backed project name opens the rename input with the visible project name, not the full path.
+- Projectless chat folders created under `Documents/Codex/YYYY-MM-DD/<slug>` stay out of `Projects` and appear under `Chats`.
 - Light theme and dark theme both preserve readable project rows and dropdown options.
 
 #### Rollback/Cleanup
