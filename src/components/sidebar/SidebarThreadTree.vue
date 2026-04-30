@@ -797,6 +797,7 @@ const chatSortMode = ref<ChatSortMode>(loadChatSortMode())
 let hasLoadedPinnedThreadState = false
 const pinnedThreadIds = ref<string[]>([])
 const inlineDeleteConfirmThreadId = ref('')
+const optimisticallyArchivedThreadIds = ref<string[]>([])
 const openProjectMenuId = ref('')
 const openThreadMenuId = ref('')
 const projectMenuDirectionById = ref<Record<string, MenuDirection>>({})
@@ -958,8 +959,10 @@ const matchedThreadIdSet = computed(() => {
   return new Set(props.searchMatchedThreadIds)
 })
 const pinnedThreadIdSet = computed(() => new Set(pinnedThreadIds.value))
+const optimisticallyArchivedThreadIdSet = computed(() => new Set(optimisticallyArchivedThreadIds.value))
 
 function threadMatchesSearch(thread: UiThread): boolean {
+  if (optimisticallyArchivedThreadIdSet.value.has(thread.id)) return false
   if (!isSearchActive.value) return true
   if (matchedThreadIdSet.value) {
     return matchedThreadIdSet.value.has(thread.id)
@@ -1014,6 +1017,7 @@ const threadById = computed(() => {
 
   for (const group of props.groups) {
     for (const thread of group.threads) {
+      if (optimisticallyArchivedThreadIdSet.value.has(thread.id)) continue
       map.set(thread.id, thread)
     }
   }
@@ -1069,7 +1073,7 @@ const threadProjectNameById = computed(() => {
 const unpinnedThreadsByProjectName = computed(() => {
   const map = new Map<string, UiThread[]>()
   for (const group of props.groups) {
-    const rows = group.threads.filter((thread) => !pinnedThreadIdSet.value.has(thread.id))
+    const rows = group.threads.filter((thread) => !pinnedThreadIdSet.value.has(thread.id) && !optimisticallyArchivedThreadIdSet.value.has(thread.id))
     map.set(group.projectName, rows)
   }
   return map
@@ -1339,7 +1343,7 @@ function closeDeleteThreadDialog(): void {
 async function submitDeleteThread(): Promise<void> {
   const threadId = deleteThreadDialogThreadId.value
   if (!threadId) return
-  await deleteThreadById(threadId)
+  deleteThreadById(threadId)
   closeDeleteThreadDialog()
 }
 
@@ -1347,30 +1351,32 @@ function isInlineDeleteConfirming(threadId: string): boolean {
   return inlineDeleteConfirmThreadId.value === threadId
 }
 
-async function onInlineDeleteClick(threadId: string): Promise<void> {
+function onInlineDeleteClick(threadId: string): void {
   if (inlineDeleteConfirmThreadId.value !== threadId) {
     inlineDeleteConfirmThreadId.value = threadId
     closeThreadMenu()
     return
   }
 
-  await deleteThreadById(threadId)
+  deleteThreadById(threadId)
   inlineDeleteConfirmThreadId.value = ''
 }
 
-async function deleteThreadById(threadId: string): Promise<void> {
+function deleteThreadById(threadId: string): void {
+  if (!optimisticallyArchivedThreadIdSet.value.has(threadId)) {
+    optimisticallyArchivedThreadIds.value = [threadId, ...optimisticallyArchivedThreadIds.value]
+  }
+  inlineDeleteConfirmThreadId.value = ''
+  closeThreadMenu()
+  pinnedThreadIds.value = pinnedThreadIds.value.filter((id) => id !== threadId)
+  emit('archive', threadId)
+
   if (threadHasAutomation(threadId)) {
-    try {
-      await deleteThreadAutomation(threadId)
-    } catch {
-      // Keep thread archive usable even if automation cleanup fails.
-    }
+    void deleteThreadAutomation(threadId).catch(() => undefined)
     automationByThreadId.value = Object.fromEntries(
       Object.entries(automationByThreadId.value).filter(([id]) => id !== threadId),
     )
   }
-  pinnedThreadIds.value = pinnedThreadIds.value.filter((id) => id !== threadId)
-  emit('archive', threadId)
 }
 
 function openAutomationDialog(threadId: string): void {
