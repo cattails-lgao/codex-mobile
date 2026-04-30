@@ -3323,6 +3323,7 @@ export function useDesktopState() {
       setTurnSummaryForThread(startedTurn.threadId, null)
       setTurnErrorForThread(startedTurn.threadId, null)
       setThreadInProgress(startedTurn.threadId, true)
+      scheduleQueueStateRefresh(startedTurn.threadId)
       if (eventUnreadByThreadId.value[startedTurn.threadId]) {
         eventUnreadByThreadId.value = omitKey(eventUnreadByThreadId.value, startedTurn.threadId)
       }
@@ -3365,7 +3366,7 @@ export function useDesktopState() {
       markThreadUnreadByEvent(completedTurn.threadId)
       if (!shouldRetryWithFallback) {
         clearPendingTurnRequest(completedTurn.threadId)
-        void processQueuedMessages(completedTurn.threadId)
+        scheduleQueueStateRefresh(completedTurn.threadId)
       }
     }
 
@@ -3527,7 +3528,7 @@ export function useDesktopState() {
         markThreadUnreadByEvent(completedThreadId)
         if (!shouldRetryWithFallback) {
           clearPendingTurnRequest(completedThreadId)
-          void processQueuedMessages(completedThreadId)
+          scheduleQueueStateRefresh(completedThreadId)
         }
       }
     }
@@ -4532,6 +4533,14 @@ export function useDesktopState() {
     } finally {
       queueProcessingByThreadId.value = omitKey(queueProcessingByThreadId.value, threadId)
     }
+  }
+
+  function scheduleQueueStateRefresh(threadId: string): void {
+    void processQueuedMessages(threadId)
+    if (typeof window === 'undefined') return
+    window.setTimeout(() => {
+      void processQueuedMessages(threadId)
+    }, 650)
   }
 
   async function interruptSelectedThreadTurn(): Promise<void> {
