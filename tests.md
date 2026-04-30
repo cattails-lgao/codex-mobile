@@ -3831,31 +3831,28 @@ Queued messages are saved through the backend, survive page refresh, and can be 
 
 ---
 
-### Backend-drained queued messages while browser is closed
+### ChatGPT auth tokens refresh for external auth
 
 #### Feature/Change Name
-Queued messages are submitted by the backend after the active turn completes, even when the browser tab is closed.
+Codex app-server `account/chatgptAuthTokens/refresh` requests are handled automatically from `auth.json` so expired ChatGPT access tokens can be refreshed without a manual relogin.
 
 #### Prerequisites/Setup
-1. Dev server running (`pnpm run dev`)
-2. Open any existing thread and start a long-running turn
-3. Queue one or more messages while the turn is running
-4. Light theme and dark theme both available from the appearance switcher
+1. App server is running from this repository
+2. `$CODEX_HOME/auth.json` contains ChatGPT auth with a valid `refresh_token`
+3. The current ChatGPT `access_token` is expired or close enough to expiry that Codex app-server asks for token refresh
 
 #### Steps
-1. In light theme, confirm queued messages appear above the composer
-2. Close the browser tab or disconnect the frontend notification stream
-3. Wait for the active turn to complete
-4. Reopen the same thread
-5. Confirm the first queued message was submitted as the next turn
-6. Confirm any remaining queued messages are still listed in order
-7. Repeat the queue visibility check in dark theme
+1. Open the app with the ChatGPT-authenticated account selected
+2. Trigger an account operation such as loading account rate limits or starting a normal Codex turn
+3. Watch the server logs for an `account/chatgptAuthTokens/refresh` server request
+4. Reopen `$CODEX_HOME/auth.json`
+5. Repeat the same account operation after the refresh completes
 
 #### Expected Results
-- The backend removes only the submitted queued message from persisted queue state
-- The queued message starts as a new turn without requiring an open browser tab
-- Remaining queued messages stay persisted and preserve their order
-- Queue rows and composer spacing remain readable in both light theme and dark theme
+- The refresh request is answered automatically and does not appear as a manual pending request in the UI
+- `auth.json` is updated with the fresh `access_token` and any rotated `refresh_token` or `id_token`
+- The account operation succeeds without showing `token_expired`
+- If no refresh token is available, the operation fails with a sign-in-again message instead of silently looping
 
 #### Rollback/Cleanup
-- Delete any remaining queued test messages or let the queue drain
+- None, unless a test-only `$CODEX_HOME` was used
