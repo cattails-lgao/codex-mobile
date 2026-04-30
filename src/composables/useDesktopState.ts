@@ -1025,6 +1025,21 @@ function toForkedThreadTitle(title: string): string {
   return /^fork:\s+/iu.test(normalizedTitle) ? normalizedTitle : `Fork: ${normalizedTitle}`
 }
 
+function isProjectlessGroup(group: UiProjectGroup): boolean {
+  return group.threads.some((thread) => thread.cwd.trim().length === 0)
+}
+
+export function filterGroupsByWorkspaceRoots(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  if (!rootsState || rootsState.order.length === 0) return groups
+  const allowedProjectNames = new Set(
+    rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
+  )
+  return groups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -4506,44 +4521,16 @@ export function useDesktopState() {
 
   async function processQueuedMessages(threadId: string): Promise<void> {
     if (queueProcessingByThreadId.value[threadId] === true) return
-    const queue = queuedMessagesByThreadId.value[threadId]
-    if (!queue || queue.length === 0) return
     queueProcessingByThreadId.value = {
       ...queueProcessingByThreadId.value,
       [threadId]: true,
     }
-    const [next, ...rest] = queue
-    queuedMessagesByThreadId.value = rest.length > 0
-      ? { ...queuedMessagesByThreadId.value, [threadId]: rest }
-      : omitKey(queuedMessagesByThreadId.value, threadId)
-    persistQueueState()
-    isSendingMessage.value = true
-    error.value = ''
-    shouldAutoScrollOnNextAgentEvent = true
-    setTurnSummaryForThread(threadId, null)
-    setTurnActivityForThread(
-      threadId,
-      {
-        label: 'Thinking',
-        details: buildPendingTurnDetails(
-          readModelIdForThread(threadId),
-          selectedReasoningEffort.value,
-          next.collaborationMode,
-        ),
-      },
-    )
-
-    setTurnErrorForThread(threadId, null)
-    setThreadInProgress(threadId, true)
     try {
-      setSelectedCollaborationMode(next.collaborationMode)
-      await startTurnForThread(threadId, next.text, next.imageUrls, next.skills, next.fileAttachments)
+      queuedMessagesByThreadId.value = await getThreadQueueState()
     } catch {
-      setThreadInProgress(threadId, false)
-      setTurnActivityForThread(threadId, null)
+      // Backend queue state is optional during transient bridge failures.
     } finally {
       queueProcessingByThreadId.value = omitKey(queueProcessingByThreadId.value, threadId)
-      isSendingMessage.value = false
     }
   }
 
