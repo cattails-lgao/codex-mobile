@@ -1,3 +1,8 @@
+---
+name: github-pr-acceptance
+description: Use when the user explicitly asks to accept or merge a GitHub pull request and the PR must show as merged on GitHub, not only in local git history.
+---
+
 # GitHub PR Acceptance
 
 ## When To Use
