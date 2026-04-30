@@ -431,7 +431,8 @@
                   <h4 class="directory-detail-heading">Apps</h4>
                   <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
                     <span>{{ app.name }}</span>
-                    <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ app.needsAuth ? 'Login' : 'Manage' }}</button>
+                    <span v-if="isPluginDetailAppUnavailable(app)" class="directory-auth-status is-warning">GPT Plus account required</span>
+                    <button v-else-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ app.needsAuth ? 'Login' : 'Manage' }}</button>
                   </div>
                 </div>
                 <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
@@ -484,13 +485,21 @@
               {{ isPluginActionInFlight ? 'Uninstalling...' : 'Uninstall' }}
             </button>
             <button
-              v-else-if="selectedPlugin"
+              v-else-if="selectedPlugin && !selectedPluginInstallUnavailable"
               class="directory-action primary"
               type="button"
               :disabled="isPluginActionInFlight || selectedPlugin.installPolicy === 'NOT_AVAILABLE' || selectedPluginRequiresMissingApp"
               @click="installSelectedPlugin"
             >
               {{ selectedPluginRequiresMissingApp ? 'ChatGPT Plus' : isPluginActionInFlight ? 'Installing...' : 'Install' }}
+            </button>
+            <button
+              v-else-if="selectedPlugin"
+              class="directory-action"
+              type="button"
+              disabled
+            >
+              GPT Plus account required
             </button>
             <button
               v-if="selectedPlugin && selectedPlugin.installed"
@@ -824,6 +833,10 @@ const selectedPluginRequiresMissingApp = computed(() => {
     return !hasMatchingId && !hasMatchingName
   })
 })
+const selectedPluginInstallUnavailable = computed(() =>
+  selectedPlugin.value?.installPolicy === 'NOT_AVAILABLE' ||
+  (selectedPluginDetail.value?.apps.some((app) => isPluginDetailAppUnavailable(app)) ?? false),
+)
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
 const visibleComposioConnectors = computed(() => sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value))
@@ -843,6 +856,47 @@ const composioWorkspaceSummary = computed(() => {
 
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function normalizePluginAssociationKey(value: string): string {
+  return normalizeSearch(value)
+    .replace(/\s+\((synced|legacy)\)\s*$/iu, '')
+    .replace(/\s+\(.*?\)\s*$/u, '')
+    .replace(/[-_]+/gu, ' ')
+    .replace(/\s+plugin$/iu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function pluginAssociationKeys(...values: string[]): string[] {
+  const keys = new Set<string>()
+  for (const value of values) {
+    const normalized = normalizePluginAssociationKey(value)
+    if (!normalized) continue
+    keys.add(normalized)
+    keys.add(normalized.replace(/\s+/gu, ''))
+  }
+  return Array.from(keys)
+}
+
+function isUnavailableApp(app: DirectoryAppInfo): boolean {
+  return !app.isAccessible && app.installUrl.trim().length === 0
+}
+
+function findDirectoryAppForPluginApp(app: DirectoryPluginAppSummary): DirectoryAppInfo | null {
+  const id = app.id.trim()
+  if (id) {
+    const byId = apps.value.find((row) => row.id === id)
+    if (byId) return byId
+  }
+  const appKeys = pluginAssociationKeys(app.name)
+  return apps.value.find((row) => pluginAssociationKeys(row.name).some((key) => appKeys.includes(key))) ?? null
+}
+
+function isPluginDetailAppUnavailable(app: DirectoryPluginAppSummary): boolean {
+  const directoryApp = findDirectoryAppForPluginApp(app)
+  if (directoryApp) return isUnavailableApp(directoryApp)
+  return app.needsAuth && app.installUrl.trim().length === 0
 }
 
 function includesSearch(parts: Array<string | null | undefined>, query: string): boolean {
@@ -1187,7 +1241,11 @@ async function loadPlugins(): Promise<void> {
   pluginError.value = ''
   try {
     const cwd = props.cwd?.trim()
-    plugins.value = await listDirectoryPlugins(cwd ? [cwd] : undefined)
+    const [nextPlugins] = await Promise.all([
+      listDirectoryPlugins(cwd ? [cwd] : undefined),
+      supportsApps.value ? loadApps() : Promise.resolve(),
+    ])
+    plugins.value = nextPlugins
   } catch (error) {
     pluginError.value = error instanceof Error ? error.message : 'Failed to load plugins'
   } finally {
@@ -1528,7 +1586,7 @@ watch(() => props.cwd, () => {
   if (activeTab.value === 'plugins') void loadPlugins()
 })
 watch(() => props.threadId, () => {
-  if (activeTab.value === 'apps') void loadApps()
+  if (activeTab.value === 'apps' || activeTab.value === 'plugins') void loadApps()
 })
 
 onMounted(async () => {
