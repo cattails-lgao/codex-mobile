@@ -121,6 +121,8 @@
 - When working in a git worktree, prefer reusing an existing compatible `node_modules` tree when it is already available instead of triggering a fresh install by default.
 - If `node_modules` is symlinked to a shared dependency directory, avoid workflows that prompt to remove and recreate that shared directory just to run `npm run dev` or `pnpm run dev`.
 - For dev-server fixes, verify the exact user-requested command afterwards (for example `npm run dev`), not only a fallback Vite invocation.
+- Never kill or stop the tmux-managed dev server bound to port `5173`.
+- Treat the `5173` tmux dev process as persistent infrastructure; restart it only when the user explicitly requests a restart.
 
 ## Dark Theme CSS Rule
 
