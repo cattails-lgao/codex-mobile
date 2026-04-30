@@ -472,8 +472,12 @@
   @apply bg-rose-500 text-white hover:bg-rose-400;
 }
 
-:root.dark .thread-pin-button {
+:root.dark .thread-delete-button {
   @apply text-zinc-400;
+}
+
+:root.dark .thread-delete-button[data-confirming='true'] {
+  @apply bg-rose-500 text-white hover:bg-rose-400;
 }
 
 :root.dark .message-bubble {
