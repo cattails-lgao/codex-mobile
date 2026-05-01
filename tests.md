@@ -4122,3 +4122,34 @@ Project removal matches duplicate workspace roots by full path, and project orde
 #### Rollback/Cleanup
 - Re-add any duplicate workspace root removed only for testing.
 - Restore the preferred project order after manual verification.
+
+---
+
+### Header terminal command dropdown
+
+#### Feature/Change Name
+The content header terminal control is a command dropdown that opens the terminal and runs the selected command.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a thread or new-chat composer with a valid cwd
+3. The cwd has package scripts, Make targets, or previously saved terminal quick commands
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the terminal dropdown in the content header.
+2. Select a listed command such as a package script.
+3. Confirm the terminal panel opens and the selected command is submitted to the active terminal.
+4. Open the dropdown again and select `Hide terminal`.
+5. Open the dropdown, select `Add command...`, enter a simple command such as `pwd`, and confirm it opens the terminal and runs.
+6. Switch to dark theme and repeat steps 1-5.
+
+#### Expected Results
+- The old standalone terminal toggle is replaced by a dropdown.
+- Selecting a command opens the terminal automatically and sends the command with Enter.
+- `Hide terminal` and `Open terminal` remain available from the dropdown.
+- Custom commands are saved into the same terminal quick-command history and appear in later dropdown usage.
+- Dropdown text, borders, and open state are readable in both light theme and dark theme.
+
+#### Rollback/Cleanup
+- Remove any disposable custom quick commands from browser local storage key `codex-web-local.terminal-quick-commands.v1` if needed.

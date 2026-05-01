@@ -479,18 +479,21 @@
             </span>
           </template>
           <template #actions>
-            <button
+            <select
               v-if="canShowTerminalToggle"
-              class="content-header-terminal-toggle"
-              type="button"
-              :aria-pressed="isComposerTerminalOpen"
-              :title="`${t('Toggle terminal')} (${terminalShortcutLabel})`"
-              :aria-label="t('Toggle terminal')"
-              @click="toggleComposerTerminal"
+              class="content-header-terminal-command"
+              :class="{ 'is-open': isComposerTerminalOpen }"
+              :title="`${t('Open terminal')} (${terminalShortcutLabel})`"
+              :aria-label="t('Terminal command')"
+              @change="onHeaderTerminalCommandSelect"
             >
-              <IconTablerTerminal class="content-header-terminal-toggle-icon" />
-              <span class="content-header-terminal-shortcut">{{ terminalShortcutLabel }}</span>
-            </button>
+              <option value="">{{ terminalCommandPlaceholder }}</option>
+              <option v-for="command in terminalHeaderQuickCommands" :key="command.value" :value="command.value">
+                {{ command.label }}
+              </option>
+              <option :value="ADD_TERMINAL_COMMAND_VALUE">Add command...</option>
+              <option :value="TOGGLE_TERMINAL_COMMAND_VALUE">{{ isComposerTerminalOpen ? t('Hide terminal') : t('Open terminal') }}</option>
+            </select>
             <ComposerDropdown
               v-if="route.name === 'thread' && selectedThreadId"
               class="content-header-branch-dropdown"
@@ -732,6 +735,7 @@
               <div class="composer-with-queue">
                 <ThreadTerminalPanel
                   v-if="homeTerminalOpen && composerCwd"
+                  ref="homeTerminalPanelRef"
                   class="content-thread-terminal-panel"
                   :thread-id="composerThreadContextId"
                   :cwd="composerCwd"
@@ -795,6 +799,7 @@
                   />
                   <ThreadTerminalPanel
                     v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
+                    ref="threadTerminalPanelRef"
                     class="content-thread-terminal-panel"
                     :thread-id="selectedThreadId"
                     :cwd="composerCwd"
@@ -861,7 +866,6 @@ import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vu
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
-import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
@@ -881,6 +885,7 @@ import {
   getTelegramConfig,
   getProjectRootSuggestion,
   getTelegramStatus,
+  getThreadTerminalQuickCommands,
   getThreadTerminalStatus,
   getWorkspaceRootsState,
   listLocalDirectories,
@@ -893,7 +898,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
+import type { LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
@@ -905,6 +910,10 @@ const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
+const TERMINAL_QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
+const ADD_TERMINAL_COMMAND_VALUE = '__add_terminal_command__'
+const TOGGLE_TERMINAL_COMMAND_VALUE = '__toggle_terminal__'
+const MAX_HEADER_TERMINAL_COMMANDS = 5
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -918,6 +927,19 @@ const SETTINGS_HELP = {
 } as const
 
 type ChatWidthMode = 'standard' | 'wide' | 'extra-wide'
+
+type TerminalHeaderQuickCommand = {
+  label: string
+  value: string
+  custom?: boolean
+  usageCount: number
+  lastUsedAt: number
+  sourceIndex?: number
+}
+
+type ThreadTerminalPanelExposed = {
+  runQuickCommand: (command: string, custom?: boolean) => Promise<void>
+}
 
 type DirectoryTryItemPayload = {
   kind: 'app' | 'plugin' | 'skill' | 'composio'
@@ -1122,10 +1144,14 @@ const { isMobile } = useMobile()
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
+const homeTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
+const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const homeTerminalOpen = ref(false)
 const isTerminalInputFocused = ref(false)
 const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
+const terminalProjectQuickCommands = ref<ThreadTerminalQuickCommand[]>([])
+const terminalStoredQuickCommands = ref<TerminalHeaderQuickCommand[]>(loadTerminalStoredQuickCommands())
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const directoryTryInFlightKey = ref('')
@@ -1558,6 +1584,27 @@ const terminalShortcutLabel = computed(() => {
   }
   return 'Ctrl+J'
 })
+const terminalCommandPlaceholder = computed(() => (
+  isComposerTerminalOpen.value ? t('Terminal') : t('Open terminal')
+))
+const terminalHeaderQuickCommands = computed<TerminalHeaderQuickCommand[]>(() => {
+  const storedByValue = new Map(terminalStoredQuickCommands.value.map((command) => [command.value, command]))
+  const combined: TerminalHeaderQuickCommand[] = [
+    ...terminalProjectQuickCommands.value.map((command, index) => ({
+      label: command.label,
+      value: command.value,
+      usageCount: 0,
+      lastUsedAt: 0,
+      ...(storedByValue.get(command.value) ?? {}),
+      custom: false,
+      sourceIndex: index,
+    })),
+    ...terminalStoredQuickCommands.value.filter((command) => command.custom === true),
+  ]
+  return combined
+    .sort(compareTerminalQuickCommands)
+    .slice(0, MAX_HEADER_TERMINAL_COMMANDS)
+})
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
   const keyboardInset = Math.max(
@@ -1604,6 +1651,7 @@ onMounted(() => {
   void refreshTelegramStatus()
   void loadFreeModeStatus()
   void refreshThreadTerminalStatus()
+  void refreshTerminalQuickCommands()
 })
 
 onUnmounted(() => {
@@ -2247,6 +2295,159 @@ function toggleComposerTerminal(): void {
   if (!selectedThreadTerminalOpen.value) {
     resetTerminalKeyboardFocusState()
   }
+}
+
+function onHeaderTerminalCommandSelect(event: Event): void {
+  const select = event.target instanceof HTMLSelectElement ? event.target : null
+  const command = select?.value.trim() ?? ''
+  if (select) {
+    select.value = ''
+  }
+  if (!command) return
+  if (command === TOGGLE_TERMINAL_COMMAND_VALUE) {
+    toggleComposerTerminal()
+    return
+  }
+  if (command === ADD_TERMINAL_COMMAND_VALUE) {
+    if (typeof window === 'undefined') return
+    const customCommand = normalizeTerminalQuickCommandValue(window.prompt('Add command') ?? '')
+    if (!customCommand) return
+    void openTerminalAndRunCommand(customCommand, true)
+    return
+  }
+  void openTerminalAndRunCommand(command, false)
+}
+
+async function openTerminalAndRunCommand(command: string, custom: boolean): Promise<void> {
+  if (!isThreadTerminalAvailable.value || !composerCwd.value) return
+  if (isHomeRoute.value) {
+    homeTerminalOpen.value = true
+  } else if (selectedThreadId.value) {
+    setThreadTerminalOpen(selectedThreadId.value, true)
+  } else {
+    return
+  }
+  const panel = await waitForTerminalPanel()
+  if (!panel) return
+  try {
+    await panel.runQuickCommand(command, custom)
+    recordHeaderTerminalCommandUse(command, custom)
+  } catch {
+    // ThreadTerminalPanel renders the terminal-specific error in place.
+  }
+}
+
+async function waitForTerminalPanel(): Promise<ThreadTerminalPanelExposed | null> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await nextTick()
+    const panel = isHomeRoute.value ? homeTerminalPanelRef.value : threadTerminalPanelRef.value
+    if (panel) return panel
+  }
+  return null
+}
+
+async function refreshTerminalQuickCommands(): Promise<void> {
+  const cwd = composerCwd.value.trim()
+  if (!cwd) {
+    terminalProjectQuickCommands.value = []
+    return
+  }
+  try {
+    terminalProjectQuickCommands.value = await getThreadTerminalQuickCommands(cwd)
+  } catch {
+    terminalProjectQuickCommands.value = []
+  }
+}
+
+function recordHeaderTerminalCommandUse(command: string, custom: boolean): void {
+  const normalized = normalizeTerminalQuickCommandValue(command)
+  if (!normalized) return
+  const existing = terminalStoredQuickCommands.value.find((row) => row.value === normalized)
+  const projectCommandIndex = terminalProjectQuickCommands.value.findIndex((row) => row.value === normalized)
+  const projectCommand = projectCommandIndex >= 0 ? terminalProjectQuickCommands.value[projectCommandIndex] : null
+  const nextCommand: TerminalHeaderQuickCommand = {
+    label: existing?.label || projectCommand?.label || normalized,
+    value: normalized,
+    custom: existing?.custom === true || (!projectCommand && custom),
+    usageCount: (existing?.usageCount ?? 0) + 1,
+    lastUsedAt: Date.now(),
+    sourceIndex: projectCommandIndex >= 0 ? projectCommandIndex : undefined,
+  }
+  const next = [
+    ...terminalStoredQuickCommands.value.filter((row) => row.value !== normalized),
+    nextCommand,
+  ]
+  terminalStoredQuickCommands.value = next
+  saveTerminalStoredQuickCommands(next)
+}
+
+function normalizeTerminalQuickCommandValue(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+function compareTerminalQuickCommands(first: TerminalHeaderQuickCommand, second: TerminalHeaderQuickCommand): number {
+  if (second.usageCount !== first.usageCount) return second.usageCount - first.usageCount
+  if (second.lastUsedAt !== first.lastUsedAt) return second.lastUsedAt - first.lastUsedAt
+  const firstSource = typeof first.sourceIndex === 'number' ? first.sourceIndex : Number.MAX_SAFE_INTEGER
+  const secondSource = typeof second.sourceIndex === 'number' ? second.sourceIndex : Number.MAX_SAFE_INTEGER
+  return firstSource - secondSource
+}
+
+function loadTerminalStoredQuickCommands(): TerminalHeaderQuickCommand[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(TERMINAL_QUICK_COMMAND_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    const commands: TerminalHeaderQuickCommand[] = []
+    for (const row of parsed) {
+      const record = row !== null && typeof row === 'object' && !Array.isArray(row)
+        ? row as Record<string, unknown>
+        : null
+      const value = normalizeTerminalQuickCommandValue(readTerminalString(record?.value))
+      if (!value || seen.has(value)) continue
+      seen.add(value)
+      commands.push({
+        label: readTerminalString(record?.label) || value,
+        value,
+        custom: record?.custom !== false,
+        usageCount: readTerminalPositiveInteger(record?.usageCount),
+        lastUsedAt: readTerminalPositiveInteger(record?.lastUsedAt),
+      })
+    }
+    return commands
+  } catch {
+    return []
+  }
+}
+
+function saveTerminalStoredQuickCommands(commands: TerminalHeaderQuickCommand[]): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(
+    TERMINAL_QUICK_COMMAND_STORAGE_KEY,
+    JSON.stringify(commands.map((command) => ({
+      label: command.label,
+      value: command.value,
+      custom: command.custom === true,
+      usageCount: command.usageCount,
+      lastUsedAt: command.lastUsedAt,
+    }))),
+  )
+}
+
+function readTerminalString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function readTerminalPositiveInteger(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.trunc(value))
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed))
+  }
+  return 0
 }
 
 function onTerminalFocusChange(focused: boolean): void {
@@ -3401,6 +3602,13 @@ watch(
 )
 
 watch(
+  () => composerCwd.value,
+  () => {
+    void refreshTerminalQuickCommands()
+  },
+)
+
+watch(
   () => selectedThreadId.value,
   async (threadId) => {
     if (!hasInitialized.value) return
@@ -3796,20 +4004,12 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply w-full;
 }
 
-.content-header-terminal-toggle {
-  @apply flex h-8 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+.content-header-terminal-command {
+  @apply h-8 max-w-48 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none transition hover:bg-zinc-50 focus:border-zinc-300;
 }
 
-.content-header-terminal-toggle[aria-pressed='true'] {
+.content-header-terminal-command.is-open {
   @apply border-zinc-300 bg-zinc-100 text-zinc-950;
-}
-
-.content-header-terminal-toggle-icon {
-  @apply h-4 w-4;
-}
-
-.content-header-terminal-shortcut {
-  @apply hidden text-[11px] text-zinc-500 sm:inline;
 }
 
 .content-header-branch-dropdown :deep(.composer-dropdown-trigger) {
