@@ -1117,6 +1117,7 @@ function orderGroupsByWorkspaceProjectOrder(
 
 function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): Set<string> {
   const rootByLeafName = new Map<string, Set<string>>()
+  const workspaceRootCountsByLeafName = new Map<string, number>()
   const addPath = (value: string): void => {
     const normalizedPath = normalizePathForUi(value).trim()
     if (!normalizedPath) return
@@ -1126,9 +1127,20 @@ function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: 
     rootByLeafName.set(leafName, existing)
   }
 
-  for (const rootPath of rootsState?.order ?? []) addPath(rootPath)
+  for (const rootPath of rootsState?.order ?? []) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectName(normalizedRootPath)
+    workspaceRootCountsByLeafName.set(leafName, (workspaceRootCountsByLeafName.get(leafName) ?? 0) + 1)
+    addPath(rootPath)
+  }
   for (const group of groups) {
-    for (const thread of group.threads) addPath(thread.cwd)
+    for (const thread of group.threads) {
+      const normalizedCwd = normalizePathForUi(thread.cwd).trim()
+      const leafName = toProjectName(normalizedCwd)
+      if (thread.hasWorktree && workspaceRootCountsByLeafName.get(leafName) === 1) continue
+      addPath(thread.cwd)
+    }
   }
 
   const duplicateLeafNames = new Set<string>()
@@ -1145,13 +1157,30 @@ function disambiguateProjectGroupsByCwd(
   const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
   if (duplicateLeafNames.size === 0) return groups
 
+  const uniqueWorkspaceRootLeafNames = new Set<string>()
+  const duplicateWorkspaceRootLeafNames = new Set<string>()
+  for (const rootPath of rootsState?.order ?? []) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectName(normalizedRootPath)
+    if (uniqueWorkspaceRootLeafNames.has(leafName)) {
+      uniqueWorkspaceRootLeafNames.delete(leafName)
+      duplicateWorkspaceRootLeafNames.add(leafName)
+    } else if (!duplicateWorkspaceRootLeafNames.has(leafName)) {
+      uniqueWorkspaceRootLeafNames.add(leafName)
+    }
+  }
+
   const disambiguatedGroups: UiProjectGroup[] = []
   const groupsByProjectName = new Map<string, UiProjectGroup>()
   for (const group of groups) {
     for (const thread of group.threads) {
       const normalizedCwd = normalizePathForUi(thread.cwd).trim()
       const leafName = toProjectName(normalizedCwd)
-      const projectName = normalizedCwd && duplicateLeafNames.has(leafName) ? normalizedCwd : group.projectName
+      const isCanonicalWorktreeThread = thread.hasWorktree && uniqueWorkspaceRootLeafNames.has(leafName)
+      const projectName = normalizedCwd && duplicateLeafNames.has(leafName) && !isCanonicalWorktreeThread
+        ? normalizedCwd
+        : group.projectName
       const nextThread = thread.projectName === projectName ? thread : { ...thread, projectName }
       const existingGroup = groupsByProjectName.get(projectName)
       if (existingGroup) {
