@@ -1,4 +1,4 @@
-const { existsSync, lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs')
+const { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } = require('node:fs')
 const { dirname, join } = require('node:path')
 const { spawnSync } = require('node:child_process')
 
@@ -37,9 +37,18 @@ function patchMakefile(makefile) {
   }
 }
 
+function ensureSpawnHelperExecutable(root) {
+  if (process.platform !== 'darwin' && process.platform !== 'linux') return
+  const helperPath = join(root, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
+  if (existsSync(helperPath)) {
+    chmodSync(helperPath, 0o755)
+  }
+}
+
 for (const name of PTY_PACKAGES) {
   const root = packageRoot(name)
   if (!root) continue
+  ensureSpawnHelperExecutable(root)
 
   const buildDir = join(root, 'build')
   const makefile = join(buildDir, 'Makefile')

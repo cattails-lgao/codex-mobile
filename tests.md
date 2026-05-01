@@ -4153,3 +4153,32 @@ The content header terminal control is a command dropdown that opens the termina
 
 #### Rollback/Cleanup
 - Remove any disposable custom quick commands from browser local storage key `codex-web-local.terminal-quick-commands.v1` if needed.
+
+---
+
+### Terminal PTY spawn helper repair
+
+#### Feature/Change Name
+Terminal attach repairs the maintained `node-pty` macOS/Linux `spawn-helper` executable bit before spawning a PTY.
+
+#### Prerequisites/Setup
+1. Dependencies installed with `pnpm install`
+2. Dev server running (`pnpm run dev`)
+3. Open a thread or new-chat composer with a valid cwd
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the terminal dropdown and select `Open terminal`.
+2. Confirm no `posix_spawnp failed` error appears in the terminal panel.
+3. Click the terminal prompt and run `printf "TERMINAL_EXEC_OK\n"`.
+4. Confirm `TERMINAL_EXEC_OK` appears in the terminal.
+5. Switch to dark theme and repeat steps 1-4.
+
+#### Expected Results
+- Terminal attach succeeds without `posix_spawnp failed`.
+- The PTY prompt accepts input and prints command output.
+- Browser console has no error logs from terminal attach or input.
+- Terminal panel, controls, and output remain readable in both light theme and dark theme.
+
+#### Rollback/Cleanup
+- Close any disposable terminal tabs opened during verification.
