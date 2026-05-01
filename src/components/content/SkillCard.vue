@@ -23,7 +23,7 @@
             <span v-else-if="skill.installed" class="skill-card-badge">{{ t('Installed') }}</span>
           </template>
         </div>
-        <span class="skill-card-owner">{{ skill.owner }}</span>
+        <span v-if="showOwner" class="skill-card-owner">{{ skill.owner }}</span>
       </div>
       <button
         v-if="showBrowseAction && skill.installed && skillDirPath"
@@ -61,15 +61,18 @@ const props = withDefaults(defineProps<{
   }
   showStatusBadge?: boolean
   showBrowseAction?: boolean
+  showOwner?: boolean
 }>(), {
   showStatusBadge: true,
   showBrowseAction: true,
+  showOwner: true,
 })
 
 defineEmits<{ select: [skill: unknown] }>()
 const { t } = useUiLanguage()
 const showStatusBadge = computed(() => props.showStatusBadge !== false)
 const showBrowseAction = computed(() => props.showBrowseAction !== false)
+const showOwner = computed(() => props.showOwner !== false)
 
 const skillDirPath = computed(() => {
   const p = props.skill.path

@@ -629,6 +629,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getDirectoryComposioStatus,
   getMethodCatalog,
@@ -734,6 +735,9 @@ const emit = defineEmits<{
   'try-item': [payload: DirectoryTryItemPayload]
 }>()
 
+const route = useRoute()
+const router = useRouter()
+
 const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
   { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
@@ -741,7 +745,15 @@ const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'skills', label: 'Skills', subtitle: 'MCPs first, then installed skills and GitHub sync state.' },
 ]
 
-const activeTab = ref<DirectoryTab>('plugins')
+function isDirectoryTab(value: unknown): value is DirectoryTab {
+  return value === 'plugins' || value === 'apps' || value === 'composio' || value === 'skills'
+}
+
+function tabFromRoute(): DirectoryTab {
+  return isDirectoryTab(route.query.tab) ? route.query.tab : 'skills'
+}
+
+const activeTab = ref<DirectoryTab>(tabFromRoute())
 const methodSet = ref<Set<string>>(new Set())
 const methodsLoaded = ref(false)
 const plugins = ref<DirectoryPluginSummary[]>([])
@@ -1569,7 +1581,17 @@ function toggleMcpExpanded(name: string): void {
   expandedMcpNames.value = next
 }
 
-watch(activeTab, () => refreshActiveTab())
+watch(activeTab, (tab) => {
+  if (route.name === 'skills' && route.query.tab !== tab) {
+    void router.replace({ name: 'skills', query: { ...route.query, tab } })
+  }
+  refreshActiveTab()
+})
+watch(() => route.query.tab, () => {
+  if (route.name !== 'skills') return
+  const tab = tabFromRoute()
+  if (activeTab.value !== tab) activeTab.value = tab
+})
 watch(composioSearchQuery, () => {
   if (activeTab.value !== 'composio') return
   composioConnectors.value = []
@@ -1591,7 +1613,7 @@ watch(() => props.threadId, () => {
 
 onMounted(async () => {
   await loadMethods()
-  await loadPlugins()
+  refreshActiveTab()
 })
 </script>
 

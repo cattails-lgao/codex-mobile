@@ -99,6 +99,7 @@
           :key="skill.name"
           :skill="skill"
           :show-status-badge="false"
+          :show-owner="false"
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>

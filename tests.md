@@ -3351,7 +3351,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 
 #### Steps
 1. Open `http://127.0.0.1:4173/#/skills`
-2. Switch to the `Skills` tab
+2. Verify the `Skills` tab is selected by default; open `http://127.0.0.1:4173/#/skills?tab=plugins`, then click `Skills` and verify the URL updates to `?tab=skills`
 3. In `Find skills`, type a query such as `browser`
 4. Click `Search`
 5. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
@@ -3364,7 +3364,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 12. Verify installed matches in search results keep their remote registry owner/details while showing the `Installed` badge
 13. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
 14. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
-15. Verify cards in the `Installed skills (count)` section do not show `Installed` or `Disabled` status labels, while search result cards can still show installed state
+15. Verify cards in the `Installed skills (count)` section do not show `Installed`, `Disabled`, or repeated `local` owner labels, while search result cards can still show installed state and registry owner details
 16. Verify Find skills result cards do not show the local folder browse icon; Browse files remains available inside the installed local modal
 
 #### Expected Results
@@ -3382,6 +3382,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
 - Local-only installed skills hide the external GitHub link when no URL is available
 - Installed skills section cards hide redundant installed/disabled status labels
+- Installed skills section cards hide the repeated local owner label; registry search cards keep owner/repository labels to distinguish remote results
 - Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
 - Light theme and dark theme keep the search panel, cards, and modal readable
 
