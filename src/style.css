@@ -778,11 +778,11 @@
   @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
 }
 
-:root.dark .content-header-terminal-command {
+:root.dark .content-header-terminal-command .composer-dropdown-trigger {
   @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 focus:border-zinc-600;
 }
 
-:root.dark .content-header-terminal-command.is-open {
+:root.dark .content-header-terminal-command.is-open .composer-dropdown-trigger {
   @apply border-zinc-600 bg-zinc-800 text-zinc-100;
 }
 

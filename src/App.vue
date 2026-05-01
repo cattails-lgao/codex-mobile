@@ -479,21 +479,16 @@
             </span>
           </template>
           <template #actions>
-            <select
+            <ComposerDropdown
               v-if="canShowTerminalToggle"
               class="content-header-terminal-command"
               :class="{ 'is-open': isComposerTerminalOpen }"
-              :title="`${t('Open terminal')} (${terminalShortcutLabel})`"
-              :aria-label="t('Terminal command')"
-              @change="onHeaderTerminalCommandSelect"
-            >
-              <option value="">{{ terminalCommandPlaceholder }}</option>
-              <option v-for="command in terminalHeaderQuickCommands" :key="command.value" :value="command.value">
-                {{ command.label }}
-              </option>
-              <option :value="ADD_TERMINAL_COMMAND_VALUE">Add command...</option>
-              <option :value="TOGGLE_TERMINAL_COMMAND_VALUE">{{ isComposerTerminalOpen ? t('Hide terminal') : t('Open terminal') }}</option>
-            </select>
+              :model-value="terminalHeaderDropdownValue"
+              :options="terminalHeaderDropdownOptions"
+              :placeholder="terminalCommandPlaceholder"
+              :empty-label="t('No commands')"
+              @update:model-value="onSelectHeaderTerminalCommand"
+            />
             <ComposerDropdown
               v-if="route.name === 'thread' && selectedThreadId"
               class="content-header-branch-dropdown"
@@ -1152,6 +1147,7 @@ const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
 const terminalProjectQuickCommands = ref<ThreadTerminalQuickCommand[]>([])
 const terminalStoredQuickCommands = ref<TerminalHeaderQuickCommand[]>(loadTerminalStoredQuickCommands())
+const terminalHeaderDropdownValue = ref('')
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const directoryTryInFlightKey = ref('')
@@ -1605,6 +1601,11 @@ const terminalHeaderQuickCommands = computed<TerminalHeaderQuickCommand[]>(() =>
     .sort(compareTerminalQuickCommands)
     .slice(0, MAX_HEADER_TERMINAL_COMMANDS)
 })
+const terminalHeaderDropdownOptions = computed(() => [
+  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
+  { label: 'Add command...', value: ADD_TERMINAL_COMMAND_VALUE },
+  { label: isComposerTerminalOpen.value ? t('Hide terminal') : t('Open terminal'), value: TOGGLE_TERMINAL_COMMAND_VALUE },
+])
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
   const keyboardInset = Math.max(
@@ -2297,12 +2298,8 @@ function toggleComposerTerminal(): void {
   }
 }
 
-function onHeaderTerminalCommandSelect(event: Event): void {
-  const select = event.target instanceof HTMLSelectElement ? event.target : null
-  const command = select?.value.trim() ?? ''
-  if (select) {
-    select.value = ''
-  }
+function onSelectHeaderTerminalCommand(command: string): void {
+  terminalHeaderDropdownValue.value = ''
   if (!command) return
   if (command === TOGGLE_TERMINAL_COMMAND_VALUE) {
     toggleComposerTerminal()
@@ -4005,10 +4002,14 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-header-terminal-command {
-  @apply h-8 max-w-48 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none transition hover:bg-zinc-50 focus:border-zinc-300;
+  @apply max-w-48;
 }
 
-.content-header-terminal-command.is-open {
+.content-header-terminal-command :deep(.composer-dropdown-trigger) {
+  @apply h-8 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none transition hover:bg-zinc-50 focus:border-zinc-300;
+}
+
+.content-header-terminal-command.is-open :deep(.composer-dropdown-trigger) {
   @apply border-zinc-300 bg-zinc-100 text-zinc-950;
 }
 
