@@ -3338,6 +3338,40 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 
 ---
 
+### Skills tab npx skills search
+
+#### Feature/Change Name
+The Skills tab includes a registry search panel backed by `npx skills find`, shows matching skill cards, and installs selected registry results with `npx skills add`.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Network access available for `npx skills find`
+3. `npx` can run the published `skills` package
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/skills`
+2. Switch to the `Skills` tab
+3. In `Find skills`, type a query such as `browser`
+4. Click `Search`
+5. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
+6. Verify `Search results (count)` appears above `Installed skills (count)`
+7. Open one result and verify the detail modal shows the skill name, owner/repository, install count description, and external link
+8. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill>`
+9. After install, verify the result becomes installed and the installed skills list refreshes
+10. Switch to dark theme and repeat the search visibility check
+
+#### Expected Results
+- Search results are parsed from the real `npx skills find` output, not a static catalog
+- The search UI does not replace or hide local installed skills
+- Installed matching results show the existing `Installed` badge and can be opened like local skills
+- Light theme and dark theme keep the search panel, cards, and modal readable
+
+#### Rollback/Cleanup
+- Uninstall any skill installed only for this test
+
+---
+
 ### Sidebar thread row edge click selects thread
 
 #### Feature/Change Name

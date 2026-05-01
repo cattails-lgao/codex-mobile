@@ -50,6 +50,41 @@
 
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
 
+    <div class="skills-search-panel">
+      <div class="skills-search-copy">
+        <strong>{{ t('Find skills') }}</strong>
+        <span>{{ t('Search the Skills registry with npx skills find.') }}</span>
+      </div>
+      <form class="skills-search-form" @submit.prevent="searchSkills">
+        <input
+          v-model="skillSearchQuery"
+          class="skills-search-input"
+          type="search"
+          :placeholder="t('Search skills...')"
+          aria-label="Search skills"
+        />
+        <button class="skills-hub-sort" type="submit" :disabled="isSearchingSkills || skillSearchQuery.trim().length < 2">
+          {{ isSearchingSkills ? t('Searching...') : t('Search') }}
+        </button>
+      </form>
+      <div v-if="skillSearchError" class="skills-hub-error">{{ skillSearchError }}</div>
+    </div>
+
+    <div v-if="skillSearchResults.length > 0" class="skills-hub-section">
+      <button class="skills-hub-section-toggle" type="button" @click="isSearchResultsOpen = !isSearchResultsOpen">
+        <span class="skills-hub-section-title">{{ t('Search results ({count})', { count: skillSearchResults.length }) }}</span>
+        <IconTablerChevronRight class="skills-hub-section-chevron" :class="{ 'is-open': isSearchResultsOpen }" />
+      </button>
+      <div v-if="isSearchResultsOpen" class="skills-hub-grid">
+        <SkillCard
+          v-for="skill in skillSearchResults"
+          :key="skill.source || `${skill.owner}/${skill.name}`"
+          :skill="skill"
+          @select="(skill) => openDetail(skill as HubSkill)"
+        />
+      </div>
+    </div>
+
     <slot name="before-installed" />
 
     <div v-if="filteredInstalled.length > 0" class="skills-hub-section">
@@ -98,11 +133,17 @@ import { useUiLanguage } from '../../composables/useUiLanguage'
 
 const EMPTY_SKILL: HubSkill = { name: '', owner: '', description: '', url: '', installed: false }
 type SkillsHubPayload = { installed?: HubSkill[] }
+type SkillsSearchPayload = { results?: HubSkill[]; error?: string }
 
 const installedSkills = ref<HubSkill[]>([])
+const skillSearchResults = ref<HubSkill[]>([])
 const isLoading = ref(false)
+const isSearchingSkills = ref(false)
 const error = ref('')
+const skillSearchQuery = ref('')
+const skillSearchError = ref('')
 const isInstalledOpen = ref(true)
+const isSearchResultsOpen = ref(true)
 const isDetailOpen = ref(false)
 const detailSkill = ref<HubSkill>(EMPTY_SKILL)
 const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -146,6 +187,13 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
 
 function applySkillsPayload(payload: SkillsHubPayload): void {
   installedSkills.value = payload.installed ?? []
+  if (skillSearchResults.value.length > 0) {
+    const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
+    skillSearchResults.value = skillSearchResults.value.map((skill) => {
+      const installed = installedByName.get(skill.name)
+      return installed ? { ...skill, installed: true, path: installed.path, enabled: installed.enabled } : skill
+    })
+  }
 }
 
 async function fetchSkills(): Promise<void> {
@@ -168,6 +216,28 @@ function openDetail(skill: HubSkill): void {
   isDetailOpen.value = true
 }
 
+async function searchSkills(): Promise<void> {
+  const query = skillSearchQuery.value.trim()
+  if (query.length < 2) return
+  isSearchingSkills.value = true
+  skillSearchError.value = ''
+  try {
+    const params = new URLSearchParams({ q: query })
+    const resp = await fetch(`/codex-api/skills-hub/search?${params}`)
+    const data = (await resp.json()) as SkillsSearchPayload
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
+    skillSearchResults.value = data.results ?? []
+    isSearchResultsOpen.value = true
+    if (skillSearchResults.value.length === 0) {
+      showToast(t('No matching skills found.'), 'error')
+    }
+  } catch (e) {
+    skillSearchError.value = e instanceof Error ? e.message : 'Failed to search skills'
+  } finally {
+    isSearchingSkills.value = false
+  }
+}
+
 async function handleInstall(skill: HubSkill): Promise<void> {
   actionSkillKey.value = `${skill.owner}/${skill.name}`
   isInstallActionInFlight.value = true
@@ -175,7 +245,7 @@ async function handleInstall(skill: HubSkill): Promise<void> {
     const resp = await fetch('/codex-api/skills-hub/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ owner: skill.owner, name: skill.name }),
+      body: JSON.stringify({ owner: skill.owner, name: skill.name, source: skill.source }),
     })
     const data = (await resp.json()) as { ok?: boolean; error?: string; path?: string }
     if (!data.ok) throw new Error(data.error || 'Install failed')
@@ -329,6 +399,26 @@ onMounted(() => {
 
 .skills-sync-actions {
   @apply flex flex-wrap gap-2;
+}
+
+.skills-search-panel {
+  @apply rounded-xl border border-zinc-200 bg-white p-3 flex flex-col gap-2;
+}
+
+.skills-search-copy {
+  @apply flex flex-col gap-0.5 text-sm text-zinc-700;
+}
+
+.skills-search-copy span {
+  @apply text-xs text-zinc-500;
+}
+
+.skills-search-form {
+  @apply flex flex-col gap-2 sm:flex-row;
+}
+
+.skills-search-input {
+  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
 }
 
 .skills-hub-toast {

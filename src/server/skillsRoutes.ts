@@ -245,6 +245,7 @@ type SkillHubEntry = {
   avatarUrl: string
   url: string
   installed: boolean
+  source?: string
   path?: string
   enabled?: boolean
 }
@@ -276,6 +277,48 @@ function buildLocalHubEntry(info: InstalledSkillInfo): SkillHubEntry {
     path: info.path,
     enabled: info.enabled,
   }
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/gu, '')
+}
+
+function parseNpxSkillsFindOutput(output: string, installedMap: Map<string, InstalledSkillInfo>): SkillHubEntry[] {
+  const lines = stripAnsi(output).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean)
+  const results: SkillHubEntry[] = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+    const match = line.match(/^(.+?@[^@\s]+)\s+([\d.]+[KMB]?)\s+installs$/iu)
+    if (!match) continue
+    const source = match[1]?.trim() ?? ''
+    const installs = match[2]?.trim() ?? ''
+    const atIndex = source.lastIndexOf('@')
+    if (atIndex <= 0 || atIndex >= source.length - 1) continue
+    const owner = source.slice(0, atIndex)
+    const name = source.slice(atIndex + 1)
+    let url = ''
+    const next = lines[index + 1] ?? ''
+    const urlMatch = next.match(/(?:^└\s*)?(https?:\/\/\S+)$/u)
+    if (urlMatch?.[1]) {
+      url = urlMatch[1]
+      index += 1
+    }
+    const installedInfo = installedMap.get(name)
+    results.push({
+      name,
+      owner,
+      displayName: name,
+      description: installs ? `${installs} installs` : '',
+      publishedAt: 0,
+      avatarUrl: '',
+      url,
+      installed: Boolean(installedInfo),
+      source,
+      path: installedInfo?.path,
+      enabled: installedInfo?.enabled,
+    })
+  }
+  return results
 }
 
 type RpcSkillRecord = {
@@ -1166,6 +1209,23 @@ export async function handleSkillsRoutes(
     return true
   }
 
+  if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub/search') {
+    try {
+      const query = (url.searchParams.get('q') || '').trim()
+      if (query.length < 2) {
+        setJson(res, 200, { results: [] })
+        return true
+      }
+      const installedMap = await scanInstalledSkillsFromDisk()
+      const output = await runCommandWithOutput('npx', ['skills', 'find', query], { timeoutMs: 60_000 })
+      const results = parseNpxSkillsFindOutput(output, installedMap)
+      setJson(res, 200, { results })
+    } catch (error) {
+      setJson(res, 502, { error: getErrorMessage(error, 'Failed to search skills') })
+    }
+    return true
+  }
+
   if (req.method === 'GET' && url.pathname === '/codex-api/skills-sync/status') {
     const state = await readSkillsSyncState()
     setJson(res, 200, {
@@ -1380,7 +1440,28 @@ export async function handleSkillsRoutes(
   }
 
   if (req.method === 'POST' && url.pathname === '/codex-api/skills-hub/install') {
-    setJson(res, 410, { error: 'Remote Skills Hub installation is disabled.' })
+    try {
+      const payload = asRecord(await readJsonBody(req))
+      const source = typeof payload?.source === 'string' ? payload.source.trim() : ''
+      const owner = typeof payload?.owner === 'string' ? payload.owner.trim() : ''
+      const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
+      const installSource = source || (owner && name ? `${owner}@${name}` : '')
+      if (!installSource || !/^[A-Za-z0-9._/-]+@[A-Za-z0-9._-]+$/u.test(installSource)) {
+        setJson(res, 400, { error: 'Missing or invalid skill source' })
+        return true
+      }
+      await runCommand('npx', ['skills', 'add', installSource], { timeoutMs: 120_000 })
+      try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
+      const installedMap = await scanInstalledSkillsFromDisk()
+      const installed = installedMap.get(name || installSource.slice(installSource.lastIndexOf('@') + 1))
+      if (installed?.path) {
+        await ensureInstalledSkillIsValid(appServer, installed.path)
+      }
+      autoPushSyncedSkills(appServer).catch(() => {})
+      setJson(res, 200, { ok: true, path: installed?.path ?? '' })
+    } catch (error) {
+      setJson(res, 502, { error: getErrorMessage(error, 'Failed to install skill') })
+    }
     return true
   }
 

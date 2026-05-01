@@ -103,6 +103,7 @@ export type HubSkill = {
   avatarUrl?: string
   url: string
   installed: boolean
+  source?: string
   path?: string
   enabled?: boolean
 }

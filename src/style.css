@@ -1319,6 +1319,22 @@
   @apply border-rose-800 bg-rose-950/40 text-rose-200;
 }
 
+:root.dark .skills-search-panel {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .skills-search-copy {
+  @apply text-zinc-200;
+}
+
+:root.dark .skills-search-copy span {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-search-input {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100 placeholder-zinc-500 focus:border-zinc-600 focus:bg-zinc-900;
+}
+
 :root.dark .skills-hub-section-toggle {
   @apply text-zinc-300 hover:text-zinc-100;
 }
