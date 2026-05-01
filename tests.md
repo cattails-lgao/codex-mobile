@@ -3385,6 +3385,8 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - Installed skills section cards hide redundant installed/disabled status labels
 - Installed skills section cards hide the repeated local owner label; registry search cards keep owner/repository labels to distinguish remote results
 - Installed skill descriptions come from the local installed `SKILL.md`, so installed cards are useful without opening each modal
+- Installed entries are assembled concurrently so reading local `SKILL.md` descriptions does not add one file-read round trip per installed skill
+- Opening or switching to the Skills tab lists MCP servers without forcing an MCP reload; the top-level Refresh button remains the explicit reload action
 - Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
 - Light theme and dark theme keep the search panel, cards, and modal readable
 

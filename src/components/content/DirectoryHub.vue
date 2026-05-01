@@ -6,7 +6,7 @@
         <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
       </div>
       <div class="directory-header-actions">
-        <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab">
+        <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab(true)">
           {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
@@ -1341,12 +1341,12 @@ async function refreshMcpStatusesForPluginDetail(): Promise<void> {
   }
 }
 
-function refreshActiveTab(): void {
+function refreshActiveTab(forceReload = false): void {
   if (activeTab.value === 'plugins') void loadPlugins()
   if (activeTab.value === 'apps') void loadApps()
   if (activeTab.value === 'composio') void loadComposio()
   if (activeTab.value === 'skills') {
-    if (supportsMcpReload.value) void reloadMcps()
+    if (forceReload && supportsMcpReload.value) void reloadMcps()
     else void loadMcps()
   }
 }

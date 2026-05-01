@@ -1308,10 +1308,7 @@ export async function handleSkillsRoutes(
   if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub') {
     try {
       const installedMap = await collectInstalledSkillsMap(appServer)
-      const installed: SkillHubEntry[] = []
-      for (const [, info] of installedMap) {
-        installed.push(await buildLocalHubEntry(info))
-      }
+      const installed = await Promise.all([...installedMap.values()].map((info) => buildLocalHubEntry(info)))
       installed.sort((a, b) => a.name.localeCompare(b.name))
       setJson(res, 200, { installed })
     } catch (error) {
