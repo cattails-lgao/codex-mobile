@@ -3294,7 +3294,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 19. If Composio cannot start through npx, click `Check npx` and verify the app probes `npx --yes composio --version` instead of installing a separate CLI binary
 20. If Composio is available but not authenticated, click `Login` and verify the app opens a new tab, starts `npx --yes composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
 21. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
-22. In Composio search, type `instagram` and verify the Instagram connector appears in the results
+22. In Composio search, type `instagram` and verify the Instagram connector appears first when it is returned by the connector source, ahead of description-only matches such as Meta Ads
 23. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
 24. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
 25. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
@@ -3321,6 +3321,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - The Composio check action probes `npx --yes composio --version` instead of installing a separate CLI binary
 - The Composio login action opens a new tab from the click, starts `npx --yes composio login --no-browser -y`, then navigates that tab to the returned auth URL
 - Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
+- Composio search prioritizes exact slug/name matches above connectors that only mention the query in their description
 - Connected or no-auth Composio connectors expose `Try it!`, creating a new chat with the `composio-cli` skill attached
 - Composio pagination supports page-by-page loading with a clear `Load more` path and cursor-based page continuation
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
@@ -3387,6 +3388,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - Installed skill descriptions come from the local installed `SKILL.md`, so installed cards are useful without opening each modal
 - Installed entries are assembled concurrently so reading local `SKILL.md` descriptions does not add one file-read round trip per installed skill
 - Opening or switching to the Skills tab lists MCP servers without forcing an MCP reload; the top-level Refresh button remains the explicit reload action
+- The top-level Refresh button only shows `Refreshing...` for explicit user-triggered refreshes, not for ordinary initial tab loading
 - Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
 - Light theme and dark theme keep the search panel, cards, and modal readable
 

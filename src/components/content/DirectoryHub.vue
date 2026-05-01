@@ -6,8 +6,8 @@
         <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
       </div>
       <div class="directory-header-actions">
-        <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab(true)">
-          {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
+        <button class="directory-refresh" type="button" :disabled="isManualRefreshInFlight" @click="manualRefreshActiveTab">
+          {{ isManualRefreshInFlight ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
     </div>
@@ -774,6 +774,7 @@ const isLoadingApps = ref(false)
 const isLoadingComposio = ref(false)
 const isLoadingMcps = ref(false)
 const isReloadingMcps = ref(false)
+const isManualRefreshInFlight = ref(false)
 const isMcpSectionOpen = ref(true)
 const pluginError = ref('')
 const appError = ref('')
@@ -811,13 +812,6 @@ const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has(
 const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
 const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/login'))
 const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length > 0)
-const isActiveLoading = computed(() =>
-  activeTab.value === 'plugins' ? isLoadingPlugins.value
-    : activeTab.value === 'apps' ? isLoadingApps.value
-      : activeTab.value === 'composio' ? isLoadingComposio.value
-      : activeTab.value === 'skills' ? isLoadingMcps.value
-        : false,
-)
 const selectedPluginDescription = computed(() =>
   selectedPluginDetail.value?.description ||
   selectedPluginDetail.value?.summary.longDescription ||
@@ -851,7 +845,11 @@ const selectedPluginInstallUnavailable = computed(() =>
 )
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
-const visibleComposioConnectors = computed(() => sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value))
+const visibleComposioConnectors = computed(() => sortComposioConnectors(
+  filterComposioConnectors(composioConnectors.value, composioSearchQuery.value),
+  composioSortMode.value,
+  composioSearchQuery.value,
+))
 const visibleMcpServers = computed(() => sortMcpServers(mcpServers.value, 'popular'))
 const hasMoreComposioConnectors = computed(() => composioNextCursor.value !== null)
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
@@ -1068,6 +1066,18 @@ function composioPopularScore(connector: DirectoryComposioConnector): number {
   )
 }
 
+function composioQueryScore(connector: DirectoryComposioConnector, query: string): number {
+  const normalized = normalizeSearch(query)
+  if (!normalized) return 0
+  const name = connector.name.toLowerCase()
+  const slug = connector.slug.toLowerCase()
+  if (name === normalized || slug === normalized) return 1_000_000
+  if (name.replace(/\s+/gu, '') === normalized.replace(/\s+/gu, '')) return 900_000
+  if (name.startsWith(normalized) || slug.startsWith(normalized)) return 800_000
+  if (name.includes(normalized) || slug.includes(normalized)) return 700_000
+  return 0
+}
+
 function composioConnectionRank(connector: DirectoryComposioConnector): number {
   if (connector.activeCount > 0) return 0
   if (connector.totalConnections > 0) return 1
@@ -1087,16 +1097,23 @@ function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): Direct
   return [...rows].sort((a, b) => (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
-function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode): DirectoryComposioConnector[] {
+function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode, query = ''): DirectoryComposioConnector[] {
+  const normalizedQuery = normalizeSearch(query)
+  const queryRank = (connector: DirectoryComposioConnector) => composioQueryScore(connector, normalizedQuery)
   if (sortMode === 'name') {
     return [...rows].sort((a, b) => (
-      composioConnectionRank(a) - composioConnectionRank(b)
+      (queryRank(b) - queryRank(a)) ||
+      (composioConnectionRank(a) - composioConnectionRank(b))
     ) || a.name.localeCompare(b.name))
   }
   if (sortMode === 'date') {
-    return [...rows].sort((a, b) => composioConnectionRank(a) - composioConnectionRank(b))
+    return [...rows].sort((a, b) => (
+      (queryRank(b) - queryRank(a)) ||
+      (composioConnectionRank(a) - composioConnectionRank(b))
+    ) || a.name.localeCompare(b.name))
   }
   return [...rows].sort((a, b) => (
+    (queryRank(b) - queryRank(a)) ||
     composioConnectionRank(a) - composioConnectionRank(b)
   ) || (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
@@ -1348,6 +1365,19 @@ function refreshActiveTab(forceReload = false): void {
   if (activeTab.value === 'skills') {
     if (forceReload && supportsMcpReload.value) void reloadMcps()
     else void loadMcps()
+  }
+}
+
+async function manualRefreshActiveTab(): Promise<void> {
+  isManualRefreshInFlight.value = true
+  try {
+    if (activeTab.value === 'plugins') await loadPlugins()
+    else if (activeTab.value === 'apps') await loadApps()
+    else if (activeTab.value === 'composio') await loadComposio()
+    else if (activeTab.value === 'skills' && supportsMcpReload.value) await reloadMcps()
+    else if (activeTab.value === 'skills') await loadMcps()
+  } finally {
+    isManualRefreshInFlight.value = false
   }
 }
 
