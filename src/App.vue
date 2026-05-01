@@ -111,7 +111,7 @@
                   <button
                     class="sidebar-settings-account-refresh"
                     type="button"
-                    :disabled="isRefreshingAccounts || isSwitchingAccounts"
+                    :disabled="isRefreshingAccounts || isSwitchingAccounts || isStartingCodexLogin || isCompletingCodexLogin"
                     @click="onRefreshAccounts"
                   >
                     {{ isRefreshingAccounts ? t('Reloading…') : t('Reload') }}
@@ -119,8 +119,45 @@
                 </div>
                 <template v-if="!isAccountsSectionCollapsed">
                   <p v-if="accountActionError" class="sidebar-settings-account-error">{{ accountActionError }}</p>
+                  <div class="sidebar-settings-account-login">
+                    <button
+                      class="sidebar-settings-account-login-button"
+                      type="button"
+                      :disabled="isRefreshingAccounts || isSwitchingAccounts || isStartingCodexLogin || isCompletingCodexLogin"
+                      @click="onStartCodexLogin"
+                    >
+                      {{ isStartingCodexLogin ? t('Starting login…') : t('Login') }}
+                    </button>
+                    <a
+                      v-if="codexLoginUrl"
+                      class="sidebar-settings-account-login-link"
+                      :href="codexLoginUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {{ t('Open login URL') }}
+                    </a>
+                  </div>
+                  <div v-if="codexLoginUrl" class="sidebar-settings-account-callback">
+                    <input
+                      v-model="codexLoginCallbackUrl"
+                      class="sidebar-settings-account-callback-input"
+                      type="url"
+                      inputmode="url"
+                      :placeholder="t('Paste localhost callback URL')"
+                      @keydown.enter.prevent="onCompleteCodexLogin"
+                    >
+                    <button
+                      class="sidebar-settings-account-callback-submit"
+                      type="button"
+                      :disabled="isCompletingCodexLogin || codexLoginCallbackUrl.trim().length === 0"
+                      @click="onCompleteCodexLogin"
+                    >
+                      {{ isCompletingCodexLogin ? t('Completing…') : t('Complete') }}
+                    </button>
+                  </div>
                   <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
-                    {{ t('Run `codex login`, then click reload.') }}
+                    {{ t('Click Login, or run `codex login`, then click reload.') }}
                   </p>
                   <div v-else class="sidebar-settings-account-list">
                   <article
@@ -877,6 +914,7 @@ import {
   getGitRepositoryStatus,
   getWorktreeBranchOptions,
   getAccounts,
+  completeCodexLogin,
   createLocalDirectory,
   getFirstLaunchPluginsCardPreference,
   getHomeDirectory,
@@ -890,6 +928,7 @@ import {
   persistFirstLaunchPluginsCardPreference,
   removeAccount,
   refreshAccountsFromAuth,
+  startCodexLogin,
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
@@ -1170,6 +1209,10 @@ const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
 const isSwitchingAccounts = ref(false)
+const isStartingCodexLogin = ref(false)
+const isCompletingCodexLogin = ref(false)
+const codexLoginUrl = ref('')
+const codexLoginCallbackUrl = ref('')
 const removingAccountId = ref('')
 const confirmingRemoveAccountId = ref('')
 const hoveredAccountId = ref('')
@@ -1837,7 +1880,7 @@ function isAccountUnavailable(account: UiAccountEntry): boolean {
 }
 
 function isAccountActionDisabled(account: UiAccountEntry): boolean {
-  return isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0
+  return isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value || removingAccountId.value.length > 0
     || (account.isActive && removingAccountId.value !== account.accountId && isAccountSwitchBlocked.value)
 }
 
@@ -1959,7 +2002,7 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
 }
 
 async function onRefreshAccounts(): Promise<void> {
-  if (isRefreshingAccounts.value || isSwitchingAccounts.value) return
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
   accountActionError.value = ''
   hoveredAccountId.value = ''
   confirmingRemoveAccountId.value = ''
@@ -1979,8 +2022,45 @@ async function onRefreshAccounts(): Promise<void> {
   }
 }
 
+async function onStartCodexLogin(): Promise<void> {
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
+  accountActionError.value = ''
+  codexLoginCallbackUrl.value = ''
+  isStartingCodexLogin.value = true
+  try {
+    const loginUrl = await startCodexLogin()
+    codexLoginUrl.value = loginUrl
+    window.open(loginUrl, '_blank', 'noopener,noreferrer')
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : t('Failed to start Codex login')
+  } finally {
+    isStartingCodexLogin.value = false
+  }
+}
+
+async function onCompleteCodexLogin(): Promise<void> {
+  if (isCompletingCodexLogin.value || codexLoginCallbackUrl.value.trim().length === 0) return
+  accountActionError.value = ''
+  isCompletingCodexLogin.value = true
+  try {
+    const result = await completeCodexLogin(codexLoginCallbackUrl.value.trim())
+    accounts.value = result.accounts
+    codexLoginUrl.value = ''
+    codexLoginCallbackUrl.value = ''
+    stopPolling()
+    startPolling()
+    void refreshAll({
+      includeSelectedThreadMessages: true,
+    })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : t('Failed to complete Codex login')
+  } finally {
+    isCompletingCodexLogin.value = false
+  }
+}
+
 async function onSwitchAccount(accountId: string): Promise<void> {
-  if (isSwitchingAccounts.value || isRefreshingAccounts.value) return
+  if (isSwitchingAccounts.value || isRefreshingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
   if (isAccountSwitchBlocked.value) {
     accountActionError.value = t('Finish the current turn and pending requests before switching accounts.')
     return
@@ -2010,7 +2090,7 @@ async function onSwitchAccount(accountId: string): Promise<void> {
 }
 
 async function onRemoveAccount(accountId: string): Promise<void> {
-  if (isRefreshingAccounts.value || isSwitchingAccounts.value || removingAccountId.value.length > 0) return
+  if (isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value || removingAccountId.value.length > 0) return
   const targetAccount = accounts.value.find((account) => account.accountId === accountId) ?? null
   if (!targetAccount) return
   if (confirmingRemoveAccountId.value !== accountId) {
@@ -4343,6 +4423,30 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-account-refresh {
+  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-login {
+  @apply mb-2 flex items-center gap-2;
+}
+
+.sidebar-settings-account-login-button {
+  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-login-link {
+  @apply min-w-0 truncate text-xs text-blue-600 hover:text-blue-700 hover:underline;
+}
+
+.sidebar-settings-account-callback {
+  @apply mb-2 flex items-center gap-2;
+}
+
+.sidebar-settings-account-callback-input {
+  @apply min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-zinc-400 disabled:cursor-default disabled:opacity-60;
+}
+
+.sidebar-settings-account-callback-submit {
   @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 

@@ -1219,6 +1219,37 @@ export async function refreshAccountsFromAuth(): Promise<AccountsListResult> {
   return normalizeAccountsListResult(envelope?.data)
 }
 
+export async function startCodexLogin(): Promise<string> {
+  const response = await fetch('/codex-api/accounts/login/start', {
+    method: 'POST',
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to start Codex login'))
+  }
+  const envelope = asRecord(payload)
+  const data = asRecord(envelope?.data)
+  const loginUrl = readString(data?.loginUrl)
+  if (!loginUrl) {
+    throw new Error('Failed to start Codex login')
+  }
+  return loginUrl
+}
+
+export async function completeCodexLogin(callbackUrl: string): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts/login/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callbackUrl }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to complete Codex login'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
+}
+
 export async function switchAccount(accountId: string): Promise<UiAccountEntry> {
   const response = await fetch('/codex-api/accounts/switch', {
     method: 'POST',
