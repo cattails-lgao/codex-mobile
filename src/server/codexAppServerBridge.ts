@@ -4191,6 +4191,7 @@ class AppServerProcess {
 
 class BackendQueueProcessor {
   private readonly processingThreadIds = new Set<string>()
+  private readonly queueDrainTimersByThreadId = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly unsubscribe: () => void
 
   constructor(private readonly appServer: AppServerProcess) {
@@ -4200,29 +4201,86 @@ class BackendQueueProcessor {
       if (!threadId) return
       void this.processThreadQueue(threadId)
     })
+    void this.scheduleAllQueuedThreads(1000)
   }
 
   dispose(): void {
     this.unsubscribe()
+    for (const timer of this.queueDrainTimersByThreadId.values()) {
+      clearTimeout(timer)
+    }
+    this.queueDrainTimersByThreadId.clear()
     this.processingThreadIds.clear()
   }
 
-  private async processThreadQueue(threadId: string): Promise<void> {
+  async scheduleAllQueuedThreads(delayMs = 0): Promise<void> {
+    try {
+      const state = await readThreadQueueState()
+      for (const threadId of Object.keys(state)) {
+        this.scheduleThreadQueueDrain(threadId, delayMs)
+      }
+    } catch {
+      // Queue recovery is best-effort; normal turn-completed events can still drain later.
+    }
+  }
+
+  scheduleThreadQueueDrain(threadId: string, delayMs = 5000): void {
+    if (!threadId || this.queueDrainTimersByThreadId.has(threadId)) return
+    const timer = setTimeout(() => {
+      this.queueDrainTimersByThreadId.delete(threadId)
+      void this.processThreadQueue(threadId)
+    }, Math.max(0, delayMs))
+    timer.unref?.()
+    this.queueDrainTimersByThreadId.set(threadId, timer)
+  }
+
+  async processThreadQueue(threadId: string): Promise<void> {
     if (this.processingThreadIds.has(threadId)) return
     this.processingThreadIds.add(threadId)
     try {
+      const canStart = await this.canStartQueuedTurn(threadId)
+      if (!canStart) {
+        if (await this.hasQueuedTurns(threadId)) {
+          this.scheduleThreadQueueDrain(threadId)
+        }
+        return
+      }
       const next = await this.popNextQueuedTurn(threadId)
       if (!next) return
       try {
         await this.startQueuedTurn(next)
+        if (await this.hasQueuedTurns(threadId)) {
+          this.scheduleThreadQueueDrain(threadId)
+        }
       } catch {
         await this.restoreQueuedTurn(next)
+        this.scheduleThreadQueueDrain(threadId)
       }
     } catch {
       // Queue processing is best-effort. Keep the bridge alive if app-server is unavailable.
+      this.scheduleThreadQueueDrain(threadId)
     } finally {
       this.processingThreadIds.delete(threadId)
     }
+  }
+
+  private async hasQueuedTurns(threadId: string): Promise<boolean> {
+    const state = await readThreadQueueState()
+    const queue = state[threadId]
+    return Array.isArray(queue) && queue.length > 0
+  }
+
+  private async canStartQueuedTurn(threadId: string): Promise<boolean> {
+    const response = asRecord(await this.appServer.rpc('thread/read', { threadId, includeTurns: true }))
+    const thread = asRecord(response?.thread)
+    if (!thread) return false
+
+    const status = asRecord(thread.status)
+    const statusType = readNonEmptyString(status?.type)
+    if (statusType === 'inProgress' || statusType === 'running' || statusType === 'active') return false
+
+    const turns = Array.isArray(thread.turns) ? thread.turns : []
+    return !turns.some((turn) => readNonEmptyString(asRecord(turn)?.status) === 'inProgress')
   }
 
   private async popNextQueuedTurn(threadId: string): Promise<BackendQueuedTurn | null> {
@@ -5821,6 +5879,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
         await writeThreadQueueState(normalizeThreadQueueState(record))
+        void backendQueueProcessor.scheduleAllQueuedThreads()
         setJson(res, 200, { ok: true })
         return
       }
