@@ -4043,6 +4043,7 @@ Deleting the currently open thread immediately selects the next available thread
 - Deleting the active thread does not leave the deleted thread selected
 - The next thread is selected immediately; when there is no next thread, the previous thread is selected
 - The browser route updates to the newly selected thread without waiting for a manual click
+- A stale deleted-thread URL does not switch the UI back to the archived thread
 - Light-theme and dark-theme sidebar selection states remain readable after the automatic switch
 
 #### Rollback/Cleanup
