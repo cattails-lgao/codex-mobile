@@ -321,6 +321,67 @@ function parseNpxSkillsFindOutput(output: string, installedMap: Map<string, Inst
   return results
 }
 
+function parseGithubSkillSource(source: string): { ownerRepo: string; skillName: string } | null {
+  const atIndex = source.lastIndexOf('@')
+  if (atIndex <= 0 || atIndex >= source.length - 1) return null
+  const ownerRepo = source.slice(0, atIndex).trim()
+  const skillName = source.slice(atIndex + 1).trim()
+  const ownerRepoParts = ownerRepo.split('/').filter(Boolean)
+  if (ownerRepoParts.length !== 2 || skillName.length === 0) return null
+  if (ownerRepoParts.some((part) => part.includes(':') || part.includes(' '))) return null
+  return { ownerRepo, skillName }
+}
+
+function buildGithubSkillRawCandidates(source: string): string[] {
+  const parsed = parseGithubSkillSource(source)
+  if (!parsed) return []
+  const ownerRepo = parsed.ownerRepo.split('/').map(encodeURIComponent).join('/')
+  const skillName = encodeURIComponent(parsed.skillName)
+  const branches = ['main', 'master']
+  const paths = [
+    `skills/${skillName}/SKILL.md`,
+    `${skillName}/SKILL.md`,
+    'SKILL.md',
+  ]
+  return branches.flatMap((branch) => paths.map((path) => `https://raw.githubusercontent.com/${ownerRepo}/${branch}/${path}`))
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'codex-web-local' },
+      signal: controller.signal,
+    })
+    if (!resp.ok) return ''
+    return await resp.text()
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function fetchGithubSkillDescription(source: string): Promise<string> {
+  for (const candidate of buildGithubSkillRawCandidates(source)) {
+    try {
+      const markdown = await fetchTextWithTimeout(candidate, 4_000)
+      if (!markdown) continue
+      const description = extractSkillDescriptionFromMarkdown(markdown)
+      if (description) return description
+    } catch {}
+  }
+  return ''
+}
+
+async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<SkillHubEntry[]> {
+  return await Promise.all(results.map(async (result) => {
+    if (!result.source) return result
+    const description = await fetchGithubSkillDescription(result.source)
+    if (!description) return result
+    return { ...result, description }
+  }))
+}
+
 type RpcSkillRecord = {
   name?: string
   description?: string
@@ -468,6 +529,21 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
 
 function extractSkillDescriptionFromMarkdown(markdown: string): string {
   const lines = markdown.split(/\r?\n/)
+  if (lines[0]?.trim() === '---') {
+    const frontmatter: string[] = []
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index] ?? ''
+      if (line.trim() === '---') break
+      frontmatter.push(line)
+    }
+    const descriptionLine = frontmatter.find((line) => /^description\s*:/iu.test(line.trim()))
+    if (descriptionLine) {
+      return descriptionLine
+        .replace(/^description\s*:\s*/iu, '')
+        .replace(/^['"]|['"]$/gu, '')
+        .trim()
+    }
+  }
   let inCodeFence = false
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -1218,7 +1294,7 @@ export async function handleSkillsRoutes(
       }
       const installedMap = await scanInstalledSkillsFromDisk()
       const output = await runCommandWithOutput('npx', ['skills', 'find', query], { timeoutMs: 60_000 })
-      const results = parseNpxSkillsFindOutput(output, installedMap)
+      const results = await enrichSkillSearchDescriptions(parseNpxSkillsFindOutput(output, installedMap))
       setJson(res, 200, { results })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to search skills') })
