@@ -3357,7 +3357,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 5. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
 6. Verify `Search results (count)` appears above `Installed skills (count)`
 7. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
-8. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill>`
+8. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill> --yes --global`
 9. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
 10. Switch to dark theme and repeat the search visibility check
 11. Search for an already-installed skill and verify its search result shows `Installed`
@@ -3369,6 +3369,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
+- Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
 - GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
 - GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
 - The search UI does not replace or hide local installed skills

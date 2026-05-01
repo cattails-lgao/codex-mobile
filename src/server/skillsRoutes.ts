@@ -1440,7 +1440,7 @@ export async function handleSkillsRoutes(
         return true
       }
       const local = await collectLocalSyncedSkills(appServer)
-      const installedMap = await scanInstalledSkillsFromDisk()
+      const installedMap = await collectInstalledSkillsMap(appServer)
       await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
       await syncInstalledSkillsFolderToRepo(state.githubToken, state.repoOwner, state.repoName, installedMap)
       setJson(res, 200, { ok: true, data: { synced: local.length } })
@@ -1555,9 +1555,9 @@ export async function handleSkillsRoutes(
         setJson(res, 400, { error: 'Missing or invalid skill source' })
         return true
       }
-      await runCommand('npx', ['skills', 'add', installSource], { timeoutMs: 120_000 })
+      await runCommand('npx', ['skills', 'add', installSource, '--yes', '--global'], { timeoutMs: 120_000 })
       try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
-      const installedMap = await scanInstalledSkillsFromDisk()
+      const installedMap = await collectInstalledSkillsMap(appServer)
       const installed = installedMap.get(name || installSource.slice(installSource.lastIndexOf('@') + 1))
       if (installed?.path) {
         await ensureInstalledSkillIsValid(appServer, installed.path)
