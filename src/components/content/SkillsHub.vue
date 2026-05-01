@@ -97,6 +97,7 @@
           v-for="skill in filteredInstalled"
           :key="skill.name"
           :skill="skill"
+          :show-status-badge="false"
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>

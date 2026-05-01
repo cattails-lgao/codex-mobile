@@ -18,8 +18,10 @@
       <div class="skill-card-info">
         <div class="skill-card-header">
           <span class="skill-card-name">{{ skill.displayName || skill.name }}</span>
-          <span v-if="skill.installed && skill.enabled === false" class="skill-card-badge-disabled">{{ t('Disabled') }}</span>
-          <span v-else-if="skill.installed" class="skill-card-badge">{{ t('Installed') }}</span>
+          <template v-if="showStatusBadge">
+            <span v-if="skill.installed && skill.enabled === false" class="skill-card-badge-disabled">{{ t('Disabled') }}</span>
+            <span v-else-if="skill.installed" class="skill-card-badge">{{ t('Installed') }}</span>
+          </template>
         </div>
         <span class="skill-card-owner">{{ skill.owner }}</span>
       </div>
@@ -43,7 +45,7 @@ import { computed } from 'vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   skill: {
     name: string
     owner: string
@@ -57,10 +59,14 @@ const props = defineProps<{
     path?: string
     enabled?: boolean
   }
-}>()
+  showStatusBadge?: boolean
+}>(), {
+  showStatusBadge: true,
+})
 
 defineEmits<{ select: [skill: unknown] }>()
 const { t } = useUiLanguage()
+const showStatusBadge = computed(() => props.showStatusBadge !== false)
 
 const skillDirPath = computed(() => {
   const p = props.skill.path
