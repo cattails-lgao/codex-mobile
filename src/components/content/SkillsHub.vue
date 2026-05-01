@@ -274,9 +274,13 @@ async function handleInstall(skill: HubSkill): Promise<void> {
     })
     const data = (await resp.json()) as { ok?: boolean; error?: string; path?: string }
     if (!data.ok) throw new Error(data.error || 'Install failed')
+    if (!data.path) throw new Error('Install completed but no local skill path was returned')
     await fetchSkills()
     const installed = installedSkills.value.find((candidate) => candidate.name === skill.name)
-    detailSkill.value = installed ? localSearchSkill(installed, skill) : { ...skill, installed: true, path: data.path, enabled: true, owner: 'local', avatarUrl: '', url: '' }
+    if (!installed?.path) {
+      throw new Error('Install completed but the local skill was not found after refresh')
+    }
+    detailSkill.value = localSearchSkill(installed, skill)
     showToast(`${skill.displayName || skill.name} skill installed`)
     isDetailOpen.value = false
     emit('skills-changed')

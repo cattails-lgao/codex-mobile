@@ -1559,11 +1559,12 @@ export async function handleSkillsRoutes(
       try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
       const installedMap = await collectInstalledSkillsMap(appServer)
       const installed = installedMap.get(name || installSource.slice(installSource.lastIndexOf('@') + 1))
-      if (installed?.path) {
-        await ensureInstalledSkillIsValid(appServer, installed.path)
+      if (!installed?.path) {
+        throw new Error(`Skill install completed but ${installSource} was not found in local installed skills`)
       }
+      await ensureInstalledSkillIsValid(appServer, installed.path)
       autoPushSyncedSkills(appServer).catch(() => {})
-      setJson(res, 200, { ok: true, path: installed?.path ?? '' })
+      setJson(res, 200, { ok: true, path: installed.path })
     } catch (error) {
       setJson(res, 502, { error: getErrorMessage(error, 'Failed to install skill') })
     }

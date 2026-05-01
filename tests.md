@@ -3370,6 +3370,8 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
 - Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
+- Registry install responses only return `ok: true` when the local installed `SKILL.md` path is found and validates successfully
+- The UI treats a missing returned path or missing post-refresh local skill as an install failure instead of showing the remote registry card as installed
 - GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
 - GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
 - The search UI does not replace or hide local installed skills
