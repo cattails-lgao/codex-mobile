@@ -1,9 +1,5 @@
 # What To Test
 
-## Skills & Apps Directory
-
-- [ ] Verify failed registry installs do not show the remote registry card as installed.
-
 ## Composio Directory
 
 - [ ] Verify unauthenticated and unavailable Composio CLI states show clear actions.
