@@ -191,8 +191,17 @@ function applySkillsPayload(payload: SkillsHubPayload): void {
     const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
     skillSearchResults.value = skillSearchResults.value.map((skill) => {
       const installed = installedByName.get(skill.name)
-      return installed ? { ...skill, installed: true, path: installed.path, enabled: installed.enabled } : skill
+      return installed ? localSearchSkill(installed, skill) : skill
     })
+  }
+}
+
+function localSearchSkill(installed: HubSkill, registrySkill: HubSkill): HubSkill {
+  return {
+    ...installed,
+    installed: true,
+    source: registrySkill.source,
+    publishedAt: registrySkill.publishedAt,
   }
 }
 
@@ -213,15 +222,7 @@ async function fetchSkills(): Promise<void> {
 
 function openDetail(skill: HubSkill): void {
   const installedSkill = skill.installed ? installedSkills.value.find((candidate) => candidate.name === skill.name) : undefined
-  detailSkill.value = installedSkill
-    ? {
-        ...installedSkill,
-        avatarUrl: installedSkill.avatarUrl || skill.avatarUrl,
-        description: installedSkill.description || skill.description,
-        displayName: installedSkill.displayName || skill.displayName,
-        url: installedSkill.url || skill.url,
-      }
-    : skill
+  detailSkill.value = installedSkill ? localSearchSkill(installedSkill, skill) : skill
   isDetailOpen.value = true
 }
 
@@ -235,7 +236,11 @@ async function searchSkills(): Promise<void> {
     const resp = await fetch(`/codex-api/skills-hub/search?${params}`)
     const data = (await resp.json()) as SkillsSearchPayload
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
-    skillSearchResults.value = data.results ?? []
+    const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
+    skillSearchResults.value = (data.results ?? []).map((skill) => {
+      const installed = installedByName.get(skill.name)
+      return installed ? localSearchSkill(installed, skill) : skill
+    })
     isSearchResultsOpen.value = true
     if (skillSearchResults.value.length === 0) {
       showToast(t('No matching skills found.'), 'error')

@@ -3361,8 +3361,9 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 9. After install, verify the result becomes installed and the installed skills list refreshes
 10. Switch to dark theme and repeat the search visibility check
 11. Search for an already-installed skill and verify its search result shows `Installed`
-12. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
-13. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
+12. Verify the installed search result card itself shows the local installed skill owner/details, not the remote registry owner/install-count identity
+13. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
+14. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
@@ -3371,6 +3372,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - The search UI does not replace or hide local installed skills
 - Installed matching results show the existing `Installed` badge and can be opened like local skills
 - Installed detection uses the same installed skills source as the Skills Hub list, including RPC/plugin/shared skills and not only the base skills directory
+- Installed search result cards are rendered from the local installed skill record, so they show local ownership/content rather than remote registry metadata
 - Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
 - Local-only installed skills hide the external GitHub link when no URL is available
 - Light theme and dark theme keep the search panel, cards, and modal readable
