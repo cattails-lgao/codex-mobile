@@ -192,8 +192,17 @@ function applySkillsPayload(payload: SkillsHubPayload): void {
     const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
     skillSearchResults.value = skillSearchResults.value.map((skill) => {
       const installed = installedByName.get(skill.name)
-      return installed ? localSearchSkill(installed, skill) : skill
+      return installed ? registrySearchSkillWithLocalState(skill, installed) : skill
     })
+  }
+}
+
+function registrySearchSkillWithLocalState(registrySkill: HubSkill, installed: HubSkill): HubSkill {
+  return {
+    ...registrySkill,
+    installed: true,
+    path: installed.path,
+    enabled: installed.enabled,
   }
 }
 
@@ -240,7 +249,7 @@ async function searchSkills(): Promise<void> {
     const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
     skillSearchResults.value = (data.results ?? []).map((skill) => {
       const installed = installedByName.get(skill.name)
-      return installed ? localSearchSkill(installed, skill) : skill
+      return installed ? registrySearchSkillWithLocalState(skill, installed) : skill
     })
     isSearchResultsOpen.value = true
     if (skillSearchResults.value.length === 0) {
