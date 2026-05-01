@@ -1136,7 +1136,11 @@ const newThreadRuntime = ref<'local' | 'worktree'>('local')
 const newWorktreeBaseBranch = ref('')
 const worktreeBranchOptions = ref<WorktreeBranchOption[]>([])
 const isLoadingWorktreeBranches = ref(false)
-const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string> }>({ order: [], labels: {} })
+const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, string>; projectOrder: string[] }>({
+  order: [],
+  labels: {},
+  projectOrder: [],
+})
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
   title: '',
@@ -1382,17 +1386,58 @@ const threadContextSecondaryText = computed(() => {
 })
 
 const threadContextTooltip = computed(() => buildThreadContextTooltip(selectedThreadTokenUsage.value))
+
+function hasDuplicateFolderLeaf(path: string, knownPaths: string[]): boolean {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const leafName = getPathLeafName(normalizedPath)
+  if (!normalizedPath || !leafName) return false
+  return knownPaths.some((knownPath) => {
+    const normalizedKnownPath = normalizePathForUi(knownPath).trim()
+    return normalizedKnownPath !== normalizedPath && getPathLeafName(normalizedKnownPath) === leafName
+  })
+}
+
+function getFolderOptionLabel(path: string, fallbackLabel = ''): string {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const explicitLabel = fallbackLabel.trim()
+  if (explicitLabel) return explicitLabel
+  const leafName = getPathLeafName(normalizedPath)
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : leafName
+}
+
+function getOrderedWorkspaceRootOptions(): string[] {
+  const savedRoots = new Set(workspaceRootOptionsState.value.order)
+  const orderedRoots = workspaceRootOptionsState.value.projectOrder.filter((item) => savedRoots.has(item))
+  for (const rootPath of workspaceRootOptionsState.value.order) {
+    if (!orderedRoots.includes(rootPath)) orderedRoots.push(rootPath)
+  }
+  return orderedRoots
+}
+
+function getProjectOrderNameForPath(path: string): string {
+  const normalizedPath = normalizePathForUi(path).trim()
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : getPathLeafName(normalizedPath)
+}
+
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
 
-  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+  for (const cwdRaw of getOrderedWorkspaceRootOptions()) {
     const cwd = cwdRaw.trim()
     if (!cwd || seenCwds.has(cwd)) continue
     seenCwds.add(cwd)
     options.push({
       value: cwd,
-      label: workspaceRootOptionsState.value.labels[cwd] || getPathLeafName(cwd),
+      label: getFolderOptionLabel(cwd, workspaceRootOptionsState.value.labels[cwd]),
     })
   }
 
@@ -1402,7 +1447,7 @@ const newThreadFolderOptions = computed(() => {
     seenCwds.add(cwd)
     options.push({
       value: cwd,
-      label: projectDisplayNameById.value[group.projectName] ?? group.projectName,
+      label: getFolderOptionLabel(cwd, projectDisplayNameById.value[group.projectName]),
     })
   }
 
@@ -1410,7 +1455,7 @@ const newThreadFolderOptions = computed(() => {
   if (selectedCwd && !seenCwds.has(selectedCwd)) {
     options.unshift({
       value: selectedCwd,
-      label: getPathLeafName(selectedCwd),
+      label: getFolderOptionLabel(selectedCwd),
     })
   }
 
@@ -2482,7 +2527,7 @@ async function onCreateProject(): Promise<void> {
     if (!normalizedPath) return
 
     newThreadCwd.value = normalizedPath
-    pinProjectToTop(getPathLeafName(normalizedPath))
+    pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
   } catch (error) {
@@ -2724,9 +2769,10 @@ async function loadWorkspaceRootOptionsState(): Promise<void> {
     workspaceRootOptionsState.value = {
       order: [...state.order],
       labels: { ...state.labels },
+      projectOrder: [...state.projectOrder],
     }
   } catch {
-    workspaceRootOptionsState.value = { order: [], labels: {} }
+    workspaceRootOptionsState.value = { order: [], labels: {}, projectOrder: [] }
   }
 }
 

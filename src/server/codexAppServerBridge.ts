@@ -72,6 +72,13 @@ type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
+  projectOrder: string[]
+  remoteProjects: Array<{
+    id: string
+    hostId: string
+    remotePath: string
+    label: string
+  }>
 }
 
 type PendingServerRequest = {
@@ -2525,6 +2532,26 @@ function normalizeStringRecord(value: unknown): Record<string, string> {
   return next
 }
 
+function normalizeRemoteProjects(value: unknown): WorkspaceRootsState['remoteProjects'] {
+  if (!Array.isArray(value)) return []
+  const next: WorkspaceRootsState['remoteProjects'] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    const record = asRecord(item)
+    if (!record) continue
+    const id = typeof record.id === 'string' ? record.id.trim() : ''
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    next.push({
+      id,
+      hostId: typeof record.hostId === 'string' ? record.hostId.trim() : '',
+      remotePath: typeof record.remotePath === 'string' ? record.remotePath.trim() : '',
+      label: typeof record.label === 'string' ? record.label.trim() : '',
+    })
+  }
+  return next
+}
+
 
 
 function getCodexAuthPath(): string {
@@ -3330,6 +3357,8 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     order: normalizeStringArray(payload['electron-saved-workspace-roots']),
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
+    projectOrder: normalizeStringArray(payload['project-order']),
+    remoteProjects: normalizeRemoteProjects(payload['remote-projects']),
   }
 }
 
@@ -3346,6 +3375,7 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   payload['electron-saved-workspace-roots'] = normalizeStringArray(nextState.order)
   payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels)
   payload['active-workspace-roots'] = normalizeStringArray(nextState.active)
+  payload['project-order'] = normalizeStringArray(nextState.projectOrder)
 
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
@@ -5861,10 +5891,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'Invalid body: expected object' })
           return
         }
+        const existingState = await readWorkspaceRootsState()
         const nextState: WorkspaceRootsState = {
           order: normalizeStringArray(record.order),
           labels: normalizeStringRecord(record.labels),
           active: normalizeStringArray(record.active),
+          projectOrder: Array.isArray(record.projectOrder)
+            ? normalizeStringArray(record.projectOrder)
+            : existingState.projectOrder,
+          remoteProjects: existingState.remoteProjects,
         }
         await writeWorkspaceRootsState(nextState)
         setJson(res, 200, { ok: true })
@@ -5924,6 +5959,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           order: nextOrder,
           labels: nextLabels,
           active: nextActive,
+          projectOrder: [normalizedPath, ...existingState.projectOrder.filter((item) => item !== normalizedPath)],
+          remoteProjects: existingState.remoteProjects,
         })
         setJson(res, 200, { data: { path: normalizedPath } })
         return

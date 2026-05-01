@@ -58,7 +58,7 @@ import type {
   UiTokenUsageBreakdown,
   UiThread,
 } from '../types/codex'
-import { isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
+import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 
 function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
@@ -553,7 +553,7 @@ function orderGroupsByProjectOrder(incoming: UiProjectGroup[], projectOrder: str
   const incomingByName = new Map(incoming.map((group) => [group.projectName, group]))
   const ordered: UiProjectGroup[] = projectOrder
     .map((projectName) => incomingByName.get(projectName) ?? null)
-    .filter((group): group is UiProjectGroup => group !== null && group.threads.length > 0)
+    .filter((group): group is UiProjectGroup => group !== null)
 
   for (const group of incoming) {
     if (!projectOrder.includes(group.projectName)) {
@@ -1010,6 +1010,236 @@ function toProjectNameFromWorkspaceRoot(value: string): string {
   return toProjectName(value)
 }
 
+function getRemoteProjectHostLabel(hostId: string): string {
+  const normalized = hostId.trim()
+  if (!normalized) return ''
+  const separatorIndex = normalized.lastIndexOf(':')
+  return separatorIndex >= 0 ? normalized.slice(separatorIndex + 1) : normalized
+}
+
+function getRemoteProjectDisplayName(remoteProject: NonNullable<WorkspaceRootsState['remoteProjects']>[number]): string {
+  const label = remoteProject.label || toProjectName(remoteProject.remotePath) || remoteProject.id
+  const hostLabel = getRemoteProjectHostLabel(remoteProject.hostId)
+  return hostLabel ? `${label} ${hostLabel}` : label
+}
+
+function getRemoteProjectById(rootsState: WorkspaceRootsState | null): Map<string, NonNullable<WorkspaceRootsState['remoteProjects']>[number]> {
+  const remoteProjects = rootsState?.remoteProjects ?? []
+  return new Map(remoteProjects.map((project) => [project.id, project]))
+}
+
+function getWorkspaceProjectOrderPaths(rootsState: WorkspaceRootsState | null): string[] {
+  if (!rootsState) return []
+  const savedRoots = new Set(rootsState.order)
+  const remoteProjectIds = new Set((rootsState.remoteProjects ?? []).map((project) => project.id))
+  const orderedRoots = rootsState.projectOrder.filter((item) => savedRoots.has(item) || remoteProjectIds.has(item))
+  for (const rootPath of rootsState.order) {
+    if (!orderedRoots.includes(rootPath)) orderedRoots.push(rootPath)
+  }
+  for (const remoteProjectId of remoteProjectIds) {
+    if (!orderedRoots.includes(remoteProjectId)) orderedRoots.push(remoteProjectId)
+  }
+  return orderedRoots
+}
+
+function getWorkspaceProjectOrderNames(
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): string[] {
+  const remoteProjectsById = getRemoteProjectById(rootsState)
+  return getWorkspaceProjectOrderPaths(rootsState).map((rootPath) => {
+    if (remoteProjectsById.has(rootPath)) return rootPath
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    return duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+  })
+}
+
+function matchesWorkspaceRootProject(rootPath: string, projectName: string): boolean {
+  const normalizedRootPath = normalizePathForUi(rootPath).trim()
+  return normalizedRootPath === projectName || toProjectNameFromWorkspaceRoot(rootPath) === projectName
+}
+
+export function collectWorkspaceRootPathsForProjectRemoval(
+  rootsState: WorkspaceRootsState,
+  projectName: string,
+): Set<string> {
+  const removedRootPaths = new Set<string>()
+  for (const rootPath of rootsState.order) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  for (const rootPath of rootsState.active) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  for (const rootPath of Object.keys(rootsState.labels)) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  return removedRootPaths
+}
+
+export function buildWorkspaceRootsProjectOrderState(
+  rootsState: WorkspaceRootsState,
+  orderedProjectNames: string[],
+  groups: UiProjectGroup[],
+): Pick<WorkspaceRootsState, 'order' | 'active' | 'projectOrder'> {
+  const remoteProjectIds = new Set((rootsState.remoteProjects ?? []).map((project) => project.id))
+  const rootByProjectName = new Map<string, string>()
+  for (const rootPath of rootsState.order) {
+    const projectName = toProjectNameFromWorkspaceRoot(rootPath)
+    if (!rootByProjectName.has(projectName)) {
+      rootByProjectName.set(projectName, rootPath)
+    }
+  }
+  for (const group of groups) {
+    const cwd = group.threads[0]?.cwd?.trim() ?? ''
+    if (!cwd) continue
+    rootByProjectName.set(group.projectName, cwd)
+  }
+
+  const nextProjectOrder: string[] = []
+  const pushProjectOrderItem = (item: string): void => {
+    if (item && !nextProjectOrder.includes(item)) {
+      nextProjectOrder.push(item)
+    }
+  }
+
+  for (const projectName of orderedProjectNames) {
+    if (remoteProjectIds.has(projectName)) {
+      pushProjectOrderItem(projectName)
+      continue
+    }
+    const rootPath = rootByProjectName.get(projectName)
+    if (rootPath) {
+      pushProjectOrderItem(rootPath)
+    }
+  }
+  for (const item of getWorkspaceProjectOrderPaths(rootsState)) {
+    pushProjectOrderItem(item)
+  }
+
+  const nextOrder = nextProjectOrder.filter((item) => rootsState.order.includes(item))
+  for (const rootPath of rootsState.order) {
+    if (!nextOrder.includes(rootPath)) {
+      nextOrder.push(rootPath)
+    }
+  }
+
+  const nextActive = rootsState.active.filter((rootPath) => nextOrder.includes(rootPath))
+  if (nextActive.length === 0 && nextOrder.length > 0) {
+    nextActive.push(nextOrder[0])
+  }
+
+  return {
+    order: nextOrder,
+    active: nextActive,
+    projectOrder: nextProjectOrder,
+  }
+}
+
+function orderGroupsByWorkspaceProjectOrder(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  const order = getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)
+  if (order.length === 0) return groups
+  const orderIndexByName = new Map(order.map((name, index) => [name, index]))
+  return [...groups].sort((first, second) => {
+    if (isProjectlessGroup(first) || isProjectlessGroup(second)) return 0
+    const firstIndex = orderIndexByName.get(first.projectName) ?? Number.POSITIVE_INFINITY
+    const secondIndex = orderIndexByName.get(second.projectName) ?? Number.POSITIVE_INFINITY
+    if (firstIndex === secondIndex) return 0
+    return firstIndex - secondIndex
+  })
+}
+
+function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): Set<string> {
+  const rootByLeafName = new Map<string, Set<string>>()
+  const addPath = (value: string): void => {
+    const normalizedPath = normalizePathForUi(value).trim()
+    if (!normalizedPath) return
+    const leafName = toProjectName(normalizedPath)
+    const existing = rootByLeafName.get(leafName) ?? new Set<string>()
+    existing.add(normalizedPath)
+    rootByLeafName.set(leafName, existing)
+  }
+
+  for (const rootPath of rootsState?.order ?? []) addPath(rootPath)
+  for (const group of groups) {
+    for (const thread of group.threads) addPath(thread.cwd)
+  }
+
+  const duplicateLeafNames = new Set<string>()
+  for (const [leafName, paths] of rootByLeafName.entries()) {
+    if (paths.size > 1) duplicateLeafNames.add(leafName)
+  }
+  return duplicateLeafNames
+}
+
+function disambiguateProjectGroupsByCwd(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  if (duplicateLeafNames.size === 0) return groups
+
+  const disambiguatedGroups: UiProjectGroup[] = []
+  const groupsByProjectName = new Map<string, UiProjectGroup>()
+  for (const group of groups) {
+    for (const thread of group.threads) {
+      const normalizedCwd = normalizePathForUi(thread.cwd).trim()
+      const leafName = toProjectName(normalizedCwd)
+      const projectName = normalizedCwd && duplicateLeafNames.has(leafName) ? normalizedCwd : group.projectName
+      const nextThread = thread.projectName === projectName ? thread : { ...thread, projectName }
+      const existingGroup = groupsByProjectName.get(projectName)
+      if (existingGroup) {
+        existingGroup.threads.push(nextThread)
+      } else {
+        const nextGroup = { projectName, threads: [nextThread] }
+        groupsByProjectName.set(projectName, nextGroup)
+        disambiguatedGroups.push(nextGroup)
+      }
+    }
+  }
+
+  return disambiguatedGroups
+}
+
+function addWorkspaceRootPlaceholderGroups(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groups
+  const existingProjectNames = new Set(groups.map((group) => group.projectName))
+  const nextGroups = [...groups]
+  const remoteProjectsById = getRemoteProjectById(rootsState)
+
+  for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
+    if (remoteProjectsById.has(rootPath)) {
+      if (existingProjectNames.has(rootPath)) continue
+      nextGroups.push({ projectName: rootPath, threads: [] })
+      existingProjectNames.add(rootPath)
+      continue
+    }
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    const projectName = duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+    if (existingProjectNames.has(projectName)) continue
+    nextGroups.push({ projectName, threads: [] })
+    existingProjectNames.add(projectName)
+  }
+
+  return nextGroups
+}
+
 function toOptimisticThreadTitle(message: string): string {
   const firstLine = message
     .split('\n')
@@ -1026,18 +1256,23 @@ function toForkedThreadTitle(title: string): string {
 }
 
 function isProjectlessGroup(group: UiProjectGroup): boolean {
-  return group.threads.some((thread) => thread.cwd.trim().length === 0)
+  return group.threads.some((thread) => thread.cwd.trim().length === 0 || isProjectlessChatPath(thread.cwd))
 }
 
 export function filterGroupsByWorkspaceRoots(
   groups: UiProjectGroup[],
   rootsState: WorkspaceRootsState | null,
 ): UiProjectGroup[] {
-  if (!rootsState || rootsState.order.length === 0) return groups
-  const allowedProjectNames = new Set(
-    rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-  )
-  return groups.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+  const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+  if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groupsWithWorkspaceRoots
+  const allowedProjectNames = new Set<string>()
+  for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+    allowedProjectNames.add(projectName)
+  }
+  const filteredGroups = groupsWithWorkspaceRoots.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
 }
 
 export function useDesktopState() {
@@ -3575,32 +3810,51 @@ export function useDesktopState() {
     try {
       if (!rootsState) return
       const hydratedOrder: string[] = []
-      for (const rootPath of rootsState.order) {
+      for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
         if (hydratedOrder.includes(projectName)) continue
         hydratedOrder.push(projectName)
       }
 
       if (hydratedOrder.length > 0) {
-        const mergedOrder = mergeProjectOrder(hydratedOrder, groups)
+        const mergedOrder = rootsState.projectOrder.length > 0
+          ? mergeProjectOrder(hydratedOrder, groups)
+          : mergeProjectOrder(projectOrder.value, groups)
         if (!areStringArraysEqual(projectOrder.value, mergedOrder)) {
           projectOrder.value = mergedOrder
-          saveProjectOrder(projectOrder.value)
         }
       }
 
-      if (Object.keys(rootsState.labels).length > 0) {
+      if (Object.keys(rootsState.labels).length > 0 || (rootsState.remoteProjects ?? []).length > 0) {
         const nextLabels = { ...projectDisplayNameById.value }
         let changed = false
         for (const [rootPath, label] of Object.entries(rootsState.labels)) {
-          const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-          if (nextLabels[projectName] === label) continue
-          nextLabels[projectName] = label
+          const normalizedRootPath = normalizePathForUi(rootPath).trim()
+          const projectNames = [toProjectNameFromWorkspaceRoot(rootPath)]
+          if (normalizedRootPath) projectNames.push(normalizedRootPath)
+          for (const projectName of projectNames) {
+            if (nextLabels[projectName] === label) continue
+            nextLabels[projectName] = label
+            changed = true
+          }
+        }
+        for (const rootPath of rootsState.order) {
+          const leafName = toProjectNameFromWorkspaceRoot(rootPath)
+          const parentLeafName = toProjectName(getPathParent(rootPath))
+          if (!parentLeafName.startsWith('.') || parentLeafName === leafName) continue
+          const displayName = `${leafName} ${parentLeafName}`
+          if (nextLabels[leafName] !== undefined || nextLabels[leafName] === displayName) continue
+          nextLabels[leafName] = displayName
+          changed = true
+        }
+        for (const remoteProject of rootsState.remoteProjects ?? []) {
+          const label = getRemoteProjectDisplayName(remoteProject)
+          if (nextLabels[remoteProject.id] === label) continue
+          nextLabels[remoteProject.id] = label
           changed = true
         }
         if (changed) {
           projectDisplayNameById.value = nextLabels
-          saveProjectDisplayNames(nextLabels)
         }
       }
     } catch {
@@ -3648,23 +3902,38 @@ export function useDesktopState() {
     groups: UiProjectGroup[],
     rootsState: WorkspaceRootsState | null,
   ): UiProjectGroup[] {
-    if (!rootsState || rootsState.order.length === 0) return groups
-    const allowedProjectNames = new Set(
-      rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-    )
-    return groups.filter((group) => {
+    const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+    const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+    const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+    if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groupsWithWorkspaceRoots
+    const allowedProjectNames = new Set<string>()
+    for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+      allowedProjectNames.add(projectName)
+    }
+    const filteredGroups = groupsWithWorkspaceRoots.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
       return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
     })
+    return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
   }
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
     const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
+    const hasWorkspaceRootsState = Boolean(
+      rootsState && (rootsState.order.length > 0 || rootsState.projectOrder.length > 0 || (rootsState.remoteProjects ?? []).length > 0),
+    )
 
-    const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
+    const nextProjectOrder = rootsState?.projectOrder.length
+      ? mergeProjectOrder(
+        getWorkspaceProjectOrderNames(rootsState, collectDuplicateProjectLeafNames(groups, rootsState)),
+        visibleGroups,
+      )
+      : mergeProjectOrder(projectOrder.value, visibleGroups)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
       projectOrder.value = nextProjectOrder
-      saveProjectOrder(projectOrder.value)
+      if (!hasWorkspaceRootsState) {
+        saveProjectOrder(projectOrder.value)
+      }
     }
 
     const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
@@ -4634,7 +4903,7 @@ export function useDesktopState() {
       const nextLabels = { ...rootsState.labels }
       let changed = false
       for (const rootPath of rootsState.order) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) !== projectName) continue
+        if (!matchesWorkspaceRootProject(rootPath, projectName)) continue
         const trimmed = displayName.trim()
         if (trimmed.length === 0) {
           if (nextLabels[rootPath] !== undefined) {
@@ -4651,6 +4920,7 @@ export function useDesktopState() {
           order: rootsState.order,
           labels: nextLabels,
           active: rootsState.active,
+          projectOrder: rootsState.projectOrder,
         })
       }
     } catch {
@@ -4708,21 +4978,9 @@ export function useDesktopState() {
     const removedRootPaths = new Set<string>()
     try {
       const rootsState = await getWorkspaceRootsState()
-      for (const rootPath of rootsState.order) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
-      for (const rootPath of rootsState.active) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
-      for (const rootPath of Object.keys(rootsState.labels)) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
+      collectWorkspaceRootPathsForProjectRemoval(rootsState, projectName).forEach((rootPath) => {
+        removedRootPaths.add(rootPath)
+      })
     } catch {
       // Keep local-only removal when global state is unavailable.
     }
@@ -4739,6 +4997,7 @@ export function useDesktopState() {
           order: nextOrder,
           labels: omitKeys(rootsState.labels, removedRootPaths),
           active: fallbackActive,
+          projectOrder: rootsState.projectOrder.filter((item) => item !== projectName && !removedRootPaths.has(item)),
         })
         return
       } catch {
@@ -4788,41 +5047,13 @@ export function useDesktopState() {
   async function persistProjectOrderToWorkspaceRoots(): Promise<void> {
     try {
       const rootsState = await getWorkspaceRootsState()
-      const rootByProjectName = new Map<string, string>()
-      for (const rootPath of rootsState.order) {
-        const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-        if (!rootByProjectName.has(projectName)) {
-          rootByProjectName.set(projectName, rootPath)
-        }
-      }
-      for (const group of sourceGroups.value) {
-        const cwd = group.threads[0]?.cwd?.trim() ?? ''
-        if (!cwd) continue
-        rootByProjectName.set(group.projectName, cwd)
-      }
-
-      const nextOrder: string[] = []
-      for (const projectName of projectOrder.value) {
-        const rootPath = rootByProjectName.get(projectName)
-        if (rootPath && !nextOrder.includes(rootPath)) {
-          nextOrder.push(rootPath)
-        }
-      }
-      for (const rootPath of rootsState.order) {
-        if (!nextOrder.includes(rootPath)) {
-          nextOrder.push(rootPath)
-        }
-      }
-
-      const nextActive = rootsState.active.filter((rootPath) => nextOrder.includes(rootPath))
-      if (nextActive.length === 0 && nextOrder.length > 0) {
-        nextActive.push(nextOrder[0])
-      }
+      const nextState = buildWorkspaceRootsProjectOrderState(rootsState, projectOrder.value, sourceGroups.value)
 
       await setWorkspaceRootsState({
-        order: nextOrder,
+        order: nextState.order,
         labels: rootsState.labels,
-        active: nextActive,
+        active: nextState.active,
+        projectOrder: nextState.projectOrder,
       })
     } catch {
       // Keep local project order when global state persistence is unavailable.

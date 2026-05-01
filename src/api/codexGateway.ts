@@ -267,6 +267,13 @@ export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
+  projectOrder: string[]
+  remoteProjects?: Array<{
+    id: string
+    hostId: string
+    remotePath: string
+    label: string
+  }>
 }
 
 export type StoredQueuedMessage = {
@@ -2152,6 +2159,21 @@ function normalizeWorkspaceRootsState(payload: unknown): WorkspaceRootsState {
     order: normalizeArray(record.order).map((value) => normalizePathForUi(value)),
     labels,
     active: normalizeArray(record.active).map((value) => normalizePathForUi(value)),
+    projectOrder: normalizeArray(record.projectOrder).map((value) => normalizePathForUi(value)),
+    remoteProjects: Array.isArray(record.remoteProjects)
+      ? record.remoteProjects.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+        const remote = item as Record<string, unknown>
+        const id = typeof remote.id === 'string' ? remote.id.trim() : ''
+        if (!id) return []
+        return [{
+          id,
+          hostId: typeof remote.hostId === 'string' ? remote.hostId.trim() : '',
+          remotePath: typeof remote.remotePath === 'string' ? normalizePathForUi(remote.remotePath) : '',
+          label: typeof remote.label === 'string' ? remote.label.trim() : '',
+        }]
+      })
+      : [],
   }
 }
 
