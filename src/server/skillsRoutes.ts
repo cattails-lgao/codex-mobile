@@ -550,6 +550,21 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
   return map
 }
 
+async function collectInstalledSkillsMap(appServer: AppServerLike): Promise<Map<string, InstalledSkillInfo>> {
+  const installedMap = await scanInstalledSkillsFromDisk()
+  try {
+    const result = await appServer.rpc('skills/list', {}) as { data?: Array<{ skills?: RpcSkillRecord[] }> }
+    for (const entry of result.data ?? []) {
+      for (const skill of groupRpcSkillRecords(entry.skills ?? [])) {
+        if (skill.name) {
+          installedMap.set(skill.name, { name: skill.name, path: skill.path ?? '', enabled: skill.enabled !== false })
+        }
+      }
+    }
+  } catch {}
+  return installedMap
+}
+
 function extractSkillFrontmatterField(markdown: string, fieldName: string): string {
   const lines = markdown.split(/\r?\n/)
   if (lines[0]?.trim() !== '---') return ''
@@ -1286,20 +1301,7 @@ export async function handleSkillsRoutes(
   const { appServer, readJsonBody } = context
   if (req.method === 'GET' && url.pathname === '/codex-api/skills-hub') {
     try {
-      const installedMap = await scanInstalledSkillsFromDisk()
-      try {
-        const result = (await appServer.rpc('skills/list', {})) as {
-          data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }>
-        }
-        for (const entry of result.data ?? []) {
-          for (const skill of groupRpcSkillRecords(entry.skills ?? [])) {
-            if (skill.name) {
-              installedMap.set(skill.name, { name: skill.name, path: skill.path ?? '', enabled: skill.enabled !== false })
-            }
-          }
-        }
-      } catch {}
-
+      const installedMap = await collectInstalledSkillsMap(appServer)
       const installed: SkillHubEntry[] = []
       for (const [, info] of installedMap) {
         installed.push(buildLocalHubEntry(info))
@@ -1319,7 +1321,7 @@ export async function handleSkillsRoutes(
         setJson(res, 200, { results: [] })
         return true
       }
-      const installedMap = await scanInstalledSkillsFromDisk()
+      const installedMap = await collectInstalledSkillsMap(appServer)
       const output = await runCommandWithOutput('npx', ['skills', 'find', query], { timeoutMs: 60_000 })
       const results = await enrichSkillSearchDescriptions(parseNpxSkillsFindOutput(output, installedMap))
       setJson(res, 200, { results })

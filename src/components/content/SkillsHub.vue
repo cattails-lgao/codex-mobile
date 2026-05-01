@@ -212,7 +212,16 @@ async function fetchSkills(): Promise<void> {
 }
 
 function openDetail(skill: HubSkill): void {
-  detailSkill.value = skill
+  const installedSkill = skill.installed ? installedSkills.value.find((candidate) => candidate.name === skill.name) : undefined
+  detailSkill.value = installedSkill
+    ? {
+        ...installedSkill,
+        avatarUrl: installedSkill.avatarUrl || skill.avatarUrl,
+        description: installedSkill.description || skill.description,
+        displayName: installedSkill.displayName || skill.displayName,
+        url: installedSkill.url || skill.url,
+      }
+    : skill
   isDetailOpen.value = true
 }
 

@@ -3360,6 +3360,8 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 8. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill>`
 9. After install, verify the result becomes installed and the installed skills list refreshes
 10. Switch to dark theme and repeat the search visibility check
+11. Search for an already-installed skill and verify its search result shows `Installed`
+12. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
@@ -3367,6 +3369,8 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
 - The search UI does not replace or hide local installed skills
 - Installed matching results show the existing `Installed` badge and can be opened like local skills
+- Installed detection uses the same installed skills source as the Skills Hub list, including RPC/plugin/shared skills and not only the base skills directory
+- Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
 - Light theme and dark theme keep the search panel, cards, and modal readable
 
 #### Rollback/Cleanup
