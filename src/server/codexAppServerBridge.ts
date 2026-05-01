@@ -1157,26 +1157,66 @@ function readNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function resolveComposioCommand(): string | null {
+type ComposioCliInvocation = { command: string; args: string[]; displayCommand: string }
+
+function buildComposioInvocation(args: string[]): ComposioCliInvocation {
+  const overrideCommand = process.env.CODEXUI_COMPOSIO_COMMAND?.trim()
+  if (overrideCommand) {
+    const invocation = getSpawnInvocation(overrideCommand, args)
+    return {
+      command: invocation.command,
+      args: invocation.args,
+      displayCommand: `${overrideCommand} ${args.map(quoteShellTokenIfNeeded).join(' ')}`.trim(),
+    }
+  }
+  const invocation = getSpawnInvocation('npx', ['--yes', 'composio', ...args])
+  return {
+    command: invocation.command,
+    args: invocation.args,
+    displayCommand: `npx --yes composio ${args.map(quoteShellTokenIfNeeded).join(' ')}`.trim(),
+  }
+}
+
+function buildInstalledComposioInvocation(args: string[]): ComposioCliInvocation | null {
   const candidates = [
-    process.env.CODEXUI_COMPOSIO_COMMAND?.trim() ?? '',
     join(homedir(), '.composio', 'composio'),
     'composio',
   ]
-
   for (const candidate of candidates) {
-    if (!candidate) continue
     if ((candidate.includes('/') || candidate.includes('\\')) && !existsSync(candidate)) continue
-    const invocation = getSpawnInvocation(candidate, ['--version'])
-    const probe = spawnSync(invocation.command, invocation.args, {
-      stdio: 'ignore',
-      windowsHide: true,
-    })
-    if (!probe.error && probe.status === 0) {
-      return candidate
+    const invocation = getSpawnInvocation(candidate, args)
+    return {
+      command: invocation.command,
+      args: invocation.args,
+      displayCommand: `${candidate} ${args.map(quoteShellTokenIfNeeded).join(' ')}`.trim(),
     }
   }
+  return null
+}
 
+function probeComposioInvocation(invocation: ComposioCliInvocation): { available: boolean; cliVersion: string; output: string } {
+  const probe = spawnSync(invocation.command, invocation.args, {
+    encoding: 'utf8',
+    env: process.env,
+    windowsHide: true,
+  })
+  const output = `${probe.stdout ?? ''}${probe.stderr ?? ''}`.trim()
+  return {
+    available: !probe.error && probe.status === 0,
+    cliVersion: probe.status === 0 ? (probe.stdout ?? '').trim() : '',
+    output,
+  }
+}
+
+function resolveComposioInvocation(args: string[]): ComposioCliInvocation | null {
+  const preferred = buildComposioInvocation(args)
+  if (probeComposioInvocation(buildComposioInvocation(['--version'])).available) {
+    return preferred
+  }
+  const installed = buildInstalledComposioInvocation(args)
+  if (!installed) return null
+  const installedVersion = buildInstalledComposioInvocation(['--version'])
+  if (installedVersion && probeComposioInvocation(installedVersion).available) return installed
   return null
 }
 
@@ -1189,12 +1229,10 @@ function parseComposioJson<T>(stdout: string, fallback: string): T {
 }
 
 async function runComposioJson<T>(args: string[], fallback: string): Promise<T> {
-  const command = resolveComposioCommand()
-  if (!command) {
-    throw new Error('Composio CLI is not installed')
+  const invocation = resolveComposioInvocation(args)
+  if (!invocation) {
+    throw new Error('Composio is not available through npx or an installed CLI')
   }
-
-  const invocation = getSpawnInvocation(command, args)
   const child = spawn(invocation.command, invocation.args, {
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1307,19 +1345,15 @@ async function readComposioConnectionsBySlug(): Promise<Map<string, ComposioConn
 }
 
 async function readComposioStatus(): Promise<ComposioStatusResponse> {
-  const cliVersion = (() => {
-    const command = resolveComposioCommand()
-    if (!command) return ''
-    const invocation = getSpawnInvocation(command, ['--version'])
-    const probe = spawnSync(invocation.command, invocation.args, {
-      encoding: 'utf8',
-      windowsHide: true,
-    })
-    return probe.status === 0 ? probe.stdout.trim() : ''
-  })()
-
+  const preferredProbe = probeComposioInvocation(buildComposioInvocation(['--version']))
+  const installedVersion = buildInstalledComposioInvocation(['--version'])
+  const installedProbe = preferredProbe.available || !installedVersion
+    ? { available: false, cliVersion: '', output: '' }
+    : probeComposioInvocation(installedVersion)
+  const available = preferredProbe.available || installedProbe.available
+  const cliVersion = preferredProbe.cliVersion || installedProbe.cliVersion
   const userData = await readComposioUserData()
-  if (!resolveComposioCommand()) {
+  if (!available) {
     return {
       available: false,
       authenticated: false,
@@ -1445,11 +1479,10 @@ async function startComposioLink(slug: string): Promise<ComposioLinkResult> {
 }
 
 async function startComposioLogin(): Promise<ComposioLoginResult> {
-  const command = resolveComposioCommand()
-  if (!command) {
-    throw new Error('Composio CLI is not installed')
+  const invocation = resolveComposioInvocation(['login', '--no-browser', '-y'])
+  if (!invocation) {
+    throw new Error('Composio is not available through npx or an installed CLI')
   }
-  const invocation = getSpawnInvocation(command, ['login', '--no-browser', '-y'])
   const proc = spawn(invocation.command, invocation.args, {
     cwd: process.cwd(),
     env: process.env,
@@ -1502,27 +1535,15 @@ async function startComposioLogin(): Promise<ComposioLoginResult> {
 }
 
 async function installComposioCli(): Promise<ComposioInstallResult> {
-  const command = 'bash'
-  const installScriptUrl = 'https://composio.dev/install'
-  const args = ['-lc', `curl -fsSL ${installScriptUrl} | bash`]
-  const invocation = getSpawnInvocation(command, args)
-  const env = {
-    ...process.env,
-    COMPOSIO_INSTALL_DIR: process.env.COMPOSIO_INSTALL_DIR?.trim() || join(homedir(), '.composio'),
-  }
-  const result = spawnSync(invocation.command, invocation.args, {
-    encoding: 'utf8',
-    env,
-    windowsHide: true,
-  })
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
-  if (result.error || result.status !== 0) {
-    throw new Error(output || result.error?.message || 'Failed to install Composio CLI')
+  const invocation = buildComposioInvocation(['--version'])
+  const result = probeComposioInvocation(invocation)
+  if (!result.available) {
+    throw new Error(result.output || 'Failed to run Composio through npx')
   }
   return {
     ok: true,
-    command: `curl -fsSL ${installScriptUrl} | bash`,
-    output,
+    command: invocation.displayCommand,
+    output: result.output,
   }
 }
 
