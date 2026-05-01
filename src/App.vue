@@ -518,7 +518,7 @@
               :model-value="contentHeaderBranchDropdownValue"
               :options="contentHeaderBranchDropdownOptions"
               :selected-prefix-icon="contentHeaderBranchDropdownIcon"
-              :icon-only="true"
+              :icon-only="contentHeaderBranchDropdownValue === '__detached_head__'"
               :disabled="isLoadingThreadBranches || isSwitchingThreadBranch"
               :enable-search="true"
               :search-placeholder="t('Search branches...')"
