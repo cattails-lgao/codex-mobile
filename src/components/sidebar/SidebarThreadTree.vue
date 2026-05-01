@@ -290,7 +290,7 @@
               :data-dragging-handle="isDraggingProject(group.projectName)"
               @mousedown.left="onProjectHandleMouseDown($event, group.projectName)"
             >
-              <span class="project-title" :title="getProjectDisplayName(group.projectName)">
+              <span class="project-title" :title="getProjectTooltipTitle(group.projectName)">
                 {{ getProjectVisibleName(group) }}
               </span>
             </span>
@@ -1464,6 +1464,10 @@ function getProjectDisplayName(projectName: string): string {
 
 function isPathLikeProjectName(value: string): boolean {
   return value.includes('/') || value.includes('\\')
+}
+
+function getProjectTooltipTitle(projectName: string): string {
+  return isPathLikeProjectName(projectName) ? projectName : getProjectDisplayName(projectName)
 }
 
 function isDuplicatePathLeafName(value: string): boolean {
