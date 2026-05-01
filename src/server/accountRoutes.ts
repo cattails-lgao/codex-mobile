@@ -83,7 +83,7 @@ const ACCOUNT_QUOTA_LOADING_STALE_MS = 2 * 60 * 1000
 const ACCOUNT_INSPECTION_TIMEOUT_MS = 25 * 1000
 const LOGIN_URL_TIMEOUT_MS = 15 * 1000
 const LOGIN_CALLBACK_TIMEOUT_MS = 20 * 1000
-const LOGIN_FINISH_TIMEOUT_MS = 20 * 1000
+const LOGIN_AUTH_FILE_TIMEOUT_MS = 10 * 1000
 
 let backgroundRefreshPromise: Promise<void> | null = null
 let activeLogin: {
@@ -847,14 +847,31 @@ async function curlLoginCallback(callbackUrl: string): Promise<void> {
   }
 }
 
-async function waitForLoginToFinish(): Promise<void> {
+async function getActiveAuthMtimeMs(): Promise<number | null> {
+  try {
+    return (await stat(getActiveAuthPath())).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+async function waitForAuthFileUpdate(previousMtimeMs: number | null): Promise<void> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt <= LOGIN_AUTH_FILE_TIMEOUT_MS) {
+    const nextMtimeMs = await getActiveAuthMtimeMs()
+    if (nextMtimeMs !== null && (previousMtimeMs === null || nextMtimeMs > previousMtimeMs)) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+}
+
+function stopActiveLogin(): void {
   if (!activeLogin) return
-  await Promise.race([
-    activeLogin.exitPromise,
-    new Promise<void>((_, reject) => {
-      setTimeout(() => reject(new Error('Timed out waiting for codex login to finish.')), LOGIN_FINISH_TIMEOUT_MS)
-    }),
-  ])
+  if (!activeLogin.exited) {
+    activeLogin.proc.kill('SIGTERM')
+  }
+  activeLogin = null
 }
 
 export async function handleAccountRoutes(
@@ -986,11 +1003,12 @@ export async function handleAccountRoutes(
         return true
       }
 
+      const previousAuthMtimeMs = await getActiveAuthMtimeMs()
       await curlLoginCallback(callbackUrl)
-      await waitForLoginToFinish()
-      activeLogin = null
+      await waitForAuthFileUpdate(previousAuthMtimeMs)
 
       const imported = await importAccountFromAuthPath(getActiveAuthPath())
+      stopActiveLogin()
       appServer.dispose()
       const inspection = await validateSwitchedAccount(appServer)
       const state = await readStoredAccountsState()
