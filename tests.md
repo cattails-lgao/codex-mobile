@@ -4102,11 +4102,13 @@ Opening a thread always scrolls the conversation to the latest messages, with no
 2. Switch to another thread
 3. Open the first thread again
 4. Verify the viewport opens at the bottom (latest messages), not the previous middle position
-5. Repeat steps 1 through 4 in dark theme
+5. Refresh the browser tab, open the same thread again, and verify it still opens at the bottom
+6. Repeat steps 1 through 5 in dark theme
 
 #### Expected Results
 - Opening a thread always lands on the latest messages
 - Previously viewed scroll positions are not restored when revisiting a thread
+- Browser refresh does not restore a previously viewed conversation scroll position
 - Behavior is the same in light theme and dark theme
 
 #### Rollback/Cleanup

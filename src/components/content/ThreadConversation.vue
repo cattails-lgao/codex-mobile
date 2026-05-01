@@ -1284,11 +1284,11 @@ type MessageBlock =
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
 
-let scrollRestoreFrame = 0
+let conversationScrollFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
-let scrollRestorePromise: Promise<void> | null = null
+let conversationScrollPromise: Promise<void> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const highlightJsModule = ref<HighlightJsModule | null>(null)
 const highlightCacheVersion = ref(0)
@@ -3929,7 +3929,7 @@ function isAtBottom(container: HTMLElement): boolean {
   return distance <= BOTTOM_THRESHOLD_PX
 }
 
-function applySavedScrollState(): void {
+function applyConversationScrollState(): void {
   const container = conversationListRef.value
   if (!container) return
 
@@ -4024,24 +4024,24 @@ function bindPendingImageHandlers(): void {
   }
 }
 
-async function scheduleScrollRestore(): Promise<void> {
-  if (scrollRestorePromise) return scrollRestorePromise
+async function scheduleConversationScroll(): Promise<void> {
+  if (conversationScrollPromise) return conversationScrollPromise
 
-  scrollRestorePromise = nextTick().then(() => new Promise<void>((resolve) => {
-    if (scrollRestoreFrame) {
-      cancelAnimationFrame(scrollRestoreFrame)
+  conversationScrollPromise = nextTick().then(() => new Promise<void>((resolve) => {
+    if (conversationScrollFrame) {
+      cancelAnimationFrame(conversationScrollFrame)
     }
-    scrollRestoreFrame = requestAnimationFrame(() => {
-      scrollRestoreFrame = 0
-      scrollRestorePromise = null
-      applySavedScrollState()
+    conversationScrollFrame = requestAnimationFrame(() => {
+      conversationScrollFrame = 0
+      conversationScrollPromise = null
+      applyConversationScrollState()
       bindPendingImageHandlers()
       scheduleBottomLock()
       resolve()
     })
   }))
 
-  return scrollRestorePromise
+  return conversationScrollPromise
 }
 
 function clearRenderCaches(): void {
@@ -4086,7 +4086,7 @@ watch(
       renderWindowStart.value = Math.min(renderWindowStart.value, Math.max(0, next.length - 1))
     }
 
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
 )
 
@@ -4114,7 +4114,7 @@ watch(
   () => props.pendingRequests,
   async () => {
     if (props.isLoading) return
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
   { deep: true },
 )
@@ -4136,18 +4136,19 @@ watch(
   async (loading) => {
     if (loading) return
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
 )
 
 watch(
   () => props.activeThreadId,
-  () => {
+  async () => {
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
+    await scheduleConversationScroll()
   },
   { flush: 'post' },
 )
@@ -4194,9 +4195,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearRenderCaches()
-  if (scrollRestoreFrame) {
-    cancelAnimationFrame(scrollRestoreFrame)
-    scrollRestoreFrame = 0
+  if (conversationScrollFrame) {
+    cancelAnimationFrame(conversationScrollFrame)
+    conversationScrollFrame = 0
   }
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
