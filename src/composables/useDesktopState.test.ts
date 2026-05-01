@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { filterGroupsByWorkspaceRoots } from './useDesktopState'
+import {
+  buildWorkspaceRootsProjectOrderState,
+  collectWorkspaceRootPathsForProjectRemoval,
+  filterGroupsByWorkspaceRoots,
+} from './useDesktopState'
 import type { UiProjectGroup } from '../types/codex'
 import type { WorkspaceRootsState } from '../api/codexGateway'
 
@@ -133,5 +137,50 @@ describe('filterGroupsByWorkspaceRoots', () => {
       ['remote-project-id', 0],
       ['local-project', 0],
     ])
+  })
+})
+
+describe('workspace roots project persistence helpers', () => {
+  it('collects duplicate-path project roots by full path when removing a project', () => {
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/first/api', '/tmp/second/api'],
+      labels: {
+        '/tmp/first/api': 'First API',
+        '/tmp/second/api': 'Second API',
+      },
+      active: ['/tmp/first/api'],
+      projectOrder: ['/tmp/first/api', '/tmp/second/api'],
+    }
+
+    expect([...collectWorkspaceRootPathsForProjectRemoval(rootsState, '/tmp/first/api')]).toEqual([
+      '/tmp/first/api',
+    ])
+  })
+
+  it('preserves remote project ids in explicit project order when persisting workspace roots', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'local-project',
+        threads: [thread('local-chat', '/tmp/local-project')],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/local-project'],
+      labels: {},
+      active: ['/tmp/local-project'],
+      projectOrder: ['remote-project-id', '/tmp/local-project'],
+      remoteProjects: [{
+        id: 'remote-project-id',
+        hostId: 'remote-ssh-discovered:a1',
+        remotePath: '/home/ubuntu',
+        label: 'ubuntu',
+      }],
+    }
+
+    expect(buildWorkspaceRootsProjectOrderState(rootsState, ['remote-project-id', 'local-project'], groups)).toEqual({
+      order: ['/tmp/local-project'],
+      active: ['/tmp/local-project'],
+      projectOrder: ['remote-project-id', '/tmp/local-project'],
+    })
   })
 })

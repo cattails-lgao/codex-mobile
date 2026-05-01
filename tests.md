@@ -4092,3 +4092,33 @@ Thread rows show an inline delete button that morphs to `Confirm`, while pin/unp
 
 #### Rollback/Cleanup
 - Delete or unpin any disposable threads created only for this test
+
+---
+
+### Workspace roots duplicate removal and remote order persistence
+
+#### Feature/Change Name
+Project removal matches duplicate workspace roots by full path, and project order persistence keeps remote project IDs in place.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Codex global workspace roots include two local roots with the same folder name and one remote project entry
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open the sidebar Projects section.
+2. Confirm the duplicate local roots are shown as separate project rows.
+3. Remove one duplicate project row.
+4. Reload the app and confirm the removed duplicate does not reappear.
+5. Reorder or pin a local project while a remote project is listed above it.
+6. Reload the app and confirm the remote project keeps the same relative order.
+7. Switch to dark theme and repeat steps 1-6.
+
+#### Expected Results
+- Removing a duplicate path project removes the matching full workspace root, not every project with the same leaf name.
+- Remote project IDs remain in Codex global `project-order` where the user placed them.
+- Project rows and menus remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- Re-add any duplicate workspace root removed only for testing.
+- Restore the preferred project order after manual verification.
