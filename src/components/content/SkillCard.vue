@@ -26,7 +26,7 @@
         <span class="skill-card-owner">{{ skill.owner }}</span>
       </div>
       <button
-        v-if="skill.installed && skillDirPath"
+        v-if="showBrowseAction && skill.installed && skillDirPath"
         class="skill-card-browse"
         type="button"
         :title="t('Browse files')"
@@ -60,13 +60,16 @@ const props = withDefaults(defineProps<{
     enabled?: boolean
   }
   showStatusBadge?: boolean
+  showBrowseAction?: boolean
 }>(), {
   showStatusBadge: true,
+  showBrowseAction: true,
 })
 
 defineEmits<{ select: [skill: unknown] }>()
 const { t } = useUiLanguage()
 const showStatusBadge = computed(() => props.showStatusBadge !== false)
+const showBrowseAction = computed(() => props.showBrowseAction !== false)
 
 const skillDirPath = computed(() => {
   const p = props.skill.path

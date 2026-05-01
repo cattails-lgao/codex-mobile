@@ -3365,6 +3365,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 13. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
 14. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
 15. Verify cards in the `Installed skills (count)` section do not show `Installed` or `Disabled` status labels, while search result cards can still show installed state
+16. Verify Find skills result cards do not show the local folder browse icon; Browse files remains available inside the installed local modal
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
@@ -3378,6 +3379,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
 - Local-only installed skills hide the external GitHub link when no URL is available
 - Installed skills section cards hide redundant installed/disabled status labels
+- Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
 - Light theme and dark theme keep the search panel, cards, and modal readable
 
 #### Rollback/Cleanup

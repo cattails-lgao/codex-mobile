@@ -80,6 +80,7 @@
           v-for="skill in skillSearchResults"
           :key="skill.source || `${skill.owner}/${skill.name}`"
           :skill="skill"
+          :show-browse-action="false"
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>
