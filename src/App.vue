@@ -486,6 +486,7 @@
               :model-value="terminalHeaderDropdownValue"
               :options="terminalHeaderDropdownOptions"
               :placeholder="terminalCommandPlaceholder"
+              :selected-prefix-icon="IconTablerTerminal"
               :empty-label="t('No commands')"
               @update:model-value="onSelectHeaderTerminalCommand"
             />
@@ -861,6 +862,7 @@ import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vu
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
+import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
@@ -4007,6 +4009,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .content-header-terminal-command :deep(.composer-dropdown-trigger) {
   @apply h-8 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none transition hover:bg-zinc-50 focus:border-zinc-300;
+}
+
+.content-header-terminal-command :deep(.composer-dropdown-prefix-icon) {
+  @apply h-4 w-4 text-zinc-500;
 }
 
 .content-header-terminal-command.is-open :deep(.composer-dropdown-trigger) {
