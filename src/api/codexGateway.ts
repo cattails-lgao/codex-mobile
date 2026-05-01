@@ -312,6 +312,11 @@ export type GitBranchState = {
   options: WorktreeBranchOption[]
 }
 
+export type GitRepositoryStatus = {
+  isGitRepo: boolean
+  gitRoot: string
+}
+
 
 
 export type ThreadSearchResult = {
@@ -2375,6 +2380,26 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
     options.unshift({ value: currentBranch, label: currentBranch })
   }
   return { currentBranch, options }
+}
+
+export async function getGitRepositoryStatus(cwd: string): Promise<GitRepositoryStatus> {
+  const normalizedCwd = cwd.trim()
+  if (!normalizedCwd) {
+    return { isGitRepo: false, gitRoot: '' }
+  }
+  const query = new URLSearchParams({ cwd: normalizedCwd })
+  const response = await fetch(`/codex-api/git/repository-status?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to read Git repository status')
+  }
+  const record = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? (payload.data as Record<string, unknown>)
+    : {}
+  return {
+    isGitRepo: record.isGitRepo === true,
+    gitRoot: typeof record.gitRoot === 'string' ? normalizePathForUi(record.gitRoot) : '',
+  }
 }
 
 export async function checkoutGitBranch(cwd: string, branch: string): Promise<string | null> {

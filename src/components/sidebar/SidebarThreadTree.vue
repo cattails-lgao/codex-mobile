@@ -316,7 +316,12 @@
                       <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
                         Browse files
                       </button>
-                      <button class="project-menu-item" type="button" @click="onCreateProjectWorktree(group.projectName)">
+                      <button
+                        v-if="projectGitRepoByName[group.projectName]"
+                        class="project-menu-item"
+                        type="button"
+                        @click="onCreateProjectWorktree(group.projectName)"
+                      >
                         New worktree
                       </button>
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group)">
@@ -735,6 +740,7 @@ import SidebarMenuRow from './SidebarMenuRow.vue'
 const props = defineProps<{
   groups: UiProjectGroup[]
   projectDisplayNameById: Record<string, string>
+  projectGitRepoByName: Record<string, boolean>
   selectedThreadId: string
   isLoading: boolean
   searchQuery: string

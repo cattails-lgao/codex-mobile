@@ -61,6 +61,7 @@
           </button>
 
           <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
+            :project-git-repo-by-name="projectGitRepoByName"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
@@ -688,6 +689,7 @@
                   </div>
                 </Teleport>
                 <ComposerRuntimeDropdown
+                  v-if="isNewThreadCwdGitRepo"
                   class="new-thread-runtime-dropdown"
                   v-model="newThreadRuntime"
                 />
@@ -713,7 +715,7 @@
                     }}
                   </p>
                 </div>
-                <p class="new-thread-runtime-help">
+                <p v-if="isNewThreadCwdGitRepo" class="new-thread-runtime-help">
                   {{ t('Local project uses the selected folder directly. New worktree creates an isolated Git worktree before the first prompt.') }}
                 </p>
                 <div
@@ -873,6 +875,7 @@ import {
   createWorktree,
   createProjectlessThreadDirectory,
   getGitBranchState,
+  getGitRepositoryStatus,
   getWorktreeBranchOptions,
   getAccounts,
   createLocalDirectory,
@@ -1133,6 +1136,7 @@ let hasPendingRouteSync = false
 const hasInitialized = ref(false)
 const newThreadCwd = ref('')
 const newThreadRuntime = ref<'local' | 'worktree'>('local')
+const gitRepoStatusByCwd = ref<Record<string, boolean>>({})
 const newWorktreeBaseBranch = ref('')
 const worktreeBranchOptions = ref<WorktreeBranchOption[]>([])
 const isLoadingWorktreeBranches = ref(false)
@@ -1460,6 +1464,18 @@ const newThreadFolderOptions = computed(() => {
   }
 
   return options
+})
+const isNewThreadCwdGitRepo = computed(() => {
+  const cwd = newThreadCwd.value.trim()
+  return cwd ? gitRepoStatusByCwd.value[cwd] === true : false
+})
+const projectGitRepoByName = computed<Record<string, boolean>>(() => {
+  const result: Record<string, boolean> = {}
+  for (const group of projectGroups.value) {
+    const cwd = resolvePreferredLocalCwd(group.projectName, group.threads[0]?.cwd?.trim() ?? '')
+    result[group.projectName] = cwd ? gitRepoStatusByCwd.value[cwd] === true : false
+  }
+  return result
 })
 const newWorktreeBranchDropdownOptions = computed<Array<{ value: string; label: string }>>(() => {
   const selectedBranch = newWorktreeBaseBranch.value.trim()
@@ -2111,6 +2127,8 @@ function onBrowseProjectFiles(projectName: string): void {
 async function onCreateProjectWorktree(projectName: string): Promise<void> {
   const sourceCwd = getProjectCwd(projectName)
   if (!sourceCwd || typeof window === 'undefined') return
+  await loadGitRepoStatus(sourceCwd)
+  if (gitRepoStatusByCwd.value[sourceCwd] !== true) return
 
   const suggestedName = `${toWorktreeFolderNameDraft(projectName)}-`
   const worktreeName = window.prompt('New worktree folder name', suggestedName)
@@ -2152,6 +2170,23 @@ function onStartNewThreadFromToolbar(): void {
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
   void router.push({ name: 'home' })
+}
+
+async function loadGitRepoStatus(cwdRaw: string): Promise<void> {
+  const cwd = cwdRaw.trim()
+  if (!cwd || Object.prototype.hasOwnProperty.call(gitRepoStatusByCwd.value, cwd)) return
+  try {
+    const status = await getGitRepositoryStatus(cwd)
+    gitRepoStatusByCwd.value = {
+      ...gitRepoStatusByCwd.value,
+      [cwd]: status.isGitRepo,
+    }
+  } catch {
+    gitRepoStatusByCwd.value = {
+      ...gitRepoStatusByCwd.value,
+      [cwd]: false,
+    }
+  }
 }
 
 function onRenameProject(payload: { projectName: string; displayName: string }): void {
@@ -3448,9 +3483,37 @@ watch(
 )
 
 watch(
+  () => newThreadCwd.value,
+  (cwd) => {
+    void loadGitRepoStatus(cwd)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => projectGroups.value.map((group) => resolvePreferredLocalCwd(group.projectName, group.threads[0]?.cwd?.trim() ?? '')).filter(Boolean),
+  (cwds) => {
+    for (const cwd of cwds) {
+      void loadGitRepoStatus(cwd)
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  isNewThreadCwdGitRepo,
+  (isGitRepo) => {
+    if (!isGitRepo && newThreadRuntime.value === 'worktree') {
+      newThreadRuntime.value = 'local'
+    }
+  },
+  { immediate: true },
+)
+
+watch(
   () => [newThreadRuntime.value, newThreadCwd.value] as const,
   ([runtime, cwd]) => {
-    if (runtime !== 'worktree') return
+    if (runtime !== 'worktree' || !isNewThreadCwdGitRepo.value) return
     void loadWorktreeBranches(cwd)
   },
   { immediate: true },
@@ -3471,7 +3534,9 @@ watch(
       }
       return
     }
-    void loadWorktreeBranches(newThreadCwd.value)
+    if (isNewThreadCwdGitRepo.value) {
+      void loadWorktreeBranches(newThreadCwd.value)
+    }
   },
 )
 

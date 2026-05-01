@@ -5834,6 +5834,47 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/git/repository-status') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          setJson(res, 200, {
+            data: {
+              isGitRepo: true,
+              gitRoot,
+            },
+          })
+        } catch (error) {
+          if (!isNotGitRepositoryError(error)) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to read Git repository status') })
+            return
+          }
+          setJson(res, 200, {
+            data: {
+              isGitRepo: false,
+              gitRoot: '',
+            },
+          })
+        }
+        return
+      }
+
       if (req.method === 'POST' && url.pathname === '/codex-api/git/checkout') {
         const payload = await readJsonBody(req)
         const record = asRecord(payload)
