@@ -285,9 +285,8 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
-function buildTunnelAutologinUrl(tunnelUrl: string, password: string | undefined): string {
-  if (!password) return tunnelUrl
-  return `${tunnelUrl}/password=${encodeURIComponent(password)}`
+function buildTunnelAutologinUrl(tunnelUrl: string, _password: string | undefined): string {
+  return tunnelUrl
 }
 
 function parseCloudflaredUrl(chunk: string): string | null {
@@ -556,9 +555,6 @@ async function startServer(options: {
     lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
   }
 
-  if (password) {
-    lines.push(`  Password: ${password}`)
-  }
   const tunnelQrUrl = tunnelUrl ? buildTunnelAutologinUrl(tunnelUrl, password) : null
   if (tunnelUrl) {
     lines.push(`  Tunnel:   ${tunnelQrUrl ?? tunnelUrl}`)
