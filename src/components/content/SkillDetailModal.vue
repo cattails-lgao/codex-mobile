@@ -30,7 +30,7 @@
           <div v-if="isLoadingReadme" class="sdm-readme-loading">{{ t('Loading skill contents...') }}</div>
           <div v-else-if="readmeContent" class="sdm-readme" v-html="renderedReadme"></div>
 
-          <a class="sdm-link" :href="skill.url" target="_blank" rel="noopener noreferrer">{{ t('View on GitHub') }}</a>
+          <a v-if="skill.url" class="sdm-link" :href="skill.url" target="_blank" rel="noopener noreferrer">{{ t('View on GitHub') }}</a>
         </div>
 
         <div class="sdm-footer">
