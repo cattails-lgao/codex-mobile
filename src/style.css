@@ -783,6 +783,14 @@
   @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
 }
 
+:root.dark .content-header-terminal-command .composer-dropdown-trigger {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 focus:border-zinc-600;
+}
+
+:root.dark .content-header-terminal-command.is-open .composer-dropdown-trigger {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-100;
+}
+
 :root.dark .content-header-branch-dropdown.is-review-open .composer-dropdown-trigger {
   @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
 }

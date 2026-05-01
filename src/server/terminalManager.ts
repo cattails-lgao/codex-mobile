@@ -470,9 +470,13 @@ function resolveNodePtyPrebuiltPath(): string | null {
 
 function ensureNodePtyPrebuiltExecutable(): void {
   if (process.platform !== 'darwin' && process.platform !== 'linux') return
+  ensurePackageSpawnHelperExecutable('node-pty')
+  ensurePackageSpawnHelperExecutable('node-pty-prebuilt-multiarch')
+}
+
+function ensurePackageSpawnHelperExecutable(packageName: string): void {
   try {
-    const nodePtyEntry = require.resolve('node-pty-prebuilt-multiarch')
-    const packageRoot = join(dirname(nodePtyEntry), '..')
+    const packageRoot = dirname(require.resolve(`${packageName}/package.json`))
     const helperPath = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
     if (existsSync(helperPath)) {
       chmodSync(helperPath, 0o755)

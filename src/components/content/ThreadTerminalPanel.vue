@@ -16,18 +16,6 @@
         </button>
       </div>
       <div class="thread-terminal-actions">
-        <select
-          class="thread-terminal-quick-command"
-          aria-label="Run quick command"
-          title="Run quick command"
-          @change="onQuickCommandSelect"
-        >
-          <option value="">Run...</option>
-          <option v-for="command in quickCommands" :key="command.value" :value="command.value">
-            {{ command.label }}
-          </option>
-          <option :value="ADD_QUICK_COMMAND_VALUE">Add command...</option>
-        </select>
         <button class="thread-terminal-action" type="button" title="New" @click="onNewTerminal">
           New
         </button>
@@ -72,6 +60,10 @@ const props = defineProps<{
   cwd: string
 }>()
 
+type ThreadTerminalPanelExposed = {
+  runQuickCommand: (command: string, custom?: boolean) => Promise<void>
+}
+
 const emit = defineEmits<{
   hide: []
   terminalFocusChange: [focused: boolean]
@@ -106,7 +98,6 @@ type QuickCommand = {
 
 const QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
 const TERMINAL_TABS_STORAGE_KEY = 'codex-web-local.terminal-tabs.v1'
-const ADD_QUICK_COMMAND_VALUE = '__add_quick_command__'
 const MAX_VISIBLE_QUICK_COMMANDS = 5
 
 const storedQuickCommands = ref<QuickCommand[]>(loadStoredQuickCommands())
@@ -287,27 +278,6 @@ function onSelectTab(tabId: string): void {
   void attachToThread(false, tabId)
 }
 
-function onQuickCommandSelect(event: Event): void {
-  const select = event.target instanceof HTMLSelectElement ? event.target : null
-  const command = select?.value.trim() ?? ''
-  if (select) {
-    select.value = ''
-  }
-  if (command === ADD_QUICK_COMMAND_VALUE) {
-    onAddQuickCommandFromPrompt()
-    return
-  }
-  if (!command) return
-  runQuickCommand(command, false)
-}
-
-function onAddQuickCommandFromPrompt(): void {
-  if (typeof window === 'undefined') return
-  const value = normalizeQuickCommandValue(window.prompt('Add quick command') ?? '')
-  if (!value) return
-  runQuickCommand(value, true)
-}
-
 function onCloseTerminal(): void {
   const currentSessionId = activeSessionId.value
   if (!currentSessionId) {
@@ -482,19 +452,28 @@ async function refreshProjectQuickCommands(): Promise<void> {
   }
 }
 
-function runQuickCommand(command: string, custom: boolean): void {
+async function runQuickCommand(command: string, custom = false): Promise<void> {
   const value = normalizeQuickCommandValue(command)
   if (!value) return
-  recordQuickCommandUse(value, custom)
   if (!activeSessionId.value) {
-    errorMessage.value = 'Terminal is not connected'
-    return
+    await attachToThread(false)
+  }
+  if (!activeSessionId.value) {
+    throw new Error('Terminal is not connected')
   }
   terminal?.focus()
-  void sendThreadTerminalInput(activeSessionId.value, `${value}\r`).catch((error: unknown) => {
+  recordQuickCommandUse(value, custom)
+  try {
+    await sendThreadTerminalInput(activeSessionId.value, `${value}\r`)
+  } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Quick command failed'
-  })
+    throw error
+  }
 }
+
+defineExpose<ThreadTerminalPanelExposed>({
+  runQuickCommand,
+})
 
 function recordQuickCommandUse(value: string, custom: boolean): void {
   const normalized = normalizeQuickCommandValue(value)
@@ -638,10 +617,6 @@ function readString(value: unknown): string {
   @apply flex shrink-0 items-center gap-1;
 }
 
-.thread-terminal-quick-command {
-  @apply h-7 max-w-32 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white focus:border-zinc-600;
-}
-
 .thread-terminal-action {
   @apply rounded-md border border-transparent px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white;
 }
@@ -678,10 +653,6 @@ function readString(value: unknown): string {
 
   .thread-terminal-action {
     @apply px-1.5 text-[11px];
-  }
-
-  .thread-terminal-quick-command {
-    @apply max-w-24 px-1 text-[11px];
   }
 
   .thread-terminal-host {
