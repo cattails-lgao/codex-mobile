@@ -218,7 +218,7 @@
               role="switch"
               :aria-checked="isPlanModeSelected"
               :aria-label="isPlanModeSelected ? t('Disable plan mode') : t('Enable plan mode')"
-              :disabled="disabled || !activeThreadId || isTurnInProgress"
+              :disabled="isComposerConfigDisabled"
               @click="toggleCollaborationMode"
             >
               <span class="thread-composer-attach-setting-copy">
@@ -241,7 +241,7 @@
             :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
             :placeholder="t('Model')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
+            :disabled="isComposerConfigDisabled || models.length === 0"
             enable-search
             :search-placeholder="t('Search models...')"
             @update:model-value="onModelSelect"
@@ -257,7 +257,7 @@
             :allow-remove="true"
             :remove-label="t('Remove prompt')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            :disabled="isComposerConfigDisabled"
             @toggle="onSkillDropdownToggle"
             @create="onCreatePrompt"
             @remove="onRemovePrompt"
@@ -269,7 +269,7 @@
             :options="reasoningOptions"
             :placeholder="t('Thinking')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            :disabled="isComposerConfigDisabled"
             @update:model-value="onReasoningEffortSelect"
           />
         </template>
@@ -628,6 +628,7 @@ const standaloneFileAttachments = computed(() => {
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
+const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => props.selectedModel.trim() === 'gpt-5.4')
 const showFastModeModelIcon = computed(() =>
   props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
