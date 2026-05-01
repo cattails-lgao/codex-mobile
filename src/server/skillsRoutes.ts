@@ -264,11 +264,17 @@ async function runGitFetchWithRefLockRetry(repoDir: string, args: string[] = ['f
   }
 }
 
-function buildLocalHubEntry(info: InstalledSkillInfo): SkillHubEntry {
+async function buildLocalHubEntry(info: InstalledSkillInfo): Promise<SkillHubEntry> {
+  let description = ''
+  if (info.path) {
+    try {
+      description = extractSkillDescriptionFromMarkdown(await readFile(info.path, 'utf8'))
+    } catch {}
+  }
   return {
     name: info.name,
     owner: 'local',
-    description: '',
+    description,
     displayName: '',
     publishedAt: 0,
     avatarUrl: '',
@@ -1304,7 +1310,7 @@ export async function handleSkillsRoutes(
       const installedMap = await collectInstalledSkillsMap(appServer)
       const installed: SkillHubEntry[] = []
       for (const [, info] of installedMap) {
-        installed.push(buildLocalHubEntry(info))
+        installed.push(await buildLocalHubEntry(info))
       }
       installed.sort((a, b) => a.name.localeCompare(b.name))
       setJson(res, 200, { installed })
