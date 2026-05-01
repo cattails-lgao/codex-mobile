@@ -44,7 +44,6 @@ import type {
   UiPendingRequestState,
   ReasoningEffort,
   SpeedMode,
-  ThreadScrollState,
   UiFileChange,
   UiLiveOverlay,
   UiMessage,
@@ -71,7 +70,6 @@ export function findAdjacentThreadId(threads: UiThread[], threadId: string): str
 }
 
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
-const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
@@ -305,54 +303,6 @@ function saveSelectedCollaborationModeMap(state: Record<string, CollaborationMod
 
 function clamp(value: number, minValue: number, maxValue: number): number {
   return Math.min(Math.max(value, minValue), maxValue)
-}
-
-function normalizeThreadScrollState(value: unknown): ThreadScrollState | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-
-  const rawState = value as Record<string, unknown>
-  if (typeof rawState.scrollTop !== 'number' || !Number.isFinite(rawState.scrollTop)) return null
-  if (typeof rawState.isAtBottom !== 'boolean') return null
-
-  const normalized: ThreadScrollState = {
-    scrollTop: Math.max(0, rawState.scrollTop),
-    isAtBottom: rawState.isAtBottom,
-  }
-
-  if (typeof rawState.scrollRatio === 'number' && Number.isFinite(rawState.scrollRatio)) {
-    normalized.scrollRatio = clamp(rawState.scrollRatio, 0, 1)
-  }
-
-  return normalized
-}
-
-function loadThreadScrollStateMap(): Record<string, ThreadScrollState> {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    const raw = window.localStorage.getItem(SCROLL_STATE_STORAGE_KEY)
-    if (!raw) return {}
-
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-
-    const normalizedMap: Record<string, ThreadScrollState> = {}
-    for (const [threadId, state] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!threadId) continue
-      const normalizedState = normalizeThreadScrollState(state)
-      if (normalizedState) {
-        normalizedMap[threadId] = normalizedState
-      }
-    }
-    return normalizedMap
-  } catch {
-    return {}
-  }
-}
-
-function saveThreadScrollStateMap(state: Record<string, ThreadScrollState>): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(SCROLL_STATE_STORAGE_KEY, JSON.stringify(state))
 }
 
 function normalizeStoredTokenCount(value: unknown): number | null {
@@ -1331,7 +1281,6 @@ export function useDesktopState() {
   const selectedSpeedMode = ref<SpeedMode>('standard')
   const activeProviderId = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
-  const scrollStateByThreadId = ref<Record<string, ThreadScrollState>>(loadThreadScrollStateMap())
   const projectOrder = ref<string[]>(loadProjectOrder())
   const projectDisplayNameById = ref<Record<string, string>>(loadProjectDisplayNames())
   const loadedVersionByThreadId = ref<Record<string, string>>({})
@@ -1423,9 +1372,6 @@ export function useDesktopState() {
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
     allThreads.value.find((thread) => thread.id === selectedThreadId.value) ?? null,
-  )
-  const selectedThreadScrollState = computed<ThreadScrollState | null>(
-    () => scrollStateByThreadId.value[selectedThreadId.value] ?? null,
   )
   const selectedThreadTerminalOpen = computed(() => {
     const threadId = selectedThreadId.value
@@ -2024,11 +1970,6 @@ export function useDesktopState() {
       readStateByThreadId.value = nextReadState
       saveReadStateMap(nextReadState)
     }
-    const nextScrollState = pruneThreadStateMap(scrollStateByThreadId.value, activeThreadIds)
-    if (nextScrollState !== scrollStateByThreadId.value) {
-      scrollStateByThreadId.value = nextScrollState
-      saveThreadScrollStateMap(nextScrollState)
-    }
     loadedMessagesByThreadId.value = pruneThreadStateMap(loadedMessagesByThreadId.value, activeThreadIds)
     loadedVersionByThreadId.value = pruneThreadStateMap(loadedVersionByThreadId.value, activeThreadIds)
     resumedThreadById.value = pruneThreadStateMap(resumedThreadById.value, activeThreadIds)
@@ -2279,34 +2220,6 @@ export function useDesktopState() {
   function currentThreadVersion(threadId: string): string {
     const thread = flattenThreads(sourceGroups.value).find((row) => row.id === threadId)
     return thread?.updatedAtIso ?? ''
-  }
-
-  function setThreadScrollState(threadId: string, nextState: ThreadScrollState): void {
-    if (!threadId) return
-
-    const normalizedState: ThreadScrollState = {
-      scrollTop: Math.max(0, nextState.scrollTop),
-      isAtBottom: nextState.isAtBottom === true,
-    }
-    if (typeof nextState.scrollRatio === 'number' && Number.isFinite(nextState.scrollRatio)) {
-      normalizedState.scrollRatio = clamp(nextState.scrollRatio, 0, 1)
-    }
-
-    const previousState = scrollStateByThreadId.value[threadId]
-    if (
-      previousState &&
-      previousState.scrollTop === normalizedState.scrollTop &&
-      previousState.isAtBottom === normalizedState.isAtBottom &&
-      previousState.scrollRatio === normalizedState.scrollRatio
-    ) {
-      return
-    }
-
-    scrollStateByThreadId.value = {
-      ...scrollStateByThreadId.value,
-      [threadId]: normalizedState,
-    }
-    saveThreadScrollStateMap(scrollStateByThreadId.value)
   }
 
   function setThreadTerminalOpen(threadId: string, isOpen: boolean): void {
@@ -3744,13 +3657,6 @@ export function useDesktopState() {
     }
 
     if (isAgentContentEvent(notification)) {
-      if (shouldAutoScrollOnNextAgentEvent && selectedThreadId.value) {
-        setThreadScrollState(selectedThreadId.value, {
-          scrollTop: 0,
-          isAtBottom: true,
-          scrollRatio: 1,
-        })
-      }
       activeReasoningItemId = ''
       clearLiveReasoningForThread(notificationThreadId)
     }
@@ -5325,7 +5231,6 @@ export function useDesktopState() {
     projectDisplayNameById,
     selectedThread,
     selectedThreadTokenUsage,
-    selectedThreadScrollState,
     selectedThreadTerminalOpen,
     isSelectedThreadInterruptPending,
     selectedThreadServerRequests,
@@ -5354,7 +5259,6 @@ export function useDesktopState() {
     selectThread,
     loadMessages,
     ensureThreadMessagesLoaded,
-    setThreadScrollState,
     setThreadTerminalOpen,
     toggleSelectedThreadTerminal,
     archiveThreadById,

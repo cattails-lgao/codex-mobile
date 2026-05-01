@@ -777,10 +777,9 @@
               <template v-else>
                 <div class="content-thread">
                   <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
-                    :active-thread-id="composerThreadContextId" :cwd="composerCwd" :scroll-state="selectedThreadScrollState"
+                    :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
                     :pending-requests="selectedThreadServerRequests"
-                    @update-scroll-state="onUpdateThreadScrollState"
                     @fork-thread="onForkThreadFromMessage"
                     @rollback="onRollback"
                     @implement-plan="onImplementPlan"
@@ -894,7 +893,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, ThreadScrollState, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
+import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
@@ -1063,7 +1062,6 @@ const {
   projectDisplayNameById,
   selectedThread,
   selectedThreadTokenUsage,
-  selectedThreadScrollState,
   selectedThreadTerminalOpen,
   selectedThreadServerRequests,
   selectedLiveOverlay,
@@ -1088,7 +1086,6 @@ const {
   refreshSkills,
   selectThread,
   ensureThreadMessagesLoaded,
-  setThreadScrollState,
   setThreadTerminalOpen,
   toggleSelectedThreadTerminal,
   archiveThreadById,
@@ -2205,10 +2202,6 @@ async function onRemoveProject(projectName: string): Promise<void> {
 
 function onReorderProject(payload: { projectName: string; toIndex: number }): void {
   reorderProject(payload.projectName, payload.toIndex)
-}
-
-function onUpdateThreadScrollState(payload: { threadId: string; state: ThreadScrollState }): void {
-  setThreadScrollState(payload.threadId, payload.state)
 }
 
 function onRespondServerRequest(payload: UiServerRequestReply): void {

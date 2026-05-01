@@ -852,7 +852,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
+import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { useMobile } from '../../composables/useMobile'
 
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -1221,11 +1221,9 @@ const props = defineProps<{
   isLoading: boolean
   activeThreadId: string
   cwd: string
-  scrollState: ThreadScrollState | null
 }>()
 
 const emit = defineEmits<{
-  updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   forkThread: [payload: { threadId: string; turnIndex: number }]
   rollback: [payload: { turnId: string }]
   implementPlan: [payload: { turnId: string }]
@@ -1239,8 +1237,7 @@ const copiedResponseAnchorId = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
-const localScrollState = ref<ThreadScrollState | null>(null)
-const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
+const autoFollowOutput = ref(true)
 const BOTTOM_THRESHOLD_PX = 16
 const CODE_LANGUAGE_ALIASES: Record<string, string> = {
   js: 'javascript',
@@ -3932,20 +3929,6 @@ function isAtBottom(container: HTMLElement): boolean {
   return distance <= BOTTOM_THRESHOLD_PX
 }
 
-function emitScrollState(container: HTMLElement): void {
-  if (!props.activeThreadId) return
-  const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const scrollRatio = maxScrollTop > 0 ? Math.min(Math.max(container.scrollTop / maxScrollTop, 0), 1) : 1
-  emit('updateScrollState', {
-    threadId: props.activeThreadId,
-    state: {
-      scrollTop: container.scrollTop,
-      isAtBottom: isAtBottom(container),
-      scrollRatio,
-    },
-  })
-}
-
 function applySavedScrollState(): void {
   const container = conversationListRef.value
   if (!container) return
@@ -3954,24 +3937,12 @@ function applySavedScrollState(): void {
     enforceBottomState()
     return
   }
-
-  const savedState = props.scrollState
-  if (!savedState || savedState.isAtBottom) {
-    emitScrollState(container)
-    return
-  }
-
-  const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const targetScrollTop = savedState.scrollTop
-  container.scrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop)
-  emitScrollState(container)
 }
 
 function enforceBottomState(): void {
   const container = conversationListRef.value
   if (!container) return
   scrollToBottom()
-  emitScrollState(container)
 }
 
 function shouldLockToBottom(): boolean {
@@ -4172,7 +4143,6 @@ watch(
 watch(
   () => props.activeThreadId,
   () => {
-    localScrollState.value = null
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
@@ -4186,7 +4156,6 @@ function onConversationScroll(): void {
   const container = conversationListRef.value
   if (!container || props.isLoading) return
   autoFollowOutput.value = isAtBottom(container)
-  emitScrollState(container)
   if (hasMoreAbove.value && !isLoadingMore.value && container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX) {
     void loadMoreAbove()
   }
