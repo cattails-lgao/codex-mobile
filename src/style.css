@@ -103,17 +103,12 @@
 
 :root.dark .sidebar-settings-account-refresh,
 :root.dark .sidebar-settings-account-switch,
-:root.dark .sidebar-settings-account-login-button,
-:root.dark .sidebar-settings-account-callback-submit {
+:root.dark .sidebar-settings-account-login-button {
   @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
 }
 
 :root.dark .sidebar-settings-account-login-link {
   @apply text-sky-300 hover:text-sky-200;
-}
-
-:root.dark .sidebar-settings-account-callback-input {
-  @apply border-zinc-600 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-400;
 }
 
 :root.dark .sidebar-settings-account-empty {

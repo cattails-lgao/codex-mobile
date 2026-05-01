@@ -326,6 +326,7 @@ const zhCN: Record<string, string> = {
   'Starting login…': '正在启动登录…',
   'Open login URL': '打开登录链接',
   'Paste localhost callback URL': '粘贴 localhost 回调 URL',
+  'Paste localhost callback URL after browser login completes': '浏览器登录完成后，粘贴 localhost 回调 URL',
   'Complete': '完成',
   'Completing…': '正在完成…',
   'Failed to start Codex login': '启动 Codex 登录失败',

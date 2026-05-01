@@ -138,24 +138,6 @@
                       {{ t('Open login URL') }}
                     </a>
                   </div>
-                  <div v-if="codexLoginUrl" class="sidebar-settings-account-callback">
-                    <input
-                      v-model="codexLoginCallbackUrl"
-                      class="sidebar-settings-account-callback-input"
-                      type="url"
-                      inputmode="url"
-                      :placeholder="t('Paste localhost callback URL')"
-                      @keydown.enter.prevent="onCompleteCodexLogin"
-                    >
-                    <button
-                      class="sidebar-settings-account-callback-submit"
-                      type="button"
-                      :disabled="isCompletingCodexLogin || codexLoginCallbackUrl.trim().length === 0"
-                      @click="onCompleteCodexLogin"
-                    >
-                      {{ isCompletingCodexLogin ? t('Completing…') : t('Complete') }}
-                    </button>
-                  </div>
                   <p v-if="accounts.length === 0" class="sidebar-settings-account-empty">
                     {{ t('Click Login, or run `codex login`, then click reload.') }}
                   </p>
@@ -1212,7 +1194,6 @@ const isSwitchingAccounts = ref(false)
 const isStartingCodexLogin = ref(false)
 const isCompletingCodexLogin = ref(false)
 const codexLoginUrl = ref('')
-const codexLoginCallbackUrl = ref('')
 const removingAccountId = ref('')
 const confirmingRemoveAccountId = ref('')
 const hoveredAccountId = ref('')
@@ -2025,12 +2006,15 @@ async function onRefreshAccounts(): Promise<void> {
 async function onStartCodexLogin(): Promise<void> {
   if (isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
   accountActionError.value = ''
-  codexLoginCallbackUrl.value = ''
   isStartingCodexLogin.value = true
   try {
     const loginUrl = await startCodexLogin()
     codexLoginUrl.value = loginUrl
     window.open(loginUrl, '_blank', 'noopener,noreferrer')
+    const callbackUrl = window.prompt(t('Paste localhost callback URL after browser login completes'))
+    if (callbackUrl && callbackUrl.trim().length > 0) {
+      await completeCodexLoginFromCallback(callbackUrl.trim())
+    }
   } catch (error) {
     accountActionError.value = error instanceof Error ? error.message : t('Failed to start Codex login')
   } finally {
@@ -2038,15 +2022,14 @@ async function onStartCodexLogin(): Promise<void> {
   }
 }
 
-async function onCompleteCodexLogin(): Promise<void> {
-  if (isCompletingCodexLogin.value || codexLoginCallbackUrl.value.trim().length === 0) return
+async function completeCodexLoginFromCallback(callbackUrl: string): Promise<void> {
+  if (isCompletingCodexLogin.value || callbackUrl.length === 0) return
   accountActionError.value = ''
   isCompletingCodexLogin.value = true
   try {
-    const result = await completeCodexLogin(codexLoginCallbackUrl.value.trim())
+    const result = await completeCodexLogin(callbackUrl)
     accounts.value = result.accounts
     codexLoginUrl.value = ''
-    codexLoginCallbackUrl.value = ''
     stopPolling()
     startPolling()
     void refreshAll({
@@ -4436,18 +4419,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-account-login-link {
   @apply min-w-0 truncate text-xs text-blue-600 hover:text-blue-700 hover:underline;
-}
-
-.sidebar-settings-account-callback {
-  @apply mb-2 flex items-center gap-2;
-}
-
-.sidebar-settings-account-callback-input {
-  @apply min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-zinc-400 disabled:cursor-default disabled:opacity-60;
-}
-
-.sidebar-settings-account-callback-submit {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-empty {
