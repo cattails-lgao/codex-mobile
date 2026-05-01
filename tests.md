@@ -4142,13 +4142,15 @@ The content header terminal control is a command dropdown that opens the termina
 3. Confirm the terminal panel opens and the selected command is submitted to the active terminal.
 4. Open the dropdown again and select `Hide terminal`.
 5. Open the dropdown, select `Add command...`, enter a simple command such as `pwd`, and confirm it opens the terminal and runs.
-6. Switch to dark theme and repeat steps 1-5.
+6. Resize the window narrow enough that the terminal dropdown is near the right edge, then open the dropdown again.
+7. Switch to dark theme and repeat steps 1-6.
 
 #### Expected Results
 - The old standalone terminal toggle is replaced by a dropdown.
 - Selecting a command opens the terminal automatically and sends the command with Enter.
 - `Hide terminal` and `Open terminal` remain available from the dropdown.
 - Custom commands are saved into the same terminal quick-command history and appear in later dropdown usage.
+- The dropdown menu remains inside the viewport and long command labels truncate instead of overflowing off-screen.
 - Dropdown text, borders, and open state are readable in both light theme and dark theme.
 
 #### Rollback/Cleanup

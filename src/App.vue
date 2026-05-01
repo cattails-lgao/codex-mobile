@@ -4013,6 +4013,20 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-zinc-300 bg-zinc-100 text-zinc-950;
 }
 
+.content-header-terminal-command :deep(.composer-dropdown-menu-wrap) {
+  left: auto;
+  right: 0;
+}
+
+.content-header-terminal-command :deep(.composer-dropdown-menu) {
+  width: min(18rem, calc(100vw - 1rem));
+  min-width: min(14rem, calc(100vw - 1rem));
+}
+
+.content-header-terminal-command :deep(.composer-dropdown-option) {
+  @apply block truncate;
+}
+
 .content-header-branch-dropdown :deep(.composer-dropdown-trigger) {
   @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
 }
