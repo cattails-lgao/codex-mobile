@@ -64,6 +64,12 @@ function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
 }
 
+export function findAdjacentThreadId(threads: UiThread[], threadId: string): string {
+  const targetIndex = threads.findIndex((thread) => thread.id === threadId)
+  if (targetIndex < 0) return ''
+  return threads[targetIndex + 1]?.id ?? threads[targetIndex - 1]?.id ?? ''
+}
+
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
@@ -4321,12 +4327,24 @@ export function useDesktopState() {
   }
 
   async function archiveThreadById(threadId: string) {
+    const wasSelectedThread = selectedThreadId.value === threadId
+    const nextSelectedThreadId = wasSelectedThread
+      ? findAdjacentThreadId(flattenThreads(projectGroups.value), threadId)
+      : ''
+
+    if (wasSelectedThread) {
+      setSelectedThreadId(nextSelectedThreadId)
+      if (nextSelectedThreadId) {
+        void loadMessages(nextSelectedThreadId, { silent: true })
+      }
+    }
+
     try {
       await archiveThread(threadId)
       await loadThreads()
 
-      if (selectedThreadId.value === threadId) {
-        await loadMessages(selectedThreadId.value)
+      if (wasSelectedThread && nextSelectedThreadId && selectedThreadId.value === nextSelectedThreadId) {
+        await ensureThreadMessagesLoaded(nextSelectedThreadId, { silent: true })
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'

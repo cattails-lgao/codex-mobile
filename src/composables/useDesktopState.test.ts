@@ -3,6 +3,7 @@ import {
   buildWorkspaceRootsProjectOrderState,
   collectWorkspaceRootPathsForProjectRemoval,
   filterGroupsByWorkspaceRoots,
+  findAdjacentThreadId,
 } from './useDesktopState'
 import type { UiProjectGroup } from '../types/codex'
 import type { WorkspaceRootsState } from '../api/codexGateway'
@@ -182,5 +183,30 @@ describe('workspace roots project persistence helpers', () => {
       active: ['/tmp/local-project'],
       projectOrder: ['remote-project-id', '/tmp/local-project'],
     })
+  })
+})
+
+describe('findAdjacentThreadId', () => {
+  it('selects the next thread after the archived thread', () => {
+    const threads = [
+      thread('first-thread', '/tmp/project'),
+      thread('selected-thread', '/tmp/project'),
+      thread('next-thread', '/tmp/project'),
+    ]
+
+    expect(findAdjacentThreadId(threads, 'selected-thread')).toBe('next-thread')
+  })
+
+  it('falls back to the previous thread when the last thread is archived', () => {
+    const threads = [
+      thread('previous-thread', '/tmp/project'),
+      thread('selected-thread', '/tmp/project'),
+    ]
+
+    expect(findAdjacentThreadId(threads, 'selected-thread')).toBe('previous-thread')
+  })
+
+  it('returns no fallback when there is no adjacent thread', () => {
+    expect(findAdjacentThreadId([thread('selected-thread', '/tmp/project')], 'selected-thread')).toBe('')
   })
 })

@@ -647,81 +647,6 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete the test folder created in step 3 if it was created only for verification.
 
-### Feature: Keep same-name project folders separate
-
-#### Prerequisites
-- App is running from this repository.
-- Home/new-thread screen is open.
-- Two writable parent directories are available.
-
-#### Steps
-1. Create or select two project folders with the same leaf name under different parents, for example `/tmp/first/api` and `/tmp/second/api`.
-2. On the home/new-thread screen, add/select both folders through `Select folder` or `Create Project`.
-3. Open the `Choose folder` dropdown in light theme.
-4. Switch to dark theme and open the `Choose folder` dropdown again.
-5. Start or open a thread in each same-name folder and confirm both projects appear independently in the sidebar.
-
-#### Expected Results
-- Both same-name folders remain selectable as distinct projects instead of merging into one `api` project.
-- Duplicate folder names display their full paths in the folder picker so the targets are distinguishable.
-- Light theme and dark theme both keep the dropdown and sidebar readable with no same-name project collision.
-
-#### Rollback/Cleanup
-- Remove the temporary same-name folders if they were created only for verification.
-
-### Feature: Show project folder names for long sidebar project paths
-
-#### Prerequisites
-- App is running from this repository.
-- Sidebar contains at least one project group whose display name is a long absolute path.
-
-#### Steps
-1. Open the home/new-thread screen in light theme.
-2. Inspect the `Projects` section in the sidebar.
-3. Confirm a long absolute project path is shown as only the final folder name, for example `New project 4` or `codex-web-local`, instead of `/Users/igor/...`.
-4. Hover the shortened project title.
-5. Switch to dark theme and repeat steps 2-4.
-
-#### Expected Results
-- Long path-like project titles show only the final project folder name.
-- The full path remains available in the title tooltip.
-- Light theme and dark theme both keep the shortened project title readable and aligned with the existing project row controls.
-
-#### Rollback/Cleanup
-- None.
-
-### Feature: Match Codex.app project order source
-
-#### Prerequisites
-- App is running from this repository.
-- Codex global state contains `electron-saved-workspace-roots` and `project-order`.
-- At least one workspace root appears in a different position in `project-order` than in `electron-saved-workspace-roots`.
-- Two saved workspace roots share the same final folder name, and at least one of them has no threads.
-
-#### Steps
-1. Open the home/new-thread screen.
-2. Expand the sidebar and inspect the `Projects` section.
-3. Open the `Choose folder` dropdown.
-4. Compare the visible project order against Codex.app for the same Codex global state.
-5. Confirm duplicate saved roots with no threads still appear as project rows.
-6. Hover a duplicate project name.
-7. Repeat in dark theme.
-
-#### Expected Results
-- Sidebar project order follows Codex.app's `project-order` key rather than raw saved-root insertion order.
-- The folder dropdown follows the same project order as the sidebar/Codex.app.
-- Projects that are lower in Codex.app, such as older labeled roots, do not jump to the top only because they appear early in `electron-saved-workspace-roots`.
-- Empty saved roots remain visible with a `No threads` row.
-- Empty duplicate project names include the parent folder suffix, such as `TestChat New project 2`, while thread-backed duplicate project names keep the plain final folder name.
-- Hovering a shortened duplicate project title shows the full project path.
-- Editing a duplicate path-backed project name opens the rename input with the visible project name, not the full path.
-- Projectless chat folders created under `Documents/Codex/YYYY-MM-DD/<slug>` stay out of `Projects` and appear under `Chats`.
-- Remote projects from Codex global `remote-projects` stay in the same `project-order`, for example `ubuntu a1`, even when they have no local chats.
-- Light theme and dark theme both preserve readable project rows and dropdown options.
-
-#### Rollback/Cleanup
-- None.
-
 ### Feature: Disable auto-restore to last thread when opening home URL
 
 #### Prerequisites
@@ -4095,30 +4020,30 @@ Thread rows show an inline delete button that morphs to `Confirm`, while pin/unp
 
 ---
 
-### Workspace roots duplicate removal and remote order persistence
+### Active thread switches after delete
 
 #### Feature/Change Name
-Project removal matches duplicate workspace roots by full path, and project order persistence keeps remote project IDs in place.
+Deleting the currently open thread immediately selects the next available thread.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
-2. Codex global workspace roots include two local roots with the same folder name and one remote project entry
-3. Light theme and dark theme both available from the appearance switcher
+2. Sidebar contains at least three disposable test threads
+3. Light theme and dark theme are available from the appearance switcher
 
 #### Steps
-1. In light theme, open the sidebar Projects section.
-2. Confirm the duplicate local roots are shown as separate project rows.
-3. Remove one duplicate project row.
-4. Reload the app and confirm the removed duplicate does not reappear.
-5. Reorder or pin a local project while a remote project is listed above it.
-6. Reload the app and confirm the remote project keeps the same relative order.
-7. Switch to dark theme and repeat steps 1-6.
+1. In light theme, open the middle disposable thread
+2. Click that thread's delete icon, then click `Confirm`
+3. Verify the content area immediately switches to the next thread in the sidebar list
+4. Open the last disposable thread
+5. Delete and confirm it
+6. Verify the content area immediately switches to the previous thread
+7. Repeat steps 1 through 6 in dark theme
 
 #### Expected Results
-- Removing a duplicate path project removes the matching full workspace root, not every project with the same leaf name.
-- Remote project IDs remain in Codex global `project-order` where the user placed them.
-- Project rows and menus remain readable in light and dark themes.
+- Deleting the active thread does not leave the deleted thread selected
+- The next thread is selected immediately; when there is no next thread, the previous thread is selected
+- The browser route updates to the newly selected thread without waiting for a manual click
+- Light-theme and dark-theme sidebar selection states remain readable after the automatic switch
 
 #### Rollback/Cleanup
-- Re-add any duplicate workspace root removed only for testing.
-- Restore the preferred project order after manual verification.
+- Delete any disposable threads created only for this test
