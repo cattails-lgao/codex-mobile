@@ -90,7 +90,7 @@
   - inspect row HTML and count expected rendered nodes (for example `strong.message-bold-text`)
   - save screenshot to `output/playwright/<task-name>.png`
 - Playwright test sequence (when Playwright is requested):
-  1. Start or confirm a single dev server instance (`pnpm run dev -- --host 0.0.0.0 --port 4173`).
+  1. Start or confirm a single dev server instance (`pnpm run dev --host 0.0.0.0 --port 4173`).
   2. If there are stale servers on the same port, stop them first to avoid false test results.
   3. Run Playwright CLI against `http://127.0.0.1:4173` (or required test URL) and exercise the changed flow.
   4. For visual/UI changes, capture both light-theme and dark-theme results.
@@ -120,6 +120,7 @@
 
 - When working in a git worktree, prefer reusing an existing compatible `node_modules` tree when it is already available instead of triggering a fresh install by default.
 - If `node_modules` is symlinked to a shared dependency directory, avoid workflows that prompt to remove and recreate that shared directory just to run `npm run dev` or `pnpm run dev`.
+- For this repo's `pnpm run dev` wrapper, pass Vite flags directly, for example `pnpm run dev --host 127.0.0.1 --port 5173`; do not insert an extra `--` before `--host`.
 - For dev-server fixes, verify the exact user-requested command afterwards (for example `npm run dev`), not only a fallback Vite invocation.
 - Never kill or stop the tmux-managed dev server bound to port `5173`.
 - Treat the `5173` tmux dev process as persistent infrastructure; restart it only when the user explicitly requests a restart.
@@ -141,7 +142,7 @@
 - Use this flow when validating UI behavior on Oracle A1 from the local Mac machine.
 - On A1, start the app server with Codex CLI available in `PATH`:
   - `export PATH="$HOME/.npm-global/bin:$PATH"`
-  - `pnpm run dev -- --host 0.0.0.0 --port 4173`
+  - `pnpm run dev --host 0.0.0.0 --port 4173`
 - From Mac, run Playwright against Tailscale URL (`http://100.127.77.25:4173`), not localhost.
 - Verify success with both checks:
   - UI assertion in Playwright (new project/folder appears in sidebar or selector).
