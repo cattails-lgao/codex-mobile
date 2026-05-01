@@ -3358,7 +3358,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 6. Verify `Search results (count)` appears above `Installed skills (count)`
 7. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
 8. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill>`
-9. After install, verify the result becomes installed and the installed skills list refreshes
+9. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
 10. Switch to dark theme and repeat the search visibility check
 11. Search for an already-installed skill and verify its search result shows `Installed`
 12. Verify the installed search result card itself shows the local installed skill owner/details, not the remote registry owner/install-count identity
@@ -3374,6 +3374,7 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 - Installed matching results show the existing `Installed` badge and can be opened like local skills
 - Installed detection uses the same installed skills source as the Skills Hub list, including RPC/plugin/shared skills and not only the base skills directory
 - Installed search result cards are rendered from the local installed skill record, so they show local ownership/content rather than remote registry metadata
+- Newly installed registry results are reloaded from the local installed skills source before appearing in the Installed skills section
 - Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
 - Local-only installed skills hide the external GitHub link when no URL is available
 - Installed skills section cards hide redundant installed/disabled status labels
