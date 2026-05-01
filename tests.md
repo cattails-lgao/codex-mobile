@@ -3322,6 +3322,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - The Composio login action opens a new tab from the click, starts `npx --yes composio login --no-browser -y`, then navigates that tab to the returned auth URL
 - Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
 - Composio search prioritizes exact slug/name matches above connectors that only mention the query in their description
+- Unit coverage verifies that Composio exact query matches outrank description-only matches and that gateway connector search sends `query`, `cursor`, and `limit` params expected by the server
 - Connected or no-auth Composio connectors expose `Try it!`, creating a new chat with the `composio-cli` skill attached
 - Composio pagination supports page-by-page loading with a clear `Load more` path and cursor-based page continuation
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login

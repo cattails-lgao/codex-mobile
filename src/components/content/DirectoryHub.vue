@@ -658,10 +658,10 @@ import {
   type DirectoryPluginDetail,
   type DirectoryPluginSummary,
 } from '../../api/codexGateway'
+import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
 import SkillsHub from './SkillsHub.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
-type DirectorySortMode = 'popular' | 'name' | 'date'
 const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
 const COMPOSIO_PAGE_LIMIT = 50
 
@@ -710,11 +710,6 @@ const POPULAR_MCP_NAME_BONUSES: Array<[RegExp, number]> = [
   [/(github|gitlab|linear|slack|notion|filesystem|browser|computer|web|postgres|sqlite|database)/i, 120],
   [/(search|drive|docs|calendar|terminal|shell|deploy|cloud|memory)/i, 55],
 ]
-const POPULAR_COMPOSIO_NAME_BONUSES: Array<[RegExp, number]> = [
-  [/(gmail|google calendar|google docs|google sheets|google drive|github|slack|notion|linear|outlook|supabase)/i, 140],
-  [/(email|calendar|document|sheet|drive|repo|issue|message|project|database|crm|deploy)/i, 50],
-]
-
 const props = defineProps<{
   cwd?: string
   threadId?: string
@@ -1056,35 +1051,6 @@ function mcpPopularScore(server: DirectoryMcpServerStatus): number {
   )
 }
 
-function composioPopularScore(connector: DirectoryComposioConnector): number {
-  return (
-    (connector.activeCount * 1_000) +
-    (connector.isNoAuth ? 300 : 0) +
-    (connector.toolsCount * 3) +
-    (connector.triggersCount * 4) +
-    bonusForName(`${connector.name} ${connector.slug} ${connector.description}`, POPULAR_COMPOSIO_NAME_BONUSES)
-  )
-}
-
-function composioQueryScore(connector: DirectoryComposioConnector, query: string): number {
-  const normalized = normalizeSearch(query)
-  if (!normalized) return 0
-  const name = connector.name.toLowerCase()
-  const slug = connector.slug.toLowerCase()
-  if (name === normalized || slug === normalized) return 1_000_000
-  if (name.replace(/\s+/gu, '') === normalized.replace(/\s+/gu, '')) return 900_000
-  if (name.startsWith(normalized) || slug.startsWith(normalized)) return 800_000
-  if (name.includes(normalized) || slug.includes(normalized)) return 700_000
-  return 0
-}
-
-function composioConnectionRank(connector: DirectoryComposioConnector): number {
-  if (connector.activeCount > 0) return 0
-  if (connector.totalConnections > 0) return 1
-  if (connector.isNoAuth) return 2
-  return 3
-}
-
 function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
   if (sortMode === 'name') return [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName))
   if (sortMode === 'date') return [...rows]
@@ -1095,27 +1061,6 @@ function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): Direct
   if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
   if (sortMode === 'date') return [...rows].sort((a, b) => a.catalogRank - b.catalogRank)
   return [...rows].sort((a, b) => (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
-}
-
-function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode, query = ''): DirectoryComposioConnector[] {
-  const normalizedQuery = normalizeSearch(query)
-  const queryRank = (connector: DirectoryComposioConnector) => composioQueryScore(connector, normalizedQuery)
-  if (sortMode === 'name') {
-    return [...rows].sort((a, b) => (
-      (queryRank(b) - queryRank(a)) ||
-      (composioConnectionRank(a) - composioConnectionRank(b))
-    ) || a.name.localeCompare(b.name))
-  }
-  if (sortMode === 'date') {
-    return [...rows].sort((a, b) => (
-      (queryRank(b) - queryRank(a)) ||
-      (composioConnectionRank(a) - composioConnectionRank(b))
-    ) || a.name.localeCompare(b.name))
-  }
-  return [...rows].sort((a, b) => (
-    (queryRank(b) - queryRank(a)) ||
-    composioConnectionRank(a) - composioConnectionRank(b)
-  ) || (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
