@@ -332,6 +332,13 @@ function parseGithubSkillSource(source: string): { ownerRepo: string; skillName:
   return { ownerRepo, skillName }
 }
 
+function getGithubOwnerAvatarUrl(source: string): string {
+  const parsed = parseGithubSkillSource(source)
+  if (!parsed) return ''
+  const owner = parsed.ownerRepo.split('/')[0] ?? ''
+  return owner ? `https://github.com/${encodeURIComponent(owner)}.png?size=64` : ''
+}
+
 function buildGithubSkillRawCandidates(source: string): string[] {
   const parsed = parseGithubSkillSource(source)
   if (!parsed) return []
@@ -361,24 +368,40 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
   }
 }
 
-async function fetchGithubSkillDescription(source: string): Promise<string> {
+function resolveSkillIconUrl(icon: string, markdownUrl: string): string {
+  const value = icon.trim().replace(/^['"]|['"]$/gu, '')
+  if (!value) return ''
+  if (/^https?:\/\//iu.test(value)) return value
+  try {
+    return new URL(value, markdownUrl).toString()
+  } catch {
+    return ''
+  }
+}
+
+async function fetchGithubSkillMetadata(source: string): Promise<Partial<Pick<SkillHubEntry, 'avatarUrl' | 'description'>>> {
   for (const candidate of buildGithubSkillRawCandidates(source)) {
     try {
       const markdown = await fetchTextWithTimeout(candidate, 4_000)
       if (!markdown) continue
       const description = extractSkillDescriptionFromMarkdown(markdown)
-      if (description) return description
+      const icon = extractSkillFrontmatterField(markdown, 'icon')
+      const avatarUrl = icon ? resolveSkillIconUrl(icon, candidate) : getGithubOwnerAvatarUrl(source)
+      if (description || avatarUrl) return { description, avatarUrl }
     } catch {}
   }
-  return ''
+  return { avatarUrl: getGithubOwnerAvatarUrl(source) }
 }
 
 async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<SkillHubEntry[]> {
   return await Promise.all(results.map(async (result) => {
     if (!result.source) return result
-    const description = await fetchGithubSkillDescription(result.source)
-    if (!description) return result
-    return { ...result, description }
+    const metadata = await fetchGithubSkillMetadata(result.source)
+    return {
+      ...result,
+      description: metadata.description || result.description,
+      avatarUrl: metadata.avatarUrl || result.avatarUrl,
+    }
   }))
 }
 
@@ -527,23 +550,27 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
   return map
 }
 
-function extractSkillDescriptionFromMarkdown(markdown: string): string {
+function extractSkillFrontmatterField(markdown: string, fieldName: string): string {
   const lines = markdown.split(/\r?\n/)
-  if (lines[0]?.trim() === '---') {
-    const frontmatter: string[] = []
-    for (let index = 1; index < lines.length; index += 1) {
-      const line = lines[index] ?? ''
-      if (line.trim() === '---') break
-      frontmatter.push(line)
-    }
-    const descriptionLine = frontmatter.find((line) => /^description\s*:/iu.test(line.trim()))
-    if (descriptionLine) {
-      return descriptionLine
-        .replace(/^description\s*:\s*/iu, '')
-        .replace(/^['"]|['"]$/gu, '')
-        .trim()
-    }
+  if (lines[0]?.trim() !== '---') return ''
+  const frontmatter: string[] = []
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+    if (line.trim() === '---') break
+    frontmatter.push(line)
   }
+  const escapedFieldName = fieldName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const fieldPattern = new RegExp(`^${escapedFieldName}\\s*:`, 'iu')
+  const valuePattern = new RegExp(`^${escapedFieldName}\\s*:\\s*`, 'iu')
+  const fieldLine = frontmatter.find((line) => fieldPattern.test(line.trim()))
+  if (!fieldLine) return ''
+  return fieldLine.replace(valuePattern, '').replace(/^['"]|['"]$/gu, '').trim()
+}
+
+function extractSkillDescriptionFromMarkdown(markdown: string): string {
+  const frontmatterDescription = extractSkillFrontmatterField(markdown, 'description')
+  if (frontmatterDescription) return frontmatterDescription
+  const lines = markdown.split(/\r?\n/)
   let inCodeFence = false
   for (const rawLine of lines) {
     const line = rawLine.trim()
