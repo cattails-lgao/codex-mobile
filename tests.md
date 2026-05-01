@@ -1925,7 +1925,7 @@ This file tracks manual regression and feature verification steps.
 
 #### Steps
 1. Clone or pull branch `codex/thread-stream-parity` on A1 into `~/codexui`.
-2. Run `pnpm install` and start dev server: `pnpm run dev -- --host 0.0.0.0 --port 4173`.
+2. Run `pnpm install` and start dev server: `pnpm run dev --host 0.0.0.0 --port 4173`.
 3. From A1 locally, call `curl http://localhost:<port>/codex-api/rpc -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"thread/list","params":{},"id":1}'` and verify thread list returns.
 4. Pick a thread with known commands and file edits (e.g., MCP server deploy thread).
 5. Call `curl http://localhost:<port>/codex-api/thread-live-state?threadId=<id>` and inspect response.
