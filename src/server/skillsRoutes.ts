@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { resolvePythonCommand, resolveSkillInstallerScriptPath } from '../commandResolution.js'
+import { getSpawnInvocation } from '../utils/commandInvocation.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -114,11 +115,14 @@ function getSkillsInstallDir(): string {
 }
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000
+const SKILL_SEARCH_METADATA_LIMIT = 20
+const SKILL_SEARCH_METADATA_CONCURRENCY = 4
 
 async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
   const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const invocation = getSpawnInvocation(command, args)
+    const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -158,7 +162,8 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
 async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<string> {
   const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   return await new Promise<string>((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const invocation = getSpawnInvocation(command, args)
+    const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -401,8 +406,29 @@ async function fetchGithubSkillMetadata(source: string): Promise<Partial<Pick<Sk
   return { avatarUrl: getGithubOwnerAvatarUrl(source) }
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.max(1, Math.min(concurrency, items.length))
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index] as T, index)
+    }
+  }))
+  return results
+}
+
 async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<SkillHubEntry[]> {
-  return await Promise.all(results.map(async (result) => {
+  const enrichedHead = await mapWithConcurrency(
+    results.slice(0, SKILL_SEARCH_METADATA_LIMIT),
+    SKILL_SEARCH_METADATA_CONCURRENCY,
+    async (result) => {
     if (!result.source) return result
     const metadata = await fetchGithubSkillMetadata(result.source)
     return {
@@ -410,7 +436,9 @@ async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<
       description: metadata.description || result.description,
       avatarUrl: metadata.avatarUrl || result.avatarUrl,
     }
-  }))
+    },
+  )
+  return [...enrichedHead, ...results.slice(SKILL_SEARCH_METADATA_LIMIT)]
 }
 
 type RpcSkillRecord = {
@@ -1327,7 +1355,7 @@ export async function handleSkillsRoutes(
         return true
       }
       const installedMap = await collectInstalledSkillsMap(appServer)
-      const output = await runCommandWithOutput('npx', ['skills', 'find', query], { timeoutMs: 60_000 })
+      const output = await runCommandWithOutput('npx', ['--yes', 'skills', 'find', query], { timeoutMs: 60_000 })
       const results = await enrichSkillSearchDescriptions(parseNpxSkillsFindOutput(output, installedMap))
       setJson(res, 200, { results })
     } catch (error) {
@@ -1560,7 +1588,7 @@ export async function handleSkillsRoutes(
         setJson(res, 400, { error: 'Missing or invalid skill source' })
         return true
       }
-      await runCommand('npx', ['skills', 'add', installSource, '--yes', '--global'], { timeoutMs: 120_000 })
+      await runCommand('npx', ['--yes', 'skills', 'add', installSource, '--yes', '--global'], { timeoutMs: 120_000 })
       try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
       const installedMap = await collectInstalledSkillsMap(appServer)
       const installed = installedMap.get(name || installSource.slice(installSource.lastIndexOf('@') + 1))

@@ -3423,11 +3423,11 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 3. Verify the `Find skills` header shows a `Skills directory` link on the right that opens `https://skills.anyclaw.store/` in a new tab
 4. In `Find skills`, type a query such as `browser`
 5. Click `Search`
-6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
+6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx --yes skills find browser`
 7. Verify `Search results (count)` appears above `Installed skills (count)`
 8. Verify each registry result card shows its install count metadata, such as `1.2K installs`, even when a GitHub `SKILL.md` description is shown
 9. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
-10. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill> --yes --global`
+10. Click `Install` for a result and verify the backend runs `npx --yes skills add <owner/repo@skill> --yes --global`
 11. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
 12. Switch to dark theme and repeat the search visibility check
 13. Search for an already-installed skill and verify its search result shows `Installed`
@@ -3440,11 +3440,14 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
+- Skills search/install commands use the repo command invocation wrapper so `npx` starts reliably on Windows
+- Skills search/install commands include outer `npx --yes` so first-run package prompts cannot hang with ignored stdin
 - The Skills directory link is visible beside Find skills in light and dark theme and opens the public directory in a new tab
 - Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
 - Registry install responses only return `ok: true` when the local installed `SKILL.md` path is found and validates successfully
 - The UI treats a missing returned path or missing post-refresh local skill as an install failure instead of showing the remote registry card as installed
 - GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
+- GitHub metadata enrichment is bounded to the first 20 results with limited concurrency, so broad searches still return without unbounded raw GitHub fetch fanout
 - Search result cards keep the registry install count visible as card metadata even when GitHub enrichment replaces the fallback description
 - GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
 - The search UI does not replace or hide local installed skills
