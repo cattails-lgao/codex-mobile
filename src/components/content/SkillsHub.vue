@@ -51,9 +51,19 @@
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
 
     <div class="skills-search-panel">
-      <div class="skills-search-copy">
-        <strong>{{ t('Find skills') }}</strong>
-        <span>{{ t('Search the Skills registry with npx skills find.') }}</span>
+      <div class="skills-search-header">
+        <div class="skills-search-copy">
+          <strong>{{ t('Find skills') }}</strong>
+          <span>{{ t('Search the Skills registry with npx skills find.') }}</span>
+        </div>
+        <a
+          class="skills-directory-link"
+          href="https://skills.anyclaw.store/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ t('Skills directory') }}
+        </a>
       </div>
       <form class="skills-search-form" @submit.prevent="searchSkills">
         <input
@@ -435,12 +445,20 @@ onMounted(() => {
   @apply rounded-xl border border-zinc-200 bg-white p-3 flex flex-col gap-2;
 }
 
+.skills-search-header {
+  @apply flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between;
+}
+
 .skills-search-copy {
   @apply flex flex-col gap-0.5 text-sm text-zinc-700;
 }
 
 .skills-search-copy span {
   @apply text-xs text-zinc-500;
+}
+
+.skills-directory-link {
+  @apply inline-flex shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-white hover:text-zinc-900;
 }
 
 .skills-search-form {

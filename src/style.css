@@ -1331,6 +1331,10 @@
   @apply text-zinc-400;
 }
 
+:root.dark .skills-directory-link {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
 :root.dark .skills-search-input {
   @apply border-zinc-700 bg-zinc-950 text-zinc-100 placeholder-zinc-500 focus:border-zinc-600 focus:bg-zinc-900;
 }
