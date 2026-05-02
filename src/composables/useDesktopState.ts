@@ -998,17 +998,35 @@ function getWorkspaceProjectOrderPaths(rootsState: WorkspaceRootsState | null): 
   return orderedRoots
 }
 
+function hasCanonicalWorkspaceRootForManagedWorktree(rootPath: string, rootsState: WorkspaceRootsState | null): boolean {
+  const normalizedRootPath = normalizePathForUi(rootPath).trim()
+  if (!isManagedCodexWorktreePath(normalizedRootPath)) return false
+  const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+  return (rootsState?.order ?? []).some((candidate) => {
+    const normalizedCandidate = normalizePathForUi(candidate).trim()
+    return normalizedCandidate.length > 0
+      && !isManagedCodexWorktreePath(normalizedCandidate)
+      && toProjectNameFromWorkspaceRoot(normalizedCandidate) === leafName
+  })
+}
+
 function getWorkspaceProjectOrderNames(
   rootsState: WorkspaceRootsState | null,
   duplicateLeafNames: Set<string>,
 ): string[] {
   const remoteProjectsById = getRemoteProjectById(rootsState)
-  return getWorkspaceProjectOrderPaths(rootsState).map((rootPath) => {
-    if (remoteProjectsById.has(rootPath)) return rootPath
+  const names: string[] = []
+  for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
+    if (remoteProjectsById.has(rootPath)) {
+      names.push(rootPath)
+      continue
+    }
+    if (hasCanonicalWorkspaceRootForManagedWorktree(rootPath, rootsState)) continue
     const normalizedRootPath = normalizePathForUi(rootPath).trim()
     const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
-    return duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
-  })
+    names.push(duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName)
+  }
+  return names
 }
 
 function matchesWorkspaceRootProject(rootPath: string, projectName: string): boolean {
@@ -1167,11 +1185,9 @@ function disambiguateProjectGroupsByCwd(
   const uniqueCanonicalWorkspaceRootLeafNames = new Set<string>()
   const duplicateCanonicalWorkspaceRootLeafNames = new Set<string>()
   const canonicalWorkspaceRootByLeafName = new Map<string, string>()
-  const registeredWorkspaceRoots = new Set<string>()
   for (const rootPath of rootsState?.order ?? []) {
     const normalizedRootPath = normalizePathForUi(rootPath).trim()
     if (!normalizedRootPath) continue
-    registeredWorkspaceRoots.add(normalizedRootPath)
     if (isManagedCodexWorktreePath(normalizedRootPath)) continue
     const leafName = toProjectName(normalizedRootPath)
     if (uniqueCanonicalWorkspaceRootLeafNames.has(leafName)) {
@@ -1190,9 +1206,7 @@ function disambiguateProjectGroupsByCwd(
     for (const thread of group.threads) {
       const normalizedCwd = normalizePathForUi(thread.cwd).trim()
       const leafName = toProjectName(normalizedCwd)
-      const isRegisteredRoot = registeredWorkspaceRoots.has(normalizedCwd)
       const isCanonicalWorktreeThread = isManagedCodexWorktreePath(normalizedCwd)
-        && !isRegisteredRoot
         && uniqueCanonicalWorkspaceRootLeafNames.has(leafName)
       let projectName = group.projectName
       if (isCanonicalWorktreeThread && duplicateLeafNames.has(leafName)) {
@@ -1234,6 +1248,7 @@ function addWorkspaceRootPlaceholderGroups(
     }
     const normalizedRootPath = normalizePathForUi(rootPath).trim()
     if (!normalizedRootPath) continue
+    if (hasCanonicalWorkspaceRootForManagedWorktree(normalizedRootPath, rootsState)) continue
     const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
     const projectName = duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
     if (existingProjectNames.has(projectName)) continue
