@@ -231,10 +231,10 @@
       <div v-else-if="isLoadingComposio" class="directory-loading">Loading Composio connectors...</div>
       <div v-else-if="!composioStatus?.available" class="directory-empty">
         <div class="directory-empty-copy">
-          <p class="directory-empty-text">Composio could not be started with npx in this environment.</p>
+          <p class="directory-empty-text">Composio CLI is not installed in this environment.</p>
           <div class="directory-card-actions">
             <button class="directory-action primary" type="button" :disabled="isInstallingComposio" @click="installComposioCli">
-              {{ isInstallingComposio ? 'Checking...' : 'Check npx' }}
+              {{ isInstallingComposio ? 'Installing...' : 'Install Composio' }}
             </button>
           </div>
         </div>

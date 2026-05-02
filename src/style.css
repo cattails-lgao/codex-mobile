@@ -1398,6 +1398,10 @@
   @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
+:root.dark .directory-action.primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+}
+
 :root.dark .directory-sort-group {
   @apply border-zinc-700 bg-zinc-950;
 }

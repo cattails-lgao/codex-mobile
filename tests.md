@@ -3290,9 +3290,9 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 15. Open a plugin whose detail lists a required app that is absent from the Apps catalog for the current account, such as Gmail on an account without Gmail app access, and verify the footer shows a disabled `ChatGPT Plus` action instead of `Install`
 16. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
 17. Search Apps and verify matching results are not capped to the Popular top 100 list
-18. Switch to `Composio` and verify the workspace summary card shows the current Composio login state from the preferred `npx --yes composio` path, or the installed CLI fallback when the npm package does not expose a runnable binary
-19. If Composio cannot start through npx, click `Check npx` and verify the app probes `npx --yes composio --version` instead of installing a separate CLI binary
-20. If Composio is available but not authenticated, click `Login` and verify the app opens a new tab, starts `npx --yes composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
+18. Switch to `Composio` and verify the workspace summary card shows the current installed Composio CLI login state, or a clear not-installed / not-authenticated message appears
+19. If Composio CLI is not installed, click `Install Composio` and verify the app installs the CLI to `~/.composio/composio` using the official Composio installer
+20. If Composio is available but not authenticated, click `Login` and verify the app opens a new tab, starts the installed `composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
 21. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
 22. In Composio search, type `instagram` and verify the Instagram connector appears first when it is returned by the connector source, ahead of description-only matches such as Meta Ads
 23. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
@@ -3317,9 +3317,9 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - App and plugin enable/disable actions update their local card state after a successful config write
 - Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
-- The Composio tab tries `npx --yes composio` by default and falls back to the installed CLI only when the current npm package cannot be executed
-- The Composio check action probes `npx --yes composio --version` instead of installing a separate CLI binary
-- The Composio login action opens a new tab from the click, starts `npx --yes composio login --no-browser -y`, then navigates that tab to the returned auth URL
+- The Composio tab uses the installed Composio CLI, preferring `CODEXUI_COMPOSIO_COMMAND` when set and otherwise `~/.composio/composio` or `composio` on `PATH`
+- The Composio install action uses the official installer and produces a working `~/.composio/composio` binary
+- The Composio login action opens a new tab from the click, starts the installed `composio login --no-browser -y`, then navigates that tab to the returned auth URL
 - Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
 - Composio search prioritizes exact slug/name matches above connectors that only mention the query in their description
 - Unit coverage verifies that Composio exact query matches outrank description-only matches and that gateway connector search sends `query`, `cursor`, and `limit` params expected by the server
