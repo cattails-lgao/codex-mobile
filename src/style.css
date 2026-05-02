@@ -1435,8 +1435,20 @@
   @apply text-zinc-300;
 }
 
-:root.dark .skill-card-date {
+:root.dark .skill-card-meta {
   @apply text-zinc-500;
+}
+
+:root.dark .mcp-skill-name {
+  @apply text-zinc-100;
+}
+
+:root.dark .mcp-skill-owner {
+  @apply text-zinc-400;
+}
+
+:root.dark .mcp-skill-meta {
+  @apply text-zinc-300;
 }
 
 :root.dark .sdm-panel {

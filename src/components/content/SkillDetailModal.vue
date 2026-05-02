@@ -106,6 +106,7 @@ export type HubSkill = {
   source?: string
   path?: string
   enabled?: boolean
+  installCountLabel?: string
 }
 
 const props = defineProps<{

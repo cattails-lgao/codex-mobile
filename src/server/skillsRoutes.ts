@@ -248,6 +248,7 @@ type SkillHubEntry = {
   source?: string
   path?: string
   enabled?: boolean
+  installCountLabel?: string
 }
 
 async function runGitFetchWithRefLockRetry(repoDir: string, args: string[] = ['fetch', 'origin']): Promise<void> {
@@ -315,6 +316,7 @@ function parseNpxSkillsFindOutput(output: string, installedMap: Map<string, Inst
       owner,
       displayName: name,
       description: installs ? `${installs} installs` : '',
+      installCountLabel: installs ? `${installs} installs` : '',
       publishedAt: 0,
       avatarUrl: '',
       url,

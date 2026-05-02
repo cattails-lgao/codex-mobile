@@ -36,7 +36,9 @@
       </button>
     </div>
     <p v-if="skill.description" class="skill-card-desc">{{ skill.description }}</p>
-    <span v-if="publishedLabel" class="skill-card-date">{{ publishedLabel }}</span>
+    <div v-if="metaLabels.length > 0" class="skill-card-meta-row">
+      <span v-for="label in metaLabels" :key="label" class="skill-card-meta">{{ label }}</span>
+    </div>
   </button>
 </template>
 
@@ -58,6 +60,7 @@ const props = withDefaults(defineProps<{
     source?: string
     path?: string
     enabled?: boolean
+    installCountLabel?: string
   }
   showStatusBadge?: boolean
   showBrowseAction?: boolean
@@ -96,6 +99,13 @@ const publishedLabel = computed(() => {
   if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
   if (diff < 2592000_000) return `${Math.floor(diff / 86400_000)}d ago`
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+})
+
+const metaLabels = computed(() => {
+  const labels: string[] = []
+  if (props.skill.installCountLabel) labels.push(props.skill.installCountLabel)
+  if (publishedLabel.value) labels.push(publishedLabel.value)
+  return labels
 })
 
 function onAvatarError(e: Event): void {
@@ -163,7 +173,11 @@ function onAvatarError(e: Event): void {
   @apply m-0 text-xs text-zinc-500 line-clamp-2;
 }
 
-.skill-card-date {
+.skill-card-meta-row {
+  @apply flex flex-wrap gap-1.5;
+}
+
+.skill-card-meta {
   @apply text-[10px] text-zinc-300;
 }
 </style>
