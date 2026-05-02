@@ -2507,6 +2507,44 @@ function extractBranchLockedWorktreePath(error: unknown, branchName: string): st
   return match?.[1]?.trim() ?? ''
 }
 
+function toPermanentWorktreeBranchNameDraft(worktreeName: string): string {
+  const sanitized = worktreeName
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/gu, '-')
+    .replace(/\.+/gu, '.')
+    .replace(/-+/gu, '-')
+    .replace(/^[.-]+|[.-]+$/gu, '')
+  return sanitized || 'worktree'
+}
+
+async function isValidGitBranchName(gitRoot: string, branchName: string): Promise<boolean> {
+  try {
+    await runCommand('git', ['check-ref-format', '--branch', branchName], { cwd: gitRoot })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function doesLocalGitBranchExist(gitRoot: string, branchName: string): Promise<boolean> {
+  try {
+    await runCommand('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], { cwd: gitRoot })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function allocatePermanentWorktreeBranchName(gitRoot: string, worktreeName: string): Promise<string> {
+  const base = toPermanentWorktreeBranchNameDraft(worktreeName)
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`
+    if (!await isValidGitBranchName(gitRoot, candidate)) continue
+    if (!await doesLocalGitBranchExist(gitRoot, candidate)) return candidate
+  }
+  throw new Error('Failed to allocate a unique branch name for worktree')
+}
+
 async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -5700,18 +5738,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             // Expected for a new worktree path.
           }
 
+          const branchName = await allocatePermanentWorktreeBranchName(gitRoot, rawWorktreeName)
           try {
-            await runCommand('git', ['worktree', 'add', worktreeCwd, 'HEAD'], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeCwd, 'HEAD'], { cwd: gitRoot })
           } catch (error) {
             if (!isMissingHeadError(error)) throw error
             await ensureRepoHasInitialCommit(gitRoot)
-            await runCommand('git', ['worktree', 'add', worktreeCwd, 'HEAD'], { cwd: gitRoot })
+            await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeCwd, 'HEAD'], { cwd: gitRoot })
           }
 
           setJson(res, 200, {
             data: {
               cwd: worktreeCwd,
-              branch: null,
+              branch: branchName,
               gitRoot,
             },
           })
