@@ -162,6 +162,35 @@ describe('filterGroupsByWorkspaceRoots', () => {
     ])
   })
 
+  it('keeps unregistered managed worktrees under the main root when another managed worktree root is registered', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'codex-web-local',
+        threads: [
+          thread('main-chat', '/Users/igor/Git-projects/codex-web-local'),
+          thread('registered-worktree-chat', '/Users/igor/.codex/worktrees/a77f/codex-web-local', { hasWorktree: true }),
+          thread('unregistered-worktree-chat', '/Users/igor/.codex/worktrees/53e7/codex-web-local', { hasWorktree: true }),
+        ],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: [
+        '/Users/igor/Git-projects/codex-web-local',
+        '/Users/igor/.codex/worktrees/a77f/codex-web-local',
+      ],
+      labels: {
+        '/Users/igor/.codex/worktrees/a77f/codex-web-local': 'codex-web-local2',
+      },
+      active: ['/Users/igor/Git-projects/codex-web-local'],
+      projectOrder: ['/Users/igor/Git-projects/codex-web-local'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
+      ['/Users/igor/Git-projects/codex-web-local', ['main-chat', 'unregistered-worktree-chat']],
+      ['/Users/igor/.codex/worktrees/a77f/codex-web-local', ['registered-worktree-chat']],
+    ])
+  })
+
   it('does not group unrelated git worktrees under a same-leaf workspace root project', () => {
     const groups: UiProjectGroup[] = [
       {
