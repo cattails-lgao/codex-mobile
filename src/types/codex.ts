@@ -311,12 +311,6 @@ export type UiAccountEntry = {
   isActive: boolean
 }
 
-export type ThreadScrollState = {
-  scrollTop: number
-  isAtBottom: boolean
-  scrollRatio?: number
-}
-
 export type ChatMessage = {
   id: string
   role: string

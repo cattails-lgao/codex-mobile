@@ -46,7 +46,7 @@ export function getPathParent(value: string): string {
 
 export function toProjectName(value: string): string {
   const leaf = getPathLeafName(value)
-  return leaf || normalizePathForUi(value) || 'unknown-project'
+  return leaf || normalizePathForUi(value) || 'Projectless'
 }
 
 export function isProjectlessChatPath(value: string): boolean {

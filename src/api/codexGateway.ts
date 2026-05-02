@@ -267,6 +267,13 @@ export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
+  projectOrder: string[]
+  remoteProjects?: Array<{
+    id: string
+    hostId: string
+    remotePath: string
+    label: string
+  }>
 }
 
 export type StoredQueuedMessage = {
@@ -303,6 +310,11 @@ export type WorktreeBranchOption = {
 export type GitBranchState = {
   currentBranch: string | null
   options: WorktreeBranchOption[]
+}
+
+export type GitRepositoryStatus = {
+  isGitRepo: boolean
+  gitRoot: string
 }
 
 
@@ -1214,6 +1226,37 @@ export async function refreshAccountsFromAuth(): Promise<AccountsListResult> {
   const payload = (await response.json()) as unknown
   if (!response.ok) {
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to refresh accounts'))
+  }
+  const envelope = asRecord(payload)
+  return normalizeAccountsListResult(envelope?.data)
+}
+
+export async function startCodexLogin(): Promise<string> {
+  const response = await fetch('/codex-api/accounts/login/start', {
+    method: 'POST',
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to start Codex login'))
+  }
+  const envelope = asRecord(payload)
+  const data = asRecord(envelope?.data)
+  const loginUrl = readString(data?.loginUrl)
+  if (!loginUrl) {
+    throw new Error('Failed to start Codex login')
+  }
+  return loginUrl
+}
+
+export async function completeCodexLogin(callbackUrl: string): Promise<AccountsListResult> {
+  const response = await fetch('/codex-api/accounts/login/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callbackUrl }),
+  })
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to complete Codex login'))
   }
   const envelope = asRecord(payload)
   return normalizeAccountsListResult(envelope?.data)
@@ -2164,6 +2207,21 @@ function normalizeWorkspaceRootsState(payload: unknown): WorkspaceRootsState {
     order: normalizeArray(record.order).map((value) => normalizePathForUi(value)),
     labels,
     active: normalizeArray(record.active).map((value) => normalizePathForUi(value)),
+    projectOrder: normalizeArray(record.projectOrder).map((value) => normalizePathForUi(value)),
+    remoteProjects: Array.isArray(record.remoteProjects)
+      ? record.remoteProjects.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+        const remote = item as Record<string, unknown>
+        const id = typeof remote.id === 'string' ? remote.id.trim() : ''
+        if (!id) return []
+        return [{
+          id,
+          hostId: typeof remote.hostId === 'string' ? remote.hostId.trim() : '',
+          remotePath: typeof remote.remotePath === 'string' ? normalizePathForUi(remote.remotePath) : '',
+          label: typeof remote.label === 'string' ? remote.label.trim() : '',
+        }]
+      })
+      : [],
   }
 }
 
@@ -2281,6 +2339,26 @@ export async function createWorktree(sourceCwd: string, baseBranch?: string): Pr
   }
 }
 
+export async function createPermanentWorktree(sourceCwd: string, worktreeName: string): Promise<WorktreeCreateResult> {
+  const response = await fetch('/codex-api/worktree/create-permanent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sourceCwd,
+      worktreeName,
+    }),
+  })
+  const payload = (await response.json()) as { data?: WorktreeCreateResult; error?: string }
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error || 'Failed to create worktree')
+  }
+  return {
+    ...payload.data,
+    cwd: normalizePathForUi(payload.data.cwd),
+    gitRoot: normalizePathForUi(payload.data.gitRoot),
+  }
+}
+
 export async function getWorktreeBranchOptions(sourceCwd: string): Promise<WorktreeBranchOption[]> {
   const normalizedSourceCwd = sourceCwd.trim()
   if (!normalizedSourceCwd) return []
@@ -2345,6 +2423,26 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
     options.unshift({ value: currentBranch, label: currentBranch })
   }
   return { currentBranch, options }
+}
+
+export async function getGitRepositoryStatus(cwd: string): Promise<GitRepositoryStatus> {
+  const normalizedCwd = cwd.trim()
+  if (!normalizedCwd) {
+    return { isGitRepo: false, gitRoot: '' }
+  }
+  const query = new URLSearchParams({ cwd: normalizedCwd })
+  const response = await fetch(`/codex-api/git/repository-status?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to read Git repository status')
+  }
+  const record = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? (payload.data as Record<string, unknown>)
+    : {}
+  return {
+    isGitRepo: record.isGitRepo === true,
+    gitRoot: typeof record.gitRoot === 'string' ? normalizePathForUi(record.gitRoot) : '',
+  }
 }
 
 export async function checkoutGitBranch(cwd: string, branch: string): Promise<string | null> {

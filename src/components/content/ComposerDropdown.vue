@@ -3,11 +3,13 @@
     <button
       class="composer-dropdown-trigger"
       type="button"
+      :title="triggerAccessibleLabel"
+      :aria-label="triggerAccessibleLabel"
       :disabled="disabled"
       @click="onToggle"
     >
       <component :is="selectedPrefixIcon" v-if="selectedPrefixIcon" class="composer-dropdown-prefix-icon" />
-      <span class="composer-dropdown-value">{{ selectedLabel }}</span>
+      <span v-if="!iconOnly" class="composer-dropdown-value">{{ selectedLabel }}</span>
       <IconTablerChevronDown class="composer-dropdown-chevron" />
     </button>
 
@@ -67,6 +69,7 @@ const props = defineProps<{
   placeholder?: string
   disabled?: boolean
   selectedPrefixIcon?: Component | null
+  iconOnly?: boolean
   openDirection?: 'up' | 'down'
   enableSearch?: boolean
   searchPlaceholder?: string
@@ -89,9 +92,11 @@ const selectedLabel = computed(() => {
 })
 
 const openDirection = computed(() => props.openDirection ?? 'down')
+const iconOnly = computed(() => props.iconOnly === true)
 const enableSearch = computed(() => props.enableSearch === true)
 const searchPlaceholderText = computed(() => props.searchPlaceholder?.trim() || 'Quick search projects')
 const emptyText = computed(() => props.emptyLabel?.trim() || 'No results')
+const triggerAccessibleLabel = computed(() => selectedLabel.value || props.placeholder?.trim() || 'Select option')
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return props.options

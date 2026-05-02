@@ -50,6 +50,52 @@
 
     <div v-if="toast" class="skills-hub-toast" :class="toastClass">{{ toast.text }}</div>
 
+    <div class="skills-search-panel">
+      <div class="skills-search-header">
+        <div class="skills-search-copy">
+          <strong>{{ t('Find skills') }}</strong>
+          <span>{{ t('Search the Skills registry with npx skills find.') }}</span>
+        </div>
+        <a
+          class="skills-directory-link"
+          href="https://skills.anyclaw.store/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ t('Skills directory') }}
+        </a>
+      </div>
+      <form class="skills-search-form" @submit.prevent="searchSkills">
+        <input
+          v-model="skillSearchQuery"
+          class="skills-search-input"
+          type="search"
+          :placeholder="t('Search skills...')"
+          aria-label="Search skills"
+        />
+        <button class="skills-hub-sort" type="submit" :disabled="isSearchingSkills || skillSearchQuery.trim().length < 2">
+          {{ isSearchingSkills ? t('Searching...') : t('Search') }}
+        </button>
+      </form>
+      <div v-if="skillSearchError" class="skills-hub-error">{{ skillSearchError }}</div>
+    </div>
+
+    <div v-if="skillSearchResults.length > 0" class="skills-hub-section">
+      <button class="skills-hub-section-toggle" type="button" @click="isSearchResultsOpen = !isSearchResultsOpen">
+        <span class="skills-hub-section-title">{{ t('Search results ({count})', { count: skillSearchResults.length }) }}</span>
+        <IconTablerChevronRight class="skills-hub-section-chevron" :class="{ 'is-open': isSearchResultsOpen }" />
+      </button>
+      <div v-if="isSearchResultsOpen" class="skills-hub-grid">
+        <SkillCard
+          v-for="skill in skillSearchResults"
+          :key="skill.source || `${skill.owner}/${skill.name}`"
+          :skill="skill"
+          :show-browse-action="false"
+          @select="(skill) => openDetail(skill as HubSkill)"
+        />
+      </div>
+    </div>
+
     <slot name="before-installed" />
 
     <div v-if="filteredInstalled.length > 0" class="skills-hub-section">
@@ -62,6 +108,8 @@
           v-for="skill in filteredInstalled"
           :key="skill.name"
           :skill="skill"
+          :show-status-badge="false"
+          :show-owner="false"
           @select="(skill) => openDetail(skill as HubSkill)"
         />
       </div>
@@ -98,11 +146,17 @@ import { useUiLanguage } from '../../composables/useUiLanguage'
 
 const EMPTY_SKILL: HubSkill = { name: '', owner: '', description: '', url: '', installed: false }
 type SkillsHubPayload = { installed?: HubSkill[] }
+type SkillsSearchPayload = { results?: HubSkill[]; error?: string }
 
 const installedSkills = ref<HubSkill[]>([])
+const skillSearchResults = ref<HubSkill[]>([])
 const isLoading = ref(false)
+const isSearchingSkills = ref(false)
 const error = ref('')
+const skillSearchQuery = ref('')
+const skillSearchError = ref('')
 const isInstalledOpen = ref(true)
+const isSearchResultsOpen = ref(true)
 const isDetailOpen = ref(false)
 const detailSkill = ref<HubSkill>(EMPTY_SKILL)
 const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -146,6 +200,31 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
 
 function applySkillsPayload(payload: SkillsHubPayload): void {
   installedSkills.value = payload.installed ?? []
+  if (skillSearchResults.value.length > 0) {
+    const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
+    skillSearchResults.value = skillSearchResults.value.map((skill) => {
+      const installed = installedByName.get(skill.name)
+      return installed ? registrySearchSkillWithLocalState(skill, installed) : skill
+    })
+  }
+}
+
+function registrySearchSkillWithLocalState(registrySkill: HubSkill, installed: HubSkill): HubSkill {
+  return {
+    ...registrySkill,
+    installed: true,
+    path: installed.path,
+    enabled: installed.enabled,
+  }
+}
+
+function localSearchSkill(installed: HubSkill, registrySkill: HubSkill): HubSkill {
+  return {
+    ...installed,
+    installed: true,
+    source: registrySkill.source,
+    publishedAt: registrySkill.publishedAt,
+  }
 }
 
 async function fetchSkills(): Promise<void> {
@@ -164,8 +243,35 @@ async function fetchSkills(): Promise<void> {
 }
 
 function openDetail(skill: HubSkill): void {
-  detailSkill.value = skill
+  const installedSkill = skill.installed ? installedSkills.value.find((candidate) => candidate.name === skill.name) : undefined
+  detailSkill.value = installedSkill ? localSearchSkill(installedSkill, skill) : skill
   isDetailOpen.value = true
+}
+
+async function searchSkills(): Promise<void> {
+  const query = skillSearchQuery.value.trim()
+  if (query.length < 2) return
+  isSearchingSkills.value = true
+  skillSearchError.value = ''
+  try {
+    const params = new URLSearchParams({ q: query })
+    const resp = await fetch(`/codex-api/skills-hub/search?${params}`)
+    const data = (await resp.json()) as SkillsSearchPayload
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
+    const installedByName = new Map(installedSkills.value.map((skill) => [skill.name, skill]))
+    skillSearchResults.value = (data.results ?? []).map((skill) => {
+      const installed = installedByName.get(skill.name)
+      return installed ? registrySearchSkillWithLocalState(skill, installed) : skill
+    })
+    isSearchResultsOpen.value = true
+    if (skillSearchResults.value.length === 0) {
+      showToast(t('No matching skills found.'), 'error')
+    }
+  } catch (e) {
+    skillSearchError.value = e instanceof Error ? e.message : 'Failed to search skills'
+  } finally {
+    isSearchingSkills.value = false
+  }
 }
 
 async function handleInstall(skill: HubSkill): Promise<void> {
@@ -175,13 +281,17 @@ async function handleInstall(skill: HubSkill): Promise<void> {
     const resp = await fetch('/codex-api/skills-hub/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ owner: skill.owner, name: skill.name }),
+      body: JSON.stringify({ owner: skill.owner, name: skill.name, source: skill.source }),
     })
     const data = (await resp.json()) as { ok?: boolean; error?: string; path?: string }
     if (!data.ok) throw new Error(data.error || 'Install failed')
-    const installed = { ...skill, installed: true, path: data.path, enabled: true }
-    installedSkills.value = [...installedSkills.value, installed]
-    detailSkill.value = installed
+    if (!data.path) throw new Error('Install completed but no local skill path was returned')
+    await fetchSkills()
+    const installed = installedSkills.value.find((candidate) => candidate.name === skill.name)
+    if (!installed?.path) {
+      throw new Error('Install completed but the local skill was not found after refresh')
+    }
+    detailSkill.value = localSearchSkill(installed, skill)
     showToast(`${skill.displayName || skill.name} skill installed`)
     isDetailOpen.value = false
     emit('skills-changed')
@@ -329,6 +439,34 @@ onMounted(() => {
 
 .skills-sync-actions {
   @apply flex flex-wrap gap-2;
+}
+
+.skills-search-panel {
+  @apply rounded-xl border border-zinc-200 bg-white p-3 flex flex-col gap-2;
+}
+
+.skills-search-header {
+  @apply flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between;
+}
+
+.skills-search-copy {
+  @apply flex flex-col gap-0.5 text-sm text-zinc-700;
+}
+
+.skills-search-copy span {
+  @apply text-xs text-zinc-500;
+}
+
+.skills-directory-link {
+  @apply inline-flex shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-white hover:text-zinc-900;
+}
+
+.skills-search-form {
+  @apply flex flex-col gap-2 sm:flex-row;
+}
+
+.skills-search-input {
+  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
 }
 
 .skills-hub-toast {

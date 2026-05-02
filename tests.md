@@ -578,6 +578,33 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: Stop button interrupts active turn without missing turnId
 
+### Feature: Windows npx install no longer depends on legacy PTY package
+
+#### Prerequisites
+- A Windows machine with Node.js and npm installed.
+- No globally installed `codexapp` package.
+- Clear any previous temporary npm cache for `codexapp` if needed.
+
+#### Steps
+1. Run `npx codexapp --no-login` on Windows.
+2. Confirm npm does not print deprecation warnings for `prebuild-install`, `npmlog`, `are-we-there-yet`, or `gauge` during package install.
+3. Exit the app, then run `npx codexapp --no-login` again.
+4. Run `npm i -g codexapp` on Windows.
+5. Start the globally installed CLI with `codexapp --no-login`.
+6. On macOS or Linux, start the app normally and confirm the integrated terminal still opens in a thread.
+7. Repeat the integrated terminal check in both light theme and dark theme.
+
+#### Expected Results
+- Windows `npx` install no longer pulls `node-pty-prebuilt-multiarch` as a required install dependency.
+- The deprecated `prebuild-install` dependency chain warnings no longer appear for `codexapp` installation.
+- Re-running `npx codexapp --no-login` works without getting stuck in the same failed temporary install loop.
+- Global installation succeeds on Windows.
+- Integrated terminal continues to work through `node-pty` on supported hosts.
+- Light theme and dark theme terminal surfaces remain readable and unchanged.
+
+#### Rollback/Cleanup
+- Remove the global package with `npm rm -g codexapp` if it was installed only for verification.
+
 #### Prerequisites
 - App is running from this repository.
 - At least one thread can run a long response (for example, request a large code explanation).
@@ -1898,7 +1925,7 @@ This file tracks manual regression and feature verification steps.
 
 #### Steps
 1. Clone or pull branch `codex/thread-stream-parity` on A1 into `~/codexui`.
-2. Run `pnpm install` and start dev server: `pnpm run dev -- --host 0.0.0.0 --port 4173`.
+2. Run `pnpm install` and start dev server: `pnpm run dev --host 0.0.0.0 --port 4173`.
 3. From A1 locally, call `curl http://localhost:<port>/codex-api/rpc -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"thread/list","params":{},"id":1}'` and verify thread list returns.
 4. Pick a thread with known commands and file edits (e.g., MCP server deploy thread).
 5. Call `curl http://localhost:<port>/codex-api/thread-live-state?threadId=<id>` and inspect response.
@@ -3260,27 +3287,28 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 12. Open an installed/enabled plugin detail, click `Try it!`, and verify a new thread opens with an auto-submitted plugin test prompt
 13. Open an installed/enabled skill detail, click `Try it!`, and verify a new thread opens with an auto-submitted skill test prompt and the skill attached
 14. Install a plugin whose install response includes `appsNeedingAuth`, and verify the first required app login/manage URL opens automatically
-15. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
-16. Search Apps and verify matching results are not capped to the Popular top 100 list
-17. Switch to `Composio` and verify the workspace summary card shows the current Composio CLI login state, or a clear not-installed / not-authenticated message appears
-18. If Composio CLI is not installed, click `Install` and verify the app installs the CLI to `~/.composio/composio` using the official Composio installer
-19. If Composio CLI is installed but not authenticated, click `Login` and verify the app opens a new tab, starts `composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
-20. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
-21. In Composio search, type `instagram` and verify the Instagram connector appears in the results
-22. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
-23. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
-24. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
-25. On Composio, verify that if more than one page exists, `Load more` appears and appends additional connectors while keeping prior results visible
-26. In Composio search, verify the page state resets (the list returns to the first result page and stale pagination is cleared)
-27. Switch to `Skills` and verify the view shows an `MCPs(count)` collapsible section immediately before the `Installed skills (count)` section
-28. Expand `MCPs(count)` and verify server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
-29. Click header `Refresh` while on `Skills` and verify MCP state reloads (it should perform MCP reload behavior on this tab instead of using a separate `Reload MCPs` button)
-30. Verify no separate `Reload MCPs` button is shown in the header or inside the MCP section body
-31. Verify the `MCPs(count)` section does not show its own search or sort controls
-32. Verify MCP cards use the same visual card/grid layout pattern as Installed skills cards (avatar circle, title row, badge, secondary text)
-33. Verify the `Installed skills (count)` section below MCPs still supports the existing Skills Hub behavior
-34. Verify both light and dark themes render Composio cards and status/detail actions with readable contrast
-35. In dark mode, verify MCP cards use the same dark card surface styling as Installed skills cards (not a light/white card)
+15. Open a plugin whose detail lists a required app that is absent from the Apps catalog for the current account, such as Gmail on an account without Gmail app access, and verify the footer shows a disabled `ChatGPT Plus` action instead of `Install`
+16. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
+17. Search Apps and verify matching results are not capped to the Popular top 100 list
+18. Switch to `Composio` and verify the workspace summary card shows the current installed Composio CLI login state, or a clear not-installed / not-authenticated message appears
+19. If Composio CLI is not installed, click `Install Composio` and verify the app installs the CLI to `~/.composio/composio` using the official Composio installer
+20. If Composio is available but not authenticated, click `Login` and verify the app opens a new tab, starts the installed `composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
+21. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
+22. In Composio search, type `instagram` and verify the Instagram connector appears first when it is returned by the connector source, ahead of description-only matches such as Meta Ads
+23. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
+24. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
+25. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
+26. On Composio, verify that if more than one page exists, `Load more` appears and appends additional connectors while keeping prior results visible
+27. In Composio search, verify the page state resets (the list returns to the first result page and stale pagination is cleared)
+28. Switch to `Skills` and verify the view shows an `MCPs(count)` collapsible section immediately before the `Installed skills (count)` section
+29. Expand `MCPs(count)` and verify server cards show auth status and tool/resource counts, or the unavailable/empty state appears without breaking the page
+30. Click header `Refresh` while on `Skills` and verify MCP state reloads (it should perform MCP reload behavior on this tab instead of using a separate `Reload MCPs` button)
+31. Verify no separate `Reload MCPs` button is shown in the header or inside the MCP section body
+32. Verify the `MCPs(count)` section does not show its own search or sort controls
+33. Verify MCP cards use the same visual card/grid layout pattern as Installed skills cards (avatar circle, title row, badge, secondary text)
+34. Verify the `Installed skills (count)` section below MCPs still supports the existing Skills Hub behavior
+35. Verify both light and dark themes render Composio cards and status/detail actions with readable contrast
+36. In dark mode, verify MCP cards use the same dark card surface styling as Installed skills cards (not a light/white card)
 
 #### Expected Results
 - The directory tabs render without a full-page error
@@ -3289,13 +3317,16 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - App and plugin enable/disable actions update their local card state after a successful config write
 - Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
-- The Composio tab reuses the authenticated local Composio CLI state and does not require a separate app-specific login
+- The Composio tab uses the installed Composio CLI, preferring `CODEXUI_COMPOSIO_COMMAND` when set and otherwise `~/.composio/composio` or `composio` on `PATH`
 - The Composio install action uses the official installer and produces a working `~/.composio/composio` binary
-- The Composio login action opens a new tab from the click, starts the CLI in non-browser mode with `composio login --no-browser -y`, then navigates that tab to the returned auth URL
+- The Composio login action opens a new tab from the click, starts the installed `composio login --no-browser -y`, then navigates that tab to the returned auth URL
 - Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
+- Composio search prioritizes exact slug/name matches above connectors that only mention the query in their description
+- Unit coverage verifies that Composio exact query matches outrank description-only matches and that gateway connector search sends `query`, `cursor`, and `limit` params expected by the server
 - Connected or no-auth Composio connectors expose `Try it!`, creating a new chat with the `composio-cli` skill attached
 - Composio pagination supports page-by-page loading with a clear `Load more` path and cursor-based page continuation
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
+- Plugin install is blocked with `ChatGPT Plus` when the plugin requires an app that is absent from the Apps catalog for the current account
 - Connected and enabled apps, plus installed/enabled plugins/skills, expose `Try it!`, creating a new chat with an auto-submitted test prompt
 - Repeated `Try it!` clicks during startup are ignored until the first request resolves, so duplicate threads are not created
 - Plugins, Apps, and the Skills-tab MCP section default to local popularity-style ordering because app-server does not expose numeric popularity fields
@@ -3306,6 +3337,68 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 #### Rollback/Cleanup
 - Re-enable any app or plugin disabled during testing
 - Uninstall any plugin installed only for this test
+
+---
+
+### Skills tab npx skills search
+
+#### Feature/Change Name
+The Skills tab includes a registry search panel backed by `npx skills find`, shows matching skill cards, and installs selected registry results with `npx skills add`.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Network access available for `npx skills find`
+3. `npx` can run the published `skills` package
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/skills`
+2. Verify the `Skills` tab is selected by default; open `http://127.0.0.1:4173/#/skills?tab=plugins`, then click `Skills` and verify the URL updates to `?tab=skills`
+3. Verify the `Find skills` header shows a `Skills directory` link on the right that opens `https://skills.anyclaw.store/` in a new tab
+4. In `Find skills`, type a query such as `browser`
+5. Click `Search`
+6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
+7. Verify `Search results (count)` appears above `Installed skills (count)`
+8. Verify each registry result card shows its install count metadata, such as `1.2K installs`, even when a GitHub `SKILL.md` description is shown
+9. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
+10. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill> --yes --global`
+11. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
+12. Switch to dark theme and repeat the search visibility check
+13. Search for an already-installed skill and verify its search result shows `Installed`
+14. Verify installed matches in search results keep their remote registry owner/details while showing the `Installed` badge
+15. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
+16. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
+17. Verify cards in the `Installed skills (count)` section do not show `Installed`, `Disabled`, or repeated `local` owner labels, while search result cards can still show installed state and registry owner details
+18. Verify installed cards show local `SKILL.md` descriptions when the installed skill has frontmatter or readable markdown content
+19. Verify Find skills result cards do not show the local folder browse icon; Browse files remains available inside the installed local modal
+
+#### Expected Results
+- Search results are parsed from the real `npx skills find` output, not a static catalog
+- The Skills directory link is visible beside Find skills in light and dark theme and opens the public directory in a new tab
+- Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
+- Registry install responses only return `ok: true` when the local installed `SKILL.md` path is found and validates successfully
+- The UI treats a missing returned path or missing post-refresh local skill as an install failure instead of showing the remote registry card as installed
+- GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
+- Search result cards keep the registry install count visible as card metadata even when GitHub enrichment replaces the fallback description
+- GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
+- The search UI does not replace or hide local installed skills
+- Installed matching results show the existing `Installed` badge and can be opened like local skills
+- Installed detection uses the same installed skills source as the Skills Hub list, including RPC/plugin/shared skills and not only the base skills directory
+- Installed search result cards keep remote registry ownership/content but include local installed state and path for actions
+- Newly installed registry results are reloaded from the local installed skills source before appearing in the Installed skills section
+- Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
+- Local-only installed skills hide the external GitHub link when no URL is available
+- Installed skills section cards hide redundant installed/disabled status labels
+- Installed skills section cards hide the repeated local owner label; registry search cards keep owner/repository labels to distinguish remote results
+- Installed skill descriptions come from the local installed `SKILL.md`, so installed cards are useful without opening each modal
+- Installed entries are assembled concurrently so reading local `SKILL.md` descriptions does not add one file-read round trip per installed skill
+- Opening or switching to the Skills tab lists MCP servers without forcing an MCP reload; the top-level Refresh button remains the explicit reload action
+- The top-level Refresh button only shows `Refreshing...` for explicit user-triggered refreshes, not for ordinary initial tab loading
+- Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
+- Light theme and dark theme keep the search panel, cards, and modal readable
+
+#### Rollback/Cleanup
+- Uninstall any skill installed only for this test
 
 ---
 
@@ -3826,3 +3919,323 @@ Queued messages are saved through the backend, survive page refresh, and can be 
 
 #### Rollback/Cleanup
 - Delete any queued test messages that should not be sent
+
+---
+
+### Backend-drained queue UI refresh
+
+#### Feature/Change Name
+The queue panel refreshes when the backend starts and drains persisted queued messages.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a `TestChat` thread
+3. Queue at least three short messages while a turn is running
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, confirm queued rows are visible above the composer
+2. Let the backend drain each queued message
+3. Confirm the queue panel removes each row as its queued turn starts
+4. Confirm the queue panel disappears when the final queued message is submitted
+5. Refresh the thread after all queued turns complete
+6. Switch to dark theme and repeat the visibility check after queue drain
+
+#### Expected Results
+- Queued messages execute in order after the active turn completes
+- The queue panel reflects backend queue state after `turn/started` and `turn/completed`
+- No already-executed queued rows remain visible after the queue is empty
+- Queue row text, actions, and composer spacing remain readable in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Delete any remaining queued test messages or let the queue drain
+
+---
+
+### Persisted idle queue recovery
+
+#### Feature/Change Name
+Backend queued messages are retried and drained for idle threads even if the original `turn/completed` notification was missed or the server starts with persisted queue state already present.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A thread exists with queued messages persisted in `/codex-api/thread-queue-state`
+3. The thread's latest turn is completed/idle
+4. Light theme and dark theme are both available
+
+#### Steps
+1. In light theme, open the thread with persisted queued rows
+2. Confirm the queued rows are visible above the composer
+3. Wait for backend queue recovery to start the first queued message
+4. Confirm the first queued row is removed and a new turn starts
+5. Wait for the queued turn to complete
+6. Confirm the next queued row starts automatically
+7. Repeat until `/codex-api/thread-queue-state` no longer includes the thread
+8. Refresh the thread and confirm all queued messages completed in order
+9. Switch to dark theme and confirm the completed conversation and empty queue state remain readable
+
+#### Expected Results
+- Idle persisted queues recover without requiring a new manual message
+- Queued messages do not start while the thread has an in-progress turn
+- Multiple queued messages drain one at a time and complete in order
+- The queue panel disappears after the final queued message is started
+- The recovered turns and empty queue state are visible in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Delete any remaining queued test rows or let recovery drain them
+- Remove temporary test projects/threads if they are no longer needed
+
+---
+
+### ChatGPT auth tokens refresh for external auth
+
+#### Feature/Change Name
+Codex app-server `account/chatgptAuthTokens/refresh` requests are handled automatically from `auth.json` so expired ChatGPT access tokens can be refreshed without a manual relogin.
+
+#### Prerequisites/Setup
+1. App server is running from this repository
+2. `$CODEX_HOME/auth.json` contains ChatGPT auth with a valid `refresh_token`
+3. The current ChatGPT `access_token` is expired or close enough to expiry that Codex app-server asks for token refresh
+
+#### Steps
+1. Open the app with the ChatGPT-authenticated account selected
+2. Trigger an account operation such as loading account rate limits or starting a normal Codex turn
+3. Watch the server logs for an `account/chatgptAuthTokens/refresh` server request
+4. Reopen `$CODEX_HOME/auth.json`
+5. Repeat the same account operation after the refresh completes
+
+#### Expected Results
+- The refresh request is answered automatically and does not appear as a manual pending request in the UI
+- `auth.json` is updated with the fresh `access_token` and any rotated `refresh_token` or `id_token`
+- The account operation succeeds without showing `token_expired`
+- If no refresh token is available, the operation fails with a sign-in-again message instead of silently looping
+
+#### Rollback/Cleanup
+- None, unless a test-only `$CODEX_HOME` was used
+
+---
+
+### Project menu permanent worktree action
+
+#### Feature/Change Name
+Project rows open the same action menu from right-click and the dots button, and can create a permanent sibling Git worktree as a new project.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Sidebar has at least one Git-backed project
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, click the project row dots button.
+2. Verify the menu shows `Browse files`, `New worktree`, `Rename project`, and `Remove`.
+3. Close the menu, then right-click the same project row.
+4. Verify the same menu opens.
+5. Click `Browse files` and confirm the local file browser opens for the project cwd.
+6. Reopen the project menu, click `Rename project`, and confirm the inline project name input still works.
+7. Reopen the project menu, click `New worktree`, and confirm the prompt is prefilled with `<project name>-`.
+8. Enter a unique folder name such as `<project name>-manual-test`.
+9. Confirm a Git worktree is created at `../<worktree name>` relative to the source repo root.
+10. Confirm the new worktree is added as a project and the app opens the new-chat composer with that cwd selected.
+11. Rename the project to include a slash, reopen `New worktree`, and confirm the suggested folder name replaces the slash with `-`.
+12. Switch to dark theme and repeat steps 1-4, verifying menu contrast and danger styling remain readable.
+
+#### Expected Results
+- Right-click and dots button expose the same project action menu.
+- `Browse files`, `Rename project`, and `Remove` remain available from that menu.
+- `New worktree` creates a permanent sibling worktree folder, registers it as a project, and opens a new chat for it.
+- Invalid path separator characters are not used in the default worktree folder suggestion.
+- Menu text, hover states, and the remove action remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- Remove the test worktree with `git -C <source-repo-root> worktree remove ../<worktree name>`.
+- Remove the temporary project from the sidebar if it remains listed.
+
+---
+
+### Sidebar thread inline delete confirmation and menu pin action
+
+#### Feature/Change Name
+Thread rows show an inline delete button that morphs to `Confirm`, while pin/unpin moves to the thread context menu.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Sidebar contains at least two disposable test threads
+3. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, hover a disposable thread row and verify the left-side action shows a delete icon instead of a pin icon
+2. Click the delete icon once and verify it changes to a `Confirm` button without selecting the row
+3. Click a different thread row and verify the pending `Confirm` state clears
+4. Hover the disposable thread row again, click delete, then click `Confirm`
+5. Verify the thread is removed from the sidebar immediately and, if it was pinned, removed from the `Pinned` section too
+6. Open another thread row context menu and verify it contains `Pin thread` for an unpinned thread
+7. Click `Pin thread`, reopen the same thread menu, and verify it now shows `Unpin thread`
+8. Switch to dark theme and repeat steps 1 through 7 with another disposable thread
+
+#### Expected Results
+- The inline row action is delete, not pin
+- Delete requires two clicks: delete icon, then `Confirm`
+- Confirming archives/removes the correct thread immediately from the sidebar and clears any pinned state for that thread
+- Pin/unpin is available from the thread context menu and updates the `Pinned` section immediately
+- Delete icon, `Confirm` button, and context menu items are readable in both light theme and dark theme
+
+#### Rollback/Cleanup
+- Delete or unpin any disposable threads created only for this test
+
+---
+
+### Accounts panel Codex login callback modal
+
+#### Feature/Change Name
+Accounts settings includes an always-available `Login` button that starts `codex login`, opens the returned authorization URL, shows an in-app callback modal, requests the pasted localhost callback URL from the server, and imports the completed Codex account.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. `codex` CLI available in the server process `PATH`
+3. Browser can open the authorization URL returned by the server
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. Open settings and expand `Accounts`.
+2. In light theme, verify `Login` appears even when an active account is already listed.
+3. Click `Login`.
+4. Verify a new tab opens to the OpenAI authorization URL and an in-app `Complete Codex login` modal asks for the localhost callback URL.
+5. Complete authorization in the browser until it redirects to a `http://localhost:<port>/auth/callback?...` URL.
+6. Paste that full localhost callback URL into the modal input and click `Complete`.
+7. Verify the account list refreshes, the new or refreshed account is active, and normal thread/account data reloads.
+8. Click `Login` again, close the modal, and verify the Accounts panel keeps the `Open login URL` fallback link available.
+9. Switch to dark theme and repeat steps 1-4, verifying the Login button, link, modal, input, and buttons have readable contrast.
+
+#### Expected Results
+- `Login` is available regardless of current login state.
+- Starting login runs `codex login` on the server and exposes the generated OpenAI authorization URL.
+- Completing login uses the modal input value, only accepts local callback URLs, and uses the server to request the pasted callback.
+- After completion, `$CODEX_HOME/auth.json` is imported into the Accounts list and selected as the active account.
+- Completion does not remain stuck waiting for the `codex login` process after the callback has updated `auth.json`.
+- Light-theme and dark-theme controls are readable and do not overlap.
+
+#### Rollback/Cleanup
+- Remove any test-only account from the Accounts panel if needed.
+- If a login is abandoned, restart the dev server to clear any in-memory pending login process.
+
+---
+
+### Active thread switches after delete
+
+#### Feature/Change Name
+Deleting the currently open thread immediately selects the next available thread.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Sidebar contains at least three disposable test threads
+3. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the middle disposable thread
+2. Click that thread's delete icon, then click `Confirm`
+3. Verify the content area immediately switches to the next thread in the sidebar list
+4. Open the last disposable thread
+5. Delete and confirm it
+6. Verify the content area immediately switches to the previous thread
+7. Repeat steps 1 through 6 in dark theme
+
+#### Expected Results
+- Deleting the active thread does not leave the deleted thread selected
+- The next thread is selected immediately; when there is no next thread, the previous thread is selected
+- The browser route updates to the newly selected thread without waiting for a manual click
+- A stale deleted-thread URL does not switch the UI back to the archived thread
+- Light-theme and dark-theme sidebar selection states remain readable after the automatic switch
+
+#### Rollback/Cleanup
+- Delete any disposable threads created only for this test
+
+---
+
+### Thread open always autoscrolls to latest
+
+#### Feature/Change Name
+Opening a thread always scrolls the conversation to the latest messages, with no per-thread scroll restore.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. At least one thread with enough messages to require scrolling
+3. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open a thread and scroll to the middle of its history
+2. Switch to another thread
+3. Open the first thread again
+4. Verify the viewport opens at the bottom (latest messages), not the previous middle position
+5. Refresh the browser tab, open the same thread again, and verify it still opens at the bottom
+6. Repeat steps 1 through 5 in dark theme
+
+#### Expected Results
+- Opening a thread always lands on the latest messages
+- Previously viewed scroll positions are not restored when revisiting a thread
+- Browser refresh does not restore a previously viewed conversation scroll position
+- Behavior is the same in light theme and dark theme
+
+#### Rollback/Cleanup
+- None
+
+---
+
+### Hide worktree controls for non-Git folders
+
+#### Feature/Change Name
+Composer runtime options and project menu worktree actions are hidden when the selected folder is not a Git repository.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. One Git-backed project and one plain local folder without a `.git` directory are available in the folder picker/sidebar
+3. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, select the plain local folder in the new-thread composer.
+2. Confirm the `Local project` / `New worktree` runtime toggle is not shown.
+3. Confirm the first message can still be sent as a normal local-folder chat.
+4. Select a Git-backed folder and confirm the runtime toggle appears again.
+5. Open the project action menu for a non-Git project and confirm `New worktree` is not shown.
+6. Open the project action menu for a Git-backed project and confirm `New worktree` is shown.
+7. Switch to dark theme and repeat steps 1, 2, 4, 5, and 6.
+
+#### Expected Results
+- Non-Git folders do not show `Local project` or `New worktree` runtime options.
+- Non-Git project menus do not show `New worktree`.
+- Git-backed folders continue to expose the runtime toggle and worktree action.
+- The hidden/visible states are consistent and readable in both light and dark themes.
+
+#### Rollback/Cleanup
+- Remove any disposable plain folder or test chats created for this validation.
+
+---
+
+### Project worktree threads under canonical project
+
+#### Feature/Change Name
+Managed worktree threads remain visible under their matching canonical workspace-root project, and path-like project tooltips expose the full path.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Codex global workspace roots include `/Users/igor/Git-projects/codex-web-local`
+3. Thread history contains at least one thread whose cwd is under `/Users/igor/.codex/worktrees/*/codex-web-local`
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open the sidebar Projects section.
+2. Scroll to the `codex-web-local` project.
+3. Confirm the project includes the main-root thread and managed worktree threads.
+4. Confirm worktree rows still show the worktree icon.
+5. Confirm unrelated `.git/worktrees` rows with the same leaf folder name are not grouped into this project.
+6. Hover any shortened path-like duplicate project title and confirm the tooltip shows the full project path, not only the friendly label.
+7. Switch to dark theme and repeat steps 1-6.
+
+#### Expected Results
+- Managed worktree threads with the same leaf folder name are not split into hidden path-like project groups.
+- Generic `.git/worktrees` rows are not treated as managed Codex worktrees for project-root grouping.
+- The canonical `codex-web-local` project shows both main-root and worktree threads.
+- Path-like project tooltips expose the full project path.
+- Project rows and worktree icons remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- None.

@@ -852,7 +852,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ThreadScrollState, UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
+import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { useMobile } from '../../composables/useMobile'
 
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -1221,11 +1221,9 @@ const props = defineProps<{
   isLoading: boolean
   activeThreadId: string
   cwd: string
-  scrollState: ThreadScrollState | null
 }>()
 
 const emit = defineEmits<{
-  updateScrollState: [payload: { threadId: string; state: ThreadScrollState }]
   forkThread: [payload: { threadId: string; turnIndex: number }]
   rollback: [payload: { turnId: string }]
   implementPlan: [payload: { turnId: string }]
@@ -1239,8 +1237,7 @@ const copiedResponseAnchorId = ref('')
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
-const localScrollState = ref<ThreadScrollState | null>(null)
-const autoFollowOutput = ref(props.scrollState?.isAtBottom !== false)
+const autoFollowOutput = ref(true)
 const BOTTOM_THRESHOLD_PX = 16
 const CODE_LANGUAGE_ALIASES: Record<string, string> = {
   js: 'javascript',
@@ -1287,11 +1284,11 @@ type MessageBlock =
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string }
 
-let scrollRestoreFrame = 0
+let conversationScrollFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
-let scrollRestorePromise: Promise<void> | null = null
+let conversationScrollPromise: Promise<void> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const highlightJsModule = ref<HighlightJsModule | null>(null)
 const highlightCacheVersion = ref(0)
@@ -3932,21 +3929,7 @@ function isAtBottom(container: HTMLElement): boolean {
   return distance <= BOTTOM_THRESHOLD_PX
 }
 
-function emitScrollState(container: HTMLElement): void {
-  if (!props.activeThreadId) return
-  const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const scrollRatio = maxScrollTop > 0 ? Math.min(Math.max(container.scrollTop / maxScrollTop, 0), 1) : 1
-  emit('updateScrollState', {
-    threadId: props.activeThreadId,
-    state: {
-      scrollTop: container.scrollTop,
-      isAtBottom: isAtBottom(container),
-      scrollRatio,
-    },
-  })
-}
-
-function applySavedScrollState(): void {
+function applyConversationScrollState(): void {
   const container = conversationListRef.value
   if (!container) return
 
@@ -3954,24 +3937,12 @@ function applySavedScrollState(): void {
     enforceBottomState()
     return
   }
-
-  const savedState = props.scrollState
-  if (!savedState || savedState.isAtBottom) {
-    emitScrollState(container)
-    return
-  }
-
-  const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0)
-  const targetScrollTop = savedState.scrollTop
-  container.scrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop)
-  emitScrollState(container)
 }
 
 function enforceBottomState(): void {
   const container = conversationListRef.value
   if (!container) return
   scrollToBottom()
-  emitScrollState(container)
 }
 
 function shouldLockToBottom(): boolean {
@@ -4053,24 +4024,24 @@ function bindPendingImageHandlers(): void {
   }
 }
 
-async function scheduleScrollRestore(): Promise<void> {
-  if (scrollRestorePromise) return scrollRestorePromise
+async function scheduleConversationScroll(): Promise<void> {
+  if (conversationScrollPromise) return conversationScrollPromise
 
-  scrollRestorePromise = nextTick().then(() => new Promise<void>((resolve) => {
-    if (scrollRestoreFrame) {
-      cancelAnimationFrame(scrollRestoreFrame)
+  conversationScrollPromise = nextTick().then(() => new Promise<void>((resolve) => {
+    if (conversationScrollFrame) {
+      cancelAnimationFrame(conversationScrollFrame)
     }
-    scrollRestoreFrame = requestAnimationFrame(() => {
-      scrollRestoreFrame = 0
-      scrollRestorePromise = null
-      applySavedScrollState()
+    conversationScrollFrame = requestAnimationFrame(() => {
+      conversationScrollFrame = 0
+      conversationScrollPromise = null
+      applyConversationScrollState()
       bindPendingImageHandlers()
       scheduleBottomLock()
       resolve()
     })
   }))
 
-  return scrollRestorePromise
+  return conversationScrollPromise
 }
 
 function clearRenderCaches(): void {
@@ -4115,7 +4086,7 @@ watch(
       renderWindowStart.value = Math.min(renderWindowStart.value, Math.max(0, next.length - 1))
     }
 
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
 )
 
@@ -4143,7 +4114,7 @@ watch(
   () => props.pendingRequests,
   async () => {
     if (props.isLoading) return
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
   { deep: true },
 )
@@ -4165,19 +4136,19 @@ watch(
   async (loading) => {
     if (loading) return
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
-    await scheduleScrollRestore()
+    await scheduleConversationScroll()
   },
 )
 
 watch(
   () => props.activeThreadId,
-  () => {
-    localScrollState.value = null
+  async () => {
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
+    await scheduleConversationScroll()
   },
   { flush: 'post' },
 )
@@ -4186,7 +4157,6 @@ function onConversationScroll(): void {
   const container = conversationListRef.value
   if (!container || props.isLoading) return
   autoFollowOutput.value = isAtBottom(container)
-  emitScrollState(container)
   if (hasMoreAbove.value && !isLoadingMore.value && container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX) {
     void loadMoreAbove()
   }
@@ -4225,9 +4195,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearRenderCaches()
-  if (scrollRestoreFrame) {
-    cancelAnimationFrame(scrollRestoreFrame)
-    scrollRestoreFrame = 0
+  if (conversationScrollFrame) {
+    cancelAnimationFrame(conversationScrollFrame)
+    conversationScrollFrame = 0
   }
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)

@@ -4,8 +4,6 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
-import type { IPty, IPtyForkOptions } from 'node-pty-prebuilt-multiarch'
-
 const TERMINAL_BUFFER_LIMIT = 16 * 1024
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -36,12 +34,29 @@ type TerminalSession = {
   truncated: boolean
 }
 
-export type TerminalPty = Pick<IPty, 'write' | 'resize' | 'kill' | 'onData' | 'onExit'>
+type TerminalExitEvent = {
+  exitCode: number
+  signal?: number
+}
+
+export type TerminalPty = {
+  write(data: string): void
+  resize(cols: number, rows: number): void
+  kill(): void
+  onData(listener: (data: string) => void): void
+  onExit(listener: (event: TerminalExitEvent) => void): void
+}
 
 type SpawnTerminal = (
   file: string,
   args: string[],
-  opt: IPtyForkOptions,
+  opt: {
+    name?: string
+    cols?: number
+    rows?: number
+    cwd?: string
+    env?: Record<string, string>
+  },
 ) => TerminalPty
 
 export type TerminalManagerOptions = {
@@ -383,7 +398,6 @@ function normalizeDimension(value: unknown, fallback: number): number {
 }
 
 function loadTerminalSpawn(): SpawnTerminal {
-  repairNativePtyBuild('node-pty-prebuilt-multiarch')
   repairNativePtyBuild('node-pty')
 
   if (resolveNodePtyPrebuiltPath()) {
@@ -456,9 +470,13 @@ function resolveNodePtyPrebuiltPath(): string | null {
 
 function ensureNodePtyPrebuiltExecutable(): void {
   if (process.platform !== 'darwin' && process.platform !== 'linux') return
+  ensurePackageSpawnHelperExecutable('node-pty')
+  ensurePackageSpawnHelperExecutable('node-pty-prebuilt-multiarch')
+}
+
+function ensurePackageSpawnHelperExecutable(packageName: string): void {
   try {
-    const nodePtyEntry = require.resolve('node-pty-prebuilt-multiarch')
-    const packageRoot = join(dirname(nodePtyEntry), '..')
+    const packageRoot = dirname(require.resolve(`${packageName}/package.json`))
     const helperPath = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
     if (existsSync(helperPath)) {
       chmodSync(helperPath, 0o755)

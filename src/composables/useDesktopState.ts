@@ -44,7 +44,6 @@ import type {
   UiPendingRequestState,
   ReasoningEffort,
   SpeedMode,
-  ThreadScrollState,
   UiFileChange,
   UiLiveOverlay,
   UiMessage,
@@ -58,14 +57,19 @@ import type {
   UiTokenUsageBreakdown,
   UiThread,
 } from '../types/codex'
-import { isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
+import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 
 function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
 }
 
+export function findAdjacentThreadId(threads: UiThread[], threadId: string): string {
+  const targetIndex = threads.findIndex((thread) => thread.id === threadId)
+  if (targetIndex < 0) return ''
+  return threads[targetIndex + 1]?.id ?? threads[targetIndex - 1]?.id ?? ''
+}
+
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
-const SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
@@ -301,54 +305,6 @@ function clamp(value: number, minValue: number, maxValue: number): number {
   return Math.min(Math.max(value, minValue), maxValue)
 }
 
-function normalizeThreadScrollState(value: unknown): ThreadScrollState | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-
-  const rawState = value as Record<string, unknown>
-  if (typeof rawState.scrollTop !== 'number' || !Number.isFinite(rawState.scrollTop)) return null
-  if (typeof rawState.isAtBottom !== 'boolean') return null
-
-  const normalized: ThreadScrollState = {
-    scrollTop: Math.max(0, rawState.scrollTop),
-    isAtBottom: rawState.isAtBottom,
-  }
-
-  if (typeof rawState.scrollRatio === 'number' && Number.isFinite(rawState.scrollRatio)) {
-    normalized.scrollRatio = clamp(rawState.scrollRatio, 0, 1)
-  }
-
-  return normalized
-}
-
-function loadThreadScrollStateMap(): Record<string, ThreadScrollState> {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    const raw = window.localStorage.getItem(SCROLL_STATE_STORAGE_KEY)
-    if (!raw) return {}
-
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-
-    const normalizedMap: Record<string, ThreadScrollState> = {}
-    for (const [threadId, state] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!threadId) continue
-      const normalizedState = normalizeThreadScrollState(state)
-      if (normalizedState) {
-        normalizedMap[threadId] = normalizedState
-      }
-    }
-    return normalizedMap
-  } catch {
-    return {}
-  }
-}
-
-function saveThreadScrollStateMap(state: Record<string, ThreadScrollState>): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(SCROLL_STATE_STORAGE_KEY, JSON.stringify(state))
-}
-
 function normalizeStoredTokenCount(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.max(0, Math.trunc(value))
@@ -553,7 +509,7 @@ function orderGroupsByProjectOrder(incoming: UiProjectGroup[], projectOrder: str
   const incomingByName = new Map(incoming.map((group) => [group.projectName, group]))
   const ordered: UiProjectGroup[] = projectOrder
     .map((projectName) => incomingByName.get(projectName) ?? null)
-    .filter((group): group is UiProjectGroup => group !== null && group.threads.length > 0)
+    .filter((group): group is UiProjectGroup => group !== null)
 
   for (const group of incoming) {
     if (!projectOrder.includes(group.projectName)) {
@@ -1010,6 +966,284 @@ function toProjectNameFromWorkspaceRoot(value: string): string {
   return toProjectName(value)
 }
 
+function getRemoteProjectHostLabel(hostId: string): string {
+  const normalized = hostId.trim()
+  if (!normalized) return ''
+  const separatorIndex = normalized.lastIndexOf(':')
+  return separatorIndex >= 0 ? normalized.slice(separatorIndex + 1) : normalized
+}
+
+function getRemoteProjectDisplayName(remoteProject: NonNullable<WorkspaceRootsState['remoteProjects']>[number]): string {
+  const label = remoteProject.label || toProjectName(remoteProject.remotePath) || remoteProject.id
+  const hostLabel = getRemoteProjectHostLabel(remoteProject.hostId)
+  return hostLabel ? `${label} ${hostLabel}` : label
+}
+
+function getRemoteProjectById(rootsState: WorkspaceRootsState | null): Map<string, NonNullable<WorkspaceRootsState['remoteProjects']>[number]> {
+  const remoteProjects = rootsState?.remoteProjects ?? []
+  return new Map(remoteProjects.map((project) => [project.id, project]))
+}
+
+function getWorkspaceProjectOrderPaths(rootsState: WorkspaceRootsState | null): string[] {
+  if (!rootsState) return []
+  const savedRoots = new Set(rootsState.order)
+  const remoteProjectIds = new Set((rootsState.remoteProjects ?? []).map((project) => project.id))
+  const orderedRoots = rootsState.projectOrder.filter((item) => savedRoots.has(item) || remoteProjectIds.has(item))
+  for (const rootPath of rootsState.order) {
+    if (!orderedRoots.includes(rootPath)) orderedRoots.push(rootPath)
+  }
+  for (const remoteProjectId of remoteProjectIds) {
+    if (!orderedRoots.includes(remoteProjectId)) orderedRoots.push(remoteProjectId)
+  }
+  return orderedRoots
+}
+
+function getWorkspaceProjectOrderNames(
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): string[] {
+  const remoteProjectsById = getRemoteProjectById(rootsState)
+  return getWorkspaceProjectOrderPaths(rootsState).map((rootPath) => {
+    if (remoteProjectsById.has(rootPath)) return rootPath
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    return duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+  })
+}
+
+function matchesWorkspaceRootProject(rootPath: string, projectName: string): boolean {
+  const normalizedRootPath = normalizePathForUi(rootPath).trim()
+  return normalizedRootPath === projectName || toProjectNameFromWorkspaceRoot(rootPath) === projectName
+}
+
+export function collectWorkspaceRootPathsForProjectRemoval(
+  rootsState: WorkspaceRootsState,
+  projectName: string,
+): Set<string> {
+  const removedRootPaths = new Set<string>()
+  for (const rootPath of rootsState.order) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  for (const rootPath of rootsState.active) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  for (const rootPath of Object.keys(rootsState.labels)) {
+    if (matchesWorkspaceRootProject(rootPath, projectName)) {
+      removedRootPaths.add(rootPath)
+    }
+  }
+  return removedRootPaths
+}
+
+export function buildWorkspaceRootsProjectOrderState(
+  rootsState: WorkspaceRootsState,
+  orderedProjectNames: string[],
+  groups: UiProjectGroup[],
+): Pick<WorkspaceRootsState, 'order' | 'active' | 'projectOrder'> {
+  const remoteProjectIds = new Set((rootsState.remoteProjects ?? []).map((project) => project.id))
+  const rootByProjectName = new Map<string, string>()
+  for (const rootPath of rootsState.order) {
+    const projectName = toProjectNameFromWorkspaceRoot(rootPath)
+    if (!rootByProjectName.has(projectName)) {
+      rootByProjectName.set(projectName, rootPath)
+    }
+  }
+  for (const group of groups) {
+    const cwd = group.threads[0]?.cwd?.trim() ?? ''
+    if (!cwd) continue
+    rootByProjectName.set(group.projectName, cwd)
+  }
+
+  const nextProjectOrder: string[] = []
+  const pushProjectOrderItem = (item: string): void => {
+    if (item && !nextProjectOrder.includes(item)) {
+      nextProjectOrder.push(item)
+    }
+  }
+
+  for (const projectName of orderedProjectNames) {
+    if (remoteProjectIds.has(projectName)) {
+      pushProjectOrderItem(projectName)
+      continue
+    }
+    const rootPath = rootByProjectName.get(projectName)
+    if (rootPath) {
+      pushProjectOrderItem(rootPath)
+    }
+  }
+  for (const item of getWorkspaceProjectOrderPaths(rootsState)) {
+    pushProjectOrderItem(item)
+  }
+
+  const nextOrder = nextProjectOrder.filter((item) => rootsState.order.includes(item))
+  for (const rootPath of rootsState.order) {
+    if (!nextOrder.includes(rootPath)) {
+      nextOrder.push(rootPath)
+    }
+  }
+
+  const nextActive = rootsState.active.filter((rootPath) => nextOrder.includes(rootPath))
+  if (nextActive.length === 0 && nextOrder.length > 0) {
+    nextActive.push(nextOrder[0])
+  }
+
+  return {
+    order: nextOrder,
+    active: nextActive,
+    projectOrder: nextProjectOrder,
+  }
+}
+
+function orderGroupsByWorkspaceProjectOrder(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  const order = getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)
+  if (order.length === 0) return groups
+  const orderIndexByName = new Map(order.map((name, index) => [name, index]))
+  return [...groups].sort((first, second) => {
+    if (isProjectlessGroup(first) || isProjectlessGroup(second)) return 0
+    const firstIndex = orderIndexByName.get(first.projectName) ?? Number.POSITIVE_INFINITY
+    const secondIndex = orderIndexByName.get(second.projectName) ?? Number.POSITIVE_INFINITY
+    if (firstIndex === secondIndex) return 0
+    return firstIndex - secondIndex
+  })
+}
+
+function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): Set<string> {
+  const rootByLeafName = new Map<string, Set<string>>()
+  const canonicalWorkspaceRootCountsByLeafName = new Map<string, number>()
+  const addPath = (value: string): void => {
+    const normalizedPath = normalizePathForUi(value).trim()
+    if (!normalizedPath) return
+    const leafName = toProjectName(normalizedPath)
+    const existing = rootByLeafName.get(leafName) ?? new Set<string>()
+    existing.add(normalizedPath)
+    rootByLeafName.set(leafName, existing)
+  }
+
+  for (const rootPath of rootsState?.order ?? []) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectName(normalizedRootPath)
+    if (!isManagedCodexWorktreePath(normalizedRootPath)) {
+      canonicalWorkspaceRootCountsByLeafName.set(leafName, (canonicalWorkspaceRootCountsByLeafName.get(leafName) ?? 0) + 1)
+    }
+    addPath(rootPath)
+  }
+  for (const group of groups) {
+    for (const thread of group.threads) {
+      const normalizedCwd = normalizePathForUi(thread.cwd).trim()
+      const leafName = toProjectName(normalizedCwd)
+      const isRegisteredRoot = rootsState?.order.some((rootPath) => normalizePathForUi(rootPath).trim() === normalizedCwd) === true
+      if (isManagedCodexWorktreePath(normalizedCwd) && !isRegisteredRoot && canonicalWorkspaceRootCountsByLeafName.get(leafName) === 1) continue
+      addPath(thread.cwd)
+    }
+  }
+
+  const duplicateLeafNames = new Set<string>()
+  for (const [leafName, paths] of rootByLeafName.entries()) {
+    if (paths.size > 1) duplicateLeafNames.add(leafName)
+  }
+  return duplicateLeafNames
+}
+
+function isManagedCodexWorktreePath(value: string): boolean {
+  return value.includes('/.codex/worktrees/')
+}
+
+function disambiguateProjectGroupsByCwd(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  if (duplicateLeafNames.size === 0) return groups
+
+  const uniqueCanonicalWorkspaceRootLeafNames = new Set<string>()
+  const duplicateCanonicalWorkspaceRootLeafNames = new Set<string>()
+  const canonicalWorkspaceRootByLeafName = new Map<string, string>()
+  const registeredWorkspaceRoots = new Set<string>()
+  for (const rootPath of rootsState?.order ?? []) {
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    registeredWorkspaceRoots.add(normalizedRootPath)
+    if (isManagedCodexWorktreePath(normalizedRootPath)) continue
+    const leafName = toProjectName(normalizedRootPath)
+    if (uniqueCanonicalWorkspaceRootLeafNames.has(leafName)) {
+      uniqueCanonicalWorkspaceRootLeafNames.delete(leafName)
+      duplicateCanonicalWorkspaceRootLeafNames.add(leafName)
+      canonicalWorkspaceRootByLeafName.delete(leafName)
+    } else if (!duplicateCanonicalWorkspaceRootLeafNames.has(leafName)) {
+      uniqueCanonicalWorkspaceRootLeafNames.add(leafName)
+      canonicalWorkspaceRootByLeafName.set(leafName, normalizedRootPath)
+    }
+  }
+
+  const disambiguatedGroups: UiProjectGroup[] = []
+  const groupsByProjectName = new Map<string, UiProjectGroup>()
+  for (const group of groups) {
+    for (const thread of group.threads) {
+      const normalizedCwd = normalizePathForUi(thread.cwd).trim()
+      const leafName = toProjectName(normalizedCwd)
+      const isRegisteredRoot = registeredWorkspaceRoots.has(normalizedCwd)
+      const isCanonicalWorktreeThread = isManagedCodexWorktreePath(normalizedCwd)
+        && !isRegisteredRoot
+        && uniqueCanonicalWorkspaceRootLeafNames.has(leafName)
+      let projectName = group.projectName
+      if (isCanonicalWorktreeThread && duplicateLeafNames.has(leafName)) {
+        projectName = canonicalWorkspaceRootByLeafName.get(leafName) ?? group.projectName
+      } else if (normalizedCwd && duplicateLeafNames.has(leafName)) {
+        projectName = normalizedCwd
+      }
+      const nextThread = thread.projectName === projectName ? thread : { ...thread, projectName }
+      const existingGroup = groupsByProjectName.get(projectName)
+      if (existingGroup) {
+        existingGroup.threads.push(nextThread)
+      } else {
+        const nextGroup = { projectName, threads: [nextThread] }
+        groupsByProjectName.set(projectName, nextGroup)
+        disambiguatedGroups.push(nextGroup)
+      }
+    }
+  }
+
+  return disambiguatedGroups
+}
+
+function addWorkspaceRootPlaceholderGroups(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+  duplicateLeafNames: Set<string>,
+): UiProjectGroup[] {
+  if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groups
+  const existingProjectNames = new Set(groups.map((group) => group.projectName))
+  const nextGroups = [...groups]
+  const remoteProjectsById = getRemoteProjectById(rootsState)
+
+  for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
+    if (remoteProjectsById.has(rootPath)) {
+      if (existingProjectNames.has(rootPath)) continue
+      nextGroups.push({ projectName: rootPath, threads: [] })
+      existingProjectNames.add(rootPath)
+      continue
+    }
+    const normalizedRootPath = normalizePathForUi(rootPath).trim()
+    if (!normalizedRootPath) continue
+    const leafName = toProjectNameFromWorkspaceRoot(normalizedRootPath)
+    const projectName = duplicateLeafNames.has(leafName) ? normalizedRootPath : leafName
+    if (existingProjectNames.has(projectName)) continue
+    nextGroups.push({ projectName, threads: [] })
+    existingProjectNames.add(projectName)
+  }
+
+  return nextGroups
+}
+
 function toOptimisticThreadTitle(message: string): string {
   const firstLine = message
     .split('\n')
@@ -1023,6 +1257,26 @@ function toOptimisticThreadTitle(message: string): string {
 function toForkedThreadTitle(title: string): string {
   const normalizedTitle = title.trim() || 'Untitled thread'
   return /^fork:\s+/iu.test(normalizedTitle) ? normalizedTitle : `Fork: ${normalizedTitle}`
+}
+
+function isProjectlessGroup(group: UiProjectGroup): boolean {
+  return group.threads.some((thread) => thread.cwd.trim().length === 0 || isProjectlessChatPath(thread.cwd))
+}
+
+export function filterGroupsByWorkspaceRoots(
+  groups: UiProjectGroup[],
+  rootsState: WorkspaceRootsState | null,
+): UiProjectGroup[] {
+  const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+  const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+  const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+  if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groupsWithWorkspaceRoots
+  const allowedProjectNames = new Set<string>()
+  for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+    allowedProjectNames.add(projectName)
+  }
+  const filteredGroups = groupsWithWorkspaceRoots.filter((group) => allowedProjectNames.has(group.projectName) || isProjectlessGroup(group))
+  return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
 }
 
 export function useDesktopState() {
@@ -1075,7 +1329,6 @@ export function useDesktopState() {
   const selectedSpeedMode = ref<SpeedMode>('standard')
   const activeProviderId = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
-  const scrollStateByThreadId = ref<Record<string, ThreadScrollState>>(loadThreadScrollStateMap())
   const projectOrder = ref<string[]>(loadProjectOrder())
   const projectDisplayNameById = ref<Record<string, string>>(loadProjectDisplayNames())
   const loadedVersionByThreadId = ref<Record<string, string>>({})
@@ -1167,9 +1420,6 @@ export function useDesktopState() {
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
     allThreads.value.find((thread) => thread.id === selectedThreadId.value) ?? null,
-  )
-  const selectedThreadScrollState = computed<ThreadScrollState | null>(
-    () => scrollStateByThreadId.value[selectedThreadId.value] ?? null,
   )
   const selectedThreadTerminalOpen = computed(() => {
     const threadId = selectedThreadId.value
@@ -1768,11 +2018,6 @@ export function useDesktopState() {
       readStateByThreadId.value = nextReadState
       saveReadStateMap(nextReadState)
     }
-    const nextScrollState = pruneThreadStateMap(scrollStateByThreadId.value, activeThreadIds)
-    if (nextScrollState !== scrollStateByThreadId.value) {
-      scrollStateByThreadId.value = nextScrollState
-      saveThreadScrollStateMap(nextScrollState)
-    }
     loadedMessagesByThreadId.value = pruneThreadStateMap(loadedMessagesByThreadId.value, activeThreadIds)
     loadedVersionByThreadId.value = pruneThreadStateMap(loadedVersionByThreadId.value, activeThreadIds)
     resumedThreadById.value = pruneThreadStateMap(resumedThreadById.value, activeThreadIds)
@@ -2023,34 +2268,6 @@ export function useDesktopState() {
   function currentThreadVersion(threadId: string): string {
     const thread = flattenThreads(sourceGroups.value).find((row) => row.id === threadId)
     return thread?.updatedAtIso ?? ''
-  }
-
-  function setThreadScrollState(threadId: string, nextState: ThreadScrollState): void {
-    if (!threadId) return
-
-    const normalizedState: ThreadScrollState = {
-      scrollTop: Math.max(0, nextState.scrollTop),
-      isAtBottom: nextState.isAtBottom === true,
-    }
-    if (typeof nextState.scrollRatio === 'number' && Number.isFinite(nextState.scrollRatio)) {
-      normalizedState.scrollRatio = clamp(nextState.scrollRatio, 0, 1)
-    }
-
-    const previousState = scrollStateByThreadId.value[threadId]
-    if (
-      previousState &&
-      previousState.scrollTop === normalizedState.scrollTop &&
-      previousState.isAtBottom === normalizedState.isAtBottom &&
-      previousState.scrollRatio === normalizedState.scrollRatio
-    ) {
-      return
-    }
-
-    scrollStateByThreadId.value = {
-      ...scrollStateByThreadId.value,
-      [threadId]: normalizedState,
-    }
-    saveThreadScrollStateMap(scrollStateByThreadId.value)
   }
 
   function setThreadTerminalOpen(threadId: string, isOpen: boolean): void {
@@ -3308,6 +3525,7 @@ export function useDesktopState() {
       setTurnSummaryForThread(startedTurn.threadId, null)
       setTurnErrorForThread(startedTurn.threadId, null)
       setThreadInProgress(startedTurn.threadId, true)
+      scheduleQueueStateRefresh(startedTurn.threadId)
       if (eventUnreadByThreadId.value[startedTurn.threadId]) {
         eventUnreadByThreadId.value = omitKey(eventUnreadByThreadId.value, startedTurn.threadId)
       }
@@ -3350,7 +3568,7 @@ export function useDesktopState() {
       markThreadUnreadByEvent(completedTurn.threadId)
       if (!shouldRetryWithFallback) {
         clearPendingTurnRequest(completedTurn.threadId)
-        void processQueuedMessages(completedTurn.threadId)
+        scheduleQueueStateRefresh(completedTurn.threadId)
       }
     }
 
@@ -3487,13 +3705,6 @@ export function useDesktopState() {
     }
 
     if (isAgentContentEvent(notification)) {
-      if (shouldAutoScrollOnNextAgentEvent && selectedThreadId.value) {
-        setThreadScrollState(selectedThreadId.value, {
-          scrollTop: 0,
-          isAtBottom: true,
-          scrollRatio: 1,
-        })
-      }
       activeReasoningItemId = ''
       clearLiveReasoningForThread(notificationThreadId)
     }
@@ -3512,7 +3723,7 @@ export function useDesktopState() {
         markThreadUnreadByEvent(completedThreadId)
         if (!shouldRetryWithFallback) {
           clearPendingTurnRequest(completedThreadId)
-          void processQueuedMessages(completedThreadId)
+          scheduleQueueStateRefresh(completedThreadId)
         }
       }
     }
@@ -3559,32 +3770,51 @@ export function useDesktopState() {
     try {
       if (!rootsState) return
       const hydratedOrder: string[] = []
-      for (const rootPath of rootsState.order) {
+      for (const rootPath of getWorkspaceProjectOrderPaths(rootsState)) {
         const projectName = toProjectNameFromWorkspaceRoot(rootPath)
         if (hydratedOrder.includes(projectName)) continue
         hydratedOrder.push(projectName)
       }
 
       if (hydratedOrder.length > 0) {
-        const mergedOrder = mergeProjectOrder(hydratedOrder, groups)
+        const mergedOrder = rootsState.projectOrder.length > 0
+          ? mergeProjectOrder(hydratedOrder, groups)
+          : mergeProjectOrder(projectOrder.value, groups)
         if (!areStringArraysEqual(projectOrder.value, mergedOrder)) {
           projectOrder.value = mergedOrder
-          saveProjectOrder(projectOrder.value)
         }
       }
 
-      if (Object.keys(rootsState.labels).length > 0) {
+      if (Object.keys(rootsState.labels).length > 0 || (rootsState.remoteProjects ?? []).length > 0) {
         const nextLabels = { ...projectDisplayNameById.value }
         let changed = false
         for (const [rootPath, label] of Object.entries(rootsState.labels)) {
-          const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-          if (nextLabels[projectName] === label) continue
-          nextLabels[projectName] = label
+          const normalizedRootPath = normalizePathForUi(rootPath).trim()
+          const projectNames = [toProjectNameFromWorkspaceRoot(rootPath)]
+          if (normalizedRootPath) projectNames.push(normalizedRootPath)
+          for (const projectName of projectNames) {
+            if (nextLabels[projectName] === label) continue
+            nextLabels[projectName] = label
+            changed = true
+          }
+        }
+        for (const rootPath of rootsState.order) {
+          const leafName = toProjectNameFromWorkspaceRoot(rootPath)
+          const parentLeafName = toProjectName(getPathParent(rootPath))
+          if (!parentLeafName.startsWith('.') || parentLeafName === leafName) continue
+          const displayName = `${leafName} ${parentLeafName}`
+          if (nextLabels[leafName] !== undefined || nextLabels[leafName] === displayName) continue
+          nextLabels[leafName] = displayName
+          changed = true
+        }
+        for (const remoteProject of rootsState.remoteProjects ?? []) {
+          const label = getRemoteProjectDisplayName(remoteProject)
+          if (nextLabels[remoteProject.id] === label) continue
+          nextLabels[remoteProject.id] = label
           changed = true
         }
         if (changed) {
           projectDisplayNameById.value = nextLabels
-          saveProjectDisplayNames(nextLabels)
         }
       }
     } catch {
@@ -3632,23 +3862,38 @@ export function useDesktopState() {
     groups: UiProjectGroup[],
     rootsState: WorkspaceRootsState | null,
   ): UiProjectGroup[] {
-    if (!rootsState || rootsState.order.length === 0) return groups
-    const allowedProjectNames = new Set(
-      rootsState.order.map((rootPath) => toProjectNameFromWorkspaceRoot(rootPath)),
-    )
-    return groups.filter((group) => {
+    const duplicateLeafNames = collectDuplicateProjectLeafNames(groups, rootsState)
+    const disambiguatedGroups = disambiguateProjectGroupsByCwd(groups, rootsState)
+    const groupsWithWorkspaceRoots = addWorkspaceRootPlaceholderGroups(disambiguatedGroups, rootsState, duplicateLeafNames)
+    if (!rootsState || (rootsState.order.length === 0 && (rootsState.remoteProjects ?? []).length === 0)) return groupsWithWorkspaceRoots
+    const allowedProjectNames = new Set<string>()
+    for (const projectName of getWorkspaceProjectOrderNames(rootsState, duplicateLeafNames)) {
+      allowedProjectNames.add(projectName)
+    }
+    const filteredGroups = groupsWithWorkspaceRoots.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
       return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
     })
+    return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
   }
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
     const visibleGroups = filterGroupsByWorkspaceRoots(groups, rootsState)
+    const hasWorkspaceRootsState = Boolean(
+      rootsState && (rootsState.order.length > 0 || rootsState.projectOrder.length > 0 || (rootsState.remoteProjects ?? []).length > 0),
+    )
 
-    const nextProjectOrder = mergeProjectOrder(projectOrder.value, visibleGroups)
+    const nextProjectOrder = rootsState?.projectOrder.length
+      ? mergeProjectOrder(
+        getWorkspaceProjectOrderNames(rootsState, collectDuplicateProjectLeafNames(groups, rootsState)),
+        visibleGroups,
+      )
+      : mergeProjectOrder(projectOrder.value, visibleGroups)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
       projectOrder.value = nextProjectOrder
-      saveProjectOrder(projectOrder.value)
+      if (!hasWorkspaceRootsState) {
+        saveProjectOrder(projectOrder.value)
+      }
     }
 
     const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
@@ -4036,12 +4281,24 @@ export function useDesktopState() {
   }
 
   async function archiveThreadById(threadId: string) {
+    const wasSelectedThread = selectedThreadId.value === threadId
+    const nextSelectedThreadId = wasSelectedThread
+      ? findAdjacentThreadId(flattenThreads(projectGroups.value), threadId)
+      : ''
+
+    if (wasSelectedThread) {
+      setSelectedThreadId(nextSelectedThreadId)
+      if (nextSelectedThreadId) {
+        void loadMessages(nextSelectedThreadId, { silent: true })
+      }
+    }
+
     try {
       await archiveThread(threadId)
       await loadThreads()
 
-      if (selectedThreadId.value === threadId) {
-        await loadMessages(selectedThreadId.value)
+      if (wasSelectedThread && nextSelectedThreadId && selectedThreadId.value === nextSelectedThreadId) {
+        await ensureThreadMessagesLoaded(nextSelectedThreadId, { silent: true })
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
@@ -4506,45 +4763,25 @@ export function useDesktopState() {
 
   async function processQueuedMessages(threadId: string): Promise<void> {
     if (queueProcessingByThreadId.value[threadId] === true) return
-    const queue = queuedMessagesByThreadId.value[threadId]
-    if (!queue || queue.length === 0) return
     queueProcessingByThreadId.value = {
       ...queueProcessingByThreadId.value,
       [threadId]: true,
     }
-    const [next, ...rest] = queue
-    queuedMessagesByThreadId.value = rest.length > 0
-      ? { ...queuedMessagesByThreadId.value, [threadId]: rest }
-      : omitKey(queuedMessagesByThreadId.value, threadId)
-    persistQueueState()
-    isSendingMessage.value = true
-    error.value = ''
-    shouldAutoScrollOnNextAgentEvent = true
-    setTurnSummaryForThread(threadId, null)
-    setTurnActivityForThread(
-      threadId,
-      {
-        label: 'Thinking',
-        details: buildPendingTurnDetails(
-          readModelIdForThread(threadId),
-          selectedReasoningEffort.value,
-          next.collaborationMode,
-        ),
-      },
-    )
-
-    setTurnErrorForThread(threadId, null)
-    setThreadInProgress(threadId, true)
     try {
-      setSelectedCollaborationMode(next.collaborationMode)
-      await startTurnForThread(threadId, next.text, next.imageUrls, next.skills, next.fileAttachments)
+      queuedMessagesByThreadId.value = await getThreadQueueState()
     } catch {
-      setThreadInProgress(threadId, false)
-      setTurnActivityForThread(threadId, null)
+      // Backend queue state is optional during transient bridge failures.
     } finally {
       queueProcessingByThreadId.value = omitKey(queueProcessingByThreadId.value, threadId)
-      isSendingMessage.value = false
     }
+  }
+
+  function scheduleQueueStateRefresh(threadId: string): void {
+    void processQueuedMessages(threadId)
+    if (typeof window === 'undefined') return
+    window.setTimeout(() => {
+      void processQueuedMessages(threadId)
+    }, 650)
   }
 
   async function interruptSelectedThreadTurn(): Promise<void> {
@@ -4638,7 +4875,7 @@ export function useDesktopState() {
       const nextLabels = { ...rootsState.labels }
       let changed = false
       for (const rootPath of rootsState.order) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) !== projectName) continue
+        if (!matchesWorkspaceRootProject(rootPath, projectName)) continue
         const trimmed = displayName.trim()
         if (trimmed.length === 0) {
           if (nextLabels[rootPath] !== undefined) {
@@ -4655,6 +4892,7 @@ export function useDesktopState() {
           order: rootsState.order,
           labels: nextLabels,
           active: rootsState.active,
+          projectOrder: rootsState.projectOrder,
         })
       }
     } catch {
@@ -4712,21 +4950,9 @@ export function useDesktopState() {
     const removedRootPaths = new Set<string>()
     try {
       const rootsState = await getWorkspaceRootsState()
-      for (const rootPath of rootsState.order) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
-      for (const rootPath of rootsState.active) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
-      for (const rootPath of Object.keys(rootsState.labels)) {
-        if (toProjectNameFromWorkspaceRoot(rootPath) === projectName) {
-          removedRootPaths.add(rootPath)
-        }
-      }
+      collectWorkspaceRootPathsForProjectRemoval(rootsState, projectName).forEach((rootPath) => {
+        removedRootPaths.add(rootPath)
+      })
     } catch {
       // Keep local-only removal when global state is unavailable.
     }
@@ -4743,6 +4969,7 @@ export function useDesktopState() {
           order: nextOrder,
           labels: omitKeys(rootsState.labels, removedRootPaths),
           active: fallbackActive,
+          projectOrder: rootsState.projectOrder.filter((item) => item !== projectName && !removedRootPaths.has(item)),
         })
         return
       } catch {
@@ -4792,41 +5019,13 @@ export function useDesktopState() {
   async function persistProjectOrderToWorkspaceRoots(): Promise<void> {
     try {
       const rootsState = await getWorkspaceRootsState()
-      const rootByProjectName = new Map<string, string>()
-      for (const rootPath of rootsState.order) {
-        const projectName = toProjectNameFromWorkspaceRoot(rootPath)
-        if (!rootByProjectName.has(projectName)) {
-          rootByProjectName.set(projectName, rootPath)
-        }
-      }
-      for (const group of sourceGroups.value) {
-        const cwd = group.threads[0]?.cwd?.trim() ?? ''
-        if (!cwd) continue
-        rootByProjectName.set(group.projectName, cwd)
-      }
-
-      const nextOrder: string[] = []
-      for (const projectName of projectOrder.value) {
-        const rootPath = rootByProjectName.get(projectName)
-        if (rootPath && !nextOrder.includes(rootPath)) {
-          nextOrder.push(rootPath)
-        }
-      }
-      for (const rootPath of rootsState.order) {
-        if (!nextOrder.includes(rootPath)) {
-          nextOrder.push(rootPath)
-        }
-      }
-
-      const nextActive = rootsState.active.filter((rootPath) => nextOrder.includes(rootPath))
-      if (nextActive.length === 0 && nextOrder.length > 0) {
-        nextActive.push(nextOrder[0])
-      }
+      const nextState = buildWorkspaceRootsProjectOrderState(rootsState, projectOrder.value, sourceGroups.value)
 
       await setWorkspaceRootsState({
-        order: nextOrder,
+        order: nextState.order,
         labels: rootsState.labels,
-        active: nextActive,
+        active: nextState.active,
+        projectOrder: nextState.projectOrder,
       })
     } catch {
       // Keep local project order when global state persistence is unavailable.
@@ -5080,7 +5279,6 @@ export function useDesktopState() {
     projectDisplayNameById,
     selectedThread,
     selectedThreadTokenUsage,
-    selectedThreadScrollState,
     selectedThreadTerminalOpen,
     isSelectedThreadInterruptPending,
     selectedThreadServerRequests,
@@ -5109,7 +5307,6 @@ export function useDesktopState() {
     selectThread,
     loadMessages,
     ensureThreadMessagesLoaded,
-    setThreadScrollState,
     setThreadTerminalOpen,
     toggleSelectedThreadTerminal,
     archiveThreadById,

@@ -1,6 +1,6 @@
 {
   "name": "codexapp",
-  "version": "0.1.84",
+  "version": "0.1.87",
   "description": "A lightweight web interface for Codex that runs on top of the Codex app-server, allowing remote access from any browser",
   "type": "module",
   "license": "MIT",
@@ -41,7 +41,6 @@
       "@firebase/util",
       "esbuild",
       "node-pty",
-      "node-pty-prebuilt-multiarch",
       "protobufjs"
     ]
   },
@@ -67,7 +66,6 @@
     "firebase": "^12.2.1",
     "highlight.js": "^11.11.1",
     "node-pty": "^1.1.0",
-    "node-pty-prebuilt-multiarch": "0.10.1-pre.5",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.3"
   },
