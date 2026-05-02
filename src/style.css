@@ -1319,6 +1319,26 @@
   @apply border-rose-800 bg-rose-950/40 text-rose-200;
 }
 
+:root.dark .skills-search-panel {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .skills-search-copy {
+  @apply text-zinc-200;
+}
+
+:root.dark .skills-search-copy span {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-directory-link {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:root.dark .skills-search-input {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100 placeholder-zinc-500 focus:border-zinc-600 focus:bg-zinc-900;
+}
+
 :root.dark .skills-hub-section-toggle {
   @apply text-zinc-300 hover:text-zinc-100;
 }
@@ -1378,6 +1398,10 @@
   @apply border-zinc-700 bg-zinc-800 text-zinc-100;
 }
 
+:root.dark .directory-action.primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+}
+
 :root.dark .directory-sort-group {
   @apply border-zinc-700 bg-zinc-950;
 }
@@ -1419,8 +1443,20 @@
   @apply text-zinc-300;
 }
 
-:root.dark .skill-card-date {
+:root.dark .skill-card-meta {
   @apply text-zinc-500;
+}
+
+:root.dark .mcp-skill-name {
+  @apply text-zinc-100;
+}
+
+:root.dark .mcp-skill-owner {
+  @apply text-zinc-400;
+}
+
+:root.dark .mcp-skill-meta {
+  @apply text-zinc-300;
 }
 
 :root.dark .sdm-panel {

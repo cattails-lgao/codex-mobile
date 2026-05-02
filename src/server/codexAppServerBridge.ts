@@ -1157,26 +1157,56 @@ function readNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function resolveComposioCommand(): string | null {
+type ComposioCliInvocation = { command: string; args: string[]; displayCommand: string }
+
+function buildComposioInvocation(args: string[]): ComposioCliInvocation | null {
+  const overrideCommand = process.env.CODEXUI_COMPOSIO_COMMAND?.trim()
+  if (overrideCommand) {
+    const invocation = getSpawnInvocation(overrideCommand, args)
+    return {
+      command: invocation.command,
+      args: invocation.args,
+      displayCommand: `${overrideCommand} ${args.map(quoteShellTokenIfNeeded).join(' ')}`.trim(),
+    }
+  }
+  return buildInstalledComposioInvocation(args)
+}
+
+function buildInstalledComposioInvocation(args: string[]): ComposioCliInvocation | null {
   const candidates = [
-    process.env.CODEXUI_COMPOSIO_COMMAND?.trim() ?? '',
     join(homedir(), '.composio', 'composio'),
     'composio',
   ]
-
   for (const candidate of candidates) {
-    if (!candidate) continue
     if ((candidate.includes('/') || candidate.includes('\\')) && !existsSync(candidate)) continue
-    const invocation = getSpawnInvocation(candidate, ['--version'])
-    const probe = spawnSync(invocation.command, invocation.args, {
-      stdio: 'ignore',
-      windowsHide: true,
-    })
-    if (!probe.error && probe.status === 0) {
-      return candidate
+    const invocation = getSpawnInvocation(candidate, args)
+    return {
+      command: invocation.command,
+      args: invocation.args,
+      displayCommand: `${candidate} ${args.map(quoteShellTokenIfNeeded).join(' ')}`.trim(),
     }
   }
+  return null
+}
 
+function probeComposioInvocation(invocation: ComposioCliInvocation): { available: boolean; cliVersion: string; output: string } {
+  const probe = spawnSync(invocation.command, invocation.args, {
+    encoding: 'utf8',
+    env: process.env,
+    windowsHide: true,
+  })
+  const output = `${probe.stdout ?? ''}${probe.stderr ?? ''}`.trim()
+  return {
+    available: !probe.error && probe.status === 0,
+    cliVersion: probe.status === 0 ? (probe.stdout ?? '').trim() : '',
+    output,
+  }
+}
+
+function resolveComposioInvocation(args: string[]): ComposioCliInvocation | null {
+  const invocation = buildComposioInvocation(args)
+  const versionInvocation = buildComposioInvocation(['--version'])
+  if (invocation && versionInvocation && probeComposioInvocation(versionInvocation).available) return invocation
   return null
 }
 
@@ -1189,12 +1219,10 @@ function parseComposioJson<T>(stdout: string, fallback: string): T {
 }
 
 async function runComposioJson<T>(args: string[], fallback: string): Promise<T> {
-  const command = resolveComposioCommand()
-  if (!command) {
+  const invocation = resolveComposioInvocation(args)
+  if (!invocation) {
     throw new Error('Composio CLI is not installed')
   }
-
-  const invocation = getSpawnInvocation(command, args)
   const child = spawn(invocation.command, invocation.args, {
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1307,19 +1335,14 @@ async function readComposioConnectionsBySlug(): Promise<Map<string, ComposioConn
 }
 
 async function readComposioStatus(): Promise<ComposioStatusResponse> {
-  const cliVersion = (() => {
-    const command = resolveComposioCommand()
-    if (!command) return ''
-    const invocation = getSpawnInvocation(command, ['--version'])
-    const probe = spawnSync(invocation.command, invocation.args, {
-      encoding: 'utf8',
-      windowsHide: true,
-    })
-    return probe.status === 0 ? probe.stdout.trim() : ''
-  })()
-
+  const versionInvocation = buildComposioInvocation(['--version'])
+  const probe = versionInvocation
+    ? probeComposioInvocation(versionInvocation)
+    : { available: false, cliVersion: '', output: '' }
+  const available = probe.available
+  const cliVersion = probe.cliVersion
   const userData = await readComposioUserData()
-  if (!resolveComposioCommand()) {
+  if (!available) {
     return {
       available: false,
       authenticated: false,
@@ -1445,11 +1468,10 @@ async function startComposioLink(slug: string): Promise<ComposioLinkResult> {
 }
 
 async function startComposioLogin(): Promise<ComposioLoginResult> {
-  const command = resolveComposioCommand()
-  if (!command) {
+  const invocation = resolveComposioInvocation(['login', '--no-browser', '-y'])
+  if (!invocation) {
     throw new Error('Composio CLI is not installed')
   }
-  const invocation = getSpawnInvocation(command, ['login', '--no-browser', '-y'])
   const proc = spawn(invocation.command, invocation.args, {
     cwd: process.cwd(),
     env: process.env,

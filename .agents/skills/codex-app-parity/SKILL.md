@@ -14,6 +14,15 @@ Ensure behavior is implemented with Codex.app as the source of truth, then verif
 
 ## Project Instructions
 
+## Repo Knowledge Maintenance
+
+For user-visible Directory, Skills, Apps, Plugins, MCP, or Composio changes in this repo:
+
+- Update `tests.md` with manual verification steps, including light and dark theme checks.
+- If the change creates or changes durable behavior/architecture, add or update an `llm-wiki/raw/...` source and corresponding `llm-wiki/wiki/...` concept page.
+- Keep `whatToTest.md` as a short pending-only checklist; remove items that were actually executed successfully.
+- Prefer assertions plus screenshots for browser validation; screenshots alone are not enough.
+
 ## Codex.app-First Development Policy
 
 For every **new feature** and every **behavior/UI change**, treat the installed desktop app as the source of truth:

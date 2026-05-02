@@ -1479,7 +1479,7 @@ function dismissFirstLaunchPluginsCard(): void {
 
 function onOpenPluginsHomeCard(): void {
   dismissFirstLaunchPluginsCard()
-  void router.push({ name: 'skills' })
+  void router.push({ name: 'skills', query: { tab: 'plugins' } })
 }
 
 const threadContextBadgeState = computed(() => {

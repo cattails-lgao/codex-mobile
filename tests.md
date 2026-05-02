@@ -3290,11 +3290,11 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 15. Open a plugin whose detail lists a required app that is absent from the Apps catalog for the current account, such as Gmail on an account without Gmail app access, and verify the footer shows a disabled `ChatGPT Plus` action instead of `Install`
 16. Switch Apps sorting to `A-Z` and verify apps reorder alphabetically; switch to `Date` and verify app-server catalog order is restored; switch back to `Popular` and verify casual-user relevant apps are prioritized and capped to 100 when no search is active
 17. Search Apps and verify matching results are not capped to the Popular top 100 list
-18. Switch to `Composio` and verify the workspace summary card shows the current Composio CLI login state, or a clear not-installed / not-authenticated message appears
-19. If Composio CLI is not installed, click `Install` and verify the app installs the CLI to `~/.composio/composio` using the official Composio installer
-20. If Composio CLI is installed but not authenticated, click `Login` and verify the app opens a new tab, starts `composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
+18. Switch to `Composio` and verify the workspace summary card shows the current installed Composio CLI login state, or a clear not-installed / not-authenticated message appears
+19. If Composio CLI is not installed, click `Install Composio` and verify the app installs the CLI to `~/.composio/composio` using the official Composio installer
+20. If Composio is available but not authenticated, click `Login` and verify the app opens a new tab, starts the installed `composio login --no-browser -y`, captures the returned auth URL, and navigates the new tab to that URL
 21. Verify Composio connector cards show real connector details such as tool counts, trigger counts, auth mode, and connection state instead of only aggregate totals
-22. In Composio search, type `instagram` and verify the Instagram connector appears in the results
+22. In Composio search, type `instagram` and verify the Instagram connector appears first when it is returned by the connector source, ahead of description-only matches such as Meta Ads
 23. Open a disconnected Composio connector and click `Connect` or `Reconnect`; verify the returned `connect.composio.dev` authorization URL opens
 24. Open a connected Composio connector and verify connection rows show account identifiers and statuses such as `Active` or `Expired`
 25. Click `Try it!` on a connected or no-auth Composio connector and verify a new thread opens with a Composio-specific prompt and the `composio-cli` skill attached
@@ -3317,10 +3317,12 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - App and plugin enable/disable actions update their local card state after a successful config write
 - Plugin detail shows bundled MCP login state and can launch MCP OAuth for `notLoggedIn` servers
 - Disconnected apps are labeled `Login`; connected apps are labeled `Manage`
-- The Composio tab reuses the authenticated local Composio CLI state and does not require a separate app-specific login
+- The Composio tab uses the installed Composio CLI, preferring `CODEXUI_COMPOSIO_COMMAND` when set and otherwise `~/.composio/composio` or `composio` on `PATH`
 - The Composio install action uses the official installer and produces a working `~/.composio/composio` binary
-- The Composio login action opens a new tab from the click, starts the CLI in non-browser mode with `composio login --no-browser -y`, then navigates that tab to the returned auth URL
+- The Composio login action opens a new tab from the click, starts the installed `composio login --no-browser -y`, then navigates that tab to the returned auth URL
 - Composio connector cards and detail views show concrete connector details, connection rows, and useful tool samples
+- Composio search prioritizes exact slug/name matches above connectors that only mention the query in their description
+- Unit coverage verifies that Composio exact query matches outrank description-only matches and that gateway connector search sends `query`, `cursor`, and `limit` params expected by the server
 - Connected or no-auth Composio connectors expose `Try it!`, creating a new chat with the `composio-cli` skill attached
 - Composio pagination supports page-by-page loading with a clear `Load more` path and cursor-based page continuation
 - Plugin install opens the first required app login/manage page before falling back to bundled MCP OAuth login
@@ -3335,6 +3337,68 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 #### Rollback/Cleanup
 - Re-enable any app or plugin disabled during testing
 - Uninstall any plugin installed only for this test
+
+---
+
+### Skills tab npx skills search
+
+#### Feature/Change Name
+The Skills tab includes a registry search panel backed by `npx skills find`, shows matching skill cards, and installs selected registry results with `npx skills add`.
+
+#### Prerequisites/Setup
+1. Dev server running at `http://127.0.0.1:4173`
+2. Network access available for `npx skills find`
+3. `npx` can run the published `skills` package
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. Open `http://127.0.0.1:4173/#/skills`
+2. Verify the `Skills` tab is selected by default; open `http://127.0.0.1:4173/#/skills?tab=plugins`, then click `Skills` and verify the URL updates to `?tab=skills`
+3. Verify the `Find skills` header shows a `Skills directory` link on the right that opens `https://skills.anyclaw.store/` in a new tab
+4. In `Find skills`, type a query such as `browser`
+5. Click `Search`
+6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
+7. Verify `Search results (count)` appears above `Installed skills (count)`
+8. Verify each registry result card shows its install count metadata, such as `1.2K installs`, even when a GitHub `SKILL.md` description is shown
+9. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
+10. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill> --yes --global`
+11. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
+12. Switch to dark theme and repeat the search visibility check
+13. Search for an already-installed skill and verify its search result shows `Installed`
+14. Verify installed matches in search results keep their remote registry owner/details while showing the `Installed` badge
+15. Open the installed search result and verify the modal reads the local installed `SKILL.md`, exposes `Uninstall`, and does not show the registry install flow
+16. Open a local-only installed skill and verify the modal does not show a dead `View on GitHub` link when no external URL is available
+17. Verify cards in the `Installed skills (count)` section do not show `Installed`, `Disabled`, or repeated `local` owner labels, while search result cards can still show installed state and registry owner details
+18. Verify installed cards show local `SKILL.md` descriptions when the installed skill has frontmatter or readable markdown content
+19. Verify Find skills result cards do not show the local folder browse icon; Browse files remains available inside the installed local modal
+
+#### Expected Results
+- Search results are parsed from the real `npx skills find` output, not a static catalog
+- The Skills directory link is visible beside Find skills in light and dark theme and opens the public directory in a new tab
+- Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
+- Registry install responses only return `ok: true` when the local installed `SKILL.md` path is found and validates successfully
+- The UI treats a missing returned path or missing post-refresh local skill as an install failure instead of showing the remote registry card as installed
+- GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
+- Search result cards keep the registry install count visible as card metadata even when GitHub enrichment replaces the fallback description
+- GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
+- The search UI does not replace or hide local installed skills
+- Installed matching results show the existing `Installed` badge and can be opened like local skills
+- Installed detection uses the same installed skills source as the Skills Hub list, including RPC/plugin/shared skills and not only the base skills directory
+- Installed search result cards keep remote registry ownership/content but include local installed state and path for actions
+- Newly installed registry results are reloaded from the local installed skills source before appearing in the Installed skills section
+- Opening an installed search result uses the local installed skill record/path, so local content, uninstall, enable/disable, browse, and try actions behave the same as the Installed skills section
+- Local-only installed skills hide the external GitHub link when no URL is available
+- Installed skills section cards hide redundant installed/disabled status labels
+- Installed skills section cards hide the repeated local owner label; registry search cards keep owner/repository labels to distinguish remote results
+- Installed skill descriptions come from the local installed `SKILL.md`, so installed cards are useful without opening each modal
+- Installed entries are assembled concurrently so reading local `SKILL.md` descriptions does not add one file-read round trip per installed skill
+- Opening or switching to the Skills tab lists MCP servers without forcing an MCP reload; the top-level Refresh button remains the explicit reload action
+- The top-level Refresh button only shows `Refreshing...` for explicit user-triggered refreshes, not for ordinary initial tab loading
+- Find skills cards hide local folder browse actions to avoid mixing remote registry cards with local-only card controls
+- Light theme and dark theme keep the search panel, cards, and modal readable
+
+#### Rollback/Cleanup
+- Uninstall any skill installed only for this test
 
 ---
 

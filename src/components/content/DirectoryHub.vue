@@ -6,8 +6,8 @@
         <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
       </div>
       <div class="directory-header-actions">
-        <button class="directory-refresh" type="button" :disabled="isActiveLoading" @click="refreshActiveTab">
-          {{ isActiveLoading ? 'Refreshing...' : 'Refresh' }}
+        <button class="directory-refresh" type="button" :disabled="isManualRefreshInFlight" @click="manualRefreshActiveTab">
+          {{ isManualRefreshInFlight ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
     </div>
@@ -234,14 +234,14 @@
           <p class="directory-empty-text">Composio CLI is not installed in this environment.</p>
           <div class="directory-card-actions">
             <button class="directory-action primary" type="button" :disabled="isInstallingComposio" @click="installComposioCli">
-              {{ isInstallingComposio ? 'Installing...' : 'Install' }}
+              {{ isInstallingComposio ? 'Installing...' : 'Install Composio' }}
             </button>
           </div>
         </div>
       </div>
       <div v-else-if="!composioStatus.authenticated" class="directory-empty">
         <div class="directory-empty-copy">
-          <p class="directory-empty-text">Composio CLI is installed but not logged in.</p>
+          <p class="directory-empty-text">Composio is available but not logged in.</p>
           <div class="directory-card-actions">
             <button class="directory-action primary" type="button" :disabled="isStartingComposioLogin" @click="startComposioCliLogin">
               {{ isStartingComposioLogin ? 'Opening...' : 'Login' }}
@@ -431,7 +431,8 @@
                   <h4 class="directory-detail-heading">Apps</h4>
                   <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
                     <span>{{ app.name }}</span>
-                    <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ app.needsAuth ? 'Login' : 'Manage' }}</button>
+                    <span v-if="isPluginDetailAppUnavailable(app)" class="directory-auth-status is-warning">GPT Plus account required</span>
+                    <button v-else-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ app.needsAuth ? 'Login' : 'Manage' }}</button>
                   </div>
                 </div>
                 <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
@@ -484,13 +485,21 @@
               {{ isPluginActionInFlight ? 'Uninstalling...' : 'Uninstall' }}
             </button>
             <button
-              v-else-if="selectedPlugin"
+              v-else-if="selectedPlugin && !selectedPluginInstallUnavailable"
               class="directory-action primary"
               type="button"
               :disabled="isPluginActionInFlight || selectedPlugin.installPolicy === 'NOT_AVAILABLE' || selectedPluginRequiresMissingApp"
               @click="installSelectedPlugin"
             >
               {{ selectedPluginRequiresMissingApp ? 'ChatGPT Plus' : isPluginActionInFlight ? 'Installing...' : 'Install' }}
+            </button>
+            <button
+              v-else-if="selectedPlugin"
+              class="directory-action"
+              type="button"
+              disabled
+            >
+              GPT Plus account required
             </button>
             <button
               v-if="selectedPlugin && selectedPlugin.installed"
@@ -620,6 +629,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getDirectoryComposioStatus,
   getMethodCatalog,
@@ -648,10 +658,10 @@ import {
   type DirectoryPluginDetail,
   type DirectoryPluginSummary,
 } from '../../api/codexGateway'
+import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
 import SkillsHub from './SkillsHub.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
-type DirectorySortMode = 'popular' | 'name' | 'date'
 const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
 const COMPOSIO_PAGE_LIMIT = 50
 
@@ -700,11 +710,6 @@ const POPULAR_MCP_NAME_BONUSES: Array<[RegExp, number]> = [
   [/(github|gitlab|linear|slack|notion|filesystem|browser|computer|web|postgres|sqlite|database)/i, 120],
   [/(search|drive|docs|calendar|terminal|shell|deploy|cloud|memory)/i, 55],
 ]
-const POPULAR_COMPOSIO_NAME_BONUSES: Array<[RegExp, number]> = [
-  [/(gmail|google calendar|google docs|google sheets|google drive|github|slack|notion|linear|outlook|supabase)/i, 140],
-  [/(email|calendar|document|sheet|drive|repo|issue|message|project|database|crm|deploy)/i, 50],
-]
-
 const props = defineProps<{
   cwd?: string
   threadId?: string
@@ -725,6 +730,9 @@ const emit = defineEmits<{
   'try-item': [payload: DirectoryTryItemPayload]
 }>()
 
+const route = useRoute()
+const router = useRouter()
+
 const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
   { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
@@ -732,7 +740,15 @@ const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'skills', label: 'Skills', subtitle: 'MCPs first, then installed skills and GitHub sync state.' },
 ]
 
-const activeTab = ref<DirectoryTab>('plugins')
+function isDirectoryTab(value: unknown): value is DirectoryTab {
+  return value === 'plugins' || value === 'apps' || value === 'composio' || value === 'skills'
+}
+
+function tabFromRoute(): DirectoryTab {
+  return isDirectoryTab(route.query.tab) ? route.query.tab : 'skills'
+}
+
+const activeTab = ref<DirectoryTab>(tabFromRoute())
 const methodSet = ref<Set<string>>(new Set())
 const methodsLoaded = ref(false)
 const plugins = ref<DirectoryPluginSummary[]>([])
@@ -753,6 +769,7 @@ const isLoadingApps = ref(false)
 const isLoadingComposio = ref(false)
 const isLoadingMcps = ref(false)
 const isReloadingMcps = ref(false)
+const isManualRefreshInFlight = ref(false)
 const isMcpSectionOpen = ref(true)
 const pluginError = ref('')
 const appError = ref('')
@@ -790,13 +807,6 @@ const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has(
 const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
 const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/login'))
 const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length > 0)
-const isActiveLoading = computed(() =>
-  activeTab.value === 'plugins' ? isLoadingPlugins.value
-    : activeTab.value === 'apps' ? isLoadingApps.value
-      : activeTab.value === 'composio' ? isLoadingComposio.value
-      : activeTab.value === 'skills' ? isLoadingMcps.value
-        : false,
-)
 const selectedPluginDescription = computed(() =>
   selectedPluginDetail.value?.description ||
   selectedPluginDetail.value?.summary.longDescription ||
@@ -824,9 +834,17 @@ const selectedPluginRequiresMissingApp = computed(() => {
     return !hasMatchingId && !hasMatchingName
   })
 })
+const selectedPluginInstallUnavailable = computed(() =>
+  selectedPlugin.value?.installPolicy === 'NOT_AVAILABLE' ||
+  (selectedPluginDetail.value?.apps.some((app) => isPluginDetailAppUnavailable(app)) ?? false),
+)
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
-const visibleComposioConnectors = computed(() => sortComposioConnectors(filterComposioConnectors(composioConnectors.value, composioSearchQuery.value), composioSortMode.value))
+const visibleComposioConnectors = computed(() => sortComposioConnectors(
+  filterComposioConnectors(composioConnectors.value, composioSearchQuery.value),
+  composioSortMode.value,
+  composioSearchQuery.value,
+))
 const visibleMcpServers = computed(() => sortMcpServers(mcpServers.value, 'popular'))
 const hasMoreComposioConnectors = computed(() => composioNextCursor.value !== null)
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
@@ -843,6 +861,47 @@ const composioWorkspaceSummary = computed(() => {
 
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function normalizePluginAssociationKey(value: string): string {
+  return normalizeSearch(value)
+    .replace(/\s+\((synced|legacy)\)\s*$/iu, '')
+    .replace(/\s+\(.*?\)\s*$/u, '')
+    .replace(/[-_]+/gu, ' ')
+    .replace(/\s+plugin$/iu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function pluginAssociationKeys(...values: string[]): string[] {
+  const keys = new Set<string>()
+  for (const value of values) {
+    const normalized = normalizePluginAssociationKey(value)
+    if (!normalized) continue
+    keys.add(normalized)
+    keys.add(normalized.replace(/\s+/gu, ''))
+  }
+  return Array.from(keys)
+}
+
+function isUnavailableApp(app: DirectoryAppInfo): boolean {
+  return !app.isAccessible && app.installUrl.trim().length === 0
+}
+
+function findDirectoryAppForPluginApp(app: DirectoryPluginAppSummary): DirectoryAppInfo | null {
+  const id = app.id.trim()
+  if (id) {
+    const byId = apps.value.find((row) => row.id === id)
+    if (byId) return byId
+  }
+  const appKeys = pluginAssociationKeys(app.name)
+  return apps.value.find((row) => pluginAssociationKeys(row.name).some((key) => appKeys.includes(key))) ?? null
+}
+
+function isPluginDetailAppUnavailable(app: DirectoryPluginAppSummary): boolean {
+  const directoryApp = findDirectoryAppForPluginApp(app)
+  if (directoryApp) return isUnavailableApp(directoryApp)
+  return app.needsAuth && app.installUrl.trim().length === 0
 }
 
 function includesSearch(parts: Array<string | null | undefined>, query: string): boolean {
@@ -992,23 +1051,6 @@ function mcpPopularScore(server: DirectoryMcpServerStatus): number {
   )
 }
 
-function composioPopularScore(connector: DirectoryComposioConnector): number {
-  return (
-    (connector.activeCount * 1_000) +
-    (connector.isNoAuth ? 300 : 0) +
-    (connector.toolsCount * 3) +
-    (connector.triggersCount * 4) +
-    bonusForName(`${connector.name} ${connector.slug} ${connector.description}`, POPULAR_COMPOSIO_NAME_BONUSES)
-  )
-}
-
-function composioConnectionRank(connector: DirectoryComposioConnector): number {
-  if (connector.activeCount > 0) return 0
-  if (connector.totalConnections > 0) return 1
-  if (connector.isNoAuth) return 2
-  return 3
-}
-
 function sortPlugins(rows: DirectoryPluginSummary[], sortMode: DirectorySortMode): DirectoryPluginSummary[] {
   if (sortMode === 'name') return [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName))
   if (sortMode === 'date') return [...rows]
@@ -1019,20 +1061,6 @@ function sortApps(rows: DirectoryAppInfo[], sortMode: DirectorySortMode): Direct
   if (sortMode === 'name') return [...rows].sort((a, b) => a.name.localeCompare(b.name))
   if (sortMode === 'date') return [...rows].sort((a, b) => a.catalogRank - b.catalogRank)
   return [...rows].sort((a, b) => (appPopularScore(b) - appPopularScore(a)) || a.name.localeCompare(b.name))
-}
-
-function sortComposioConnectors(rows: DirectoryComposioConnector[], sortMode: DirectorySortMode): DirectoryComposioConnector[] {
-  if (sortMode === 'name') {
-    return [...rows].sort((a, b) => (
-      composioConnectionRank(a) - composioConnectionRank(b)
-    ) || a.name.localeCompare(b.name))
-  }
-  if (sortMode === 'date') {
-    return [...rows].sort((a, b) => composioConnectionRank(a) - composioConnectionRank(b))
-  }
-  return [...rows].sort((a, b) => (
-    composioConnectionRank(a) - composioConnectionRank(b)
-  ) || (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
 
 function sortMcpServers(rows: DirectoryMcpServerStatus[], sortMode: DirectorySortMode): DirectoryMcpServerStatus[] {
@@ -1187,7 +1215,11 @@ async function loadPlugins(): Promise<void> {
   pluginError.value = ''
   try {
     const cwd = props.cwd?.trim()
-    plugins.value = await listDirectoryPlugins(cwd ? [cwd] : undefined)
+    const [nextPlugins] = await Promise.all([
+      listDirectoryPlugins(cwd ? [cwd] : undefined),
+      supportsApps.value ? loadApps() : Promise.resolve(),
+    ])
+    plugins.value = nextPlugins
   } catch (error) {
     pluginError.value = error instanceof Error ? error.message : 'Failed to load plugins'
   } finally {
@@ -1271,13 +1303,26 @@ async function refreshMcpStatusesForPluginDetail(): Promise<void> {
   }
 }
 
-function refreshActiveTab(): void {
+function refreshActiveTab(forceReload = false): void {
   if (activeTab.value === 'plugins') void loadPlugins()
   if (activeTab.value === 'apps') void loadApps()
   if (activeTab.value === 'composio') void loadComposio()
   if (activeTab.value === 'skills') {
-    if (supportsMcpReload.value) void reloadMcps()
+    if (forceReload && supportsMcpReload.value) void reloadMcps()
     else void loadMcps()
+  }
+}
+
+async function manualRefreshActiveTab(): Promise<void> {
+  isManualRefreshInFlight.value = true
+  try {
+    if (activeTab.value === 'plugins') await loadPlugins()
+    else if (activeTab.value === 'apps') await loadApps()
+    else if (activeTab.value === 'composio') await loadComposio()
+    else if (activeTab.value === 'skills' && supportsMcpReload.value) await reloadMcps()
+    else if (activeTab.value === 'skills') await loadMcps()
+  } finally {
+    isManualRefreshInFlight.value = false
   }
 }
 
@@ -1511,7 +1556,17 @@ function toggleMcpExpanded(name: string): void {
   expandedMcpNames.value = next
 }
 
-watch(activeTab, () => refreshActiveTab())
+watch(activeTab, (tab) => {
+  if (route.name === 'skills' && route.query.tab !== tab) {
+    void router.replace({ name: 'skills', query: { ...route.query, tab } })
+  }
+  refreshActiveTab()
+})
+watch(() => route.query.tab, () => {
+  if (route.name !== 'skills') return
+  const tab = tabFromRoute()
+  if (activeTab.value !== tab) activeTab.value = tab
+})
 watch(composioSearchQuery, () => {
   if (activeTab.value !== 'composio') return
   composioConnectors.value = []
@@ -1528,12 +1583,12 @@ watch(() => props.cwd, () => {
   if (activeTab.value === 'plugins') void loadPlugins()
 })
 watch(() => props.threadId, () => {
-  if (activeTab.value === 'apps') void loadApps()
+  if (activeTab.value === 'apps' || activeTab.value === 'plugins') void loadApps()
 })
 
 onMounted(async () => {
   await loadMethods()
-  await loadPlugins()
+  refreshActiveTab()
 })
 </script>
 

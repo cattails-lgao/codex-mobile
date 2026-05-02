@@ -1,5 +1,11 @@
 # Log
 
+## [2026-05-02] ingest | Directory Hub Composio and Skills search
+- Added source: `raw/features/directory-hub-composio-skills-search.md`.
+- Created wiki page: `concepts/directory-hub-composio-skills.md`.
+- Documents: Skills tab default/query routing, MCP placement/reload behavior, `npx skills find/add` semantics, Composio CLI-backed connector behavior, search-ranking edge cases, and verification coverage.
+- Updated `overview.md`, `entities/codex-web-local.md`, and `index.md`.
+
 ## [2026-04-26] ingest | skills route UI and first-launch plugins card
 - Added source: `raw/features/skills-route-ui-and-first-launch-card.md`.
 - Created wiki page: `concepts/skills-route-ui.md`.
