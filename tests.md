@@ -4162,11 +4162,13 @@ Managed worktree threads remain visible under their matching canonical workspace
 2. Scroll to the `codex-web-local` project.
 3. Confirm the project includes the main-root thread and managed worktree threads.
 4. Confirm worktree rows still show the worktree icon.
-5. Hover any shortened path-like duplicate project title and confirm the tooltip shows the full project path, not only the friendly label.
-6. Switch to dark theme and repeat steps 1-5.
+5. Confirm unrelated `.git/worktrees` rows with the same leaf folder name are not grouped into this project.
+6. Hover any shortened path-like duplicate project title and confirm the tooltip shows the full project path, not only the friendly label.
+7. Switch to dark theme and repeat steps 1-6.
 
 #### Expected Results
 - Managed worktree threads with the same leaf folder name are not split into hidden path-like project groups.
+- Generic `.git/worktrees` rows are not treated as managed Codex worktrees for project-root grouping.
 - The canonical `codex-web-local` project shows both main-root and worktree threads.
 - Path-like project tooltips expose the full project path.
 - Project rows and worktree icons remain readable in light and dark themes.

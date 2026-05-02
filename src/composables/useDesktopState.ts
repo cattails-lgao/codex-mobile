@@ -1138,7 +1138,7 @@ function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: 
     for (const thread of group.threads) {
       const normalizedCwd = normalizePathForUi(thread.cwd).trim()
       const leafName = toProjectName(normalizedCwd)
-      if (thread.hasWorktree && workspaceRootCountsByLeafName.get(leafName) === 1) continue
+      if (isManagedCodexWorktreePath(normalizedCwd) && workspaceRootCountsByLeafName.get(leafName) === 1) continue
       addPath(thread.cwd)
     }
   }
@@ -1148,6 +1148,10 @@ function collectDuplicateProjectLeafNames(groups: UiProjectGroup[], rootsState: 
     if (paths.size > 1) duplicateLeafNames.add(leafName)
   }
   return duplicateLeafNames
+}
+
+function isManagedCodexWorktreePath(value: string): boolean {
+  return value.includes('/.codex/worktrees/')
 }
 
 function disambiguateProjectGroupsByCwd(
@@ -1177,7 +1181,7 @@ function disambiguateProjectGroupsByCwd(
     for (const thread of group.threads) {
       const normalizedCwd = normalizePathForUi(thread.cwd).trim()
       const leafName = toProjectName(normalizedCwd)
-      const isCanonicalWorktreeThread = thread.hasWorktree && uniqueWorkspaceRootLeafNames.has(leafName)
+      const isCanonicalWorktreeThread = isManagedCodexWorktreePath(normalizedCwd) && uniqueWorkspaceRootLeafNames.has(leafName)
       const projectName = normalizedCwd && duplicateLeafNames.has(leafName) && !isCanonicalWorktreeThread
         ? normalizedCwd
         : group.projectName

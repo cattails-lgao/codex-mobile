@@ -161,6 +161,28 @@ describe('filterGroupsByWorkspaceRoots', () => {
       ['codex-web-local', ['main-chat', 'worktree-chat']],
     ])
   })
+
+  it('does not group unrelated git worktrees under a same-leaf workspace root project', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'codex-web-local',
+        threads: [
+          thread('main-chat', '/Users/igor/Git-projects/codex-web-local'),
+          thread('other-git-worktree-chat', '/tmp/other/.git/worktrees/codex-web-local', { hasWorktree: true }),
+        ],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/Users/igor/Git-projects/codex-web-local'],
+      labels: {},
+      active: ['/Users/igor/Git-projects/codex-web-local'],
+      projectOrder: ['/Users/igor/Git-projects/codex-web-local'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
+      ['/Users/igor/Git-projects/codex-web-local', ['main-chat']],
+    ])
+  })
 })
 
 describe('workspace roots project persistence helpers', () => {
