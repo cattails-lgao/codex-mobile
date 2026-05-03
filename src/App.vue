@@ -512,7 +512,7 @@
               @update:model-value="onSelectHeaderTerminalCommand"
             />
             <HeaderGitBranchDropdown
-              v-if="route.name === 'thread' && selectedThreadId"
+              v-if="canShowContentHeaderBranchDropdown"
               class="content-header-branch-dropdown"
               :current-branch="currentThreadBranch"
               :head-sha="currentThreadHeadSha"
@@ -1440,6 +1440,10 @@ const canShowTerminalToggle = computed(() => (
     (isHomeRoute.value && composerCwd.value.length > 0) ||
     (route.name === 'thread' && selectedThreadId.value.length > 0)
   )
+))
+const canShowContentHeaderBranchDropdown = computed(() => (
+  (route.name === 'thread' && selectedThreadId.value.length > 0) ||
+  (isHomeRoute.value && isNewThreadCwdGitRepo.value)
 ))
 const isComposerTerminalOpen = computed(() => (
   isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
@@ -2852,7 +2856,7 @@ function onSelectNewWorktreeBranch(branch: string): void {
 
 async function loadThreadBranches(cwd: string): Promise<void> {
   const targetCwd = cwd.trim()
-  if (!targetCwd || route.name !== 'thread') {
+  if (!targetCwd) {
     threadBranchOptions.value = []
     currentThreadBranch.value = null
     currentThreadHeadSha.value = null
@@ -4015,9 +4019,10 @@ watch(
 )
 
 watch(
-  () => [route.name, composerCwd.value] as const,
-  ([routeName, cwd]) => {
-    if (routeName !== 'thread') {
+  () => [route.name, composerCwd.value, isNewThreadCwdGitRepo.value] as const,
+  ([routeName, cwd, isNewThreadGitRepo]) => {
+    const shouldLoadBranches = routeName === 'thread' || (routeName === 'home' && isNewThreadGitRepo)
+    if (!shouldLoadBranches) {
       threadBranchOptions.value = []
       currentThreadBranch.value = null
       currentThreadHeadSha.value = null
