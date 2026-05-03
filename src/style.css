@@ -799,6 +799,73 @@
   @apply text-zinc-900;
 }
 
+:root.dark .header-git-trigger {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .header-git-dropdown.is-review-open .header-git-trigger {
+  @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:bg-white;
+}
+
+:root.dark .header-git-menu {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .header-git-review-row,
+:root.dark .header-git-branch-button,
+:root.dark .header-git-commit {
+  @apply text-zinc-200;
+}
+
+:root.dark .header-git-review-row:hover,
+:root.dark .header-git-branch-expand:hover,
+:root.dark .header-git-branch-button:hover,
+:root.dark .header-git-commit:hover,
+:root.dark .header-git-commit.is-current,
+:root.dark .header-git-branch-button.is-current {
+  @apply bg-zinc-800;
+}
+
+:root.dark .header-git-commit.is-current {
+  @apply ring-zinc-600;
+}
+
+:root.dark .header-git-state,
+:root.dark .header-git-commits {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .header-git-state-value {
+  @apply text-zinc-100;
+}
+
+:root.dark .header-git-state-label,
+:root.dark .header-git-state-meta,
+:root.dark .header-git-branch-meta,
+:root.dark .header-git-commit-top,
+:root.dark .header-git-empty,
+:root.dark .header-git-commits-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .header-git-search {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100 focus:border-zinc-600;
+}
+
+:root.dark .header-git-commit-top code,
+:root.dark .header-git-branch-meta {
+  @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .header-git-status {
+  @apply bg-amber-950/40 text-amber-300;
+}
+
+:root.dark .header-git-status.is-error,
+:root.dark .header-git-commits-empty.is-error {
+  @apply bg-red-950/40 text-red-300;
+}
+
 :root.dark .review-pane {
   @apply border-zinc-700 bg-zinc-900;
 }

@@ -305,11 +305,26 @@ export type WorktreeCreateResult = {
 export type WorktreeBranchOption = {
   value: string
   label: string
+  isCurrent?: boolean
+  isRemote?: boolean
 }
 
 export type GitBranchState = {
   currentBranch: string | null
+  headSha: string | null
+  headSubject: string | null
+  headDate: string | null
+  detached: boolean
+  dirty: boolean
+  gitRoot: string
   options: WorktreeBranchOption[]
+}
+
+export type GitCommitOption = {
+  sha: string
+  shortSha: string
+  subject: string
+  date: string
 }
 
 export type GitRepositoryStatus = {
@@ -2377,7 +2392,7 @@ export async function getWorktreeBranchOptions(sourceCwd: string): Promise<Workt
 export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
   const normalizedCwd = cwd.trim()
   if (!normalizedCwd) {
-    return { currentBranch: null, options: [] }
+    return { currentBranch: null, headSha: null, headSubject: null, headDate: null, detached: false, dirty: false, gitRoot: '', options: [] }
   }
   const query = new URLSearchParams({ cwd: normalizedCwd })
   const response = await fetch(`/codex-api/git/branches?${query.toString()}`)
@@ -2405,12 +2420,27 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
     options.push({
       value,
       label: label || value,
+      isCurrent: option.isCurrent === true,
+      isRemote: option.isRemote === true,
     })
   }
   if (currentBranch && !seen.has(currentBranch)) {
-    options.unshift({ value: currentBranch, label: currentBranch })
+    options.unshift({ value: currentBranch, label: currentBranch, isCurrent: true })
   }
-  return { currentBranch, options }
+  const headShaRaw = record.headSha
+  const headSubjectRaw = record.headSubject
+  const headDateRaw = record.headDate
+  const gitRootRaw = record.gitRoot
+  return {
+    currentBranch,
+    headSha: typeof headShaRaw === 'string' && headShaRaw.trim() ? headShaRaw.trim() : null,
+    headSubject: typeof headSubjectRaw === 'string' && headSubjectRaw.trim() ? headSubjectRaw.trim() : null,
+    headDate: typeof headDateRaw === 'string' && headDateRaw.trim() ? headDateRaw.trim() : null,
+    detached: record.detached === true,
+    dirty: record.dirty === true,
+    gitRoot: typeof gitRootRaw === 'string' ? normalizePathForUi(gitRootRaw) : '',
+    options,
+  }
 }
 
 export async function getGitRepositoryStatus(cwd: string): Promise<GitRepositoryStatus> {
@@ -2448,6 +2478,57 @@ export async function checkoutGitBranch(cwd: string, branch: string): Promise<st
   }
   const branchName = payload.data?.currentBranch
   return typeof branchName === 'string' && branchName.trim() ? branchName.trim() : null
+}
+
+export async function getGitBranchCommits(cwd: string, branch: string): Promise<GitCommitOption[]> {
+  const normalizedCwd = cwd.trim()
+  const normalizedBranch = branch.trim()
+  if (!normalizedCwd || !normalizedBranch) return []
+  const query = new URLSearchParams({ cwd: normalizedCwd, branch: normalizedBranch })
+  const response = await fetch(`/codex-api/git/branch-commits?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load branch commits')
+  }
+  const rawList = Array.isArray(payload.data) ? payload.data : []
+  return rawList.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const record = item as Record<string, unknown>
+    const sha = typeof record.sha === 'string' ? record.sha.trim() : ''
+    const shortSha = typeof record.shortSha === 'string' ? record.shortSha.trim() : ''
+    const subject = typeof record.subject === 'string' ? record.subject.trim() : ''
+    const date = typeof record.date === 'string' ? record.date.trim() : ''
+    if (!sha || !shortSha) return []
+    return [{ sha, shortSha, subject: subject || shortSha, date }]
+  })
+}
+
+export async function checkoutGitCommit(cwd: string, sha: string): Promise<GitBranchState> {
+  const response = await fetch('/codex-api/git/checkout-commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cwd: cwd.trim(),
+      sha: sha.trim(),
+    }),
+  })
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to check out commit')
+  }
+  const record = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? (payload.data as Record<string, unknown>)
+    : {}
+  return {
+    currentBranch: typeof record.currentBranch === 'string' && record.currentBranch.trim() ? record.currentBranch.trim() : null,
+    headSha: typeof record.headSha === 'string' && record.headSha.trim() ? record.headSha.trim() : null,
+    headSubject: typeof record.headSubject === 'string' && record.headSubject.trim() ? record.headSubject.trim() : null,
+    headDate: typeof record.headDate === 'string' && record.headDate.trim() ? record.headDate.trim() : null,
+    detached: record.detached === true,
+    dirty: record.dirty === true,
+    gitRoot: typeof record.gitRoot === 'string' ? normalizePathForUi(record.gitRoot) : '',
+    options: [],
+  }
 }
 
 export async function getReviewSnapshot(

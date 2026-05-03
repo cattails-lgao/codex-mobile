@@ -2498,6 +2498,40 @@ function normalizeBranchRefName(value: string): string {
   return trimmed
 }
 
+async function readGitHeaderState(cwd: string): Promise<{
+  currentBranch: string | null
+  headSha: string | null
+  headSubject: string | null
+  headDate: string | null
+  detached: boolean
+  dirty: boolean
+  gitRoot: string
+}> {
+  const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+  const currentBranchRaw = await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })
+  const currentBranch = currentBranchRaw.trim() || null
+  const headShaRaw = await runCommandCapture('git', ['rev-parse', '--short=12', 'HEAD'], { cwd: gitRoot })
+  const headCommitRaw = await runCommandCapture('git', ['show', '-s', '--date=short', '--format=%cd%x09%s', 'HEAD'], { cwd: gitRoot })
+  const [headDate = '', ...headSubjectParts] = headCommitRaw.split('\t')
+  const statusRaw = await runCommandCapture('git', ['status', '--porcelain'], { cwd: gitRoot })
+  return {
+    currentBranch,
+    headSha: headShaRaw.trim() || null,
+    headSubject: headSubjectParts.join('\t').trim() || null,
+    headDate: headDate.trim() || null,
+    detached: !currentBranch,
+    dirty: statusRaw.trim().length > 0,
+    gitRoot,
+  }
+}
+
+async function assertCleanGitWorktree(repoRoot: string): Promise<void> {
+  const statusRaw = await runCommandCapture('git', ['status', '--porcelain'], { cwd: repoRoot })
+  if (statusRaw.trim()) {
+    throw new Error('Cannot switch checkout with uncommitted changes. Commit, stash, or discard local changes first.')
+  }
+}
+
 function extractBranchLockedWorktreePath(error: unknown, branchName: string): string {
   const message = getErrorMessage(error, '')
   if (!message || !branchName) return ''
@@ -5853,39 +5887,45 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          const currentBranchRaw = await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })
-          const currentBranch = currentBranchRaw.trim() || null
+          const state = await readGitHeaderState(gitRoot)
+          const currentBranch = state.currentBranch
           const output = await runCommandCapture(
             'git',
-            ['for-each-ref', '--format=%(committerdate:unix)\t%(refname)', 'refs/heads', 'refs/remotes'],
+            ['for-each-ref', '--format=%(committerdate:unix)\t%(refname)\t%(objectname)', 'refs/heads', 'refs/remotes'],
             { cwd: gitRoot },
           )
-          const branchActivityByName = new Map<string, number>()
+          const branchActivityByName = new Map<string, { timestamp: number; isRemote: boolean }>()
           for (const line of output.split('\n')) {
             const [rawTimestamp = '', rawRefName = ''] = line.split('\t')
             const normalized = normalizeBranchRefName(rawRefName)
             if (!normalized || normalized === 'origin/HEAD') continue
             const parsedTimestamp = Number.parseInt(rawTimestamp.trim(), 10)
             const timestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0
-            const current = branchActivityByName.get(normalized) ?? Number.MIN_SAFE_INTEGER
-            if (timestamp > current) {
-              branchActivityByName.set(normalized, timestamp)
+            const isRemote = rawRefName.trim().startsWith('refs/remotes/')
+            const current = branchActivityByName.get(normalized)
+            if (!current || timestamp > current.timestamp) {
+              branchActivityByName.set(normalized, { timestamp, isRemote })
             }
           }
           if (currentBranch && !branchActivityByName.has(currentBranch)) {
-            branchActivityByName.set(currentBranch, Number.MAX_SAFE_INTEGER)
+            branchActivityByName.set(currentBranch, { timestamp: Number.MAX_SAFE_INTEGER, isRemote: false })
           }
           const options = Array.from(branchActivityByName.entries())
-            .map(([value]) => ({ value, label: value }))
+            .map(([value, metadata]) => ({
+              value,
+              label: value,
+              isCurrent: value === currentBranch,
+              isRemote: metadata.isRemote,
+            }))
             .sort((a, b) => {
-              const aActivity = branchActivityByName.get(a.value) ?? 0
-              const bActivity = branchActivityByName.get(b.value) ?? 0
+              const aActivity = branchActivityByName.get(a.value)?.timestamp ?? 0
+              const bActivity = branchActivityByName.get(b.value)?.timestamp ?? 0
               if (bActivity !== aActivity) return bActivity - aActivity
               return a.value.localeCompare(b.value)
             })
           setJson(res, 200, {
             data: {
-              currentBranch,
+              ...state,
               options,
             },
           })
@@ -5966,6 +6006,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          await assertCleanGitWorktree(gitRoot)
           try {
             await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
           } catch (checkoutError) {
@@ -5976,10 +6017,73 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
             await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
           }
-          const currentBranch = (await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })).trim() || null
-          setJson(res, 200, { data: { currentBranch } })
+          setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to switch branch') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/git/branch-commits') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        const branch = (url.searchParams.get('branch') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!branch) {
+          setJson(res, 400, { error: 'Missing branch' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          await runCommandCapture('git', ['rev-parse', '--verify', `${branch}^{commit}`], { cwd: gitRoot })
+          const output = await runCommandCapture(
+            'git',
+            ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch],
+            { cwd: gitRoot },
+          )
+          const commits = output.split('\n').flatMap((line) => {
+            const [sha = '', shortSha = '', date = '', ...subjectParts] = line.split('\t')
+            const subject = subjectParts.join('\t').trim()
+            return sha.trim() && shortSha.trim()
+              ? [{ sha: sha.trim(), shortSha: shortSha.trim(), date: date.trim(), subject: subject || shortSha.trim() }]
+              : []
+          })
+          setJson(res, 200, { data: commits })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load branch commits') })
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/git/checkout-commit') {
+        const payload = await readJsonBody(req)
+        const record = asRecord(payload)
+        if (!record) {
+          setJson(res, 400, { error: 'Invalid body: expected object' })
+          return
+        }
+        const rawCwd = readNonEmptyString(record.cwd)
+        const sha = readNonEmptyString(record.sha)
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!sha) {
+          setJson(res, 400, { error: 'Missing commit' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          await assertCleanGitWorktree(gitRoot)
+          const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
+          await runCommand('git', ['checkout', '--detach', targetSha.trim()], { cwd: gitRoot })
+          setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to check out commit') })
         }
         return
       }

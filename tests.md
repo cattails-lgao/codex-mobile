@@ -178,6 +178,43 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+### Header Git branch dropdown with commit checkout
+
+#### Feature/Change Name
+Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, detached HEAD recovery, and recent commit checkout.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a thread whose `cwd` is inside a Git repository with at least two branches and several commits
+3. Ensure the repository is clean for successful checkout paths: `git -C <thread-cwd> status --porcelain`
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the Git dropdown in the thread header.
+2. Confirm the trigger shows the current branch, or the detached commit subject when HEAD is detached.
+3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
+4. Type part of a branch name in search and confirm the branch list filters.
+5. Select a different branch with a clean worktree and confirm the header updates to that branch.
+6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
+7. Select a commit and confirm the header changes to detached HEAD state with the commit subject as the main value and SHA/date metadata below it.
+8. Expand the branch containing the detached commit and confirm that commit row is marked `current`.
+9. From detached HEAD, select a branch and confirm the header recovers to normal branch state.
+10. Create an uncommitted change, try to switch branch or commit, and confirm the dropdown shows a dirty-worktree error instead of switching.
+11. Switch to dark theme and repeat steps 1, 2, 4, 6, 8, and 10.
+
+#### Expected Results
+- The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
+- Branch switching and commit checkout only proceed when the Git worktree is clean.
+- Detached commit checkout is explicit in the header, shows the commit message, marks the active commit as current in expanded commit lists, and can recover by selecting any branch.
+- Loading and error messages remain visible in the dropdown without using browser alerts.
+- Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
+
+#### Rollback/Cleanup
+- Restore any dirty-worktree file changed for validation.
+- If left detached, run `git -C <thread-cwd> checkout <expected-branch>`.
+
+---
+
 ### Termux install without native PTY build
 
 #### Feature/Change Name
