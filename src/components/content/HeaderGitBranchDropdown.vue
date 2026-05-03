@@ -154,7 +154,7 @@ const detachedCommitMeta = computed(() => {
 const triggerLabel = computed(() => `Git branch: ${displayLabel.value}`)
 const disabled = computed(() => props.loading && props.branches.length === 0)
 const busy = computed(() => props.busy || props.loading)
-const statusMessage = computed(() => props.error || (props.dirty ? 'Uncommitted changes must be committed, stashed, or discarded before switching.' : ''))
+const statusMessage = computed(() => props.error || (props.dirty ? 'Tracked changes must be committed, stashed, or discarded before switching or resetting. Untracked files are allowed unless Git would overwrite them.' : ''))
 const statusKind = computed(() => props.error ? 'error' : 'info')
 const filteredBranches = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()

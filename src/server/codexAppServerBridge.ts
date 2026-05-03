@@ -2533,10 +2533,14 @@ async function readGitHeaderState(cwd: string): Promise<{
   }
 }
 
-async function assertCleanGitWorktree(repoRoot: string): Promise<void> {
+async function assertNoTrackedGitChanges(repoRoot: string): Promise<void> {
   const statusRaw = await runCommandCapture('git', ['status', '--porcelain'], { cwd: repoRoot })
-  if (statusRaw.trim()) {
-    throw new Error('Cannot switch branches or reset with uncommitted changes. Commit, stash, or discard local changes first.')
+  const trackedChanges = statusRaw
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line && !line.startsWith('?? '))
+  if (trackedChanges.length > 0) {
+    throw new Error('Cannot switch branches or reset with tracked uncommitted changes. Commit, stash, or discard tracked changes first. Untracked files are allowed unless Git would overwrite them.')
   }
 }
 
@@ -6014,7 +6018,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
-          await assertCleanGitWorktree(gitRoot)
+          await assertNoTrackedGitChanges(gitRoot)
           try {
             await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
           } catch (checkoutError) {
@@ -6101,7 +6105,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
-          await assertCleanGitWorktree(gitRoot)
+          await assertNoTrackedGitChanges(gitRoot)
           await assertLocalGitBranch(gitRoot, branch)
           const currentBranch = (await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })).trim()
           if (currentBranch && currentBranch !== branch) {

@@ -187,7 +187,7 @@ Thread header Git dropdown replaces the simple review action with branch search,
 1. Dev server running (`pnpm run dev`)
 2. Open a thread whose `cwd` is inside a Git repository with at least two branches and several commits
 3. Use a disposable local branch with at least two commits ahead of its reset target.
-4. Ensure the repository is clean for successful branch switch/reset paths: `git -C <thread-cwd> status --porcelain`
+4. Ensure the repository has no tracked uncommitted changes for successful branch switch/reset paths: `git -C <thread-cwd> status --porcelain`
 5. Light theme and dark theme are available from the appearance switcher
 
 #### Steps
@@ -200,12 +200,13 @@ Thread header Git dropdown replaces the simple review action with branch search,
 7. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
 8. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
 9. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
-10. Create an uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
-11. Switch to dark theme and repeat steps 1, 2, 4, 6, 9, and 10.
+10. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+11. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
+12. Switch to dark theme and repeat steps 1, 2, 4, 6, 9, 10, and 11.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
-- Branch switching and branch reset-to-commit only proceed when the Git worktree is clean.
+- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
 - Commit selection resets the local branch to that commit instead of detaching HEAD.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - The selected branch HEAD commit is marked `current` in expanded commit lists.
