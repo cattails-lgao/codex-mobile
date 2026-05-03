@@ -6090,26 +6090,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
             { cwd: gitRoot },
           )
-          const commits = []
-          for (const line of output.split('\n')) {
+          const commits = output.split('\n').flatMap((line) => {
             const [sha = '', shortSha = '', date = '', ...subjectParts] = line.split('\t')
             const subject = subjectParts.join('\t').trim()
-            const normalizedSha = sha.trim()
-            const normalizedShortSha = shortSha.trim()
-            if (!normalizedSha || !normalizedShortSha) continue
-            const isReachableFromBranch = await runCommandCapture(
-              'git',
-              ['merge-base', '--is-ancestor', normalizedSha, branch],
-              { cwd: gitRoot },
-            ).then(() => true).catch(() => false)
-            commits.push({
-              sha: normalizedSha,
-              shortSha: normalizedShortSha,
-              date: date.trim(),
-              subject: subject || normalizedShortSha,
-              isReachableFromBranch,
-            })
-          }
+            return sha.trim() && shortSha.trim()
+              ? [{ sha: sha.trim(), shortSha: shortSha.trim(), date: date.trim(), subject: subject || shortSha.trim() }]
+              : []
+          })
           setJson(res, 200, { data: commits })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to load branch commits') })

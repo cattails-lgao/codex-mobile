@@ -325,7 +325,6 @@ export type GitCommitOption = {
   shortSha: string
   subject: string
   date: string
-  isReachableFromBranch: boolean
 }
 
 export type GitRepositoryStatus = {
@@ -2500,7 +2499,7 @@ export async function getGitBranchCommits(cwd: string, branch: string): Promise<
     const subject = typeof record.subject === 'string' ? record.subject.trim() : ''
     const date = typeof record.date === 'string' ? record.date.trim() : ''
     if (!sha || !shortSha) return []
-    return [{ sha, shortSha, subject: subject || shortSha, date, isReachableFromBranch: record.isReachableFromBranch !== false }]
+    return [{ sha, shortSha, subject: subject || shortSha, date }]
   })
 }
 

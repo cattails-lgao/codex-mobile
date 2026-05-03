@@ -200,7 +200,7 @@ Thread header Git dropdown replaces the simple review action with branch search,
 7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
 8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
 9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
-10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current` and commits no longer reachable from the branch marked `saved`.
+10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
 11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
 12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
 13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
@@ -212,7 +212,6 @@ Thread header Git dropdown replaces the simple review action with branch search,
 - Commit selection resets the local branch to that commit instead of detaching HEAD.
 - Remote branch commit rows are inspectable but cannot trigger local branch reset.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
-- Commits visible only through reset-history refs are labeled `saved`.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
 - The selected branch HEAD commit is marked `current` in expanded commit lists.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
