@@ -16,7 +16,7 @@
 
     <div v-if="isOpen" class="header-git-menu-wrap">
       <div class="header-git-menu">
-        <button class="header-git-review-row" type="button" @click="emit('toggleReview')">
+        <button v-if="showReview" class="header-git-review-row" type="button" @click="emit('toggleReview')">
           <IconTablerFilePencil class="header-git-row-icon" />
           <span>{{ reviewOpen ? 'Review (Open)' : 'Review' }}</span>
         </button>
@@ -125,6 +125,7 @@ const props = defineProps<{
   busy: boolean
   error: string
   reviewOpen: boolean
+  showReview?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -139,6 +140,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 const isOpen = ref(false)
 const searchQuery = ref('')
 const expandedBranch = ref('')
+const showReview = computed(() => props.showReview !== false)
 
 const displayLabel = computed(() => {
   if (props.currentBranch) return props.currentBranch

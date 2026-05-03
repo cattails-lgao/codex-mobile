@@ -70,6 +70,52 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
 
+### Feature: Empty project new thread action
+
+#### Prerequisites
+- App server is running from this repository.
+- At least one workspace root is registered that has no threads.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the app in light theme.
+2. Find the empty project row in the sidebar that shows `No threads`.
+3. Click that project's new thread icon.
+4. Confirm the home composer opens and the folder dropdown is set to the empty project's workspace root.
+5. Switch to dark theme and repeat steps 2-4.
+
+#### Expected Results
+- The new thread icon works for projects with zero threads.
+- The new thread screen uses the clicked project's registered workspace root instead of leaving the folder blank or reusing another project.
+- Light and dark theme sidebar and composer surfaces remain readable.
+
+#### Rollback/Cleanup
+- No cleanup is required unless a test message is sent; delete that test thread if created.
+
+### Feature: Start new thread header Git branch dropdown
+
+#### Prerequisites
+- App server is running from this repository.
+- At least one Git-backed workspace folder is available in the Start new thread folder dropdown.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the app in light theme.
+2. Click the sidebar or header new thread icon to open Start new thread.
+3. Select a Git-backed folder.
+4. Confirm the header actions next to the terminal control show the Git checkout branch dropdown.
+5. Open the branch dropdown and confirm branch search/options are available.
+6. Switch to dark theme and repeat steps 2-5.
+
+#### Expected Results
+- Start new thread shows the same header Git checkout dropdown used by existing thread pages when the selected folder is a Git repository.
+- Switching the selected folder updates the dropdown branch state for that folder.
+- Non-Git folders do not show the Git checkout dropdown.
+- Light and dark theme header controls remain readable and aligned.
+
+#### Rollback/Cleanup
+- If a branch was switched during testing, switch back to the original branch before continuing.
+
 ### Feature: Telegram bot token stored in dedicated global file
 
 #### Prerequisites
