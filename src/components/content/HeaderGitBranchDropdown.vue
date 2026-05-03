@@ -24,6 +24,7 @@
         <div class="header-git-state">
           <span class="header-git-state-label">{{ detached ? 'Detached HEAD' : 'Current branch' }}</span>
           <span class="header-git-state-value">{{ displayLabel }}</span>
+          <span v-if="detachedCommitMeta" class="header-git-state-meta">{{ detachedCommitMeta }}</span>
         </div>
 
         <div v-if="statusMessage" class="header-git-status" :class="{ 'is-error': statusKind === 'error' }">
@@ -72,13 +73,17 @@
                 v-for="commit in commitsByBranch[branch.value] || []"
                 :key="commit.sha"
                 class="header-git-commit"
+                :class="{ 'is-current': isCurrentCommit(commit) }"
                 type="button"
                 :disabled="busy"
                 @click="emit('checkoutCommit', commit.sha)"
               >
                 <span class="header-git-commit-top">
                   <code>{{ commit.shortSha }}</code>
-                  <span>{{ commit.date }}</span>
+                  <span class="header-git-commit-meta">
+                    <span v-if="isCurrentCommit(commit)" class="header-git-branch-meta">current</span>
+                    <span>{{ commit.date }}</span>
+                  </span>
                 </span>
                 <span class="header-git-commit-subject">{{ commit.subject }}</span>
               </button>
@@ -108,6 +113,8 @@ import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 const props = defineProps<{
   currentBranch: string | null
   headSha: string | null
+  headSubject: string | null
+  headDate: string | null
   detached: boolean
   dirty: boolean
   branches: WorktreeBranchOption[]
@@ -135,8 +142,13 @@ const expandedBranch = ref('')
 
 const displayLabel = computed(() => {
   if (props.currentBranch) return props.currentBranch
+  if (props.headSubject) return props.headSubject
   if (props.headSha) return `Detached ${props.headSha}`
   return props.loading ? 'Loading branch...' : 'Detached HEAD'
+})
+const detachedCommitMeta = computed(() => {
+  if (!props.detached) return ''
+  return [props.headSha, props.headDate].filter(Boolean).join(' · ')
 })
 const triggerLabel = computed(() => `Git checkout: ${displayLabel.value}`)
 const disabled = computed(() => props.loading && props.branches.length === 0)
@@ -158,6 +170,12 @@ function toggleOpen(): void {
 function toggleBranchCommits(branch: string): void {
   expandedBranch.value = expandedBranch.value === branch ? '' : branch
   if (expandedBranch.value) emit('loadCommits', branch)
+}
+
+function isCurrentCommit(commit: GitCommitOption): boolean {
+  const headSha = props.headSha?.trim() ?? ''
+  if (!headSha) return false
+  return commit.sha === headSha || commit.shortSha === headSha || commit.sha.startsWith(headSha)
 }
 
 function onEscapeSearch(): void {
@@ -244,6 +262,10 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply block truncate font-medium text-zinc-800;
 }
 
+.header-git-state-meta {
+  @apply mt-0.5 block truncate text-[0.68rem] text-zinc-500;
+}
+
 .header-git-status {
   @apply mx-1 my-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800;
 }
@@ -309,8 +331,16 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply flex-col gap-0.5 rounded-md px-2 py-1.5 text-xs text-zinc-700 hover:bg-white disabled:cursor-wait;
 }
 
+.header-git-commit.is-current {
+  @apply bg-white ring-1 ring-zinc-300;
+}
+
 .header-git-commit-top {
   @apply flex items-center justify-between gap-2 text-[0.68rem] text-zinc-500;
+}
+
+.header-git-commit-meta {
+  @apply flex shrink-0 items-center gap-1.5;
 }
 
 .header-git-commit-top code {

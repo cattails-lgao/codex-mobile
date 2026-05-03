@@ -2501,6 +2501,8 @@ function normalizeBranchRefName(value: string): string {
 async function readGitHeaderState(cwd: string): Promise<{
   currentBranch: string | null
   headSha: string | null
+  headSubject: string | null
+  headDate: string | null
   detached: boolean
   dirty: boolean
   gitRoot: string
@@ -2509,10 +2511,14 @@ async function readGitHeaderState(cwd: string): Promise<{
   const currentBranchRaw = await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })
   const currentBranch = currentBranchRaw.trim() || null
   const headShaRaw = await runCommandCapture('git', ['rev-parse', '--short=12', 'HEAD'], { cwd: gitRoot })
+  const headCommitRaw = await runCommandCapture('git', ['show', '-s', '--date=short', '--format=%cd%x09%s', 'HEAD'], { cwd: gitRoot })
+  const [headDate = '', ...headSubjectParts] = headCommitRaw.split('\t')
   const statusRaw = await runCommandCapture('git', ['status', '--porcelain'], { cwd: gitRoot })
   return {
     currentBranch,
     headSha: headShaRaw.trim() || null,
+    headSubject: headSubjectParts.join('\t').trim() || null,
+    headDate: headDate.trim() || null,
     detached: !currentBranch,
     dirty: statusRaw.trim().length > 0,
     gitRoot,

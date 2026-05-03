@@ -191,20 +191,21 @@ Thread header Git dropdown replaces the simple review action with branch search,
 
 #### Steps
 1. In light theme, open the Git dropdown in the thread header.
-2. Confirm the trigger shows the current branch, or `Detached <short-sha>` when HEAD is detached.
+2. Confirm the trigger shows the current branch, or the detached commit subject when HEAD is detached.
 3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
 4. Type part of a branch name in search and confirm the branch list filters.
 5. Select a different branch with a clean worktree and confirm the header updates to that branch.
 6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
-7. Select a commit and confirm the header changes to detached HEAD state.
-8. From detached HEAD, select a branch and confirm the header recovers to normal branch state.
-9. Create an uncommitted change, try to switch branch or commit, and confirm the dropdown shows a dirty-worktree error instead of switching.
-10. Switch to dark theme and repeat steps 1, 2, 4, 6, and 9.
+7. Select a commit and confirm the header changes to detached HEAD state with the commit subject as the main value and SHA/date metadata below it.
+8. Expand the branch containing the detached commit and confirm that commit row is marked `current`.
+9. From detached HEAD, select a branch and confirm the header recovers to normal branch state.
+10. Create an uncommitted change, try to switch branch or commit, and confirm the dropdown shows a dirty-worktree error instead of switching.
+11. Switch to dark theme and repeat steps 1, 2, 4, 6, 8, and 10.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
 - Branch switching and commit checkout only proceed when the Git worktree is clean.
-- Detached commit checkout is explicit in the header and can recover by selecting any branch.
+- Detached commit checkout is explicit in the header, shows the commit message, marks the active commit as current in expanded commit lists, and can recover by selecting any branch.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 

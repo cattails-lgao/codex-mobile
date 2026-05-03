@@ -516,6 +516,8 @@
               class="content-header-branch-dropdown"
               :current-branch="currentThreadBranch"
               :head-sha="currentThreadHeadSha"
+              :head-subject="currentThreadHeadSubject"
+              :head-date="currentThreadHeadDate"
               :detached="isThreadDetachedHead"
               :dirty="isThreadWorktreeDirty"
               :branches="threadBranchOptions"
@@ -1290,6 +1292,8 @@ const isReviewPaneOpen = ref(false)
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
 const currentThreadHeadSha = ref<string | null>(null)
+const currentThreadHeadSubject = ref<string | null>(null)
+const currentThreadHeadDate = ref<string | null>(null)
 const isThreadDetachedHead = ref(false)
 const isThreadWorktreeDirty = ref(false)
 const threadBranchError = ref('')
@@ -2833,6 +2837,8 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     threadBranchOptions.value = []
     currentThreadBranch.value = null
     currentThreadHeadSha.value = null
+    currentThreadHeadSubject.value = null
+    currentThreadHeadDate.value = null
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
     threadBranchError.value = ''
@@ -2845,12 +2851,16 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     threadBranchOptions.value = state.options
     currentThreadBranch.value = state.currentBranch
     currentThreadHeadSha.value = state.headSha
+    currentThreadHeadSubject.value = state.headSubject
+    currentThreadHeadDate.value = state.headDate
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
   } catch {
     threadBranchOptions.value = []
     currentThreadBranch.value = null
     currentThreadHeadSha.value = null
+    currentThreadHeadSubject.value = null
+    currentThreadHeadDate.value = null
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
   } finally {
@@ -2858,9 +2868,11 @@ async function loadThreadBranches(cwd: string): Promise<void> {
   }
 }
 
-function applyThreadGitState(state: { currentBranch: string | null; headSha: string | null; detached: boolean; dirty: boolean }): void {
+function applyThreadGitState(state: { currentBranch: string | null; headSha: string | null; headSubject: string | null; headDate: string | null; detached: boolean; dirty: boolean }): void {
   currentThreadBranch.value = state.currentBranch
   currentThreadHeadSha.value = state.headSha
+  currentThreadHeadSubject.value = state.headSubject
+  currentThreadHeadDate.value = state.headDate
   isThreadDetachedHead.value = state.detached
   isThreadWorktreeDirty.value = state.dirty
 }
@@ -2878,6 +2890,8 @@ function onCheckoutContentHeaderBranch(value: string): void {
     .then((branch) => {
       currentThreadBranch.value = branch || targetBranch
       currentThreadHeadSha.value = null
+      currentThreadHeadSubject.value = null
+      currentThreadHeadDate.value = null
       isThreadDetachedHead.value = false
       isReviewPaneOpen.value = false
       return loadThreadBranches(cwd)
@@ -3988,6 +4002,8 @@ watch(
       threadBranchOptions.value = []
       currentThreadBranch.value = null
       currentThreadHeadSha.value = null
+      currentThreadHeadSubject.value = null
+      currentThreadHeadDate.value = null
       isThreadDetachedHead.value = false
       isThreadWorktreeDirty.value = false
       threadBranchCommitsByBranch.value = {}

@@ -312,6 +312,8 @@ export type WorktreeBranchOption = {
 export type GitBranchState = {
   currentBranch: string | null
   headSha: string | null
+  headSubject: string | null
+  headDate: string | null
   detached: boolean
   dirty: boolean
   gitRoot: string
@@ -2390,7 +2392,7 @@ export async function getWorktreeBranchOptions(sourceCwd: string): Promise<Workt
 export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
   const normalizedCwd = cwd.trim()
   if (!normalizedCwd) {
-    return { currentBranch: null, headSha: null, detached: false, dirty: false, gitRoot: '', options: [] }
+    return { currentBranch: null, headSha: null, headSubject: null, headDate: null, detached: false, dirty: false, gitRoot: '', options: [] }
   }
   const query = new URLSearchParams({ cwd: normalizedCwd })
   const response = await fetch(`/codex-api/git/branches?${query.toString()}`)
@@ -2426,10 +2428,14 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
     options.unshift({ value: currentBranch, label: currentBranch, isCurrent: true })
   }
   const headShaRaw = record.headSha
+  const headSubjectRaw = record.headSubject
+  const headDateRaw = record.headDate
   const gitRootRaw = record.gitRoot
   return {
     currentBranch,
     headSha: typeof headShaRaw === 'string' && headShaRaw.trim() ? headShaRaw.trim() : null,
+    headSubject: typeof headSubjectRaw === 'string' && headSubjectRaw.trim() ? headSubjectRaw.trim() : null,
+    headDate: typeof headDateRaw === 'string' && headDateRaw.trim() ? headDateRaw.trim() : null,
     detached: record.detached === true,
     dirty: record.dirty === true,
     gitRoot: typeof gitRootRaw === 'string' ? normalizePathForUi(gitRootRaw) : '',
@@ -2516,6 +2522,8 @@ export async function checkoutGitCommit(cwd: string, sha: string): Promise<GitBr
   return {
     currentBranch: typeof record.currentBranch === 'string' && record.currentBranch.trim() ? record.currentBranch.trim() : null,
     headSha: typeof record.headSha === 'string' && record.headSha.trim() ? record.headSha.trim() : null,
+    headSubject: typeof record.headSubject === 'string' && record.headSubject.trim() ? record.headSubject.trim() : null,
+    headDate: typeof record.headDate === 'string' && record.headDate.trim() ? record.headDate.trim() : null,
     detached: record.detached === true,
     dirty: record.dirty === true,
     gitRoot: typeof record.gitRoot === 'string' ? normalizePathForUi(record.gitRoot) : '',
