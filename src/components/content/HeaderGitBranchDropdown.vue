@@ -83,6 +83,7 @@
                   <code>{{ commit.shortSha }}</code>
                   <span class="header-git-commit-meta">
                     <span v-if="isCurrentCommit(commit)" class="header-git-branch-meta">current</span>
+                    <span v-else-if="!commit.isReachableFromBranch" class="header-git-branch-meta" title="Saved from reset history, not on this branch">saved</span>
                     <span>{{ commit.date }}</span>
                   </span>
                 </span>
