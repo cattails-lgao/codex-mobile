@@ -1570,6 +1570,25 @@ function getProjectOrderNameForPath(path: string): string {
   return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : getPathLeafName(normalizedPath)
 }
 
+function resolveWorkspaceRootCwd(projectName: string): string {
+  const normalizedProjectName = normalizePathForUi(projectName).trim()
+  if (!normalizedProjectName) return ''
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+    const cwd = normalizePathForUi(cwdRaw).trim()
+    if (!cwd) continue
+    const leafName = getPathLeafName(cwd)
+    const orderName = hasDuplicateFolderLeaf(cwd, knownPaths) ? cwd : leafName
+    if (cwd === normalizedProjectName || orderName === normalizedProjectName || leafName === normalizedProjectName) {
+      return cwd
+    }
+  }
+  return ''
+}
+
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -2265,10 +2284,10 @@ function isWorktreePath(cwdRaw: string): boolean {
 
 function resolvePreferredLocalCwd(projectName: string, fallbackCwd = ''): string {
   const group = projectGroups.value.find((row) => row.projectName === projectName)
-  if (!group) return fallbackCwd.trim()
+  if (!group) return resolveWorkspaceRootCwd(projectName) || fallbackCwd.trim()
   const nonWorktreeThread = group.threads.find((thread) => !isWorktreePath(thread.cwd))
   const candidate = nonWorktreeThread?.cwd?.trim() ?? group.threads[0]?.cwd?.trim() ?? ''
-  return candidate || fallbackCwd.trim()
+  return candidate || resolveWorkspaceRootCwd(projectName) || fallbackCwd.trim()
 }
 
 function onStartNewThread(projectName: string): void {
