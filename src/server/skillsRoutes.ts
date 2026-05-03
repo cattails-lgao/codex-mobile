@@ -833,9 +833,10 @@ async function readRemoteSkillsManifest(token: string, repoOwner: string, repoNa
   return skills
 }
 
-async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoName: string, skills: SyncedSkill[]): Promise<void> {
+async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoName: string, skills: SyncedSkill[]): Promise<boolean> {
   const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${SKILLS_SYNC_MANIFEST_PATH}`
   let sha = ''
+  const nextContent = JSON.stringify(skills, null, 2)
   const existing = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
@@ -845,15 +846,18 @@ async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoN
     },
   })
   if (existing.ok) {
-    const payload = await existing.json() as { sha?: string }
+    const payload = await existing.json() as { sha?: string; content?: string }
     sha = payload.sha ?? ''
+    const currentContent = payload.content ? Buffer.from(payload.content.replace(/\n/g, ''), 'base64').toString('utf8') : ''
+    if (currentContent === nextContent) return false
   }
-  const content = Buffer.from(JSON.stringify(skills, null, 2), 'utf8').toString('base64')
+  const content = Buffer.from(nextContent, 'utf8').toString('base64')
   await getGithubJson(url, token, 'PUT', {
     message: 'Update synced skills manifest',
     content,
     ...(sha ? { sha } : {}),
   })
+  return true
 }
 
 function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string): string {
@@ -1163,8 +1167,10 @@ async function syncInstalledSkillsFolderToRepo(
   await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: repoDir })
   await restoreProtectedFilesFromOrigin(repoDir, branch)
   await runCommand('git', ['add', '.'], { cwd: repoDir })
-  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
-  if (!status) return
+  try {
+    await runCommand('git', ['diff', '--cached', '--quiet', '--exit-code'], { cwd: repoDir })
+    return
+  } catch {}
   await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: repoDir })
   await pushWithNonFastForwardRetry(repoDir, branch)
 }
