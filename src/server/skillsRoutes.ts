@@ -1050,6 +1050,17 @@ async function hasLocalUncommittedChanges(repoDir: string): Promise<boolean> {
   return status.length > 0
 }
 
+async function hasCommittableWorkingTreeChanges(repoDir: string): Promise<boolean> {
+  try {
+    await runCommand('git', ['diff', '--quiet', '--exit-code', '--ignore-submodules=dirty'], { cwd: repoDir })
+    await runCommand('git', ['diff', '--cached', '--quiet', '--exit-code', '--ignore-submodules=dirty'], { cwd: repoDir })
+  } catch {
+    return true
+  }
+  const untracked = (await runCommandWithOutput('git', ['ls-files', '--others', '--exclude-standard'], { cwd: repoDir })).trim()
+  return untracked.length > 0
+}
+
 async function walkFileMtimes(rootDir: string, currentDir: string, out: Map<string, number>): Promise<void> {
   let entries: Array<{ name: string | Buffer; isDirectory: () => boolean; isFile: () => boolean }>
   try {
@@ -1222,10 +1233,10 @@ async function autoPushSyncedSkills(appServer: AppServerLike): Promise<void> {
   await runCommand('git', ['fetch', 'origin', PRIVATE_SYNC_BRANCH], { cwd: repoDir })
   const head = (await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir })).trim()
   const originHead = (await runCommandWithOutput('git', ['rev-parse', `origin/${PRIVATE_SYNC_BRANCH}`], { cwd: repoDir })).trim()
-  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+  const hasCommittableChanges = await hasCommittableWorkingTreeChanges(repoDir)
   // After a successful pull, if local tree is already clean and equal to remote,
   // skip push entirely to avoid rewriting/deleting remote-only updates.
-  if (!status && head === originHead) return
+  if (!hasCommittableChanges && head === originHead) return
   const local = await collectLocalSyncedSkills(appServer)
   const installedMap = await scanInstalledSkillsFromDisk()
   await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
