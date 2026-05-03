@@ -528,6 +528,7 @@
               :busy="isSwitchingThreadBranch"
               :error="threadBranchError"
               :review-open="isReviewPaneOpen"
+              :show-review="route.name === 'thread' && selectedThreadId.length > 0"
               @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
               @checkout-branch="onCheckoutContentHeaderBranch"
               @checkout-commit="onCheckoutContentHeaderCommit"
