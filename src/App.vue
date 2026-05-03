@@ -1285,6 +1285,8 @@ const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
+let threadBranchesRequestId = 0
+let threadBranchCommitsRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
@@ -2855,23 +2857,41 @@ function onSelectNewWorktreeBranch(branch: string): void {
   newWorktreeBaseBranch.value = branch.trim()
 }
 
+function canLoadBranchStateForCwd(cwd: string): boolean {
+  const currentCwd = composerCwd.value.trim()
+  if (!cwd || currentCwd !== cwd) return false
+  return route.name === 'thread' || (route.name === 'home' && isNewThreadCwdGitRepo.value)
+}
+
+function resetThreadBranchState(): void {
+  threadBranchesRequestId += 1
+  threadBranchCommitsRequestId += 1
+  threadBranchOptions.value = []
+  currentThreadBranch.value = null
+  currentThreadHeadSha.value = null
+  currentThreadHeadSubject.value = null
+  currentThreadHeadDate.value = null
+  isThreadDetachedHead.value = false
+  isThreadWorktreeDirty.value = false
+  threadBranchCommitsByBranch.value = {}
+  threadBranchCommitsLoadingFor.value = ''
+  threadBranchCommitsError.value = ''
+  threadBranchError.value = ''
+  isLoadingThreadBranches.value = false
+}
+
 async function loadThreadBranches(cwd: string): Promise<void> {
   const targetCwd = cwd.trim()
   if (!targetCwd) {
-    threadBranchOptions.value = []
-    currentThreadBranch.value = null
-    currentThreadHeadSha.value = null
-    currentThreadHeadSubject.value = null
-    currentThreadHeadDate.value = null
-    isThreadDetachedHead.value = false
-    isThreadWorktreeDirty.value = false
-    threadBranchError.value = ''
+    resetThreadBranchState()
     return
   }
+  const requestId = ++threadBranchesRequestId
   isLoadingThreadBranches.value = true
   threadBranchError.value = ''
   try {
     const state = await getGitBranchState(targetCwd)
+    if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = state.options
     currentThreadBranch.value = state.currentBranch
     currentThreadHeadSha.value = state.headSha
@@ -2880,6 +2900,7 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
   } catch {
+    if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = []
     currentThreadBranch.value = null
     currentThreadHeadSha.value = null
@@ -2888,7 +2909,9 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
   } finally {
-    isLoadingThreadBranches.value = false
+    if (requestId === threadBranchesRequestId) {
+      isLoadingThreadBranches.value = false
+    }
   }
 }
 
@@ -2960,20 +2983,23 @@ function loadThreadBranchCommits(branch: string): void {
   const cwd = composerCwd.value.trim()
   if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
   if (threadBranchCommitsByBranch.value[targetBranch]) return
+  const requestId = ++threadBranchCommitsRequestId
   threadBranchCommitsLoadingFor.value = targetBranch
   threadBranchCommitsError.value = ''
   void getGitBranchCommits(cwd, targetBranch)
     .then((commits) => {
+      if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
       threadBranchCommitsByBranch.value = {
         ...threadBranchCommitsByBranch.value,
         [targetBranch]: commits,
       }
     })
     .catch((error: unknown) => {
+      if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
       threadBranchCommitsError.value = error instanceof Error ? error.message : 'Failed to load branch commits'
     })
     .finally(() => {
-      if (threadBranchCommitsLoadingFor.value === targetBranch) {
+      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === targetBranch) {
         threadBranchCommitsLoadingFor.value = ''
       }
     })
@@ -4024,18 +4050,13 @@ watch(
   ([routeName, cwd, isNewThreadGitRepo]) => {
     const shouldLoadBranches = routeName === 'thread' || (routeName === 'home' && isNewThreadGitRepo)
     if (!shouldLoadBranches) {
-      threadBranchOptions.value = []
-      currentThreadBranch.value = null
-      currentThreadHeadSha.value = null
-      currentThreadHeadSubject.value = null
-      currentThreadHeadDate.value = null
-      isThreadDetachedHead.value = false
-      isThreadWorktreeDirty.value = false
-      threadBranchCommitsByBranch.value = {}
-      threadBranchError.value = ''
+      resetThreadBranchState()
       return
     }
+    threadBranchCommitsRequestId += 1
     threadBranchCommitsByBranch.value = {}
+    threadBranchCommitsLoadingFor.value = ''
+    threadBranchCommitsError.value = ''
     void loadThreadBranches(cwd)
   },
   { immediate: true },
