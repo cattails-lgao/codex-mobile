@@ -224,40 +224,48 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
-### Header Git branch dropdown with commit checkout
+### Header Git branch dropdown with commit reset
 
 #### Feature/Change Name
-Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, detached HEAD recovery, and recent commit checkout.
+Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, branch reset-to-commit, and reset-history commit preservation.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
 2. Open a thread whose `cwd` is inside a Git repository with at least two branches and several commits
-3. Ensure the repository is clean for successful checkout paths: `git -C <thread-cwd> status --porcelain`
-4. Light theme and dark theme are available from the appearance switcher
+3. Use a disposable local branch with at least two commits ahead of its reset target.
+4. Ensure the repository has no tracked uncommitted changes for successful branch switch/reset paths: `git -C <thread-cwd> status --porcelain`
+5. Light theme and dark theme are available from the appearance switcher
 
 #### Steps
 1. In light theme, open the Git dropdown in the thread header.
-2. Confirm the trigger shows the current branch, or the detached commit subject when HEAD is detached.
+2. Confirm the trigger shows the current branch, or the detached commit subject if the repository is already detached.
 3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
 4. Type part of a branch name in search and confirm the branch list filters.
 5. Select a different branch with a clean worktree and confirm the header updates to that branch.
 6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
-7. Select a commit and confirm the header changes to detached HEAD state with the commit subject as the main value and SHA/date metadata below it.
-8. Expand the branch containing the detached commit and confirm that commit row is marked `current`.
-9. From detached HEAD, select a branch and confirm the header recovers to normal branch state.
-10. Create an uncommitted change, try to switch branch or commit, and confirm the dropdown shows a dirty-worktree error instead of switching.
-11. Switch to dark theme and repeat steps 1, 2, 4, 6, 8, and 10.
+7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
+8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
+10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
+14. Switch to dark theme and repeat steps 1, 2, 4, 6, 7, 10, 12, and 13.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
-- Branch switching and commit checkout only proceed when the Git worktree is clean.
-- Detached commit checkout is explicit in the header, shows the commit message, marks the active commit as current in expanded commit lists, and can recover by selecting any branch.
+- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
+- Commit selection resets the local branch to that commit instead of detaching HEAD.
+- Remote branch commit rows are inspectable but cannot trigger local branch reset.
+- The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
+- Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
+- The selected branch HEAD commit is marked `current` in expanded commit lists.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 
 #### Rollback/Cleanup
 - Restore any dirty-worktree file changed for validation.
-- If left detached, run `git -C <thread-cwd> checkout <expected-branch>`.
+- Restore or delete the disposable branch used for reset validation.
 
 ---
 

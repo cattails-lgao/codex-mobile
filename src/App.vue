@@ -531,7 +531,7 @@
               :show-review="route.name === 'thread' && selectedThreadId.length > 0"
               @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
               @checkout-branch="onCheckoutContentHeaderBranch"
-              @checkout-commit="onCheckoutContentHeaderCommit"
+              @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
               @load-commits="loadThreadBranchCommits"
             />
           </template>
@@ -970,7 +970,6 @@ import { useMobile } from './composables/useMobile'
 import { useUiLanguage } from './composables/useUiLanguage'
 import {
   checkoutGitBranch,
-  checkoutGitCommit,
   configureTelegramBot,
   createPermanentWorktree,
   createWorktree,
@@ -995,6 +994,7 @@ import {
   persistFirstLaunchPluginsCardPreference,
   removeAccount,
   refreshAccountsFromAuth,
+  resetGitBranchToCommit,
   startCodexLogin,
   searchThreads,
   switchAccount,
@@ -2954,21 +2954,22 @@ function onCheckoutContentHeaderBranch(value: string): void {
     })
 }
 
-function onCheckoutContentHeaderCommit(sha: string): void {
+function onResetContentHeaderBranchToCommit(payload: { branch: string; sha: string }): void {
   if (isSwitchingThreadBranch.value) return
-  const targetSha = sha.trim()
+  const targetBranch = payload.branch.trim()
+  const targetSha = payload.sha.trim()
   const cwd = composerCwd.value.trim()
-  if (!targetSha || !cwd) return
+  if (!targetBranch || !targetSha || !cwd) return
   isSwitchingThreadBranch.value = true
   threadBranchError.value = ''
-  void checkoutGitCommit(cwd, targetSha)
+  void resetGitBranchToCommit(cwd, targetBranch, targetSha)
     .then((state) => {
       applyThreadGitState(state)
       isReviewPaneOpen.value = false
       return loadThreadBranches(cwd)
     })
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Failed to check out commit'
+      const message = error instanceof Error ? error.message : 'Failed to reset branch to commit'
       void loadThreadBranches(cwd).finally(() => {
         threadBranchError.value = message
       })

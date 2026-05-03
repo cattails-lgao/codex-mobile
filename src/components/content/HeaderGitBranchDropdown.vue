@@ -75,8 +75,9 @@
                 class="header-git-commit"
                 :class="{ 'is-current': isCurrentCommit(commit) }"
                 type="button"
-                :disabled="busy"
-                @click="emit('checkoutCommit', commit.sha)"
+                :disabled="busy || branch.isRemote"
+                :title="commitActionTitle(branch, commit)"
+                @click="onSelectCommit(branch, commit)"
               >
                 <span class="header-git-commit-top">
                   <code>{{ commit.shortSha }}</code>
@@ -131,7 +132,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleReview: []
   checkoutBranch: [branch: string]
-  checkoutCommit: [sha: string]
+  resetBranchToCommit: [payload: { branch: string; sha: string }]
   loadCommits: [branch: string]
 }>()
 
@@ -152,10 +153,10 @@ const detachedCommitMeta = computed(() => {
   if (!props.detached) return ''
   return [props.headSha, props.headDate].filter(Boolean).join(' · ')
 })
-const triggerLabel = computed(() => `Git checkout: ${displayLabel.value}`)
+const triggerLabel = computed(() => `Git branch: ${displayLabel.value}`)
 const disabled = computed(() => props.loading && props.branches.length === 0)
 const busy = computed(() => props.busy || props.loading)
-const statusMessage = computed(() => props.error || (props.dirty ? 'Uncommitted changes must be committed, stashed, or discarded before switching.' : ''))
+const statusMessage = computed(() => props.error || (props.dirty ? 'Tracked changes must be committed, stashed, or discarded before switching or resetting. Untracked files are allowed unless Git would overwrite them.' : ''))
 const statusKind = computed(() => props.error ? 'error' : 'info')
 const filteredBranches = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -178,6 +179,16 @@ function isCurrentCommit(commit: GitCommitOption): boolean {
   const headSha = props.headSha?.trim() ?? ''
   if (!headSha) return false
   return commit.sha === headSha || commit.shortSha === headSha || commit.sha.startsWith(headSha)
+}
+
+function commitActionTitle(branch: WorktreeBranchOption, commit: GitCommitOption): string {
+  if (branch.isRemote) return 'Remote branches cannot be reset from this menu'
+  return `Reset ${branch.value} to ${commit.shortSha}`
+}
+
+function onSelectCommit(branch: WorktreeBranchOption, commit: GitCommitOption): void {
+  if (branch.isRemote) return
+  emit('resetBranchToCommit', { branch: branch.value, sha: commit.sha })
 }
 
 function onEscapeSearch(): void {
