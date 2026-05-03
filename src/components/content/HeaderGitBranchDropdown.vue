@@ -76,7 +76,8 @@
                 :class="{ 'is-current': isCurrentCommit(commit) }"
                 type="button"
                 :disabled="busy"
-                @click="emit('checkoutCommit', commit.sha)"
+                :title="`Reset ${branch.value} to ${commit.shortSha}`"
+                @click="emit('resetBranchToCommit', { branch: branch.value, sha: commit.sha })"
               >
                 <span class="header-git-commit-top">
                   <code>{{ commit.shortSha }}</code>
@@ -130,7 +131,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleReview: []
   checkoutBranch: [branch: string]
-  checkoutCommit: [sha: string]
+  resetBranchToCommit: [payload: { branch: string; sha: string }]
   loadCommits: [branch: string]
 }>()
 
@@ -150,7 +151,7 @@ const detachedCommitMeta = computed(() => {
   if (!props.detached) return ''
   return [props.headSha, props.headDate].filter(Boolean).join(' · ')
 })
-const triggerLabel = computed(() => `Git checkout: ${displayLabel.value}`)
+const triggerLabel = computed(() => `Git branch: ${displayLabel.value}`)
 const disabled = computed(() => props.loading && props.branches.length === 0)
 const busy = computed(() => props.busy || props.loading)
 const statusMessage = computed(() => props.error || (props.dirty ? 'Uncommitted changes must be committed, stashed, or discarded before switching.' : ''))

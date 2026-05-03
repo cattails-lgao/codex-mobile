@@ -2498,6 +2498,14 @@ function normalizeBranchRefName(value: string): string {
   return trimmed
 }
 
+function toHeaderGitResetHistoryRef(branchName: string, commitSha: string): string {
+  return `refs/codex/header-git-reset-history/${branchName}/${commitSha}`
+}
+
+async function assertLocalGitBranch(repoRoot: string, branchName: string): Promise<void> {
+  await runCommandCapture('git', ['show-ref', '--verify', `refs/heads/${branchName}`], { cwd: repoRoot })
+}
+
 async function readGitHeaderState(cwd: string): Promise<{
   currentBranch: string | null
   headSha: string | null
@@ -2528,7 +2536,7 @@ async function readGitHeaderState(cwd: string): Promise<{
 async function assertCleanGitWorktree(repoRoot: string): Promise<void> {
   const statusRaw = await runCommandCapture('git', ['status', '--porcelain'], { cwd: repoRoot })
   if (statusRaw.trim()) {
-    throw new Error('Cannot switch checkout with uncommitted changes. Commit, stash, or discard local changes first.')
+    throw new Error('Cannot switch branches or reset with uncommitted changes. Commit, stash, or discard local changes first.')
   }
 }
 
@@ -6039,9 +6047,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await runCommandCapture('git', ['rev-parse', '--verify', `${branch}^{commit}`], { cwd: gitRoot })
+          const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
+          const resetHistoryRefsRaw = await runCommandCapture(
+            'git',
+            ['for-each-ref', '--format=%(refname)', resetHistoryRefPrefix],
+            { cwd: gitRoot },
+          ).catch(() => '')
+          const resetHistoryRefs = resetHistoryRefsRaw
+            .split('\n')
+            .map((entry) => entry.trim())
+            .filter(Boolean)
           const output = await runCommandCapture(
             'git',
-            ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch],
+            ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
             { cwd: gitRoot },
           )
           const commits = output.split('\n').flatMap((line) => {
@@ -6058,7 +6076,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'POST' && url.pathname === '/codex-api/git/checkout-commit') {
+      if (req.method === 'POST' && url.pathname === '/codex-api/git/reset-to-commit') {
         const payload = await readJsonBody(req)
         const record = asRecord(payload)
         if (!record) {
@@ -6066,9 +6084,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
         const rawCwd = readNonEmptyString(record.cwd)
+        const branch = readNonEmptyString(record.branch)
         const sha = readNonEmptyString(record.sha)
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!branch) {
+          setJson(res, 400, { error: 'Missing branch' })
           return
         }
         if (!sha) {
@@ -6079,11 +6102,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await assertCleanGitWorktree(gitRoot)
+          await assertLocalGitBranch(gitRoot, branch)
+          const currentBranch = (await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })).trim()
+          if (currentBranch && currentBranch !== branch) {
+            await runCommand('git', ['checkout', branch], { cwd: gitRoot })
+          } else if (!currentBranch) {
+            await runCommand('git', ['checkout', branch], { cwd: gitRoot })
+          }
+          const previousTip = await runCommandCapture('git', ['rev-parse', 'HEAD'], { cwd: gitRoot })
           const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
-          await runCommand('git', ['checkout', '--detach', targetSha.trim()], { cwd: gitRoot })
+          await runCommand('git', ['update-ref', toHeaderGitResetHistoryRef(branch, previousTip.trim()), previousTip.trim()], { cwd: gitRoot })
+          await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to check out commit') })
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to reset branch to commit') })
         }
         return
       }

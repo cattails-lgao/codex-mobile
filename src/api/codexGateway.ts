@@ -2503,18 +2503,19 @@ export async function getGitBranchCommits(cwd: string, branch: string): Promise<
   })
 }
 
-export async function checkoutGitCommit(cwd: string, sha: string): Promise<GitBranchState> {
-  const response = await fetch('/codex-api/git/checkout-commit', {
+export async function resetGitBranchToCommit(cwd: string, branch: string, sha: string): Promise<GitBranchState> {
+  const response = await fetch('/codex-api/git/reset-to-commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       cwd: cwd.trim(),
+      branch: branch.trim(),
       sha: sha.trim(),
     }),
   })
   const payload = (await response.json()) as { data?: unknown; error?: string }
   if (!response.ok) {
-    throw new Error(payload.error || 'Failed to check out commit')
+    throw new Error(payload.error || 'Failed to reset branch to commit')
   }
   const record = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
     ? (payload.data as Record<string, unknown>)
