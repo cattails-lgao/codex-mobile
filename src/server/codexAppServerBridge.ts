@@ -2502,8 +2502,40 @@ function toHeaderGitResetHistoryRef(branchName: string, commitSha: string): stri
   return `refs/codex/header-git-reset-history/${branchName}/${commitSha}`
 }
 
+const HEADER_GIT_RESET_HISTORY_REF_LIMIT = 25
+
 async function assertLocalGitBranch(repoRoot: string, branchName: string): Promise<void> {
   await runCommandCapture('git', ['show-ref', '--verify', `refs/heads/${branchName}`], { cwd: repoRoot })
+}
+
+async function checkoutGitBranchWithWorktreeRecovery(repoRoot: string, branchName: string): Promise<void> {
+  try {
+    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+  } catch (checkoutError) {
+    const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, branchName)
+    if (!blockingWorktreePath) {
+      throw checkoutError
+    }
+    await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
+    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+  }
+}
+
+async function pruneHeaderGitResetHistoryRefs(repoRoot: string, branchName: string): Promise<void> {
+  const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branchName}/`
+  const refsRaw = await runCommandCapture(
+    'git',
+    ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
+    { cwd: repoRoot },
+  ).catch(() => '')
+  const refs = refsRaw
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  const staleRefs = refs.slice(HEADER_GIT_RESET_HISTORY_REF_LIMIT)
+  for (const refName of staleRefs) {
+    await runCommand('git', ['update-ref', '-d', refName], { cwd: repoRoot })
+  }
 }
 
 async function readGitHeaderState(cwd: string): Promise<{
@@ -6019,16 +6051,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await assertNoTrackedGitChanges(gitRoot)
-          try {
-            await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
-          } catch (checkoutError) {
-            const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, targetBranch)
-            if (!blockingWorktreePath) {
-              throw checkoutError
-            }
-            await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
-            await runCommand('git', ['checkout', targetBranch], { cwd: gitRoot })
-          }
+          await checkoutGitBranchWithWorktreeRecovery(gitRoot, targetBranch)
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to switch branch') })
@@ -6054,13 +6077,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
           const resetHistoryRefsRaw = await runCommandCapture(
             'git',
-            ['for-each-ref', '--format=%(refname)', resetHistoryRefPrefix],
+            ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
             { cwd: gitRoot },
           ).catch(() => '')
           const resetHistoryRefs = resetHistoryRefsRaw
             .split('\n')
             .map((entry) => entry.trim())
             .filter(Boolean)
+            .slice(0, HEADER_GIT_RESET_HISTORY_REF_LIMIT)
           const output = await runCommandCapture(
             'git',
             ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
@@ -6109,13 +6133,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           await assertLocalGitBranch(gitRoot, branch)
           const currentBranch = (await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })).trim()
           if (currentBranch && currentBranch !== branch) {
-            await runCommand('git', ['checkout', branch], { cwd: gitRoot })
+            await checkoutGitBranchWithWorktreeRecovery(gitRoot, branch)
           } else if (!currentBranch) {
-            await runCommand('git', ['checkout', branch], { cwd: gitRoot })
+            await checkoutGitBranchWithWorktreeRecovery(gitRoot, branch)
           }
           const previousTip = await runCommandCapture('git', ['rev-parse', 'HEAD'], { cwd: gitRoot })
           const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
           await runCommand('git', ['update-ref', toHeaderGitResetHistoryRef(branch, previousTip.trim()), previousTip.trim()], { cwd: gitRoot })
+          await pruneHeaderGitResetHistoryRefs(gitRoot, branch)
           await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {

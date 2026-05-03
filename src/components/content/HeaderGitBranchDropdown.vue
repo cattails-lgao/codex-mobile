@@ -75,9 +75,9 @@
                 class="header-git-commit"
                 :class="{ 'is-current': isCurrentCommit(commit) }"
                 type="button"
-                :disabled="busy"
-                :title="`Reset ${branch.value} to ${commit.shortSha}`"
-                @click="emit('resetBranchToCommit', { branch: branch.value, sha: commit.sha })"
+                :disabled="busy || branch.isRemote"
+                :title="commitActionTitle(branch, commit)"
+                @click="onSelectCommit(branch, commit)"
               >
                 <span class="header-git-commit-top">
                   <code>{{ commit.shortSha }}</code>
@@ -177,6 +177,16 @@ function isCurrentCommit(commit: GitCommitOption): boolean {
   const headSha = props.headSha?.trim() ?? ''
   if (!headSha) return false
   return commit.sha === headSha || commit.shortSha === headSha || commit.sha.startsWith(headSha)
+}
+
+function commitActionTitle(branch: WorktreeBranchOption, commit: GitCommitOption): string {
+  if (branch.isRemote) return 'Remote branches cannot be reset from this menu'
+  return `Reset ${branch.value} to ${commit.shortSha}`
+}
+
+function onSelectCommit(branch: WorktreeBranchOption, commit: GitCommitOption): void {
+  if (branch.isRemote) return
+  emit('resetBranchToCommit', { branch: branch.value, sha: commit.sha })
 }
 
 function onEscapeSearch(): void {

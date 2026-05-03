@@ -197,18 +197,22 @@ Thread header Git dropdown replaces the simple review action with branch search,
 4. Type part of a branch name in search and confirm the branch list filters.
 5. Select a different branch with a clean worktree and confirm the header updates to that branch.
 6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
-7. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
-8. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
-9. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
-10. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
-11. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
-12. Switch to dark theme and repeat steps 1, 2, 4, 6, 9, 10, and 11.
+7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
+8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
+10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
+14. Switch to dark theme and repeat steps 1, 2, 4, 6, 7, 10, 12, and 13.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
 - Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
 - Commit selection resets the local branch to that commit instead of detaching HEAD.
+- Remote branch commit rows are inspectable but cannot trigger local branch reset.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
+- Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
 - The selected branch HEAD commit is marked `current` in expanded commit lists.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
