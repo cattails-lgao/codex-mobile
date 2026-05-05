@@ -79,8 +79,20 @@ const worktreeName = getWorktreeName();
 const appVersion = typeof pkg.version === "string" ? pkg.version : "unknown";
 const WS_UPGRADE_ATTACHED_KEY = "__codexBridgeWsAttached__";
 
-function readEnvValueFromFile(filePath: string, key: string): string {
-  if (!existsSync(filePath)) return "";
+function stripSurroundingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === "\"" || first === "'") && first === last) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
+}
+
+function readEnvValueFromFile(filePath: string, key: string): string | null {
+  if (!existsSync(filePath)) return null;
   const raw = readFileSync(filePath, "utf8");
   for (const line of raw.split(/\r?\n/u)) {
     const trimmed = line.trim();
@@ -89,18 +101,37 @@ function readEnvValueFromFile(filePath: string, key: string): string {
     if (separator <= 0) continue;
     const currentKey = trimmed.slice(0, separator).trim();
     if (currentKey !== key) continue;
-    return trimmed.slice(separator + 1).trim();
+    return stripSurroundingQuotes(trimmed.slice(separator + 1));
   }
-  return "";
+  return null;
 }
 
 function resolveViteRollbackDebugFallback(): string {
   const fromEnvLocal = readEnvValueFromFile(".env.local", "VITE_ROLLBACK_DEBUG");
   if (fromEnvLocal) return fromEnvLocal;
-  return readEnvValueFromFile(".env", "VITE_ROLLBACK_DEBUG");
+  return readEnvValueFromFile(".env", "VITE_ROLLBACK_DEBUG") ?? "";
+}
+
+function resolveAdditionalAllowedHosts(): string[] {
+  const envKey = "CODEXUI_VITE_ALLOWED_HOSTS";
+  const raw = Object.prototype.hasOwnProperty.call(process.env, envKey)
+    ? stripSurroundingQuotes(process.env[envKey] ?? "")
+    : (readEnvValueFromFile(".env.local", envKey) ?? readEnvValueFromFile(".env", envKey));
+  const normalizedRaw = stripSurroundingQuotes(raw ?? "");
+  if (!normalizedRaw) return [];
+
+  const hosts: string[] = [];
+  const hostPattern = /"([^"]*)"|'([^']*)'|([^,\s]+)/gu;
+  for (const match of normalizedRaw.matchAll(hostPattern)) {
+    const host = (match[1] ?? match[2] ?? match[3] ?? "").trim();
+    if (host) hosts.push(host);
+  }
+
+  return [...new Set(hosts)];
 }
 
 const viteRollbackDebugFallback = resolveViteRollbackDebugFallback();
+const additionalAllowedHosts = resolveAdditionalAllowedHosts();
 
 export default defineConfig({
   define: {
@@ -111,7 +142,7 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
-    allowedHosts: [".trycloudflare.com"],
+    allowedHosts: [".trycloudflare.com", ...additionalAllowedHosts],
     watch: {
       ignored: [
         '**/.omx/**',
