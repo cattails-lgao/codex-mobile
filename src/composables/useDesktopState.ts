@@ -70,6 +70,7 @@ export function findAdjacentThreadId(threads: UiThread[], threadId: string): str
 }
 
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
+const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
@@ -108,6 +109,39 @@ function loadReadStateMap(): Record<string, string> {
 function saveReadStateMap(state: Record<string, string>): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(READ_STATE_STORAGE_KEY, JSON.stringify(state))
+}
+
+function loadUnreadCutoffIso(): string {
+  if (typeof window === 'undefined') return ''
+
+  const existing = window.localStorage.getItem(UNREAD_CUTOFF_STORAGE_KEY)
+  if (existing) return existing
+
+  const initialCutoff = new Date().toISOString()
+  window.localStorage.setItem(UNREAD_CUTOFF_STORAGE_KEY, initialCutoff)
+  return initialCutoff
+}
+
+function saveUnreadCutoffIso(cutoffIso: string): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(UNREAD_CUTOFF_STORAGE_KEY, cutoffIso)
+}
+
+function isThreadUpdatedAfterCutoff(updatedAtIso: string, cutoffIso: string): boolean {
+  if (!updatedAtIso || !cutoffIso) return false
+  const updatedAtMs = new Date(updatedAtIso).getTime()
+  const cutoffMs = new Date(cutoffIso).getTime()
+  if (!Number.isFinite(updatedAtMs) || !Number.isFinite(cutoffMs)) return false
+  return updatedAtMs > cutoffMs
+}
+
+export function isThreadUnreadByLastRead(
+  updatedAtIso: string,
+  threadReadStateIso: string | undefined,
+  unreadCutoffIso: string,
+): boolean {
+  const effectiveLastReadIso = threadReadStateIso ?? unreadCutoffIso
+  return isThreadUpdatedAfterCutoff(updatedAtIso, effectiveLastReadIso)
 }
 
 function normalizeCollaborationMode(value: unknown): CollaborationModeKind {
@@ -1329,6 +1363,7 @@ export function useDesktopState() {
   const selectedSpeedMode = ref<SpeedMode>('standard')
   const activeProviderId = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
+  const unreadCutoffIso = ref(loadUnreadCutoffIso())
   const projectOrder = ref<string[]>(loadProjectOrder())
   const projectDisplayNameById = ref<Record<string, string>>(loadProjectDisplayNames())
   const loadedVersionByThreadId = ref<Record<string, string>>({})
@@ -1933,9 +1968,13 @@ export function useDesktopState() {
         const inProgress = inProgressById.value[thread.id] === true
         const pendingRequestState = readPendingRequestState(getThreadPendingRequests(thread.id))
         const isSelected = selectedThreadId.value === thread.id
-        const lastReadIso = readStateByThreadId.value[thread.id]
         const unreadByEvent = eventUnreadByThreadId.value[thread.id] === true
-        const unread = !isSelected && !inProgress && (unreadByEvent || lastReadIso !== thread.updatedAtIso)
+        const unreadByTime = isThreadUnreadByLastRead(
+          thread.updatedAtIso,
+          readStateByThreadId.value[thread.id],
+          unreadCutoffIso.value,
+        )
+        const unread = !isSelected && !inProgress && (unreadByEvent || unreadByTime)
 
         return {
           ...thread,
