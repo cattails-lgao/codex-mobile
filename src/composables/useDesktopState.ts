@@ -135,6 +135,15 @@ function isThreadUpdatedAfterCutoff(updatedAtIso: string, cutoffIso: string): bo
   return updatedAtMs > cutoffMs
 }
 
+export function isThreadUnreadByLastRead(
+  updatedAtIso: string,
+  threadReadStateIso: string | undefined,
+  unreadCutoffIso: string,
+): boolean {
+  const effectiveLastReadIso = threadReadStateIso ?? unreadCutoffIso
+  return isThreadUpdatedAfterCutoff(updatedAtIso, effectiveLastReadIso)
+}
+
 function normalizeCollaborationMode(value: unknown): CollaborationModeKind {
   return value === 'plan' ? 'plan' : 'default'
 }
@@ -1960,8 +1969,12 @@ export function useDesktopState() {
         const pendingRequestState = readPendingRequestState(getThreadPendingRequests(thread.id))
         const isSelected = selectedThreadId.value === thread.id
         const unreadByEvent = eventUnreadByThreadId.value[thread.id] === true
-        const unreadByCutoff = isThreadUpdatedAfterCutoff(thread.updatedAtIso, unreadCutoffIso.value)
-        const unread = !isSelected && !inProgress && (unreadByEvent || unreadByCutoff)
+        const unreadByTime = isThreadUnreadByLastRead(
+          thread.updatedAtIso,
+          readStateByThreadId.value[thread.id],
+          unreadCutoffIso.value,
+        )
+        const unread = !isSelected && !inProgress && (unreadByEvent || unreadByTime)
 
         return {
           ...thread,
@@ -2089,11 +2102,6 @@ export function useDesktopState() {
       [threadId]: thread.updatedAtIso,
     }
     saveReadStateMap(readStateByThreadId.value)
-    const nextCutoffIso = new Date().toISOString()
-    if (isThreadUpdatedAfterCutoff(nextCutoffIso, unreadCutoffIso.value)) {
-      unreadCutoffIso.value = nextCutoffIso
-      saveUnreadCutoffIso(nextCutoffIso)
-    }
     if (eventUnreadByThreadId.value[threadId]) {
       eventUnreadByThreadId.value = omitKey(eventUnreadByThreadId.value, threadId)
     }
