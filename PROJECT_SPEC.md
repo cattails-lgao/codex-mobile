@@ -325,11 +325,11 @@ Bidirectional sync between `selectedThreadId` state and URL is handled via Vue `
 npx codex-web-local [--port 5999] [--password mypass] [--no-password]
 ```
 
-The CLI starts an Express server that serves the built frontend from `dist/` and uses the same bridge middleware. Password authentication is enabled by default with an auto-generated password printed to the console.
+The CLI starts an Express server that serves the built frontend from `dist/` and uses the same bridge middleware. Password authentication is enabled by default. When a password is auto-generated, it is written to `$CODEX_HOME/codexui-password` with `0600` permissions and startup output prints only that file path.
 
 ### Auth (Production)
 
-- Default: auto-generated password printed to console on startup
+- Default: auto-generated password saved to `$CODEX_HOME/codexui-password` on startup
 - Login: POST `/auth/login` with `{ password }` body
 - Session: HttpOnly cookie `codex_web_local_token`
 - Uses constant-time comparison to prevent timing attacks
