@@ -230,6 +230,13 @@
                 </span>
               </div>
 
+              <div v-if="message.skills && message.skills.length > 0" class="message-skill-attachments">
+                <span v-for="skill in message.skills" :key="`${message.id}:${skill.path}`" class="message-skill-chip" :title="skill.path">
+                  <span class="message-skill-chip-prefix">Skill</span>
+                  <span class="message-skill-chip-name">{{ skill.name }}</span>
+                </span>
+              </div>
+
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
                   <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
@@ -4467,8 +4474,24 @@ onBeforeUnmount(() => {
   @apply mb-2 flex flex-wrap gap-1.5;
 }
 
+.message-skill-attachments {
+  @apply mb-2 flex flex-wrap justify-end gap-1.5;
+}
+
 .message-file-chip {
   @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
+}
+
+.message-skill-chip {
+  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800;
+}
+
+.message-skill-chip-prefix {
+  @apply shrink-0 font-medium text-emerald-700;
+}
+
+.message-skill-chip-name {
+  @apply min-w-0 max-w-48 truncate font-mono;
 }
 
 .message-file-chip-icon {
@@ -4834,6 +4857,18 @@ onBeforeUnmount(() => {
 .message-card[data-role='assistant'],
 .message-card[data-role='system'] {
   @apply px-0 py-0 bg-transparent border-none rounded-none;
+}
+
+:global(.dark) .message-file-chip {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-200;
+}
+
+:global(.dark) .message-skill-chip {
+  @apply border-emerald-800/70 bg-emerald-950/50 text-emerald-100;
+}
+
+:global(.dark) .message-skill-chip-prefix {
+  @apply text-emerald-300;
 }
 
 .conversation-item[data-message-type='worked'] .message-stack,
