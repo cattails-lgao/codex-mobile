@@ -224,6 +224,32 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+### CLI password output redaction
+
+#### Feature/Change Name
+CLI startup output no longer prints the configured password or embeds it in the tunnel URL.
+
+#### Prerequisites/Setup
+1. Project dependencies are installed.
+2. CLI build is available from the current branch.
+
+#### Steps
+1. Run `pnpm run build:cli`.
+2. Start the CLI with a disposable password: `node dist-cli/index.js --no-tunnel --no-open --port 5998 --password TEST_SECRET_SHOULD_NOT_PRINT`.
+3. Confirm startup output includes the local and network URLs.
+4. Confirm startup output does not include `Password:` or `TEST_SECRET_SHOULD_NOT_PRINT`.
+5. If tunnel testing is available, start with tunnel enabled and confirm the printed tunnel URL and QR code do not include `/password=`.
+
+#### Expected Results
+- Password-protected startup still works.
+- The password is not printed as a standalone line.
+- Tunnel output does not include an autologin URL containing the password.
+
+#### Rollback/Cleanup
+- Stop the disposable CLI process.
+
+---
+
 ### npx run dev compatibility shim
 
 #### Feature/Change Name
