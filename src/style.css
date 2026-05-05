@@ -239,6 +239,10 @@
   @apply text-zinc-300;
 }
 
+:root.dark .project-pin-indicator {
+  @apply text-zinc-400;
+}
+
 :root.dark .thread-composer-shell {
   @apply border-zinc-700 bg-zinc-800;
 }
@@ -431,6 +435,12 @@
 
 :root.dark .project-menu-item {
   @apply text-zinc-300 hover:bg-zinc-700;
+}
+
+:root.dark .project-reorder-button,
+:root.dark .project-move-done-button,
+:root.dark .project-move-handle {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-300 hover:bg-zinc-700;
 }
 
 :root.dark .thread-menu-panel {
