@@ -254,6 +254,32 @@ Unread thread state uses a local cutoff timestamp so existing threads are not al
 
 #### Rollback/Cleanup
 - Remove any disposable test threads created for this validation.
+### CLI password output redaction
+
+#### Feature/Change Name
+CLI startup output no longer prints the configured password or embeds it in the tunnel URL.
+
+#### Prerequisites/Setup
+1. Project dependencies are installed.
+2. CLI build is available from the current branch.
+
+#### Steps
+1. Run `pnpm run build:cli`.
+2. Start the CLI with a disposable password: `node dist-cli/index.js --no-tunnel --no-open --port 5998 --password TEST_SECRET_SHOULD_NOT_PRINT`.
+3. Confirm startup output includes the local and network URLs.
+4. Confirm startup output does not include `Password:` or `TEST_SECRET_SHOULD_NOT_PRINT`.
+5. Start the CLI without an explicit password and confirm startup output prints `Generated password file:` with a path under `$CODEX_HOME`.
+6. Confirm the generated password file exists, is readable by the current user, and has `0600` permissions.
+7. If tunnel testing is available, start with tunnel enabled and confirm the printed tunnel URL and QR code do not include `/password=`.
+
+#### Expected Results
+- Password-protected startup still works.
+- The password is not printed as a standalone line.
+- Auto-generated passwords remain discoverable through the generated password file path.
+- Tunnel output does not include an autologin URL containing the password.
+
+#### Rollback/Cleanup
+- Stop the disposable CLI process.
 
 ---
 
@@ -718,7 +744,7 @@ Model, skill, thinking, and plan controls remain usable while a thread turn is i
 - Clear browser cookies for the app origin(s).
 - Stop the CLI process.
 
-### Feature: Cloudflare tunnel QR includes password auto-login path
+### Feature: Cloudflare tunnel QR omits password auto-login path
 
 #### Prerequisites
 - App is running from this repository with password enabled.
@@ -726,16 +752,16 @@ Model, skill, thinking, and plan controls remain usable while a thread turn is i
 
 #### Steps
 1. Start CLI and wait for tunnel output.
-2. Verify the printed `Tunnel:` URL includes `/password=` suffix.
+2. Verify the printed `Tunnel:` URL does not include a `/password=` suffix.
 3. Scan the terminal QR code from a phone/browser.
-4. Confirm first page load enters the app without showing password form.
-5. Open the tunnel base URL without `/password=` in a private window and verify login prompt still appears.
+4. Confirm first page load shows the password form when no trusted bypass applies.
+5. Use the generated password file path from startup output to retrieve the password and sign in.
 
 #### Expected Results
-- Tunnel URL shown in startup output uses `/password=<encoded-password>`.
-- QR code encodes the same auto-login URL.
-- Visiting the auto-login URL sets session cookie and redirects to `/`.
-- Base tunnel URL still requires login when no trusted bypass applies.
+- Tunnel URL shown in startup output does not expose the password.
+- QR code encodes the base tunnel URL without a password-bearing path.
+- The generated password remains available from the local password file.
+- Base tunnel URL requires login when no trusted bypass applies.
 
 #### Rollback/Cleanup
 - Stop the CLI process.
