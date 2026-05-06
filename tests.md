@@ -3330,23 +3330,21 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 8. Confirm `terminal-ok` appears in the xterm output
 9. Choose `npm run dev` from the `Run...` quick-command menu
 10. Confirm the command is submitted to the active terminal
-11. Choose `Add command...` from the `Run...` menu
-12. Enter a custom command in the prompt and confirm it runs immediately
-13. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
-14. Confirm the JSON `session.buffer` contains `terminal-ok`
-15. Refresh the page and reopen the same thread
-16. Toggle the terminal open again
-17. Click `New`
-18. Confirm a second terminal tab appears and becomes active
-19. Click the first terminal tab
-20. Confirm its previous output is restored
-21. Resize the browser window
-22. Click `Close`
-23. Open the new-chat screen
-24. Confirm a working folder is selected
-25. Click the terminal button in the top-right header
-26. Confirm the terminal opens below the new-chat composer before a thread exists
-27. Run `pwd` and confirm it matches the selected folder
+11. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
+12. Confirm the JSON `session.buffer` contains `terminal-ok`
+13. Refresh the page and reopen the same thread
+14. Toggle the terminal open again
+15. Click `New`
+16. Confirm a second terminal tab appears and becomes active
+17. Click the first terminal tab
+18. Confirm its previous output is restored
+19. Resize the browser window
+20. Click `Close`
+21. Open the new-chat screen
+22. Confirm a working folder is selected
+23. Click the terminal button in the top-right header
+24. Confirm the terminal opens below the new-chat composer before a thread exists
+25. Run `pwd` and confirm it matches the selected folder
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
@@ -3357,8 +3355,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
-- Custom quick commands can be added from the `Run...` menu prompt and run immediately
-- The `Run...` menu shows only the five most-used/recent commands before `Add command...`
+- The terminal open/hide action is the first item in the `Run...` menu
+- The `Run...` menu shows discovered project commands in usage order and scrolls when the list is longer than the visible menu
 - `New` adds another tab without killing the previous PTY
 - `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
@@ -4153,8 +4151,9 @@ Terminal quick commands are discovered from the current project instead of using
 5. Verify root-level `*.sh` / `*.cmd` files appear as `./<file>`
 6. Verify `scripts/*.sh` and `scripts/*.cmd` files appear as `./scripts/<file>`
 7. Select one discovered command and confirm it is sent to the terminal
-8. Use `Add command...` to add a custom command
-9. Reopen the dropdown after running commands multiple times
+8. Reopen the dropdown after running commands multiple times
+9. If the project has more commands than fit in the menu, scroll the dropdown and verify lower-priority entries such as `./scripts/<file>.sh` remain reachable
+10. From a closed terminal state on a remote server, select a command immediately after opening the `Run...` menu and confirm it runs after the terminal attaches
 
 #### Expected Results
 - The dropdown is based on the current project `cwd`
@@ -4162,12 +4161,11 @@ Terminal quick commands are discovered from the current project instead of using
 - Package script commands use the lockfile-preferred package manager
 - Make targets are listed after package scripts
 - Root and `scripts/` script-file commands are listed after Make targets
-- Only the top five commands are shown, sorted by most-used and then most-recent usage
-- Custom commands still work and are included in the same usage sorting
+- Commands are sorted by most-used and then most-recent usage, and the dropdown scrolls instead of hiding entries beyond the first five
+- Selecting a command while the terminal is still mounting waits for the attach flow instead of dropping the command
 
 #### Rollback/Cleanup
 - Remove any temporary files created under the project root or `scripts/`
-- Remove custom quick commands from browser local storage if needed
 
 ---
 
