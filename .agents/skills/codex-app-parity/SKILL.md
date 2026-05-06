@@ -160,6 +160,22 @@ If a usable target is found, reuse it and do not launch another Codex instance.
 
 Only if no reusable CDP target exists, prefer running a separate Codex.app debug instance so the user's normal Codex session is not interrupted and the CDP target can stay alive after tests.
 
+In this repo, prefer the maintained helper script first:
+
+```bash
+bash /Users/igor/Git-projects/codex-web-local/scripts/run-codex-unpacked-debug.sh
+```
+
+The script:
+
+- launches Codex.app from the installed `app.asar` under external Electron
+- pins the external runtime to `electron@41.2.0`
+- auto-picks free CDP and Node inspector ports
+- verifies the endpoints after launch
+- prepares the required native Sparkle shim for external-Electron runs
+
+Use `--verify-only` when you only need to confirm whether the current endpoints are still alive.
+
 Use a fresh app instance with its own profile directory:
 
 ```bash
@@ -214,6 +230,21 @@ Important caveats:
 - In this workspace, parity work often happens repeatedly in the same session, so a previously launched Codex.app debug instance may already be listening on a local CDP port.
 - Before using `open -na "Codex"` or starting a fresh debug profile, probe common local ports and reuse an existing endpoint when it already serves a valid `app://-/index.html` page target.
 - Creating unnecessary extra Codex.app instances makes parity work noisier and can leave behind multiple stale debug profiles under `/tmp/codex-cdp-*`.
+
+## Findings: External Electron Debug Launcher (2026-05-06)
+
+- In this workspace, the most reliable parity-debug launch path is now:
+  - `bash /Users/igor/Git-projects/codex-web-local/scripts/run-codex-unpacked-debug.sh`
+- The helper intentionally uses external Electron instead of `/Applications/Codex.app/Contents/MacOS/Codex`, because that preserves the generic Electron-style process/icon behavior some parity workflows expect while still launching the installed Codex `app.asar`.
+- Using an unpinned external Electron such as `pnpm dlx electron` can break startup because Codex.app expects Electron-41-era native resources; the current helper pins the runtime to `electron@41.2.0`.
+- External-Electron startup also needs Codex’s bundled Sparkle native addon available at the external Electron resource path. The helper now prepares a shim by linking:
+  - `/Applications/Codex.app/Contents/Resources/native/sparkle.node`
+  - into the matching `pnpm dlx` Electron bundle before launch.
+- Verified-good external debug state from this environment:
+  - browser/CDP endpoint exposed from `--remote-debugging-port`
+  - Node inspector endpoint exposed from `--inspect`
+  - WebSocket connection to the Node inspector target succeeds, not just `json/list`
+- When validating a parity session, do not stop at `curl /json/list`; also confirm a real WebSocket connect to the returned `webSocketDebuggerUrl`.
 
 ### Architecture Notes
 
