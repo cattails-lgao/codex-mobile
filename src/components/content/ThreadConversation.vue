@@ -2445,118 +2445,125 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
 }
 
 function parseInlineSegmentsUncached(text: string): InlineSegment[] {
-  if (text.includes('](')) {
-    const linkFirstSegments = splitTextByFileUrls(text)
-    if (linkFirstSegments.some((segment) => segment.kind === 'file' || segment.kind === 'url') && !text.includes('`')) {
-      return linkFirstSegments
-    }
+  const linkFirstSegments = splitTextByFileUrls(text)
+  if (!text.includes('`')) return linkFirstSegments
+  if (!linkFirstSegments.some((segment) => segment.kind === 'text' && segment.value.includes('`'))) {
+    return linkFirstSegments
   }
 
-  if (!text.includes('`')) return splitTextByFileUrls(text)
+  const parseCodeAwareTextSegments = (value: string): InlineSegment[] => {
+    if (!value.includes('`')) return splitPlainTextByLinks(value)
 
-  const segments: InlineSegment[] = []
-  let cursor = 0
-  let textStart = 0
+    const segments: InlineSegment[] = []
+    let cursor = 0
+    let textStart = 0
 
-  while (cursor < text.length) {
-    if (text[cursor] !== '`') {
-      cursor += 1
-      continue
-    }
-
-    let openLength = 1
-    while (cursor + openLength < text.length && text[cursor + openLength] === '`') {
-      openLength += 1
-    }
-    const delimiter = '`'.repeat(openLength)
-
-    let searchFrom = cursor + openLength
-    let closingStart = -1
-    while (searchFrom < text.length) {
-      const candidate = text.indexOf(delimiter, searchFrom)
-      if (candidate < 0) break
-
-      const hasBacktickBefore = candidate > 0 && text[candidate - 1] === '`'
-      const hasBacktickAfter =
-        candidate + openLength < text.length && text[candidate + openLength] === '`'
-      const hasNewLineInside = text.slice(cursor + openLength, candidate).includes('\n')
-
-      if (!hasBacktickBefore && !hasBacktickAfter && !hasNewLineInside) {
-        closingStart = candidate
-        break
+    while (cursor < value.length) {
+      if (value[cursor] !== '`') {
+        cursor += 1
+        continue
       }
-      searchFrom = candidate + 1
-    }
 
-    if (closingStart < 0) {
-      cursor += openLength
-      continue
-    }
+      let openLength = 1
+      while (cursor + openLength < value.length && value[cursor + openLength] === '`') {
+        openLength += 1
+      }
+      const delimiter = '`'.repeat(openLength)
 
-    if (cursor > textStart) {
-      segments.push(...splitTextByFileUrls(text.slice(textStart, cursor)))
-    }
+      let searchFrom = cursor + openLength
+      let closingStart = -1
+      while (searchFrom < value.length) {
+        const candidate = value.indexOf(delimiter, searchFrom)
+        if (candidate < 0) break
 
-    const token = text.slice(cursor + openLength, closingStart)
-    if (token.length > 0) {
-      const markdownLink = parseMarkdownLinkToken(token)
-      if (markdownLink) {
-        if (/^https?:\/\//u.test(markdownLink.target)) {
+        const hasBacktickBefore = candidate > 0 && value[candidate - 1] === '`'
+        const hasBacktickAfter =
+          candidate + openLength < value.length && value[candidate + openLength] === '`'
+        const hasNewLineInside = value.slice(cursor + openLength, candidate).includes('\n')
+
+        if (!hasBacktickBefore && !hasBacktickAfter && !hasNewLineInside) {
+          closingStart = candidate
+          break
+        }
+        searchFrom = candidate + 1
+      }
+
+      if (closingStart < 0) {
+        cursor += openLength
+        continue
+      }
+
+      if (cursor > textStart) {
+        segments.push(...splitPlainTextByLinks(value.slice(textStart, cursor)))
+      }
+
+      const token = value.slice(cursor + openLength, closingStart)
+      if (token.length > 0) {
+        const markdownLink = parseMarkdownLinkToken(token)
+        if (markdownLink) {
+          if (/^https?:\/\//u.test(markdownLink.target)) {
+            segments.push({
+              kind: 'url',
+              value: markdownLink.label || markdownLink.target,
+              href: markdownLink.target,
+            })
+          } else {
+            const markdownFileReference = parseFileReference(markdownLink.target)
+            if (markdownFileReference) {
+              segments.push({
+                kind: 'file',
+                value: markdownLink.target,
+                path: markdownFileReference.path,
+                displayPath: markdownLink.label || markdownLink.target,
+                downloadName: getBasename(markdownFileReference.path),
+              })
+            } else {
+              segments.push({ kind: 'code', value: token })
+            }
+          }
+        } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
           segments.push({
             kind: 'url',
-            value: markdownLink.label || markdownLink.target,
-            href: markdownLink.target,
+            value: token,
+            href: token,
           })
         } else {
-          const markdownFileReference = parseFileReference(markdownLink.target)
-          if (markdownFileReference) {
+          const fileReference = parseFileReference(token)
+          if (fileReference) {
+            const displayPath = fileReference.line
+              ? `${fileReference.path}:${String(fileReference.line)}`
+              : fileReference.path
             segments.push({
               kind: 'file',
-              value: markdownLink.target,
-              path: markdownFileReference.path,
-              displayPath: markdownLink.label || markdownLink.target,
-              downloadName: getBasename(markdownFileReference.path),
+              value: token,
+              path: fileReference.path,
+              displayPath,
+              downloadName: getBasename(fileReference.path),
             })
           } else {
             segments.push({ kind: 'code', value: token })
           }
         }
-      } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
-        segments.push({
-          kind: 'url',
-          value: token,
-          href: token,
-        })
       } else {
-        const fileReference = parseFileReference(token)
-        if (fileReference) {
-          const displayPath = fileReference.line
-            ? `${fileReference.path}:${String(fileReference.line)}`
-            : fileReference.path
-          segments.push({
-            kind: 'file',
-            value: token,
-            path: fileReference.path,
-            displayPath,
-            downloadName: getBasename(fileReference.path),
-          })
-        } else {
-          segments.push({ kind: 'code', value: token })
-        }
+        segments.push({ kind: 'text', value: `${delimiter}${delimiter}` })
       }
-    } else {
-      segments.push({ kind: 'text', value: `${delimiter}${delimiter}` })
+
+      cursor = closingStart + openLength
+      textStart = cursor
     }
 
-    cursor = closingStart + openLength
-    textStart = cursor
+    if (textStart < value.length) {
+      segments.push(...splitPlainTextByLinks(value.slice(textStart)))
+    }
+
+    return segments
   }
 
-  if (textStart < text.length) {
-    segments.push(...splitTextByFileUrls(text.slice(textStart)))
-  }
-
-  return segments
+  return linkFirstSegments.flatMap((segment) => (
+    segment.kind === 'text'
+      ? parseCodeAwareTextSegments(segment.value)
+      : [segment]
+  ))
 }
 
 function getInlineSegments(text: string): InlineSegment[] {
