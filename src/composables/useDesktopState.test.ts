@@ -5,6 +5,7 @@ import {
   filterGroupsByWorkspaceRoots,
   findAdjacentThreadId,
   removeThreadFromGroups,
+  isThreadUnreadByLastRead,
 } from './useDesktopState'
 import type { UiProjectGroup } from '../types/codex'
 import type { WorkspaceRootsState } from '../api/codexGateway'
@@ -300,6 +301,28 @@ describe('workspace roots project persistence helpers', () => {
       active: ['/tmp/local-project'],
       projectOrder: ['remote-project-id', '/tmp/local-project'],
     })
+  })
+})
+
+describe('thread unread state helpers', () => {
+  const cutoffIso = '2026-05-01T12:00:00.000Z'
+
+  it('uses the initialization cutoff when a thread has no read state', () => {
+    expect(isThreadUnreadByLastRead('2026-05-01T11:59:59.000Z', undefined, cutoffIso)).toBe(false)
+    expect(isThreadUnreadByLastRead('2026-05-01T12:00:01.000Z', undefined, cutoffIso)).toBe(true)
+  })
+
+  it('uses per-thread read state instead of the global cutoff after a thread is read', () => {
+    expect(isThreadUnreadByLastRead(
+      '2026-05-01T12:30:00.000Z',
+      '2026-05-01T12:45:00.000Z',
+      cutoffIso,
+    )).toBe(false)
+    expect(isThreadUnreadByLastRead(
+      '2026-05-01T12:50:00.000Z',
+      '2026-05-01T12:45:00.000Z',
+      cutoffIso,
+    )).toBe(true)
   })
 })
 

@@ -252,14 +252,32 @@ function ensureCodexInstalled(): string | null {
   return codexCommand
 }
 
-function resolvePassword(input: string | boolean): string | undefined {
+type PasswordResolution = {
+  password: string | undefined
+  generated: boolean
+}
+
+function resolvePassword(input: string | boolean): PasswordResolution {
   if (input === false) {
-    return undefined
+    return { password: undefined, generated: false }
   }
   if (typeof input === 'string') {
-    return input
+    return { password: input, generated: false }
   }
-  return generatePassword()
+  return { password: generatePassword(), generated: true }
+}
+
+function getGeneratedPasswordPath(): string {
+  return join(getCodexHomePath(), 'codexui-password')
+}
+
+async function persistGeneratedPassword(password: string): Promise<string> {
+  const codexHome = getCodexHomePath()
+  mkdirSync(codexHome, { recursive: true })
+  const passwordPath = getGeneratedPasswordPath()
+  await writeFile(passwordPath, `${password}\n`, { encoding: 'utf8', mode: 0o600 })
+  chmodSync(passwordPath, 0o600)
+  return passwordPath
 }
 
 function printTermuxKeepAlive(lines: string[]): void {
@@ -285,9 +303,8 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
-function buildTunnelAutologinUrl(tunnelUrl: string, password: string | undefined): string {
-  if (!password) return tunnelUrl
-  return `${tunnelUrl}/password=${encodeURIComponent(password)}`
+function buildTunnelAutologinUrl(tunnelUrl: string, _password: string | undefined): string {
+  return tunnelUrl
 }
 
 function parseCloudflaredUrl(chunk: string): string | null {
@@ -511,7 +528,11 @@ async function startServer(options: {
     console.log('\nCodex is not logged in. You can log in later via settings or run `codexui login`.\n')
   }
   const requestedPort = parseInt(options.port, 10)
-  const password = resolvePassword(options.password)
+  const passwordResolution = resolvePassword(options.password)
+  const password = passwordResolution.password
+  const generatedPasswordPath = password && passwordResolution.generated
+    ? await persistGeneratedPassword(password)
+    : null
   const { app, dispose, attachWebSocket } = createApp({ password })
   const server = createServer(app)
   attachWebSocket(server)
@@ -556,9 +577,11 @@ async function startServer(options: {
     lines.push(`  Requested port ${String(requestedPort)} was unavailable; using ${String(port)}.`)
   }
 
-  if (password) {
-    lines.push(`  Password: ${password}`)
+  if (generatedPasswordPath) {
+    lines.push(`  Generated password file: ${generatedPasswordPath}`)
+    lines.push('  Use that file to retrieve the password for untrusted origins.')
   }
+
   const tunnelQrUrl = tunnelUrl ? buildTunnelAutologinUrl(tunnelUrl, password) : null
   if (tunnelUrl) {
     lines.push(`  Tunnel:   ${tunnelQrUrl ?? tunnelUrl}`)
