@@ -231,10 +231,16 @@
               </div>
 
               <div v-if="message.skills && message.skills.length > 0" class="message-skill-attachments">
-                <span v-for="skill in message.skills" :key="`${message.id}:${skill.path}`" class="message-skill-chip" :title="skill.path">
+                <a
+                  v-for="skill in message.skills"
+                  :key="`${message.id}:${skill.path}`"
+                  class="message-skill-chip"
+                  :href="toBrowseUrl(skill.path)"
+                  :title="skill.path"
+                >
                   <span class="message-skill-chip-prefix">Skill</span>
                   <span class="message-skill-chip-name">{{ skill.name }}</span>
-                </span>
+                </a>
               </div>
 
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
@@ -4483,7 +4489,7 @@ onBeforeUnmount(() => {
 }
 
 .message-skill-chip {
-  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800;
+  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800 no-underline transition hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-900;
 }
 
 .message-skill-chip-prefix {
