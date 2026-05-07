@@ -475,6 +475,31 @@
   @apply border-zinc-600 bg-zinc-700 text-zinc-100;
 }
 
+:root.dark .automation-thread-list {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .automation-thread-list-item {
+  @apply text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .automation-thread-list-item.is-active {
+  @apply bg-zinc-800 text-zinc-50 shadow-none;
+}
+
+:root.dark .automation-thread-list-item small {
+  @apply text-zinc-500;
+}
+
+:root.dark .automation-thread-list-add {
+  @apply border-zinc-700 text-zinc-400;
+}
+
+:root.dark .automation-thread-select,
+:root.dark .automation-thread-textarea {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-100;
+}
+
 :root.dark .rename-thread-button {
   @apply text-zinc-300 hover:bg-zinc-700;
 }

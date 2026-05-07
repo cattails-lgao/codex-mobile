@@ -3215,9 +3215,9 @@ async function readAutomationRecordFromFile(filePath: string): Promise<ThreadAut
   }
 }
 
-async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord>> {
+async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord[]>> {
   const automationRoot = getCodexAutomationsDir()
-  const next: Record<string, ThreadAutomationRecord> = {}
+  const next: Record<string, ThreadAutomationRecord[]> = {}
   let entries
   try {
     entries = await readdir(automationRoot, { withFileTypes: true })
@@ -3229,19 +3229,45 @@ async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAu
     if (!entry.isDirectory()) continue
     const automation = await readAutomationRecordFromFile(join(automationRoot, entry.name, 'automation.toml'))
     if (!automation || automation.kind !== 'heartbeat' || !automation.targetThreadId) continue
-    next[automation.targetThreadId] = automation
+    next[automation.targetThreadId] = [...(next[automation.targetThreadId] ?? []), automation]
+  }
+
+  for (const automations of Object.values(next)) {
+    automations.sort((first, second) => {
+      const firstCreatedAt = first.createdAtMs ?? 0
+      const secondCreatedAt = second.createdAtMs ?? 0
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt - secondCreatedAt
+      return first.id.localeCompare(second.id)
+    })
   }
 
   return next
 }
 
-async function readThreadHeartbeatAutomation(threadId: string): Promise<ThreadAutomationRecord | null> {
+async function readThreadHeartbeatAutomations(threadId: string): Promise<ThreadAutomationRecord[]> {
   const all = await listThreadHeartbeatAutomations()
-  return all[threadId] ?? null
+  return all[threadId] ?? []
+}
+
+async function readThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<ThreadAutomationRecord | null> {
+  const automations = await readThreadHeartbeatAutomations(threadId)
+  if (automationId) return automations.find((automation) => automation.id === automationId) ?? null
+  return automations[0] ?? null
+}
+
+function resolveUniqueAutomationId(existingIds: Set<string>, threadId: string, name: string): string {
+  const baseId = slugifyAutomationId(threadId, name)
+  if (!existingIds.has(baseId)) return baseId
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${baseId}-${index}`
+    if (!existingIds.has(candidate)) return candidate
+  }
+  return `${baseId}-${randomBytes(4).toString('hex')}`
 }
 
 async function writeThreadHeartbeatAutomation(input: {
   threadId: string
+  id?: string
   name: string
   prompt: string
   rrule: string
@@ -3257,8 +3283,10 @@ async function writeThreadHeartbeatAutomation(input: {
 
   const automationRoot = getCodexAutomationsDir()
   await mkdir(automationRoot, { recursive: true })
-  const existing = await readThreadHeartbeatAutomation(threadId)
-  const id = existing?.id ?? slugifyAutomationId(threadId, name)
+  const existing = input.id ? await readThreadHeartbeatAutomation(threadId, input.id.trim()) : null
+  const entries = await readdir(automationRoot, { withFileTypes: true }).catch(() => [])
+  const existingIds = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name))
+  const id = existing?.id ?? resolveUniqueAutomationId(existingIds, threadId, name)
   const automationDir = join(automationRoot, id)
   const now = Date.now()
   const record: ThreadAutomationRecord = {
@@ -3285,10 +3313,19 @@ async function writeThreadHeartbeatAutomation(input: {
   return record
 }
 
-async function deleteThreadHeartbeatAutomation(threadId: string): Promise<boolean> {
-  const automation = await readThreadHeartbeatAutomation(threadId.trim())
-  if (!automation) return false
-  await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+async function deleteThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<boolean> {
+  const normalizedThreadId = threadId.trim()
+  const normalizedAutomationId = automationId.trim()
+  if (normalizedAutomationId) {
+    const automation = await readThreadHeartbeatAutomation(normalizedThreadId, normalizedAutomationId)
+    if (!automation) return false
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    return true
+  }
+
+  const automations = await readThreadHeartbeatAutomations(normalizedThreadId)
+  if (automations.length === 0) return false
+  await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
   return true
 }
 
@@ -6716,11 +6753,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const automation = await readThreadHeartbeatAutomation(threadId)
+        const automation = automationId
+          ? await readThreadHeartbeatAutomation(threadId, automationId)
+          : await readThreadHeartbeatAutomations(threadId)
         setJson(res, 200, { data: automation })
         return
       }
@@ -6779,6 +6819,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'PUT' && url.pathname === '/codex-api/thread-automation') {
         const payload = asRecord(await readJsonBody(req))
         const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
         const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
         const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
         const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
@@ -6787,18 +6828,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'threadId, name, prompt, and rrule are required' })
           return
         }
-        const automation = await writeThreadHeartbeatAutomation({ threadId, name, prompt, rrule, status })
+        const automation = await writeThreadHeartbeatAutomation({ threadId, id, name, prompt, rrule, status })
         setJson(res, 200, { data: automation })
         return
       }
 
       if (req.method === 'DELETE' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const removed = await deleteThreadHeartbeatAutomation(threadId)
+        const removed = await deleteThreadHeartbeatAutomation(threadId, automationId)
         setJson(res, 200, { data: { removed } })
         return
       }

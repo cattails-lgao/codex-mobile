@@ -1024,33 +1024,47 @@ function asAutomation(record: unknown): UiThreadAutomation | null {
   }
 }
 
-export async function getThreadAutomationMap(): Promise<Record<string, UiThreadAutomation>> {
+function asAutomationArray(value: unknown): UiThreadAutomation[] {
+  if (Array.isArray(value)) return value.flatMap((item) => {
+    const automation = asAutomation(item)
+    return automation ? [automation] : []
+  })
+  const automation = asAutomation(value)
+  return automation ? [automation] : []
+}
+
+export async function getThreadAutomationMap(): Promise<Record<string, UiThreadAutomation[]>> {
   const response = await fetch('/codex-api/thread-automations')
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to load thread automations'))
   }
   const data = asRecord(asRecord(payload)?.data)
-  const next: Record<string, UiThreadAutomation> = {}
+  const next: Record<string, UiThreadAutomation[]> = {}
   if (!data) return next
   for (const [threadId, value] of Object.entries(data)) {
-    const automation = asAutomation(value)
-    if (automation) next[threadId] = automation
+    const automations = asAutomationArray(value)
+    if (automations.length > 0) next[threadId] = automations
   }
   return next
 }
 
-export async function getThreadAutomation(threadId: string): Promise<UiThreadAutomation | null> {
-  const response = await fetch(`/codex-api/thread-automation?threadId=${encodeURIComponent(threadId)}`)
+export async function getThreadAutomation(threadId: string, automationId?: string): Promise<UiThreadAutomation | null> {
+  const query = new URLSearchParams({ threadId })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/thread-automation?${query.toString()}`)
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to load thread automation'))
   }
-  return asAutomation(asRecord(payload)?.data)
+  const data = asRecord(payload)?.data
+  if (automationId) return asAutomation(data)
+  return asAutomationArray(data)[0] ?? null
 }
 
 export async function upsertThreadAutomation(input: {
   threadId: string
+  id?: string
   name: string
   prompt: string
   rrule: string
@@ -1070,8 +1084,10 @@ export async function upsertThreadAutomation(input: {
   return automation
 }
 
-export async function deleteThreadAutomation(threadId: string): Promise<void> {
-  const response = await fetch(`/codex-api/thread-automation?threadId=${encodeURIComponent(threadId)}`, {
+export async function deleteThreadAutomation(threadId: string, automationId?: string): Promise<void> {
+  const query = new URLSearchParams({ threadId })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/thread-automation?${query.toString()}`, {
     method: 'DELETE',
   })
   const payload = await response.json().catch(() => null)

@@ -632,7 +632,7 @@
         @click.stop
       >
         <button class="thread-menu-item" type="button" @click="openAutomationDialog(openThreadMenuThread.id)">
-          {{ threadHasAutomation(openThreadMenuThread.id) ? 'Edit automation…' : 'Add automation…' }}
+          {{ threadHasAutomation(openThreadMenuThread.id) ? 'Manage automations…' : 'Add automation…' }}
         </button>
         <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(openThreadMenuThread.id)">
           Browse files
@@ -683,10 +683,10 @@
     <Teleport to="body">
       <div v-if="deleteThreadDialogVisible" class="rename-thread-overlay" @click.self="closeDeleteThreadDialog">
         <div class="rename-thread-panel" role="dialog" aria-modal="true" aria-label="Delete thread">
-          <h3 class="rename-thread-title">{{ deleteThreadHasAutomation ? 'Archive chat and remove automation?' : 'Delete thread?' }}</h3>
+          <h3 class="rename-thread-title">{{ deleteThreadHasAutomation ? 'Archive chat and remove automations?' : 'Delete thread?' }}</h3>
           <p class="rename-thread-subtitle">
             <template v-if="deleteThreadHasAutomation">
-              This will archive the thread "{{ deleteThreadTitle }}" and remove the attached heartbeat automation.
+              This will archive the thread "{{ deleteThreadTitle }}" and remove the attached heartbeat automations.
             </template>
             <template v-else>
               This will archive the thread "{{ deleteThreadTitle }}". You can find it later in archived threads.
@@ -706,7 +706,24 @@
       <div v-if="automationDialogVisible" class="rename-thread-overlay" @click.self="closeAutomationDialog">
         <div class="rename-thread-panel automation-thread-panel" role="dialog" aria-modal="true" aria-label="Thread automation">
           <h3 class="rename-thread-title">{{ automationDialogMode === 'edit' ? 'Edit automation' : 'Add automation' }}</h3>
-          <p class="rename-thread-subtitle">This creates a heartbeat automation attached to the selected thread.</p>
+          <p class="rename-thread-subtitle">This creates heartbeat automations attached to the selected thread.</p>
+
+          <div v-if="automationDialogAutomations.length > 0" class="automation-thread-list" aria-label="Thread automations">
+            <button
+              v-for="automation in automationDialogAutomations"
+              :key="automation.id"
+              class="automation-thread-list-item"
+              :class="{ 'is-active': automation.id === automationDialogAutomationId }"
+              type="button"
+              @click="selectAutomationForEditing(automation.id)"
+            >
+              <span>{{ automation.name }}</span>
+              <small>{{ automation.status === 'PAUSED' ? 'Paused' : 'Active' }}</small>
+            </button>
+            <button class="automation-thread-list-item automation-thread-list-add" type="button" @click="startNewAutomationDraft">
+              Add another automation
+            </button>
+          </div>
 
           <label class="automation-thread-field">
             <span class="automation-thread-label">Name</span>
@@ -889,9 +906,10 @@ const renameThreadInputRef = ref<HTMLInputElement | null>(null)
 const deleteThreadDialogVisible = ref(false)
 const deleteThreadDialogThreadId = ref('')
 const deleteThreadTitle = ref('')
-const automationByThreadId = ref<Record<string, UiThreadAutomation>>({})
+const automationByThreadId = ref<Record<string, UiThreadAutomation[]>>({})
 const automationDialogVisible = ref(false)
 const automationDialogThreadId = ref('')
+const automationDialogAutomationId = ref('')
 const automationDialogMode = ref<'create' | 'edit'>('create')
 const automationDialogError = ref('')
 const isSavingAutomation = ref(false)
@@ -905,6 +923,10 @@ const automationDraft = ref<{
   prompt: '',
   rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
   status: 'ACTIVE',
+})
+const automationDialogAutomations = computed(() => {
+  const threadId = automationDialogThreadId.value
+  return threadId ? (automationByThreadId.value[threadId] ?? []) : []
 })
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
@@ -1294,12 +1316,17 @@ function onSelect(threadId: string): void {
 }
 
 function threadHasAutomation(threadId: string): boolean {
-  return Boolean(automationByThreadId.value[threadId])
+  return (automationByThreadId.value[threadId]?.length ?? 0) > 0
 }
 
 function threadAutomationTooltip(threadId: string): string {
-  const automation = automationByThreadId.value[threadId]
-  if (!automation) return ''
+  const automations = automationByThreadId.value[threadId] ?? []
+  if (automations.length === 0) return ''
+  if (automations.length > 1) {
+    const activeCount = automations.filter((automation) => automation.status === 'ACTIVE').length
+    return `${automations.length} automations • ${activeCount} active`
+  }
+  const [automation] = automations
   const nextRunLabel = automation.status === 'PAUSED'
     ? '-'
     : automation.nextRunAtMs
@@ -1454,32 +1481,83 @@ function deleteThreadById(threadId: string): void {
 
   if (threadHasAutomation(threadId)) {
     void deleteThreadAutomation(threadId).catch(() => undefined)
-    automationByThreadId.value = Object.fromEntries(
-      Object.entries(automationByThreadId.value).filter(([id]) => id !== threadId),
-    )
+    automationByThreadId.value = omitAutomationThread(automationByThreadId.value, threadId)
   }
 }
 
 function openAutomationDialog(threadId: string): void {
-  const existing = automationByThreadId.value[threadId]
   automationDialogThreadId.value = threadId
-  automationDialogMode.value = existing ? 'edit' : 'create'
   automationDialogError.value = ''
-  automationDraft.value = {
-    name: existing?.name ?? 'Thread automation',
-    prompt: existing?.prompt ?? '',
-    rrule: existing?.rrule ?? 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-    status: existing?.status ?? 'ACTIVE',
+  const existing = automationByThreadId.value[threadId]?.[0]
+  if (existing) {
+    selectAutomationForEditing(existing.id)
+  } else {
+    startNewAutomationDraft()
   }
   automationDialogVisible.value = true
   closeThreadMenu()
 }
 
+function startNewAutomationDraft(): void {
+  automationDialogAutomationId.value = ''
+  automationDialogMode.value = 'create'
+  automationDraft.value = {
+    name: 'Thread automation',
+    prompt: '',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    status: 'ACTIVE',
+  }
+}
+
+function selectAutomationForEditing(automationId: string): void {
+  const existing = automationDialogAutomations.value.find((automation) => automation.id === automationId)
+  if (!existing) return
+  automationDialogAutomationId.value = existing.id
+  automationDialogMode.value = 'edit'
+  automationDialogError.value = ''
+  automationDraft.value = {
+    name: existing.name,
+    prompt: existing.prompt,
+    rrule: existing.rrule,
+    status: existing.status,
+  }
+}
+
 function closeAutomationDialog(): void {
   automationDialogVisible.value = false
   automationDialogThreadId.value = ''
+  automationDialogAutomationId.value = ''
   automationDialogError.value = ''
   isSavingAutomation.value = false
+}
+
+function omitAutomationThread(state: Record<string, UiThreadAutomation[]>, threadId: string): Record<string, UiThreadAutomation[]> {
+  return Object.fromEntries(Object.entries(state).filter(([id]) => id !== threadId))
+}
+
+function updateAutomationForThread(
+  state: Record<string, UiThreadAutomation[]>,
+  threadId: string,
+  saved: UiThreadAutomation,
+): Record<string, UiThreadAutomation[]> {
+  const existing = state[threadId] ?? []
+  const index = existing.findIndex((automation) => automation.id === saved.id)
+  const next = [...existing]
+  if (index >= 0) {
+    next.splice(index, 1, saved)
+  } else {
+    next.push(saved)
+  }
+  return { ...state, [threadId]: next }
+}
+
+function removeAutomationForThread(
+  state: Record<string, UiThreadAutomation[]>,
+  threadId: string,
+  automationId: string,
+): Record<string, UiThreadAutomation[]> {
+  const next = (state[threadId] ?? []).filter((automation) => automation.id !== automationId)
+  return next.length > 0 ? { ...state, [threadId]: next } : omitAutomationThread(state, threadId)
 }
 
 async function submitAutomationDialog(): Promise<void> {
@@ -1490,16 +1568,15 @@ async function submitAutomationDialog(): Promise<void> {
   try {
     const saved = await upsertThreadAutomation({
       threadId,
+      id: automationDialogAutomationId.value || undefined,
       name: automationDraft.value.name,
       prompt: automationDraft.value.prompt,
       rrule: automationDraft.value.rrule,
       status: automationDraft.value.status,
     })
-    automationByThreadId.value = {
-      ...automationByThreadId.value,
-      [threadId]: saved,
-    }
-    closeAutomationDialog()
+    automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, threadId, saved)
+    selectAutomationForEditing(saved.id)
+    isSavingAutomation.value = false
   } catch (error) {
     automationDialogError.value = error instanceof Error ? error.message : 'Failed to save automation'
     isSavingAutomation.value = false
@@ -1508,15 +1585,20 @@ async function submitAutomationDialog(): Promise<void> {
 
 async function onDeleteAutomationFromDialog(): Promise<void> {
   const threadId = automationDialogThreadId.value
-  if (!threadId) return
+  const automationId = automationDialogAutomationId.value
+  if (!threadId || !automationId) return
   isSavingAutomation.value = true
   automationDialogError.value = ''
   try {
-    await deleteThreadAutomation(threadId)
-    automationByThreadId.value = Object.fromEntries(
-      Object.entries(automationByThreadId.value).filter(([id]) => id !== threadId),
-    )
-    closeAutomationDialog()
+    await deleteThreadAutomation(threadId, automationId)
+    automationByThreadId.value = removeAutomationForThread(automationByThreadId.value, threadId, automationId)
+    const nextAutomation = automationByThreadId.value[threadId]?.[0]
+    if (nextAutomation) {
+      selectAutomationForEditing(nextAutomation.id)
+    } else {
+      startNewAutomationDraft()
+    }
+    isSavingAutomation.value = false
   } catch (error) {
     automationDialogError.value = error instanceof Error ? error.message : 'Failed to remove automation'
     isSavingAutomation.value = false
@@ -2871,6 +2953,26 @@ onBeforeUnmount(() => {
 
 .automation-thread-field {
   @apply mb-3 flex flex-col gap-1;
+}
+
+.automation-thread-list {
+  @apply mb-3 flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-1;
+}
+
+.automation-thread-list-item {
+  @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-zinc-700 hover:bg-white;
+}
+
+.automation-thread-list-item.is-active {
+  @apply bg-white font-medium text-zinc-950 shadow-sm;
+}
+
+.automation-thread-list-item small {
+  @apply text-xs font-normal text-zinc-500;
+}
+
+.automation-thread-list-add {
+  @apply justify-center border border-dashed border-zinc-300 text-zinc-500;
 }
 
 .automation-thread-label {
