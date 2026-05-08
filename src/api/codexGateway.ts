@@ -1096,6 +1096,18 @@ export async function deleteThreadAutomation(threadId: string, automationId?: st
   }
 }
 
+export async function runThreadAutomationNow(threadId: string, automationId: string): Promise<void> {
+  const response = await fetch('/codex-api/thread-automation/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ threadId, automationId }),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to run thread automation'))
+  }
+}
+
 export function subscribeCodexNotifications(onNotification: (value: RpcNotification) => void): () => void {
   return subscribeRpcNotifications(onNotification)
 }

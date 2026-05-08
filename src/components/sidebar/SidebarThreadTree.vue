@@ -754,21 +754,31 @@
           </label>
 
           <p v-if="automationDialogError" class="rename-thread-subtitle automation-thread-error">{{ automationDialogError }}</p>
+          <p v-else-if="automationDialogNotice" class="rename-thread-subtitle automation-thread-notice">{{ automationDialogNotice }}</p>
 
           <div class="rename-thread-actions">
             <button
               v-if="automationDialogMode === 'edit'"
+              class="rename-thread-button"
+              type="button"
+              :disabled="isSavingAutomation || isRunningAutomation"
+              @click="onRunAutomationFromDialog"
+            >
+              {{ isRunningAutomation ? 'Running…' : 'Run now' }}
+            </button>
+            <button
+              v-if="automationDialogMode === 'edit'"
               class="rename-thread-button rename-thread-button-danger"
               type="button"
-              :disabled="isSavingAutomation"
+              :disabled="isSavingAutomation || isRunningAutomation"
               @click="onDeleteAutomationFromDialog"
             >
               Remove
             </button>
-            <button class="rename-thread-button" type="button" :disabled="isSavingAutomation" @click="closeAutomationDialog">
+            <button class="rename-thread-button" type="button" :disabled="isSavingAutomation || isRunningAutomation" @click="closeAutomationDialog">
               {{ t('Cancel') }}
             </button>
-            <button class="rename-thread-button rename-thread-button-primary" type="button" :disabled="isSavingAutomation" @click="submitAutomationDialog">
+            <button class="rename-thread-button rename-thread-button-primary" type="button" :disabled="isSavingAutomation || isRunningAutomation" @click="submitAutomationDialog">
               {{ isSavingAutomation ? 'Saving…' : 'Save' }}
             </button>
           </div>
@@ -786,6 +796,7 @@ import {
   getPinnedThreadState,
   getThreadAutomationMap,
   persistPinnedThreadIds,
+  runThreadAutomationNow,
   upsertThreadAutomation,
 } from '../../api/codexGateway'
 import type { UiProjectGroup, UiThread, UiThreadAutomation, UiThreadAutomationStatus } from '../../types/codex'
@@ -912,7 +923,9 @@ const automationDialogThreadId = ref('')
 const automationDialogAutomationId = ref('')
 const automationDialogMode = ref<'create' | 'edit'>('create')
 const automationDialogError = ref('')
+const automationDialogNotice = ref('')
 const isSavingAutomation = ref(false)
+const isRunningAutomation = ref(false)
 const automationDraft = ref<{
   name: string
   prompt: string
@@ -1488,6 +1501,7 @@ function deleteThreadById(threadId: string): void {
 function openAutomationDialog(threadId: string): void {
   automationDialogThreadId.value = threadId
   automationDialogError.value = ''
+  automationDialogNotice.value = ''
   const existing = automationByThreadId.value[threadId]?.[0]
   if (existing) {
     selectAutomationForEditing(existing.id)
@@ -1501,6 +1515,8 @@ function openAutomationDialog(threadId: string): void {
 function startNewAutomationDraft(): void {
   automationDialogAutomationId.value = ''
   automationDialogMode.value = 'create'
+  automationDialogError.value = ''
+  automationDialogNotice.value = ''
   automationDraft.value = {
     name: 'Thread automation',
     prompt: '',
@@ -1515,6 +1531,7 @@ function selectAutomationForEditing(automationId: string): void {
   automationDialogAutomationId.value = existing.id
   automationDialogMode.value = 'edit'
   automationDialogError.value = ''
+  automationDialogNotice.value = ''
   automationDraft.value = {
     name: existing.name,
     prompt: existing.prompt,
@@ -1528,7 +1545,9 @@ function closeAutomationDialog(): void {
   automationDialogThreadId.value = ''
   automationDialogAutomationId.value = ''
   automationDialogError.value = ''
+  automationDialogNotice.value = ''
   isSavingAutomation.value = false
+  isRunningAutomation.value = false
 }
 
 function omitAutomationThread(state: Record<string, UiThreadAutomation[]>, threadId: string): Record<string, UiThreadAutomation[]> {
@@ -1565,6 +1584,7 @@ async function submitAutomationDialog(): Promise<void> {
   if (!threadId) return
   isSavingAutomation.value = true
   automationDialogError.value = ''
+  automationDialogNotice.value = ''
   try {
     const saved = await upsertThreadAutomation({
       threadId,
@@ -1576,6 +1596,7 @@ async function submitAutomationDialog(): Promise<void> {
     })
     automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, threadId, saved)
     selectAutomationForEditing(saved.id)
+    automationDialogNotice.value = 'Automation saved.'
     isSavingAutomation.value = false
   } catch (error) {
     automationDialogError.value = error instanceof Error ? error.message : 'Failed to save automation'
@@ -1589,6 +1610,7 @@ async function onDeleteAutomationFromDialog(): Promise<void> {
   if (!threadId || !automationId) return
   isSavingAutomation.value = true
   automationDialogError.value = ''
+  automationDialogNotice.value = ''
   try {
     await deleteThreadAutomation(threadId, automationId)
     automationByThreadId.value = removeAutomationForThread(automationByThreadId.value, threadId, automationId)
@@ -1602,6 +1624,23 @@ async function onDeleteAutomationFromDialog(): Promise<void> {
   } catch (error) {
     automationDialogError.value = error instanceof Error ? error.message : 'Failed to remove automation'
     isSavingAutomation.value = false
+  }
+}
+
+async function onRunAutomationFromDialog(): Promise<void> {
+  const threadId = automationDialogThreadId.value
+  const automationId = automationDialogAutomationId.value
+  if (!threadId || !automationId) return
+  isRunningAutomation.value = true
+  automationDialogError.value = ''
+  automationDialogNotice.value = ''
+  try {
+    await runThreadAutomationNow(threadId, automationId)
+    automationDialogNotice.value = 'Automation run queued.'
+  } catch (error) {
+    automationDialogError.value = error instanceof Error ? error.message : 'Failed to run automation'
+  } finally {
+    isRunningAutomation.value = false
   }
 }
 
@@ -2986,5 +3025,9 @@ onBeforeUnmount(() => {
 
 .automation-thread-error {
   @apply mb-0 text-rose-600;
+}
+
+.automation-thread-notice {
+  @apply mb-0 text-emerald-600;
 }
 </style>

@@ -1,5 +1,11 @@
 # Log
 
+## [2026-05-09] ingest | thread heartbeat automations
+- Added source: `raw/features/thread-heartbeat-automations.md`.
+- Created wiki page: `concepts/thread-heartbeat-automations.md`.
+- Documents: multiple heartbeat automations per thread, ID-aware manager operations, and manual `Run now` behavior through the persisted thread queue.
+- Updated `index.md`.
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.

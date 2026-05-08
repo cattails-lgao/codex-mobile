@@ -3601,6 +3601,16 @@ async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void>
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
+async function appendThreadQueuedMessage(threadId: string, message: StoredQueuedMessage): Promise<void> {
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) throw new Error('threadId is required')
+  const state = await readThreadQueueState()
+  await writeThreadQueueState({
+    ...state,
+    [normalizedThreadId]: [...(state[normalizedThreadId] ?? []), message],
+  })
+}
+
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
   const allowed: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
   return typeof value === 'string' && allowed.includes(value as ReasoningEffort)
@@ -3631,6 +3641,26 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
     prefix += `\n## ${f.label}: ${f.path}\n`
   }
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
+}
+
+function buildHeartbeatAutomationPrompt(automation: ThreadAutomationRecord): string {
+  return [
+    '<heartbeat>',
+    `<automation_id>${automation.id}</automation_id>`,
+    `<instructions>${automation.prompt}</instructions>`,
+    '</heartbeat>',
+  ].join('\n')
+}
+
+function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
+  return {
+    id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
+    text: buildHeartbeatAutomationPrompt(automation),
+    imageUrls: [],
+    skills: [],
+    fileAttachments: [],
+    collaborationMode: 'default',
+  }
 }
 
 function fileNameFromPath(pathValue: string): string {
@@ -6830,6 +6860,25 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         const automation = await writeThreadHeartbeatAutomation({ threadId, id, name, prompt, rrule, status })
         setJson(res, 200, { data: automation })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/thread-automation/run') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const automationId = typeof payload?.automationId === 'string' ? payload.automationId.trim() : ''
+        if (!threadId || !automationId) {
+          setJson(res, 400, { error: 'threadId and automationId are required' })
+          return
+        }
+        const automation = await readThreadHeartbeatAutomation(threadId, automationId)
+        if (!automation) {
+          setJson(res, 404, { error: 'Automation not found for thread' })
+          return
+        }
+        await appendThreadQueuedMessage(threadId, buildHeartbeatQueuedMessage(automation))
+        backendQueueProcessor.scheduleThreadQueueDrain(threadId, 0)
+        setJson(res, 200, { data: { queued: true } })
         return
       }
 

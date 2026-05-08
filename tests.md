@@ -92,13 +92,17 @@ This file tracks manual regression and feature verification steps.
 7. Open `Manage automations…`, confirm the saved values are prefilled, then click `Add another automation`.
 8. Fill a second automation with a different name and RRULE, save it, and confirm both automations appear in the dialog list.
 9. Select each automation from the list and confirm its own prompt, RRULE, and status load independently.
-10. Remove one automation and confirm the other remains attached to the same thread.
-11. Switch to dark theme, reopen `Manage automations…`, and confirm the list, inputs, textarea, and status select remain readable.
-12. Remove the final automation and confirm the thread menu returns to `Add automation…`.
+10. Click `Run now` for one saved automation while the thread is idle and confirm the automation run is queued or starts in the selected thread.
+11. Start a normal thread turn, reopen `Manage automations…`, click `Run now` for another saved automation, and confirm it waits in the queue until the active turn can finish.
+12. Remove one automation and confirm the other remains attached to the same thread.
+13. Switch to dark theme, reopen `Manage automations…`, and confirm the list, inputs, textarea, status select, `Run now`, and queued-run notice remain readable.
+14. Remove the final automation and confirm the thread menu returns to `Add automation…`.
 
 #### Expected Results
 - Multiple thread-scoped heartbeat automations can be created under the Codex automations store with the same `target_thread_id`.
 - The automation manager is hosted from the thread menu and supports adding, selecting, editing, and removing individual automations.
+- `Run now` enqueues the selected automation immediately using that automation's saved prompt, without requiring a schedule tick.
+- Manual runs use the existing thread queue, so they do not interrupt an active turn and run in order when the thread is available.
 - Removing one automation does not remove other automations attached to the same thread.
 - Removing the final automation removes the thread row automation chip and returns the menu to `Add automation…`.
 - Light and dark theme automation manager surfaces remain readable.
