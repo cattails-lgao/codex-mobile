@@ -19,6 +19,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - <cleanup action, if any>
 
+### Feature: Vite local allowed hosts override
+
+#### Prerequisites
+- App is running from this repository.
+- `CODEXUI_VITE_ALLOWED_HOSTS` is set in ignored `.env.local` or the shell environment.
+
+#### Steps
+1. Confirm `.env.local` is ignored by git.
+2. Set `CODEXUI_VITE_ALLOWED_HOSTS` to a comma/space-separated host list, including quoted entries if needed.
+3. Start the dev server.
+4. Request the dev server with one configured host in the `Host` header.
+
+#### Expected Results
+- Tracked `vite.config.ts` keeps only the generic `CODEXUI_VITE_ALLOWED_HOSTS` hook, not host-specific DNS values.
+- Duplicate hosts are deduplicated.
+- Quoted host tokens are parsed without splitting inside the quoted token.
+- A fully quoted dotenv list such as `"phone.ts.net,tablet.ts.net"` is parsed as separate hosts.
+- An explicitly empty shell or `.env.local` value clears additional hosts instead of falling back to `.env`.
+- Requests using configured local hosts are accepted by the dev server.
+
+#### Rollback/Cleanup
+- Remove `CODEXUI_VITE_ALLOWED_HOSTS` from `.env.local` or the shell environment.
 ### Feature: Project recency sort, pins, and mobile move mode
 
 #### Prerequisites
