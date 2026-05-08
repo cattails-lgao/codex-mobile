@@ -3518,18 +3518,69 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
-async function persistWorkspaceRoot(workspaceRoot: string): Promise<void> {
+let workspaceRootsMutation: Promise<void> = Promise.resolve()
+
+function queueWorkspaceRootsMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const run = workspaceRootsMutation.catch(() => undefined).then(mutation)
+  workspaceRootsMutation = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+function prependUniqueString(value: string, items: string[]): string[] {
+  return [value, ...items.filter((item) => item !== value)]
+}
+
+async function updateWorkspaceRootsState(
+  updater: (existingState: WorkspaceRootsState) => WorkspaceRootsState,
+): Promise<void> {
+  await queueWorkspaceRootsMutation(async () => {
+    const existingState = await readWorkspaceRootsState()
+    await writeWorkspaceRootsState(updater(existingState))
+  })
+}
+
+async function persistWorkspaceRoot(workspaceRoot: string, label = ''): Promise<void> {
   const normalizedRoot = workspaceRoot.trim()
   if (!normalizedRoot) return
 
-  const existingState = await readWorkspaceRootsState()
-  await writeWorkspaceRootsState({
-    order: [normalizedRoot, ...existingState.order.filter((item) => item !== normalizedRoot)],
-    labels: existingState.labels,
-    active: [normalizedRoot, ...existingState.active.filter((item) => item !== normalizedRoot)],
-    projectOrder: [normalizedRoot, ...existingState.projectOrder.filter((item) => item !== normalizedRoot)],
-    remoteProjects: existingState.remoteProjects,
+  await updateWorkspaceRootsState((existingState) => {
+    const nextLabels = { ...existingState.labels }
+    const trimmedLabel = label.trim()
+    if (trimmedLabel.length > 0) {
+      nextLabels[normalizedRoot] = trimmedLabel
+    }
+    return {
+      order: prependUniqueString(normalizedRoot, existingState.order),
+      labels: nextLabels,
+      active: prependUniqueString(normalizedRoot, existingState.active),
+      projectOrder: prependUniqueString(normalizedRoot, existingState.projectOrder),
+      remoteProjects: existingState.remoteProjects,
+    }
   })
+}
+
+async function rollbackCreatedWorktree(
+  gitRoot: string,
+  worktreeCwd: string,
+  cleanupDirectory?: string,
+  branchName?: string,
+): Promise<void> {
+  try {
+    await runCommand('git', ['worktree', 'remove', '--force', worktreeCwd], { cwd: gitRoot })
+  } catch {
+    await rm(worktreeCwd, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  if (cleanupDirectory && cleanupDirectory !== worktreeCwd) {
+    await rm(cleanupDirectory, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  if (branchName) {
+    await runCommand('git', ['branch', '-D', branchName], { cwd: gitRoot }).catch(() => undefined)
+  }
 }
 
 function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
@@ -5769,7 +5820,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '--detach', worktreeCwd, startPoint], { cwd: gitRoot })
           }
-          await persistWorkspaceRoot(worktreeCwd)
+          try {
+            await persistWorkspaceRoot(worktreeCwd)
+          } catch (error) {
+            await rollbackCreatedWorktree(gitRoot, worktreeCwd, worktreeParent)
+            throw error
+          }
 
           setJson(res, 200, {
             data: {
@@ -5839,7 +5895,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeCwd, 'HEAD'], { cwd: gitRoot })
           }
-          await persistWorkspaceRoot(worktreeCwd)
+          try {
+            await persistWorkspaceRoot(worktreeCwd)
+          } catch (error) {
+            await rollbackCreatedWorktree(gitRoot, worktreeCwd, undefined, branchName)
+            throw error
+          }
 
           setJson(res, 200, {
             data: {
@@ -6174,8 +6235,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'Invalid body: expected object' })
           return
         }
-        const existingState = await readWorkspaceRootsState()
-        const nextState: WorkspaceRootsState = {
+        await updateWorkspaceRootsState((existingState) => ({
           order: normalizeStringArray(record.order),
           labels: normalizeStringRecord(record.labels),
           active: normalizeStringArray(record.active),
@@ -6183,8 +6243,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ? normalizeStringArray(record.projectOrder)
             : existingState.projectOrder,
           remoteProjects: existingState.remoteProjects,
-        }
-        await writeWorkspaceRootsState(nextState)
+        }))
         setJson(res, 200, { ok: true })
         return
       }
@@ -6231,20 +6290,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
 
-        const existingState = await readWorkspaceRootsState()
-        const nextOrder = [normalizedPath, ...existingState.order.filter((item) => item !== normalizedPath)]
-        const nextActive = [normalizedPath, ...existingState.active.filter((item) => item !== normalizedPath)]
-        const nextLabels = { ...existingState.labels }
-        if (label.trim().length > 0) {
-          nextLabels[normalizedPath] = label.trim()
-        }
-        await writeWorkspaceRootsState({
-          order: nextOrder,
-          labels: nextLabels,
-          active: nextActive,
-          projectOrder: [normalizedPath, ...existingState.projectOrder.filter((item) => item !== normalizedPath)],
-          remoteProjects: existingState.remoteProjects,
-        })
+        await persistWorkspaceRoot(normalizedPath, label)
         setJson(res, 200, { data: { path: normalizedPath } })
         return
       }
