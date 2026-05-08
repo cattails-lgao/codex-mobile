@@ -4772,6 +4772,7 @@ class AppServerProcess {
 class BackendQueueProcessor {
   private readonly processingThreadIds = new Set<string>()
   private readonly queueDrainTimersByThreadId = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly queueDrainDueAtByThreadId = new Map<string, number>()
   private readonly unsubscribe: () => void
 
   constructor(private readonly appServer: AppServerProcess) {
@@ -4790,6 +4791,7 @@ class BackendQueueProcessor {
       clearTimeout(timer)
     }
     this.queueDrainTimersByThreadId.clear()
+    this.queueDrainDueAtByThreadId.clear()
     this.processingThreadIds.clear()
   }
 
@@ -4805,13 +4807,25 @@ class BackendQueueProcessor {
   }
 
   scheduleThreadQueueDrain(threadId: string, delayMs = 5000): void {
-    if (!threadId || this.queueDrainTimersByThreadId.has(threadId)) return
+    if (!threadId) return
+    const normalizedDelayMs = Math.max(0, delayMs)
+    const nextDueAt = Date.now() + normalizedDelayMs
+    const existingDueAt = this.queueDrainDueAtByThreadId.get(threadId)
+    const existingTimer = this.queueDrainTimersByThreadId.get(threadId)
+    if (existingTimer) {
+      if (existingDueAt !== undefined && existingDueAt <= nextDueAt) return
+      clearTimeout(existingTimer)
+      this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
+    }
     const timer = setTimeout(() => {
       this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
       void this.processThreadQueue(threadId)
-    }, Math.max(0, delayMs))
+    }, normalizedDelayMs)
     timer.unref?.()
     this.queueDrainTimersByThreadId.set(threadId, timer)
+    this.queueDrainDueAtByThreadId.set(threadId, nextDueAt)
   }
 
   async processThreadQueue(threadId: string): Promise<void> {
