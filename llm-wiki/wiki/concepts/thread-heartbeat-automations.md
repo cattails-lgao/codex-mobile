@@ -17,11 +17,11 @@ The thread overflow menu shows `Add automation...` when no automation is attache
 
 ## Run Now
 
-Saved automations have a `Run now` action. The backend validates the selected automation, appends the saved prompt to the persisted thread queue, and schedules immediate queue drain.
+Saved automations have a `Run now` action. The backend validates the selected automation, appends a Codex.app-style heartbeat payload to the persisted thread queue, and schedules immediate queue drain.
 
 This keeps manual runs aligned with normal thread behavior: an idle thread can start the run immediately, while a busy thread receives the automation run as a queued turn instead of being interrupted.
 
-Manual runs must not write the raw `<heartbeat>` envelope into thread history because Codex.app renders that XML as normal user-visible text.
+Manual run heartbeat payloads include `automation_id`, `current_time_iso`, and `instructions`, matching the fields Codex.app requires for heartbeat user-message parsing. Incomplete heartbeat payloads remain normal text instead of being labeled as automation runs.
 
 ## Testing
 

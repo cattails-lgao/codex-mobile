@@ -14,9 +14,9 @@ The sidebar thread menu shows `Manage automations...` when at least one automati
 
 ## Manual run
 
-The automation manager includes `Run now` for saved automations. The run endpoint validates the `threadId` and `automationId`, appends the saved automation prompt as a default-mode queued message for the target thread, and schedules the backend queue processor immediately.
+The automation manager includes `Run now` for saved automations. The run endpoint validates the `threadId` and `automationId`, appends a Codex.app-style heartbeat payload as a default-mode queued message for the target thread, and schedules the backend queue processor immediately.
 
-Manual runs intentionally do not inject the raw `<heartbeat>` envelope into the queued message. That envelope is a renderer-specific marker in `codex-web-local`; Codex.app displays it as normal user text when it is written into thread history.
+Manual run heartbeat payloads include `automation_id`, `current_time_iso`, and `instructions`, matching the fields Codex.app requires for heartbeat user-message parsing. Incomplete heartbeat payloads must be treated as normal text so malformed internal XML does not get mislabeled as an automation run.
 
 Manual runs use the persisted thread queue rather than directly interrupting or steering a turn. If the target thread is idle, the queue can start the automation turn immediately. If the thread is already running, the automation waits in queue order until the thread is available.
 

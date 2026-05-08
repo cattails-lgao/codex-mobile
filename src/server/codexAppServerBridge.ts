@@ -3646,7 +3646,13 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
 function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
   return {
     id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
-    text: automation.prompt,
+    text: `<heartbeat>
+<automation_id>${automation.id}</automation_id>
+<current_time_iso>${new Date().toISOString()}</current_time_iso>
+<instructions>
+${automation.prompt}
+</instructions>
+</heartbeat>`,
     imageUrls: [],
     skills: [],
     fileAttachments: [],

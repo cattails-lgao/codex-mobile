@@ -101,7 +101,7 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - Multiple thread-scoped heartbeat automations can be created under the Codex automations store with the same `target_thread_id`.
 - The automation manager is hosted from the thread menu and supports adding, selecting, editing, and removing individual automations.
-- `Run now` enqueues the selected automation immediately using that automation's saved prompt, without requiring a schedule tick.
+- `Run now` enqueues the selected automation immediately using a Codex.app-style heartbeat payload with `automation_id`, `current_time_iso`, and `instructions`, without requiring a schedule tick.
 - Manual runs use the existing thread queue, so they do not interrupt an active turn and run in order when the thread is available.
 - Removing one automation does not remove other automations attached to the same thread.
 - Removing the final automation removes the thread row automation chip and returns the menu to `Add automation…`.

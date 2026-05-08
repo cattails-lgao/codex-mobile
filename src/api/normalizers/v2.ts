@@ -93,13 +93,15 @@ function readHeartbeatField(value: string, field: string): string {
   return match?.[1]?.trim() ?? ''
 }
 
-function parseHeartbeatEnvelope(value: string): { automationId: string; instructions: string } | null {
+function parseHeartbeatEnvelope(value: string): { automationId: string; currentTimeIso: string; instructions: string } | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('<heartbeat>') || !trimmed.endsWith('</heartbeat>')) return null
+  const currentTimeIso = readHeartbeatField(trimmed, 'current_time_iso')
   const instructions = readHeartbeatField(trimmed, 'instructions')
-  if (!instructions) return null
+  if (!currentTimeIso || !instructions) return null
   return {
     automationId: readHeartbeatField(trimmed, 'automation_id'),
+    currentTimeIso,
     instructions,
   }
 }
