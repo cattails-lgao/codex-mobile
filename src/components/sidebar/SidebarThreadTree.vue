@@ -824,7 +824,6 @@ const emit = defineEmits<{
   'start-new-thread': [projectName: string]
   'browse-thread-files': [threadId: string]
   'browse-project-files': [projectName: string]
-  'request-project-git-status': [projectName: string]
   'create-project-worktree': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
@@ -1631,7 +1630,6 @@ function toggleProjectMenu(projectName: string): void {
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'actions'
   projectRenameDraft.value = getProjectDisplayName(projectName)
-  emit('request-project-git-status', projectName)
   nextTick(() => {
     updateProjectMenuDirection(projectName)
   })
