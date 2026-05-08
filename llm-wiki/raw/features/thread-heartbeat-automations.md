@@ -20,6 +20,8 @@ Manual run heartbeat payloads include `automation_id`, `current_time_iso`, and `
 
 Manual runs use the persisted thread queue rather than directly interrupting or steering a turn. If the target thread is idle, the queue can start the automation turn immediately. If the thread is already running, the automation waits in queue order until the thread is available.
 
+Heartbeat user messages render as visible user-side automation prompt cards labeled `Sent via automation`. The renderer shows the parsed `instructions` text and never shows the raw heartbeat XML for valid payloads.
+
 ## Verification expectations
 
-Manual verification should cover light and dark themes, multiple automations on one thread, selecting and editing each automation independently, `Run now` while idle, `Run now` while another turn is active, and cleanup of all test automations.
+Manual verification should cover light and dark themes, multiple automations on one thread, selecting and editing each automation independently, `Run now` while idle, `Run now` while another turn is active, visible automation prompt cards in selected threads, and cleanup of all test automations.

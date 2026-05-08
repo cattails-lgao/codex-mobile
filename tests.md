@@ -96,12 +96,14 @@ This file tracks manual regression and feature verification steps.
 11. Start a normal thread turn, reopen `Manage automations…`, click `Run now` for another saved automation, and confirm it waits in the queue until the active turn can finish.
 12. Remove one automation and confirm the other remains attached to the same thread.
 13. Switch to dark theme, reopen `Manage automations…`, and confirm the list, inputs, textarea, status select, `Run now`, and queued-run notice remain readable.
-14. Remove the final automation and confirm the thread menu returns to `Add automation…`.
+14. Select a thread that already contains automation runs and confirm both the automation prompt card and the assistant reply are visible.
+15. Remove the final automation and confirm the thread menu returns to `Add automation…`.
 
 #### Expected Results
 - Multiple thread-scoped heartbeat automations can be created under the Codex automations store with the same `target_thread_id`.
 - The automation manager is hosted from the thread menu and supports adding, selecting, editing, and removing individual automations.
 - `Run now` enqueues the selected automation immediately using a Codex.app-style heartbeat payload with `automation_id`, `current_time_iso`, and `instructions`, without requiring a schedule tick.
+- Automation heartbeat prompts render as visible user-side cards labeled `Sent via automation`; raw heartbeat XML is not shown.
 - Manual runs use the existing thread queue, so they do not interrupt an active turn and run in order when the thread is available.
 - Removing one automation does not remove other automations attached to the same thread.
 - Removing the final automation removes the thread row automation chip and returns the menu to `Add automation…`.

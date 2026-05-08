@@ -407,7 +407,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     if (hasRenderableUserContent) {
       messages.push({
         id: item.id,
-        role: parsed.isAutomationRun ? 'system' : 'user',
+        role: 'user',
         text: parsed.text,
         images: parsed.images,
         skills: parsed.skills.length > 0 ? parsed.skills : undefined,

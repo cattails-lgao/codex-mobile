@@ -23,6 +23,8 @@ This keeps manual runs aligned with normal thread behavior: an idle thread can s
 
 Manual run heartbeat payloads include `automation_id`, `current_time_iso`, and `instructions`, matching the fields Codex.app requires for heartbeat user-message parsing. Incomplete heartbeat payloads remain normal text instead of being labeled as automation runs.
 
+Valid heartbeat user messages render as visible user-side prompt cards labeled `Sent via automation`. The card shows parsed instructions instead of raw heartbeat XML, so selected threads show both automation prompts and assistant replies.
+
 ## Testing
 
-Regression coverage should verify multiple automations on one thread, independent edit/remove behavior, idle `Run now`, busy-thread queued `Run now`, and readable light/dark theme states.
+Regression coverage should verify multiple automations on one thread, independent edit/remove behavior, idle `Run now`, busy-thread queued `Run now`, visible automation prompt cards in selected threads, and readable light/dark theme states.
