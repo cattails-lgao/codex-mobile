@@ -533,16 +533,6 @@
             <button
               class="chats-section-action"
               type="button"
-              :aria-pressed="filterActive"
-              :aria-label="filterActive ? t('Hide chat filters') : t('Filter chats')"
-              :title="filterActive ? t('Hide chat filters') : t('Filter chats')"
-              @click.stop="$emit('toggle-filter')"
-            >
-              <IconTablerFilter class="thread-icon" />
-            </button>
-            <button
-              class="chats-section-action"
-              type="button"
               :aria-label="t('New chat')"
               :title="t('New chat')"
               @click.stop="$emit('start-new-chat')"
@@ -790,7 +780,6 @@ import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerFolderOpen from '../icons/IconTablerFolderOpen.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
-import IconTablerFilter from '../icons/IconTablerFilter.vue'
 import IconTablerGripVertical from '../icons/IconTablerGripVertical.vue'
 import IconTablerPin from '../icons/IconTablerPin.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
@@ -813,7 +802,6 @@ const props = defineProps<{
   isLoading: boolean
   searchQuery: string
   searchMatchedThreadIds: string[] | null
-  filterActive: boolean
 }>()
 
 const { t } = useUiLanguage()
@@ -834,7 +822,6 @@ const emit = defineEmits<{
   'export-thread': [threadId: string]
   'fork-thread': [threadId: string]
   'start-new-chat': []
-  'toggle-filter': []
 }>()
 
 type PendingProjectDrag = {
@@ -1103,7 +1090,6 @@ const chatThreads = computed(() => {
       const secondTimestamp = new Date(second[timestampKey] || second.updatedAtIso || second.createdAtIso).getTime()
       return secondTimestamp - firstTimestamp
     })
-    .slice(0, 4)
 })
 
 const threadById = computed(() => {

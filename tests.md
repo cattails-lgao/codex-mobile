@@ -4675,3 +4675,32 @@ Newly created temporary and permanent worktrees are persisted in workspace roots
 - Remove temporary test worktrees with `git worktree remove --force <worktree-path>`.
 - Delete any empty temporary parent directory left under `$CODEX_HOME/worktrees/<id>`.
 - Remove permanent test worktrees with `git worktree remove --force <worktree-path>` and delete their test branch if needed.
+
+---
+
+### Sidebar chats show all projectless chats
+
+#### Feature/Change Name
+The sidebar Chats section lists all projectless chats and no longer shows the per-section filter button.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Thread history contains more than five projectless chats
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open the sidebar Chats section.
+2. Count the visible projectless chat rows and confirm older rows beyond the latest five are present.
+3. Confirm the Chats section header only shows the New chat action and does not show a filter button.
+4. Use the main sidebar search button and confirm global thread search still opens and filters chats/projects.
+5. Switch to dark theme and repeat steps 1-4.
+
+#### Expected Results
+- All projectless chats are listed in the Chats section according to the selected chat sort mode.
+- The Chats header does not include a filter action.
+- The New chat action remains available.
+- The main sidebar search remains functional.
+- Rows and header actions remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- None.

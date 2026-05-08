@@ -17,8 +17,6 @@ const zhCN: Record<string, string> = {
   'Sort by': '排序',
   'Created': '创建时间',
   'Updated': '更新时间',
-  'Filter chats': '筛选聊天',
-  'Hide chat filters': '隐藏聊天筛选',
   'New chat': '新聊天',
   'No chats': '没有聊天',
   'Skills Hub': '技能中心',
