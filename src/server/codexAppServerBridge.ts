@@ -248,6 +248,15 @@ type SessionRecoveredSkillInput = {
   path: string
 }
 
+type SessionSkillInputCacheEntry = {
+  size: number
+  mtimeMs: number
+  skillsByTurnId: Map<string, SessionRecoveredSkillInput[]>
+}
+
+const SESSION_SKILL_INPUT_CACHE_LIMIT = 64
+const sessionSkillInputCache = new Map<string, SessionSkillInputCacheEntry>()
+
 function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('<skill>')) return null
@@ -257,7 +266,7 @@ function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null
   return { name, path }
 }
 
-function buildSessionSkillInputsByTurn(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionRecoveredSkillInput[]> {
+function buildSessionSkillInputsByTurn(sessionLogRaw: string): Map<string, SessionRecoveredSkillInput[]> {
   let currentTurnId = ''
   const skillsByTurnId = new Map<string, SessionRecoveredSkillInput[]>()
 
@@ -283,7 +292,7 @@ function buildSessionSkillInputsByTurn(sessionLogRaw: string, turnIds: Set<strin
       continue
     }
 
-    if (row.type !== 'response_item' || !currentTurnId || !turnIds.has(currentTurnId)) continue
+    if (row.type !== 'response_item' || !currentTurnId) continue
     const payloadRecord = asRecord(row.payload)
     if (payloadRecord?.type !== 'message' || payloadRecord.role !== 'user') continue
     const content = Array.isArray(payloadRecord.content) ? payloadRecord.content : []
@@ -304,7 +313,31 @@ function buildSessionSkillInputsByTurn(sessionLogRaw: string, turnIds: Set<strin
   return skillsByTurnId
 }
 
-export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+async function readCachedSessionSkillInputsByTurn(sessionPath: string): Promise<Map<string, SessionRecoveredSkillInput[]>> {
+  const sessionStat = await stat(sessionPath)
+  const cached = sessionSkillInputCache.get(sessionPath)
+  if (cached && cached.size === sessionStat.size && cached.mtimeMs === sessionStat.mtimeMs) {
+    return cached.skillsByTurnId
+  }
+
+  const sessionLogRaw = await readFile(sessionPath, 'utf8')
+  const skillsByTurnId = buildSessionSkillInputsByTurn(sessionLogRaw)
+  sessionSkillInputCache.set(sessionPath, {
+    size: sessionStat.size,
+    mtimeMs: sessionStat.mtimeMs,
+    skillsByTurnId,
+  })
+  if (sessionSkillInputCache.size > SESSION_SKILL_INPUT_CACHE_LIMIT) {
+    const oldestKey = sessionSkillInputCache.keys().next().value
+    if (oldestKey) sessionSkillInputCache.delete(oldestKey)
+  }
+  return skillsByTurnId
+}
+
+function mergeSessionSkillInputsIntoTurnsFromMap(
+  turns: unknown[],
+  skillsByTurnId: Map<string, SessionRecoveredSkillInput[]>,
+): unknown[] {
   const turnIds = new Set<string>()
   for (const turn of turns) {
     const turnRecord = asRecord(turn)
@@ -313,7 +346,6 @@ export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw
   }
   if (turnIds.size === 0) return turns
 
-  const skillsByTurnId = buildSessionSkillInputsByTurn(sessionLogRaw, turnIds)
   if (skillsByTurnId.size === 0) return turns
 
   let changed = false
@@ -324,11 +356,21 @@ export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw
     const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
     if (!turnRecord || !skills || skills.length === 0 || !items) return turn
 
-    let addedToTurn = false
-    const nextItems = items.map((item) => {
+    let targetUserMessageIndex = -1
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const itemRecord = asRecord(items[index])
+      if (itemRecord?.type === 'userMessage' && Array.isArray(itemRecord.content)) {
+        targetUserMessageIndex = index
+        break
+      }
+    }
+    if (targetUserMessageIndex < 0) return turn
+
+    let addedToMessage = false
+    const nextItems = items.map((item, index) => {
       const itemRecord = asRecord(item)
       const content = Array.isArray(itemRecord?.content) ? itemRecord.content : null
-      if (addedToTurn || itemRecord?.type !== 'userMessage' || !content) return item
+      if (index !== targetUserMessageIndex || itemRecord?.type !== 'userMessage' || !content) return item
 
       const existingSkillPaths = new Set(
         content.flatMap((contentItem) => {
@@ -340,7 +382,7 @@ export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw
       const missingSkills = skills.filter((skill) => !existingSkillPaths.has(skill.path))
       if (missingSkills.length === 0) return item
 
-      addedToTurn = true
+      addedToMessage = true
       changed = true
       return {
         ...itemRecord,
@@ -351,10 +393,14 @@ export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw
       }
     })
 
-    return addedToTurn ? { ...turnRecord, items: nextItems } : turn
+    return addedToMessage ? { ...turnRecord, items: nextItems } : turn
   })
 
   return changed ? nextTurns : turns
+}
+
+export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  return mergeSessionSkillInputsIntoTurnsFromMap(turns, buildSessionSkillInputsByTurn(sessionLogRaw))
 }
 
 async function mergeSessionSkillInputsIntoThreadResult(result: unknown): Promise<unknown> {
@@ -367,8 +413,8 @@ async function mergeSessionSkillInputsIntoThreadResult(result: unknown): Promise
   }
 
   try {
-    const sessionLogRaw = await readFile(sessionPath, 'utf8')
-    const mergedTurns = mergeSessionSkillInputsIntoTurns(turns, sessionLogRaw)
+    const skillsByTurnId = await readCachedSessionSkillInputsByTurn(sessionPath)
+    const mergedTurns = mergeSessionSkillInputsIntoTurnsFromMap(turns, skillsByTurnId)
     if (mergedTurns === turns) return result
     return {
       ...record,
