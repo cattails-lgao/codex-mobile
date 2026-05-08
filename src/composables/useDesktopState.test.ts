@@ -418,6 +418,36 @@ describe('thread unread state helpers', () => {
   })
 })
 
+describe('collaboration mode selection', () => {
+  it('does not carry plan mode from new chats into existing threads', () => {
+    installTestWindow({
+      'codex-web-local.collaboration-mode.v1': 'plan',
+    })
+
+    const state = useDesktopState()
+
+    expect(state.selectedCollaborationMode.value).toBe('default')
+
+    state.setSelectedCollaborationMode('plan')
+
+    expect(state.selectedCollaborationMode.value).toBe('plan')
+    expect(window.localStorage.getItem('codex-web-local.collaboration-mode-by-context.v1')).toBe(null)
+
+    state.primeSelectedThread('thread-a')
+
+    expect(state.selectedCollaborationMode.value).toBe('default')
+
+    state.setSelectedCollaborationMode('plan')
+    state.primeSelectedThread('thread-b')
+
+    expect(state.selectedCollaborationMode.value).toBe('default')
+
+    state.primeSelectedThread('thread-a')
+
+    expect(state.selectedCollaborationMode.value).toBe('plan')
+  })
+})
+
 describe('pinned project ordering', () => {
   const groups: UiProjectGroup[] = [
     { projectName: 'alpha', threads: [thread('alpha-chat', '/tmp/alpha')] },
