@@ -3518,6 +3518,20 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
+async function persistWorkspaceRoot(workspaceRoot: string): Promise<void> {
+  const normalizedRoot = workspaceRoot.trim()
+  if (!normalizedRoot) return
+
+  const existingState = await readWorkspaceRootsState()
+  await writeWorkspaceRootsState({
+    order: [normalizedRoot, ...existingState.order.filter((item) => item !== normalizedRoot)],
+    labels: existingState.labels,
+    active: [normalizedRoot, ...existingState.active.filter((item) => item !== normalizedRoot)],
+    projectOrder: [normalizedRoot, ...existingState.projectOrder.filter((item) => item !== normalizedRoot)],
+    remoteProjects: existingState.remoteProjects,
+  })
+}
+
 function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
   const record = asRecord(value)
   if (!record) return { botToken: '', chatIds: [], allowedUserIds: [] }
@@ -5755,6 +5769,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '--detach', worktreeCwd, startPoint], { cwd: gitRoot })
           }
+          await persistWorkspaceRoot(worktreeCwd)
 
           setJson(res, 200, {
             data: {
@@ -5824,6 +5839,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeCwd, 'HEAD'], { cwd: gitRoot })
           }
+          await persistWorkspaceRoot(worktreeCwd)
 
           setJson(res, 200, {
             data: {
