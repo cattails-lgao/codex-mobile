@@ -4693,13 +4693,16 @@ Project Git repository status is loaded lazily from the project action menu inst
 2. Open browser devtools or the runtime profile output and confirm startup does not issue one `/codex-api/git/repository-status` request per visible project.
 3. Open the action menu for a Git-backed project.
 4. Confirm the menu remains readable and the `New worktree` item appears after the Git status check completes.
-5. Open the action menu for a non-Git project.
-6. Confirm the menu remains readable and `New worktree` is not shown.
-7. Switch to dark theme and repeat steps 3 through 6.
+5. Right-click the header row for the same Git-backed project.
+6. Confirm the context menu remains readable and the `New worktree` item appears after the Git status check completes.
+7. Open the action menu for a non-Git project.
+8. Confirm the menu remains readable and `New worktree` is not shown.
+9. Switch to dark theme and repeat steps 3 through 8.
 
 #### Expected Results
 - Startup avoids eager Git status scans for all project rows.
-- Opening a project menu still loads that project's Git status on demand.
+- Opening a project menu through click or right-click still loads that project's Git status on demand.
+- Menus re-measure placement after async Git status updates add the `New worktree` row.
 - `New worktree` remains available for Git-backed projects and hidden for non-Git projects.
 - Project menus remain usable and visually consistent in both light and dark themes.
 
