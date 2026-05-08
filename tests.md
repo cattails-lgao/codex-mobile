@@ -462,123 +462,34 @@ The accidental `npx run dev` command starts the repository dev wrapper instead o
 
 ---
 
-### Unread thread cutoff state
+### Selected skills visible on sent chat messages
 
 #### Feature/Change Name
-Unread thread state uses a local cutoff timestamp so existing threads are not all marked unread after first load.
-
-#### Prerequisites/Setup
-1. Dev server running (`pnpm run dev`).
-2. Browser localStorage is available for the app origin.
-3. At least two existing threads are present.
-4. Light theme and dark theme are available from the appearance switcher.
-
-#### Steps
-1. Clear only `codex-web-local.thread-unread-cutoff.v1` from localStorage for the app origin.
-2. Load the app in light theme.
-3. Confirm existing threads are not all marked unread on first load.
-4. Create or receive an update in a different thread after the app has loaded.
-5. Confirm that updated thread can show unread when it is not selected or in progress.
-6. Create or receive an update in a second unselected thread.
-7. Open the first updated thread and confirm only that thread's unread indicator clears.
-8. Confirm the second updated thread remains unread until it is opened.
-9. Switch to dark theme and repeat steps 4 through 8.
-
-#### Expected Results
-- Missing cutoff state initializes to the current time instead of treating every thread as unread.
-- Threads updated after the cutoff can still become unread.
-- Opening a thread updates only that thread's read state and clears only that thread's unread indicator.
-- Unread indicators remain readable in both light theme and dark theme.
-
-#### Rollback/Cleanup
-- Remove any disposable test threads created for this validation.
-
----
-
-### CLI password output redaction
-
-#### Feature/Change Name
-CLI startup output no longer prints the configured password or embeds it in the tunnel URL.
-
-#### Prerequisites/Setup
-1. Project dependencies are installed.
-2. CLI build is available from the current branch.
-
-#### Steps
-1. Run `pnpm run build:cli`.
-2. Start the CLI with a disposable password: `node dist-cli/index.js --no-tunnel --no-open --port 5998 --password TEST_SECRET_SHOULD_NOT_PRINT`.
-3. Confirm startup output includes the local and network URLs.
-4. Confirm startup output does not include `Password:` or `TEST_SECRET_SHOULD_NOT_PRINT`.
-5. Start the CLI without an explicit password and confirm startup output prints `Generated password file:` with a path under `$CODEX_HOME`.
-6. Confirm the generated password file exists, is readable by the current user, and has `0600` permissions.
-7. If tunnel testing is available, start with tunnel enabled and confirm the printed tunnel URL and QR code do not include `/password=`.
-
-#### Expected Results
-- Password-protected startup still works.
-- The password is not printed as a standalone line.
-- Auto-generated passwords remain discoverable through the generated password file path.
-- Tunnel output does not include an autologin URL containing the password.
-
-#### Rollback/Cleanup
-- Stop the disposable CLI process.
-
----
-
-### Composer skill chip opens SKILL.md
-
-#### Feature/Change Name
-Selected skill labels in the thread composer open that skill's `SKILL.md` in the web file browser.
+Selected composer skills are shown as skill chips on the user message after send/history load.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
-2. At least one installed skill is available in the composer skill picker
-3. Browser pop-ups from the local dev origin are allowed
-4. Light theme and dark theme are available from the appearance switcher
+2. At least one installed skill is available in the composer `Skills` dropdown
+3. Light theme and dark theme both available from the appearance switcher
 
 #### Steps
-1. In light theme, open any thread with the composer enabled.
-2. Open the `Skills` picker and select an installed skill.
-3. Confirm the selected skill appears as a green chip above the input field.
-4. Click the skill name on the green chip.
-5. Confirm a new tab opens to `/codex-local-browse.../SKILL.md` for that skill.
-6. Return to the composer and click the chip `x`.
-7. Confirm the skill is removed and no file-browser tab is opened by the remove action.
-8. Switch to dark theme and repeat steps 2 through 7.
+1. In light theme, open an existing thread or start a new thread.
+2. Open the composer `Skills` dropdown and select one skill.
+3. Type and send a short message.
+4. Confirm the sent user message shows a `Skill` chip with the selected skill name.
+5. Click the skill chip and confirm the current browser tab opens the skill `SKILL.md` file through the local browse view.
+6. Refresh or reopen the thread and confirm the same skill chip remains visible and clickable in history.
+7. Switch to dark theme and repeat steps 2-6 with another message.
 
 #### Expected Results
-- The skill chip label is clickable and opens the selected skill's `SKILL.md` in the web file browser.
-- Skill paths that point at a skill directory are normalized to the nested `SKILL.md` file.
-- The remove button still only removes the skill from the composer.
-- The chip and focus/hover states remain readable in light theme and dark theme.
+- Selected skills are visible on the user message, not only in the composer before send.
+- Skill chips show the skill name and expose the skill path in the tooltip.
+- Skill chips link to the selected skill file using the local browse route in the current tab.
+- Skill chips remain visible after thread history reload.
+- Skill chips are readable in both light and dark themes.
 
 #### Rollback/Cleanup
-- Close any file-browser tabs opened during validation.
-
----
-
-### npx run dev compatibility shim
-
-#### Feature/Change Name
-The accidental `npx run dev` command starts the repository dev wrapper instead of failing with a missing `dev` module.
-
-#### Prerequisites/Setup
-1. Run from the repository root.
-2. Local dependencies are available, or the dev wrapper can install them with `pnpm install`.
-3. Port 5173 is free, or Vite can select the next available port.
-
-#### Steps
-1. Run `npx run dev`.
-2. Confirm the command reaches the existing `scripts/dev.cjs` wrapper and starts Vite.
-3. Stop the dev server with Ctrl-C.
-4. Repeat with `npx run dev --host 127.0.0.1 --port 4173`.
-
-#### Expected Results
-- `npx run dev` no longer fails with `Cannot find module '<repo>/dev'`.
-- The command starts the same dev server path as `npm run dev` / `pnpm run dev`.
-- Host and port arguments are passed through to Vite.
-
-#### Rollback/Cleanup
-- Stop any dev server process started for validation.
+- Remove disposable test messages/threads if needed.
 
 ---
 
