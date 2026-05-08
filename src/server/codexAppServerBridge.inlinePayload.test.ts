@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { sanitizeThreadTurnsInlinePayloads } from './codexAppServerBridge'
+import { mergeSessionSkillInputsIntoTurns, sanitizeThreadTurnsInlinePayloads } from './codexAppServerBridge'
 
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const pngDataUrl = `data:image/png;base64,${pngBase64}`
@@ -224,5 +224,76 @@ describe('thread inline media sanitization', () => {
     const result = await sanitizeThreadTurnsInlinePayloads('thread/list', payload)
 
     expect(result).toBe(payload)
+  })
+})
+
+describe('thread session skill recovery', () => {
+  it('adds selected skill inputs from session JSONL to matching user messages', () => {
+    const turns = [{
+      id: 'turn-1',
+      items: [{
+        id: 'item-1',
+        type: 'userMessage',
+        content: [{ type: 'text', text: 'use a skill', text_elements: [] }],
+      }],
+    }]
+    const sessionLog = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'use a skill' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n---\n# Browser\n</skill>',
+          }],
+        },
+      }),
+    ].join('\n')
+
+    const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
+    expect(merged[0].items[0].content).toEqual([
+      { type: 'text', text: 'use a skill', text_elements: [] },
+      { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+    ])
+  })
+
+  it('does not duplicate skill inputs that are already present', () => {
+    const turns = [{
+      id: 'turn-1',
+      items: [{
+        id: 'item-1',
+        type: 'userMessage',
+        content: [
+          { type: 'text', text: 'use a skill', text_elements: [] },
+          { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+        ],
+      }],
+    }]
+    const sessionLog = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n</skill>',
+          }],
+        },
+      }),
+    ].join('\n')
+
+    expect(mergeSessionSkillInputsIntoTurns(turns, sessionLog)).toBe(turns)
   })
 })

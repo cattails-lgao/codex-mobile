@@ -243,6 +243,145 @@ type SessionRecoveredTurnFileChanges = {
   fileChanges: SessionRecoveredFileChange[]
 }
 
+type SessionRecoveredSkillInput = {
+  name: string
+  path: string
+}
+
+function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('<skill>')) return null
+  const name = trimmed.match(/<name>\s*([\s\S]*?)\s*<\/name>/u)?.[1]?.trim() ?? ''
+  const path = trimmed.match(/<path>\s*([\s\S]*?)\s*<\/path>/u)?.[1]?.trim() ?? ''
+  if (!name || !path) return null
+  return { name, path }
+}
+
+function buildSessionSkillInputsByTurn(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionRecoveredSkillInput[]> {
+  let currentTurnId = ''
+  const skillsByTurnId = new Map<string, SessionRecoveredSkillInput[]>()
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const payloadRecord = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(payloadRecord?.turn_id) || currentTurnId
+      continue
+    }
+    if (row.type === 'event_msg') {
+      const payloadRecord = asRecord(row.payload)
+      if (payloadRecord?.type === 'task_started') {
+        currentTurnId = readNonEmptyString(payloadRecord.turn_id) || currentTurnId
+      }
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId || !turnIds.has(currentTurnId)) continue
+    const payloadRecord = asRecord(row.payload)
+    if (payloadRecord?.type !== 'message' || payloadRecord.role !== 'user') continue
+    const content = Array.isArray(payloadRecord.content) ? payloadRecord.content : []
+
+    for (const contentItem of content) {
+      const contentRecord = asRecord(contentItem)
+      if (contentRecord?.type !== 'input_text' || typeof contentRecord.text !== 'string') continue
+      const skill = parseSessionSkillText(contentRecord.text)
+      if (!skill) continue
+      const existing = skillsByTurnId.get(currentTurnId) ?? []
+      if (!existing.some((item) => item.path === skill.path)) {
+        existing.push(skill)
+        skillsByTurnId.set(currentTurnId, existing)
+      }
+    }
+  }
+
+  return skillsByTurnId
+}
+
+export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  const turnIds = new Set<string>()
+  for (const turn of turns) {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    if (turnId) turnIds.add(turnId)
+  }
+  if (turnIds.size === 0) return turns
+
+  const skillsByTurnId = buildSessionSkillInputsByTurn(sessionLogRaw, turnIds)
+  if (skillsByTurnId.size === 0) return turns
+
+  let changed = false
+  const nextTurns = turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    const skills = turnId ? skillsByTurnId.get(turnId) : undefined
+    const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
+    if (!turnRecord || !skills || skills.length === 0 || !items) return turn
+
+    let addedToTurn = false
+    const nextItems = items.map((item) => {
+      const itemRecord = asRecord(item)
+      const content = Array.isArray(itemRecord?.content) ? itemRecord.content : null
+      if (addedToTurn || itemRecord?.type !== 'userMessage' || !content) return item
+
+      const existingSkillPaths = new Set(
+        content.flatMap((contentItem) => {
+          const contentRecord = asRecord(contentItem)
+          const path = typeof contentRecord?.path === 'string' ? contentRecord.path.trim() : ''
+          return contentRecord?.type === 'skill' && path ? [path] : []
+        }),
+      )
+      const missingSkills = skills.filter((skill) => !existingSkillPaths.has(skill.path))
+      if (missingSkills.length === 0) return item
+
+      addedToTurn = true
+      changed = true
+      return {
+        ...itemRecord,
+        content: [
+          ...content,
+          ...missingSkills.map((skill) => ({ type: 'skill', name: skill.name, path: skill.path })),
+        ],
+      }
+    })
+
+    return addedToTurn ? { ...turnRecord, items: nextItems } : turn
+  })
+
+  return changed ? nextTurns : turns
+}
+
+async function mergeSessionSkillInputsIntoThreadResult(result: unknown): Promise<unknown> {
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  const sessionPath = readNonEmptyString(thread?.path)
+  if (!record || !thread || !turns || turns.length === 0 || !sessionPath || !isAbsolute(sessionPath)) {
+    return result
+  }
+
+  try {
+    const sessionLogRaw = await readFile(sessionPath, 'utf8')
+    const mergedTurns = mergeSessionSkillInputsIntoTurns(turns, sessionLogRaw)
+    if (mergedTurns === turns) return result
+    return {
+      ...record,
+      thread: {
+        ...thread,
+        turns: mergedTurns,
+      },
+    }
+  } catch {
+    return result
+  }
+}
+
 function readEnvValueFromFile(filePath: string, key: string): string | null {
   try {
     const content = readFileSync(filePath, 'utf8')
@@ -5405,7 +5544,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         const rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
-        const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+        const result = THREAD_METHODS_WITH_TURNS.has(body.method)
+          ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
+          : sanitizedResult
 
         if (THREAD_METHODS_WITH_TURNS.has(body.method)) {
           const rpcRecord = asRecord(result)
