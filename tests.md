@@ -4675,3 +4675,33 @@ Newly created temporary and permanent worktrees are persisted in workspace roots
 - Remove temporary test worktrees with `git worktree remove --force <worktree-path>`.
 - Delete any empty temporary parent directory left under `$CODEX_HOME/worktrees/<id>`.
 - Remove permanent test worktrees with `git worktree remove --force <worktree-path>` and delete their test branch if needed.
+
+---
+
+### Lazy project Git status checks
+
+#### Feature/Change Name
+Project Git repository status is loaded lazily from the project action menu instead of scanning every visible project during startup.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. Sidebar contains multiple projects, including at least one Git-backed project
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, load the home route and confirm the Projects section renders normally.
+2. Open browser devtools or the runtime profile output and confirm startup does not issue one `/codex-api/git/repository-status` request per visible project.
+3. Open the action menu for a Git-backed project.
+4. Confirm the menu remains readable and the `New worktree` item appears after the Git status check completes.
+5. Open the action menu for a non-Git project.
+6. Confirm the menu remains readable and `New worktree` is not shown.
+7. Switch to dark theme and repeat steps 3 through 6.
+
+#### Expected Results
+- Startup avoids eager Git status scans for all project rows.
+- Opening a project menu still loads that project's Git status on demand.
+- `New worktree` remains available for Git-backed projects and hidden for non-Git projects.
+- Project menus remain usable and visually consistent in both light and dark themes.
+
+#### Rollback/Cleanup
+- None.
