@@ -812,6 +812,7 @@ const emit = defineEmits<{
   'start-new-thread': [projectName: string]
   'browse-thread-files': [threadId: string]
   'browse-project-files': [projectName: string]
+  'request-project-git-status': [projectName: string]
   'create-project-worktree': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
   'rename-thread': [payload: { threadId: string; title: string }]
@@ -1605,6 +1606,13 @@ function setProjectSortMode(mode: 'recent' | 'manual'): void {
   emit('set-project-sort-mode', mode)
 }
 
+function requestProjectGitStatusAndUpdateMenuDirection(projectName: string): void {
+  emit('request-project-git-status', projectName)
+  nextTick(() => {
+    updateProjectMenuDirection(projectName)
+  })
+}
+
 function toggleProjectMenu(projectName: string): void {
   if (openProjectMenuId.value === projectName) {
     closeProjectMenu()
@@ -1616,9 +1624,7 @@ function toggleProjectMenu(projectName: string): void {
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'actions'
   projectRenameDraft.value = getProjectDisplayName(projectName)
-  nextTick(() => {
-    updateProjectMenuDirection(projectName)
-  })
+  requestProjectGitStatusAndUpdateMenuDirection(projectName)
 }
 
 function openProjectContextMenu(projectName: string): void {
@@ -1627,9 +1633,7 @@ function openProjectContextMenu(projectName: string): void {
   openProjectMenuId.value = projectName
   projectMenuMode.value = 'actions'
   projectRenameDraft.value = getProjectDisplayName(projectName)
-  nextTick(() => {
-    updateProjectMenuDirection(projectName)
-  })
+  requestProjectGitStatusAndUpdateMenuDirection(projectName)
 }
 
 function getProjectRenameDraftName(group: UiProjectGroup): string {
@@ -2378,6 +2382,22 @@ watch(
     if (Object.keys(nextMeasuredHeights).length !== Object.keys(measuredHeightByProject.value).length) {
       measuredHeightByProject.value = nextMeasuredHeights
     }
+  },
+)
+
+watch(
+  () => {
+    const projectName = openProjectMenuId.value
+    return projectName ? props.projectGitRepoByName[projectName] : undefined
+  },
+  () => {
+    const projectName = openProjectMenuId.value
+    if (!projectName) return
+    nextTick(() => {
+      if (openProjectMenuId.value === projectName) {
+        updateProjectMenuDirection(projectName)
+      }
+    })
   },
 )
 
