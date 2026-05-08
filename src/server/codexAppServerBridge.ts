@@ -3643,19 +3643,10 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
 }
 
-function buildHeartbeatAutomationPrompt(automation: ThreadAutomationRecord): string {
-  return [
-    '<heartbeat>',
-    `<automation_id>${automation.id}</automation_id>`,
-    `<instructions>${automation.prompt}</instructions>`,
-    '</heartbeat>',
-  ].join('\n')
-}
-
 function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
   return {
     id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
-    text: buildHeartbeatAutomationPrompt(automation),
+    text: automation.prompt,
     imageUrls: [],
     skills: [],
     fileAttachments: [],
