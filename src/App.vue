@@ -511,18 +511,28 @@
               :empty-label="t('No commands')"
               @update:model-value="onSelectHeaderTerminalCommand"
             />
-            <ComposerDropdown
-              v-if="route.name === 'thread' && selectedThreadId"
+            <HeaderGitBranchDropdown
+              v-if="canShowContentHeaderBranchDropdown"
               class="content-header-branch-dropdown"
-              :class="{ 'is-review-open': isReviewPaneOpen }"
-              :model-value="contentHeaderBranchDropdownValue"
-              :options="contentHeaderBranchDropdownOptions"
-              :selected-prefix-icon="contentHeaderBranchDropdownIcon"
-              :icon-only="contentHeaderBranchDropdownValue === '__detached_head__'"
-              :disabled="isLoadingThreadBranches || isSwitchingThreadBranch"
-              :enable-search="true"
-              :search-placeholder="t('Search branches...')"
-              @update:model-value="onSelectContentHeaderBranch"
+              :current-branch="currentThreadBranch"
+              :head-sha="currentThreadHeadSha"
+              :head-subject="currentThreadHeadSubject"
+              :head-date="currentThreadHeadDate"
+              :detached="isThreadDetachedHead"
+              :dirty="isThreadWorktreeDirty"
+              :branches="threadBranchOptions"
+              :commits-by-branch="threadBranchCommitsByBranch"
+              :commits-loading-for="threadBranchCommitsLoadingFor"
+              :commits-error="threadBranchCommitsError"
+              :loading="isLoadingThreadBranches"
+              :busy="isSwitchingThreadBranch"
+              :error="threadBranchError"
+              :review-open="isReviewPaneOpen"
+              :show-review="route.name === 'thread' && selectedThreadId.length > 0"
+              @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
+              @checkout-branch="onCheckoutContentHeaderBranch"
+              @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
+              @load-commits="loadThreadBranchCommits"
             />
           </template>
         </ContentHeader>
@@ -947,10 +957,10 @@ import ThreadPendingRequestPanel from './components/content/ThreadPendingRequest
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
+import HeaderGitBranchDropdown from './components/content/HeaderGitBranchDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
-import IconTablerGitFork from './components/icons/IconTablerGitFork.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
@@ -965,6 +975,7 @@ import {
   createWorktree,
   createProjectlessThreadDirectory,
   getGitBranchState,
+  getGitBranchCommits,
   getGitRepositoryStatus,
   getWorktreeBranchOptions,
   getAccounts,
@@ -983,13 +994,14 @@ import {
   persistFirstLaunchPluginsCardPreference,
   removeAccount,
   refreshAccountsFromAuth,
+  resetGitBranchToCommit,
   startCodexLogin,
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
+import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
@@ -1002,9 +1014,7 @@ const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
 const TERMINAL_QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
-const ADD_TERMINAL_COMMAND_VALUE = '__add_terminal_command__'
 const TOGGLE_TERMINAL_COMMAND_VALUE = '__toggle_terminal__'
-const MAX_HEADER_TERMINAL_COMMANDS = 5
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -1273,6 +1283,8 @@ const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
+let threadBranchesRequestId = 0
+let threadBranchCommitsRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
@@ -1280,6 +1292,15 @@ const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
+const currentThreadHeadSha = ref<string | null>(null)
+const currentThreadHeadSubject = ref<string | null>(null)
+const currentThreadHeadDate = ref<string | null>(null)
+const isThreadDetachedHead = ref(false)
+const isThreadWorktreeDirty = ref(false)
+const threadBranchError = ref('')
+const threadBranchCommitsByBranch = ref<Record<string, GitCommitOption[]>>({})
+const threadBranchCommitsLoadingFor = ref('')
+const threadBranchCommitsError = ref('')
 const isLoadingThreadBranches = ref(false)
 const isSwitchingThreadBranch = ref(false)
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
@@ -1421,6 +1442,10 @@ const canShowTerminalToggle = computed(() => (
     (route.name === 'thread' && selectedThreadId.value.length > 0)
   )
 ))
+const canShowContentHeaderBranchDropdown = computed(() => (
+  (route.name === 'thread' && selectedThreadId.value.length > 0) ||
+  (isHomeRoute.value && isNewThreadCwdGitRepo.value)
+))
 const isComposerTerminalOpen = computed(() => (
   isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
 ))
@@ -1550,6 +1575,25 @@ function getProjectOrderNameForPath(path: string): string {
   return hasDuplicateFolderLeaf(normalizedPath, knownPaths) ? normalizedPath : getPathLeafName(normalizedPath)
 }
 
+function resolveWorkspaceRootCwd(projectName: string): string {
+  const normalizedProjectName = normalizePathForUi(projectName).trim()
+  if (!normalizedProjectName) return ''
+  const knownPaths = [
+    ...workspaceRootOptionsState.value.order,
+    ...projectGroups.value.map((group) => group.threads[0]?.cwd?.trim() ?? '').filter(Boolean),
+  ]
+  for (const cwdRaw of workspaceRootOptionsState.value.order) {
+    const cwd = normalizePathForUi(cwdRaw).trim()
+    if (!cwd) continue
+    const leafName = getPathLeafName(cwd)
+    const orderName = hasDuplicateFolderLeaf(cwd, knownPaths) ? cwd : leafName
+    if (cwd === normalizedProjectName || orderName === normalizedProjectName || leafName === normalizedProjectName) {
+      return cwd
+    }
+  }
+  return ''
+}
+
 const newThreadFolderOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = []
   const seenCwds = new Set<string>()
@@ -1609,30 +1653,6 @@ const selectedWorktreeBranchLabel = computed(() => {
   if (!selectedBranch) return ''
   const selected = newWorktreeBranchDropdownOptions.value.find((option) => option.value === selectedBranch)
   return selected?.label ?? selectedBranch
-})
-const contentHeaderBranchDropdownValue = computed(() => currentThreadBranch.value ?? '__detached_head__')
-const contentHeaderBranchDropdownOptions = computed<Array<{ value: string; label: string }>>(() => {
-  const options: Array<{ value: string; label: string }> = [
-    {
-      value: '__review__',
-      label: isReviewPaneOpen.value ? 'Review (Open)' : 'Review',
-    },
-  ]
-  const seen = new Set<string>()
-  const currentBranch = currentThreadBranch.value?.trim() ?? ''
-  if (currentBranch) {
-    options.push({ value: currentBranch, label: currentBranch })
-    seen.add(currentBranch)
-  } else {
-    options.push({ value: '__detached_head__', label: 'Detached HEAD' })
-    seen.add('__detached_head__')
-  }
-  for (const option of threadBranchOptions.value) {
-    if (!option.value || seen.has(option.value)) continue
-    seen.add(option.value)
-    options.push(option)
-  }
-  return options
 })
 const createFolderParentPath = computed(() => existingFolderBrowsePath.value.trim())
 const isCreateFolderNameValid = computed(() => {
@@ -1708,20 +1728,14 @@ const terminalHeaderQuickCommands = computed<TerminalHeaderQuickCommand[]>(() =>
       custom: false,
       sourceIndex: index,
     })),
-    ...terminalStoredQuickCommands.value.filter((command) => command.custom === true),
   ]
   return combined
     .sort(compareTerminalQuickCommands)
-    .slice(0, MAX_HEADER_TERMINAL_COMMANDS)
 })
 const terminalHeaderDropdownOptions = computed(() => [
-  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
-  { label: 'Add command...', value: ADD_TERMINAL_COMMAND_VALUE },
   { label: isComposerTerminalOpen.value ? t('Hide terminal') : t('Open terminal'), value: TOGGLE_TERMINAL_COMMAND_VALUE },
+  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
 ])
-const contentHeaderBranchDropdownIcon = computed(() => {
-  return IconTablerGitFork
-})
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
   const keyboardInset = Math.max(
@@ -2272,10 +2286,10 @@ function isWorktreePath(cwdRaw: string): boolean {
 
 function resolvePreferredLocalCwd(projectName: string, fallbackCwd = ''): string {
   const group = projectGroups.value.find((row) => row.projectName === projectName)
-  if (!group) return fallbackCwd.trim()
+  if (!group) return resolveWorkspaceRootCwd(projectName) || fallbackCwd.trim()
   const nonWorktreeThread = group.threads.find((thread) => !isWorktreePath(thread.cwd))
   const candidate = nonWorktreeThread?.cwd?.trim() ?? group.threads[0]?.cwd?.trim() ?? ''
-  return candidate || fallbackCwd.trim()
+  return candidate || resolveWorkspaceRootCwd(projectName) || fallbackCwd.trim()
 }
 
 function onStartNewThread(projectName: string): void {
@@ -2489,17 +2503,10 @@ function onSelectHeaderTerminalCommand(command: string): void {
     toggleComposerTerminal()
     return
   }
-  if (command === ADD_TERMINAL_COMMAND_VALUE) {
-    if (typeof window === 'undefined') return
-    const customCommand = normalizeTerminalQuickCommandValue(window.prompt('Add command') ?? '')
-    if (!customCommand) return
-    void openTerminalAndRunCommand(customCommand, true)
-    return
-  }
-  void openTerminalAndRunCommand(command, false)
+  void openTerminalAndRunCommand(command)
 }
 
-async function openTerminalAndRunCommand(command: string, custom: boolean): Promise<void> {
+async function openTerminalAndRunCommand(command: string): Promise<void> {
   if (!isThreadTerminalAvailable.value || !composerCwd.value) return
   if (isHomeRoute.value) {
     homeTerminalOpen.value = true
@@ -2511,18 +2518,19 @@ async function openTerminalAndRunCommand(command: string, custom: boolean): Prom
   const panel = await waitForTerminalPanel()
   if (!panel) return
   try {
-    await panel.runQuickCommand(command, custom)
-    recordHeaderTerminalCommandUse(command, custom)
+    await panel.runQuickCommand(command)
+    recordHeaderTerminalCommandUse(command)
   } catch {
     // ThreadTerminalPanel renders the terminal-specific error in place.
   }
 }
 
 async function waitForTerminalPanel(): Promise<ThreadTerminalPanelExposed | null> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await nextTick()
     const panel = isHomeRoute.value ? homeTerminalPanelRef.value : threadTerminalPanelRef.value
     if (panel) return panel
+    await new Promise((resolve) => window.setTimeout(resolve, 25))
   }
   return null
 }
@@ -2540,16 +2548,17 @@ async function refreshTerminalQuickCommands(): Promise<void> {
   }
 }
 
-function recordHeaderTerminalCommandUse(command: string, custom: boolean): void {
+function recordHeaderTerminalCommandUse(command: string): void {
   const normalized = normalizeTerminalQuickCommandValue(command)
   if (!normalized) return
   const existing = terminalStoredQuickCommands.value.find((row) => row.value === normalized)
   const projectCommandIndex = terminalProjectQuickCommands.value.findIndex((row) => row.value === normalized)
   const projectCommand = projectCommandIndex >= 0 ? terminalProjectQuickCommands.value[projectCommandIndex] : null
+  if (!projectCommand) return
   const nextCommand: TerminalHeaderQuickCommand = {
     label: existing?.label || projectCommand?.label || normalized,
     value: normalized,
-    custom: existing?.custom === true || (!projectCommand && custom),
+    custom: false,
     usageCount: (existing?.usageCount ?? 0) + 1,
     lastUsedAt: Date.now(),
     sourceIndex: projectCommandIndex >= 0 ? projectCommandIndex : undefined,
@@ -2838,32 +2847,74 @@ function onSelectNewWorktreeBranch(branch: string): void {
   newWorktreeBaseBranch.value = branch.trim()
 }
 
+function canLoadBranchStateForCwd(cwd: string): boolean {
+  const currentCwd = composerCwd.value.trim()
+  if (!cwd || currentCwd !== cwd) return false
+  return route.name === 'thread' || (route.name === 'home' && isNewThreadCwdGitRepo.value)
+}
+
+function resetThreadBranchState(): void {
+  threadBranchesRequestId += 1
+  threadBranchCommitsRequestId += 1
+  threadBranchOptions.value = []
+  currentThreadBranch.value = null
+  currentThreadHeadSha.value = null
+  currentThreadHeadSubject.value = null
+  currentThreadHeadDate.value = null
+  isThreadDetachedHead.value = false
+  isThreadWorktreeDirty.value = false
+  threadBranchCommitsByBranch.value = {}
+  threadBranchCommitsLoadingFor.value = ''
+  threadBranchCommitsError.value = ''
+  threadBranchError.value = ''
+  isLoadingThreadBranches.value = false
+}
+
 async function loadThreadBranches(cwd: string): Promise<void> {
   const targetCwd = cwd.trim()
-  if (!targetCwd || route.name !== 'thread') {
-    threadBranchOptions.value = []
-    currentThreadBranch.value = null
+  if (!targetCwd) {
+    resetThreadBranchState()
     return
   }
+  const requestId = ++threadBranchesRequestId
   isLoadingThreadBranches.value = true
+  threadBranchError.value = ''
   try {
     const state = await getGitBranchState(targetCwd)
+    if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = state.options
     currentThreadBranch.value = state.currentBranch
+    currentThreadHeadSha.value = state.headSha
+    currentThreadHeadSubject.value = state.headSubject
+    currentThreadHeadDate.value = state.headDate
+    isThreadDetachedHead.value = state.detached
+    isThreadWorktreeDirty.value = state.dirty
   } catch {
+    if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = []
     currentThreadBranch.value = null
+    currentThreadHeadSha.value = null
+    currentThreadHeadSubject.value = null
+    currentThreadHeadDate.value = null
+    isThreadDetachedHead.value = false
+    isThreadWorktreeDirty.value = false
   } finally {
-    isLoadingThreadBranches.value = false
+    if (requestId === threadBranchesRequestId) {
+      isLoadingThreadBranches.value = false
+    }
   }
 }
 
-function onSelectContentHeaderBranch(value: string): void {
-  if (value === '__review__') {
-    isReviewPaneOpen.value = !isReviewPaneOpen.value
-    return
-  }
-  if (value === '__detached_head__') return
+function applyThreadGitState(state: { currentBranch: string | null; headSha: string | null; headSubject: string | null; headDate: string | null; detached: boolean; dirty: boolean }): void {
+  currentThreadBranch.value = state.currentBranch
+  currentThreadHeadSha.value = state.headSha
+  currentThreadHeadSubject.value = state.headSubject
+  currentThreadHeadDate.value = state.headDate
+  isThreadDetachedHead.value = state.detached
+  isThreadWorktreeDirty.value = state.dirty
+}
+
+function onCheckoutContentHeaderBranch(value: string): void {
   if (isSwitchingThreadBranch.value) return
   const targetBranch = value.trim()
   if (!targetBranch || targetBranch === (currentThreadBranch.value ?? '')) return
@@ -2871,18 +2922,77 @@ function onSelectContentHeaderBranch(value: string): void {
   if (!cwd) return
 
   isSwitchingThreadBranch.value = true
+  threadBranchError.value = ''
   void checkoutGitBranch(cwd, targetBranch)
     .then((branch) => {
       currentThreadBranch.value = branch || targetBranch
+      currentThreadHeadSha.value = null
+      currentThreadHeadSubject.value = null
+      currentThreadHeadDate.value = null
+      isThreadDetachedHead.value = false
       isReviewPaneOpen.value = false
       return loadThreadBranches(cwd)
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : 'Failed to switch branch'
-      window.alert(message)
+      void loadThreadBranches(cwd).finally(() => {
+        threadBranchError.value = message
+      })
     })
     .finally(() => {
       isSwitchingThreadBranch.value = false
+    })
+}
+
+function onResetContentHeaderBranchToCommit(payload: { branch: string; sha: string }): void {
+  if (isSwitchingThreadBranch.value) return
+  const targetBranch = payload.branch.trim()
+  const targetSha = payload.sha.trim()
+  const cwd = composerCwd.value.trim()
+  if (!targetBranch || !targetSha || !cwd) return
+  isSwitchingThreadBranch.value = true
+  threadBranchError.value = ''
+  void resetGitBranchToCommit(cwd, targetBranch, targetSha)
+    .then((state) => {
+      applyThreadGitState(state)
+      isReviewPaneOpen.value = false
+      return loadThreadBranches(cwd)
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to reset branch to commit'
+      void loadThreadBranches(cwd).finally(() => {
+        threadBranchError.value = message
+      })
+    })
+    .finally(() => {
+      isSwitchingThreadBranch.value = false
+    })
+}
+
+function loadThreadBranchCommits(branch: string): void {
+  const targetBranch = branch.trim()
+  const cwd = composerCwd.value.trim()
+  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
+  if (threadBranchCommitsByBranch.value[targetBranch]) return
+  const requestId = ++threadBranchCommitsRequestId
+  threadBranchCommitsLoadingFor.value = targetBranch
+  threadBranchCommitsError.value = ''
+  void getGitBranchCommits(cwd, targetBranch)
+    .then((commits) => {
+      if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadBranchCommitsByBranch.value = {
+        ...threadBranchCommitsByBranch.value,
+        [targetBranch]: commits,
+      }
+    })
+    .catch((error: unknown) => {
+      if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadBranchCommitsError.value = error instanceof Error ? error.message : 'Failed to load branch commits'
+    })
+    .finally(() => {
+      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === targetBranch) {
+        threadBranchCommitsLoadingFor.value = ''
+      }
     })
 }
 
@@ -3927,13 +4037,17 @@ watch(
 )
 
 watch(
-  () => [route.name, composerCwd.value] as const,
-  ([routeName, cwd]) => {
-    if (routeName !== 'thread') {
-      threadBranchOptions.value = []
-      currentThreadBranch.value = null
+  () => [route.name, composerCwd.value, isNewThreadCwdGitRepo.value] as const,
+  ([routeName, cwd, isNewThreadGitRepo]) => {
+    const shouldLoadBranches = routeName === 'thread' || (routeName === 'home' && isNewThreadGitRepo)
+    if (!shouldLoadBranches) {
+      resetThreadBranchState()
       return
     }
+    threadBranchCommitsRequestId += 1
+    threadBranchCommitsByBranch.value = {}
+    threadBranchCommitsLoadingFor.value = ''
+    threadBranchCommitsError.value = ''
     void loadThreadBranches(cwd)
   },
   { immediate: true },

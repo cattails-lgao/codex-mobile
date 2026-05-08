@@ -64,7 +64,15 @@
 
       <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
         <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
-          <span class="thread-composer-skill-chip-name">{{ skill.displayName || skill.name }}</span>
+          <button
+            class="thread-composer-skill-chip-name"
+            type="button"
+            :title="skillMarkdownPath(skill.path)"
+            :aria-label="`Open ${skill.displayName || skill.name} SKILL.md`"
+            @click="openSkillMarkdown(skill)"
+          >
+            {{ skill.displayName || skill.name }}
+          </button>
           <button
             class="thread-composer-skill-chip-remove"
             type="button"
@@ -218,7 +226,7 @@
               role="switch"
               :aria-checked="isPlanModeSelected"
               :aria-label="isPlanModeSelected ? t('Disable plan mode') : t('Enable plan mode')"
-              :disabled="disabled || !activeThreadId || isTurnInProgress"
+              :disabled="isComposerConfigDisabled"
               @click="toggleCollaborationMode"
             >
               <span class="thread-composer-attach-setting-copy">
@@ -241,7 +249,7 @@
             :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
             :placeholder="t('Model')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || models.length === 0 || isTurnInProgress"
+            :disabled="isComposerConfigDisabled || models.length === 0"
             enable-search
             :search-placeholder="t('Search models...')"
             @update:model-value="onModelSelect"
@@ -257,7 +265,7 @@
             :allow-remove="true"
             :remove-label="t('Remove prompt')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            :disabled="isComposerConfigDisabled"
             @toggle="onSkillDropdownToggle"
             @create="onCreatePrompt"
             @remove="onRemovePrompt"
@@ -269,7 +277,7 @@
             :options="reasoningOptions"
             :placeholder="t('Thinking')"
             open-direction="up"
-            :disabled="disabled || !activeThreadId || isTurnInProgress"
+            :disabled="isComposerConfigDisabled"
             @update:model-value="onReasoningEffortSelect"
           />
         </template>
@@ -628,6 +636,7 @@ const standaloneFileAttachments = computed(() => {
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
+const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => props.selectedModel.trim() === 'gpt-5.4')
 const showFastModeModelIcon = computed(() =>
   props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
@@ -1143,6 +1152,18 @@ function removeImage(id: string): void {
 
 function removeSkill(path: string): void {
   selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
+}
+
+function skillMarkdownPath(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  return trimmed.endsWith('/SKILL.md') ? trimmed : `${trimmed.replace(/\/+$/, '')}/SKILL.md`
+}
+
+function openSkillMarkdown(skill: SkillItem): void {
+  const markdownPath = skillMarkdownPath(skill.path)
+  if (!markdownPath || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(markdownPath)}`, '_blank', 'noopener,noreferrer')
 }
 
 function removeFileAttachment(fsPath: string): void {
@@ -1886,7 +1907,7 @@ watch(
 }
 
 .thread-composer-skill-chip-name {
-  @apply font-medium;
+  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500;
 }
 
 .thread-composer-skill-chip-remove {

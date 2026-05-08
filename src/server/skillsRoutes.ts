@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { resolvePythonCommand, resolveSkillInstallerScriptPath } from '../commandResolution.js'
+import { getSpawnInvocation } from '../utils/commandInvocation.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -114,11 +115,14 @@ function getSkillsInstallDir(): string {
 }
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000
+const SKILL_SEARCH_METADATA_LIMIT = 20
+const SKILL_SEARCH_METADATA_CONCURRENCY = 4
 
 async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
   const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const invocation = getSpawnInvocation(command, args)
+    const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -158,7 +162,8 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
 async function runCommandWithOutput(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<string> {
   const timeout = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
   return await new Promise<string>((resolve, reject) => {
-    const proc = spawn(command, args, {
+    const invocation = getSpawnInvocation(command, args)
+    const proc = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -401,8 +406,29 @@ async function fetchGithubSkillMetadata(source: string): Promise<Partial<Pick<Sk
   return { avatarUrl: getGithubOwnerAvatarUrl(source) }
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.max(1, Math.min(concurrency, items.length))
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index] as T, index)
+    }
+  }))
+  return results
+}
+
 async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<SkillHubEntry[]> {
-  return await Promise.all(results.map(async (result) => {
+  const enrichedHead = await mapWithConcurrency(
+    results.slice(0, SKILL_SEARCH_METADATA_LIMIT),
+    SKILL_SEARCH_METADATA_CONCURRENCY,
+    async (result) => {
     if (!result.source) return result
     const metadata = await fetchGithubSkillMetadata(result.source)
     return {
@@ -410,7 +436,9 @@ async function enrichSkillSearchDescriptions(results: SkillHubEntry[]): Promise<
       description: metadata.description || result.description,
       avatarUrl: metadata.avatarUrl || result.avatarUrl,
     }
-  }))
+    },
+  )
+  return [...enrichedHead, ...results.slice(SKILL_SEARCH_METADATA_LIMIT)]
 }
 
 type RpcSkillRecord = {
@@ -805,9 +833,10 @@ async function readRemoteSkillsManifest(token: string, repoOwner: string, repoNa
   return skills
 }
 
-async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoName: string, skills: SyncedSkill[]): Promise<void> {
+async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoName: string, skills: SyncedSkill[]): Promise<boolean> {
   const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${SKILLS_SYNC_MANIFEST_PATH}`
   let sha = ''
+  const nextContent = JSON.stringify(skills, null, 2)
   const existing = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
@@ -817,15 +846,18 @@ async function writeRemoteSkillsManifest(token: string, repoOwner: string, repoN
     },
   })
   if (existing.ok) {
-    const payload = await existing.json() as { sha?: string }
+    const payload = await existing.json() as { sha?: string; content?: string }
     sha = payload.sha ?? ''
+    const currentContent = payload.content ? Buffer.from(payload.content.replace(/\n/g, ''), 'base64').toString('utf8') : ''
+    if (currentContent === nextContent) return false
   }
-  const content = Buffer.from(JSON.stringify(skills, null, 2), 'utf8').toString('base64')
+  const content = Buffer.from(nextContent, 'utf8').toString('base64')
   await getGithubJson(url, token, 'PUT', {
     message: 'Update synced skills manifest',
     content,
     ...(sha ? { sha } : {}),
   })
+  return true
 }
 
 function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string): string {
@@ -1018,6 +1050,17 @@ async function hasLocalUncommittedChanges(repoDir: string): Promise<boolean> {
   return status.length > 0
 }
 
+async function hasCommittableWorkingTreeChanges(repoDir: string): Promise<boolean> {
+  try {
+    await runCommand('git', ['diff', '--quiet', '--exit-code', '--ignore-submodules=dirty'], { cwd: repoDir })
+    await runCommand('git', ['diff', '--cached', '--quiet', '--exit-code', '--ignore-submodules=dirty'], { cwd: repoDir })
+  } catch {
+    return true
+  }
+  const untracked = (await runCommandWithOutput('git', ['ls-files', '--others', '--exclude-standard'], { cwd: repoDir })).trim()
+  return untracked.length > 0
+}
+
 async function walkFileMtimes(rootDir: string, currentDir: string, out: Map<string, number>): Promise<void> {
   let entries: Array<{ name: string | Buffer; isDirectory: () => boolean; isFile: () => boolean }>
   try {
@@ -1135,8 +1178,10 @@ async function syncInstalledSkillsFolderToRepo(
   await runCommand('git', ['config', 'user.name', 'Skills Sync'], { cwd: repoDir })
   await restoreProtectedFilesFromOrigin(repoDir, branch)
   await runCommand('git', ['add', '.'], { cwd: repoDir })
-  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
-  if (!status) return
+  try {
+    await runCommand('git', ['diff', '--cached', '--quiet', '--exit-code'], { cwd: repoDir })
+    return
+  } catch {}
   await runCommand('git', ['commit', '-m', 'Sync installed skills folder and manifest'], { cwd: repoDir })
   await pushWithNonFastForwardRetry(repoDir, branch)
 }
@@ -1188,10 +1233,10 @@ async function autoPushSyncedSkills(appServer: AppServerLike): Promise<void> {
   await runCommand('git', ['fetch', 'origin', PRIVATE_SYNC_BRANCH], { cwd: repoDir })
   const head = (await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir })).trim()
   const originHead = (await runCommandWithOutput('git', ['rev-parse', `origin/${PRIVATE_SYNC_BRANCH}`], { cwd: repoDir })).trim()
-  const status = (await runCommandWithOutput('git', ['status', '--porcelain'], { cwd: repoDir })).trim()
+  const hasCommittableChanges = await hasCommittableWorkingTreeChanges(repoDir)
   // After a successful pull, if local tree is already clean and equal to remote,
   // skip push entirely to avoid rewriting/deleting remote-only updates.
-  if (!status && head === originHead) return
+  if (!hasCommittableChanges && head === originHead) return
   const local = await collectLocalSyncedSkills(appServer)
   const installedMap = await scanInstalledSkillsFromDisk()
   await writeRemoteSkillsManifest(state.githubToken, state.repoOwner, state.repoName, local)
@@ -1327,7 +1372,7 @@ export async function handleSkillsRoutes(
         return true
       }
       const installedMap = await collectInstalledSkillsMap(appServer)
-      const output = await runCommandWithOutput('npx', ['skills', 'find', query], { timeoutMs: 60_000 })
+      const output = await runCommandWithOutput('npx', ['--yes', 'skills', 'find', query], { timeoutMs: 60_000 })
       const results = await enrichSkillSearchDescriptions(parseNpxSkillsFindOutput(output, installedMap))
       setJson(res, 200, { results })
     } catch (error) {
@@ -1560,7 +1605,7 @@ export async function handleSkillsRoutes(
         setJson(res, 400, { error: 'Missing or invalid skill source' })
         return true
       }
-      await runCommand('npx', ['skills', 'add', installSource, '--yes', '--global'], { timeoutMs: 120_000 })
+      await runCommand('npx', ['--yes', 'skills', 'add', installSource, '--yes', '--global'], { timeoutMs: 120_000 })
       try { await withTimeout(appServer.rpc('skills/list', { forceReload: true }), 10_000, 'skills/list reload') } catch {}
       const installedMap = await collectInstalledSkillsMap(appServer)
       const installed = installedMap.get(name || installSource.slice(installSource.lastIndexOf('@') + 1))

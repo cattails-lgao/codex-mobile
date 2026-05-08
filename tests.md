@@ -70,6 +70,52 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
 
+### Feature: Empty project new thread action
+
+#### Prerequisites
+- App server is running from this repository.
+- At least one workspace root is registered that has no threads.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the app in light theme.
+2. Find the empty project row in the sidebar that shows `No threads`.
+3. Click that project's new thread icon.
+4. Confirm the home composer opens and the folder dropdown is set to the empty project's workspace root.
+5. Switch to dark theme and repeat steps 2-4.
+
+#### Expected Results
+- The new thread icon works for projects with zero threads.
+- The new thread screen uses the clicked project's registered workspace root instead of leaving the folder blank or reusing another project.
+- Light and dark theme sidebar and composer surfaces remain readable.
+
+#### Rollback/Cleanup
+- No cleanup is required unless a test message is sent; delete that test thread if created.
+
+### Feature: Start new thread header Git branch dropdown
+
+#### Prerequisites
+- App server is running from this repository.
+- At least one Git-backed workspace folder is available in the Start new thread folder dropdown.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the app in light theme.
+2. Click the sidebar or header new thread icon to open Start new thread.
+3. Select a Git-backed folder.
+4. Confirm the header actions next to the terminal control show the Git checkout branch dropdown.
+5. Open the branch dropdown and confirm branch search/options are available.
+6. Switch to dark theme and repeat steps 2-5.
+
+#### Expected Results
+- Start new thread shows the same header Git checkout dropdown used by existing thread pages when the selected folder is a Git repository.
+- Switching the selected folder updates the dropdown branch state for that folder.
+- Non-Git folders do not show the Git checkout dropdown.
+- Light and dark theme header controls remain readable and aligned.
+
+#### Rollback/Cleanup
+- If a branch was switched during testing, switch back to the original branch before continuing.
+
 ### Feature: Telegram bot token stored in dedicated global file
 
 #### Prerequisites
@@ -176,6 +222,269 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+---
+
+### Unread thread cutoff state
+
+#### Feature/Change Name
+Unread thread state uses a local cutoff timestamp so existing threads are not all marked unread after first load.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`).
+2. Browser localStorage is available for the app origin.
+3. At least two existing threads are present.
+4. Light theme and dark theme are available from the appearance switcher.
+
+#### Steps
+1. Clear only `codex-web-local.thread-unread-cutoff.v1` from localStorage for the app origin.
+2. Load the app in light theme.
+3. Confirm existing threads are not all marked unread on first load.
+4. Create or receive an update in a different thread after the app has loaded.
+5. Confirm that updated thread can show unread when it is not selected or in progress.
+6. Create or receive an update in a second unselected thread.
+7. Open the first updated thread and confirm only that thread's unread indicator clears.
+8. Confirm the second updated thread remains unread until it is opened.
+9. Switch to dark theme and repeat steps 4 through 8.
+
+#### Expected Results
+- Missing cutoff state initializes to the current time instead of treating every thread as unread.
+- Threads updated after the cutoff can still become unread.
+- Opening a thread updates only that thread's read state and clears only that thread's unread indicator.
+- Unread indicators remain readable in both light theme and dark theme.
+
+#### Rollback/Cleanup
+- Remove any disposable test threads created for this validation.
+
+---
+
+### CLI password output redaction
+
+#### Feature/Change Name
+CLI startup output no longer prints the configured password or embeds it in the tunnel URL.
+
+#### Prerequisites/Setup
+1. Project dependencies are installed.
+2. CLI build is available from the current branch.
+
+#### Steps
+1. Run `pnpm run build:cli`.
+2. Start the CLI with a disposable password: `node dist-cli/index.js --no-tunnel --no-open --port 5998 --password TEST_SECRET_SHOULD_NOT_PRINT`.
+3. Confirm startup output includes the local and network URLs.
+4. Confirm startup output does not include `Password:` or `TEST_SECRET_SHOULD_NOT_PRINT`.
+5. Start the CLI without an explicit password and confirm startup output prints `Generated password file:` with a path under `$CODEX_HOME`.
+6. Confirm the generated password file exists, is readable by the current user, and has `0600` permissions.
+7. If tunnel testing is available, start with tunnel enabled and confirm the printed tunnel URL and QR code do not include `/password=`.
+
+#### Expected Results
+- Password-protected startup still works.
+- The password is not printed as a standalone line.
+- Auto-generated passwords remain discoverable through the generated password file path.
+- Tunnel output does not include an autologin URL containing the password.
+
+#### Rollback/Cleanup
+- Stop the disposable CLI process.
+
+---
+
+### Composer skill chip opens SKILL.md
+
+#### Feature/Change Name
+Selected skill labels in the thread composer open that skill's `SKILL.md` in the web file browser.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. At least one installed skill is available in the composer skill picker
+3. Browser pop-ups from the local dev origin are allowed
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open any thread with the composer enabled.
+2. Open the `Skills` picker and select an installed skill.
+3. Confirm the selected skill appears as a green chip above the input field.
+4. Click the skill name on the green chip.
+5. Confirm a new tab opens to `/codex-local-browse.../SKILL.md` for that skill.
+6. Return to the composer and click the chip `x`.
+7. Confirm the skill is removed and no file-browser tab is opened by the remove action.
+8. Switch to dark theme and repeat steps 2 through 7.
+
+#### Expected Results
+- The skill chip label is clickable and opens the selected skill's `SKILL.md` in the web file browser.
+- Skill paths that point at a skill directory are normalized to the nested `SKILL.md` file.
+- The remove button still only removes the skill from the composer.
+- The chip and focus/hover states remain readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Close any file-browser tabs opened during validation.
+
+---
+
+### npx run dev compatibility shim
+
+#### Feature/Change Name
+The accidental `npx run dev` command starts the repository dev wrapper instead of failing with a missing `dev` module.
+
+#### Prerequisites/Setup
+1. Run from the repository root.
+2. Local dependencies are available, or the dev wrapper can install them with `pnpm install`.
+3. Port 5173 is free, or Vite can select the next available port.
+
+#### Steps
+1. Run `npx run dev`.
+2. Confirm the command reaches the existing `scripts/dev.cjs` wrapper and starts Vite.
+3. Stop the dev server with Ctrl-C.
+4. Repeat with `npx run dev --host 127.0.0.1 --port 4173`.
+
+#### Expected Results
+- `npx run dev` no longer fails with `Cannot find module '<repo>/dev'`.
+- The command starts the same dev server path as `npm run dev` / `pnpm run dev`.
+- Host and port arguments are passed through to Vite.
+
+#### Rollback/Cleanup
+- Stop any dev server process started for validation.
+
+---
+
+### Skills sync idempotent commits and nested shared skills handling
+
+#### Feature/Change Name
+Skills Sync skips unchanged manifest writes and does not fail parent commits when only nested `shared_skills` content is dirty.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 5173`)
+2. GitHub Skills Sync is connected to a private skills sync repo
+3. `/Users/igor/.codex/skills/shared_skills` exists as a nested Git repository
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open `#/skills`.
+2. Click `Startup Sync` when no installed skills manifest content has changed.
+3. Confirm the sync completes without adding a new `Update synced skills manifest` commit to the GitHub repo.
+4. Modify a file inside `/Users/igor/.codex/skills/shared_skills` without committing it inside that nested repository.
+5. Click `Push` or `Startup Sync` again.
+6. Confirm the sync does not show `Command failed (git commit -m Sync installed skills folder and manifest)` for the parent `/Users/igor/.codex/skills` repository.
+7. Confirm the startup auto-push path skips when the only local status is dirty nested `shared_skills` content and local `HEAD` equals `origin/main`.
+8. Switch to dark theme and repeat steps 1, 2, and 5.
+
+#### Expected Results
+- Unchanged `installed-skills.json` content is not written back to GitHub, so repeated empty-looking manifest commits are not created.
+- A dirty nested `shared_skills` repository does not make the parent skills sync fail with `no changes added to commit`.
+- Dirty nested `shared_skills` content alone does not keep triggering no-op startup push work.
+- Skills Sync status, errors, and action buttons remain readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Revert or commit the intentional test edit inside `/Users/igor/.codex/skills/shared_skills`.
+
+---
+
+### Header Git branch dropdown with commit reset
+
+#### Feature/Change Name
+Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, branch reset-to-commit, and reset-history commit preservation.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Open a thread whose `cwd` is inside a Git repository with at least two branches and several commits
+3. Use a disposable local branch with at least two commits ahead of its reset target.
+4. Ensure the repository has no tracked uncommitted changes for successful branch switch/reset paths: `git -C <thread-cwd> status --porcelain`
+5. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open the Git dropdown in the thread header.
+2. Confirm the trigger shows the current branch, or the detached commit subject if the repository is already detached.
+3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
+4. Type part of a branch name in search and confirm the branch list filters.
+5. Select a different branch with a clean worktree and confirm the header updates to that branch.
+6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
+7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
+8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
+10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
+14. Switch to dark theme and repeat steps 1, 2, 4, 6, 7, 10, 12, and 13.
+
+#### Expected Results
+- The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
+- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
+- Commit selection resets the local branch to that commit instead of detaching HEAD.
+- Remote branch commit rows are inspectable but cannot trigger local branch reset.
+- The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
+- Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
+- The selected branch HEAD commit is marked `current` in expanded commit lists.
+- Loading and error messages remain visible in the dropdown without using browser alerts.
+- Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
+
+#### Rollback/Cleanup
+- Restore any dirty-worktree file changed for validation.
+- Restore or delete the disposable branch used for reset validation.
+
+---
+
+### Termux install without native PTY build
+
+#### Feature/Change Name
+Android Termux installs can complete when `node-pty` has no compatible native build.
+
+#### Prerequisites/Setup
+1. Android device or emulator with Termux installed.
+2. Node.js and npm available in Termux.
+3. Network access to npm and GitHub.
+4. A macOS or Linux desktop remains available for supported-host integrated terminal checks.
+5. Light theme and dark theme are available from the appearance switcher on the desktop check.
+
+#### Steps
+1. In Termux, run `npm i -g codexapp@latest` after the fixed version is published.
+2. Confirm installation does not fail if npm cannot build `node-pty` for `android-arm64`.
+3. Run `codexapp --no-login` in Termux.
+4. Open the printed URL and confirm the app loads.
+5. Open a thread and confirm the integrated terminal reports unavailable instead of crashing the server if native PTY support is missing.
+6. On macOS or Linux, run `npm i -g codexapp@latest`, then start `codexapp --no-login`.
+7. Open a thread in light theme and confirm the integrated terminal still opens on the supported host.
+8. Switch to dark theme and confirm the integrated terminal remains readable.
+
+#### Expected Results
+- Termux install completes even when `node-pty` cannot build on Android.
+- The Termux app server starts and the browser UI loads.
+- Missing native PTY support disables only the integrated terminal, not the whole app.
+- Supported hosts still install `node-pty` and keep integrated terminal behavior in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Remove test global installs with `npm rm -g codexapp`.
+
+---
+
+### Composer controls stay editable during responses
+
+#### Feature/Change Name
+Model, skill, thinking, and plan controls remain usable while a thread turn is in progress.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A thread that can produce a long enough response to interact with the composer while the assistant is responding
+3. At least one installed skill or saved prompt
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, send a message that starts an assistant response.
+2. While the response is still streaming, type a follow-up draft in the composer.
+3. Open the model dropdown and select a different model.
+4. Open the skills dropdown and select a skill or saved prompt.
+5. Open the thinking dropdown and select a different value.
+6. Open the attachment menu and toggle plan mode.
+7. Verify the stop button and send/queue behavior still match the in-progress turn state.
+8. Switch to dark theme and repeat steps 1 through 7.
+
+#### Expected Results
+- The message textarea remains editable while the assistant is responding.
+- Model, skills, thinking, and plan controls are not disabled during the in-progress response.
+- Selected controls update the composer state for the next submitted or queued message.
+- Stop remains available while no draft content is present, and the submit button switches to the configured steer/queue behavior when draft content exists.
+- Light-theme and dark-theme controls remain readable and do not overlap.
+
+#### Rollback/Cleanup
+- Remove any disposable queued messages or test skill selections from the thread.
+
 ### Feature: Remove GitHub trending projects from the new-thread screen
 
 #### Prerequisites
@@ -221,26 +530,30 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Reset appearance to the previous user preference.
 
-### Feature: Markdown file links with backticks and parentheses render correctly
+### Feature: Markdown file links with backticked filename labels render correctly
 
 #### Prerequisites
 - App is running from this repository.
 - An active thread is open.
-- Local file exists at `/root/New Project (1)/qwe.txt`.
+- Light and dark themes are both available.
+- Local file exists at `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
 
 #### Steps
-1. Send a message containing: `Done. Created [`/root/New Project (1)/qwe.txt`](/root/New Project (1)/qwe.txt) with content:`.
-2. In the rendered assistant message, click the `/root/New Project (1)/qwe.txt` link.
-3. Right-click the same link and choose `Copy link` from the context menu.
-4. Paste the copied link into a text field and inspect it.
+1. In light theme, send a message containing: `Added [`TrustedBrowserLauncher.kt`](/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt)`.
+2. Confirm the rendered message shows one clickable file link with visible text `TrustedBrowserLauncher.kt`.
+3. Click the link and confirm it opens local browse for `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
+4. Right-click the same link and choose `Copy link`, then paste it into a text field and inspect it.
+5. Switch to dark theme and repeat steps 1-4.
 
 #### Expected Results
-- The markdown link renders as one clickable file link (not split into partial tokens).
+- The markdown link renders as one clickable file link instead of splitting around backticks.
+- The visible link text is the markdown label `TrustedBrowserLauncher.kt`, without backtick glyphs.
 - Clicking opens the local browse route for the full file path.
 - Copied link includes the full encoded path and still resolves to the same file.
+- Light and dark theme message surfaces keep the link readable and styled consistently.
 
 #### Rollback/Cleanup
-- Delete `/root/New Project (1)/qwe.txt` if it was created only for this test.
+- No cleanup required.
 
 ### Feature: Deferred ancillary startup refreshes
 
@@ -470,7 +783,7 @@ This file tracks manual regression and feature verification steps.
 - Clear browser cookies for the app origin(s).
 - Stop the CLI process.
 
-### Feature: Cloudflare tunnel QR includes password auto-login path
+### Feature: Cloudflare tunnel QR omits password auto-login path
 
 #### Prerequisites
 - App is running from this repository with password enabled.
@@ -478,16 +791,16 @@ This file tracks manual regression and feature verification steps.
 
 #### Steps
 1. Start CLI and wait for tunnel output.
-2. Verify the printed `Tunnel:` URL includes `/password=` suffix.
+2. Verify the printed `Tunnel:` URL does not include a `/password=` suffix.
 3. Scan the terminal QR code from a phone/browser.
-4. Confirm first page load enters the app without showing password form.
-5. Open the tunnel base URL without `/password=` in a private window and verify login prompt still appears.
+4. Confirm first page load shows the password form when no trusted bypass applies.
+5. Use the generated password file path from startup output to retrieve the password and sign in.
 
 #### Expected Results
-- Tunnel URL shown in startup output uses `/password=<encoded-password>`.
-- QR code encodes the same auto-login URL.
-- Visiting the auto-login URL sets session cookie and redirects to `/`.
-- Base tunnel URL still requires login when no trusted bypass applies.
+- Tunnel URL shown in startup output does not expose the password.
+- QR code encodes the base tunnel URL without a password-bearing path.
+- The generated password remains available from the local password file.
+- Base tunnel URL requires login when no trusted bypass applies.
 
 #### Rollback/Cleanup
 - Stop the CLI process.
@@ -3021,23 +3334,21 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 8. Confirm `terminal-ok` appears in the xterm output
 9. Choose `npm run dev` from the `Run...` quick-command menu
 10. Confirm the command is submitted to the active terminal
-11. Choose `Add command...` from the `Run...` menu
-12. Enter a custom command in the prompt and confirm it runs immediately
-13. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
-14. Confirm the JSON `session.buffer` contains `terminal-ok`
-15. Refresh the page and reopen the same thread
-16. Toggle the terminal open again
-17. Click `New`
-18. Confirm a second terminal tab appears and becomes active
-19. Click the first terminal tab
-20. Confirm its previous output is restored
-21. Resize the browser window
-22. Click `Close`
-23. Open the new-chat screen
-24. Confirm a working folder is selected
-25. Click the terminal button in the top-right header
-26. Confirm the terminal opens below the new-chat composer before a thread exists
-27. Run `pwd` and confirm it matches the selected folder
+11. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
+12. Confirm the JSON `session.buffer` contains `terminal-ok`
+13. Refresh the page and reopen the same thread
+14. Toggle the terminal open again
+15. Click `New`
+16. Confirm a second terminal tab appears and becomes active
+17. Click the first terminal tab
+18. Confirm its previous output is restored
+19. Resize the browser window
+20. Click `Close`
+21. Open the new-chat screen
+22. Confirm a working folder is selected
+23. Click the terminal button in the top-right header
+24. Confirm the terminal opens below the new-chat composer before a thread exists
+25. Run `pwd` and confirm it matches the selected folder
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
@@ -3048,8 +3359,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
-- Custom quick commands can be added from the `Run...` menu prompt and run immediately
-- The `Run...` menu shows only the five most-used/recent commands before `Add command...`
+- The terminal open/hide action is the first item in the `Run...` menu
+- The `Run...` menu shows discovered project commands in usage order and scrolls when the list is longer than the visible menu
 - `New` adds another tab without killing the previous PTY
 - `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
@@ -3357,11 +3668,11 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 3. Verify the `Find skills` header shows a `Skills directory` link on the right that opens `https://skills.anyclaw.store/` in a new tab
 4. In `Find skills`, type a query such as `browser`
 5. Click `Search`
-6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx skills find browser`
+6. Verify the app calls `/codex-api/skills-hub/search?q=browser`, which runs `npx --yes skills find browser`
 7. Verify `Search results (count)` appears above `Installed skills (count)`
 8. Verify each registry result card shows its install count metadata, such as `1.2K installs`, even when a GitHub `SKILL.md` description is shown
 9. Open one GitHub-backed result and verify the detail modal shows the skill name, owner/repository, parsed `SKILL.md` description, GitHub-backed icon/avatar, and external link
-10. Click `Install` for a result and verify the backend runs `npx skills add <owner/repo@skill> --yes --global`
+10. Click `Install` for a result and verify the backend runs `npx --yes skills add <owner/repo@skill> --yes --global`
 11. After install, verify the result becomes installed and the installed skills list refreshes from local installed skill data rather than appending the remote registry card
 12. Switch to dark theme and repeat the search visibility check
 13. Search for an already-installed skill and verify its search result shows `Installed`
@@ -3374,11 +3685,14 @@ The Skills tab includes a registry search panel backed by `npx skills find`, sho
 
 #### Expected Results
 - Search results are parsed from the real `npx skills find` output, not a static catalog
+- Skills search/install commands use the repo command invocation wrapper so `npx` starts reliably on Windows
+- Skills search/install commands include outer `npx --yes` so first-run package prompts cannot hang with ignored stdin
 - The Skills directory link is visible beside Find skills in light and dark theme and opens the public directory in a new tab
 - Registry installs run noninteractively with `--yes --global`, so the process cannot stop at the agent-selection prompt and falsely report success
 - Registry install responses only return `ok: true` when the local installed `SKILL.md` path is found and validates successfully
 - The UI treats a missing returned path or missing post-refresh local skill as an install failure instead of showing the remote registry card as installed
 - GitHub-backed results fetch the repository `SKILL.md` and show its `description` frontmatter when available, falling back to the install count when unavailable
+- GitHub metadata enrichment is bounded to the first 20 results with limited concurrency, so broad searches still return without unbounded raw GitHub fetch fanout
 - Search result cards keep the registry install count visible as card metadata even when GitHub enrichment replaces the fallback description
 - GitHub-backed results show an explicit frontmatter `icon` when provided, otherwise they show the GitHub repository owner avatar instead of a generic letter fallback
 - The search UI does not replace or hide local installed skills
@@ -3841,8 +4155,9 @@ Terminal quick commands are discovered from the current project instead of using
 5. Verify root-level `*.sh` / `*.cmd` files appear as `./<file>`
 6. Verify `scripts/*.sh` and `scripts/*.cmd` files appear as `./scripts/<file>`
 7. Select one discovered command and confirm it is sent to the terminal
-8. Use `Add command...` to add a custom command
-9. Reopen the dropdown after running commands multiple times
+8. Reopen the dropdown after running commands multiple times
+9. If the project has more commands than fit in the menu, scroll the dropdown and verify lower-priority entries such as `./scripts/<file>.sh` remain reachable
+10. From a closed terminal state on a remote server, select a command immediately after opening the `Run...` menu and confirm it runs after the terminal attaches
 
 #### Expected Results
 - The dropdown is based on the current project `cwd`
@@ -3850,12 +4165,11 @@ Terminal quick commands are discovered from the current project instead of using
 - Package script commands use the lockfile-preferred package manager
 - Make targets are listed after package scripts
 - Root and `scripts/` script-file commands are listed after Make targets
-- Only the top five commands are shown, sorted by most-used and then most-recent usage
-- Custom commands still work and are included in the same usage sorting
+- Commands are sorted by most-used and then most-recent usage, and the dropdown scrolls instead of hiding entries beyond the first five
+- Selecting a command while the terminal is still mounting waits for the attach flow instead of dropping the command
 
 #### Rollback/Cleanup
 - Remove any temporary files created under the project root or `scripts/`
-- Remove custom quick commands from browser local storage if needed
 
 ---
 
@@ -4035,19 +4349,21 @@ Project rows open the same action menu from right-click and the dots button, and
 7. Reopen the project menu, click `New worktree`, and confirm the prompt is prefilled with `<project name>-`.
 8. Enter a unique folder name such as `<project name>-manual-test`.
 9. Confirm a Git worktree is created at `../<worktree name>` relative to the source repo root.
-10. Confirm the new worktree is added as a project and the app opens the new-chat composer with that cwd selected.
-11. Rename the project to include a slash, reopen `New worktree`, and confirm the suggested folder name replaces the slash with `-`.
-12. Switch to dark theme and repeat steps 1-4, verifying menu contrast and danger styling remain readable.
+10. Run `git -C ../<worktree name> branch --show-current` and confirm it prints a branch based on the worktree folder name.
+11. Confirm the new worktree is added as a project and the app opens the new-chat composer with that cwd selected.
+12. Rename the project to include a slash, reopen `New worktree`, and confirm the suggested folder name replaces the slash with `-`.
+13. Switch to dark theme and repeat steps 1-4, verifying menu contrast and danger styling remain readable.
 
 #### Expected Results
 - Right-click and dots button expose the same project action menu.
 - `Browse files`, `Rename project`, and `Remove` remain available from that menu.
-- `New worktree` creates a permanent sibling worktree folder, registers it as a project, and opens a new chat for it.
+- `New worktree` creates a permanent sibling worktree folder on its own branch, registers it as a project, and opens a new chat for it.
 - Invalid path separator characters are not used in the default worktree folder suggestion.
 - Menu text, hover states, and the remove action remain readable in light and dark themes.
 
 #### Rollback/Cleanup
 - Remove the test worktree with `git -C <source-repo-root> worktree remove ../<worktree name>`.
+- Delete the test branch with `git -C <source-repo-root> branch -D <branch name>`.
 - Remove the temporary project from the sidebar if it remains listed.
 
 ---
