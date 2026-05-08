@@ -4,6 +4,7 @@ import {
   collectWorkspaceRootPathsForProjectRemoval,
   filterGroupsByWorkspaceRoots,
   findAdjacentThreadId,
+  removeThreadFromGroups,
   isThreadUnreadByLastRead,
   normalizePinnedProjectOrder,
   orderGroupsByPinnedProjectOrder,
@@ -304,6 +305,49 @@ describe('filterGroupsByWorkspaceRoots', () => {
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
       ['/Users/igor/Git-projects/codex-web-local', ['main-chat']],
     ])
+  })
+})
+
+describe('removeThreadFromGroups', () => {
+  it('removes an archived thread and drops the now-empty project group', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('keep-alpha', '/tmp/alpha')],
+      },
+      {
+        projectName: 'archived-project',
+        threads: [thread('archive-me', '/tmp/archived-project')],
+      },
+      {
+        projectName: 'beta',
+        threads: [thread('keep-beta', '/tmp/beta')],
+      },
+      {
+        projectName: 'empty-workspace-root',
+        threads: [],
+      },
+    ]
+
+    expect(removeThreadFromGroups(groups, 'archive-me').map((group) => [
+      group.projectName,
+      group.threads.map((row) => row.id),
+    ])).toEqual([
+      ['alpha', ['keep-alpha']],
+      ['beta', ['keep-beta']],
+      ['empty-workspace-root', []],
+    ])
+  })
+
+  it('preserves referential identity when the thread is absent', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('keep-alpha', '/tmp/alpha')],
+      },
+    ]
+
+    expect(removeThreadFromGroups(groups, 'missing-thread')).toBe(groups)
   })
 })
 

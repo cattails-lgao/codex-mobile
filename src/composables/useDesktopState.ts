@@ -1013,6 +1013,29 @@ function pruneThreadStateMap<T>(stateMap: Record<string, T>, threadIds: Set<stri
   return Object.fromEntries(nextEntries) as Record<string, T>
 }
 
+export function removeThreadFromGroups(groups: UiProjectGroup[], threadId: string): UiProjectGroup[] {
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return groups
+
+  let changed = false
+  const nextGroups: UiProjectGroup[] = []
+
+  for (const group of groups) {
+    const nextThreads = group.threads.filter((thread) => thread.id !== normalizedThreadId)
+    const removedFromGroup = nextThreads.length !== group.threads.length
+    if (removedFromGroup) {
+      changed = true
+    }
+    if (nextThreads.length > 0) {
+      nextGroups.push(removedFromGroup ? { ...group, threads: nextThreads } : group)
+    } else if (group.threads.length === 0) {
+      nextGroups.push(group)
+    }
+  }
+
+  return changed ? nextGroups : groups
+}
+
 function mergeThreadGroups(
   previous: UiProjectGroup[],
   incoming: UiProjectGroup[],
@@ -4077,6 +4100,13 @@ export function useDesktopState() {
     }
   }
 
+  function removeArchivedThreadFromLoadedLists(threadId: string): void {
+    loadedThreadListGroups = removeThreadFromGroups(loadedThreadListGroups, threadId)
+    sourceGroups.value = removeThreadFromGroups(sourceGroups.value, threadId)
+    inProgressById.value = omitKey(inProgressById.value, threadId)
+    applyThreadFlags()
+  }
+
   function mergeThreadGroupPages(previous: UiProjectGroup[], incoming: UiProjectGroup[]): UiProjectGroup[] {
     if (previous.length === 0) return incoming
     if (incoming.length === 0) return previous
@@ -4424,6 +4454,7 @@ export function useDesktopState() {
 
     try {
       await archiveThread(threadId)
+      removeArchivedThreadFromLoadedLists(threadId)
       await loadThreads()
 
       if (wasSelectedThread && nextSelectedThreadId && selectedThreadId.value === nextSelectedThreadId) {
