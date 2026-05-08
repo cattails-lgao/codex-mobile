@@ -41,6 +41,38 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove `CODEXUI_VITE_ALLOWED_HOSTS` from `.env.local` or the shell environment.
+### Feature: Project recency sort, pins, and mobile move mode
+
+#### Prerequisites
+- App is running from this repository on `feature/project-recency-sort-upstream`.
+- At least two visible projects exist with threads updated at different times.
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. Open the sidebar in light theme.
+2. Open Projects -> Organize and confirm `Recent projects` is selected by default.
+3. Confirm projects appear in descending recent thread activity order.
+4. Tap the Projects header reorder icon and confirm move mode starts, all current project thread lists collapse, and drag handles are visible.
+5. Drag a non-top project above the first project while still in recent mode.
+6. Confirm the moved project appears in the pinned prefix, recent mode remains selected, and project threads do not expand from the drag release.
+7. Tap `Done`, open the moved project's menu, choose `Unpin project`, and confirm it returns to its recency-derived position.
+8. Switch to `Manual project order`, drag a project, and confirm the manual order sticks independently of recent-mode pins.
+9. Enter sidebar search text and confirm project move mode/dragging cannot start while the project list is filtered.
+10. Repeat steps 1-9 in dark theme.
+
+#### Expected Results
+- Recent mode ignores saved manual `projectOrder` except for explicit pinned project overrides.
+- Recent-mode drags pin the moved project without switching the persisted sort mode to manual.
+- Recent-mode drag and pin actions update only the pinned project override list and do not rewrite saved manual order.
+- Unpinning removes the override and restores the project to recency order.
+- Manual project order remains a separate full-list ordering mode.
+- Move mode collapses project thread lists, restores prior expansion state on exit, and is blocked while search filters the sidebar.
+- Reorder icon, `Done`, drag handles, pin labels, and menus remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- Tap `Done` to leave move mode.
+- Reset the sidebar Organize menu to the preferred project sort mode.
+- Remove any temporary chats or workspace roots created for verification.
 
 ### Feature: Thread heartbeat automations
 
@@ -247,6 +279,36 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+### Thread archive recovery and sidebar pruning
+
+#### Feature/Change Name
+Deleting a thread recovers from Codex `no rollout found` archive failures and removes successfully archived threads from the sidebar immediately.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. Codex CLI available on `PATH`
+3. At least one normal thread and one newly-created thread that has not yet produced a rollout
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, create a new empty thread from the sidebar.
+2. Open that thread's menu and choose `Delete thread`.
+3. Confirm the thread disappears from the sidebar without a `no rollout found` error.
+4. Rename another visible thread, then delete it.
+5. Confirm the renamed thread disappears immediately and does not reappear after sidebar refresh/background pagination.
+6. Call `thread/list` with `archived:false` through `/codex-api/rpc` and confirm the deleted thread ids are absent.
+7. Call `thread/list` with `archived:true` and confirm the deleted thread ids are present.
+8. Switch to dark theme and repeat steps 1-5.
+
+#### Expected Results
+- Empty or not-yet-materialized threads are archived after CodexUI sets a fallback name and retries.
+- Already archived threads are treated as archived instead of surfacing a stale `no rollout found` error.
+- The sidebar prunes archived ids from its accumulated paginated list before refreshing.
+- Older unarchived threads may appear as the list refills, but archived threads do not remain visible.
+- Behavior is consistent in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
 ### Unread thread cutoff state
 
 #### Feature/Change Name
@@ -277,6 +339,9 @@ Unread thread state uses a local cutoff timestamp so existing threads are not al
 
 #### Rollback/Cleanup
 - Remove any disposable test threads created for this validation.
+
+---
+
 ### CLI password output redaction
 
 #### Feature/Change Name
@@ -303,6 +368,38 @@ CLI startup output no longer prints the configured password or embeds it in the 
 
 #### Rollback/Cleanup
 - Stop the disposable CLI process.
+
+---
+
+### Composer skill chip opens SKILL.md
+
+#### Feature/Change Name
+Selected skill labels in the thread composer open that skill's `SKILL.md` in the web file browser.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. At least one installed skill is available in the composer skill picker
+3. Browser pop-ups from the local dev origin are allowed
+4. Light theme and dark theme are available from the appearance switcher
+
+#### Steps
+1. In light theme, open any thread with the composer enabled.
+2. Open the `Skills` picker and select an installed skill.
+3. Confirm the selected skill appears as a green chip above the input field.
+4. Click the skill name on the green chip.
+5. Confirm a new tab opens to `/codex-local-browse.../SKILL.md` for that skill.
+6. Return to the composer and click the chip `x`.
+7. Confirm the skill is removed and no file-browser tab is opened by the remove action.
+8. Switch to dark theme and repeat steps 2 through 7.
+
+#### Expected Results
+- The skill chip label is clickable and opens the selected skill's `SKILL.md` in the web file browser.
+- Skill paths that point at a skill directory are normalized to the nested `SKILL.md` file.
+- The remove button still only removes the skill from the composer.
+- The chip and focus/hover states remain readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Close any file-browser tabs opened during validation.
 
 ---
 
@@ -518,26 +615,30 @@ Model, skill, thinking, and plan controls remain usable while a thread turn is i
 #### Rollback/Cleanup
 - Reset appearance to the previous user preference.
 
-### Feature: Markdown file links with backticks and parentheses render correctly
+### Feature: Markdown file links with backticked filename labels render correctly
 
 #### Prerequisites
 - App is running from this repository.
 - An active thread is open.
-- Local file exists at `/root/New Project (1)/qwe.txt`.
+- Light and dark themes are both available.
+- Local file exists at `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
 
 #### Steps
-1. Send a message containing: `Done. Created [`/root/New Project (1)/qwe.txt`](/root/New Project (1)/qwe.txt) with content:`.
-2. In the rendered assistant message, click the `/root/New Project (1)/qwe.txt` link.
-3. Right-click the same link and choose `Copy link` from the context menu.
-4. Paste the copied link into a text field and inspect it.
+1. In light theme, send a message containing: `Added [`TrustedBrowserLauncher.kt`](/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt)`.
+2. Confirm the rendered message shows one clickable file link with visible text `TrustedBrowserLauncher.kt`.
+3. Click the link and confirm it opens local browse for `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
+4. Right-click the same link and choose `Copy link`, then paste it into a text field and inspect it.
+5. Switch to dark theme and repeat steps 1-4.
 
 #### Expected Results
-- The markdown link renders as one clickable file link (not split into partial tokens).
+- The markdown link renders as one clickable file link instead of splitting around backticks.
+- The visible link text is the markdown label `TrustedBrowserLauncher.kt`, without backtick glyphs.
 - Clicking opens the local browse route for the full file path.
 - Copied link includes the full encoded path and still resolves to the same file.
+- Light and dark theme message surfaces keep the link readable and styled consistently.
 
 #### Rollback/Cleanup
-- Delete `/root/New Project (1)/qwe.txt` if it was created only for this test.
+- No cleanup required.
 
 ### Feature: Deferred ancillary startup refreshes
 
@@ -3318,23 +3419,21 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 8. Confirm `terminal-ok` appears in the xterm output
 9. Choose `npm run dev` from the `Run...` quick-command menu
 10. Confirm the command is submitted to the active terminal
-11. Choose `Add command...` from the `Run...` menu
-12. Enter a custom command in the prompt and confirm it runs immediately
-13. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
-14. Confirm the JSON `session.buffer` contains `terminal-ok`
-15. Refresh the page and reopen the same thread
-16. Toggle the terminal open again
-17. Click `New`
-18. Confirm a second terminal tab appears and becomes active
-19. Click the first terminal tab
-20. Confirm its previous output is restored
-21. Resize the browser window
-22. Click `Close`
-23. Open the new-chat screen
-24. Confirm a working folder is selected
-25. Click the terminal button in the top-right header
-26. Confirm the terminal opens below the new-chat composer before a thread exists
-27. Run `pwd` and confirm it matches the selected folder
+11. Fetch `/codex-api/thread-terminal-snapshot?threadId=<thread-id>`
+12. Confirm the JSON `session.buffer` contains `terminal-ok`
+13. Refresh the page and reopen the same thread
+14. Toggle the terminal open again
+15. Click `New`
+16. Confirm a second terminal tab appears and becomes active
+17. Click the first terminal tab
+18. Confirm its previous output is restored
+19. Resize the browser window
+20. Click `Close`
+21. Open the new-chat screen
+22. Confirm a working folder is selected
+23. Click the terminal button in the top-right header
+24. Confirm the terminal opens below the new-chat composer before a thread exists
+25. Run `pwd` and confirm it matches the selected folder
 
 #### Expected Results
 - The terminal button shows a pressed state when the drawer is open
@@ -3345,8 +3444,8 @@ Each local/worktree thread has an integrated xterm terminal that can be toggled 
 - The terminal resizes without clipping the prompt
 - The snapshot endpoint returns `{ session: { cwd, shell, buffer, truncated } }` while a session exists
 - The quick-command menu sends common project commands such as `npm run dev` into the current PTY
-- Custom quick commands can be added from the `Run...` menu prompt and run immediately
-- The `Run...` menu shows only the five most-used/recent commands before `Add command...`
+- The terminal open/hide action is the first item in the `Run...` menu
+- The `Run...` menu shows discovered project commands in usage order and scrolls when the list is longer than the visible menu
 - `New` adds another tab without killing the previous PTY
 - `Close` terminates the active PTY and hides the drawer only after the last tab is closed
 
@@ -4141,8 +4240,9 @@ Terminal quick commands are discovered from the current project instead of using
 5. Verify root-level `*.sh` / `*.cmd` files appear as `./<file>`
 6. Verify `scripts/*.sh` and `scripts/*.cmd` files appear as `./scripts/<file>`
 7. Select one discovered command and confirm it is sent to the terminal
-8. Use `Add command...` to add a custom command
-9. Reopen the dropdown after running commands multiple times
+8. Reopen the dropdown after running commands multiple times
+9. If the project has more commands than fit in the menu, scroll the dropdown and verify lower-priority entries such as `./scripts/<file>.sh` remain reachable
+10. From a closed terminal state on a remote server, select a command immediately after opening the `Run...` menu and confirm it runs after the terminal attaches
 
 #### Expected Results
 - The dropdown is based on the current project `cwd`
@@ -4150,12 +4250,11 @@ Terminal quick commands are discovered from the current project instead of using
 - Package script commands use the lockfile-preferred package manager
 - Make targets are listed after package scripts
 - Root and `scripts/` script-file commands are listed after Make targets
-- Only the top five commands are shown, sorted by most-used and then most-recent usage
-- Custom commands still work and are included in the same usage sorting
+- Commands are sorted by most-used and then most-recent usage, and the dropdown scrolls instead of hiding entries beyond the first five
+- Selecting a command while the terminal is still mounting waits for the attach flow instead of dropping the command
 
 #### Rollback/Cleanup
 - Remove any temporary files created under the project root or `scripts/`
-- Remove custom quick commands from browser local storage if needed
 
 ---
 
@@ -4541,3 +4640,38 @@ Managed worktree threads remain visible under their matching canonical workspace
 
 #### Rollback/Cleanup
 - None.
+
+---
+
+### Worktree creation persists across refresh
+
+#### Feature/Change Name
+Newly created temporary and permanent worktrees are persisted in workspace roots so their threads remain visible after a full browser refresh.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A Git-backed workspace root is registered and selected in the Start new thread screen
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open Start new thread for the Git-backed workspace root.
+2. Select `New worktree`, send a unique first prompt, and wait for the thread page to open.
+3. Note the created worktree path from the selected folder or thread metadata.
+4. Refresh the browser tab.
+5. Confirm the new worktree-backed project/thread remains visible in the sidebar and can be opened.
+6. Open the project action menu for the original Git-backed project and create a permanent named worktree.
+7. Confirm the permanent worktree appears in the folder/project list, then refresh the browser tab.
+8. Confirm the permanent worktree remains visible after refresh.
+9. Switch to dark theme and repeat steps 1 through 5 with a second unique temporary worktree prompt.
+
+#### Expected Results
+- Temporary worktree creation writes the new worktree cwd to persisted workspace roots.
+- Permanent worktree creation writes the new worktree cwd to persisted workspace roots.
+- Full page refresh does not hide the newly created worktree project or its thread.
+- The same behavior works in light theme and dark theme.
+- If workspace-root persistence fails after `git worktree add`, the request fails cleanly and best-effort rollback removes the created worktree instead of leaving retry-prone orphaned worktrees.
+
+#### Rollback/Cleanup
+- Remove temporary test worktrees with `git worktree remove --force <worktree-path>`.
+- Delete any empty temporary parent directory left under `$CODEX_HOME/worktrees/<id>`.
+- Remove permanent test worktrees with `git worktree remove --force <worktree-path>` and delete their test branch if needed.

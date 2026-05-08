@@ -62,6 +62,8 @@
 
           <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
             :project-git-repo-by-name="projectGitRepoByName"
+            :project-sort-mode="projectSortMode"
+            :pinned-project-order="pinnedProjectOrder"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
@@ -75,6 +77,8 @@
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
+            @set-project-sort-mode="onSetProjectSortMode"
+            @toggle-project-pinned="onToggleProjectPinned"
             @export-thread="onExportThread"
             @start-new-chat="onStartNewThreadFromToolbar"
             @toggle-filter="toggleSidebarSearch" />
@@ -1014,9 +1018,7 @@ const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
 const TERMINAL_QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
-const ADD_TERMINAL_COMMAND_VALUE = '__add_terminal_command__'
 const TOGGLE_TERMINAL_COMMAND_VALUE = '__toggle_terminal__'
-const MAX_HEADER_TERMINAL_COMMANDS = 5
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -1183,6 +1185,8 @@ const WHISPER_LANGUAGES: Record<string, string> = {
 const {
   projectGroups,
   projectDisplayNameById,
+  projectSortMode,
+  pinnedProjectOrder,
   selectedThread,
   selectedThreadTokenUsage,
   selectedThreadTerminalOpen,
@@ -1232,7 +1236,9 @@ const {
   renameProject,
   removeProject,
   reorderProject,
-  pinProjectToTop,
+  setProjectSortMode,
+  focusProjectToTop,
+  toggleProjectPinned,
   startPolling,
   stopPolling,
   primeSelectedThread,
@@ -1730,16 +1736,13 @@ const terminalHeaderQuickCommands = computed<TerminalHeaderQuickCommand[]>(() =>
       custom: false,
       sourceIndex: index,
     })),
-    ...terminalStoredQuickCommands.value.filter((command) => command.custom === true),
   ]
   return combined
     .sort(compareTerminalQuickCommands)
-    .slice(0, MAX_HEADER_TERMINAL_COMMANDS)
 })
 const terminalHeaderDropdownOptions = computed(() => [
-  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
-  { label: 'Add command...', value: ADD_TERMINAL_COMMAND_VALUE },
   { label: isComposerTerminalOpen.value ? t('Hide terminal') : t('Open terminal'), value: TOGGLE_TERMINAL_COMMAND_VALUE },
+  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
 ])
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
@@ -2372,7 +2375,7 @@ async function onCreateProjectWorktree(projectName: string): Promise<void> {
 
     newThreadCwd.value = normalizedPath
     newThreadRuntime.value = 'local'
-    pinProjectToTop(getPathLeafName(normalizedPath))
+    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
     if (isMobile.value) setSidebarCollapsed(true)
@@ -2426,6 +2429,14 @@ async function onRemoveProject(projectName: string): Promise<void> {
 
 function onReorderProject(payload: { projectName: string; toIndex: number }): void {
   reorderProject(payload.projectName, payload.toIndex)
+}
+
+function onSetProjectSortMode(mode: 'recent' | 'manual'): void {
+  setProjectSortMode(mode)
+}
+
+function onToggleProjectPinned(projectName: string): void {
+  toggleProjectPinned(projectName)
 }
 
 function onRespondServerRequest(payload: UiServerRequestReply): void {
@@ -2508,17 +2519,10 @@ function onSelectHeaderTerminalCommand(command: string): void {
     toggleComposerTerminal()
     return
   }
-  if (command === ADD_TERMINAL_COMMAND_VALUE) {
-    if (typeof window === 'undefined') return
-    const customCommand = normalizeTerminalQuickCommandValue(window.prompt('Add command') ?? '')
-    if (!customCommand) return
-    void openTerminalAndRunCommand(customCommand, true)
-    return
-  }
-  void openTerminalAndRunCommand(command, false)
+  void openTerminalAndRunCommand(command)
 }
 
-async function openTerminalAndRunCommand(command: string, custom: boolean): Promise<void> {
+async function openTerminalAndRunCommand(command: string): Promise<void> {
   if (!isThreadTerminalAvailable.value || !composerCwd.value) return
   if (isHomeRoute.value) {
     homeTerminalOpen.value = true
@@ -2530,18 +2534,19 @@ async function openTerminalAndRunCommand(command: string, custom: boolean): Prom
   const panel = await waitForTerminalPanel()
   if (!panel) return
   try {
-    await panel.runQuickCommand(command, custom)
-    recordHeaderTerminalCommandUse(command, custom)
+    await panel.runQuickCommand(command)
+    recordHeaderTerminalCommandUse(command)
   } catch {
     // ThreadTerminalPanel renders the terminal-specific error in place.
   }
 }
 
 async function waitForTerminalPanel(): Promise<ThreadTerminalPanelExposed | null> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await nextTick()
     const panel = isHomeRoute.value ? homeTerminalPanelRef.value : threadTerminalPanelRef.value
     if (panel) return panel
+    await new Promise((resolve) => window.setTimeout(resolve, 25))
   }
   return null
 }
@@ -2559,16 +2564,17 @@ async function refreshTerminalQuickCommands(): Promise<void> {
   }
 }
 
-function recordHeaderTerminalCommandUse(command: string, custom: boolean): void {
+function recordHeaderTerminalCommandUse(command: string): void {
   const normalized = normalizeTerminalQuickCommandValue(command)
   if (!normalized) return
   const existing = terminalStoredQuickCommands.value.find((row) => row.value === normalized)
   const projectCommandIndex = terminalProjectQuickCommands.value.findIndex((row) => row.value === normalized)
   const projectCommand = projectCommandIndex >= 0 ? terminalProjectQuickCommands.value[projectCommandIndex] : null
+  if (!projectCommand) return
   const nextCommand: TerminalHeaderQuickCommand = {
     label: existing?.label || projectCommand?.label || normalized,
     value: normalized,
-    custom: existing?.custom === true || (!projectCommand && custom),
+    custom: false,
     usageCount: (existing?.usageCount ?? 0) + 1,
     lastUsedAt: Date.now(),
     sourceIndex: projectCommandIndex >= 0 ? projectCommandIndex : undefined,
@@ -3029,7 +3035,7 @@ async function onCreateProject(): Promise<void> {
     if (!normalizedPath) return
 
     newThreadCwd.value = normalizedPath
-    pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
   } catch (error) {
@@ -3114,7 +3120,7 @@ async function onConfirmExistingFolder(path = resolvedExistingFolderPath.value):
     }
 
     newThreadCwd.value = normalizedPath
-    pinProjectToTop(getPathLeafName(normalizedPath))
+    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
     onCloseExistingFolderPanel()
@@ -3206,7 +3212,7 @@ async function applyLaunchProjectPathFromUrl(): Promise<boolean> {
     })
     if (!normalizedPath) return false
     newThreadCwd.value = normalizedPath
-    pinProjectToTop(getPathLeafName(normalizedPath))
+    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await router.replace({ name: 'home' })
     await loadWorkspaceRootOptionsState()
     const nextUrl = new URL(window.location.href)

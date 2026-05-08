@@ -1,13 +1,54 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildWorkspaceRootsProjectOrderState,
   collectWorkspaceRootPathsForProjectRemoval,
   filterGroupsByWorkspaceRoots,
   findAdjacentThreadId,
+  removeThreadFromGroups,
   isThreadUnreadByLastRead,
+  normalizePinnedProjectOrder,
+  orderGroupsByPinnedProjectOrder,
+  reorderPinnedProjectOrder,
+  useDesktopState,
 } from './useDesktopState'
 import type { UiProjectGroup } from '../types/codex'
 import type { WorkspaceRootsState } from '../api/codexGateway'
+
+const gatewayMocks = vi.hoisted(() => ({
+  archiveThread: vi.fn(),
+  forkThread: vi.fn(),
+  getAccountRateLimits: vi.fn(),
+  getAvailableCollaborationModes: vi.fn(),
+  getAvailableModelIds: vi.fn(),
+  getCurrentModelConfig: vi.fn(),
+  getPendingServerRequests: vi.fn(),
+  getSkillsList: vi.fn(),
+  getThreadDetail: vi.fn(),
+  getThreadGroupsPage: vi.fn(),
+  getThreadQueueState: vi.fn(),
+  getThreadTitleCache: vi.fn(),
+  getWorkspaceRootsState: vi.fn(),
+  generateThreadTitle: vi.fn(),
+  interruptThreadTurn: vi.fn(),
+  persistThreadTitle: vi.fn(),
+  renameThread: vi.fn(),
+  replyToServerRequest: vi.fn(),
+  resumeThread: vi.fn(),
+  revertThreadFileChanges: vi.fn(),
+  rollbackThread: vi.fn(),
+  setCodexSpeedMode: vi.fn(),
+  setThreadQueueState: vi.fn(),
+  setWorkspaceRootsState: vi.fn(),
+  startThread: vi.fn(),
+  startThreadTurn: vi.fn(),
+  subscribeCodexNotifications: vi.fn(),
+}))
+
+vi.mock('../api/codexGateway', () => ({
+  ...gatewayMocks,
+  getBackgroundThreadListLimit: vi.fn(() => 100),
+  pickCodexRateLimitSnapshot: vi.fn(() => null),
+}))
 
 function thread(id: string, cwd: string, options: { hasWorktree?: boolean } = {}) {
   return {
@@ -23,6 +64,34 @@ function thread(id: string, cwd: string, options: { hasWorktree?: boolean } = {}
     inProgress: false,
   }
 }
+
+function installTestWindow(initialStorage: Record<string, string> = {}) {
+  const store = new Map(Object.entries(initialStorage))
+  vi.stubGlobal('window', {
+    localStorage: {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        store.set(key, value)
+      }),
+      removeItem: vi.fn((key: string) => {
+        store.delete(key)
+      }),
+    },
+    setTimeout: vi.fn(),
+    clearTimeout: vi.fn(),
+  })
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  gatewayMocks.getThreadQueueState.mockResolvedValue({})
+  gatewayMocks.getThreadTitleCache.mockResolvedValue({ titles: {} })
+  gatewayMocks.getWorkspaceRootsState.mockRejectedValue(new Error('no workspace roots state'))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('filterGroupsByWorkspaceRoots', () => {
   it('keeps projectless chats visible when workspace roots are configured', () => {
@@ -97,6 +166,30 @@ describe('filterGroupsByWorkspaceRoots', () => {
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
       'beta',
       'alpha',
+    ])
+  })
+
+  it('preserves incoming recency order when project sort mode is recent', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('alpha-chat', '/tmp/alpha')],
+      },
+      {
+        projectName: 'beta',
+        threads: [thread('beta-chat', '/tmp/beta')],
+      },
+    ]
+    const rootsState: WorkspaceRootsState = {
+      order: ['/tmp/alpha', '/tmp/beta'],
+      labels: {},
+      active: ['/tmp/alpha'],
+      projectOrder: ['/tmp/beta', '/tmp/alpha'],
+    }
+
+    expect(filterGroupsByWorkspaceRoots(groups, rootsState, 'recent').map((group) => group.projectName)).toEqual([
+      'alpha',
+      'beta',
     ])
   })
 
@@ -215,6 +308,49 @@ describe('filterGroupsByWorkspaceRoots', () => {
   })
 })
 
+describe('removeThreadFromGroups', () => {
+  it('removes an archived thread and drops the now-empty project group', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('keep-alpha', '/tmp/alpha')],
+      },
+      {
+        projectName: 'archived-project',
+        threads: [thread('archive-me', '/tmp/archived-project')],
+      },
+      {
+        projectName: 'beta',
+        threads: [thread('keep-beta', '/tmp/beta')],
+      },
+      {
+        projectName: 'empty-workspace-root',
+        threads: [],
+      },
+    ]
+
+    expect(removeThreadFromGroups(groups, 'archive-me').map((group) => [
+      group.projectName,
+      group.threads.map((row) => row.id),
+    ])).toEqual([
+      ['alpha', ['keep-alpha']],
+      ['beta', ['keep-beta']],
+      ['empty-workspace-root', []],
+    ])
+  })
+
+  it('preserves referential identity when the thread is absent', () => {
+    const groups: UiProjectGroup[] = [
+      {
+        projectName: 'alpha',
+        threads: [thread('keep-alpha', '/tmp/alpha')],
+      },
+    ]
+
+    expect(removeThreadFromGroups(groups, 'missing-thread')).toBe(groups)
+  })
+})
+
 describe('workspace roots project persistence helpers', () => {
   it('collects duplicate-path project roots by full path when removing a project', () => {
     const rootsState: WorkspaceRootsState = {
@@ -279,6 +415,102 @@ describe('thread unread state helpers', () => {
       '2026-05-01T12:45:00.000Z',
       cutoffIso,
     )).toBe(true)
+  })
+})
+
+describe('pinned project ordering', () => {
+  const groups: UiProjectGroup[] = [
+    { projectName: 'alpha', threads: [thread('alpha-chat', '/tmp/alpha')] },
+    { projectName: 'beta', threads: [thread('beta-chat', '/tmp/beta')] },
+    { projectName: 'gamma', threads: [thread('gamma-chat', '/tmp/gamma')] },
+  ]
+
+  it('places pinned projects before remaining recent-order projects', () => {
+    expect(orderGroupsByPinnedProjectOrder(groups, ['gamma']).map((group) => group.projectName)).toEqual([
+      'gamma',
+      'alpha',
+      'beta',
+    ])
+  })
+
+  it('removes stale and duplicate pin entries while ordering visible projects', () => {
+    expect(orderGroupsByPinnedProjectOrder(groups, ['gamma', 'missing', 'gamma', 'alpha']).map((group) => group.projectName)).toEqual([
+      'gamma',
+      'alpha',
+      'beta',
+    ])
+  })
+
+  it('preserves path-qualified project ids when normalizing persisted pins', () => {
+    expect(normalizePinnedProjectOrder(['/tmp/first/api', 'api', '/tmp/first/api'])).toEqual([
+      '/tmp/first/api',
+      'api',
+    ])
+  })
+
+  it('pins an unpinned project into the pinned prefix when reordered in recent mode', () => {
+    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma'], 'beta', 0)).toEqual([
+      'beta',
+      'gamma',
+    ])
+  })
+
+  it('keeps recent-mode reordered projects in the pinned prefix even when dropped below unpinned projects', () => {
+    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma'], 'alpha', 2)).toEqual([
+      'gamma',
+      'alpha',
+    ])
+  })
+
+  it('reorders existing pins within the pinned prefix', () => {
+    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma', 'alpha'], 'gamma', 1)).toEqual([
+      'alpha',
+      'gamma',
+    ])
+  })
+
+  it('preserves hidden entries after reordering visible projects', () => {
+    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['hidden', 'gamma', 'alpha', 'remote'], 'beta', 1)).toEqual([
+      'gamma',
+      'beta',
+      'alpha',
+      'hidden',
+      'remote',
+    ])
+  })
+
+  it('interprets target indexes against the visible project order', () => {
+    expect(reorderPinnedProjectOrder(['alpha', 'beta'], ['hidden', 'alpha', 'beta', 'gamma'], 'beta', 0)).toEqual([
+      'beta',
+      'alpha',
+      'hidden',
+      'gamma',
+    ])
+  })
+
+  it('keeps saved manual project order unchanged when reordering in recent mode', async () => {
+    const savedManualOrder = ['alpha', 'beta', 'gamma']
+    installTestWindow({
+      'codex-web-local.project-sort-mode.v1': 'recent',
+      'codex-web-local.project-order.v1': JSON.stringify(savedManualOrder),
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups,
+      nextCursor: null,
+    })
+
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.reorderProject('beta', 0)
+
+    expect(window.localStorage.getItem('codex-web-local.project-order.v1')).toBe(JSON.stringify(savedManualOrder))
+    expect(window.localStorage.getItem('codex-web-local.pinned-project-order.v1')).toBe(JSON.stringify(['beta']))
+    expect(state.projectGroups.value.map((group) => group.projectName)).toEqual([
+      'beta',
+      'alpha',
+      'gamma',
+    ])
+    expect(gatewayMocks.setWorkspaceRootsState).not.toHaveBeenCalled()
   })
 })
 

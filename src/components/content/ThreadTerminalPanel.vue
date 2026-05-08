@@ -79,6 +79,7 @@ let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let unsubscribeNotifications: (() => void) | null = null
 let resizeFrame = 0
+let attachPromise: Promise<void> | null = null
 const { t } = useUiLanguage()
 
 type TerminalTab = {
@@ -195,6 +196,22 @@ function createTerminal(): void {
 }
 
 async function attachToThread(newSession: boolean, targetSessionId = ''): Promise<void> {
+  if (attachPromise && !newSession && !targetSessionId) {
+    await attachPromise
+    return
+  }
+  const nextAttach = doAttachToThread(newSession, targetSessionId)
+  attachPromise = nextAttach
+  try {
+    await nextAttach
+  } finally {
+    if (attachPromise === nextAttach) {
+      attachPromise = null
+    }
+  }
+}
+
+async function doAttachToThread(newSession: boolean, targetSessionId = ''): Promise<void> {
   if (!props.threadId || !props.cwd || !terminal) return
   errorMessage.value = ''
   await nextTick()
@@ -455,6 +472,7 @@ async function refreshProjectQuickCommands(): Promise<void> {
 async function runQuickCommand(command: string, custom = false): Promise<void> {
   const value = normalizeQuickCommandValue(command)
   if (!value) return
+  await waitForTerminalReady()
   if (!activeSessionId.value) {
     await attachToThread(false)
   }
@@ -469,6 +487,14 @@ async function runQuickCommand(command: string, custom = false): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : 'Quick command failed'
     throw error
   }
+}
+
+async function waitForTerminalReady(): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (terminal) return
+    await new Promise((resolve) => window.setTimeout(resolve, 25))
+  }
+  throw new Error('Terminal is not ready')
 }
 
 defineExpose<ThreadTerminalPanelExposed>({
