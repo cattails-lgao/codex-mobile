@@ -3508,6 +3508,11 @@ type BackendQueuedTurn = {
   message: StoredQueuedMessage
 }
 
+type ThreadQueueStateUpdate<T> = {
+  nextState: ThreadQueueState
+  result: T
+}
+
 type ResolvedCollaborationModeSettings = {
   model: string
   reasoningEffort: ReasoningEffort | null
@@ -3572,6 +3577,8 @@ function normalizeThreadQueueState(value: unknown): ThreadQueueState {
   return state
 }
 
+let threadQueueMutationChain: Promise<unknown> = Promise.resolve()
+
 async function readThreadQueueState(): Promise<ThreadQueueState> {
   const statePath = getCodexGlobalStatePath()
   try {
@@ -3583,7 +3590,7 @@ async function readThreadQueueState(): Promise<ThreadQueueState> {
   }
 }
 
-async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+async function writeThreadQueueStateUnlocked(nextState: ThreadQueueState): Promise<void> {
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
   try {
@@ -3601,14 +3608,36 @@ async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void>
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
 
+async function withThreadQueueStateUpdate<T>(
+  update: (state: ThreadQueueState) => ThreadQueueStateUpdate<T> | Promise<ThreadQueueStateUpdate<T>>,
+): Promise<T> {
+  const run = threadQueueMutationChain.then(async () => {
+    const currentState = await readThreadQueueState()
+    const { nextState, result } = await update(currentState)
+    await writeThreadQueueStateUnlocked(nextState)
+    return result
+  })
+  threadQueueMutationChain = run.catch(() => {})
+  return run
+}
+
+async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+  await withThreadQueueStateUpdate(() => ({
+    nextState: normalizeThreadQueueState(nextState),
+    result: undefined,
+  }))
+}
+
 async function appendThreadQueuedMessage(threadId: string, message: StoredQueuedMessage): Promise<void> {
   const normalizedThreadId = threadId.trim()
   if (!normalizedThreadId) throw new Error('threadId is required')
-  const state = await readThreadQueueState()
-  await writeThreadQueueState({
-    ...state,
-    [normalizedThreadId]: [...(state[normalizedThreadId] ?? []), message],
-  })
+  await withThreadQueueStateUpdate((state) => ({
+    nextState: {
+      ...state,
+      [normalizedThreadId]: [...(state[normalizedThreadId] ?? []), message],
+    },
+    result: undefined,
+  }))
 }
 
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
@@ -3643,14 +3672,21 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
 }
 
+function escapeHeartbeatXmlText(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+}
+
 function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
   return {
     id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
     text: `<heartbeat>
-<automation_id>${automation.id}</automation_id>
+<automation_id>${escapeHeartbeatXmlText(automation.id)}</automation_id>
 <current_time_iso>${new Date().toISOString()}</current_time_iso>
 <instructions>
-${automation.prompt}
+${escapeHeartbeatXmlText(automation.prompt)}
 </instructions>
 </heartbeat>`,
     imageUrls: [],
@@ -4828,27 +4864,33 @@ class BackendQueueProcessor {
   }
 
   private async popNextQueuedTurn(threadId: string): Promise<BackendQueuedTurn | null> {
-    const state = await readThreadQueueState()
-    const queue = state[threadId]
-    if (!queue || queue.length === 0) return null
+    return withThreadQueueStateUpdate((state) => {
+      const queue = state[threadId]
+      if (!queue || queue.length === 0) {
+        return { nextState: state, result: null }
+      }
 
-    const [message, ...rest] = queue
-    const nextState = { ...state }
-    if (rest.length > 0) {
-      nextState[threadId] = rest
-    } else {
-      delete nextState[threadId]
-    }
-    await writeThreadQueueState(nextState)
-    return { threadId, message }
+      const [message, ...rest] = queue
+      const nextState = { ...state }
+      if (rest.length > 0) {
+        nextState[threadId] = rest
+      } else {
+        delete nextState[threadId]
+      }
+      return { nextState, result: { threadId, message } }
+    })
   }
 
   private async restoreQueuedTurn(turn: BackendQueuedTurn): Promise<void> {
-    const state = await readThreadQueueState()
-    const queue = state[turn.threadId] ?? []
-    await writeThreadQueueState({
-      ...state,
-      [turn.threadId]: [turn.message, ...queue],
+    await withThreadQueueStateUpdate((state) => {
+      const queue = state[turn.threadId] ?? []
+      return {
+        nextState: {
+          ...state,
+          [turn.threadId]: [turn.message, ...queue],
+        },
+        result: undefined,
+      }
     })
   }
 

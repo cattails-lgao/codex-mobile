@@ -88,9 +88,16 @@ function toImageGenerationUrl(value: string): string {
   return `data:image/png;base64,${compact}`
 }
 
+function decodeHeartbeatXmlText(value: string): string {
+  return value
+    .replace(/&lt;/giu, '<')
+    .replace(/&gt;/giu, '>')
+    .replace(/&amp;/giu, '&')
+}
+
 function readHeartbeatField(value: string, field: string): string {
   const match = new RegExp(`<${field}>\\s*([\\s\\S]*?)\\s*</${field}>`, 'iu').exec(value)
-  return match?.[1]?.trim() ?? ''
+  return match?.[1] ? decodeHeartbeatXmlText(match[1].trim()) : ''
 }
 
 function parseHeartbeatEnvelope(value: string): { automationId: string; currentTimeIso: string; instructions: string } | null {
