@@ -21,3 +21,4 @@
 - [../raw/features/skills-route-ui-and-first-launch-card.md](../raw/features/skills-route-ui-and-first-launch-card.md): source facts for the Skills route rename, first-launch Plugins card, dark-theme fix, and dev-server workflow adjustment.
 - [../raw/projects/codex-web-local.md](../raw/projects/codex-web-local.md): immutable source snapshot for project facts.
 - [../raw/fixes/opencode-zen-big-pickle-codex-cli.md](../raw/fixes/opencode-zen-big-pickle-codex-cli.md): Big Pickle + Codex CLI fix details.
+- [../raw/fixes/opencode-zen-reasoning-content-proxy.md](../raw/fixes/opencode-zen-reasoning-content-proxy.md): Codex Web Local Zen proxy reasoning_content round-trip fix and Docker verification.
