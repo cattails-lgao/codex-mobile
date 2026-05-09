@@ -105,6 +105,7 @@ const FALLBACK_FREE_MODELS = [
 let cachedFreeModels: string[] | null = null
 let cacheTimestamp = 0
 const CACHE_TTL_MS = 10 * 60 * 1000
+let freeModelsRefreshPromise: Promise<string[]> | null = null
 
 async function fetchFreeModelsFromOpenRouter(): Promise<string[]> {
   try {
@@ -129,6 +130,19 @@ export async function getFreeModels(): Promise<string[]> {
     return cachedFreeModels
   }
   return fetchFreeModelsFromOpenRouter()
+}
+
+export function getCachedFreeModels(): string[] {
+  return cachedFreeModels ?? FALLBACK_FREE_MODELS
+}
+
+export function refreshFreeModelsInBackground(): void {
+  if (cachedFreeModels && Date.now() - cacheTimestamp < CACHE_TTL_MS) return
+  if (freeModelsRefreshPromise) return
+  freeModelsRefreshPromise = fetchFreeModelsFromOpenRouter()
+    .finally(() => {
+      freeModelsRefreshPromise = null
+    })
 }
 
 export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
