@@ -114,6 +114,10 @@ function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
 }
 
+function getSharedSkillsInstallDir(): string {
+  return join(getSkillsInstallDir(), 'shared_skills')
+}
+
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000
 const SKILL_SEARCH_METADATA_LIMIT = 20
 const SKILL_SEARCH_METADATA_CONCURRENCY = 4
@@ -867,9 +871,9 @@ function toGitHubTokenRemote(repoOwner: string, repoName: string, token: string)
 async function ensureSkillsWorkingTreeRepo(
   repoUrl: string,
   branch: string,
-  options: { overwriteLocalFiles?: boolean } = {},
+  options: { localDir?: string; overwriteLocalFiles?: boolean } = {},
 ): Promise<string> {
-  const localDir = getSkillsInstallDir()
+  const localDir = options.localDir ?? getSkillsInstallDir()
   await mkdir(localDir, { recursive: true })
   const gitDir = join(localDir, '.git')
   let hasGitDir = false
@@ -1213,8 +1217,10 @@ async function pullInstalledSkillsFolderFromRepo(token: string, repoOwner: strin
 
 async function bootstrapSkillsFromUpstreamIntoLocal(): Promise<void> {
   const repoUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
-  const branch = getPreferredPublicUpstreamBranch()
-  await ensureSkillsWorkingTreeRepo(repoUrl, branch, { overwriteLocalFiles: true })
+  await ensureSkillsWorkingTreeRepo(repoUrl, PUBLIC_UPSTREAM_BRANCH_ANDROID, {
+    localDir: getSharedSkillsInstallDir(),
+    overwriteLocalFiles: true,
+  })
 }
 
 async function collectLocalSyncedSkills(appServer: AppServerLike): Promise<SyncedSkill[]> {
