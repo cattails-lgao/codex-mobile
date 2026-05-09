@@ -3936,7 +3936,7 @@ export function useDesktopState() {
     }
     const filteredGroups = groupsWithWorkspaceRoots.filter((group) => {
       if (allowedProjectNames.has(group.projectName)) return true
-      return group.threads.some((thread) => isProjectlessChatPath(thread.cwd))
+      return isProjectlessGroup(group)
     })
     return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
   }
