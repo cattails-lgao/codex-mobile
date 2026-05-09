@@ -181,6 +181,13 @@ export function createDefaultOpenCodeZenFreeModeState(): FreeModeState {
   }
 }
 
+export function shouldCreateDefaultFreeModeStateForMissingAuth(
+  current: FreeModeState | null,
+  hasUsableCodexAuth: boolean,
+): boolean {
+  return current == null && !hasUsableCodexAuth
+}
+
 export function getFreeModeEnvVars(state: FreeModeState): Record<string, string> {
   if (!state.enabled) return {}
 

@@ -294,14 +294,21 @@ Codex app-server startup defaults to OpenCode Zen `big-pickle` when `CODEX_HOME`
 2. Confirm `$CODEX_HOME/webui-free-mode.json` is created.
 3. Confirm `/codex-api/free-mode/status` reports `enabled: true`, `provider: "opencode-zen"`, and `currentModel: "big-pickle"`.
 4. Send `hi` through the app-server path.
-5. Repeat a quick visual load of the app in light theme.
-6. Switch to dark theme and confirm the provider/settings UI remains readable.
+5. Send a second prompt that triggers tool calls and prior reasoning reuse.
+6. Confirm a streamed tool request through the Zen proxy does not request upstream SSE when tool outputs are present.
+7. Disable free mode and reload `/codex-api/free-mode/status`.
+8. From a non-loopback client, attempt to call `/codex-api/zen-proxy/v1/responses`.
+9. Repeat a quick visual load of the app in light theme.
+10. Switch to dark theme and confirm the provider/settings UI remains readable.
 
 #### Expected Results
 - The app does not require `codex login` before first use in the empty Docker environment.
 - App-server runs with the `opencode-zen` provider and the local Zen proxy without an API key.
 - A `hi` turn completes with an assistant response.
 - Multi-turn Zen conversations preserve provider `reasoning_content` and do not fail with `The reasoning_content in the thinking mode must be passed back to the API`.
+- Tool-bearing Zen proxy requests with downstream `stream: true` are sent upstream as non-streaming JSON when the proxy cannot forward SSE.
+- A user-disabled free mode state remains disabled on later status reads.
+- The unauthenticated local Zen proxy rejects non-loopback callers.
 - Light-theme and dark-theme provider controls remain readable.
 
 #### Rollback/Cleanup

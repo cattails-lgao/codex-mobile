@@ -6,6 +6,7 @@ import {
   OPENCODE_ZEN_PROVIDER_ID,
   createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
+  shouldCreateDefaultFreeModeStateForMissingAuth,
 } from './freeMode'
 
 describe('unauthenticated free mode defaults', () => {
@@ -42,5 +43,20 @@ describe('unauthenticated free mode defaults', () => {
 
     expect(args).toContain(`model_provider="${FREE_MODE_PROVIDER_ID}"`)
     expect(args).toContain(`model="${FREE_MODE_DEFAULT_MODEL}"`)
+  })
+
+  it('does not replace an intentionally disabled free mode state', () => {
+    expect(shouldCreateDefaultFreeModeStateForMissingAuth({
+      enabled: false,
+      apiKey: null,
+      model: FREE_MODE_DEFAULT_MODEL,
+      provider: 'opencode-zen',
+      wireApi: 'chat',
+    }, false)).toBe(false)
+  })
+
+  it('creates the default only when state is absent and Codex auth is missing', () => {
+    expect(shouldCreateDefaultFreeModeStateForMissingAuth(null, false)).toBe(true)
+    expect(shouldCreateDefaultFreeModeStateForMissingAuth(null, true)).toBe(false)
   })
 })

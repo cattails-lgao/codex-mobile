@@ -278,15 +278,6 @@ export function chatCompletionToResponsesFormat(chatResponse: Record<string, unk
     const message = choice.message
     if (!message) continue
 
-    if (message.reasoning_content) {
-      output.push({
-        type: 'reasoning',
-        id: `rs_${Date.now()}`,
-        summary: [],
-        content: [{ type: 'reasoning_text', text: message.reasoning_content }],
-      })
-    }
-
     if (Array.isArray(message.tool_calls)) {
       for (const toolCall of message.tool_calls) {
         if (!toolCall || toolCall.type !== 'function') continue
@@ -309,6 +300,15 @@ export function chatCompletionToResponsesFormat(chatResponse: Record<string, unk
         role: 'assistant',
         content: [{ type: 'output_text', text: message.content }],
         status: 'completed',
+      })
+    }
+
+    if (message.reasoning_content) {
+      output.push({
+        type: 'reasoning',
+        id: `rs_${Date.now()}`,
+        summary: [],
+        content: [{ type: 'reasoning_text', text: message.reasoning_content }],
       })
     }
   }
@@ -499,7 +499,7 @@ export function handleUnifiedResponsesProxyRequest(
         const chatReq: ChatCompletionsRequest = {
           model: parsedBody.model,
           messages: responsesInputToMessages(parsedBody.input, parsedBody.instructions),
-          stream: useChatCompletions ? effectiveStreaming : isStreaming,
+          stream: effectiveStreaming,
         }
         if (parsedBody.temperature != null) chatReq.temperature = parsedBody.temperature
         if (parsedBody.top_p != null) chatReq.top_p = parsedBody.top_p
