@@ -4769,7 +4769,7 @@ class AppServerProcess {
   }
 }
 
-class BackendQueueProcessor {
+export class BackendQueueProcessor {
   private readonly processingThreadIds = new Set<string>()
   private readonly queueDrainTimersByThreadId = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly queueDrainDueAtByThreadId = new Map<string, number>()
