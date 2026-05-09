@@ -3,9 +3,11 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 
 type ResponsesApiInput = {
+  id?: string
   type: string
   role?: string
   content?: string | Array<{ type?: string; text?: string }>
+  summary?: Array<{ type?: string; text?: string }>
   text?: string
   name?: string
   arguments?: string
@@ -29,6 +31,7 @@ type ResponsesApiRequest = {
 type ChatMessage = {
   role: string
   content?: string
+  reasoning_content?: string
   tool_call_id?: string
   tool_calls?: Array<{
     id: string
@@ -53,6 +56,7 @@ type ChatCompletionsRequest = {
 
 export type UnifiedProxyOptions = {
   bearerToken: string
+  requireBearerToken?: boolean
   wireApi: 'responses' | 'chat'
   responsesEndpoint: string
   chatCompletionsEndpoint: string
@@ -80,36 +84,70 @@ function safeStringifyUnknown(value: unknown): string {
   }
 }
 
-function appendAssistantText(messages: ChatMessage[], text: string): void {
+function appendAssistantText(messages: ChatMessage[], text: string, reasoningContent?: string): void {
   const trimmedText = text.trim()
-  if (!trimmedText) return
+  const trimmedReasoningContent = reasoningContent?.trim() ?? ''
+  if (!trimmedText && !trimmedReasoningContent) return
 
   const lastMessage = messages[messages.length - 1]
   if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.tool_calls)) {
     lastMessage.content = lastMessage.content
       ? `${lastMessage.content}\n${trimmedText}`
       : trimmedText
+    if (trimmedReasoningContent) {
+      lastMessage.reasoning_content = lastMessage.reasoning_content
+        ? `${lastMessage.reasoning_content}\n${trimmedReasoningContent}`
+        : trimmedReasoningContent
+    }
     return
   }
 
-  messages.push({ role: 'assistant', content: trimmedText })
+  messages.push({
+    role: 'assistant',
+    content: trimmedText,
+    ...(trimmedReasoningContent ? { reasoning_content: trimmedReasoningContent } : {}),
+  })
 }
 
 function appendAssistantToolCall(
   messages: ChatMessage[],
   toolCall: NonNullable<ChatMessage['tool_calls']>[number],
+  reasoningContent?: string,
 ): void {
+  const trimmedReasoningContent = reasoningContent?.trim() ?? ''
   const lastMessage = messages[messages.length - 1]
   if (lastMessage?.role === 'assistant' && !lastMessage.tool_call_id) {
     lastMessage.tool_calls = [...(lastMessage.tool_calls ?? []), toolCall]
+    if (trimmedReasoningContent) {
+      lastMessage.reasoning_content = lastMessage.reasoning_content
+        ? `${lastMessage.reasoning_content}\n${trimmedReasoningContent}`
+        : trimmedReasoningContent
+    }
     return
   }
 
-  messages.push({ role: 'assistant', tool_calls: [toolCall] })
+  messages.push({
+    role: 'assistant',
+    content: '',
+    tool_calls: [toolCall],
+    ...(trimmedReasoningContent ? { reasoning_content: trimmedReasoningContent } : {}),
+  })
 }
 
-function responsesInputToMessages(input: string | ResponsesApiInput[], instructions?: string): ChatMessage[] {
+function extractTextParts(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return ''
+  return value
+    .map((part) => (part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+      ? (part as { text: string }).text
+      : ''))
+    .filter((part) => part.length > 0)
+    .join('\n')
+}
+
+export function responsesInputToMessages(input: string | ResponsesApiInput[], instructions?: string): ChatMessage[] {
   const messages: ChatMessage[] = []
+  let pendingReasoningContent = ''
   if (instructions) {
     messages.push({ role: 'system', content: instructions })
   }
@@ -120,6 +158,25 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
 
   for (const item of input) {
     if (!item || typeof item !== 'object') continue
+
+    if (item.type === 'reasoning') {
+      const content = extractTextParts(item.content)
+      const summary = extractTextParts(item.summary)
+      const text = content || summary
+      if (text) {
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage?.role === 'assistant') {
+          lastMessage.reasoning_content = lastMessage.reasoning_content
+            ? `${lastMessage.reasoning_content}\n${text}`
+            : text
+        } else {
+          pendingReasoningContent = pendingReasoningContent
+            ? `${pendingReasoningContent}\n${text}`
+            : text
+        }
+      }
+      continue
+    }
 
     if (item.type === 'message' && item.role) {
       const content = item.content
@@ -133,7 +190,8 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
           : (typeof item.text === 'string' ? item.text : '')
       const role = item.role === 'developer' ? 'system' : item.role
       if (role === 'assistant') {
-        appendAssistantText(messages, text)
+        appendAssistantText(messages, text, pendingReasoningContent)
+        pendingReasoningContent = ''
       } else {
         messages.push({ role, content: text })
       }
@@ -157,7 +215,8 @@ function responsesInputToMessages(input: string | ResponsesApiInput[], instructi
           name: item.name,
           arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
         },
-      })
+      }, pendingReasoningContent)
+      pendingReasoningContent = ''
     }
   }
 
@@ -201,10 +260,11 @@ function responsesToolChoiceToChatToolChoice(toolChoice: unknown): ChatCompletio
   return { type: 'function', function: { name } }
 }
 
-function chatCompletionToResponsesFormat(chatResponse: Record<string, unknown>, model: string): Record<string, unknown> {
+export function chatCompletionToResponsesFormat(chatResponse: Record<string, unknown>, model: string): Record<string, unknown> {
   const choices = (chatResponse.choices ?? []) as Array<{
     message?: {
       content?: string
+      reasoning_content?: string
       tool_calls?: Array<{
         id?: string
         type?: string
@@ -242,6 +302,15 @@ function chatCompletionToResponsesFormat(chatResponse: Record<string, unknown>, 
         status: 'completed',
       })
     }
+
+    if (message.reasoning_content) {
+      output.push({
+        type: 'reasoning',
+        id: `rs_${Date.now()}`,
+        summary: [],
+        content: [{ type: 'reasoning_text', text: message.reasoning_content }],
+      })
+    }
   }
 
   const usage = chatResponse.usage as Record<string, number> | undefined
@@ -273,6 +342,7 @@ function forwardStreamingTextResponse(
 
   let buffer = ''
   const contentParts: string[] = []
+  const reasoningParts: string[] = []
   let responseId = `resp_${Date.now()}`
 
   res.write(`data: {"type":"response.created","response":{"id":"${responseId}","object":"response","status":"in_progress","model":"${model}","output":[]}}\n\n`)
@@ -291,10 +361,13 @@ function forwardStreamingTextResponse(
       try {
         const parsed = JSON.parse(data) as {
           id?: string
-          choices?: Array<{ delta?: { content?: string } }>
+          choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>
         }
         if (parsed.id) responseId = `resp_${parsed.id}`
         const delta = parsed.choices?.[0]?.delta
+        if (delta?.reasoning_content) {
+          reasoningParts.push(delta.reasoning_content)
+        }
         if (delta?.content) {
           contentParts.push(delta.content)
           const escaped = JSON.stringify(delta.content).slice(1, -1)
@@ -308,11 +381,28 @@ function forwardStreamingTextResponse(
 
   upstreamRes.on('end', () => {
     const fullText = contentParts.join('')
+    const fullReasoningText = reasoningParts.join('')
     const escapedFull = JSON.stringify(fullText).slice(1, -1)
+    const messageItem = { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: fullText }], status: 'completed' }
+    const output: Array<Record<string, unknown>> = [messageItem]
+    if (fullReasoningText) {
+      output.push({
+        type: 'reasoning',
+        id: `rs_${Date.now()}`,
+        summary: [],
+        content: [{ type: 'reasoning_text', text: fullReasoningText }],
+      })
+    }
     res.write(`data: {"type":"response.output_text.done","output_index":0,"content_index":0,"text":"${escapedFull}"}\n\n`)
     res.write(`data: {"type":"response.content_part.done","output_index":0,"content_index":0,"part":{"type":"output_text","text":"${escapedFull}"}}\n\n`)
     res.write(`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"${escapedFull}"}],"status":"completed"}}\n\n`)
-    res.write(`data: {"type":"response.completed","response":{"id":"${responseId}","object":"response","status":"completed","model":"${model}","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"${escapedFull}"}],"status":"completed"}]}}\n\n`)
+    if (fullReasoningText) {
+      const reasoningIndex = output.length - 1
+      const reasoningItem = output[reasoningIndex]
+      res.write(`data: ${JSON.stringify({ type: 'response.output_item.added', output_index: reasoningIndex, item: reasoningItem })}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'response.output_item.done', output_index: reasoningIndex, item: reasoningItem })}\n\n`)
+    }
+    res.write(`data: ${JSON.stringify({ type: 'response.completed', response: { id: responseId, object: 'response', status: 'completed', model, output } })}\n\n`)
     res.end()
   })
 
@@ -386,7 +476,7 @@ export function handleUnifiedResponsesProxyRequest(
 ): void {
   void (async () => {
     try {
-      if (!options.bearerToken) {
+      if (options.requireBearerToken !== false && !options.bearerToken) {
         res.writeHead(401, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: { message: options.missingKeyMessage } }))
         return
@@ -400,7 +490,7 @@ export function handleUnifiedResponsesProxyRequest(
       const useChatCompletions = options.wireApi === 'chat' && !useResponsesFallback
       const useChatPayload = useChatCompletions || options.responsesPayloadFormat === 'chat'
       const isStreaming = parsedBody.stream === true
-      const effectiveStreaming = useChatCompletions && isStreaming && !(hasTools || hasToolOutputs)
+      const effectiveStreaming = useChatPayload && isStreaming && !(hasTools || hasToolOutputs)
 
       let payload = ''
       let upstreamUrl: URL
@@ -409,7 +499,7 @@ export function handleUnifiedResponsesProxyRequest(
         const chatReq: ChatCompletionsRequest = {
           model: parsedBody.model,
           messages: responsesInputToMessages(parsedBody.input, parsedBody.instructions),
-          stream: useChatCompletions ? effectiveStreaming : isStreaming,
+          stream: effectiveStreaming,
         }
         if (parsedBody.temperature != null) chatReq.temperature = parsedBody.temperature
         if (parsedBody.top_p != null) chatReq.top_p = parsedBody.top_p
@@ -419,7 +509,7 @@ export function handleUnifiedResponsesProxyRequest(
         if (chatTools) chatReq.tools = chatTools
         if (chatToolChoice) chatReq.tool_choice = chatToolChoice
         payload = JSON.stringify(chatReq)
-        upstreamUrl = new URL(useChatCompletions ? options.chatCompletionsEndpoint : options.responsesEndpoint)
+        upstreamUrl = new URL(options.chatCompletionsEndpoint)
       } else {
         const requestBody =
           parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
@@ -439,11 +529,11 @@ export function handleUnifiedResponsesProxyRequest(
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          'Authorization': `Bearer ${options.bearerToken}`,
+          ...(options.bearerToken ? { 'Authorization': `Bearer ${options.bearerToken}` } : {}),
         },
       }, (upstreamRes) => {
         const status = upstreamRes.statusCode ?? 502
-        if (useChatCompletions && effectiveStreaming && status >= 200 && status < 300) {
+        if (useChatPayload && effectiveStreaming && status >= 200 && status < 300) {
           forwardStreamingTextResponse(upstreamRes, res, parsedBody.model)
           return
         }
@@ -452,7 +542,7 @@ export function handleUnifiedResponsesProxyRequest(
         upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk))
         upstreamRes.on('end', () => {
           const rawResponseBody = Buffer.concat(chunks).toString()
-          if (!useChatCompletions) {
+          if (!useChatPayload) {
             res.writeHead(status, copyProxyHeaders(upstreamRes.headers))
             res.end(rawResponseBody)
             return
@@ -461,6 +551,14 @@ export function handleUnifiedResponsesProxyRequest(
           try {
             const upstreamPayload = JSON.parse(rawResponseBody) as Record<string, unknown>
             if (upstreamPayload.error || status >= 400) {
+              if (process.env.CODEXUI_PROXY_DEBUG === '1') {
+                console.warn('[unified-responses-proxy]', JSON.stringify({
+                  status,
+                  upstreamUrl: upstreamUrl.toString(),
+                  request: JSON.parse(payload) as unknown,
+                  response: upstreamPayload,
+                }))
+              }
               res.writeHead(status, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify(upstreamPayload))
               return

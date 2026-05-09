@@ -40,3 +40,9 @@
 - Created wiki page: `concepts/thread-heartbeat-automations.md`.
 - Documents: multiple heartbeat automations per thread, ID-aware manager operations, and manual `Run now` behavior through the persisted thread queue.
 - Updated `index.md`.
+
+## [2026-05-09] ingest | OpenCode Zen reasoning_content proxy fix
+- Added source: `raw/fixes/opencode-zen-reasoning-content-proxy.md`.
+- Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
+- Documents: DeepSeek thinking-mode `reasoning_content` round-trip requirement, Chat-shaped Zen proxy endpoint selection, streaming reasoning preservation, Docker validation, and the `/tmp/app.tar` restart gotcha.
+- Updated `index.md`.

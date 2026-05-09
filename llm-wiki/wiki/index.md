@@ -23,3 +23,4 @@
 - [../raw/features/thread-heartbeat-automations.md](../raw/features/thread-heartbeat-automations.md): source facts for thread heartbeat automations, multiple automations per thread, and Run now queue behavior.
 - [../raw/projects/codex-web-local.md](../raw/projects/codex-web-local.md): immutable source snapshot for project facts.
 - [../raw/fixes/opencode-zen-big-pickle-codex-cli.md](../raw/fixes/opencode-zen-big-pickle-codex-cli.md): Big Pickle + Codex CLI fix details.
+- [../raw/fixes/opencode-zen-reasoning-content-proxy.md](../raw/fixes/opencode-zen-reasoning-content-proxy.md): Codex Web Local Zen proxy reasoning_content round-trip fix and Docker verification.

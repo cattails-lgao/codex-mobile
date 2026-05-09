@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
-import { createReadStream, existsSync, readFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -24,8 +24,10 @@ import {
   getFreeModels,
   refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
+  createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
+  shouldCreateDefaultFreeModeStateForMissingAuth,
   type FreeModeState,
 } from './freeMode.js'
 import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
@@ -3100,6 +3102,45 @@ async function readCodexAuth(): Promise<{ accessToken: string; accountId?: strin
   }
 }
 
+function hasUsableCodexAuthSync(): boolean {
+  try {
+    const raw = readFileSync(getCodexAuthPath(), 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return Boolean(auth.tokens?.access_token?.trim())
+  } catch {
+    return false
+  }
+}
+
+function readFreeModeStateSync(statePath: string): FreeModeState | null {
+  try {
+    return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+  } catch {
+    return null
+  }
+}
+
+function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
+  const current = readFreeModeStateSync(statePath)
+  if (!shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuthSync())) {
+    return current
+  }
+
+  const fallback = createDefaultOpenCodeZenFreeModeState()
+
+  mkdirSync(dirname(statePath), { recursive: true })
+  writeFileSync(statePath, JSON.stringify(fallback), { encoding: 'utf8', mode: 0o600 })
+  return fallback
+}
+
+function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false
+  const normalized = remoteAddress.startsWith('::ffff:')
+    ? remoteAddress.slice('::ffff:'.length)
+    : remoteAddress
+  return normalized === '127.0.0.1' || normalized === '::1'
+}
+
 function getCodexGlobalStatePath(): string {
   return join(getCodexHomeDir(), '.codex-global-state.json')
 }
@@ -4272,10 +4313,11 @@ class AppServerProcess {
     const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
     const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
     try {
-      const raw = readFileSync(statePath, 'utf8')
-      const state = JSON.parse(raw) as FreeModeState
-      args.push(...getFreeModeConfigArgs(state, serverPort))
-      extraEnv = getFreeModeEnvVars(state)
+      const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+      if (state) {
+        args.push(...getFreeModeConfigArgs(state, serverPort))
+        extraEnv = getFreeModeEnvVars(state)
+      }
     } catch {
       // No free-mode state or invalid — use defaults
     }
@@ -5334,6 +5376,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       const url = new URL(req.url, 'http://localhost')
 
       if (url.pathname === '/codex-api/zen-proxy/v1/responses' && req.method === 'POST') {
+        if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+          setJson(res, 403, { error: 'Zen proxy is only available from localhost' })
+          return
+        }
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
         let bearerToken = ''
         let wireApi: 'responses' | 'chat' = 'chat'
@@ -5351,9 +5397,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         let bearerToken = ''
         let wireApi: 'responses' | 'chat' = 'responses'
         try {
-          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          bearerToken = state.apiKey ?? ''
-          wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
+          const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+          bearerToken = state?.apiKey ?? ''
+          wireApi = state?.wireApi === 'chat' ? 'chat' : 'responses'
         } catch { /* use empty */ }
         handleOpenRouterProxyRequest(req, res, bearerToken, wireApi)
         return
@@ -5378,11 +5424,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
 
         function readFreeModeState(): FreeModeState {
-          try {
-            return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          } catch {
-            return { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
-          }
+          return ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+            ?? { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
         }
 
         if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
@@ -6050,8 +6093,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
         try {
-          const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
-          if (fmState.enabled) {
+          const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+          if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {
               try {
                 const modelsUrl = 'https://opencode.ai/zen/v1/models'

@@ -16,6 +16,7 @@ export function handleZenProxyRequest(
     responsesEndpoint: ZEN_RESPONSES_ENDPOINT,
     chatCompletionsEndpoint: ZEN_CHAT_COMPLETIONS_ENDPOINT,
     missingKeyMessage: 'Missing OpenCode Zen API key',
+    requireBearerToken: false,
     allowToolFallbackToResponses: false,
     responsesPayloadFormat: 'chat',
   })
