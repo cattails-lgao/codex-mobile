@@ -62,6 +62,7 @@
 - Reproduce the issue with a focused test when feasible; if direct reproduction is impractical, document the exact reasoning and code evidence used to accept or reject the finding.
 - Prefer adding or updating a regression test for every accepted review-bot bug before or alongside the fix.
 - Do not patch purely to satisfy a bot comment if the behavior is correct, stale, already fixed, or the proposed change would make the implementation worse.
+- After pushing any commit to an open PR, check for Qodo/review-bot comments and PR review status before reporting the push workflow as complete.
 - After fixing an accepted review-bot finding, run the narrow regression test plus the relevant build/typecheck command, push the commit, and re-check the PR comments/status.
 - In the completion report, distinguish confirmed fixes from stale or rejected bot comments.
 
