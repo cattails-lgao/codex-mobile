@@ -105,26 +105,6 @@
         <template #right>
           <div ref="organizeMenuWrapRef" class="organize-menu-wrap">
             <button
-              v-if="isProjectMoveMode"
-              class="project-move-done-button"
-              type="button"
-              @click.stop="stopProjectMoveMode"
-            >
-              {{ t('Done') }}
-            </button>
-            <button
-              v-else
-              class="project-reorder-button"
-              type="button"
-              :disabled="isSearchActive"
-              :aria-disabled="isSearchActive"
-              :aria-label="t('Reorder projects')"
-              :title="t('Reorder projects')"
-              @click.stop="startProjectMoveMode()"
-            >
-              <IconTablerArrowsSort class="thread-icon" />
-            </button>
-            <button
               class="organize-menu-trigger"
               type="button"
               :aria-expanded="isOrganizeMenuOpen"
@@ -137,25 +117,6 @@
 
             <div v-if="isOrganizeMenuOpen" class="organize-menu-panel" @click.stop>
               <p class="organize-menu-title">{{ t('Organize') }}</p>
-              <button
-                class="organize-menu-item"
-                :data-active="projectSortMode === 'recent'"
-                type="button"
-                @click="setProjectSortMode('recent')"
-              >
-                <span>{{ t('Recent projects') }}</span>
-                <span v-if="projectSortMode === 'recent'">✓</span>
-              </button>
-              <button
-                class="organize-menu-item"
-                :data-active="projectSortMode === 'manual'"
-                type="button"
-                @click="setProjectSortMode('manual')"
-              >
-                <span>{{ t('Manual project order') }}</span>
-                <span v-if="projectSortMode === 'manual'">✓</span>
-              </button>
-              <div class="organize-menu-separator" />
               <button
                 class="organize-menu-item"
                 :data-active="threadViewMode === 'project'"
@@ -329,11 +290,6 @@
               :data-dragging-handle="isDraggingProject(group.projectName)"
               @mousedown.left="onProjectHandleMouseDown($event, group.projectName)"
             >
-              <IconTablerPin
-                v-if="isProjectPinned(group.projectName)"
-                class="project-pin-indicator"
-                aria-hidden="true"
-              />
               <span class="project-title" :title="getProjectTooltipTitle(group.projectName)">
                 {{ getProjectVisibleName(group) }}
               </span>
@@ -371,9 +327,6 @@
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group)">
                         Rename project
                       </button>
-                      <button class="project-menu-item" type="button" @click="onToggleProjectPinned(group.projectName)">
-                        {{ isProjectPinPreferenceSet(group.projectName) ? t('Unpin project') : t('Pin project') }}
-                      </button>
                       <button
                         class="project-menu-item project-menu-item-danger"
                         type="button"
@@ -394,17 +347,6 @@
                   </div>
                 </div>
 
-                <button
-                  v-if="isProjectMoveMode"
-                  class="project-move-handle"
-                  type="button"
-                  :aria-label="t('Move project')"
-                  :title="t('Move project')"
-                  @click.stop
-                  @pointerdown.stop.prevent="onProjectMoveHandlePointerDown($event, group.projectName)"
-                >
-                  <IconTablerGripVertical class="thread-icon" />
-                </button>
                 <button
                   class="thread-start-button"
                   type="button"
@@ -772,7 +714,6 @@ import {
   upsertThreadAutomation,
 } from '../../api/codexGateway'
 import type { UiProjectGroup, UiThread, UiThreadAutomation, UiThreadAutomationStatus } from '../../types/codex'
-import IconTablerArrowsSort from '../icons/IconTablerArrowsSort.vue'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import IconTablerDots from '../icons/IconTablerDots.vue'
@@ -780,24 +721,15 @@ import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerFolderOpen from '../icons/IconTablerFolderOpen.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
-import IconTablerGripVertical from '../icons/IconTablerGripVertical.vue'
-import IconTablerPin from '../icons/IconTablerPin.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { getPathLeafName, getPathParent, isProjectlessChatPath } from '../../pathUtils.js'
-import {
-  collapseProjectsForMoveMode,
-  createProjectMoveModeState,
-  stopProjectMoveMode as createStoppedProjectMoveMode,
-} from './projectMoveMode'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 
 const props = defineProps<{
   groups: UiProjectGroup[]
   projectDisplayNameById: Record<string, string>
   projectGitRepoByName: Record<string, boolean>
-  projectSortMode: 'recent' | 'manual'
-  pinnedProjectOrder: string[]
   selectedThreadId: string
   isLoading: boolean
   searchQuery: string
@@ -818,8 +750,6 @@ const emit = defineEmits<{
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
-  'set-project-sort-mode': [mode: 'recent' | 'manual']
-  'toggle-project-pinned': [projectName: string]
   'export-thread': [threadId: string]
   'fork-thread': [threadId: string]
   'start-new-chat': []
@@ -858,8 +788,6 @@ type MenuDirection = 'up' | 'down'
 type ChatSortMode = 'created' | 'updated'
 
 const DRAG_START_THRESHOLD_PX = 4
-const SUPPRESSED_PROJECT_TOGGLE_CLEAR_DELAY_MS = 100
-const FALLBACK_PROJECT_MENU_HEIGHT_PX = 176
 const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const SECTION_EXPANSION_STORAGE_KEY = 'codex-web-local.sidebar-section-expansion.v1'
 const CHATS_FIRST_STORAGE_KEY = 'codex-web-local.sidebar-chats-first.v1'
@@ -909,12 +837,8 @@ const automationDraft = ref<{
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
-const projectMoveMode = ref(createStoppedProjectMoveMode())
-const preMoveCollapsedProjects = ref<Record<string, boolean> | null>(null)
 let pendingDragPointerSample: DragPointerSample | null = null
 let dragPointerRafId: number | null = null
-let activeProjectPointerId: number | null = null
-let suppressProjectToggleClearTimer: number | null = null
 const suppressNextProjectToggleId = ref('')
 const measuredHeightByProject = ref<Record<string, number>>({})
 const projectGroupElementByName = new Map<string, HTMLElement>()
@@ -1061,8 +985,6 @@ const filteredGroups = computed<UiProjectGroup[]>(() => {
 })
 
 const isChronologicalView = computed(() => threadViewMode.value === 'chronological')
-const isProjectMoveMode = computed(() => projectMoveMode.value.isActive)
-const pinnedProjectNameSet = computed(() => new Set(props.pinnedProjectOrder))
 
 const globalThreads = computed<UiThread[]>(() => {
   const rows: UiThread[] = []
@@ -1602,10 +1524,6 @@ function setChatSortMode(mode: ChatSortMode): void {
   chatSortMode.value = mode
 }
 
-function setProjectSortMode(mode: 'recent' | 'manual'): void {
-  emit('set-project-sort-mode', mode)
-}
-
 function requestProjectGitStatusAndUpdateMenuDirection(projectName: string): void {
   emit('request-project-git-status', projectName)
   nextTick(() => {
@@ -1673,39 +1591,6 @@ function onRemoveProject(projectName: string): void {
   closeProjectMenu()
 }
 
-function onToggleProjectPinned(projectName: string): void {
-  emit('toggle-project-pinned', projectName)
-  closeProjectMenu()
-}
-
-function isProjectPinned(projectName: string): boolean {
-  return props.projectSortMode === 'recent' && isProjectPinPreferenceSet(projectName)
-}
-
-function isProjectPinPreferenceSet(projectName: string): boolean {
-  return pinnedProjectNameSet.value.has(projectName)
-}
-
-function startProjectMoveMode(projectName = ''): void {
-  if (isSearchActive.value) return
-  const projectNames = props.groups.map((group) => group.projectName)
-  projectMoveMode.value = createProjectMoveModeState(projectNames, projectName || (projectNames[0] ?? ''))
-  if (projectMoveMode.value.isActive) {
-    preMoveCollapsedProjects.value = { ...collapsedProjects.value }
-    collapsedProjects.value = collapseProjectsForMoveMode(projectNames, collapsedProjects.value)
-    closeProjectMenu()
-  }
-}
-
-function stopProjectMoveMode(): void {
-  projectMoveMode.value = createStoppedProjectMoveMode()
-  if (preMoveCollapsedProjects.value) {
-    collapsedProjects.value = preMoveCollapsedProjects.value
-    preMoveCollapsedProjects.value = null
-  }
-  resetProjectDragState()
-}
-
 function onProjectHeaderKeyDown(event: KeyboardEvent, projectName: string): void {
   if (!event.altKey) return
   if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
@@ -1741,10 +1626,6 @@ function toggleProjectExpansion(projectName: string): void {
 
 function toggleProjectCollapse(projectName: string): void {
   if (suppressNextProjectToggleId.value === projectName) {
-    if (suppressProjectToggleClearTimer !== null) {
-      window.clearTimeout(suppressProjectToggleClearTimer)
-      suppressProjectToggleClearTimer = null
-    }
     suppressNextProjectToggleId.value = ''
     return
   }
@@ -1843,13 +1724,9 @@ function updateProjectMenuDirection(projectName: string): void {
   const menuWrapElement = projectMenuWrapElementByName.get(projectName)
   if (!menuWrapElement) return
 
-  const panelElement = menuWrapElement.querySelector<HTMLElement>('.project-menu-panel')
-  const panelRect = panelElement?.getBoundingClientRect()
-  const panelHeight = panelRect?.height || panelElement?.offsetHeight || FALLBACK_PROJECT_MENU_HEIGHT_PX
-
   projectMenuDirectionById.value = {
     ...projectMenuDirectionById.value,
-    [projectName]: resolveMenuDirection(menuWrapElement, panelHeight),
+    [projectName]: resolveMenuDirection(menuWrapElement, 176),
   }
 }
 
@@ -2031,46 +1908,30 @@ function setProjectGroupRef(projectName: string, element: Element | ComponentPub
   projectGroupElementByName.delete(projectName)
 }
 
-function beginProjectDrag(projectName: string, clientX: number, clientY: number): boolean {
-  if (isSearchActive.value) return false
-  if (pendingProjectDrag.value || activeProjectDrag.value) return false
+function onProjectHandleMouseDown(event: MouseEvent, projectName: string): void {
+  if (event.button !== 0) return
+  if (pendingProjectDrag.value || activeProjectDrag.value) return
 
   const fromIndex = props.groups.findIndex((group) => group.projectName === projectName)
   const projectGroupElement = projectGroupElementByName.get(projectName)
-  if (fromIndex < 0 || !projectGroupElement) return false
+  if (fromIndex < 0 || !projectGroupElement) return
 
   const groupRect = projectGroupElement.getBoundingClientRect()
   const groupGap = isCollapsed(projectName) ? 0 : PROJECT_GROUP_EXPANDED_GAP_PX
   pendingProjectDrag.value = {
     projectName,
     fromIndex,
-    startClientX: clientX,
-    startClientY: clientY,
-    pointerOffsetY: clientY - groupRect.top,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    pointerOffsetY: event.clientY - groupRect.top,
     groupLeft: groupRect.left,
     groupWidth: groupRect.width,
     groupHeight: groupRect.height,
     groupOuterHeight: groupRect.height + groupGap,
   }
 
-  return true
-}
-
-function onProjectHandleMouseDown(event: MouseEvent, projectName: string): void {
-  if (event.button !== 0) return
-  if (!beginProjectDrag(projectName, event.clientX, event.clientY)) return
-
   event.preventDefault()
   bindProjectDragListeners()
-}
-
-function onProjectMoveHandlePointerDown(event: PointerEvent, projectName: string): void {
-  if (event.button !== 0) return
-  if (!isProjectMoveMode.value) return
-  if (!beginProjectDrag(projectName, event.clientX, event.clientY)) return
-
-  activeProjectPointerId = event.pointerId
-  bindProjectPointerDragListeners()
 }
 
 function bindProjectDragListeners(): void {
@@ -2085,20 +1946,6 @@ function unbindProjectDragListeners(): void {
   window.removeEventListener('keydown', onProjectDragKeyDown)
 }
 
-function bindProjectPointerDragListeners(): void {
-  window.addEventListener('pointermove', onProjectDragPointerMove)
-  window.addEventListener('pointerup', onProjectDragPointerUp)
-  window.addEventListener('pointercancel', onProjectDragPointerCancel)
-  window.addEventListener('keydown', onProjectDragKeyDown)
-}
-
-function unbindProjectPointerDragListeners(): void {
-  window.removeEventListener('pointermove', onProjectDragPointerMove)
-  window.removeEventListener('pointerup', onProjectDragPointerUp)
-  window.removeEventListener('pointercancel', onProjectDragPointerCancel)
-  window.removeEventListener('keydown', onProjectDragKeyDown)
-}
-
 function onProjectDragMouseMove(event: MouseEvent): void {
   pendingDragPointerSample = {
     clientX: event.clientX,
@@ -2108,30 +1955,10 @@ function onProjectDragMouseMove(event: MouseEvent): void {
 }
 
 function onProjectDragMouseUp(event: MouseEvent): void {
-  finishProjectDrag({ clientX: event.clientX, clientY: event.clientY })
-}
-
-function onProjectDragPointerMove(event: PointerEvent): void {
-  if (activeProjectPointerId !== null && event.pointerId !== activeProjectPointerId) return
-  pendingDragPointerSample = {
+  processProjectDragPointerSample({
     clientX: event.clientX,
     clientY: event.clientY,
-  }
-  scheduleProjectDragPointerFrame()
-}
-
-function onProjectDragPointerUp(event: PointerEvent): void {
-  if (activeProjectPointerId !== null && event.pointerId !== activeProjectPointerId) return
-  finishProjectDrag({ clientX: event.clientX, clientY: event.clientY })
-}
-
-function onProjectDragPointerCancel(event: PointerEvent): void {
-  if (activeProjectPointerId !== null && event.pointerId !== activeProjectPointerId) return
-  resetProjectDragState()
-}
-
-function finishProjectDrag(sample: DragPointerSample): void {
-  processProjectDragPointerSample(sample)
+  })
 
   const drag = activeProjectDrag.value
   if (drag && projectedDropProjectIndex.value !== null) {
@@ -2166,24 +1993,8 @@ function resetProjectDragState(): void {
   pendingDragPointerSample = null
   pendingProjectDrag.value = null
   activeProjectDrag.value = null
-  activeProjectPointerId = null
-  scheduleSuppressedProjectToggleClear()
+  suppressNextProjectToggleId.value = ''
   unbindProjectDragListeners()
-  unbindProjectPointerDragListeners()
-}
-
-function scheduleSuppressedProjectToggleClear(): void {
-  const suppressedProjectName = suppressNextProjectToggleId.value
-  if (!suppressedProjectName) return
-  if (suppressProjectToggleClearTimer !== null) {
-    window.clearTimeout(suppressProjectToggleClearTimer)
-  }
-  suppressProjectToggleClearTimer = window.setTimeout(() => {
-    if (suppressNextProjectToggleId.value === suppressedProjectName) {
-      suppressNextProjectToggleId.value = ''
-    }
-    suppressProjectToggleClearTimer = null
-  }, SUPPRESSED_PROJECT_TOGGLE_CLEAR_DELAY_MS)
 }
 
 function scheduleProjectDragPointerFrame(): void {
@@ -2366,14 +2177,6 @@ watch(
       resetProjectDragState()
     }
 
-    if (projectMoveMode.value.isActive) {
-      if (!props.groups.some((group) => group.projectName === projectMoveMode.value.projectName)) {
-        stopProjectMoveMode()
-      } else {
-        collapsedProjects.value = collapseProjectsForMoveMode(projectNames, collapsedProjects.value)
-      }
-    }
-
     const projectNameSet = new Set(projectNames)
     const nextMeasuredHeights = Object.fromEntries(
       Object.entries(measuredHeightByProject.value).filter(([projectName]) => projectNameSet.has(projectName)),
@@ -2401,12 +2204,6 @@ watch(
   },
 )
 
-watch(isSearchActive, (nextIsSearchActive) => {
-  if (nextIsSearchActive && projectMoveMode.value.isActive) {
-    stopProjectMoveMode()
-  }
-})
-
 const hasOpenDismissableMenu = computed(
   () => isOrganizeMenuOpen.value || openProjectMenuId.value !== '' || openThreadMenuId.value !== '',
 )
@@ -2433,11 +2230,6 @@ watch(openThreadMenuId, (threadId) => {
 })
 
 onBeforeUnmount(() => {
-  if (suppressProjectToggleClearTimer !== null) {
-    window.clearTimeout(suppressProjectToggleClearTimer)
-    suppressProjectToggleClearTimer = null
-  }
-  suppressNextProjectToggleId.value = ''
   for (const element of projectGroupElementByName.values()) {
     projectGroupResizeObserver?.unobserve(element)
   }
@@ -2501,7 +2293,7 @@ onBeforeUnmount(() => {
 }
 
 .organize-menu-wrap {
-  @apply relative inline-flex items-center gap-1;
+  @apply relative;
 }
 
 .organize-menu-trigger {
@@ -2557,24 +2349,11 @@ onBeforeUnmount(() => {
 }
 
 .project-main-button {
-  @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center gap-1 min-h-5 cursor-grab;
+  @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center min-h-5 cursor-grab;
 }
 
 .project-main-button[data-dragging-handle='true'] {
   @apply cursor-grabbing;
-}
-
-.project-move-done-button {
-  @apply h-6 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50;
-}
-
-.project-reorder-button {
-  @apply h-6 w-6 rounded-md border border-zinc-200 bg-white text-zinc-600 flex items-center justify-center transition hover:bg-zinc-50;
-}
-
-.project-move-handle {
-  @apply h-6 w-6 rounded-md border border-zinc-200 bg-white text-zinc-600 flex items-center justify-center transition hover:bg-zinc-50;
-  touch-action: none;
 }
 
 .project-icon-stack {
@@ -2591,10 +2370,6 @@ onBeforeUnmount(() => {
 
 .project-title {
   @apply text-sm font-normal text-zinc-700 truncate select-none;
-}
-
-.project-pin-indicator {
-  @apply h-3.5 w-3.5 shrink-0 text-zinc-500;
 }
 
 .project-menu-wrap {

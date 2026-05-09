@@ -6,9 +6,6 @@ import {
   findAdjacentThreadId,
   removeThreadFromGroups,
   isThreadUnreadByLastRead,
-  normalizePinnedProjectOrder,
-  orderGroupsByPinnedProjectOrder,
-  reorderPinnedProjectOrder,
   useDesktopState,
 } from './useDesktopState'
 import type { UiProjectGroup } from '../types/codex'
@@ -166,30 +163,6 @@ describe('filterGroupsByWorkspaceRoots', () => {
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => group.projectName)).toEqual([
       'beta',
       'alpha',
-    ])
-  })
-
-  it('preserves incoming recency order when project sort mode is recent', () => {
-    const groups: UiProjectGroup[] = [
-      {
-        projectName: 'alpha',
-        threads: [thread('alpha-chat', '/tmp/alpha')],
-      },
-      {
-        projectName: 'beta',
-        threads: [thread('beta-chat', '/tmp/beta')],
-      },
-    ]
-    const rootsState: WorkspaceRootsState = {
-      order: ['/tmp/alpha', '/tmp/beta'],
-      labels: {},
-      active: ['/tmp/alpha'],
-      projectOrder: ['/tmp/beta', '/tmp/alpha'],
-    }
-
-    expect(filterGroupsByWorkspaceRoots(groups, rootsState, 'recent').map((group) => group.projectName)).toEqual([
-      'alpha',
-      'beta',
     ])
   })
 
@@ -445,102 +418,6 @@ describe('collaboration mode selection', () => {
     state.primeSelectedThread('thread-a')
 
     expect(state.selectedCollaborationMode.value).toBe('plan')
-  })
-})
-
-describe('pinned project ordering', () => {
-  const groups: UiProjectGroup[] = [
-    { projectName: 'alpha', threads: [thread('alpha-chat', '/tmp/alpha')] },
-    { projectName: 'beta', threads: [thread('beta-chat', '/tmp/beta')] },
-    { projectName: 'gamma', threads: [thread('gamma-chat', '/tmp/gamma')] },
-  ]
-
-  it('places pinned projects before remaining recent-order projects', () => {
-    expect(orderGroupsByPinnedProjectOrder(groups, ['gamma']).map((group) => group.projectName)).toEqual([
-      'gamma',
-      'alpha',
-      'beta',
-    ])
-  })
-
-  it('removes stale and duplicate pin entries while ordering visible projects', () => {
-    expect(orderGroupsByPinnedProjectOrder(groups, ['gamma', 'missing', 'gamma', 'alpha']).map((group) => group.projectName)).toEqual([
-      'gamma',
-      'alpha',
-      'beta',
-    ])
-  })
-
-  it('preserves path-qualified project ids when normalizing persisted pins', () => {
-    expect(normalizePinnedProjectOrder(['/tmp/first/api', 'api', '/tmp/first/api'])).toEqual([
-      '/tmp/first/api',
-      'api',
-    ])
-  })
-
-  it('pins an unpinned project into the pinned prefix when reordered in recent mode', () => {
-    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma'], 'beta', 0)).toEqual([
-      'beta',
-      'gamma',
-    ])
-  })
-
-  it('keeps recent-mode reordered projects in the pinned prefix even when dropped below unpinned projects', () => {
-    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma'], 'alpha', 2)).toEqual([
-      'gamma',
-      'alpha',
-    ])
-  })
-
-  it('reorders existing pins within the pinned prefix', () => {
-    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['gamma', 'alpha'], 'gamma', 1)).toEqual([
-      'alpha',
-      'gamma',
-    ])
-  })
-
-  it('preserves hidden entries after reordering visible projects', () => {
-    expect(reorderPinnedProjectOrder(['alpha', 'beta', 'gamma'], ['hidden', 'gamma', 'alpha', 'remote'], 'beta', 1)).toEqual([
-      'gamma',
-      'beta',
-      'alpha',
-      'hidden',
-      'remote',
-    ])
-  })
-
-  it('interprets target indexes against the visible project order', () => {
-    expect(reorderPinnedProjectOrder(['alpha', 'beta'], ['hidden', 'alpha', 'beta', 'gamma'], 'beta', 0)).toEqual([
-      'beta',
-      'alpha',
-      'hidden',
-      'gamma',
-    ])
-  })
-
-  it('keeps saved manual project order unchanged when reordering in recent mode', async () => {
-    const savedManualOrder = ['alpha', 'beta', 'gamma']
-    installTestWindow({
-      'codex-web-local.project-sort-mode.v1': 'recent',
-      'codex-web-local.project-order.v1': JSON.stringify(savedManualOrder),
-    })
-    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
-      groups,
-      nextCursor: null,
-    })
-
-    const state = useDesktopState()
-    await state.refreshAll({ includeSelectedThreadMessages: false })
-    state.reorderProject('beta', 0)
-
-    expect(window.localStorage.getItem('codex-web-local.project-order.v1')).toBe(JSON.stringify(savedManualOrder))
-    expect(window.localStorage.getItem('codex-web-local.pinned-project-order.v1')).toBe(JSON.stringify(['beta']))
-    expect(state.projectGroups.value.map((group) => group.projectName)).toEqual([
-      'beta',
-      'alpha',
-      'gamma',
-    ])
-    expect(gatewayMocks.setWorkspaceRootsState).not.toHaveBeenCalled()
   })
 })
 

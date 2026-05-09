@@ -62,8 +62,6 @@
 
           <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
             :project-git-repo-by-name="projectGitRepoByName"
-            :project-sort-mode="projectSortMode"
-            :pinned-project-order="pinnedProjectOrder"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :search-query="sidebarSearchQuery"
@@ -77,8 +75,6 @@
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
-            @set-project-sort-mode="onSetProjectSortMode"
-            @toggle-project-pinned="onToggleProjectPinned"
             @export-thread="onExportThread"
             @start-new-chat="onStartNewThreadFromToolbar" />
         </div>
@@ -1184,8 +1180,6 @@ const WHISPER_LANGUAGES: Record<string, string> = {
 const {
   projectGroups,
   projectDisplayNameById,
-  projectSortMode,
-  pinnedProjectOrder,
   selectedThread,
   selectedThreadTokenUsage,
   selectedThreadTerminalOpen,
@@ -1235,9 +1229,7 @@ const {
   renameProject,
   removeProject,
   reorderProject,
-  setProjectSortMode,
-  focusProjectToTop,
-  toggleProjectPinned,
+  pinProjectToTop,
   startPolling,
   stopPolling,
   primeSelectedThread,
@@ -2375,7 +2367,7 @@ async function onCreateProjectWorktree(projectName: string): Promise<void> {
 
     newThreadCwd.value = normalizedPath
     newThreadRuntime.value = 'local'
-    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    pinProjectToTop(getPathLeafName(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
     if (isMobile.value) setSidebarCollapsed(true)
@@ -2450,14 +2442,6 @@ function onRequestProjectGitStatus(projectName: string): void {
   const group = projectGroups.value.find((entry) => entry.projectName === projectName)
   const cwd = resolvePreferredLocalCwd(projectName, group?.threads[0]?.cwd?.trim() ?? '')
   void loadGitRepoStatus(cwd)
-}
-
-function onSetProjectSortMode(mode: 'recent' | 'manual'): void {
-  setProjectSortMode(mode)
-}
-
-function onToggleProjectPinned(projectName: string): void {
-  toggleProjectPinned(projectName)
 }
 
 function onRespondServerRequest(payload: UiServerRequestReply): void {
@@ -3056,7 +3040,7 @@ async function onCreateProject(): Promise<void> {
     if (!normalizedPath) return
 
     newThreadCwd.value = normalizedPath
-    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
   } catch (error) {
@@ -3141,7 +3125,7 @@ async function onConfirmExistingFolder(path = resolvedExistingFolderPath.value):
     }
 
     newThreadCwd.value = normalizedPath
-    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    pinProjectToTop(getPathLeafName(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
     onCloseExistingFolderPanel()
@@ -3233,7 +3217,7 @@ async function applyLaunchProjectPathFromUrl(): Promise<boolean> {
     })
     if (!normalizedPath) return false
     newThreadCwd.value = normalizedPath
-    focusProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    pinProjectToTop(getPathLeafName(normalizedPath))
     await router.replace({ name: 'home' })
     await loadWorkspaceRootOptionsState()
     const nextUrl = new URL(window.location.href)
