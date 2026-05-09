@@ -293,6 +293,13 @@
               <span class="project-title" :title="getProjectTooltipTitle(group.projectName)">
                 {{ getProjectVisibleName(group) }}
               </span>
+              <span
+                v-if="projectHasAutomation(group.projectName)"
+                class="thread-row-automation-chip"
+                :title="projectAutomationTooltip(group.projectName)"
+              >
+                Auto
+              </span>
             </span>
             <template #right>
               <div class="project-hover-controls">
@@ -315,6 +322,9 @@
                     <template v-if="projectMenuMode === 'actions'">
                       <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
                         Browse files
+                      </button>
+                      <button class="project-menu-item" type="button" @click="openProjectAutomationDialog(group.projectName)">
+                        {{ projectHasAutomation(group.projectName) ? 'Manage automations…' : 'Add automation…' }}
                       </button>
                       <button
                         v-if="projectGitRepoByName[group.projectName]"
@@ -655,11 +665,11 @@
 
     <Teleport to="body">
       <div v-if="automationDialogVisible" class="rename-thread-overlay" @click.self="closeAutomationDialog">
-        <div class="rename-thread-panel automation-thread-panel" role="dialog" aria-modal="true" aria-label="Thread automation">
+        <div class="rename-thread-panel automation-thread-panel" role="dialog" aria-modal="true" :aria-label="automationDialogScope === 'project' ? 'Project automation' : 'Thread automation'">
           <h3 class="rename-thread-title">{{ automationDialogMode === 'edit' ? 'Edit automation' : 'Add automation' }}</h3>
-          <p class="rename-thread-subtitle">This creates heartbeat automations attached to the selected thread.</p>
+          <p class="rename-thread-subtitle">{{ automationDialogSubtitle }}</p>
 
-          <div v-if="automationDialogAutomations.length > 0" class="automation-thread-list" aria-label="Thread automations">
+          <div v-if="automationDialogAutomations.length > 0" class="automation-thread-list" :aria-label="automationDialogScope === 'project' ? 'Project automations' : 'Thread automations'">
             <button
               v-for="automation in automationDialogAutomations"
               :key="automation.id"
@@ -770,7 +780,7 @@
 
           <div class="rename-thread-actions">
             <button
-              v-if="automationDialogMode === 'edit'"
+              v-if="automationDialogMode === 'edit' && automationDialogScope === 'thread'"
               class="rename-thread-button"
               type="button"
               :disabled="isSavingAutomation || isRunningAutomation"
@@ -805,11 +815,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import {
   deleteThreadAutomation,
+  deleteProjectAutomation,
+  getProjectAutomationMap,
   getPinnedThreadState,
   getThreadAutomationMap,
   getThreadSummary,
   persistPinnedThreadIds,
   runThreadAutomationNow,
+  upsertProjectAutomation,
   upsertThreadAutomation,
 } from '../../api/codexGateway'
 import type { UiProjectGroup, UiThread, UiThreadAutomation, UiThreadAutomationStatus } from '../../types/codex'
@@ -930,8 +943,11 @@ const deleteThreadDialogVisible = ref(false)
 const deleteThreadDialogThreadId = ref('')
 const deleteThreadTitle = ref('')
 const automationByThreadId = ref<Record<string, UiThreadAutomation[]>>({})
+const automationByProjectName = ref<Record<string, UiThreadAutomation[]>>({})
 const automationDialogVisible = ref(false)
+const automationDialogScope = ref<'thread' | 'project'>('thread')
 const automationDialogThreadId = ref('')
+const automationDialogProjectName = ref('')
 const automationDialogAutomationId = ref('')
 const automationDialogMode = ref<'create' | 'edit'>('create')
 const automationDialogError = ref('')
@@ -956,10 +972,19 @@ const automationScheduleDraft = ref<AutomationScheduleDraft>({
   intervalUnit: 'hours',
 })
 const automationDialogAutomations = computed(() => {
+  if (automationDialogScope.value === 'project') {
+    const projectName = automationDialogProjectName.value
+    return projectName ? (automationByProjectName.value[projectName] ?? []) : []
+  }
   const threadId = automationDialogThreadId.value
   return threadId ? (automationByThreadId.value[threadId] ?? []) : []
 })
 const automationSchedulePreview = computed(() => describeAutomationSchedule(automationDraft.value.rrule))
+const automationDialogSubtitle = computed(() =>
+  automationDialogScope.value === 'project'
+    ? 'This creates project automations attached to the selected project folder.'
+    : 'This creates heartbeat automations attached to the selected thread.',
+)
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
@@ -1233,6 +1258,11 @@ onMounted(async () => {
   } catch {
     automationByThreadId.value = {}
   }
+  try {
+    automationByProjectName.value = await getProjectAutomationMap()
+  } catch {
+    automationByProjectName.value = {}
+  }
   hasLoadedPinnedThreadState = true
   void hydrateMissingPinnedThreads()
 })
@@ -1394,8 +1424,11 @@ function threadHasAutomation(threadId: string): boolean {
   return (automationByThreadId.value[threadId]?.length ?? 0) > 0
 }
 
-function threadAutomationTooltip(threadId: string): string {
-  const automations = automationByThreadId.value[threadId] ?? []
+function projectHasAutomation(projectName: string): boolean {
+  return (automationByProjectName.value[projectName]?.length ?? 0) > 0
+}
+
+function automationTooltip(automations: UiThreadAutomation[]): string {
   if (automations.length === 0) return ''
   if (automations.length > 1) {
     const activeCount = automations.filter((automation) => automation.status === 'ACTIVE').length
@@ -1408,6 +1441,14 @@ function threadAutomationTooltip(threadId: string): string {
       ? new Date(automation.nextRunAtMs).toLocaleString()
       : 'Not scheduled'
   return `${automation.name} • Next run: ${nextRunLabel}`
+}
+
+function threadAutomationTooltip(threadId: string): string {
+  return automationTooltip(automationByThreadId.value[threadId] ?? [])
+}
+
+function projectAutomationTooltip(projectName: string): string {
+  return automationTooltip(automationByProjectName.value[projectName] ?? [])
 }
 
 function padRruleNumber(value: number): string {
@@ -1665,7 +1706,9 @@ function deleteThreadById(threadId: string): void {
 }
 
 function openAutomationDialog(threadId: string): void {
+  automationDialogScope.value = 'thread'
   automationDialogThreadId.value = threadId
+  automationDialogProjectName.value = ''
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   const existing = automationByThreadId.value[threadId]?.[0]
@@ -1678,13 +1721,29 @@ function openAutomationDialog(threadId: string): void {
   closeThreadMenu()
 }
 
+function openProjectAutomationDialog(projectName: string): void {
+  automationDialogScope.value = 'project'
+  automationDialogThreadId.value = ''
+  automationDialogProjectName.value = projectName
+  automationDialogError.value = ''
+  automationDialogNotice.value = ''
+  const existing = automationByProjectName.value[projectName]?.[0]
+  if (existing) {
+    selectAutomationForEditing(existing.id)
+  } else {
+    startNewAutomationDraft()
+  }
+  automationDialogVisible.value = true
+  closeProjectMenu()
+}
+
 function startNewAutomationDraft(): void {
   automationDialogAutomationId.value = ''
   automationDialogMode.value = 'create'
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   automationDraft.value = {
-    name: 'Thread automation',
+    name: automationDialogScope.value === 'project' ? 'Project automation' : 'Thread automation',
     prompt: '',
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     status: 'ACTIVE',
@@ -1710,7 +1769,9 @@ function selectAutomationForEditing(automationId: string): void {
 
 function closeAutomationDialog(): void {
   automationDialogVisible.value = false
+  automationDialogScope.value = 'thread'
   automationDialogThreadId.value = ''
+  automationDialogProjectName.value = ''
   automationDialogAutomationId.value = ''
   automationDialogError.value = ''
   automationDialogNotice.value = ''
@@ -1747,23 +1808,60 @@ function removeAutomationForThread(
   return next.length > 0 ? { ...state, [threadId]: next } : omitAutomationThread(state, threadId)
 }
 
+function omitAutomationProject(state: Record<string, UiThreadAutomation[]>, projectName: string): Record<string, UiThreadAutomation[]> {
+  return Object.fromEntries(Object.entries(state).filter(([name]) => name !== projectName))
+}
+
+function updateAutomationForProject(
+  state: Record<string, UiThreadAutomation[]>,
+  projectName: string,
+  saved: UiThreadAutomation,
+): Record<string, UiThreadAutomation[]> {
+  const existing = state[projectName] ?? []
+  const index = existing.findIndex((automation) => automation.id === saved.id)
+  const next = [...existing]
+  if (index >= 0) {
+    next.splice(index, 1, saved)
+  } else {
+    next.push(saved)
+  }
+  return { ...state, [projectName]: next }
+}
+
+function removeAutomationForProject(
+  state: Record<string, UiThreadAutomation[]>,
+  projectName: string,
+  automationId: string,
+): Record<string, UiThreadAutomation[]> {
+  const next = (state[projectName] ?? []).filter((automation) => automation.id !== automationId)
+  return next.length > 0 ? { ...state, [projectName]: next } : omitAutomationProject(state, projectName)
+}
+
 async function submitAutomationDialog(): Promise<void> {
   const threadId = automationDialogThreadId.value
-  if (!threadId) return
+  const projectName = automationDialogProjectName.value
+  if (automationDialogScope.value === 'thread' && !threadId) return
+  if (automationDialogScope.value === 'project' && !projectName) return
   isSavingAutomation.value = true
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   try {
     syncAutomationRruleFromScheduleDraft()
-    const saved = await upsertThreadAutomation({
-      threadId,
+    const input = {
       id: automationDialogAutomationId.value || undefined,
       name: automationDraft.value.name,
       prompt: automationDraft.value.prompt,
       rrule: automationDraft.value.rrule,
       status: automationDraft.value.status,
-    })
-    automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, threadId, saved)
+    }
+    const saved = automationDialogScope.value === 'project'
+      ? await upsertProjectAutomation({ ...input, projectName })
+      : await upsertThreadAutomation({ ...input, threadId })
+    if (automationDialogScope.value === 'project') {
+      automationByProjectName.value = updateAutomationForProject(automationByProjectName.value, projectName, saved)
+    } else {
+      automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, threadId, saved)
+    }
     selectAutomationForEditing(saved.id)
     automationDialogNotice.value = 'Automation saved.'
     isSavingAutomation.value = false
@@ -1775,15 +1873,23 @@ async function submitAutomationDialog(): Promise<void> {
 
 async function onDeleteAutomationFromDialog(): Promise<void> {
   const threadId = automationDialogThreadId.value
+  const projectName = automationDialogProjectName.value
   const automationId = automationDialogAutomationId.value
-  if (!threadId || !automationId) return
+  if (!automationId) return
+  if (automationDialogScope.value === 'thread' && !threadId) return
+  if (automationDialogScope.value === 'project' && !projectName) return
   isSavingAutomation.value = true
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   try {
-    await deleteThreadAutomation(threadId, automationId)
-    automationByThreadId.value = removeAutomationForThread(automationByThreadId.value, threadId, automationId)
-    const nextAutomation = automationByThreadId.value[threadId]?.[0]
+    if (automationDialogScope.value === 'project') {
+      await deleteProjectAutomation(projectName, automationId)
+      automationByProjectName.value = removeAutomationForProject(automationByProjectName.value, projectName, automationId)
+    } else {
+      await deleteThreadAutomation(threadId, automationId)
+      automationByThreadId.value = removeAutomationForThread(automationByThreadId.value, threadId, automationId)
+    }
+    const nextAutomation = automationDialogAutomations.value[0]
     if (nextAutomation) {
       selectAutomationForEditing(nextAutomation.id)
     } else {
@@ -1956,6 +2062,10 @@ function onProjectNameInput(projectName: string): void {
 
 function onRemoveProject(projectName: string): void {
   emit('remove-project', projectName)
+  if (projectHasAutomation(projectName)) {
+    void deleteProjectAutomation(projectName).catch(() => undefined)
+    automationByProjectName.value = omitAutomationProject(automationByProjectName.value, projectName)
+  }
   closeProjectMenu()
 }
 
@@ -2726,7 +2836,7 @@ onBeforeUnmount(() => {
 }
 
 .project-main-button {
-  @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center min-h-5 cursor-grab;
+  @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center gap-1.5 min-h-5 cursor-grab;
 }
 
 .project-main-button[data-dragging-handle='true'] {
@@ -2746,7 +2856,7 @@ onBeforeUnmount(() => {
 }
 
 .project-title {
-  @apply text-sm font-normal text-zinc-700 truncate select-none;
+  @apply min-w-0 flex-1 text-sm font-normal text-zinc-700 truncate select-none;
 }
 
 .project-menu-wrap {

@@ -3248,6 +3248,7 @@ type ThreadAutomationRecord = {
   rrule: string
   status: ThreadAutomationStatus
   targetThreadId: string | null
+  cwds: string[]
   createdAtMs: number | null
   updatedAtMs: number | null
   nextRunAtMs: number | null
@@ -3269,6 +3270,23 @@ function serializeTomlString(value: string): string {
   return JSON.stringify(value)
 }
 
+function parseTomlStringArray(value: string): string[] {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return []
+  try {
+    const parsed = JSON.parse(trimmed)
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function serializeTomlStringArray(values: string[]): string {
+  return `[${values.map((value) => serializeTomlString(value)).join(', ')}]`
+}
+
 function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
   const values: Record<string, string> = {}
   for (const line of raw.split(/\r?\n/u)) {
@@ -3281,12 +3299,13 @@ function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
   }
 
   const id = readTomlString(values.id ?? '')
-  const kindValue = readTomlString(values.kind ?? 'heartbeat')
+  const kindValue = readTomlString(values.kind ?? (values.cwds ? 'cron' : 'heartbeat'))
   const name = readTomlString(values.name ?? '')
   const prompt = readTomlString(values.prompt ?? '')
   const rrule = readTomlString(values.rrule ?? '')
   const statusValue = readTomlString(values.status ?? 'ACTIVE')
   const targetThreadId = readTomlString(values.target_thread_id ?? '') || null
+  const cwds = parseTomlStringArray(values.cwds ?? '')
   const createdAtMs = Number.parseInt(values.created_at ?? '', 10)
   const updatedAtMs = Number.parseInt(values.updated_at ?? '', 10)
 
@@ -3302,6 +3321,7 @@ function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
     rrule,
     status: statusValue,
     targetThreadId,
+    cwds,
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : null,
     updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : null,
     nextRunAtMs: null,
@@ -3317,10 +3337,17 @@ function serializeAutomationToml(record: ThreadAutomationRecord): string {
     `prompt = ${serializeTomlString(record.prompt)}`,
     `status = ${serializeTomlString(record.status)}`,
     `rrule = ${serializeTomlString(record.rrule)}`,
-    `target_thread_id = ${serializeTomlString(record.targetThreadId ?? '')}`,
+  ]
+  if (record.targetThreadId) {
+    lines.push(`target_thread_id = ${serializeTomlString(record.targetThreadId)}`)
+  }
+  if (record.cwds.length > 0) {
+    lines.push(`cwds = ${serializeTomlStringArray(record.cwds)}`)
+  }
+  lines.push(
     `created_at = ${String(record.createdAtMs ?? Date.now())}`,
     `updated_at = ${String(record.updatedAtMs ?? Date.now())}`,
-  ]
+  )
   return `${lines.join('\n')}\n`
 }
 
@@ -3421,6 +3448,7 @@ async function writeThreadHeartbeatAutomation(input: {
     rrule,
     status: input.status,
     targetThreadId: threadId,
+    cwds: [],
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
     nextRunAtMs: null,
@@ -3448,6 +3476,113 @@ async function deleteThreadHeartbeatAutomation(threadId: string, automationId = 
   }
 
   const automations = await readThreadHeartbeatAutomations(normalizedThreadId)
+  if (automations.length === 0) return false
+  await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
+  return true
+}
+
+async function listProjectCronAutomations(): Promise<Record<string, ThreadAutomationRecord[]>> {
+  const automationRoot = getCodexAutomationsDir()
+  const next: Record<string, ThreadAutomationRecord[]> = {}
+  let entries
+  try {
+    entries = await readdir(automationRoot, { withFileTypes: true })
+  } catch {
+    return next
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const automation = await readAutomationRecordFromFile(join(automationRoot, entry.name, 'automation.toml'))
+    if (!automation || automation.kind !== 'cron' || automation.cwds.length === 0) continue
+    for (const cwd of automation.cwds) {
+      next[cwd] = [...(next[cwd] ?? []), automation]
+    }
+  }
+
+  for (const automations of Object.values(next)) {
+    automations.sort((first, second) => {
+      const firstCreatedAt = first.createdAtMs ?? 0
+      const secondCreatedAt = second.createdAtMs ?? 0
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt - secondCreatedAt
+      return first.id.localeCompare(second.id)
+    })
+  }
+
+  return next
+}
+
+async function readProjectCronAutomations(projectName: string): Promise<ThreadAutomationRecord[]> {
+  const all = await listProjectCronAutomations()
+  return all[projectName] ?? []
+}
+
+async function readProjectCronAutomation(projectName: string, automationId = ''): Promise<ThreadAutomationRecord | null> {
+  const automations = await readProjectCronAutomations(projectName)
+  if (automationId) return automations.find((automation) => automation.id === automationId) ?? null
+  return automations[0] ?? null
+}
+
+async function writeProjectCronAutomation(input: {
+  projectName: string
+  id?: string
+  name: string
+  prompt: string
+  rrule: string
+  status: ThreadAutomationStatus
+}): Promise<ThreadAutomationRecord> {
+  const projectName = input.projectName.trim()
+  const name = input.name.trim()
+  const prompt = input.prompt.trim()
+  const rrule = input.rrule.trim()
+  if (!projectName || !name || !prompt || !rrule) {
+    throw new Error('projectName, name, prompt, and rrule are required')
+  }
+
+  const automationRoot = getCodexAutomationsDir()
+  await mkdir(automationRoot, { recursive: true })
+  const existing = input.id ? await readProjectCronAutomation(projectName, input.id.trim()) : null
+  const entries = await readdir(automationRoot, { withFileTypes: true }).catch(() => [])
+  const existingIds = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name))
+  const id = existing?.id ?? resolveUniqueAutomationId(existingIds, projectName, name)
+  const automationDir = join(automationRoot, id)
+  const now = Date.now()
+  const record: ThreadAutomationRecord = {
+    id,
+    kind: 'cron',
+    name,
+    prompt,
+    rrule,
+    status: input.status,
+    targetThreadId: null,
+    cwds: [projectName],
+    createdAtMs: existing?.createdAtMs ?? now,
+    updatedAtMs: now,
+    nextRunAtMs: null,
+  }
+
+  await mkdir(automationDir, { recursive: true })
+  await writeFile(join(automationDir, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+  const memoryPath = join(automationDir, 'memory.md')
+  try {
+    await stat(memoryPath)
+  } catch {
+    await writeFile(memoryPath, '', 'utf8')
+  }
+  return record
+}
+
+async function deleteProjectCronAutomation(projectName: string, automationId = ''): Promise<boolean> {
+  const normalizedProjectName = projectName.trim()
+  const normalizedAutomationId = automationId.trim()
+  if (normalizedAutomationId) {
+    const automation = await readProjectCronAutomation(normalizedProjectName, normalizedAutomationId)
+    if (!automation) return false
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    return true
+  }
+
+  const automations = await readProjectCronAutomations(normalizedProjectName)
   if (automations.length === 0) return false
   await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
   return true
@@ -7067,6 +7202,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-automations') {
+        const automationsByProjectName = await listProjectCronAutomations()
+        setJson(res, 200, { data: automationsByProjectName })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
         const automationId = url.searchParams.get('automationId')?.trim() ?? ''
@@ -7077,6 +7218,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const automation = automationId
           ? await readThreadHeartbeatAutomation(threadId, automationId)
           : await readThreadHeartbeatAutomations(threadId)
+        setJson(res, 200, { data: automation })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-automation') {
+        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
+        if (!projectName) {
+          setJson(res, 400, { error: 'Missing projectName' })
+          return
+        }
+        const automation = automationId
+          ? await readProjectCronAutomation(projectName, automationId)
+          : await readProjectCronAutomations(projectName)
         setJson(res, 200, { data: automation })
         return
       }
@@ -7149,6 +7304,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'PUT' && url.pathname === '/codex-api/project-automation') {
+        const payload = asRecord(await readJsonBody(req))
+        const projectName = typeof payload?.projectName === 'string' ? payload.projectName.trim() : ''
+        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
+        const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
+        const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
+        const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
+        const status = payload?.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE'
+        if (!projectName || !name || !prompt || !rrule) {
+          setJson(res, 400, { error: 'projectName, name, prompt, and rrule are required' })
+          return
+        }
+        const automation = await writeProjectCronAutomation({ projectName, id, name, prompt, rrule, status })
+        setJson(res, 200, { data: automation })
+        return
+      }
+
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-automation/run') {
         const payload = asRecord(await readJsonBody(req))
         const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
@@ -7176,6 +7348,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
         const removed = await deleteThreadHeartbeatAutomation(threadId, automationId)
+        setJson(res, 200, { data: { removed } })
+        return
+      }
+
+      if (req.method === 'DELETE' && url.pathname === '/codex-api/project-automation') {
+        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
+        if (!projectName) {
+          setJson(res, 400, { error: 'Missing projectName' })
+          return
+        }
+        const removed = await deleteProjectCronAutomation(projectName, automationId)
         setJson(res, 200, { data: { removed } })
         return
       }

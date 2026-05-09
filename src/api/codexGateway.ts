@@ -1097,6 +1097,7 @@ function asAutomation(record: unknown): UiThreadAutomation | null {
     rrule,
     status,
     targetThreadId: readString(row.targetThreadId),
+    cwds: Array.isArray(row.cwds) ? row.cwds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [],
     createdAtMs: readNumber(row.createdAtMs),
     updatedAtMs: readNumber(row.updatedAtMs),
     nextRunAtMs: readNumber(row.nextRunAtMs),
@@ -1124,6 +1125,22 @@ export async function getThreadAutomationMap(): Promise<Record<string, UiThreadA
   for (const [threadId, value] of Object.entries(data)) {
     const automations = asAutomationArray(value)
     if (automations.length > 0) next[threadId] = automations
+  }
+  return next
+}
+
+export async function getProjectAutomationMap(): Promise<Record<string, UiThreadAutomation[]>> {
+  const response = await fetch('/codex-api/project-automations')
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to load project automations'))
+  }
+  const data = asRecord(asRecord(payload)?.data)
+  const next: Record<string, UiThreadAutomation[]> = {}
+  if (!data) return next
+  for (const [projectName, value] of Object.entries(data)) {
+    const automations = asAutomationArray(value)
+    if (automations.length > 0) next[projectName] = automations
   }
   return next
 }
@@ -1163,6 +1180,28 @@ export async function upsertThreadAutomation(input: {
   return automation
 }
 
+export async function upsertProjectAutomation(input: {
+  projectName: string
+  id?: string
+  name: string
+  prompt: string
+  rrule: string
+  status: UiThreadAutomationStatus
+}): Promise<UiThreadAutomation> {
+  const response = await fetch('/codex-api/project-automation', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to save project automation'))
+  }
+  const automation = asAutomation(asRecord(payload)?.data)
+  if (!automation) throw new Error('Project automation response was malformed')
+  return automation
+}
+
 export async function deleteThreadAutomation(threadId: string, automationId?: string): Promise<void> {
   const query = new URLSearchParams({ threadId })
   if (automationId) query.set('automationId', automationId)
@@ -1172,6 +1211,18 @@ export async function deleteThreadAutomation(threadId: string, automationId?: st
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to delete thread automation'))
+  }
+}
+
+export async function deleteProjectAutomation(projectName: string, automationId?: string): Promise<void> {
+  const query = new URLSearchParams({ projectName })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/project-automation?${query.toString()}`, {
+    method: 'DELETE',
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to delete project automation'))
   }
 }
 
