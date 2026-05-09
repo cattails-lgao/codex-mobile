@@ -88,18 +88,27 @@ function toImageGenerationUrl(value: string): string {
   return `data:image/png;base64,${compact}`
 }
 
-function readHeartbeatField(value: string, field: string): string {
-  const match = new RegExp(`<${field}>\\s*([\\s\\S]*?)\\s*</${field}>`, 'iu').exec(value)
-  return match?.[1]?.trim() ?? ''
+function decodeHeartbeatXmlText(value: string): string {
+  return value
+    .replace(/&lt;/giu, '<')
+    .replace(/&gt;/giu, '>')
+    .replace(/&amp;/giu, '&')
 }
 
-function parseHeartbeatEnvelope(value: string): { automationId: string; instructions: string } | null {
+function readHeartbeatField(value: string, field: string): string {
+  const match = new RegExp(`<${field}>\\s*([\\s\\S]*?)\\s*</${field}>`, 'iu').exec(value)
+  return match?.[1] ? decodeHeartbeatXmlText(match[1].trim()) : ''
+}
+
+function parseHeartbeatEnvelope(value: string): { automationId: string; currentTimeIso: string; instructions: string } | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('<heartbeat>') || !trimmed.endsWith('</heartbeat>')) return null
+  const currentTimeIso = readHeartbeatField(trimmed, 'current_time_iso')
   const instructions = readHeartbeatField(trimmed, 'instructions')
-  if (!instructions) return null
+  if (!currentTimeIso || !instructions) return null
   return {
     automationId: readHeartbeatField(trimmed, 'automation_id'),
+    currentTimeIso,
     instructions,
   }
 }
@@ -405,7 +414,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     if (hasRenderableUserContent) {
       messages.push({
         id: item.id,
-        role: parsed.isAutomationRun ? 'system' : 'user',
+        role: 'user',
         text: parsed.text,
         images: parsed.images,
         skills: parsed.skills.length > 0 ? parsed.skills : undefined,

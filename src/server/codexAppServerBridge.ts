@@ -3215,9 +3215,9 @@ async function readAutomationRecordFromFile(filePath: string): Promise<ThreadAut
   }
 }
 
-async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord>> {
+async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord[]>> {
   const automationRoot = getCodexAutomationsDir()
-  const next: Record<string, ThreadAutomationRecord> = {}
+  const next: Record<string, ThreadAutomationRecord[]> = {}
   let entries
   try {
     entries = await readdir(automationRoot, { withFileTypes: true })
@@ -3229,19 +3229,45 @@ async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAu
     if (!entry.isDirectory()) continue
     const automation = await readAutomationRecordFromFile(join(automationRoot, entry.name, 'automation.toml'))
     if (!automation || automation.kind !== 'heartbeat' || !automation.targetThreadId) continue
-    next[automation.targetThreadId] = automation
+    next[automation.targetThreadId] = [...(next[automation.targetThreadId] ?? []), automation]
+  }
+
+  for (const automations of Object.values(next)) {
+    automations.sort((first, second) => {
+      const firstCreatedAt = first.createdAtMs ?? 0
+      const secondCreatedAt = second.createdAtMs ?? 0
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt - secondCreatedAt
+      return first.id.localeCompare(second.id)
+    })
   }
 
   return next
 }
 
-async function readThreadHeartbeatAutomation(threadId: string): Promise<ThreadAutomationRecord | null> {
+async function readThreadHeartbeatAutomations(threadId: string): Promise<ThreadAutomationRecord[]> {
   const all = await listThreadHeartbeatAutomations()
-  return all[threadId] ?? null
+  return all[threadId] ?? []
+}
+
+async function readThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<ThreadAutomationRecord | null> {
+  const automations = await readThreadHeartbeatAutomations(threadId)
+  if (automationId) return automations.find((automation) => automation.id === automationId) ?? null
+  return automations[0] ?? null
+}
+
+function resolveUniqueAutomationId(existingIds: Set<string>, threadId: string, name: string): string {
+  const baseId = slugifyAutomationId(threadId, name)
+  if (!existingIds.has(baseId)) return baseId
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${baseId}-${index}`
+    if (!existingIds.has(candidate)) return candidate
+  }
+  return `${baseId}-${randomBytes(4).toString('hex')}`
 }
 
 async function writeThreadHeartbeatAutomation(input: {
   threadId: string
+  id?: string
   name: string
   prompt: string
   rrule: string
@@ -3257,8 +3283,10 @@ async function writeThreadHeartbeatAutomation(input: {
 
   const automationRoot = getCodexAutomationsDir()
   await mkdir(automationRoot, { recursive: true })
-  const existing = await readThreadHeartbeatAutomation(threadId)
-  const id = existing?.id ?? slugifyAutomationId(threadId, name)
+  const existing = input.id ? await readThreadHeartbeatAutomation(threadId, input.id.trim()) : null
+  const entries = await readdir(automationRoot, { withFileTypes: true }).catch(() => [])
+  const existingIds = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name))
+  const id = existing?.id ?? resolveUniqueAutomationId(existingIds, threadId, name)
   const automationDir = join(automationRoot, id)
   const now = Date.now()
   const record: ThreadAutomationRecord = {
@@ -3285,10 +3313,19 @@ async function writeThreadHeartbeatAutomation(input: {
   return record
 }
 
-async function deleteThreadHeartbeatAutomation(threadId: string): Promise<boolean> {
-  const automation = await readThreadHeartbeatAutomation(threadId.trim())
-  if (!automation) return false
-  await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+async function deleteThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<boolean> {
+  const normalizedThreadId = threadId.trim()
+  const normalizedAutomationId = automationId.trim()
+  if (normalizedAutomationId) {
+    const automation = await readThreadHeartbeatAutomation(normalizedThreadId, normalizedAutomationId)
+    if (!automation) return false
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    return true
+  }
+
+  const automations = await readThreadHeartbeatAutomations(normalizedThreadId)
+  if (automations.length === 0) return false
+  await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
   return true
 }
 
@@ -3471,6 +3508,11 @@ type BackendQueuedTurn = {
   message: StoredQueuedMessage
 }
 
+type ThreadQueueStateUpdate<T> = {
+  nextState: ThreadQueueState
+  result: T
+}
+
 type ResolvedCollaborationModeSettings = {
   model: string
   reasoningEffort: ReasoningEffort | null
@@ -3535,6 +3577,8 @@ function normalizeThreadQueueState(value: unknown): ThreadQueueState {
   return state
 }
 
+let threadQueueMutationChain: Promise<unknown> = Promise.resolve()
+
 async function readThreadQueueState(): Promise<ThreadQueueState> {
   const statePath = getCodexGlobalStatePath()
   try {
@@ -3546,7 +3590,7 @@ async function readThreadQueueState(): Promise<ThreadQueueState> {
   }
 }
 
-async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+async function writeThreadQueueStateUnlocked(nextState: ThreadQueueState): Promise<void> {
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
   try {
@@ -3562,6 +3606,38 @@ async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void>
     delete payload[THREAD_QUEUE_STATE_KEY]
   }
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function withThreadQueueStateUpdate<T>(
+  update: (state: ThreadQueueState) => ThreadQueueStateUpdate<T> | Promise<ThreadQueueStateUpdate<T>>,
+): Promise<T> {
+  const run = threadQueueMutationChain.then(async () => {
+    const currentState = await readThreadQueueState()
+    const { nextState, result } = await update(currentState)
+    await writeThreadQueueStateUnlocked(nextState)
+    return result
+  })
+  threadQueueMutationChain = run.catch(() => {})
+  return run
+}
+
+async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+  await withThreadQueueStateUpdate(() => ({
+    nextState: normalizeThreadQueueState(nextState),
+    result: undefined,
+  }))
+}
+
+async function appendThreadQueuedMessage(threadId: string, message: StoredQueuedMessage): Promise<void> {
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) throw new Error('threadId is required')
+  await withThreadQueueStateUpdate((state) => ({
+    nextState: {
+      ...state,
+      [normalizedThreadId]: [...(state[normalizedThreadId] ?? []), message],
+    },
+    result: undefined,
+  }))
 }
 
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
@@ -3594,6 +3670,30 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
     prefix += `\n## ${f.label}: ${f.path}\n`
   }
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
+}
+
+function escapeHeartbeatXmlText(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+}
+
+function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
+  return {
+    id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
+    text: `<heartbeat>
+<automation_id>${escapeHeartbeatXmlText(automation.id)}</automation_id>
+<current_time_iso>${new Date().toISOString()}</current_time_iso>
+<instructions>
+${escapeHeartbeatXmlText(automation.prompt)}
+</instructions>
+</heartbeat>`,
+    imageUrls: [],
+    skills: [],
+    fileAttachments: [],
+    collaborationMode: 'default',
+  }
 }
 
 function fileNameFromPath(pathValue: string): string {
@@ -4669,9 +4769,10 @@ class AppServerProcess {
   }
 }
 
-class BackendQueueProcessor {
+export class BackendQueueProcessor {
   private readonly processingThreadIds = new Set<string>()
   private readonly queueDrainTimersByThreadId = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly queueDrainDueAtByThreadId = new Map<string, number>()
   private readonly unsubscribe: () => void
 
   constructor(private readonly appServer: AppServerProcess) {
@@ -4690,6 +4791,7 @@ class BackendQueueProcessor {
       clearTimeout(timer)
     }
     this.queueDrainTimersByThreadId.clear()
+    this.queueDrainDueAtByThreadId.clear()
     this.processingThreadIds.clear()
   }
 
@@ -4705,13 +4807,25 @@ class BackendQueueProcessor {
   }
 
   scheduleThreadQueueDrain(threadId: string, delayMs = 5000): void {
-    if (!threadId || this.queueDrainTimersByThreadId.has(threadId)) return
+    if (!threadId) return
+    const normalizedDelayMs = Math.max(0, delayMs)
+    const nextDueAt = Date.now() + normalizedDelayMs
+    const existingDueAt = this.queueDrainDueAtByThreadId.get(threadId)
+    const existingTimer = this.queueDrainTimersByThreadId.get(threadId)
+    if (existingTimer) {
+      if (existingDueAt !== undefined && existingDueAt <= nextDueAt) return
+      clearTimeout(existingTimer)
+      this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
+    }
     const timer = setTimeout(() => {
       this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
       void this.processThreadQueue(threadId)
-    }, Math.max(0, delayMs))
+    }, normalizedDelayMs)
     timer.unref?.()
     this.queueDrainTimersByThreadId.set(threadId, timer)
+    this.queueDrainDueAtByThreadId.set(threadId, nextDueAt)
   }
 
   async processThreadQueue(threadId: string): Promise<void> {
@@ -4764,27 +4878,33 @@ class BackendQueueProcessor {
   }
 
   private async popNextQueuedTurn(threadId: string): Promise<BackendQueuedTurn | null> {
-    const state = await readThreadQueueState()
-    const queue = state[threadId]
-    if (!queue || queue.length === 0) return null
+    return withThreadQueueStateUpdate((state) => {
+      const queue = state[threadId]
+      if (!queue || queue.length === 0) {
+        return { nextState: state, result: null }
+      }
 
-    const [message, ...rest] = queue
-    const nextState = { ...state }
-    if (rest.length > 0) {
-      nextState[threadId] = rest
-    } else {
-      delete nextState[threadId]
-    }
-    await writeThreadQueueState(nextState)
-    return { threadId, message }
+      const [message, ...rest] = queue
+      const nextState = { ...state }
+      if (rest.length > 0) {
+        nextState[threadId] = rest
+      } else {
+        delete nextState[threadId]
+      }
+      return { nextState, result: { threadId, message } }
+    })
   }
 
   private async restoreQueuedTurn(turn: BackendQueuedTurn): Promise<void> {
-    const state = await readThreadQueueState()
-    const queue = state[turn.threadId] ?? []
-    await writeThreadQueueState({
-      ...state,
-      [turn.threadId]: [turn.message, ...queue],
+    await withThreadQueueStateUpdate((state) => {
+      const queue = state[turn.threadId] ?? []
+      return {
+        nextState: {
+          ...state,
+          [turn.threadId]: [turn.message, ...queue],
+        },
+        result: undefined,
+      }
     })
   }
 
@@ -6716,11 +6836,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const automation = await readThreadHeartbeatAutomation(threadId)
+        const automation = automationId
+          ? await readThreadHeartbeatAutomation(threadId, automationId)
+          : await readThreadHeartbeatAutomations(threadId)
         setJson(res, 200, { data: automation })
         return
       }
@@ -6779,6 +6902,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'PUT' && url.pathname === '/codex-api/thread-automation') {
         const payload = asRecord(await readJsonBody(req))
         const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
         const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
         const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
         const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
@@ -6787,18 +6911,38 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'threadId, name, prompt, and rrule are required' })
           return
         }
-        const automation = await writeThreadHeartbeatAutomation({ threadId, name, prompt, rrule, status })
+        const automation = await writeThreadHeartbeatAutomation({ threadId, id, name, prompt, rrule, status })
         setJson(res, 200, { data: automation })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/thread-automation/run') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const automationId = typeof payload?.automationId === 'string' ? payload.automationId.trim() : ''
+        if (!threadId || !automationId) {
+          setJson(res, 400, { error: 'threadId and automationId are required' })
+          return
+        }
+        const automation = await readThreadHeartbeatAutomation(threadId, automationId)
+        if (!automation) {
+          setJson(res, 404, { error: 'Automation not found for thread' })
+          return
+        }
+        await appendThreadQueuedMessage(threadId, buildHeartbeatQueuedMessage(automation))
+        backendQueueProcessor.scheduleThreadQueueDrain(threadId, 0)
+        setJson(res, 200, { data: { queued: true } })
         return
       }
 
       if (req.method === 'DELETE' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const removed = await deleteThreadHeartbeatAutomation(threadId)
+        const removed = await deleteThreadHeartbeatAutomation(threadId, automationId)
         setJson(res, 200, { data: { removed } })
         return
       }

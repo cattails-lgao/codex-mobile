@@ -1,12 +1,17 @@
 import { existsSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { mergeSessionSkillInputsIntoTurns, sanitizeThreadTurnsInlinePayloads } from './codexAppServerBridge'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BackendQueueProcessor, mergeSessionSkillInputsIntoTurns, sanitizeThreadTurnsInlinePayloads } from './codexAppServerBridge'
 
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const pngDataUrl = `data:image/png;base64,${pngBase64}`
 const gifBase64 = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const jpegBase64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2w=='
 const webpBase64 = 'UklGRiIAAABXRUJQVlA4IC4AAAAwAQCdASoBAAEAAQAcJaQAA3AA/vuUAAA='
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 function localImagePathFromProxyUrl(value: string): string {
   const parsed = new URL(value, 'http://localhost')
@@ -339,5 +344,29 @@ describe('thread session skill recovery', () => {
       { type: 'text', text: 'second message', text_elements: [] },
       { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
     ])
+  })
+})
+
+describe('backend queue scheduling', () => {
+  it('reschedules a pending drain when a run-now request needs an earlier drain', async () => {
+    vi.useFakeTimers()
+    const processor = new BackendQueueProcessor({
+      onNotification: () => () => undefined,
+    } as never)
+    const processThreadQueue = vi
+      .spyOn(processor as unknown as { processThreadQueue: (threadId: string) => Promise<void> }, 'processThreadQueue')
+      .mockResolvedValue(undefined)
+
+    processor.scheduleThreadQueueDrain('thread-1', 5000)
+    processor.scheduleThreadQueueDrain('thread-1', 0)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(processThreadQueue).toHaveBeenCalledTimes(1)
+    expect(processThreadQueue).toHaveBeenCalledWith('thread-1')
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(processThreadQueue).toHaveBeenCalledTimes(1)
+
+    processor.dispose()
   })
 })

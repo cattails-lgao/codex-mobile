@@ -244,6 +244,10 @@
               </div>
 
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
+                <div v-if="message.isAutomationRun" class="automation-message-label">
+                  <span>Sent via automation</span>
+                  <code v-if="message.automationDisplayName">{{ message.automationDisplayName }}</code>
+                </div>
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
                   <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
                     <span class="worked-separator-line" aria-hidden="true" />
@@ -4858,6 +4862,14 @@ onBeforeUnmount(() => {
   width: fit-content;
   margin-left: auto;
   align-self: flex-end;
+}
+
+.automation-message-label {
+  @apply mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+}
+
+.automation-message-label code {
+  @apply rounded-full bg-white/70 px-2 py-0.5 text-[10px] normal-case tracking-normal text-slate-600;
 }
 
 .message-card[data-role='assistant'],
