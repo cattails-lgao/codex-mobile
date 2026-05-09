@@ -488,7 +488,7 @@
       <p v-if="isChatsSectionExpanded && chatThreads.length === 0" class="thread-tree-no-results">{{ t('No chats') }}</p>
       <ul v-else-if="isChatsSectionExpanded" class="thread-list thread-list-global">
         <li
-          v-for="thread in chatThreads"
+          v-for="thread in visibleChatThreads"
           :key="thread.id"
           class="thread-row-item"
           :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
@@ -562,6 +562,15 @@
           </SidebarMenuRow>
         </li>
       </ul>
+
+      <SidebarMenuRow v-if="isChatsSectionExpanded && hasHiddenChatThreads" class="thread-show-more-row">
+        <template #left>
+          <span class="thread-show-more-spacer" />
+        </template>
+        <button class="thread-show-more-button" type="button" @click="toggleChatsListExpansion">
+          {{ isChatsListExpanded ? 'Show less' : 'Show more' }}
+        </button>
+      </SidebarMenuRow>
     </section>
 
     <Teleport to="body">
@@ -895,6 +904,7 @@ const collapsedProjects = ref<Record<string, boolean>>({})
 const isPinnedSectionExpanded = ref(true)
 const isProjectsSectionExpanded = ref(true)
 const isChatsSectionExpanded = ref(true)
+const isChatsListExpanded = ref(false)
 const showChatsFirst = ref(loadBooleanStorage(CHATS_FIRST_STORAGE_KEY, false))
 const chatSortMode = ref<ChatSortMode>(loadChatSortMode())
 let hasLoadedPinnedThreadState = false
@@ -1125,6 +1135,16 @@ const chatThreads = computed(() => {
       const secondTimestamp = new Date(second[timestampKey] || second.updatedAtIso || second.createdAtIso).getTime()
       return secondTimestamp - firstTimestamp
     })
+})
+
+const visibleChatThreads = computed(() => {
+  if (isSearchActive.value) return chatThreads.value
+  return isChatsListExpanded.value ? chatThreads.value : chatThreads.value.slice(0, 10)
+})
+
+const hasHiddenChatThreads = computed(() => {
+  if (isSearchActive.value) return false
+  return chatThreads.value.length > 10
 })
 
 const threadById = computed(() => {
@@ -1927,6 +1947,10 @@ function toggleProjectExpansion(projectName: string): void {
     ...expandedProjects.value,
     [projectName]: !isExpanded(projectName),
   }
+}
+
+function toggleChatsListExpansion(): void {
+  isChatsListExpanded.value = !isChatsListExpanded.value
 }
 
 function toggleProjectCollapse(projectName: string): void {
