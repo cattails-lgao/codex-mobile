@@ -25,6 +25,7 @@ import {
   readActiveTurnIdFromResponse,
   normalizeThreadGroupsV2,
   normalizeThreadMessagesV2,
+  normalizeThreadSummaryV2,
   readThreadInProgressFromResponse,
 } from './normalizers/v2'
 import type {
@@ -38,6 +39,7 @@ import type {
   UiFileChange,
   UiMessage,
   UiProjectGroup,
+  UiThread,
   UiReviewAction,
   UiReviewActionLevel,
   UiReviewFile,
@@ -715,6 +717,14 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
   return normalizeThreadMessagesV2(payload)
 }
 
+async function getThreadSummaryV2(threadId: string): Promise<UiThread> {
+  const payload = await callRpc<ThreadReadResponse>('thread/read', {
+    threadId,
+    includeTurns: false,
+  })
+  return normalizeThreadSummaryV2(payload)
+}
+
 async function getThreadDetailV2(threadId: string): Promise<{
   messages: UiMessage[]
   inProgress: boolean
@@ -760,6 +770,14 @@ export function getBackgroundThreadListLimit(): number {
 export async function getThreadMessages(threadId: string): Promise<UiMessage[]> {
   try {
     return await getThreadMessagesV2(threadId)
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
+  }
+}
+
+export async function getThreadSummary(threadId: string): Promise<UiThread> {
+  try {
+    return await getThreadSummaryV2(threadId)
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
   }
