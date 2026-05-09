@@ -60,6 +60,7 @@
 - When implementing any feature or behavior change, always audit performance before marking the task complete.
 - Ground the audit in measurements, profiler output, traces, request counts, bundle/build output, or concrete code-path analysis when live measurement is not feasible.
 - For startup, thread loading, realtime rendering, routing, API, filesystem, git, or module-loading changes, explicitly check for duplicate requests, unnecessary blocking work, unbounded fanout, large payloads, and cache invalidation risks.
+- For browser, startup, and thread-loading performance audits, prefer the built-in profiler helpers: `pnpm run profile:browser` and `pnpm run profile:thread`, which use `scripts/profile-browser-runtime.cjs` and write reports under `output/playwright/`.
 - If live measurement is not feasible, state what was not measured and what should be measured next.
 - Include the performance audit result in the completion report.
 
