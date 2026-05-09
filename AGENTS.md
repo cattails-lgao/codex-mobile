@@ -72,6 +72,14 @@
 - Ground the audit in measurements, profiler output, traces, request counts, bundle/build output, or concrete code-path analysis when live measurement is not feasible.
 - For startup, thread loading, realtime rendering, routing, API, filesystem, git, or module-loading changes, explicitly check for duplicate requests, unnecessary blocking work, unbounded fanout, large payloads, and cache invalidation risks.
 - For browser, startup, and thread-loading performance audits, prefer the built-in profiler helpers: `pnpm run profile:browser` and `pnpm run profile:thread`, which use `scripts/profile-browser-runtime.cjs` and write reports under `output/playwright/`.
+- Exact post-task profiling workflow:
+  1. Start or confirm the app server on `http://127.0.0.1:4173` with `pnpm run dev --host 127.0.0.1 --port 4173`; do not stop the persistent `5173` tmux server.
+  2. For general browser/startup changes, run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser`.
+  3. For thread-loading or conversation-route changes, also run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_ROUTE='#/thread/<thread-id>' PROFILE_WAIT_MS=7000 pnpm run profile:browser` or `pnpm run profile:thread` when the default thread id is appropriate.
+  4. Open the generated `output/playwright/browser-runtime-profile-*.json` and inspect `duplicateCounts`, `warnings`, `totalApiKB`, `topApiSummary`, and `slowestApiRows`.
+  5. For traces, open the matching `output/playwright/browser-runtime-profile-*-trace.zip` with `npx playwright show-trace` when request timing or rendering behavior needs deeper inspection.
+  6. Compare against the pre-change profile when available; otherwise record the current numbers as the baseline and state that no prior measurement was available.
+  7. If profiling exposes duplicate requests, large payloads, slow API rows, or warnings related to the changed path, fix them or explicitly document why they are acceptable before completion.
 - If live measurement is not feasible, state what was not measured and what should be measured next.
 - Include the performance audit result in the completion report.
 
