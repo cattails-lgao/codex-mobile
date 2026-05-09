@@ -22,7 +22,7 @@ import {
   FREE_MODE_DEFAULT_MODEL,
   getFreeModels,
   FREE_MODE_STATE_FILE,
-  createDefaultOpenRouterFreeModeState,
+  createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
   type FreeModeState,
@@ -3122,8 +3122,7 @@ function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeMo
   if (current?.enabled) return current
   if (hasUsableCodexAuthSync()) return current
 
-  const fallback = createDefaultOpenRouterFreeModeState()
-  if (!fallback) return current
+  const fallback = createDefaultOpenCodeZenFreeModeState()
 
   mkdirSync(dirname(statePath), { recursive: true })
   writeFileSync(statePath, JSON.stringify(fallback), { encoding: 'utf8', mode: 0o600 })

@@ -279,10 +279,10 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
-### OpenRouter Default For Unauthenticated Codex
+### OpenCode Zen Default For Unauthenticated Codex
 
 #### Feature/Change Name
-Codex app-server startup defaults to OpenRouter free mode when `CODEX_HOME` has no usable Codex login.
+Codex app-server startup defaults to OpenCode Zen `big-pickle` when `CODEX_HOME` has no usable Codex login.
 
 #### Prerequisites/Setup
 1. Build artifacts available with `pnpm run build`.
@@ -292,14 +292,14 @@ Codex app-server startup defaults to OpenRouter free mode when `CODEX_HOME` has 
 #### Steps
 1. Start `codexapp` in Docker with an empty `CODEX_HOME`.
 2. Confirm `$CODEX_HOME/webui-free-mode.json` is created.
-3. Confirm `/codex-api/free-mode/status` reports `enabled: true`, `provider: "openrouter"`, and `currentModel: "openrouter/free"`.
+3. Confirm `/codex-api/free-mode/status` reports `enabled: true`, `provider: "opencode-zen"`, and `currentModel: "big-pickle"`.
 4. Send `hi` through the app-server path.
 5. Repeat a quick visual load of the app in light theme.
 6. Switch to dark theme and confirm the provider/settings UI remains readable.
 
 #### Expected Results
 - The app does not require `codex login` before first use in the empty Docker environment.
-- App-server runs with the `openrouter-free` provider and the local OpenRouter proxy.
+- App-server runs with the `opencode-zen` provider and the local Zen proxy without an API key.
 - A `hi` turn completes with an assistant response.
 - Light-theme and dark-theme provider controls remain readable.
 

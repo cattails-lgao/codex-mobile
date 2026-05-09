@@ -53,6 +53,7 @@ type ChatCompletionsRequest = {
 
 export type UnifiedProxyOptions = {
   bearerToken: string
+  requireBearerToken?: boolean
   wireApi: 'responses' | 'chat'
   responsesEndpoint: string
   chatCompletionsEndpoint: string
@@ -386,7 +387,7 @@ export function handleUnifiedResponsesProxyRequest(
 ): void {
   void (async () => {
     try {
-      if (!options.bearerToken) {
+      if (options.requireBearerToken !== false && !options.bearerToken) {
         res.writeHead(401, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: { message: options.missingKeyMessage } }))
         return
@@ -439,7 +440,7 @@ export function handleUnifiedResponsesProxyRequest(
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          'Authorization': `Bearer ${options.bearerToken}`,
+          ...(options.bearerToken ? { 'Authorization': `Bearer ${options.bearerToken}` } : {}),
         },
       }, (upstreamRes) => {
         const status = upstreamRes.statusCode ?? 502
