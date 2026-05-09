@@ -152,6 +152,22 @@ export interface FreeModeState {
   providerKeys?: Record<string, string>
 }
 
+export function createDefaultOpenRouterFreeModeState(): FreeModeState | null {
+  const apiKey = getRandomFreeKey()
+  if (!apiKey) return null
+  return {
+    enabled: true,
+    apiKey,
+    model: FREE_MODE_DEFAULT_MODEL,
+    customKey: false,
+    provider: 'openrouter',
+    wireApi: 'responses',
+    providerKeys: {
+      openrouter: apiKey,
+    },
+  }
+}
+
 export function getFreeModeEnvVars(state: FreeModeState): Record<string, string> {
   if (!state.enabled) return {}
 
