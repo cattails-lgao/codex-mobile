@@ -735,15 +735,76 @@
             <textarea v-model="automationDraft.prompt" class="automation-thread-textarea" rows="6" placeholder="Describe what the automation should do"></textarea>
           </label>
 
-          <label class="automation-thread-field">
-            <span class="automation-thread-label">Schedule (RRULE)</span>
+          <div class="automation-thread-field">
+            <span class="automation-thread-label">Schedule</span>
+            <div class="automation-schedule-mode-group" role="radiogroup" aria-label="Automation schedule type">
+              <button
+                class="automation-schedule-mode"
+                :class="{ 'is-active': automationScheduleDraft.mode === 'daily' }"
+                type="button"
+                @click="setAutomationScheduleMode('daily')"
+              >
+                Daily
+              </button>
+              <button
+                class="automation-schedule-mode"
+                :class="{ 'is-active': automationScheduleDraft.mode === 'interval' }"
+                type="button"
+                @click="setAutomationScheduleMode('interval')"
+              >
+                Interval
+              </button>
+              <button
+                class="automation-schedule-mode"
+                :class="{ 'is-active': automationScheduleDraft.mode === 'advanced' }"
+                type="button"
+                @click="setAutomationScheduleMode('advanced')"
+              >
+                RRULE
+              </button>
+            </div>
+
+            <div v-if="automationScheduleDraft.mode === 'daily'" class="automation-schedule-row">
+              <span class="automation-schedule-copy">Run every day at</span>
+              <input
+                v-model="automationScheduleDraft.dailyTime"
+                class="automation-schedule-time"
+                type="time"
+                @input="syncAutomationRruleFromScheduleDraft"
+              />
+            </div>
+
+            <div v-else-if="automationScheduleDraft.mode === 'interval'" class="automation-schedule-row">
+              <span class="automation-schedule-copy">Run every</span>
+              <input
+                v-model.number="automationScheduleDraft.interval"
+                class="automation-schedule-number"
+                type="number"
+                min="1"
+                step="1"
+                @input="syncAutomationRruleFromScheduleDraft"
+              />
+              <select
+                v-model="automationScheduleDraft.intervalUnit"
+                class="automation-schedule-unit"
+                @change="syncAutomationRruleFromScheduleDraft"
+              >
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+            </div>
+
             <input
+              v-if="automationScheduleDraft.mode === 'advanced'"
               v-model="automationDraft.rrule"
               class="rename-thread-input"
               type="text"
               placeholder="FREQ=DAILY;BYHOUR=9;BYMINUTE=0"
+              @input="syncAutomationScheduleDraftFromRrule"
             />
-          </label>
+            <p class="automation-schedule-preview">{{ automationSchedulePreview }}</p>
+          </div>
 
           <label class="automation-thread-field">
             <span class="automation-thread-label">Status</span>
@@ -884,6 +945,15 @@ type DragPointerSample = {
 
 type MenuDirection = 'up' | 'down'
 type ChatSortMode = 'created' | 'updated'
+type AutomationScheduleMode = 'daily' | 'interval' | 'advanced'
+type AutomationIntervalUnit = 'minutes' | 'hours' | 'days'
+
+type AutomationScheduleDraft = {
+  mode: AutomationScheduleMode
+  dailyTime: string
+  interval: number
+  intervalUnit: AutomationIntervalUnit
+}
 
 const DRAG_START_THRESHOLD_PX = 4
 const SUPPRESSED_PROJECT_TOGGLE_CLEAR_DELAY_MS = 100
@@ -937,10 +1007,17 @@ const automationDraft = ref<{
   rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
   status: 'ACTIVE',
 })
+const automationScheduleDraft = ref<AutomationScheduleDraft>({
+  mode: 'daily',
+  dailyTime: '09:00',
+  interval: 1,
+  intervalUnit: 'hours',
+})
 const automationDialogAutomations = computed(() => {
   const threadId = automationDialogThreadId.value
   return threadId ? (automationByThreadId.value[threadId] ?? []) : []
 })
+const automationSchedulePreview = computed(() => describeAutomationSchedule(automationDraft.value.rrule))
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
@@ -1348,6 +1425,110 @@ function threadAutomationTooltip(threadId: string): string {
   return `${automation.name} • Next run: ${nextRunLabel}`
 }
 
+function padRruleNumber(value: number): string {
+  return String(Math.max(0, value)).padStart(2, '0')
+}
+
+function parsePositiveInteger(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.floor(parsed))
+}
+
+function buildDailyRrule(time: string): string {
+  const [rawHour, rawMinute] = time.split(':')
+  const hour = Math.min(23, Math.max(0, Number(rawHour) || 0))
+  const minute = Math.min(59, Math.max(0, Number(rawMinute) || 0))
+  return `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`
+}
+
+function buildIntervalRrule(interval: number, unit: AutomationIntervalUnit): string {
+  const normalizedInterval = parsePositiveInteger(interval, 1)
+  if (unit === 'minutes') return `FREQ=MINUTELY;INTERVAL=${normalizedInterval}`
+  if (unit === 'hours') return `FREQ=HOURLY;INTERVAL=${normalizedInterval}`
+  return `FREQ=DAILY;INTERVAL=${normalizedInterval}`
+}
+
+function parseRruleParts(rrule: string): Record<string, string> {
+  return Object.fromEntries(
+    rrule
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const [key, ...rest] = part.split('=')
+        return [key.toUpperCase(), rest.join('=').trim()]
+      })
+      .filter(([key, value]) => key && value),
+  )
+}
+
+function createScheduleDraftFromRrule(rrule: string): AutomationScheduleDraft {
+  const parts = parseRruleParts(rrule)
+  const frequency = parts.FREQ?.toUpperCase()
+  const interval = parsePositiveInteger(parts.INTERVAL, 1)
+  if (frequency === 'DAILY' && parts.BYHOUR !== undefined && parts.BYMINUTE !== undefined && interval === 1) {
+    const hour = Math.min(23, Math.max(0, Number(parts.BYHOUR) || 0))
+    const minute = Math.min(59, Math.max(0, Number(parts.BYMINUTE) || 0))
+    return {
+      mode: 'daily',
+      dailyTime: `${padRruleNumber(hour)}:${padRruleNumber(minute)}`,
+      interval: 1,
+      intervalUnit: 'hours',
+    }
+  }
+  if (frequency === 'MINUTELY' || frequency === 'HOURLY' || (frequency === 'DAILY' && parts.INTERVAL !== undefined)) {
+    return {
+      mode: 'interval',
+      dailyTime: '09:00',
+      interval,
+      intervalUnit: frequency === 'MINUTELY' ? 'minutes' : frequency === 'HOURLY' ? 'hours' : 'days',
+    }
+  }
+  return {
+    mode: 'advanced',
+    dailyTime: '09:00',
+    interval: 1,
+    intervalUnit: 'hours',
+  }
+}
+
+function describeAutomationSchedule(rrule: string): string {
+  const parts = parseRruleParts(rrule)
+  const frequency = parts.FREQ?.toUpperCase()
+  const interval = parsePositiveInteger(parts.INTERVAL, 1)
+  if (frequency === 'DAILY' && parts.BYHOUR !== undefined && parts.BYMINUTE !== undefined && interval === 1) {
+    const hour = Math.min(23, Math.max(0, Number(parts.BYHOUR) || 0))
+    const minute = Math.min(59, Math.max(0, Number(parts.BYMINUTE) || 0))
+    return `RRULE: ${rrule} · runs daily at ${padRruleNumber(hour)}:${padRruleNumber(minute)}`
+  }
+  if (frequency === 'MINUTELY') return `RRULE: ${rrule} · runs every ${interval} minute${interval === 1 ? '' : 's'}`
+  if (frequency === 'HOURLY') return `RRULE: ${rrule} · runs every ${interval} hour${interval === 1 ? '' : 's'}`
+  if (frequency === 'DAILY' && parts.INTERVAL !== undefined) return `RRULE: ${rrule} · runs every ${interval} day${interval === 1 ? '' : 's'}`
+  return rrule ? `RRULE: ${rrule}` : 'RRULE is required.'
+}
+
+function syncAutomationRruleFromScheduleDraft(): void {
+  const draft = automationScheduleDraft.value
+  if (draft.mode === 'daily') {
+    automationDraft.value.rrule = buildDailyRrule(draft.dailyTime)
+  } else if (draft.mode === 'interval') {
+    automationDraft.value.rrule = buildIntervalRrule(draft.interval, draft.intervalUnit)
+  }
+}
+
+function syncAutomationScheduleDraftFromRrule(): void {
+  automationScheduleDraft.value = createScheduleDraftFromRrule(automationDraft.value.rrule)
+}
+
+function setAutomationScheduleMode(mode: AutomationScheduleMode): void {
+  automationScheduleDraft.value = {
+    ...automationScheduleDraft.value,
+    mode,
+  }
+  syncAutomationRruleFromScheduleDraft()
+}
+
 function onExportThread(threadId: string): void {
   emit('export-thread', threadId)
   closeThreadMenu()
@@ -1523,6 +1704,7 @@ function startNewAutomationDraft(): void {
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     status: 'ACTIVE',
   }
+  automationScheduleDraft.value = createScheduleDraftFromRrule(automationDraft.value.rrule)
 }
 
 function selectAutomationForEditing(automationId: string): void {
@@ -1538,6 +1720,7 @@ function selectAutomationForEditing(automationId: string): void {
     rrule: existing.rrule,
     status: existing.status,
   }
+  automationScheduleDraft.value = createScheduleDraftFromRrule(existing.rrule)
 }
 
 function closeAutomationDialog(): void {
@@ -1586,6 +1769,7 @@ async function submitAutomationDialog(): Promise<void> {
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   try {
+    syncAutomationRruleFromScheduleDraft()
     const saved = await upsertThreadAutomation({
       threadId,
       id: automationDialogAutomationId.value || undefined,
@@ -3021,6 +3205,40 @@ onBeforeUnmount(() => {
 .automation-thread-textarea,
 .automation-thread-select {
   @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+}
+
+.automation-schedule-mode-group {
+  @apply grid grid-cols-3 gap-1 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+}
+
+.automation-schedule-mode {
+  @apply rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-white;
+}
+
+.automation-schedule-mode.is-active {
+  @apply bg-white text-zinc-950 shadow-sm;
+}
+
+.automation-schedule-row {
+  @apply mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2;
+}
+
+.automation-schedule-copy {
+  @apply text-sm text-zinc-600;
+}
+
+.automation-schedule-time,
+.automation-schedule-number,
+.automation-schedule-unit {
+  @apply rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+}
+
+.automation-schedule-number {
+  @apply w-20;
+}
+
+.automation-schedule-preview {
+  @apply mt-1 text-xs text-zinc-500;
 }
 
 .automation-thread-error {
