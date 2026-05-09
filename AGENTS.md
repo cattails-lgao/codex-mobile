@@ -55,6 +55,16 @@
 
 - Before merging to local `main`, diff-compare all changes on the current branch against `main`.
 
+## PR Review Bot Workflow (MANDATORY)
+
+- Treat Qodo and other review-bot comments as advisory findings, not authoritative fix instructions.
+- Before applying a suggested review-bot fix, inspect the relevant code path and decide whether the reported behavior is technically correct.
+- Reproduce the issue with a focused test when feasible; if direct reproduction is impractical, document the exact reasoning and code evidence used to accept or reject the finding.
+- Prefer adding or updating a regression test for every accepted review-bot bug before or alongside the fix.
+- Do not patch purely to satisfy a bot comment if the behavior is correct, stale, already fixed, or the proposed change would make the implementation worse.
+- After fixing an accepted review-bot finding, run the narrow regression test plus the relevant build/typecheck command, push the commit, and re-check the PR comments/status.
+- In the completion report, distinguish confirmed fixes from stale or rejected bot comments.
+
 ## Tests Documentation Rule (MANDATORY)
 
 - After every feature implementation, update `tests.md` in the repository root.
