@@ -891,6 +891,8 @@ async function ensureSkillsWorkingTreeRepo(
     }
     await runGitFetchWithRefLockRetry(localDir)
     if (options.overwriteLocalFiles) {
+      await runCommand('git', ['reset', '--hard'], { cwd: localDir })
+      await runCommand('git', ['clean', '-fd'], { cwd: localDir })
       await runCommand('git', ['checkout', '-B', branch, `origin/${branch}`], { cwd: localDir })
       await runCommand('git', ['reset', '--hard', `origin/${branch}`], { cwd: localDir })
       await runCommand('git', ['clean', '-fd'], { cwd: localDir })
@@ -906,6 +908,7 @@ async function ensureSkillsWorkingTreeRepo(
   await runGitFetchWithRefLockRetry(localDir)
   if (options.overwriteLocalFiles) {
     try { await runCommand('git', ['reset', '--hard'], { cwd: localDir }) } catch {}
+    await runCommand('git', ['clean', '-fd'], { cwd: localDir })
     await runCommand('git', ['checkout', '-B', branch, `origin/${branch}`], { cwd: localDir })
     await runCommand('git', ['reset', '--hard', `origin/${branch}`], { cwd: localDir })
     await runCommand('git', ['clean', '-fd'], { cwd: localDir })
@@ -1207,11 +1210,13 @@ async function syncInstalledSkillsFolderToRepo(
   await pushWithNonFastForwardRetry(repoDir, branch)
 }
 
-async function pullInstalledSkillsFolderFromRepo(token: string, repoOwner: string, repoName: string): Promise<void> {
+async function pullInstalledSkillsFolderFromRepo(token: string, repoOwner: string, repoName: string): Promise<string> {
   const remoteUrl = toGitHubTokenRemote(repoOwner, repoName, token)
-  const branch = PRIVATE_SYNC_BRANCH
-  await ensureSkillsWorkingTreeRepo(remoteUrl, branch, {
-    overwriteLocalFiles: isUpstreamSkillsRepo(repoOwner, repoName),
+  const isUpstream = isUpstreamSkillsRepo(repoOwner, repoName)
+  const branch = isUpstream ? PUBLIC_UPSTREAM_BRANCH_ANDROID : PRIVATE_SYNC_BRANCH
+  return await ensureSkillsWorkingTreeRepo(remoteUrl, branch, {
+    ...(isUpstream ? { localDir: getSharedSkillsInstallDir() } : {}),
+    overwriteLocalFiles: isUpstream,
   })
 }
 
@@ -1545,9 +1550,9 @@ export async function handleSkillsRoutes(
         return true
       }
       if (isUpstreamSkillsRepo(state.repoOwner, state.repoName)) {
-        await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
+        const repoDir = await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
         const localSkills = await scanInstalledSkillsFromDisk()
-        const pulledHead = await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: getSkillsInstallDir() }).catch(() => '')
+        const pulledHead = await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir }).catch(() => '')
         await writeSkillsSyncState({
           ...state,
           lastPullCommitSha: pulledHead.trim(),
