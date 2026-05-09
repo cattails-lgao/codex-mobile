@@ -203,6 +203,10 @@ function normalizeProviderContextId(providerId: string): string {
   return normalized || 'codex'
 }
 
+function isNewThreadContextId(contextId: string): boolean {
+  return contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT
+}
+
 function toProviderModelContextId(providerId: string): string {
   const normalizedProviderId = normalizeProviderContextId(providerId)
   if (!normalizedProviderId) return ''
@@ -294,12 +298,7 @@ function loadSelectedCollaborationModeMap(): Record<string, CollaborationModeKin
     // Fall back to the legacy global preference below.
   }
 
-  const legacyMode = normalizeCollaborationMode(window.localStorage.getItem(LEGACY_COLLABORATION_MODE_STORAGE_KEY))
-  const next = createStringKeyedRecord<CollaborationModeKind>()
-  if (legacyMode === 'plan') {
-    next[NEW_THREAD_COLLABORATION_MODE_CONTEXT] = 'plan'
-  }
-  return next
+  return createStringKeyedRecord<CollaborationModeKind>()
 }
 
 function readSelectedCollaborationMode(
@@ -316,6 +315,9 @@ function writeSelectedCollaborationModeForContext(
   mode: CollaborationModeKind,
 ): Record<string, CollaborationModeKind> {
   const contextId = toThreadContextId(threadId)
+  if (isNewThreadContextId(contextId)) {
+    return omitStringKeyedRecordKey(state, contextId)
+  }
   if (mode === 'plan') {
     const next = cloneStringKeyedRecord(state)
     next[contextId] = 'plan'
@@ -4734,10 +4736,7 @@ export function useDesktopState() {
     const nextText = text.trim()
     const targetCwd = cwd.trim()
     const selectedModel = readModelIdForThread(NEW_THREAD_COLLABORATION_MODE_CONTEXT).trim()
-    const selectedMode = readSelectedCollaborationMode(
-      selectedCollaborationModeByContext.value,
-      NEW_THREAD_COLLABORATION_MODE_CONTEXT,
-    )
+    const selectedMode = selectedCollaborationMode.value
     if (!nextText && imageUrls.length === 0 && fileAttachments.length === 0) return ''
 
     isSendingMessage.value = true
