@@ -64,6 +64,7 @@
             :project-git-repo-by-name="projectGitRepoByName"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
+            :is-thread-list-fully-loaded="isThreadListFullyLoaded"
             :search-query="sidebarSearchQuery"
             :search-matched-thread-ids="serverMatchedThreadIds"
             @select="onSelectThread"
@@ -1197,6 +1198,7 @@ const {
   accountRateLimitSnapshots,
   messages,
   isLoadingThreads,
+  isThreadListFullyLoaded,
   isLoadingMessages,
   isSendingMessage,
   isInterruptingTurn,

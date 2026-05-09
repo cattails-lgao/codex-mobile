@@ -587,6 +587,10 @@ function toUiThread(summary: Thread): UiThread {
   }
 }
 
+export function normalizeThreadSummaryV2(payload: ThreadReadResponse): UiThread {
+  return toUiThread(payload.thread)
+}
+
 function groupThreadsByProject(threads: UiThread[]): UiProjectGroup[] {
   const grouped = new Map<string, UiThread[]>()
   for (const thread of threads) {
