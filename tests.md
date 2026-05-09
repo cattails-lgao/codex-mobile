@@ -301,6 +301,7 @@ Codex app-server startup defaults to OpenCode Zen `big-pickle` when `CODEX_HOME`
 - The app does not require `codex login` before first use in the empty Docker environment.
 - App-server runs with the `opencode-zen` provider and the local Zen proxy without an API key.
 - A `hi` turn completes with an assistant response.
+- Multi-turn Zen conversations preserve provider `reasoning_content` and do not fail with `The reasoning_content in the thinking mode must be passed back to the API`.
 - Light-theme and dark-theme provider controls remain readable.
 
 #### Rollback/Cleanup
