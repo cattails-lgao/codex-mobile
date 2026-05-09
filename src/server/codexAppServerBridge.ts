@@ -20,7 +20,9 @@ import {
   getFreeKeyCount,
   FREE_MODE_PROVIDER_ID,
   FREE_MODE_DEFAULT_MODEL,
+  getCachedFreeModels,
   getFreeModels,
+  refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
@@ -5324,14 +5326,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
           try {
             const state = readFreeModeState()
-            const freeModels = await getFreeModels()
             const maskedKey = state.apiKey && state.customKey
               ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
               : null
+            refreshFreeModelsInBackground()
             setJson(res, 200, {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
-              models: freeModels,
+              models: getCachedFreeModels(),
               currentModel: state.enabled ? state.model : null,
               customKey: Boolean(state.customKey),
               maskedKey,

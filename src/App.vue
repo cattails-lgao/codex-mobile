@@ -3950,6 +3950,15 @@ watch(
 )
 
 watch(
+  () => [route.name, composerCwd.value] as const,
+  ([routeName, cwd]) => {
+    if (routeName !== 'thread') return
+    void loadGitRepoStatus(cwd)
+  },
+  { immediate: true },
+)
+
+watch(
   () => selectedThreadId.value,
   async (threadId) => {
     if (!hasInitialized.value) return
@@ -3997,8 +4006,9 @@ watch(
 )
 
 watch(
-  () => newThreadCwd.value,
-  (cwd) => {
+  () => [route.name, newThreadCwd.value] as const,
+  ([routeName, cwd]) => {
+    if (routeName !== 'home') return
     void loadGitRepoStatus(cwd)
   },
   { immediate: true },
