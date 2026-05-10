@@ -76,7 +76,7 @@
             </span>
           </button>
 
-          <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
+          <SidebarThreadTree ref="sidebarThreadTreeRef" :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
             :project-git-repo-by-name="projectGitRepoByName"
             :project-cwd-by-name="projectCwdByName"
             v-if="!isSidebarCollapsed"
@@ -94,6 +94,7 @@
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread"
+            @automations-changed="onAutomationsChanged"
             @start-new-chat="onStartNewThreadFromToolbar" />
         </div>
 
@@ -569,10 +570,12 @@
           </template>
           <template v-else-if="isAutomationsRoute">
             <AutomationsPanel
+              ref="automationsPanelRef"
               :groups="projectGroups"
               :project-cwd-by-name="projectCwdByName"
               :selected-automation-id="routeAutomationId"
               @select-automation="onSelectAutomationInPanel"
+              @edit-automation="onEditAutomationFromPanel"
             />
           </template>
           <template v-else-if="isHomeRoute">
@@ -1115,7 +1118,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
+import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
@@ -1361,6 +1364,19 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+type SidebarThreadTreeExposed = {
+  openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
+}
+type AutomationsPanelExposed = {
+  loadAutomations: () => Promise<void>
+}
+type AutomationEditRequest = {
+  scope: 'thread' | 'project'
+  target: string
+  automation: UiThreadAutomation
+}
+const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
+const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
@@ -2128,6 +2144,19 @@ function onSelectAutomationInPanel(automationId: string): void {
   if (route.name !== 'automations') return
   if (routeAutomationId.value === automationId) return
   void router.replace({ name: 'automations', query: automationId ? { automationId } : {} })
+}
+
+async function onEditAutomationFromPanel(payload: AutomationEditRequest): Promise<void> {
+  if (isSidebarCollapsed.value) {
+    setSidebarCollapsed(false)
+    await nextTick()
+  }
+  sidebarThreadTreeRef.value?.openAutomationEditorFromPanel(payload)
+}
+
+function onAutomationsChanged(): void {
+  if (route.name !== 'automations') return
+  void automationsPanelRef.value?.loadAutomations()
 }
 
 async function onExportThread(threadId: string): Promise<void> {

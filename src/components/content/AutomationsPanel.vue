@@ -26,13 +26,16 @@
 
     <div v-else class="automations-layout">
       <section class="automations-list" aria-label="Automations">
-        <button
+        <div
           v-for="row in automationRows"
           :key="row.automation.id"
           class="automation-row"
           :class="{ 'is-selected': selectedAutomationId === row.automation.id }"
-          type="button"
+          role="button"
+          tabindex="0"
           @click="selectedAutomationId = row.automation.id"
+          @keydown.enter.prevent="selectedAutomationId = row.automation.id"
+          @keydown.space.prevent="selectedAutomationId = row.automation.id"
         >
           <span class="automation-row-icon" :data-status="row.automation.status">
             <IconTablerPlayerStopFilled v-if="row.automation.status === 'PAUSED'" />
@@ -46,7 +49,10 @@
             <span class="automation-row-status" :data-status="row.automation.status">{{ statusLabel(row.automation.status) }}</span>
             <span class="automation-row-schedule">{{ row.scheduleLabel }}</span>
           </span>
-        </button>
+          <button class="automation-edit-button" type="button" @click.stop="emitEditAutomation(row)">
+            Edit
+          </button>
+        </div>
       </section>
 
       <aside v-if="selectedRow" class="automation-detail" aria-label="Automation details">
@@ -59,6 +65,9 @@
             <h2>{{ selectedRow.automation.name }}</h2>
             <span>{{ selectedRow.scopeLabel }}</span>
           </div>
+          <button class="automation-detail-edit" type="button" @click="emitEditAutomation(selectedRow)">
+            Edit
+          </button>
         </div>
 
         <dl class="automation-detail-grid">
@@ -104,6 +113,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'select-automation', id: string): void
+  (event: 'edit-automation', payload: AutomationEditRequest): void
 }>()
 
 type AutomationRow = {
@@ -113,6 +123,12 @@ type AutomationRow = {
   targetLabel: string
   targetTitle: string
   scheduleLabel: string
+}
+
+type AutomationEditRequest = {
+  scope: 'thread' | 'project'
+  target: string
+  automation: UiThreadAutomation
 }
 
 const threadAutomations = ref<Record<string, UiThreadAutomation[]>>({})
@@ -213,6 +229,10 @@ onMounted(() => {
   void loadAutomations()
 })
 
+defineExpose({
+  loadAutomations,
+})
+
 async function loadAutomations(): Promise<void> {
   isLoading.value = true
   loadError.value = ''
@@ -232,6 +252,14 @@ async function loadAutomations(): Promise<void> {
 
 function statusLabel(status: UiThreadAutomationStatus): string {
   return status === 'PAUSED' ? 'Paused' : 'Active'
+}
+
+function emitEditAutomation(row: AutomationRow): void {
+  emit('edit-automation', {
+    scope: row.scope,
+    target: row.targetTitle,
+    automation: row.automation,
+  })
 }
 
 function describeAutomationSchedule(automation: UiThreadAutomation): string {
@@ -302,7 +330,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-row {
-  @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-100 px-3 py-3 text-left transition last:border-b-0 hover:bg-zinc-50;
+  @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-zinc-100 px-3 py-3 text-left transition last:border-b-0 hover:bg-zinc-50;
 }
 
 .automation-row.is-selected {
@@ -350,6 +378,15 @@ function getPathLeaf(path: string): string {
 
 .automation-row-schedule {
   @apply max-w-36 truncate text-xs text-zinc-500;
+}
+
+.automation-edit-button,
+.automation-detail-edit {
+  @apply h-7 shrink-0 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50;
+}
+
+.automation-detail-edit {
+  @apply ml-auto;
 }
 
 .automation-detail {
@@ -427,12 +464,16 @@ function getPathLeaf(path: string): string {
 }
 
 :global(:root.dark) .automations-refresh,
+:global(:root.dark) .automation-edit-button,
+:global(:root.dark) .automation-detail-edit,
 :global(:root.dark) .automations-list,
 :global(:root.dark) .automation-detail {
   @apply border-zinc-800 bg-zinc-950 text-zinc-100;
 }
 
 :global(:root.dark) .automations-refresh:hover,
+:global(:root.dark) .automation-edit-button:hover,
+:global(:root.dark) .automation-detail-edit:hover,
 :global(:root.dark) .automation-row:hover,
 :global(:root.dark) .automation-row.is-selected {
   @apply bg-zinc-900;
