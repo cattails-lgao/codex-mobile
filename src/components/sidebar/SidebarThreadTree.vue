@@ -58,6 +58,9 @@
                     :title="threadAutomationTooltip(thread.id)"
                   >
                     <IconTablerBolt class="thread-row-automation-icon" />
+                    <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
+                      {{ threadAutomationCount(thread.id) }}
+                    </span>
                   </span>
                   <span
                     v-if="thread.pendingRequestState"
@@ -221,6 +224,9 @@
                   :title="threadAutomationTooltip(thread.id)"
                 >
                   <IconTablerBolt class="thread-row-automation-icon" />
+                  <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
+                    {{ threadAutomationCount(thread.id) }}
+                  </span>
                 </span>
                 <span
                   v-if="thread.pendingRequestState"
@@ -299,6 +305,9 @@
                 :title="projectAutomationTooltip(group.projectName)"
               >
                 <IconTablerBolt class="thread-row-automation-icon" />
+                <span v-if="projectAutomationCount(group.projectName) > 1" class="thread-row-automation-count">
+                  {{ projectAutomationCount(group.projectName) }}
+                </span>
               </span>
             </span>
             <template #right>
@@ -417,6 +426,9 @@
                         :title="threadAutomationTooltip(thread.id)"
                       >
                         <IconTablerBolt class="thread-row-automation-icon" />
+                        <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
+                          {{ threadAutomationCount(thread.id) }}
+                        </span>
                       </span>
                       <span
                         v-if="thread.pendingRequestState"
@@ -543,6 +555,9 @@
                     :title="threadAutomationTooltip(thread.id)"
                   >
                     <IconTablerBolt class="thread-row-automation-icon" />
+                    <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
+                      {{ threadAutomationCount(thread.id) }}
+                    </span>
                   </span>
                   <span
                     v-if="thread.pendingRequestState"
@@ -1423,12 +1438,20 @@ function onSelect(threadId: string): void {
 }
 
 function threadHasAutomation(threadId: string): boolean {
-  return (automationByThreadId.value[threadId]?.length ?? 0) > 0
+  return threadAutomationCount(threadId) > 0
+}
+
+function threadAutomationCount(threadId: string): number {
+  return automationByThreadId.value[threadId]?.length ?? 0
 }
 
 function projectHasAutomation(projectName: string): boolean {
+  return projectAutomationCount(projectName) > 0
+}
+
+function projectAutomationCount(projectName: string): number {
   const key = getProjectAutomationKey(projectName)
-  return key ? (automationByProjectName.value[key]?.length ?? 0) > 0 : false
+  return key ? (automationByProjectName.value[key]?.length ?? 0) : 0
 }
 
 function automationTooltip(automations: UiThreadAutomation[]): string {
@@ -3051,11 +3074,15 @@ onBeforeUnmount(() => {
 }
 
 .thread-row-automation-chip {
-  @apply inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800;
+  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-amber-100 px-1 text-amber-800;
 }
 
 .thread-row-automation-icon {
-  @apply h-3 w-3;
+  @apply h-3 w-3 shrink-0;
+}
+
+.thread-row-automation-count {
+  @apply text-[10px] font-semibold leading-none tabular-nums;
 }
 
 .project-header-row:hover .project-icon-folder {
