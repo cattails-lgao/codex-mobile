@@ -28,14 +28,14 @@
       <section class="automations-list" aria-label="Automations">
         <div
           v-for="row in automationRows"
-          :key="row.automation.id"
+          :key="row.rowKey"
           class="automation-row"
-          :class="{ 'is-selected': selectedAutomationId === row.automation.id }"
+          :class="{ 'is-selected': selectedRowKey === row.rowKey }"
           role="button"
           tabindex="0"
-          @click="selectedAutomationId = row.automation.id"
-          @keydown.enter.prevent="selectedAutomationId = row.automation.id"
-          @keydown.space.prevent="selectedAutomationId = row.automation.id"
+          @click="selectAutomationRow(row)"
+          @keydown.enter.prevent="selectAutomationRow(row)"
+          @keydown.space.prevent="selectAutomationRow(row)"
         >
           <span class="automation-row-icon" :data-status="row.automation.status">
             <IconTablerPlayerStopFilled v-if="row.automation.status === 'PAUSED'" />
@@ -117,6 +117,7 @@ const emit = defineEmits<{
 }>()
 
 type AutomationRow = {
+  rowKey: string
   automation: UiThreadAutomation
   scope: 'thread' | 'project'
   scopeLabel: string
@@ -136,6 +137,7 @@ const projectAutomations = ref<Record<string, UiThreadAutomation[]>>({})
 const isLoading = ref(false)
 const loadError = ref('')
 const selectedAutomationId = ref(props.selectedAutomationId ?? '')
+const selectedRowKey = ref('')
 
 const threadTitleById = computed(() => {
   const map = new Map<string, string>()
@@ -162,6 +164,7 @@ const automationRows = computed<AutomationRow[]>(() => {
     const threadTitle = threadTitleById.value.get(threadId) ?? threadId
     for (const automation of automations) {
       rows.push({
+        rowKey: getAutomationRowKey('thread', threadId, automation.id),
         automation,
         scope: 'thread',
         scopeLabel: 'Heartbeat',
@@ -175,6 +178,7 @@ const automationRows = computed<AutomationRow[]>(() => {
     const projectLabel = projectLabelByCwd.value.get(cwd) ?? getPathLeaf(cwd)
     for (const automation of automations) {
       rows.push({
+        rowKey: getAutomationRowKey('project', cwd, automation.id),
         automation,
         scope: 'project',
         scopeLabel: 'Project',
@@ -201,13 +205,18 @@ const automationRows = computed<AutomationRow[]>(() => {
 const activeCount = computed(() => automationRows.value.filter((row) => row.automation.status === 'ACTIVE').length)
 const pausedCount = computed(() => automationRows.value.filter((row) => row.automation.status === 'PAUSED').length)
 const selectedRow = computed(() =>
-  automationRows.value.find((row) => row.automation.id === selectedAutomationId.value) ?? automationRows.value[0] ?? null,
+  automationRows.value.find((row) => row.rowKey === selectedRowKey.value)
+    ?? automationRows.value.find((row) => row.automation.id === selectedAutomationId.value)
+    ?? automationRows.value[0]
+    ?? null,
 )
 
 watch(
   () => props.selectedAutomationId,
   (id) => {
-    if (id) selectedAutomationId.value = id
+    if (!id) return
+    selectedAutomationId.value = id
+    selectedRowKey.value = resolveRowKeyForAutomationId(id)
   },
 )
 
@@ -218,10 +227,17 @@ watch(selectedAutomationId, (id) => {
 watch(automationRows, (rows) => {
   if (rows.length === 0) {
     selectedAutomationId.value = ''
+    selectedRowKey.value = ''
+    return
+  }
+  if (selectedRowKey.value && rows.some((row) => row.rowKey === selectedRowKey.value)) return
+  if (selectedAutomationId.value && rows.some((row) => row.automation.id === selectedAutomationId.value)) {
+    selectedRowKey.value = resolveRowKeyForAutomationId(selectedAutomationId.value)
     return
   }
   if (!selectedAutomationId.value || !rows.some((row) => row.automation.id === selectedAutomationId.value)) {
     selectedAutomationId.value = rows[0].automation.id
+    selectedRowKey.value = rows[0].rowKey
   }
 })
 
@@ -260,6 +276,19 @@ function emitEditAutomation(row: AutomationRow): void {
     target: row.targetTitle,
     automation: row.automation,
   })
+}
+
+function selectAutomationRow(row: AutomationRow): void {
+  selectedRowKey.value = row.rowKey
+  selectedAutomationId.value = row.automation.id
+}
+
+function resolveRowKeyForAutomationId(automationId: string): string {
+  return automationRows.value.find((row) => row.automation.id === automationId)?.rowKey ?? ''
+}
+
+function getAutomationRowKey(scope: 'thread' | 'project', target: string, automationId: string): string {
+  return `${scope}:${target}:${automationId}`
 }
 
 function describeAutomationSchedule(automation: UiThreadAutomation): string {
