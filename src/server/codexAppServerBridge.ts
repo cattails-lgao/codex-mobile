@@ -3249,6 +3249,7 @@ type ThreadAutomationRecord = {
   status: ThreadAutomationStatus
   targetThreadId: string | null
   cwds: string[]
+  extraTomlLines: string[]
   createdAtMs: number | null
   updatedAtMs: number | null
   nextRunAtMs: number | null
@@ -3289,13 +3290,32 @@ function serializeTomlStringArray(values: string[]): string {
 
 function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
   const values: Record<string, string> = {}
+  const extraTomlLines: string[] = []
+  const knownKeys = new Set([
+    'version',
+    'id',
+    'kind',
+    'name',
+    'prompt',
+    'status',
+    'rrule',
+    'target_thread_id',
+    'cwds',
+    'created_at',
+    'updated_at',
+  ])
   for (const line of raw.split(/\r?\n/u)) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
     const separatorIndex = trimmed.indexOf('=')
     const key = trimmed.slice(0, separatorIndex).trim()
     const value = trimmed.slice(separatorIndex + 1).trim()
-    if (key) values[key] = value
+    if (!key) continue
+    if (knownKeys.has(key)) {
+      values[key] = value
+    } else {
+      extraTomlLines.push(trimmed)
+    }
   }
 
   const id = readTomlString(values.id ?? '')
@@ -3322,6 +3342,7 @@ function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
     status: statusValue,
     targetThreadId,
     cwds,
+    extraTomlLines,
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : null,
     updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : null,
     nextRunAtMs: null,
@@ -3344,6 +3365,7 @@ function serializeAutomationToml(record: ThreadAutomationRecord): string {
   if (record.cwds.length > 0) {
     lines.push(`cwds = ${serializeTomlStringArray(record.cwds)}`)
   }
+  lines.push(...record.extraTomlLines)
   lines.push(
     `created_at = ${String(record.createdAtMs ?? Date.now())}`,
     `updated_at = ${String(record.updatedAtMs ?? Date.now())}`,
@@ -3449,6 +3471,7 @@ async function writeThreadHeartbeatAutomation(input: {
     status: input.status,
     targetThreadId: threadId,
     cwds: [],
+    extraTomlLines: existing?.extraTomlLines ?? [],
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
     nextRunAtMs: null,
@@ -3559,6 +3582,7 @@ async function writeProjectCronAutomation(input: {
     status: input.status,
     targetThreadId: null,
     cwds: Array.from(new Set([...(existing?.cwds ?? []), projectName])),
+    extraTomlLines: existing?.extraTomlLines ?? [],
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
     nextRunAtMs: null,
