@@ -3052,12 +3052,49 @@ function toHeaderGitResetHistoryRef(branchName: string, commitSha: string): stri
 }
 
 const HEADER_GIT_RESET_HISTORY_REF_LIMIT = 25
+const HEADER_GIT_UNTRACKED_BACKUP_DIR = '.codex/untracked-backups'
 
 async function assertLocalGitBranch(repoRoot: string, branchName: string): Promise<void> {
   await runCommandCapture('git', ['show-ref', '--verify', `refs/heads/${branchName}`], { cwd: repoRoot })
 }
 
+function splitGitPathList(raw: string): string[] {
+  return raw
+    .split('\0')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function isSafeGitRelativePath(filePath: string): boolean {
+  return Boolean(filePath) && !isAbsolute(filePath) && !filePath.split('/').includes('..')
+}
+
+function resolveGitRelativePath(repoRoot: string, filePath: string): string {
+  return join(repoRoot, ...filePath.split('/'))
+}
+
+async function preserveUntrackedFilesForGitTarget(repoRoot: string, targetRef: string): Promise<string[]> {
+  const [untrackedRaw, targetTreeRaw] = await Promise.all([
+    runCommandCapture('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: repoRoot }),
+    runCommandCapture('git', ['ls-tree', '-r', '--name-only', '-z', `${targetRef}^{tree}`], { cwd: repoRoot }),
+  ])
+  const targetPaths = new Set(splitGitPathList(targetTreeRaw))
+  const conflictingUntrackedPaths = splitGitPathList(untrackedRaw)
+    .filter((filePath) => targetPaths.has(filePath) && isSafeGitRelativePath(filePath))
+  if (conflictingUntrackedPaths.length === 0) return []
+
+  const backupRoot = join(repoRoot, HEADER_GIT_UNTRACKED_BACKUP_DIR, new Date().toISOString().replace(/[:.]/g, '-'))
+  for (const filePath of conflictingUntrackedPaths) {
+    const sourcePath = resolveGitRelativePath(repoRoot, filePath)
+    const backupPath = join(backupRoot, ...filePath.split('/'))
+    await mkdir(dirname(backupPath), { recursive: true })
+    await rename(sourcePath, backupPath)
+  }
+  return conflictingUntrackedPaths
+}
+
 async function checkoutGitBranchWithWorktreeRecovery(repoRoot: string, branchName: string): Promise<void> {
+  await preserveUntrackedFilesForGitTarget(repoRoot, branchName)
   try {
     await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
   } catch (checkoutError) {
@@ -7323,6 +7360,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'GET' && url.pathname === '/codex-api/git/branch-commits') {
         const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
         const branch = (url.searchParams.get('branch') ?? '').trim()
+        const includeResetHistory = url.searchParams.get('includeResetHistory') !== 'false'
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
           return
@@ -7335,20 +7373,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await runCommandCapture('git', ['rev-parse', '--verify', `${branch}^{commit}`], { cwd: gitRoot })
-          const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
-          const resetHistoryRefsRaw = await runCommandCapture(
-            'git',
-            ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
-            { cwd: gitRoot },
-          ).catch(() => '')
-          const resetHistoryRefs = resetHistoryRefsRaw
-            .split('\n')
-            .map((entry) => entry.trim())
-            .filter(Boolean)
-            .slice(0, HEADER_GIT_RESET_HISTORY_REF_LIMIT)
+          let resetHistoryRefs: string[] = []
+          if (includeResetHistory) {
+            const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
+            const resetHistoryRefsRaw = await runCommandCapture(
+              'git',
+              ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
+              { cwd: gitRoot },
+            ).catch(() => '')
+            resetHistoryRefs = resetHistoryRefsRaw
+              .split('\n')
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+              .slice(0, HEADER_GIT_RESET_HISTORY_REF_LIMIT)
+          }
           const output = await runCommandCapture(
             'git',
-            ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
+            ['log', '-n', '50', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
             { cwd: gitRoot },
           )
           const commits = output.split('\n').flatMap((line) => {
@@ -7402,6 +7443,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
           await runCommand('git', ['update-ref', toHeaderGitResetHistoryRef(branch, previousTip.trim()), previousTip.trim()], { cwd: gitRoot })
           await pruneHeaderGitResetHistoryRefs(gitRoot, branch)
+          await preserveUntrackedFilesForGitTarget(gitRoot, targetSha.trim())
           await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {

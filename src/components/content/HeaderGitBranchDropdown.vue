@@ -24,7 +24,7 @@
         <div class="header-git-state">
           <span class="header-git-state-label">{{ detached ? 'Detached HEAD' : 'Current branch' }}</span>
           <span class="header-git-state-value">{{ displayLabel }}</span>
-          <span v-if="detachedCommitMeta" class="header-git-state-meta">{{ detachedCommitMeta }}</span>
+          <span v-if="currentCommitSummary" class="header-git-state-meta">{{ currentCommitSummary }}</span>
         </div>
 
         <div v-if="statusMessage" class="header-git-status" :class="{ 'is-error': statusKind === 'error' }">
@@ -32,76 +32,91 @@
           <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">Send feedback</a>
         </div>
 
-        <div class="header-git-search-wrap">
-          <input
-            ref="searchInputRef"
-            v-model="searchQuery"
-            class="header-git-search"
-            type="text"
-            placeholder="Search branches..."
-            @keydown.esc.prevent="onEscapeSearch"
-          />
-        </div>
-
-        <ul class="header-git-branches" role="listbox">
-          <li v-for="branch in filteredBranches" :key="branch.value" class="header-git-branch-item">
-            <div class="header-git-branch-row">
-              <button
-                class="header-git-branch-expand"
-                type="button"
-                :aria-label="expandedBranch === branch.value ? 'Hide commits' : 'Show commits'"
-                @click="toggleBranchCommits(branch.value)"
-              >
-                <IconTablerChevronRight class="header-git-expand-icon" :class="{ 'is-expanded': expandedBranch === branch.value }" />
-              </button>
-              <button
-                class="header-git-branch-button"
-                :class="{ 'is-current': branch.value === currentBranch }"
-                type="button"
-                :disabled="busy"
-                @click="emit('checkoutBranch', branch.value)"
-              >
-                <span class="header-git-branch-name">{{ branch.label }}</span>
-                <span v-if="branch.value === currentBranch" class="header-git-branch-meta">current</span>
-                <span v-else-if="branch.isRemote" class="header-git-branch-meta">remote</span>
-              </button>
+        <div class="header-git-columns">
+          <section class="header-git-commit-panel" aria-label="Branch commits">
+            <div class="header-git-search-wrap">
+              <input
+                v-model="commitSearchQuery"
+                class="header-git-search"
+                type="text"
+                placeholder="Search commits..."
+                @keydown.esc.prevent="onEscapeCommitSearch"
+              />
             </div>
-
-            <div v-if="expandedBranch === branch.value" class="header-git-commits">
-              <div v-if="commitsLoadingFor === branch.value" class="header-git-commits-empty">Loading commits...</div>
-              <div v-else-if="commitsError" class="header-git-commits-empty is-error">
-                <span>{{ commitsError }}</span>
-                <a class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, commitsError)">Send feedback</a>
-              </div>
-              <button
-                v-for="commit in commitsByBranch[branch.value] || []"
-                :key="commit.sha"
-                class="header-git-commit"
-                :class="{ 'is-current': isCurrentCommit(commit) }"
-                type="button"
-                :disabled="busy || branch.isRemote"
-                :title="commitActionTitle(branch, commit)"
-                @click="onSelectCommit(branch, commit)"
-              >
-                <span class="header-git-commit-top">
-                  <code>{{ commit.shortSha }}</code>
-                  <span class="header-git-commit-meta">
-                    <span v-if="isCurrentCommit(commit)" class="header-git-branch-meta">current</span>
-                    <span>{{ commit.date }}</span>
+            <label class="header-git-toggle-row">
+              <input v-model="showResetHistoryRefs" type="checkbox" @change="reloadSelectedBranchCommits" />
+              <span>Reset-history refs</span>
+            </label>
+            <div class="header-git-commit-list">
+              <div v-if="!selectedBranch" class="header-git-commits-empty">Select a branch.</div>
+              <div v-else-if="commitsLoadingFor === selectedBranch" class="header-git-commits-empty">Loading commits...</div>
+              <div v-else-if="commitsError" class="header-git-commits-empty is-error">{{ commitsError }}</div>
+              <template v-else>
+                <button
+                  v-for="commit in filteredSelectedBranchCommits"
+                  :key="commit.sha"
+                  class="header-git-commit"
+                  :class="{ 'is-current': isCurrentCommit(commit) }"
+                  type="button"
+                  :disabled="busy || selectedBranchIsRemote"
+                  :title="selectedBranchCommitActionTitle(commit)"
+                  @click="onSelectCommit(commit)"
+                >
+                  <span class="header-git-commit-top">
+                    <code>{{ commit.shortSha }}</code>
+                    <span class="header-git-commit-meta">
+                      <span v-if="isCurrentCommit(commit)" class="header-git-branch-meta">current</span>
+                      <span>{{ commit.date }}</span>
+                    </span>
                   </span>
-                </span>
-                <span class="header-git-commit-subject">{{ commit.subject }}</span>
-              </button>
-              <div
-                v-if="commitsLoadingFor !== branch.value && !commitsError && (commitsByBranch[branch.value] || []).length === 0"
-                class="header-git-commits-empty"
-              >
-                No commits found.
-              </div>
+                  <span class="header-git-commit-subject">{{ commit.subject }}</span>
+                </button>
+                <div v-if="filteredSelectedBranchCommits.length === 0" class="header-git-commits-empty">No commits found.</div>
+              </template>
             </div>
-          </li>
-          <li v-if="filteredBranches.length === 0" class="header-git-empty">No branches found.</li>
-        </ul>
+          </section>
+
+          <section class="header-git-branch-panel" aria-label="Branches">
+            <div class="header-git-search-wrap">
+              <input
+                ref="searchInputRef"
+                v-model="searchQuery"
+                class="header-git-search"
+                type="text"
+                placeholder="Search branches..."
+                @keydown.esc.prevent="onEscapeSearch"
+              />
+            </div>
+
+            <ul class="header-git-branches" role="listbox">
+              <li v-for="branch in filteredBranches" :key="branch.value" class="header-git-branch-item">
+                <div class="header-git-branch-row">
+                  <button
+                    class="header-git-branch-button"
+                    :class="{ 'is-current': branch.value === currentBranch, 'is-selected': branch.value === selectedBranch }"
+                    type="button"
+                    :disabled="busy"
+                    @click="selectBranch(branch.value)"
+                  >
+                    <span class="header-git-branch-name">{{ branch.label }}</span>
+                    <span v-if="branch.value === currentBranch" class="header-git-branch-meta">current</span>
+                    <span v-else-if="branch.isRemote" class="header-git-branch-meta">remote</span>
+                  </button>
+                  <button
+                    v-if="branch.value === selectedBranch && branch.value !== currentBranch"
+                    class="header-git-branch-checkout"
+                    type="button"
+                    :disabled="busy"
+                    @click="emit('checkoutBranch', branch.value)"
+                  >
+                    Checkout
+                  </button>
+                </div>
+              </li>
+              <li v-if="filteredBranches.length === 0" class="header-git-empty">No branches found.</li>
+            </ul>
+          </section>
+        </div>
       </div>
     </div>
   </div>
@@ -111,7 +126,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { GitCommitOption, WorktreeBranchOption } from '../../api/codexGateway'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
-import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
@@ -138,14 +152,17 @@ const emit = defineEmits<{
   toggleReview: []
   checkoutBranch: [branch: string]
   resetBranchToCommit: [payload: { branch: string; sha: string }]
-  loadCommits: [branch: string]
+  loadCommits: [payload: { branch: string; includeResetHistory: boolean }]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const isOpen = ref(false)
 const searchQuery = ref('')
-const expandedBranch = ref('')
+const commitSearchQuery = ref('')
+const selectedBranch = ref('')
+const lastCurrentBranch = ref('')
+const showResetHistoryRefs = ref(true)
 const showReview = computed(() => props.showReview !== false)
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
 const feedbackMailto = feedbackMailtoBase()
@@ -164,9 +181,11 @@ const displayLabel = computed(() => {
   if (props.headSha) return `Detached ${props.headSha}`
   return props.loading ? 'Loading branch...' : 'Detached HEAD'
 })
-const detachedCommitMeta = computed(() => {
-  if (!props.detached) return ''
-  return [props.headSha, props.headDate].filter(Boolean).join(' · ')
+const currentCommitSummary = computed(() => {
+  const details = [props.headSha, props.headDate].filter(Boolean).join(' · ')
+  const subject = props.headSubject?.trim() ?? ''
+  if (subject && details) return `${subject} (${details})`
+  return subject || details
 })
 const triggerLabel = computed(() => `Git branch: ${displayLabel.value}`)
 const disabled = computed(() => props.loading && props.branches.length === 0)
@@ -175,9 +194,29 @@ const statusMessage = computed(() => props.error || (props.dirty ? 'Tracked chan
 const statusKind = computed(() => props.error ? 'error' : 'info')
 const filteredBranches = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  const branches = props.branches
+  const branches = props.branches.filter((branch) => branch.isRemote !== true)
   if (!query) return branches
   return branches.filter((branch) => branch.label.toLowerCase().includes(query) || branch.value.toLowerCase().includes(query))
+})
+const selectedBranchOption = computed(() => props.branches.find((branch) => branch.value === selectedBranch.value) ?? null)
+const selectedBranchIsRemote = computed(() => selectedBranchOption.value?.isRemote === true)
+const selectedBranchCommitsKey = computed(() => {
+  if (!selectedBranch.value) return ''
+  return `${selectedBranch.value}\u0000${showResetHistoryRefs.value ? 'with-reset-history' : 'without-reset-history'}`
+})
+const selectedBranchCommits = computed(() => selectedBranchCommitsKey.value ? props.commitsByBranch[selectedBranchCommitsKey.value] || [] : [])
+const filteredSelectedBranchCommits = computed(() => {
+  const query = commitSearchQuery.value.trim().toLowerCase()
+  const commits = selectedBranchCommits.value
+  if (!query) return commits
+  return commits.filter((commit) => {
+    return (
+      commit.sha.toLowerCase().includes(query) ||
+      commit.shortSha.toLowerCase().includes(query) ||
+      commit.subject.toLowerCase().includes(query) ||
+      commit.date.toLowerCase().includes(query)
+    )
+  })
 })
 
 function toggleOpen(): void {
@@ -185,9 +224,14 @@ function toggleOpen(): void {
   isOpen.value = !isOpen.value
 }
 
-function toggleBranchCommits(branch: string): void {
-  expandedBranch.value = expandedBranch.value === branch ? '' : branch
-  if (expandedBranch.value) emit('loadCommits', branch)
+function selectBranch(branch: string): void {
+  selectedBranch.value = branch
+  emit('loadCommits', { branch, includeResetHistory: showResetHistoryRefs.value })
+}
+
+function reloadSelectedBranchCommits(): void {
+  if (!selectedBranch.value) return
+  emit('loadCommits', { branch: selectedBranch.value, includeResetHistory: showResetHistoryRefs.value })
 }
 
 function isCurrentCommit(commit: GitCommitOption): boolean {
@@ -196,19 +240,27 @@ function isCurrentCommit(commit: GitCommitOption): boolean {
   return commit.sha === headSha || commit.shortSha === headSha || commit.sha.startsWith(headSha)
 }
 
-function commitActionTitle(branch: WorktreeBranchOption, commit: GitCommitOption): string {
-  if (branch.isRemote) return 'Remote branches cannot be reset from this menu'
-  return `Reset ${branch.value} to ${commit.shortSha}`
+function selectedBranchCommitActionTitle(commit: GitCommitOption): string {
+  if (selectedBranchIsRemote.value) return 'Remote branches cannot be reset from this menu'
+  return `Reset ${selectedBranch.value} to ${commit.shortSha}`
 }
 
-function onSelectCommit(branch: WorktreeBranchOption, commit: GitCommitOption): void {
-  if (branch.isRemote) return
-  emit('resetBranchToCommit', { branch: branch.value, sha: commit.sha })
+function onSelectCommit(commit: GitCommitOption): void {
+  if (!selectedBranch.value || selectedBranchIsRemote.value) return
+  emit('resetBranchToCommit', { branch: selectedBranch.value, sha: commit.sha })
 }
 
 function onEscapeSearch(): void {
   if (searchQuery.value) {
     searchQuery.value = ''
+    return
+  }
+  isOpen.value = false
+}
+
+function onEscapeCommitSearch(): void {
+  if (commitSearchQuery.value) {
+    commitSearchQuery.value = ''
     return
   }
   isOpen.value = false
@@ -221,11 +273,49 @@ function onDocumentPointerDown(event: PointerEvent): void {
   if (!root || !(target instanceof Node) || root.contains(target)) return
   isOpen.value = false
   searchQuery.value = ''
+  commitSearchQuery.value = ''
+}
+
+function preferredBranch(): string {
+  const currentBranch = props.currentBranch?.trim()
+  if (currentBranch) return currentBranch
+  return props.branches[0]?.value ?? ''
+}
+
+function ensureSelectedBranchCommits(): void {
+  const targetBranch = selectedBranch.value || preferredBranch()
+  if (!targetBranch) return
+  selectedBranch.value = targetBranch
+  emit('loadCommits', { branch: targetBranch, includeResetHistory: showResetHistoryRefs.value })
 }
 
 watch(isOpen, (open) => {
-  if (open) void nextTick(() => searchInputRef.value?.focus())
+  if (!open) return
+  ensureSelectedBranchCommits()
+  void nextTick(() => searchInputRef.value?.focus())
 })
+
+watch(
+  () => [props.currentBranch, props.branches.map((branch) => branch.value).join('\n')] as const,
+  () => {
+    const targetBranch = preferredBranch()
+    if (!targetBranch) {
+      selectedBranch.value = ''
+      lastCurrentBranch.value = ''
+      return
+    }
+    const currentBranch = props.currentBranch?.trim() ?? ''
+    const currentBranchChanged = currentBranch !== lastCurrentBranch.value
+    lastCurrentBranch.value = currentBranch
+    if (currentBranchChanged || !selectedBranch.value || !props.branches.some((branch) => branch.value === selectedBranch.value)) {
+      selectedBranch.value = targetBranch
+    }
+    if (isOpen.value && selectedBranch.value) {
+      emit('loadCommits', { branch: selectedBranch.value, includeResetHistory: showResetHistoryRefs.value })
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => window.addEventListener('pointerdown', onDocumentPointerDown))
 onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointerDown))
@@ -265,11 +355,12 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-menu {
-  @apply w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply w-[42rem] max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .header-git-review-row,
 .header-git-branch-button,
+.header-git-branch-checkout,
 .header-git-commit {
   @apply flex w-full border-0 bg-transparent text-left transition;
 }
@@ -310,6 +401,27 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-zinc-400;
 }
 
+.header-git-toggle-row {
+  @apply mx-1 mb-1 flex items-center gap-2 rounded-md px-1 py-1 text-xs text-zinc-500;
+}
+
+.header-git-toggle-row input {
+  @apply h-3.5 w-3.5 shrink-0;
+}
+
+.header-git-columns {
+  @apply grid min-h-80 grid-cols-[minmax(0,1.15fr)_minmax(13rem,0.85fr)] gap-1;
+}
+
+.header-git-commit-panel,
+.header-git-branch-panel {
+  @apply min-w-0 rounded-lg border border-zinc-100 bg-zinc-50 p-1;
+}
+
+.header-git-commit-list {
+  @apply max-h-80 overflow-y-auto;
+}
+
 .header-git-branches {
   @apply m-0 max-h-80 list-none overflow-y-auto p-0;
 }
@@ -322,24 +434,21 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply flex items-stretch gap-1;
 }
 
-.header-git-branch-expand {
-  @apply flex w-7 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-100;
-}
-
-.header-git-expand-icon {
-  @apply h-4 w-4 transition-transform;
-}
-
-.header-git-expand-icon.is-expanded {
-  @apply rotate-90;
-}
-
 .header-git-branch-button {
   @apply min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 disabled:cursor-wait;
 }
 
-.header-git-branch-button.is-current {
+.header-git-branch-button.is-current,
+.header-git-branch-button.is-selected {
   @apply bg-zinc-100 text-zinc-950;
+}
+
+.header-git-branch-button.is-selected {
+  @apply ring-1 ring-zinc-300;
+}
+
+.header-git-branch-checkout {
+  @apply w-auto shrink-0 items-center rounded-lg px-2 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-wait;
 }
 
 .header-git-branch-name,
@@ -352,7 +461,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-commits {
-  @apply ml-8 mr-1 mb-1 rounded-lg border border-zinc-100 bg-zinc-50 p-1;
+  @apply rounded-lg border border-zinc-100 bg-zinc-50 p-1;
 }
 
 .header-git-commit {
@@ -386,5 +495,16 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 
 .header-git-feedback {
   @apply shrink-0 rounded-full border border-red-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200;
+}
+
+@media (max-width: 640px) {
+  .header-git-columns {
+    @apply grid-cols-1;
+  }
+
+  .header-git-commit-list,
+  .header-git-branches {
+    @apply max-h-56;
+  }
 }
 </style>

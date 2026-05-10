@@ -1497,6 +1497,11 @@ const threadBranchCommitsLoadingFor = ref('')
 const threadBranchCommitsError = ref('')
 const isLoadingThreadBranches = ref(false)
 const isSwitchingThreadBranch = ref(false)
+
+function toThreadBranchCommitsKey(branch: string, includeResetHistory: boolean): string {
+  return `${branch}\u0000${includeResetHistory ? 'with-reset-history' : 'without-reset-history'}`
+}
+
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
@@ -3225,6 +3230,8 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = state.headDate
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
+    const defaultBranchForCommits = state.currentBranch?.trim() || state.options[0]?.value?.trim() || ''
+    if (defaultBranchForCommits) loadThreadBranchCommits({ branch: defaultBranchForCommits, includeResetHistory: true })
   } catch {
     if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = []
@@ -3305,20 +3312,22 @@ function onResetContentHeaderBranchToCommit(payload: { branch: string; sha: stri
     })
 }
 
-function loadThreadBranchCommits(branch: string): void {
-  const targetBranch = branch.trim()
+function loadThreadBranchCommits(payload: string | { branch: string; includeResetHistory?: boolean }): void {
+  const targetBranch = (typeof payload === 'string' ? payload : payload.branch).trim()
+  const includeResetHistory = typeof payload === 'string' ? true : payload.includeResetHistory !== false
   const cwd = composerCwd.value.trim()
   if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
-  if (threadBranchCommitsByBranch.value[targetBranch]) return
+  const cacheKey = toThreadBranchCommitsKey(targetBranch, includeResetHistory)
+  if (threadBranchCommitsByBranch.value[cacheKey]) return
   const requestId = ++threadBranchCommitsRequestId
   threadBranchCommitsLoadingFor.value = targetBranch
   threadBranchCommitsError.value = ''
-  void getGitBranchCommits(cwd, targetBranch)
+  void getGitBranchCommits(cwd, targetBranch, { includeResetHistory })
     .then((commits) => {
       if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
       threadBranchCommitsByBranch.value = {
         ...threadBranchCommitsByBranch.value,
-        [targetBranch]: commits,
+        [cacheKey]: commits,
       }
     })
     .catch((error: unknown) => {

@@ -1019,7 +1019,7 @@ Skills Sync skips unchanged manifest writes and does not fail parent commits whe
 ### Header Git branch dropdown with commit reset
 
 #### Feature/Change Name
-Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, branch reset-to-commit, and reset-history commit preservation.
+Thread header Git dropdown replaces the simple review action with a two-column commits/branches picker, Review access, safe branch switching, branch reset-to-commit, and reset-history commit preservation.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
@@ -1031,27 +1031,37 @@ Thread header Git dropdown replaces the simple review action with branch search,
 #### Steps
 1. In light theme, open the Git dropdown in the thread header.
 2. Confirm the trigger shows the current branch, or the detached commit subject if the repository is already detached.
-3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
-4. Type part of a branch name in search and confirm the branch list filters.
-5. Select a different branch with a clean worktree and confirm the header updates to that branch.
-6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
-7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
-8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
-9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
-10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
-11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
-12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
-13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
-14. Switch to dark theme and repeat steps 1, 2, 4, 6, 7, 10, 12, and 13.
+3. Confirm the menu shows commits in the left column and branches in the right column.
+4. Confirm the left column defaults to the current branch and shows no more than 50 recent commits with short SHA, subject, and date.
+5. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
+6. Type part of a commit subject or short SHA in the left commit search and confirm the commit list filters.
+7. Turn off `Reset-history refs` and confirm the commit list reloads without saved reset-history refs.
+8. Turn `Reset-history refs` back on and confirm saved reset-history commits reappear when available.
+9. Type part of a branch name in search and confirm the right branch list filters.
+10. Click a different branch row and confirm the left commit list changes to that branch without immediately switching checkout.
+11. Use the branch row `Checkout` action with a clean worktree and confirm the header updates to that branch.
+12. Confirm remote branches are hidden from the branch list.
+13. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+14. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
+15. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+16. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+17. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+18. Create only an untracked file whose path does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the untracked file remains in place.
+19. Create only an untracked file whose path exists in the target commit, try to reset to that target, and confirm the reset proceeds and the untracked file is moved under `.codex/untracked-backups/` instead of being overwritten.
+20. Switch to dark theme and repeat steps 1, 2, 3, 4, 6, 7, 8, 9, 12, 15, 17, 18, and 19.
 
 #### Expected Results
-- The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
-- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
+- The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list.
+- The current branch commit list loads by default and is capped at 50 commits.
+- The commit list can be searched by SHA, subject, or date without changing the selected branch.
+- Reset-history refs can be shown or hidden from the commit list without changing the selected branch.
+- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are preserved and allowed.
 - Commit selection resets the local branch to that commit instead of detaching HEAD.
-- Remote branch commit rows are inspectable but cannot trigger local branch reset.
+- Remote branches are hidden from the branch list.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
-- The selected branch HEAD commit is marked `current` in expanded commit lists.
+- Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset.
+- The selected branch HEAD commit is marked `current` in the commit list.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 

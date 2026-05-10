@@ -2732,11 +2732,15 @@ export async function checkoutGitBranch(cwd: string, branch: string): Promise<st
   return typeof branchName === 'string' && branchName.trim() ? branchName.trim() : null
 }
 
-export async function getGitBranchCommits(cwd: string, branch: string): Promise<GitCommitOption[]> {
+export async function getGitBranchCommits(cwd: string, branch: string, options: { includeResetHistory?: boolean } = {}): Promise<GitCommitOption[]> {
   const normalizedCwd = cwd.trim()
   const normalizedBranch = branch.trim()
   if (!normalizedCwd || !normalizedBranch) return []
-  const query = new URLSearchParams({ cwd: normalizedCwd, branch: normalizedBranch })
+  const query = new URLSearchParams({
+    cwd: normalizedCwd,
+    branch: normalizedBranch,
+    includeResetHistory: options.includeResetHistory === false ? 'false' : 'true',
+  })
   const response = await fetch(`/codex-api/git/branch-commits?${query.toString()}`)
   const payload = (await response.json()) as { data?: unknown; error?: string }
   if (!response.ok) {

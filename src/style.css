@@ -933,17 +933,23 @@
 
 :root.dark .header-git-review-row,
 :root.dark .header-git-branch-button,
+:root.dark .header-git-branch-checkout,
 :root.dark .header-git-commit {
   @apply text-zinc-200;
 }
 
 :root.dark .header-git-review-row:hover,
-:root.dark .header-git-branch-expand:hover,
 :root.dark .header-git-branch-button:hover,
+:root.dark .header-git-branch-checkout:hover,
 :root.dark .header-git-commit:hover,
 :root.dark .header-git-commit.is-current,
+:root.dark .header-git-branch-button.is-selected,
 :root.dark .header-git-branch-button.is-current {
   @apply bg-zinc-800;
+}
+
+:root.dark .header-git-branch-button.is-selected {
+  @apply ring-zinc-600;
 }
 
 :root.dark .header-git-commit.is-current {
@@ -951,6 +957,8 @@
 }
 
 :root.dark .header-git-state,
+:root.dark .header-git-commit-panel,
+:root.dark .header-git-branch-panel,
 :root.dark .header-git-commits {
   @apply border-zinc-700 bg-zinc-800;
 }
@@ -961,6 +969,7 @@
 
 :root.dark .header-git-state-label,
 :root.dark .header-git-state-meta,
+:root.dark .header-git-toggle-row,
 :root.dark .header-git-branch-meta,
 :root.dark .header-git-commit-top,
 :root.dark .header-git-empty,
