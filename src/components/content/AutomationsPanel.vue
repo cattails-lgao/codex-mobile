@@ -169,9 +169,12 @@ const automationRows = computed<AutomationRow[]>(() => {
     }
   }
   return rows.sort((first, second) => {
-    const firstNext = first.automation.status === 'PAUSED' ? Number.POSITIVE_INFINITY : first.automation.nextRunAtMs ?? Number.POSITIVE_INFINITY
-    const secondNext = second.automation.status === 'PAUSED' ? Number.POSITIVE_INFINITY : second.automation.nextRunAtMs ?? Number.POSITIVE_INFINITY
-    if (firstNext !== secondNext) return firstNext - secondNext
+    const firstCreated = first.automation.createdAtMs ?? 0
+    const secondCreated = second.automation.createdAtMs ?? 0
+    if (firstCreated !== secondCreated) return secondCreated - firstCreated
+    const firstUpdated = first.automation.updatedAtMs ?? 0
+    const secondUpdated = second.automation.updatedAtMs ?? 0
+    if (firstUpdated !== secondUpdated) return secondUpdated - firstUpdated
     return first.automation.name.localeCompare(second.automation.name)
   })
 })
