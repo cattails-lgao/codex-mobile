@@ -10,8 +10,7 @@
         <button
           class="automations-create"
           type="button"
-          :disabled="!selectedRow"
-          :title="selectedRow ? `Create automation for ${selectedRow.targetLabel}` : 'Select an automation target first'"
+          title="Create a new automation"
           @click="emitCreateAutomation"
         >
           New automation
@@ -125,7 +124,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'select-automation', id: string): void
   (event: 'edit-automation', payload: AutomationEditRequest): void
-  (event: 'create-automation', payload: AutomationCreateRequest): void
+  (event: 'create-automation'): void
 }>()
 
 type AutomationRow = {
@@ -142,11 +141,6 @@ type AutomationEditRequest = {
   scope: 'thread' | 'project'
   target: string
   automation: UiThreadAutomation
-}
-
-type AutomationCreateRequest = {
-  scope: 'thread' | 'project'
-  target: string
 }
 
 const threadAutomations = ref<Record<string, UiThreadAutomation[]>>({})
@@ -296,12 +290,7 @@ function emitEditAutomation(row: AutomationRow): void {
 }
 
 function emitCreateAutomation(): void {
-  const row = selectedRow.value
-  if (!row) return
-  emit('create-automation', {
-    scope: row.scope,
-    target: row.targetTitle,
-  })
+  emit('create-automation')
 }
 
 function selectAutomationRow(row: AutomationRow): void {

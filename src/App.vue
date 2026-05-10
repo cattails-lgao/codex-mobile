@@ -1367,7 +1367,7 @@ const router = useRouter()
 const { isMobile } = useMobile()
 type SidebarThreadTreeExposed = {
   openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
-  openAutomationCreatorFromPanel: (payload: AutomationCreateRequest) => void
+  openAutomationCreatorFromPanel: () => void
 }
 type AutomationsPanelExposed = {
   loadAutomations: () => Promise<void>
@@ -1376,10 +1376,6 @@ type AutomationEditRequest = {
   scope: 'thread' | 'project'
   target: string
   automation: UiThreadAutomation
-}
-type AutomationCreateRequest = {
-  scope: 'thread' | 'project'
-  target: string
 }
 const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
 const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
@@ -2160,12 +2156,12 @@ async function onEditAutomationFromPanel(payload: AutomationEditRequest): Promis
   sidebarThreadTreeRef.value?.openAutomationEditorFromPanel(payload)
 }
 
-async function onCreateAutomationFromPanel(payload: AutomationCreateRequest): Promise<void> {
+async function onCreateAutomationFromPanel(): Promise<void> {
   if (isSidebarCollapsed.value) {
     setSidebarCollapsed(false)
     await nextTick()
   }
-  sidebarThreadTreeRef.value?.openAutomationCreatorFromPanel(payload)
+  sidebarThreadTreeRef.value?.openAutomationCreatorFromPanel()
 }
 
 function onAutomationsChanged(): void {

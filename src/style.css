@@ -465,6 +465,22 @@
   @apply border-zinc-600 bg-zinc-700 text-zinc-100;
 }
 
+:root.dark .automation-target-picker {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .automation-target-mode-group {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .automation-target-mode {
+  @apply text-zinc-400 hover:bg-zinc-700;
+}
+
+:root.dark .automation-target-mode.is-active {
+  @apply bg-zinc-200 text-zinc-900 hover:bg-zinc-200;
+}
+
 :root.dark .automation-thread-list {
   @apply border-zinc-700 bg-zinc-900;
 }

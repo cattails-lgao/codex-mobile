@@ -684,6 +684,54 @@
           <h3 class="rename-thread-title">{{ automationDialogMode === 'edit' ? 'Edit automation' : 'Add automation' }}</h3>
           <p class="rename-thread-subtitle">{{ automationDialogSubtitle }}</p>
 
+          <div v-if="automationTargetPickerVisible && automationDialogMode === 'create'" class="automation-target-picker">
+            <span class="automation-thread-label">Target</span>
+            <div class="automation-target-mode-group" role="radiogroup" aria-label="Automation target type">
+              <button
+                class="automation-target-mode"
+                :class="{ 'is-active': automationTargetMode === 'new-chat' }"
+                type="button"
+                @click="setAutomationTargetMode('new-chat')"
+              >
+                New chat
+              </button>
+              <button
+                class="automation-target-mode"
+                :class="{ 'is-active': automationTargetMode === 'thread' }"
+                type="button"
+                @click="setAutomationTargetMode('thread')"
+              >
+                Existing chat
+              </button>
+              <button
+                class="automation-target-mode"
+                :class="{ 'is-active': automationTargetMode === 'project' }"
+                type="button"
+                @click="setAutomationTargetMode('project')"
+              >
+                Project
+              </button>
+            </div>
+
+            <div v-if="automationTargetMode !== 'new-chat'" class="automation-target-dropdown">
+              <input
+                v-model="automationTargetSearch"
+                class="rename-thread-input"
+                type="search"
+                :placeholder="automationTargetMode === 'project' ? 'Search projects' : 'Search chats'"
+              />
+              <select v-model="automationTargetValue" class="automation-thread-select" size="5">
+                <option
+                  v-for="option in filteredAutomationTargetOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
           <div v-if="automationDialogAutomations.length > 0" class="automation-thread-list" :aria-label="automationDialogScope === 'project' ? 'Project automations' : 'Thread automations'">
             <button
               v-for="automation in automationDialogAutomations"
@@ -831,12 +879,14 @@ import type { ComponentPublicInstance } from 'vue'
 import {
   deleteThreadAutomation,
   deleteProjectAutomation,
+  createProjectlessThreadDirectory,
   getProjectAutomationMap,
   getPinnedThreadState,
   getThreadAutomationMap,
   getThreadSummary,
   persistPinnedThreadIds,
   runThreadAutomationNow,
+  startThread,
   upsertProjectAutomation,
   upsertThreadAutomation,
 } from '../../api/codexGateway'
@@ -920,6 +970,7 @@ type MenuDirection = 'up' | 'down'
 type ChatSortMode = 'created' | 'updated'
 type AutomationScheduleMode = 'daily' | 'interval' | 'advanced'
 type AutomationIntervalUnit = 'minutes' | 'hours' | 'days'
+type AutomationTargetMode = 'new-chat' | 'thread' | 'project'
 
 type AutomationScheduleDraft = {
   mode: AutomationScheduleMode
@@ -968,6 +1019,10 @@ const automationDialogThreadId = ref('')
 const automationDialogProjectName = ref('')
 const automationDialogAutomationId = ref('')
 const automationDialogMode = ref<'create' | 'edit'>('create')
+const automationTargetPickerVisible = ref(false)
+const automationTargetMode = ref<AutomationTargetMode>('new-chat')
+const automationTargetSearch = ref('')
+const automationTargetValue = ref('')
 const automationDialogError = ref('')
 const automationDialogNotice = ref('')
 const isSavingAutomation = ref(false)
@@ -998,11 +1053,57 @@ const automationDialogAutomations = computed(() => {
   return threadId ? (automationByThreadId.value[threadId] ?? []) : []
 })
 const automationSchedulePreview = computed(() => describeAutomationSchedule(automationDraft.value.rrule))
-const automationDialogSubtitle = computed(() =>
-  automationDialogScope.value === 'project'
+const automationDialogSubtitle = computed(() => {
+  if (automationTargetPickerVisible.value && automationDialogMode.value === 'create') {
+    if (automationTargetMode.value === 'new-chat') return 'This creates a new chat and attaches a heartbeat automation to it.'
+    if (automationTargetMode.value === 'thread') return 'This creates a heartbeat automation attached to the selected chat.'
+    return 'This creates a project automation attached to the selected project folder.'
+  }
+  return automationDialogScope.value === 'project'
     ? 'This creates project automations attached to the selected project folder.'
-    : 'This creates heartbeat automations attached to the selected thread.',
-)
+    : 'This creates heartbeat automations attached to the selected thread.'
+})
+const automationThreadTargetOptions = computed(() => {
+  const rows: Array<{ value: string; label: string; searchText: string }> = []
+  for (const group of props.groups) {
+    for (const thread of group.threads) {
+      const title = thread.title?.trim() || thread.id
+      const project = getProjectDisplayName(group.projectName)
+      rows.push({
+        value: thread.id,
+        label: `${title} · ${project}`,
+        searchText: `${title} ${project} ${thread.id}`.toLowerCase(),
+      })
+    }
+  }
+  return rows
+})
+const automationProjectTargetOptions = computed(() => {
+  const rows: Array<{ value: string; label: string; searchText: string }> = []
+  for (const group of props.groups) {
+    const cwd = getProjectAutomationKey(group.projectName)
+    if (!cwd) continue
+    const label = getProjectDisplayName(group.projectName)
+    rows.push({
+      value: cwd,
+      label,
+      searchText: `${label} ${cwd}`.toLowerCase(),
+    })
+  }
+  return rows
+})
+const filteredAutomationTargetOptions = computed(() => {
+  const query = automationTargetSearch.value.trim().toLowerCase()
+  const source = automationTargetMode.value === 'project'
+    ? automationProjectTargetOptions.value
+    : automationThreadTargetOptions.value
+  return query ? source.filter((option) => option.searchText.includes(query)) : source
+})
+watch(filteredAutomationTargetOptions, (options) => {
+  if (!automationTargetPickerVisible.value || automationTargetMode.value === 'new-chat') return
+  if (options.some((option) => option.value === automationTargetValue.value)) return
+  automationTargetValue.value = options[0]?.value ?? ''
+})
 const groupsContainerRef = ref<HTMLElement | null>(null)
 const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
 const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
@@ -1737,6 +1838,7 @@ function openAutomationDialog(threadId: string): void {
   automationDialogScope.value = 'thread'
   automationDialogThreadId.value = threadId
   automationDialogProjectName.value = ''
+  automationTargetPickerVisible.value = false
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   const existing = automationByThreadId.value[threadId]?.[0]
@@ -1755,6 +1857,7 @@ function openProjectAutomationDialog(projectName: string): void {
     automationDialogScope.value = 'project'
     automationDialogThreadId.value = ''
     automationDialogProjectName.value = ''
+    automationTargetPickerVisible.value = false
     automationDialogError.value = 'Project automation requires a resolved absolute project path.'
     automationDialogNotice.value = ''
     automationDialogVisible.value = true
@@ -1764,6 +1867,7 @@ function openProjectAutomationDialog(projectName: string): void {
   automationDialogScope.value = 'project'
   automationDialogThreadId.value = ''
   automationDialogProjectName.value = projectCwd
+  automationTargetPickerVisible.value = false
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   const existing = automationByProjectName.value[projectCwd]?.[0]
@@ -1784,6 +1888,7 @@ function openAutomationEditorFromPanel(payload: {
   automationDialogScope.value = payload.scope
   automationDialogThreadId.value = payload.scope === 'thread' ? payload.target : ''
   automationDialogProjectName.value = payload.scope === 'project' ? payload.target : ''
+  automationTargetPickerVisible.value = false
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   if (payload.scope === 'project') {
@@ -1797,19 +1902,32 @@ function openAutomationEditorFromPanel(payload: {
   closeThreadMenu()
 }
 
-function openAutomationCreatorFromPanel(payload: {
-  scope: 'thread' | 'project'
-  target: string
-}): void {
-  automationDialogScope.value = payload.scope
-  automationDialogThreadId.value = payload.scope === 'thread' ? payload.target : ''
-  automationDialogProjectName.value = payload.scope === 'project' ? payload.target : ''
+function openAutomationCreatorFromPanel(): void {
+  automationTargetPickerVisible.value = true
+  automationTargetMode.value = 'new-chat'
+  automationTargetSearch.value = ''
+  automationTargetValue.value = ''
+  automationDialogScope.value = 'thread'
+  automationDialogThreadId.value = ''
+  automationDialogProjectName.value = ''
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   startNewAutomationDraft()
   automationDialogVisible.value = true
   closeProjectMenu()
   closeThreadMenu()
+}
+
+function setAutomationTargetMode(mode: AutomationTargetMode): void {
+  automationTargetMode.value = mode
+  automationTargetSearch.value = ''
+  automationTargetValue.value = ''
+  automationDialogScope.value = mode === 'project' ? 'project' : 'thread'
+  if (mode === 'thread') {
+    automationTargetValue.value = filteredAutomationTargetOptions.value[0]?.value ?? ''
+  } else if (mode === 'project') {
+    automationTargetValue.value = filteredAutomationTargetOptions.value[0]?.value ?? ''
+  }
 }
 
 function startNewAutomationDraft(): void {
@@ -1913,15 +2031,42 @@ function removeAutomationForProject(
 }
 
 async function submitAutomationDialog(): Promise<void> {
-  const threadId = automationDialogThreadId.value
-  const projectName = automationDialogProjectName.value
-  if (automationDialogScope.value === 'thread' && !threadId) return
-  if (automationDialogScope.value === 'project' && !projectName) return
+  let threadId = automationDialogThreadId.value
+  let projectName = automationDialogProjectName.value
   isSavingAutomation.value = true
   automationDialogError.value = ''
   automationDialogNotice.value = ''
   try {
     syncAutomationRruleFromScheduleDraft()
+    if (automationTargetPickerVisible.value && automationDialogMode.value === 'create') {
+      if (automationTargetMode.value === 'new-chat') {
+        const directory = await createProjectlessThreadDirectory(automationDraft.value.name || automationDraft.value.prompt)
+        const thread = await startThread(directory.cwd)
+        threadId = thread.threadId
+        projectName = ''
+        automationDialogScope.value = 'thread'
+        automationDialogThreadId.value = threadId
+        automationDialogProjectName.value = ''
+      } else if (automationTargetMode.value === 'thread') {
+        threadId = automationTargetValue.value
+        projectName = ''
+        automationDialogScope.value = 'thread'
+        automationDialogThreadId.value = threadId
+        automationDialogProjectName.value = ''
+      } else {
+        projectName = automationTargetValue.value
+        threadId = ''
+        automationDialogScope.value = 'project'
+        automationDialogThreadId.value = ''
+        automationDialogProjectName.value = projectName
+      }
+    }
+    if (automationDialogScope.value === 'thread' && !threadId) {
+      throw new Error('Select a chat target for this automation')
+    }
+    if (automationDialogScope.value === 'project' && !projectName) {
+      throw new Error('Select a project target for this automation')
+    }
     const input = {
       id: automationDialogAutomationId.value || undefined,
       name: automationDraft.value.name,
@@ -3233,6 +3378,26 @@ onBeforeUnmount(() => {
 
 .automation-thread-field {
   @apply mb-3 flex flex-col gap-1;
+}
+
+.automation-target-picker {
+  @apply mb-3 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2;
+}
+
+.automation-target-mode-group {
+  @apply grid grid-cols-3 gap-1 rounded-lg border border-zinc-200 bg-white p-1;
+}
+
+.automation-target-mode {
+  @apply rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100;
+}
+
+.automation-target-mode.is-active {
+  @apply bg-zinc-900 text-white shadow-sm hover:bg-zinc-900;
+}
+
+.automation-target-dropdown {
+  @apply flex flex-col gap-2;
 }
 
 .automation-thread-list {
