@@ -12,7 +12,7 @@ Source: [project-cron-automations.md](../../raw/features/project-cron-automation
 
 The sidebar project row dots menu exposes `Add automation…` or `Manage automations…`. The dialog reuses the thread automation manager style, including multiple automation selection, schedule presets, status, and remove/save behavior.
 
-Project rows show the same compact `Auto` chip when at least one project automation is attached.
+Project rows show the same compact automation icon when at least one project automation is attached. The top-level Automations panel lists both project cron automations and thread heartbeat automations together, sorted by next run and backed by the existing automation map endpoints.
 
 Source: [project-cron-automations.md](../../raw/features/project-cron-automations.md)
 

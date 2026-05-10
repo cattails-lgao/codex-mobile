@@ -9,5 +9,6 @@ Implementation facts:
 - `GET /codex-api/project-automations` returns project cron automations grouped by project cwd.
 - `GET`, `PUT`, and `DELETE /codex-api/project-automation` read, save, and remove automations for one project cwd.
 - `src/api/codexGateway.ts` exposes project automation helpers mirroring the thread automation helpers.
-- `src/components/sidebar/SidebarThreadTree.vue` adds project menu `Add automation…` / `Manage automations…`, project row `Auto` chips, and reuses the existing automation dialog with project-specific copy.
+- `src/components/sidebar/SidebarThreadTree.vue` adds project menu `Add automation…` / `Manage automations…`, project row automation icons, and reuses the existing automation dialog with project-specific copy.
+- `src/components/content/AutomationsPanel.vue` lists both thread heartbeat automations and project cron automations in one top-level panel.
 - Project automations intentionally do not expose `Run now`; the existing manual run behavior remains thread-heartbeat-only.
