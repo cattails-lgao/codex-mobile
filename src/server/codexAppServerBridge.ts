@@ -3538,6 +3538,9 @@ async function writeProjectCronAutomation(input: {
   if (!projectName || !name || !prompt || !rrule) {
     throw new Error('projectName, name, prompt, and rrule are required')
   }
+  if (!isAbsolute(projectName)) {
+    throw new Error('Project automation cwd must be an absolute path')
+  }
 
   const automationRoot = getCodexAutomationsDir()
   await mkdir(automationRoot, { recursive: true })
@@ -3555,7 +3558,7 @@ async function writeProjectCronAutomation(input: {
     rrule,
     status: input.status,
     targetThreadId: null,
-    cwds: [projectName],
+    cwds: Array.from(new Set([...(existing?.cwds ?? []), projectName])),
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
     nextRunAtMs: null,
@@ -3575,16 +3578,31 @@ async function writeProjectCronAutomation(input: {
 async function deleteProjectCronAutomation(projectName: string, automationId = ''): Promise<boolean> {
   const normalizedProjectName = projectName.trim()
   const normalizedAutomationId = automationId.trim()
+  if (!normalizedProjectName || !isAbsolute(normalizedProjectName)) return false
   if (normalizedAutomationId) {
     const automation = await readProjectCronAutomation(normalizedProjectName, normalizedAutomationId)
     if (!automation) return false
-    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    const remainingCwds = automation.cwds.filter((cwd) => cwd !== normalizedProjectName)
+    if (remainingCwds.length > 0) {
+      const record = { ...automation, cwds: remainingCwds, updatedAtMs: Date.now() }
+      await writeFile(join(getCodexAutomationsDir(), automation.id, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+    } else {
+      await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    }
     return true
   }
 
   const automations = await readProjectCronAutomations(normalizedProjectName)
   if (automations.length === 0) return false
-  await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
+  await Promise.all(automations.map(async (automation) => {
+    const remainingCwds = automation.cwds.filter((cwd) => cwd !== normalizedProjectName)
+    if (remainingCwds.length > 0) {
+      const record = { ...automation, cwds: remainingCwds, updatedAtMs: Date.now() }
+      await writeFile(join(getCodexAutomationsDir(), automation.id, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+      return
+    }
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+  }))
   return true
 }
 
@@ -7314,6 +7332,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const status = payload?.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE'
         if (!projectName || !name || !prompt || !rrule) {
           setJson(res, 400, { error: 'projectName, name, prompt, and rrule are required' })
+          return
+        }
+        if (!isAbsolute(projectName)) {
+          setJson(res, 400, { error: 'Project automation cwd must be an absolute path' })
           return
         }
         const automation = await writeProjectCronAutomation({ projectName, id, name, prompt, rrule, status })

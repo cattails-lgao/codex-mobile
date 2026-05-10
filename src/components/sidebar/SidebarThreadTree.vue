@@ -1751,7 +1751,16 @@ function openAutomationDialog(threadId: string): void {
 
 function openProjectAutomationDialog(projectName: string): void {
   const projectCwd = getProjectAutomationKey(projectName)
-  if (!projectCwd) return
+  if (!projectCwd) {
+    automationDialogScope.value = 'project'
+    automationDialogThreadId.value = ''
+    automationDialogProjectName.value = ''
+    automationDialogError.value = 'Project automation requires a resolved absolute project path.'
+    automationDialogNotice.value = ''
+    automationDialogVisible.value = true
+    closeProjectMenu()
+    return
+  }
   automationDialogScope.value = 'project'
   automationDialogThreadId.value = ''
   automationDialogProjectName.value = projectCwd
@@ -2128,7 +2137,12 @@ function onRemoveProject(projectName: string): void {
 }
 
 function getProjectAutomationKey(projectName: string): string {
-  return props.projectCwdByName[projectName]?.trim() || projectName.trim()
+  const projectCwd = props.projectCwdByName[projectName]?.trim() ?? ''
+  return isAbsoluteProjectCwd(projectCwd) ? projectCwd : ''
+}
+
+function isAbsoluteProjectCwd(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(value)
 }
 
 function onProjectHeaderKeyDown(event: KeyboardEvent, projectName: string): void {

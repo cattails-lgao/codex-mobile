@@ -2,7 +2,7 @@
 
 Date: 2026-05-10
 
-Project-scoped automations are represented as Codex cron automations with a `cwds` array containing the absolute project folder path. The sidebar resolves display labels such as `TestChat` to the real cwd before saving so the Codex scheduler can run in the intended project. Thread automations remain heartbeat automations keyed by `target_thread_id`.
+Project-scoped automations are represented as Codex cron automations with a `cwds` array containing absolute project folder paths. The sidebar resolves display labels such as `TestChat` to the real cwd before saving so the Codex scheduler can run in the intended project. The project automation UI blocks unresolved/non-absolute project cwd values. Editing or deleting a project association on a multi-cwd cron automation preserves the other cwd associations and only deletes the automation folder when the final cwd is removed. Thread automations remain heartbeat automations keyed by `target_thread_id`.
 
 Implementation facts:
 - `src/server/codexAppServerBridge.ts` parses and serializes `cwds` in automation TOML records.

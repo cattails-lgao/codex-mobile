@@ -4,7 +4,7 @@ Project automations extend the existing sidebar automation UI from thread-scoped
 
 ## Storage
 
-Project automations use Codex cron automation TOML records with `cwds = ["<absolute project path>"]`. Sidebar display labels must be resolved to the real project folder before saving, so folder-name rows such as `TestChat` still write the scheduler-visible cwd. This matches Codex's project/folder automation shape while preserving thread heartbeat records that use `target_thread_id`.
+Project automations use Codex cron automation TOML records with `cwds = ["<absolute project path>"]`. Sidebar display labels must be resolved to the real project folder before saving, so folder-name rows such as `TestChat` still write the scheduler-visible cwd. The UI/server reject unresolved non-absolute cwd values for project automation saves. Multi-cwd cron records keep their other cwd associations when edited or removed from one project, and the automation folder is deleted only when the final cwd association is removed. This matches Codex's project/folder automation shape while preserving thread heartbeat records that use `target_thread_id`.
 
 Source: [project-cron-automations.md](../../raw/features/project-cron-automations.md)
 

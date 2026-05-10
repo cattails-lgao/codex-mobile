@@ -1709,12 +1709,16 @@
 }
 
 :root.dark .automations-refresh,
+:root.dark .automation-edit-button,
+:root.dark .automation-detail-edit,
 :root.dark .automations-list,
 :root.dark .automation-detail {
   @apply border-zinc-800 bg-zinc-950 text-zinc-100;
 }
 
 :root.dark .automations-refresh:hover,
+:root.dark .automation-edit-button:hover,
+:root.dark .automation-detail-edit:hover,
 :root.dark .automation-row:hover,
 :root.dark .automation-row.is-selected {
   @apply bg-zinc-900;
