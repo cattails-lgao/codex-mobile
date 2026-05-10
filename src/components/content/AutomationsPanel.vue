@@ -6,9 +6,20 @@
         <span>{{ activeCount }} active</span>
         <span>{{ pausedCount }} paused</span>
       </div>
-      <button class="automations-refresh" type="button" :disabled="isLoading" @click="loadAutomations">
-        {{ isLoading ? 'Refreshing...' : 'Refresh' }}
-      </button>
+      <div class="automations-actions">
+        <button
+          class="automations-create"
+          type="button"
+          :disabled="!selectedRow"
+          :title="selectedRow ? `Create automation for ${selectedRow.targetLabel}` : 'Select an automation target first'"
+          @click="emitCreateAutomation"
+        >
+          New automation
+        </button>
+        <button class="automations-refresh" type="button" :disabled="isLoading" @click="loadAutomations">
+          {{ isLoading ? 'Refreshing...' : 'Refresh' }}
+        </button>
+      </div>
     </div>
 
     <p v-if="loadError" class="automations-error">{{ loadError }}</p>
@@ -114,6 +125,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'select-automation', id: string): void
   (event: 'edit-automation', payload: AutomationEditRequest): void
+  (event: 'create-automation', payload: AutomationCreateRequest): void
 }>()
 
 type AutomationRow = {
@@ -130,6 +142,11 @@ type AutomationEditRequest = {
   scope: 'thread' | 'project'
   target: string
   automation: UiThreadAutomation
+}
+
+type AutomationCreateRequest = {
+  scope: 'thread' | 'project'
+  target: string
 }
 
 const threadAutomations = ref<Record<string, UiThreadAutomation[]>>({})
@@ -278,6 +295,15 @@ function emitEditAutomation(row: AutomationRow): void {
   })
 }
 
+function emitCreateAutomation(): void {
+  const row = selectedRow.value
+  if (!row) return
+  emit('create-automation', {
+    scope: row.scope,
+    target: row.targetTitle,
+  })
+}
+
 function selectAutomationRow(row: AutomationRow): void {
   selectedRowKey.value = row.rowKey
   selectedAutomationId.value = row.automation.id
@@ -342,7 +368,12 @@ function getPathLeaf(path: string): string {
   @apply rounded-full bg-zinc-100 px-2 py-1;
 }
 
-.automations-refresh {
+.automations-actions {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.automations-refresh,
+.automations-create {
   @apply h-8 shrink-0 rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60;
 }
 
