@@ -169,6 +169,9 @@ const automationRows = computed<AutomationRow[]>(() => {
     }
   }
   return rows.sort((first, second) => {
+    const firstStatusRank = first.automation.status === 'ACTIVE' ? 0 : 1
+    const secondStatusRank = second.automation.status === 'ACTIVE' ? 0 : 1
+    if (firstStatusRank !== secondStatusRank) return firstStatusRank - secondStatusRank
     const firstCreated = first.automation.createdAtMs ?? 0
     const secondCreated = second.automation.createdAtMs ?? 0
     if (firstCreated !== secondCreated) return secondCreated - firstCreated
