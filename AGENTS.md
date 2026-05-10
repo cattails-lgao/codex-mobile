@@ -142,6 +142,7 @@
   - viewport(s)
   - assertion/result summary
   - screenshot absolute path(s)
+  - inline screenshot image(s) rendered in chat with Markdown image syntax using absolute local paths
   - CJS command/result (when module-loading behavior was changed)
 
 ## Worktree Dev Server Rule
@@ -181,6 +182,7 @@
 
 - When the user asks to test with Playwright, run the verification on the explicitly requested project/thread context (for example `TestChat`).
 - Screenshot artifacts must show complete passing evidence for the tested feature, not only the base page load.
+- Always show captured screenshots inline in the chat, not only as links or filesystem paths. Use Markdown image tags with absolute local paths, for example `![light verification](/absolute/path/output/playwright/example.png)`.
 - For UI work, include dark-theme evidence in addition to the default/light-theme evidence unless the task is explicitly light-only.
 - For refresh-persistence fixes, include a post-refresh screenshot that still shows the expected UI state.
 
@@ -209,6 +211,7 @@
   - exact CJS command/script path
   - assertion summary (`hrefOk`, `titleOk`, `textOk`)
   - screenshot absolute path
+  - inline screenshot image rendered in chat with Markdown image syntax using the absolute screenshot path
 
 ## LLM Wiki Schema
 
