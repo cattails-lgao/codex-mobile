@@ -57,7 +57,7 @@
                     class="thread-row-automation-chip"
                     :title="threadAutomationTooltip(thread.id)"
                   >
-                    Auto
+                    <IconTablerBolt class="thread-row-automation-icon" />
                   </span>
                   <span
                     v-if="thread.pendingRequestState"
@@ -220,7 +220,7 @@
                   class="thread-row-automation-chip"
                   :title="threadAutomationTooltip(thread.id)"
                 >
-                  Auto
+                  <IconTablerBolt class="thread-row-automation-icon" />
                 </span>
                 <span
                   v-if="thread.pendingRequestState"
@@ -298,7 +298,7 @@
                 class="thread-row-automation-chip"
                 :title="projectAutomationTooltip(group.projectName)"
               >
-                Auto
+                <IconTablerBolt class="thread-row-automation-icon" />
               </span>
             </span>
             <template #right>
@@ -416,7 +416,7 @@
                         class="thread-row-automation-chip"
                         :title="threadAutomationTooltip(thread.id)"
                       >
-                        Auto
+                        <IconTablerBolt class="thread-row-automation-icon" />
                       </span>
                       <span
                         v-if="thread.pendingRequestState"
@@ -542,7 +542,7 @@
                     class="thread-row-automation-chip"
                     :title="threadAutomationTooltip(thread.id)"
                   >
-                    Auto
+                    <IconTablerBolt class="thread-row-automation-icon" />
                   </span>
                   <span
                     v-if="thread.pendingRequestState"
@@ -833,6 +833,7 @@ import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerFolderOpen from '../icons/IconTablerFolderOpen.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
+import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { getPathLeafName, getPathParent, isProjectlessChatPath } from '../../pathUtils.js'
@@ -3050,7 +3051,11 @@ onBeforeUnmount(() => {
 }
 
 .thread-row-automation-chip {
-  @apply rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800;
+  @apply inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800;
+}
+
+.thread-row-automation-icon {
+  @apply h-3 w-3;
 }
 
 .project-header-row:hover .project-icon-folder {
