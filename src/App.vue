@@ -62,6 +62,7 @@
 
           <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
             :project-git-repo-by-name="projectGitRepoByName"
+            :project-cwd-by-name="projectCwdByName"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :is-thread-list-fully-loaded="isThreadListFullyLoaded"
@@ -2439,6 +2440,14 @@ function getProjectCwd(projectName: string): string {
   const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
   return resolvePreferredLocalCwd(projectName, projectGroup?.threads[0]?.cwd?.trim() ?? '')
 }
+
+const projectCwdByName = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    projectGroups.value
+      .map((group) => [group.projectName, getProjectCwd(group.projectName).trim()] as const)
+      .filter(([, cwd]) => cwd.length > 0),
+  ),
+)
 
 function getProjectDisplayNameForWorktree(projectName: string): string {
   return (projectDisplayNameById.value[projectName] ?? projectName).trim() || projectName

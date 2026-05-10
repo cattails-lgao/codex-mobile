@@ -843,6 +843,7 @@ const props = defineProps<{
   groups: UiProjectGroup[]
   projectDisplayNameById: Record<string, string>
   projectGitRepoByName: Record<string, boolean>
+  projectCwdByName: Record<string, string>
   selectedThreadId: string
   isLoading: boolean
   isThreadListFullyLoaded: boolean
@@ -1425,7 +1426,8 @@ function threadHasAutomation(threadId: string): boolean {
 }
 
 function projectHasAutomation(projectName: string): boolean {
-  return (automationByProjectName.value[projectName]?.length ?? 0) > 0
+  const key = getProjectAutomationKey(projectName)
+  return key ? (automationByProjectName.value[key]?.length ?? 0) > 0 : false
 }
 
 function automationTooltip(automations: UiThreadAutomation[]): string {
@@ -1448,7 +1450,8 @@ function threadAutomationTooltip(threadId: string): string {
 }
 
 function projectAutomationTooltip(projectName: string): string {
-  return automationTooltip(automationByProjectName.value[projectName] ?? [])
+  const key = getProjectAutomationKey(projectName)
+  return automationTooltip(key ? (automationByProjectName.value[key] ?? []) : [])
 }
 
 function padRruleNumber(value: number): string {
@@ -1722,12 +1725,14 @@ function openAutomationDialog(threadId: string): void {
 }
 
 function openProjectAutomationDialog(projectName: string): void {
+  const projectCwd = getProjectAutomationKey(projectName)
+  if (!projectCwd) return
   automationDialogScope.value = 'project'
   automationDialogThreadId.value = ''
-  automationDialogProjectName.value = projectName
+  automationDialogProjectName.value = projectCwd
   automationDialogError.value = ''
   automationDialogNotice.value = ''
-  const existing = automationByProjectName.value[projectName]?.[0]
+  const existing = automationByProjectName.value[projectCwd]?.[0]
   if (existing) {
     selectAutomationForEditing(existing.id)
   } else {
@@ -2061,12 +2066,17 @@ function onProjectNameInput(projectName: string): void {
 }
 
 function onRemoveProject(projectName: string): void {
+  const projectCwd = getProjectAutomationKey(projectName)
   emit('remove-project', projectName)
-  if (projectHasAutomation(projectName)) {
-    void deleteProjectAutomation(projectName).catch(() => undefined)
-    automationByProjectName.value = omitAutomationProject(automationByProjectName.value, projectName)
+  if (projectCwd && projectHasAutomation(projectName)) {
+    void deleteProjectAutomation(projectCwd).catch(() => undefined)
+    automationByProjectName.value = omitAutomationProject(automationByProjectName.value, projectCwd)
   }
   closeProjectMenu()
+}
+
+function getProjectAutomationKey(projectName: string): string {
+  return props.projectCwdByName[projectName]?.trim() || projectName.trim()
 }
 
 function onProjectHeaderKeyDown(event: KeyboardEvent, projectName: string): void {
