@@ -573,9 +573,8 @@ const startupSyncStatus: StartupSyncStatus = {
   lastError: '',
 }
 
-async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
+async function scanInstalledSkillsFromDir(skillsDir: string): Promise<Map<string, InstalledSkillInfo>> {
   const map = new Map<string, InstalledSkillInfo>()
-  const skillsDir = getSkillsInstallDir()
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true })
     for (const entry of entries) {
@@ -588,6 +587,10 @@ async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkill
     }
   } catch {}
   return map
+}
+
+async function scanInstalledSkillsFromDisk(): Promise<Map<string, InstalledSkillInfo>> {
+  return await scanInstalledSkillsFromDir(getSkillsInstallDir())
 }
 
 async function collectInstalledSkillsMap(appServer: AppServerLike): Promise<Map<string, InstalledSkillInfo>> {
@@ -877,7 +880,12 @@ async function ensureSkillsWorkingTreeRepo(
   await mkdir(localDir, { recursive: true })
   const gitDir = join(localDir, '.git')
   let hasGitDir = false
-  try { hasGitDir = (await stat(gitDir)).isDirectory() } catch { hasGitDir = false }
+  try {
+    const gitDirStat = await lstat(gitDir)
+    hasGitDir = gitDirStat.isDirectory() || gitDirStat.isFile()
+  } catch {
+    hasGitDir = false
+  }
 
   if (!hasGitDir) {
     await runCommand('git', ['init'], { cwd: localDir })
@@ -1220,9 +1228,9 @@ async function pullInstalledSkillsFolderFromRepo(token: string, repoOwner: strin
   })
 }
 
-async function bootstrapSkillsFromUpstreamIntoLocal(): Promise<void> {
+async function bootstrapSkillsFromUpstreamIntoLocal(): Promise<string> {
   const repoUrl = `https://github.com/${SYNC_UPSTREAM_SKILLS_OWNER}/${SYNC_UPSTREAM_SKILLS_REPO}.git`
-  await ensureSkillsWorkingTreeRepo(repoUrl, PUBLIC_UPSTREAM_BRANCH_ANDROID, {
+  return await ensureSkillsWorkingTreeRepo(repoUrl, PUBLIC_UPSTREAM_BRANCH_ANDROID, {
     localDir: getSharedSkillsInstallDir(),
     overwriteLocalFiles: true,
   })
@@ -1544,14 +1552,15 @@ export async function handleSkillsRoutes(
     try {
       const state = await readSkillsSyncState()
       if (!state.githubToken || !state.repoOwner || !state.repoName) {
-        await bootstrapSkillsFromUpstreamIntoLocal()
+        const repoDir = await bootstrapSkillsFromUpstreamIntoLocal()
+        const localSkills = await scanInstalledSkillsFromDir(repoDir)
         try { await appServer.rpc('skills/list', { forceReload: true }) } catch {}
-        setJson(res, 200, { ok: true, data: { synced: 0, source: 'upstream' } })
+        setJson(res, 200, { ok: true, data: { synced: localSkills.size, source: 'upstream' } })
         return true
       }
       if (isUpstreamSkillsRepo(state.repoOwner, state.repoName)) {
         const repoDir = await pullInstalledSkillsFolderFromRepo(state.githubToken, state.repoOwner, state.repoName)
-        const localSkills = await scanInstalledSkillsFromDisk()
+        const localSkills = await scanInstalledSkillsFromDir(repoDir)
         const pulledHead = await runCommandWithOutput('git', ['rev-parse', 'HEAD'], { cwd: repoDir }).catch(() => '')
         await writeSkillsSyncState({
           ...state,
