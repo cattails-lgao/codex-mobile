@@ -1042,7 +1042,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 11. Click a different branch row and confirm the left commit list changes to that branch without immediately switching checkout.
 12. Use the branch row `Checkout` action with a clean worktree and confirm the header updates to that branch.
 13. Confirm local branches appear first and remote branches appear at the end of the branch list.
-14. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a right-side file panel with that commit subject, file changes, and a `Reset` button without changing HEAD.
+14. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a left-side file panel with that commit subject, file changes, and a `Reset` button without changing HEAD.
 15. Click a file in the selected commit details and confirm the Review pane opens with the matching file selected when that file is present in the review snapshot.
 16. Click `Reset` for the selected commit and confirm the header stays on that branch instead of entering detached HEAD.
 17. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
@@ -1055,8 +1055,8 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
-- The selected-commit file panel is hidden until commit selection, then appears on the right and expands the dropdown width.
-- The dropdown layer appears above the sidebar and Review pane while it is open.
+- The selected-commit file panel is hidden until commit selection, then appears on the left and expands the dropdown width.
+- The dropdown layer is viewport-positioned and appears above the sidebar and the already-open Review pane while it is open.
 - The current branch commit list loads by default and is capped at 50 commits.
 - The commit list can be searched by SHA, subject, or date without changing the selected branch.
 - Reset-history refs can be shown or hidden from the commit list without changing the selected branch.

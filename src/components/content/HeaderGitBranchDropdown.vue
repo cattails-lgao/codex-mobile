@@ -33,6 +33,46 @@
         </div>
 
         <div class="header-git-columns" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
+          <section v-if="selectedCommit" class="header-git-commit-detail-panel" aria-label="Commit files">
+            <div class="header-git-commit-detail-head">
+              <div class="header-git-commit-detail-title">
+                <code>{{ selectedCommit.shortSha }}</code>
+                <span>{{ selectedCommit.date }}</span>
+              </div>
+              <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
+              <button
+                class="header-git-reset-commit"
+                type="button"
+                :disabled="busy || selectedBranchIsRemote || !selectedBranch"
+                @click="resetSelectedCommit"
+              >
+                Reset
+              </button>
+            </div>
+
+            <div class="header-git-file-list">
+              <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="header-git-files-empty">Loading files...</div>
+              <div v-else-if="commitFilesError" class="header-git-files-empty is-error">{{ commitFilesError }}</div>
+              <template v-else>
+                <button
+                  v-for="file in selectedCommitFiles"
+                  :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
+                  class="header-git-file"
+                  type="button"
+                  :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
+                  @click="openCommitFile(file.path)"
+                >
+                  <span class="header-git-file-status">{{ file.label }}</span>
+                  <span class="header-git-file-path">
+                    {{ file.path }}
+                    <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
+                  </span>
+                </button>
+                <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
+              </template>
+            </div>
+          </section>
+
           <section class="header-git-commit-panel" aria-label="Branch commits">
             <div class="header-git-search-wrap">
               <input
@@ -115,46 +155,6 @@
               </li>
               <li v-if="filteredBranches.length === 0" class="header-git-empty">No branches found.</li>
             </ul>
-          </section>
-
-          <section v-if="selectedCommit" class="header-git-commit-detail-panel" aria-label="Commit files">
-            <div class="header-git-commit-detail-head">
-              <div class="header-git-commit-detail-title">
-                <code>{{ selectedCommit.shortSha }}</code>
-                <span>{{ selectedCommit.date }}</span>
-              </div>
-              <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
-              <button
-                class="header-git-reset-commit"
-                type="button"
-                :disabled="busy || selectedBranchIsRemote || !selectedBranch"
-                @click="resetSelectedCommit"
-              >
-                Reset
-              </button>
-            </div>
-
-            <div class="header-git-file-list">
-              <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="header-git-files-empty">Loading files...</div>
-              <div v-else-if="commitFilesError" class="header-git-files-empty is-error">{{ commitFilesError }}</div>
-              <template v-else>
-                <button
-                  v-for="file in selectedCommitFiles"
-                  :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
-                  class="header-git-file"
-                  type="button"
-                  :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
-                  @click="openCommitFile(file.path)"
-                >
-                  <span class="header-git-file-status">{{ file.label }}</span>
-                  <span class="header-git-file-path">
-                    {{ file.path }}
-                    <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
-                  </span>
-                </button>
-                <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
-              </template>
-            </div>
           </section>
         </div>
       </div>
@@ -423,7 +423,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-menu-wrap {
-  @apply absolute right-0 top-[calc(100%+8px)] z-50;
+  @apply fixed right-3 top-[4.25rem] z-[1000];
 }
 
 .header-git-menu {

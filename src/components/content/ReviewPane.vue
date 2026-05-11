@@ -1108,7 +1108,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .review-pane {
-  @apply flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white;
+  @apply relative z-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white;
 }
 
 .review-pane.is-mobile {
