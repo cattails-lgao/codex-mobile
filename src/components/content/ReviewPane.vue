@@ -1112,7 +1112,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane.is-mobile {
-  @apply fixed inset-0 z-40 rounded-none border-0;
+  @apply fixed inset-0 z-[700] rounded-none border-0;
 }
 
 .review-pane-header {
@@ -1120,7 +1120,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-heading {
-  @apply min-w-0;
+  @apply min-w-0 flex-1;
 }
 
 .review-pane-eyebrow {
@@ -1132,7 +1132,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-header-actions {
-  @apply flex items-center gap-2;
+  @apply flex shrink-0 items-center gap-2;
 }
 
 .review-pane-close,
@@ -1146,7 +1146,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-close {
-  @apply flex h-7.5 w-7.5 items-center justify-center rounded-full p-0;
+  @apply flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full p-0;
 }
 
 .review-pane-toolbar {

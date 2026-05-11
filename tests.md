@@ -1052,7 +1052,8 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 21. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
 22. Create only an untracked file whose path does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the untracked file remains in place.
 23. Create only an untracked file whose path exists in the target commit, try to reset to that target, and confirm the reset proceeds and the untracked file is moved under `.codex/untracked-backups/` instead of being overwritten.
-24. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, and 23.
+24. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
+25. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, and 24.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
@@ -1072,6 +1073,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
 - Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset.
 - The selected branch HEAD commit is marked `current` in the commit list.
+- The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 
