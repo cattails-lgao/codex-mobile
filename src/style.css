@@ -1352,6 +1352,54 @@
   @apply text-zinc-200;
 }
 
+:root.dark .new-thread-folder-action {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800;
+}
+
+:root.dark .new-thread-folder-action-primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+}
+
+:root.dark .new-thread-open-folder,
+:root.dark .new-thread-project-modal {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .new-thread-open-folder-title {
+  @apply text-zinc-50;
+}
+
+:root.dark .new-thread-open-folder-close,
+:root.dark .new-thread-open-folder-label {
+  @apply text-zinc-400;
+}
+
+:root.dark .new-thread-open-folder-close:hover {
+  @apply text-zinc-100;
+}
+
+:root.dark .new-thread-open-folder-path,
+:root.dark .new-thread-open-folder-filter,
+:root.dark .new-thread-open-folder-create-input {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100 focus:border-zinc-500;
+}
+
+:root.dark .new-thread-project-mode-tabs {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .new-thread-project-mode-tab {
+  @apply text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50;
+}
+
+:root.dark .new-thread-project-mode-tab.is-active {
+  @apply bg-zinc-100 text-zinc-950;
+}
+
+:root.dark .new-thread-open-folder-error {
+  @apply border-rose-900 bg-rose-950/60 text-rose-200;
+}
+
 :root.dark .runtime-toggle {
   @apply border-zinc-700 bg-zinc-900;
 }

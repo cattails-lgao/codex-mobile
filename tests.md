@@ -117,9 +117,9 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
 
-## New chat GitHub clone
+## New chat project setup modal
 
-### Feature: Clone from GitHub on new chat
+### Feature: Unified create project and GitHub clone modal
 
 Prerequisites/setup:
 - Run the app with access to `git` and network access to `github.com`.
@@ -127,21 +127,25 @@ Prerequisites/setup:
 
 Steps:
 1. Open the app in light theme and navigate to the new chat screen.
-2. Confirm the folder actions show `Select folder`, `Create Project`, and `Clone from GitHub`.
-3. Click `Clone from GitHub`, paste a valid `https://github.com/<owner>/<repo>` URL, and submit the prompt.
-4. Confirm the cloned repository folder is selected in the new chat folder selector and appears as a project root.
-5. Switch the app to dark theme and repeat opening the new chat screen.
-6. Confirm the `Clone from GitHub` button keeps the same spacing, disabled loading state, and readable contrast as the other folder actions.
+2. Confirm the folder actions show `Select folder` and `Create or clone`.
+3. Click `Create or clone` and confirm a modal opens with `New project` and `Clone from GitHub` modes.
+4. In `New project`, keep or edit the destination folder, enter a single folder name, and submit.
+5. Confirm the created project folder is selected in the new chat folder selector and appears as a project root.
+6. Reopen the modal, switch to `Clone from GitHub`, paste a valid `https://github.com/<owner>/<repo>` URL, and submit.
+7. Confirm the cloned repository folder is selected in the new chat folder selector and appears as a project root.
+8. Switch the app to dark theme and repeat opening the modal.
+9. Confirm the modal, tabs, inputs, error message, and buttons have readable contrast and stable spacing.
 
 Expected results:
-- The repository is cloned under the same base folder used by `Create Project`.
-- The cloned folder is registered as a project root and selected for the new chat.
-- Invalid or non-GitHub URLs show an error alert without changing the selected folder.
-- Light and dark themes render the new action consistently with the existing new-chat controls.
+- New project creation and GitHub cloning share one modal and destination folder field.
+- Created and cloned folders are registered as project roots and selected for the new chat.
+- Invalid project names or non-GitHub URLs show an inline modal error without changing the selected folder.
+- Light and dark themes render the unified modal consistently with the existing new-chat controls.
 
 Rollback/cleanup:
+- Remove the created project folder from the filesystem if it was only used for testing.
 - Remove the cloned repository folder from the filesystem if it was only used for testing.
-- Remove the cloned project from the app project list if it is no longer needed.
+- Remove the test projects from the app project list if they are no longer needed.
 
 ### Feature: Empty project new thread action
 
