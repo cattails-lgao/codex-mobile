@@ -171,7 +171,7 @@
                 v-else
                 type="button"
                 class="review-pane-file review-pane-tree-file"
-                :style="treeIndentStyle(node.depth)"
+                :style="treeFileIndentStyle()"
                 :data-active="selectedFile?.id === node.file.id"
                 :title="node.file.path"
                 @click="selectFile(node.file.id)"
@@ -310,7 +310,7 @@
                 v-else
                 type="button"
                 class="review-pane-file review-pane-tree-file"
-                :style="treeIndentStyle(node.depth)"
+                :style="treeFileIndentStyle()"
                 :data-active="selectedFile?.id === node.file.id"
                 :title="node.file.path"
                 @click="selectFile(node.file.id)"
@@ -704,6 +704,12 @@ function treeIndentStyle(depth: number): Record<string, string> {
   const step = isMobile.value ? 12 : 14
   return {
     paddingLeft: `${base + (depth * step)}px`,
+  }
+}
+
+function treeFileIndentStyle(): Record<string, string> {
+  return {
+    paddingLeft: isMobile.value ? '8px' : '10px',
   }
 }
 
