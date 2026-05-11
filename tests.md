@@ -1034,7 +1034,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 3. Confirm the menu initially shows only commits on the left and branches on the right, with no commit-files panel before a commit is selected.
 4. Confirm the left column defaults to the current branch and shows no more than 50 recent commits with short SHA, subject, and date.
 5. Confirm the open dropdown visually layers above the sidebar and above the Review pane if the pane is already open.
-6. Confirm the top action reads `Worktree changes` and shows `+`/`-` line counts; click it and confirm the dropdown closes and the review pane opens directly to changes without showing a `Findings` tab or `Run review` button; reopen the dropdown, click `Worktree changes` again, and confirm the dropdown closes and the pane toggles closed.
+6. Confirm the top action reads `Worktree changes` and shows `+`/`-` line counts; click it and confirm the dropdown stays open while the review pane opens above it directly to changes without showing a `Findings` tab or `Run review` button; click `Worktree changes` again and confirm the pane toggles closed.
 7. Type part of a commit subject or short SHA in the left commit search and confirm the commit list filters.
 8. Turn off `Reset-history refs` and confirm the commit list reloads without saved reset-history refs.
 9. Turn `Reset-history refs` back on and confirm saved reset-history commits reappear when available.
@@ -1059,8 +1059,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
 - The selected-commit file panel is hidden until commit selection, then appears on the left and expands the dropdown width.
 - Each selected-commit file row shows added and removed line counts, using `-` for binary or unavailable counts.
-- The dropdown layer is viewport-positioned and appears above the sidebar and the already-open Review pane while it is open.
-- Clicking the dropdown `Worktree changes` row always closes the dropdown after toggling the Review pane.
+- The dropdown layer is viewport-positioned and appears above the sidebar when open.
+- The Review pane renders above the open dropdown and app chrome.
+- Clicking the dropdown `Worktree changes` row keeps the dropdown open while toggling the Review pane.
 - The `Worktree changes` row shows current worktree added and removed line counts.
 - The Review pane toolbar keeps `Refresh` but does not show a `Findings` tab or `Run review` button.
 - The current branch commit list loads by default and is capped at 50 commits.

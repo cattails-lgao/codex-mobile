@@ -305,10 +305,6 @@ function toggleOpen(): void {
 
 function toggleReview(): void {
   emit('toggleReview')
-  isOpen.value = false
-  searchQuery.value = ''
-  commitSearchQuery.value = ''
-  selectedCommitSha.value = ''
 }
 
 function selectBranch(branch: string): void {
