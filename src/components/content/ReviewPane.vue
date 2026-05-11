@@ -1425,7 +1425,7 @@ onBeforeUnmount(() => {
   }
 
   .review-pane-main {
-    @apply block;
+    @apply flex h-full min-h-0 flex-col;
   }
 
   .review-pane-resizer {
@@ -1433,7 +1433,9 @@ onBeforeUnmount(() => {
   }
 
   .review-pane-diff {
-    @apply px-2 py-2.5;
+    @apply min-h-0 flex-1 overflow-y-auto px-2 py-2.5;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .review-pane-file-header,

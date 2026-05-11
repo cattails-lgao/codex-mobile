@@ -1054,7 +1054,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 23. Create only an untracked file whose path exists in the target commit, try to reset to that target, and confirm the reset proceeds and the untracked file is moved under `.codex/untracked-backups/` instead of being overwritten.
 24. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with the selected-commit file panel, commits panel, and branches panel stacked vertically instead of squeezed into columns.
 25. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
-26. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
+26. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
 27. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, 24, 25, and 26.
 
 #### Expected Results
@@ -1082,6 +1082,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset.
 - The selected branch HEAD commit is marked `current` in the commit list.
 - The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
+- The mobile Review pane diff area scrolls vertically without moving or hiding the pane header.
 - On mobile, selected-commit file details, commits, and branches stack vertically and stay inside the viewport in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
