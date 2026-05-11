@@ -567,7 +567,7 @@
               :error="threadBranchError"
               :review-open="isReviewPaneOpen"
               :show-review="route.name === 'thread' && selectedThreadId.length > 0"
-              @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
+              @toggle-review="onToggleContentHeaderReview"
               @checkout-branch="onCheckoutContentHeaderBranch"
               @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
               @load-commits="loadThreadBranchCommits"
@@ -953,6 +953,7 @@
                 :cwd="composerCwd"
                 :is-thread-in-progress="isSelectedThreadInProgress"
                 :initial-file-path="reviewInitialFilePath"
+                :commit-sha="reviewInitialCommitSha"
                 @close="isReviewPaneOpen = false"
               />
 
@@ -1493,6 +1494,7 @@ const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
 const reviewInitialFilePath = ref('')
+const reviewInitialCommitSha = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
 const currentThreadHeadSha = ref<string | null>(null)
@@ -3384,11 +3386,19 @@ function loadThreadCommitFiles(sha: string): void {
     })
 }
 
-function onOpenContentHeaderCommitFile(filePath: string): void {
-  const targetPath = filePath.trim()
-  if (!targetPath) return
+function onOpenContentHeaderCommitFile(payload: { sha: string; path: string }): void {
+  const targetPath = payload.path.trim()
+  const targetSha = payload.sha.trim()
+  if (!targetPath || !targetSha) return
   reviewInitialFilePath.value = targetPath
+  reviewInitialCommitSha.value = targetSha
   isReviewPaneOpen.value = true
+}
+
+function onToggleContentHeaderReview(): void {
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = !isReviewPaneOpen.value
 }
 
 async function onOpenProjectSetupModal(): Promise<void> {

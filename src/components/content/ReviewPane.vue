@@ -22,7 +22,7 @@
 
     <div class="review-pane-toolbar">
       <div class="review-pane-toolbar-controls">
-        <div class="review-pane-control-cluster">
+        <div v-if="!isCommitReview" class="review-pane-control-cluster">
           <span class="review-pane-control-label">{{ t('Compare') }}</span>
           <div class="review-pane-segmented">
             <button
@@ -45,7 +45,7 @@
           </div>
         </div>
 
-        <div v-if="activeScope === 'baseBranch' && snapshot?.baseBranchOptions.length" class="review-pane-control-cluster">
+        <div v-if="!isCommitReview && activeScope === 'baseBranch' && snapshot?.baseBranchOptions.length" class="review-pane-control-cluster">
           <span class="review-pane-control-label">{{ t('Branch') }}</span>
           <label class="review-pane-branch-select-wrap">
             <select
@@ -63,7 +63,7 @@
           </label>
         </div>
 
-        <div v-if="activeScope === 'workspace'" class="review-pane-control-cluster">
+        <div v-if="!isCommitReview && activeScope === 'workspace'" class="review-pane-control-cluster">
           <span class="review-pane-control-label">{{ t('Changes') }}</span>
           <div class="review-pane-segmented">
             <button
@@ -102,6 +102,7 @@
       <span class="review-pane-summary-pill review-pane-summary-pill-add">+{{ snapshot.summary.addedLineCount }}</span>
       <span class="review-pane-summary-pill review-pane-summary-pill-remove">-{{ snapshot.summary.removedLineCount }}</span>
       <span v-if="snapshot.headBranch">{{ snapshot.headBranch }}</span>
+      <span v-if="isCommitReview && snapshot.commitSha">{{ shortCommitSha(snapshot.commitSha) }}</span>
       <span v-if="activeScope === 'baseBranch' && snapshot.baseBranch">vs {{ snapshot.baseBranch }}</span>
     </div>
 
@@ -122,7 +123,7 @@
         </div>
       </template>
 
-      <template v-else-if="activeScope === 'baseBranch' && !snapshot.baseBranch">
+      <template v-else-if="!isCommitReview && activeScope === 'baseBranch' && !snapshot.baseBranch">
         <div class="review-pane-empty">
           <p class="review-pane-empty-title">{{ t('Base branch unavailable') }}</p>
           <p class="review-pane-empty-text">{{ t('Could not resolve `origin/HEAD`, `main`, or `master` for this repository.') }}</p>
@@ -366,6 +367,7 @@ const props = defineProps<{
   cwd: string
   isThreadInProgress: boolean
   initialFilePath?: string
+  commitSha?: string
 }>()
 
 defineEmits<{
@@ -429,6 +431,7 @@ type MutableReviewTreeFolder = {
 
 const selectedFile = computed(() => snapshot.value?.files.find((file) => file.id === selectedFileId.value) ?? snapshot.value?.files[0] ?? null)
 const folderExpansionState = ref<Record<string, boolean>>({})
+const isCommitReview = computed(() => Boolean(props.commitSha?.trim()))
 
 function normalizeReviewPath(filePath: string): string {
   return filePath.trim().replace(/\\/g, '/')
@@ -456,6 +459,9 @@ function selectInitialFilePath(): boolean {
 
 const headerTitle = computed(() => {
   if (!snapshot.value?.isGitRepo) return t('Repository review')
+  if (isCommitReview.value) {
+    return snapshot.value.commitSha ? `${t('Commit')} ${shortCommitSha(snapshot.value.commitSha)}` : t('Commit')
+  }
   if (activeScope.value === 'workspace') {
     return workspaceView.value === 'staged' ? t('Staged changes') : t('Workspace changes')
   }
@@ -463,7 +469,8 @@ const headerTitle = computed(() => {
 })
 
 const showBulkActions = computed(() => (
-  activeScope.value === 'workspace'
+  !isCommitReview.value
+  && activeScope.value === 'workspace'
   && snapshot.value?.isGitRepo === true
   && snapshot.value.files.length > 0
 ))
@@ -734,11 +741,13 @@ async function loadSnapshot(): Promise<void> {
   snapshotError.value = ''
   try {
     const desiredBaseBranch = activeScope.value === 'baseBranch' ? selectedBaseBranch.value.trim() : ''
+    const desiredCommitSha = props.commitSha?.trim() ?? ''
     const nextSnapshot = await getReviewSnapshot(
       props.cwd,
-      activeScope.value,
+      isCommitReview.value ? 'commit' : activeScope.value,
       workspaceView.value,
       desiredBaseBranch || null,
+      desiredCommitSha || null,
     )
     if (nextSnapshot.baseBranchOptions.length > 0) {
       const normalizedBaseBranch = nextSnapshot.baseBranch ?? nextSnapshot.baseBranchOptions[0] ?? ''
@@ -777,6 +786,10 @@ function selectFile(fileId: string): void {
   if (isMobile.value) {
     isFileSheetOpen.value = false
   }
+}
+
+function shortCommitSha(value: string): string {
+  return value.trim().slice(0, 7)
 }
 
 async function applyAction(action: UiReviewAction, level: 'all' | 'file' | 'hunk', patch = ''): Promise<void> {
@@ -859,7 +872,7 @@ function handleNotification(notification: RpcNotification): void {
 }
 
 watch(
-  () => [props.threadId, props.cwd] as const,
+  () => [props.threadId, props.cwd, props.commitSha] as const,
   () => {
     selectedFileId.value = ''
     selectedHunkId.value = ''
@@ -871,7 +884,7 @@ watch(
 )
 
 watch(
-  () => props.initialFilePath,
+  () => [props.initialFilePath, props.commitSha] as const,
   () => {
     selectInitialFilePath()
   },

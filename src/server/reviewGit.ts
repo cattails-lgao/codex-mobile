@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 
-type ReviewScope = 'workspace' | 'baseBranch'
+type ReviewScope = 'workspace' | 'baseBranch' | 'commit'
 type ReviewWorkspaceView = 'unstaged' | 'staged'
 type ReviewAction = 'stage' | 'unstage' | 'revert'
 type ReviewActionLevel = 'all' | 'file' | 'hunk'
@@ -51,6 +51,7 @@ type ReviewSnapshot = {
   workspaceView: ReviewWorkspaceView
   baseBranch: string | null
   baseBranchOptions: string[]
+  commitSha: string | null
   headBranch: string | null
   mergeBaseSha: string | null
   generatedAtIso: string
@@ -356,6 +357,16 @@ async function buildBaseBranchDiff(
   }
 }
 
+async function buildCommitDiff(repoRoot: string, commitSha: string): Promise<{ diffText: string; commitSha: string }> {
+  const resolvedSha = await runCommandCapture('git', ['rev-parse', '--verify', `${commitSha}^{commit}`], { cwd: repoRoot })
+  const diffText = await runCommandCapture(
+    'git',
+    ['diff-tree', '--root', '--no-commit-id', '--no-ext-diff', '--find-renames', '--patch', resolvedSha],
+    { cwd: repoRoot },
+  )
+  return { diffText, commitSha: resolvedSha }
+}
+
 function normalizeDiffPath(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed || trimmed === '/dev/null') return null
@@ -617,6 +628,7 @@ async function buildReviewSnapshot(
   scope: ReviewScope,
   workspaceView: ReviewWorkspaceView,
   requestedBaseBranch = '',
+  requestedCommitSha = '',
 ): Promise<ReviewSnapshot> {
   const normalizedCwd = normalizeInputCwd(cwd)
   await ensureDirectory(normalizedCwd)
@@ -631,6 +643,7 @@ async function buildReviewSnapshot(
       workspaceView,
       baseBranch: null,
       baseBranchOptions: [],
+      commitSha: null,
       headBranch: null,
       mergeBaseSha: null,
       generatedAtIso: new Date().toISOString(),
@@ -651,8 +664,16 @@ async function buildReviewSnapshot(
 
   let diffText = ''
   let mergeBaseSha: string | null = null
+  let commitSha: string | null = null
 
-  if (scope === 'baseBranch') {
+  if (scope === 'commit') {
+    if (!requestedCommitSha.trim()) {
+      throw new Error('Missing commit')
+    }
+    const commitDiff = await buildCommitDiff(gitRoot, requestedCommitSha.trim())
+    diffText = commitDiff.diffText
+    commitSha = commitDiff.commitSha
+  } else if (scope === 'baseBranch') {
     if (baseBranch) {
       const baseDiff = await buildBaseBranchDiff(gitRoot, baseBranch)
       diffText = baseDiff.diffText
@@ -671,6 +692,7 @@ async function buildReviewSnapshot(
     workspaceView,
     baseBranch: baseBranch?.displayName ?? null,
     baseBranchOptions,
+    commitSha,
     headBranch,
     mergeBaseSha,
     generatedAtIso: new Date().toISOString(),
@@ -756,7 +778,7 @@ async function applyReviewAction(payload: unknown): Promise<ReviewSnapshot> {
   }
 
   const cwd = readString(record.cwd)
-  const scope = record.scope === 'baseBranch' ? 'baseBranch' : 'workspace'
+  const scope = record.scope === 'baseBranch' ? 'baseBranch' : record.scope === 'commit' ? 'commit' : 'workspace'
   const workspaceView = record.workspaceView === 'staged' ? 'staged' : 'unstaged'
   const action = readString(record.action)
   const level = readString(record.level)
@@ -802,9 +824,14 @@ export async function handleReviewRoutes(
 ): Promise<boolean> {
   if (req.method === 'GET' && url.pathname === '/codex-api/review/snapshot') {
     const cwd = url.searchParams.get('cwd')?.trim() ?? ''
-    const scope = url.searchParams.get('scope') === 'baseBranch' ? 'baseBranch' : 'workspace'
+    const scope = url.searchParams.get('scope') === 'baseBranch'
+      ? 'baseBranch'
+      : url.searchParams.get('scope') === 'commit'
+        ? 'commit'
+        : 'workspace'
     const workspaceView = url.searchParams.get('workspaceView') === 'staged' ? 'staged' : 'unstaged'
     const baseBranch = url.searchParams.get('baseBranch')?.trim() ?? ''
+    const commitSha = url.searchParams.get('commitSha')?.trim() ?? ''
     if (!cwd) {
       setJson(res, 400, { error: 'Missing cwd' })
       return true
@@ -812,7 +839,7 @@ export async function handleReviewRoutes(
 
     try {
       setJson(res, 200, {
-        data: await buildReviewSnapshot(cwd, scope, workspaceView, baseBranch),
+        data: await buildReviewSnapshot(cwd, scope, workspaceView, baseBranch, commitSha),
       })
     } catch (error) {
       setJson(res, 500, { error: getErrorMessage(error, 'Failed to load review snapshot') })

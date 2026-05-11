@@ -218,7 +218,7 @@ const emit = defineEmits<{
   resetBranchToCommit: [payload: { branch: string; sha: string }]
   loadCommits: [payload: { branch: string; includeResetHistory: boolean }]
   loadCommitFiles: [sha: string]
-  openCommitFile: [path: string]
+  openCommitFile: [payload: { sha: string; path: string }]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -373,7 +373,8 @@ function formatFileLineCount(value: number | null): string {
 }
 
 function openCommitFile(filePath: string): void {
-  emit('openCommitFile', filePath)
+  if (!selectedCommit.value) return
+  emit('openCommitFile', { sha: selectedCommit.value.sha, path: filePath })
   isOpen.value = false
   searchQuery.value = ''
   commitSearchQuery.value = ''

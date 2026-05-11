@@ -953,7 +953,8 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
   const envelope = asRecord(payload)
   const data = asRecord(envelope?.data)
   const summaryRecord = asRecord(data?.summary)
-  const scope = readString(data?.scope) === 'baseBranch' ? 'baseBranch' : 'workspace'
+  const rawScope = readString(data?.scope)
+  const scope = rawScope === 'baseBranch' || rawScope === 'commit' ? rawScope : 'workspace'
   const workspaceView = readString(data?.workspaceView) === 'staged' ? 'staged' : 'unstaged'
 
   return {
@@ -968,6 +969,7 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
         .map((entry) => readString(entry))
         .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
       : [],
+    commitSha: readString(data?.commitSha),
     headBranch: readString(data?.headBranch),
     mergeBaseSha: readString(data?.mergeBaseSha),
     generatedAtIso: readString(data?.generatedAtIso) ?? '',
@@ -2830,10 +2832,14 @@ export async function getReviewSnapshot(
   scope: UiReviewScope,
   workspaceView: UiReviewWorkspaceView,
   baseBranch?: string | null,
+  commitSha?: string | null,
 ): Promise<UiReviewSnapshot> {
   const query = new URLSearchParams({ cwd, scope, workspaceView })
   if (baseBranch && baseBranch.trim()) {
     query.set('baseBranch', baseBranch.trim())
+  }
+  if (commitSha && commitSha.trim()) {
+    query.set('commitSha', commitSha.trim())
   }
   const response = await fetch(`/codex-api/review/snapshot?${query.toString()}`)
   const payload = (await response.json()) as unknown

@@ -1044,7 +1044,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 13. Confirm local branches appear first and remote branches appear at the end of the branch list.
 14. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a left-side file panel with that commit subject, file changes, per-file `+`/`-` line counts, and a `Reset` button without changing HEAD.
 15. Click a commit ref badge and confirm the full commit SHA is copied to the clipboard without changing the selected commit.
-16. Click a file in the selected commit details and confirm the Review pane opens with the matching file selected when that file is present in the review snapshot.
+16. Click a file in the selected commit details and confirm the dropdown closes and the Review pane opens in commit mode, with the selected commit diff loaded and that file selected.
 17. Click `Reset` for the selected commit and confirm the header stays on that branch instead of entering detached HEAD.
 18. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
 19. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
@@ -1069,7 +1069,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Commit selection opens file details without resetting or detaching HEAD.
 - Commit ref badges copy the full SHA to the clipboard without triggering commit selection.
 - The selected commit `Reset` button resets the local branch to that commit instead of detaching HEAD.
-- Clicking a selected commit file opens the Review pane and selects that path when it exists in the current review snapshot.
+- Clicking a selected commit file opens the Review pane against that commit diff and selects that path.
 - Remote branches appear after local branches in the branch list.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.

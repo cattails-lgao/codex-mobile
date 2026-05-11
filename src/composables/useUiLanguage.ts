@@ -149,6 +149,7 @@ const zhCN: Record<string, string> = {
   'No diff available': '没有可用 diff',
   'This summary was restored from the final answer text, but the thread history does not include patch diff content for this file.': '此摘要是从最终回答文本恢复的，但线程历史中不包含该文件的补丁 diff 内容。',
   'Review': '审查',
+  'Commit': '提交',
   'Close review pane': '关闭审查面板',
   'Compare': '比较',
   'Branch': '分支',
