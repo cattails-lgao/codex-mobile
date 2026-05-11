@@ -16,7 +16,7 @@
 
     <div v-if="isOpen" class="header-git-menu-wrap">
       <div class="header-git-menu" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
-        <button v-if="showReview" class="header-git-review-row" type="button" @click="emit('toggleReview')">
+        <button v-if="showReview" class="header-git-review-row" type="button" @click="toggleReview">
           <IconTablerFilePencil class="header-git-row-icon" />
           <span>{{ reviewOpen ? 'Review (Open)' : 'Review' }}</span>
         </button>
@@ -296,6 +296,14 @@ const filteredSelectedBranchCommits = computed(() => {
 function toggleOpen(): void {
   if (disabled.value) return
   isOpen.value = !isOpen.value
+}
+
+function toggleReview(): void {
+  emit('toggleReview')
+  isOpen.value = false
+  searchQuery.value = ''
+  commitSearchQuery.value = ''
+  selectedCommitSha.value = ''
 }
 
 function selectBranch(branch: string): void {
