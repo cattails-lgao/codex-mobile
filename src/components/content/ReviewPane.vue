@@ -7,7 +7,7 @@
       </div>
       <div class="review-pane-header-actions">
         <button
-          v-if="isMobile && activeTab === 'changes' && snapshot?.files.length"
+          v-if="isMobile && snapshot?.files.length"
           type="button"
           class="review-pane-mobile-files-button"
           @click="isFileSheetOpen = true"
@@ -21,21 +21,6 @@
     </header>
 
     <div class="review-pane-toolbar">
-      <div class="review-pane-toolbar-tabs">
-        <div class="review-pane-segmented review-pane-segmented-primary">
-          <button
-            v-for="tab in reviewTabs"
-            :key="tab.value"
-            type="button"
-            class="review-pane-segmented-button review-pane-tab"
-            :data-active="activeTab === tab.value"
-            @click="activeTab = tab.value"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-      </div>
-
       <div class="review-pane-toolbar-controls">
         <div class="review-pane-control-cluster">
           <span class="review-pane-control-label">{{ t('Compare') }}</span>
@@ -120,7 +105,7 @@
       <span v-if="activeScope === 'baseBranch' && snapshot.baseBranch">vs {{ snapshot.baseBranch }}</span>
     </div>
 
-    <div v-if="activeTab === 'changes'" class="review-pane-content">
+    <div class="review-pane-content">
       <template v-if="!snapshot">
         <div class="review-pane-empty">
           <p class="review-pane-empty-title">{{ t('Loading review state') }}</p>
@@ -296,36 +281,6 @@
       </template>
     </div>
 
-    <div v-else class="review-pane-findings">
-      <div v-if="currentReviewResult?.summary" class="review-pane-summary-card">
-        <p class="review-pane-summary-title">Summary</p>
-        <pre class="review-pane-summary-text">{{ currentReviewResult.summary }}</pre>
-      </div>
-
-      <div v-if="currentReviewResult?.findings.length" class="review-pane-findings-list">
-        <button
-          v-for="finding in currentReviewResult.findings"
-          :key="finding.id"
-          type="button"
-          class="review-pane-finding"
-          @click="openFinding(finding)"
-        >
-          <span class="review-pane-finding-title">{{ finding.title }}</span>
-          <span v-if="finding.absolutePath" class="review-pane-finding-location">
-            {{ formatFindingLocation(finding) }}
-          </span>
-          <span v-if="finding.body" class="review-pane-finding-body">{{ finding.body }}</span>
-        </button>
-      </div>
-
-      <div v-else class="review-pane-empty">
-        <p class="review-pane-empty-title">No structured findings yet</p>
-        <p class="review-pane-empty-text">
-          {{ currentReviewResult?.summary ? 'The latest review only returned summary text.' : 'No review results yet.' }}
-        </p>
-      </div>
-    </div>
-
     <Transition name="review-pane-sheet">
       <div
         v-if="isMobile && isFileSheetOpen && snapshot?.files.length"
@@ -390,7 +345,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   applyReviewAction,
   getReviewSnapshot,
-  getThreadReviewResult,
   initializeReviewGit,
   subscribeCodexNotifications,
   type RpcNotification,
@@ -399,11 +353,8 @@ import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import type {
   UiReviewAction,
-  UiReviewFinding,
-  UiReviewResult,
   UiReviewScope,
   UiReviewSnapshot,
-  UiReviewTab,
   UiReviewWorkspaceView,
   UiReviewFile,
   UiReviewHunk,
@@ -424,7 +375,6 @@ defineEmits<{
 const { isMobile } = useMobile()
 const { t } = useUiLanguage()
 
-const activeTab = ref<UiReviewTab>('changes')
 const activeScope = ref<UiReviewScope>('workspace')
 const workspaceView = ref<UiReviewWorkspaceView>('unstaged')
 const snapshot = ref<UiReviewSnapshot | null>(null)
@@ -435,21 +385,13 @@ const selectedHunkId = ref('')
 const isFileSheetOpen = ref(false)
 const isLoadingSnapshot = ref(false)
 const isApplyingAction = ref(false)
-const isRunningReview = ref(false)
 const isInitializingGit = ref(false)
 const snapshotError = ref('')
 const reviewError = ref('')
 const reviewStatusLabel = ref('')
-const reviewResultsByKey = ref<Record<string, UiReviewResult | null>>({})
-const pendingReviewKey = ref('')
 const hunkRefs = new Map<string, HTMLElement>()
 let stopNotifications: (() => void) | null = null
 let stopResizeTracking: (() => void) | null = null
-
-const reviewTabs = [
-  { value: 'changes' as const, label: t('Changes') },
-  { value: 'findings' as const, label: t('Findings') },
-]
 
 type ReviewTreeFolderNode = {
   kind: 'folder'
@@ -485,8 +427,6 @@ type MutableReviewTreeFolder = {
   files: MutableReviewTreeFile[]
 }
 
-const reviewKey = computed(() => `${activeScope.value}:${workspaceView.value}`)
-const currentReviewResult = computed(() => reviewResultsByKey.value[reviewKey.value] ?? null)
 const selectedFile = computed(() => snapshot.value?.files.find((file) => file.id === selectedFileId.value) ?? snapshot.value?.files[0] ?? null)
 const folderExpansionState = ref<Record<string, boolean>>({})
 
@@ -825,26 +765,8 @@ async function loadSnapshot(): Promise<void> {
   }
 }
 
-async function loadLatestReviewResult(): Promise<void> {
-  if (!props.threadId.trim()) return
-  try {
-    const reviewState = await getThreadReviewResult(props.threadId)
-    if (reviewState.result) {
-      reviewResultsByKey.value = {
-        ...reviewResultsByKey.value,
-        [reviewKey.value]: reviewState.result,
-      }
-    }
-  } catch {
-    // Keep the pane usable even if thread history refresh fails.
-  }
-}
-
 async function reloadAll(): Promise<void> {
-  await Promise.all([
-    loadSnapshot(),
-    loadLatestReviewResult(),
-  ])
+  await loadSnapshot()
 }
 
 function selectFile(fileId: string): void {
@@ -910,52 +832,10 @@ async function initializeGit(): Promise<void> {
   }
 }
 
-function formatFindingLocation(finding: UiReviewFinding): string {
-  if (!finding.absolutePath) return ''
-  const lineSuffix = finding.startLine ? `:${finding.startLine}${finding.endLine && finding.endLine !== finding.startLine ? `-${finding.endLine}` : ''}` : ''
-  return `${finding.absolutePath}${lineSuffix}`
-}
-
-function findMatchingHunk(file: UiReviewFile, finding: UiReviewFinding): UiReviewHunk | null {
-  if (!finding.startLine) return file.hunks[0] ?? null
-  for (const hunk of file.hunks) {
-    if (hunk.newStart !== null) {
-      const newEnd = hunk.newStart + Math.max(hunk.newLineCount, 1) - 1
-      if (finding.startLine >= hunk.newStart && finding.startLine <= newEnd) {
-        return hunk
-      }
-    }
-    if (hunk.oldStart !== null) {
-      const oldEnd = hunk.oldStart + Math.max(hunk.oldLineCount, 1) - 1
-      if (finding.startLine >= hunk.oldStart && finding.startLine <= oldEnd) {
-        return hunk
-      }
-    }
-  }
-  return file.hunks[0] ?? null
-}
-
 async function scrollToHunk(hunkId: string): Promise<void> {
   await nextTick()
   const element = hunkRefs.get(hunkId)
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-}
-
-async function openFinding(finding: UiReviewFinding): Promise<void> {
-  activeTab.value = 'changes'
-  const file = snapshot.value?.files.find((entry) => (
-    entry.absolutePath === finding.absolutePath
-    || entry.previousAbsolutePath === finding.absolutePath
-  )) ?? null
-  if (!file) return
-
-  expandFileAncestors(file.id)
-  selectedFileId.value = file.id
-  const matchedHunk = findMatchingHunk(file, finding)
-  selectedHunkId.value = matchedHunk?.id ?? ''
-  if (matchedHunk?.id) {
-    await scrollToHunk(matchedHunk.id)
-  }
 }
 
 function handleNotification(notification: RpcNotification): void {
@@ -969,30 +849,12 @@ function handleNotification(notification: RpcNotification): void {
   const itemType = typeof item?.type === 'string' ? item.type : ''
 
   if (notification.method === 'item/started' && itemType === 'enteredReviewMode') {
-    isRunningReview.value = true
     reviewStatusLabel.value = typeof item?.review === 'string' ? item.review : 'Review in progress'
     return
   }
 
   if (notification.method === 'item/completed' && itemType === 'exitedReviewMode') {
-    const targetKey = pendingReviewKey.value || reviewKey.value
-    isRunningReview.value = false
     reviewStatusLabel.value = ''
-    void getThreadReviewResult(props.threadId)
-      .then((reviewState) => {
-        if (!reviewState.result) return
-        reviewResultsByKey.value = {
-          ...reviewResultsByKey.value,
-          [targetKey]: reviewState.result,
-        }
-        activeTab.value = 'findings'
-      })
-      .catch((error) => {
-        reviewError.value = error instanceof Error ? error.message : 'Failed to load review result'
-      })
-      .finally(() => {
-        pendingReviewKey.value = ''
-      })
   }
 }
 
@@ -1001,8 +863,6 @@ watch(
   () => {
     selectedFileId.value = ''
     selectedHunkId.value = ''
-    reviewResultsByKey.value = {}
-    pendingReviewKey.value = ''
     reviewError.value = ''
     reviewStatusLabel.value = ''
     void reloadAll()
@@ -1112,10 +972,6 @@ onBeforeUnmount(() => {
   @apply flex flex-col gap-2 border-b border-zinc-100 px-3 py-2.5;
 }
 
-.review-pane-toolbar-tabs {
-  @apply min-w-0;
-}
-
 .review-pane-toolbar-controls {
   @apply flex flex-wrap items-center gap-2;
 }
@@ -1138,10 +994,6 @@ onBeforeUnmount(() => {
 
 .review-pane-segmented {
   @apply inline-flex min-w-0 items-center gap-1 rounded-full bg-zinc-100 p-1;
-}
-
-.review-pane-segmented-primary {
-  @apply flex-1 bg-zinc-100/80;
 }
 
 .review-pane-segmented-button {
@@ -1197,8 +1049,7 @@ onBeforeUnmount(() => {
   @apply bg-rose-100 text-rose-700;
 }
 
-.review-pane-content,
-.review-pane-findings {
+.review-pane-content {
   @apply min-h-0 flex-1 overflow-hidden;
 }
 
@@ -1261,8 +1112,7 @@ onBeforeUnmount(() => {
   @apply bg-sky-500;
 }
 
-.review-pane-file,
-.review-pane-finding {
+.review-pane-file {
   @apply flex w-full flex-col gap-0.75 rounded-xl border border-transparent px-2.5 py-2 text-left transition hover:border-zinc-200 hover:bg-white;
 }
 
@@ -1340,8 +1190,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-subtitle,
-.review-pane-hunk-meta,
-.review-pane-finding-location {
+.review-pane-hunk-meta {
   @apply m-0 text-[11px] text-zinc-500;
 }
 
@@ -1419,33 +1268,8 @@ onBeforeUnmount(() => {
   @apply overflow-x-auto rounded-2xl border border-zinc-200 bg-zinc-950 p-3 text-xs text-zinc-100;
 }
 
-.review-pane-raw-diff pre,
-.review-pane-summary-text {
+.review-pane-raw-diff pre {
   @apply m-0 whitespace-pre-wrap break-all font-mono;
-}
-
-.review-pane-summary-card {
-  @apply mx-3 mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2.5;
-}
-
-.review-pane-summary-title {
-  @apply m-0 mb-2 text-sm font-medium text-zinc-900;
-}
-
-.review-pane-findings-list {
-  @apply flex h-full flex-col gap-2.5 overflow-y-auto px-3 py-3;
-}
-
-.review-pane-finding {
-  @apply border-zinc-200 bg-white hover:border-zinc-300;
-}
-
-.review-pane-finding-title {
-  @apply text-sm font-medium text-zinc-900;
-}
-
-.review-pane-finding-body {
-  @apply text-sm text-zinc-600 whitespace-pre-wrap;
 }
 
 .review-pane-empty {
@@ -1676,10 +1500,6 @@ onBeforeUnmount(() => {
 @media (min-width: 768px) {
   .review-pane-toolbar {
     @apply flex-row items-center gap-2.5;
-  }
-
-  .review-pane-toolbar-tabs {
-    @apply flex-1;
   }
 
   .review-pane-toolbar-controls {

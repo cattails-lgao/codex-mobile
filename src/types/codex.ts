@@ -112,7 +112,6 @@ export type UiFileChange = {
   removedLineCount: number
 }
 
-export type UiReviewTab = 'changes' | 'findings'
 export type UiReviewScope = 'workspace' | 'baseBranch'
 export type UiReviewWorkspaceView = 'unstaged' | 'staged'
 export type UiReviewAction = 'stage' | 'unstage' | 'revert'
