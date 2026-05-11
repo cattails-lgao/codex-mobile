@@ -931,6 +931,10 @@
   @apply border-zinc-700 bg-zinc-900;
 }
 
+:root.dark .header-git-review-row {
+  @apply border-zinc-700 bg-zinc-800 shadow-none;
+}
+
 :root.dark .header-git-review-row,
 :root.dark .header-git-branch-button,
 :root.dark .header-git-branch-checkout,

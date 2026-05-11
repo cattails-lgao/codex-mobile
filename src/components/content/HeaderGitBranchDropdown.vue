@@ -18,7 +18,7 @@
       <div class="header-git-menu" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
         <button v-if="showReview" class="header-git-review-row" type="button" @click="toggleReview">
           <IconTablerFilePencil class="header-git-row-icon" />
-          <span class="header-git-review-label">{{ reviewOpen ? 'Worktree changes (Open)' : 'Worktree changes' }}</span>
+          <span class="header-git-review-label">{{ reviewOpen ? 'Review Worktree Changes (Open)' : 'Review Worktree Changes' }}</span>
           <span class="header-git-review-delta">
             <span class="header-git-file-added">+{{ worktreeChangeSummary.addedLineCount }}</span>
             <span class="header-git-file-removed">-{{ worktreeChangeSummary.removedLineCount }}</span>
@@ -510,7 +510,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-review-row {
-  @apply items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100;
+  @apply mb-1 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50;
 }
 
 .header-git-review-label {
@@ -719,14 +719,32 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 @media (max-width: 640px) {
+  .header-git-menu-wrap {
+    @apply left-2 right-2 top-[4.5rem];
+  }
+
+  .header-git-menu,
+  .header-git-menu.has-commit-files {
+    @apply w-auto max-w-none overflow-y-auto;
+    max-height: calc(100vh - 5.25rem);
+  }
+
+  .header-git-review-row {
+    @apply px-3 py-2.5;
+  }
+
   .header-git-columns {
+    @apply min-h-0 grid-cols-1;
+  }
+
+  .header-git-columns.has-commit-files {
     @apply grid-cols-1;
   }
 
   .header-git-commit-list,
   .header-git-branches,
   .header-git-file-list {
-    @apply max-h-56;
+    @apply max-h-48;
   }
 }
 </style>

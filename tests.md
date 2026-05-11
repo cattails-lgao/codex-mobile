@@ -1034,7 +1034,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 3. Confirm the menu initially shows only commits on the left and branches on the right, with no commit-files panel before a commit is selected.
 4. Confirm the left column defaults to the current branch and shows no more than 50 recent commits with short SHA, subject, and date.
 5. Confirm the open dropdown visually layers above the sidebar and above the Review pane if the pane is already open.
-6. Confirm the top action reads `Worktree changes` and shows `+`/`-` line counts; click it and confirm the dropdown stays open while the review pane opens above it directly to changes without showing a `Findings` tab or `Run review` button; click `Worktree changes` again and confirm the pane toggles closed.
+6. Confirm the top action is styled as a button, reads `Review Worktree Changes`, and shows `+`/`-` line counts; click it and confirm the dropdown stays open while the review pane opens above it directly to changes without showing a `Findings` tab or `Run review` button; click the Review pane `X` and confirm only the pane closes while the dropdown stays open; click `Review Worktree Changes` again and confirm the pane toggles open.
 7. Type part of a commit subject or short SHA in the left commit search and confirm the commit list filters.
 8. Turn off `Reset-history refs` and confirm the commit list reloads without saved reset-history refs.
 9. Turn `Reset-history refs` back on and confirm saved reset-history commits reappear when available.
@@ -1052,8 +1052,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 21. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
 22. Create only an untracked file whose path does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the untracked file remains in place.
 23. Create only an untracked file whose path exists in the target commit, try to reset to that target, and confirm the reset proceeds and the untracked file is moved under `.codex/untracked-backups/` instead of being overwritten.
-24. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
-25. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, and 24.
+24. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with the selected-commit file panel, commits panel, and branches panel stacked vertically instead of squeezed into columns.
+25. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
+26. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, 24, and 25.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
@@ -1061,8 +1062,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Each selected-commit file row shows added and removed line counts, using `-` for binary or unavailable counts.
 - The dropdown layer is viewport-positioned and appears above the sidebar when open.
 - The Review pane renders above the open dropdown and app chrome.
-- Clicking the dropdown `Worktree changes` row keeps the dropdown open while toggling the Review pane.
-- The `Worktree changes` row shows current worktree added and removed line counts.
+- Clicking the dropdown `Review Worktree Changes` button keeps the dropdown open while toggling the Review pane.
+- Clicking the Review pane `X` while the dropdown is open closes only the Review pane and leaves the dropdown open.
+- The `Review Worktree Changes` button shows current worktree added and removed line counts.
 - The Review pane toolbar keeps `Refresh` but does not show a `Findings` tab or `Run review` button.
 - The current branch commit list loads by default and is capped at 50 commits.
 - The commit list can be searched by SHA, subject, or date without changing the selected branch.
@@ -1078,6 +1080,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset.
 - The selected branch HEAD commit is marked `current` in the commit list.
 - The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
+- On mobile, selected-commit file details, commits, and branches stack vertically and stay inside the viewport in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 

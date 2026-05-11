@@ -1,5 +1,5 @@
 <template>
-  <section class="review-pane" :class="{ 'is-mobile': isMobile }" @click.stop>
+  <section class="review-pane" :class="{ 'is-mobile': isMobile }" @pointerdown.stop @click.stop>
     <header class="review-pane-header">
       <div class="review-pane-heading">
         <p class="review-pane-eyebrow">{{ t('Review') }}</p>
