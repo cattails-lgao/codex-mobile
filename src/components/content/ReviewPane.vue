@@ -102,14 +102,6 @@
       </div>
 
       <div class="review-pane-toolbar-actions">
-        <button
-          type="button"
-          class="review-pane-run"
-          :disabled="!canRunReview || isRunningReview"
-          @click="runReview"
-        >
-          {{ isRunningReview ? t('Reviewing…') : t('Run review') }}
-        </button>
         <button type="button" class="review-pane-refresh" :disabled="isLoadingSnapshot" @click="reloadAll">
           {{ t('Refresh') }}
         </button>
@@ -329,7 +321,7 @@
       <div v-else class="review-pane-empty">
         <p class="review-pane-empty-title">No structured findings yet</p>
         <p class="review-pane-empty-text">
-          {{ currentReviewResult?.summary ? 'The latest review only returned summary text.' : 'Run review to populate this pane.' }}
+          {{ currentReviewResult?.summary ? 'The latest review only returned summary text.' : 'No review results yet.' }}
         </p>
       </div>
     </div>
@@ -400,7 +392,6 @@ import {
   getReviewSnapshot,
   getThreadReviewResult,
   initializeReviewGit,
-  startThreadReview,
   subscribeCodexNotifications,
   type RpcNotification,
 } from '../../api/codexGateway'
@@ -530,14 +521,6 @@ const headerTitle = computed(() => {
   }
   return snapshot.value?.baseBranch ? `${t('Against')} ${snapshot.value.baseBranch}` : t('Base branch')
 })
-
-const canRunReview = computed(() => (
-  props.threadId.trim().length > 0
-  && props.cwd.trim().length > 0
-  && snapshot.value?.isGitRepo === true
-  && !props.isThreadInProgress
-  && !(activeScope.value === 'baseBranch' && !snapshot.value?.baseBranch)
-))
 
 const showBulkActions = computed(() => (
   activeScope.value === 'workspace'
@@ -927,29 +910,6 @@ async function initializeGit(): Promise<void> {
   }
 }
 
-async function runReview(): Promise<void> {
-  if (!canRunReview.value || isRunningReview.value) return
-  reviewError.value = ''
-  reviewStatusLabel.value = activeScope.value === 'workspace'
-    ? 'Reviewing current changes'
-    : `Reviewing against ${snapshot.value?.baseBranch ?? 'base branch'}`
-  isRunningReview.value = true
-  pendingReviewKey.value = reviewKey.value
-
-  try {
-    await startThreadReview(
-      props.threadId,
-      activeScope.value,
-      workspaceView.value,
-      selectedBaseBranch.value || (snapshot.value?.baseBranch ?? null),
-    )
-  } catch (error) {
-    isRunningReview.value = false
-    reviewStatusLabel.value = ''
-    reviewError.value = error instanceof Error ? error.message : 'Failed to start review'
-  }
-}
-
 function formatFindingLocation(finding: UiReviewFinding): string {
   if (!finding.absolutePath) return ''
   const lineSuffix = finding.startLine ? `:${finding.startLine}${finding.endLine && finding.endLine !== finding.startLine ? `-${finding.endLine}` : ''}` : ''
@@ -1138,7 +1098,6 @@ onBeforeUnmount(() => {
 .review-pane-close,
 .review-pane-mobile-files-button,
 .review-pane-refresh,
-.review-pane-run,
 .review-pane-bulk-button,
 .review-pane-row-button,
 .review-pane-primary-cta {
@@ -1208,10 +1167,6 @@ onBeforeUnmount(() => {
 
 .review-pane-toolbar-actions {
   @apply flex shrink-0 items-center gap-1.5;
-}
-
-.review-pane-run {
-  @apply border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700;
 }
 
 .review-pane-refresh {
@@ -1576,8 +1531,7 @@ onBeforeUnmount(() => {
 
   .review-pane-close,
   .review-pane-mobile-files-button,
-  .review-pane-refresh,
-  .review-pane-run {
+  .review-pane-refresh {
     @apply px-2.5 py-1 text-[12px];
   }
 
@@ -1621,8 +1575,7 @@ onBeforeUnmount(() => {
     @apply w-auto gap-1;
   }
 
-  .review-pane-refresh,
-  .review-pane-run {
+  .review-pane-refresh {
     @apply px-2.5 py-1 text-[12px];
   }
 
