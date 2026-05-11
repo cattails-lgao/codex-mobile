@@ -741,6 +741,18 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
     @apply grid-cols-1;
   }
 
+  .header-git-branch-panel {
+    @apply order-1;
+  }
+
+  .header-git-commit-panel {
+    @apply order-2;
+  }
+
+  .header-git-commit-detail-panel {
+    @apply order-3;
+  }
+
   .header-git-commit-list,
   .header-git-branches,
   .header-git-file-list {
