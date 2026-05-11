@@ -566,6 +566,9 @@
                   <button class="new-thread-folder-action" type="button" @click="onCreateProject">
                     {{ t('Create Project') }}
                   </button>
+                  <button class="new-thread-folder-action" type="button" :disabled="isCloningGithubRepository" @click="onCloneGithubRepository">
+                    {{ isCloningGithubRepository ? t('Cloning…') : t('Clone from GitHub') }}
+                  </button>
                 </div>
                 <section v-if="showFirstLaunchPluginsCard" class="new-thread-launch-card" aria-label="Plugins and Apps announcement">
                   <div class="new-thread-launch-card-copy">
@@ -970,6 +973,7 @@ import { useMobile } from './composables/useMobile'
 import { useUiLanguage } from './composables/useUiLanguage'
 import {
   checkoutGitBranch,
+  cloneGithubRepository,
   configureTelegramBot,
   createPermanentWorktree,
   createWorktree,
@@ -1359,6 +1363,7 @@ const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
 const isCreatingFolder = ref(false)
+const isCloningGithubRepository = ref(false)
 const isExistingFolderPickerOpen = ref(false)
 const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
@@ -3048,6 +3053,33 @@ async function onCreateProject(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create the project.'
     window.alert(message)
+  }
+}
+
+async function onCloneGithubRepository(): Promise<void> {
+  if (isCloningGithubRepository.value) return
+  const baseDir = await resolveProjectBaseDirectory()
+  if (!baseDir) return
+
+  const repoUrl = window.prompt(`Clone GitHub repository into ${baseDir}`, 'https://github.com/')
+  if (repoUrl === null) return
+  const normalizedRepoUrl = repoUrl.trim()
+  if (!normalizedRepoUrl) return
+
+  isCloningGithubRepository.value = true
+  try {
+    const normalizedPath = await cloneGithubRepository(normalizedRepoUrl, baseDir)
+    if (!normalizedPath) return
+
+    newThreadCwd.value = normalizedPath
+    pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to clone GitHub repository.'
+    window.alert(message)
+  } finally {
+    isCloningGithubRepository.value = false
   }
 }
 

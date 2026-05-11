@@ -79,6 +79,8 @@ const zhCN: Record<string, string> = {
   'Selected folder': '已选文件夹',
   'Select folder': '选择文件夹',
   'Create Project': '创建项目',
+  'Clone from GitHub': '从 GitHub 克隆',
+  'Cloning…': '克隆中…',
   'Current folder': '当前文件夹',
   'Unavailable': '不可用',
   'Opening…': '打开中…',

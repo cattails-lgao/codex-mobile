@@ -117,6 +117,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
 
+## New chat GitHub clone
+
+### Feature: Clone from GitHub on new chat
+
+Prerequisites/setup:
+- Run the app with access to `git` and network access to `github.com`.
+- Have a small public GitHub repository URL available for testing.
+
+Steps:
+1. Open the app in light theme and navigate to the new chat screen.
+2. Confirm the folder actions show `Select folder`, `Create Project`, and `Clone from GitHub`.
+3. Click `Clone from GitHub`, paste a valid `https://github.com/<owner>/<repo>` URL, and submit the prompt.
+4. Confirm the cloned repository folder is selected in the new chat folder selector and appears as a project root.
+5. Switch the app to dark theme and repeat opening the new chat screen.
+6. Confirm the `Clone from GitHub` button keeps the same spacing, disabled loading state, and readable contrast as the other folder actions.
+
+Expected results:
+- The repository is cloned under the same base folder used by `Create Project`.
+- The cloned folder is registered as a project root and selected for the new chat.
+- Invalid or non-GitHub URLs show an error alert without changing the selected folder.
+- Light and dark themes render the new action consistently with the existing new-chat controls.
+
+Rollback/cleanup:
+- Remove the cloned repository folder from the filesystem if it was only used for testing.
+- Remove the cloned project from the app project list if it is no longer needed.
+
 ### Feature: Empty project new thread action
 
 #### Prerequisites
