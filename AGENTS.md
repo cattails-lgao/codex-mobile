@@ -127,6 +127,7 @@
   5. For responsive/mobile changes, run checks at 375x812 and 768x1024.
   6. Wait 2-3 seconds before capturing final screenshot(s).
   7. Save screenshots under `output/playwright/` with task-specific names.
+  8. Leave the dev server running after verification unless the user explicitly asks to stop it.
 - Capture screenshots only when Playwright verification is requested.
 - If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
 - If requested Playwright assertions fail, do not report completion; fix and re-run until passing.
@@ -155,6 +156,7 @@
 - For dev-server fixes, verify the exact user-requested command afterwards (for example `npm run dev`), not only a fallback Vite invocation.
 - Never kill or stop the tmux-managed dev server bound to port `5173`.
 - Treat the `5173` tmux dev process as persistent infrastructure; restart it only when the user explicitly requests a restart.
+- Treat the `4173` verification dev server as reusable test infrastructure during active UI work; after tests or screenshots, leave it running unless the user explicitly asks to stop it.
 
 ## Dark Theme CSS Rule
 
