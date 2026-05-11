@@ -36,7 +36,14 @@
           <section v-if="selectedCommit" class="header-git-commit-detail-panel" aria-label="Commit files">
             <div class="header-git-commit-detail-head">
               <div class="header-git-commit-detail-title">
-                <code>{{ selectedCommit.shortSha }}</code>
+                <button
+                  class="header-git-ref"
+                  type="button"
+                  :title="copiedCommitSha === selectedCommit.sha ? 'Copied commit ref' : `Copy ${selectedCommit.sha}`"
+                  @click.stop="copyCommitRef(selectedCommit)"
+                >
+                  {{ selectedCommit.shortSha }}
+                </button>
                 <span>{{ selectedCommit.date }}</span>
               </div>
               <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
@@ -107,7 +114,17 @@
                   @click="onSelectCommit(commit)"
                 >
                   <span class="header-git-commit-top">
-                    <code>{{ commit.shortSha }}</code>
+                    <span
+                      class="header-git-ref"
+                      role="button"
+                      tabindex="0"
+                      :title="copiedCommitSha === commit.sha ? 'Copied commit ref' : `Copy ${commit.sha}`"
+                      @click.stop="copyCommitRef(commit)"
+                      @keydown.enter.prevent.stop="copyCommitRef(commit)"
+                      @keydown.space.prevent.stop="copyCommitRef(commit)"
+                    >
+                      {{ commit.shortSha }}
+                    </span>
                     <span class="header-git-commit-meta">
                       <span v-if="isCurrentCommit(commit)" class="header-git-branch-meta">current</span>
                       <span>{{ commit.date }}</span>
@@ -211,6 +228,7 @@ const searchQuery = ref('')
 const commitSearchQuery = ref('')
 const selectedBranch = ref('')
 const selectedCommitSha = ref('')
+const copiedCommitSha = ref('')
 const lastCurrentBranch = ref('')
 const showResetHistoryRefs = ref(true)
 const showReview = computed(() => props.showReview !== false)
@@ -304,6 +322,37 @@ function selectedBranchCommitActionTitle(commit: GitCommitOption): string {
 function onSelectCommit(commit: GitCommitOption): void {
   selectedCommitSha.value = commit.sha
   emit('loadCommitFiles', commit.sha)
+}
+
+function copyCommitRef(commit: GitCommitOption): void {
+  const value = commit.sha.trim() || commit.shortSha.trim()
+  if (!value) return
+  copiedCommitSha.value = commit.sha
+  void copyTextToClipboard(value).catch(() => {
+    copiedCommitSha.value = ''
+  })
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return
+    }
+  } catch {
+    // Fall back for embedded browser contexts without clipboard permission.
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  if (!copied) throw new Error('Copy failed')
 }
 
 function resetSelectedCommit(): void {
@@ -578,8 +627,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply flex shrink-0 items-center gap-1.5;
 }
 
-.header-git-commit-top code {
-  @apply rounded bg-zinc-200 px-1 py-0.5 font-mono text-[0.68rem] text-zinc-700;
+.header-git-ref {
+  @apply inline-flex w-fit max-w-full items-center rounded border-0 bg-zinc-200 px-1 py-0.5 font-mono text-[0.68rem] text-zinc-700 outline-none transition hover:bg-zinc-300 focus-visible:ring-1 focus-visible:ring-zinc-500;
 }
 
 .header-git-empty,
@@ -601,10 +650,6 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 
 .header-git-commit-detail-title {
   @apply flex items-center justify-between gap-2 text-[0.68rem] text-zinc-500;
-}
-
-.header-git-commit-detail-title code {
-  @apply rounded bg-zinc-200 px-1 py-0.5 font-mono text-[0.68rem] text-zinc-700;
 }
 
 .header-git-commit-detail-subject {

@@ -998,11 +998,14 @@
   @apply border-zinc-700 bg-zinc-800 text-zinc-100 focus:border-zinc-600;
 }
 
-:root.dark .header-git-commit-top code,
-:root.dark .header-git-commit-detail-title code,
+:root.dark .header-git-ref,
 :root.dark .header-git-file-status,
 :root.dark .header-git-branch-meta {
   @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .header-git-ref:hover {
+  @apply bg-zinc-600;
 }
 
 :root.dark .header-git-commit-detail-head {
