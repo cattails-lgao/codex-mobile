@@ -812,6 +812,9 @@
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
                     :pending-requests="selectedThreadServerRequests"
+                    :has-more-persisted-above="hasMoreOlderMessages"
+                    :is-loading-persisted-above="isLoadingOlderMessages"
+                    :load-earlier-messages="loadOlderMessages"
                     @fork-thread="onForkThreadFromMessage"
                     @rollback="onRollback"
                     @implement-plan="onImplementPlan"
@@ -1197,9 +1200,11 @@ const {
   installedSkills,
   accountRateLimitSnapshots,
   messages,
+  hasMoreOlderMessages,
   isLoadingThreads,
   isThreadListFullyLoaded,
   isLoadingMessages,
+  isLoadingOlderMessages,
   isSendingMessage,
   isInterruptingTurn,
   isSelectedThreadInterruptPending,
@@ -1208,6 +1213,7 @@ const {
   refreshSkills,
   selectThread,
   ensureThreadMessagesLoaded,
+  loadOlderMessages,
   setThreadTerminalOpen,
   toggleSelectedThreadTerminal,
   archiveThreadById,
