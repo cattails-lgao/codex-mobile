@@ -237,7 +237,6 @@
                 <article
                   v-for="hunk in selectedFile.hunks"
                   :key="hunk.id"
-                  :ref="(element) => bindHunkRef(hunk.id, element)"
                   class="review-pane-hunk"
                   :data-active="selectedHunkId === hunk.id"
                   @click="selectedHunkId = hunk.id"
@@ -342,7 +341,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   applyReviewAction,
   getReviewSnapshot,
@@ -391,7 +390,6 @@ const isInitializingGit = ref(false)
 const snapshotError = ref('')
 const reviewError = ref('')
 const reviewStatusLabel = ref('')
-const hunkRefs = new Map<string, HTMLElement>()
 let stopNotifications: (() => void) | null = null
 let stopResizeTracking: (() => void) | null = null
 
@@ -720,14 +718,6 @@ function formatOperation(operation: string): string {
   return 'Modified'
 }
 
-function bindHunkRef(hunkId: string, element: unknown): void {
-  if (!(element instanceof HTMLElement)) {
-    hunkRefs.delete(hunkId)
-    return
-  }
-  hunkRefs.set(hunkId, element)
-}
-
 function extractNotificationThreadId(notification: RpcNotification): string {
   const params = notification.params !== null && typeof notification.params === 'object' && !Array.isArray(notification.params)
     ? notification.params as Record<string, unknown>
@@ -845,12 +835,6 @@ async function initializeGit(): Promise<void> {
   }
 }
 
-async function scrollToHunk(hunkId: string): Promise<void> {
-  await nextTick()
-  const element = hunkRefs.get(hunkId)
-  element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-}
-
 function handleNotification(notification: RpcNotification): void {
   if (extractNotificationThreadId(notification) !== props.threadId) return
   const params = notification.params !== null && typeof notification.params === 'object' && !Array.isArray(notification.params)
@@ -917,11 +901,6 @@ watch(selectedFile, (file) => {
   if (!file.hunks.some((hunk) => hunk.id === selectedHunkId.value)) {
     selectedHunkId.value = file.hunks[0]?.id ?? ''
   }
-})
-
-watch(selectedHunkId, (hunkId) => {
-  if (!hunkId) return
-  void scrollToHunk(hunkId)
 })
 
 onMounted(() => {
