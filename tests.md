@@ -1031,18 +1031,18 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 #### Steps
 1. In light theme, open the Git dropdown in the thread header.
 2. Confirm the trigger shows the current branch, or the detached commit subject if the repository is already detached.
-3. Confirm the menu shows commits in the left column, branches in the middle column, and an empty commit detail panel on the right.
+3. Confirm the menu initially shows only commits on the left and branches on the right, with no commit-files panel before a commit is selected.
 4. Confirm the left column defaults to the current branch and shows no more than 50 recent commits with short SHA, subject, and date.
 5. Confirm the open dropdown visually layers above the sidebar and above the Review pane if the pane is already open.
 6. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
 7. Type part of a commit subject or short SHA in the left commit search and confirm the commit list filters.
 8. Turn off `Reset-history refs` and confirm the commit list reloads without saved reset-history refs.
 9. Turn `Reset-history refs` back on and confirm saved reset-history commits reappear when available.
-10. Type part of a branch name in search and confirm the right branch list filters.
+10. Type part of a branch name in search and confirm the branch list filters.
 11. Click a different branch row and confirm the left commit list changes to that branch without immediately switching checkout.
 12. Use the branch row `Checkout` action with a clean worktree and confirm the header updates to that branch.
 13. Confirm local branches appear first and remote branches appear at the end of the branch list.
-14. Select an older commit on the disposable local branch and confirm the right detail panel shows that commit subject, file changes, and a `Reset` button without changing HEAD.
+14. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a right-side file panel with that commit subject, file changes, and a `Reset` button without changing HEAD.
 15. Click a file in the selected commit details and confirm the Review pane opens with the matching file selected when that file is present in the review snapshot.
 16. Click `Reset` for the selected commit and confirm the header stays on that branch instead of entering detached HEAD.
 17. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
@@ -1054,7 +1054,8 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 23. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 18, 20, 21, and 22.
 
 #### Expected Results
-- The header dropdown exposes Review, current checkout state, a left-side commit list, a middle searchable branch list, and a right-side selected-commit file panel.
+- The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
+- The selected-commit file panel is hidden until commit selection, then appears on the right and expands the dropdown width.
 - The dropdown layer appears above the sidebar and Review pane while it is open.
 - The current branch commit list loads by default and is capped at 50 commits.
 - The commit list can be searched by SHA, subject, or date without changing the selected branch.

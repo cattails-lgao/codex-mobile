@@ -15,7 +15,7 @@
     </button>
 
     <div v-if="isOpen" class="header-git-menu-wrap">
-      <div class="header-git-menu">
+      <div class="header-git-menu" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
         <button v-if="showReview" class="header-git-review-row" type="button" @click="emit('toggleReview')">
           <IconTablerFilePencil class="header-git-row-icon" />
           <span>{{ reviewOpen ? 'Review (Open)' : 'Review' }}</span>
@@ -32,7 +32,7 @@
           <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">Send feedback</a>
         </div>
 
-        <div class="header-git-columns">
+        <div class="header-git-columns" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
           <section class="header-git-commit-panel" aria-label="Branch commits">
             <div class="header-git-search-wrap">
               <input
@@ -117,47 +117,44 @@
             </ul>
           </section>
 
-          <section class="header-git-commit-detail-panel" aria-label="Commit files">
-            <template v-if="selectedCommit">
-              <div class="header-git-commit-detail-head">
-                <div class="header-git-commit-detail-title">
-                  <code>{{ selectedCommit.shortSha }}</code>
-                  <span>{{ selectedCommit.date }}</span>
-                </div>
-                <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
-                <button
-                  class="header-git-reset-commit"
-                  type="button"
-                  :disabled="busy || selectedBranchIsRemote || !selectedBranch"
-                  @click="resetSelectedCommit"
-                >
-                  Reset
-                </button>
+          <section v-if="selectedCommit" class="header-git-commit-detail-panel" aria-label="Commit files">
+            <div class="header-git-commit-detail-head">
+              <div class="header-git-commit-detail-title">
+                <code>{{ selectedCommit.shortSha }}</code>
+                <span>{{ selectedCommit.date }}</span>
               </div>
+              <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
+              <button
+                class="header-git-reset-commit"
+                type="button"
+                :disabled="busy || selectedBranchIsRemote || !selectedBranch"
+                @click="resetSelectedCommit"
+              >
+                Reset
+              </button>
+            </div>
 
-              <div class="header-git-file-list">
-                <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="header-git-files-empty">Loading files...</div>
-                <div v-else-if="commitFilesError" class="header-git-files-empty is-error">{{ commitFilesError }}</div>
-                <template v-else>
-                  <button
-                    v-for="file in selectedCommitFiles"
-                    :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
-                    class="header-git-file"
-                    type="button"
-                    :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
-                    @click="openCommitFile(file.path)"
-                  >
-                    <span class="header-git-file-status">{{ file.label }}</span>
-                    <span class="header-git-file-path">
-                      {{ file.path }}
-                      <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
-                    </span>
-                  </button>
-                  <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
-                </template>
-              </div>
-            </template>
-            <div v-else class="header-git-files-empty">Select a commit to view files.</div>
+            <div class="header-git-file-list">
+              <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="header-git-files-empty">Loading files...</div>
+              <div v-else-if="commitFilesError" class="header-git-files-empty is-error">{{ commitFilesError }}</div>
+              <template v-else>
+                <button
+                  v-for="file in selectedCommitFiles"
+                  :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
+                  class="header-git-file"
+                  type="button"
+                  :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
+                  @click="openCommitFile(file.path)"
+                >
+                  <span class="header-git-file-status">{{ file.label }}</span>
+                  <span class="header-git-file-path">
+                    {{ file.path }}
+                    <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
+                  </span>
+                </button>
+                <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
+              </template>
+            </div>
           </section>
         </div>
       </div>
@@ -430,7 +427,11 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-menu {
-  @apply w-[58rem] max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply w-[42rem] max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+}
+
+.header-git-menu.has-commit-files {
+  @apply w-[58rem];
 }
 
 .header-git-review-row,
@@ -486,7 +487,11 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-columns {
-  @apply grid min-h-80 grid-cols-[minmax(0,1.1fr)_minmax(12rem,0.75fr)_minmax(13rem,0.8fr)] gap-1;
+  @apply grid min-h-80 grid-cols-[minmax(0,1.15fr)_minmax(13rem,0.85fr)] gap-1;
+}
+
+.header-git-columns.has-commit-files {
+  @apply grid-cols-[minmax(0,1.1fr)_minmax(12rem,0.75fr)_minmax(13rem,0.8fr)];
 }
 
 .header-git-commit-panel,
