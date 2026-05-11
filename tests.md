@@ -271,6 +271,36 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+### Sidebar sessions survive symlinked workspace roots
+
+#### Feature/Change Name
+Workspace roots and thread-list cwd values are canonicalized through local `realpath` before the sidebar filters thread projects, so sessions remain visible whether they were recorded through a symlink path or its target.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev`)
+2. A workspace root registered through a symlink path, for example `/workspace-link/projects/demo`
+3. At least one session recorded with the canonical cwd, for example `/storage/projects/demo`
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open the app and wait for the sidebar thread list to load.
+2. Confirm a session recorded under the canonical cwd appears in the sidebar.
+3. Confirm a session recorded under the symlink cwd also appears in the sidebar.
+4. Search for both known session titles and confirm both rows remain findable.
+5. Fetch `/codex-api/workspace-roots-state` and confirm local symlink roots are returned as their canonical real paths.
+6. Switch to dark theme and repeat steps 1-4.
+
+#### Expected Results
+- A registered symlink root and a session cwd pointing at the symlink target are treated as the same project.
+- Sessions recorded through either path form are not filtered out as unregistered workspace roots.
+- Search and sidebar browsing both expose the session.
+- Rows remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
+
+---
+
 ### Pinned threads remain visible during background pagination
 
 #### Feature/Change Name

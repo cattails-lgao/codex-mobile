@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink, realpath } from 'node:fs/promises'
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
@@ -76,7 +76,7 @@ type ServerRequestReply = {
   }
 }
 
-type WorkspaceRootsState = {
+export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
@@ -1228,7 +1228,10 @@ export async function callRpcWithArchiveRecovery(
   params: unknown,
 ): Promise<unknown> {
   try {
-    return await appServer.rpc(method, params ?? null)
+    const result = await appServer.rpc(method, params ?? null)
+    return method === 'thread/list'
+      ? await canonicalizeThreadListResponseForRead(result)
+      : result
   } catch (error) {
     if (method !== 'thread/archive') {
       throw error
@@ -3869,6 +3872,74 @@ async function readMergedThreadTitleCache(): Promise<ThreadTitleCache> {
   return mergeThreadTitleCaches(persistedCache, sessionIndexCache)
 }
 
+type PathRealpathResolver = (path: string) => Promise<string>
+
+async function canonicalizeWorkspaceRootPath(
+  value: string,
+  pathRealpath: PathRealpathResolver,
+): Promise<string> {
+  if (!isAbsolute(value)) return value
+  try {
+    return await pathRealpath(value)
+  } catch {
+    return value
+  }
+}
+
+async function canonicalizeWorkspaceRootPathList(
+  values: string[],
+  pathRealpath: PathRealpathResolver,
+): Promise<string[]> {
+  return normalizeStringArray(await Promise.all(values.map((value) => canonicalizeWorkspaceRootPath(value, pathRealpath))))
+}
+
+export async function canonicalizeWorkspaceRootsStateForRead(
+  state: WorkspaceRootsState,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<WorkspaceRootsState> {
+  const [order, active, projectOrder] = await Promise.all([
+    canonicalizeWorkspaceRootPathList(state.order, pathRealpath),
+    canonicalizeWorkspaceRootPathList(state.active, pathRealpath),
+    canonicalizeWorkspaceRootPathList(state.projectOrder, pathRealpath),
+  ])
+  const labels: Record<string, string> = { ...state.labels }
+  await Promise.all(Object.entries(state.labels).map(async ([key, label]) => {
+    const canonicalKey = await canonicalizeWorkspaceRootPath(key, pathRealpath)
+    labels[canonicalKey] = label
+  }))
+
+  return {
+    order,
+    labels,
+    active,
+    projectOrder,
+    remoteProjects: state.remoteProjects.map((project) => ({ ...project })),
+  }
+}
+
+async function canonicalizeThreadCwdRecord(
+  value: unknown,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<unknown> {
+  const record = asRecord(value)
+  const cwd = typeof record?.cwd === 'string' ? record.cwd : ''
+  if (!record || !cwd) return value
+  const canonicalCwd = await canonicalizeWorkspaceRootPath(cwd, pathRealpath)
+  return canonicalCwd === cwd ? value : { ...record, cwd: canonicalCwd }
+}
+
+export async function canonicalizeThreadListResponseForRead(
+  payload: unknown,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<unknown> {
+  const record = asRecord(payload)
+  if (!record || !Array.isArray(record.data)) return payload
+  return {
+    ...record,
+    data: await Promise.all(record.data.map((item) => canonicalizeThreadCwdRecord(item, pathRealpath))),
+  }
+}
+
 async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
@@ -3881,13 +3952,13 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     payload = {}
   }
 
-  return {
+  return await canonicalizeWorkspaceRootsStateForRead({
     order: normalizeStringArray(payload['electron-saved-workspace-roots']),
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
     projectOrder: normalizeStringArray(payload['project-order']),
     remoteProjects: normalizeRemoteProjects(payload['remote-projects']),
-  }
+  })
 }
 
 async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
