@@ -981,8 +981,17 @@
 :root.dark .header-git-empty,
 :root.dark .header-git-commits-empty,
 :root.dark .header-git-commit-detail-title,
-:root.dark .header-git-files-empty {
+:root.dark .header-git-files-empty,
+:root.dark .header-git-file-previous-path {
   @apply text-zinc-400;
+}
+
+:root.dark .header-git-file-added {
+  @apply text-emerald-400;
+}
+
+:root.dark .header-git-file-removed {
+  @apply text-red-400;
 }
 
 :root.dark .header-git-search {

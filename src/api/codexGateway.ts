@@ -338,6 +338,8 @@ export type GitCommitFileChange = {
   previousPath: string | null
   status: string
   label: string
+  addedLineCount: number | null
+  removedLineCount: number | null
 }
 
 export type GitRepositoryStatus = {
@@ -2787,8 +2789,10 @@ export async function getGitCommitFiles(cwd: string, sha: string): Promise<GitCo
     const previousPath = typeof record.previousPath === 'string' && record.previousPath.trim() ? record.previousPath.trim() : null
     const status = typeof record.status === 'string' ? record.status.trim() : ''
     const label = typeof record.label === 'string' ? record.label.trim() : ''
+    const addedLineCount = typeof record.addedLineCount === 'number' && Number.isFinite(record.addedLineCount) ? record.addedLineCount : null
+    const removedLineCount = typeof record.removedLineCount === 'number' && Number.isFinite(record.removedLineCount) ? record.removedLineCount : null
     if (!path || !status) return []
-    return [{ path, previousPath, status, label: label || status }]
+    return [{ path, previousPath, status, label: label || status, addedLineCount, removedLineCount }]
   })
 }
 

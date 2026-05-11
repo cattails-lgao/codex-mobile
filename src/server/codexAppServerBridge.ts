@@ -7426,6 +7426,22 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', sha],
             { cwd: gitRoot },
           )
+          const numstatOutput = await runCommandCapture(
+            'git',
+            ['diff-tree', '--root', '--no-commit-id', '--numstat', '-r', '-M', sha],
+            { cwd: gitRoot },
+          )
+          const lineCountsByPath = new Map<string, { addedLineCount: number | null; removedLineCount: number | null }>()
+          for (const line of numstatOutput.split('\n')) {
+            const parts = line.split('\t')
+            const addedRaw = parts[0]?.trim() ?? ''
+            const removedRaw = parts[1]?.trim() ?? ''
+            const path = (parts.length >= 4 ? parts[3] : parts[2])?.trim() ?? ''
+            if (!path) continue
+            const addedLineCount = /^\d+$/.test(addedRaw) ? Number(addedRaw) : null
+            const removedLineCount = /^\d+$/.test(removedRaw) ? Number(removedRaw) : null
+            lineCountsByPath.set(path, { addedLineCount, removedLineCount })
+          }
           const files = output.split('\n').flatMap((line) => {
             const parts = line.split('\t').map((part) => part.trim()).filter(Boolean)
             const status = parts[0] ?? ''
@@ -7446,7 +7462,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                     : statusKind === 'M'
                       ? 'Modified'
                       : status
-            return [{ path, previousPath, status, label }]
+            const lineCounts = lineCountsByPath.get(path) ?? { addedLineCount: null, removedLineCount: null }
+            return [{ path, previousPath, status, label, ...lineCounts }]
           })
           setJson(res, 200, { data: files })
         } catch (error) {

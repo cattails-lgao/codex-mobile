@@ -62,11 +62,15 @@
                   :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
                   @click="openCommitFile(file.path)"
                 >
-                  <span class="header-git-file-status">{{ file.label }}</span>
-                  <span class="header-git-file-path">
-                    {{ file.path }}
-                    <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
+                  <span class="header-git-file-meta-row">
+                    <span class="header-git-file-status">{{ file.label }}</span>
+                    <span class="header-git-file-delta">
+                      <span class="header-git-file-added">+{{ formatFileLineCount(file.addedLineCount) }}</span>
+                      <span class="header-git-file-removed">-{{ formatFileLineCount(file.removedLineCount) }}</span>
+                    </span>
                   </span>
+                  <span class="header-git-file-path">{{ file.path }}</span>
+                  <span v-if="file.previousPath" class="header-git-file-previous-path">← {{ file.previousPath }}</span>
                 </button>
                 <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
               </template>
@@ -305,6 +309,10 @@ function onSelectCommit(commit: GitCommitOption): void {
 function resetSelectedCommit(): void {
   if (!selectedBranch.value || !selectedCommit.value || selectedBranchIsRemote.value) return
   emit('resetBranchToCommit', { branch: selectedBranch.value, sha: selectedCommit.value.sha })
+}
+
+function formatFileLineCount(value: number | null): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '-'
 }
 
 function openCommitFile(filePath: string): void {
@@ -611,12 +619,32 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply mt-1 flex-col gap-1 rounded-md px-2 py-1.5 text-xs text-zinc-700 hover:bg-white;
 }
 
+.header-git-file-meta-row {
+  @apply flex min-w-0 items-center justify-between gap-2;
+}
+
 .header-git-file-status {
   @apply w-fit rounded bg-zinc-200 px-1.5 py-0.5 text-[0.65rem] uppercase text-zinc-600;
 }
 
+.header-git-file-delta {
+  @apply flex shrink-0 items-center gap-1 font-mono text-[0.68rem];
+}
+
+.header-git-file-added {
+  @apply text-emerald-600;
+}
+
+.header-git-file-removed {
+  @apply text-red-600;
+}
+
 .header-git-file-path {
   @apply min-w-0 truncate;
+}
+
+.header-git-file-previous-path {
+  @apply min-w-0 truncate text-[0.68rem] text-zinc-500;
 }
 
 .header-git-files-empty {
