@@ -934,7 +934,8 @@
 :root.dark .header-git-review-row,
 :root.dark .header-git-branch-button,
 :root.dark .header-git-branch-checkout,
-:root.dark .header-git-commit {
+:root.dark .header-git-commit,
+:root.dark .header-git-file {
   @apply text-zinc-200;
 }
 
@@ -942,13 +943,16 @@
 :root.dark .header-git-branch-button:hover,
 :root.dark .header-git-branch-checkout:hover,
 :root.dark .header-git-commit:hover,
+:root.dark .header-git-file:hover,
 :root.dark .header-git-commit.is-current,
+:root.dark .header-git-commit.is-selected,
 :root.dark .header-git-branch-button.is-selected,
 :root.dark .header-git-branch-button.is-current {
   @apply bg-zinc-800;
 }
 
-:root.dark .header-git-branch-button.is-selected {
+:root.dark .header-git-branch-button.is-selected,
+:root.dark .header-git-commit.is-selected {
   @apply ring-zinc-600;
 }
 
@@ -959,11 +963,13 @@
 :root.dark .header-git-state,
 :root.dark .header-git-commit-panel,
 :root.dark .header-git-branch-panel,
+:root.dark .header-git-commit-detail-panel,
 :root.dark .header-git-commits {
   @apply border-zinc-700 bg-zinc-800;
 }
 
-:root.dark .header-git-state-value {
+:root.dark .header-git-state-value,
+:root.dark .header-git-commit-detail-subject {
   @apply text-zinc-100;
 }
 
@@ -973,7 +979,9 @@
 :root.dark .header-git-branch-meta,
 :root.dark .header-git-commit-top,
 :root.dark .header-git-empty,
-:root.dark .header-git-commits-empty {
+:root.dark .header-git-commits-empty,
+:root.dark .header-git-commit-detail-title,
+:root.dark .header-git-files-empty {
   @apply text-zinc-400;
 }
 
@@ -982,8 +990,18 @@
 }
 
 :root.dark .header-git-commit-top code,
+:root.dark .header-git-commit-detail-title code,
+:root.dark .header-git-file-status,
 :root.dark .header-git-branch-meta {
   @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .header-git-commit-detail-head {
+  @apply bg-zinc-900;
+}
+
+:root.dark .header-git-reset-commit {
+  @apply border-zinc-600 bg-zinc-100 text-zinc-900 hover:bg-white disabled:border-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-500;
 }
 
 :root.dark .header-git-status {
@@ -991,7 +1009,8 @@
 }
 
 :root.dark .header-git-status.is-error,
-:root.dark .header-git-commits-empty.is-error {
+:root.dark .header-git-commits-empty.is-error,
+:root.dark .header-git-files-empty.is-error {
   @apply bg-red-950/40 text-red-300;
 }
 

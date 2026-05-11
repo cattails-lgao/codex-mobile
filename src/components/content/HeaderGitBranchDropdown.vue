@@ -56,9 +56,9 @@
                   v-for="commit in filteredSelectedBranchCommits"
                   :key="commit.sha"
                   class="header-git-commit"
-                  :class="{ 'is-current': isCurrentCommit(commit) }"
+                  :class="{ 'is-current': isCurrentCommit(commit), 'is-selected': commit.sha === selectedCommitSha }"
                   type="button"
-                  :disabled="busy || selectedBranchIsRemote"
+                  :disabled="busy"
                   :title="selectedBranchCommitActionTitle(commit)"
                   @click="onSelectCommit(commit)"
                 >
@@ -116,6 +116,49 @@
               <li v-if="filteredBranches.length === 0" class="header-git-empty">No branches found.</li>
             </ul>
           </section>
+
+          <section class="header-git-commit-detail-panel" aria-label="Commit files">
+            <template v-if="selectedCommit">
+              <div class="header-git-commit-detail-head">
+                <div class="header-git-commit-detail-title">
+                  <code>{{ selectedCommit.shortSha }}</code>
+                  <span>{{ selectedCommit.date }}</span>
+                </div>
+                <p class="header-git-commit-detail-subject">{{ selectedCommit.subject }}</p>
+                <button
+                  class="header-git-reset-commit"
+                  type="button"
+                  :disabled="busy || selectedBranchIsRemote || !selectedBranch"
+                  @click="resetSelectedCommit"
+                >
+                  Reset
+                </button>
+              </div>
+
+              <div class="header-git-file-list">
+                <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="header-git-files-empty">Loading files...</div>
+                <div v-else-if="commitFilesError" class="header-git-files-empty is-error">{{ commitFilesError }}</div>
+                <template v-else>
+                  <button
+                    v-for="file in selectedCommitFiles"
+                    :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
+                    class="header-git-file"
+                    type="button"
+                    :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
+                    @click="openCommitFile(file.path)"
+                  >
+                    <span class="header-git-file-status">{{ file.label }}</span>
+                    <span class="header-git-file-path">
+                      {{ file.path }}
+                      <template v-if="file.previousPath"> ← {{ file.previousPath }}</template>
+                    </span>
+                  </button>
+                  <div v-if="selectedCommitFiles.length === 0" class="header-git-files-empty">No file changes.</div>
+                </template>
+              </div>
+            </template>
+            <div v-else class="header-git-files-empty">Select a commit to view files.</div>
+          </section>
         </div>
       </div>
     </div>
@@ -124,7 +167,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { GitCommitOption, WorktreeBranchOption } from '../../api/codexGateway'
+import type { GitCommitFileChange, GitCommitOption, WorktreeBranchOption } from '../../api/codexGateway'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
@@ -141,6 +184,9 @@ const props = defineProps<{
   commitsByBranch: Record<string, GitCommitOption[]>
   commitsLoadingFor: string
   commitsError: string
+  commitFilesBySha: Record<string, GitCommitFileChange[]>
+  commitFilesLoadingFor: string
+  commitFilesError: string
   loading: boolean
   busy: boolean
   error: string
@@ -153,6 +199,8 @@ const emit = defineEmits<{
   checkoutBranch: [branch: string]
   resetBranchToCommit: [payload: { branch: string; sha: string }]
   loadCommits: [payload: { branch: string; includeResetHistory: boolean }]
+  loadCommitFiles: [sha: string]
+  openCommitFile: [path: string]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -161,6 +209,7 @@ const isOpen = ref(false)
 const searchQuery = ref('')
 const commitSearchQuery = ref('')
 const selectedBranch = ref('')
+const selectedCommitSha = ref('')
 const lastCurrentBranch = ref('')
 const showResetHistoryRefs = ref(true)
 const showReview = computed(() => props.showReview !== false)
@@ -194,7 +243,11 @@ const statusMessage = computed(() => props.error || (props.dirty ? 'Tracked chan
 const statusKind = computed(() => props.error ? 'error' : 'info')
 const filteredBranches = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  const branches = props.branches.filter((branch) => branch.isRemote !== true)
+  const branches = [...props.branches].sort((a, b) => {
+    if (a.isRemote === true && b.isRemote !== true) return 1
+    if (a.isRemote !== true && b.isRemote === true) return -1
+    return 0
+  })
   if (!query) return branches
   return branches.filter((branch) => branch.label.toLowerCase().includes(query) || branch.value.toLowerCase().includes(query))
 })
@@ -205,6 +258,8 @@ const selectedBranchCommitsKey = computed(() => {
   return `${selectedBranch.value}\u0000${showResetHistoryRefs.value ? 'with-reset-history' : 'without-reset-history'}`
 })
 const selectedBranchCommits = computed(() => selectedBranchCommitsKey.value ? props.commitsByBranch[selectedBranchCommitsKey.value] || [] : [])
+const selectedCommit = computed(() => selectedBranchCommits.value.find((commit) => commit.sha === selectedCommitSha.value) ?? null)
+const selectedCommitFiles = computed(() => selectedCommit.value ? props.commitFilesBySha[selectedCommit.value.sha] || [] : [])
 const filteredSelectedBranchCommits = computed(() => {
   const query = commitSearchQuery.value.trim().toLowerCase()
   const commits = selectedBranchCommits.value
@@ -226,6 +281,7 @@ function toggleOpen(): void {
 
 function selectBranch(branch: string): void {
   selectedBranch.value = branch
+  selectedCommitSha.value = ''
   emit('loadCommits', { branch, includeResetHistory: showResetHistoryRefs.value })
 }
 
@@ -241,13 +297,24 @@ function isCurrentCommit(commit: GitCommitOption): boolean {
 }
 
 function selectedBranchCommitActionTitle(commit: GitCommitOption): string {
-  if (selectedBranchIsRemote.value) return 'Remote branches cannot be reset from this menu'
-  return `Reset ${selectedBranch.value} to ${commit.shortSha}`
+  return `Show ${commit.shortSha} files`
 }
 
 function onSelectCommit(commit: GitCommitOption): void {
-  if (!selectedBranch.value || selectedBranchIsRemote.value) return
-  emit('resetBranchToCommit', { branch: selectedBranch.value, sha: commit.sha })
+  selectedCommitSha.value = commit.sha
+  emit('loadCommitFiles', commit.sha)
+}
+
+function resetSelectedCommit(): void {
+  if (!selectedBranch.value || !selectedCommit.value || selectedBranchIsRemote.value) return
+  emit('resetBranchToCommit', { branch: selectedBranch.value, sha: selectedCommit.value.sha })
+}
+
+function openCommitFile(filePath: string): void {
+  emit('openCommitFile', filePath)
+  isOpen.value = false
+  searchQuery.value = ''
+  commitSearchQuery.value = ''
 }
 
 function onEscapeSearch(): void {
@@ -274,6 +341,7 @@ function onDocumentPointerDown(event: PointerEvent): void {
   isOpen.value = false
   searchQuery.value = ''
   commitSearchQuery.value = ''
+  selectedCommitSha.value = ''
 }
 
 function preferredBranch(): string {
@@ -317,6 +385,13 @@ watch(
   { immediate: true },
 )
 
+watch(selectedBranchCommits, (commits) => {
+  if (!selectedCommitSha.value) return
+  if (!commits.some((commit) => commit.sha === selectedCommitSha.value)) {
+    selectedCommitSha.value = ''
+  }
+})
+
 onMounted(() => window.addEventListener('pointerdown', onDocumentPointerDown))
 onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointerDown))
 </script>
@@ -355,13 +430,14 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-menu {
-  @apply w-[42rem] max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply w-[58rem] max-w-[calc(100vw-1.5rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .header-git-review-row,
 .header-git-branch-button,
 .header-git-branch-checkout,
-.header-git-commit {
+.header-git-commit,
+.header-git-file {
   @apply flex w-full border-0 bg-transparent text-left transition;
 }
 
@@ -410,16 +486,21 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-columns {
-  @apply grid min-h-80 grid-cols-[minmax(0,1.15fr)_minmax(13rem,0.85fr)] gap-1;
+  @apply grid min-h-80 grid-cols-[minmax(0,1.1fr)_minmax(12rem,0.75fr)_minmax(13rem,0.8fr)] gap-1;
 }
 
 .header-git-commit-panel,
-.header-git-branch-panel {
+.header-git-branch-panel,
+.header-git-commit-detail-panel {
   @apply min-w-0 rounded-lg border border-zinc-100 bg-zinc-50 p-1;
 }
 
 .header-git-commit-list {
   @apply max-h-80 overflow-y-auto;
+}
+
+.header-git-file-list {
+  @apply max-h-64 overflow-y-auto;
 }
 
 .header-git-branches {
@@ -472,6 +553,10 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply bg-white ring-1 ring-zinc-300;
 }
 
+.header-git-commit.is-selected {
+  @apply bg-white ring-1 ring-zinc-400;
+}
+
 .header-git-commit-top {
   @apply flex items-center justify-between gap-2 text-[0.68rem] text-zinc-500;
 }
@@ -497,13 +582,54 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
   @apply shrink-0 rounded-full border border-red-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200;
 }
 
+.header-git-commit-detail-head {
+  @apply rounded-lg bg-white p-2;
+}
+
+.header-git-commit-detail-title {
+  @apply flex items-center justify-between gap-2 text-[0.68rem] text-zinc-500;
+}
+
+.header-git-commit-detail-title code {
+  @apply rounded bg-zinc-200 px-1 py-0.5 font-mono text-[0.68rem] text-zinc-700;
+}
+
+.header-git-commit-detail-subject {
+  @apply m-0 mt-1 line-clamp-2 text-xs text-zinc-800;
+}
+
+.header-git-reset-commit {
+  @apply mt-2 w-full rounded-md border border-zinc-200 bg-zinc-900 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
+}
+
+.header-git-file {
+  @apply mt-1 flex-col gap-1 rounded-md px-2 py-1.5 text-xs text-zinc-700 hover:bg-white;
+}
+
+.header-git-file-status {
+  @apply w-fit rounded bg-zinc-200 px-1.5 py-0.5 text-[0.65rem] uppercase text-zinc-600;
+}
+
+.header-git-file-path {
+  @apply min-w-0 truncate;
+}
+
+.header-git-files-empty {
+  @apply px-2 py-2 text-xs text-zinc-500;
+}
+
+.header-git-files-empty.is-error {
+  @apply text-red-700;
+}
+
 @media (max-width: 640px) {
   .header-git-columns {
     @apply grid-cols-1;
   }
 
   .header-git-commit-list,
-  .header-git-branches {
+  .header-git-branches,
+  .header-git-file-list {
     @apply max-h-56;
   }
 }

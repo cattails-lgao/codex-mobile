@@ -333,6 +333,13 @@ export type GitCommitOption = {
   date: string
 }
 
+export type GitCommitFileChange = {
+  path: string
+  previousPath: string | null
+  status: string
+  label: string
+}
+
 export type GitRepositoryStatus = {
   isGitRepo: boolean
   gitRoot: string
@@ -2756,6 +2763,32 @@ export async function getGitBranchCommits(cwd: string, branch: string, options: 
     const date = typeof record.date === 'string' ? record.date.trim() : ''
     if (!sha || !shortSha) return []
     return [{ sha, shortSha, subject: subject || shortSha, date }]
+  })
+}
+
+export async function getGitCommitFiles(cwd: string, sha: string): Promise<GitCommitFileChange[]> {
+  const normalizedCwd = cwd.trim()
+  const normalizedSha = sha.trim()
+  if (!normalizedCwd || !normalizedSha) return []
+  const query = new URLSearchParams({
+    cwd: normalizedCwd,
+    sha: normalizedSha,
+  })
+  const response = await fetch(`/codex-api/git/commit-files?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load commit files')
+  }
+  const rawList = Array.isArray(payload.data) ? payload.data : []
+  return rawList.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === 'string' ? record.path.trim() : ''
+    const previousPath = typeof record.previousPath === 'string' && record.previousPath.trim() ? record.previousPath.trim() : null
+    const status = typeof record.status === 'string' ? record.status.trim() : ''
+    const label = typeof record.label === 'string' ? record.label.trim() : ''
+    if (!path || !status) return []
+    return [{ path, previousPath, status, label: label || status }]
   })
 }
 

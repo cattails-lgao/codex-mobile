@@ -7406,6 +7406,55 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/git/commit-files') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        const sha = (url.searchParams.get('sha') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!sha) {
+          setJson(res, 400, { error: 'Missing sha' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
+          const output = await runCommandCapture(
+            'git',
+            ['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', sha],
+            { cwd: gitRoot },
+          )
+          const files = output.split('\n').flatMap((line) => {
+            const parts = line.split('\t').map((part) => part.trim()).filter(Boolean)
+            const status = parts[0] ?? ''
+            if (!status) return []
+            const statusKind = status.charAt(0)
+            const isRenameOrCopy = (statusKind === 'R' || statusKind === 'C') && parts.length >= 3
+            const path = isRenameOrCopy ? parts[2] : parts[1]
+            const previousPath = isRenameOrCopy ? parts[1] : null
+            if (!path) return []
+            const label = statusKind === 'A'
+              ? 'Added'
+              : statusKind === 'D'
+                ? 'Deleted'
+                : statusKind === 'R'
+                  ? 'Renamed'
+                  : statusKind === 'C'
+                    ? 'Copied'
+                    : statusKind === 'M'
+                      ? 'Modified'
+                      : status
+            return [{ path, previousPath, status, label }]
+          })
+          setJson(res, 200, { data: files })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load commit files') })
+        }
+        return
+      }
+
       if (req.method === 'POST' && url.pathname === '/codex-api/git/reset-to-commit') {
         const payload = await readJsonBody(req)
         const record = asRecord(payload)

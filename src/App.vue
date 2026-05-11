@@ -559,6 +559,9 @@
               :commits-by-branch="threadBranchCommitsByBranch"
               :commits-loading-for="threadBranchCommitsLoadingFor"
               :commits-error="threadBranchCommitsError"
+              :commit-files-by-sha="threadCommitFilesBySha"
+              :commit-files-loading-for="threadCommitFilesLoadingFor"
+              :commit-files-error="threadCommitFilesError"
               :loading="isLoadingThreadBranches"
               :busy="isSwitchingThreadBranch"
               :error="threadBranchError"
@@ -568,6 +571,8 @@
               @checkout-branch="onCheckoutContentHeaderBranch"
               @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
               @load-commits="loadThreadBranchCommits"
+              @load-commit-files="loadThreadCommitFiles"
+              @open-commit-file="onOpenContentHeaderCommitFile"
             />
           </template>
         </ContentHeader>
@@ -947,6 +952,7 @@
                 :thread-id="selectedThreadId"
                 :cwd="composerCwd"
                 :is-thread-in-progress="isSelectedThreadInProgress"
+                :initial-file-path="reviewInitialFilePath"
                 @close="isReviewPaneOpen = false"
               />
 
@@ -1132,6 +1138,7 @@ import {
   createProjectlessThreadDirectory,
   getGitBranchState,
   getGitBranchCommits,
+  getGitCommitFiles,
   getGitRepositoryStatus,
   getWorktreeBranchOptions,
   getAccounts,
@@ -1157,7 +1164,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
+import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
@@ -1479,11 +1486,13 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
+let threadCommitFilesRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
+const reviewInitialFilePath = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
 const currentThreadHeadSha = ref<string | null>(null)
@@ -1495,6 +1504,9 @@ const threadBranchError = ref('')
 const threadBranchCommitsByBranch = ref<Record<string, GitCommitOption[]>>({})
 const threadBranchCommitsLoadingFor = ref('')
 const threadBranchCommitsError = ref('')
+const threadCommitFilesBySha = ref<Record<string, GitCommitFileChange[]>>({})
+const threadCommitFilesLoadingFor = ref('')
+const threadCommitFilesError = ref('')
 const isLoadingThreadBranches = ref(false)
 const isSwitchingThreadBranch = ref(false)
 
@@ -3197,6 +3209,7 @@ function canLoadBranchStateForCwd(cwd: string): boolean {
 function resetThreadBranchState(): void {
   threadBranchesRequestId += 1
   threadBranchCommitsRequestId += 1
+  threadCommitFilesRequestId += 1
   threadBranchOptions.value = []
   currentThreadBranch.value = null
   currentThreadHeadSha.value = null
@@ -3207,6 +3220,9 @@ function resetThreadBranchState(): void {
   threadBranchCommitsByBranch.value = {}
   threadBranchCommitsLoadingFor.value = ''
   threadBranchCommitsError.value = ''
+  threadCommitFilesBySha.value = {}
+  threadCommitFilesLoadingFor.value = ''
+  threadCommitFilesError.value = ''
   threadBranchError.value = ''
   isLoadingThreadBranches.value = false
 }
@@ -3339,6 +3355,40 @@ function loadThreadBranchCommits(payload: string | { branch: string; includeRese
         threadBranchCommitsLoadingFor.value = ''
       }
     })
+}
+
+function loadThreadCommitFiles(sha: string): void {
+  const targetSha = sha.trim()
+  const cwd = composerCwd.value.trim()
+  if (!targetSha || !cwd || threadCommitFilesLoadingFor.value === targetSha) return
+  if (threadCommitFilesBySha.value[targetSha]) return
+  const requestId = ++threadCommitFilesRequestId
+  threadCommitFilesLoadingFor.value = targetSha
+  threadCommitFilesError.value = ''
+  void getGitCommitFiles(cwd, targetSha)
+    .then((files) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesBySha.value = {
+        ...threadCommitFilesBySha.value,
+        [targetSha]: files,
+      }
+    })
+    .catch((error: unknown) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesError.value = error instanceof Error ? error.message : 'Failed to load commit files'
+    })
+    .finally(() => {
+      if (requestId === threadCommitFilesRequestId && threadCommitFilesLoadingFor.value === targetSha) {
+        threadCommitFilesLoadingFor.value = ''
+      }
+    })
+}
+
+function onOpenContentHeaderCommitFile(filePath: string): void {
+  const targetPath = filePath.trim()
+  if (!targetPath) return
+  reviewInitialFilePath.value = targetPath
+  isReviewPaneOpen.value = true
 }
 
 async function onOpenProjectSetupModal(): Promise<void> {

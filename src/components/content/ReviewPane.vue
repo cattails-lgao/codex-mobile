@@ -423,6 +423,7 @@ const props = defineProps<{
   threadId: string
   cwd: string
   isThreadInProgress: boolean
+  initialFilePath?: string
 }>()
 
 defineEmits<{
@@ -497,6 +498,30 @@ const reviewKey = computed(() => `${activeScope.value}:${workspaceView.value}`)
 const currentReviewResult = computed(() => reviewResultsByKey.value[reviewKey.value] ?? null)
 const selectedFile = computed(() => snapshot.value?.files.find((file) => file.id === selectedFileId.value) ?? snapshot.value?.files[0] ?? null)
 const folderExpansionState = ref<Record<string, boolean>>({})
+
+function normalizeReviewPath(filePath: string): string {
+  return filePath.trim().replace(/\\/g, '/')
+}
+
+function findFileByPath(filePath: string): UiReviewFile | null {
+  const targetPath = normalizeReviewPath(filePath)
+  if (!targetPath || !snapshot.value) return null
+  return snapshot.value.files.find((file) => {
+    return [
+      file.path,
+      file.absolutePath,
+      file.previousPath,
+      file.previousAbsolutePath,
+    ].some((candidate) => typeof candidate === 'string' && normalizeReviewPath(candidate) === targetPath)
+  }) ?? null
+}
+
+function selectInitialFilePath(): boolean {
+  const targetFile = findFileByPath(props.initialFilePath ?? '')
+  if (!targetFile) return false
+  selectFile(targetFile.id)
+  return true
+}
 
 const headerTitle = computed(() => {
   if (!snapshot.value?.isGitRepo) return t('Repository review')
@@ -806,7 +831,7 @@ async function loadSnapshot(): Promise<void> {
     }
     snapshot.value = nextSnapshot
     const hasSelectedFile = nextSnapshot.files.some((file) => file.id === selectedFileId.value)
-    if (!hasSelectedFile) {
+    if (!selectInitialFilePath() && !hasSelectedFile) {
       selectedFileId.value = nextSnapshot.files[0]?.id ?? ''
       selectedHunkId.value = nextSnapshot.files[0]?.hunks[0]?.id ?? ''
     }
@@ -1023,6 +1048,13 @@ watch(
     void reloadAll()
   },
   { immediate: true },
+)
+
+watch(
+  () => props.initialFilePath,
+  () => {
+    selectInitialFilePath()
+  },
 )
 
 watch(
