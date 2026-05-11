@@ -18,7 +18,11 @@
       <div class="header-git-menu" :class="{ 'has-commit-files': Boolean(selectedCommit) }">
         <button v-if="showReview" class="header-git-review-row" type="button" @click="toggleReview">
           <IconTablerFilePencil class="header-git-row-icon" />
-          <span>{{ reviewOpen ? 'Review (Open)' : 'Review' }}</span>
+          <span class="header-git-review-label">{{ reviewOpen ? 'Worktree changes (Open)' : 'Worktree changes' }}</span>
+          <span class="header-git-review-delta">
+            <span class="header-git-file-added">+{{ worktreeChangeSummary.addedLineCount }}</span>
+            <span class="header-git-file-removed">-{{ worktreeChangeSummary.removedLineCount }}</span>
+          </span>
         </button>
 
         <div class="header-git-state">
@@ -198,6 +202,7 @@ const props = defineProps<{
   headDate: string | null
   detached: boolean
   dirty: boolean
+  worktreeChangeSummary: { addedLineCount: number; removedLineCount: number }
   branches: WorktreeBranchOption[]
   commitsByBranch: Record<string, GitCommitOption[]>
   commitsLoadingFor: string
@@ -510,6 +515,14 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 
 .header-git-review-row {
   @apply items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100;
+}
+
+.header-git-review-label {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.header-git-review-delta {
+  @apply ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium;
 }
 
 .header-git-state {
