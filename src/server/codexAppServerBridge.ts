@@ -1026,7 +1026,12 @@ async function cloneGithubRepositoryIntoBase(rawUrl: string, rawBasePath: string
     if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
   }
 
-  await runCommand('git', ['clone', url, targetPath], { cwd: normalizedBasePath })
+  try {
+    await runCommand('git', ['clone', url, targetPath], { cwd: normalizedBasePath, timeoutMs: 5 * 60_000 })
+  } catch (error) {
+    await rm(targetPath, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
   await persistWorkspaceRoot(targetPath, '')
   return targetPath
 }
@@ -2714,7 +2719,7 @@ async function removeComposerPromptFile(promptPath: string): Promise<boolean> {
   }
 }
 
-async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
@@ -2723,10 +2728,32 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
     })
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    let closed = false
+    const timeout =
+      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+        ? setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+          setTimeout(() => {
+            if (!closed) proc.kill('SIGKILL')
+          }, 5_000).unref()
+        }, options.timeoutMs)
+        : null
+    timeout?.unref()
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on('error', reject)
+    proc.on('error', (error) => {
+      if (timeout) clearTimeout(timeout)
+      reject(error)
+    })
     proc.on('close', (code) => {
+      closed = true
+      if (timeout) clearTimeout(timeout)
+      if (timedOut) {
+        reject(new Error(`Command timed out after ${options.timeoutMs}ms (${command} ${args.join(' ')})`))
+        return
+      }
       if (code === 0) {
         resolve()
         return

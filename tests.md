@@ -139,7 +139,9 @@ Steps:
 Expected results:
 - New project creation and GitHub cloning share one modal and destination folder field.
 - Created and cloned folders are registered as project roots and selected for the new chat.
+- After cloning, the folder selector immediately includes the cloned project without a full page refresh.
 - Invalid project names or non-GitHub URLs show an inline modal error without changing the selected folder.
+- A stalled clone eventually fails with an error instead of keeping the request open indefinitely.
 - Light and dark themes render the unified modal consistently with the existing new-chat controls.
 
 Rollback/cleanup:

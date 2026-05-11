@@ -2804,7 +2804,11 @@ export async function createLocalDirectory(path: string): Promise<string> {
     record.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
       : {}
-  return typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  if (normalizedPath) {
+    invalidateWorkspaceRootsStateCache()
+  }
+  return normalizedPath
 }
 
 export async function cloneGithubRepository(url: string, basePath: string): Promise<string> {
