@@ -127,8 +127,8 @@ Prerequisites/setup:
 
 Steps:
 1. Open the app in light theme and navigate to the new chat screen.
-2. Confirm the folder actions show `Select folder` and `Create or clone`.
-3. Click `Create or clone` and confirm a modal opens with `New project` and `Clone from GitHub` modes.
+2. Confirm the folder actions show `Select folder` and `Create Project`.
+3. Click `Create Project` and confirm a modal opens with `New project` and `Clone from GitHub` modes.
 4. In `New project`, keep or edit the destination folder, enter a single folder name, and submit.
 5. Confirm the created project folder is selected in the new chat folder selector and appears as a project root.
 6. Reopen the modal, switch to `Clone from GitHub`, paste a valid `https://github.com/<owner>/<repo>` URL, and submit.

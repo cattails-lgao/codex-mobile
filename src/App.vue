@@ -564,7 +564,7 @@
                     {{ t('Select folder') }}
                   </button>
                   <button class="new-thread-folder-action" type="button" @click="onOpenProjectSetupModal">
-                    {{ t('Create or clone') }}
+                    {{ t('Create Project') }}
                   </button>
                 </div>
                 <section v-if="showFirstLaunchPluginsCard" class="new-thread-launch-card" aria-label="Plugins and Apps announcement">
