@@ -177,12 +177,9 @@
                 @click="selectFile(node.file.id)"
               >
                 <span class="review-pane-file-meta-row">
-                  <span class="review-pane-file-main">
-                    <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
-                    <span class="review-pane-file-path">
-                      {{ node.name }}
-                      <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
-                    </span>
+                  <span class="review-pane-file-path">
+                    {{ node.name }}
+                    <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
                   </span>
                   <span class="review-pane-file-delta">
                     <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
@@ -190,6 +187,7 @@
                     <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
                   </span>
                 </span>
+                <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
               </button>
             </template>
           </aside>
@@ -318,12 +316,9 @@
                 @click="selectFile(node.file.id)"
               >
                 <span class="review-pane-file-meta-row">
-                  <span class="review-pane-file-main">
-                    <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
-                    <span class="review-pane-file-path">
-                      {{ node.name }}
-                      <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
-                    </span>
+                  <span class="review-pane-file-path">
+                    {{ node.name }}
+                    <template v-if="node.file.previousPath"> ← {{ fileBaseName(node.file.previousPath) }}</template>
                   </span>
                   <span class="review-pane-file-delta">
                     <span class="review-pane-delta-add">+{{ node.file.addedLineCount }}</span>
@@ -331,6 +326,7 @@
                     <span class="review-pane-delta-remove">-{{ node.file.removedLineCount }}</span>
                   </span>
                 </span>
+                <span class="review-pane-file-op" :data-operation="node.file.operation">{{ formatOperation(node.file.operation) }}</span>
               </button>
             </template>
           </div>
@@ -1055,6 +1051,7 @@ onBeforeUnmount(() => {
 
 .review-pane-file-list {
   @apply hidden min-w-0 overflow-y-auto border-r border-zinc-100 bg-zinc-50/60 p-2 md:flex md:flex-col md:gap-1.5;
+  container-type: inline-size;
 }
 
 .review-pane-tree-folder {
@@ -1113,11 +1110,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-meta-row {
-  @apply flex items-start justify-between gap-2;
-}
-
-.review-pane-file-main {
-  @apply flex min-w-0 items-center gap-1.5;
+  @apply flex min-w-0 items-start justify-between gap-2;
 }
 
 .review-pane-file[data-active='true'] {
@@ -1145,11 +1138,21 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-path {
-  @apply min-w-0 break-all text-sm text-zinc-800;
+  @apply min-w-0 truncate text-sm text-zinc-800;
 }
 
 .review-pane-file-delta {
   @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px];
+}
+
+@container (max-width: 14rem) {
+  .review-pane-file-list .review-pane-file-meta-row {
+    @apply flex-col items-stretch gap-1;
+  }
+
+  .review-pane-file-list .review-pane-file-delta {
+    @apply self-start;
+  }
 }
 
 .review-pane-delta-add {
@@ -1474,10 +1477,6 @@ onBeforeUnmount(() => {
 
   .review-pane-sheet-list .review-pane-file-op {
     @apply px-1.5 py-0.25 text-[9px];
-  }
-
-  .review-pane-sheet-list .review-pane-file-main {
-    @apply gap-1;
   }
 
   .review-pane-sheet-list .review-pane-file-path {

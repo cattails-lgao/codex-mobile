@@ -1053,8 +1053,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 22. Create only an untracked file whose path does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the untracked file remains in place.
 23. Create only an untracked file whose path exists in the target commit, try to reset to that target, and confirm the reset proceeds and the untracked file is moved under `.codex/untracked-backups/` instead of being overwritten.
 24. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with the selected-commit file panel, commits panel, and branches panel stacked vertically instead of squeezed into columns.
-25. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
-26. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, 24, and 25.
+25. Narrow the Review pane file list and confirm long changed-file names truncate on one line instead of wrapping vertically while the `+`/`-` counts remain visible.
+26. At a mobile viewport around 375px wide, open the Review pane and confirm the `X` close button remains visible and tappable in the top-right corner.
+27. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 19, 21, 22, 23, 24, 25, and 26.
 
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
@@ -1074,6 +1075,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Commit ref badges copy the full SHA to the clipboard without triggering commit selection.
 - The selected commit `Reset` button resets the local branch to that commit instead of detaching HEAD.
 - Clicking a selected commit file opens the Review pane against that commit diff and selects that path without auto-centering the selected hunk.
+- Long changed-file names in the Review pane file list truncate horizontally instead of wrapping one character per line when the list is narrow.
 - Remote branches appear after local branches in the branch list.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
