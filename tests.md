@@ -4114,6 +4114,7 @@ Playwright browser runtime profiler captures route timing, Codex API network cou
 #### Expected Results
 - The profiler prints final URL, title, total observed time, duplicate request counts, and slowest Codex API calls
 - JSON report includes raw API rows, grouped summaries, Performance API data, and artifact paths
+- JSON report includes `pageState.stillLoadingThreads`; the profiler exits non-zero if the page still contains `Loading threads...` after the thread-loading timeout
 - Screenshot is saved under `output/playwright/browser-runtime-profile-*.png`
 - Trace is saved under `output/playwright/browser-runtime-profile-*-trace.zip`
 
