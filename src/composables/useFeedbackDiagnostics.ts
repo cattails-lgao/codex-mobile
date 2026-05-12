@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 const FEEDBACK_EMAIL = 'brutalstrikedevs@gmail.com'
 const MAX_DIAGNOSTICS = 20
 const MAX_BODY_CHARS = 6500
+const MAX_PAGE_TEXT_CHARS = 1800
 
 export type FeedbackDiagnosticKind = 'window-error' | 'unhandled-rejection' | 'fetch-error' | 'api-response' | 'visible-error'
 
@@ -49,6 +50,19 @@ function normalizeFetchMethod(input: RequestInfo | URL, init?: RequestInit): str
 function normalizeSubjectMessage(message?: string): string {
   const firstLine = (message || '').split(/\r?\n/, 1)[0] ?? ''
   return firstLine.replace(/\s+/g, ' ').trim().slice(0, 80) || 'issue report'
+}
+
+function readVisiblePageText(): string {
+  if (typeof document === 'undefined') return 'unknown'
+  const text = document.body?.innerText
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim() ?? ''
+  if (!text) return 'No visible page text captured.'
+  return text.length > MAX_PAGE_TEXT_CHARS
+    ? `${text.slice(0, MAX_PAGE_TEXT_CHARS)}\n...[truncated]`
+    : text
 }
 
 export function recordFeedbackDiagnostic(input: Omit<FeedbackDiagnostic, 'atIso'> & { atIso?: string }): void {
@@ -106,6 +120,9 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
     '',
     'Recent diagnostics',
     recentDiagnostics || 'No diagnostics captured.',
+    '',
+    'Visible page text',
+    readVisiblePageText(),
   ].join('\n').slice(0, MAX_BODY_CHARS)
 
   const params = new URLSearchParams({

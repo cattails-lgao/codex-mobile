@@ -17,6 +17,11 @@ beforeEach(() => {
     },
     addEventListener: vi.fn(),
   })
+  vi.stubGlobal('document', {
+    body: {
+      innerText: 'Start new thread\\nVisible failure banner\\nSend feedback',
+    },
+  })
   useFeedbackDiagnostics().diagnostics.value = []
 })
 
@@ -52,6 +57,8 @@ describe('feedback diagnostics', () => {
     expect(body).toContain('User agent: TestAgent/1.0')
     expect(body).toContain('Viewport: 390x844 @2x')
     expect(body).toContain('POST | /codex-api/rpc | 500 Internal Server Error')
+    expect(body).toContain('Visible page text')
+    expect(body).toContain('Visible failure banner')
   })
 
   it('dedupes identical newest diagnostics', () => {
