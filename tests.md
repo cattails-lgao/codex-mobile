@@ -105,12 +105,16 @@ This file tracks manual regression and feature verification steps.
 4. Open `/automations` from the sidebar and confirm the new project automation appears with the visible project display name.
 5. Edit the automation from `/automations`, change its name and status, save, and confirm the project row chip count and tooltip update without a full page refresh.
 6. Seed or keep a cron automation record whose `cwds` contains two project paths, then edit it from one project and confirm both project rows show the updated name/status.
-7. Remove one project that has an attached automation while `/automations` is open and confirm the panel removes the deleted project row after the cleanup completes.
-8. Switch to dark theme and repeat opening the project menu and `/automations`; confirm rows, chips, buttons, inputs, and empty states remain readable.
+7. Seed a cron automation record with a TOML-style single-quoted `cwds` array such as `cwds = ['/tmp/project-one', '/tmp/project,two']`, refresh `/automations`, and confirm it is still listed.
+8. Inspect `/codex-api/project-automations` for the seeded record and confirm the response includes public automation fields but not `extraTomlLines`.
+9. Remove one project that has an attached automation while `/automations` is open and confirm the panel removes the deleted project row after the cleanup completes.
+10. Switch to dark theme and repeat opening the project menu and `/automations`; confirm rows, chips, buttons, inputs, and empty states remain readable.
 
 #### Expected Results
 - Project-scoped cron automations are listed under every associated `cwd`.
 - Editing a multi-`cwd` project automation refreshes all affected sidebar chips/tooltips, not only the currently edited project.
+- Existing TOML cron records with valid non-JSON string arrays remain visible and manageable.
+- Automation API responses do not include internal preserved TOML metadata such as `extraTomlLines`.
 - Removing a project deletes or detaches that project's automation association and refreshes the `/automations` panel.
 - Preserved TOML metadata and table sections remain intact after saving or deleting a project automation.
 - Light and dark theme project automation surfaces remain readable.
