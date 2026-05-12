@@ -84,7 +84,10 @@
 
       <div
         class="thread-composer-input-wrap"
-        :class="{ 'thread-composer-input-wrap--drag-active': isDragActive }"
+        :class="{
+          'thread-composer-input-wrap--drag-active': isDragActive,
+          'thread-composer-input-wrap--expanded': isComposerExpanded,
+        }"
         @dragenter="onInputDragEnter"
         @dragover="onInputDragOver"
         @dragleave="onInputDragLeave"
@@ -130,6 +133,18 @@
           @keydown="onInputKeydown"
           @paste="onInputPaste"
         />
+        <button
+          v-if="hasExpandedComposerToggle"
+          class="thread-composer-expand"
+          type="button"
+          :aria-label="isComposerExpanded ? t('Exit full screen composer') : t('Expand composer')"
+          :title="isComposerExpanded ? t('Exit full screen composer') : t('Expand composer')"
+          :disabled="isInteractionDisabled"
+          @click="toggleComposerExpanded"
+        >
+          <IconTablerMinimize v-if="isComposerExpanded" class="thread-composer-expand-icon" />
+          <IconTablerMaximize v-else class="thread-composer-expand-icon" />
+        </button>
       </div>
 
       <div
@@ -402,7 +417,9 @@ import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
+import IconTablerMaximize from '../icons/IconTablerMaximize.vue'
 import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
+import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
@@ -555,6 +572,8 @@ const mentionQuery = ref('')
 const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
 const isFileMentionOpen = ref(false)
 const fileMentionHighlightedIndex = ref(0)
+const isComposerExpanded = ref(false)
+const isDraftOverflowing = ref(false)
 const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -703,6 +722,10 @@ const placeholderText = computed(() =>
 )
 const hasSubmitContent = computed(() =>
   draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0,
+)
+const draftLineCount = computed(() => draft.value.split('\n').length)
+const hasExpandedComposerToggle = computed(() =>
+  isComposerExpanded.value || draftLineCount.value >= 6 || isDraftOverflowing.value,
 )
 const quotaSummaryText = computed(() => buildQuotaSummaryText(props.codexQuota ?? null))
 const quotaWeeklyRefreshText = computed(() => '')
@@ -940,6 +963,7 @@ function onSubmit(mode: 'steer' | 'queue' = 'steer'): void {
   })
   clearPersistedDraftForThread(props.activeThreadId)
   clearDraftState()
+  isComposerExpanded.value = false
   folderUploadGroups.value = []
   isAttachMenuOpen.value = false
   closeFileMention()
@@ -983,6 +1007,7 @@ function clearDraftState(): void {
     fileAttachments: [],
     skills: [],
   })
+  isComposerExpanded.value = false
 }
 
 function getDraftStorageKey(threadId: string): string {
@@ -1070,6 +1095,26 @@ function getCurrentDraftPayload(): ComposerDraftPayload {
 
 function onInterrupt(): void {
   emit('interrupt')
+}
+
+function updateComposerOverflowState(): void {
+  const input = inputRef.value
+  if (!input) {
+    isDraftOverflowing.value = false
+    return
+  }
+  isDraftOverflowing.value = input.scrollHeight > input.clientHeight + 2
+}
+
+function queueComposerOverflowMeasurement(): void {
+  void nextTick(updateComposerOverflowState)
+}
+
+function toggleComposerExpanded(): void {
+  if (isInteractionDisabled.value) return
+  isComposerExpanded.value = !isComposerExpanded.value
+  queueComposerOverflowMeasurement()
+  void nextTick(() => inputRef.value?.focus())
 }
 
 function onModelSelect(value: string): void {
@@ -1496,6 +1541,7 @@ function onInputChange(): void {
   if (dictationFeedback.value) {
     dictationFeedback.value = ''
   }
+  queueComposerOverflowMeasurement()
   updateFileMentionState()
 }
 
@@ -1614,7 +1660,10 @@ function applyFileMention(suggestion: ComposerFileSuggestion): void {
 function hydrateDraft(payload: ComposerDraftPayload): void {
   cancelDictation()
   replaceDraftState(payload)
-  nextTick(() => inputRef.value?.focus())
+  void nextTick(() => {
+    inputRef.value?.focus()
+    updateComposerOverflowState()
+  })
 }
 
 function appendTextToDraft(text: string): void {
@@ -1756,6 +1805,7 @@ onMounted(() => {
   window.addEventListener('dragend', onWindowDragCleanup)
   window.addEventListener('blur', onWindowDragCleanup)
   void reloadPrompts()
+  queueComposerOverflowMeasurement()
 })
 
 defineExpose<ThreadComposerExposed>({
@@ -1800,6 +1850,10 @@ watch([draft, selectedImages, fileAttachments, selectedSkills], () => {
   persistDraftForThread(lastActiveThreadId, getCurrentDraftPayload())
 }, { deep: true })
 
+watch(draft, () => {
+  queueComposerOverflowMeasurement()
+})
+
 watch(
   () => props.cwd,
   () => {
@@ -1826,8 +1880,16 @@ watch(
   @apply w-full max-w-[min(var(--chat-column-max,72rem),100%)] mx-auto;
 }
 
+.thread-composer:has(.thread-composer-input-wrap--expanded) {
+  @apply fixed inset-0 z-50 max-w-none bg-white/95 p-3 sm:p-6;
+}
+
 .thread-composer-shell {
   @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
+}
+
+.thread-composer:has(.thread-composer-input-wrap--expanded) .thread-composer-shell {
+  @apply mx-auto flex h-full w-full max-w-[min(var(--chat-column-max,72rem),100%)] flex-col shadow-2xl;
 }
 
 .thread-composer-shell--drag-active {
@@ -1957,6 +2019,10 @@ watch(
   @apply relative;
 }
 
+.thread-composer-input-wrap--expanded {
+  @apply min-h-0 flex-1;
+}
+
 .thread-composer-input-wrap--drag-active {
   @apply rounded-xl bg-zinc-50;
 }
@@ -2022,7 +2088,11 @@ watch(
 }
 
 .thread-composer-input {
-  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
+  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 pr-10 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
+}
+
+.thread-composer-input-wrap--expanded .thread-composer-input {
+  @apply h-full max-h-none pr-12 text-base leading-6;
 }
 
 .thread-composer-input:focus {
@@ -2031,6 +2101,14 @@ watch(
 
 .thread-composer-input:disabled {
   @apply bg-zinc-100 text-zinc-500 cursor-not-allowed;
+}
+
+.thread-composer-expand {
+  @apply absolute right-0.5 top-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-500 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-expand-icon {
+  @apply h-[18px] w-[18px];
 }
 
 .thread-composer-controls {
