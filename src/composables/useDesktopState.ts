@@ -223,34 +223,8 @@ function toThreadContextId(threadId: string): string {
 }
 
 function loadSelectedModelMap(): Record<string, string> {
-  if (typeof window === 'undefined') return createStringKeyedRecord<string>()
-
-  try {
-    const raw = window.localStorage.getItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return createStringKeyedRecord<string>()
-
-      const next = createStringKeyedRecord<string>()
-      for (const [contextId, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof contextId !== 'string' || contextId.length === 0) continue
-        const normalizedModelId = normalizeStoredModelId(value)
-        if (normalizedModelId) {
-          next[contextId] = normalizedModelId
-        }
-      }
-      return next
-    }
-  } catch {
-    // Fall back to the legacy global preference below.
-  }
-
-  const legacyModelId = normalizeStoredModelId(window.localStorage.getItem(LEGACY_SELECTED_MODEL_STORAGE_KEY))
-  const next = createStringKeyedRecord<string>()
-  if (legacyModelId) {
-    next[NEW_THREAD_COLLABORATION_MODE_CONTEXT] = legacyModelId
-  }
-  return next
+  clearSelectedModelStorage()
+  return createStringKeyedRecord<string>()
 }
 
 function readSelectedModel(
@@ -264,16 +238,17 @@ function readSelectedModel(
 }
 
 function saveSelectedModelMap(state: Record<string, string>): void {
+  void state
+  clearSelectedModelStorage()
+}
+
+function clearSelectedModelStorage(): void {
   if (typeof window === 'undefined') return
   try {
-    if (Object.keys(state).length === 0) {
-      window.localStorage.removeItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
-    } else {
-      window.localStorage.setItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY, JSON.stringify(state))
-    }
+    window.localStorage.removeItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
     window.localStorage.removeItem(LEGACY_SELECTED_MODEL_STORAGE_KEY)
   } catch {
-    // Keep in-memory selection working even if localStorage writes fail.
+    // Keep in-memory selection working even if localStorage cleanup fails.
   }
 }
 

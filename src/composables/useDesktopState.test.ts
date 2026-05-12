@@ -435,7 +435,7 @@ describe('Codex CLI availability', () => {
 })
 
 describe('provider model selection', () => {
-  it('rejects a persisted Codex model when OpenCode Zen is the active provider', async () => {
+  it('ignores stored selected-model localStorage when OpenCode Zen is the active provider', async () => {
     installTestWindow({
       'codex-web-local.selected-model-by-context.v1': JSON.stringify({
         '__new-thread__': 'gpt-5.5',
@@ -472,6 +472,8 @@ describe('provider model selection', () => {
     ])
     expect(state.selectedModelId.value).toBe('big-pickle')
     expect(state.readModelIdForThread('').trim()).toBe('big-pickle')
+    expect(window.localStorage.getItem('codex-web-local.selected-model-by-context.v1')).toBe(null)
+    expect(window.localStorage.getItem('codex-web-local.selected-model-id.v1')).toBe(null)
   })
 })
 
