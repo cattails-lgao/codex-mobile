@@ -1108,8 +1108,12 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 
 #### Rollback/Cleanup
-- Restore any dirty-worktree file changed for validation.
-- Restore or delete the disposable branch used for reset validation.
+- Switch back to the original branch used before the test.
+- Reset or delete the disposable local branch used for commit reset validation.
+- Revert or discard the tracked dirty-worktree file created for the blocked-switch validation.
+- Delete any untracked files created for untracked preservation validation.
+- Inspect and remove test-only files under `.codex/untracked-backups/` after confirming backup behavior.
+- Clear any copied commit SHA from the clipboard if the test environment requires clipboard cleanup.
 
 ---
 

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -332,20 +332,17 @@ function addReviewSummary(left: ReviewSummary, right: ReviewSummary): ReviewSumm
   }
 }
 
-async function numstatUntrackedFile(repoRoot: string, path: string): Promise<string> {
-  const result = await runCommandResult(
-    'git',
-    ['diff', '--no-index', '--no-ext-diff', '--numstat', '--', '/dev/null', path],
-    { cwd: repoRoot },
-  )
-
-  if (result.code !== 0 && result.code !== 1) {
-    const details = [result.stderr, result.stdout].filter(Boolean).join('\n')
-    const suffix = details ? `: ${details}` : ''
-    throw new Error(`Command failed (git diff --no-index --numstat -- /dev/null ${path})${suffix}`)
+async function summarizeUntrackedFile(repoRoot: string, path: string): Promise<ReviewSummary> {
+  const absolutePath = join(repoRoot, ...path.split('/'))
+  const info = await stat(absolutePath)
+  if (!info.isFile()) {
+    return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
   }
-
-  return result.stdout
+  const content = await readFile(absolutePath)
+  const addedLineCount = content.length === 0
+    ? 0
+    : content.reduce((count, byte) => count + (byte === 10 ? 1 : 0), content[content.length - 1] === 10 ? 0 : 1)
+  return { fileCount: 1, addedLineCount, removedLineCount: 0 }
 }
 
 async function buildWorkspaceDiffSummary(repoRoot: string, workspaceView: ReviewWorkspaceView): Promise<ReviewSummary> {
@@ -373,7 +370,7 @@ async function buildWorkspaceDiffSummary(repoRoot: string, workspaceView: Review
 
   const statusOutput = await runCommandCapture('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: repoRoot })
   for (const path of parseUntrackedPaths(statusOutput)) {
-    summary = addReviewSummary(summary, parseNumstatSummary(await numstatUntrackedFile(repoRoot, path)))
+    summary = addReviewSummary(summary, await summarizeUntrackedFile(repoRoot, path))
   }
   return summary
 }
@@ -435,7 +432,7 @@ async function buildCommitDiff(repoRoot: string, commitSha: string): Promise<{ d
   const resolvedSha = await runCommandCapture('git', ['rev-parse', '--verify', `${commitSha}^{commit}`], { cwd: repoRoot })
   const diffText = await runCommandCapture(
     'git',
-    ['diff-tree', '--root', '--no-commit-id', '--no-ext-diff', '--find-renames', '--patch', resolvedSha],
+    ['diff-tree', '--root', '-r', '--no-commit-id', '--no-ext-diff', '--find-renames', '--patch', resolvedSha],
     { cwd: repoRoot },
   )
   return { diffText, commitSha: resolvedSha }
