@@ -5228,12 +5228,15 @@ Android `codexui-android` startup passes the bound server port to app-server fre
 4. Call `POST /codex-api/rpc` with `{"method":"model/list","params":{}}`.
 5. Confirm `/codex-api/provider-models` still returns OpenCode Zen model ids.
 6. Verify the model selector is enabled in light theme and dark theme.
+7. Send `hi` from the home composer and wait for the first assistant reply.
+8. Confirm browser/network logs do not show a `502` for `generate-thread-title` or an empty-rollout `thread/read` during startup.
 
 #### Expected Results
 - `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
 - `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
 - `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
 - The model selector is usable in both light theme and dark theme.
+- A first home-composer message creates a thread and receives a response without visible startup RPC errors.
 
 #### Rollback/Cleanup
 - Stop the temporary Android proot process with `pkill -f codexui-android` if needed.

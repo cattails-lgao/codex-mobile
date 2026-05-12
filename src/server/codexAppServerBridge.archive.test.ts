@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { callRpcWithArchiveRecovery, hasUsableCodexAuth, isUnauthenticatedRateLimitError } from './codexAppServerBridge'
+import {
+  callRpcWithArchiveRecovery,
+  hasUsableCodexAuth,
+  isEmptyThreadReadError,
+  isUnauthenticatedRateLimitError,
+} from './codexAppServerBridge'
 
 const originalCodexHome = process.env.CODEX_HOME
 
@@ -97,6 +102,19 @@ describe('isUnauthenticatedRateLimitError', () => {
   it('does not match unrelated authentication failures', () => {
     expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to send messages'))).toBe(false)
     expect(isUnauthenticatedRateLimitError(new Error('failed to read rate limits'))).toBe(false)
+  })
+})
+
+describe('isEmptyThreadReadError', () => {
+  it('matches Codex empty rollout read failures during immediate thread startup', () => {
+    expect(isEmptyThreadReadError(new Error(
+      'failed to read thread: thread-store internal error: failed to read thread /tmp/codex-home/sessions/rollout-test.jsonl: rollout at /tmp/codex-home/sessions/rollout-test.jsonl is empty',
+    ))).toBe(true)
+  })
+
+  it('does not match unrelated thread read failures', () => {
+    expect(isEmptyThreadReadError(new Error('failed to read thread: permission denied'))).toBe(false)
+    expect(isEmptyThreadReadError(new Error('rollout is empty'))).toBe(false)
   })
 })
 
