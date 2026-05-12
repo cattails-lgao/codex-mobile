@@ -291,6 +291,10 @@
   @apply border-rose-800/70 bg-rose-950/70 text-rose-100 shadow-none;
 }
 
+:root.dark .visible-error-feedback {
+  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
+}
+
 :root.dark .composer-dropdown-trigger {
   @apply text-zinc-400;
 }

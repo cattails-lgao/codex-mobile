@@ -26,13 +26,15 @@
         <span>{{ t('Action') }}: {{ syncStatus.startup.lastAction }}</span>
       </div>
       <div v-if="syncStatus.startup.lastError" class="skills-sync-error">
-        {{ syncStatus.startup.lastError }}
+        <span>{{ syncStatus.startup.lastError }}</span>
+        <a class="skills-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
       </div>
       <div v-if="syncActionStatus" class="skills-sync-meta">
         <span>{{ t('Manual sync') }}: {{ syncActionStatus }}</span>
       </div>
       <div v-if="syncActionError" class="skills-sync-error">
-        {{ syncActionError }}
+        <span>{{ syncActionError }}</span>
+        <a class="skills-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
       </div>
       <div v-if="deviceLogin" class="skills-sync-device">
         <span>{{ t('Open') }} <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">{{ t('GitHub device login') }}</a> {{ t('and enter code:') }}</span>
@@ -77,7 +79,10 @@
           {{ isSearchingSkills ? t('Searching...') : t('Search') }}
         </button>
       </form>
-      <div v-if="skillSearchError" class="skills-hub-error">{{ skillSearchError }}</div>
+      <div v-if="skillSearchError" class="skills-hub-error">
+        <span>{{ skillSearchError }}</span>
+        <a class="skills-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+      </div>
     </div>
 
     <div v-if="skillSearchResults.length > 0" class="skills-hub-section">
@@ -117,7 +122,10 @@
 
     <div class="skills-hub-section">
       <div v-if="isLoading" class="skills-hub-loading">{{ t('Loading skills...') }}</div>
-      <div v-else-if="error" class="skills-hub-error">{{ error }}</div>
+      <div v-else-if="error" class="skills-hub-error">
+        <span>{{ error }}</span>
+        <a class="skills-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+      </div>
       <div v-else-if="installedSkills.length === 0" class="skills-hub-empty">{{ t('No installed skills found.') }}</div>
     </div>
 
@@ -142,6 +150,7 @@ import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
 import SkillDetailModal, { type HubSkill } from './SkillDetailModal.vue'
 import { useGithubSkillsSync } from '../../composables/useGithubSkillsSync'
+import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 
 const EMPTY_SKILL: HubSkill = { name: '', owner: '', description: '', url: '', installed: false }
@@ -165,6 +174,8 @@ const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const { t } = useUiLanguage()
+const { buildFeedbackMailto } = useFeedbackDiagnostics()
+const feedbackMailto = computed(() => buildFeedbackMailto())
 
 const props = defineProps<{
   tryInFlightKey?: string
@@ -434,7 +445,7 @@ onMounted(() => {
 }
 
 .skills-sync-error {
-  @apply text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1;
+  @apply flex items-start justify-between gap-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1;
 }
 
 .skills-sync-actions {
@@ -510,7 +521,15 @@ onMounted(() => {
 }
 
 .skills-hub-error {
-  @apply text-sm text-rose-600 py-4 text-center rounded-lg border border-rose-200 bg-rose-50;
+  @apply flex items-start justify-between gap-3 text-sm text-rose-600 p-4 text-left rounded-lg border border-rose-200 bg-rose-50;
+}
+
+.skills-error-feedback {
+  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+}
+
+:global(:root.dark) .skills-error-feedback {
+  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
 }
 
 .skills-hub-empty {

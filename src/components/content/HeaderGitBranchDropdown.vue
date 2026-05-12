@@ -28,7 +28,8 @@
         </div>
 
         <div v-if="statusMessage" class="header-git-status" :class="{ 'is-error': statusKind === 'error' }">
-          {{ statusMessage }}
+          <span>{{ statusMessage }}</span>
+          <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto">Send feedback</a>
         </div>
 
         <div class="header-git-search-wrap">
@@ -68,7 +69,10 @@
 
             <div v-if="expandedBranch === branch.value" class="header-git-commits">
               <div v-if="commitsLoadingFor === branch.value" class="header-git-commits-empty">Loading commits...</div>
-              <div v-else-if="commitsError" class="header-git-commits-empty is-error">{{ commitsError }}</div>
+              <div v-else-if="commitsError" class="header-git-commits-empty is-error">
+                <span>{{ commitsError }}</span>
+                <a class="header-git-feedback" :href="feedbackMailto">Send feedback</a>
+              </div>
               <button
                 v-for="commit in commitsByBranch[branch.value] || []"
                 :key="commit.sha"
@@ -110,6 +114,7 @@ import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
+import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 
 const props = defineProps<{
   currentBranch: string | null
@@ -142,6 +147,8 @@ const isOpen = ref(false)
 const searchQuery = ref('')
 const expandedBranch = ref('')
 const showReview = computed(() => props.showReview !== false)
+const { buildFeedbackMailto } = useFeedbackDiagnostics()
+const feedbackMailto = computed(() => buildFeedbackMailto())
 
 const displayLabel = computed(() => {
   if (props.currentBranch) return props.currentBranch
@@ -280,7 +287,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-status {
-  @apply mx-1 my-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800;
+  @apply mx-1 my-1 flex items-start justify-between gap-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800;
 }
 
 .header-git-status.is-error {
@@ -366,6 +373,10 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 }
 
 .header-git-commits-empty.is-error {
-  @apply text-red-700;
+  @apply flex items-start justify-between gap-2 text-red-700;
+}
+
+.header-git-feedback {
+  @apply shrink-0 rounded-full border border-red-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200;
 }
 </style>
