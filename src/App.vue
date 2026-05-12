@@ -3364,11 +3364,11 @@ function loadThreadBranchCommits(payload: string | { branch: string; includeRese
   const targetBranch = (typeof payload === 'string' ? payload : payload.branch).trim()
   const includeResetHistory = typeof payload === 'string' ? true : payload.includeResetHistory !== false
   const cwd = composerCwd.value.trim()
-  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
   const cacheKey = toThreadBranchCommitsKey(targetBranch, includeResetHistory)
+  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === cacheKey) return
   if (threadBranchCommitsByBranch.value[cacheKey]) return
   const requestId = ++threadBranchCommitsRequestId
-  threadBranchCommitsLoadingFor.value = targetBranch
+  threadBranchCommitsLoadingFor.value = cacheKey
   threadBranchCommitsError.value = ''
   void getGitBranchCommits(cwd, targetBranch, { includeResetHistory })
     .then((commits) => {
@@ -3383,7 +3383,7 @@ function loadThreadBranchCommits(payload: string | { branch: string; includeRese
       threadBranchCommitsError.value = error instanceof Error ? error.message : 'Failed to load branch commits'
     })
     .finally(() => {
-      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === targetBranch) {
+      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === cacheKey) {
         threadBranchCommitsLoadingFor.value = ''
       }
     })

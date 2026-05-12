@@ -104,7 +104,7 @@
             </label>
             <div class="header-git-commit-list">
               <div v-if="!selectedBranch" class="header-git-commits-empty">Select a branch.</div>
-              <div v-else-if="commitsLoadingFor === selectedBranch" class="header-git-commits-empty">Loading commits...</div>
+              <div v-else-if="commitsLoadingFor === selectedBranchCommitsKey" class="header-git-commits-empty">Loading commits...</div>
               <div v-else-if="commitsError" class="header-git-commits-empty is-error">{{ commitsError }}</div>
               <template v-else>
                 <button
