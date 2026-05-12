@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
-import { callRpcWithArchiveRecovery, hasCodexRefreshToken, isUnauthenticatedRateLimitError } from './codexAppServerBridge'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { callRpcWithArchiveRecovery, hasUsableCodexAuth, isUnauthenticatedRateLimitError } from './codexAppServerBridge'
 
 const originalCodexHome = process.env.CODEX_HOME
 
@@ -100,26 +100,45 @@ describe('isUnauthenticatedRateLimitError', () => {
   })
 })
 
-describe('hasCodexRefreshToken', () => {
-  it('returns false when auth.json is missing or does not contain a refresh token', async () => {
+describe('hasUsableCodexAuth', () => {
+  it('returns false when auth.json is missing or does not contain usable tokens', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-no-token-'))
     process.env.CODEX_HOME = codexHome
     try {
-      await expect(hasCodexRefreshToken()).resolves.toBe(false)
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
       await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: {} }))
-      await expect(hasCodexRefreshToken()).resolves.toBe(false)
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
     } finally {
       await rm(codexHome, { recursive: true, force: true })
     }
   })
 
-  it('returns true when auth.json contains a refresh token', async () => {
+  it('returns true when auth.json contains an access token or refresh token', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-with-token-'))
     process.env.CODEX_HOME = codexHome
     try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+      await expect(hasUsableCodexAuth()).resolves.toBe(true)
       await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { refresh_token: 'refresh-token' } }))
-      await expect(hasCodexRefreshToken()).resolves.toBe(true)
+      await expect(hasUsableCodexAuth()).resolves.toBe(true)
     } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('warns when auth.json exists but cannot be parsed', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-invalid-auth-'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), '{')
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
+      expect(warn).toHaveBeenCalledWith(
+        '[codex-auth] Unable to read Codex auth state',
+        expect.objectContaining({ path: join(codexHome, 'auth.json') }),
+      )
+    } finally {
+      warn.mockRestore()
       await rm(codexHome, { recursive: true, force: true })
     }
   })

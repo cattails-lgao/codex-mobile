@@ -5194,10 +5194,14 @@ Fresh unauthenticated install mobile home screen rate-limit handling.
 4. Confirm the composer renders and the quota UI is simply absent when the fresh `CODEX_HOME` has no authenticated Codex account.
 5. Switch to dark theme and reload the same mobile viewport.
 6. Repeat steps 2 through 4 in dark theme.
+7. Add an `auth.json` containing only `tokens.access_token` and confirm `account/rateLimits/read` is not short-circuited as unauthenticated.
+8. Replace `auth.json` with malformed JSON and confirm the server logs a `[codex-auth] Unable to read Codex auth state` warning while the home screen still renders.
 
 #### Expected Results
 - The fresh mobile home screen renders without a blank page.
 - `account/rateLimits/read` returns an empty result instead of a `502` when no Codex account is authenticated.
+- An access-token-only auth file is treated as authenticated enough to ask Codex for rate limits.
+- Malformed auth files are visible in server logs instead of being silently treated as a normal fresh install.
 - The UI remains usable in light theme and dark theme.
 - No login or account import is required just to load the home screen.
 
