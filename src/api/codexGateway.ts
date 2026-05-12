@@ -1438,7 +1438,7 @@ export async function renameThread(threadId: string, threadName: string): Promis
 
 export async function rollbackThread(threadId: string, numTurns: number): Promise<UiMessage[]> {
   const payload = await callRpc<ThreadReadResponse>('thread/rollback', { threadId, numTurns })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
 export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
@@ -1545,7 +1545,7 @@ export async function forkThread(
         threadId: forkedThreadId,
         cwd: normalizeThreadCwdFromPayload(payload),
         model: normalizeThreadModelFromPayload(payload),
-        messages: normalizeThreadMessagesV2(payload),
+        messages: normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload)),
       }
     } catch (error) {
       throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')

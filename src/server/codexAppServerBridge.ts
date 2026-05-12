@@ -5776,43 +5776,52 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-turn-page') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        const beforeTurnId = url.searchParams.get('beforeTurnId')?.trim() ?? ''
-        const limitRaw = url.searchParams.get('limit')?.trim() ?? String(THREAD_RESPONSE_TURN_LIMIT)
-        const limit = Math.max(1, Math.min(50, Number.parseInt(limitRaw, 10) || THREAD_RESPONSE_TURN_LIMIT))
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
+        try {
+          const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+          const beforeTurnId = url.searchParams.get('beforeTurnId')?.trim() ?? ''
+          const limitRaw = url.searchParams.get('limit')?.trim() ?? String(THREAD_RESPONSE_TURN_LIMIT)
+          const limit = Math.max(1, Math.min(50, Number.parseInt(limitRaw, 10) || THREAD_RESPONSE_TURN_LIMIT))
+          if (!threadId) {
+            setJson(res, 400, { error: 'Missing threadId' })
+            return
+          }
 
-        const threadReadResult = await appServer.rpc('thread/read', {
-          threadId,
-          includeTurns: true,
-        })
-        const record = asRecord(threadReadResult)
-        const thread = asRecord(record?.thread)
-        const turns = Array.isArray(thread?.turns) ? thread.turns : []
-        const beforeIndex = beforeTurnId
-          ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
-          : turns.length
-        const endIndex = beforeIndex >= 0 ? beforeIndex : turns.length
-        const startIndex = Math.max(0, endIndex - limit)
-        const pageTurns = turns.slice(startIndex, endIndex)
-        const pagedResult = {
-          ...record,
-          thread: {
-            ...thread,
-            turns: pageTurns,
-          },
-        }
-        const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
-        const result = await mergeSessionSkillInputsIntoThreadResult(sanitized)
+          const threadReadResult = await appServer.rpc('thread/read', {
+            threadId,
+            includeTurns: true,
+          })
+          const record = asRecord(threadReadResult)
+          const thread = asRecord(record?.thread)
+          if (!record || !thread) {
+            setJson(res, 502, { error: 'thread/read returned an invalid thread response' })
+            return
+          }
 
-        setJson(res, 200, {
-          result,
-          startTurnIndex: startIndex,
-          hasMoreOlder: startIndex > 0,
-        })
+          const turns = Array.isArray(thread.turns) ? thread.turns : []
+          const beforeIndex = beforeTurnId
+            ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
+            : turns.length
+          const endIndex = beforeIndex >= 0 ? beforeIndex : turns.length
+          const startIndex = Math.max(0, endIndex - limit)
+          const pageTurns = turns.slice(startIndex, endIndex)
+          const pagedResult = {
+            ...record,
+            thread: {
+              ...thread,
+              turns: pageTurns,
+            },
+          }
+          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
+          const result = await mergeSessionSkillInputsIntoThreadResult(sanitized)
+
+          setJson(res, 200, {
+            result,
+            startTurnIndex: startIndex,
+            hasMoreOlder: startIndex > 0,
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load earlier thread messages') })
+        }
         return
       }
 

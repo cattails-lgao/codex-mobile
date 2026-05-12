@@ -1240,7 +1240,7 @@ const props = defineProps<{
   cwd: string
   hasMorePersistedAbove?: boolean
   isLoadingPersistedAbove?: boolean
-  loadEarlierMessages?: () => Promise<void>
+  loadEarlierMessages?: (threadId: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -4026,7 +4026,7 @@ async function loadMoreAbove(): Promise<void> {
     if (renderWindowStart.value > 0) {
       renderWindowStart.value = Math.max(0, renderWindowStart.value - LOAD_MORE_CHUNK)
     } else if (props.hasMorePersistedAbove === true) {
-      await props.loadEarlierMessages?.()
+      await props.loadEarlierMessages?.(threadIdAtStart)
     }
 
     await nextTick()
