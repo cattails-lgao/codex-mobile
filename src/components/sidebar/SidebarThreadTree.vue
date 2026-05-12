@@ -891,7 +891,7 @@ import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import { getPathLeafName, getPathParent, isProjectlessChatPath } from '../../pathUtils.js'
+import { getPathLeafName, getPathParent, isAbsoluteLikePath, isProjectlessChatPath } from '../../pathUtils.js'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 import { reconcilePinnedThreadIds } from './pinnedThreadUtils'
 
@@ -2280,11 +2280,7 @@ function onRemoveProject(projectName: string): void {
 
 function getProjectAutomationKey(projectName: string): string {
   const projectCwd = props.projectCwdByName[projectName]?.trim() ?? ''
-  return isAbsoluteProjectCwd(projectCwd) ? projectCwd : ''
-}
-
-function isAbsoluteProjectCwd(value: string): boolean {
-  return value.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(value)
+  return isAbsoluteLikePath(projectCwd) ? projectCwd : ''
 }
 
 function onProjectHeaderKeyDown(event: KeyboardEvent, projectName: string): void {

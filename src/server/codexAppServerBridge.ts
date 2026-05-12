@@ -40,6 +40,7 @@ import {
   resolveRipgrepCommand,
 } from '../commandResolution.js'
 import type { CollaborationModeKind, ReasoningEffort } from '../types/codex.js'
+import { isAbsoluteLikePath } from '../pathUtils.js'
 
 type JsonRpcCall = {
   jsonrpc: '2.0'
@@ -3304,9 +3305,23 @@ function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
     'created_at',
     'updated_at',
   ])
+  let isInsideExtraTable = false
   for (const line of raw.split(/\r?\n/u)) {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
+    if (!trimmed || trimmed.startsWith('#')) continue
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      isInsideExtraTable = true
+      extraTomlLines.push(trimmed)
+      continue
+    }
+    if (isInsideExtraTable) {
+      extraTomlLines.push(trimmed)
+      continue
+    }
+    if (!trimmed.includes('=')) {
+      extraTomlLines.push(trimmed)
+      continue
+    }
     const separatorIndex = trimmed.indexOf('=')
     const key = trimmed.slice(0, separatorIndex).trim()
     const value = trimmed.slice(separatorIndex + 1).trim()
@@ -3561,7 +3576,7 @@ async function writeProjectCronAutomation(input: {
   if (!projectName || !name || !prompt || !rrule) {
     throw new Error('projectName, name, prompt, and rrule are required')
   }
-  if (!isAbsolute(projectName)) {
+  if (!isAbsoluteLikePath(projectName)) {
     throw new Error('Project automation cwd must be an absolute path')
   }
 
@@ -3602,7 +3617,7 @@ async function writeProjectCronAutomation(input: {
 async function deleteProjectCronAutomation(projectName: string, automationId = ''): Promise<boolean> {
   const normalizedProjectName = projectName.trim()
   const normalizedAutomationId = automationId.trim()
-  if (!normalizedProjectName || !isAbsolute(normalizedProjectName)) return false
+  if (!normalizedProjectName || !isAbsoluteLikePath(normalizedProjectName)) return false
   if (normalizedAutomationId) {
     const automation = await readProjectCronAutomation(normalizedProjectName, normalizedAutomationId)
     if (!automation) return false
@@ -7358,7 +7373,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'projectName, name, prompt, and rrule are required' })
           return
         }
-        if (!isAbsolute(projectName)) {
+        if (!isAbsoluteLikePath(projectName)) {
           setJson(res, 400, { error: 'Project automation cwd must be an absolute path' })
           return
         }

@@ -573,6 +573,7 @@
               ref="automationsPanelRef"
               :groups="projectGroups"
               :project-cwd-by-name="projectCwdByName"
+              :project-display-name-by-id="projectDisplayNameById"
               :selected-automation-id="routeAutomationId"
               @select-automation="onSelectAutomationInPanel"
               @edit-automation="onEditAutomationFromPanel"
