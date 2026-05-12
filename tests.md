@@ -1057,7 +1057,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 26. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
 27. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
 28. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
-29. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, and 28.
+29. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, and 28.
 
 #### Preserved Prior Coverage
 1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
@@ -1103,6 +1103,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - The selected branch HEAD commit is marked `current` in the commit list.
 - The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
 - The mobile Review pane diff area scrolls vertically without moving or hiding the pane header.
+- The Review pane overlay, toolbar, file list, file sheet, and diff surfaces use dark backgrounds and borders in dark theme instead of showing light surfaces.
 - On mobile, branches, commits, and selected-commit file details stack vertically in that order and stay inside the viewport in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
