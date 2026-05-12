@@ -1861,14 +1861,13 @@ export function useDesktopState() {
 
   async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
     try {
-      const [modelIds, currentConfig] = await Promise.all([
-        getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
-        getCurrentModelConfig(),
-      ])
-
+      const currentConfig = await getCurrentModelConfig()
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
       const normalizedConfiguredModelId = currentConfig.model.trim()
       const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
+      const modelIds = await getAvailableModelIds({
+        includeProviderModels: options?.includeProviderModels !== false || normalizedProviderId !== 'codex',
+      })
       activeProviderId.value = normalizedProviderId
       const providerModelContextId = toProviderModelContextId(normalizedProviderId)
       const providerScopedModelId = providerModelContextId
