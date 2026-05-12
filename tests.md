@@ -336,6 +336,43 @@ Rollback/cleanup:
 
 ---
 
+### Qodo feedback diagnostics reliability fixes
+
+#### Feature/Change Name
+Feedback diagnostics startup hardening, project automation delete failure handling, and coalesced composer overflow measurement.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. At least one sidebar project with a configured project automation
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, temporarily make `DELETE /codex-api/project-automation` fail, for example by stopping the local API bridge or forcing a 500 response in a development proxy.
+2. Open the project menu for a project with an automation and click Remove.
+3. Confirm the sidebar does not trigger an unhandled promise rejection and shows a small project automation error message.
+4. Restore the API bridge and refresh project automations.
+5. Confirm the automation chip/server state is reloaded instead of staying optimistically removed.
+6. Open the app in an environment where `window.fetch` is missing or read-only and confirm the app still mounts.
+7. Trigger a chat send failure and click Send feedback next to the chat error.
+8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, visible page text, and browser/app state prefilled.
+9. Type a long draft in the composer and confirm the expand control still appears when the textarea overflows.
+10. Switch to dark theme and repeat steps 2-9.
+
+#### Expected Results
+- Project automation delete failures are caught, recorded in feedback diagnostics, and surfaced as a visible sidebar error.
+- Automation state is restored or reloaded after a failed delete.
+- Feedback diagnostics never prevent app startup when fetch cannot be patched.
+- Chat and Skills Hub error feedback links use native `mailto:` anchor handling so Chrome can open the configured email handler.
+- Feedback email bodies include visible page text alongside diagnostics.
+- Feedback email bodies include localStorage/sessionStorage state, route/hash, online state, language, and platform without redaction or per-section truncation.
+- Composer overflow checks remain functional without scheduling duplicate same-tick measurements.
+- The sidebar error message remains readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Restore any temporary API failure/proxy change.
+
+---
+
 ### Composer expands long drafts to full screen
 
 #### Feature/Change Name
@@ -380,7 +417,7 @@ Feedback action appears in Settings and on visible error banners after captured 
 1. In light theme, load the home screen, open Settings, and confirm no `Send feedback` row is visible during a clean state.
 2. Trigger a failure, for example run `fetch('/codex-api/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })` in the browser console or open a folder path that produces a visible load error.
 3. Reopen Settings and confirm a `Send feedback` row with `Issue detected` appears after the failed request is recorded.
-4. Trigger or view a visible error banner, such as the missing Codex CLI composer banner, a settings provider error, a folder picker error, a Skills Hub error, or a branch dropdown error, and confirm that error state includes a compact `Send feedback` action.
+4. Trigger or view a visible error banner, such as the missing Codex CLI composer banner, a chat send/connection error in the live conversation overlay, a settings provider error, a folder picker error, a Skills Hub error, or a branch dropdown error, and confirm that error state includes a compact `Send feedback` action.
 5. Confirm no feedback action appears in the content header during normal use.
 6. Click `Send feedback` and confirm the mail client opens a draft to `brutalstrikedevs@gmail.com`.
 7. Confirm the draft body includes current URL, user agent, viewport, app/worktree version info, and recent diagnostics including the failed request or visible error.
@@ -389,7 +426,7 @@ Feedback action appears in Settings and on visible error banners after captured 
 #### Expected Results
 - The settings feedback action is absent during normal operation.
 - Runtime errors, unhandled rejections, failed fetches/API responses, and visible load failures make the Settings feedback action visible.
-- Visible error states include a local `Send feedback` action so the user can report the error from the same context.
+- Visible error states, including chat send/connection failures, include a local `Send feedback` action so the user can report the error from the same context.
 - The generated `mailto:` draft is prefilled with useful diagnostics and does not submit anything automatically.
 - No feedback action is shown in the app header during normal use.
 - The Settings feedback row and visible-error feedback actions remain readable in light and dark themes.

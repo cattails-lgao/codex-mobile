@@ -2,7 +2,6 @@ import { computed, ref } from 'vue'
 
 const FEEDBACK_EMAIL = 'brutalstrikedevs@gmail.com'
 const MAX_DIAGNOSTICS = 20
-const MAX_BODY_CHARS = 6500
 
 export type FeedbackDiagnosticKind = 'window-error' | 'unhandled-rejection' | 'fetch-error' | 'api-response' | 'visible-error'
 
@@ -46,9 +45,72 @@ function normalizeFetchMethod(input: RequestInfo | URL, init?: RequestInit): str
   return 'GET'
 }
 
+function normalizeSubjectMessage(message?: string): string {
+  const firstLine = (message || '').split(/\r?\n/, 1)[0] ?? ''
+  return firstLine.replace(/\s+/g, ' ').trim().slice(0, 80) || 'issue report'
+}
+
+function readVisiblePageText(): string {
+  if (typeof document === 'undefined') return 'unknown'
+  const text = document.body?.innerText
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim() ?? ''
+  if (!text) return 'No visible page text captured.'
+  return text
+}
+
+function normalizeStorageValue(value: string): string {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim()
+}
+
+function readStorageSnapshot(storage: Storage | undefined, label: string): string {
+  if (!storage) return `${label}: unavailable`
+  try {
+    const rows: string[] = []
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index)
+      if (!key) continue
+      rows.push(`${key}=${normalizeStorageValue(storage.getItem(key) ?? '')}`)
+    }
+    return `${label}:\n${rows.join('\n') || 'empty'}`
+  } catch (error) {
+    return `${label}: unavailable (${normalizeSubjectMessage(normalizeMessage(error))})`
+  }
+}
+
+function readBrowserStateSnapshot(): string {
+  if (typeof window === 'undefined') return 'unknown'
+  return [
+    `Path: ${window.location.pathname || '/'}`,
+    `Hash: ${window.location.hash || '(none)'}`,
+    `Search: ${window.location.search || '(none)'}`,
+    `Online: ${typeof navigator === 'undefined' ? 'unknown' : String(navigator.onLine)}`,
+    `Language: ${typeof navigator === 'undefined' ? 'unknown' : navigator.language}`,
+    `Platform: ${typeof navigator === 'undefined' ? 'unknown' : navigator.platform}`,
+    readStorageSnapshot(window.localStorage, 'localStorage'),
+    readStorageSnapshot(window.sessionStorage, 'sessionStorage'),
+  ].join('\n')
+}
+
 export function recordFeedbackDiagnostic(input: Omit<FeedbackDiagnostic, 'atIso'> & { atIso?: string }): void {
   const message = input.message.trim()
   if (!message) return
+  const newest = diagnostics.value[0]
+  if (
+    newest &&
+    newest.kind === input.kind &&
+    newest.message === message &&
+    newest.url === input.url &&
+    newest.method === input.method &&
+    newest.status === input.status
+  ) {
+    return
+  }
 
   const next: FeedbackDiagnostic = {
     ...input,
@@ -88,12 +150,18 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
     `App version: ${appVersion}`,
     `Worktree: ${worktreeName}`,
     '',
+    'Browser/app state',
+    readBrowserStateSnapshot(),
+    '',
     'Recent diagnostics',
     recentDiagnostics || 'No diagnostics captured.',
-  ].join('\n').slice(0, MAX_BODY_CHARS)
+    '',
+    'Visible page text',
+    readVisiblePageText(),
+  ].join('\n')
 
   const params = new URLSearchParams({
-    subject: `Codex Web feedback: ${entries[0]?.message.slice(0, 80) || 'issue report'}`,
+    subject: `Codex Web feedback: ${normalizeSubjectMessage(entries[0]?.message)}`,
     body,
   })
   return `mailto:${FEEDBACK_EMAIL}?${params.toString()}`
@@ -126,34 +194,57 @@ export function installFeedbackDiagnostics(): void {
   }
 
   if (!fetchInstalled) {
-    fetchInstalled = true
-    originalFetch = window.fetch.bind(window)
-    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = normalizeFetchUrl(input)
-      const method = normalizeFetchMethod(input, init)
-      try {
-        const response = await originalFetch!(input, init)
-        if (!response.ok) {
+    if (typeof window.fetch !== 'function') {
+      recordFeedbackDiagnostic({
+        kind: 'fetch-error',
+        message: 'Feedback diagnostics could not monitor fetch: window.fetch is unavailable',
+        url: window.location.href,
+      })
+      return
+    }
+
+    try {
+      originalFetch = window.fetch.bind(window)
+      window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = normalizeFetchUrl(input)
+        const method = normalizeFetchMethod(input, init)
+        try {
+          const response = await originalFetch!(input, init)
+          if (!response.ok) {
+            recordFeedbackDiagnostic({
+              kind: url.includes('/codex-api/') ? 'api-response' : 'fetch-error',
+              message: `Request failed with HTTP ${response.status}`,
+              url,
+              method,
+              status: response.status,
+              statusText: response.statusText,
+            })
+          }
+          return response
+        } catch (error) {
           recordFeedbackDiagnostic({
-            kind: url.includes('/codex-api/') ? 'api-response' : 'fetch-error',
-            message: `Request failed with HTTP ${response.status}`,
+            kind: 'fetch-error',
+            message: normalizeMessage(error),
             url,
             method,
-            status: response.status,
-            statusText: response.statusText,
           })
+          throw error
         }
-        return response
-      } catch (error) {
+      }) as typeof window.fetch
+      fetchInstalled = true
+    } catch (error) {
+      originalFetch = null
+      fetchInstalled = false
+      try {
         recordFeedbackDiagnostic({
           kind: 'fetch-error',
-          message: normalizeMessage(error),
-          url,
-          method,
+          message: `Feedback diagnostics could not monitor fetch: ${normalizeMessage(error)}`,
+          url: window.location.href,
         })
-        throw error
+      } catch {
+        // Startup diagnostics must never prevent the app from mounting.
       }
-    }) as typeof window.fetch
+    }
   }
 }
 
