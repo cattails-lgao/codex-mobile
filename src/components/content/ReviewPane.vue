@@ -147,7 +147,7 @@
         <div v-if="!snapshot.files.length" class="review-pane-empty">
           <p class="review-pane-empty-title">{{ t('No changes in this scope') }}</p>
           <p class="review-pane-empty-text">
-            {{ activeScope === 'workspace' ? t('Your current workspace is clean.') : t('No merge diff found against the base branch.') }}
+            {{ emptyReviewMessage }}
           </p>
         </div>
 
@@ -426,6 +426,14 @@ type MutableReviewTreeFolder = {
 const selectedFile = computed(() => snapshot.value?.files.find((file) => file.id === selectedFileId.value) ?? snapshot.value?.files[0] ?? null)
 const folderExpansionState = ref<Record<string, boolean>>({})
 const isCommitReview = computed(() => Boolean(props.commitSha?.trim()))
+const emptyReviewMessage = computed(() => {
+  if (snapshot.value?.scope === 'commit' || isCommitReview.value) {
+    return t('No file changes in this commit.')
+  }
+  return activeScope.value === 'workspace'
+    ? t('Your current workspace is clean.')
+    : t('No merge diff found against the base branch.')
+})
 
 function normalizeReviewPath(filePath: string): string {
   return filePath.trim().replace(/\\/g, '/')

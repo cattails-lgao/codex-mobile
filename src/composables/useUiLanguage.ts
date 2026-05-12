@@ -162,6 +162,7 @@ const zhCN: Record<string, string> = {
   'Base branch unavailable': '基础分支不可用',
   'Could not resolve `origin/HEAD`, `main`, or `master` for this repository.': '无法为此仓库解析 `origin/HEAD`、`main` 或 `master`。',
   'No changes in this scope': '此范围内没有更改',
+  'No file changes in this commit.': '此提交中没有文件更改。',
   'Your current workspace is clean.': '当前工作区很干净。',
   'No merge diff found against the base branch.': '未找到相对基础分支的合并 diff。',
   'No unified diff available.': '没有可用的统一 diff。',

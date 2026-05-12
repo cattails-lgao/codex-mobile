@@ -1058,6 +1058,20 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 27. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
 28. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 15, 16, 17, 20, 22, 23, 24, 25, 26, and 27.
 
+#### Preserved Prior Coverage
+1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
+2. Type part of a branch name in search and confirm the branch list filters.
+3. Select a different branch with a clean worktree using the checkout action and confirm the header updates to that branch.
+4. Select a branch row and confirm recent commits load with short SHA, subject, and date.
+5. Confirm remote branch rows are inspectable, appear after local branches, and do not trigger local reset without a supported local branch action.
+6. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+7. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit after reset.
+8. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+9. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+10. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+11. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds while preserving the untracked file in place or moving it to `.codex/untracked-backups/` if the target would overwrite it.
+12. Switch to dark theme and repeat the branch filtering, commit loading, reset-history, dirty-worktree, and untracked-file checks.
+
 #### Expected Results
 - The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
 - The selected-commit file panel is hidden until commit selection, then appears on the left and expands the dropdown width.
@@ -1079,6 +1093,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Clicking a selected commit file opens the Review pane against that commit diff and selects that path without auto-centering the selected hunk.
 - Changed-file rows in the Review pane file list do not inherit folder-depth indentation, so long names have enough room to truncate horizontally instead of wrapping one character per line when the list is narrow.
 - Remote branches appear after local branches in the branch list.
+- Prior branch-search, inline-commit, remote-branch inspection, reset-to-commit, dirty-worktree, and untracked-file manual coverage remains represented in the section.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
 - Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset.

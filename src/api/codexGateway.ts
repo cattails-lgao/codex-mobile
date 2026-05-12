@@ -49,6 +49,7 @@ import type {
   UiReviewResult,
   UiReviewScope,
   UiReviewSnapshot,
+  UiReviewSummary,
   UiReviewWorkspaceView,
   UiRateLimitSnapshot,
   UiRateLimitWindow,
@@ -983,6 +984,16 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
         .map((entry) => normalizeReviewFile(entry))
         .filter((entry): entry is UiReviewFile => entry !== null)
       : [],
+  }
+}
+
+function normalizeReviewSummary(payload: unknown): UiReviewSummary {
+  const envelope = asRecord(payload)
+  const data = asRecord(envelope?.data)
+  return {
+    fileCount: readNumber(data?.fileCount) ?? 0,
+    addedLineCount: readNumber(data?.addedLineCount) ?? 0,
+    removedLineCount: readNumber(data?.removedLineCount) ?? 0,
   }
 }
 
@@ -2847,6 +2858,19 @@ export async function getReviewSnapshot(
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to load review snapshot'))
   }
   return normalizeReviewSnapshot(payload)
+}
+
+export async function getReviewSummary(
+  cwd: string,
+  workspaceView: UiReviewWorkspaceView,
+): Promise<UiReviewSummary> {
+  const query = new URLSearchParams({ cwd, workspaceView })
+  const response = await fetch(`/codex-api/review/summary?${query.toString()}`)
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load review summary'))
+  }
+  return normalizeReviewSummary(payload)
 }
 
 export async function applyReviewAction(payload: {

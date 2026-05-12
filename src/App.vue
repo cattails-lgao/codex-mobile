@@ -1142,7 +1142,7 @@ import {
   getGitBranchCommits,
   getGitCommitFiles,
   getGitRepositoryStatus,
-  getReviewSnapshot,
+  getReviewSummary,
   getWorktreeBranchOptions,
   getAccounts,
   completeCodexLogin,
@@ -3242,12 +3242,12 @@ function loadThreadWorktreeChangeSummary(cwd: string): void {
     return
   }
   const requestId = ++threadWorktreeSummaryRequestId
-  void getReviewSnapshot(targetCwd, 'workspace', 'unstaged')
-    .then((snapshot) => {
+  void getReviewSummary(targetCwd, 'unstaged')
+    .then((summary) => {
       if (requestId !== threadWorktreeSummaryRequestId || !canLoadBranchStateForCwd(targetCwd)) return
       threadWorktreeChangeSummary.value = {
-        addedLineCount: snapshot.summary.addedLineCount,
-        removedLineCount: snapshot.summary.removedLineCount,
+        addedLineCount: summary.addedLineCount,
+        removedLineCount: summary.removedLineCount,
       }
     })
     .catch(() => {

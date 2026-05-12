@@ -63,6 +63,8 @@ type ReviewSnapshot = {
   files: ReviewSnapshotFile[]
 }
 
+type ReviewSummary = ReviewSnapshot['summary']
+
 type ReviewRouteContext = {
   readJsonBody: (req: IncomingMessage) => Promise<unknown>
 }
@@ -302,6 +304,78 @@ async function diffUntrackedFile(repoRoot: string, path: string): Promise<string
   }
 
   return result.stdout
+}
+
+function parseNumstatSummary(output: string): ReviewSummary {
+  let fileCount = 0
+  let addedLineCount = 0
+  let removedLineCount = 0
+  for (const line of output.split(/\r?\n/u)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const [addedRaw, removedRaw] = trimmed.split(/\s+/u)
+    if (addedRaw === undefined || removedRaw === undefined) continue
+    fileCount += 1
+    const added = Number(addedRaw)
+    const removed = Number(removedRaw)
+    if (Number.isFinite(added)) addedLineCount += added
+    if (Number.isFinite(removed)) removedLineCount += removed
+  }
+  return { fileCount, addedLineCount, removedLineCount }
+}
+
+function addReviewSummary(left: ReviewSummary, right: ReviewSummary): ReviewSummary {
+  return {
+    fileCount: left.fileCount + right.fileCount,
+    addedLineCount: left.addedLineCount + right.addedLineCount,
+    removedLineCount: left.removedLineCount + right.removedLineCount,
+  }
+}
+
+async function numstatUntrackedFile(repoRoot: string, path: string): Promise<string> {
+  const result = await runCommandResult(
+    'git',
+    ['diff', '--no-index', '--no-ext-diff', '--numstat', '--', '/dev/null', path],
+    { cwd: repoRoot },
+  )
+
+  if (result.code !== 0 && result.code !== 1) {
+    const details = [result.stderr, result.stdout].filter(Boolean).join('\n')
+    const suffix = details ? `: ${details}` : ''
+    throw new Error(`Command failed (git diff --no-index --numstat -- /dev/null ${path})${suffix}`)
+  }
+
+  return result.stdout
+}
+
+async function buildWorkspaceDiffSummary(repoRoot: string, workspaceView: ReviewWorkspaceView): Promise<ReviewSummary> {
+  if (workspaceView === 'staged') {
+    try {
+      const output = await runCommandCapture('git', ['diff', '--cached', '--no-ext-diff', '--find-renames', '--numstat'], { cwd: repoRoot })
+      return parseNumstatSummary(output)
+    } catch (error) {
+      if (isMissingHeadError(error)) {
+        return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
+      }
+      throw error
+    }
+  }
+
+  let summary: ReviewSummary = { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
+  try {
+    const output = await runCommandCapture('git', ['diff', '--no-ext-diff', '--find-renames', '--numstat'], { cwd: repoRoot })
+    summary = addReviewSummary(summary, parseNumstatSummary(output))
+  } catch (error) {
+    if (!isMissingHeadError(error)) {
+      throw error
+    }
+  }
+
+  const statusOutput = await runCommandCapture('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: repoRoot })
+  for (const path of parseUntrackedPaths(statusOutput)) {
+    summary = addReviewSummary(summary, parseNumstatSummary(await numstatUntrackedFile(repoRoot, path)))
+  }
+  return summary
 }
 
 async function buildWorkspaceDiff(repoRoot: string, workspaceView: ReviewWorkspaceView): Promise<string> {
@@ -705,6 +779,18 @@ async function buildReviewSnapshot(
   }
 }
 
+async function buildReviewSummary(cwd: string, workspaceView: ReviewWorkspaceView): Promise<ReviewSummary> {
+  const normalizedCwd = normalizeInputCwd(cwd)
+  await ensureDirectory(normalizedCwd)
+
+  const gitRoot = await resolveGitRoot(normalizedCwd)
+  if (!gitRoot) {
+    return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
+  }
+
+  return await buildWorkspaceDiffSummary(gitRoot, workspaceView)
+}
+
 async function writePatchFile(patch: string): Promise<string> {
   const dir = await mkdir(join(tmpdir(), 'codexui-review-patches'), { recursive: true }).then(() => join(tmpdir(), 'codexui-review-patches'))
   const filePath = join(dir, `${Date.now()}-${Math.random().toString(16).slice(2)}.patch`)
@@ -822,6 +908,24 @@ export async function handleReviewRoutes(
   url: URL,
   context: ReviewRouteContext,
 ): Promise<boolean> {
+  if (req.method === 'GET' && url.pathname === '/codex-api/review/summary') {
+    const cwd = url.searchParams.get('cwd')?.trim() ?? ''
+    const workspaceView = url.searchParams.get('workspaceView') === 'staged' ? 'staged' : 'unstaged'
+    if (!cwd) {
+      setJson(res, 400, { error: 'Missing cwd' })
+      return true
+    }
+
+    try {
+      setJson(res, 200, {
+        data: await buildReviewSummary(cwd, workspaceView),
+      })
+    } catch (error) {
+      setJson(res, 500, { error: getErrorMessage(error, 'Failed to load review summary') })
+    }
+    return true
+  }
+
   if (req.method === 'GET' && url.pathname === '/codex-api/review/snapshot') {
     const cwd = url.searchParams.get('cwd')?.trim() ?? ''
     const scope = url.searchParams.get('scope') === 'baseBranch'

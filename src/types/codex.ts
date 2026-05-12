@@ -172,6 +172,8 @@ export type UiReviewSnapshot = {
   files: UiReviewFile[]
 }
 
+export type UiReviewSummary = UiReviewSnapshot['summary']
+
 export type UiReviewFinding = {
   id: string
   title: string
