@@ -11,6 +11,7 @@ import {
   getPendingServerRequests,
   getSkillsList,
   getThreadDetail,
+  getOlderThreadMessages,
   getBackgroundThreadListLimit,
   interruptThreadTurn,
   pickCodexRateLimitSnapshot,
@@ -1393,6 +1394,8 @@ export function useDesktopState() {
   const projectDisplayNameById = ref<Record<string, string>>(loadProjectDisplayNames())
   const loadedVersionByThreadId = ref<Record<string, string>>({})
   const loadedMessagesByThreadId = ref<Record<string, boolean>>({})
+  const hasMoreOlderMessagesByThreadId = ref<Record<string, boolean>>({})
+  const loadingOlderMessagesByThreadId = ref<Record<string, boolean>>({})
   const resumedThreadById = ref<Record<string, boolean>>({})
   const turnIndexByTurnIdByThreadId = ref<Record<string, Record<string, number>>>({})
   const turnSummaryByThreadId = ref<Record<string, TurnSummaryState>>({})
@@ -1542,6 +1545,23 @@ export function useDesktopState() {
     if (!summary) return combined
     return insertTurnSummaryMessage(combined, summary)
   })
+  const hasMoreOlderMessages = computed(() => {
+    const threadId = selectedThreadId.value
+    return threadId ? hasMoreOlderMessagesByThreadId.value[threadId] === true : false
+  })
+  const isLoadingOlderMessages = computed(() => {
+    const threadId = selectedThreadId.value
+    return threadId ? loadingOlderMessagesByThreadId.value[threadId] === true : false
+  })
+
+  function getFirstPersistedTurnId(threadId: string): string {
+    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+    for (const message of persisted) {
+      const turnId = message.turnId?.trim() ?? ''
+      if (turnId) return turnId
+    }
+    return ''
+  }
 
   function readModelIdForThread(threadId: string): string {
     const contextId = toThreadContextId(threadId)
@@ -4202,6 +4222,10 @@ export function useDesktopState() {
       }
 
       const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = detail
+      hasMoreOlderMessagesByThreadId.value = {
+        ...hasMoreOlderMessagesByThreadId.value,
+        [threadId]: detail.hasMoreOlder === true,
+      }
       markThreadMessagesPersisted(threadId, nextMessages)
       replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
       rebindLiveFileChangeTurnIndices(threadId)
@@ -4257,6 +4281,50 @@ export function useDesktopState() {
 
     loadMessagePromiseByThreadId.set(threadId, loadPromise)
     await loadPromise
+  }
+
+  async function loadOlderMessages(threadId: string = selectedThreadId.value): Promise<void> {
+    if (!threadId) return
+    if (loadingOlderMessagesByThreadId.value[threadId] === true) return
+    if (hasMoreOlderMessagesByThreadId.value[threadId] !== true) return
+
+    const beforeTurnId = getFirstPersistedTurnId(threadId)
+    if (!beforeTurnId) {
+      hasMoreOlderMessagesByThreadId.value = {
+        ...hasMoreOlderMessagesByThreadId.value,
+        [threadId]: false,
+      }
+      return
+    }
+
+    loadingOlderMessagesByThreadId.value = {
+      ...loadingOlderMessagesByThreadId.value,
+      [threadId]: true,
+    }
+
+    try {
+      const page = await getOlderThreadMessages(threadId, beforeTurnId)
+      const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
+      const mergedMessages = mergeMessages(page.messages, previousPersisted, { preserveMissing: true })
+      setPersistedMessagesForThread(threadId, mergedMessages)
+      replaceTurnIndexLookupForThread(threadId, {
+        ...(turnIndexByTurnIdByThreadId.value[threadId] ?? {}),
+        ...page.turnIndexByTurnId,
+      })
+      rebindLiveFileChangeTurnIndices(threadId)
+      hasMoreOlderMessagesByThreadId.value = {
+        ...hasMoreOlderMessagesByThreadId.value,
+        [threadId]: page.hasMoreOlder,
+      }
+    } catch (loadError) {
+      error.value = loadError instanceof Error ? loadError.message : 'Failed to load earlier messages'
+      throw loadError
+    } finally {
+      loadingOlderMessagesByThreadId.value = {
+        ...loadingOlderMessagesByThreadId.value,
+        [threadId]: false,
+      }
+    }
   }
 
   async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
@@ -5366,9 +5434,11 @@ export function useDesktopState() {
     installedSkills,
     accountRateLimitSnapshots,
     messages,
+    hasMoreOlderMessages,
     isLoadingThreads,
     isThreadListFullyLoaded,
     isLoadingMessages,
+    isLoadingOlderMessages,
     isSendingMessage,
     isInterruptingTurn,
     isUpdatingSpeedMode,
@@ -5379,6 +5449,7 @@ export function useDesktopState() {
     refreshSkills,
     selectThread,
     loadMessages,
+    loadOlderMessages,
     ensureThreadMessagesLoaded,
     setThreadTerminalOpen,
     toggleSelectedThreadTerminal,

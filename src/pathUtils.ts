@@ -21,6 +21,11 @@ function isWindowsLikePath(value: string): boolean {
   return /^[a-z]:[\\/]/iu.test(value) || value.startsWith('\\\\')
 }
 
+export function isAbsoluteLikePath(value: string): boolean {
+  const normalized = normalizePathForUi(value)
+  return normalized.startsWith('/') || isWindowsLikePath(normalized)
+}
+
 export function normalizePathForComparison(value: string): string {
   const normalized = normalizePathForUi(value).replace(/[\\/]+/gu, '/')
   return isWindowsLikePath(normalized) ? normalized.toLowerCase() : normalized

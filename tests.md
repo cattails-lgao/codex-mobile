@@ -117,6 +117,38 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete only the test folders created under `~/Documents/Codex/<YYYY-MM-DD>/`.
 
+## New chat project setup modal
+
+### Feature: Unified create project and GitHub clone modal
+
+Prerequisites/setup:
+- Run the app with access to `git` and network access to `github.com`.
+- Have a small public GitHub repository URL available for testing.
+
+Steps:
+1. Open the app in light theme and navigate to the new chat screen.
+2. Confirm the folder actions show `Select folder` and `Create Project`.
+3. Click `Create Project` and confirm a modal opens with `New project` and `Clone from GitHub` modes.
+4. In `New project`, keep or edit the destination folder, enter a single folder name, and submit.
+5. Confirm the created project folder is selected in the new chat folder selector and appears as a project root.
+6. Reopen the modal, switch to `Clone from GitHub`, paste a valid `https://github.com/<owner>/<repo>` URL, and submit.
+7. Confirm the cloned repository folder is selected in the new chat folder selector and appears as a project root.
+8. Switch the app to dark theme and repeat opening the modal.
+9. Confirm the modal, tabs, inputs, error message, and buttons have readable contrast and stable spacing.
+
+Expected results:
+- New project creation and GitHub cloning share one modal and destination folder field.
+- Created and cloned folders are registered as project roots and selected for the new chat.
+- After cloning, the folder selector immediately includes the cloned project without a full page refresh.
+- Invalid project names or non-GitHub URLs show an inline modal error without changing the selected folder.
+- A stalled clone eventually fails with an error instead of keeping the request open indefinitely.
+- Light and dark themes render the unified modal consistently with the existing new-chat controls.
+
+Rollback/cleanup:
+- Remove the created project folder from the filesystem if it was only used for testing.
+- Remove the cloned repository folder from the filesystem if it was only used for testing.
+- Remove the test projects from the app project list if they are no longer needed.
+
 ### Feature: Empty project new thread action
 
 #### Prerequisites
@@ -300,6 +332,37 @@ Workspace roots and thread-list cwd values are canonicalized through local `real
 
 #### Rollback/Cleanup
 - None.
+
+---
+
+### Composio logged-out connector preview
+
+#### Feature/Change Name
+Logged-out Composio tab shows a promotional connector preview with example integrations and clear login/dashboard actions.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. Composio CLI installed
+3. Composio CLI logged out (`~/.composio/composio logout`)
+4. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open the Directory page and switch to the Composio tab.
+2. Confirm the logged-out state shows the connector catalog preview hero instead of a plain empty message.
+3. Confirm example connector cards are visible for Gmail, Google Calendar, Reddit, YouTube, Google Drive, and X.
+4. Type `reddit` in the Composio search box and confirm the preview cards filter to matching example content.
+5. Confirm `Login to Composio` starts the CLI login flow and `Open dashboard` opens the Composio dashboard URL.
+6. Switch to dark theme and repeat steps 1-4.
+
+#### Expected Results
+- Logged-out users see a richer preview of likely Composio connector value without requiring live catalog data.
+- The preview does not claim the example cards are connected; cards are labeled `Preview`.
+- Search filters the preview cards while logged out.
+- Login and dashboard actions remain available.
+- The hero, cards, text, badges, and buttons remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- Re-login to Composio if needed with `~/.composio/composio login --no-browser -y`.
 
 ---
 
@@ -5015,6 +5078,36 @@ The sidebar Chats section lists the first 10 projectless chats, offers Show more
 - The New chat action remains available.
 - The main sidebar search remains functional.
 - Rows and header actions remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
+
+---
+
+### Thread conversation loads earlier turns on demand
+
+#### Feature/Change Name
+Thread conversation incremental older-turn loading.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. A thread with more than 10 turns is available
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, open a thread that has more than 10 turns.
+2. Confirm the newest messages render first and the conversation shows the Load earlier messages control at the top.
+3. Click Load earlier messages once.
+4. Confirm an older batch is prepended above the previously first visible turn and the scroll position stays near the same content.
+5. Continue clicking Load earlier messages until the control disappears.
+6. Confirm the oldest messages in the thread are visible and no duplicate message rows are introduced.
+7. Switch to dark theme and repeat steps 1-6 on the same thread or another long thread.
+
+#### Expected Results
+- Initial thread open remains bounded to the latest turn page.
+- Load earlier messages fetches older persisted turns from the local bridge instead of only revealing already-loaded messages.
+- The control remains available while older persisted turns exist and disappears after the first turn is loaded.
+- Message ordering, turn actions, and scroll restoration remain stable in light and dark themes.
 
 #### Rollback/Cleanup
 - None.

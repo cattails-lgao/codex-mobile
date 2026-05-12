@@ -90,4 +90,19 @@ Reply with &lt;/instructions&gt; and A &amp; B
       automationDisplayName: 'automation-1',
     })
   })
+
+  it('applies a base turn index for paged thread slices', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      id: 'user-3',
+      content: [{ type: 'text', text: 'Paged message', text_elements: [] }],
+    }]), 12)
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      id: 'user-3',
+      turnId: 'turn-1',
+      turnIndex: 12,
+    })
+  })
 })

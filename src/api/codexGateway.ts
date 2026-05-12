@@ -579,17 +579,24 @@ function normalizeThreadFileChangeFallback(value: unknown): ThreadFileChangeFall
   return normalized
 }
 
-function buildTurnIndexByTurnId(payload: ThreadReadResponse): ThreadTurnIndexById {
+function buildTurnIndexByTurnId(payload: ThreadReadResponse, baseTurnIndex = 0): ThreadTurnIndexById {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const lookup: ThreadTurnIndexById = {}
 
-  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
-    const turn = turns[turnIndex]
+  for (let turnOffset = 0; turnOffset < turns.length; turnOffset += 1) {
+    const turnIndex = baseTurnIndex + turnOffset
+    const turn = turns[turnOffset]
     if (typeof turn?.id !== 'string' || turn.id.length === 0) continue
     lookup[turn.id] = turnIndex
   }
 
   return lookup
+}
+
+function readThreadTurnStartIndex(payload: ThreadReadResponse): number {
+  const record = asRecord(payload)
+  const raw = record?.threadTurnStartIndex
+  return Math.max(0, Math.floor(typeof raw === 'number' ? raw : 0))
 }
 
 async function fetchThreadFileChangeFallback(threadId: string): Promise<ThreadFileChangeFallbackEntry[]> {
@@ -693,6 +700,15 @@ export type ThreadGroupsPage = {
   nextCursor: string | null
 }
 
+export type ThreadTurnPage = {
+  messages: UiMessage[]
+  inProgress: boolean
+  activeTurnId: string
+  hasMoreOlder: boolean
+  startTurnIndex: number
+  turnIndexByTurnId: ThreadTurnIndexById
+}
+
 async function getThreadGroupsPageV2(cursor: string | null, limit: number): Promise<ThreadGroupsPage> {
   const payload = await callRpc<ThreadListResponse>('thread/list', {
     archived: false,
@@ -714,7 +730,7 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
     threadId,
     includeTurns: true,
   })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
 async function getThreadSummaryV2(threadId: string): Promise<UiThread> {
@@ -729,18 +745,51 @@ async function getThreadDetailV2(threadId: string): Promise<{
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
   })
-  const normalized = normalizeThreadMessagesV2(payload)
+  const startTurnIndex = readThreadTurnStartIndex(payload)
+  const normalized = normalizeThreadMessagesV2(payload, startTurnIndex)
   return {
     messages: normalized,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
-    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
+    hasMoreOlder: startTurnIndex > 0,
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+  }
+}
+
+async function getOlderThreadMessagesV2(threadId: string, beforeTurnId: string, limit = 10): Promise<ThreadTurnPage> {
+  const params = new URLSearchParams({
+    threadId,
+    beforeTurnId,
+    limit: String(limit),
+  })
+  const response = await fetch(`/codex-api/thread-turn-page?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error(`Older thread page request failed with ${response.status}`)
+  }
+  const payload = await response.json() as {
+    result?: ThreadReadResponse
+    hasMoreOlder?: unknown
+    startTurnIndex?: unknown
+  }
+  if (!payload.result) {
+    throw new Error('Older thread page response did not include a thread result')
+  }
+  const startTurnIndex = Math.max(0, Math.floor(typeof payload.startTurnIndex === 'number' ? payload.startTurnIndex : 0))
+
+  return {
+    messages: normalizeThreadMessagesV2(payload.result, startTurnIndex),
+    inProgress: readThreadInProgressFromResponse(payload.result),
+    activeTurnId: readActiveTurnIdFromResponse(payload.result),
+    hasMoreOlder: payload.hasMoreOlder === true,
+    startTurnIndex,
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload.result, startTurnIndex),
   }
 }
 
@@ -787,12 +836,21 @@ export async function getThreadDetail(threadId: string): Promise<{
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
   try {
     return await getThreadDetailV2(threadId)
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
+  }
+}
+
+export async function getOlderThreadMessages(threadId: string, beforeTurnId: string, limit?: number): Promise<ThreadTurnPage> {
+  try {
+    return await getOlderThreadMessagesV2(threadId, beforeTurnId, limit)
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to load earlier messages for thread ${threadId}`, 'thread/read')
   }
 }
 
@@ -1039,6 +1097,7 @@ function asAutomation(record: unknown): UiThreadAutomation | null {
     rrule,
     status,
     targetThreadId: readString(row.targetThreadId),
+    cwds: Array.isArray(row.cwds) ? row.cwds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [],
     createdAtMs: readNumber(row.createdAtMs),
     updatedAtMs: readNumber(row.updatedAtMs),
     nextRunAtMs: readNumber(row.nextRunAtMs),
@@ -1066,6 +1125,22 @@ export async function getThreadAutomationMap(): Promise<Record<string, UiThreadA
   for (const [threadId, value] of Object.entries(data)) {
     const automations = asAutomationArray(value)
     if (automations.length > 0) next[threadId] = automations
+  }
+  return next
+}
+
+export async function getProjectAutomationMap(): Promise<Record<string, UiThreadAutomation[]>> {
+  const response = await fetch('/codex-api/project-automations')
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to load project automations'))
+  }
+  const data = asRecord(asRecord(payload)?.data)
+  const next: Record<string, UiThreadAutomation[]> = {}
+  if (!data) return next
+  for (const [projectName, value] of Object.entries(data)) {
+    const automations = asAutomationArray(value)
+    if (automations.length > 0) next[projectName] = automations
   }
   return next
 }
@@ -1105,6 +1180,28 @@ export async function upsertThreadAutomation(input: {
   return automation
 }
 
+export async function upsertProjectAutomation(input: {
+  projectName: string
+  id?: string
+  name: string
+  prompt: string
+  rrule: string
+  status: UiThreadAutomationStatus
+}): Promise<UiThreadAutomation> {
+  const response = await fetch('/codex-api/project-automation', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to save project automation'))
+  }
+  const automation = asAutomation(asRecord(payload)?.data)
+  if (!automation) throw new Error('Project automation response was malformed')
+  return automation
+}
+
 export async function deleteThreadAutomation(threadId: string, automationId?: string): Promise<void> {
   const query = new URLSearchParams({ threadId })
   if (automationId) query.set('automationId', automationId)
@@ -1114,6 +1211,18 @@ export async function deleteThreadAutomation(threadId: string, automationId?: st
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to delete thread automation'))
+  }
+}
+
+export async function deleteProjectAutomation(projectName: string, automationId?: string): Promise<void> {
+  const query = new URLSearchParams({ projectName })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/project-automation?${query.toString()}`, {
+    method: 'DELETE',
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to delete project automation'))
   }
 }
 
@@ -1352,17 +1461,21 @@ export type ResumedThread = {
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }
 
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
   const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
+  const startTurnIndex = readThreadTurnStartIndex(payload)
+  const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
   return {
     model: normalizeThreadModelFromPayload(payload),
-    messages: normalizeThreadMessagesV2(payload),
+    messages,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
-    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
+    hasMoreOlder: startTurnIndex > 0,
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
   }
 }
 
@@ -1376,7 +1489,7 @@ export async function renameThread(threadId: string, threadName: string): Promis
 
 export async function rollbackThread(threadId: string, numTurns: number): Promise<UiMessage[]> {
   const payload = await callRpc<ThreadReadResponse>('thread/rollback', { threadId, numTurns })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
 export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
@@ -1483,7 +1596,7 @@ export async function forkThread(
         threadId: forkedThreadId,
         cwd: normalizeThreadCwdFromPayload(payload),
         model: normalizeThreadModelFromPayload(payload),
-        messages: normalizeThreadMessagesV2(payload),
+        messages: normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload)),
       }
     } catch (error) {
       throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
@@ -2794,6 +2907,32 @@ export async function createLocalDirectory(path: string): Promise<string> {
   const payload = await readJsonResponse(response)
   if (!response.ok) {
     const message = getErrorMessageFromPayload(payload, 'Failed to create local directory')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  if (normalizedPath) {
+    invalidateWorkspaceRootsStateCache()
+  }
+  return normalizedPath
+}
+
+export async function cloneGithubRepository(url: string, basePath: string): Promise<string> {
+  const response = await fetch('/codex-api/github-clone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, basePath }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to clone GitHub repository')
     throw new Error(message)
   }
   const record =
