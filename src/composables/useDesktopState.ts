@@ -223,8 +223,34 @@ function toThreadContextId(threadId: string): string {
 }
 
 function loadSelectedModelMap(): Record<string, string> {
-  clearSelectedModelStorage()
-  return createStringKeyedRecord<string>()
+  if (typeof window === 'undefined') return createStringKeyedRecord<string>()
+
+  try {
+    const raw = window.localStorage.getItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return createStringKeyedRecord<string>()
+
+      const next = createStringKeyedRecord<string>()
+      for (const [contextId, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof contextId !== 'string' || contextId.length === 0) continue
+        const normalizedModelId = normalizeStoredModelId(value)
+        if (normalizedModelId) {
+          next[contextId] = normalizedModelId
+        }
+      }
+      return next
+    }
+  } catch {
+    // Fall back to the legacy global preference below.
+  }
+
+  const legacyModelId = normalizeStoredModelId(window.localStorage.getItem(LEGACY_SELECTED_MODEL_STORAGE_KEY))
+  const next = createStringKeyedRecord<string>()
+  if (legacyModelId) {
+    next[NEW_THREAD_COLLABORATION_MODE_CONTEXT] = legacyModelId
+  }
+  return next
 }
 
 function readSelectedModel(
@@ -238,17 +264,16 @@ function readSelectedModel(
 }
 
 function saveSelectedModelMap(state: Record<string, string>): void {
-  void state
-  clearSelectedModelStorage()
-}
-
-function clearSelectedModelStorage(): void {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.removeItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
+    if (Object.keys(state).length === 0) {
+      window.localStorage.removeItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY, JSON.stringify(state))
+    }
     window.localStorage.removeItem(LEGACY_SELECTED_MODEL_STORAGE_KEY)
   } catch {
-    // Keep in-memory selection working even if localStorage cleanup fails.
+    // Keep in-memory selection working even if localStorage writes fail.
   }
 }
 
@@ -1548,11 +1573,13 @@ export function useDesktopState() {
   function readModelIdForThread(threadId: string): string {
     const contextId = toThreadContextId(threadId)
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      const providerModelId = providerContextId
-        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
-        : ''
-      if (providerModelId) return providerModelId
+      const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+      if (normalizedProviderId !== 'codex') {
+        const providerContextId = toProviderModelContextId(normalizedProviderId)
+        return providerContextId
+          ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
+          : ''
+      }
     }
     return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
   }
@@ -1587,30 +1614,31 @@ export function useDesktopState() {
   function setSelectedModelIdForThread(threadId: string, modelId: string): void {
     const normalizedModelId = modelId.trim()
     const contextId = toThreadContextId(threadId)
+    const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+    const providerContextId =
+      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT && normalizedProviderId !== 'codex'
+        ? toProviderModelContextId(normalizedProviderId)
+        : ''
+    const selectedContextId = providerContextId || contextId
     if (normalizedModelId) {
       const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-      nextModelMap[contextId] = normalizedModelId
+      nextModelMap[selectedContextId] = normalizedModelId
+      if (providerContextId) {
+        delete nextModelMap[contextId]
+      }
       selectedModelIdByContext.value = nextModelMap
     } else {
-      selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, contextId)
+      let nextModelMap = omitStringKeyedRecordKey(selectedModelIdByContext.value, selectedContextId)
+      if (providerContextId) {
+        nextModelMap = omitStringKeyedRecordKey(nextModelMap, contextId)
+      }
+      selectedModelIdByContext.value = nextModelMap
     }
     if (threadId.trim() === selectedThreadId.value) {
       selectedModelId.value = readModelIdForThread(selectedThreadId.value)
       ensureAvailableModelIds(selectedModelId.value)
     } else {
       ensureAvailableModelIds(normalizedModelId)
-    }
-    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      if (providerContextId) {
-        if (normalizedModelId) {
-          const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-          nextModelMap[providerContextId] = normalizedModelId
-          selectedModelIdByContext.value = nextModelMap
-        } else {
-          selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, providerContextId)
-        }
-      }
     }
     saveSelectedModelMap(selectedModelIdByContext.value)
   }
@@ -1864,7 +1892,7 @@ export function useDesktopState() {
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
       if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
         if (options?.providerChanged && nextModelIds.length > 0) {
-          if (providerScopedModelId && nextModelIds.includes(providerScopedModelId)) {
+          if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
             setSelectedModelId(providerScopedModelId)
           } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
             setSelectedModelId(normalizedConfiguredModelId)
@@ -1878,13 +1906,8 @@ export function useDesktopState() {
         } else {
           setSelectedModelId('')
         }
-      } else if (
-        isProviderBacked
-        && normalizedConfiguredModelId
-        && modelIds.includes(normalizedConfiguredModelId)
-        && normalizedSelectedModelId !== normalizedConfiguredModelId
-      ) {
-        setSelectedModelId(normalizedConfiguredModelId)
+      } else if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
+        setSelectedModelId(normalizedSelectedModelId)
       }
       if (providerModelContextId && selectedModelId.value.trim().length > 0) {
         const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
