@@ -4,6 +4,10 @@ const FEEDBACK_EMAIL = 'brutalstrikedevs@gmail.com'
 const MAX_DIAGNOSTICS = 20
 const MAX_BODY_CHARS = 6500
 const MAX_PAGE_TEXT_CHARS = 1800
+const MAX_STORAGE_ITEMS = 12
+const MAX_STORAGE_VALUE_CHARS = 240
+
+const SENSITIVE_STORAGE_PATTERN = /token|secret|password|passwd|credential|authorization|auth|bearer|cookie|session|key/i
 
 export type FeedbackDiagnosticKind = 'window-error' | 'unhandled-rejection' | 'fetch-error' | 'api-response' | 'visible-error'
 
@@ -65,6 +69,49 @@ function readVisiblePageText(): string {
     : text
 }
 
+function redactStorageValue(key: string, value: string): string {
+  if (SENSITIVE_STORAGE_PATTERN.test(key) || SENSITIVE_STORAGE_PATTERN.test(value)) return '[redacted]'
+  const normalized = value
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim()
+  if (!normalized) return ''
+  return normalized.length > MAX_STORAGE_VALUE_CHARS
+    ? `${normalized.slice(0, MAX_STORAGE_VALUE_CHARS)}...[truncated]`
+    : normalized
+}
+
+function readStorageSnapshot(storage: Storage | undefined, label: string): string {
+  if (!storage) return `${label}: unavailable`
+  try {
+    const rows: string[] = []
+    const length = Math.min(storage.length, MAX_STORAGE_ITEMS)
+    for (let index = 0; index < length; index += 1) {
+      const key = storage.key(index)
+      if (!key) continue
+      rows.push(`${key}=${redactStorageValue(key, storage.getItem(key) ?? '')}`)
+    }
+    const suffix = storage.length > MAX_STORAGE_ITEMS ? `\n...${storage.length - MAX_STORAGE_ITEMS} more item(s)` : ''
+    return `${label}:\n${rows.join('\n') || 'empty'}${suffix}`
+  } catch (error) {
+    return `${label}: unavailable (${normalizeSubjectMessage(normalizeMessage(error))})`
+  }
+}
+
+function readBrowserStateSnapshot(): string {
+  if (typeof window === 'undefined') return 'unknown'
+  return [
+    `Path: ${window.location.pathname || '/'}`,
+    `Hash: ${window.location.hash || '(none)'}`,
+    `Search: ${window.location.search || '(none)'}`,
+    `Online: ${typeof navigator === 'undefined' ? 'unknown' : String(navigator.onLine)}`,
+    `Language: ${typeof navigator === 'undefined' ? 'unknown' : navigator.language}`,
+    `Platform: ${typeof navigator === 'undefined' ? 'unknown' : navigator.platform}`,
+    readStorageSnapshot(window.localStorage, 'localStorage'),
+    readStorageSnapshot(window.sessionStorage, 'sessionStorage'),
+  ].join('\n')
+}
+
 export function recordFeedbackDiagnostic(input: Omit<FeedbackDiagnostic, 'atIso'> & { atIso?: string }): void {
   const message = input.message.trim()
   if (!message) return
@@ -117,6 +164,9 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
     `Viewport: ${viewport}`,
     `App version: ${appVersion}`,
     `Worktree: ${worktreeName}`,
+    '',
+    'Browser/app state',
+    readBrowserStateSnapshot(),
     '',
     'Recent diagnostics',
     recentDiagnostics || 'No diagnostics captured.',
