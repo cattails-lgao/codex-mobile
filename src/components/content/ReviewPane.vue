@@ -103,7 +103,7 @@
       <span class="review-pane-summary-pill review-pane-summary-pill-remove">-{{ snapshot.summary.removedLineCount }}</span>
       <span v-if="snapshot.headBranch">{{ snapshot.headBranch }}</span>
       <span v-if="isCommitReview && snapshot.commitSha">{{ shortCommitSha(snapshot.commitSha) }}</span>
-      <span v-if="activeScope === 'baseBranch' && snapshot.baseBranch">vs {{ snapshot.baseBranch }}</span>
+      <span v-if="!isCommitReview && activeScope === 'baseBranch' && snapshot.baseBranch">vs {{ snapshot.baseBranch }}</span>
     </div>
 
     <div class="review-pane-content">
@@ -868,6 +868,7 @@ function handleNotification(notification: RpcNotification): void {
 watch(
   () => [props.threadId, props.cwd, props.commitSha] as const,
   () => {
+    if (isCommitReview.value) activeScope.value = 'workspace'
     selectedFileId.value = ''
     selectedHunkId.value = ''
     reviewError.value = ''

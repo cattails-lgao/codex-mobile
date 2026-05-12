@@ -1046,7 +1046,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 15. Select a remote branch row and confirm it can load commits but does not show a `Checkout` action.
 16. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a left-side file panel with that commit subject, file changes, per-file `+`/`-` line counts, and a `Reset` button without changing HEAD.
 17. Click a commit ref badge and confirm the full commit SHA is copied to the clipboard without changing the selected commit.
-18. Click a file in the selected commit details and confirm the dropdown closes, clears the selected commit state for the next open, and the Review pane opens in commit mode with that file selected without auto-centering the first hunk.
+18. Click a file in the selected commit details and confirm the dropdown closes, clears the selected commit state for the next open, and the Review pane opens in commit mode with that file selected without auto-centering the first hunk; if the Review pane previously used base-branch comparison, confirm the commit review meta row shows the commit SHA and does not show `vs <base-branch>`.
 19. Click `Reset` for the selected commit and confirm the header stays on that branch instead of entering detached HEAD.
 20. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
 21. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
@@ -1095,6 +1095,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - The selected commit `Reset` button resets the local branch to that commit instead of detaching HEAD.
 - Remote branches are inspectable but cannot be checked out directly from this control.
 - Clicking a selected commit file opens the Review pane against that commit diff and selects that path without auto-centering the selected hunk.
+- Commit review mode shows the selected commit SHA in the Review pane meta row and never shows a base-branch comparison label.
 - Clicking a selected commit file clears the dropdown commit selection before closing, so reopening starts without the stale file panel.
 - Changed-file rows in the Review pane file list do not inherit folder-depth indentation, so long names have enough room to truncate horizontally instead of wrapping one character per line when the list is narrow.
 - Remote branches appear after local branches in the branch list.
@@ -1122,6 +1123,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 #### Performance Audit Evidence
 - `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser` completed after the review-summary changes.
 - Latest report: `output/playwright/browser-runtime-profile-home-2026-05-12T12-50-45-771Z.json`.
+- Follow-up report after the commit-review meta-label fix: `output/playwright/browser-runtime-profile-home-2026-05-12T13-04-36-811Z.json`.
 - The profile showed one `thread/list:first-page` request, one `skills/list` request, one `rateLimitsRead` request, and the existing `threadRead=3` warning. No duplicate review-summary request was introduced on the home route.
 - The review-summary path now uses one tracked `git diff --numstat` plus NUL-delimited `git ls-files --others --exclude-standard -z`; untracked line counts are streamed from disk instead of reading full files into memory.
 
