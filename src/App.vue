@@ -563,7 +563,7 @@
                   <button class="new-thread-folder-action new-thread-folder-action-primary" type="button" @click="onOpenExistingFolder">
                     {{ t('Select folder') }}
                   </button>
-                  <button class="new-thread-folder-action" type="button" @click="onCreateProject">
+                  <button class="new-thread-folder-action" type="button" @click="onOpenProjectSetupModal">
                     {{ t('Create Project') }}
                   </button>
                 </div>
@@ -716,6 +716,90 @@
                           </button>
                         </li>
                       </ul>
+                    </div>
+                  </div>
+                </Teleport>
+                <Teleport to="body">
+                  <div v-if="isProjectSetupModalOpen" class="new-thread-open-folder-overlay" @click.self="onCloseProjectSetupModal">
+                    <div class="new-thread-project-modal" role="dialog" aria-modal="true" :aria-label="t('Create or clone project')" @keydown.esc.prevent="onCloseProjectSetupModal">
+                      <div class="new-thread-open-folder-header">
+                        <p class="new-thread-open-folder-title">{{ t('Create or clone project') }}</p>
+                        <button class="new-thread-open-folder-close" type="button" :disabled="isProjectSetupSubmitting" @click="onCloseProjectSetupModal">
+                          {{ t('Cancel') }}
+                        </button>
+                      </div>
+                      <div class="new-thread-project-mode-tabs" role="tablist" :aria-label="t('Project source')">
+                        <button
+                          class="new-thread-project-mode-tab"
+                          :class="{ 'is-active': projectSetupMode === 'create' }"
+                          type="button"
+                          role="tab"
+                          :aria-selected="projectSetupMode === 'create'"
+                          :disabled="isProjectSetupSubmitting"
+                          @click="projectSetupMode = 'create'"
+                        >
+                          {{ t('New project') }}
+                        </button>
+                        <button
+                          class="new-thread-project-mode-tab"
+                          :class="{ 'is-active': projectSetupMode === 'clone' }"
+                          type="button"
+                          role="tab"
+                          :aria-selected="projectSetupMode === 'clone'"
+                          :disabled="isProjectSetupSubmitting"
+                          @click="projectSetupMode = 'clone'"
+                        >
+                          {{ t('Clone from GitHub') }}
+                        </button>
+                      </div>
+                      <label class="new-thread-project-field">
+                        <span class="new-thread-open-folder-label">{{ t('Destination folder') }}</span>
+                        <input
+                          v-model="projectSetupBaseDir"
+                          class="new-thread-open-folder-path"
+                          type="text"
+                          :disabled="isProjectSetupSubmitting"
+                          :placeholder="t('Destination folder')"
+                        />
+                      </label>
+                      <label v-if="projectSetupMode === 'create'" class="new-thread-project-field">
+                        <span class="new-thread-open-folder-label">{{ t('Project name') }}</span>
+                        <input
+                          ref="projectSetupPrimaryInputRef"
+                          v-model="projectNameDraft"
+                          class="new-thread-open-folder-create-input"
+                          type="text"
+                          :disabled="isProjectSetupSubmitting"
+                          :placeholder="t('Project name')"
+                          @keydown.enter.prevent="onSubmitProjectSetup"
+                        />
+                      </label>
+                      <label v-else class="new-thread-project-field">
+                        <span class="new-thread-open-folder-label">{{ t('GitHub repository URL') }}</span>
+                        <input
+                          ref="projectSetupPrimaryInputRef"
+                          v-model="githubCloneUrlDraft"
+                          class="new-thread-open-folder-create-input"
+                          type="url"
+                          :disabled="isProjectSetupSubmitting"
+                          placeholder="https://github.com/owner/repo"
+                          @keydown.enter.prevent="onSubmitProjectSetup"
+                        />
+                      </label>
+                      <p v-if="projectSetupError" class="new-thread-open-folder-error">{{ projectSetupError }}</p>
+                      <div class="new-thread-project-modal-actions">
+                        <button class="new-thread-folder-action" type="button" :disabled="isProjectSetupSubmitting" @click="onCloseProjectSetupModal">
+                          {{ t('Cancel') }}
+                        </button>
+                        <button
+                          class="new-thread-folder-action new-thread-folder-action-primary"
+                          type="button"
+                          :disabled="!canSubmitProjectSetup || isProjectSetupSubmitting"
+                          @click="onSubmitProjectSetup"
+                        >
+                          {{ projectSetupSubmitLabel }}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </Teleport>
@@ -970,6 +1054,7 @@ import { useMobile } from './composables/useMobile'
 import { useUiLanguage } from './composables/useUiLanguage'
 import {
   checkoutGitBranch,
+  cloneGithubRepository,
   configureTelegramBot,
   createPermanentWorktree,
   createWorktree,
@@ -1359,6 +1444,14 @@ const isCreateFolderOpen = ref(false)
 const createFolderDraft = ref('')
 const createFolderError = ref('')
 const isCreatingFolder = ref(false)
+const isProjectSetupModalOpen = ref(false)
+const projectSetupMode = ref<'create' | 'clone'>('create')
+const projectSetupBaseDir = ref('')
+const projectNameDraft = ref('')
+const githubCloneUrlDraft = ref('')
+const projectSetupError = ref('')
+const isProjectSetupSubmitting = ref(false)
+const projectSetupPrimaryInputRef = ref<HTMLInputElement | null>(null)
 const isExistingFolderPickerOpen = ref(false)
 const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
@@ -1666,6 +1759,18 @@ const isCreateFolderNameValid = computed(() => {
 const canCreateFolder = computed(() => {
   return isCreateFolderNameValid.value && createFolderParentPath.value.trim().length > 0 && !existingFolderError.value
 })
+const isProjectNameDraftValid = computed(() => {
+  const draft = projectNameDraft.value.trim()
+  if (!draft) return false
+  if (draft === '.' || draft === '..') return false
+  return !/[\\/]/u.test(draft)
+})
+const canSubmitProjectSetup = computed(() => {
+  const baseDir = projectSetupBaseDir.value.trim()
+  if (!baseDir) return false
+  if (projectSetupMode.value === 'create') return isProjectNameDraftValid.value
+  return githubCloneUrlDraft.value.trim().length > 0
+})
 const resolvedExistingFolderPath = computed(() => {
   const draftedPath = normalizePathForUi(existingFolderPathDraft.value).trim()
   if (draftedPath) return draftedPath
@@ -1674,6 +1779,12 @@ const resolvedExistingFolderPath = computed(() => {
 const createFolderSubmitLabel = computed(() => {
   if (isCreatingFolder.value) return 'Creating…'
   return 'Create'
+})
+const projectSetupSubmitLabel = computed(() => {
+  if (isProjectSetupSubmitting.value) {
+    return projectSetupMode.value === 'clone' ? t('Cloning…') : t('Creating…')
+  }
+  return projectSetupMode.value === 'clone' ? t('Clone repository') : t('Create project')
 })
 const canBrowseExistingFolderParent = computed(() => {
   const current = existingFolderBrowsePath.value.trim()
@@ -3019,35 +3130,70 @@ function loadThreadBranchCommits(branch: string): void {
     })
 }
 
-async function onCreateProject(): Promise<void> {
+async function onOpenProjectSetupModal(): Promise<void> {
   const baseDir = await resolveProjectBaseDirectory()
   if (!baseDir) return
 
   await refreshDefaultProjectName()
-  const suggestedName = defaultNewProjectName.value.trim() || 'New Project (1)'
-  const projectName = window.prompt(`Create project in ${baseDir}`, suggestedName)
-  if (projectName === null) return
+  projectSetupBaseDir.value = baseDir
+  projectNameDraft.value = defaultNewProjectName.value.trim() || 'New Project (1)'
+  githubCloneUrlDraft.value = ''
+  projectSetupError.value = ''
+  projectSetupMode.value = 'create'
+  isProjectSetupModalOpen.value = true
+  void nextTick(() => projectSetupPrimaryInputRef.value?.focus())
+}
 
-  const normalizedProjectName = projectName.trim()
-  if (!normalizedProjectName) return
+function onCloseProjectSetupModal(): void {
+  if (isProjectSetupSubmitting.value) return
+  isProjectSetupModalOpen.value = false
+  projectSetupError.value = ''
+}
 
+async function createProjectFromSetupModal(): Promise<string> {
+  const baseDir = projectSetupBaseDir.value.trim()
+  const normalizedProjectName = projectNameDraft.value.trim()
+  if (!isProjectNameDraftValid.value) {
+    throw new Error('Enter a single project folder name.')
+  }
   const targetPath = normalizeAbsolutePath(joinPath(baseDir, normalizedProjectName))
-  if (!targetPath) return
+  if (!targetPath) return ''
 
+  return openProjectRoot(targetPath, {
+    createIfMissing: true,
+    label: '',
+  })
+}
+
+async function cloneGithubRepositoryFromSetupModal(): Promise<string> {
+  const baseDir = projectSetupBaseDir.value.trim()
+  const normalizedRepoUrl = githubCloneUrlDraft.value.trim()
+  if (!normalizedRepoUrl) return ''
+
+  return cloneGithubRepository(normalizedRepoUrl, baseDir)
+}
+
+async function onSubmitProjectSetup(): Promise<void> {
+  if (!canSubmitProjectSetup.value || isProjectSetupSubmitting.value) return
+
+  projectSetupError.value = ''
+  isProjectSetupSubmitting.value = true
   try {
-    const normalizedPath = await openProjectRoot(targetPath, {
-      createIfMissing: true,
-      label: '',
-    })
+    const normalizedPath =
+      projectSetupMode.value === 'clone'
+        ? await cloneGithubRepositoryFromSetupModal()
+        : await createProjectFromSetupModal()
     if (!normalizedPath) return
 
     newThreadCwd.value = normalizedPath
     pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
     await refreshDefaultProjectName()
+    isProjectSetupModalOpen.value = false
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create the project.'
-    window.alert(message)
+    projectSetupError.value = error instanceof Error ? error.message : 'Failed to create or clone project.'
+  } finally {
+    isProjectSetupSubmitting.value = false
   }
 }
 
@@ -4562,6 +4708,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply flex w-full max-w-3xl max-h-[90vh] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-xl;
 }
 
+.new-thread-project-modal {
+  @apply flex w-full max-w-xl max-h-[90vh] flex-col gap-3 overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-xl;
+}
+
 .new-thread-open-folder-header {
   @apply flex items-center justify-between gap-3;
 }
@@ -4588,6 +4738,26 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .new-thread-open-folder-actions {
   @apply flex flex-wrap items-center gap-2;
+}
+
+.new-thread-project-mode-tabs {
+  @apply grid grid-cols-2 rounded-xl border border-zinc-200 bg-zinc-50 p-1;
+}
+
+.new-thread-project-mode-tab {
+  @apply inline-flex h-9 items-center justify-center rounded-lg border-0 bg-transparent px-3 text-sm font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 disabled:cursor-default disabled:opacity-60;
+}
+
+.new-thread-project-mode-tab.is-active {
+  @apply bg-white text-zinc-950 shadow-sm;
+}
+
+.new-thread-project-field {
+  @apply flex flex-col gap-1.5;
+}
+
+.new-thread-project-modal-actions {
+  @apply mt-1 flex flex-wrap justify-end gap-2;
 }
 
 .new-thread-open-folder-toggle {

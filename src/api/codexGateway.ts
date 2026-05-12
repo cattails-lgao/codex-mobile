@@ -2804,6 +2804,32 @@ export async function createLocalDirectory(path: string): Promise<string> {
     record.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
       : {}
+  const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  if (normalizedPath) {
+    invalidateWorkspaceRootsStateCache()
+  }
+  return normalizedPath
+}
+
+export async function cloneGithubRepository(url: string, basePath: string): Promise<string> {
+  const response = await fetch('/codex-api/github-clone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, basePath }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to clone GitHub repository')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
   return typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
 }
 

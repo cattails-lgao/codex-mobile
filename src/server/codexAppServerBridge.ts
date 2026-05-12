@@ -980,6 +980,62 @@ async function createProjectlessThreadDirectory(prompt: string | null): Promise<
   throw new Error('Unable to create a unique new chat folder')
 }
 
+function normalizeGithubCloneUrl(rawUrl: string): { url: string; repoName: string } {
+  const trimmedUrl = rawUrl.trim()
+  if (!trimmedUrl) throw new Error('Missing GitHub repository URL')
+
+  const sshMatch = trimmedUrl.match(/^git@github\.com:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/u)
+  if (sshMatch) {
+    const repoName = sshMatch[2]
+    return { url: `git@github.com:${sshMatch[1]}/${repoName}.git`, repoName }
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmedUrl)
+  } catch {
+    throw new Error('Enter a valid GitHub repository URL')
+  }
+  if (parsed.hostname.toLowerCase() !== 'github.com') {
+    throw new Error('Only github.com repository URLs are supported')
+  }
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  if (segments.length < 2) {
+    throw new Error('Enter a GitHub repository URL with owner and repository name')
+  }
+  const owner = segments[0]
+  const repoName = segments[1].replace(/\.git$/iu, '')
+  if (!/^[A-Za-z0-9_.-]+$/u.test(owner) || !/^[A-Za-z0-9_.-]+$/u.test(repoName)) {
+    throw new Error('GitHub repository owner or name contains unsupported characters')
+  }
+  return { url: `https://github.com/${owner}/${repoName}.git`, repoName }
+}
+
+async function cloneGithubRepositoryIntoBase(rawUrl: string, rawBasePath: string): Promise<string> {
+  const basePath = rawBasePath.trim()
+  if (!basePath) throw new Error('Missing clone destination folder')
+  const normalizedBasePath = isAbsolute(basePath) ? basePath : resolve(basePath)
+  await ensureRealDirectory(normalizedBasePath, 'Clone destination folder')
+
+  const { url, repoName } = normalizeGithubCloneUrl(rawUrl)
+  const targetPath = join(normalizedBasePath, repoName)
+  try {
+    await stat(targetPath)
+    throw new Error(`Destination already exists: ${targetPath}`)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+  }
+
+  try {
+    await runCommand('git', ['clone', url, targetPath], { cwd: normalizedBasePath, timeoutMs: 5 * 60_000 })
+  } catch (error) {
+    await rm(targetPath, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+  await persistWorkspaceRoot(targetPath, '')
+  return targetPath
+}
+
 function normalizeHeaderValue(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim()
@@ -2663,7 +2719,7 @@ async function removeComposerPromptFile(promptPath: string): Promise<boolean> {
   }
 }
 
-async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
@@ -2672,10 +2728,32 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
     })
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    let closed = false
+    const timeout =
+      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+        ? setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+          setTimeout(() => {
+            if (!closed) proc.kill('SIGKILL')
+          }, 5_000).unref()
+        }, options.timeoutMs)
+        : null
+    timeout?.unref()
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on('error', reject)
+    proc.on('error', (error) => {
+      if (timeout) clearTimeout(timeout)
+      reject(error)
+    })
     proc.on('close', (code) => {
+      closed = true
+      if (timeout) clearTimeout(timeout)
+      if (timedOut) {
+        reject(new Error(`Command timed out after ${options.timeoutMs}ms (${command} ${args.join(' ')})`))
+        return
+      }
       if (code === 0) {
         resolve()
         return
@@ -6730,6 +6808,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         setJson(res, 200, { data: { path: normalizedPath } })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/github-clone') {
+        const payload = asRecord(await readJsonBody(req))
+        const repoUrl = typeof payload?.url === 'string' ? payload.url.trim() : ''
+        const basePath = typeof payload?.basePath === 'string' ? payload.basePath.trim() : ''
+        try {
+          const clonedPath = await cloneGithubRepositoryIntoBase(repoUrl, basePath)
+          setJson(res, 200, { data: { path: clonedPath } })
+        } catch (error) {
+          setJson(res, 400, { error: error instanceof Error ? error.message : 'Failed to clone GitHub repository' })
+        }
         return
       }
 
