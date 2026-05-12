@@ -2012,13 +2012,14 @@ onMounted(() => {
   void refreshTerminalQuickCommands()
 })
 
-watch(visibleFeedbackErrors, (values) => {
-  for (const value of values) {
+watch(visibleFeedbackErrors, (values, oldValues) => {
+  values.forEach((value, index) => {
+    if (value === oldValues[index]) return
     const message = value.trim()
     if (message) {
       recordVisibleFailure(message)
     }
-  }
+  })
 })
 
 onUnmounted(() => {

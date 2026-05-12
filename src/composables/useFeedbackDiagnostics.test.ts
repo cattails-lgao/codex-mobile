@@ -51,4 +51,21 @@ describe('feedback diagnostics', () => {
     expect(body).toContain('Viewport: 390x844 @2x')
     expect(body).toContain('POST | /codex-api/rpc | 500 Internal Server Error')
   })
+
+  it('dedupes identical newest diagnostics', () => {
+    recordFeedbackDiagnostic({
+      kind: 'visible-error',
+      message: 'Failed to load folders',
+      url: 'http://127.0.0.1:4173/#/',
+      atIso: '2026-05-12T03:00:00.000Z',
+    })
+    recordFeedbackDiagnostic({
+      kind: 'visible-error',
+      message: 'Failed to load folders',
+      url: 'http://127.0.0.1:4173/#/',
+      atIso: '2026-05-12T03:00:01.000Z',
+    })
+
+    expect(useFeedbackDiagnostics().diagnostics.value).toHaveLength(1)
+  })
 })

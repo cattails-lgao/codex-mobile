@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import SkillCard from './SkillCard.vue'
 import SkillDetailModal, { type HubSkill } from './SkillDetailModal.vue'
@@ -174,7 +174,7 @@ const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const { t } = useUiLanguage()
-const { buildFeedbackMailto } = useFeedbackDiagnostics()
+const { buildFeedbackMailto, recordVisibleFailure } = useFeedbackDiagnostics()
 const feedbackMailto = computed(() => buildFeedbackMailto())
 
 const props = defineProps<{
@@ -390,10 +390,26 @@ const {
     emit('skills-changed')
   },
 })
+const visibleSkillErrors = [
+  computed(() => syncStatus.value.startup.lastError),
+  syncActionError,
+  skillSearchError,
+  error,
+]
 
 onMounted(() => {
   void fetchSkills()
   void loadSyncStatus()
+})
+
+watch(visibleSkillErrors, (values, oldValues) => {
+  values.forEach((value, index) => {
+    if (value === oldValues[index]) return
+    const message = value.trim()
+    if (message) {
+      recordVisibleFailure(message)
+    }
+  })
 })
 </script>
 
@@ -526,10 +542,6 @@ onMounted(() => {
 
 .skills-error-feedback {
   @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
-}
-
-:global(:root.dark) .skills-error-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
 }
 
 .skills-hub-empty {

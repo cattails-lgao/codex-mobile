@@ -49,6 +49,17 @@ function normalizeFetchMethod(input: RequestInfo | URL, init?: RequestInit): str
 export function recordFeedbackDiagnostic(input: Omit<FeedbackDiagnostic, 'atIso'> & { atIso?: string }): void {
   const message = input.message.trim()
   if (!message) return
+  const newest = diagnostics.value[0]
+  if (
+    newest &&
+    newest.kind === input.kind &&
+    newest.message === message &&
+    newest.url === input.url &&
+    newest.method === input.method &&
+    newest.status === input.status
+  ) {
+    return
+  }
 
   const next: FeedbackDiagnostic = {
     ...input,
