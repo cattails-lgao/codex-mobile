@@ -86,6 +86,7 @@ export type UiThreadAutomation = {
   rrule: string
   status: UiThreadAutomationStatus
   targetThreadId: string | null
+  cwds: string[]
   createdAtMs: number | null
   updatedAtMs: number | null
   nextRunAtMs: number | null

@@ -46,3 +46,9 @@
 - Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
 - Documents: DeepSeek thinking-mode `reasoning_content` round-trip requirement, Chat-shaped Zen proxy endpoint selection, streaming reasoning preservation, Docker validation, and the `/tmp/app.tar` restart gotcha.
 - Updated `index.md`.
+## 2026-05-10
+
+- Added project cron automation notes for sidebar project-level automation management.
+- Updated project cron automation notes for the combined Automations panel.
+- Updated Automations panel notes for active/newest sorting and direct edit buttons.
+- Updated project cron automation notes for absolute cwd validation and multi-cwd preservation.

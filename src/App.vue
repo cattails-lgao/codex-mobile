@@ -60,8 +60,25 @@
             </span>
           </button>
 
-          <SidebarThreadTree :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
+          <button
+            v-if="!isSidebarCollapsed"
+            class="sidebar-skills-link"
+            :class="{ 'is-active': isAutomationsRoute }"
+            type="button"
+            @click="router.push({ name: 'automations' }); isMobile && setSidebarCollapsed(true)"
+          >
+            <span class="sidebar-skills-link-icon sidebar-automations-link-icon" aria-hidden="true">
+              <IconTablerBolt />
+            </span>
+            <span class="sidebar-skills-link-copy">
+              <span class="sidebar-skills-link-title">{{ t('Automations') }}</span>
+              <span class="sidebar-skills-link-subtitle">{{ t('Scheduled work') }}</span>
+            </span>
+          </button>
+
+          <SidebarThreadTree ref="sidebarThreadTreeRef" :groups="projectGroups" :project-display-name-by-id="projectDisplayNameById"
             :project-git-repo-by-name="projectGitRepoByName"
+            :project-cwd-by-name="projectCwdByName"
             v-if="!isSidebarCollapsed"
             :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
             :is-thread-list-fully-loaded="isThreadListFullyLoaded"
@@ -77,6 +94,7 @@
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @export-thread="onExportThread"
+            @automations-changed="onAutomationsChanged"
             @start-new-chat="onStartNewThreadFromToolbar" />
         </div>
 
@@ -484,7 +502,7 @@
         :style="contentStyle"
       >
         <span v-if="isVirtualKeyboardOpen" class="content-keyboard-spacer" aria-hidden="true" />
-        <ContentHeader :title="contentTitle" :accent="isSkillsRoute">
+        <ContentHeader :title="contentTitle" :accent="isSkillsRoute || isAutomationsRoute">
           <template #leading>
             <SidebarThreadControls
               v-if="isSidebarCollapsed || isMobile"
@@ -495,6 +513,9 @@
               @start-new-thread="onStartNewThreadFromToolbar"
             />
             <span v-if="isSkillsRoute" class="skills-route-header-icon" aria-hidden="true">
+              <IconTablerBolt />
+            </span>
+            <span v-else-if="isAutomationsRoute" class="skills-route-header-icon automations-route-header-icon" aria-hidden="true">
               <IconTablerBolt />
             </span>
           </template>
@@ -545,6 +566,18 @@
               :try-in-flight-key="directoryTryInFlightKey"
               @skills-changed="onSkillsChanged"
               @try-item="onTryDirectoryItem"
+            />
+          </template>
+          <template v-else-if="isAutomationsRoute">
+            <AutomationsPanel
+              ref="automationsPanelRef"
+              :groups="projectGroups"
+              :project-cwd-by-name="projectCwdByName"
+              :project-display-name-by-id="projectDisplayNameById"
+              :selected-automation-id="routeAutomationId"
+              @select-automation="onSelectAutomationInPanel"
+              @edit-automation="onEditAutomationFromPanel"
+              @create-automation="onCreateAutomationFromPanel"
             />
           </template>
           <template v-else-if="isHomeRoute">
@@ -1087,7 +1120,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadTokenUsage } from './types/codex'
+import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
@@ -1097,6 +1130,7 @@ const ThreadConversation = defineAsyncComponent(() => import('./components/conte
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
 const ReviewPane = defineAsyncComponent(() => import('./components/content/ReviewPane.vue'))
 const DirectoryHub = defineAsyncComponent(() => import('./components/content/DirectoryHub.vue'))
+const AutomationsPanel = defineAsyncComponent(() => import('./components/content/AutomationsPanel.vue'))
 const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
@@ -1332,6 +1366,20 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+type SidebarThreadTreeExposed = {
+  openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
+  openAutomationCreatorFromPanel: () => void
+}
+type AutomationsPanelExposed = {
+  loadAutomations: () => Promise<void>
+}
+type AutomationEditRequest = {
+  scope: 'thread' | 'project'
+  target: string
+  automation: UiThreadAutomation
+}
+const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
+const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
@@ -1496,7 +1544,13 @@ const routeThreadId = computed(() => {
 
 const isHomeRoute = computed(() => route.name === 'home')
 const isSkillsRoute = computed(() => route.name === 'skills')
+const isAutomationsRoute = computed(() => route.name === 'automations')
+const routeAutomationId = computed(() => {
+  const raw = route.query.automationId
+  return typeof raw === 'string' ? raw : ''
+})
 const contentTitle = computed(() => {
+  if (isAutomationsRoute.value) return t('Automations')
   if (isSkillsRoute.value) return t('Skills')
   if (isHomeRoute.value) return t('Start new thread')
   return selectedThread.value?.title ?? t('Choose a thread')
@@ -1561,7 +1615,7 @@ const isTerminalKeyboardLayoutActive = computed(() => (
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
-const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && selectedThreadId.value.trim().length > 0)
+const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && !isAutomationsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
   isInterruptingTurn.value ||
@@ -2089,6 +2143,33 @@ function onSelectThread(threadId: string): void {
   if (isMobile.value) setSidebarCollapsed(true)
 }
 
+function onSelectAutomationInPanel(automationId: string): void {
+  if (route.name !== 'automations') return
+  if (routeAutomationId.value === automationId) return
+  void router.replace({ name: 'automations', query: automationId ? { automationId } : {} })
+}
+
+async function onEditAutomationFromPanel(payload: AutomationEditRequest): Promise<void> {
+  if (isSidebarCollapsed.value) {
+    setSidebarCollapsed(false)
+    await nextTick()
+  }
+  sidebarThreadTreeRef.value?.openAutomationEditorFromPanel(payload)
+}
+
+async function onCreateAutomationFromPanel(): Promise<void> {
+  if (isSidebarCollapsed.value) {
+    setSidebarCollapsed(false)
+    await nextTick()
+  }
+  sidebarThreadTreeRef.value?.openAutomationCreatorFromPanel()
+}
+
+function onAutomationsChanged(): void {
+  if (route.name !== 'automations') return
+  void automationsPanelRef.value?.loadAutomations()
+}
+
 async function onExportThread(threadId: string): Promise<void> {
   if (!threadId) return
   if (selectedThreadId.value !== threadId) {
@@ -2439,6 +2520,14 @@ function getProjectCwd(projectName: string): string {
   const projectGroup = projectGroups.value.find((group) => group.projectName === projectName)
   return resolvePreferredLocalCwd(projectName, projectGroup?.threads[0]?.cwd?.trim() ?? '')
 }
+
+const projectCwdByName = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    projectGroups.value
+      .map((group) => [group.projectName, getProjectCwd(group.projectName).trim()] as const)
+      .filter(([, cwd]) => cwd.length > 0),
+  ),
+)
 
 function getProjectDisplayNameForWorktree(projectName: string): string {
   return (projectDisplayNameById.value[projectName] ?? projectName).trim() || projectName
@@ -3578,7 +3667,7 @@ function onImplementPlan(payload: { turnId: string }): void {
 
 
 function onExportChat(): void {
-  if (isHomeRoute.value || isSkillsRoute.value || typeof document === 'undefined') return
+  if (isHomeRoute.value || isSkillsRoute.value || isAutomationsRoute.value || typeof document === 'undefined') return
   if (!selectedThread.value || filteredMessages.value.length === 0) return
   const markdown = buildThreadMarkdown()
   const fileName = buildExportFileName()
@@ -4034,7 +4123,7 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
     do {
       hasPendingRouteSync = false
 
-      if (route.name === 'home' || route.name === 'skills') {
+      if (route.name === 'home' || route.name === 'skills' || route.name === 'automations') {
         if (selectedThreadId.value !== '') {
           await selectThread('')
         }
@@ -4101,7 +4190,7 @@ watch(
   async (threadId) => {
     if (!hasInitialized.value) return
     if (isRouteSyncInProgress.value) return
-    if (isHomeRoute.value || isSkillsRoute.value) return
+    if (isHomeRoute.value || isSkillsRoute.value || isAutomationsRoute.value) return
 
     if (!threadId) {
       if (route.name !== 'home') {
@@ -4426,6 +4515,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white;
 }
 
+.sidebar-automations-link-icon {
+  @apply bg-amber-500;
+}
+
 .sidebar-skills-link-icon :deep(svg) {
   @apply h-5 w-5;
 }
@@ -4448,6 +4541,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .skills-route-header-icon {
   @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-[0_16px_32px_-20px_rgba(5,150,105,0.9)];
+}
+
+.automations-route-header-icon {
+  @apply bg-amber-500 shadow-[0_16px_32px_-20px_rgba(245,158,11,0.9)];
 }
 
 .skills-route-header-icon :deep(svg) {

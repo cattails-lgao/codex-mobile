@@ -465,6 +465,22 @@
   @apply border-zinc-600 bg-zinc-700 text-zinc-100;
 }
 
+:root.dark .automation-target-picker {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .automation-target-mode-group {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .automation-target-mode {
+  @apply text-zinc-400 hover:bg-zinc-700;
+}
+
+:root.dark .automation-target-mode.is-active {
+  @apply bg-zinc-200 text-zinc-900 hover:bg-zinc-200;
+}
+
 :root.dark .automation-thread-list {
   @apply border-zinc-700 bg-zinc-900;
 }
@@ -1696,6 +1712,60 @@
 
 :root.dark .sdm-btn-secondary {
   @apply bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
+:root.dark .automations-toolbar {
+  @apply border-zinc-800;
+}
+
+:root.dark .automations-summary span,
+:root.dark .automation-row-icon[data-status='PAUSED'],
+:root.dark .automation-detail-icon[data-status='PAUSED'] {
+  @apply bg-zinc-800 text-zinc-400;
+}
+
+:root.dark .automations-refresh,
+:root.dark .automations-create,
+:root.dark .automation-edit-button,
+:root.dark .automation-detail-edit,
+:root.dark .automations-list,
+:root.dark .automation-detail {
+  @apply border-zinc-800 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .automations-refresh:hover,
+:root.dark .automations-create:hover,
+:root.dark .automation-edit-button:hover,
+:root.dark .automation-detail-edit:hover,
+:root.dark .automation-row:hover,
+:root.dark .automation-row.is-selected {
+  @apply bg-zinc-900;
+}
+
+:root.dark .automation-row {
+  @apply border-zinc-800;
+}
+
+:root.dark .automation-row-title,
+:root.dark .automation-detail-title-wrap h2,
+:root.dark .automation-detail-grid dd,
+:root.dark .automations-empty p {
+  @apply text-zinc-100;
+}
+
+:root.dark .automation-row-meta,
+:root.dark .automation-row-schedule,
+:root.dark .automation-detail-title-wrap span,
+:root.dark .automation-detail-grid dt,
+:root.dark .automation-detail-prompt h3,
+:root.dark .automations-summary,
+:root.dark .automations-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .automation-detail-grid div,
+:root.dark .automation-detail-prompt p {
+  @apply bg-zinc-900 text-zinc-200;
 }
 
 @media (max-width: 768px) {
