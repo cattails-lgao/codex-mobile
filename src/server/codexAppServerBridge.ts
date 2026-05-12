@@ -24,6 +24,8 @@ import {
   getFreeModels,
   refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
+  OPENCODE_ZEN_DEFAULT_MODEL,
+  OPENCODE_ZEN_PROVIDER_ID,
   createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
@@ -1154,6 +1156,25 @@ async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string):
   } catch {
     return ''
   }
+}
+
+async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
+  const headers: Record<string, string> = {}
+  if (apiKey && apiKey !== 'dummy') {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
+  const response = await fetch('https://opencode.ai/zen/v1/models', {
+    headers,
+    signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+  })
+  if (!response.ok) return []
+  return normalizeProviderModelsData(await response.json() as unknown)
+}
+
+function sortOpenCodeZenModelIds(modelIds: string[]): string[] {
+  const freeIds = modelIds.filter((id) => id.endsWith('-free') || id === OPENCODE_ZEN_DEFAULT_MODEL)
+  const paidIds = modelIds.filter((id) => !id.endsWith('-free') && id !== OPENCODE_ZEN_DEFAULT_MODEL)
+  return [...freeIds, ...paidIds]
 }
 
 async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<ProviderModelsResponse> {
@@ -5906,17 +5927,43 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             const maskedKey = state.apiKey && state.customKey
               ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
               : null
-            refreshFreeModelsInBackground()
+            let models = getCachedFreeModels()
+            let wireApi = state.wireApi ?? null
+            if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
+              try {
+                const zenModels = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey))
+                if (zenModels.length > 0) {
+                  models = zenModels
+                } else {
+                  models = [
+                    OPENCODE_ZEN_DEFAULT_MODEL,
+                    'minimax-m2.5-free',
+                    'nemotron-3-super-free',
+                    'trinity-large-preview-free',
+                  ]
+                }
+              } catch {
+                models = [
+                  OPENCODE_ZEN_DEFAULT_MODEL,
+                  'minimax-m2.5-free',
+                  'nemotron-3-super-free',
+                  'trinity-large-preview-free',
+                ]
+              }
+              wireApi = 'responses'
+            } else {
+              refreshFreeModelsInBackground()
+            }
             setJson(res, 200, {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
-              models: getCachedFreeModels(),
+              models,
               currentModel: state.enabled ? state.model : null,
               customKey: Boolean(state.customKey),
               maskedKey,
               provider: state.provider ?? 'openrouter',
               customBaseUrl: state.customBaseUrl ?? null,
-              wireApi: state.wireApi ?? null,
+              wireApi,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -6601,18 +6648,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {
               try {
-                const modelsUrl = 'https://opencode.ai/zen/v1/models'
-                const headers: Record<string, string> = {}
-                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
-                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
-                }
-                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
-                if (resp.ok) {
-                  const json = await resp.json() as { data?: Array<{ id: string }> }
-                  const allIds = (json.data ?? []).map(m => m.id).filter(Boolean)
-                  const freeIds = allIds.filter(id => id.endsWith('-free') || id === 'big-pickle')
-                  const paidIds = allIds.filter(id => !id.endsWith('-free') && id !== 'big-pickle')
-                  setJson(res, 200, { data: [...freeIds, ...paidIds], exclusive: true, source: 'opencode-zen' })
+                const modelIds = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey))
+                if (modelIds.length > 0) {
+                  setJson(res, 200, { data: modelIds, exclusive: true, source: 'opencode-zen' })
                   return
                 }
               } catch {

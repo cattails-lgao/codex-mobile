@@ -5243,6 +5243,35 @@ Android `codexui-android` startup passes the bound server port to app-server fre
 
 ---
 
+### OpenCode Zen status returns current provider models
+
+#### Feature/Change Name
+OpenCode Zen free-mode status and model discovery consistency.
+
+#### Prerequisites/Setup
+1. Dev server or published CLI server running with no Codex auth so free mode defaults to OpenCode Zen.
+2. Browser can open the home route in light theme and dark theme.
+
+#### Steps
+1. In light theme, open the home route.
+2. Call `GET /codex-api/free-mode/status`.
+3. Call `GET /codex-api/provider-models`.
+4. Confirm both responses report OpenCode Zen data, including `big-pickle` and current Zen model ids such as `deepseek-v4-flash-free` when upstream returns it.
+5. Confirm `/codex-api/free-mode/status` reports `wireApi` as `responses`.
+6. Open the model selector and confirm the Zen models are available.
+7. Switch to dark theme and repeat steps 1 through 6.
+
+#### Expected Results
+- Free-mode status does not expose stale OpenRouter cached model ids when `provider` is `opencode-zen`.
+- OpenCode Zen uses `responses`, not `chat`, in saved/default UI state.
+- Provider model discovery and status agree on the model list source.
+- Model selector content remains usable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- None.
+
+---
+
 ### Thread conversation loads earlier turns on demand
 
 #### Feature/Change Name

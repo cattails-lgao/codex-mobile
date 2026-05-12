@@ -190,7 +190,7 @@ export function createDefaultOpenCodeZenFreeModeState(): FreeModeState {
     model: OPENCODE_ZEN_DEFAULT_MODEL,
     customKey: false,
     provider: 'opencode-zen',
-    wireApi: 'chat',
+    wireApi: 'responses',
     providerKeys: {},
   }
 }

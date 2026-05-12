@@ -16,7 +16,7 @@ describe('unauthenticated free mode defaults', () => {
     expect(state.enabled).toBe(true)
     expect(state.provider).toBe('opencode-zen')
     expect(state.model).toBe(OPENCODE_ZEN_DEFAULT_MODEL)
-    expect(state.wireApi).toBe('chat')
+    expect(state.wireApi).toBe('responses')
     expect(state.apiKey).toBeNull()
     expect(state.providerKeys).toEqual({})
   })
