@@ -1,4 +1,4 @@
-const CACHE_NAME = 'codexweb-shell-v1'
+const CACHE_NAME = 'codexweb-shell-v2'
 const APP_SHELL_PATHS = ['/', '/manifest.webmanifest']
 const STATIC_DESTINATIONS = new Set(['document', 'script', 'style', 'image', 'font'])
 const BYPASS_PREFIXES = ['/codex-api/', '/codex-local-image', '/codex-local-file', '/codex-local-browse/', '/codex-local-edit/']
@@ -36,6 +36,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  if (request.destination === 'script' || request.destination === 'style') {
+    event.respondWith(networkFirstStatic(request))
+    return
+  }
+
   if (STATIC_DESTINATIONS.has(request.destination) || url.pathname === '/manifest.webmanifest') {
     event.respondWith(staleWhileRevalidate(request))
   }
@@ -70,4 +75,17 @@ async function staleWhileRevalidate(request) {
 
   const response = await networkPromise
   return response || Response.error()
+}
+
+async function networkFirstStatic(request) {
+  const cache = await caches.open(CACHE_NAME)
+  try {
+    const response = await fetch(request)
+    if (response.ok) {
+      cache.put(request, response.clone())
+    }
+    return response
+  } catch {
+    return (await cache.match(request)) || Response.error()
+  }
 }
