@@ -1,5 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import { callRpcWithArchiveRecovery } from './codexAppServerBridge'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  callRpcWithArchiveRecovery,
+  hasUsableCodexAuth,
+  isEmptyThreadReadError,
+  isUnauthenticatedRateLimitError,
+} from './codexAppServerBridge'
+
+const originalCodexHome = process.env.CODEX_HOME
+
+afterEach(() => {
+  if (originalCodexHome === undefined) {
+    delete process.env.CODEX_HOME
+  } else {
+    process.env.CODEX_HOME = originalCodexHome
+  }
+})
 
 describe('callRpcWithArchiveRecovery', () => {
   it('sets a fallback name and retries archive when Codex has not materialized a rollout', async () => {
@@ -73,5 +91,73 @@ describe('callRpcWithArchiveRecovery', () => {
 
     await expect(callRpcWithArchiveRecovery(appServer, 'thread/archive', { threadId: 'test-thread' })).rejects.toThrow('network failed')
     await expect(callRpcWithArchiveRecovery(appServer, 'thread/read', { threadId: 'test-thread' })).rejects.toThrow('network failed')
+  })
+})
+
+describe('isUnauthenticatedRateLimitError', () => {
+  it('matches unauthenticated rate-limit failures from a fresh Codex home', () => {
+    expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to read rate limits'))).toBe(true)
+  })
+
+  it('does not match unrelated authentication failures', () => {
+    expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to send messages'))).toBe(false)
+    expect(isUnauthenticatedRateLimitError(new Error('failed to read rate limits'))).toBe(false)
+  })
+})
+
+describe('isEmptyThreadReadError', () => {
+  it('matches Codex empty rollout read failures during immediate thread startup', () => {
+    expect(isEmptyThreadReadError(new Error(
+      'failed to read thread: thread-store internal error: failed to read thread /tmp/codex-home/sessions/rollout-test.jsonl: rollout at /tmp/codex-home/sessions/rollout-test.jsonl is empty',
+    ))).toBe(true)
+  })
+
+  it('does not match unrelated thread read failures', () => {
+    expect(isEmptyThreadReadError(new Error('failed to read thread: permission denied'))).toBe(false)
+    expect(isEmptyThreadReadError(new Error('rollout is empty'))).toBe(false)
+  })
+})
+
+describe('hasUsableCodexAuth', () => {
+  it('returns false when auth.json is missing or does not contain usable tokens', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-no-token-'))
+    process.env.CODEX_HOME = codexHome
+    try {
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: {} }))
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('returns true when auth.json contains an access token or refresh token', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-with-token-'))
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+      await expect(hasUsableCodexAuth()).resolves.toBe(true)
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { refresh_token: 'refresh-token' } }))
+      await expect(hasUsableCodexAuth()).resolves.toBe(true)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('warns when auth.json exists but cannot be parsed', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-invalid-auth-'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), '{')
+      await expect(hasUsableCodexAuth()).resolves.toBe(false)
+      expect(warn).toHaveBeenCalledWith(
+        '[codex-auth] Unable to read Codex auth state',
+        expect.objectContaining({ path: join(codexHome, 'auth.json') }),
+      )
+    } finally {
+      warn.mockRestore()
+      await rm(codexHome, { recursive: true, force: true })
+    }
   })
 })

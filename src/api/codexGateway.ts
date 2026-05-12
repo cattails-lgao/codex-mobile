@@ -1886,7 +1886,7 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-export async function getAvailableModelIds(options: { includeProviderModels?: boolean } = {}): Promise<string[]> {
+export async function getAvailableModelIds(options: { includeProviderModels?: boolean; requireProviderModels?: boolean } = {}): Promise<string[]> {
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
   for (const row of payload.data) {
@@ -1899,6 +1899,7 @@ export async function getAvailableModelIds(options: { includeProviderModels?: bo
     return ids
   }
 
+  let sawProviderModels = false
   try {
     const response = await fetch('/codex-api/provider-models', {
       signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
@@ -1911,6 +1912,7 @@ export async function getAvailableModelIds(options: { includeProviderModels?: bo
     }
 
     if (response.ok && Array.isArray(providerPayload?.data)) {
+      sawProviderModels = true
       if (providerPayload.exclusive) {
         return providerPayload.data.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
       }
@@ -1923,6 +1925,10 @@ export async function getAvailableModelIds(options: { includeProviderModels?: bo
     }
   } catch {
     // Keep Codex usable when the provider-models endpoint is unavailable.
+  }
+
+  if (options.requireProviderModels && !sawProviderModels) {
+    return []
   }
 
   return ids

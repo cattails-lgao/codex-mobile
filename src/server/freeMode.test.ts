@@ -16,7 +16,7 @@ describe('unauthenticated free mode defaults', () => {
     expect(state.enabled).toBe(true)
     expect(state.provider).toBe('opencode-zen')
     expect(state.model).toBe(OPENCODE_ZEN_DEFAULT_MODEL)
-    expect(state.wireApi).toBe('chat')
+    expect(state.wireApi).toBe('responses')
     expect(state.apiKey).toBeNull()
     expect(state.providerKeys).toEqual({})
   })
@@ -29,7 +29,17 @@ describe('unauthenticated free mode defaults', () => {
     expect(args).toContain(`model_provider="${OPENCODE_ZEN_PROVIDER_ID}"`)
     expect(args).toContain(`model="${OPENCODE_ZEN_DEFAULT_MODEL}"`)
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="http://127.0.0.1:4173/codex-api/zen-proxy/v1"`)
+    expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.wire_api="responses"`)
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="zen-proxy-token"`)
+  })
+
+  it('uses the OpenCode Zen default model when persisted Zen state has an empty model', () => {
+    const args = getFreeModeConfigArgs({
+      ...createDefaultOpenCodeZenFreeModeState(),
+      model: '',
+    }, 4173)
+
+    expect(args).toContain(`model="${OPENCODE_ZEN_DEFAULT_MODEL}"`)
   })
 
   it('keeps OpenRouter config available for manual free mode', () => {

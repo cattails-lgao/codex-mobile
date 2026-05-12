@@ -5174,6 +5174,110 @@ The sidebar Chats section lists the first 10 projectless chats, offers Show more
 
 ---
 
+### Fresh Docker mobile install does not show rate-limit request failures
+
+#### Feature/Change Name
+Fresh unauthenticated install mobile home screen rate-limit handling.
+
+#### Prerequisites/Setup
+1. Docker is available.
+2. A clean container has this project installed under `/workspace`.
+3. `@openai/codex` is installed in the container.
+4. Container dev server is running with a fresh Codex home:
+   `CODEX_HOME=/tmp/codex-home CODEXUI_CODEX_COMMAND=$(command -v codex) pnpm run dev --host 0.0.0.0 --port 4173`
+5. The container port is mapped to the host, for example `127.0.0.1:4174 -> 4173`.
+
+#### Steps
+1. Open `http://127.0.0.1:4174/` in a mobile viewport such as iPhone 13 `390x664`.
+2. In light theme, wait for the Start new thread home screen to render.
+3. Capture network responses and confirm no `/codex-api/rpc` response fails with `502` for `account/rateLimits/read`.
+4. Confirm the composer renders and the quota UI is simply absent when the fresh `CODEX_HOME` has no authenticated Codex account.
+5. Switch to dark theme and reload the same mobile viewport.
+6. Repeat steps 2 through 4 in dark theme.
+7. Add an `auth.json` containing only `tokens.access_token` and confirm `account/rateLimits/read` is not short-circuited as unauthenticated.
+8. Replace `auth.json` with malformed JSON and confirm the server logs a `[codex-auth] Unable to read Codex auth state` warning while the home screen still renders.
+
+#### Expected Results
+- The fresh mobile home screen renders without a blank page.
+- `account/rateLimits/read` returns an empty result instead of a `502` when no Codex account is authenticated.
+- An access-token-only auth file is treated as authenticated enough to ask Codex for rate limits.
+- Malformed auth files are visible in server logs instead of being silently treated as a normal fresh install.
+- The UI remains usable in light theme and dark theme.
+- No login or account import is required just to load the home screen.
+
+#### Rollback/Cleanup
+- Stop and remove the temporary Docker container, for example `docker rm -f <container-name>`.
+
+---
+
+### Android published CLI loads Codex app-server models through local proxy
+
+#### Feature/Change Name
+Android `codexui-android` startup passes the bound server port to app-server free-mode config.
+
+#### Prerequisites/Setup
+1. Android proot access works through `/Users/igor/Git-projects/codex-web-local-android/andClaw-codex/ssh.sh`.
+2. The published `codexui-android` package version under test is available from npm.
+3. ADB forward maps device port `17923` to local port `17923`.
+
+#### Steps
+1. Start the package in Android proot:
+   `pnpm dlx codexui-android@<version> --port 17923 --no-open --no-tunnel --no-login`
+2. Open `http://127.0.0.1:17923/#/` in the browser.
+3. Call `POST /codex-api/rpc` with `{"method":"config/read","params":{}}`.
+4. Call `POST /codex-api/rpc` with `{"method":"model/list","params":{}}`.
+5. Confirm `/codex-api/provider-models` still returns OpenCode Zen model ids.
+6. Verify the model selector is enabled in light theme and dark theme.
+7. Send `hi` from the home composer and wait for the first assistant reply.
+8. Confirm browser/network logs do not show a `502` for `generate-thread-title` or an empty-rollout `thread/read` during startup.
+
+#### Expected Results
+- `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
+- `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
+- `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
+- The model selector is usable in both light theme and dark theme.
+- A first home-composer message creates a thread and receives a response without visible startup RPC errors.
+
+#### Rollback/Cleanup
+- Stop the temporary Android proot process with `pkill -f codexui-android` if needed.
+
+---
+
+### OpenCode Zen status returns current provider models
+
+#### Feature/Change Name
+OpenCode Zen free-mode status and model discovery consistency.
+
+#### Prerequisites/Setup
+1. Dev server or published CLI server running with no Codex auth so free mode defaults to OpenCode Zen.
+2. Browser can open the home route in light theme and dark theme.
+
+#### Steps
+1. In light theme, open the home route.
+2. Call `GET /codex-api/free-mode/status`.
+3. Call `GET /codex-api/provider-models`.
+4. Confirm both responses report OpenCode Zen data, including `big-pickle` and current Zen model ids such as `deepseek-v4-flash-free` when upstream returns it.
+5. Confirm `/codex-api/free-mode/status` reports `wireApi` as `responses`.
+6. Open the model selector immediately after initial page load and confirm the Zen models are available without first switching providers or refreshing settings.
+7. In Chrome with a previously loaded app version, reload the page and confirm the service worker fetches the new script/style bundle instead of keeping stale cached selector behavior.
+8. With a script/style bundle already cached by the service worker, temporarily make the same script/style request return HTTP 404 or 500 and reload.
+9. Switch to dark theme and repeat steps 1 through 8.
+
+#### Expected Results
+- Free-mode status does not expose stale OpenRouter cached model ids when `provider` is `opencode-zen`.
+- OpenCode Zen uses `responses`, not `chat`, in saved/default UI state.
+- Provider model discovery and status agree on the model list source.
+- Initial startup model loading uses the active provider context and does not leave GPT-only `model/list` entries as the visible selector list for OpenCode Zen.
+- Selected model ids persist to localStorage by thread/provider context; legacy/global selected-model keys cannot choose a model for OpenCode Zen, while a valid provider-scoped OpenCode Zen saved choice is restored.
+- Service-worker script/style cache invalidation does not keep Chrome on an older model-selector bundle after a new local build is served.
+- Service-worker script/style fetches still use a cached bundle if the network request resolves with a non-OK HTTP status.
+- Model selector content remains usable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- None.
+
+---
+
 ### Thread conversation loads earlier turns on demand
 
 #### Feature/Change Name

@@ -1573,11 +1573,13 @@ export function useDesktopState() {
   function readModelIdForThread(threadId: string): string {
     const contextId = toThreadContextId(threadId)
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      const providerModelId = providerContextId
-        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
-        : ''
-      if (providerModelId) return providerModelId
+      const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+      if (normalizedProviderId !== 'codex') {
+        const providerContextId = toProviderModelContextId(normalizedProviderId)
+        return providerContextId
+          ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
+          : ''
+      }
     }
     return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
   }
@@ -1612,30 +1614,31 @@ export function useDesktopState() {
   function setSelectedModelIdForThread(threadId: string, modelId: string): void {
     const normalizedModelId = modelId.trim()
     const contextId = toThreadContextId(threadId)
+    const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+    const providerContextId =
+      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT && normalizedProviderId !== 'codex'
+        ? toProviderModelContextId(normalizedProviderId)
+        : ''
+    const selectedContextId = providerContextId || contextId
     if (normalizedModelId) {
       const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-      nextModelMap[contextId] = normalizedModelId
+      nextModelMap[selectedContextId] = normalizedModelId
+      if (providerContextId) {
+        delete nextModelMap[contextId]
+      }
       selectedModelIdByContext.value = nextModelMap
     } else {
-      selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, contextId)
+      let nextModelMap = omitStringKeyedRecordKey(selectedModelIdByContext.value, selectedContextId)
+      if (providerContextId) {
+        nextModelMap = omitStringKeyedRecordKey(nextModelMap, contextId)
+      }
+      selectedModelIdByContext.value = nextModelMap
     }
     if (threadId.trim() === selectedThreadId.value) {
       selectedModelId.value = readModelIdForThread(selectedThreadId.value)
       ensureAvailableModelIds(selectedModelId.value)
     } else {
       ensureAvailableModelIds(normalizedModelId)
-    }
-    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      if (providerContextId) {
-        if (normalizedModelId) {
-          const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-          nextModelMap[providerContextId] = normalizedModelId
-          selectedModelIdByContext.value = nextModelMap
-        } else {
-          selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, providerContextId)
-        }
-      }
     }
     saveSelectedModelMap(selectedModelIdByContext.value)
   }
@@ -1861,22 +1864,24 @@ export function useDesktopState() {
 
   async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
     try {
-      const [modelIds, currentConfig] = await Promise.all([
-        getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
-        getCurrentModelConfig(),
-      ])
-
-      const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
+      const currentConfig = await getCurrentModelConfig()
       const normalizedConfiguredModelId = currentConfig.model.trim()
       const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
+      const isProviderBacked = normalizedProviderId !== 'codex'
       activeProviderId.value = normalizedProviderId
+      const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
+      const modelIds = await getAvailableModelIds({
+        includeProviderModels: options?.includeProviderModels !== false || isProviderBacked,
+        requireProviderModels: isProviderBacked,
+      })
       const providerModelContextId = toProviderModelContextId(normalizedProviderId)
       const providerScopedModelId = providerModelContextId
         ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
         : ''
       const nextModelIds = [...modelIds]
       if (!options?.providerChanged) {
-        for (const modelId of [normalizedSelectedModelId, normalizedConfiguredModelId]) {
+        const extraModelIds = isProviderBacked ? [normalizedConfiguredModelId] : [normalizedSelectedModelId, normalizedConfiguredModelId]
+        for (const modelId of extraModelIds) {
           if (modelId && !nextModelIds.includes(modelId)) {
             nextModelIds.push(modelId)
           }
@@ -1887,7 +1892,7 @@ export function useDesktopState() {
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
       if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
         if (options?.providerChanged && nextModelIds.length > 0) {
-          if (providerScopedModelId && nextModelIds.includes(providerScopedModelId)) {
+          if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
             setSelectedModelId(providerScopedModelId)
           } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
             setSelectedModelId(normalizedConfiguredModelId)
@@ -1901,6 +1906,8 @@ export function useDesktopState() {
         } else {
           setSelectedModelId('')
         }
+      } else if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
+        setSelectedModelId(normalizedSelectedModelId)
       }
       if (providerModelContextId && selectedModelId.value.trim().length > 0) {
         const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)

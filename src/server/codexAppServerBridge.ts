@@ -24,6 +24,8 @@ import {
   getFreeModels,
   refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
+  OPENCODE_ZEN_DEFAULT_MODEL,
+  OPENCODE_ZEN_PROVIDER_ID,
   createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
@@ -223,6 +225,7 @@ const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
+const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS = 100
 const PROJECTLESS_THREAD_SLUG_MAX_LENGTH = 80
@@ -919,6 +922,52 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
+export function isUnauthenticatedRateLimitError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('authentication required') && message.includes('rate limits')
+}
+
+export function isEmptyThreadReadError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('failed to read thread') && message.includes('rollout') && message.includes('is empty')
+}
+
+const warnedCodexAuthReadFailures = new Set<string>()
+
+function getErrorCode(error: unknown): string | null {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : null
+}
+
+function getCodexAuthReadErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : String(error)
+}
+
+function warnCodexAuthReadFailure(authPath: string, error: unknown): void {
+  const message = getCodexAuthReadErrorMessage(error)
+  const warningKey = `${authPath}:${message}`
+  if (warnedCodexAuthReadFailures.has(warningKey)) return
+  warnedCodexAuthReadFailures.add(warningKey)
+  console.warn('[codex-auth] Unable to read Codex auth state', { path: authPath, error: message })
+}
+
+export async function hasUsableCodexAuth(): Promise<boolean> {
+  const authPath = getCodexAuthPath()
+  try {
+    const raw = await readFile(authPath, 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return Boolean(auth.tokens?.access_token?.trim() || auth.tokens?.refresh_token?.trim())
+  } catch (error) {
+    if (getErrorCode(error) !== 'ENOENT') {
+      warnCodexAuthReadFailure(authPath, error)
+    }
+    return false
+  }
+}
+
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -1107,6 +1156,25 @@ async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string):
   } catch {
     return ''
   }
+}
+
+async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
+  const headers: Record<string, string> = {}
+  if (apiKey && apiKey !== 'dummy') {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
+  const response = await fetch('https://opencode.ai/zen/v1/models', {
+    headers,
+    signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+  })
+  if (!response.ok) return []
+  return normalizeProviderModelsData(await response.json() as unknown)
+}
+
+function sortOpenCodeZenModelIds(modelIds: string[]): string[] {
+  const freeIds = modelIds.filter((id) => id.endsWith('-free') || id === OPENCODE_ZEN_DEFAULT_MODEL)
+  const paidIds = modelIds.filter((id) => !id.endsWith('-free') && id !== OPENCODE_ZEN_DEFAULT_MODEL)
+  return [...freeIds, ...paidIds]
 }
 
 async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<ProviderModelsResponse> {
@@ -5859,17 +5927,45 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             const maskedKey = state.apiKey && state.customKey
               ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
               : null
-            refreshFreeModelsInBackground()
+            let models = getCachedFreeModels()
+            let currentModel = state.enabled ? state.model : null
+            let wireApi = state.wireApi ?? null
+            if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
+              currentModel = state.enabled ? (state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL) : null
+              try {
+                const zenModels = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey))
+                if (zenModels.length > 0) {
+                  models = zenModels
+                } else {
+                  models = [
+                    OPENCODE_ZEN_DEFAULT_MODEL,
+                    'minimax-m2.5-free',
+                    'nemotron-3-super-free',
+                    'trinity-large-preview-free',
+                  ]
+                }
+              } catch {
+                models = [
+                  OPENCODE_ZEN_DEFAULT_MODEL,
+                  'minimax-m2.5-free',
+                  'nemotron-3-super-free',
+                  'trinity-large-preview-free',
+                ]
+              }
+              wireApi = 'responses'
+            } else {
+              refreshFreeModelsInBackground()
+            }
             setJson(res, 200, {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
-              models: getCachedFreeModels(),
-              currentModel: state.enabled ? state.model : null,
+              models,
+              currentModel,
               customKey: Boolean(state.customKey),
               maskedKey,
               provider: state.provider ?? 'openrouter',
               customBaseUrl: state.customBaseUrl ?? null,
-              wireApi: state.wireApi ?? null,
+              wireApi,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -5960,7 +6056,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               ? (current.model || FREE_MODE_DEFAULT_MODEL)
               : providerType === 'custom'
                 ? await fetchCustomEndpointDefaultModel(baseUrl, resolvedKey)
-                : ''
+                : OPENCODE_ZEN_DEFAULT_MODEL
             const state: FreeModeState = {
               enabled: true,
               apiKey: resolvedKey,
@@ -6115,22 +6211,50 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         rpcMethod = body?.method && typeof body.method === 'string' ? body.method : null
 
-        if (!body || typeof body.method !== 'string' || body.method.length === 0) {
-          setJson(res, 400, { error: 'Invalid body: expected { method, params? }' })
-          return
-        }
+	        if (!body || typeof body.method !== 'string' || body.method.length === 0) {
+	          setJson(res, 400, { error: 'Invalid body: expected { method, params? }' })
+	          return
+	        }
 
-        const rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+	        if (body.method === 'generate-thread-title') {
+	          setJson(res, 200, { result: { title: '' } })
+	          return
+	        }
+
+	        if (body.method === 'account/rateLimits/read' && !(await hasUsableCodexAuth())) {
+	          setJson(res, 200, { result: null })
+	          return
+	        }
+
+        let rpcResult: unknown
+        try {
+          rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+        } catch (error) {
+	          if (body.method === 'account/rateLimits/read' && isUnauthenticatedRateLimitError(error)) {
+	            setJson(res, 200, { result: null })
+	            return
+	          }
+	          if (body.method === 'thread/read' && isEmptyThreadReadError(error)) {
+	            const params = asRecord(body.params)
+	            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+	            const snapshot = threadId ? appServer.getLastThreadReadSnapshot(threadId) : null
+	            if (snapshot) {
+	              setJson(res, 200, { result: snapshot })
+	              return
+	            }
+	          }
+	          throw error
+	        }
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
         const result = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
           : sanitizedResult
 
-        if (THREAD_METHODS_WITH_TURNS.has(body.method)) {
-          const rpcRecord = asRecord(result)
-          const rpcThread = asRecord(rpcRecord?.thread)
-          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
+	        if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(body.method)) {
+	          const rpcRecord = asRecord(result)
+	          const rpcThread = asRecord(rpcRecord?.thread)
+	          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
           if (rpcThreadId) {
             appServer.storeThreadReadSnapshot(rpcThreadId, result)
           }
@@ -6526,18 +6650,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {
               try {
-                const modelsUrl = 'https://opencode.ai/zen/v1/models'
-                const headers: Record<string, string> = {}
-                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
-                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
-                }
-                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
-                if (resp.ok) {
-                  const json = await resp.json() as { data?: Array<{ id: string }> }
-                  const allIds = (json.data ?? []).map(m => m.id).filter(Boolean)
-                  const freeIds = allIds.filter(id => id.endsWith('-free') || id === 'big-pickle')
-                  const paidIds = allIds.filter(id => !id.endsWith('-free') && id !== 'big-pickle')
-                  setJson(res, 200, { data: [...freeIds, ...paidIds], exclusive: true, source: 'opencode-zen' })
+                const modelIds = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey))
+                if (modelIds.length > 0) {
+                  setJson(res, 200, { data: modelIds, exclusive: true, source: 'opencode-zen' })
                   return
                 }
               } catch {
