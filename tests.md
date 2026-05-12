@@ -5267,6 +5267,7 @@ OpenCode Zen free-mode status and model discovery consistency.
 - OpenCode Zen uses `responses`, not `chat`, in saved/default UI state.
 - Provider model discovery and status agree on the model list source.
 - Initial startup model loading uses the active provider context and does not leave GPT-only `model/list` entries as the visible selector list for OpenCode Zen.
+- Persisted selected-model localStorage from another provider is ignored unless the model is present in the active provider list.
 - Service-worker script/style cache invalidation does not keep Chrome on an older model-selector bundle after a new local build is served.
 - Model selector content remains usable in light theme and dark theme.
 

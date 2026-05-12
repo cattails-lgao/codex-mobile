@@ -1864,10 +1864,12 @@ export function useDesktopState() {
       const currentConfig = await getCurrentModelConfig()
       const normalizedConfiguredModelId = currentConfig.model.trim()
       const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
+      const isProviderBacked = normalizedProviderId !== 'codex'
       activeProviderId.value = normalizedProviderId
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
       const modelIds = await getAvailableModelIds({
-        includeProviderModels: options?.includeProviderModels !== false || normalizedProviderId !== 'codex',
+        includeProviderModels: options?.includeProviderModels !== false || isProviderBacked,
+        requireProviderModels: isProviderBacked,
       })
       const providerModelContextId = toProviderModelContextId(normalizedProviderId)
       const providerScopedModelId = providerModelContextId
@@ -1875,7 +1877,8 @@ export function useDesktopState() {
         : ''
       const nextModelIds = [...modelIds]
       if (!options?.providerChanged) {
-        for (const modelId of [normalizedSelectedModelId, normalizedConfiguredModelId]) {
+        const extraModelIds = isProviderBacked ? [normalizedConfiguredModelId] : [normalizedSelectedModelId, normalizedConfiguredModelId]
+        for (const modelId of extraModelIds) {
           if (modelId && !nextModelIds.includes(modelId)) {
             nextModelIds.push(modelId)
           }
@@ -1901,9 +1904,9 @@ export function useDesktopState() {
           setSelectedModelId('')
         }
       } else if (
-        normalizedProviderId !== 'codex'
+        isProviderBacked
         && normalizedConfiguredModelId
-        && nextModelIds.includes(normalizedConfiguredModelId)
+        && modelIds.includes(normalizedConfiguredModelId)
         && normalizedSelectedModelId !== normalizedConfiguredModelId
       ) {
         setSelectedModelId(normalizedConfiguredModelId)
