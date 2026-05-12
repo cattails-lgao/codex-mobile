@@ -699,7 +699,7 @@
               </p>
               <div v-if="liveOverlay.errorText" class="live-overlay-error">
                 <span>{{ liveOverlay.errorText }}</span>
-                <a class="live-overlay-feedback" :href="feedbackMailto" @click.prevent="openLiveErrorFeedback(liveOverlay.errorText)">Send feedback</a>
+                <a class="live-overlay-feedback" :href="feedbackMailto" @click="prepareLiveErrorFeedback($event, liveOverlay.errorText)">Send feedback</a>
               </div>
             </article>
           </div>
@@ -902,9 +902,12 @@ const { isMobile } = useMobile()
 const { buildFeedbackMailto, recordVisibleFailure } = useFeedbackDiagnostics()
 const feedbackMailto = computed(() => buildFeedbackMailto())
 
-function openLiveErrorFeedback(message: string): void {
+function prepareLiveErrorFeedback(event: MouseEvent, message: string): void {
   recordVisibleFailure(message)
-  window.location.href = buildFeedbackMailto()
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
 }
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {

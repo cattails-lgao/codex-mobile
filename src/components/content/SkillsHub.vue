@@ -27,14 +27,14 @@
       </div>
       <div v-if="syncStatus.startup.lastError" class="skills-sync-error">
         <span>{{ syncStatus.startup.lastError }}</span>
-        <a class="skills-error-feedback" :href="feedbackMailto" @click.prevent="openSkillsErrorFeedback(syncStatus.startup.lastError)">{{ t('Send feedback') }}</a>
+        <a class="skills-error-feedback" :href="feedbackMailto" @click="prepareSkillsErrorFeedback($event, syncStatus.startup.lastError)">{{ t('Send feedback') }}</a>
       </div>
       <div v-if="syncActionStatus" class="skills-sync-meta">
         <span>{{ t('Manual sync') }}: {{ syncActionStatus }}</span>
       </div>
       <div v-if="syncActionError" class="skills-sync-error">
         <span>{{ syncActionError }}</span>
-        <a class="skills-error-feedback" :href="feedbackMailto" @click.prevent="openSkillsErrorFeedback(syncActionError)">{{ t('Send feedback') }}</a>
+        <a class="skills-error-feedback" :href="feedbackMailto" @click="prepareSkillsErrorFeedback($event, syncActionError)">{{ t('Send feedback') }}</a>
       </div>
       <div v-if="deviceLogin" class="skills-sync-device">
         <span>{{ t('Open') }} <a :href="deviceLogin.verification_uri" target="_blank" rel="noreferrer">{{ t('GitHub device login') }}</a> {{ t('and enter code:') }}</span>
@@ -81,7 +81,7 @@
       </form>
       <div v-if="skillSearchError" class="skills-hub-error">
         <span>{{ skillSearchError }}</span>
-        <a class="skills-error-feedback" :href="feedbackMailto" @click.prevent="openSkillsErrorFeedback(skillSearchError)">{{ t('Send feedback') }}</a>
+        <a class="skills-error-feedback" :href="feedbackMailto" @click="prepareSkillsErrorFeedback($event, skillSearchError)">{{ t('Send feedback') }}</a>
       </div>
     </div>
 
@@ -124,7 +124,7 @@
       <div v-if="isLoading" class="skills-hub-loading">{{ t('Loading skills...') }}</div>
       <div v-else-if="error" class="skills-hub-error">
         <span>{{ error }}</span>
-        <a class="skills-error-feedback" :href="feedbackMailto" @click.prevent="openSkillsErrorFeedback(error)">{{ t('Send feedback') }}</a>
+        <a class="skills-error-feedback" :href="feedbackMailto" @click="prepareSkillsErrorFeedback($event, error)">{{ t('Send feedback') }}</a>
       </div>
       <div v-else-if="installedSkills.length === 0" class="skills-hub-empty">{{ t('No installed skills found.') }}</div>
     </div>
@@ -209,9 +209,12 @@ function showToast(text: string, type: 'success' | 'error' = 'success'): void {
   toastTimer = setTimeout(() => { toast.value = null }, 3000)
 }
 
-function openSkillsErrorFeedback(message: string): void {
+function prepareSkillsErrorFeedback(event: MouseEvent, message: string): void {
   recordVisibleFailure(message)
-  window.location.href = buildFeedbackMailto()
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
 }
 
 function applySkillsPayload(payload: SkillsHubPayload): void {
