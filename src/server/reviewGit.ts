@@ -163,6 +163,31 @@ async function runCommandCapture(command: string, args: string[], options: { cwd
   throw new Error(`Command failed (${command} ${args.join(' ')})${suffix}`)
 }
 
+async function runCommandCaptureRaw(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout)
+        return
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+      const suffix = details ? `: ${details}` : ''
+      reject(new Error(`Command failed (${command} ${args.join(' ')})${suffix}`))
+    })
+  })
+}
+
 function isNotGitRepositoryError(error: unknown): boolean {
   const message = getErrorMessage(error, '').toLowerCase()
   return message.includes('not a git repository') || message.includes('fatal: not a git repository')
@@ -278,16 +303,17 @@ async function detectHeadBranch(repoRoot: string): Promise<string | null> {
   return result.code === 0 && result.stdout !== 'HEAD' ? result.stdout : null
 }
 
-function parseUntrackedPaths(statusOutput: string): string[] {
-  const paths: string[] = []
-  for (const line of statusOutput.split(/\r?\n/u)) {
-    if (!line.startsWith('?? ')) continue
-    const path = line.slice(3).trim()
-    if (path && !paths.includes(path)) {
-      paths.push(path)
-    }
-  }
-  return paths
+function splitGitPathList(raw: string): string[] {
+  return raw.split('\0').filter((entry) => entry.length > 0)
+}
+
+function isSafeGitRelativePath(filePath: string): boolean {
+  return Boolean(filePath) && !isAbsolute(filePath) && !filePath.split('/').includes('..')
+}
+
+async function listUntrackedPaths(repoRoot: string): Promise<string[]> {
+  const output = await runCommandCaptureRaw('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: repoRoot })
+  return splitGitPathList(output).filter(isSafeGitRelativePath)
 }
 
 async function diffUntrackedFile(repoRoot: string, path: string): Promise<string> {
@@ -334,7 +360,16 @@ function addReviewSummary(left: ReviewSummary, right: ReviewSummary): ReviewSumm
 
 async function summarizeUntrackedFile(repoRoot: string, path: string): Promise<ReviewSummary> {
   const absolutePath = join(repoRoot, ...path.split('/'))
-  const info = await stat(absolutePath)
+  let info
+  try {
+    info = await stat(absolutePath)
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
+    }
+    throw error
+  }
   if (!info.isFile()) {
     return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
   }
@@ -368,8 +403,7 @@ async function buildWorkspaceDiffSummary(repoRoot: string, workspaceView: Review
     }
   }
 
-  const statusOutput = await runCommandCapture('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: repoRoot })
-  for (const path of parseUntrackedPaths(statusOutput)) {
+  for (const path of await listUntrackedPaths(repoRoot)) {
     summary = addReviewSummary(summary, await summarizeUntrackedFile(repoRoot, path))
   }
   return summary
@@ -396,9 +430,8 @@ async function buildWorkspaceDiff(repoRoot: string, workspaceView: ReviewWorkspa
     }
   }
 
-  const statusOutput = await runCommandCapture('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: repoRoot })
   const untrackedDiffs = await Promise.all(
-    parseUntrackedPaths(statusOutput).map(async (path) => await diffUntrackedFile(repoRoot, path)),
+    (await listUntrackedPaths(repoRoot)).map(async (path) => await diffUntrackedFile(repoRoot, path)),
   )
 
   return [trackedDiff, ...untrackedDiffs]

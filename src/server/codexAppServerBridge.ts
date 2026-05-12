@@ -7425,36 +7425,58 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
-          const output = await runCommandCapture(
+          const output = await runCommandCaptureRaw(
             'git',
-            ['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', sha],
+            ['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', '-z', sha],
             { cwd: gitRoot },
           )
-          const numstatOutput = await runCommandCapture(
+          const numstatOutput = await runCommandCaptureRaw(
             'git',
-            ['diff-tree', '--root', '--no-commit-id', '--numstat', '-r', '-M', sha],
+            ['diff-tree', '--root', '--no-commit-id', '--numstat', '-r', '-M', '-z', sha],
             { cwd: gitRoot },
           )
+          const splitNumstatRecord = (record: string): { addedRaw: string; removedRaw: string; path: string } | null => {
+            const firstTab = record.indexOf('\t')
+            if (firstTab < 0) return null
+            const secondTab = record.indexOf('\t', firstTab + 1)
+            if (secondTab < 0) return null
+            return {
+              addedRaw: record.slice(0, firstTab),
+              removedRaw: record.slice(firstTab + 1, secondTab),
+              path: record.slice(secondTab + 1),
+            }
+          }
           const lineCountsByPath = new Map<string, { addedLineCount: number | null; removedLineCount: number | null }>()
-          for (const line of numstatOutput.split('\n')) {
-            const parts = line.split('\t')
-            const addedRaw = parts[0]?.trim() ?? ''
-            const removedRaw = parts[1]?.trim() ?? ''
-            const path = (parts.length >= 4 ? parts[3] : parts[2])?.trim() ?? ''
+          const numstatRecords = splitGitPathList(numstatOutput)
+          for (let index = 0; index < numstatRecords.length; index += 1) {
+            const record = splitNumstatRecord(numstatRecords[index] ?? '')
+            if (!record) continue
+            const { addedRaw, removedRaw } = record
+            const path = record.path || numstatRecords[index + 2] || numstatRecords[index + 1] || ''
+            if (!record.path) index += 2
             if (!path) continue
             const addedLineCount = /^\d+$/.test(addedRaw) ? Number(addedRaw) : null
             const removedLineCount = /^\d+$/.test(removedRaw) ? Number(removedRaw) : null
             lineCountsByPath.set(path, { addedLineCount, removedLineCount })
           }
-          const files = output.split('\n').flatMap((line) => {
-            const parts = line.split('\t').map((part) => part.trim()).filter(Boolean)
-            const status = parts[0] ?? ''
-            if (!status) return []
+          const nameStatusRecords = splitGitPathList(output)
+          const files: Array<{
+            path: string
+            previousPath: string | null
+            status: string
+            label: string
+            addedLineCount: number | null
+            removedLineCount: number | null
+          }> = []
+          for (let index = 0; index < nameStatusRecords.length; index += 1) {
+            const status = nameStatusRecords[index] ?? ''
+            if (!status) continue
             const statusKind = status.charAt(0)
-            const isRenameOrCopy = (statusKind === 'R' || statusKind === 'C') && parts.length >= 3
-            const path = isRenameOrCopy ? parts[2] : parts[1]
-            const previousPath = isRenameOrCopy ? parts[1] : null
-            if (!path) return []
+            const isRenameOrCopy = statusKind === 'R' || statusKind === 'C'
+            const previousPath = isRenameOrCopy ? nameStatusRecords[index + 1] || null : null
+            const path = isRenameOrCopy ? nameStatusRecords[index + 2] || '' : nameStatusRecords[index + 1] || ''
+            index += isRenameOrCopy ? 2 : 1
+            if (!path) continue
             const label = statusKind === 'A'
               ? 'Added'
               : statusKind === 'D'
@@ -7467,8 +7489,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                       ? 'Modified'
                       : status
             const lineCounts = lineCountsByPath.get(path) ?? { addedLineCount: null, removedLineCount: null }
-            return [{ path, previousPath, status, label, ...lineCounts }]
-          })
+            files.push({ path, previousPath, status, label, ...lineCounts })
+          }
           setJson(res, 200, { data: files })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to load commit files') })

@@ -2798,8 +2798,8 @@ export async function getGitCommitFiles(cwd: string, sha: string): Promise<GitCo
   return rawList.flatMap((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return []
     const record = item as Record<string, unknown>
-    const path = typeof record.path === 'string' ? record.path.trim() : ''
-    const previousPath = typeof record.previousPath === 'string' && record.previousPath.trim() ? record.previousPath.trim() : null
+    const path = typeof record.path === 'string' ? record.path : ''
+    const previousPath = typeof record.previousPath === 'string' && record.previousPath.length > 0 ? record.previousPath : null
     const status = typeof record.status === 'string' ? record.status.trim() : ''
     const label = typeof record.label === 'string' ? record.label.trim() : ''
     const addedLineCount = typeof record.addedLineCount === 'number' && Number.isFinite(record.addedLineCount) ? record.addedLineCount : null

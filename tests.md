@@ -1054,10 +1054,11 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 23. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
 24. Create only an untracked file whose path includes leading/trailing whitespace and does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the exact untracked filename remains in place.
 25. Create only an untracked file whose path includes leading/trailing whitespace and exists in the target commit, try to reset to that target, and confirm the reset proceeds and the exact untracked filename is moved under `.codex/untracked-backups/` instead of being overwritten or renamed incorrectly.
-26. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
-27. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
-28. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
-29. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, and 28.
+26. Add or inspect a commit that changes a file whose name includes leading/trailing whitespace, then select that commit and confirm the commit file list shows the exact path, correct `+`/`-` counts, and opens the same path in the Review pane.
+27. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
+28. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
+29. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
+30. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, 28, and 29.
 
 #### Preserved Prior Coverage
 1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
@@ -1090,6 +1091,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are preserved and allowed.
 - Commit selection opens file details without resetting or detaching HEAD.
 - Commit ref badges copy the full SHA to the clipboard without triggering commit selection.
+- Commit file names and untracked file names with leading/trailing whitespace are parsed from NUL-delimited Git output and are not trimmed before display, counting, backup, or Review-pane navigation.
 - The selected commit `Reset` button resets the local branch to that commit instead of detaching HEAD.
 - Remote branches are inspectable but cannot be checked out directly from this control.
 - Clicking a selected commit file opens the Review pane against that commit diff and selects that path without auto-centering the selected hunk.
@@ -1113,6 +1115,7 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Reset or delete the disposable local branch used for commit reset validation.
 - Revert or discard the tracked dirty-worktree file created for the blocked-switch validation.
 - Delete any untracked files created for untracked preservation validation.
+- Delete any tracked test commits/files created for whitespace-path commit-list validation.
 - Inspect and remove test-only files under `.codex/untracked-backups/` after confirming backup behavior.
 - Clear any copied commit SHA from the clipboard if the test environment requires clipboard cleanup.
 
