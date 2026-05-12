@@ -33,6 +33,15 @@ describe('unauthenticated free mode defaults', () => {
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="zen-proxy-token"`)
   })
 
+  it('uses the OpenCode Zen default model when persisted Zen state has an empty model', () => {
+    const args = getFreeModeConfigArgs({
+      ...createDefaultOpenCodeZenFreeModeState(),
+      model: '',
+    }, 4173)
+
+    expect(args).toContain(`model="${OPENCODE_ZEN_DEFAULT_MODEL}"`)
+  })
+
   it('keeps OpenRouter config available for manual free mode', () => {
     const args = getFreeModeConfigArgs({
       enabled: true,

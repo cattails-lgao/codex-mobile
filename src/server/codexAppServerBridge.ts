@@ -5928,8 +5928,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
               : null
             let models = getCachedFreeModels()
+            let currentModel = state.enabled ? state.model : null
             let wireApi = state.wireApi ?? null
             if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
+              currentModel = state.enabled ? (state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL) : null
               try {
                 const zenModels = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey))
                 if (zenModels.length > 0) {
@@ -5958,7 +5960,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               enabled: state.enabled,
               keyCount: getFreeKeyCount(),
               models,
-              currentModel: state.enabled ? state.model : null,
+              currentModel,
               customKey: Boolean(state.customKey),
               maskedKey,
               provider: state.provider ?? 'openrouter',
@@ -6054,7 +6056,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               ? (current.model || FREE_MODE_DEFAULT_MODEL)
               : providerType === 'custom'
                 ? await fetchCustomEndpointDefaultModel(baseUrl, resolvedKey)
-                : ''
+                : OPENCODE_ZEN_DEFAULT_MODEL
             const state: FreeModeState = {
               enabled: true,
               apiKey: resolvedKey,

@@ -220,6 +220,7 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
   if (!state.enabled) return []
 
   if (state.provider === 'opencode-zen') {
+    const model = state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL
     const baseUrl = serverPort
       ? `http://127.0.0.1:${serverPort}/codex-api/zen-proxy/v1`
       : OPENCODE_ZEN_BASE_URL
@@ -227,11 +228,8 @@ export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number)
     const authArgs: string[] = serverPort
       ? ['-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="zen-proxy-token"`]
       : ['-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.env_key="OPENCODE_ZEN_API_KEY"`]
-    const modelArgs: string[] = state.model?.trim()
-      ? ['-c', `model="${state.model.trim()}"`]
-      : []
     return [
-      ...modelArgs,
+      '-c', `model="${model}"`,
       '-c', `model_provider="${OPENCODE_ZEN_PROVIDER_ID}"`,
       '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.name="OpenCode Zen"`,
       '-c', `model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="${baseUrl}"`,
