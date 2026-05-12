@@ -4210,12 +4210,12 @@ export async function canonicalizeWorkspaceRootsStateForRead(
 
 async function canonicalizeThreadCwdRecord(
   value: unknown,
-  pathRealpath: PathRealpathResolver = realpath,
+  canonicalizeCwd: (cwd: string) => Promise<string>,
 ): Promise<unknown> {
   const record = asRecord(value)
   const cwd = typeof record?.cwd === 'string' ? record.cwd : ''
   if (!record || !cwd) return value
-  const canonicalCwd = await canonicalizeWorkspaceRootPath(cwd, pathRealpath)
+  const canonicalCwd = await canonicalizeCwd(cwd)
   return canonicalCwd === cwd ? value : { ...record, cwd: canonicalCwd }
 }
 
@@ -4225,9 +4225,18 @@ export async function canonicalizeThreadListResponseForRead(
 ): Promise<unknown> {
   const record = asRecord(payload)
   if (!record || !Array.isArray(record.data)) return payload
+  const cwdCanonicalizationByValue = new Map<string, Promise<string>>()
+  const canonicalizeCwd = (cwd: string): Promise<string> => {
+    let canonicalized = cwdCanonicalizationByValue.get(cwd)
+    if (!canonicalized) {
+      canonicalized = canonicalizeWorkspaceRootPath(cwd, pathRealpath)
+      cwdCanonicalizationByValue.set(cwd, canonicalized)
+    }
+    return canonicalized
+  }
   return {
     ...record,
-    data: await Promise.all(record.data.map((item) => canonicalizeThreadCwdRecord(item, pathRealpath))),
+    data: await Promise.all(record.data.map((item) => canonicalizeThreadCwdRecord(item, canonicalizeCwd))),
   }
 }
 

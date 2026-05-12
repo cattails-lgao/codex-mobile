@@ -136,4 +136,34 @@ describe('canonicalizeThreadListResponseForRead', () => {
       nextCursor: null,
     })
   })
+
+  it('reuses cwd realpath results within one thread list response', async () => {
+    const calls: string[] = []
+    const payload = await canonicalizeThreadListResponseForRead({
+      data: [
+        { id: 'first-symlink-thread', cwd: '/workspace-link/projects/demo' },
+        { id: 'second-symlink-thread', cwd: '/workspace-link/projects/demo' },
+        { id: 'canonical-cwd-thread', cwd: '/storage/projects/demo' },
+        { id: 'remote-thread', cwd: 'remote-project-id' },
+      ],
+      nextCursor: null,
+    }, async (value) => {
+      calls.push(value)
+      return value.replace('/workspace-link/', '/storage/')
+    })
+
+    expect(payload).toEqual({
+      data: [
+        { id: 'first-symlink-thread', cwd: '/storage/projects/demo' },
+        { id: 'second-symlink-thread', cwd: '/storage/projects/demo' },
+        { id: 'canonical-cwd-thread', cwd: '/storage/projects/demo' },
+        { id: 'remote-thread', cwd: 'remote-project-id' },
+      ],
+      nextCursor: null,
+    })
+    expect(calls).toEqual([
+      '/workspace-link/projects/demo',
+      '/storage/projects/demo',
+    ])
+  })
 })
