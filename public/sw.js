@@ -83,8 +83,9 @@ async function networkFirstStatic(request) {
     const response = await fetch(request)
     if (response.ok) {
       cache.put(request, response.clone())
+      return response
     }
-    return response
+    return (await cache.match(request)) || response
   } catch {
     return (await cache.match(request)) || Response.error()
   }
