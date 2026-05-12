@@ -3083,7 +3083,8 @@ export function useDesktopState() {
 
     if (
       notification.method === 'item/reasoning/summaryTextDelta' ||
-      notification.method === 'item/reasoning/summaryPartAdded'
+      notification.method === 'item/reasoning/summaryPartAdded' ||
+      notification.method === 'item/reasoning/textDelta'
     ) {
       return {
         threadId,
@@ -3260,6 +3261,17 @@ export function useDesktopState() {
 
     // Канонический источник дельт для UI — уже нормализованный item/*.
     if (notification.method === 'item/reasoning/summaryTextDelta') {
+      const itemId = readString(params.itemId)
+      const delta = readString(params.delta)
+      if (!itemId || !delta) return null
+      return { messageId: liveReasoningMessageId(itemId), delta }
+    }
+
+    // codex also emits the full reasoning-chain stream as item/reasoning/textDelta
+    // (alongside the summary stream). Without handling it, reasoning text the
+    // model streams via this channel is dropped and the UI shows only the
+    // summary, making long thinking phases look like a stall.
+    if (notification.method === 'item/reasoning/textDelta') {
       const itemId = readString(params.itemId)
       const delta = readString(params.delta)
       if (!itemId || !delta) return null
