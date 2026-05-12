@@ -919,6 +919,21 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
+export function isUnauthenticatedRateLimitError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('authentication required') && message.includes('rate limits')
+}
+
+export async function hasCodexRefreshToken(): Promise<boolean> {
+  try {
+    const raw = await readFile(getCodexAuthPath(), 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return (auth.tokens?.refresh_token?.trim() ?? '').length > 0
+  } catch {
+    return false
+  }
+}
+
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -6120,7 +6135,21 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
 
-        const rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+        if (body.method === 'account/rateLimits/read' && !(await hasCodexRefreshToken())) {
+          setJson(res, 200, { result: null })
+          return
+        }
+
+        let rpcResult: unknown
+        try {
+          rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+        } catch (error) {
+          if (body.method === 'account/rateLimits/read' && isUnauthenticatedRateLimitError(error)) {
+            setJson(res, 200, { result: null })
+            return
+          }
+          throw error
+        }
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
         const result = THREAD_METHODS_WITH_TURNS.has(body.method)

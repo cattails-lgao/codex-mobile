@@ -1,5 +1,18 @@
-import { describe, expect, it } from 'vitest'
-import { callRpcWithArchiveRecovery } from './codexAppServerBridge'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { afterEach, describe, expect, it } from 'vitest'
+import { callRpcWithArchiveRecovery, hasCodexRefreshToken, isUnauthenticatedRateLimitError } from './codexAppServerBridge'
+
+const originalCodexHome = process.env.CODEX_HOME
+
+afterEach(() => {
+  if (originalCodexHome === undefined) {
+    delete process.env.CODEX_HOME
+  } else {
+    process.env.CODEX_HOME = originalCodexHome
+  }
+})
 
 describe('callRpcWithArchiveRecovery', () => {
   it('sets a fallback name and retries archive when Codex has not materialized a rollout', async () => {
@@ -73,5 +86,41 @@ describe('callRpcWithArchiveRecovery', () => {
 
     await expect(callRpcWithArchiveRecovery(appServer, 'thread/archive', { threadId: 'test-thread' })).rejects.toThrow('network failed')
     await expect(callRpcWithArchiveRecovery(appServer, 'thread/read', { threadId: 'test-thread' })).rejects.toThrow('network failed')
+  })
+})
+
+describe('isUnauthenticatedRateLimitError', () => {
+  it('matches unauthenticated rate-limit failures from a fresh Codex home', () => {
+    expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to read rate limits'))).toBe(true)
+  })
+
+  it('does not match unrelated authentication failures', () => {
+    expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to send messages'))).toBe(false)
+    expect(isUnauthenticatedRateLimitError(new Error('failed to read rate limits'))).toBe(false)
+  })
+})
+
+describe('hasCodexRefreshToken', () => {
+  it('returns false when auth.json is missing or does not contain a refresh token', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-no-token-'))
+    process.env.CODEX_HOME = codexHome
+    try {
+      await expect(hasCodexRefreshToken()).resolves.toBe(false)
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: {} }))
+      await expect(hasCodexRefreshToken()).resolves.toBe(false)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('returns true when auth.json contains a refresh token', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-with-token-'))
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { refresh_token: 'refresh-token' } }))
+      await expect(hasCodexRefreshToken()).resolves.toBe(true)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
   })
 })
