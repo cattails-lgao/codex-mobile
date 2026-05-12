@@ -3902,11 +3902,29 @@ export async function canonicalizeWorkspaceRootsStateForRead(
     canonicalizeWorkspaceRootPathList(state.active, pathRealpath),
     canonicalizeWorkspaceRootPathList(state.projectOrder, pathRealpath),
   ])
-  const labels: Record<string, string> = { ...state.labels }
-  await Promise.all(Object.entries(state.labels).map(async ([key, label]) => {
-    const canonicalKey = await canonicalizeWorkspaceRootPath(key, pathRealpath)
-    labels[canonicalKey] = label
-  }))
+  const labelEntries = await Promise.all(
+    Object.entries(state.labels)
+      .sort(([first], [second]) => first.localeCompare(second))
+      .map(async ([key, label]) => {
+        const canonicalKey = await canonicalizeWorkspaceRootPath(key, pathRealpath)
+        return {
+          canonicalKey,
+          label,
+          isCanonicalSource: canonicalKey === key,
+        }
+      }),
+  )
+  const labels: Record<string, string> = {}
+  const labelSourceByCanonicalKey = new Map<string, { isCanonicalSource: boolean }>()
+  for (const entry of labelEntries) {
+    const existing = labelSourceByCanonicalKey.get(entry.canonicalKey)
+    if (existing?.isCanonicalSource === true && !entry.isCanonicalSource) continue
+    if (existing && existing.isCanonicalSource === entry.isCanonicalSource) continue
+    labels[entry.canonicalKey] = entry.label
+    labelSourceByCanonicalKey.set(entry.canonicalKey, {
+      isCanonicalSource: entry.isCanonicalSource,
+    })
+  }
 
   return {
     order,

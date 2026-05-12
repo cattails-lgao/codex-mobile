@@ -85,7 +85,9 @@ describe('canonicalizeWorkspaceRootsStateForRead', () => {
     const state = await canonicalizeWorkspaceRootsStateForRead({
       order: ['/workspace-link/projects/demo', 'remote-project-id'],
       labels: {
-        '/workspace-link/projects/demo': 'Demo',
+        '/storage/projects/demo': 'Canonical Demo',
+        '/workspace-link/projects/demo': 'Symlink Demo',
+        'remote-project-id': 'Remote Demo',
       },
       active: ['/workspace-link/projects/demo'],
       projectOrder: ['remote-project-id', '/workspace-link/projects/demo'],
@@ -106,7 +108,10 @@ describe('canonicalizeWorkspaceRootsStateForRead', () => {
       'remote-project-id',
       '/storage/projects/demo',
     ])
-    expect(state.labels['/storage/projects/demo']).toBe('Demo')
+    expect(state.labels).toEqual({
+      '/storage/projects/demo': 'Canonical Demo',
+      'remote-project-id': 'Remote Demo',
+    })
     expect(state.remoteProjects[0]?.id).toBe('remote-project-id')
   })
 })
