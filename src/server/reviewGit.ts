@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -78,6 +79,10 @@ type CommandResult = {
 type DetectedBaseBranch = {
   displayName: string
   gitRef: string
+}
+
+function getNodeErrorCode(error: unknown): string {
+  return typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
 }
 
 function normalizeBaseBranchDisplayName(value: string): string {
@@ -364,19 +369,47 @@ async function summarizeUntrackedFile(repoRoot: string, path: string): Promise<R
   try {
     info = await stat(absolutePath)
   } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
+    const code = getNodeErrorCode(error)
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      return { fileCount: 1, addedLineCount: 0, removedLineCount: 0 }
     }
     throw error
   }
   if (!info.isFile()) {
     return { fileCount: 0, addedLineCount: 0, removedLineCount: 0 }
   }
-  const content = await readFile(absolutePath)
-  const addedLineCount = content.length === 0
-    ? 0
-    : content.reduce((count, byte) => count + (byte === 10 ? 1 : 0), content[content.length - 1] === 10 ? 0 : 1)
+  const addedLineCount = await new Promise<number>((resolve, reject) => {
+    const stream = createReadStream(absolutePath)
+    let lineCount = 0
+    let sawAnyByte = false
+    let lastByteWasNewline = false
+    stream.on('data', (chunk: string | Buffer) => {
+      if (typeof chunk === 'string') chunk = Buffer.from(chunk)
+      sawAnyByte = true
+      for (const byte of chunk) {
+        if (byte === 10) lineCount += 1
+      }
+      lastByteWasNewline = chunk[chunk.length - 1] === 10
+    })
+    stream.on('error', (error: unknown) => {
+      const code = getNodeErrorCode(error)
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        resolve(0)
+        return
+      }
+      if (code === 'EACCES' || code === 'EPERM') {
+        resolve(0)
+        return
+      }
+      reject(error)
+    })
+    stream.on('end', () => {
+      resolve(sawAnyByte && !lastByteWasNewline ? lineCount + 1 : lineCount)
+    })
+  })
   return { fileCount: 1, addedLineCount, removedLineCount: 0 }
 }
 

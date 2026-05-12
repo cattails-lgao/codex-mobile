@@ -1119,6 +1119,12 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - Inspect and remove test-only files under `.codex/untracked-backups/` after confirming backup behavior.
 - Clear any copied commit SHA from the clipboard if the test environment requires clipboard cleanup.
 
+#### Performance Audit Evidence
+- `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser` completed after the review-summary changes.
+- Latest report: `output/playwright/browser-runtime-profile-home-2026-05-12T12-50-45-771Z.json`.
+- The profile showed one `thread/list:first-page` request, one `skills/list` request, one `rateLimitsRead` request, and the existing `threadRead=3` warning. No duplicate review-summary request was introduced on the home route.
+- The review-summary path now uses one tracked `git diff --numstat` plus NUL-delimited `git ls-files --others --exclude-standard -z`; untracked line counts are streamed from disk instead of reading full files into memory.
+
 ---
 
 ### Termux install without native PTY build

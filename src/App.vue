@@ -3366,10 +3366,10 @@ function loadThreadBranchCommits(payload: string | { branch: string; includeRese
   const cwd = composerCwd.value.trim()
   const cacheKey = toThreadBranchCommitsKey(targetBranch, includeResetHistory)
   if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === cacheKey) return
+  threadBranchCommitsError.value = ''
   if (threadBranchCommitsByBranch.value[cacheKey]) return
   const requestId = ++threadBranchCommitsRequestId
   threadBranchCommitsLoadingFor.value = cacheKey
-  threadBranchCommitsError.value = ''
   void getGitBranchCommits(cwd, targetBranch, { includeResetHistory })
     .then((commits) => {
       if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
@@ -3393,10 +3393,10 @@ function loadThreadCommitFiles(sha: string): void {
   const targetSha = sha.trim()
   const cwd = composerCwd.value.trim()
   if (!targetSha || !cwd || threadCommitFilesLoadingFor.value === targetSha) return
+  threadCommitFilesError.value = ''
   if (threadCommitFilesBySha.value[targetSha]) return
   const requestId = ++threadCommitFilesRequestId
   threadCommitFilesLoadingFor.value = targetSha
-  threadCommitFilesError.value = ''
   void getGitCommitFiles(cwd, targetSha)
     .then((files) => {
       if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
