@@ -2,12 +2,6 @@ import { computed, ref } from 'vue'
 
 const FEEDBACK_EMAIL = 'brutalstrikedevs@gmail.com'
 const MAX_DIAGNOSTICS = 20
-const MAX_BODY_CHARS = 6500
-const MAX_PAGE_TEXT_CHARS = 1800
-const MAX_STORAGE_ITEMS = 12
-const MAX_STORAGE_VALUE_CHARS = 240
-
-const SENSITIVE_STORAGE_PATTERN = /token|secret|password|passwd|credential|authorization|auth|bearer|cookie|session|key/i
 
 export type FeedbackDiagnosticKind = 'window-error' | 'unhandled-rejection' | 'fetch-error' | 'api-response' | 'visible-error'
 
@@ -64,35 +58,26 @@ function readVisiblePageText(): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim() ?? ''
   if (!text) return 'No visible page text captured.'
-  return text.length > MAX_PAGE_TEXT_CHARS
-    ? `${text.slice(0, MAX_PAGE_TEXT_CHARS)}\n...[truncated]`
-    : text
+  return text
 }
 
-function redactStorageValue(key: string, value: string): string {
-  if (SENSITIVE_STORAGE_PATTERN.test(key) || SENSITIVE_STORAGE_PATTERN.test(value)) return '[redacted]'
-  const normalized = value
+function normalizeStorageValue(value: string): string {
+  return value
     .replace(/\r\n/g, '\n')
     .replace(/[ \t]+/g, ' ')
     .trim()
-  if (!normalized) return ''
-  return normalized.length > MAX_STORAGE_VALUE_CHARS
-    ? `${normalized.slice(0, MAX_STORAGE_VALUE_CHARS)}...[truncated]`
-    : normalized
 }
 
 function readStorageSnapshot(storage: Storage | undefined, label: string): string {
   if (!storage) return `${label}: unavailable`
   try {
     const rows: string[] = []
-    const length = Math.min(storage.length, MAX_STORAGE_ITEMS)
-    for (let index = 0; index < length; index += 1) {
+    for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index)
       if (!key) continue
-      rows.push(`${key}=${redactStorageValue(key, storage.getItem(key) ?? '')}`)
+      rows.push(`${key}=${normalizeStorageValue(storage.getItem(key) ?? '')}`)
     }
-    const suffix = storage.length > MAX_STORAGE_ITEMS ? `\n...${storage.length - MAX_STORAGE_ITEMS} more item(s)` : ''
-    return `${label}:\n${rows.join('\n') || 'empty'}${suffix}`
+    return `${label}:\n${rows.join('\n') || 'empty'}`
   } catch (error) {
     return `${label}: unavailable (${normalizeSubjectMessage(normalizeMessage(error))})`
   }
@@ -173,7 +158,7 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
     '',
     'Visible page text',
     readVisiblePageText(),
-  ].join('\n').slice(0, MAX_BODY_CHARS)
+  ].join('\n')
 
   const params = new URLSearchParams({
     subject: `Codex Web feedback: ${normalizeSubjectMessage(entries[0]?.message)}`,

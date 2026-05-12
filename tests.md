@@ -354,7 +354,7 @@ Feedback diagnostics startup hardening, project automation delete failure handli
 5. Confirm the automation chip/server state is reloaded instead of staying optimistically removed.
 6. Open the app in an environment where `window.fetch` is missing or read-only and confirm the app still mounts.
 7. Trigger a chat send failure and click Send feedback next to the chat error.
-8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, bounded visible page text, and redacted browser/app state prefilled.
+8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, visible page text, and browser/app state prefilled.
 9. Type a long draft in the composer and confirm the expand control still appears when the textarea overflows.
 10. Switch to dark theme and repeat steps 2-9.
 
@@ -363,8 +363,8 @@ Feedback diagnostics startup hardening, project automation delete failure handli
 - Automation state is restored or reloaded after a failed delete.
 - Feedback diagnostics never prevent app startup when fetch cannot be patched.
 - Chat and Skills Hub error feedback links use native `mailto:` anchor handling so Chrome can open the configured email handler.
-- Feedback email bodies include bounded visible page text alongside diagnostics.
-- Feedback email bodies include bounded localStorage/sessionStorage state, route/hash, online state, language, and platform, with sensitive-looking keys and values redacted.
+- Feedback email bodies include visible page text alongside diagnostics.
+- Feedback email bodies include localStorage/sessionStorage state, route/hash, online state, language, and platform without redaction or per-section truncation.
 - Composer overflow checks remain functional without scheduling duplicate same-tick measurements.
 - The sidebar error message remains readable in light theme and dark theme.
 

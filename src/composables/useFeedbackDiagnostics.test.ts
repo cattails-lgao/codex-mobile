@@ -81,7 +81,7 @@ describe('feedback diagnostics', () => {
     expect(body).toContain('Hash: #/')
     expect(body).toContain('Online: true')
     expect(body).toContain('codex-web-local.sidebar-chat-sort-mode.v1=updated')
-    expect(body).toContain('codex-token=[redacted]')
+    expect(body).toContain('codex-token=super-secret-token')
     expect(body).toContain('codex-web-local.temp=open-folder-modal')
     expect(body).toContain('POST | /codex-api/rpc | 500 Internal Server Error')
     expect(body).toContain('Visible page text')
