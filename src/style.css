@@ -203,6 +203,10 @@
   @apply text-zinc-500;
 }
 
+:root.dark .thread-tree-action-error {
+  @apply border-rose-800/80 bg-rose-950 text-rose-100;
+}
+
 :root.dark .section-toggle-row {
   @apply hover:bg-zinc-800 focus-visible:ring-zinc-600;
 }

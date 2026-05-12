@@ -142,34 +142,57 @@ export function installFeedbackDiagnostics(): void {
   }
 
   if (!fetchInstalled) {
-    fetchInstalled = true
-    originalFetch = window.fetch.bind(window)
-    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = normalizeFetchUrl(input)
-      const method = normalizeFetchMethod(input, init)
-      try {
-        const response = await originalFetch!(input, init)
-        if (!response.ok) {
+    if (typeof window.fetch !== 'function') {
+      recordFeedbackDiagnostic({
+        kind: 'fetch-error',
+        message: 'Feedback diagnostics could not monitor fetch: window.fetch is unavailable',
+        url: window.location.href,
+      })
+      return
+    }
+
+    try {
+      originalFetch = window.fetch.bind(window)
+      window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = normalizeFetchUrl(input)
+        const method = normalizeFetchMethod(input, init)
+        try {
+          const response = await originalFetch!(input, init)
+          if (!response.ok) {
+            recordFeedbackDiagnostic({
+              kind: url.includes('/codex-api/') ? 'api-response' : 'fetch-error',
+              message: `Request failed with HTTP ${response.status}`,
+              url,
+              method,
+              status: response.status,
+              statusText: response.statusText,
+            })
+          }
+          return response
+        } catch (error) {
           recordFeedbackDiagnostic({
-            kind: url.includes('/codex-api/') ? 'api-response' : 'fetch-error',
-            message: `Request failed with HTTP ${response.status}`,
+            kind: 'fetch-error',
+            message: normalizeMessage(error),
             url,
             method,
-            status: response.status,
-            statusText: response.statusText,
           })
+          throw error
         }
-        return response
-      } catch (error) {
+      }) as typeof window.fetch
+      fetchInstalled = true
+    } catch (error) {
+      originalFetch = null
+      fetchInstalled = false
+      try {
         recordFeedbackDiagnostic({
           kind: 'fetch-error',
-          message: normalizeMessage(error),
-          url,
-          method,
+          message: `Feedback diagnostics could not monitor fetch: ${normalizeMessage(error)}`,
+          url: window.location.href,
         })
-        throw error
+      } catch {
+        // Startup diagnostics must never prevent the app from mounting.
       }
-    }) as typeof window.fetch
+    }
   }
 }
 

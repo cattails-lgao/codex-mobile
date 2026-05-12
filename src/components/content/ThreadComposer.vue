@@ -574,6 +574,7 @@ const isFileMentionOpen = ref(false)
 const fileMentionHighlightedIndex = ref(0)
 const isComposerExpanded = ref(false)
 const isDraftOverflowing = ref(false)
+let composerOverflowMeasurementQueued = false
 const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -1107,7 +1108,12 @@ function updateComposerOverflowState(): void {
 }
 
 function queueComposerOverflowMeasurement(): void {
-  void nextTick(updateComposerOverflowState)
+  if (composerOverflowMeasurementQueued) return
+  composerOverflowMeasurementQueued = true
+  void nextTick(() => {
+    composerOverflowMeasurementQueued = false
+    updateComposerOverflowState()
+  })
 }
 
 function toggleComposerExpanded(): void {

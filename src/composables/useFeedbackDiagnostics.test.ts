@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildFeedbackMailto,
+  installFeedbackDiagnostics,
   recordFeedbackDiagnostic,
   useFeedbackDiagnostics,
 } from './useFeedbackDiagnostics'
@@ -14,6 +15,7 @@ beforeEach(() => {
     location: {
       href: 'http://127.0.0.1:4173/#/',
     },
+    addEventListener: vi.fn(),
   })
   useFeedbackDiagnostics().diagnostics.value = []
 })
@@ -80,5 +82,23 @@ describe('feedback diagnostics', () => {
     const subject = new URL(buildFeedbackMailto()).searchParams.get('subject') ?? ''
 
     expect(subject).toBe('Codex Web feedback: Top level failure')
+  })
+
+  it('does not throw during install when fetch is unavailable', () => {
+    expect(() => installFeedbackDiagnostics()).not.toThrow()
+
+    expect(useFeedbackDiagnostics().diagnostics.value[0]?.message).toContain('window.fetch is unavailable')
+  })
+
+  it('does not throw during install when fetch cannot be patched', () => {
+    Object.defineProperty(window, 'fetch', {
+      value: vi.fn(),
+      writable: false,
+      configurable: true,
+    })
+
+    expect(() => installFeedbackDiagnostics()).not.toThrow()
+
+    expect(useFeedbackDiagnostics().diagnostics.value[0]?.message).toContain('could not monitor fetch')
   })
 })
