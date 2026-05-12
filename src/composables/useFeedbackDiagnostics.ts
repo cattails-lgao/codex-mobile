@@ -46,6 +46,11 @@ function normalizeFetchMethod(input: RequestInfo | URL, init?: RequestInit): str
   return 'GET'
 }
 
+function normalizeSubjectMessage(message?: string): string {
+  const firstLine = (message || '').split(/\r?\n/, 1)[0] ?? ''
+  return firstLine.replace(/\s+/g, ' ').trim().slice(0, 80) || 'issue report'
+}
+
 export function recordFeedbackDiagnostic(input: Omit<FeedbackDiagnostic, 'atIso'> & { atIso?: string }): void {
   const message = input.message.trim()
   if (!message) return
@@ -104,7 +109,7 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
   ].join('\n').slice(0, MAX_BODY_CHARS)
 
   const params = new URLSearchParams({
-    subject: `Codex Web feedback: ${entries[0]?.message.slice(0, 80) || 'issue report'}`,
+    subject: `Codex Web feedback: ${normalizeSubjectMessage(entries[0]?.message)}`,
     body,
   })
   return `mailto:${FEEDBACK_EMAIL}?${params.toString()}`

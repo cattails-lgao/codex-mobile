@@ -68,4 +68,17 @@ describe('feedback diagnostics', () => {
 
     expect(useFeedbackDiagnostics().diagnostics.value).toHaveLength(1)
   })
+
+  it('uses a single-line subject for multiline diagnostics', () => {
+    recordFeedbackDiagnostic({
+      kind: 'window-error',
+      message: 'Top level failure\n    at stack frame\n    at another frame',
+      url: 'http://127.0.0.1:4173/#/',
+      atIso: '2026-05-12T03:00:00.000Z',
+    })
+
+    const subject = new URL(buildFeedbackMailto()).searchParams.get('subject') ?? ''
+
+    expect(subject).toBe('Codex Web feedback: Top level failure')
+  })
 })

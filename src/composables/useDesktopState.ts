@@ -1860,6 +1860,7 @@ export function useDesktopState() {
   }
 
   async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
+    codexCliMissingError.value = ''
     try {
       const [modelIds, currentConfig] = await Promise.all([
         getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
@@ -1916,10 +1917,11 @@ export function useDesktopState() {
         selectedReasoningEffort.value = currentConfig.reasoningEffort
       }
       selectedSpeedMode.value = currentConfig.speedMode
-      codexCliMissingError.value = ''
     } catch (unknownError) {
       if (isCodexCliMissingError(unknownError)) {
         codexCliMissingError.value = CODEX_CLI_MISSING_MESSAGE
+      } else {
+        codexCliMissingError.value = ''
       }
       // Keep chat UI usable even if model metadata is temporarily unavailable.
     }
@@ -4397,6 +4399,7 @@ export function useDesktopState() {
     options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean } = {},
   ) {
     error.value = ''
+    codexCliMissingError.value = ''
     const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
     const awaitAncillaryRefreshes = options.awaitAncillaryRefreshes === true
 
@@ -4421,6 +4424,8 @@ export function useDesktopState() {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
       if (isCodexCliMissingError(unknownError)) {
         codexCliMissingError.value = CODEX_CLI_MISSING_MESSAGE
+      } else {
+        codexCliMissingError.value = ''
       }
     }
   }

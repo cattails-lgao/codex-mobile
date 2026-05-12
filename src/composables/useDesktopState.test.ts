@@ -432,6 +432,22 @@ describe('Codex CLI availability', () => {
 
     expect(state.codexCliMissingError.value).toBe('Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.')
   })
+
+  it('clears a previous Codex CLI missing banner when a later refresh fails for another reason', async () => {
+    installTestWindow()
+    gatewayMocks.getThreadGroupsPage
+      .mockRejectedValueOnce(new Error('Codex CLI is not available. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'))
+      .mockRejectedValueOnce(new Error('Connection lost'))
+
+    const state = useDesktopState()
+
+    await state.refreshAll({ awaitAncillaryRefreshes: true })
+    expect(state.codexCliMissingError.value).toBe('Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.')
+
+    await state.refreshAll({ awaitAncillaryRefreshes: true })
+    expect(state.error.value).toBe('Connection lost')
+    expect(state.codexCliMissingError.value).toBe('')
+  })
 })
 
 describe('findAdjacentThreadId', () => {
