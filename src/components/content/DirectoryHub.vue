@@ -245,9 +245,9 @@
             <div class="directory-card-fallback composio-fallback">C</div>
             <div>
               <p class="composio-preview-kicker">Connector catalog preview</p>
-              <h3 class="composio-preview-title">Unlock app actions from Gmail, GitHub, Slack, Notion, and more.</h3>
+              <h3 class="composio-preview-title">Connect everyday apps like Gmail, Calendar, Reddit, YouTube, and Drive.</h3>
               <p class="composio-preview-text">
-                Composio is installed locally. Login to load the live catalog, connection state, tools, and ready-to-run prompts from this machine.
+                Composio is installed locally. Login to browse the live catalog, connect your accounts, and try simple actions from this machine.
               </p>
             </div>
           </div>
@@ -775,49 +775,49 @@ const composioPreviewConnectors = [
     name: 'Gmail',
     slug: 'gmail',
     initial: 'G',
-    meta: 'Email, inbox, drafts',
-    description: 'Read messages, prepare replies, search mail, and work with attachments once connected.',
-    chips: ['61 tools', '2 triggers', 'OAuth'],
-  },
-  {
-    name: 'GitHub',
-    slug: 'github',
-    initial: 'G',
-    meta: 'Issues, PRs, repos',
-    description: 'Inspect pull requests, create issues, read repositories, and coordinate release work.',
-    chips: ['846 tools', '46 triggers', 'OAuth'],
-  },
-  {
-    name: 'Slack',
-    slug: 'slack',
-    initial: 'S',
-    meta: 'Channels, DMs, search',
-    description: 'Find conversations, draft team updates, and route workflow notifications into chat.',
-    chips: ['Team chat', 'Messages', 'OAuth'],
-  },
-  {
-    name: 'Notion',
-    slug: 'notion',
-    initial: 'N',
-    meta: 'Docs, pages, databases',
-    description: 'Pull project context from workspaces and turn structured notes into agent-ready tasks.',
-    chips: ['Knowledge base', 'Databases', 'OAuth'],
+    meta: 'Inbox, drafts, attachments',
+    description: 'Find emails, summarize threads, draft replies, and pull attachment context into a chat.',
+    chips: ['Email', 'Search', 'Drafts'],
   },
   {
     name: 'Google Calendar',
     slug: 'google-calendar',
     initial: 'C',
     meta: 'Events and availability',
-    description: 'Check schedules, plan follow-ups, and create calendar blocks from conversation context.',
-    chips: ['Scheduling', 'Events', 'OAuth'],
+    description: 'Check what is next, find open time, and turn follow-ups into calendar blocks.',
+    chips: ['Events', 'Availability', 'Reminders'],
   },
   {
-    name: 'Linear',
-    slug: 'linear',
-    initial: 'L',
-    meta: 'Issues and projects',
-    description: 'Browse issue status, create tickets, and keep implementation plans tied to product work.',
-    chips: ['Issue tracker', 'Projects', 'OAuth'],
+    name: 'Reddit',
+    slug: 'reddit',
+    initial: 'R',
+    meta: 'Posts, comments, communities',
+    description: 'Search communities, inspect posts, and prepare natural replies before posting.',
+    chips: ['Search', 'Comments', 'Posts'],
+  },
+  {
+    name: 'YouTube',
+    slug: 'youtube',
+    initial: 'Y',
+    meta: 'Videos, channels, comments',
+    description: 'Look up channel details, inspect video metadata, and help manage comment workflows.',
+    chips: ['Videos', 'Channels', 'Comments'],
+  },
+  {
+    name: 'Google Drive',
+    slug: 'google-drive',
+    initial: 'D',
+    meta: 'Files, docs, folders',
+    description: 'Find files, read shared docs, and bring Drive context into a Codex thread.',
+    chips: ['Files', 'Docs', 'Search'],
+  },
+  {
+    name: 'X',
+    slug: 'x',
+    initial: 'X',
+    meta: 'Posts, replies, profiles',
+    description: 'Research public posts, draft replies, and keep social workflows reviewable.',
+    chips: ['Posts', 'Replies', 'Profiles'],
   },
 ]
 

@@ -317,8 +317,8 @@ Logged-out Composio tab shows a promotional connector preview with example integ
 #### Steps
 1. In light theme, open the Directory page and switch to the Composio tab.
 2. Confirm the logged-out state shows the connector catalog preview hero instead of a plain empty message.
-3. Confirm example connector cards are visible for Gmail, GitHub, Slack, Notion, Google Calendar, and Linear.
-4. Type `github` in the Composio search box and confirm the preview cards filter to matching example content.
+3. Confirm example connector cards are visible for Gmail, Google Calendar, Reddit, YouTube, Google Drive, and X.
+4. Type `reddit` in the Composio search box and confirm the preview cards filter to matching example content.
 5. Confirm `Login to Composio` starts the CLI login flow and `Open dashboard` opens the Composio dashboard URL.
 6. Switch to dark theme and repeat steps 1-4.
 
