@@ -3380,11 +3380,11 @@ function serializeAutomationToml(record: ThreadAutomationRecord): string {
   if (record.cwds.length > 0) {
     lines.push(`cwds = ${serializeTomlStringArray(record.cwds)}`)
   }
-  lines.push(...record.extraTomlLines)
   lines.push(
     `created_at = ${String(record.createdAtMs ?? Date.now())}`,
     `updated_at = ${String(record.updatedAtMs ?? Date.now())}`,
   )
+  lines.push(...record.extraTomlLines)
   return `${lines.join('\n')}\n`
 }
 
