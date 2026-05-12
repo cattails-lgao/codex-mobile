@@ -243,6 +243,10 @@
   @apply border-zinc-700 bg-zinc-800;
 }
 
+:root.dark .thread-composer:has(.thread-composer-input-wrap--expanded) {
+  @apply bg-zinc-950/95;
+}
+
 :root.dark .thread-composer-shell--drag-active {
   @apply border-zinc-400 shadow-zinc-950/60;
 }
@@ -253,6 +257,10 @@
 
 :root.dark .thread-composer-input:disabled {
   @apply bg-zinc-700 text-zinc-500;
+}
+
+:root.dark .thread-composer-expand {
+  @apply bg-zinc-700 text-zinc-300 hover:bg-zinc-600 hover:text-white;
 }
 
 :root.dark .thread-composer-input-wrap--drag-active {
