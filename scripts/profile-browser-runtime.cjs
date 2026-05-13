@@ -5,9 +5,11 @@ const { resolve } = require('node:path')
 const baseUrl = process.env.PROFILE_BASE_URL || 'http://localhost:5173'
 const route = process.env.PROFILE_ROUTE || '/'
 const waitMs = Number.parseInt(process.env.PROFILE_WAIT_MS || '7000', 10)
+const threadLoadTimeoutMs = Number.parseInt(process.env.PROFILE_THREAD_LOAD_TIMEOUT_MS || '15000', 10)
 const headless = process.env.PROFILE_HEADLESS !== 'false'
 const outputDir = resolve(process.cwd(), 'output/playwright')
 const runStamp = new Date().toISOString().replace(/[:.]/g, '-')
+const THREAD_LOADING_TEXT = 'Loading threads...'
 
 function routeSlug() {
   const raw = route.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -69,6 +71,10 @@ function parseJson(value) {
   } catch {
     return null
   }
+}
+
+function hasThreadLoadingText(value) {
+  return typeof value === 'string' && value.includes(THREAD_LOADING_TEXT)
 }
 
 function toTargetUrl() {
@@ -168,11 +174,25 @@ async function main() {
   const startedAt = performance.now()
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(Number.isFinite(waitMs) && waitMs >= 0 ? waitMs : 7000)
+  let threadLoadingTimedOut = false
+  const resolvedThreadLoadTimeoutMs = Number.isFinite(threadLoadTimeoutMs) && threadLoadTimeoutMs >= 0
+    ? threadLoadTimeoutMs
+    : 15000
+  try {
+    await page.waitForFunction(
+      (loadingText) => !document.body.innerText.includes(loadingText),
+      THREAD_LOADING_TEXT,
+      { timeout: resolvedThreadLoadTimeoutMs },
+    )
+  } catch {
+    threadLoadingTimedOut = true
+  }
   const totalMs = round(performance.now() - startedAt)
 
   const finalUrl = page.url()
   const title = await page.title()
   const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '')
+  const stillLoadingThreads = threadLoadingTimedOut || hasThreadLoadingText(bodyText)
   const performanceData = await collectPerformance(page)
   const screenshotPath = resolve(outputDir, `${artifactPrefix}.png`)
   await page.screenshot({ path: screenshotPath, fullPage: true })
@@ -213,6 +233,11 @@ async function main() {
     duplicateCounts,
     warnings: diagnostics.warnings,
     totalApiKB: diagnostics.totalApiKB,
+    pageState: {
+      threadLoadingText: THREAD_LOADING_TEXT,
+      threadLoadTimeoutMs: resolvedThreadLoadTimeoutMs,
+      stillLoadingThreads,
+    },
     bodyTextHead: bodyText.slice(0, 1000),
     performance: performanceData,
     apiSummary,
@@ -233,10 +258,16 @@ async function main() {
     totalMs,
     duplicateCounts,
     warnings: diagnostics.warnings,
+    pageState: report.pageState,
     totalApiKB: diagnostics.totalApiKB,
     topApiSummary: apiSummary.slice(0, 12),
     slowestApiRows: report.slowestApiRows.slice(0, 10),
   }, null, 2))
+
+  if (stillLoadingThreads) {
+    console.error(`Profile failed: page still contains "${THREAD_LOADING_TEXT}" after ${resolvedThreadLoadTimeoutMs}ms. Report: ${reportPath}`)
+    process.exitCode = 2
+  }
 }
 
 main().catch((error) => {

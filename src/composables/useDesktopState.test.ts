@@ -421,6 +421,117 @@ describe('collaboration mode selection', () => {
   })
 })
 
+describe('Codex CLI availability', () => {
+  it('surfaces a chat runtime error when the app-server bridge cannot find Codex CLI', async () => {
+    installTestWindow()
+    gatewayMocks.getThreadGroupsPage.mockRejectedValue(new Error('Codex CLI is not available. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'))
+
+    const state = useDesktopState()
+
+    await state.refreshAll({ awaitAncillaryRefreshes: true })
+
+    expect(state.codexCliMissingError.value).toBe('Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.')
+  })
+
+  it('clears a previous Codex CLI missing banner when a later refresh fails for another reason', async () => {
+    installTestWindow()
+    gatewayMocks.getThreadGroupsPage
+      .mockRejectedValueOnce(new Error('Codex CLI is not available. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'))
+      .mockRejectedValueOnce(new Error('Connection lost'))
+
+    const state = useDesktopState()
+
+    await state.refreshAll({ awaitAncillaryRefreshes: true })
+    expect(state.codexCliMissingError.value).toBe('Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.')
+
+    await state.refreshAll({ awaitAncillaryRefreshes: true })
+    expect(state.error.value).toBe('Connection lost')
+    expect(state.codexCliMissingError.value).toBe('')
+  })
+})
+
+describe('provider model selection', () => {
+  it('ignores global selected-model localStorage when OpenCode Zen is the active provider', async () => {
+    installTestWindow({
+      'codex-web-local.selected-model-by-context.v1': JSON.stringify({
+        '__new-thread__': 'gpt-5.5',
+      }),
+      'codex-web-local.selected-model-id.v1': 'gpt-5.5',
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'big-pickle',
+      providerId: 'opencode-zen',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'ring-2.6-1t-free',
+    ])
+
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+    expect(gatewayMocks.getAvailableModelIds).toHaveBeenCalledWith({
+      includeProviderModels: true,
+      requireProviderModels: true,
+    })
+    expect(state.availableModelIds.value).toEqual([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'ring-2.6-1t-free',
+    ])
+    expect(state.selectedModelId.value).toBe('big-pickle')
+    expect(state.readModelIdForThread('').trim()).toBe('big-pickle')
+    expect(JSON.parse(window.localStorage.getItem('codex-web-local.selected-model-by-context.v1') ?? '{}')).toEqual({
+      '__new-thread-provider__::opencode-zen': 'big-pickle',
+    })
+    expect(window.localStorage.getItem('codex-web-local.selected-model-id.v1')).toBe(null)
+  })
+
+  it('restores a valid provider-scoped OpenCode Zen selected model from localStorage', async () => {
+    installTestWindow({
+      'codex-web-local.selected-model-by-context.v1': JSON.stringify({
+        '__new-thread-provider__::opencode-zen': 'ring-2.6-1t-free',
+      }),
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'big-pickle',
+      providerId: 'opencode-zen',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'ring-2.6-1t-free',
+    ])
+
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+    expect(state.availableModelIds.value).toEqual([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'ring-2.6-1t-free',
+    ])
+    expect(state.selectedModelId.value).toBe('ring-2.6-1t-free')
+    expect(state.readModelIdForThread('').trim()).toBe('ring-2.6-1t-free')
+    expect(JSON.parse(window.localStorage.getItem('codex-web-local.selected-model-by-context.v1') ?? '{}')).toEqual({
+      '__new-thread-provider__::opencode-zen': 'ring-2.6-1t-free',
+    })
+  })
+})
+
 describe('findAdjacentThreadId', () => {
   it('selects the next thread after the archived thread', () => {
     const threads = [

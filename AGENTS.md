@@ -58,6 +58,9 @@
 ## PR Review Bot Workflow (MANDATORY)
 
 - Treat Qodo and other review-bot comments as advisory findings, not authoritative fix instructions.
+- When the user asks to update a PR and request review, first push the current branch, update the PR summary/verification notes when they changed, then post a plain PR comment containing exactly `/review`.
+- Do not use a draft review, pending review, or batch review technique to trigger Qodo; Qodo review requests should be ordinary PR comments.
+- After posting `/review`, wait for or re-check bot comments/status when the user asks to wait, continue, or check comments.
 - Before applying a suggested review-bot fix, inspect the relevant code path and decide whether the reported behavior is technically correct.
 - Reproduce the issue with a focused test when feasible; if direct reproduction is impractical, document the exact reasoning and code evidence used to accept or reject the finding.
 - Prefer adding or updating a regression test for every accepted review-bot bug before or alongside the fix.

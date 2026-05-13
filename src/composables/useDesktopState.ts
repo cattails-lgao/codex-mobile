@@ -91,6 +91,12 @@ const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
+const CODEX_CLI_MISSING_MESSAGE = 'Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'
+
+function isCodexCliMissingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return message.includes('Codex CLI is not available')
+}
 
 function loadReadStateMap(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -1388,6 +1394,7 @@ export function useDesktopState() {
   const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
   const selectedSpeedMode = ref<SpeedMode>('standard')
   const activeProviderId = ref('')
+  const codexCliMissingError = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const unreadCutoffIso = ref(loadUnreadCutoffIso())
   const projectOrder = ref<string[]>(loadProjectOrder())
@@ -1566,11 +1573,13 @@ export function useDesktopState() {
   function readModelIdForThread(threadId: string): string {
     const contextId = toThreadContextId(threadId)
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      const providerModelId = providerContextId
-        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
-        : ''
-      if (providerModelId) return providerModelId
+      const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+      if (normalizedProviderId !== 'codex') {
+        const providerContextId = toProviderModelContextId(normalizedProviderId)
+        return providerContextId
+          ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
+          : ''
+      }
     }
     return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
   }
@@ -1605,30 +1614,31 @@ export function useDesktopState() {
   function setSelectedModelIdForThread(threadId: string, modelId: string): void {
     const normalizedModelId = modelId.trim()
     const contextId = toThreadContextId(threadId)
+    const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
+    const providerContextId =
+      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT && normalizedProviderId !== 'codex'
+        ? toProviderModelContextId(normalizedProviderId)
+        : ''
+    const selectedContextId = providerContextId || contextId
     if (normalizedModelId) {
       const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-      nextModelMap[contextId] = normalizedModelId
+      nextModelMap[selectedContextId] = normalizedModelId
+      if (providerContextId) {
+        delete nextModelMap[contextId]
+      }
       selectedModelIdByContext.value = nextModelMap
     } else {
-      selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, contextId)
+      let nextModelMap = omitStringKeyedRecordKey(selectedModelIdByContext.value, selectedContextId)
+      if (providerContextId) {
+        nextModelMap = omitStringKeyedRecordKey(nextModelMap, contextId)
+      }
+      selectedModelIdByContext.value = nextModelMap
     }
     if (threadId.trim() === selectedThreadId.value) {
       selectedModelId.value = readModelIdForThread(selectedThreadId.value)
       ensureAvailableModelIds(selectedModelId.value)
     } else {
       ensureAvailableModelIds(normalizedModelId)
-    }
-    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const providerContextId = toProviderModelContextId(activeProviderId.value)
-      if (providerContextId) {
-        if (normalizedModelId) {
-          const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-          nextModelMap[providerContextId] = normalizedModelId
-          selectedModelIdByContext.value = nextModelMap
-        } else {
-          selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, providerContextId)
-        }
-      }
     }
     saveSelectedModelMap(selectedModelIdByContext.value)
   }
@@ -1853,23 +1863,26 @@ export function useDesktopState() {
   }
 
   async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
+    codexCliMissingError.value = ''
     try {
-      const [modelIds, currentConfig] = await Promise.all([
-        getAvailableModelIds({ includeProviderModels: options?.includeProviderModels !== false }),
-        getCurrentModelConfig(),
-      ])
-
-      const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
+      const currentConfig = await getCurrentModelConfig()
       const normalizedConfiguredModelId = currentConfig.model.trim()
       const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
+      const isProviderBacked = normalizedProviderId !== 'codex'
       activeProviderId.value = normalizedProviderId
+      const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
+      const modelIds = await getAvailableModelIds({
+        includeProviderModels: options?.includeProviderModels !== false || isProviderBacked,
+        requireProviderModels: isProviderBacked,
+      })
       const providerModelContextId = toProviderModelContextId(normalizedProviderId)
       const providerScopedModelId = providerModelContextId
         ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
         : ''
       const nextModelIds = [...modelIds]
       if (!options?.providerChanged) {
-        for (const modelId of [normalizedSelectedModelId, normalizedConfiguredModelId]) {
+        const extraModelIds = isProviderBacked ? [normalizedConfiguredModelId] : [normalizedSelectedModelId, normalizedConfiguredModelId]
+        for (const modelId of extraModelIds) {
           if (modelId && !nextModelIds.includes(modelId)) {
             nextModelIds.push(modelId)
           }
@@ -1880,7 +1893,7 @@ export function useDesktopState() {
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
       if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
         if (options?.providerChanged && nextModelIds.length > 0) {
-          if (providerScopedModelId && nextModelIds.includes(providerScopedModelId)) {
+          if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
             setSelectedModelId(providerScopedModelId)
           } else if (normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
             setSelectedModelId(normalizedConfiguredModelId)
@@ -1894,6 +1907,8 @@ export function useDesktopState() {
         } else {
           setSelectedModelId('')
         }
+      } else if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
+        setSelectedModelId(normalizedSelectedModelId)
       }
       if (providerModelContextId && selectedModelId.value.trim().length > 0) {
         const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
@@ -1909,7 +1924,12 @@ export function useDesktopState() {
         selectedReasoningEffort.value = currentConfig.reasoningEffort
       }
       selectedSpeedMode.value = currentConfig.speedMode
-    } catch {
+    } catch (unknownError) {
+      if (isCodexCliMissingError(unknownError)) {
+        codexCliMissingError.value = CODEX_CLI_MISSING_MESSAGE
+      } else {
+        codexCliMissingError.value = ''
+      }
       // Keep chat UI usable even if model metadata is temporarily unavailable.
     }
   }
@@ -3083,7 +3103,8 @@ export function useDesktopState() {
 
     if (
       notification.method === 'item/reasoning/summaryTextDelta' ||
-      notification.method === 'item/reasoning/summaryPartAdded'
+      notification.method === 'item/reasoning/summaryPartAdded' ||
+      notification.method === 'item/reasoning/textDelta'
     ) {
       return {
         threadId,
@@ -3260,6 +3281,17 @@ export function useDesktopState() {
 
     // Канонический источник дельт для UI — уже нормализованный item/*.
     if (notification.method === 'item/reasoning/summaryTextDelta') {
+      const itemId = readString(params.itemId)
+      const delta = readString(params.delta)
+      if (!itemId || !delta) return null
+      return { messageId: liveReasoningMessageId(itemId), delta }
+    }
+
+    // codex also emits the full reasoning-chain stream as item/reasoning/textDelta
+    // (alongside the summary stream). Without handling it, reasoning text the
+    // model streams via this channel is dropped and the UI shows only the
+    // summary, making long thinking phases look like a stall.
+    if (notification.method === 'item/reasoning/textDelta') {
       const itemId = readString(params.itemId)
       const delta = readString(params.delta)
       if (!itemId || !delta) return null
@@ -4386,6 +4418,7 @@ export function useDesktopState() {
     options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean } = {},
   ) {
     error.value = ''
+    codexCliMissingError.value = ''
     const includeSelectedThreadMessages = options.includeSelectedThreadMessages !== false
     const awaitAncillaryRefreshes = options.awaitAncillaryRefreshes === true
 
@@ -4408,6 +4441,11 @@ export function useDesktopState() {
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+      if (isCodexCliMissingError(unknownError)) {
+        codexCliMissingError.value = CODEX_CLI_MISSING_MESSAGE
+      } else {
+        codexCliMissingError.value = ''
+      }
     }
   }
 
@@ -5431,6 +5469,7 @@ export function useDesktopState() {
     selectedModelId,
     selectedReasoningEffort,
     selectedSpeedMode,
+    codexCliMissingError,
     installedSkills,
     accountRateLimitSnapshots,
     messages,

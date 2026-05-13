@@ -90,6 +90,39 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove any test automations from the thread automation dialog or delete their folders under `$CODEX_HOME/automations/<automation-id>/`.
 
+### Feature: Project automations and `/automations` panel
+
+#### Prerequisites
+- App is running from this repository.
+- At least two sidebar projects have absolute workspace paths.
+- Local Codex home is writable (`$CODEX_HOME` or `~/.codex`).
+- Light and dark themes are both available from Settings.
+
+#### Steps
+1. In light theme, open a project overflow menu for a project without an attached automation.
+2. Confirm the menu shows `Add automation…`, then create a project automation with a name, prompt, RRULE schedule, and status.
+3. Confirm the project row shows an automation chip and the same menu changes to `Manage automations…`.
+4. Open `/automations` from the sidebar and confirm the new project automation appears with the visible project display name.
+5. Edit the automation from `/automations`, change its name and status, save, and confirm the project row chip count and tooltip update without a full page refresh.
+6. Seed or keep a cron automation record whose `cwds` contains two project paths, then edit it from one project and confirm both project rows show the updated name/status.
+7. Seed a cron automation record with a TOML-style single-quoted `cwds` array such as `cwds = ['/tmp/project-one', '/tmp/project,two']`, refresh `/automations`, and confirm it is still listed.
+8. Inspect `/codex-api/project-automations` for the seeded record and confirm the response includes public automation fields but not `extraTomlLines`.
+9. Remove one project that has an attached automation while `/automations` is open and confirm the panel removes the deleted project row after the cleanup completes.
+10. Switch to dark theme and repeat opening the project menu and `/automations`; confirm rows, chips, buttons, inputs, and empty states remain readable.
+
+#### Expected Results
+- Project-scoped cron automations are listed under every associated `cwd`.
+- Editing a multi-`cwd` project automation refreshes all affected sidebar chips/tooltips, not only the currently edited project.
+- Existing TOML cron records with valid non-JSON string arrays remain visible and manageable.
+- Automation API responses do not include internal preserved TOML metadata such as `extraTomlLines`.
+- Removing a project deletes or detaches that project's automation association and refreshes the `/automations` panel.
+- Preserved TOML metadata and table sections remain intact after saving or deleting a project automation.
+- Light and dark theme project automation surfaces remain readable.
+
+#### Rollback/Cleanup
+- Remove any test project automations from the project automation dialog or delete their folders under `$CODEX_HOME/automations/<automation-id>/`.
+- Remove temporary test projects or workspace roots created for verification.
+
 ### Feature: Projectless new chat folders
 
 #### Prerequisites
@@ -334,6 +367,132 @@ Workspace roots and thread-list cwd values are canonicalized through local `real
 
 #### Rollback/Cleanup
 - None.
+  
+---
+
+### Qodo feedback diagnostics reliability fixes
+
+#### Feature/Change Name
+Feedback diagnostics startup hardening, project automation delete failure handling, and coalesced composer overflow measurement.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. At least one sidebar project with a configured project automation
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, temporarily make `DELETE /codex-api/project-automation` fail, for example by stopping the local API bridge or forcing a 500 response in a development proxy.
+2. Open the project menu for a project with an automation and click Remove.
+3. Confirm the sidebar does not trigger an unhandled promise rejection and shows a small project automation error message.
+4. Restore the API bridge and refresh project automations.
+5. Confirm the automation chip/server state is reloaded instead of staying optimistically removed.
+6. Open the app in an environment where `window.fetch` is missing or read-only and confirm the app still mounts.
+7. Trigger a chat send failure and click Send feedback next to the chat error.
+8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, visible page text, and browser/app state prefilled.
+9. Type a long draft in the composer and confirm the expand control still appears when the textarea overflows.
+10. Switch to dark theme and repeat steps 2-9.
+
+#### Expected Results
+- Project automation delete failures are caught, recorded in feedback diagnostics, and surfaced as a visible sidebar error.
+- Automation state is restored or reloaded after a failed delete.
+- Feedback diagnostics never prevent app startup when fetch cannot be patched.
+- Chat and Skills Hub error feedback links use native `mailto:` anchor handling so Chrome can open the configured email handler.
+- Feedback email bodies include visible page text alongside diagnostics.
+- Feedback email bodies include localStorage/sessionStorage state, route/hash, online state, language, and platform without redaction or per-section truncation.
+- Composer overflow checks remain functional without scheduling duplicate same-tick measurements.
+- The sidebar error message remains readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Restore any temporary API failure/proxy change.
+
+---
+
+### Composer expands long drafts to full screen
+
+#### Feature/Change Name
+Thread composer full-screen expand control for multi-line drafts.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. Any existing thread is open and send controls are enabled
+3. Light theme and dark theme both available from the appearance switcher
+
+#### Steps
+1. In light theme, type or paste at least six lines into the composer.
+2. Confirm the expand button appears in the composer input area.
+3. Click the expand button.
+4. Confirm the composer fills the viewport, keeps the draft text, and leaves model/skill/thinking/send controls usable at the bottom.
+5. Click the collapse button.
+6. Confirm the composer returns to its normal inline size with the draft still intact.
+7. Switch to dark theme and repeat steps 1-6.
+
+#### Expected Results
+- Short drafts do not show the expand control.
+- Long or overflowing drafts show an icon-only expand control.
+- Full-screen mode uses the same draft state and submit controls as inline mode.
+- Full-screen and inline states are readable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Clear the draft from the composer.
+
+---
+
+### Error-triggered feedback button
+
+#### Feature/Change Name
+Feedback action appears in Settings and on visible error banners after captured UI/runtime/API failures, then opens prefilled email diagnostics.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173` or an alternate free port).
+2. Browser devtools available to inject a test error or failed fetch.
+3. Light theme and dark theme both available from the appearance switcher.
+
+#### Steps
+1. In light theme, load the home screen, open Settings, and confirm no `Send feedback` row is visible during a clean state.
+2. Trigger a failure, for example run `fetch('/codex-api/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })` in the browser console or open a folder path that produces a visible load error.
+3. Reopen Settings and confirm a `Send feedback` row with `Issue detected` appears after the failed request is recorded.
+4. Trigger or view a visible error banner, such as the missing Codex CLI composer banner, a chat send/connection error in the live conversation overlay, a settings provider error, a folder picker error, a Skills Hub error, or a branch dropdown error, and confirm that error state includes a compact `Send feedback` action.
+5. Confirm no feedback action appears in the content header during normal use.
+6. Click `Send feedback` and confirm the mail client opens a draft to `brutalstrikedevs@gmail.com`.
+7. Confirm the draft body includes current URL, user agent, viewport, app/worktree version info, and recent diagnostics including the failed request or visible error.
+8. Switch to dark theme and repeat steps 1-7.
+
+#### Expected Results
+- The settings feedback action is absent during normal operation.
+- Runtime errors, unhandled rejections, failed fetches/API responses, and visible load failures make the Settings feedback action visible.
+- Visible error states, including chat send/connection failures, include a local `Send feedback` action so the user can report the error from the same context.
+- The generated `mailto:` draft is prefilled with useful diagnostics and does not submit anything automatically.
+- No feedback action is shown in the app header during normal use.
+- The Settings feedback row and visible-error feedback actions remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- Close the generated email draft without sending if this was only a test.
+
+---
+
+### Missing Codex CLI chat error
+
+#### Feature/Change Name
+Fresh installs without a runnable Codex CLI show a visible chat runtime error.
+
+#### Prerequisites/Setup
+1. Start the app in an isolated environment without `codex` in `PATH` and without `CODEXUI_CODEX_COMMAND`.
+2. Use a mobile viewport such as `390x844`.
+3. Light theme and dark theme both available from the appearance switcher when the app can reach settings.
+
+#### Steps
+1. In light theme, open the app home/new chat screen.
+2. Confirm the composer area shows `Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.`
+3. Confirm the model dropdown no longer fails silently as the only visible symptom.
+4. Switch to dark theme and repeat steps 1-3.
+
+#### Expected Results
+- The missing CLI condition is visible in the chat/composer area.
+- The banner remains readable and does not overlap the mobile composer controls.
+- Dark theme uses a dark error surface, not a light-theme panel.
+
+#### Rollback/Cleanup
+- Stop and remove the isolated container or test server.
 
 ---
 
@@ -4026,6 +4185,7 @@ Playwright browser runtime profiler captures route timing, Codex API network cou
 #### Expected Results
 - The profiler prints final URL, title, total observed time, duplicate request counts, and slowest Codex API calls
 - JSON report includes raw API rows, grouped summaries, Performance API data, and artifact paths
+- JSON report includes `pageState.stillLoadingThreads`; the profiler exits non-zero if the page still contains `Loading threads...` after the thread-loading timeout
 - Screenshot is saved under `output/playwright/browser-runtime-profile-*.png`
 - Trace is saved under `output/playwright/browser-runtime-profile-*-trace.zip`
 
@@ -5080,6 +5240,110 @@ The sidebar Chats section lists the first 10 projectless chats, offers Show more
 - The New chat action remains available.
 - The main sidebar search remains functional.
 - Rows and header actions remain readable in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
+
+---
+
+### Fresh Docker mobile install does not show rate-limit request failures
+
+#### Feature/Change Name
+Fresh unauthenticated install mobile home screen rate-limit handling.
+
+#### Prerequisites/Setup
+1. Docker is available.
+2. A clean container has this project installed under `/workspace`.
+3. `@openai/codex` is installed in the container.
+4. Container dev server is running with a fresh Codex home:
+   `CODEX_HOME=/tmp/codex-home CODEXUI_CODEX_COMMAND=$(command -v codex) pnpm run dev --host 0.0.0.0 --port 4173`
+5. The container port is mapped to the host, for example `127.0.0.1:4174 -> 4173`.
+
+#### Steps
+1. Open `http://127.0.0.1:4174/` in a mobile viewport such as iPhone 13 `390x664`.
+2. In light theme, wait for the Start new thread home screen to render.
+3. Capture network responses and confirm no `/codex-api/rpc` response fails with `502` for `account/rateLimits/read`.
+4. Confirm the composer renders and the quota UI is simply absent when the fresh `CODEX_HOME` has no authenticated Codex account.
+5. Switch to dark theme and reload the same mobile viewport.
+6. Repeat steps 2 through 4 in dark theme.
+7. Add an `auth.json` containing only `tokens.access_token` and confirm `account/rateLimits/read` is not short-circuited as unauthenticated.
+8. Replace `auth.json` with malformed JSON and confirm the server logs a `[codex-auth] Unable to read Codex auth state` warning while the home screen still renders.
+
+#### Expected Results
+- The fresh mobile home screen renders without a blank page.
+- `account/rateLimits/read` returns an empty result instead of a `502` when no Codex account is authenticated.
+- An access-token-only auth file is treated as authenticated enough to ask Codex for rate limits.
+- Malformed auth files are visible in server logs instead of being silently treated as a normal fresh install.
+- The UI remains usable in light theme and dark theme.
+- No login or account import is required just to load the home screen.
+
+#### Rollback/Cleanup
+- Stop and remove the temporary Docker container, for example `docker rm -f <container-name>`.
+
+---
+
+### Android published CLI loads Codex app-server models through local proxy
+
+#### Feature/Change Name
+Android `codexui-android` startup passes the bound server port to app-server free-mode config.
+
+#### Prerequisites/Setup
+1. Android proot access works through `/Users/igor/Git-projects/codex-web-local-android/andClaw-codex/ssh.sh`.
+2. The published `codexui-android` package version under test is available from npm.
+3. ADB forward maps device port `17923` to local port `17923`.
+
+#### Steps
+1. Start the package in Android proot:
+   `pnpm dlx codexui-android@<version> --port 17923 --no-open --no-tunnel --no-login`
+2. Open `http://127.0.0.1:17923/#/` in the browser.
+3. Call `POST /codex-api/rpc` with `{"method":"config/read","params":{}}`.
+4. Call `POST /codex-api/rpc` with `{"method":"model/list","params":{}}`.
+5. Confirm `/codex-api/provider-models` still returns OpenCode Zen model ids.
+6. Verify the model selector is enabled in light theme and dark theme.
+7. Send `hi` from the home composer and wait for the first assistant reply.
+8. Confirm browser/network logs do not show a `502` for `generate-thread-title` or an empty-rollout `thread/read` during startup.
+
+#### Expected Results
+- `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
+- `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
+- `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
+- The model selector is usable in both light theme and dark theme.
+- A first home-composer message creates a thread and receives a response without visible startup RPC errors.
+
+#### Rollback/Cleanup
+- Stop the temporary Android proot process with `pkill -f codexui-android` if needed.
+
+---
+
+### OpenCode Zen status returns current provider models
+
+#### Feature/Change Name
+OpenCode Zen free-mode status and model discovery consistency.
+
+#### Prerequisites/Setup
+1. Dev server or published CLI server running with no Codex auth so free mode defaults to OpenCode Zen.
+2. Browser can open the home route in light theme and dark theme.
+
+#### Steps
+1. In light theme, open the home route.
+2. Call `GET /codex-api/free-mode/status`.
+3. Call `GET /codex-api/provider-models`.
+4. Confirm both responses report OpenCode Zen data, including `big-pickle` and current Zen model ids such as `deepseek-v4-flash-free` when upstream returns it.
+5. Confirm `/codex-api/free-mode/status` reports `wireApi` as `responses`.
+6. Open the model selector immediately after initial page load and confirm the Zen models are available without first switching providers or refreshing settings.
+7. In Chrome with a previously loaded app version, reload the page and confirm the service worker fetches the new script/style bundle instead of keeping stale cached selector behavior.
+8. With a script/style bundle already cached by the service worker, temporarily make the same script/style request return HTTP 404 or 500 and reload.
+9. Switch to dark theme and repeat steps 1 through 8.
+
+#### Expected Results
+- Free-mode status does not expose stale OpenRouter cached model ids when `provider` is `opencode-zen`.
+- OpenCode Zen uses `responses`, not `chat`, in saved/default UI state.
+- Provider model discovery and status agree on the model list source.
+- Initial startup model loading uses the active provider context and does not leave GPT-only `model/list` entries as the visible selector list for OpenCode Zen.
+- Selected model ids persist to localStorage by thread/provider context; legacy/global selected-model keys cannot choose a model for OpenCode Zen, while a valid provider-scoped OpenCode Zen saved choice is restored.
+- Service-worker script/style cache invalidation does not keep Chrome on an older model-selector bundle after a new local build is served.
+- Service-worker script/style fetches still use a cached bundle if the network request resolves with a non-OK HTTP status.
+- Model selector content remains usable in light theme and dark theme.
 
 #### Rollback/Cleanup
 - None.
