@@ -70,8 +70,24 @@ Validated Docker states:
 
 The first authenticated turn may briefly make `thread/read includeTurns=true` fail with `not materialized yet; includeTurns is unavailable before first user message`. The bridge maps that exact response to an in-progress empty live state with no `liveStateError`; real `thread/read` failures still surface as errors.
 
+## Copied Auth Promotion
+
+If a container starts without auth and later receives a valid `auth.json`, Codex auth should take precedence over community fallback provider state. This matters when a user starts in no-auth Zen mode, switches to OpenRouter, then copies auth into `CODEX_HOME`.
+
+Expected behavior after copying auth and reloading:
+- Community fallback provider state (`openrouter` or `opencode-zen` without a custom key) is suppressed.
+- Provider promotes to Codex.
+- Accounts imports the copied active auth file and the badge updates from `0` to at least `1`.
+- The new-thread composer shows a concrete Codex model, not a generic `Model` placeholder.
+- Stale historical diagnostics do not show a `Send feedback / Issue detected` row unless a current visible error remains.
+
+User-configured provider state is preserved: OpenRouter with `customKey: true`, OpenCode Zen with an explicit API key, and custom endpoint providers should not be suppressed merely because Codex auth exists.
+
+This behavior was fixed in commit `7ee94f83` and validated in a packaged Docker image by running: no-auth Zen startup, switch to OpenRouter, copy host `auth.json`, reload, verify Codex provider + Accounts `1`, send `hi`, and wait for a Codex reply.
+
 ## Related
 - Source: [opencode-zen-big-pickle-codex-cli.md](../../raw/fixes/opencode-zen-big-pickle-codex-cli.md)
 - Source: [opencode-zen-reasoning-content-proxy.md](../../raw/fixes/opencode-zen-reasoning-content-proxy.md)
 - Source: [opencode-zen-docker-auth-provider-models.md](../../raw/fixes/opencode-zen-docker-auth-provider-models.md)
+- Source: [copied-auth-provider-promotion.md](../../raw/fixes/copied-auth-provider-promotion.md)
 - [merge-to-main-workflow.md](./merge-to-main-workflow.md)

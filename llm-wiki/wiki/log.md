@@ -6,6 +6,12 @@
 - Documents: PR #174 chat link parser fixes, Qodo/CodeRabbit finding triage, dynamic-origin `codex://threads/<id>` URL rewriting, light/dark Playwright checks, and profile result.
 - Updated `index.md`.
 
+## [2026-05-13] ingest | copied auth provider promotion
+- Added source: `raw/fixes/copied-auth-provider-promotion.md`.
+- Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
+- Documents: suppressing community fallback provider state after valid Codex auth appears, preserving user-configured providers, importing copied auth into Accounts, provider-scoped Codex model persistence, stale feedback-row cleanup, and packaged Docker validation.
+- Updated `index.md`.
+
 ## [2026-05-13] ingest | OpenCode Zen Docker auth and provider models
 - Added source: `raw/fixes/opencode-zen-docker-auth-provider-models.md`.
 - Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
