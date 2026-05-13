@@ -181,6 +181,8 @@ describe('canonicalizeThreadListResponseForRead', () => {
       '/workspace-link/projects/demo',
       '/storage/projects/demo',
     ])
+  })
+})
 
 describe('isUnauthenticatedRateLimitError', () => {
   it('matches unauthenticated rate-limit failures from a fresh Codex home', () => {
