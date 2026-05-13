@@ -19,7 +19,6 @@ import { TelegramThreadBridge } from './telegramThreadBridge.js'
 import {
   getRandomFreeKey,
   getFreeKeyCount,
-  FREE_MODE_PROVIDER_ID,
   FREE_MODE_DEFAULT_MODEL,
   getCachedFreeModels,
   getFreeModels,

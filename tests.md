@@ -5551,6 +5551,7 @@ Docker provider/auth checklist execution and live error overlay de-duplication.
 
 #### Expected Results
 - No-auth startup uses the OpenCode Zen runtime fallback and sends successfully.
+- Runtime `-c` provider config uses underscore-safe provider ids, so Zen/OpenRouter/custom providers are actually registered with Codex app-server.
 - Provider switching is scoped to the selected provider and does not require changing the model dropdown directly.
 - Invalid/expired auth stays on the Codex provider path and renders the final auth failure as a persisted chat error.
 - A new live error is still visible when an older persisted turn error exists, but the same live error is suppressed after that exact error has persisted.
@@ -5587,7 +5588,8 @@ Runtime auth detection after starting without auth.
 - Community fallback providers are suppressed once usable Codex auth appears.
 - User-configured providers with a custom key or custom endpoint remain available and are not suppressed.
 - The app refreshes model metadata after provider promotion so the composer does not stay on a generic `Model` label.
-- The copied auth file is imported into the accounts list without requiring a manual Reload click.
+- The copied auth file is imported into the accounts list without requiring a manual Reload click after Codex quota metadata loads successfully.
+- Invalid or expired copied auth is not imported during startup before a successful quota read, so the first failed send still renders a chat error instead of leaving the thread empty.
 - The Settings feedback row is hidden after provider/account recovery unless there is still a visible error.
 - The Codex provider can send a message successfully after auth promotion.
 

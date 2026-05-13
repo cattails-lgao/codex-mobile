@@ -1601,6 +1601,7 @@ const visualViewportOffsetTop = ref(typeof window !== 'undefined' ? window.visua
 const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
+let externalCodexAuthAvailable = false
 let externalAuthImportAttempted = false
 let existingFolderBrowseRequestId = 0
 
@@ -2112,6 +2113,25 @@ watch(accounts, () => {
     })
   }, 1500)
 }, { deep: true })
+
+watch(accountRateLimitSnapshots, () => {
+  void maybeImportExternalCodexAuthAccount()
+}, { deep: true })
+
+async function maybeImportExternalCodexAuthAccount(): Promise<void> {
+  if (!externalCodexAuthAvailable) return
+  if (externalAuthImportAttempted) return
+  if (selectedProvider.value !== 'codex') return
+  if (accounts.value.length > 0) return
+  if (accountRateLimitSnapshots.value.length === 0) return
+  externalAuthImportAttempted = true
+  try {
+    const result = await refreshAccountsFromAuth()
+    accounts.value = result.accounts
+  } catch {
+    void loadAccountsState({ silent: true })
+  }
+}
 
 function onSkillsChanged(): void {
   void refreshSkills()
@@ -4051,22 +4071,18 @@ async function loadFreeModeStatus(): Promise<void> {
     } else {
       selectedProvider.value = 'codex'
     }
-    if (status.hasCodexAuth === true && accounts.value.length === 0 && !externalAuthImportAttempted) {
-      externalAuthImportAttempted = true
-      void refreshAccountsFromAuth()
-        .then((result) => {
-          accounts.value = result.accounts
-        })
-        .catch(() => {
-          void loadAccountsState({ silent: true })
-        })
+    externalCodexAuthAvailable = status.hasCodexAuth === true
+    if (!externalCodexAuthAvailable) {
+      externalAuthImportAttempted = false
     }
     if (selectedProvider.value !== previousProvider) {
       void refreshAll({
         includeSelectedThreadMessages: false,
         providerChanged: true,
         awaitAncillaryRefreshes: true,
-      })
+      }).then(() => maybeImportExternalCodexAuthAccount())
+    } else {
+      void maybeImportExternalCodexAuthAccount()
     }
   } catch {
     // Ignore — free mode status unknown
