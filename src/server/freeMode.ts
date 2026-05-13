@@ -147,7 +147,7 @@ export function refreshFreeModelsInBackground(): void {
 
 export const FREE_MODE_DEFAULT_MODEL = 'openrouter/free'
 
-export const FREE_MODE_STATE_FILE = 'webui-free-mode.json'
+export const FREE_MODE_STATE_FILE = 'webui-custom-providers.json'
 
 export const CUSTOM_PROVIDER_ID = 'custom-endpoint'
 export const OPENCODE_ZEN_PROVIDER_ID = 'opencode-zen'

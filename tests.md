@@ -3171,7 +3171,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 ### Free Mode (OpenRouter)
 
 #### Feature
-Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args.
+Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-custom-providers.json` and passed to app-server via `-c` CLI args.
 
 #### Prerequisites
 - Project built: `pnpm run build`.
@@ -3185,7 +3185,7 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 5. Verify the toggle turns on and model dropdown changes to `openrouter/free`.
 6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
 7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
-8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
+8. Verify `~/.codex/webui-custom-providers.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
 9. Open a new thread and send a message (e.g. "Say hello").
 10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
 11. Toggle **Free mode (OpenRouter)** OFF.
@@ -3226,7 +3226,7 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 
 #### Rollback/Cleanup
 - Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
-- Delete `~/.codex/webui-free-mode.json` to clear free mode state.
+- Delete `~/.codex/webui-custom-providers.json` to clear free mode state.
 
 ### Feature: Codex.app Thread Provider Filter Patch (fix-codex-thread-filter.sh)
 
@@ -3455,12 +3455,12 @@ OpenCode Zen as built-in provider + API format selector for custom endpoints
 - OpenCode Zen appears in provider dropdown alongside Codex/OpenRouter/Custom
 - OpenCode Zen defaults to `wire_api = "chat"` (Chat Completions API)
 - Custom endpoints show an API format selector; default is "Responses API"
-- Provider selection and wireApi are persisted in `~/.codex/webui-free-mode.json`
+- Provider selection and wireApi are persisted in `~/.codex/webui-custom-providers.json`
 - Model list for OpenCode Zen is fetched from `https://opencode.ai/zen/v1/models`
 
 #### Rollback/Cleanup
 - Switch provider back to "Codex" to disable free mode
-- No config files outside the project are modified (state stored in `~/.codex/webui-free-mode.json`)
+- No config files outside the project are modified (state stored in `~/.codex/webui-custom-providers.json`)
 
 ### env_key Authentication for Custom Providers (codex CLI v0.93.0)
 
@@ -5359,8 +5359,9 @@ Android `codexui-android` startup passes the bound server port to app-server fre
 #### Expected Results
 - `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
 - `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
-- Fresh no-auth startup uses OpenCode Zen as a runtime fallback without creating `~/.codex/webui-free-mode.json`.
+- Fresh no-auth startup uses OpenCode Zen as a runtime fallback without creating `~/.codex/webui-custom-providers.json`.
 - After a usable Codex `auth.json` is added and the server restarts with no saved free-mode state, startup does not keep forcing `model_provider="opencode-zen"`.
+- Existing `~/.codex/webui-free-mode.json` files are ignored and not migrated to `~/.codex/webui-custom-providers.json`.
 - `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
 - The model selector is usable in both light theme and dark theme.
 - A first home-composer message creates a thread and receives a response without visible startup RPC errors.

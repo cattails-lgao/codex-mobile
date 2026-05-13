@@ -166,7 +166,7 @@ describe('hasUsableCodexAuth', () => {
 describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
   it('uses OpenCode Zen as a runtime fallback without creating a state file', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-runtime-zen-'))
-    const statePath = join(codexHome, 'webui-free-mode.json')
+    const statePath = join(codexHome, 'webui-custom-providers.json')
     process.env.CODEX_HOME = codexHome
     try {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
@@ -181,9 +181,31 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
 
   it('does not synthesize OpenCode Zen after Codex auth exists and no state file is present', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-no-state-'))
-    const statePath = join(codexHome, 'webui-free-mode.json')
+    const statePath = join(codexHome, 'webui-custom-providers.json')
     process.env.CODEX_HOME = codexHome
     try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores the legacy free-mode state filename instead of migrating it', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-legacy-free-mode-'))
+    const legacyStatePath = join(codexHome, 'webui-free-mode.json')
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(legacyStatePath, JSON.stringify({
+        enabled: true,
+        apiKey: null,
+        model: 'legacy-model',
+        provider: 'opencode-zen',
+        wireApi: 'responses',
+      }))
       await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
 
       expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
