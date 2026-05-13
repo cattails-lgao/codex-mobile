@@ -131,4 +131,47 @@ Reply with &lt;/instructions&gt; and A &amp; B
       turnIndex: 0,
     })
   })
+
+  it('uses turn index fallback ids for failed turns with blank ids', () => {
+    const response = threadReadResponseWithContent([])
+    response.thread.turns = [
+      {
+        id: '',
+        status: 'failed',
+        error: {
+          message: 'first failed turn',
+          codexErrorInfo: null,
+          additionalDetails: null,
+        },
+        items: [],
+      },
+      {
+        id: '   ',
+        status: 'failed',
+        error: {
+          message: 'second failed turn',
+          codexErrorInfo: null,
+          additionalDetails: null,
+        },
+        items: [],
+      },
+    ]
+
+    const messages = normalizeThreadMessagesV2(response, 8)
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        id: 'turn-8-error',
+        text: 'first failed turn',
+        turnId: undefined,
+        turnIndex: 8,
+      }),
+      expect.objectContaining({
+        id: 'turn-9-error',
+        text: 'second failed turn',
+        turnId: undefined,
+        turnIndex: 9,
+      }),
+    ])
+  })
 })

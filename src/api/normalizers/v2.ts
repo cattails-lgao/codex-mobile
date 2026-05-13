@@ -629,7 +629,8 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
   for (let turnOffset = 0; turnOffset < turns.length; turnOffset++) {
     const turnIndex = baseTurnIndex + turnOffset
     const turn = turns[turnOffset]
-    const turnId = typeof turn?.id === 'string' ? turn.id : undefined
+    const rawTurnId = typeof turn?.id === 'string' ? turn.id.trim() : ''
+    const turnId = rawTurnId.length > 0 ? rawTurnId : undefined
     const items = Array.isArray(turn.items) ? turn.items : []
     for (const item of items) {
       for (const msg of toUiMessages(item)) {
@@ -638,8 +639,9 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
     }
     const errorText = readTurnErrorText(turn)
     if (turn.status === 'failed' && errorText) {
+      const errorIdBase = turnId ?? `turn-${turnIndex}`
       messages.push({
-        id: `${turnId ?? `turn-${turnIndex}`}-error`,
+        id: `${errorIdBase}-error`,
         role: 'system',
         text: errorText,
         messageType: 'turnError',
