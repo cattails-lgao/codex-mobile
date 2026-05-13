@@ -6335,17 +6335,33 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 	            setJson(res, 200, { result: null })
 	            return
 	          }
-	          if (body.method === 'thread/read' && isEmptyThreadReadError(error)) {
-	            const params = asRecord(body.params)
-	            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
-	            const snapshot = threadId ? appServer.getLastThreadReadSnapshot(threadId) : null
-	            if (snapshot) {
-	              setJson(res, 200, { result: snapshot })
-	              return
-	            }
-	          }
-	          throw error
-	        }
+		          if (body.method === 'thread/read' && isEmptyThreadReadError(error)) {
+		            const params = asRecord(body.params)
+		            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+		            const snapshot = threadId ? appServer.getLastThreadReadSnapshot(threadId) : null
+		            if (snapshot) {
+		              setJson(res, 200, { result: snapshot })
+		              return
+		            }
+		          }
+          if (body.method === 'thread/read' && isThreadMaterializationPendingError(error)) {
+            const params = asRecord(body.params)
+            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+            if (threadId) {
+              setJson(res, 200, {
+                result: {
+                  thread: {
+                    id: threadId,
+                    turns: [],
+                    status: { type: 'inProgress' },
+                  },
+                },
+              })
+              return
+            }
+          }
+		          throw error
+		        }
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? mergeStreamTurnErrorsIntoThreadResult(appServer, trimmedResult)
