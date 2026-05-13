@@ -654,6 +654,42 @@ describe('provider model selection', () => {
       '__new-thread-provider__::codex': 'gpt-5.5',
     })
   })
+
+  it('drops stale non-Codex selected models from the Codex model list', async () => {
+    installTestWindow({
+      'codex-web-local.selected-model-by-context.v1': JSON.stringify({
+        '__new-thread-provider__::codex': 'big-pickle',
+      }),
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue([
+      'gpt-5.5',
+      'gpt-5.4-mini',
+    ])
+
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+    expect(state.availableModelIds.value).toEqual([
+      'gpt-5.5',
+      'gpt-5.4-mini',
+    ])
+    expect(state.availableModelIds.value).not.toContain('big-pickle')
+    expect(state.selectedModelId.value).toBe('gpt-5.5')
+    expect(state.readModelIdForThread('').trim()).toBe('gpt-5.5')
+    expect(JSON.parse(window.localStorage.getItem('codex-web-local.selected-model-by-context.v1') ?? '{}')).toEqual({
+      '__new-thread-provider__::codex': 'gpt-5.5',
+    })
+  })
 })
 
 describe('findAdjacentThreadId', () => {

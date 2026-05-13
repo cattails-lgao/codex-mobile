@@ -743,6 +743,8 @@ async function getThreadSummaryV2(threadId: string): Promise<UiThread> {
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{
+  model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
@@ -756,6 +758,8 @@ async function getThreadDetailV2(threadId: string): Promise<{
   const startTurnIndex = readThreadTurnStartIndex(payload)
   const normalized = normalizeThreadMessagesV2(payload, startTurnIndex)
   return {
+    model: normalizeThreadModelFromPayload(payload),
+    modelProvider: normalizeThreadModelProviderFromPayload(payload),
     messages: normalized,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
@@ -834,6 +838,8 @@ export async function getThreadSummary(threadId: string): Promise<UiThread> {
 }
 
 export async function getThreadDetail(threadId: string): Promise<{
+  model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
@@ -1459,6 +1465,7 @@ export async function removeAccount(accountId: string): Promise<AccountsListResu
 
 export type ResumedThread = {
   model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
@@ -1472,6 +1479,7 @@ export async function resumeThread(threadId: string): Promise<ResumedThread> {
   const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
   return {
     model: normalizeThreadModelFromPayload(payload),
+    modelProvider: normalizeThreadModelProviderFromPayload(payload),
     messages,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
@@ -1539,6 +1547,12 @@ function normalizeThreadModelFromPayload(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return ''
   const model = (payload as Record<string, unknown>).model
   return typeof model === 'string' ? model.trim() : ''
+}
+
+function normalizeThreadModelProviderFromPayload(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const modelProvider = (payload as Record<string, unknown>).modelProvider
+  return typeof modelProvider === 'string' ? modelProvider.trim() : ''
 }
 
 export type StartedThread = {

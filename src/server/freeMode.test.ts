@@ -3,7 +3,9 @@ import {
   FREE_MODE_DEFAULT_MODEL,
   OPENCODE_ZEN_DEFAULT_MODEL,
   createDefaultOpenCodeZenFreeModeState,
+  filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
+  getProviderCompatibilityConfigArgs,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
 } from './freeMode'
@@ -30,6 +32,16 @@ describe('unauthenticated free mode defaults', () => {
     expect(args).toContain('model_providers.opencode_zen.base_url="http://127.0.0.1:4173/codex-api/zen-proxy/v1"')
     expect(args).toContain('model_providers.opencode_zen.wire_api="responses"')
     expect(args).toContain('model_providers.opencode_zen.experimental_bearer_token="zen-proxy-token"')
+  })
+
+  it('can register OpenCode Zen for legacy thread reads without selecting it as active provider', () => {
+    const args = getProviderCompatibilityConfigArgs(4173)
+
+    expect(args).toContain('model_providers.opencode_zen.base_url="http://127.0.0.1:4173/codex-api/zen-proxy/v1"')
+    expect(args).toContain('model_providers.opencode_zen.wire_api="responses"')
+    expect(args).toContain('model_providers.opencode_zen.experimental_bearer_token="zen-proxy-token"')
+    expect(args).not.toContain('model_provider="opencode_zen"')
+    expect(args.some((arg) => arg.startsWith('model="'))).toBe(false)
   })
 
   it('suppresses community fallback providers when Codex auth appears', () => {
@@ -85,6 +97,32 @@ describe('unauthenticated free mode defaults', () => {
     }, 4173)
 
     expect(args).toContain(`model="${OPENCODE_ZEN_DEFAULT_MODEL}"`)
+  })
+
+  it('keeps unauthenticated OpenCode Zen model lists limited to free models', () => {
+    expect(filterOpenCodeZenModelsForAuthState([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'GPT-5.5',
+      'claude-opus-4-7',
+      'nemotron-3-super-free',
+    ], null)).toEqual([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'nemotron-3-super-free',
+    ])
+  })
+
+  it('keeps paid OpenCode Zen models when a user Zen key is configured', () => {
+    expect(filterOpenCodeZenModelsForAuthState([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'GPT-5.5',
+    ], 'zen-user-key')).toEqual([
+      'big-pickle',
+      'deepseek-v4-flash-free',
+      'GPT-5.5',
+    ])
   })
 
   it('keeps OpenRouter config available for manual free mode', () => {

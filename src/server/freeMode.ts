@@ -230,26 +230,41 @@ export function getFreeModeEnvVars(state: FreeModeState): Record<string, string>
   return {}
 }
 
+export function filterOpenCodeZenModelsForAuthState(modelIds: string[], apiKey: string | null | undefined): string[] {
+  if (apiKey?.trim()) return modelIds
+  return modelIds.filter((id) => id === OPENCODE_ZEN_DEFAULT_MODEL || id.endsWith('-free'))
+}
+
+function getOpenCodeZenProviderConfigArgs(serverPort?: number): string[] {
+  const providerConfigKey = `model_providers.${OPENCODE_ZEN_RUNTIME_PROVIDER_ID}`
+  const baseUrl = serverPort
+    ? `http://127.0.0.1:${serverPort}/codex-api/zen-proxy/v1`
+    : OPENCODE_ZEN_BASE_URL
+  const authArgs: string[] = serverPort
+    ? ['-c', `${providerConfigKey}.experimental_bearer_token="zen-proxy-token"`]
+    : ['-c', `${providerConfigKey}.env_key="OPENCODE_ZEN_API_KEY"`]
+
+  return [
+    '-c', `${providerConfigKey}.name="OpenCode Zen"`,
+    '-c', `${providerConfigKey}.base_url="${baseUrl}"`,
+    '-c', `${providerConfigKey}.wire_api="responses"`,
+    ...authArgs,
+  ]
+}
+
+export function getProviderCompatibilityConfigArgs(serverPort?: number): string[] {
+  return getOpenCodeZenProviderConfigArgs(serverPort)
+}
+
 export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number): string[] {
   if (!state.enabled) return []
 
   if (state.provider === 'opencode-zen') {
     const model = state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL
-    const providerConfigKey = `model_providers.${OPENCODE_ZEN_RUNTIME_PROVIDER_ID}`
-    const baseUrl = serverPort
-      ? `http://127.0.0.1:${serverPort}/codex-api/zen-proxy/v1`
-      : OPENCODE_ZEN_BASE_URL
-    const wireApi = serverPort ? 'responses' : (state.wireApi || 'chat')
-    const authArgs: string[] = serverPort
-      ? ['-c', `${providerConfigKey}.experimental_bearer_token="zen-proxy-token"`]
-      : ['-c', `${providerConfigKey}.env_key="OPENCODE_ZEN_API_KEY"`]
     return [
       '-c', `model="${model}"`,
       '-c', `model_provider="${OPENCODE_ZEN_RUNTIME_PROVIDER_ID}"`,
-      '-c', `${providerConfigKey}.name="OpenCode Zen"`,
-      '-c', `${providerConfigKey}.base_url="${baseUrl}"`,
-      '-c', `${providerConfigKey}.wire_api="${wireApi}"`,
-      ...authArgs,
+      ...getOpenCodeZenProviderConfigArgs(serverPort),
     ]
   }
 

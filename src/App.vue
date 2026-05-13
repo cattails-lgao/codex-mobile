@@ -3958,9 +3958,6 @@ async function onProviderChange(provider: string): Promise<void> {
     }
     providerError.value = ''
     await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
-    if (route.name === 'thread') {
-      void router.push({ name: 'home' })
-    }
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : 'Failed to switch provider'
   } finally {
@@ -4235,11 +4232,6 @@ async function initialize(): Promise<void> {
   startPolling()
 }
 
-function threadExistsInSidebar(threadId: string): boolean {
-  if (!threadId) return false
-  return projectGroups.value.some((group) => group.threads.some((thread) => thread.id === threadId))
-}
-
 async function syncThreadSelectionWithRoute(): Promise<void> {
   if (isRouteSyncInProgress.value) {
     hasPendingRouteSync = true
@@ -4263,15 +4255,11 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
         if (!threadId) continue
 
         if (selectedThreadId.value !== threadId) {
-          if (!threadExistsInSidebar(threadId)) {
-            if (selectedThreadId.value) {
-              await router.replace({ name: 'thread', params: { threadId: selectedThreadId.value } })
-            } else {
-              await router.replace({ name: 'home' })
-            }
+          const result = await selectThread(threadId)
+          if (result === 'not-found') {
+            await router.replace({ name: 'home' })
             continue
           }
-          await selectThread(threadId)
         } else {
           void ensureThreadMessagesLoaded(threadId, { silent: true })
         }

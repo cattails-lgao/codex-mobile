@@ -27,8 +27,10 @@ import {
   OPENCODE_ZEN_DEFAULT_MODEL,
   OPENCODE_ZEN_PROVIDER_ID,
   createDefaultOpenCodeZenFreeModeState,
+  filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
+  getProviderCompatibilityConfigArgs,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
@@ -940,6 +942,11 @@ export function isThreadMaterializationPendingError(error: unknown): boolean {
   return message.includes('not materialized yet') && message.includes('includeturns is unavailable before first user message')
 }
 
+export function isThreadNotFoundError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('thread not found') || message.includes('no rollout found for thread id')
+}
+
 function readStreamTurnId(params: Record<string, unknown>): string {
   const directTurnId = readNonEmptyString(params.turnId) || readNonEmptyString(params.turn_id)
   if (directTurnId) return directTurnId
@@ -1438,12 +1445,18 @@ export async function callRpcWithArchiveRecovery(
   try {
     return await callRpcWithRateLimitDecodeRecovery(appServer, method, params)
   } catch (error) {
+    const paramsRecord = asRecord(params)
+    const threadId = readNonEmptyString(paramsRecord?.threadId)
+
+    if (method === 'turn/start' && threadId && isThreadNotFoundError(error)) {
+      await appServer.rpc('thread/resume', { threadId })
+      return appServer.rpc(method, params ?? null)
+    }
+
     if (method !== 'thread/archive') {
       throw error
     }
 
-    const paramsRecord = asRecord(params)
-    const threadId = readNonEmptyString(paramsRecord?.threadId)
     const errorMessage = getErrorMessage(error, '')
     if (!threadId || !errorMessage.includes('no rollout found')) {
       throw error
@@ -4796,6 +4809,7 @@ class AppServerProcess {
     ]
     let extraEnv: Record<string, string> = {}
     const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
+    args.push(...getProviderCompatibilityConfigArgs(serverPort))
     const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
     try {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
@@ -5897,11 +5911,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
         let bearerToken = ''
-        let wireApi: 'responses' | 'chat' = 'chat'
+        let wireApi: 'responses' | 'chat' = 'responses'
         try {
           const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
           bearerToken = state?.apiKey ?? ''
-          wireApi = state?.wireApi === 'responses' ? 'responses' : 'chat'
+          if (state) {
+            wireApi = state.wireApi === 'responses' ? 'responses' : 'chat'
+          }
         } catch { /* use empty */ }
         handleZenProxyRequest(req, res, bearerToken, wireApi)
         return
@@ -6013,7 +6029,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
               currentModel = state.enabled ? (state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL) : null
               try {
-                const zenModels = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey))
+                const zenModels = filterOpenCodeZenModelsForAuthState(
+                  sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey)),
+                  state.apiKey,
+                )
                 if (zenModels.length > 0) {
                   models = zenModels
                 } else {
@@ -6133,8 +6152,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             if (resolvedKey) {
               prevKeys[providerType] = resolvedKey
             }
+            const currentModel = (current.model ?? '').trim()
             const resolvedModel = providerType === 'openrouter'
-              ? (current.model || FREE_MODE_DEFAULT_MODEL)
+              ? (currentModel.includes('/') ? currentModel : FREE_MODE_DEFAULT_MODEL)
               : providerType === 'custom'
                 ? await fetchCustomEndpointDefaultModel(baseUrl, resolvedKey)
                 : OPENCODE_ZEN_DEFAULT_MODEL
@@ -6745,7 +6765,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {
               try {
-                const modelIds = sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey))
+                const modelIds = filterOpenCodeZenModelsForAuthState(
+                  sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey)),
+                  fmState.apiKey,
+                )
                 if (modelIds.length > 0) {
                   setJson(res, 200, { data: modelIds, exclusive: true, source: 'opencode-zen' })
                   return
