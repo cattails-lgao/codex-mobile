@@ -92,6 +92,7 @@ const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
+const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
 const CODEX_CLI_MISSING_MESSAGE = 'Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -211,7 +212,7 @@ function pruneThreadContextStateMap<T>(
 }
 
 function normalizeProviderContextId(providerId: string): string {
-  const normalized = providerId.trim().toLowerCase()
+  const normalized = providerId.trim().toLowerCase().replace(/_/g, '-')
   return normalized || 'codex'
 }
 
@@ -1709,6 +1710,23 @@ export function useDesktopState() {
     }
   }
 
+  function resolveThreadModelForProvider(threadId: string, modelId: string, providerId: string): string {
+    const normalizedModelId = modelId.trim()
+    const normalizedProviderId = normalizeProviderContextId(providerId)
+    if (normalizedProviderId !== 'opencode-zen') {
+      return normalizedModelId
+    }
+
+    const previousThreadModel = readModelIdForThread(threadId).trim()
+    if (previousThreadModel && !/^gpt-/i.test(previousThreadModel)) {
+      return previousThreadModel
+    }
+    if (normalizedModelId && !/^gpt-/i.test(normalizedModelId)) {
+      return normalizedModelId
+    }
+    return OPENCODE_ZEN_DEFAULT_MODEL
+  }
+
   function setThreadTokenUsage(threadId: string, usage: UiThreadTokenUsage | null): void {
     const normalizedThreadId = threadId.trim()
     if (!normalizedThreadId) return
@@ -1822,7 +1840,7 @@ export function useDesktopState() {
       if (resumedThreadById.value[threadId] !== true) {
         const resumedThread = await resumeThread(threadId)
         if (resumedThread.model) {
-          setThreadModelId(threadId, resumedThread.model)
+          setThreadModelId(threadId, resolveThreadModelForProvider(threadId, resumedThread.model, resumedThread.modelProvider))
         }
         if (resumedThread.modelProvider) {
           setThreadModelProviderId(threadId, resumedThread.modelProvider)
@@ -4300,11 +4318,11 @@ export function useDesktopState() {
       const resumedThread = needsResume ? await resumeThread(threadId) : null
       const detail = resumedThread ?? await getThreadDetail(threadId)
 
-      if (detail.model) {
-        setThreadModelId(threadId, detail.model)
-      }
       if (detail.modelProvider) {
         setThreadModelProviderId(threadId, detail.modelProvider)
+      }
+      if (detail.model) {
+        setThreadModelId(threadId, resolveThreadModelForProvider(threadId, detail.model, detail.modelProvider))
       }
       if (resumedThread) {
         resumedThreadById.value = {
@@ -4944,7 +4962,7 @@ export function useDesktopState() {
       if (resumedThreadById.value[threadId] !== true) {
         const resumedThread = await resumeThread(threadId)
         if (resumedThread.model) {
-          setThreadModelId(threadId, resumedThread.model)
+          setThreadModelId(threadId, resolveThreadModelForProvider(threadId, resumedThread.model, resumedThread.modelProvider))
         }
         if (resumedThread.modelProvider) {
           setThreadModelProviderId(threadId, resumedThread.modelProvider)

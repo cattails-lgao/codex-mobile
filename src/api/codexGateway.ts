@@ -1550,9 +1550,12 @@ function normalizeThreadModelFromPayload(payload: unknown): string {
 }
 
 function normalizeThreadModelProviderFromPayload(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') return ''
-  const modelProvider = (payload as Record<string, unknown>).modelProvider
-  return typeof modelProvider === 'string' ? modelProvider.trim() : ''
+  const record = asRecord(payload)
+  if (!record) return ''
+  const modelProvider = readString(record.modelProvider)?.trim() ?? ''
+  if (modelProvider) return modelProvider
+  const thread = asRecord(record.thread)
+  return readString(thread?.modelProvider)?.trim() ?? ''
 }
 
 export type StartedThread = {
