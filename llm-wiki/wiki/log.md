@@ -6,6 +6,12 @@
 - Documents: PR #174 chat link parser fixes, Qodo/CodeRabbit finding triage, dynamic-origin `codex://threads/<id>` URL rewriting, light/dark Playwright checks, and profile result.
 - Updated `index.md`.
 
+## [2026-05-13] ingest | OpenCode Zen Docker auth and provider models
+- Added source: `raw/fixes/opencode-zen-docker-auth-provider-models.md`.
+- Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
+- Documents: no-auth Zen runtime fallback, auth-mounted Docker switching back to Codex defaults, first-turn materialization as a transient live-state condition, provider-model-first loading, and the build-time Docker install workaround for runtime `pnpm dlx` OOM risk.
+- Updated `overview.md`, `entities/codex-web-local.md`, and `index.md`.
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.

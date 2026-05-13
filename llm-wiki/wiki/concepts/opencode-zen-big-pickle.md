@@ -45,6 +45,8 @@ model_provider = "opencode-zen"
 - Codex CLI deprecation warning for `wire_api = "chat"` is safe to ignore on v0.93.0
 - In Codex Web Local's Zen proxy, DeepSeek thinking-mode responses must round-trip `reasoning_content` into later Chat Completions messages. Missing this field can produce `The reasoning_content in the thinking mode must be passed back to the API`.
 - Chat-shaped Zen proxy payloads must be posted to `/v1/chat/completions`, even when the incoming local request uses the Responses-shaped `/responses` route.
+- In no-auth Docker mode, OpenCode Zen provider models are authoritative. Fetch `/codex-api/provider-models` before relying on Codex `model/list`, because `model/list` may return Codex catalog rows or fail independently.
+- During authenticated Docker first-turn startup, `thread ... is not materialized yet; includeTurns is unavailable before first user message` is a transient in-progress state, not a chat error.
 
 ## Codex Web Local Proxy Behavior
 
@@ -58,7 +60,18 @@ For thinking-mode models behind `big-pickle`, the proxy must preserve assistant 
 
 This behavior was fixed in commit `47d52c8c` after a Docker repro using an empty `CODEX_HOME`, no login, and no Zen API key.
 
+## Docker Auth and Model Loading
+
+Codex Web Local's unauthenticated Docker path should use OpenCode Zen only as a runtime fallback. It should not permanently write fallback provider configuration, and it should not depend on Codex `model/list` for the Zen selector.
+
+Validated Docker states:
+- Empty `CODEX_HOME`: `config/read` reports `model = "big-pickle"` and `model_provider = "opencode-zen"`, the app-server command includes local Zen proxy flags, and the model selector loads provider models from `/codex-api/provider-models`.
+- `auth.json` mounted into `CODEX_HOME`: `config/read` reports `model = null` and `model_provider = null`, the app-server command has no Zen flags, and sending `hi` uses the default Codex provider path.
+
+The first authenticated turn may briefly make `thread/read includeTurns=true` fail with `not materialized yet; includeTurns is unavailable before first user message`. The bridge maps that exact response to an in-progress empty live state with no `liveStateError`; real `thread/read` failures still surface as errors.
+
 ## Related
 - Source: [opencode-zen-big-pickle-codex-cli.md](../../raw/fixes/opencode-zen-big-pickle-codex-cli.md)
 - Source: [opencode-zen-reasoning-content-proxy.md](../../raw/fixes/opencode-zen-reasoning-content-proxy.md)
+- Source: [opencode-zen-docker-auth-provider-models.md](../../raw/fixes/opencode-zen-docker-auth-provider-models.md)
 - [merge-to-main-workflow.md](./merge-to-main-workflow.md)
