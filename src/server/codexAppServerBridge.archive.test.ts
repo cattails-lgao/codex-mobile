@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   callRpcWithArchiveRecovery,
+  ensureDefaultFreeModeStateForMissingAuthSync,
   hasUsableCodexAuth,
   isEmptyThreadReadError,
   isUnauthenticatedRateLimitError,
@@ -157,6 +158,37 @@ describe('hasUsableCodexAuth', () => {
       )
     } finally {
       warn.mockRestore()
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
+  it('uses OpenCode Zen as a runtime fallback without creating a state file', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-runtime-zen-'))
+    const statePath = join(codexHome, 'webui-free-mode.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+
+      expect(state?.enabled).toBe(true)
+      expect(state?.provider).toBe('opencode-zen')
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('does not synthesize OpenCode Zen after Codex auth exists and no state file is present', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-no-state-'))
+    const statePath = join(codexHome, 'webui-free-mode.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
       await rm(codexHome, { recursive: true, force: true })
     }
   })

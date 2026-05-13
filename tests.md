@@ -5359,6 +5359,8 @@ Android `codexui-android` startup passes the bound server port to app-server fre
 #### Expected Results
 - `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
 - `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
+- Fresh no-auth startup uses OpenCode Zen as a runtime fallback without creating `~/.codex/webui-free-mode.json`.
+- After a usable Codex `auth.json` is added and the server restarts with no saved free-mode state, startup does not keep forcing `model_provider="opencode-zen"`.
 - `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
 - The model selector is usable in both light theme and dark theme.
 - A first home-composer message creates a thread and receives a response without visible startup RPC errors.

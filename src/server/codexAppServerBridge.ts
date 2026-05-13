@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
@@ -3271,17 +3271,13 @@ function readFreeModeStateSync(statePath: string): FreeModeState | null {
   }
 }
 
-function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
+export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
   const current = readFreeModeStateSync(statePath)
   if (!shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuthSync())) {
     return current
   }
 
-  const fallback = createDefaultOpenCodeZenFreeModeState()
-
-  mkdirSync(dirname(statePath), { recursive: true })
-  writeFileSync(statePath, JSON.stringify(fallback), { encoding: 'utf8', mode: 0o600 })
-  return fallback
+  return createDefaultOpenCodeZenFreeModeState()
 }
 
 function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {

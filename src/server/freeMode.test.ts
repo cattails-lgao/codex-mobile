@@ -10,7 +10,7 @@ import {
 } from './freeMode'
 
 describe('unauthenticated free mode defaults', () => {
-  it('creates an enabled OpenCode Zen state for unauthenticated startup', () => {
+  it('builds an enabled OpenCode Zen runtime fallback for unauthenticated startup', () => {
     const state = createDefaultOpenCodeZenFreeModeState()
 
     expect(state.enabled).toBe(true)
@@ -65,7 +65,7 @@ describe('unauthenticated free mode defaults', () => {
     }, false)).toBe(false)
   })
 
-  it('creates the default only when state is absent and Codex auth is missing', () => {
+  it('uses the runtime default only when state is absent and Codex auth is missing', () => {
     expect(shouldCreateDefaultFreeModeStateForMissingAuth(null, false)).toBe(true)
     expect(shouldCreateDefaultFreeModeStateForMissingAuth(null, true)).toBe(false)
   })
