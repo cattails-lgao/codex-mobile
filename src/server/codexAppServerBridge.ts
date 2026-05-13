@@ -933,6 +933,11 @@ export function isEmptyThreadReadError(error: unknown): boolean {
   return message.includes('failed to read thread') && message.includes('rollout') && message.includes('is empty')
 }
 
+export function isThreadMaterializationPendingError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('not materialized yet') && message.includes('includeturns is unavailable before first user message')
+}
+
 const warnedCodexAuthReadFailures = new Set<string>()
 
 function getErrorCode(error: unknown): string | null {
@@ -6428,6 +6433,17 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           setJson(res, 200, responseData)
         } catch (error) {
+          if (isThreadMaterializationPendingError(error)) {
+            setJson(res, 200, {
+              threadId,
+              conversationState: { turns: [] },
+              ownerClientId: null,
+              liveStateError: null,
+              isInProgress: true,
+            })
+            return
+          }
+
           const snapshot = appServer.getLastThreadReadSnapshot(threadId)
           if (snapshot) {
             const record = asRecord(snapshot)

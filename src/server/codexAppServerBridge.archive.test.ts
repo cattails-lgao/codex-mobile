@@ -7,6 +7,7 @@ import {
   ensureDefaultFreeModeStateForMissingAuthSync,
   hasUsableCodexAuth,
   isEmptyThreadReadError,
+  isThreadMaterializationPendingError,
   isUnauthenticatedRateLimitError,
 } from './codexAppServerBridge'
 
@@ -116,6 +117,19 @@ describe('isEmptyThreadReadError', () => {
   it('does not match unrelated thread read failures', () => {
     expect(isEmptyThreadReadError(new Error('failed to read thread: permission denied'))).toBe(false)
     expect(isEmptyThreadReadError(new Error('rollout is empty'))).toBe(false)
+  })
+})
+
+describe('isThreadMaterializationPendingError', () => {
+  it('matches Codex live-state reads before the first message is materialized', () => {
+    expect(isThreadMaterializationPendingError(new Error(
+      'thread 019e1f04-dca4-7823-8b9a-554b9bd22f57 is not materialized yet; includeTurns is unavailable before first user message',
+    ))).toBe(true)
+  })
+
+  it('does not match unrelated thread read failures', () => {
+    expect(isThreadMaterializationPendingError(new Error('thread read failed: permission denied'))).toBe(false)
+    expect(isThreadMaterializationPendingError(new Error('not materialized yet'))).toBe(false)
   })
 })
 
