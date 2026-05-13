@@ -1937,11 +1937,6 @@ export function useDesktopState() {
       const isProviderBacked = normalizedProviderId !== 'codex'
       activeProviderId.value = normalizedProviderId
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
-      const selectedThreadProviderId = selectedThreadId.value
-        ? normalizeProviderContextId(threadModelProviderByThreadId.value[selectedThreadId.value] ?? '')
-        : ''
-      const selectedThreadUsesDifferentProvider =
-        Boolean(selectedThreadId.value && selectedThreadProviderId && selectedThreadProviderId !== normalizedProviderId)
       const modelIds = await getAvailableModelIds({
         includeProviderModels: options?.includeProviderModels !== false || isProviderBacked,
         requireProviderModels: isProviderBacked,
@@ -1950,12 +1945,9 @@ export function useDesktopState() {
       const providerScopedModelId = providerModelContextId
         ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
         : ''
-      const nextModelIds = selectedThreadUsesDifferentProvider
-        ? (normalizedSelectedModelId ? [normalizedSelectedModelId] : [])
-        : [...modelIds]
+      const nextModelIds = [...modelIds]
       if (
-        !selectedThreadUsesDifferentProvider
-        && !options?.providerChanged
+        !options?.providerChanged
         && isProviderBacked
         && normalizedConfiguredModelId
         && !nextModelIds.includes(normalizedConfiguredModelId)
@@ -1965,11 +1957,7 @@ export function useDesktopState() {
       availableModelIds.value = nextModelIds
 
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
-      if (selectedThreadUsesDifferentProvider && normalizedSelectedModelId) {
-        if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
-          setSelectedModelId(normalizedSelectedModelId)
-        }
-      } else if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
+      if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
         if (options?.providerChanged && nextModelIds.length > 0) {
           if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
             setSelectedModelId(providerScopedModelId)
@@ -1988,7 +1976,7 @@ export function useDesktopState() {
       } else if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
         setSelectedModelId(normalizedSelectedModelId)
       }
-      if (!selectedThreadUsesDifferentProvider && providerModelContextId && selectedModelId.value.trim().length > 0) {
+      if (providerModelContextId && selectedModelId.value.trim().length > 0) {
         const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
         nextModelMap[providerModelContextId] = selectedModelId.value.trim()
         selectedModelIdByContext.value = nextModelMap

@@ -5633,10 +5633,10 @@ Android no-auth OpenCode Zen model list is limited to usable free models.
 
 ---
 
-### Docker auth promotion preserves legacy Zen threads
+### Docker auth promotion moves legacy Zen threads to Codex
 
 #### Feature/Change Name
-Legacy OpenCode Zen threads continue to load and send after Codex auth appears.
+Legacy OpenCode Zen threads remain readable, but new sends use Codex once valid Codex auth appears.
 
 #### Prerequisites/Setup
 1. Run `pnpm run build`.
@@ -5651,15 +5651,15 @@ Legacy OpenCode Zen threads continue to load and send after Codex auth appears.
 3. Confirm the composer model is `big-pickle`.
 4. Copy valid Codex auth into the same container and restart the container.
 5. Reload the same thread URL.
-6. Confirm the previous Zen-backed messages still render and the composer still shows `big-pickle` for that legacy thread.
-7. Send another `hi` in the same thread and wait for an assistant reply or visible provider error.
+6. Confirm the previous Zen-backed messages still render and the composer model menu now shows only GPT/Codex models.
+7. Send another `hi` in the same thread and wait for a Codex assistant reply.
 8. Repeat the loaded-thread and model-label checks in dark theme.
 
 #### Expected Results
 - App-server config passively registers `opencode_zen` even when usable Codex auth suppresses the community fallback as the global provider.
 - The route stays on the requested thread instead of redirecting home when the active provider's thread list omits the legacy thread.
 - The UI renders a chat error with feedback if thread loading fails; it does not show an empty thread silently.
-- The legacy thread keeps its own provider/model selection and does not switch to Codex models such as `GPT-5.5`.
+- After valid Codex auth promotion, the same thread switches to the Codex provider/model list and no longer offers Zen models in the composer.
 - Follow-up sends recover from a restarted app-server process by resuming the thread once before retrying `turn/start`.
 
 #### Rollback/Cleanup

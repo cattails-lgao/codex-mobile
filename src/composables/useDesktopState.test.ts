@@ -691,7 +691,7 @@ describe('provider model selection', () => {
     })
   })
 
-  it('keeps a legacy OpenCode Zen thread on big-pickle when thread/resume reports the global Codex model', async () => {
+  it('promotes a legacy OpenCode Zen thread to Codex models after Codex auth becomes active', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({
       groups: [{ projectName: 'Project', threads: [thread('legacy-zen-thread', '/tmp/project')] }],
@@ -725,9 +725,12 @@ describe('provider model selection', () => {
     await state.loadMessages('legacy-zen-thread')
     await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
 
-    expect(state.selectedModelId.value).toBe('big-pickle')
-    expect(state.readModelIdForThread('legacy-zen-thread')).toBe('big-pickle')
-    expect(state.availableModelIds.value).toEqual(['big-pickle'])
+    expect(state.availableModelIds.value).toEqual([
+      'gpt-5.5',
+      'gpt-5.4-mini',
+    ])
+    expect(state.selectedModelId.value).toBe('gpt-5.4-mini')
+    expect(state.readModelIdForThread('legacy-zen-thread')).toBe('gpt-5.4-mini')
   })
 })
 
