@@ -912,6 +912,8 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   const record = asRecord(payload)
   if (!record) return fallback
 
+  if (typeof record.message === 'string' && record.message.length > 0) return record.message
+
   const error = record.error
   if (typeof error === 'string' && error.length > 0) return error
 

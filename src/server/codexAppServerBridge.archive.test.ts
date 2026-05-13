@@ -101,6 +101,14 @@ describe('isUnauthenticatedRateLimitError', () => {
     expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to read rate limits'))).toBe(true)
   })
 
+  it('matches direct message fields from Codex stream errors', () => {
+    expect(isUnauthenticatedRateLimitError({
+      message: 'codex account authentication required to read rate limits',
+      codexErrorInfo: 'other',
+      additionalDetails: null,
+    })).toBe(true)
+  })
+
   it('does not match unrelated authentication failures', () => {
     expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to send messages'))).toBe(false)
     expect(isUnauthenticatedRateLimitError(new Error('failed to read rate limits'))).toBe(false)
