@@ -31,6 +31,11 @@ function toRawPayload(value: unknown): string {
   }
 }
 
+function readTurnErrorText(turn: Turn): string {
+  const error = turn.error as { message?: unknown } | null
+  return typeof error?.message === 'string' ? error.message.trim() : ''
+}
+
 const FILE_ATTACHMENT_LINE = /^##\s+(.+?):\s+(.+?)\s*$/
 const FILES_MENTIONED_MARKER = /^#\s*files mentioned by the user\s*:?\s*$/i
 const ASSISTANT_FILE_CHANGE_HEADING = /^(?:#{1,6}\s*)?(?:本次修改文件(?:和操作)?(?:如下)?|修改文件和操作)\s*[:：]?\s*$/u
@@ -630,6 +635,17 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
       for (const msg of toUiMessages(item)) {
         messages.push({ ...msg, turnId, turnIndex })
       }
+    }
+    const errorText = readTurnErrorText(turn)
+    if (turn.status === 'failed' && errorText) {
+      messages.push({
+        id: `${turnId ?? `turn-${turnIndex}`}-error`,
+        role: 'system',
+        text: errorText,
+        messageType: 'turnError',
+        turnId,
+        turnIndex,
+      })
     }
   }
   return messages

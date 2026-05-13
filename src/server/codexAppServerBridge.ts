@@ -938,6 +938,78 @@ export function isThreadMaterializationPendingError(error: unknown): boolean {
   return message.includes('not materialized yet') && message.includes('includeturns is unavailable before first user message')
 }
 
+function readStreamTurnId(params: Record<string, unknown>): string {
+  const directTurnId = readNonEmptyString(params.turnId) || readNonEmptyString(params.turn_id)
+  if (directTurnId) return directTurnId
+  const turn = asRecord(params.turn)
+  return readNonEmptyString(turn?.id)
+}
+
+function readStreamTurnErrorMessage(frame: StreamEventFrame): { turnId: string; message: string } | null {
+  const params = asRecord(frame.params)
+  if (!params) return null
+  const turnId = readStreamTurnId(params)
+  if (!turnId) return null
+
+  if (frame.method === 'turn/completed') {
+    const turn = asRecord(params.turn)
+    if (turn?.status !== 'failed') return null
+    const message = getErrorMessage(turn.error, '')
+    return message ? { turnId, message } : null
+  }
+
+  if (frame.method === 'error' && params.willRetry !== true) {
+    const message = getErrorMessage(params.error, '') || readNonEmptyString(params.message)
+    return message ? { turnId, message } : null
+  }
+
+  return null
+}
+
+function mergeStreamTurnErrorsIntoThreadResult(appServer: AppServerProcess, result: unknown): unknown {
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const threadId = readNonEmptyString(thread?.id)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  if (!record || !thread || !threadId || !turns || turns.length === 0) return result
+
+  const errorsByTurnId = new Map<string, string>()
+  for (const frame of appServer.getStreamEvents(threadId, STREAM_EVENT_BUFFER_LIMIT)) {
+    const error = readStreamTurnErrorMessage(frame)
+    if (error) errorsByTurnId.set(error.turnId, error.message)
+  }
+  if (errorsByTurnId.size === 0) return result
+
+  let changed = false
+  const mergedTurns = turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    const message = turnId ? errorsByTurnId.get(turnId) : ''
+    if (!turnRecord || !turnId || !message) return turn
+    const existingErrorMessage = getErrorMessage(turnRecord.error, '')
+    if (turnRecord.status === 'failed' && existingErrorMessage) return turn
+    changed = true
+    return {
+      ...turnRecord,
+      status: 'failed',
+      error: {
+        message,
+        codexErrorInfo: null,
+        additionalDetails: null,
+      },
+    }
+  })
+
+  if (!changed) return result
+  return {
+    ...record,
+    thread: {
+      ...thread,
+      turns: mergedTurns,
+    },
+  }
+}
+
 const warnedCodexAuthReadFailures = new Set<string>()
 
 function getErrorCode(error: unknown): string | null {
@@ -6247,7 +6319,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 	          }
 	          throw error
 	        }
-        const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
+        const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
+          ? mergeStreamTurnErrorsIntoThreadResult(appServer, rpcResult)
+          : rpcResult
+        const trimmedResult = trimThreadTurnsInRpcResult(body.method, errorMergedResult)
         const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
         const result = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
@@ -6277,7 +6352,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          const threadReadResult = await appServer.readThreadForTurnPage(threadId)
+          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.readThreadForTurnPage(threadId))
           const record = asRecord(threadReadResult)
           const thread = asRecord(record?.thread)
           if (!record || !thread) {
@@ -6377,10 +6452,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          const threadReadResult = await appServer.rpc('thread/read', {
+          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.rpc('thread/read', {
             threadId,
             includeTurns: true,
-          })
+          }))
           const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
           appServer.storeThreadReadSnapshot(threadId, sanitized)
 
