@@ -3460,7 +3460,7 @@ OpenCode Zen as built-in provider + API format selector for custom endpoints
 
 #### Rollback/Cleanup
 - Switch provider back to "Codex" to disable free mode
-- No config files outside the project are modified (state stored in `~/.codex/webui-custom-providers.json`)
+- Project config files are not modified; only user-level state is written to `~/.codex/webui-custom-providers.json`
 
 ### env_key Authentication for Custom Providers (codex CLI v0.93.0)
 

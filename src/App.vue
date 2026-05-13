@@ -2115,22 +2115,32 @@ watch(accounts, () => {
 }, { deep: true })
 
 watch(accountRateLimitSnapshots, () => {
-  void maybeImportExternalCodexAuthAccount()
+  void maybeImportExternalCodexAuthAccount().then((imported) => {
+    if (!imported) return
+    void refreshAll({
+      includeSelectedThreadMessages: false,
+      providerChanged: true,
+      awaitAncillaryRefreshes: true,
+    })
+  })
 }, { deep: true })
 
-async function maybeImportExternalCodexAuthAccount(): Promise<void> {
-  if (!externalCodexAuthAvailable) return
-  if (externalAuthImportAttempted) return
-  if (selectedProvider.value !== 'codex') return
-  if (accounts.value.length > 0) return
-  if (accountRateLimitSnapshots.value.length === 0) return
+async function maybeImportExternalCodexAuthAccount(): Promise<boolean> {
+  if (!externalCodexAuthAvailable) return false
+  if (externalAuthImportAttempted) return false
+  if (selectedProvider.value !== 'codex') return false
+  if (accounts.value.length > 0) return false
+  if (accountRateLimitSnapshots.value.length === 0) return false
   externalAuthImportAttempted = true
+  const previousAccountsJson = JSON.stringify(accounts.value.map((account) => account.accountId).sort())
   try {
     const result = await refreshAccountsFromAuth()
     accounts.value = result.accounts
   } catch {
-    void loadAccountsState({ silent: true })
+    await loadAccountsState({ silent: true })
   }
+  const nextAccountsJson = JSON.stringify(accounts.value.map((account) => account.accountId).sort())
+  return previousAccountsJson !== nextAccountsJson
 }
 
 function onSkillsChanged(): void {
@@ -4075,14 +4085,21 @@ async function loadFreeModeStatus(): Promise<void> {
     if (!externalCodexAuthAvailable) {
       externalAuthImportAttempted = false
     }
-    if (selectedProvider.value !== previousProvider) {
-      void refreshAll({
+    const providerChanged = selectedProvider.value !== previousProvider
+    if (providerChanged) {
+      await refreshAll({
         includeSelectedThreadMessages: false,
         providerChanged: true,
         awaitAncillaryRefreshes: true,
-      }).then(() => maybeImportExternalCodexAuthAccount())
-    } else {
-      void maybeImportExternalCodexAuthAccount()
+      })
+    }
+    const importedExternalAuth = await maybeImportExternalCodexAuthAccount()
+    if (importedExternalAuth) {
+      await refreshAll({
+        includeSelectedThreadMessages: false,
+        providerChanged: providerChanged || importedExternalAuth,
+        awaitAncillaryRefreshes: true,
+      })
     }
   } catch {
     // Ignore — free mode status unknown

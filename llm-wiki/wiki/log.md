@@ -7,16 +7,16 @@
 - Updated `index.md`.
 
 ## [2026-05-13] ingest | copied auth provider promotion
-- Added source: `raw/fixes/copied-auth-provider-promotion.md`.
-- Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
+- Added source: [raw/fixes/copied-auth-provider-promotion.md](../raw/fixes/copied-auth-provider-promotion.md).
+- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
 - Documents: suppressing community fallback provider state after valid Codex auth appears, preserving user-configured providers, importing copied auth into Accounts, provider-scoped Codex model persistence, stale feedback-row cleanup, and packaged Docker validation.
-- Updated `index.md`.
+- Updated [index.md](./index.md).
 
 ## [2026-05-13] ingest | OpenCode Zen Docker auth and provider models
-- Added source: `raw/fixes/opencode-zen-docker-auth-provider-models.md`.
-- Updated wiki page: `concepts/opencode-zen-big-pickle.md`.
+- Added source: [raw/fixes/opencode-zen-docker-auth-provider-models.md](../raw/fixes/opencode-zen-docker-auth-provider-models.md).
+- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
 - Documents: no-auth Zen runtime fallback, auth-mounted Docker switching back to Codex defaults, first-turn materialization as a transient live-state condition, provider-model-first loading, and the build-time Docker install workaround for runtime `pnpm dlx` OOM risk.
-- Updated `overview.md`, `entities/codex-web-local.md`, and `index.md`.
+- Updated [overview.md](./overview.md), [entities/codex-web-local.md](./entities/codex-web-local.md), and [index.md](./index.md).
 
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.

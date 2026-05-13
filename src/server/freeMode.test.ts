@@ -50,6 +50,32 @@ describe('unauthenticated free mode defaults', () => {
       provider: 'openrouter',
       wireApi: 'responses',
     }, true)).toBe(false)
+
+    expect(shouldSuppressCommunityFreeModeForCodexAuth({
+      enabled: true,
+      apiKey: 'zen-user-key',
+      model: OPENCODE_ZEN_DEFAULT_MODEL,
+      customKey: false,
+      provider: 'opencode-zen',
+      wireApi: 'responses',
+    }, true)).toBe(false)
+
+    expect(shouldSuppressCommunityFreeModeForCodexAuth({
+      enabled: false,
+      apiKey: null,
+      model: FREE_MODE_DEFAULT_MODEL,
+      provider: 'openrouter',
+      wireApi: 'responses',
+    }, true)).toBe(false)
+
+    expect(shouldSuppressCommunityFreeModeForCodexAuth({
+      enabled: true,
+      apiKey: 'community-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: false,
+      provider: 'openrouter',
+      wireApi: 'responses',
+    }, false)).toBe(false)
   })
 
   it('uses the OpenCode Zen default model when persisted Zen state has an empty model', () => {
