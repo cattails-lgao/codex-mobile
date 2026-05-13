@@ -5516,6 +5516,7 @@ Invalid Codex auth failed-turn error rendering.
 #### Expected Results
 - The failed turn displays the final auth error in the chat, including the HTTP 401/unauthorized message from Codex.
 - The failed turn includes a visible `Send feedback` button next to the persisted chat error.
+- Once the failed turn is persisted, the live `Thinking` error overlay is gone so the final auth error is not duplicated.
 - The conversation does not silently show only the user message after a failed turn.
 - Reloaded thread history preserves the failed-turn error message.
 - Transient retry messages may appear while reconnecting, but the final non-retry error remains visible after completion.
