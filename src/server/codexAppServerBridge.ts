@@ -6321,11 +6321,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 	          }
 	          throw error
 	        }
+        const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
         const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
-          ? mergeStreamTurnErrorsIntoThreadResult(appServer, rpcResult)
-          : rpcResult
-        const trimmedResult = trimThreadTurnsInRpcResult(body.method, errorMergedResult)
-        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+          ? mergeStreamTurnErrorsIntoThreadResult(appServer, trimmedResult)
+          : trimmedResult
+        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, errorMergedResult)
         const result = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
           : sanitizedResult

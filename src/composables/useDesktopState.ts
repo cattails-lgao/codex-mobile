@@ -1521,9 +1521,21 @@ export function useDesktopState() {
     const reasoningText = isInProgress
       ? (liveReasoningTextByThreadId.value[threadId] ?? '').trim()
       : ''
-    const hasPersistedTurnError = !isInProgress && (persistedMessagesByThreadId.value[threadId] ?? [])
-      .some((message) => message.messageType === 'turnError')
-    const errorText = hasPersistedTurnError ? '' : (turnErrorByThreadId.value[threadId]?.message ?? '').trim()
+    const liveErrorText = (turnErrorByThreadId.value[threadId]?.message ?? '').trim()
+    let latestPersistedTurnErrorText = ''
+    if (!isInProgress && liveErrorText) {
+      const persistedMessages = persistedMessagesByThreadId.value[threadId] ?? []
+      for (let index = persistedMessages.length - 1; index >= 0; index -= 1) {
+        const message = persistedMessages[index]
+        if (message.messageType !== 'turnError') continue
+        latestPersistedTurnErrorText = normalizeMessageText(message.text)
+        break
+      }
+    }
+    const errorText =
+      !isInProgress && liveErrorText && latestPersistedTurnErrorText === liveErrorText
+        ? ''
+        : liveErrorText
 
     if (!activity && !reasoningText && !errorText) return null
     return {
