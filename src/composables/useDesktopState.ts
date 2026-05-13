@@ -1950,12 +1950,17 @@ export function useDesktopState() {
       const providerScopedModelId = providerModelContextId
         ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
         : ''
-      const nextModelIds = [...modelIds]
-      if (!options?.providerChanged && isProviderBacked && normalizedConfiguredModelId && !nextModelIds.includes(normalizedConfiguredModelId)) {
+      const nextModelIds = selectedThreadUsesDifferentProvider
+        ? (normalizedSelectedModelId ? [normalizedSelectedModelId] : [])
+        : [...modelIds]
+      if (
+        !selectedThreadUsesDifferentProvider
+        && !options?.providerChanged
+        && isProviderBacked
+        && normalizedConfiguredModelId
+        && !nextModelIds.includes(normalizedConfiguredModelId)
+      ) {
         nextModelIds.push(normalizedConfiguredModelId)
-      }
-      if (selectedThreadUsesDifferentProvider && normalizedSelectedModelId && !nextModelIds.includes(normalizedSelectedModelId)) {
-        nextModelIds.push(normalizedSelectedModelId)
       }
       availableModelIds.value = nextModelIds
 

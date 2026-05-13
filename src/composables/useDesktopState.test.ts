@@ -727,7 +727,7 @@ describe('provider model selection', () => {
 
     expect(state.selectedModelId.value).toBe('big-pickle')
     expect(state.readModelIdForThread('legacy-zen-thread')).toBe('big-pickle')
-    expect(state.availableModelIds.value).toContain('big-pickle')
+    expect(state.availableModelIds.value).toEqual(['big-pickle'])
   })
 })
 
