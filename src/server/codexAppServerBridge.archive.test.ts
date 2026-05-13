@@ -215,6 +215,49 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
     }
   })
 
+  it('ignores community provider state after Codex auth appears', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-community-provider-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+      await writeFile(statePath, JSON.stringify({
+        enabled: true,
+        apiKey: 'community-openrouter-key',
+        model: 'openrouter/free',
+        customKey: false,
+        provider: 'openrouter',
+        wireApi: 'responses',
+      }))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps user configured provider state after Codex auth appears', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-custom-provider-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ tokens: { access_token: 'access-token' } }))
+      const configuredState = {
+        enabled: true,
+        apiKey: 'user-openrouter-key',
+        model: 'openrouter/model',
+        customKey: true,
+        provider: 'openrouter',
+        wireApi: 'responses',
+      }
+      await writeFile(statePath, JSON.stringify(configuredState))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toEqual(configuredState)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
   it('ignores the legacy free-mode state filename instead of migrating it', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-legacy-free-mode-'))
     const legacyStatePath = join(codexHome, 'webui-free-mode.json')

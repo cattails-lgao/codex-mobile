@@ -7,6 +7,7 @@ import {
   createDefaultOpenCodeZenFreeModeState,
   getFreeModeConfigArgs,
   shouldCreateDefaultFreeModeStateForMissingAuth,
+  shouldSuppressCommunityFreeModeForCodexAuth,
 } from './freeMode'
 
 describe('unauthenticated free mode defaults', () => {
@@ -31,6 +32,26 @@ describe('unauthenticated free mode defaults', () => {
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.base_url="http://127.0.0.1:4173/codex-api/zen-proxy/v1"`)
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.wire_api="responses"`)
     expect(args).toContain(`model_providers.${OPENCODE_ZEN_PROVIDER_ID}.experimental_bearer_token="zen-proxy-token"`)
+  })
+
+  it('suppresses community fallback providers when Codex auth appears', () => {
+    expect(shouldSuppressCommunityFreeModeForCodexAuth({
+      enabled: true,
+      apiKey: 'community-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: false,
+      provider: 'openrouter',
+      wireApi: 'responses',
+    }, true)).toBe(true)
+
+    expect(shouldSuppressCommunityFreeModeForCodexAuth({
+      enabled: true,
+      apiKey: 'user-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: true,
+      provider: 'openrouter',
+      wireApi: 'responses',
+    }, true)).toBe(false)
   })
 
   it('uses the OpenCode Zen default model when persisted Zen state has an empty model', () => {

@@ -1836,6 +1836,7 @@ export async function setCodexSpeedMode(mode: SpeedMode): Promise<void> {
 
 export interface FreeModeStatus {
   enabled: boolean
+  hasCodexAuth?: boolean
   keyCount: number
   models: string[]
   currentModel: string | null

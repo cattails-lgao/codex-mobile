@@ -31,6 +31,7 @@ import {
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
   shouldCreateDefaultFreeModeStateForMissingAuth,
+  shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
 } from './freeMode.js'
 import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
@@ -3352,7 +3353,11 @@ function readFreeModeStateSync(statePath: string): FreeModeState | null {
 
 export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
   const current = readFreeModeStateSync(statePath)
-  if (!shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuthSync())) {
+  const hasUsableCodexAuth = hasUsableCodexAuthSync()
+  if (shouldSuppressCommunityFreeModeForCodexAuth(current, hasUsableCodexAuth)) {
+    return null
+  }
+  if (!shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuth)) {
     return current
   }
 
@@ -6034,6 +6039,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             setJson(res, 200, {
               enabled: state.enabled,
+              hasCodexAuth: hasUsableCodexAuthSync(),
               keyCount: getFreeKeyCount(),
               models,
               currentModel,

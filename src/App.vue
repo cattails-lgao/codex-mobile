@@ -250,7 +250,7 @@
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
               <a
-                v-if="hasFeedbackDiagnostics"
+                v-if="hasVisibleFeedbackError"
                 class="sidebar-settings-row sidebar-settings-feedback-row"
                 :href="feedbackMailto"
                 @click="prepareFeedbackLink"
@@ -1418,7 +1418,6 @@ type AutomationEditRequest = {
 const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
 const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
 const {
-  hasFeedbackDiagnostics,
   buildFeedbackMailto,
   feedbackMailtoBase,
   recordVisibleFailure,
@@ -1584,6 +1583,7 @@ const visibleFeedbackErrors = [
   projectSetupError,
   existingFolderError,
 ]
+const hasVisibleFeedbackError = computed(() => visibleFeedbackErrors.some((entry) => entry.value.trim().length > 0))
 const telegramStatus = ref<TelegramStatus>({
   configured: false,
   active: false,
@@ -1601,6 +1601,7 @@ const visualViewportOffsetTop = ref(typeof window !== 'undefined' ? window.visua
 const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
+let externalAuthImportAttempted = false
 let existingFolderBrowseRequestId = 0
 
 const routeThreadId = computed(() => {
@@ -4031,6 +4032,7 @@ async function clearFreeModeCustomKey(): Promise<void> {
 
 async function loadFreeModeStatus(): Promise<void> {
   try {
+    const previousProvider = selectedProvider.value
     const status = await getFreeModeStatus()
     freeModeEnabled.value = status.enabled
     freeModeHasCustomKey.value = status.customKey ?? false
@@ -4048,6 +4050,23 @@ async function loadFreeModeStatus(): Promise<void> {
       }
     } else {
       selectedProvider.value = 'codex'
+    }
+    if (status.hasCodexAuth === true && accounts.value.length === 0 && !externalAuthImportAttempted) {
+      externalAuthImportAttempted = true
+      void refreshAccountsFromAuth()
+        .then((result) => {
+          accounts.value = result.accounts
+        })
+        .catch(() => {
+          void loadAccountsState({ silent: true })
+        })
+    }
+    if (selectedProvider.value !== previousProvider) {
+      void refreshAll({
+        includeSelectedThreadMessages: false,
+        providerChanged: true,
+        awaitAncillaryRefreshes: true,
+      })
     }
   } catch {
     // Ignore — free mode status unknown

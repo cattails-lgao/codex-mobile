@@ -202,6 +202,17 @@ export function shouldCreateDefaultFreeModeStateForMissingAuth(
   return current == null && !hasUsableCodexAuth
 }
 
+export function shouldSuppressCommunityFreeModeForCodexAuth(
+  current: FreeModeState | null,
+  hasUsableCodexAuth: boolean,
+): boolean {
+  if (!hasUsableCodexAuth || !current?.enabled) return false
+  if (current.provider === 'custom') return false
+  if (current.customKey === true) return false
+  if (current.provider === 'opencode-zen' && current.apiKey?.trim()) return false
+  return current.provider === 'openrouter' || current.provider === 'opencode-zen' || !current.provider
+}
+
 export function getFreeModeEnvVars(state: FreeModeState): Record<string, string> {
   if (!state.enabled) return {}
 

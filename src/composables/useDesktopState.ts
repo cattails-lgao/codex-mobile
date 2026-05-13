@@ -1588,12 +1588,11 @@ export function useDesktopState() {
     const contextId = toThreadContextId(threadId)
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
       const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
-      if (normalizedProviderId !== 'codex') {
-        const providerContextId = toProviderModelContextId(normalizedProviderId)
-        return providerContextId
-          ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
-          : ''
-      }
+      const providerContextId = toProviderModelContextId(normalizedProviderId)
+      const providerModelId = providerContextId
+        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
+        : ''
+      if (providerModelId) return providerModelId
     }
     return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
   }
@@ -1630,7 +1629,7 @@ export function useDesktopState() {
     const contextId = toThreadContextId(threadId)
     const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
     const providerContextId =
-      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT && normalizedProviderId !== 'codex'
+      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT
         ? toProviderModelContextId(normalizedProviderId)
         : ''
     const selectedContextId = providerContextId || contextId
