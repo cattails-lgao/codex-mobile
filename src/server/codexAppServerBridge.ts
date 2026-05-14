@@ -4831,6 +4831,7 @@ class AppServerProcess {
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
   private chatgptAuthRefreshPromise: Promise<ChatgptAuthTokensRefreshResponse> | null = null
+  private activeConfigSignature = ''
 
 
   private getCodexCommand(): string {
@@ -4863,11 +4864,29 @@ class AppServerProcess {
     return { args, env: extraEnv }
   }
 
+  private getAppServerConfigSignature(config: { args: string[]; env: Record<string, string> }): string {
+    return JSON.stringify({
+      args: config.args,
+      env: Object.keys(config.env)
+        .sort()
+        .map((key) => [key, config.env[key]]),
+    })
+  }
+
+  private disposeIfConfigChanged(): void {
+    if (!this.process) return
+    const config = this.buildAppServerConfig()
+    const nextSignature = this.getAppServerConfigSignature(config)
+    if (this.activeConfigSignature === nextSignature) return
+    this.dispose()
+  }
+
   private start(): void {
     if (this.process) return
 
     this.stopping = false
     const config = this.buildAppServerConfig()
+    this.activeConfigSignature = this.getAppServerConfigSignature(config)
     const invocation = getSpawnInvocation(this.getCodexCommand(), config.args)
     const spawnEnv = Object.keys(config.env).length > 0
       ? { ...process.env, ...config.env }
@@ -5293,6 +5312,7 @@ class AppServerProcess {
   }
 
   async rpc(method: string, params: unknown): Promise<unknown> {
+    this.disposeIfConfigChanged()
     await this.ensureInitialized()
     return this.call(method, params)
   }
@@ -5348,6 +5368,7 @@ class AppServerProcess {
     this.process = null
     this.initialized = false
     this.initializePromise = null
+    this.activeConfigSignature = ''
     this.readBuffer = ''
 
     const failure = new Error('codex app-server stopped')
