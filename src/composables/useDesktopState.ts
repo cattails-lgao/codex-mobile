@@ -3972,6 +3972,7 @@ export function useDesktopState() {
       }
       const completedThreadId = extractThreadIdFromNotification(notification)
       if (completedThreadId) {
+        clearDelayedTurnSync(completedThreadId)
         setThreadInProgress(completedThreadId, false)
         setTurnActivityForThread(completedThreadId, null)
         markThreadUnreadByEvent(completedThreadId)
@@ -5448,8 +5449,8 @@ export function useDesktopState() {
 
       const shouldRefreshActiveThread =
         hasVersionChange ||
+        isActiveDirty ||
         (isInProgress && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
-        (isActiveDirty && loadedMessagesByThreadId.value[activeThreadId] !== true) ||
         (shouldRefreshThreads && loadedMessagesByThreadId.value[activeThreadId] !== true)
 
       if (shouldRefreshActiveThread) {

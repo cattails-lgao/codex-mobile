@@ -807,6 +807,82 @@ describe('provider model selection', () => {
     ])
   })
 
+  it('refreshes a loaded optimistic thread when completion events arrive', async () => {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.4-mini',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5', 'gpt-5.4-mini'])
+    gatewayMocks.startThread.mockResolvedValue({
+      threadId: 'mini-thread',
+      model: 'gpt-5.4-mini',
+      modelProvider: 'openai',
+    })
+    gatewayMocks.startThreadTurn.mockResolvedValue('turn-1')
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      model: 'gpt-5.4-mini',
+      modelProvider: 'openai',
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'hi',
+          messageType: 'userMessage',
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          text: 'Hi.',
+          messageType: 'agentMessage',
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+    await state.sendMessageToNewThread('hi', '/tmp/project')
+    state.startPolling()
+    expect(notificationHandler).toBeDefined()
+    notificationHandler!({
+      method: 'turn/completed',
+      params: {
+        threadId: 'mini-thread',
+        turn: { id: 'turn-1', status: 'completed' },
+      },
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadDetail).toHaveBeenCalledWith('mini-thread')
+    expect(state.messages.value.map((message) => `${message.role}:${message.text}`)).toEqual([
+      'user:hi',
+      'system:Worked for <1s',
+      'assistant:Hi.',
+    ])
+  })
+
   it('surfaces selected thread load failures and still refreshes models', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })

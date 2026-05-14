@@ -5751,12 +5751,15 @@ New-thread sends render the submitted user message immediately, even when the ba
 4. Restart the same Vite server with the same `CODEX_HOME`.
 5. Open the same project path, create another new chat, and send `hi`.
 6. Confirm the conversation pane immediately shows the user row `hi`, then wait for the assistant response.
-7. Repeat in dark theme and confirm the user row remains visible before and after the assistant response.
+7. Select `GPT-5.4-mini` in a post-auth new chat, send `hi`, and confirm the user row appears before the assistant response finishes.
+8. Repeat in dark theme and confirm the user row remains visible before and after the assistant response.
 
 #### Expected Results
 - The submitted first user message appears in the conversation pane immediately after send.
 - Backend refreshes that contain only the assistant item do not temporarily remove the optimistic user row.
 - When the backend later returns the real user item, the optimistic row is replaced without a duplicate.
+- Completion events refresh the selected thread even when it was already marked loaded by an optimistic first message.
+- Delayed GPT-5.4-mini replies appear automatically when the completion notification arrives; no manual refresh is required.
 - Light and dark theme message rows remain readable.
 
 #### Rollback/Cleanup
