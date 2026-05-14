@@ -800,7 +800,11 @@ describe('provider model selection', () => {
       message.messageType === 'userMessage.optimistic'
     ))).toBe(true)
 
+    const modelConfigCallsBeforeLoad = gatewayMocks.getCurrentModelConfig.mock.calls.length
+    const availableModelCallsBeforeLoad = gatewayMocks.getAvailableModelIds.mock.calls.length
     await state.loadMessages('codex-thread')
+    expect(gatewayMocks.getCurrentModelConfig).toHaveBeenCalledTimes(modelConfigCallsBeforeLoad)
+    expect(gatewayMocks.getAvailableModelIds).toHaveBeenCalledTimes(availableModelCallsBeforeLoad)
     expect(state.messages.value.map((message) => `${message.role}:${message.text}`)).toEqual([
       'user:hi',
       'assistant:Hi.',

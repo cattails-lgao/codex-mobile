@@ -4394,9 +4394,6 @@ export function useDesktopState() {
       if (detail.model) {
         setThreadModelId(threadId, resolveThreadModelForProvider(threadId, detail.model, detail.modelProvider))
       }
-      if (selectedThreadId.value === threadId) {
-        void refreshModelPreferences({ includeProviderModels: true })
-      }
       if (resumedThread) {
         resumedThreadById.value = {
           ...resumedThreadById.value,
