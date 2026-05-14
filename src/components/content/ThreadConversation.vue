@@ -4561,7 +4561,7 @@ onBeforeUnmount(() => {
 }
 
 .message-toolbar {
-  @apply mt-1 self-start flex items-center gap-1 opacity-[0.01] transition-opacity duration-200;
+  @apply mt-1 self-start flex items-center gap-1 opacity-60 transition-opacity duration-200;
 }
 
 .message-row:hover .message-toolbar {

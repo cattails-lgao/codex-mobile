@@ -742,6 +742,58 @@ describe('provider model selection', () => {
     expect(state.readModelIdForThread('')).toBe('gpt-5.4-mini')
   })
 
+  it('loads provider models for a selected provider-backed thread during scheduled refreshes', async () => {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('legacy-zen-thread', '/tmp/project')] }],
+      nextCursor: null,
+    })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.4-mini',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockImplementation(async (options?: { providerId?: string }) => {
+      if (options?.providerId === 'opencode-zen') {
+        return ['big-pickle', 'ring-2.6-1t-free']
+      }
+      return ['gpt-5.5', 'gpt-5.4-mini']
+    })
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: 'gpt-5.4-mini',
+      modelProvider: 'opencode_zen',
+      messages: [],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('legacy-zen-thread')
+    await state.loadMessages('legacy-zen-thread')
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(gatewayMocks.getAvailableModelIds).toHaveBeenLastCalledWith({
+      includeProviderModels: true,
+      requireProviderModels: true,
+      providerId: 'opencode-zen',
+    })
+    expect(state.availableModelIds.value).toEqual(['big-pickle', 'ring-2.6-1t-free'])
+    expect(state.selectedModelId.value).toBe('big-pickle')
+  })
+
   it('captures the active provider when creating a new thread', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
