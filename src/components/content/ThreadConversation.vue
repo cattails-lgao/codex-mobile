@@ -1649,6 +1649,12 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
   return { label, target }
 }
 
+function toLocalThreadUrl(value: string): string | null {
+  const match = value.trim().match(/^codex:\/\/threads\/([A-Za-z0-9-]+)$/u)
+  if (!match) return null
+  return `http://localhost:5173/#/thread/${match[1]}`
+}
+
 function headingTag(level: number): string {
   const normalizedLevel = Math.min(6, Math.max(1, Math.trunc(level)))
   return `h${String(normalizedLevel)}`
@@ -2272,7 +2278,7 @@ function editMessage(messageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
+  const pattern = /codex:\/\/threads\/[A-Za-z0-9-]+|https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -2304,7 +2310,14 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       segments.push({ kind: 'text', value: leading })
     }
 
-    if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
+    const localThreadUrl = toLocalThreadUrl(token)
+
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: localThreadUrl, href: localThreadUrl })
+      if (trailing) {
+        segments.push({ kind: 'text', value: trailing })
+      }
+    } else if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
       segments.push({ kind: 'bold', value: token.slice(2, -2) })
       if (trailing) {
         segments.push({ kind: 'text', value: trailing })
@@ -2508,8 +2521,11 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     }
     const label = markdownToken.label
     const target = markdownToken.target
+    const localThreadUrl = toLocalThreadUrl(target)
 
-    if (/^https?:\/\//u.test(target)) {
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: localThreadUrl, href: localThreadUrl })
+    } else if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
     } else {
       const ref = parseFileReference(target)
@@ -2594,7 +2610,14 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
       if (token.length > 0) {
         const markdownLink = parseMarkdownLinkToken(token)
         if (markdownLink) {
-          if (/^https?:\/\//u.test(markdownLink.target)) {
+          const localThreadUrl = toLocalThreadUrl(markdownLink.target)
+          if (localThreadUrl) {
+            segments.push({
+              kind: 'url',
+              value: localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\//u.test(markdownLink.target)) {
             segments.push({
               kind: 'url',
               value: markdownLink.label || markdownLink.target,
@@ -2614,27 +2637,36 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
               segments.push({ kind: 'code', value: token })
             }
           }
-        } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
-          segments.push({
-            kind: 'url',
-            value: token,
-            href: token,
-          })
         } else {
-          const fileReference = parseFileReference(token)
-          if (fileReference) {
-            const displayPath = fileReference.line
-              ? `${fileReference.path}:${String(fileReference.line)}`
-              : fileReference.path
+          const localThreadUrl = toLocalThreadUrl(token)
+          if (localThreadUrl) {
             segments.push({
-              kind: 'file',
+              kind: 'url',
+              value: localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
+            segments.push({
+              kind: 'url',
               value: token,
-              path: fileReference.path,
-              displayPath,
-              downloadName: getBasename(fileReference.path),
+              href: token,
             })
           } else {
-            segments.push({ kind: 'code', value: token })
+            const fileReference = parseFileReference(token)
+            if (fileReference) {
+              const displayPath = fileReference.line
+                ? `${fileReference.path}:${String(fileReference.line)}`
+                : fileReference.path
+              segments.push({
+                kind: 'file',
+                value: token,
+                path: fileReference.path,
+                displayPath,
+                downloadName: getBasename(fileReference.path),
+              })
+            } else {
+              segments.push({ kind: 'code', value: token })
+            }
           }
         }
       } else {
