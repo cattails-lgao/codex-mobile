@@ -2524,7 +2524,7 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const localThreadUrl = toLocalThreadUrl(target)
 
     if (localThreadUrl) {
-      segments.push({ kind: 'url', value: localThreadUrl, href: localThreadUrl })
+      segments.push({ kind: 'url', value: label || localThreadUrl, href: localThreadUrl })
     } else if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
     } else {
@@ -2614,7 +2614,7 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
           if (localThreadUrl) {
             segments.push({
               kind: 'url',
-              value: localThreadUrl,
+              value: markdownLink.label || localThreadUrl,
               href: localThreadUrl,
             })
           } else if (/^https?:\/\//u.test(markdownLink.target)) {

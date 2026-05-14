@@ -351,12 +351,13 @@ Codex thread link conversion in chat messages.
 2. Send or inspect a message containing a bare Codex thread link, for example `codex://threads/019e04cb-9670-7d91-be85-3ba35312170c`.
 3. Send or inspect a message containing a Markdown Codex thread link, for example `[Open thread](codex://threads/019e04cb-9670-7d91-be85-3ba35312170c)`.
 4. Confirm each rendered row contains a clickable `a.message-file-link`.
-5. Confirm each link href and visible text both equal `http://localhost:5173/#/thread/019e04cb-9670-7d91-be85-3ba35312170c`.
-6. Switch to dark theme and repeat steps 2 through 5.
+5. Confirm the bare link href and visible text both equal `http://localhost:5173/#/thread/019e04cb-9670-7d91-be85-3ba35312170c`.
+6. Confirm the Markdown link href equals `http://localhost:5173/#/thread/019e04cb-9670-7d91-be85-3ba35312170c` and visible text equals `Open thread`.
+7. Switch to dark theme and repeat steps 2 through 6.
 
 #### Expected Results
 - Bare `codex://threads/<id>` links render as local web thread URLs.
-- Markdown links targeting `codex://threads/<id>` ignore the Markdown label and display the local web thread URL.
+- Markdown links targeting `codex://threads/<id>` keep their Markdown label while linking to the local web thread URL.
 - Link color and contrast remain usable in light theme and dark theme.
 
 #### Rollback/Cleanup
