@@ -5633,10 +5633,10 @@ Android no-auth OpenCode Zen model list is limited to usable free models.
 
 ---
 
-### Docker auth promotion moves legacy Zen threads to Codex
+### Docker auth promotion preserves legacy Zen threads
 
 #### Feature/Change Name
-Legacy OpenCode Zen threads remain readable, but new sends use Codex once valid Codex auth appears.
+Legacy OpenCode Zen threads remain readable and provider-locked, while new threads use Codex once valid Codex auth appears.
 
 #### Prerequisites/Setup
 1. Run `pnpm run build`.
@@ -5651,16 +5651,55 @@ Legacy OpenCode Zen threads remain readable, but new sends use Codex once valid 
 3. Confirm the composer model is `big-pickle`.
 4. Copy valid Codex auth into the same container and restart the container.
 5. Reload the same thread URL.
-6. Confirm the previous Zen-backed messages still render and the composer model menu now shows only GPT/Codex models.
-7. Send another `hi` in the same thread and wait for a Codex assistant reply.
+6. Confirm the previous Zen-backed messages still render and the composer model menu still shows only Zen models.
+7. Send another `hi` in the same thread and wait for a Zen assistant reply.
 8. Repeat the loaded-thread and model-label checks in dark theme.
 
 #### Expected Results
 - App-server config passively registers `opencode_zen` even when usable Codex auth suppresses the community fallback as the global provider.
 - The route stays on the requested thread instead of redirecting home when the active provider's thread list omits the legacy thread.
 - The UI renders a chat error with feedback if thread loading fails; it does not show an empty thread silently.
-- After valid Codex auth promotion, the same thread switches to the Codex provider/model list and no longer offers Zen models in the composer.
+- After valid Codex auth promotion, the same thread remains on the Zen provider/model list, while a newly created thread uses Codex models.
 - Follow-up sends recover from a restarted app-server process by resuming the thread once before retrying `turn/start`.
 
 #### Rollback/Cleanup
 - Stop the temporary Docker container and remove any copied `auth.json` from its `CODEX_HOME`.
+
+---
+
+### Thread-locked providers across Zen, Codex, and OpenRouter
+
+#### Feature/Change Name
+Threads capture their provider at creation time and keep provider-scoped model menus and sends.
+
+#### Prerequisites/Setup
+1. Create a fresh temporary `CODEX_HOME` with no `auth.json`.
+2. Start the app locally with Vite only: `CODEX_HOME=<temp-home> npm run dev -- --host 127.0.0.1 --port 4173`.
+3. Keep a valid host auth file at `/Users/igor/.codex/auth.json`.
+4. Keep a valid OpenRouter key available.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173`.
+2. Create a project chat with no auth present and confirm the provider is OpenCode Zen.
+3. Open the model menu and confirm it only shows Zen models, including `big-pickle`, with no GPT/Codex entries.
+4. Send `hi` and confirm the request uses `big-pickle` and a visible assistant reply appears.
+5. Copy `/Users/igor/.codex/auth.json` into the isolated `CODEX_HOME`, restart the Vite server with the same `CODEX_HOME`, and reload the app.
+6. In the same project, create a new chat and confirm it uses the current global Codex provider.
+7. Open the model menu and confirm it only shows Codex/GPT models, with no Zen entries.
+8. Send `hi` and confirm the request uses a GPT model and a visible assistant reply appears.
+9. Reopen the old Zen thread, confirm the model menu still shows only Zen models, send `hi`, and confirm the request still uses `big-pickle` with a visible assistant reply.
+10. Switch Settings provider to OpenRouter, configure the OpenRouter API key, and create another new chat in the same project.
+11. Confirm the new chat uses OpenRouter, the model menu shows only OpenRouter models, and `hi` sends through OpenRouter with a visible assistant reply.
+12. Reopen the Zen, Codex, and OpenRouter threads in the same project and confirm each model menu remains provider-scoped and each send uses that thread's provider.
+13. Repeat the provider label and model menu checks in dark theme.
+
+#### Expected Results
+- Existing threads use their captured `modelProvider`, not the current global provider, for model-list filtering and sends.
+- New chats use the current global provider at creation time and do not inherit stale models from previously opened project threads.
+- Projects can contain Zen, Codex, and OpenRouter threads at the same time without mixed provider/model state.
+- Light and dark theme model menus remain readable and provider-specific.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server.
+- Remove the temporary isolated `CODEX_HOME`.
+- Restore the preferred provider in Settings if it was changed during testing.

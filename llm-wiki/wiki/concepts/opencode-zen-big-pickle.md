@@ -85,9 +85,22 @@ User-configured provider state is preserved: OpenRouter with `customKey: true`, 
 
 This behavior was fixed in commit `7ee94f83` and validated in a packaged Docker image by running: no-auth Zen startup, switch to OpenRouter, copy host `auth.json`, reload, verify Codex provider + Accounts `1`, send `hi`, and wait for a Codex reply.
 
+## Thread-Locked Providers
+
+Threads capture their provider at creation time. Existing threads should use their captured `modelProvider` for model-list filtering and sends, while a new chat uses the current global provider at the moment it is created.
+
+Expected behavior:
+- A no-auth Zen thread keeps Zen models such as `big-pickle` after Codex auth appears.
+- A new chat created after Codex auth appears uses Codex/GPT models.
+- A new chat created after switching Settings to OpenRouter uses OpenRouter models.
+- One project can contain Zen, Codex, and OpenRouter threads without model-menu leakage from the last opened thread.
+
+The client resolves existing-thread model menus from `useDesktopState.threadModelProviderByThreadId`. The server `/codex-api/provider-models` route accepts a provider-specific request so an older Zen thread can still load Zen model ids while the current global provider is Codex.
+
 ## Related
 - Source: [opencode-zen-big-pickle-codex-cli.md](../../raw/fixes/opencode-zen-big-pickle-codex-cli.md)
 - Source: [opencode-zen-reasoning-content-proxy.md](../../raw/fixes/opencode-zen-reasoning-content-proxy.md)
 - Source: [opencode-zen-docker-auth-provider-models.md](../../raw/fixes/opencode-zen-docker-auth-provider-models.md)
 - Source: [copied-auth-provider-promotion.md](../../raw/fixes/copied-auth-provider-promotion.md)
+- Source: [thread-locked-provider-models.md](../../raw/fixes/thread-locked-provider-models.md)
 - [merge-to-main-workflow.md](./merge-to-main-workflow.md)

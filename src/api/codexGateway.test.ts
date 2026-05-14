@@ -116,6 +116,30 @@ describe('getAvailableModelIds', () => {
     expect(requests).toEqual(['/codex-api/provider-models'])
   })
 
+  it('requests models for an explicit thread provider', async () => {
+    const requests: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requests.push(String(input))
+      if (String(input) === '/codex-api/provider-models?provider=opencode-zen') {
+        return new Response(JSON.stringify({
+          data: ['big-pickle', 'ring-2.6-1t-free'],
+          exclusive: true,
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`unexpected request ${String(input)}`)
+    }))
+
+    await expect(getAvailableModelIds({
+      includeProviderModels: true,
+      requireProviderModels: true,
+      providerId: 'opencode-zen',
+    })).resolves.toEqual(['big-pickle', 'ring-2.6-1t-free'])
+    expect(requests).toEqual(['/codex-api/provider-models?provider=opencode-zen'])
+  })
+
   it('falls back to model/list when provider models are optional and unavailable', async () => {
     const requests: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

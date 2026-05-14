@@ -1377,6 +1377,46 @@ async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<
   }
 }
 
+async function readProviderModelIdsForProvider(
+  appServer: AppServerProcess,
+  providerId: string,
+): Promise<ProviderModelsResponse> {
+  const normalizedProviderId = providerId.trim().toLowerCase().replace(/_/g, '-')
+  if (!normalizedProviderId || normalizedProviderId === 'codex' || normalizedProviderId === 'openai') {
+    return { data: [], providerId: '', source: 'provider' }
+  }
+
+  const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+  if (normalizedProviderId === 'opencode-zen') {
+    try {
+      const modelIds = filterOpenCodeZenModelsForAuthState(
+        sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState?.provider === 'opencode-zen' ? fmState.apiKey : null)),
+        fmState?.provider === 'opencode-zen' ? fmState.apiKey : null,
+      )
+      if (modelIds.length > 0) {
+        return { data: modelIds, providerId: 'opencode-zen', source: 'provider' }
+      }
+    } catch {
+      // Fall through to the offline Zen defaults.
+    }
+    return {
+      data: ['big-pickle', 'minimax-m2.5-free', 'nemotron-3-super-free', 'trinity-large-preview-free'],
+      providerId: 'opencode-zen',
+      source: 'provider',
+    }
+  }
+
+  if (normalizedProviderId === 'openrouter-free' || normalizedProviderId === 'openrouter') {
+    return {
+      data: await getFreeModels(),
+      providerId: 'openrouter-free',
+      source: 'provider',
+    }
+  }
+
+  return readProviderBackedModelIds(appServer)
+}
+
 function extractThreadMessageText(threadReadPayload: unknown): string {
   const payload = asRecord(threadReadPayload)
   const thread = asRecord(payload?.thread)
@@ -6162,7 +6202,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               enabled: true,
               apiKey: resolvedKey,
               model: resolvedModel,
-              customKey: providerType === 'openrouter' ? current.customKey : true,
+              customKey: providerType === 'openrouter' ? Boolean(resolvedKey) : true,
               provider: providerType,
               customBaseUrl: providerType === 'custom' ? baseUrl : undefined,
               wireApi,
@@ -6777,6 +6817,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
         try {
+          const requestedProvider = url.searchParams.get('provider')?.trim() ?? ''
+          if (requestedProvider) {
+            setJson(res, 200, {
+              ...(await readProviderModelIdsForProvider(appServer, requestedProvider)),
+              exclusive: true,
+            })
+            return
+          }
           const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
           if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {

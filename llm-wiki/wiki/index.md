@@ -29,3 +29,4 @@
 - [../raw/fixes/opencode-zen-reasoning-content-proxy.md](../raw/fixes/opencode-zen-reasoning-content-proxy.md): Codex Web Local Zen proxy reasoning_content round-trip fix and Docker verification.
 - [../raw/fixes/opencode-zen-docker-auth-provider-models.md](../raw/fixes/opencode-zen-docker-auth-provider-models.md): Docker auth/no-auth provider switching, first-turn live-state materialization, and provider-model loading fixes.
 - [../raw/fixes/copied-auth-provider-promotion.md](../raw/fixes/copied-auth-provider-promotion.md): copied `auth.json` promotion from community fallback provider state to Codex, account import, model-label, and stale feedback-row fixes.
+- [../raw/fixes/thread-locked-provider-models.md](../raw/fixes/thread-locked-provider-models.md): thread provider locking across Zen, Codex, and OpenRouter model menus and sends.

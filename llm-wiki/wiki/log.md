@@ -18,6 +18,12 @@
 - Documents: no-auth Zen runtime fallback, auth-mounted Docker switching back to Codex defaults, first-turn materialization as a transient live-state condition, provider-model-first loading, and the build-time Docker install workaround for runtime `pnpm dlx` OOM risk.
 - Updated [overview.md](./overview.md), [entities/codex-web-local.md](./entities/codex-web-local.md), and [index.md](./index.md).
 
+## [2026-05-14] ingest | thread-locked provider models
+- Added source: [raw/fixes/thread-locked-provider-models.md](../raw/fixes/thread-locked-provider-models.md).
+- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
+- Documents: provider capture at thread creation, existing-thread model menus resolved by captured provider, current-provider model selection for new chats, and mixed Zen/Codex/OpenRouter project behavior.
+- Updated [index.md](./index.md).
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.

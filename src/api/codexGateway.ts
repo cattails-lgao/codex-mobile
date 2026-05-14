@@ -1561,6 +1561,7 @@ function normalizeThreadModelProviderFromPayload(payload: unknown): string {
 export type StartedThread = {
   threadId: string
   model: string
+  modelProvider: string
 }
 
 export type ForkedThread = {
@@ -1587,6 +1588,7 @@ export async function startThread(cwd?: string, model?: string): Promise<Started
     return {
       threadId,
       model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
     }
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to start a new thread', 'thread/start')
@@ -1643,6 +1645,7 @@ export async function forkThread(
     return {
       threadId: nextThreadId,
       model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
     }
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
@@ -1905,9 +1908,13 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-async function fetchProviderModelIds(): Promise<{ ids: string[], exclusive: boolean } | null> {
+async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string[], exclusive: boolean } | null> {
   try {
-    const response = await fetch('/codex-api/provider-models', {
+    const normalizedProviderId = providerId?.trim() ?? ''
+    const url = normalizedProviderId
+      ? `/codex-api/provider-models?provider=${encodeURIComponent(normalizedProviderId)}`
+      : '/codex-api/provider-models'
+    const response = await fetch(url, {
       signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
     })
     let providerPayload: ProviderModelsResponse | null = null
@@ -1932,9 +1939,9 @@ async function fetchProviderModelIds(): Promise<{ ids: string[], exclusive: bool
   return null
 }
 
-export async function getAvailableModelIds(options: { includeProviderModels?: boolean; requireProviderModels?: boolean } = {}): Promise<string[]> {
+export async function getAvailableModelIds(options: { includeProviderModels?: boolean; requireProviderModels?: boolean; providerId?: string } = {}): Promise<string[]> {
   const shouldIncludeProviderModels = options.includeProviderModels !== false
-  const providerModels = shouldIncludeProviderModels ? await fetchProviderModelIds() : null
+  const providerModels = shouldIncludeProviderModels ? await fetchProviderModelIds(options.providerId) : null
 
   if (providerModels?.exclusive || options.requireProviderModels) {
     return providerModels?.ids ?? []
