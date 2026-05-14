@@ -1583,6 +1583,57 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   return { core, leading, trailing }
 }
 
+function countAsterisksBefore(value: string, endIndex: number, minIndex: number): number {
+  let count = 0
+  let index = endIndex - 1
+  while (index >= minIndex && value[index] === '*') {
+    count += 1
+    index -= 1
+  }
+  return count
+}
+
+function countAsterisksAfter(value: string, startIndex: number): number {
+  let count = 0
+  let index = startIndex
+  while (index < value.length && value[index] === '*') {
+    count += 1
+    index += 1
+  }
+  return count
+}
+
+function readAsteriskLinkWrapper(
+  source: string,
+  matchStart: number,
+  matchEnd: number,
+  cursor: number,
+  matchedToken: string,
+): { segmentStart: number; segmentEnd: number; tokenEndTrim: number } | null {
+  const leadingCount = countAsterisksBefore(source, matchStart, cursor)
+  if (leadingCount < 2) return null
+
+  const trailingOutsideCount = countAsterisksAfter(source, matchEnd)
+  if (trailingOutsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd + leadingCount,
+      tokenEndTrim: 0,
+    }
+  }
+
+  const trailingInsideCount = countAsterisksBefore(matchedToken, matchedToken.length, 0)
+  if (trailingInsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd,
+      tokenEndTrim: leadingCount,
+    }
+  }
+
+  return null
+}
+
 function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('[') || !trimmed.endsWith(')')) return null
@@ -2228,22 +2279,17 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     if (typeof match.index !== 'number') continue
     const start = match.index
     const end = start + match[0].length
-    const isBoldWrapped =
-      start - 2 >= cursor &&
-      text.slice(start - 2, start) === '**' &&
-      text.slice(end, end + 2) === '**'
-    const hasLeadingBoldMarker =
-      start - 2 >= cursor &&
-      text.slice(start - 2, start) === '**' &&
-      match[0].endsWith('**')
-    const segmentStart = isBoldWrapped || hasLeadingBoldMarker ? start - 2 : start
-    const segmentEnd = isBoldWrapped ? end + 2 : end
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, match[0])
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
     if (segmentStart > cursor) {
       segments.push({ kind: 'text', value: text.slice(cursor, segmentStart) })
     }
 
-    let token = hasLeadingBoldMarker ? match[0].slice(0, -2) : match[0]
+    let token = asteriskWrapper?.tokenEndTrim
+      ? match[0].slice(0, -asteriskWrapper.tokenEndTrim)
+      : match[0]
     let trailingPunctuation = ''
     while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
@@ -2445,12 +2491,9 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const match = findNextMarkdownLink(text, scanFrom)
     if (!match) break
     const { start, end, token } = match
-    const isBoldWrapped =
-      start - 2 >= cursor &&
-      text.slice(start - 2, start) === '**' &&
-      text.slice(end, end + 2) === '**'
-    const segmentStart = isBoldWrapped ? start - 2 : start
-    const segmentEnd = isBoldWrapped ? end + 2 : end
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, token)
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
     if (segmentStart > cursor) {
       segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart)))
