@@ -174,8 +174,8 @@ const isInstallActionInFlight = ref(false)
 const isUninstallActionInFlight = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const { t } = useUiLanguage()
-const { buildFeedbackMailto, recordVisibleFailure } = useFeedbackDiagnostics()
-const feedbackMailto = computed(() => buildFeedbackMailto())
+const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const feedbackMailto = feedbackMailtoBase()
 
 const props = defineProps<{
   tryInFlightKey?: string

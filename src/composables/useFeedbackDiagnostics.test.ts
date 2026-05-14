@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildFeedbackMailto,
+  feedbackMailtoBase,
   installFeedbackDiagnostics,
   recordFeedbackDiagnostic,
   useFeedbackDiagnostics,
@@ -73,6 +74,8 @@ describe('feedback diagnostics', () => {
     const body = parsed.searchParams.get('body') ?? ''
 
     expect(mailto.startsWith('mailto:brutalstrikedevs@gmail.com?')).toBe(true)
+    expect(mailto).toContain('subject=Codex%20Web%20feedback%3A%20Request%20failed%20with%20HTTP%20500')
+    expect(mailto).not.toContain('+')
     expect(parsed.searchParams.get('subject')).toContain('Request failed with HTTP 500')
     expect(body).toContain('URL: http://127.0.0.1:4173/#/')
     expect(body).toContain('User agent: TestAgent/1.0')
@@ -81,11 +84,16 @@ describe('feedback diagnostics', () => {
     expect(body).toContain('Hash: #/')
     expect(body).toContain('Online: true')
     expect(body).toContain('codex-web-local.sidebar-chat-sort-mode.v1=updated')
-    expect(body).toContain('codex-token=super-secret-token')
+    expect(body).toContain('codex-token=[omitted sensitive value, 18 chars]')
+    expect(mailto).not.toContain('super-secret-token')
     expect(body).toContain('codex-web-local.temp=open-folder-modal')
     expect(body).toContain('POST | /codex-api/rpc | 500 Internal Server Error')
     expect(body).toContain('Visible page text')
     expect(body).toContain('Visible failure banner')
+  })
+
+  it('exposes a minimal mailto href for static anchors', () => {
+    expect(feedbackMailtoBase()).toBe('mailto:brutalstrikedevs@gmail.com')
   })
 
   it('dedupes identical newest diagnostics', () => {
