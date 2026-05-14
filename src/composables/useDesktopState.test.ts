@@ -779,6 +779,37 @@ describe('provider model selection', () => {
     )
     expect(state.readModelIdForThread('codex-thread')).toBe('gpt-5.5')
   })
+
+  it('surfaces selected thread load failures and still refreshes models', async () => {
+    installTestWindow()
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5', 'gpt-5.4-mini'])
+    gatewayMocks.resumeThread.mockRejectedValue(new Error('thread not found'))
+
+    const state = useDesktopState()
+    state.primeSelectedThread('missing-thread')
+    await state.refreshAll({
+      includeSelectedThreadMessages: true,
+      awaitAncillaryRefreshes: true,
+    })
+
+    expect(state.selectedLiveOverlay.value?.errorText).toContain('thread not found')
+    expect(state.availableModelIds.value).toEqual(['gpt-5.5', 'gpt-5.4-mini'])
+    expect(state.selectedModelId.value).toBe('gpt-5.5')
+
+    await state.ensureThreadMessagesLoaded('missing-thread', { silent: true })
+    await state.loadMessages('missing-thread')
+    expect(gatewayMocks.resumeThread).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('findAdjacentThreadId', () => {

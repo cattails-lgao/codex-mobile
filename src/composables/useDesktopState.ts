@@ -1486,6 +1486,7 @@ export function useDesktopState() {
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
+  const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
   let threadListNextCursor: string | null = null
   let threadListBackgroundTimer: number | null = null
   let isLoadingRemainingThreadPages = false
@@ -4291,6 +4292,11 @@ export function useDesktopState() {
     if (!threadId) {
       return
     }
+    const recentLoadFailure =
+      Date.now() - (lastMessageLoadFailureAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
+    if (turnErrorByThreadId.value[threadId]?.transient && (options.silent === true || recentLoadFailure)) {
+      return
+    }
 
     const existingLoad = loadMessagePromiseByThreadId.get(threadId)
     if (existingLoad) {
@@ -4374,6 +4380,7 @@ export function useDesktopState() {
         [threadId]: true,
       }
       lastMessageLoadAtByThreadId.set(threadId, Date.now())
+      lastMessageLoadFailureAtByThreadId.delete(threadId)
 
       if (version) {
         loadedVersionByThreadId.value = {
@@ -4395,6 +4402,13 @@ export function useDesktopState() {
         clearCompletedTurnLiveState(threadId)
       }
       markThreadAsRead(threadId)
+      } catch (unknownError) {
+        const message = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+        if (selectedThreadId.value === threadId) {
+          setTurnErrorForThread(threadId, message, { transient: true })
+        }
+        lastMessageLoadFailureAtByThreadId.set(threadId, Date.now())
+        throw unknownError
       } finally {
       if (shouldShowLoading) {
         isLoadingMessages.value = false
@@ -4455,6 +4469,7 @@ export function useDesktopState() {
   async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
     if (!threadId) return
     if (loadedMessagesByThreadId.value[threadId] === true) return
+    if (options.silent === true && turnErrorByThreadId.value[threadId]?.transient) return
     await loadMessages(threadId, options)
   }
 
@@ -4519,7 +4534,11 @@ export function useDesktopState() {
       await loadPersistedQueueStateIfNeeded()
       await loadThreads()
       if (includeSelectedThreadMessages) {
-        await loadMessages(selectedThreadId.value)
+        try {
+          await loadMessages(selectedThreadId.value)
+        } catch (unknownError) {
+          error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
+        }
       }
       if (awaitAncillaryRefreshes) {
         await refreshAncillaryState({
@@ -4554,7 +4573,7 @@ export function useDesktopState() {
       const message = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
       error.value = message
       const result = isThreadNotFoundError(unknownError) ? 'not-found' : 'error'
-      if (result === 'error' && threadId.trim()) {
+      if (threadId.trim()) {
         setTurnErrorForThread(threadId, message, { transient: true })
       }
       return result

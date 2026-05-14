@@ -4257,11 +4257,12 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
         if (selectedThreadId.value !== threadId) {
           const result = await selectThread(threadId)
           if (result === 'not-found') {
-            await router.replace({ name: 'home' })
             continue
           }
         } else {
-          void ensureThreadMessagesLoaded(threadId, { silent: true })
+          void ensureThreadMessagesLoaded(threadId, { silent: true }).catch(() => {
+            // The conversation overlay receives the error from useDesktopState.
+          })
         }
       }
     } while (hasPendingRouteSync)

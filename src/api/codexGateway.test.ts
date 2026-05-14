@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, startThreadTurn } from './codexGateway'
+import { getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, resumeThread, startThreadTurn } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -203,5 +203,35 @@ describe('getThreadDetail', () => {
     await expect(getThreadDetail('legacy-thread')).resolves.toMatchObject({
       modelProvider: 'opencode_zen',
     })
+  })
+})
+
+describe('resumeThread', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('coalesces repeated resume failures for the same thread', async () => {
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string; params: Record<string, unknown> }
+        : { method: '', params: {} }
+      requests.push(body)
+      return new Response(JSON.stringify({ error: 'no rollout found for thread id missing-thread' }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    const results = await Promise.allSettled([
+      resumeThread('missing-thread'),
+      resumeThread('missing-thread'),
+    ])
+
+    expect(results.every((result) => result.status === 'rejected')).toBe(true)
+    expect(requests).toEqual([
+      { method: 'thread/resume', params: { threadId: 'missing-thread' } },
+    ])
   })
 })

@@ -1473,19 +1473,36 @@ export type ResumedThread = {
   turnIndexByTurnId: ThreadTurnIndexById
 }
 
+const recentResumeThreadById = new Map<string, Promise<ResumedThread>>()
+
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
-  const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
-  const startTurnIndex = readThreadTurnStartIndex(payload)
-  const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
-  return {
-    model: normalizeThreadModelFromPayload(payload),
-    modelProvider: normalizeThreadModelProviderFromPayload(payload),
-    messages,
-    inProgress: readThreadInProgressFromResponse(payload),
-    activeTurnId: readActiveTurnIdFromResponse(payload),
-    hasMoreOlder: startTurnIndex > 0,
-    turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
-  }
+  const existing = recentResumeThreadById.get(threadId)
+  if (existing) return existing
+
+  const promise = (async () => {
+    const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
+    const startTurnIndex = readThreadTurnStartIndex(payload)
+    const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
+    return {
+      model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
+      messages,
+      inProgress: readThreadInProgressFromResponse(payload),
+      activeTurnId: readActiveTurnIdFromResponse(payload),
+      hasMoreOlder: startTurnIndex > 0,
+      turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+    }
+  })()
+
+  recentResumeThreadById.set(threadId, promise)
+  void promise.finally(() => {
+    globalThis.setTimeout(() => {
+      if (recentResumeThreadById.get(threadId) === promise) {
+        recentResumeThreadById.delete(threadId)
+      }
+    }, 2000)
+  }).catch(() => undefined)
+  return promise
 }
 
 export async function archiveThread(threadId: string): Promise<void> {
