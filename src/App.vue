@@ -138,7 +138,7 @@
                 <template v-if="!isAccountsSectionCollapsed">
                   <div v-if="accountActionError" class="sidebar-settings-account-error visible-error-with-feedback">
                     <span>{{ accountActionError }}</span>
-                    <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                    <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, accountActionError)">{{ t('Send feedback') }}</a>
                   </div>
                   <div class="sidebar-settings-account-login">
                     <button
@@ -253,6 +253,7 @@
                 v-if="hasFeedbackDiagnostics"
                 class="sidebar-settings-row sidebar-settings-feedback-row"
                 :href="feedbackMailto"
+                @click="prepareFeedbackLink"
               >
                 <span class="sidebar-settings-label">{{ t('Send feedback') }}</span>
                 <span class="sidebar-settings-value">{{ t('Issue detected') }}</span>
@@ -274,7 +275,7 @@
               </div>
               <div v-if="providerError" class="sidebar-settings-row sidebar-settings-error">
                 <span>{{ providerError }}</span>
-                <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, providerError)">{{ t('Send feedback') }}</a>
               </div>
               <div v-if="selectedProvider === 'openrouter'" class="sidebar-settings-row sidebar-settings-row--input">
                 <div class="sidebar-settings-provider-info">
@@ -456,7 +457,7 @@
                 </div>
                 <div v-if="telegramConfigError" class="sidebar-settings-telegram-error">
                   <span>{{ telegramConfigError }}</span>
-                  <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                  <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, telegramConfigError)">{{ t('Send feedback') }}</a>
                 </div>
                 <div class="sidebar-settings-telegram-actions">
                   <button
@@ -717,7 +718,7 @@
                         </div>
                         <div v-if="createFolderError" class="new-thread-open-folder-error visible-error-with-feedback">
                           <span>{{ createFolderError }}</span>
-                          <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                          <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, createFolderError)">{{ t('Send feedback') }}</a>
                         </div>
                       </div>
                       <input
@@ -731,7 +732,7 @@
                       <div v-if="existingFolderError" class="new-thread-open-folder-error-actions">
                         <div class="new-thread-open-folder-error visible-error-with-feedback">
                           <span>{{ existingFolderError }}</span>
-                          <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                          <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, existingFolderError)">{{ t('Send feedback') }}</a>
                         </div>
                         <button
                           class="new-thread-folder-action"
@@ -840,7 +841,7 @@
                       </label>
                       <div v-if="projectSetupError" class="new-thread-open-folder-error visible-error-with-feedback">
                         <span>{{ projectSetupError }}</span>
-                        <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                        <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, projectSetupError)">{{ t('Send feedback') }}</a>
                       </div>
                       <div class="new-thread-project-modal-actions">
                         <button class="new-thread-folder-action" type="button" :disabled="isProjectSetupSubmitting" @click="onCloseProjectSetupModal">
@@ -904,7 +905,7 @@
               <div class="composer-with-queue">
                 <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
                   <span>{{ t(codexCliMissingError) }}</span>
-                  <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                  <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
                 </div>
                 <ThreadTerminalPanel
                   v-if="homeTerminalOpen && composerCwd"
@@ -967,7 +968,7 @@
                 <div class="composer-with-queue">
                   <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
                     <span>{{ t(codexCliMissingError) }}</span>
-                    <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                    <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
                   </div>
                   <QueuedMessages
                     :messages="selectedThreadQueuedMessages"
@@ -1076,7 +1077,7 @@
       >
       <div v-if="accountActionError" class="codex-login-modal-error visible-error-with-feedback">
         <span>{{ accountActionError }}</span>
-        <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+        <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, accountActionError)">{{ t('Send feedback') }}</a>
       </div>
       <div class="codex-login-modal-actions">
         <button
@@ -1419,9 +1420,20 @@ const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
 const {
   hasFeedbackDiagnostics,
   buildFeedbackMailto,
+  feedbackMailtoBase,
   recordVisibleFailure,
 } = useFeedbackDiagnostics()
-const feedbackMailto = computed(() => buildFeedbackMailto())
+const feedbackMailto = feedbackMailtoBase()
+
+function prepareFeedbackLink(event: MouseEvent, message?: string): void {
+  if (message) {
+    recordVisibleFailure(message)
+  }
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
+}
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)

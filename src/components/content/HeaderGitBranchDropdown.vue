@@ -29,7 +29,7 @@
 
         <div v-if="statusMessage" class="header-git-status" :class="{ 'is-error': statusKind === 'error' }">
           <span>{{ statusMessage }}</span>
-          <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto">Send feedback</a>
+          <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">Send feedback</a>
         </div>
 
         <div class="header-git-search-wrap">
@@ -71,7 +71,7 @@
               <div v-if="commitsLoadingFor === branch.value" class="header-git-commits-empty">Loading commits...</div>
               <div v-else-if="commitsError" class="header-git-commits-empty is-error">
                 <span>{{ commitsError }}</span>
-                <a class="header-git-feedback" :href="feedbackMailto">Send feedback</a>
+                <a class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, commitsError)">Send feedback</a>
               </div>
               <button
                 v-for="commit in commitsByBranch[branch.value] || []"
@@ -147,8 +147,16 @@ const isOpen = ref(false)
 const searchQuery = ref('')
 const expandedBranch = ref('')
 const showReview = computed(() => props.showReview !== false)
-const { buildFeedbackMailto } = useFeedbackDiagnostics()
-const feedbackMailto = computed(() => buildFeedbackMailto())
+const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const feedbackMailto = feedbackMailtoBase()
+
+function prepareHeaderFeedback(event: MouseEvent, message: string): void {
+  recordVisibleFailure(message)
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
+}
 
 const displayLabel = computed(() => {
   if (props.currentBranch) return props.currentBranch

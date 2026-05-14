@@ -899,8 +899,8 @@ const fileLinkContextMenuY = ref(0)
 const fileLinkContextBrowseUrl = ref('')
 const fileLinkContextEditUrl = ref('')
 const { isMobile } = useMobile()
-const { buildFeedbackMailto, recordVisibleFailure } = useFeedbackDiagnostics()
-const feedbackMailto = computed(() => buildFeedbackMailto())
+const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const feedbackMailto = feedbackMailtoBase()
 
 function prepareLiveErrorFeedback(event: MouseEvent, message: string): void {
   recordVisibleFailure(message)

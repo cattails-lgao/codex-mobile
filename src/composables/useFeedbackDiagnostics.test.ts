@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildFeedbackMailto,
+  feedbackMailtoBase,
   installFeedbackDiagnostics,
   recordFeedbackDiagnostic,
   useFeedbackDiagnostics,
@@ -83,11 +84,16 @@ describe('feedback diagnostics', () => {
     expect(body).toContain('Hash: #/')
     expect(body).toContain('Online: true')
     expect(body).toContain('codex-web-local.sidebar-chat-sort-mode.v1=updated')
-    expect(body).toContain('codex-token=super-secret-token')
+    expect(body).toContain('codex-token=[omitted sensitive value, 18 chars]')
+    expect(mailto).not.toContain('super-secret-token')
     expect(body).toContain('codex-web-local.temp=open-folder-modal')
     expect(body).toContain('POST | /codex-api/rpc | 500 Internal Server Error')
     expect(body).toContain('Visible page text')
     expect(body).toContain('Visible failure banner')
+  })
+
+  it('exposes a minimal mailto href for static anchors', () => {
+    expect(feedbackMailtoBase()).toBe('mailto:brutalstrikedevs@gmail.com')
   })
 
   it('dedupes identical newest diagnostics', () => {
