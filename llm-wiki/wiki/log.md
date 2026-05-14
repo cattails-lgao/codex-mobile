@@ -24,6 +24,12 @@
 - Documents: provider capture at thread creation, existing-thread model menus resolved by captured provider, current-provider model selection for new chats, and mixed Zen/Codex/OpenRouter project behavior.
 - Updated [index.md](./index.md).
 
+## [2026-05-14] ingest | provider config restart and review follow-ups
+- Added source: [raw/fixes/provider-config-restart-and-review-followups.md](../raw/fixes/provider-config-restart-and-review-followups.md).
+- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
+- Documents: stale no-auth Zen app-server config after copying auth into a running local Vite `CODEX_HOME`, the config-signature restart fix, Browser Use verification of `GPT-5.5` after auth promotion, GPT-5.4 send timing, and remaining PR review risks for provider-locked model isolation.
+- Updated [index.md](./index.md).
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.

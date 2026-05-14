@@ -97,10 +97,33 @@ Expected behavior:
 
 The client resolves existing-thread model menus from `useDesktopState.threadModelProviderByThreadId`. The server `/codex-api/provider-models` route accepts a provider-specific request so an older Zen thread can still load Zen model ids while the current global provider is Codex.
 
+## App-Server Config Restart
+
+When `auth.json` or provider state changes while local Vite is still running, the embedded Codex app-server can otherwise keep the provider config it was spawned with. The observed failure was: Settings showed `Codex` after copying auth into an isolated `CODEX_HOME`, but the new-chat composer still showed `big-pickle` because `config/read` still came from the stale no-auth Zen app-server process.
+
+The bridge fixes this by storing a startup-config signature and checking it before each RPC. If the desired app-server args or provider env vars changed, the bridge disposes the stale process and lets the next RPC start app-server with current auth/provider state.
+
+Validation notes:
+- Browser Use reload of `http://127.0.0.1:4173/#/` changed the new-chat model from `big-pickle` to `GPT-5.5`.
+- `config/read` returned `model: null` and `model_provider: null`, matching the Codex default provider path.
+- Home-route profiling reported no warnings, `threadRead: 0`, `threadResume: 0`, and `totalApiKB: 50.1`.
+
+## Remaining Provider-Lock Risks
+
+PR review comments on the provider-lock branch identified follow-up risks to resolve before treating provider isolation as complete:
+- Provider-backed model discovery must honor the requested provider for non-Zen/non-OpenRouter providers instead of falling back to global `config.model_provider`.
+- Custom endpoint threads need a non-empty provider-scoped model strategy after the global provider changes away from custom.
+- Provider-locked Zen threads should reuse a remembered Zen key from `providerKeys` even when Zen is not the current global provider.
+- Sync and async Codex-auth detection should agree on refresh-token-only auth files.
+- Materialization-pending `thread/read` fallback should preserve real thread metadata, including `modelProvider`.
+- OpenRouter community fallback keys must not be misclassified as user custom keys.
+- Selected-thread message loads should avoid redundant model metadata refreshes.
+
 ## Related
 - Source: [opencode-zen-big-pickle-codex-cli.md](../../raw/fixes/opencode-zen-big-pickle-codex-cli.md)
 - Source: [opencode-zen-reasoning-content-proxy.md](../../raw/fixes/opencode-zen-reasoning-content-proxy.md)
 - Source: [opencode-zen-docker-auth-provider-models.md](../../raw/fixes/opencode-zen-docker-auth-provider-models.md)
 - Source: [copied-auth-provider-promotion.md](../../raw/fixes/copied-auth-provider-promotion.md)
 - Source: [thread-locked-provider-models.md](../../raw/fixes/thread-locked-provider-models.md)
+- Source: [provider-config-restart-and-review-followups.md](../../raw/fixes/provider-config-restart-and-review-followups.md)
 - [merge-to-main-workflow.md](./merge-to-main-workflow.md)
