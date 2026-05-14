@@ -682,16 +682,18 @@ function mergeMessages(
     return areMessageArraysEqual(previous, mergedIncoming) ? previous : mergedIncoming
   }
 
-  const mergedFromPrevious = previous.map((previousMessage) => {
-    const nextMessage = incomingById.get(previousMessage.id)
-    if (!nextMessage) {
-      return previousMessage
-    }
-    if (areMessageFieldsEqual(previousMessage, nextMessage)) {
-      return previousMessage
-    }
-    return nextMessage
-  })
+  const mergedFromPrevious = previous
+    .map((previousMessage) => {
+      const nextMessage = incomingById.get(previousMessage.id)
+      if (!nextMessage) {
+        return previousMessage
+      }
+      if (areMessageFieldsEqual(previousMessage, nextMessage)) {
+        return previousMessage
+      }
+      return nextMessage
+    })
+    .filter((message) => !isOptimisticUserMessage(message) || !hasEquivalentUserMessage(message, incoming))
 
   const previousIdSet = new Set(previous.map((message) => message.id))
   const appended = mergedIncoming.filter((message) => !previousIdSet.has(message.id))
@@ -723,6 +725,36 @@ function areUiFileChangesEqual(first?: UiFileChange[], second?: UiFileChange[]):
 
 function normalizeMessageText(value: string): string {
   return value.replace(/\s+/gu, ' ').trim()
+}
+
+function isOptimisticUserMessage(message: UiMessage): boolean {
+  return message.messageType === 'userMessage.optimistic'
+}
+
+function hasOptimisticUserMessages(messages: UiMessage[]): boolean {
+  return messages.some(isOptimisticUserMessage)
+}
+
+function hasEquivalentUserMessage(target: UiMessage, messages: UiMessage[]): boolean {
+  if (target.role !== 'user') return false
+  const targetText = normalizeMessageText(target.text)
+  const targetImages = Array.isArray(target.images) ? target.images : []
+  const targetFileCount = Array.isArray(target.fileAttachments) ? target.fileAttachments.length : 0
+  const targetSkillCount = Array.isArray(target.skills) ? target.skills.length : 0
+
+  return messages.some((message) => {
+    if (message === target || message.role !== 'user' || isOptimisticUserMessage(message)) return false
+    const messageText = normalizeMessageText(message.text)
+    const messageImages = Array.isArray(message.images) ? message.images : []
+    const messageFileCount = Array.isArray(message.fileAttachments) ? message.fileAttachments.length : 0
+    const messageSkillCount = Array.isArray(message.skills) ? message.skills.length : 0
+    return (
+      messageText === targetText &&
+      areStringArraysEqual(messageImages, targetImages) &&
+      messageFileCount === targetFileCount &&
+      messageSkillCount === targetSkillCount
+    )
+  })
 }
 
 function removeRedundantLiveAgentMessages(previous: UiMessage[], incoming: UiMessage[]): UiMessage[] {
@@ -2485,6 +2517,26 @@ export function useDesktopState() {
       ...persistedMessagesByThreadId.value,
       [threadId]: nextMessages,
     }
+  }
+
+  function appendOptimisticUserMessage(
+    threadId: string,
+    text: string,
+    imageUrls: string[] = [],
+    skills: Array<{ name: string; path: string }> = [],
+    fileAttachments: FileAttachment[] = [],
+  ): void {
+    const existing = persistedMessagesByThreadId.value[threadId] ?? []
+    const nextMessage: UiMessage = {
+      id: `optimistic-user:${threadId}:${Date.now()}`,
+      role: 'user',
+      text,
+      images: imageUrls.length > 0 ? [...imageUrls] : undefined,
+      skills: skills.length > 0 ? skills.map((skill) => ({ name: skill.name, path: skill.path })) : undefined,
+      fileAttachments: fileAttachments.length > 0 ? fileAttachments.map((file) => ({ ...file })) : undefined,
+      messageType: 'userMessage.optimistic',
+    }
+    setPersistedMessagesForThread(threadId, [...existing, nextMessage])
   }
 
   function setLiveAgentMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
@@ -4361,7 +4413,7 @@ export function useDesktopState() {
       rebindLiveFileChangeTurnIndices(threadId)
       const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
       const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
-        preserveMissing: options.silent === true,
+        preserveMissing: options.silent === true || hasOptimisticUserMessages(previousPersisted),
       })
       setPersistedMessagesForThread(threadId, mergedMessages)
 
@@ -4904,6 +4956,7 @@ export function useDesktopState() {
       if (!threadId) return ''
 
       insertOptimisticThread(threadId, targetCwd, nextText || '[Image]')
+      appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
       blockInterruptUntilThreadIsPersisted(threadId)
       resumedThreadById.value = {
         ...resumedThreadById.value,

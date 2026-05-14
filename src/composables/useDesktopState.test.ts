@@ -761,6 +761,22 @@ describe('provider model selection', () => {
       modelProvider: 'openai',
     })
     gatewayMocks.startThreadTurn.mockResolvedValue('turn-1')
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      model: 'gpt-5.5',
+      modelProvider: 'openai',
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          text: 'Hi.',
+          messageType: 'agentMessage',
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
 
     const state = useDesktopState()
     await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
@@ -778,6 +794,17 @@ describe('provider model selection', () => {
       'default',
     )
     expect(state.readModelIdForThread('codex-thread')).toBe('gpt-5.5')
+    expect(state.messages.value.some((message) => (
+      message.role === 'user' &&
+      message.text === 'hi' &&
+      message.messageType === 'userMessage.optimistic'
+    ))).toBe(true)
+
+    await state.loadMessages('codex-thread')
+    expect(state.messages.value.map((message) => `${message.role}:${message.text}`)).toEqual([
+      'user:hi',
+      'assistant:Hi.',
+    ])
   })
 
   it('surfaces selected thread load failures and still refreshes models', async () => {
