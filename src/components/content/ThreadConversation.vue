@@ -2228,12 +2228,22 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     if (typeof match.index !== 'number') continue
     const start = match.index
     const end = start + match[0].length
+    const isBoldWrapped =
+      start - 2 >= cursor &&
+      text.slice(start - 2, start) === '**' &&
+      text.slice(end, end + 2) === '**'
+    const hasLeadingBoldMarker =
+      start - 2 >= cursor &&
+      text.slice(start - 2, start) === '**' &&
+      match[0].endsWith('**')
+    const segmentStart = isBoldWrapped || hasLeadingBoldMarker ? start - 2 : start
+    const segmentEnd = isBoldWrapped ? end + 2 : end
 
-    if (start > cursor) {
-      segments.push({ kind: 'text', value: text.slice(cursor, start) })
+    if (segmentStart > cursor) {
+      segments.push({ kind: 'text', value: text.slice(cursor, segmentStart) })
     }
 
-    let token = match[0]
+    let token = hasLeadingBoldMarker ? match[0].slice(0, -2) : match[0]
     let trailingPunctuation = ''
     while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
@@ -2276,7 +2286,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
+    cursor = segmentEnd
   }
 
   if (cursor < text.length) {
@@ -2435,16 +2445,22 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const match = findNextMarkdownLink(text, scanFrom)
     if (!match) break
     const { start, end, token } = match
+    const isBoldWrapped =
+      start - 2 >= cursor &&
+      text.slice(start - 2, start) === '**' &&
+      text.slice(end, end + 2) === '**'
+    const segmentStart = isBoldWrapped ? start - 2 : start
+    const segmentEnd = isBoldWrapped ? end + 2 : end
 
-    if (start > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
+    if (segmentStart > cursor) {
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart)))
     }
 
     const markdownToken = parseMarkdownLinkToken(token)
     if (!markdownToken) {
-      segments.push(...splitPlainTextByLinks(text.slice(start, end)))
-      cursor = end
-      scanFrom = end
+      segments.push(...splitPlainTextByLinks(text.slice(segmentStart, segmentEnd)))
+      cursor = segmentEnd
+      scanFrom = segmentEnd
       continue
     }
     const label = markdownToken.label
@@ -2467,8 +2483,8 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
-    scanFrom = end
+    cursor = segmentEnd
+    scanFrom = segmentEnd
   }
 
   if (cursor < text.length) {
