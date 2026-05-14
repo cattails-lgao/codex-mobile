@@ -50,6 +50,10 @@ function normalizeSubjectMessage(message?: string): string {
   return firstLine.replace(/\s+/g, ' ').trim().slice(0, 80) || 'issue report'
 }
 
+function encodeMailtoParam(value: string): string {
+  return encodeURIComponent(value)
+}
+
 function readVisiblePageText(): string {
   if (typeof document === 'undefined') return 'unknown'
   const text = document.body?.innerText
@@ -160,11 +164,8 @@ export function buildFeedbackMailto(entries: FeedbackDiagnostic[] = diagnostics.
     readVisiblePageText(),
   ].join('\n')
 
-  const params = new URLSearchParams({
-    subject: `Codex Web feedback: ${normalizeSubjectMessage(entries[0]?.message)}`,
-    body,
-  })
-  return `mailto:${FEEDBACK_EMAIL}?${params.toString()}`
+  const subject = `Codex Web feedback: ${normalizeSubjectMessage(entries[0]?.message)}`
+  return `mailto:${FEEDBACK_EMAIL}?subject=${encodeMailtoParam(subject)}&body=${encodeMailtoParam(body)}`
 }
 
 export function openFeedbackMail(): void {

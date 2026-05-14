@@ -73,6 +73,8 @@ describe('feedback diagnostics', () => {
     const body = parsed.searchParams.get('body') ?? ''
 
     expect(mailto.startsWith('mailto:brutalstrikedevs@gmail.com?')).toBe(true)
+    expect(mailto).toContain('subject=Codex%20Web%20feedback%3A%20Request%20failed%20with%20HTTP%20500')
+    expect(mailto).not.toContain('+')
     expect(parsed.searchParams.get('subject')).toContain('Request failed with HTTP 500')
     expect(body).toContain('URL: http://127.0.0.1:4173/#/')
     expect(body).toContain('User agent: TestAgent/1.0')
