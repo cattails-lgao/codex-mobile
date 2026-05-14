@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
+import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -384,7 +385,7 @@ async function readRuntimeAccountMetadata(appServer: AppServerLike): Promise<Tok
 
 async function validateSwitchedAccount(appServer: AppServerLike): Promise<AccountInspection> {
   const metadata = await readRuntimeAccountMetadata(appServer)
-  const quotaPayload = await appServer.rpc('account/rateLimits/read', null)
+  const quotaPayload = await callRpcWithRateLimitDecodeRecovery(appServer, 'account/rateLimits/read', null)
   return {
     metadata,
     quotaSnapshot: pickCodexRateLimitSnapshot(quotaPayload),
@@ -557,7 +558,7 @@ async function inspectStoredAccount(entry: StoredAccountEntry): Promise<AccountI
   return await withTemporaryCodexAppServer(authRaw, async (rpc) => {
     const accountPayload = asRecord(await rpc('account/read', { refreshToken: false }))
     const account = asRecord(accountPayload?.account)
-    const quotaPayload = await rpc('account/rateLimits/read', null)
+    const quotaPayload = await callRpcWithRateLimitDecodeRecovery({ rpc }, 'account/rateLimits/read', null)
     return {
       metadata: {
         email: typeof account?.email === 'string' && account.email.trim().length > 0 ? account.email.trim() : entry.email,
