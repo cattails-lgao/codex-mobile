@@ -24,5 +24,6 @@
 - [../raw/features/thread-heartbeat-automations.md](../raw/features/thread-heartbeat-automations.md): source facts for thread heartbeat automations, multiple automations per thread, and Run now queue behavior.
 - [../raw/features/project-cron-automations.md](../raw/features/project-cron-automations.md): source facts for project cron automations in the sidebar.
 - [../raw/projects/codex-web-local.md](../raw/projects/codex-web-local.md): immutable source snapshot for project facts.
+- [../raw/fixes/codex-thread-link-pr174.md](../raw/fixes/codex-thread-link-pr174.md): source facts for PR #174 chat link parsing fixes, review-bot findings, and dynamic-origin thread URLs.
 - [../raw/fixes/opencode-zen-big-pickle-codex-cli.md](../raw/fixes/opencode-zen-big-pickle-codex-cli.md): Big Pickle + Codex CLI fix details.
 - [../raw/fixes/opencode-zen-reasoning-content-proxy.md](../raw/fixes/opencode-zen-reasoning-content-proxy.md): Codex Web Local Zen proxy reasoning_content round-trip fix and Docker verification.

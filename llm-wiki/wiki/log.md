@@ -1,5 +1,11 @@
 # Log
 
+## [2026-05-15] ingest | codex thread link rendering review follow-up
+- Added source: `raw/fixes/codex-thread-link-pr174.md`.
+- Updated wiki page: `concepts/realtime-chat-rendering.md`.
+- Documents: PR #174 chat link parser fixes, Qodo/CodeRabbit finding triage, dynamic-origin `codex://threads/<id>` URL rewriting, light/dark Playwright checks, and profile result.
+- Updated `index.md`.
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.
