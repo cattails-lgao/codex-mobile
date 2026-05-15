@@ -1583,6 +1583,57 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   return { core, leading, trailing }
 }
 
+function countAsterisksBefore(value: string, endIndex: number, minIndex: number): number {
+  let count = 0
+  let index = endIndex - 1
+  while (index >= minIndex && value[index] === '*') {
+    count += 1
+    index -= 1
+  }
+  return count
+}
+
+function countAsterisksAfter(value: string, startIndex: number): number {
+  let count = 0
+  let index = startIndex
+  while (index < value.length && value[index] === '*') {
+    count += 1
+    index += 1
+  }
+  return count
+}
+
+function readAsteriskLinkWrapper(
+  source: string,
+  matchStart: number,
+  matchEnd: number,
+  cursor: number,
+  matchedToken: string,
+): { segmentStart: number; segmentEnd: number; tokenEndTrim: number } | null {
+  const leadingCount = countAsterisksBefore(source, matchStart, cursor)
+  if (leadingCount < 2) return null
+
+  const trailingOutsideCount = countAsterisksAfter(source, matchEnd)
+  if (trailingOutsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd + leadingCount,
+      tokenEndTrim: 0,
+    }
+  }
+
+  const trailingInsideCount = countAsterisksBefore(matchedToken, matchedToken.length, 0)
+  if (trailingInsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd,
+      tokenEndTrim: leadingCount,
+    }
+  }
+
+  return null
+}
+
 function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('[') || !trimmed.endsWith(')')) return null
@@ -1596,6 +1647,14 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
   const target = trimLinkWrappers(targetRaw).core.trim()
   if (!target) return null
   return { label, target }
+}
+
+function toLocalThreadUrl(value: string): string | null {
+  const match = value.trim().match(/^codex:\/\/threads\/([A-Za-z0-9-]+)$/u)
+  if (!match) return null
+  if (typeof window === 'undefined') return `/#/thread/${match[1]}`
+  const basePath = window.location.pathname.replace(/\/?$/u, '/')
+  return `${window.location.origin}${basePath}#/thread/${match[1]}`
 }
 
 function headingTag(level: number): string {
@@ -2221,19 +2280,24 @@ function editMessage(messageId: string): void {
 
 function splitPlainTextByLinks(text: string): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
+  const pattern = /codex:\/\/threads\/[A-Za-z0-9-]+|https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
     if (typeof match.index !== 'number') continue
     const start = match.index
     const end = start + match[0].length
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, match[0])
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
-    if (start > cursor) {
-      segments.push({ kind: 'text', value: text.slice(cursor, start) })
+    if (segmentStart > cursor) {
+      segments.push({ kind: 'text', value: text.slice(cursor, segmentStart) })
     }
 
-    let token = match[0]
+    let token = asteriskWrapper?.tokenEndTrim
+      ? match[0].slice(0, -asteriskWrapper.tokenEndTrim)
+      : match[0]
     let trailingPunctuation = ''
     while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
@@ -2248,7 +2312,14 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       segments.push({ kind: 'text', value: leading })
     }
 
-    if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
+    const localThreadUrl = toLocalThreadUrl(token)
+
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: localThreadUrl, href: localThreadUrl })
+      if (trailing) {
+        segments.push({ kind: 'text', value: trailing })
+      }
+    } else if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
       segments.push({ kind: 'bold', value: token.slice(2, -2) })
       if (trailing) {
         segments.push({ kind: 'text', value: trailing })
@@ -2276,7 +2347,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
+    cursor = segmentEnd
   }
 
   if (cursor < text.length) {
@@ -2435,22 +2506,28 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const match = findNextMarkdownLink(text, scanFrom)
     if (!match) break
     const { start, end, token } = match
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, token)
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
-    if (start > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
+    if (segmentStart > cursor) {
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart)))
     }
 
     const markdownToken = parseMarkdownLinkToken(token)
     if (!markdownToken) {
-      segments.push(...splitPlainTextByLinks(text.slice(start, end)))
-      cursor = end
-      scanFrom = end
+      segments.push(...splitPlainTextByLinks(text.slice(segmentStart, segmentEnd)))
+      cursor = segmentEnd
+      scanFrom = segmentEnd
       continue
     }
     const label = markdownToken.label
     const target = markdownToken.target
+    const localThreadUrl = toLocalThreadUrl(target)
 
-    if (/^https?:\/\//u.test(target)) {
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: label || localThreadUrl, href: localThreadUrl })
+    } else if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
     } else {
       const ref = parseFileReference(target)
@@ -2467,8 +2544,8 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
-    scanFrom = end
+    cursor = segmentEnd
+    scanFrom = segmentEnd
   }
 
   if (cursor < text.length) {
@@ -2535,7 +2612,14 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
       if (token.length > 0) {
         const markdownLink = parseMarkdownLinkToken(token)
         if (markdownLink) {
-          if (/^https?:\/\//u.test(markdownLink.target)) {
+          const localThreadUrl = toLocalThreadUrl(markdownLink.target)
+          if (localThreadUrl) {
+            segments.push({
+              kind: 'url',
+              value: markdownLink.label || localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\//u.test(markdownLink.target)) {
             segments.push({
               kind: 'url',
               value: markdownLink.label || markdownLink.target,
@@ -2555,27 +2639,36 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
               segments.push({ kind: 'code', value: token })
             }
           }
-        } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
-          segments.push({
-            kind: 'url',
-            value: token,
-            href: token,
-          })
         } else {
-          const fileReference = parseFileReference(token)
-          if (fileReference) {
-            const displayPath = fileReference.line
-              ? `${fileReference.path}:${String(fileReference.line)}`
-              : fileReference.path
+          const localThreadUrl = toLocalThreadUrl(token)
+          if (localThreadUrl) {
             segments.push({
-              kind: 'file',
+              kind: 'url',
+              value: localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
+            segments.push({
+              kind: 'url',
               value: token,
-              path: fileReference.path,
-              displayPath,
-              downloadName: getBasename(fileReference.path),
+              href: token,
             })
           } else {
-            segments.push({ kind: 'code', value: token })
+            const fileReference = parseFileReference(token)
+            if (fileReference) {
+              const displayPath = fileReference.line
+                ? `${fileReference.path}:${String(fileReference.line)}`
+                : fileReference.path
+              segments.push({
+                kind: 'file',
+                value: token,
+                path: fileReference.path,
+                displayPath,
+                downloadName: getBasename(fileReference.path),
+              })
+            } else {
+              segments.push({ kind: 'code', value: token })
+            }
           }
         }
       } else {
