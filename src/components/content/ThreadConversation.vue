@@ -1652,7 +1652,9 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
 function toLocalThreadUrl(value: string): string | null {
   const match = value.trim().match(/^codex:\/\/threads\/([A-Za-z0-9-]+)$/u)
   if (!match) return null
-  return `http://localhost:5173/#/thread/${match[1]}`
+  if (typeof window === 'undefined') return `/#/thread/${match[1]}`
+  const basePath = window.location.pathname.replace(/\/?$/u, '/')
+  return `${window.location.origin}${basePath}#/thread/${match[1]}`
 }
 
 function headingTag(level: number): string {
