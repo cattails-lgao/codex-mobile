@@ -3371,7 +3371,13 @@ onBeforeUnmount(() => {
 }
 
 .automation-thread-panel {
-  @apply max-w-lg;
+  @apply max-w-lg overflow-y-auto;
+  max-height: min(90vh, calc(100dvh - 2rem));
+  overscroll-behavior: contain;
+}
+
+.automation-thread-panel .rename-thread-subtitle {
+  @apply flex-none overflow-visible;
 }
 
 .automation-thread-field {
@@ -3467,5 +3473,21 @@ onBeforeUnmount(() => {
 
 .automation-thread-notice {
   @apply mb-0 text-emerald-600;
+}
+
+@media (max-height: 640px) {
+  .automation-thread-panel {
+    @apply p-3;
+  }
+
+  .automation-thread-field,
+  .automation-target-picker,
+  .automation-thread-list {
+    @apply mb-2;
+  }
+
+  .automation-thread-textarea {
+    min-height: 7rem;
+  }
 }
 </style>
