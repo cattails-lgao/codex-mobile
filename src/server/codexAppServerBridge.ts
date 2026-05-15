@@ -12,6 +12,7 @@ import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
+import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
@@ -1356,7 +1357,7 @@ export async function callRpcWithArchiveRecovery(
   params: unknown,
 ): Promise<unknown> {
   try {
-    return await appServer.rpc(method, params ?? null)
+    return await callRpcWithRateLimitDecodeRecovery(appServer, method, params)
   } catch (error) {
     if (method !== 'thread/archive') {
       throw error
