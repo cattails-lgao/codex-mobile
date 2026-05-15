@@ -104,10 +104,11 @@ function normalizeWindow(value: unknown): RateLimitWindow | null {
   if (usedPercent === null) return null
 
   const limitWindowSeconds = readNumber(record.limit_window_seconds)
+  const windowMinutes = limitWindowSeconds === null ? null : Math.round(limitWindowSeconds / 60)
   return {
     usedPercent,
-    windowDurationMins: limitWindowSeconds === null ? null : limitWindowSeconds / 60,
-    windowMinutes: limitWindowSeconds === null ? null : limitWindowSeconds / 60,
+    windowDurationMins: windowMinutes,
+    windowMinutes,
     resetsAt: readNumber(record.reset_at),
   }
 }

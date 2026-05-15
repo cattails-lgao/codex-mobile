@@ -55,6 +55,28 @@ const proliteDecodeError = new Error(`failed to fetch codex rate limits: Decode 
 }`)
 
 describe('recoverRateLimitsFromPlanTypeDecodeError', () => {
+  it('rounds recovered second-based windows to integer minutes', () => {
+    const recovered = recoverRateLimitsFromPlanTypeDecodeError(new Error(`failed to fetch codex rate limits: Decode error for https://chatgpt.com/backend-api/codex/quotas: unknown variant prolite at line 5 column 24; content-type=application/json; body={
+      "plan_type": "prolite",
+      "rate_limit": {
+        "primary_window": {
+          "used_percent": 10,
+          "limit_window_seconds": 125,
+          "reset_at": 1778653823
+        }
+      }
+    }`))
+
+    expect(recovered).toMatchObject({
+      rateLimits: {
+        primary: {
+          windowDurationMins: 2,
+          windowMinutes: 2,
+        },
+      },
+    })
+  })
+
   it('recovers quota payloads when Codex rejects a new ChatGPT plan type', () => {
     expect(recoverRateLimitsFromPlanTypeDecodeError(proliteDecodeError)).toEqual({
       rateLimits: {
