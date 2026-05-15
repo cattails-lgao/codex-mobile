@@ -451,6 +451,36 @@ describe('Codex CLI availability', () => {
 })
 
 describe('live error overlay', () => {
+  it('shows the default thinking overlay while a selected thread is in progress without activity events', async () => {
+    installTestWindow()
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'create todo list app',
+          messageType: 'userMessage',
+        },
+      ],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-thinking')
+    await state.loadMessages('thread-thinking')
+
+    expect(state.selectedLiveOverlay.value).toMatchObject({
+      activityLabel: 'Thinking',
+      reasoningText: '',
+      errorText: '',
+    })
+  })
+
   it('keeps a new live error visible when an older persisted turn error exists', async () => {
     installTestWindow()
     let notificationHandler: (notification: { method: string; params?: unknown }) => void = () => {}

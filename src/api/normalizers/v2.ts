@@ -560,6 +560,11 @@ function readThreadInProgress(summary: Thread): boolean {
   const rawSummary = summary as Record<string, unknown>
   if (rawSummary.inProgress === true) return true
   if (rawSummary.status === 'inProgress' || rawSummary.turnStatus === 'inProgress') return true
+  const status = rawSummary.status
+  if (status && typeof status === 'object') {
+    const statusType = (status as Record<string, unknown>).type
+    if (statusType === 'active' || statusType === 'inProgress') return true
+  }
 
   const turns = Array.isArray(summary.turns) ? summary.turns : []
   const lastTurn = turns.at(-1)
@@ -654,6 +659,7 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
 }
 
 export function readThreadInProgressFromResponse(payload: ThreadReadResponse): boolean {
+  if (readThreadInProgress(payload.thread)) return true
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   return isTurnInProgress(turns.at(-1))
 }

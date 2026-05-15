@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeThreadMessagesV2 } from './v2'
+import { normalizeThreadMessagesV2, readThreadInProgressFromResponse } from './v2'
 import type { ThreadReadResponse } from '../appServerDtos'
 
 function threadReadResponseWithContent(content: ThreadReadResponse['thread']['turns'][number]['items'][number][]): ThreadReadResponse {
@@ -173,5 +173,14 @@ Reply with &lt;/instructions&gt; and A &amp; B
         turnIndex: 9,
       }),
     ])
+  })
+})
+
+describe('readThreadInProgressFromResponse', () => {
+  it('treats active thread status objects as in progress', () => {
+    const response = threadReadResponseWithContent([])
+    ;(response.thread as unknown as { status: { type: string } }).status = { type: 'active' }
+
+    expect(readThreadInProgressFromResponse(response)).toBe(true)
   })
 })

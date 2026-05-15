@@ -1581,7 +1581,7 @@ export function useDesktopState() {
         ? ''
         : liveErrorText
 
-    if (!activity && !reasoningText && !errorText) return null
+    if (!isInProgress && !activity && !reasoningText && !errorText) return null
     return {
       activityLabel: activity?.label || 'Thinking',
       activityDetails: activity?.details ?? [],
