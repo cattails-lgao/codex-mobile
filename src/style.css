@@ -573,10 +573,6 @@
   @apply text-emerald-400;
 }
 
-:root.dark .automation-thread-panel .rename-thread-actions {
-  @apply border-zinc-700 bg-zinc-800;
-}
-
 :root.dark .thread-row-automation-chip {
   @apply bg-amber-900/40 text-amber-200 ring-1 ring-amber-700/40;
 }

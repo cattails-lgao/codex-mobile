@@ -3384,6 +3384,10 @@ onBeforeUnmount(() => {
   @apply sticky bottom-0 -mx-4 -mb-4 border-t border-zinc-200 bg-white px-4 py-3;
 }
 
+:global(:root.dark) .automation-thread-panel .rename-thread-actions {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
 .automation-thread-field {
   @apply mb-3 flex flex-col gap-1;
 }
