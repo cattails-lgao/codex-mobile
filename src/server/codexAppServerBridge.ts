@@ -4538,7 +4538,7 @@ async function canonicalizeWorkspaceRootPathList(
   return normalizeStringArray(await Promise.all(values.map((value) => canonicalizeWorkspaceRootPath(value, pathRealpath))))
 }
 
-export async function canonicalizeWorkspaceRootsStateForRead(
+export async function canonicalizeWorkspaceRootsState(
   state: WorkspaceRootsState,
   pathRealpath: PathRealpathResolver = realpath,
 ): Promise<WorkspaceRootsState> {
@@ -4578,6 +4578,13 @@ export async function canonicalizeWorkspaceRootsStateForRead(
     projectOrder,
     remoteProjects: state.remoteProjects.map((project) => ({ ...project })),
   }
+}
+
+export async function canonicalizeWorkspaceRootsStateForRead(
+  state: WorkspaceRootsState,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<WorkspaceRootsState> {
+  return await canonicalizeWorkspaceRootsState(state, pathRealpath)
 }
 
 async function canonicalizeThreadCwdRecord(
@@ -4624,7 +4631,7 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     payload = {}
   }
 
-  return await canonicalizeWorkspaceRootsStateForRead({
+  return await canonicalizeWorkspaceRootsState({
     order: normalizeStringArray(payload['electron-saved-workspace-roots']),
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
@@ -4633,7 +4640,8 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   })
 }
 
-async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+export async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+  const state = await canonicalizeWorkspaceRootsState(nextState)
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
   try {
@@ -4643,10 +4651,10 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
     payload = {}
   }
 
-  payload['electron-saved-workspace-roots'] = normalizeStringArray(nextState.order)
-  payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels)
-  payload['active-workspace-roots'] = normalizeStringArray(nextState.active)
-  payload['project-order'] = normalizeStringArray(nextState.projectOrder)
+  payload['electron-saved-workspace-roots'] = normalizeStringArray(state.order)
+  payload['electron-workspace-root-labels'] = normalizeStringRecord(state.labels)
+  payload['active-workspace-roots'] = normalizeStringArray(state.active)
+  payload['project-order'] = normalizeStringArray(state.projectOrder)
 
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
 }
