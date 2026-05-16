@@ -5796,6 +5796,7 @@ Message loads for an already selected thread do not trigger redundant model pref
 
 #### Rollback/Cleanup
 - Stop the temporary Vite server if it was only used for this check.
+- Remove the temporary isolated `CODEX_HOME` if it is no longer needed.
 
 ---
 

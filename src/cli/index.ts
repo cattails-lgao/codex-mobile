@@ -524,7 +524,6 @@ async function startServer(options: {
   if (options.approvalPolicy) {
     process.env.CODEXUI_APPROVAL_POLICY = options.approvalPolicy
   }
-  process.env.CODEXUI_MEMORIES = options.memories ? 'true' : 'false'
   const runtimeConfig = resolveAppServerRuntimeConfig()
   if (options.login && !hasCodexAuth()) {
     console.log('\nCodex is not logged in. You can log in later via settings or run `codexui login`.\n')
@@ -665,7 +664,16 @@ program
       || arg.startsWith('--tunnel=')
       || arg.startsWith('--no-tunnel=')
     ))
+    const memoriesFlagExplicit = rawArgv.some((arg) => (
+      arg === '--memories'
+      || arg === '--no-memories'
+      || arg.startsWith('--memories=')
+      || arg.startsWith('--no-memories=')
+    ))
     const effectiveTunnel = tunnelFlagExplicit ? opts.tunnel : hasDetectedTailscaleIp()
+    if (memoriesFlagExplicit) {
+      process.env.CODEXUI_MEMORIES = opts.memories ? 'true' : 'false'
+    }
 
     let openProjectOnly = (opts.openProject ?? '').trim()
     if (!openProjectOnly && openProjectFlagIndex >= 0 && projectPath?.trim()) {
