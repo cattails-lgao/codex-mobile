@@ -555,19 +555,25 @@
               :head-date="currentThreadHeadDate"
               :detached="isThreadDetachedHead"
               :dirty="isThreadWorktreeDirty"
+              :worktree-change-summary="threadWorktreeChangeSummary"
               :branches="threadBranchOptions"
               :commits-by-branch="threadBranchCommitsByBranch"
               :commits-loading-for="threadBranchCommitsLoadingFor"
               :commits-error="threadBranchCommitsError"
+              :commit-files-by-sha="threadCommitFilesBySha"
+              :commit-files-loading-for="threadCommitFilesLoadingFor"
+              :commit-files-error="threadCommitFilesError"
               :loading="isLoadingThreadBranches"
               :busy="isSwitchingThreadBranch"
               :error="threadBranchError"
               :review-open="isReviewPaneOpen"
               :show-review="route.name === 'thread' && selectedThreadId.length > 0"
-              @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
+              @toggle-review="onToggleContentHeaderReview"
               @checkout-branch="onCheckoutContentHeaderBranch"
               @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
               @load-commits="loadThreadBranchCommits"
+              @load-commit-files="loadThreadCommitFiles"
+              @open-commit-file="onOpenContentHeaderCommitFile"
             />
           </template>
         </ContentHeader>
@@ -947,6 +953,8 @@
                 :thread-id="selectedThreadId"
                 :cwd="composerCwd"
                 :is-thread-in-progress="isSelectedThreadInProgress"
+                :initial-file-path="reviewInitialFilePath"
+                :commit-sha="reviewInitialCommitSha"
                 @close="isReviewPaneOpen = false"
               />
 
@@ -1132,7 +1140,9 @@ import {
   createProjectlessThreadDirectory,
   getGitBranchState,
   getGitBranchCommits,
+  getGitCommitFiles,
   getGitRepositoryStatus,
+  getReviewSummary,
   getWorktreeBranchOptions,
   getAccounts,
   completeCodexLogin,
@@ -1157,7 +1167,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
+import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
@@ -1479,11 +1489,15 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
+let threadCommitFilesRequestId = 0
+let threadWorktreeSummaryRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
+const reviewInitialFilePath = ref('')
+const reviewInitialCommitSha = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
 const currentThreadHeadSha = ref<string | null>(null)
@@ -1491,12 +1505,21 @@ const currentThreadHeadSubject = ref<string | null>(null)
 const currentThreadHeadDate = ref<string | null>(null)
 const isThreadDetachedHead = ref(false)
 const isThreadWorktreeDirty = ref(false)
+const threadWorktreeChangeSummary = ref({ addedLineCount: 0, removedLineCount: 0 })
 const threadBranchError = ref('')
 const threadBranchCommitsByBranch = ref<Record<string, GitCommitOption[]>>({})
 const threadBranchCommitsLoadingFor = ref('')
 const threadBranchCommitsError = ref('')
+const threadCommitFilesBySha = ref<Record<string, GitCommitFileChange[]>>({})
+const threadCommitFilesLoadingFor = ref('')
+const threadCommitFilesError = ref('')
 const isLoadingThreadBranches = ref(false)
 const isSwitchingThreadBranch = ref(false)
+
+function toThreadBranchCommitsKey(branch: string, includeResetHistory: boolean): string {
+  return `${branch}\u0000${includeResetHistory ? 'with-reset-history' : 'without-reset-history'}`
+}
+
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
@@ -3192,6 +3215,8 @@ function canLoadBranchStateForCwd(cwd: string): boolean {
 function resetThreadBranchState(): void {
   threadBranchesRequestId += 1
   threadBranchCommitsRequestId += 1
+  threadCommitFilesRequestId += 1
+  threadWorktreeSummaryRequestId += 1
   threadBranchOptions.value = []
   currentThreadBranch.value = null
   currentThreadHeadSha.value = null
@@ -3199,11 +3224,36 @@ function resetThreadBranchState(): void {
   currentThreadHeadDate.value = null
   isThreadDetachedHead.value = false
   isThreadWorktreeDirty.value = false
+  threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
   threadBranchCommitsByBranch.value = {}
   threadBranchCommitsLoadingFor.value = ''
   threadBranchCommitsError.value = ''
+  threadCommitFilesBySha.value = {}
+  threadCommitFilesLoadingFor.value = ''
+  threadCommitFilesError.value = ''
   threadBranchError.value = ''
   isLoadingThreadBranches.value = false
+}
+
+function loadThreadWorktreeChangeSummary(cwd: string): void {
+  const targetCwd = cwd.trim()
+  if (!targetCwd) {
+    threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+    return
+  }
+  const requestId = ++threadWorktreeSummaryRequestId
+  void getReviewSummary(targetCwd, 'unstaged')
+    .then((summary) => {
+      if (requestId !== threadWorktreeSummaryRequestId || !canLoadBranchStateForCwd(targetCwd)) return
+      threadWorktreeChangeSummary.value = {
+        addedLineCount: summary.addedLineCount,
+        removedLineCount: summary.removedLineCount,
+      }
+    })
+    .catch(() => {
+      if (requestId !== threadWorktreeSummaryRequestId || !canLoadBranchStateForCwd(targetCwd)) return
+      threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+    })
 }
 
 async function loadThreadBranches(cwd: string): Promise<void> {
@@ -3225,6 +3275,9 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = state.headDate
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
+    loadThreadWorktreeChangeSummary(targetCwd)
+    const defaultBranchForCommits = state.currentBranch?.trim() || state.options[0]?.value?.trim() || ''
+    if (defaultBranchForCommits) loadThreadBranchCommits({ branch: defaultBranchForCommits, includeResetHistory: true })
   } catch {
     if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = []
@@ -3234,6 +3287,7 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = null
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
+    threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
   } finally {
     if (requestId === threadBranchesRequestId) {
       isLoadingThreadBranches.value = false
@@ -3248,6 +3302,7 @@ function applyThreadGitState(state: { currentBranch: string | null; headSha: str
   currentThreadHeadDate.value = state.headDate
   isThreadDetachedHead.value = state.detached
   isThreadWorktreeDirty.value = state.dirty
+  loadThreadWorktreeChangeSummary(composerCwd.value)
 }
 
 function onCheckoutContentHeaderBranch(value: string): void {
@@ -3305,20 +3360,22 @@ function onResetContentHeaderBranchToCommit(payload: { branch: string; sha: stri
     })
 }
 
-function loadThreadBranchCommits(branch: string): void {
-  const targetBranch = branch.trim()
+function loadThreadBranchCommits(payload: string | { branch: string; includeResetHistory?: boolean }): void {
+  const targetBranch = (typeof payload === 'string' ? payload : payload.branch).trim()
+  const includeResetHistory = typeof payload === 'string' ? true : payload.includeResetHistory !== false
   const cwd = composerCwd.value.trim()
-  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
-  if (threadBranchCommitsByBranch.value[targetBranch]) return
-  const requestId = ++threadBranchCommitsRequestId
-  threadBranchCommitsLoadingFor.value = targetBranch
+  const cacheKey = toThreadBranchCommitsKey(targetBranch, includeResetHistory)
+  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === cacheKey) return
   threadBranchCommitsError.value = ''
-  void getGitBranchCommits(cwd, targetBranch)
+  if (threadBranchCommitsByBranch.value[cacheKey]) return
+  const requestId = ++threadBranchCommitsRequestId
+  threadBranchCommitsLoadingFor.value = cacheKey
+  void getGitBranchCommits(cwd, targetBranch, { includeResetHistory })
     .then((commits) => {
       if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
       threadBranchCommitsByBranch.value = {
         ...threadBranchCommitsByBranch.value,
-        [targetBranch]: commits,
+        [cacheKey]: commits,
       }
     })
     .catch((error: unknown) => {
@@ -3326,10 +3383,59 @@ function loadThreadBranchCommits(branch: string): void {
       threadBranchCommitsError.value = error instanceof Error ? error.message : 'Failed to load branch commits'
     })
     .finally(() => {
-      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === targetBranch) {
+      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === cacheKey) {
         threadBranchCommitsLoadingFor.value = ''
       }
     })
+}
+
+function loadThreadCommitFiles(sha: string): void {
+  const targetSha = sha.trim()
+  const cwd = composerCwd.value.trim()
+  if (!targetSha || !cwd || threadCommitFilesLoadingFor.value === targetSha) return
+  threadCommitFilesError.value = ''
+  if (threadCommitFilesBySha.value[targetSha]) return
+  const requestId = ++threadCommitFilesRequestId
+  threadCommitFilesLoadingFor.value = targetSha
+  void getGitCommitFiles(cwd, targetSha)
+    .then((files) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesBySha.value = {
+        ...threadCommitFilesBySha.value,
+        [targetSha]: files,
+      }
+    })
+    .catch((error: unknown) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesError.value = error instanceof Error ? error.message : 'Failed to load commit files'
+    })
+    .finally(() => {
+      if (requestId === threadCommitFilesRequestId && threadCommitFilesLoadingFor.value === targetSha) {
+        threadCommitFilesLoadingFor.value = ''
+      }
+    })
+}
+
+function onOpenContentHeaderCommitFile(payload: { sha: string; path: string }): void {
+  const targetPath = payload.path.trim()
+  const targetSha = payload.sha.trim()
+  if (!targetPath || !targetSha) return
+  reviewInitialFilePath.value = targetPath
+  reviewInitialCommitSha.value = targetSha
+  isReviewPaneOpen.value = true
+}
+
+function onToggleContentHeaderReview(): void {
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = !isReviewPaneOpen.value
+}
+
+function clearCommitReviewContext(): void {
+  if (!reviewInitialFilePath.value && !reviewInitialCommitSha.value) return
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = false
 }
 
 async function onOpenProjectSetupModal(): Promise<void> {
@@ -4290,6 +4396,13 @@ watch(
   () => composerCwd.value,
   () => {
     void refreshTerminalQuickCommands()
+  },
+)
+
+watch(
+  () => [selectedThreadId.value, composerCwd.value] as const,
+  () => {
+    clearCommitReviewContext()
   },
 )
 

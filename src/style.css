@@ -931,19 +931,33 @@
   @apply border-zinc-700 bg-zinc-900;
 }
 
+:root.dark .header-git-review-row {
+  @apply border-zinc-700 bg-zinc-800 shadow-none;
+}
+
 :root.dark .header-git-review-row,
 :root.dark .header-git-branch-button,
-:root.dark .header-git-commit {
+:root.dark .header-git-branch-checkout,
+:root.dark .header-git-commit,
+:root.dark .header-git-file {
   @apply text-zinc-200;
 }
 
 :root.dark .header-git-review-row:hover,
-:root.dark .header-git-branch-expand:hover,
 :root.dark .header-git-branch-button:hover,
+:root.dark .header-git-branch-checkout:hover,
 :root.dark .header-git-commit:hover,
+:root.dark .header-git-file:hover,
 :root.dark .header-git-commit.is-current,
+:root.dark .header-git-commit.is-selected,
+:root.dark .header-git-branch-button.is-selected,
 :root.dark .header-git-branch-button.is-current {
   @apply bg-zinc-800;
+}
+
+:root.dark .header-git-branch-button.is-selected,
+:root.dark .header-git-commit.is-selected {
+  @apply ring-zinc-600;
 }
 
 :root.dark .header-git-commit.is-current {
@@ -951,30 +965,59 @@
 }
 
 :root.dark .header-git-state,
+:root.dark .header-git-commit-panel,
+:root.dark .header-git-branch-panel,
+:root.dark .header-git-commit-detail-panel,
 :root.dark .header-git-commits {
   @apply border-zinc-700 bg-zinc-800;
 }
 
-:root.dark .header-git-state-value {
+:root.dark .header-git-state-value,
+:root.dark .header-git-commit-detail-subject {
   @apply text-zinc-100;
 }
 
 :root.dark .header-git-state-label,
 :root.dark .header-git-state-meta,
+:root.dark .header-git-toggle-row,
 :root.dark .header-git-branch-meta,
 :root.dark .header-git-commit-top,
 :root.dark .header-git-empty,
-:root.dark .header-git-commits-empty {
+:root.dark .header-git-commits-empty,
+:root.dark .header-git-commit-detail-title,
+:root.dark .header-git-files-empty,
+:root.dark .header-git-file-previous-path {
   @apply text-zinc-400;
+}
+
+:root.dark .header-git-file-added {
+  @apply text-emerald-400;
+}
+
+:root.dark .header-git-file-removed {
+  @apply text-red-400;
 }
 
 :root.dark .header-git-search {
   @apply border-zinc-700 bg-zinc-800 text-zinc-100 focus:border-zinc-600;
 }
 
-:root.dark .header-git-commit-top code,
+:root.dark .header-git-ref,
+:root.dark .header-git-file-status,
 :root.dark .header-git-branch-meta {
   @apply bg-zinc-700 text-zinc-200;
+}
+
+:root.dark .header-git-ref:hover {
+  @apply bg-zinc-600;
+}
+
+:root.dark .header-git-commit-detail-head {
+  @apply bg-zinc-900;
+}
+
+:root.dark .header-git-reset-commit {
+  @apply border-zinc-600 bg-zinc-100 text-zinc-900 hover:bg-white disabled:border-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-500;
 }
 
 :root.dark .header-git-status {
@@ -982,7 +1025,8 @@
 }
 
 :root.dark .header-git-status.is-error,
-:root.dark .header-git-commits-empty.is-error {
+:root.dark .header-git-commits-empty.is-error,
+:root.dark .header-git-files-empty.is-error {
   @apply bg-red-950/40 text-red-300;
 }
 
@@ -999,11 +1043,14 @@
 
 :root.dark .review-pane-header,
 :root.dark .review-pane-toolbar,
+:root.dark .review-pane-content,
+:root.dark .review-pane-main,
+:root.dark .review-pane-diff,
 :root.dark .review-pane-hunk-header,
 :root.dark .review-pane-summary-card,
 :root.dark .review-pane-file-header,
 :root.dark .review-pane-hunk,
-:root.dark .review-pane-finding,
+:root.dark .review-pane-sheet-list,
 :root.dark .review-pane-sheet {
   @apply bg-zinc-900;
 }
@@ -1024,8 +1071,7 @@
 :root.dark .review-pane-empty-text,
 :root.dark .review-pane-file-subtitle,
 :root.dark .review-pane-hunk-meta,
-:root.dark .review-pane-finding-location,
-:root.dark .review-pane-finding-body {
+:root.dark .review-pane-hunk-title {
   @apply text-zinc-400;
 }
 
@@ -1070,7 +1116,6 @@
   @apply bg-white;
 }
 
-:root.dark .review-pane-run,
 :root.dark .review-pane-primary-cta {
   @apply border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-400;
 }
@@ -1121,7 +1166,7 @@
 }
 
 :root.dark .review-pane-file {
-  @apply hover:border-zinc-600 hover:bg-zinc-800;
+  @apply text-zinc-100 hover:border-zinc-600 hover:bg-zinc-800;
 }
 
 :root.dark .review-pane-file[data-active='true'] {
@@ -1130,6 +1175,10 @@
 
 :root.dark .review-pane-file-path {
   @apply text-zinc-100;
+}
+
+:root.dark .review-pane-tree-folder-name {
+  @apply text-inherit;
 }
 
 :root.dark .review-pane-file-op[data-operation='update'] {
@@ -1167,8 +1216,7 @@
 
 :root.dark .review-pane-file-header,
 :root.dark .review-pane-hunk,
-:root.dark .review-pane-summary-card,
-:root.dark .review-pane-finding {
+:root.dark .review-pane-summary-card {
   @apply border-zinc-700;
 }
 
