@@ -4932,7 +4932,6 @@ class AppServerProcess {
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>()
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
-  private readonly appServerArgs = buildAppServerArgs()
   private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
   private readonly threadTurnPageReadCacheByThreadId = new Map<string, { result: unknown; expiresAt: number }>()
@@ -4952,11 +4951,7 @@ class AppServerProcess {
   }
 
   private buildAppServerConfig(): { args: string[]; env: Record<string, string> } {
-    const args = [
-      'app-server',
-      '-c', 'approval_policy="never"',
-      '-c', 'sandbox_mode="danger-full-access"',
-    ]
+    const args = buildAppServerArgs()
     let extraEnv: Record<string, string> = {}
     const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
     args.push(...getProviderCompatibilityConfigArgs(serverPort))
