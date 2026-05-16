@@ -59,6 +59,8 @@ export function buildAppServerArgs(): string[] {
     `approval_policy="${config.approvalPolicy}"`,
     '-c',
     `sandbox_mode="${config.sandboxMode}"`,
+    '-c',
+    'features.memories=true',
   ]
 }
 
