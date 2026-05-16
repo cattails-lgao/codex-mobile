@@ -499,6 +499,7 @@ async function startServer(options: {
   tunnel: boolean
   open: boolean
   login: boolean
+  memories: boolean
   sandboxMode?: string
   approvalPolicy?: string
   projectPath?: string
@@ -523,6 +524,7 @@ async function startServer(options: {
   if (options.approvalPolicy) {
     process.env.CODEXUI_APPROVAL_POLICY = options.approvalPolicy
   }
+  process.env.CODEXUI_MEMORIES = options.memories ? 'true' : 'false'
   const runtimeConfig = resolveAppServerRuntimeConfig()
   if (options.login && !hasCodexAuth()) {
     console.log('\nCodex is not logged in. You can log in later via settings or run `codexui login`.\n')
@@ -637,6 +639,8 @@ program
   .option('--no-open', 'do not open browser on startup')
   .option('--login', 'run automatic Codex login bootstrap', true)
   .option('--no-login', 'skip automatic Codex login bootstrap')
+  .option('--memories', 'enable Codex memories for spawned app-server processes', true)
+  .option('--no-memories', 'disable Codex memories for spawned app-server processes')
   .option('--sandbox-mode <mode>', 'Codex sandbox mode: read-only, workspace-write, danger-full-access')
   .option('--approval-policy <policy>', 'Codex approval policy: untrusted, on-failure, on-request, never')
   .action(async (
@@ -647,6 +651,7 @@ program
       tunnel: boolean
       open: boolean
       login: boolean
+      memories: boolean
       sandboxMode?: string
       approvalPolicy?: string
       openProject?: string
