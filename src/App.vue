@@ -138,7 +138,7 @@
                 <template v-if="!isAccountsSectionCollapsed">
                   <div v-if="accountActionError" class="sidebar-settings-account-error visible-error-with-feedback">
                     <span>{{ accountActionError }}</span>
-                    <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                    <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, accountActionError)">{{ t('Send feedback') }}</a>
                   </div>
                   <div class="sidebar-settings-account-login">
                     <button
@@ -250,9 +250,10 @@
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
               <a
-                v-if="hasFeedbackDiagnostics"
+                v-if="hasVisibleFeedbackError"
                 class="sidebar-settings-row sidebar-settings-feedback-row"
                 :href="feedbackMailto"
+                @click="prepareFeedbackLink"
               >
                 <span class="sidebar-settings-label">{{ t('Send feedback') }}</span>
                 <span class="sidebar-settings-value">{{ t('Issue detected') }}</span>
@@ -274,7 +275,7 @@
               </div>
               <div v-if="providerError" class="sidebar-settings-row sidebar-settings-error">
                 <span>{{ providerError }}</span>
-                <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, providerError)">{{ t('Send feedback') }}</a>
               </div>
               <div v-if="selectedProvider === 'openrouter'" class="sidebar-settings-row sidebar-settings-row--input">
                 <div class="sidebar-settings-provider-info">
@@ -456,7 +457,7 @@
                 </div>
                 <div v-if="telegramConfigError" class="sidebar-settings-telegram-error">
                   <span>{{ telegramConfigError }}</span>
-                  <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                  <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, telegramConfigError)">{{ t('Send feedback') }}</a>
                 </div>
                 <div class="sidebar-settings-telegram-actions">
                   <button
@@ -554,19 +555,25 @@
               :head-date="currentThreadHeadDate"
               :detached="isThreadDetachedHead"
               :dirty="isThreadWorktreeDirty"
+              :worktree-change-summary="threadWorktreeChangeSummary"
               :branches="threadBranchOptions"
               :commits-by-branch="threadBranchCommitsByBranch"
               :commits-loading-for="threadBranchCommitsLoadingFor"
               :commits-error="threadBranchCommitsError"
+              :commit-files-by-sha="threadCommitFilesBySha"
+              :commit-files-loading-for="threadCommitFilesLoadingFor"
+              :commit-files-error="threadCommitFilesError"
               :loading="isLoadingThreadBranches"
               :busy="isSwitchingThreadBranch"
               :error="threadBranchError"
               :review-open="isReviewPaneOpen"
               :show-review="route.name === 'thread' && selectedThreadId.length > 0"
-              @toggle-review="isReviewPaneOpen = !isReviewPaneOpen"
+              @toggle-review="onToggleContentHeaderReview"
               @checkout-branch="onCheckoutContentHeaderBranch"
               @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
               @load-commits="loadThreadBranchCommits"
+              @load-commit-files="loadThreadCommitFiles"
+              @open-commit-file="onOpenContentHeaderCommitFile"
             />
           </template>
         </ContentHeader>
@@ -717,7 +724,7 @@
                         </div>
                         <div v-if="createFolderError" class="new-thread-open-folder-error visible-error-with-feedback">
                           <span>{{ createFolderError }}</span>
-                          <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                          <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, createFolderError)">{{ t('Send feedback') }}</a>
                         </div>
                       </div>
                       <input
@@ -731,7 +738,7 @@
                       <div v-if="existingFolderError" class="new-thread-open-folder-error-actions">
                         <div class="new-thread-open-folder-error visible-error-with-feedback">
                           <span>{{ existingFolderError }}</span>
-                          <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                          <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, existingFolderError)">{{ t('Send feedback') }}</a>
                         </div>
                         <button
                           class="new-thread-folder-action"
@@ -840,7 +847,7 @@
                       </label>
                       <div v-if="projectSetupError" class="new-thread-open-folder-error visible-error-with-feedback">
                         <span>{{ projectSetupError }}</span>
-                        <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                        <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, projectSetupError)">{{ t('Send feedback') }}</a>
                       </div>
                       <div class="new-thread-project-modal-actions">
                         <button class="new-thread-folder-action" type="button" :disabled="isProjectSetupSubmitting" @click="onCloseProjectSetupModal">
@@ -904,7 +911,7 @@
               <div class="composer-with-queue">
                 <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
                   <span>{{ t(codexCliMissingError) }}</span>
-                  <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                  <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
                 </div>
                 <ThreadTerminalPanel
                   v-if="homeTerminalOpen && composerCwd"
@@ -946,6 +953,8 @@
                 :thread-id="selectedThreadId"
                 :cwd="composerCwd"
                 :is-thread-in-progress="isSelectedThreadInProgress"
+                :initial-file-path="reviewInitialFilePath"
+                :commit-sha="reviewInitialCommitSha"
                 @close="isReviewPaneOpen = false"
               />
 
@@ -967,7 +976,7 @@
                 <div class="composer-with-queue">
                   <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
                     <span>{{ t(codexCliMissingError) }}</span>
-                    <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+                    <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
                   </div>
                   <QueuedMessages
                     :messages="selectedThreadQueuedMessages"
@@ -1076,7 +1085,7 @@
       >
       <div v-if="accountActionError" class="codex-login-modal-error visible-error-with-feedback">
         <span>{{ accountActionError }}</span>
-        <a class="visible-error-feedback" :href="feedbackMailto">{{ t('Send feedback') }}</a>
+        <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, accountActionError)">{{ t('Send feedback') }}</a>
       </div>
       <div class="codex-login-modal-actions">
         <button
@@ -1131,7 +1140,9 @@ import {
   createProjectlessThreadDirectory,
   getGitBranchState,
   getGitBranchCommits,
+  getGitCommitFiles,
   getGitRepositoryStatus,
+  getReviewSummary,
   getWorktreeBranchOptions,
   getAccounts,
   completeCodexLogin,
@@ -1156,7 +1167,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
+import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 
@@ -1417,11 +1428,21 @@ type AutomationEditRequest = {
 const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
 const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
 const {
-  hasFeedbackDiagnostics,
   buildFeedbackMailto,
+  feedbackMailtoBase,
   recordVisibleFailure,
 } = useFeedbackDiagnostics()
-const feedbackMailto = computed(() => buildFeedbackMailto())
+const feedbackMailto = feedbackMailtoBase()
+
+function prepareFeedbackLink(event: MouseEvent, message?: string): void {
+  if (message) {
+    recordVisibleFailure(message)
+  }
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
+}
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
@@ -1468,11 +1489,15 @@ let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
+let threadCommitFilesRequestId = 0
+let threadWorktreeSummaryRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
+const reviewInitialFilePath = ref('')
+const reviewInitialCommitSha = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
 const currentThreadBranch = ref<string | null>(null)
 const currentThreadHeadSha = ref<string | null>(null)
@@ -1480,12 +1505,21 @@ const currentThreadHeadSubject = ref<string | null>(null)
 const currentThreadHeadDate = ref<string | null>(null)
 const isThreadDetachedHead = ref(false)
 const isThreadWorktreeDirty = ref(false)
+const threadWorktreeChangeSummary = ref({ addedLineCount: 0, removedLineCount: 0 })
 const threadBranchError = ref('')
 const threadBranchCommitsByBranch = ref<Record<string, GitCommitOption[]>>({})
 const threadBranchCommitsLoadingFor = ref('')
 const threadBranchCommitsError = ref('')
+const threadCommitFilesBySha = ref<Record<string, GitCommitFileChange[]>>({})
+const threadCommitFilesLoadingFor = ref('')
+const threadCommitFilesError = ref('')
 const isLoadingThreadBranches = ref(false)
 const isSwitchingThreadBranch = ref(false)
+
+function toThreadBranchCommitsKey(branch: string, includeResetHistory: boolean): string {
+  return `${branch}\u0000${includeResetHistory ? 'with-reset-history' : 'without-reset-history'}`
+}
+
 const createFolderInputRef = ref<HTMLInputElement | null>(null)
 const accounts = ref<UiAccountEntry[]>([])
 const isRefreshingAccounts = ref(false)
@@ -1572,6 +1606,7 @@ const visibleFeedbackErrors = [
   projectSetupError,
   existingFolderError,
 ]
+const hasVisibleFeedbackError = computed(() => visibleFeedbackErrors.some((entry) => entry.value.trim().length > 0))
 const telegramStatus = ref<TelegramStatus>({
   configured: false,
   active: false,
@@ -1589,6 +1624,8 @@ const visualViewportOffsetTop = ref(typeof window !== 'undefined' ? window.visua
 const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 let accountStatePollTimer: number | null = null
 let isAccountStatePollInFlight = false
+let externalCodexAuthAvailable = false
+let externalAuthImportAttempted = false
 let existingFolderBrowseRequestId = 0
 
 const routeThreadId = computed(() => {
@@ -2099,6 +2136,35 @@ watch(accounts, () => {
     })
   }, 1500)
 }, { deep: true })
+
+watch(accountRateLimitSnapshots, () => {
+  void maybeImportExternalCodexAuthAccount().then((imported) => {
+    if (!imported) return
+    void refreshAll({
+      includeSelectedThreadMessages: false,
+      providerChanged: true,
+      awaitAncillaryRefreshes: true,
+    })
+  })
+}, { deep: true })
+
+async function maybeImportExternalCodexAuthAccount(): Promise<boolean> {
+  if (!externalCodexAuthAvailable) return false
+  if (externalAuthImportAttempted) return false
+  if (selectedProvider.value !== 'codex') return false
+  if (accounts.value.length > 0) return false
+  if (accountRateLimitSnapshots.value.length === 0) return false
+  externalAuthImportAttempted = true
+  const previousAccountsJson = JSON.stringify(accounts.value.map((account) => account.accountId).sort())
+  try {
+    const result = await refreshAccountsFromAuth()
+    accounts.value = result.accounts
+  } catch {
+    await loadAccountsState({ silent: true })
+  }
+  const nextAccountsJson = JSON.stringify(accounts.value.map((account) => account.accountId).sort())
+  return previousAccountsJson !== nextAccountsJson
+}
 
 function onSkillsChanged(): void {
   void refreshSkills()
@@ -3149,6 +3215,8 @@ function canLoadBranchStateForCwd(cwd: string): boolean {
 function resetThreadBranchState(): void {
   threadBranchesRequestId += 1
   threadBranchCommitsRequestId += 1
+  threadCommitFilesRequestId += 1
+  threadWorktreeSummaryRequestId += 1
   threadBranchOptions.value = []
   currentThreadBranch.value = null
   currentThreadHeadSha.value = null
@@ -3156,11 +3224,36 @@ function resetThreadBranchState(): void {
   currentThreadHeadDate.value = null
   isThreadDetachedHead.value = false
   isThreadWorktreeDirty.value = false
+  threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
   threadBranchCommitsByBranch.value = {}
   threadBranchCommitsLoadingFor.value = ''
   threadBranchCommitsError.value = ''
+  threadCommitFilesBySha.value = {}
+  threadCommitFilesLoadingFor.value = ''
+  threadCommitFilesError.value = ''
   threadBranchError.value = ''
   isLoadingThreadBranches.value = false
+}
+
+function loadThreadWorktreeChangeSummary(cwd: string): void {
+  const targetCwd = cwd.trim()
+  if (!targetCwd) {
+    threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+    return
+  }
+  const requestId = ++threadWorktreeSummaryRequestId
+  void getReviewSummary(targetCwd, 'unstaged')
+    .then((summary) => {
+      if (requestId !== threadWorktreeSummaryRequestId || !canLoadBranchStateForCwd(targetCwd)) return
+      threadWorktreeChangeSummary.value = {
+        addedLineCount: summary.addedLineCount,
+        removedLineCount: summary.removedLineCount,
+      }
+    })
+    .catch(() => {
+      if (requestId !== threadWorktreeSummaryRequestId || !canLoadBranchStateForCwd(targetCwd)) return
+      threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+    })
 }
 
 async function loadThreadBranches(cwd: string): Promise<void> {
@@ -3182,6 +3275,9 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = state.headDate
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
+    loadThreadWorktreeChangeSummary(targetCwd)
+    const defaultBranchForCommits = state.currentBranch?.trim() || state.options[0]?.value?.trim() || ''
+    if (defaultBranchForCommits) loadThreadBranchCommits({ branch: defaultBranchForCommits, includeResetHistory: true })
   } catch {
     if (requestId !== threadBranchesRequestId || !canLoadBranchStateForCwd(targetCwd)) return
     threadBranchOptions.value = []
@@ -3191,6 +3287,7 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = null
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
+    threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
   } finally {
     if (requestId === threadBranchesRequestId) {
       isLoadingThreadBranches.value = false
@@ -3205,6 +3302,7 @@ function applyThreadGitState(state: { currentBranch: string | null; headSha: str
   currentThreadHeadDate.value = state.headDate
   isThreadDetachedHead.value = state.detached
   isThreadWorktreeDirty.value = state.dirty
+  loadThreadWorktreeChangeSummary(composerCwd.value)
 }
 
 function onCheckoutContentHeaderBranch(value: string): void {
@@ -3262,20 +3360,22 @@ function onResetContentHeaderBranchToCommit(payload: { branch: string; sha: stri
     })
 }
 
-function loadThreadBranchCommits(branch: string): void {
-  const targetBranch = branch.trim()
+function loadThreadBranchCommits(payload: string | { branch: string; includeResetHistory?: boolean }): void {
+  const targetBranch = (typeof payload === 'string' ? payload : payload.branch).trim()
+  const includeResetHistory = typeof payload === 'string' ? true : payload.includeResetHistory !== false
   const cwd = composerCwd.value.trim()
-  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === targetBranch) return
-  if (threadBranchCommitsByBranch.value[targetBranch]) return
-  const requestId = ++threadBranchCommitsRequestId
-  threadBranchCommitsLoadingFor.value = targetBranch
+  const cacheKey = toThreadBranchCommitsKey(targetBranch, includeResetHistory)
+  if (!targetBranch || !cwd || threadBranchCommitsLoadingFor.value === cacheKey) return
   threadBranchCommitsError.value = ''
-  void getGitBranchCommits(cwd, targetBranch)
+  if (threadBranchCommitsByBranch.value[cacheKey]) return
+  const requestId = ++threadBranchCommitsRequestId
+  threadBranchCommitsLoadingFor.value = cacheKey
+  void getGitBranchCommits(cwd, targetBranch, { includeResetHistory })
     .then((commits) => {
       if (requestId !== threadBranchCommitsRequestId || !canLoadBranchStateForCwd(cwd)) return
       threadBranchCommitsByBranch.value = {
         ...threadBranchCommitsByBranch.value,
-        [targetBranch]: commits,
+        [cacheKey]: commits,
       }
     })
     .catch((error: unknown) => {
@@ -3283,10 +3383,59 @@ function loadThreadBranchCommits(branch: string): void {
       threadBranchCommitsError.value = error instanceof Error ? error.message : 'Failed to load branch commits'
     })
     .finally(() => {
-      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === targetBranch) {
+      if (requestId === threadBranchCommitsRequestId && threadBranchCommitsLoadingFor.value === cacheKey) {
         threadBranchCommitsLoadingFor.value = ''
       }
     })
+}
+
+function loadThreadCommitFiles(sha: string): void {
+  const targetSha = sha.trim()
+  const cwd = composerCwd.value.trim()
+  if (!targetSha || !cwd || threadCommitFilesLoadingFor.value === targetSha) return
+  threadCommitFilesError.value = ''
+  if (threadCommitFilesBySha.value[targetSha]) return
+  const requestId = ++threadCommitFilesRequestId
+  threadCommitFilesLoadingFor.value = targetSha
+  void getGitCommitFiles(cwd, targetSha)
+    .then((files) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesBySha.value = {
+        ...threadCommitFilesBySha.value,
+        [targetSha]: files,
+      }
+    })
+    .catch((error: unknown) => {
+      if (requestId !== threadCommitFilesRequestId || !canLoadBranchStateForCwd(cwd)) return
+      threadCommitFilesError.value = error instanceof Error ? error.message : 'Failed to load commit files'
+    })
+    .finally(() => {
+      if (requestId === threadCommitFilesRequestId && threadCommitFilesLoadingFor.value === targetSha) {
+        threadCommitFilesLoadingFor.value = ''
+      }
+    })
+}
+
+function onOpenContentHeaderCommitFile(payload: { sha: string; path: string }): void {
+  const targetPath = payload.path.trim()
+  const targetSha = payload.sha.trim()
+  if (!targetPath || !targetSha) return
+  reviewInitialFilePath.value = targetPath
+  reviewInitialCommitSha.value = targetSha
+  isReviewPaneOpen.value = true
+}
+
+function onToggleContentHeaderReview(): void {
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = !isReviewPaneOpen.value
+}
+
+function clearCommitReviewContext(): void {
+  if (!reviewInitialFilePath.value && !reviewInitialCommitSha.value) return
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = false
 }
 
 async function onOpenProjectSetupModal(): Promise<void> {
@@ -3915,9 +4064,6 @@ async function onProviderChange(provider: string): Promise<void> {
     }
     providerError.value = ''
     await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
-    if (route.name === 'thread') {
-      void router.push({ name: 'home' })
-    }
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : 'Failed to switch provider'
   } finally {
@@ -4019,6 +4165,7 @@ async function clearFreeModeCustomKey(): Promise<void> {
 
 async function loadFreeModeStatus(): Promise<void> {
   try {
+    const previousProvider = selectedProvider.value
     const status = await getFreeModeStatus()
     freeModeEnabled.value = status.enabled
     freeModeHasCustomKey.value = status.customKey ?? false
@@ -4036,6 +4183,26 @@ async function loadFreeModeStatus(): Promise<void> {
       }
     } else {
       selectedProvider.value = 'codex'
+    }
+    externalCodexAuthAvailable = status.hasCodexAuth === true
+    if (!externalCodexAuthAvailable) {
+      externalAuthImportAttempted = false
+    }
+    const providerChanged = selectedProvider.value !== previousProvider
+    if (providerChanged) {
+      await refreshAll({
+        includeSelectedThreadMessages: false,
+        providerChanged: true,
+        awaitAncillaryRefreshes: true,
+      })
+    }
+    const importedExternalAuth = await maybeImportExternalCodexAuthAccount()
+    if (importedExternalAuth) {
+      await refreshAll({
+        includeSelectedThreadMessages: false,
+        providerChanged: providerChanged || importedExternalAuth,
+        awaitAncillaryRefreshes: true,
+      })
     }
   } catch {
     // Ignore — free mode status unknown
@@ -4171,11 +4338,6 @@ async function initialize(): Promise<void> {
   startPolling()
 }
 
-function threadExistsInSidebar(threadId: string): boolean {
-  if (!threadId) return false
-  return projectGroups.value.some((group) => group.threads.some((thread) => thread.id === threadId))
-}
-
 async function syncThreadSelectionWithRoute(): Promise<void> {
   if (isRouteSyncInProgress.value) {
     hasPendingRouteSync = true
@@ -4199,17 +4361,14 @@ async function syncThreadSelectionWithRoute(): Promise<void> {
         if (!threadId) continue
 
         if (selectedThreadId.value !== threadId) {
-          if (!threadExistsInSidebar(threadId)) {
-            if (selectedThreadId.value) {
-              await router.replace({ name: 'thread', params: { threadId: selectedThreadId.value } })
-            } else {
-              await router.replace({ name: 'home' })
-            }
+          const result = await selectThread(threadId)
+          if (result === 'not-found') {
             continue
           }
-          await selectThread(threadId)
         } else {
-          void ensureThreadMessagesLoaded(threadId, { silent: true })
+          void ensureThreadMessagesLoaded(threadId, { silent: true }).catch(() => {
+            // The conversation overlay receives the error from useDesktopState.
+          })
         }
       }
     } while (hasPendingRouteSync)
@@ -4237,6 +4396,13 @@ watch(
   () => composerCwd.value,
   () => {
     void refreshTerminalQuickCommands()
+  },
+)
+
+watch(
+  () => [selectedThreadId.value, composerCwd.value] as const,
+  () => {
+    clearCommitReviewContext()
   },
 )
 

@@ -370,6 +370,93 @@ Workspace roots and thread-list cwd values are canonicalized through local `real
   
 ---
 
+### Automation editor scrolls on small viewports
+
+#### Feature/Change Name
+Automation editor small-device overflow handling.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`)
+2. At least one thread or project automation exists, or create one from a thread/project menu.
+3. Browser viewport set to a small device size such as 375x667.
+
+#### Steps
+1. In light theme, open a thread or project menu and choose `Manage automations...`.
+2. Confirm the `Edit automation` dialog opens inside the viewport and can be vertically scrolled.
+3. Confirm `Run now` when available, `Remove`, `Cancel`, and `Save` remain visible at the bottom before scrolling.
+4. Scroll through the dialog and confirm the same bottom actions stay visible while the form content moves behind them.
+5. Confirm the name input, prompt textarea, schedule controls, status select, notices, and error text do not overlap while scrolling.
+6. Switch to dark theme and repeat steps 1-5.
+
+#### Expected Results
+- The automation editor does not extend offscreen without a way to reach lower controls on small-height devices.
+- Vertical scrolling stays inside the modal, with the page behind the overlay remaining fixed.
+- The automation editor action row remains sticky and usable while the form content scrolls.
+- Light and dark theme automation editor controls remain readable and usable.
+
+#### Rollback/Cleanup
+- Remove any temporary test automation from the automation dialog if one was created for this test.
+
+---
+
+### Codex thread deep links render as local web thread URLs
+
+#### Feature/Change Name
+Codex thread link conversion in chat messages.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`).
+2. A `TestChat` project/thread is available.
+3. Light theme and dark theme are both available.
+4. Note the current app origin from the browser address bar, for example `http://127.0.0.1:4173`.
+
+#### Steps
+1. In light theme, open `TestChat`.
+2. Send or inspect a message containing a bare Codex thread link, for example `codex://threads/019e04cb-9670-7d91-be85-3ba35312170c`.
+3. Send or inspect a message containing a Markdown Codex thread link, for example `[Open thread](codex://threads/019e04cb-9670-7d91-be85-3ba35312170c)`.
+4. Confirm each rendered row contains a clickable `a.message-file-link`.
+5. Confirm the bare link href and visible text both equal `<current app origin>/#/thread/019e04cb-9670-7d91-be85-3ba35312170c`, for example `http://127.0.0.1:4173/#/thread/019e04cb-9670-7d91-be85-3ba35312170c`.
+6. Confirm the Markdown link href equals `<current app origin>/#/thread/019e04cb-9670-7d91-be85-3ba35312170c` and visible text equals `Open thread`.
+7. Switch to dark theme and repeat steps 2 through 6.
+
+#### Expected Results
+- Bare `codex://threads/<id>` links render as local web thread URLs.
+- Markdown links targeting `codex://threads/<id>` keep their Markdown label while linking to the local web thread URL.
+- Link color and contrast remain usable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Revert the thread-link conversion in `src/components/content/ThreadConversation.vue` if `codex://threads/<id>` should render literally again.
+
+---
+
+### Bold-wrapped Markdown links render without literal markers
+
+#### Feature/Change Name
+Bold-wrapped Markdown link marker cleanup in chat messages.
+
+#### Prerequisites/Setup
+1. Dev server running (`pnpm run dev --host 127.0.0.1 --port 4173`).
+2. A `TestChat` project/thread is available.
+3. Light theme and dark theme are both available.
+
+#### Steps
+1. In light theme, open `TestChat`.
+2. Send or inspect a message containing a bold-wrapped Markdown link, for example `**https://anyclaw.store/claim/a7m2z7**` or `**[claim link](https://anyclaw.store/claim/a7m2z7)**`.
+3. Repeat with triple-asterisk wrapping: `***https://anyclaw.store/claim/a7m2z7***` and `***[claim link](https://anyclaw.store/claim/a7m2z7)***`.
+4. Confirm the rendered row contains one clickable `a.message-file-link` for the URL.
+5. Confirm no literal `**`, `***`, or stray `*` characters appear before or after the link.
+6. Switch to dark theme and repeat steps 2 through 5.
+
+#### Expected Results
+- Bold-wrapped and triple-asterisk-wrapped bare URLs and Markdown links render as clickable links without visible Markdown emphasis markers.
+- Existing URL/file-link href, title, and visible link text behavior is unchanged.
+- Link color and contrast remain usable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Revert the parser change in `src/components/content/ThreadConversation.vue` if bold-wrapped links need to show raw Markdown markers again.
+
+---
+
 ### Qodo feedback diagnostics reliability fixes
 
 #### Feature/Change Name
@@ -388,7 +475,7 @@ Feedback diagnostics startup hardening, project automation delete failure handli
 5. Confirm the automation chip/server state is reloaded instead of staying optimistically removed.
 6. Open the app in an environment where `window.fetch` is missing or read-only and confirm the app still mounts.
 7. Trigger a chat send failure and click Send feedback next to the chat error.
-8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, visible page text, and browser/app state prefilled.
+8. Confirm Chrome or the OS opens the configured `mailto:` handler with `brutalstrikedevs@gmail.com`, diagnostics, bounded visible page text, and summarized browser/app state prefilled.
 9. Type a long draft in the composer and confirm the expand control still appears when the textarea overflows.
 10. Switch to dark theme and repeat steps 2-9.
 
@@ -396,9 +483,9 @@ Feedback diagnostics startup hardening, project automation delete failure handli
 - Project automation delete failures are caught, recorded in feedback diagnostics, and surfaced as a visible sidebar error.
 - Automation state is restored or reloaded after a failed delete.
 - Feedback diagnostics never prevent app startup when fetch cannot be patched.
-- Chat and Skills Hub error feedback links use native `mailto:` anchor handling so Chrome can open the configured email handler.
-- Feedback email bodies include visible page text alongside diagnostics.
-- Feedback email bodies include localStorage/sessionStorage state, route/hash, online state, language, and platform without redaction or per-section truncation.
+- Chat and Skills Hub error feedback links use native `mailto:` anchor handling so Chrome can open the configured email handler, while static link `href` values stay minimal until click.
+- Feedback email bodies include bounded visible page text alongside diagnostics.
+- Feedback email bodies include localStorage/sessionStorage state, route/hash, online state, language, and platform, with sensitive-looking storage values omitted and oversized values summarized.
 - Composer overflow checks remain functional without scheduling duplicate same-tick measurements.
 - The sidebar error message remains readable in light theme and dark theme.
 
@@ -966,7 +1053,7 @@ Skills Sync skips unchanged manifest writes and does not fail parent commits whe
 ### Header Git branch dropdown with commit reset
 
 #### Feature/Change Name
-Thread header Git dropdown replaces the simple review action with branch search, Review access, safe branch switching, branch reset-to-commit, and reset-history commit preservation.
+Thread header Git dropdown replaces the simple review action with a commits/branches picker, Review access, safe branch switching, selected-commit file details, branch reset-to-commit, and reset-history commit preservation.
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
@@ -978,33 +1065,109 @@ Thread header Git dropdown replaces the simple review action with branch search,
 #### Steps
 1. In light theme, open the Git dropdown in the thread header.
 2. Confirm the trigger shows the current branch, or the detached commit subject if the repository is already detached.
-3. Click `Review` and confirm the review pane opens; click it again and confirm the pane toggles.
-4. Type part of a branch name in search and confirm the branch list filters.
-5. Select a different branch with a clean worktree and confirm the header updates to that branch.
-6. Expand a branch row and confirm recent commits load with short SHA, subject, and date.
-7. Expand a remote branch row and confirm its commit rows are disabled with a tooltip explaining remote branches cannot be reset.
-8. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
-9. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
-10. Reopen/expand the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
-11. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
-12. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
-13. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds unless Git reports the untracked file would be overwritten.
-14. Switch to dark theme and repeat steps 1, 2, 4, 6, 7, 10, 12, and 13.
+3. Confirm the menu initially shows only commits on the left and branches on the right, with no commit-files panel before a commit is selected.
+4. Confirm the left column defaults to the current branch and shows no more than 50 recent commits with short SHA, subject, and date.
+5. Confirm the open dropdown visually layers above the sidebar and above the Review pane if the pane is already open.
+6. Confirm the top action is styled as a button, reads `Review Worktree Changes`, and shows `+`/`-` line counts; click it and confirm the dropdown stays open while the review pane opens above it directly to changes without showing a `Findings` tab or `Run review` button; click the Review pane `X` and confirm only the pane closes while the dropdown stays open; click `Review Worktree Changes` again and confirm the pane toggles open.
+7. Type part of a commit subject or short SHA in the left commit search and confirm the commit list filters.
+8. Turn off `Reset-history refs` and confirm the commit list reloads without saved reset-history refs.
+9. Turn `Reset-history refs` back on and confirm saved reset-history commits reappear when available.
+10. Toggle `Reset-history refs` while the commit list is still loading and confirm the list reloads for the new toggle state instead of staying on the previous result.
+11. Type part of a branch name in search and confirm the branch list filters.
+12. Click a different branch row and confirm the left commit list changes to that branch without immediately switching checkout.
+13. Use the branch row `Checkout` action with a clean worktree and confirm the header updates to that branch.
+14. Confirm local branches appear first and remote branches appear at the end of the branch list.
+15. Select a remote branch row and confirm it can load commits but does not show a `Checkout` action.
+16. Select an older commit on the disposable local branch and confirm the dropdown widens and shows a left-side file panel with that commit subject, file changes, per-file `+`/`-` line counts, and a `Reset` button without changing HEAD.
+17. Click a commit ref badge and confirm the full commit SHA is copied to the clipboard without changing the selected commit.
+18. Click a file in the selected commit details and confirm the dropdown closes, clears the selected commit state for the next open, and the Review pane opens in commit mode with that file selected without auto-centering the first hunk; if the Review pane previously used base-branch comparison, confirm the commit review meta row shows the commit SHA and does not show `vs <base-branch>`.
+19. Click `Reset` for the selected commit and confirm the header stays on that branch instead of entering detached HEAD.
+20. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit.
+21. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+22. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+23. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+24. Create only an untracked file whose path includes leading/trailing whitespace and does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the exact untracked filename remains in place.
+25. Create only an untracked file whose path includes leading/trailing whitespace and exists in the target commit, try to reset to that target, and confirm the reset proceeds and the exact untracked filename is moved under `.codex/untracked-backups/` instead of being overwritten or renamed incorrectly.
+26. Add or inspect a commit that changes a file whose name includes leading/trailing whitespace, then select that commit and confirm the commit file list shows the exact path, correct `+`/`-` counts, and opens the same path in the Review pane.
+27. Create an untracked nested file whose parent path is a tracked file in the target commit, or the inverse file/directory case, and confirm checkout/reset moves the conflicting untracked path to `.codex/untracked-backups/` before the Git operation.
+28. Force a checkout/reset failure after an untracked backup move, such as by making the target branch unavailable in a disposable repository, and confirm the moved untracked file is restored to its original path.
+29. Open a commit file in the Review pane, navigate to a different thread or repository cwd, and confirm the commit-scoped file/sha state clears and the pane closes instead of showing the old commit against the new repo.
+30. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
+31. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
+32. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
+33. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, and 32.
+
+#### Preserved Prior Coverage
+1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
+2. Type part of a branch name in search and confirm the branch list filters.
+3. Select a different branch with a clean worktree using the checkout action and confirm the header updates to that branch.
+4. Select a branch row and confirm recent commits load with short SHA, subject, and date.
+5. Confirm remote branch rows are inspectable, appear after local branches, and do not trigger local reset without a supported local branch action.
+6. Select an older commit on the disposable local branch and confirm the header stays on that branch instead of entering detached HEAD.
+7. Confirm `git -C <thread-cwd> rev-parse --abbrev-ref HEAD` still prints the branch name and `git -C <thread-cwd> rev-parse --short HEAD` matches the selected commit after reset.
+8. Reopen/select the same branch and confirm commits that were ahead of the reset target still appear, with the selected branch HEAD marked `current`.
+9. Repeat reset on the same branch several times and confirm the dropdown still opens quickly and shows recent reset-history commits.
+10. Create a tracked uncommitted change, try to switch branch or reset to a commit, and confirm the dropdown shows a dirty-worktree error instead of switching or resetting.
+11. Create only an untracked file, try to reset to a commit, and confirm the reset proceeds while preserving the untracked file in place or moving it to `.codex/untracked-backups/` if the target would overwrite it.
+12. Switch to dark theme and repeat the branch filtering, commit loading, reset-history, dirty-worktree, and untracked-file checks.
 
 #### Expected Results
-- The header dropdown exposes Review, current checkout state, searchable branches, and inline commits.
-- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are allowed unless Git would overwrite them.
-- Commit selection resets the local branch to that commit instead of detaching HEAD.
-- Remote branch commit rows are inspectable but cannot trigger local branch reset.
+- The header dropdown exposes Review, current checkout state, a left-side commit list, and a right-side searchable branch list before a commit is selected.
+- The selected-commit file panel is hidden until commit selection, then appears on the left and expands the dropdown width.
+- Each selected-commit file row shows added and removed line counts, using `-` for binary or unavailable counts.
+- The dropdown layer is viewport-positioned and appears above the sidebar when open.
+- The Review pane renders above the open dropdown and app chrome.
+- Clicking the dropdown `Review Worktree Changes` button keeps the dropdown open while toggling the Review pane.
+- Clicking the Review pane `X` while the dropdown is open closes only the Review pane and leaves the dropdown open.
+- The `Review Worktree Changes` button shows current worktree added and removed line counts.
+- The Review pane toolbar keeps `Refresh` but does not show a `Findings` tab or `Run review` button.
+- The current branch commit list loads by default and is capped at 50 commits.
+- The commit list can be searched by SHA, subject, or date without changing the selected branch.
+- Reset-history refs can be shown or hidden from the commit list without changing the selected branch.
+- Reset-history toggles are keyed by both branch and reset-history state, so an in-flight load for one state does not suppress loading the other state.
+- Branch switching and branch reset-to-commit are blocked by tracked uncommitted changes, but untracked-only changes are preserved and allowed.
+- Commit selection opens file details without resetting or detaching HEAD.
+- Commit ref badges copy the full SHA to the clipboard without triggering commit selection.
+- Commit file names and untracked file names with leading/trailing whitespace are parsed from NUL-delimited Git output and are not trimmed before display, counting, backup, or Review-pane navigation.
+- The selected commit `Reset` button resets the local branch to that commit instead of detaching HEAD.
+- Remote branches are inspectable but cannot be checked out directly from this control.
+- Clicking a selected commit file opens the Review pane against that commit diff and selects that path without auto-centering the selected hunk.
+- Commit review mode shows the selected commit SHA in the Review pane meta row and never shows a base-branch comparison label.
+- Clicking a selected commit file clears the dropdown commit selection before closing, so reopening starts without the stale file panel.
+- Changed-file rows in the Review pane file list do not inherit folder-depth indentation, so long names have enough room to truncate horizontally instead of wrapping one character per line when the list is narrow.
+- Remote branches appear after local branches in the branch list.
+- Prior branch-search, inline-commit, remote-branch inspection, reset-to-commit, dirty-worktree, and untracked-file manual coverage remains represented in the section.
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
-- The selected branch HEAD commit is marked `current` in expanded commit lists.
+- Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset, preserving exact Git path bytes from NUL-delimited output.
+- Untracked file/directory conflicts are detected when either the untracked path or target path is the other's directory prefix.
+- If checkout/reset fails after moving untracked files into `.codex/untracked-backups/`, those files are restored to their original paths.
+- Commit-scoped Review pane state is cleared when navigating to another thread or repository cwd.
+- The selected branch HEAD commit is marked `current` in the commit list.
+- The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
+- The mobile Review pane diff area scrolls vertically without moving or hiding the pane header.
+- The Review pane overlay, toolbar, file list, file sheet, and diff surfaces use dark backgrounds and borders in dark theme instead of showing light surfaces.
+- On mobile, branches, commits, and selected-commit file details stack vertically in that order and stay inside the viewport in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.
 - Dropdown surfaces, text, badges, and errors are readable in both light theme and dark theme.
 
 #### Rollback/Cleanup
-- Restore any dirty-worktree file changed for validation.
-- Restore or delete the disposable branch used for reset validation.
+- Switch back to the original branch used before the test.
+- Reset or delete the disposable local branch used for commit reset validation.
+- Revert or discard the tracked dirty-worktree file created for the blocked-switch validation.
+- Delete any untracked files created for untracked preservation validation.
+- Delete any tracked test commits/files created for whitespace-path commit-list validation.
+- Inspect and remove test-only files under `.codex/untracked-backups/` after confirming backup behavior.
+- Clear any copied commit SHA from the clipboard if the test environment requires clipboard cleanup.
+
+#### Performance Audit Evidence
+- `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser` completed after the review-summary changes.
+- Latest report: `output/playwright/browser-runtime-profile-home-2026-05-12T12-50-45-771Z.json`.
+- Follow-up report after the commit-review meta-label fix: `output/playwright/browser-runtime-profile-home-2026-05-12T13-04-36-811Z.json`.
+- Follow-up report after review-state and untracked-backup fixes: `output/playwright/browser-runtime-profile-home-2026-05-16T02-15-38-533Z.json`.
+- The profile showed one `thread/list:first-page` request, one `skills/list` request, one `rateLimitsRead` request, and the existing `threadRead=3` warning. No duplicate review-summary request was introduced on the home route.
+- The latest profile showed one `thread/list:first-page` request and existing startup warnings for `threadRead=4` and `skillsList=2`; no review-summary fanout was introduced.
+- The review-summary path now uses one tracked `git diff --numstat` plus NUL-delimited `git ls-files --others --exclude-standard -z`; untracked line counts are streamed from disk instead of reading full files into memory.
 
 ---
 
@@ -3118,7 +3281,7 @@ stays at `source: "NoValues"` permanently. Feature gate `505458` (worktree) retu
 ### Free Mode (OpenRouter)
 
 #### Feature
-Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-free-mode.json` and passed to app-server via `-c` CLI args.
+Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI API key. Uses XOR-encrypted community keys that rotate randomly per request. Default model is `openrouter/free` — OpenRouter's meta-model that auto-routes to the least-loaded free model, avoiding per-model rate limits. Model selector shows only free models when free mode is on. Config is isolated from `~/.codex/config.toml` — state stored in `~/.codex/webui-custom-providers.json` and passed to app-server via `-c` CLI args.
 
 #### Prerequisites
 - Project built: `pnpm run build`.
@@ -3132,7 +3295,7 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 5. Verify the toggle turns on and model dropdown changes to `openrouter/free`.
 6. Click the model dropdown — verify it shows **only** free models (gemma, llama, qwen, etc.) and no GPT/OpenAI default models.
 7. Verify `~/.codex/config.toml` was NOT modified (no `model_provider` or `model` entries added).
-8. Verify `~/.codex/webui-free-mode.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
+8. Verify `~/.codex/webui-custom-providers.json` exists and contains `{"enabled":true,"apiKey":"sk-or-v1-...","model":"openrouter/free"}`.
 9. Open a new thread and send a message (e.g. "Say hello").
 10. Verify a response comes back from a free OpenRouter model (may be rate-limited during high demand).
 11. Toggle **Free mode (OpenRouter)** OFF.
@@ -3173,7 +3336,7 @@ Toggle "Free mode" in settings to use free OpenRouter models without an OpenAI A
 
 #### Rollback/Cleanup
 - Remove `src/server/freeMode.ts`, revert changes in `codexAppServerBridge.ts`, `codexGateway.ts`, and `App.vue`.
-- Delete `~/.codex/webui-free-mode.json` to clear free mode state.
+- Delete `~/.codex/webui-custom-providers.json` to clear free mode state.
 
 ### Feature: Codex.app Thread Provider Filter Patch (fix-codex-thread-filter.sh)
 
@@ -3402,12 +3565,12 @@ OpenCode Zen as built-in provider + API format selector for custom endpoints
 - OpenCode Zen appears in provider dropdown alongside Codex/OpenRouter/Custom
 - OpenCode Zen defaults to `wire_api = "chat"` (Chat Completions API)
 - Custom endpoints show an API format selector; default is "Responses API"
-- Provider selection and wireApi are persisted in `~/.codex/webui-free-mode.json`
+- Provider selection and wireApi are persisted in `~/.codex/webui-custom-providers.json`
 - Model list for OpenCode Zen is fetched from `https://opencode.ai/zen/v1/models`
 
 #### Rollback/Cleanup
 - Switch provider back to "Codex" to disable free mode
-- No config files outside the project are modified (state stored in `~/.codex/webui-free-mode.json`)
+- Project config files are not modified; only user-level state is written to `~/.codex/webui-custom-providers.json`
 
 ### env_key Authentication for Custom Providers (codex CLI v0.93.0)
 
@@ -5306,6 +5469,9 @@ Android `codexui-android` startup passes the bound server port to app-server fre
 #### Expected Results
 - `config/read` returns `200` and includes `model_providers.opencode-zen.base_url` pointing at `http://127.0.0.1:17923/codex-api/zen-proxy/v1`.
 - `config/read` includes `model_providers.opencode-zen.wire_api` as `responses`, not `chat`.
+- Fresh no-auth startup uses OpenCode Zen as a runtime fallback without creating `~/.codex/webui-custom-providers.json`.
+- After a usable Codex `auth.json` is added and the server restarts with no saved free-mode state, startup does not keep forcing `model_provider="opencode-zen"`.
+- Existing `~/.codex/webui-free-mode.json` files are ignored and not migrated to `~/.codex/webui-custom-providers.json`.
 - `model/list` returns `200` with model data instead of `502 codex app-server exited unexpectedly`.
 - The model selector is usable in both light theme and dark theme.
 - A first home-composer message creates a thread and receives a response without visible startup RPC errors.
@@ -5377,3 +5543,593 @@ Thread conversation incremental older-turn loading.
 
 #### Rollback/Cleanup
 - None.
+
+---
+
+### Docker auth startup live-state pending read
+
+#### Feature/Change Name
+Docker authenticated first-turn live-state pending read handling.
+
+#### Prerequisites/Setup
+1. Build the project with `pnpm run build`.
+2. Build a fresh Docker image that installs `@openai/codex` and runs the packed `codexapp` artifact.
+3. Prepare two isolated `CODEX_HOME` states: one empty and one with only `auth.json` mounted.
+
+#### Steps
+1. Start the no-auth container and open the app in light theme.
+2. Confirm `config/read` uses `model_provider="opencode-zen"` and `model="big-pickle"`.
+3. Send `hi` and wait for the assistant reply.
+4. Start the auth-mounted container and open the app in light theme.
+5. Confirm `config/read` has `model_provider=null` and no Zen provider override.
+6. Send `hi` and poll `/codex-api/thread-live-state?threadId=<id>` while the first turn is starting.
+7. Confirm early live-state responses do not expose `liveStateError.kind="readFailed"` for `not materialized yet; includeTurns is unavailable before first user message`.
+8. Wait for the assistant reply, then switch to dark theme and repeat the visual checks for the composer/thread area.
+
+#### Expected Results
+- No-auth Docker startup falls back to Zen at runtime and returns a `hi` response.
+- Auth-mounted Docker startup uses the default Codex provider path without Zen flags and returns a `hi` response.
+- The transient first-turn materialization window is represented as an in-progress empty live state, not a visible chat error.
+- Real `thread/read` failures still surface through `liveStateError`.
+- Light theme and dark theme keep the chat/composer readable throughout the first-turn transition.
+
+#### Rollback/Cleanup
+- Stop temporary containers with `docker rm -f codexui-noauth-test codexui-auth-test` when finished.
+
+---
+
+### Provider models load without Codex model-list dependency
+
+#### Feature/Change Name
+Provider-backed model selector startup loading.
+
+#### Prerequisites/Setup
+1. Build the project with `pnpm run build`.
+2. Run a no-auth Docker container so Codex Web Local starts with OpenCode Zen fallback.
+3. Open `http://127.0.0.1:<port>/#/` in the browser.
+
+#### Steps
+1. In light theme, open the home screen and wait for initial model loading.
+2. Open the model selector.
+3. Confirm Zen provider models are visible even if Codex `model/list` is slow or unavailable.
+4. Confirm the selector starts with `big-pickle` and includes current Zen models such as `deepseek-v4-flash-free`.
+5. Switch to dark theme and repeat steps 2 through 4.
+
+#### Expected Results
+- Provider-backed model loading asks `/codex-api/provider-models` before depending on `model/list`.
+- OpenCode Zen models populate the selector without falling back to a blank list or stale Codex-only model list.
+- The selector remains readable and usable in light theme and dark theme.
+
+#### Rollback/Cleanup
+- Stop the temporary Docker container when finished.
+
+---
+
+### Invalid or expired auth errors appear in chat
+
+#### Feature/Change Name
+Invalid Codex auth failed-turn error rendering.
+
+#### Prerequisites/Setup
+1. Build the project with `pnpm run build`.
+2. Build a fresh Docker image from the packed artifact.
+3. Start a Docker container with an invalid or expired `auth.json` mounted into `CODEX_HOME`.
+4. Open the container URL in the browser.
+
+#### Steps
+1. Confirm `config/read` uses the default Codex provider path, not OpenCode Zen fallback.
+2. Send `hi` from the composer.
+3. Wait until the turn stops running.
+4. Reload or reopen the same thread.
+5. Repeat in dark theme and light theme.
+
+#### Expected Results
+- The failed turn displays the final auth error in the chat, including the HTTP 401/unauthorized message from Codex.
+- The failed turn includes a visible `Send feedback` button next to the persisted chat error.
+- Once the failed turn is persisted, the live `Thinking` error overlay is gone so the final auth error is not duplicated.
+- The conversation does not silently show only the user message after a failed turn.
+- Reloaded thread history preserves the failed-turn error message.
+- Transient retry messages may appear while reconnecting, but the final non-retry error remains visible after completion.
+- In dark theme and light theme, the feedback button remains readable and opens a feedback mailto with the visible auth error included in the diagnostic body.
+
+#### Rollback/Cleanup
+- Stop the invalid-auth Docker container after verification.
+
+---
+
+### Docker provider checklist and live error overlay regression
+
+#### Feature/Change Name
+Docker provider/auth checklist execution and live error overlay de-duplication.
+
+#### Prerequisites/Setup
+1. Run `pnpm run build`.
+2. Run `pnpm pack --pack-destination /tmp`.
+3. Build a Docker image from the packed `codexapp` tarball with `@openai/codex` installed.
+4. Start three isolated containers:
+   - no auth file
+   - invalid or expired `auth.json`
+   - malformed `auth.json`
+
+#### Steps
+1. In light theme, open the no-auth container, confirm the composer starts on `big-pickle`, send `hi`, and wait for an assistant reply.
+2. Switch the Settings provider selector to OpenRouter, send `hi` again, and wait for a reply or provider-scoped response.
+3. Open the invalid-auth container, send `hi`, wait for the final 401/auth error, and confirm `Send feedback` is visible.
+4. Reload the invalid-auth thread and confirm the persisted error remains without a duplicate live `Thinking` error overlay.
+5. Switch the invalid-auth thread to dark theme and confirm the persisted error and feedback button remain readable.
+6. Open the malformed-auth container, confirm it falls back to `big-pickle`, send `hi`, and wait for an assistant reply.
+
+#### Expected Results
+- No-auth startup uses the OpenCode Zen runtime fallback and sends successfully.
+- Runtime `-c` provider config uses underscore-safe provider ids, so Zen/OpenRouter/custom providers are actually registered with Codex app-server.
+- Provider switching is scoped to the selected provider and does not require changing the model dropdown directly.
+- Invalid/expired auth stays on the Codex provider path and renders the final auth failure as a persisted chat error.
+- A new live error is still visible when an older persisted turn error exists, but the same live error is suppressed after that exact error has persisted.
+- Feedback mailto diagnostics include recent diagnostics, visible page text, and the visible auth error.
+- Malformed auth is treated as unusable auth and falls back to Zen.
+
+#### Rollback/Cleanup
+- Stop temporary containers with `docker rm -f codexui-what-noauth codexui-what-invalid-auth codexui-what-malformed-auth`.
+
+---
+
+### Copied auth promotes community fallback to Codex
+
+#### Feature/Change Name
+Runtime auth detection after starting without auth.
+
+#### Prerequisites/Setup
+1. Run `pnpm run build`.
+2. Run `pnpm pack --pack-destination /tmp`.
+3. Build a Docker image from the packed `codexapp` tarball with `@openai/codex` installed.
+4. Start a fresh no-auth container with an empty mounted `CODEX_HOME`.
+5. Keep a valid host `auth.json` available to copy into that mounted `CODEX_HOME`.
+
+#### Steps
+1. Open the no-auth container and confirm the provider is OpenCode Zen with `big-pickle`.
+2. Switch the Settings provider selector to OpenRouter while still unauthenticated.
+3. Copy a valid `auth.json` into the mounted `CODEX_HOME`.
+4. Reload the page.
+5. Confirm the provider has moved to Codex, the composer shows a concrete Codex model instead of a generic `Model` placeholder, and the Accounts count imports the active auth account.
+6. Confirm the sidebar does not show a stale `Send feedback` / `Issue detected` row when there is no current visible error.
+7. Send `hi` on the Codex provider and wait for an assistant reply.
+
+#### Expected Results
+- Community fallback providers are suppressed once usable Codex auth appears.
+- User-configured providers with a custom key or custom endpoint remain available and are not suppressed.
+- The app refreshes model metadata after provider promotion so the composer does not stay on a generic `Model` label.
+- The copied auth file is imported into the accounts list without requiring a manual Reload click after Codex quota metadata loads successfully.
+- Invalid or expired copied auth is not imported during startup before a successful quota read, so the first failed send still renders a chat error instead of leaving the thread empty.
+- The Settings feedback row is hidden after provider/account recovery unless there is still a visible error.
+- The Codex provider can send a message successfully after auth promotion.
+
+#### Rollback/Cleanup
+- Stop the temporary container and remove its mounted `CODEX_HOME` directory.
+
+---
+
+### Android OpenCode Zen no-auth model filtering
+
+#### Feature/Change Name
+Android no-auth OpenCode Zen model list is limited to usable free models.
+
+#### Prerequisites/Setup
+1. Build the web and CLI artifacts with `pnpm run build`.
+2. Pack the current branch with `pnpm pack --pack-destination output/playwright/android-ssh-fulltest`.
+3. Install the tarball into the Android proot through `/Users/igor/Git-projects/codex-web-local-android/andClaw-codex/ssh.sh`.
+4. Remove `~/.codex/auth.json` and `~/.codex/webui-custom-providers.json` inside the Android proot.
+5. Start `codexui --port 18935 --no-password --no-tunnel --no-open --no-login` inside the Android proot.
+6. Forward the port with `adb -s <device> forward tcp:18935 tcp:18935`.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:18935/#/` at a mobile viewport.
+2. Confirm the composer starts on `big-pickle`.
+3. Open the model menu and confirm it only contains `big-pickle` and `*-free` OpenCode Zen models.
+4. Send `hi retest no auth default` and wait for a reply.
+5. Switch the model to `deepseek-v4-flash-free`, send `hi retest no auth switched`, and wait for a reply or visible error.
+6. Repeat the menu visibility check in dark theme.
+7. Restore a valid `~/.codex/auth.json`, clear `~/.codex/webui-custom-providers.json`, start a fresh server on another port, and confirm the composer returns to Codex models such as `GPT-5.4-mini`.
+
+#### Expected Results
+- `/codex-api/provider-models` returns an exclusive no-auth Zen list containing only `big-pickle` and free models.
+- No-auth Android startup does not expose Codex/GPT, Claude, Gemini, or other paid Zen models unless a user Zen key is configured.
+- The no-auth default and switched free model sends both produce a visible assistant reply or visible provider error.
+- With valid Codex auth restored, community fallback state is suppressed and the model menu shows Codex models.
+- Light and dark theme menus remain readable.
+
+#### Rollback/Cleanup
+- Restore the original `~/.codex/auth.json` if it was backed up for no-auth testing.
+- Stop temporary Android proot `codexui` processes or leave only the intended test port forwarded.
+
+---
+
+### Docker auth promotion preserves legacy Zen threads
+
+#### Feature/Change Name
+Legacy OpenCode Zen threads remain readable and provider-locked, while new threads use Codex once valid Codex auth appears.
+
+#### Prerequisites/Setup
+1. Run `pnpm run build`.
+2. Run `pnpm pack --pack-destination /tmp`.
+3. Build a Docker image from the packed `codexapp` tarball with `@openai/codex` installed.
+4. Start a fresh no-auth Docker container with an empty `CODEX_HOME`.
+5. Keep a valid host `auth.json` available to copy into `/codex-home/auth.json`.
+
+#### Steps
+1. In light theme, open the no-auth container URL at a mobile viewport.
+2. Send `hi` and wait for an assistant reply from the default OpenCode Zen fallback.
+3. Confirm the composer model is `big-pickle`.
+4. Copy valid Codex auth into the same container and restart the container.
+5. Reload the same thread URL.
+6. Confirm the previous Zen-backed messages still render and the composer model menu still shows only Zen models.
+7. Send another `hi` in the same thread and wait for a Zen assistant reply.
+8. Repeat the loaded-thread and model-label checks in dark theme.
+
+#### Expected Results
+- App-server config passively registers `opencode_zen` even when usable Codex auth suppresses the community fallback as the global provider.
+- The route stays on the requested thread instead of redirecting home when the active provider's thread list omits the legacy thread.
+- The UI renders a chat error with feedback if thread loading fails; it does not show an empty thread silently.
+- After valid Codex auth promotion, the same thread remains on the Zen provider/model list, while a newly created thread uses Codex models.
+- Follow-up sends recover from a restarted app-server process by resuming the thread once before retrying `turn/start`.
+
+#### Rollback/Cleanup
+- Stop the temporary Docker container and remove any copied `auth.json` from its `CODEX_HOME`.
+
+---
+
+### Thread-locked providers across Zen, Codex, and OpenRouter
+
+#### Feature/Change Name
+Threads capture their provider at creation time and keep provider-scoped model menus and sends.
+
+#### Prerequisites/Setup
+1. Create a fresh temporary `CODEX_HOME` with no `auth.json`.
+2. Start the app locally with Vite only: `CODEX_HOME=<temp-home> npm run dev -- --host 127.0.0.1 --port 4173`.
+3. Keep a valid host auth file at `/Users/igor/.codex/auth.json`.
+4. Keep a valid OpenRouter key available.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173`.
+2. Create a project chat with no auth present and confirm the provider is OpenCode Zen.
+3. Open the model menu and confirm it only shows Zen models, including `big-pickle`, with no GPT/Codex entries.
+4. Send `hi` and confirm the request uses `big-pickle` and a visible assistant reply appears.
+5. Copy `/Users/igor/.codex/auth.json` into the isolated `CODEX_HOME` while the Vite server is still running, reload the app, and confirm the new-chat composer switches from `big-pickle` to a Codex/GPT model.
+6. Restart the Vite server with the same `CODEX_HOME`, reload the app, and confirm the composer still shows Codex/GPT models.
+7. In the same project, create a new chat and confirm it uses the current global Codex provider.
+8. Open the model menu and confirm it only shows Codex/GPT models, with no Zen entries.
+9. Send `hi` and confirm the request uses a GPT model and a visible assistant reply appears.
+10. Reopen the old Zen thread, confirm the model menu still shows only Zen models, send `hi`, and confirm the request still uses `big-pickle` with a visible assistant reply.
+11. Switch Settings provider to OpenRouter, configure the OpenRouter API key, and create another new chat in the same project.
+12. Confirm the new chat uses OpenRouter, the model menu shows only OpenRouter models, and `hi` sends through OpenRouter with a visible assistant reply.
+13. Reopen the Zen, Codex, and OpenRouter threads in the same project and confirm each model menu remains provider-scoped and each send uses that thread's provider.
+14. Repeat the provider label and model menu checks in dark theme.
+
+#### Expected Results
+- Existing threads use their captured `modelProvider`, not the current global provider, for model-list filtering and sends.
+- New chats use the current global provider at creation time and do not inherit stale models from previously opened project threads.
+- Copying Codex auth into a running no-auth Vite session restarts stale Zen app-server config before the next model/config RPC, so Settings and the composer cannot disagree.
+- Projects can contain Zen, Codex, and OpenRouter threads at the same time without mixed provider/model state.
+- Light and dark theme model menus remain readable and provider-specific.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server.
+- Remove the temporary isolated `CODEX_HOME`.
+- Restore the preferred provider in Settings if it was changed during testing.
+
+---
+
+### Missing thread route errors render in chat
+
+#### Feature/Change Name
+Thread route load failures are visible in the conversation instead of silently showing an empty chat.
+
+#### Prerequisites/Setup
+1. Start the app with a `CODEX_HOME` that does not contain the target thread id.
+2. Use local Vite: `CODEX_HOME=<temp-home> npm run dev -- --host 127.0.0.1 --port 4173`.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/thread/<missing-thread-id>`.
+2. Wait for thread loading to finish.
+3. Confirm the conversation area shows the `thread/resume` or `thread/read` failure text and a `Send feedback` link.
+4. Confirm the model selector still loads the active provider model list instead of staying on disabled `Model`.
+5. Repeat in dark theme and confirm the error text, feedback link, and model selector remain readable.
+
+#### Expected Results
+- The route does not fail silently with only `No messages in this thread yet`.
+- The chat area displays the load error as a visible overlay.
+- The model dropdown loads independently of the missing thread and remains usable for the current provider.
+- Light and dark theme error surfaces are readable.
+
+#### Rollback/Cleanup
+- Navigate back to home or a valid thread.
+- Stop the temporary Vite server if it was only used for this check.
+
+---
+
+### First user message is visible immediately in new chats
+
+#### Feature/Change Name
+New-thread sends render the submitted user message immediately, even when the backend thread read lags behind the assistant response.
+
+#### Prerequisites/Setup
+1. Create a fresh isolated `CODEX_HOME`.
+2. Start local Vite: `CODEX_HOME=<temp-home> npm run dev -- --host 127.0.0.1 --port 4173`.
+3. Use an explicit test project folder to avoid projectless folder-name collisions from repeated `hi` tests.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/?openProjectPath=<encoded-test-project-path>`.
+2. Send `hi` in a new unauthenticated chat and confirm the conversation pane immediately shows the user row `hi`.
+3. Copy `/Users/igor/.codex/auth.json` to `<temp-home>/auth.json`.
+4. Restart the same Vite server with the same `CODEX_HOME`.
+5. Open the same project path, create another new chat, and send `hi`.
+6. Confirm the conversation pane immediately shows the user row `hi`, then wait for the assistant response.
+7. Select `GPT-5.4-mini` in a post-auth new chat, send `hi`, and confirm the user row appears before the assistant response finishes.
+8. Repeat in dark theme and confirm the user row remains visible before and after the assistant response.
+
+#### Expected Results
+- The submitted first user message appears in the conversation pane immediately after send.
+- Backend refreshes that contain only the assistant item do not temporarily remove the optimistic user row.
+- When the backend later returns the real user item, the optimistic row is replaced without a duplicate.
+- Completion events refresh the selected thread even when it was already marked loaded by an optimistic first message.
+- Delayed GPT-5.4-mini replies appear automatically when the completion notification arrives; no manual refresh is required.
+- Light and dark theme message rows remain readable.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server.
+- Remove the temporary isolated `CODEX_HOME` and test project folder.
+
+---
+
+### Selected thread loads do not refetch provider models
+
+#### Feature/Change Name
+Message loads for an already selected thread do not trigger redundant model preference or provider-model requests.
+
+#### Prerequisites/Setup
+1. Use a thread that already has a captured provider and visible messages.
+2. Start local Vite: `CODEX_HOME=<temp-home> pnpm run dev --host 127.0.0.1 --port 4173`.
+3. Keep browser developer tools or the profiling report available for request inspection.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/thread/<thread-id>`.
+2. Reload the route or navigate away and back to force a message load.
+3. Confirm the conversation messages render and the model dropdown remains scoped to that thread's provider.
+4. Run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_ROUTE='#/thread/<thread-id>' PROFILE_WAIT_MS=7000 pnpm run profile:browser`.
+5. Inspect the generated `output/playwright/browser-runtime-profile-*.json`.
+6. Repeat the route reload in dark theme and confirm the same model dropdown and messages remain readable.
+
+#### Expected Results
+- Loading messages does not call the model config or provider-model endpoints again after the thread/provider state is already loaded.
+- The profile shows no duplicate provider model/config requests caused by `loadMessages`.
+- The model dropdown still shows only the selected thread provider's models.
+- Light and dark theme conversation and model dropdown surfaces remain readable.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove the temporary isolated `CODEX_HOME` if it is no longer needed.
+
+---
+
+### Codex app-server memories default and opt-out
+
+#### Feature/Change Name
+Packaged CLI starts Codex app-server with memories enabled by default and supports `--no-memories`.
+
+#### Prerequisites/Setup
+1. Build the CLI: `pnpm run build:cli`.
+2. Use a temporary Codex home that does not already enable memories, for example `CODEX_HOME=$(mktemp -d)`.
+
+#### Steps
+1. Run the unit test: `pnpm exec vitest run src/server/appServerRuntimeConfig.test.ts`.
+2. Start the packaged CLI in light theme with the temporary Codex home: `CODEX_HOME=<temp-home> node dist-cli/index.js --no-open --no-tunnel --no-login --no-password --port 5900`.
+3. Trigger any route or action that starts the underlying Codex app-server.
+4. Confirm the spawned app-server command includes `-c features.memories=true`, or confirm `codex features list` with equivalent config reports `memories` enabled.
+5. Stop the temporary CLI process.
+6. Start the packaged CLI with opt-out: `CODEX_HOME=<temp-home> node dist-cli/index.js --no-open --no-tunnel --no-login --no-password --no-memories --port 5900`.
+7. Trigger any route or action that starts the underlying Codex app-server.
+8. Confirm the spawned app-server command includes `-c features.memories=false`.
+9. Open `http://127.0.0.1:5900/#/` and confirm the app shell still renders normally in light theme.
+10. Switch to dark theme and confirm the app shell still renders normally.
+
+#### Expected Results
+- `buildAppServerArgs()` includes `-c features.memories=true`.
+- `CODEXUI_MEMORIES=false` and `--no-memories` produce `-c features.memories=false`.
+- The packaged CLI no longer depends on the user's `~/.codex/config.toml` to enable memories for its spawned app-server.
+- Light and dark themes are unchanged because this is a runtime launch/config change, not a UI surface change.
+
+#### Rollback/Cleanup
+- Stop the temporary packaged CLI process.
+- Remove the temporary `CODEX_HOME`.
+
+---
+
+### Provider-backed scheduled refreshes keep model menus populated
+
+#### Feature/Change Name
+Background ancillary refreshes preserve provider-specific models for selected Zen/OpenRouter threads.
+
+#### Prerequisites/Setup
+1. Use an isolated `CODEX_HOME` with an existing Zen or OpenRouter thread.
+2. Copy Codex auth into that same `CODEX_HOME` so the global provider becomes Codex.
+3. Start local Vite: `CODEX_HOME=<temp-home> pnpm run dev --host 127.0.0.1 --port 4173`.
+
+#### Steps
+1. In light theme, open the old provider-backed thread.
+2. Wait for the background refresh after route load.
+3. Open the model dropdown.
+4. Confirm the dropdown is populated with that thread provider's models, not empty and not Codex/GPT models.
+5. Hover or focus an assistant response and confirm copy/fork actions are visibly readable.
+6. Repeat in dark theme and confirm the same provider-scoped model menu and response actions remain readable.
+
+#### Expected Results
+- Scheduled refreshes fetch provider models for provider-backed selected threads even when they are not doing an explicit provider-change refresh.
+- The model dropdown never falls back to disabled `Model` or an empty list for a loaded provider-backed thread.
+- Assistant copy/fork actions have readable contrast in both light and dark themes.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove the temporary isolated `CODEX_HOME` if it is no longer needed.
+
+---
+
+### Projectless new chat folder collisions
+
+#### Feature/Change Name
+Projectless new chats continue to create folders after repeated identical first messages.
+
+#### Prerequisites/Setup
+1. Use an isolated `CODEX_HOME`.
+2. Start local Vite: `CODEX_HOME=<temp-home> pnpm run dev --host 127.0.0.1 --port 4173`.
+3. Ensure `~/Documents/Codex/<today>/` already contains many folders for the same prompt slug, for example `hi`, `hi-2`, through `hi-100`.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/`.
+2. Start a projectless new chat with the message `hi`.
+3. Confirm the app creates a new folder under `~/Documents/Codex/<today>/` and opens the new thread without showing `Unable to create a unique new chat folder`.
+4. Confirm the created folder keeps the prompt slug and includes a unique timestamp/random suffix after the readable collision range is exhausted.
+5. Repeat in dark theme and confirm the new thread opens with readable composer and conversation surfaces.
+
+#### Expected Results
+- New projectless chats do not fail after common prompts exhaust the readable sequential suffix range.
+- The app preserves readable folder names for early collisions and switches to unique suffixes for later collisions.
+- Light and dark theme new-chat and conversation surfaces remain readable.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove any temporary collision folders created under `~/Documents/Codex/<today>/` if they are no longer needed.
+
+---
+
+### New chat live thinking and stop controls
+
+#### Feature/Change Name
+Projectless new chats show live thinking state and interrupt controls while a turn is active.
+
+#### Prerequisites/Setup
+1. Use an isolated `CODEX_HOME` with valid Codex auth.
+2. Start local Vite: `CODEX_HOME=<temp-home> pnpm run dev --host 127.0.0.1 --port 4173`.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/`.
+2. In the projectless `Chats` composer, send `create todo list app`.
+3. Within a few seconds after send, confirm the conversation shows a live `Thinking` overlay even if no detailed activity event has arrived yet.
+4. Confirm the composer shows a stop button while the turn is active.
+5. Wait for the assistant output and confirm the stop button is replaced by the normal send button after completion.
+6. Repeat in dark theme and confirm the live overlay and stop button remain readable.
+
+#### Expected Results
+- Active thread status from `thread/read`, including `{ status: { type: "active" } }`, keeps the selected thread marked in progress.
+- The live overlay renders default `Thinking` for any active selected thread, even before reasoning/activity text arrives.
+- The stop button is visible while the turn is active and disappears after completion.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove temporary projectless chat folders under `~/Documents/Codex/<today>/` if they are no longer needed.
+
+---
+
+### Qodo provider/auth review fixes
+
+#### Feature/Change Name
+OpenRouter community-key classification and stalled thread-resume recovery.
+
+#### Prerequisites/Setup
+1. Use an isolated `CODEX_HOME`.
+2. Start local Vite: `CODEX_HOME=<temp-home> pnpm run dev --host 127.0.0.1 --port 4173`.
+3. Prepare one no-auth session that uses the default OpenRouter community/free-mode state and one session with valid Codex auth copied into the same home.
+
+#### Steps
+1. In light theme, switch to OpenRouter without entering a user API key.
+2. Confirm the saved free-mode state remains community-backed, then copy Codex auth into the same `CODEX_HOME` and restart.
+3. Confirm Codex auth suppresses the community OpenRouter fallback instead of treating it as a custom key.
+4. Open an existing thread and simulate or observe a stalled `thread/resume`; after the resume coalescing TTL, retry the thread open.
+5. Confirm the retry starts a fresh resume request instead of staying pinned behind the original stalled request.
+6. Repeat the visible provider switch and thread-open checks in dark theme and confirm errors, composer controls, and model labels remain readable.
+
+#### Expected Results
+- Blank OpenRouter provider saves do not turn remembered community keys into `customKey: true`.
+- Explicit user OpenRouter keys and previously custom OpenRouter state remain custom.
+- A never-settling `resumeThread()` request cannot permanently block future resume attempts for the same thread.
+- Light and dark themes both show readable provider, model, and error/retry surfaces.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove the isolated `CODEX_HOME` after verification.
+
+---
+
+### Qodo free-mode state write fixes
+
+#### Feature/Change Name
+Free-mode provider settings create missing `CODEX_HOME` before writing state.
+
+#### Prerequisites/Setup
+1. Choose a fresh path that does not exist yet, for example `/tmp/codex-missing-home-test`.
+2. Start local Vite: `CODEX_HOME=/tmp/codex-missing-home-test pnpm run dev --host 127.0.0.1 --port 4173`.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/`.
+2. Open Settings and switch Provider to OpenRouter or another free-mode provider setting that writes `webui-custom-providers.json`.
+3. Confirm the provider update succeeds and `/tmp/codex-missing-home-test/webui-custom-providers.json` is created.
+4. Confirm the state file has restrictive owner-only permissions.
+5. Repeat the provider switch in dark theme and confirm the settings controls and any errors remain readable.
+
+#### Expected Results
+- Free-mode provider writes do not fail with `ENOENT` when `CODEX_HOME` is missing at startup.
+- The state file parent directory is created automatically before writes.
+- The state file is written with restrictive permissions.
+- Light and dark theme provider settings remain readable.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+- Remove `/tmp/codex-missing-home-test` after verification.
+
+---
+
+### Automation panel dark action row specificity fix
+
+#### Feature/Change Name
+Automation rename action row dark-theme override is scoped with the component base rule.
+
+#### Prerequisites/Setup
+1. Start local Vite: `pnpm run dev --host 127.0.0.1 --port 4173`.
+2. Use an account or fixture state with at least one automation-backed thread.
+
+#### Steps
+1. In light theme, open `http://127.0.0.1:4173/#/` and open the automation thread rename panel.
+2. Confirm the sticky action row uses a white background and light border.
+3. Switch to dark theme and reopen the same panel.
+4. Confirm the sticky action row uses a dark zinc background and dark border, with readable buttons and no light strip at the bottom.
+
+#### Expected Results
+- The base light action row remains unchanged in light theme.
+- In dark theme, the action row reliably uses dark styling from the scoped component rule regardless of global stylesheet injection order.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.
+
+---
+
+### Bold URL trailing punctuation parsing
+
+#### Feature/Change Name
+Bold-wrapped plain URLs followed by punctuation render as clean links.
+
+#### Prerequisites/Setup
+1. Start local Vite: `pnpm run dev --host 127.0.0.1 --port 4173`.
+2. Open the `TestChat` project and use an existing thread or create a new one.
+
+#### Steps
+1. In light theme, send a message containing `**https://example.com**.`.
+2. Inspect the rendered message row.
+3. Confirm the URL text is rendered as a link with `href` and `title` equal to `https://example.com`.
+4. Confirm the final period remains visible as plain text after the link.
+5. Repeat in dark theme and confirm the link and punctuation remain readable.
+
+#### Expected Results
+- The bold asterisk wrapper is removed from the rendered URL.
+- Trailing punctuation is not included in the link target.
+- Light and dark themes both render the link and punctuation clearly.
+
+#### Rollback/Cleanup
+- Stop the temporary Vite server if it was only used for this check.

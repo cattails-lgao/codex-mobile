@@ -1,5 +1,17 @@
 # Log
 
+## [2026-05-15] ingest | codex thread link rendering review follow-up
+- Added source: `raw/fixes/codex-thread-link-pr174.md`.
+- Updated wiki page: `concepts/realtime-chat-rendering.md`.
+- Documents: PR #174 chat link parser fixes, Qodo/CodeRabbit finding triage, dynamic-origin `codex://threads/<id>` URL rewriting, light/dark Playwright checks, and profile result.
+- Updated `index.md`.
+
+## [2026-05-14] ingest | provider-locked auth and model fixes
+- Added sources: [raw/fixes/copied-auth-provider-promotion.md](../raw/fixes/copied-auth-provider-promotion.md), [raw/fixes/opencode-zen-docker-auth-provider-models.md](../raw/fixes/opencode-zen-docker-auth-provider-models.md), [raw/fixes/thread-locked-provider-models.md](../raw/fixes/thread-locked-provider-models.md), and [raw/fixes/provider-config-restart-and-review-followups.md](../raw/fixes/provider-config-restart-and-review-followups.md).
+- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
+- Documents: copied auth promotion from community provider state to Codex, no-auth Zen runtime fallback, Docker auth/provider switching, first-turn materialization as transient live state, provider-scoped model loading, thread provider locks across Zen/Codex/OpenRouter, app-server restart on provider config changes, Browser Use verification, GPT send timing, and review follow-up risks.
+- Updated [overview.md](./overview.md), [entities/codex-web-local.md](./entities/codex-web-local.md), and [index.md](./index.md).
+
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.
 - Created wiki page: `concepts/directory-hub-composio-skills.md`.

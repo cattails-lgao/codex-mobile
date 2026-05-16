@@ -31,6 +31,11 @@ function toRawPayload(value: unknown): string {
   }
 }
 
+function readTurnErrorText(turn: Turn): string {
+  const error = turn.error as { message?: unknown } | null
+  return typeof error?.message === 'string' ? error.message.trim() : ''
+}
+
 const FILE_ATTACHMENT_LINE = /^##\s+(.+?):\s+(.+?)\s*$/
 const FILES_MENTIONED_MARKER = /^#\s*files mentioned by the user\s*:?\s*$/i
 const ASSISTANT_FILE_CHANGE_HEADING = /^(?:#{1,6}\s*)?(?:本次修改文件(?:和操作)?(?:如下)?|修改文件和操作)\s*[:：]?\s*$/u
@@ -555,6 +560,11 @@ function readThreadInProgress(summary: Thread): boolean {
   const rawSummary = summary as Record<string, unknown>
   if (rawSummary.inProgress === true) return true
   if (rawSummary.status === 'inProgress' || rawSummary.turnStatus === 'inProgress') return true
+  const status = rawSummary.status
+  if (status && typeof status === 'object') {
+    const statusType = (status as Record<string, unknown>).type
+    if (statusType === 'active' || statusType === 'inProgress') return true
+  }
 
   const turns = Array.isArray(summary.turns) ? summary.turns : []
   const lastTurn = turns.at(-1)
@@ -624,18 +634,32 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
   for (let turnOffset = 0; turnOffset < turns.length; turnOffset++) {
     const turnIndex = baseTurnIndex + turnOffset
     const turn = turns[turnOffset]
-    const turnId = typeof turn?.id === 'string' ? turn.id : undefined
+    const rawTurnId = typeof turn?.id === 'string' ? turn.id.trim() : ''
+    const turnId = rawTurnId.length > 0 ? rawTurnId : undefined
     const items = Array.isArray(turn.items) ? turn.items : []
     for (const item of items) {
       for (const msg of toUiMessages(item)) {
         messages.push({ ...msg, turnId, turnIndex })
       }
     }
+    const errorText = readTurnErrorText(turn)
+    if (turn.status === 'failed' && errorText) {
+      const errorIdBase = turnId ?? `turn-${turnIndex}`
+      messages.push({
+        id: `${errorIdBase}-error`,
+        role: 'system',
+        text: errorText,
+        messageType: 'turnError',
+        turnId,
+        turnIndex,
+      })
+    }
   }
   return messages
 }
 
 export function readThreadInProgressFromResponse(payload: ThreadReadResponse): boolean {
+  if (readThreadInProgress(payload.thread)) return true
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   return isTurnInProgress(turns.at(-1))
 }

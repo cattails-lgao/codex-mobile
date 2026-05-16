@@ -127,6 +127,7 @@
   5. For responsive/mobile changes, run checks at 375x812 and 768x1024.
   6. Wait 2-3 seconds before capturing final screenshot(s).
   7. Save screenshots under `output/playwright/` with task-specific names.
+  8. Leave the dev server running after verification unless the user explicitly asks to stop it.
 - Capture screenshots only when Playwright verification is requested.
 - If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
 - If requested Playwright assertions fail, do not report completion; fix and re-run until passing.
@@ -155,6 +156,7 @@
 - For dev-server fixes, verify the exact user-requested command afterwards (for example `npm run dev`), not only a fallback Vite invocation.
 - Never kill or stop the tmux-managed dev server bound to port `5173`.
 - Treat the `5173` tmux dev process as persistent infrastructure; restart it only when the user explicitly requests a restart.
+- Treat the `4173` verification dev server as reusable test infrastructure during active UI work; after tests or screenshots, leave it running unless the user explicitly asks to stop it.
 
 ## Dark Theme CSS Rule
 
@@ -187,6 +189,29 @@
 - Always show captured screenshots inline in the chat, not only as links or filesystem paths. Use Markdown image tags with absolute local paths, for example `![light verification](/absolute/path/output/playwright/example.png)`.
 - For UI work, include dark-theme evidence in addition to the default/light-theme evidence unless the task is explicitly light-only.
 - For refresh-persistence fixes, include a post-refresh screenshot that still shows the expected UI state.
+
+## Docker Provider/Auth Regression Workflow
+
+- Use this workflow when a change touches Docker startup, Codex auth detection, OpenCode Zen/OpenRouter/custom providers, provider model loading, app-server config, chat send/reply handling, or failed-turn error rendering.
+- Build and test a packaged Docker image, not only the Vite dev server:
+  1. Run `pnpm run build`.
+  2. Run `pnpm pack --pack-destination /tmp`.
+  3. Build a local image that installs the packed `codexapp` tarball plus `@openai/codex`, with `CODEX_HOME=/codex-home` and command `codexapp --port ${PORT:-4190} --no-password --no-open --no-tunnel --no-login`.
+  4. Use OrbStack/Docker CLI. Do not rely on Docker Desktop.
+- Start fresh isolated containers on unique localhost ports for at least these cases:
+  - no auth file: no `/codex-home/auth.json`; expect runtime OpenCode Zen fallback, `model_provider="opencode-zen"`, `model="big-pickle"`, send `hi`, wait for an assistant reply.
+  - invalid/expired auth file: mount an `auth.json` with token fields containing invalid/expired strings; expect Codex provider path, send `hi`, wait for final 401/auth error rendered in chat, verify `Send feedback`, reload the thread, verify the error persists, and verify no duplicate live `Thinking` overlay remains after persistence.
+  - malformed auth file: mount invalid JSON as `/codex-home/auth.json`; expect it to be treated as unusable auth and fall back to Zen, then send `hi` and wait for a reply.
+  - provider switch: start from OpenCode Zen, send `hi` and wait for a reply, switch the Provider settings selector to OpenRouter (do not change the model dropdown directly), send `hi` again and wait for a reply.
+- Browser assertions must inspect conversation rows, not sidebar previews. A test is not passing just because the sidebar contains the sent text.
+- Save screenshots under `output/playwright/` for all Docker browser cases and show them inline in the completion report.
+- Before reporting success, include:
+  - tested URLs/ports,
+  - provider/config summary for each container,
+  - exact build/test commands,
+  - screenshot absolute paths,
+  - whether invalid auth persisted after reload and whether duplicate live overlay count was zero.
+- If any Docker edge case fails, fix it before requesting PR review or merge.
 
 ## Mandatory CJS + TestChat Validation For Markdown/File-Link Features
 
