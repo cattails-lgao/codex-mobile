@@ -448,6 +448,64 @@ describe('Codex CLI availability', () => {
     expect(state.error.value).toBe('Connection lost')
     expect(state.codexCliMissingError.value).toBe('')
   })
+
+  it('reuses a just-loaded thread list during startup refresh bursts', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+
+    try {
+      const state = useDesktopState()
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+
+      expect(gatewayMocks.getThreadGroupsPage).toHaveBeenCalledTimes(1)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('reuses a just-loaded skills list for the same selected cwd', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([
+      {
+        name: 'example',
+        description: 'Example skill',
+        path: '/tmp/project/.agents/skills/example/SKILL.md',
+        scope: 'project',
+        enabled: true,
+      },
+    ])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5'])
+
+    try {
+      const state = useDesktopState()
+      state.primeSelectedThread('thread-1')
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledTimes(1)
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledWith(['/tmp/project'])
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
 })
 
 describe('live error overlay', () => {

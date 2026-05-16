@@ -89,6 +89,8 @@ const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
+const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
+const RECENT_SKILLS_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
@@ -1514,6 +1516,9 @@ export function useDesktopState() {
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let refreshSkillsPromise: Promise<void> | null = null
+  let lastThreadListLoadAt = 0
+  let lastSkillsLoadAt = 0
+  let lastSkillsLoadKey = ''
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -4293,6 +4298,12 @@ export function useDesktopState() {
       await loadThreadsPromise
       return
     }
+    if (
+      hasLoadedThreads.value &&
+      Date.now() - lastThreadListLoadAt < RECENT_THREAD_LIST_LOAD_REUSE_MS
+    ) {
+      return
+    }
 
     loadThreadsPromise = (async () => {
     if (!hasLoadedThreads.value) {
@@ -4319,6 +4330,7 @@ export function useDesktopState() {
 
       applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
+      lastThreadListLoadAt = Date.now()
       if (!hasLoadedAllThreadPages) {
         scheduleRemainingThreadPages(rootsState)
       }
@@ -4524,15 +4536,25 @@ export function useDesktopState() {
   }
 
   async function refreshSkills(): Promise<void> {
+    const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
+    const skillsLoadKey = selectedCwd || '__global__'
     if (refreshSkillsPromise) {
       await refreshSkillsPromise
+      return
+    }
+    if (
+      installedSkills.value.length > 0 &&
+      lastSkillsLoadKey === skillsLoadKey &&
+      Date.now() - lastSkillsLoadAt < RECENT_SKILLS_LOAD_REUSE_MS
+    ) {
       return
     }
 
     refreshSkillsPromise = (async () => {
       try {
-        const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
         installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
+        lastSkillsLoadAt = Date.now()
+        lastSkillsLoadKey = skillsLoadKey
       } catch {
         // keep previous skills on failure
       } finally {
