@@ -6,6 +6,7 @@ import {
   filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
   getProviderCompatibilityConfigArgs,
+  shouldMarkOpenRouterKeyAsCustom,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
 } from './freeMode'
@@ -88,6 +89,41 @@ describe('unauthenticated free mode defaults', () => {
       provider: 'openrouter',
       wireApi: 'responses',
     }, false)).toBe(false)
+  })
+
+  it('does not treat remembered community OpenRouter keys as custom keys', () => {
+    expect(shouldMarkOpenRouterKeyAsCustom({
+      enabled: true,
+      apiKey: 'community-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: false,
+      provider: 'openrouter',
+      wireApi: 'responses',
+      providerKeys: {
+        openrouter: 'community-key',
+      },
+    }, '')).toBe(false)
+
+    expect(shouldMarkOpenRouterKeyAsCustom({
+      enabled: true,
+      apiKey: 'user-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: true,
+      provider: 'openrouter',
+      wireApi: 'responses',
+      providerKeys: {
+        openrouter: 'user-key',
+      },
+    }, '')).toBe(true)
+
+    expect(shouldMarkOpenRouterKeyAsCustom({
+      enabled: true,
+      apiKey: 'community-key',
+      model: FREE_MODE_DEFAULT_MODEL,
+      customKey: false,
+      provider: 'openrouter',
+      wireApi: 'responses',
+    }, 'explicit-user-key')).toBe(true)
   })
 
   it('uses the OpenCode Zen default model when persisted Zen state has an empty model', () => {

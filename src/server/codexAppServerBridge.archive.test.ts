@@ -4,12 +4,14 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   callRpcWithArchiveRecovery,
+  buildProjectlessFolderName,
   ensureDefaultFreeModeStateForMissingAuthSync,
   hasUsableCodexAuth,
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
   isUnauthenticatedRateLimitError,
+  writeFreeModeStateFile,
 } from './codexAppServerBridge'
 
 const originalCodexHome = process.env.CODEX_HOME
@@ -134,6 +136,22 @@ describe('callRpcWithArchiveRecovery', () => {
   })
 })
 
+describe('buildProjectlessFolderName', () => {
+  it('falls back to unique suffixes after the readable collision range', () => {
+    expect(buildProjectlessFolderName('hi', 0, 'ignored')).toBe('hi')
+    expect(buildProjectlessFolderName('hi', 1, 'ignored')).toBe('hi-2')
+    expect(buildProjectlessFolderName('hi', 19, 'ignored')).toBe('hi-20')
+    expect(buildProjectlessFolderName('hi', 20, 'mabc1234-deadbeef')).toBe('hi-mabc1234-deadbeef')
+  })
+
+  it('keeps long unique fallback names within the slug length limit', () => {
+    const slug = 'a'.repeat(80)
+    const folderName = buildProjectlessFolderName(slug, 20, 'mabc1234-deadbeef')
+    expect(folderName).toHaveLength(80)
+    expect(folderName).toMatch(/-mabc1234-deadbeef$/)
+  })
+})
+
 describe('isUnauthenticatedRateLimitError', () => {
   it('matches unauthenticated rate-limit failures from a fresh Codex home', () => {
     expect(isUnauthenticatedRateLimitError(new Error('codex account authentication required to read rate limits'))).toBe(true)
@@ -236,6 +254,27 @@ describe('hasUsableCodexAuth', () => {
 })
 
 describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
+  it('creates CODEX_HOME before writing free-mode state', async () => {
+    const codexHome = join(tmpdir(), `codex-home-missing-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    try {
+      await writeFreeModeStateFile(statePath, {
+        enabled: true,
+        apiKey: 'community-key',
+        model: 'openrouter/free',
+        customKey: false,
+        provider: 'openrouter',
+        wireApi: 'responses',
+      })
+
+      const info = await stat(statePath)
+      expect(info.isFile()).toBe(true)
+      expect(info.mode & 0o777).toBe(0o600)
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
   it('uses OpenCode Zen as a runtime fallback without creating a state file', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-runtime-zen-'))
     const statePath = join(codexHome, 'webui-custom-providers.json')

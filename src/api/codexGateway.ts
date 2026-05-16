@@ -1473,6 +1473,7 @@ export type ResumedThread = {
   turnIndexByTurnId: ThreadTurnIndexById
 }
 
+const RESUME_THREAD_COALESCE_TTL_MS = 30_000
 const recentResumeThreadById = new Map<string, Promise<ResumedThread>>()
 
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
@@ -1495,7 +1496,13 @@ export async function resumeThread(threadId: string): Promise<ResumedThread> {
   })()
 
   recentResumeThreadById.set(threadId, promise)
+  const hardEvictionTimer = globalThis.setTimeout(() => {
+    if (recentResumeThreadById.get(threadId) === promise) {
+      recentResumeThreadById.delete(threadId)
+    }
+  }, RESUME_THREAD_COALESCE_TTL_MS)
   void promise.finally(() => {
+    globalThis.clearTimeout(hardEvictionTimer)
     globalThis.setTimeout(() => {
       if (recentResumeThreadById.get(threadId) === promise) {
         recentResumeThreadById.delete(threadId)

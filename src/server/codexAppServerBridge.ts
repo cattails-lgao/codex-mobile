@@ -31,6 +31,7 @@ import {
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
   getProviderCompatibilityConfigArgs,
+  shouldMarkOpenRouterKeyAsCustom,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
@@ -231,6 +232,7 @@ const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thre
 const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS = 100
+const PROJECTLESS_THREAD_READABLE_DIRECTORY_ATTEMPTS = 20
 const PROJECTLESS_THREAD_SLUG_MAX_LENGTH = 80
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
 const API_PERF_MS_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_MS_THRESHOLD'
@@ -1085,6 +1087,19 @@ function buildProjectlessPromptSlug(prompt: string | null): string {
   return slug && slug.length > 0 ? slug : 'new-chat'
 }
 
+function buildProjectlessUniqueSuffix(): string {
+  return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
+}
+
+export function buildProjectlessFolderName(slug: string, index: number, uniqueSuffix = buildProjectlessUniqueSuffix()): string {
+  if (index === 0) return slug
+  if (index < PROJECTLESS_THREAD_READABLE_DIRECTORY_ATTEMPTS) return `${slug}-${index + 1}`
+
+  const suffix = `-${uniqueSuffix}`
+  const maxSlugLength = Math.max(1, PROJECTLESS_THREAD_SLUG_MAX_LENGTH - suffix.length)
+  return `${slug.slice(0, maxSlugLength)}${suffix}`
+}
+
 async function ensureRealDirectory(path: string, label: string): Promise<void> {
   const info = await lstat(path)
   if (info.isSymbolicLink() || !info.isDirectory()) {
@@ -1103,7 +1118,7 @@ async function createProjectlessThreadDirectory(prompt: string | null): Promise<
 
   const slug = buildProjectlessPromptSlug(prompt)
   for (let index = 0; index < PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS; index += 1) {
-    const folderName = index === 0 ? slug : `${slug}-${index + 1}`
+    const folderName = buildProjectlessFolderName(slug, index)
     const cwd = join(dateDir, folderName)
     try {
       await mkdir(cwd, { recursive: false })
@@ -3401,6 +3416,11 @@ function readFreeModeStateSync(statePath: string): FreeModeState | null {
   } catch {
     return null
   }
+}
+
+export async function writeFreeModeStateFile(statePath: string, state: FreeModeState): Promise<void> {
+  await mkdir(dirname(statePath), { recursive: true })
+  await writeFile(statePath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 })
 }
 
 export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
@@ -6045,7 +6065,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 wireApi: prev.wireApi === 'chat' ? 'chat' : 'responses',
                 providerKeys: prevKeys,
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               const freeModels = await getFreeModels()
               setJson(res, 200, {
@@ -6068,7 +6088,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 wireApi: prev.wireApi === 'chat' ? 'chat' : 'responses',
                 providerKeys: prevKeys,
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, enabled: false })
             }
@@ -6143,7 +6163,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             const current = readFreeModeState()
             const state: FreeModeState = { ...current, apiKey, customKey: false }
-            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            await writeFreeModeStateFile(statePath, state)
             appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {
@@ -6167,7 +6187,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 provider: 'openrouter',
                 wireApi: current.wireApi === 'chat' ? 'chat' : 'responses',
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: true })
             } else {
@@ -6179,7 +6199,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 provider: 'openrouter',
                 wireApi: current.wireApi === 'chat' ? 'chat' : 'responses',
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: false })
             }
@@ -6223,13 +6243,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               enabled: true,
               apiKey: resolvedKey,
               model: resolvedModel,
-              customKey: providerType === 'openrouter' ? Boolean(resolvedKey) : true,
+              customKey: providerType === 'openrouter'
+                ? shouldMarkOpenRouterKeyAsCustom(current, apiKey)
+                : true,
               provider: providerType,
               customBaseUrl: providerType === 'custom' ? baseUrl : undefined,
               wireApi,
               providerKeys: prevKeys,
             }
-            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            await writeFreeModeStateFile(statePath, state)
             appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {

@@ -6,29 +6,11 @@
 - Documents: PR #174 chat link parser fixes, Qodo/CodeRabbit finding triage, dynamic-origin `codex://threads/<id>` URL rewriting, light/dark Playwright checks, and profile result.
 - Updated `index.md`.
 
-## [2026-05-13] ingest | copied auth provider promotion
-- Added source: [raw/fixes/copied-auth-provider-promotion.md](../raw/fixes/copied-auth-provider-promotion.md).
+## [2026-05-14] ingest | provider-locked auth and model fixes
+- Added sources: [raw/fixes/copied-auth-provider-promotion.md](../raw/fixes/copied-auth-provider-promotion.md), [raw/fixes/opencode-zen-docker-auth-provider-models.md](../raw/fixes/opencode-zen-docker-auth-provider-models.md), [raw/fixes/thread-locked-provider-models.md](../raw/fixes/thread-locked-provider-models.md), and [raw/fixes/provider-config-restart-and-review-followups.md](../raw/fixes/provider-config-restart-and-review-followups.md).
 - Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
-- Documents: suppressing community fallback provider state after valid Codex auth appears, preserving user-configured providers, importing copied auth into Accounts, provider-scoped Codex model persistence, stale feedback-row cleanup, and packaged Docker validation.
-- Updated [index.md](./index.md).
-
-## [2026-05-13] ingest | OpenCode Zen Docker auth and provider models
-- Added source: [raw/fixes/opencode-zen-docker-auth-provider-models.md](../raw/fixes/opencode-zen-docker-auth-provider-models.md).
-- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
-- Documents: no-auth Zen runtime fallback, auth-mounted Docker switching back to Codex defaults, first-turn materialization as a transient live-state condition, provider-model-first loading, and the build-time Docker install workaround for runtime `pnpm dlx` OOM risk.
+- Documents: copied auth promotion from community provider state to Codex, no-auth Zen runtime fallback, Docker auth/provider switching, first-turn materialization as transient live state, provider-scoped model loading, thread provider locks across Zen/Codex/OpenRouter, app-server restart on provider config changes, Browser Use verification, GPT send timing, and review follow-up risks.
 - Updated [overview.md](./overview.md), [entities/codex-web-local.md](./entities/codex-web-local.md), and [index.md](./index.md).
-
-## [2026-05-14] ingest | thread-locked provider models
-- Added source: [raw/fixes/thread-locked-provider-models.md](../raw/fixes/thread-locked-provider-models.md).
-- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
-- Documents: provider capture at thread creation, existing-thread model menus resolved by captured provider, current-provider model selection for new chats, and mixed Zen/Codex/OpenRouter project behavior.
-- Updated [index.md](./index.md).
-
-## [2026-05-14] ingest | provider config restart and review follow-ups
-- Added source: [raw/fixes/provider-config-restart-and-review-followups.md](../raw/fixes/provider-config-restart-and-review-followups.md).
-- Updated wiki page: [concepts/opencode-zen-big-pickle.md](./concepts/opencode-zen-big-pickle.md).
-- Documents: stale no-auth Zen app-server config after copying auth into a running local Vite `CODEX_HOME`, the config-signature restart fix, Browser Use verification of `GPT-5.5` after auth promotion, GPT-5.4 send timing, and remaining PR review risks for provider-locked model isolation.
-- Updated [index.md](./index.md).
 
 ## [2026-05-02] ingest | Directory Hub Composio and Skills search
 - Added source: `raw/features/directory-hub-composio-skills-search.md`.

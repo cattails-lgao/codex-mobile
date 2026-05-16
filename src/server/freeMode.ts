@@ -216,6 +216,14 @@ export function shouldSuppressCommunityFreeModeForCodexAuth(
   return current.provider === 'openrouter' || current.provider === 'opencode-zen' || !current.provider
 }
 
+export function shouldMarkOpenRouterKeyAsCustom(
+  current: FreeModeState | null,
+  explicitApiKey: string,
+): boolean {
+  if (explicitApiKey.trim().length > 0) return true
+  return current?.provider === 'openrouter' && current.customKey === true
+}
+
 export function getFreeModeEnvVars(state: FreeModeState): Record<string, string> {
   if (!state.enabled) return {}
 

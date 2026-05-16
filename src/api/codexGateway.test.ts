@@ -208,6 +208,7 @@ describe('getThreadDetail', () => {
 
 describe('resumeThread', () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -232,6 +233,31 @@ describe('resumeThread', () => {
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
     expect(requests).toEqual([
       { method: 'thread/resume', params: { threadId: 'missing-thread' } },
+    ])
+  })
+
+  it('evicts a stalled resume so later resume attempts are not pinned forever', async () => {
+    vi.useFakeTimers()
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string; params: Record<string, unknown> }
+        : { method: '', params: {} }
+      requests.push(body)
+      return new Promise<Response>(() => undefined)
+    }))
+
+    const first = resumeThread('stalled-thread')
+    void resumeThread('stalled-thread')
+    expect(requests).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    const retried = resumeThread('stalled-thread')
+    expect(retried).not.toBe(first)
+    expect(requests).toEqual([
+      { method: 'thread/resume', params: { threadId: 'stalled-thread' } },
+      { method: 'thread/resume', params: { threadId: 'stalled-thread' } },
     ])
   })
 })
