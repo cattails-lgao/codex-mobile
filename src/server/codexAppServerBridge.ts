@@ -3076,38 +3076,87 @@ function resolveGitRelativePath(repoRoot: string, filePath: string): string {
   return join(repoRoot, ...filePath.split('/'))
 }
 
-async function preserveUntrackedFilesForGitTarget(repoRoot: string, targetRef: string): Promise<string[]> {
+type PreservedUntrackedFile = {
+  filePath: string
+  sourcePath: string
+  backupPath: string
+}
+
+function gitPathsConflict(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+}
+
+async function removeEmptyGitRelativeParents(repoRoot: string, filePath: string): Promise<void> {
+  let current = dirname(resolveGitRelativePath(repoRoot, filePath))
+  while (current !== repoRoot && current.startsWith(`${repoRoot}/`)) {
+    try {
+      await rm(current, { recursive: false })
+    } catch {
+      return
+    }
+    current = dirname(current)
+  }
+}
+
+async function rollbackPreservedUntrackedFiles(entries: PreservedUntrackedFile[]): Promise<void> {
+  for (const entry of entries.slice().reverse()) {
+    try {
+      if (existsSync(entry.backupPath) && !existsSync(entry.sourcePath)) {
+        await mkdir(dirname(entry.sourcePath), { recursive: true })
+        await rename(entry.backupPath, entry.sourcePath)
+      }
+    } catch {
+      // Preserve the original git failure; best-effort rollback avoids masking it.
+    }
+  }
+}
+
+async function preserveUntrackedFilesForGitTarget(repoRoot: string, targetRef: string): Promise<PreservedUntrackedFile[]> {
   const [untrackedRaw, targetTreeRaw] = await Promise.all([
     runCommandCaptureRaw('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: repoRoot }),
     runCommandCaptureRaw('git', ['ls-tree', '-r', '--name-only', '-z', `${targetRef}^{tree}`], { cwd: repoRoot }),
   ])
-  const targetPaths = new Set(splitGitPathList(targetTreeRaw))
+  const targetPaths = splitGitPathList(targetTreeRaw)
   const conflictingUntrackedPaths = splitGitPathList(untrackedRaw)
-    .filter((filePath) => targetPaths.has(filePath) && isSafeGitRelativePath(filePath))
+    .filter((filePath) => isSafeGitRelativePath(filePath) && targetPaths.some((targetPath) => gitPathsConflict(filePath, targetPath)))
   if (conflictingUntrackedPaths.length === 0) return []
 
   const backupRoot = join(repoRoot, HEADER_GIT_UNTRACKED_BACKUP_DIR, new Date().toISOString().replace(/[:.]/g, '-'))
+  const movedFiles: PreservedUntrackedFile[] = []
   for (const filePath of conflictingUntrackedPaths) {
     const sourcePath = resolveGitRelativePath(repoRoot, filePath)
     const backupPath = join(backupRoot, ...filePath.split('/'))
     await mkdir(dirname(backupPath), { recursive: true })
     await rename(sourcePath, backupPath)
+    movedFiles.push({ filePath, sourcePath, backupPath })
+    await removeEmptyGitRelativeParents(repoRoot, filePath)
   }
-  return conflictingUntrackedPaths
+  return movedFiles
+}
+
+async function withPreservedUntrackedFilesForGitTarget(repoRoot: string, targetRef: string, operation: () => Promise<void>): Promise<void> {
+  const movedFiles = await preserveUntrackedFilesForGitTarget(repoRoot, targetRef)
+  try {
+    await operation()
+  } catch (error) {
+    await rollbackPreservedUntrackedFiles(movedFiles)
+    throw error
+  }
 }
 
 async function checkoutGitBranchWithWorktreeRecovery(repoRoot: string, branchName: string): Promise<void> {
-  await preserveUntrackedFilesForGitTarget(repoRoot, branchName)
-  try {
-    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
-  } catch (checkoutError) {
-    const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, branchName)
-    if (!blockingWorktreePath) {
-      throw checkoutError
+  await withPreservedUntrackedFilesForGitTarget(repoRoot, branchName, async () => {
+    try {
+      await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+    } catch (checkoutError) {
+      const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, branchName)
+      if (!blockingWorktreePath) {
+        throw checkoutError
+      }
+      await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
+      await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
     }
-    await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
-    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
-  }
+  })
 }
 
 async function pruneHeaderGitResetHistoryRefs(repoRoot: string, branchName: string): Promise<void> {
@@ -7535,8 +7584,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
           await runCommand('git', ['update-ref', toHeaderGitResetHistoryRef(branch, previousTip.trim()), previousTip.trim()], { cwd: gitRoot })
           await pruneHeaderGitResetHistoryRefs(gitRoot, branch)
-          await preserveUntrackedFilesForGitTarget(gitRoot, targetSha.trim())
-          await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
+          await withPreservedUntrackedFilesForGitTarget(gitRoot, targetSha.trim(), async () => {
+            await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
+          })
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to reset branch to commit') })

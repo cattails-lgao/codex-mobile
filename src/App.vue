@@ -3431,6 +3431,13 @@ function onToggleContentHeaderReview(): void {
   isReviewPaneOpen.value = !isReviewPaneOpen.value
 }
 
+function clearCommitReviewContext(): void {
+  if (!reviewInitialFilePath.value && !reviewInitialCommitSha.value) return
+  reviewInitialFilePath.value = ''
+  reviewInitialCommitSha.value = ''
+  isReviewPaneOpen.value = false
+}
+
 async function onOpenProjectSetupModal(): Promise<void> {
   const baseDir = await resolveProjectBaseDirectory()
   if (!baseDir) return
@@ -4389,6 +4396,13 @@ watch(
   () => composerCwd.value,
   () => {
     void refreshTerminalQuickCommands()
+  },
+)
+
+watch(
+  () => [selectedThreadId.value, composerCwd.value] as const,
+  () => {
+    clearCommitReviewContext()
   },
 )
 

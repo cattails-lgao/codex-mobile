@@ -1055,10 +1055,13 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 24. Create only an untracked file whose path includes leading/trailing whitespace and does not exist in the target commit, try to reset to a commit, and confirm the reset proceeds while the exact untracked filename remains in place.
 25. Create only an untracked file whose path includes leading/trailing whitespace and exists in the target commit, try to reset to that target, and confirm the reset proceeds and the exact untracked filename is moved under `.codex/untracked-backups/` instead of being overwritten or renamed incorrectly.
 26. Add or inspect a commit that changes a file whose name includes leading/trailing whitespace, then select that commit and confirm the commit file list shows the exact path, correct `+`/`-` counts, and opens the same path in the Review pane.
-27. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
-28. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
-29. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
-30. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, 28, and 29.
+27. Create an untracked nested file whose parent path is a tracked file in the target commit, or the inverse file/directory case, and confirm checkout/reset moves the conflicting untracked path to `.codex/untracked-backups/` before the Git operation.
+28. Force a checkout/reset failure after an untracked backup move, such as by making the target branch unavailable in a disposable repository, and confirm the moved untracked file is restored to its original path.
+29. Open a commit file in the Review pane, navigate to a different thread or repository cwd, and confirm the commit-scoped file/sha state clears and the pane closes instead of showing the old commit against the new repo.
+30. At a mobile viewport around 375px wide, select a commit and confirm the dropdown fits inside the viewport with branches first, commits second, and selected-commit files last, stacked vertically instead of squeezed into columns.
+31. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
+32. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
+33. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, and 32.
 
 #### Preserved Prior Coverage
 1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
@@ -1103,6 +1106,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - The branch commit list still shows commits that were ahead of the reset target by reading saved internal reset-history refs.
 - Reset-history refs are bounded so repeated resets do not grow commit-list inputs without limit.
 - Untracked files that would collide with target tracked files are moved to `.codex/untracked-backups/` before checkout/reset, preserving exact Git path bytes from NUL-delimited output.
+- Untracked file/directory conflicts are detected when either the untracked path or target path is the other's directory prefix.
+- If checkout/reset fails after moving untracked files into `.codex/untracked-backups/`, those files are restored to their original paths.
+- Commit-scoped Review pane state is cleared when navigating to another thread or repository cwd.
 - The selected branch HEAD commit is marked `current` in the commit list.
 - The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
 - The mobile Review pane diff area scrolls vertically without moving or hiding the pane header.
@@ -1124,7 +1130,9 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser` completed after the review-summary changes.
 - Latest report: `output/playwright/browser-runtime-profile-home-2026-05-12T12-50-45-771Z.json`.
 - Follow-up report after the commit-review meta-label fix: `output/playwright/browser-runtime-profile-home-2026-05-12T13-04-36-811Z.json`.
+- Follow-up report after review-state and untracked-backup fixes: `output/playwright/browser-runtime-profile-home-2026-05-16T02-15-38-533Z.json`.
 - The profile showed one `thread/list:first-page` request, one `skills/list` request, one `rateLimitsRead` request, and the existing `threadRead=3` warning. No duplicate review-summary request was introduced on the home route.
+- The latest profile showed one `thread/list:first-page` request and existing startup warnings for `threadRead=4` and `skillsList=2`; no review-summary fanout was introduced.
 - The review-summary path now uses one tracked `git diff --numstat` plus NUL-delimited `git ls-files --others --exclude-standard -z`; untracked line counts are streamed from disk instead of reading full files into memory.
 
 ---
