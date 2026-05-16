@@ -2307,7 +2307,14 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     if (typeof match.index !== 'number') continue
     const start = match.index
     const end = start + match[0].length
-    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, match[0])
+    let token = match[0]
+    let trailingPunctuation = ''
+    while (/[.,;:!?，。；：！？、]$/u.test(token)) {
+      trailingPunctuation = token.slice(-1) + trailingPunctuation
+      token = token.slice(0, -1)
+    }
+
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, token)
     const segmentStart = asteriskWrapper?.segmentStart ?? start
     const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
@@ -2315,13 +2322,8 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       segments.push({ kind: 'text', value: text.slice(cursor, segmentStart) })
     }
 
-    let token = asteriskWrapper?.tokenEndTrim
-      ? match[0].slice(0, -asteriskWrapper.tokenEndTrim)
-      : match[0]
-    let trailingPunctuation = ''
-    while (/[.,;:!?，。；：！？、]$/u.test(token)) {
-      trailingPunctuation = token.slice(-1) + trailingPunctuation
-      token = token.slice(0, -1)
+    if (asteriskWrapper?.tokenEndTrim) {
+      token = token.slice(0, -asteriskWrapper.tokenEndTrim)
     }
     const wrapped = trimLinkWrappers(token)
     token = wrapped.core
