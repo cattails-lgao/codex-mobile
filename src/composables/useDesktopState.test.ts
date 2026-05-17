@@ -392,6 +392,21 @@ describe('thread unread state helpers', () => {
 })
 
 describe('collaboration mode selection', () => {
+  it('can prime an empty selected thread without clearing persisted selection', () => {
+    installTestWindow({
+      'codex-web-local.selected-thread-id.v1': 'thread-a',
+    })
+
+    const state = useDesktopState()
+
+    expect(state.selectedThreadId.value).toBe('thread-a')
+
+    state.primeSelectedThread('', { persist: false })
+
+    expect(state.selectedThreadId.value).toBe('')
+    expect(window.localStorage.getItem('codex-web-local.selected-thread-id.v1')).toBe('thread-a')
+  })
+
   it('does not carry plan mode from new chats into existing threads', () => {
     installTestWindow({
       'codex-web-local.collaboration-mode.v1': 'plan',
@@ -447,6 +462,139 @@ describe('Codex CLI availability', () => {
     await state.refreshAll({ awaitAncillaryRefreshes: true })
     expect(state.error.value).toBe('Connection lost')
     expect(state.codexCliMissingError.value).toBe('')
+  })
+
+})
+
+describe('startup request deduplication', () => {
+  it('reuses a just-loaded thread list during startup refresh bursts', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+
+    try {
+      const state = useDesktopState()
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+
+      expect(gatewayMocks.getThreadGroupsPage).toHaveBeenCalledTimes(1)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('reuses a just-loaded skills list for the same selected cwd', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([
+      {
+        name: 'example',
+        description: 'Example skill',
+        path: '/tmp/project/.agents/skills/example/SKILL.md',
+        scope: 'project',
+        enabled: true,
+      },
+    ])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5'])
+
+    try {
+      const state = useDesktopState()
+      state.primeSelectedThread('thread-1')
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledTimes(1)
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledWith(['/tmp/project'])
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('reuses a just-loaded empty skills list for the same selected cwd', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5'])
+
+    try {
+      const state = useDesktopState()
+      state.primeSelectedThread('thread-1')
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledTimes(1)
+      expect(state.installedSkills.value).toEqual([])
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('bypasses recent thread-list reuse for event-driven thread refreshes', async () => {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+
+    try {
+      const state = useDesktopState()
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+      const callsBeforeNotification = gatewayMocks.getThreadGroupsPage.mock.calls.length
+      state.startPolling()
+      expect(notificationHandler).toBeDefined()
+      notificationHandler!({
+        method: 'thread/name/updated',
+        params: {
+          threadId: 'thread-1',
+          threadName: 'Updated title',
+        },
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBeGreaterThan(callsBeforeNotification)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 })
 
@@ -958,6 +1106,8 @@ describe('provider model selection', () => {
         turn: { id: 'turn-1', status: 'completed' },
       },
     })
+    await Promise.resolve()
+    await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
 
