@@ -506,6 +506,37 @@ describe('Codex CLI availability', () => {
       nowSpy.mockRestore()
     }
   })
+
+  it('reuses a just-loaded empty skills list for the same selected cwd', async () => {
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+    gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    gatewayMocks.getAccountRateLimits.mockResolvedValue(null)
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model: 'gpt-5.5',
+      providerId: '',
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+    gatewayMocks.getAvailableModelIds.mockResolvedValue(['gpt-5.5'])
+
+    try {
+      const state = useDesktopState()
+      state.primeSelectedThread('thread-1')
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+      await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+
+      expect(gatewayMocks.getSkillsList).toHaveBeenCalledTimes(1)
+      expect(state.installedSkills.value).toEqual([])
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
 })
 
 describe('live error overlay', () => {
@@ -1018,6 +1049,8 @@ describe('provider model selection', () => {
     })
     await Promise.resolve()
     await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(gatewayMocks.getThreadDetail).toHaveBeenCalledWith('mini-thread')
     expect(state.messages.value.map((message) => `${message.role}:${message.text}`)).toEqual([
@@ -1025,6 +1058,47 @@ describe('provider model selection', () => {
       'system:Worked for <1s',
       'assistant:Hi.',
     ])
+  })
+
+  it('bypasses recent thread-list reuse for event-driven thread refreshes', async () => {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-1', '/tmp/project')] }],
+      nextCursor: null,
+    })
+
+    try {
+      const state = useDesktopState()
+      await state.refreshAll({ includeSelectedThreadMessages: false })
+      const callsBeforeNotification = gatewayMocks.getThreadGroupsPage.mock.calls.length
+      state.startPolling()
+      expect(notificationHandler).toBeDefined()
+      notificationHandler!({
+        method: 'thread/name/updated',
+        params: {
+          threadId: 'thread-1',
+          threadName: 'Updated title',
+        },
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBeGreaterThan(callsBeforeNotification)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('surfaces selected thread load failures and still refreshes models', async () => {

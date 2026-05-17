@@ -1517,10 +1517,12 @@ export function useDesktopState() {
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let refreshSkillsPromise: Promise<void> | null = null
   let lastThreadListLoadAt = 0
+  let hasLoadedSkills = false
   let lastSkillsLoadAt = 0
   let lastSkillsLoadKey = ''
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
+  let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
@@ -4011,6 +4013,7 @@ export function useDesktopState() {
 
     if (shouldRefreshThreads) {
       pendingThreadsRefresh = true
+      pendingThreadsRefreshForce = true
     }
 
     if (eventSyncTimer !== null || typeof window === 'undefined') return
@@ -4293,12 +4296,13 @@ export function useDesktopState() {
     }
   }
 
-  async function loadThreads() {
+  async function loadThreads(options: { force?: boolean } = {}) {
     if (loadThreadsPromise) {
       await loadThreadsPromise
       return
     }
     if (
+      options.force !== true &&
       hasLoadedThreads.value &&
       Date.now() - lastThreadListLoadAt < RECENT_THREAD_LIST_LOAD_REUSE_MS
     ) {
@@ -4535,7 +4539,7 @@ export function useDesktopState() {
     await loadMessages(threadId, options)
   }
 
-  async function refreshSkills(): Promise<void> {
+  async function refreshSkills(options: { force?: boolean } = {}): Promise<void> {
     const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
     const skillsLoadKey = selectedCwd || '__global__'
     if (refreshSkillsPromise) {
@@ -4543,7 +4547,8 @@ export function useDesktopState() {
       return
     }
     if (
-      installedSkills.value.length > 0 &&
+      options.force !== true &&
+      hasLoadedSkills &&
       lastSkillsLoadKey === skillsLoadKey &&
       Date.now() - lastSkillsLoadAt < RECENT_SKILLS_LOAD_REUSE_MS
     ) {
@@ -4553,6 +4558,7 @@ export function useDesktopState() {
     refreshSkillsPromise = (async () => {
       try {
         installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
+        hasLoadedSkills = true
         lastSkillsLoadAt = Date.now()
         lastSkillsLoadKey = skillsLoadKey
       } catch {
@@ -5448,13 +5454,15 @@ export function useDesktopState() {
     isPolling.value = true
 
     const shouldRefreshThreads = pendingThreadsRefresh
+    const shouldForceThreadRefresh = pendingThreadsRefreshForce
     const threadIdsToRefresh = new Set(pendingThreadMessageRefresh)
     pendingThreadsRefresh = false
+    pendingThreadsRefreshForce = false
     pendingThreadMessageRefresh.clear()
 
     try {
       if (shouldRefreshThreads) {
-        await loadThreads()
+        await loadThreads({ force: shouldForceThreadRefresh })
       }
 
       const activeThreadId = selectedThreadId.value

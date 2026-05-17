@@ -5872,6 +5872,7 @@ Message loads for an already selected thread do not trigger redundant model pref
 
 #### Rollback/Cleanup
 - Stop the temporary Vite server if it was only used for this check.
+- Remove the temporary isolated `CODEX_HOME` if it is no longer needed.
 
 ---
 
@@ -5890,7 +5891,7 @@ Startup thread-list and skills-list refreshes reuse fresh in-memory results, and
 3. Confirm `duplicateCounts.threadListFirstPage` is `1`, `duplicateCounts.skillsList` is `1`, and `warnings` is empty.
 4. Run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:thread`.
 5. Open the generated `output/playwright/browser-runtime-profile-thread-*.json`.
-6. Confirm `duplicateCounts.threadReadWithTurns` is `0` or `1`, `duplicateCounts.threadReadDuplicateKeys` is `0`, and `warnings` is empty.
+6. Confirm `duplicateCounts.threadReadWithTurns` is `0`, `duplicateCounts.threadReadDuplicateKeys` is `0`, and `warnings` is empty.
 7. Repeat the home route in dark theme and confirm the page finishes loading without `pageState.stillLoadingThreads`.
 
 #### Expected Results
