@@ -1674,10 +1674,12 @@ export function useDesktopState() {
     return availableModelIds.value[0] ?? ''
   }
 
-  function setSelectedThreadId(nextThreadId: string): void {
+  function setSelectedThreadId(nextThreadId: string, options: { persist?: boolean } = {}): void {
     if (selectedThreadId.value === nextThreadId) return
     selectedThreadId.value = nextThreadId
-    saveSelectedThreadId(nextThreadId)
+    if (options.persist !== false) {
+      saveSelectedThreadId(nextThreadId)
+    }
     selectedModelId.value = readProviderCompatibleSelectedModel(readModelIdForThread(nextThreadId))
     selectedCollaborationMode.value = readSelectedCollaborationMode(
       selectedCollaborationModeByContext.value,
@@ -5655,8 +5657,8 @@ export function useDesktopState() {
     void sendMessageToSelectedThread(msg.text, msg.imageUrls, msg.skills, 'steer', msg.fileAttachments)
   }
 
-  function primeSelectedThread(threadId: string): void {
-    setSelectedThreadId(threadId)
+  function primeSelectedThread(threadId: string, options: { persist?: boolean } = {}): void {
+    setSelectedThreadId(threadId, options)
   }
 
   return {

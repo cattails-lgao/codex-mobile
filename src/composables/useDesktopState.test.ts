@@ -392,6 +392,21 @@ describe('thread unread state helpers', () => {
 })
 
 describe('collaboration mode selection', () => {
+  it('can prime an empty selected thread without clearing persisted selection', () => {
+    installTestWindow({
+      'codex-web-local.selected-thread-id.v1': 'thread-a',
+    })
+
+    const state = useDesktopState()
+
+    expect(state.selectedThreadId.value).toBe('thread-a')
+
+    state.primeSelectedThread('', { persist: false })
+
+    expect(state.selectedThreadId.value).toBe('')
+    expect(window.localStorage.getItem('codex-web-local.selected-thread-id.v1')).toBe('thread-a')
+  })
+
   it('does not carry plan mode from new chats into existing threads', () => {
     installTestWindow({
       'codex-web-local.collaboration-mode.v1': 'plan',
