@@ -4795,7 +4795,7 @@ onBeforeUnmount(() => {
 }
 
 .plan-card-markdown :deep(.message-inline-code) {
-  @apply rounded-md bg-slate-200/80 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-900;
+  @apply bg-transparent p-0 font-sans text-[1em] font-semibold text-inherit;
 }
 
 .plan-card-markdown :deep(.message-file-link) {
@@ -4969,7 +4969,8 @@ onBeforeUnmount(() => {
 }
 
 .message-inline-code {
-  @apply rounded-md border border-slate-200 bg-slate-100/60 px-1.5 py-0.5 text-[0.875em] leading-[1.4] text-slate-900 font-mono;
+  @apply bg-transparent p-0 font-sans text-[1em] font-semibold text-inherit;
+  line-height: inherit;
 }
 
 .message-code-block {
