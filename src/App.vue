@@ -2728,8 +2728,16 @@ async function onCreateProjectWorktree(projectName: string): Promise<void> {
   }
 }
 
+function resolveSelectedThreadProjectCwd(): string {
+  const thread = selectedThread.value
+  if (!thread) return ''
+  const projectName = thread.projectName?.trim() ?? ''
+  if (!projectName) return thread.cwd?.trim() ?? ''
+  return resolvePreferredLocalCwd(projectName, thread.cwd?.trim() ?? '')
+}
+
 function onStartNewThreadFromToolbar(): void {
-  newThreadCwd.value = ''
+  newThreadCwd.value = resolveSelectedThreadProjectCwd()
   newThreadRuntime.value = 'local'
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
