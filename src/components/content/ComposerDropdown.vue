@@ -90,6 +90,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 const isOpen = ref(false)
 const searchQuery = ref('')
 const menuWrapStyle = ref<Record<string, string>>({})
+let isLayoutListenerAttached = false
 
 const selectedLabel = computed(() => {
   const selected = props.options.find((option) => option.value === props.modelValue)
@@ -157,6 +158,20 @@ function updateMenuPosition(): void {
   }
 }
 
+function addLayoutListeners(): void {
+  if (isLayoutListenerAttached || typeof window === 'undefined') return
+  window.addEventListener('resize', updateMenuPosition)
+  window.addEventListener('scroll', updateMenuPosition, true)
+  isLayoutListenerAttached = true
+}
+
+function removeLayoutListeners(): void {
+  if (!isLayoutListenerAttached || typeof window === 'undefined') return
+  window.removeEventListener('resize', updateMenuPosition)
+  window.removeEventListener('scroll', updateMenuPosition, true)
+  isLayoutListenerAttached = false
+}
+
 function onSelect(value: string): void {
   emit('update:modelValue', value)
   isOpen.value = false
@@ -185,9 +200,11 @@ function onDocumentPointerDown(event: PointerEvent): void {
 
 watch(isOpen, (open) => {
   if (!open) {
+    removeLayoutListeners()
     menuWrapStyle.value = {}
     return
   }
+  addLayoutListeners()
   nextTick(() => {
     updateMenuPosition()
     window.requestAnimationFrame(updateMenuPosition)
@@ -197,14 +214,11 @@ watch(isOpen, (open) => {
 
 onMounted(() => {
   window.addEventListener('pointerdown', onDocumentPointerDown)
-  window.addEventListener('resize', updateMenuPosition)
-  window.addEventListener('scroll', updateMenuPosition, true)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', onDocumentPointerDown)
-  window.removeEventListener('resize', updateMenuPosition)
-  window.removeEventListener('scroll', updateMenuPosition, true)
+  removeLayoutListeners()
 })
 </script>
 

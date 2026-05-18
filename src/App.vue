@@ -2267,6 +2267,7 @@ function clearSidebarSearch(): void {
 }
 
 function onSidebarScroll(): void {
+  if (isSidebarCollapsed.value) return
   sidebarScrollTop = sidebarScrollableRef.value?.scrollTop ?? 0
 }
 
@@ -2738,7 +2739,10 @@ function resolveSelectedThreadProjectCwd(): string {
 }
 
 function onStartNewThreadFromToolbar(): void {
-  newThreadCwd.value = resolveSelectedThreadProjectCwd()
+  const resolvedCwd = resolveSelectedThreadProjectCwd()
+  if (resolvedCwd) {
+    newThreadCwd.value = resolvedCwd
+  }
   newThreadRuntime.value = 'local'
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
@@ -2836,6 +2840,7 @@ function setSidebarCollapsed(nextValue: boolean): void {
   saveSidebarCollapsed(nextValue)
   if (!nextValue) {
     void nextTick(() => {
+      if (isSidebarCollapsed.value) return
       if (!sidebarScrollableRef.value) return
       sidebarScrollableRef.value.scrollTop = sidebarScrollTop
     })
