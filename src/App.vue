@@ -547,6 +547,7 @@
               :placeholder="terminalCommandPlaceholder"
               :selected-prefix-icon="IconTablerTerminal"
               :icon-only="true"
+              menu-align="end"
               :empty-label="t('No commands')"
               @update:model-value="onSelectHeaderTerminalCommand"
             />
