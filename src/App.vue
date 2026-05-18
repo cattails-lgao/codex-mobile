@@ -2,7 +2,11 @@
   <DesktopLayout :is-sidebar-collapsed="isSidebarCollapsed" @close-sidebar="setSidebarCollapsed(true)">
     <template #sidebar>
       <section class="sidebar-root">
-        <div class="sidebar-scrollable">
+        <div
+          ref="sidebarScrollableRef"
+          class="sidebar-scrollable"
+          @scroll="onSidebarScroll"
+        >
           <SidebarThreadControls
             v-if="!isSidebarCollapsed"
             class="sidebar-thread-controls-host"
@@ -1480,6 +1484,7 @@ const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: str
 const isSidebarCollapsed = ref(loadSidebarCollapsed())
 const sidebarSearchQuery = ref('')
 const isSidebarSearchVisible = ref(false)
+const sidebarScrollableRef = ref<HTMLElement | null>(null)
 const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
 const settingsAreaRef = ref<HTMLElement | null>(null)
 const settingsPanelRef = ref<HTMLElement | null>(null)
@@ -1487,6 +1492,7 @@ const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
+let sidebarScrollTop = 0
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
 let threadCommitFilesRequestId = 0
@@ -2259,6 +2265,10 @@ function clearSidebarSearch(): void {
   sidebarSearchInputRef.value?.focus()
 }
 
+function onSidebarScroll(): void {
+  sidebarScrollTop = sidebarScrollableRef.value?.scrollTop ?? 0
+}
+
 function onSidebarSearchKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     isSidebarSearchVisible.value = false
@@ -2810,8 +2820,17 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
 
 function setSidebarCollapsed(nextValue: boolean): void {
   if (isSidebarCollapsed.value === nextValue) return
+  if (nextValue) {
+    sidebarScrollTop = sidebarScrollableRef.value?.scrollTop ?? sidebarScrollTop
+  }
   isSidebarCollapsed.value = nextValue
   saveSidebarCollapsed(nextValue)
+  if (!nextValue) {
+    void nextTick(() => {
+      if (!sidebarScrollableRef.value) return
+      sidebarScrollableRef.value.scrollTop = sidebarScrollTop
+    })
+  }
 }
 
 function onWindowKeyDown(event: KeyboardEvent): void {
