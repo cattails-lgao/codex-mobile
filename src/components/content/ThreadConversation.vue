@@ -2298,7 +2298,10 @@ function editMessage(messageId: string): void {
   emit('rollback', { turnId })
 }
 
-function splitPlainTextByLinks(text: string): InlineSegment[] {
+function splitPlainTextByLinks(
+  text: string,
+  options: { applyMarkdownMarkers?: boolean } = {},
+): InlineSegment[] {
   const segments: InlineSegment[] = []
   const pattern = /codex:\/\/threads\/[A-Za-z0-9-]+|https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
   let cursor = 0
@@ -2376,7 +2379,7 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
     segments.push({ kind: 'text', value: text.slice(cursor) })
   }
 
-  return applyInlineMarkdownMarkers(segments)
+  return options.applyMarkdownMarkers === false ? segments : applyInlineMarkdownMarkers(segments)
 }
 
 function applyDelimitedMarkersAcrossTextSegments(
@@ -2474,7 +2477,10 @@ function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[] 
   return next
 }
 
-function splitTextByFileUrls(text: string): InlineSegment[] {
+function splitTextByFileUrls(
+  text: string,
+  options: { applyMarkdownMarkers?: boolean } = {},
+): InlineSegment[] {
   const segments: InlineSegment[] = []
   let cursor = 0
   let scanFrom = 0
@@ -2533,7 +2539,7 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
     if (segmentStart > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart)))
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart), options))
     }
 
     const markdownToken = parseMarkdownLinkToken(token)
@@ -2571,15 +2577,18 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
   }
 
   if (cursor < text.length) {
-    segments.push(...splitPlainTextByLinks(text.slice(cursor)))
+    segments.push(...splitPlainTextByLinks(text.slice(cursor), options))
   }
 
   return segments
 }
 
 function parseInlineSegmentsUncached(text: string): InlineSegment[] {
-  const linkFirstSegments = splitTextByFileUrls(text)
-  if (!text.includes('`')) return linkFirstSegments
+  const hasInlineCodeMarker = text.includes('`')
+  const linkFirstSegments = splitTextByFileUrls(text, {
+    applyMarkdownMarkers: !hasInlineCodeMarker,
+  })
+  if (!hasInlineCodeMarker) return linkFirstSegments
   if (!linkFirstSegments.some((segment) => segment.kind === 'text' && segment.value.includes('`'))) {
     return linkFirstSegments
   }
