@@ -2544,7 +2544,7 @@ function splitTextByFileUrls(
 
     const markdownToken = parseMarkdownLinkToken(token)
     if (!markdownToken) {
-      segments.push(...splitPlainTextByLinks(text.slice(segmentStart, segmentEnd)))
+      segments.push(...splitPlainTextByLinks(text.slice(segmentStart, segmentEnd), options))
       cursor = segmentEnd
       scanFrom = segmentEnd
       continue
@@ -2590,7 +2590,7 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
   })
   if (!hasInlineCodeMarker) return linkFirstSegments
   if (!linkFirstSegments.some((segment) => segment.kind === 'text' && segment.value.includes('`'))) {
-    return linkFirstSegments
+    return applyInlineMarkdownMarkers(linkFirstSegments)
   }
 
   const parseCodeAwareTextSegments = (value: string): InlineSegment[] => {
