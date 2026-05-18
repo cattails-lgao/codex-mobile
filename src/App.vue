@@ -1494,6 +1494,8 @@ const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let sidebarScrollTop = 0
+let sidebarScrollRestoreRequestId = 0
+let isRestoringSidebarScroll = false
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
 let threadCommitFilesRequestId = 0
@@ -2266,9 +2268,55 @@ function clearSidebarSearch(): void {
   sidebarSearchInputRef.value?.focus()
 }
 
-function onSidebarScroll(): void {
+function getSidebarScrollableElement(): HTMLElement | null {
+  if (sidebarScrollableRef.value) return sidebarScrollableRef.value
+  if (typeof document === 'undefined') return null
+  return document.querySelector<HTMLElement>('.mobile-drawer .sidebar-scrollable, .sidebar-scrollable')
+}
+
+function onSidebarScroll(event?: Event): void {
   if (isSidebarCollapsed.value) return
-  sidebarScrollTop = sidebarScrollableRef.value?.scrollTop ?? 0
+  if (isRestoringSidebarScroll) return
+  const target = event?.currentTarget
+  const container = target instanceof HTMLElement ? target : getSidebarScrollableElement()
+  sidebarScrollTop = container?.scrollTop ?? sidebarScrollTop
+}
+
+function restoreSidebarScrollPosition(): void {
+  const requestId = ++sidebarScrollRestoreRequestId
+  const targetScrollTop = sidebarScrollTop
+  const maxRestoreAttempts = 90
+  isRestoringSidebarScroll = true
+  const finishRestore = () => {
+    if (requestId === sidebarScrollRestoreRequestId) {
+      sidebarScrollTop = targetScrollTop
+      isRestoringSidebarScroll = false
+    }
+  }
+  const restore = (attempt: number) => {
+    if (requestId !== sidebarScrollRestoreRequestId) return
+    if (isSidebarCollapsed.value) {
+      finishRestore()
+      return
+    }
+
+    const container = getSidebarScrollableElement()
+    if (container) {
+      container.scrollTop = targetScrollTop
+      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || attempt >= maxRestoreAttempts) {
+        finishRestore()
+        return
+      }
+    }
+
+    if (attempt >= maxRestoreAttempts || typeof window === 'undefined') {
+      finishRestore()
+      return
+    }
+    window.requestAnimationFrame(() => restore(attempt + 1))
+  }
+
+  void nextTick(() => restore(0))
 }
 
 function onSidebarSearchKeydown(event: KeyboardEvent): void {
@@ -2834,16 +2882,15 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
 function setSidebarCollapsed(nextValue: boolean): void {
   if (isSidebarCollapsed.value === nextValue) return
   if (nextValue) {
-    sidebarScrollTop = sidebarScrollableRef.value?.scrollTop ?? sidebarScrollTop
+    const currentScrollTop = getSidebarScrollableElement()?.scrollTop
+    if (typeof currentScrollTop === 'number' && (currentScrollTop > 0 || sidebarScrollTop === 0)) {
+      sidebarScrollTop = currentScrollTop
+    }
   }
   isSidebarCollapsed.value = nextValue
   saveSidebarCollapsed(nextValue)
   if (!nextValue) {
-    void nextTick(() => {
-      if (isSidebarCollapsed.value) return
-      if (!sidebarScrollableRef.value) return
-      sidebarScrollableRef.value.scrollTop = sidebarScrollTop
-    })
+    restoreSidebarScrollPosition()
   }
 }
 
