@@ -5,6 +5,7 @@ The integrated terminal feature adds a Codex.app-style xterm panel to local/work
 
 ## Source
 - [Integrated terminal implementation source](../../raw/features/integrated-terminal.md)
+- [Manual test domain folders source](../../raw/features/manual-test-domain-folders.md)
 
 ## Architecture
 - The browser renders the terminal with `@xterm/xterm` and `@xterm/addon-fit` in `ThreadTerminalPanel.vue`.

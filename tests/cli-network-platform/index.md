@@ -13,7 +13,6 @@ Return to the [manual test index](../../tests.md).
 | [CLI password output redaction](cli-password-output-redaction.md) |
 | [npx run dev compatibility shim](npx-run-dev-compatibility-shim.md) |
 | [Termux install without native PTY build](termux-install-without-native-pty-build.md) |
-| [Feature: pnpm dev script installs dependencies and starts Vite](pnpm-dev-script-installs-dependencies-and-starts-vite.md) |
 | [Feature: Tailscale CIDRs bypass password and Cloudflare tunnel is opt-in](tailscale-cidrs-bypass-password-and-cloudflare-tunnel-is-opt-in.md) |
 | [Feature: Tunnel auto mode follows Tailscale IP detection](tunnel-auto-mode-follows-tailscale-ip-detection.md) |
 | [Feature: Reverse tunnel login is required unless request is trusted local or Tailscale](reverse-tunnel-login-is-required-unless-request-is-trusted-local-or-tailscale.md) |

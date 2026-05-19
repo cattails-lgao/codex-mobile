@@ -22,4 +22,4 @@
 - Fast mode button and related controls are unchanged.
 
 #### Rollback/Cleanup
-- `git restore src/components/content/ThreadComposer.vue src/components/content/ThreadConversation.vue src/components/layout/DesktopLayout.vue src/style.css tests.md`
+- `git restore src/components/content/ThreadComposer.vue src/components/content/ThreadConversation.vue src/components/layout/DesktopLayout.vue src/style.css tests/theme-layout-terminal/revert-renat-scrolling-input-layout-behavior-without-fast-mode-changes.md`

@@ -19,4 +19,4 @@
 - Thread route composer behavior is unchanged.
 
 #### Rollback/Cleanup
-- Revert the `.new-thread-empty` style in [src/App.vue](/Users/igor/.codex/worktrees/eaf8/codex-web-local/src/App.vue).
+- Revert the `.new-thread-empty` style in [src/App.vue](../../src/App.vue).

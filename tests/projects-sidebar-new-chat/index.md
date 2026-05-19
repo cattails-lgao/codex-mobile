@@ -10,7 +10,6 @@ Return to the [manual test index](../../tests.md).
 | --- |
 | [Feature: Project recency sort, pins, and mobile move mode](project-recency-sort-pins-and-mobile-move-mode.md) |
 | [Feature: Projectless new chat folders](projectless-new-chat-folders.md) |
-| [New chat project setup modal](new-chat-project-setup-modal.md) |
 | [Feature: Unified create project and GitHub clone modal](unified-create-project-and-github-clone-modal.md) |
 | [Feature: Empty project new thread action](empty-project-new-thread-action.md) |
 | [Feature: Remove GitHub trending projects from the new-thread screen](remove-github-trending-projects-from-the-new-thread-screen.md) |
