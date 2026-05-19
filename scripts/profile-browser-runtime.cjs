@@ -49,7 +49,8 @@ function buildWarnings(duplicateCounts, apiSummary, apiRows) {
 
   if (duplicateCounts.threadListFirstPage > 1) warnings.push(`threadListFirstPage=${duplicateCounts.threadListFirstPage}`)
   if (duplicateCounts.threadResume > 1) warnings.push(`threadResume=${duplicateCounts.threadResume}`)
-  if (duplicateCounts.threadRead > 0) warnings.push(`threadRead=${duplicateCounts.threadRead}`)
+  if (duplicateCounts.threadReadWithTurns > 1) warnings.push(`threadReadWithTurns=${duplicateCounts.threadReadWithTurns}`)
+  if (duplicateCounts.threadReadDuplicateKeys > 0) warnings.push(`threadReadDuplicateKeys=${duplicateCounts.threadReadDuplicateKeys}`)
   if (duplicateCounts.skillsList > 1) warnings.push(`skillsList=${duplicateCounts.skillsList}`)
   if (duplicateCounts.rateLimitsRead > 1) warnings.push(`rateLimitsRead=${duplicateCounts.rateLimitsRead}`)
   if (providerModels && providerModels.maxMs > 1000) warnings.push(`providerModels=${providerModels.maxMs}ms`)
@@ -61,6 +62,9 @@ function buildWarnings(duplicateCounts, apiSummary, apiRows) {
 function requestKey(row) {
   if (row.rpc === 'thread/list') {
     return row.cursor ? 'thread/list:cursor' : 'thread/list:first-page'
+  }
+  if (row.rpc === 'thread/read') {
+    return `thread/read:${row.threadId || 'unknown'}:${row.includeTurns === true ? 'turns' : 'summary'}`
   }
   return row.rpc || row.path
 }
@@ -139,6 +143,10 @@ async function main() {
       cursor: parsedBody?.params && typeof parsedBody.params === 'object' && typeof parsedBody.params.cursor === 'string'
         ? parsedBody.params.cursor
         : '',
+      threadId: parsedBody?.params && typeof parsedBody.params === 'object' && typeof parsedBody.params.threadId === 'string'
+        ? parsedBody.params.threadId
+        : '',
+      includeTurns: parsedBody?.params && typeof parsedBody.params === 'object' && parsedBody.params.includeTurns === true,
       requestBytes: body ? Buffer.byteLength(body, 'utf8') : 0,
     }
   })
@@ -160,6 +168,8 @@ async function main() {
       path: new URL(response.url()).pathname,
       rpc: profile.rpc,
       cursor: profile.cursor,
+      threadId: profile.threadId,
+      includeTurns: profile.includeTurns,
       status: response.status(),
       ms: round(performance.now() - profile.startedAt),
       requestBytes: profile.requestBytes,
@@ -217,6 +227,17 @@ async function main() {
     threadListCursor: apiRows.filter((row) => row.rpc === 'thread/list' && row.cursor).length,
     threadResume: apiRows.filter((row) => row.rpc === 'thread/resume').length,
     threadRead: apiRows.filter((row) => row.rpc === 'thread/read').length,
+    threadReadWithTurns: apiRows.filter((row) => row.rpc === 'thread/read' && row.includeTurns === true).length,
+    threadReadDuplicateKeys: Array.from(
+      apiRows
+        .filter((row) => row.rpc === 'thread/read')
+        .reduce((counts, row) => {
+          const key = requestKey(row)
+          counts.set(key, (counts.get(key) || 0) + 1)
+          return counts
+        }, new Map())
+        .values(),
+    ).filter((count) => count > 1).length,
     skillsList: apiRows.filter((row) => row.rpc === 'skills/list').length,
     rateLimitsRead: apiRows.filter((row) => row.rpc === 'account/rateLimits/read').length,
     providerModels: apiRows.filter((row) => row.path === '/codex-api/provider-models').length,

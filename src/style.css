@@ -674,7 +674,7 @@
 }
 
 :root.dark .message-inline-code {
-  @apply border-zinc-600 bg-zinc-700/60 text-zinc-200;
+  @apply bg-transparent text-inherit;
 }
 
 :root.dark .message-table {
@@ -1321,7 +1321,7 @@
 }
 
 :root.dark .plan-card-markdown .message-inline-code {
-  @apply bg-zinc-800 text-zinc-100;
+  @apply bg-transparent text-inherit;
 }
 
 :root.dark .plan-card-markdown .message-file-link {

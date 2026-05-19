@@ -89,6 +89,8 @@ const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
+const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
+const RECENT_SKILLS_LOAD_REUSE_MS = 2000
 const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
@@ -1514,8 +1516,13 @@ export function useDesktopState() {
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let refreshSkillsPromise: Promise<void> | null = null
+  let lastThreadListLoadAt = 0
+  let hasLoadedSkills = false
+  let lastSkillsLoadAt = 0
+  let lastSkillsLoadKey = ''
   let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
+  let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
@@ -1667,10 +1674,12 @@ export function useDesktopState() {
     return availableModelIds.value[0] ?? ''
   }
 
-  function setSelectedThreadId(nextThreadId: string): void {
+  function setSelectedThreadId(nextThreadId: string, options: { persist?: boolean } = {}): void {
     if (selectedThreadId.value === nextThreadId) return
     selectedThreadId.value = nextThreadId
-    saveSelectedThreadId(nextThreadId)
+    if (options.persist !== false) {
+      saveSelectedThreadId(nextThreadId)
+    }
     selectedModelId.value = readProviderCompatibleSelectedModel(readModelIdForThread(nextThreadId))
     selectedCollaborationMode.value = readSelectedCollaborationMode(
       selectedCollaborationModeByContext.value,
@@ -4006,6 +4015,7 @@ export function useDesktopState() {
 
     if (shouldRefreshThreads) {
       pendingThreadsRefresh = true
+      pendingThreadsRefreshForce = true
     }
 
     if (eventSyncTimer !== null || typeof window === 'undefined') return
@@ -4288,9 +4298,16 @@ export function useDesktopState() {
     }
   }
 
-  async function loadThreads() {
+  async function loadThreads(options: { force?: boolean } = {}) {
     if (loadThreadsPromise) {
       await loadThreadsPromise
+      return
+    }
+    if (
+      options.force !== true &&
+      hasLoadedThreads.value &&
+      Date.now() - lastThreadListLoadAt < RECENT_THREAD_LIST_LOAD_REUSE_MS
+    ) {
       return
     }
 
@@ -4319,6 +4336,7 @@ export function useDesktopState() {
 
       applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
+      lastThreadListLoadAt = Date.now()
       if (!hasLoadedAllThreadPages) {
         scheduleRemainingThreadPages(rootsState)
       }
@@ -4523,16 +4541,28 @@ export function useDesktopState() {
     await loadMessages(threadId, options)
   }
 
-  async function refreshSkills(): Promise<void> {
+  async function refreshSkills(options: { force?: boolean } = {}): Promise<void> {
+    const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
+    const skillsLoadKey = selectedCwd || '__global__'
     if (refreshSkillsPromise) {
       await refreshSkillsPromise
+      return
+    }
+    if (
+      options.force !== true &&
+      hasLoadedSkills &&
+      lastSkillsLoadKey === skillsLoadKey &&
+      Date.now() - lastSkillsLoadAt < RECENT_SKILLS_LOAD_REUSE_MS
+    ) {
       return
     }
 
     refreshSkillsPromise = (async () => {
       try {
-        const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
         installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
+        hasLoadedSkills = true
+        lastSkillsLoadAt = Date.now()
+        lastSkillsLoadKey = skillsLoadKey
       } catch {
         // keep previous skills on failure
       } finally {
@@ -5426,13 +5456,15 @@ export function useDesktopState() {
     isPolling.value = true
 
     const shouldRefreshThreads = pendingThreadsRefresh
+    const shouldForceThreadRefresh = pendingThreadsRefreshForce
     const threadIdsToRefresh = new Set(pendingThreadMessageRefresh)
     pendingThreadsRefresh = false
+    pendingThreadsRefreshForce = false
     pendingThreadMessageRefresh.clear()
 
     try {
       if (shouldRefreshThreads) {
-        await loadThreads()
+        await loadThreads({ force: shouldForceThreadRefresh })
       }
 
       const activeThreadId = selectedThreadId.value
@@ -5625,8 +5657,8 @@ export function useDesktopState() {
     void sendMessageToSelectedThread(msg.text, msg.imageUrls, msg.skills, 'steer', msg.fileAttachments)
   }
 
-  function primeSelectedThread(threadId: string): void {
-    setSelectedThreadId(threadId)
+  function primeSelectedThread(threadId: string, options: { persist?: boolean } = {}): void {
+    setSelectedThreadId(threadId, options)
   }
 
   return {

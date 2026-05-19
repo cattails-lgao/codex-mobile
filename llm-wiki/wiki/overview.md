@@ -5,7 +5,7 @@ This wiki tracks knowledge about the `codex-web-local` project and related workf
 ## Current scope
 - Project architecture and tooling
 - Release/sync workflow on `main`
-- Manual verification practices (`tests.md`)
+- Manual verification practices (`tests.md` root index plus domain folders under `tests/`)
 - Codex.app-style integrated terminal implementation and tests
 - Realtime chat rendering performance and inline media sanitization
 - Skills route UI, first-launch Plugins card behavior, and dark-theme verification lessons
@@ -19,6 +19,7 @@ This wiki tracks knowledge about the `codex-web-local` project and related workf
 - [realtime chat rendering and inline media source](../raw/features/realtime-chat-rendering-inline-media.md)
 - [skills route UI and first-launch card source](../raw/features/skills-route-ui-and-first-launch-card.md)
 - [OpenCode Zen Docker auth/provider models source](../raw/fixes/opencode-zen-docker-auth-provider-models.md)
+- [manual test domain folders source](../raw/features/manual-test-domain-folders.md)
 
 ## Linked pages
 - [Entity: codex-web-local](./entities/codex-web-local.md)

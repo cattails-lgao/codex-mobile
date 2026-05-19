@@ -2167,7 +2167,7 @@ async function maybeImportExternalCodexAuthAccount(): Promise<boolean> {
 }
 
 function onSkillsChanged(): void {
-  void refreshSkills()
+  void refreshSkills({ force: true })
 }
 
 async function refreshTelegramStatus(): Promise<void> {
@@ -4326,6 +4326,8 @@ async function initialize(): Promise<void> {
 
   if (route.name === 'thread' && routeThreadId.value) {
     primeSelectedThread(routeThreadId.value)
+  } else if (route.name === 'home' || route.name === 'skills' || route.name === 'automations') {
+    primeSelectedThread('', { persist: false })
   }
 
   await refreshAll({

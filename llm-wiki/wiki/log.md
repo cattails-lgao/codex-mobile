@@ -64,3 +64,8 @@
 - Updated project cron automation notes for the combined Automations panel.
 - Updated Automations panel notes for active/newest sorting and direct edit buttons.
 - Updated project cron automation notes for absolute cwd validation and multi-cwd preservation.
+
+## [2026-05-19] ingest | manual test domain folders
+- Added source: `raw/features/manual-test-domain-folders.md`.
+- Updated `overview.md`, `entities/codex-web-local.md`, `concepts/integrated-terminal.md`, and `index.md`.
+- Documents: `tests.md` is now the root index, detailed checks live in domain folders under `tests/`, and new feature work should update the closest matching domain file.

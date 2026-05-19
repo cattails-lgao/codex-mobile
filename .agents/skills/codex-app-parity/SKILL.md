@@ -18,7 +18,7 @@ Ensure behavior is implemented with Codex.app as the source of truth, then verif
 
 For user-visible Directory, Skills, Apps, Plugins, MCP, or Composio changes in this repo:
 
-- Update `tests.md` with manual verification steps, including light and dark theme checks.
+- Update the relevant manual test doc under `tests/<domain>/...` with verification steps, including light and dark theme checks. Update `tests.md` only when adding, renaming, or removing a domain folder.
 - If the change creates or changes durable behavior/architecture, add or update an `llm-wiki/raw/...` source and corresponding `llm-wiki/wiki/...` concept page.
 - Keep `whatToTest.md` as a short pending-only checklist; remove items that were actually executed successfully.
 - Prefer assertions plus screenshots for browser validation; screenshots alone are not enough.

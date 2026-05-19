@@ -15,7 +15,8 @@
   1. commit task in feature worktree
   2. create/switch feature branch
   3. rebase feature branch on `main`
-  4. from main worktree: `git checkout main && git merge --no-ff <feature-branch>`
+  4. if a GitHub PR exists or GitHub merge is available, prefer updating/creating the PR, rebasing the branch, and merging the PR on GitHub instead of merging locally
+  5. if no PR/GitHub merge path is available, from main worktree: `git checkout main && git merge --no-ff <feature-branch>`
 - If user explicitly asks for a single merge commit, use:
   - `git checkout main`
   - `git reset --hard <pre-merge-main-commit>`
@@ -37,13 +38,13 @@
 - If a branch is already checked out in another worktree, rebase/commit there, then merge by branch name from main worktree.
 - If merge pulls unrelated conflicts, abort and retry with a narrower commit set.
 
-## package.json / tests.md Conflict Rule
+## package.json / manual test docs Conflict Rule
 
 - For any merge/rebase conflict involving `package.json`, always resolve by taking the current local/checkpoint `package.json` entirely (full file replacement) without additional review, then continue merge.
 - Treat `package.json` as generated/low-priority for conflict resolution and do not block merge completion on its conflicts.
 - If `package.json` has uncommitted changes during merge/rebase workflow, always discard those uncommitted changes and keep the current local/checkpoint `package.json` version.
-- For any merge/rebase conflict involving `tests.md`, always resolve by taking the current local/checkpoint `tests.md` entirely (full file replacement) without additional review, then continue merge.
-- Treat `tests.md` as low-priority for conflict resolution and do not block merge completion on its conflicts.
+- For any merge/rebase conflict involving `tests.md` or files under `tests/`, always resolve by taking the current local/checkpoint file entirely (full file replacement) without additional review, then continue merge.
+- Treat manual test docs as low-priority for conflict resolution and do not block merge completion on their conflicts.
 
 ## Commit After Each Task
 
@@ -87,8 +88,9 @@
 
 ## Tests Documentation Rule (MANDATORY)
 
-- After every feature implementation, update `tests.md` in the repository root.
-- Add a new section describing how to test the feature manually.
+- After every feature implementation, update the relevant manual test doc under `tests/<domain>/`.
+- Keep `tests.md` as the root index only; update it when adding, renaming, or removing a domain folder.
+- Add a new section file describing how to test the feature manually, or update the closest existing section file.
 - For any new or changed UI, include both light-theme and dark-theme verification steps/results in that test section.
 - Each test section must include:
   - feature/change name
@@ -97,7 +99,7 @@
   - expected result(s)
   - rollback/cleanup notes (if applicable)
 - Keep existing test cases; append or update only what is needed for the new feature.
-- Do not mark a feature task complete until `tests.md` is updated.
+- Do not mark a feature task complete until the relevant `tests/<domain>/...` file is updated.
 
 ## Completion Verification Requirement (MANDATORY)
 
