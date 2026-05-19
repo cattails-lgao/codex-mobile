@@ -11,7 +11,7 @@
 ## Operational characteristics
 - Frequent branch merges into local `main`
 - Strong conflict-resolution policy (intentional per-file merges)
-- Manual regression documentation in `tests.md`
+- Manual regression documentation uses `tests.md` as the root index and domain folders under `tests/` for detailed test sections
 - Integrated terminal uses a Node PTY bridge plus an xterm frontend for local/worktree threads
 - Realtime chat rendering uses cached markdown/highlight output and bridge-side inline media sanitization to keep browser payloads bounded
 - User-visible UI work is expected to include dark-theme verification, not only light-theme checks
@@ -26,6 +26,7 @@
 - [Realtime chat rendering source](../../raw/features/realtime-chat-rendering-inline-media.md)
 - [Skills route UI + first-launch card source](../../raw/features/skills-route-ui-and-first-launch-card.md)
 - [OpenCode Zen Docker auth/provider models source](../../raw/fixes/opencode-zen-docker-auth-provider-models.md)
+- [Manual test domain folders source](../../raw/features/manual-test-domain-folders.md)
 - [Integrated terminal concept](../concepts/integrated-terminal.md)
 - [Directory Hub, Composio, and Skills Search concept](../concepts/directory-hub-composio-skills.md)
 - [Realtime chat rendering concept](../concepts/realtime-chat-rendering.md)
