@@ -48,7 +48,7 @@ The integrated terminal feature adds a Codex.app-style xterm panel to local/work
 
 ## Verification
 - Unit coverage lives in `src/server/terminalManager.test.ts`.
-- Manual and browser verification is documented in `tests.md` and `whatToTest.md`.
+- Manual and browser verification is indexed from `tests.md`; detailed manual checks live in domain folders under `tests/`.
 - The final browser checklist validated:
   - keyboard toggle
   - cwd output
