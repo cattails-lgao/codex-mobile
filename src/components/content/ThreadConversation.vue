@@ -2020,7 +2020,7 @@ function readStandaloneFileChangeSummary(message: UiMessage): TurnFileChangeSumm
 }
 
 function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
-  return summary?.turnId ? `turn:${summary.turnId}` : ''
+  return summary?.turnId && props.activeThreadId ? `thread:${props.activeThreadId}:turn:${summary.turnId}` : ''
 }
 
 function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' {
@@ -4420,6 +4420,9 @@ watch(
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
+    fileChangeActionState.value = {}
+    fileChangeActionError.value = {}
+    fileChangeRedoPatchIds.value = {}
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
     await scheduleConversationScroll()
