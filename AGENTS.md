@@ -17,6 +17,16 @@
   3. rebase feature branch on `main`
   4. if a GitHub PR exists or GitHub merge is available, prefer updating/creating the PR, rebasing the branch, and merging the PR on GitHub instead of merging locally
   5. if no PR/GitHub merge path is available, from main worktree: `git checkout main && git merge --no-ff <feature-branch>`
+- Before any merge/rebase/sync continuation, re-check live state instead of resuming from memory:
+  - `git status --short`
+  - `git branch --show-current`
+  - `git fetch origin`
+  - `gh pr view --json number,state,mergeStateStatus,isDraft,headRefName,baseRefName,url` when a PR may exist
+  - `git diff --stat main...HEAD`
+  - `git log --oneline main..HEAD`
+- State the chosen path before acting: GitHub PR merge/update if a PR or GitHub merge path exists; local `main` merge only when no PR/GitHub path exists or the user explicitly asks for a local merge.
+- After any interruption, first check for merge/rebase state with `git status`, `.git/MERGE_HEAD`, `.git/rebase-merge`, and `.git/rebase-apply`; do not continue a stale plan until current branch, PR, and diff state are known.
+- After a merge/sync, verify the target really contains the commit with `git branch --contains <commit>`, `git log --oneline origin/main -10`, or a file-level diff against `origin/main` when relevant.
 - If user explicitly asks for a single merge commit, use:
   - `git checkout main`
   - `git reset --hard <pre-merge-main-commit>`
@@ -76,13 +86,16 @@
 - For startup, thread loading, realtime rendering, routing, API, filesystem, git, or module-loading changes, explicitly check for duplicate requests, unnecessary blocking work, unbounded fanout, large payloads, and cache invalidation risks.
 - For browser, startup, and thread-loading performance audits, prefer the built-in profiler helpers: `pnpm run profile:browser` and `pnpm run profile:thread`, which use `scripts/profile-browser-runtime.cjs` and write reports under `output/playwright/`.
 - Exact post-task profiling workflow:
-  1. Start or confirm the app server on `http://127.0.0.1:4173` with `pnpm run dev --host 127.0.0.1 --port 4173`; do not stop the persistent `5173` tmux server.
-  2. For general browser/startup changes, run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser`.
-  3. For thread-loading or conversation-route changes, also run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_ROUTE='#/thread/<thread-id>' PROFILE_WAIT_MS=7000 pnpm run profile:browser` or `pnpm run profile:thread` when the default thread id is appropriate.
-  4. Open the generated `output/playwright/browser-runtime-profile-*.json` and inspect `duplicateCounts`, `warnings`, `totalApiKB`, `topApiSummary`, and `slowestApiRows`.
-  5. For traces, open the matching `output/playwright/browser-runtime-profile-*-trace.zip` with `npx playwright show-trace` when request timing or rendering behavior needs deeper inspection.
-  6. Compare against the pre-change profile when available; otherwise record the current numbers as the baseline and state that no prior measurement was available.
-  7. If profiling exposes duplicate requests, large payloads, slow API rows, or warnings related to the changed path, fix them or explicitly document why they are acceptable before completion.
+  1. Confirm `node_modules` is available before starting the profiler server. In side worktrees, reuse a compatible shared dependency tree when needed instead of installing from scratch.
+  2. Before reusing `http://127.0.0.1:4173`, check the listener with `lsof -nP -iTCP:4173 -sTCP:LISTEN` and `lsof -a -p <PID> -d cwd`. If the listener belongs to another worktree, old main checkout, or an unknown stale Vite process, stop only that `4173` process and start a fresh one from the current worktree. Never stop the persistent `5173` tmux server.
+  3. Start or confirm the app server on `http://127.0.0.1:4173` with `pnpm run dev --host 127.0.0.1 --port 4173`.
+  4. Before accepting profiler output, verify the page is serving the current worktree and is not an error page, not stuck on `Loading threads...`, and not showing zero API traffic due to a failed app load. If readiness fails, restart only `4173` and rerun the profile.
+  5. For general browser/startup changes, run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_WAIT_MS=7000 pnpm run profile:browser`.
+  6. For thread-loading or conversation-route changes, also run `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_ROUTE='#/thread/<thread-id>' PROFILE_WAIT_MS=7000 pnpm run profile:browser` or `pnpm run profile:thread` when the default thread id is appropriate.
+  7. Open the generated `output/playwright/browser-runtime-profile-*.json` and inspect `duplicateCounts`, `warnings`, `totalApiKB`, `topApiSummary`, and `slowestApiRows`.
+  8. For traces, open the matching `output/playwright/browser-runtime-profile-*-trace.zip` with `npx playwright show-trace` when request timing or rendering behavior needs deeper inspection.
+  9. Compare against the pre-change profile when available; otherwise record the current numbers as the baseline and state that no prior measurement was available.
+  10. If profiling exposes duplicate requests, large payloads, slow API rows, or warnings related to the changed path, fix them or explicitly document why they are acceptable before completion.
 - If live measurement is not feasible, state what was not measured and what should be measured next.
 - Include the performance audit result in the completion report.
 
@@ -164,6 +177,8 @@
 - Never kill or stop the tmux-managed dev server bound to port `5173`.
 - Treat the `5173` tmux dev process as persistent infrastructure; restart it only when the user explicitly requests a restart.
 - Treat the `4173` verification dev server as reusable test infrastructure during active UI work; after tests or screenshots, leave it running unless the user explicitly asks to stop it.
+- Before using an existing `4173` server, verify its process cwd matches the current worktree. If it is serving another worktree or stale Vite state, stop only that `4173` process and restart from the current cwd.
+- Do not accept browser/profiler evidence from a stale `4173` server. If the app shows a Vite/module-resolution error, `Loading threads...` indefinitely, or no API traffic because the app failed to boot, fix server readiness and rerun verification.
 
 ## Dark Theme CSS Rule
 
