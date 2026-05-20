@@ -186,7 +186,7 @@
                         </span>
                       </li>
                     </ul>
-                    <div class="file-change-actions">
+                    <div v-if="isFileChangeActionable(readStandaloneFileChangeSummary(message))" class="file-change-actions">
                       <p v-if="fileChangeActionErrorText(readStandaloneFileChangeSummary(message))" class="file-change-action-error">
                         {{ fileChangeActionErrorText(readStandaloneFileChangeSummary(message)) }}
                       </p>
@@ -664,7 +664,7 @@
                         </span>
                       </li>
                     </ul>
-                    <div class="file-change-actions">
+                    <div v-if="isFileChangeActionable(readAnchoredFileChangeSummary(message))" class="file-change-actions">
                       <p v-if="fileChangeActionErrorText(readAnchoredFileChangeSummary(message))" class="file-change-action-error">
                         {{ fileChangeActionErrorText(readAnchoredFileChangeSummary(message)) }}
                       </p>
@@ -2023,6 +2023,10 @@ function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
   return summary?.turnId && props.activeThreadId ? `thread:${props.activeThreadId}:turn:${summary.turnId}` : ''
 }
 
+function isFileChangeActionable(summary: TurnFileChangeSummary | null): boolean {
+  return fileChangeActionKey(summary).length > 0
+}
+
 function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' {
   const key = fileChangeActionKey(summary)
   return key ? fileChangeActionState.value[key] ?? 'idle' : 'idle'
@@ -2048,30 +2052,52 @@ function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
 async function runFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): Promise<void> {
   const key = fileChangeActionKey(summary)
   if (!summary || !key || !props.activeThreadId || !props.cwd) return
+  const previousState = fileChangeActionStatus(summary)
   const pendingState = action === 'undo' ? 'undoing' : 'redoing'
   fileChangeActionState.value = { ...fileChangeActionState.value, [key]: pendingState }
   fileChangeActionError.value = { ...fileChangeActionError.value, [key]: '' }
 
-  const result = await updateThreadFileChanges(
-    props.activeThreadId,
-    summary.turnId,
-    props.cwd,
-    action,
-    action === 'redo' ? fileChangeRedoPatchIds.value[key] ?? [] : undefined,
-    'single_turn',
-  )
-  if (action === 'undo') {
-    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
-  } else {
-    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: [] }
+  let result: Awaited<ReturnType<typeof updateThreadFileChanges>>
+  try {
+    const patchIds = fileChangeRedoPatchIds.value[key] ?? []
+    result = await updateThreadFileChanges(
+      props.activeThreadId,
+      summary.turnId,
+      props.cwd,
+      action,
+      patchIds.length > 0 ? patchIds : undefined,
+      'single_turn',
+    )
+  } catch (error) {
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
+    fileChangeActionError.value = {
+      ...fileChangeActionError.value,
+      [key]: error instanceof Error ? error.message : 'Failed to update file changes.',
+    }
+    return
   }
+
   if (result.errors.length > 0) {
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: action === 'undo' ? 'undone' : 'redone' }
+    if (action === 'undo') {
+      fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
+      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+    } else {
+      if ((result.appliedPatchIds ?? []).length > 0) {
+        fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
+      }
+      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+    }
     fileChangeActionError.value = { ...fileChangeActionError.value, [key]: result.errors.join('; ') }
     return
   }
 
-  fileChangeActionState.value = { ...fileChangeActionState.value, [key]: action === 'undo' ? 'undone' : 'redone' }
+  if (action === 'undo') {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+  } else {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'redone' }
+  }
 }
 
 function fileChangeOperationLabel(change: UiFileChange): string {

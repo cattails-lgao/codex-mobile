@@ -2772,6 +2772,7 @@ async function applyTurnFileChanges(
 async function revertTurnFileChanges(
   cwd: string,
   turnInfos: Map<string, CollectedTurnFileInfo>,
+  allowedPatchIds?: Set<string>,
 ): Promise<{ reverted: number; errors: string[]; revertedPatchIds: string[] }> {
   if (turnInfos.size === 0) return { reverted: 0, errors: [], revertedPatchIds: [] }
 
@@ -2780,7 +2781,10 @@ async function revertTurnFileChanges(
   const revertedPatchIds: string[] = []
 
   const allEntries = [...turnInfos.values()]
-  const allPatchInputs = allEntries.flatMap((info) => info.patchInputs).reverse()
+  const allPatchInputs = allEntries
+    .flatMap((info) => info.patchInputs)
+    .filter((patch) => !allowedPatchIds || allowedPatchIds.has(patch.callId))
+    .reverse()
   const allCommandPaths = new Set(allEntries.flatMap((info) => info.commandFilePaths))
 
   let isGitRepo = false
@@ -2895,7 +2899,7 @@ async function revertTurnFileChanges(
         errors.push(`Failed to revert patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
-    if (patchReverted && !patchHadError) revertedPatchIds.push(patch.callId)
+    if (patchReverted) revertedPatchIds.push(patch.callId)
   }
 
   for (const filePath of allCommandPaths) {
@@ -7022,7 +7026,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          const result = await revertTurnFileChanges(cwd, turnInfos)
+          const result = await revertTurnFileChanges(cwd, turnInfos, patchIds)
           setJson(res, 200, { ...result, changed: result.reverted, message: `Reverted ${result.reverted} file change(s)` })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })

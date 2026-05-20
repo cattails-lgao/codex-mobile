@@ -53,5 +53,12 @@
 - Any backend error appears inline in the file-change panel.
 - The action row uses themed controls that remain readable in light and dark theme.
 
+#### Verification Evidence
+- Light screenshot: `output/playwright/chat-file-changes-failed-undo-single-redo-light.jpg`.
+- Dark screenshot: `output/playwright/chat-file-changes-failed-undo-single-redo-dark.jpg`.
+- Browser runtime profile: `output/playwright/browser-runtime-profile-home-2026-05-20T03-11-53-121Z.json`.
+- Profile result on `http://127.0.0.1:4173/`: `warnings: []`, `threadReadDuplicateKeys: 0`, `totalApiKB: 337.9`.
+- Code-path audit: file-change action state is component-local and keyed by thread plus turn, so it does not add startup or thread-list requests. Undo/redo server work is request-scoped, bounded to collected patch inputs for the selected turn or explicit patch subset, and uses sequential filesystem operations without background fanout.
+
 #### Rollback/Cleanup
 - Click `Undo` again if the test should leave the worktree without the assistant's file changes.
