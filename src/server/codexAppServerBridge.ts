@@ -2856,8 +2856,12 @@ async function revertTurnFileChanges(
               const relativePath = filePath.startsWith(gitRoot + '/') ? filePath.slice(gitRoot.length + 1) : filePath
               try {
                 await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
+                if (movedToPath) {
+                  await rm(movedToPath, { force: true })
+                }
                 reverted++
                 patchRevertedPaths.add(filePath)
+                if (movedToPath) patchRevertedPaths.add(movedToPath)
                 patchReverted = true
               } catch {
                 patchHadError = true
