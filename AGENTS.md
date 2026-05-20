@@ -105,10 +105,14 @@
 
 - Test changes before reporting completion when feasible.
 - For any new or changed UI, always verify both light theme and dark theme before reporting completion.
+- For every implemented user-visible feature or UI change, capture screenshot evidence of the completed feature before reporting completion.
+- Screenshot evidence should show the actual implemented feature state, not just the base page or unrelated route.
+- For UI changes, capture both light-theme and dark-theme screenshots unless the task is explicitly light-only.
+- Save screenshots under `output/playwright/` with task-specific names and include absolute paths plus inline Markdown image tags in the completion report.
 - Do not treat dark theme as optional polish; dark-theme support is part of the feature being complete.
 - When a user asks to "test it" for UI work and a local dev server is available, prefer actually loading the changed route and checking the rendered result instead of stopping at static analysis.
 - If a dark-theme screenshot shows light-theme surfaces on a dark page, fix the actual CSS/theme wiring first; do not treat "text is visible" as sufficient.
-- Run Browser Use or Playwright verification only when the user explicitly asks for browser automation testing.
+- Use Browser Use for screenshots and visible-route checks when available; fall back to Playwright CLI when Browser Use is unavailable, blocked, or the user explicitly asks for Playwright CLI/headless evidence.
 - If a change affects package/runtime/module loading behavior, also run a CJS smoke test before completion.
 - CJS smoke test requirement:
   1. Build the project/artifact first (if needed).
@@ -130,7 +134,7 @@
   6. Wait 2-3 seconds before capturing final screenshot(s).
   7. Save screenshots under `output/playwright/` with task-specific names.
   8. Leave the dev server running after verification unless the user explicitly asks to stop it.
-- Capture screenshots only when Playwright verification is requested.
+- Capture screenshots for every implemented user-visible feature or UI change, even when browser automation was not separately requested.
 - If the dev server fails to start due to pre-existing errors, fix them first or work around them before testing.
 - If requested Playwright assertions fail, do not report completion; fix and re-run until passing.
 
@@ -139,7 +143,8 @@
 - For browser interactions (navigation, clicking, typing, screenshots, snapshots), prefer the Browser Use plugin first when it is available.
 - Use Browser Use through its in-app browser backend for local UI testing, screenshots, and visible-route checks so evidence matches what the user can see in Codex.
 - Fall back to the previous Playwright CLI approach when Browser Use is unavailable, blocked, cannot reach the target, or when the user explicitly asks for Playwright CLI/headless evidence.
-- Do not run Browser Use or Playwright for routine task completion unless the user explicitly asks for browser automation testing.
+- For routine non-UI changes, do not run Browser Use or Playwright unless the user explicitly asks for browser automation testing.
+- For implemented user-visible features or UI changes, run Browser Use or Playwright as needed to capture the required screenshots before completion.
 - In the Playwright CLI fallback path, use headless mode by default; only add `--headed` when a live visual check is explicitly needed.
 - Playwright fallback skill location: `~/.codex/skills/playwright/SKILL.md` (wrapper script: `~/.codex/skills/playwright/scripts/playwright_cli.sh`).
 - Minimum reporting format in completion messages:
