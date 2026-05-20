@@ -1553,12 +1553,13 @@ export async function updateThreadFileChanges(
   cwd: string,
   action: 'undo' | 'redo',
   patchIds?: string[],
+  scope?: 'single_turn' | 'turn_and_later',
 ): Promise<{ changed: number; errors: string[]; message?: string; revertedPatchIds?: string[]; appliedPatchIds?: string[] }> {
   try {
     const response = await fetch('/codex-api/thread/rollback-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId, turnId, cwd, action, patchIds }),
+      body: JSON.stringify({ threadId, turnId, cwd, action, patchIds, scope }),
     })
     const payload = (await response.json().catch(() => ({}))) as {
       changed?: number

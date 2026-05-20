@@ -2702,6 +2702,7 @@ async function applyTurnFileChanges(
 
   for (const patch of allPatchInputs) {
     let patchApplied = false
+    let patchHadError = false
     const changes = parseApplyPatchInput(patch.input)
     for (const change of changes) {
       const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
@@ -2737,6 +2738,7 @@ async function applyTurnFileChanges(
         const currentContent = await readFile(sourcePath, 'utf8')
         const newContent = applyV4aDiff(currentContent, change.diff)
         if (newContent === null) {
+          patchHadError = true
           errors.push(`Could not apply patch for ${sourcePath}`)
           continue
         }
@@ -2757,10 +2759,11 @@ async function applyTurnFileChanges(
         applied++
         patchApplied = true
       } catch (err) {
+        patchHadError = true
         errors.push(`Failed to apply patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
-    if (patchApplied) appliedPatchIds.push(patch.callId)
+    if (patchApplied && !patchHadError) appliedPatchIds.push(patch.callId)
   }
 
   return { applied, errors, appliedPatchIds }
@@ -6960,6 +6963,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const turnId = readNonEmptyString(body?.turnId)
           const cwd = readNonEmptyString(body?.cwd)
           const action = readNonEmptyString(body?.action) === 'redo' ? 'redo' : 'undo'
+          const scope = readNonEmptyString(body?.scope) === 'single_turn' ? 'single_turn' : 'turn_and_later'
           const patchIds = Array.isArray(body?.patchIds)
             ? new Set(body.patchIds.filter((value): value is string => typeof value === 'string' && value.length > 0))
             : undefined
@@ -6989,6 +6993,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             if (foundTurnIndex >= 0 && id) {
               turnIdsToRevert.add(id)
+              if (scope === 'single_turn') break
             }
           }
 

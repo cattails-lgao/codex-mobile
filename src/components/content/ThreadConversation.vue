@@ -2058,6 +2058,7 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
     props.cwd,
     action,
     action === 'redo' ? fileChangeRedoPatchIds.value[key] ?? [] : undefined,
+    'single_turn',
   )
   if (action === 'undo') {
     fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
