@@ -1330,6 +1330,7 @@ const modalImageUrl = ref('')
 const copiedResponseAnchorId = ref('')
 const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
 const fileChangeActionError = ref<Record<string, string>>({})
+const fileChangeRedoPatchIds = ref<Record<string, string[]>>({})
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
@@ -1943,11 +1944,12 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
   for (const [turnKey, messages] of fileChangeMessagesByTurnKey.entries()) {
     const anchorId = assistantAnchorIdByTurnKey.get(turnKey)
     if (!anchorId) continue
+    const assistantTurnId = assistantSummaryByAnchorId.get(anchorId)?.turnId ?? ''
     summaries[anchorId] = {
       changes: aggregateFileChanges(messages.flatMap((message) => message.fileChanges ?? [])),
       sourceMessageIds: messages.map((message) => message.id),
       source: 'metadata',
-      turnId: messages.find((message) => typeof message.turnId === 'string' && message.turnId.length > 0)?.turnId ?? '',
+      turnId: messages.find((message) => typeof message.turnId === 'string' && message.turnId.length > 0)?.turnId ?? assistantTurnId,
     }
   }
 
@@ -2050,7 +2052,18 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
   fileChangeActionState.value = { ...fileChangeActionState.value, [key]: pendingState }
   fileChangeActionError.value = { ...fileChangeActionError.value, [key]: '' }
 
-  const result = await updateThreadFileChanges(props.activeThreadId, summary.turnId, props.cwd, action)
+  const result = await updateThreadFileChanges(
+    props.activeThreadId,
+    summary.turnId,
+    props.cwd,
+    action,
+    action === 'redo' ? fileChangeRedoPatchIds.value[key] ?? [] : undefined,
+  )
+  if (action === 'undo') {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
+  } else {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: [] }
+  }
   if (result.errors.length > 0) {
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: action === 'undo' ? 'undone' : 'redone' }
     fileChangeActionError.value = { ...fileChangeActionError.value, [key]: result.errors.join('; ') }

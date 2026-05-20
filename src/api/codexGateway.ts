@@ -1547,22 +1547,50 @@ export async function rollbackThread(threadId: string, numTurns: number): Promis
   return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
-export async function updateThreadFileChanges(threadId: string, turnId: string, cwd: string, action: 'undo' | 'redo'): Promise<{ changed: number; errors: string[]; message?: string }> {
+export async function updateThreadFileChanges(
+  threadId: string,
+  turnId: string,
+  cwd: string,
+  action: 'undo' | 'redo',
+  patchIds?: string[],
+): Promise<{ changed: number; errors: string[]; message?: string; revertedPatchIds?: string[]; appliedPatchIds?: string[] }> {
   try {
     const response = await fetch('/codex-api/thread/rollback-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId, turnId, cwd, action }),
+      body: JSON.stringify({ threadId, turnId, cwd, action, patchIds }),
     })
-    if (!response.ok) return { changed: 0, errors: ['Server error'] }
-    const payload = (await response.json()) as { changed?: number; reverted?: number; applied?: number; errors?: string[]; message?: string }
+    const payload = (await response.json().catch(() => ({}))) as {
+      changed?: number
+      reverted?: number
+      applied?: number
+      errors?: string[]
+      message?: string
+      error?: string
+      revertedPatchIds?: string[]
+      appliedPatchIds?: string[]
+    }
+    if (!response.ok) {
+      const message = typeof payload.message === 'string' && payload.message.trim()
+        ? payload.message.trim()
+        : typeof payload.error === 'string' && payload.error.trim()
+          ? payload.error.trim()
+          : 'Server error'
+      return {
+        changed: 0,
+        errors: Array.isArray(payload.errors) && payload.errors.length > 0 ? payload.errors : [message],
+        message: payload.message,
+      }
+    }
     return {
       changed: payload.changed ?? payload.reverted ?? payload.applied ?? 0,
       errors: Array.isArray(payload.errors) ? payload.errors : [],
       message: payload.message,
+      revertedPatchIds: Array.isArray(payload.revertedPatchIds) ? payload.revertedPatchIds : [],
+      appliedPatchIds: Array.isArray(payload.appliedPatchIds) ? payload.appliedPatchIds : [],
     }
-  } catch {
-    return { changed: 0, errors: ['Network error'] }
+  } catch (error) {
+    return { changed: 0, errors: [error instanceof Error ? error.message : 'Network error'] }
   }
 }
 

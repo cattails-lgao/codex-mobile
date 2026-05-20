@@ -35,19 +35,19 @@
 
 #### Steps
 1. Open a thread with a visible file-change summary under an assistant response.
-2. Expand the file-change summary and note one changed file's current contents on disk.
+2. Expand the file-change summary, identify one changed file, and save its current contents with `cat <file> > /tmp/file-before-undo.txt`.
 3. Confirm the file-change action row shows `Undo` and does not show a separate `Redo` button.
 4. Click `Undo` in the file-change action row.
 5. Confirm the button enters an `Undoing` pending state and then changes to `Redo`.
-6. Verify the file contents on disk are restored to the pre-turn state.
+6. Verify the file contents on disk are restored to the pre-turn state with `diff -u /tmp/file-before-undo.txt <file>`.
 7. Click `Redo` in the same file-change action row.
 8. Confirm the button enters a `Redoing` pending state and then changes back to `Undo`.
-9. Verify the file contents on disk match the assistant turn's changes again.
+9. Verify the file contents on disk match the assistant turn's changes again with `cat <file>` or a diff against the assistant-modified snapshot.
 10. Repeat steps 1-9 in light theme and dark theme.
 
 #### Expected Results
-- Undo reverts only the saved file changes for the selected turn and later dependent turn changes handled by the existing rollback-files endpoint.
-- Redo reapplies the saved `apply_patch` input from the session log without changing chat history.
+- Undo reverts the file changes applied by the selected turn without changing chat history.
+- Redo reapplies the previously run `apply_patch` input without changing chat history.
 - The file-change action row shows exactly one action button at a time: `Undo` before rollback, `Redo` after undo, and `Undo` again after redo.
 - If Undo fails, the inline error stays visible and the single action still switches to `Redo` so the user can reapply or recover the visible action state.
 - Any backend error appears inline in the file-change panel.
