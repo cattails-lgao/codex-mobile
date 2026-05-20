@@ -194,23 +194,15 @@
                         type="button"
                         class="file-change-action-button"
                         :disabled="fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redoing'"
-                        title="Undo file changes from this turn"
-                        aria-label="Undo file changes from this turn"
-                        @click="runFileChangeAction(readStandaloneFileChangeSummary(message), 'undo')"
+                        :title="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        :aria-label="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        @click="runFileChangeAction(readStandaloneFileChangeSummary(message), fileChangeNextAction(readStandaloneFileChangeSummary(message)))"
                       >
-                        <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
-                        {{ fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undoing' ? 'Undoing' : fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undone' ? 'Undone' : 'Undo' }}
-                      </button>
-                      <button
-                        type="button"
-                        class="file-change-action-button"
-                        :disabled="fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redoing'"
-                        title="Redo file changes from this turn"
-                        aria-label="Redo file changes from this turn"
-                        @click="runFileChangeAction(readStandaloneFileChangeSummary(message), 'redo')"
-                      >
-                        <IconTablerArrowBackUp class="icon-svg file-change-action-icon file-change-action-icon-redo" />
-                        {{ fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redoing' ? 'Redoing' : fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redone' ? 'Redone' : 'Redo' }}
+                        <IconTablerArrowBackUp
+                          class="icon-svg file-change-action-icon"
+                          :class="{ 'file-change-action-icon-redo': fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' }"
+                        />
+                        {{ fileChangeActionLabel(readStandaloneFileChangeSummary(message)) }}
                       </button>
                     </div>
                   </div>
@@ -680,23 +672,15 @@
                         type="button"
                         class="file-change-action-button"
                         :disabled="fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redoing'"
-                        title="Undo file changes from this turn"
-                        aria-label="Undo file changes from this turn"
-                        @click="runFileChangeAction(readAnchoredFileChangeSummary(message), 'undo')"
+                        :title="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        :aria-label="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        @click="runFileChangeAction(readAnchoredFileChangeSummary(message), fileChangeNextAction(readAnchoredFileChangeSummary(message)))"
                       >
-                        <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
-                        {{ fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undoing' ? 'Undoing' : fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undone' ? 'Undone' : 'Undo' }}
-                      </button>
-                      <button
-                        type="button"
-                        class="file-change-action-button"
-                        :disabled="fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redoing'"
-                        title="Redo file changes from this turn"
-                        aria-label="Redo file changes from this turn"
-                        @click="runFileChangeAction(readAnchoredFileChangeSummary(message), 'redo')"
-                      >
-                        <IconTablerArrowBackUp class="icon-svg file-change-action-icon file-change-action-icon-redo" />
-                        {{ fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redoing' ? 'Redoing' : fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redone' ? 'Redone' : 'Redo' }}
+                        <IconTablerArrowBackUp
+                          class="icon-svg file-change-action-icon"
+                          :class="{ 'file-change-action-icon-redo': fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' }"
+                        />
+                        {{ fileChangeActionLabel(readAnchoredFileChangeSummary(message)) }}
                       </button>
                     </div>
                   </div>
@@ -1344,7 +1328,7 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const copiedResponseAnchorId = ref('')
-const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' | 'error'>>({})
+const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
 const fileChangeActionError = ref<Record<string, string>>({})
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
@@ -2037,7 +2021,7 @@ function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
   return summary?.turnId ? `turn:${summary.turnId}` : ''
 }
 
-function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' | 'error' {
+function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' {
   const key = fileChangeActionKey(summary)
   return key ? fileChangeActionState.value[key] ?? 'idle' : 'idle'
 }
@@ -2045,6 +2029,18 @@ function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' |
 function fileChangeActionErrorText(summary: TurnFileChangeSummary | null): string {
   const key = fileChangeActionKey(summary)
   return key ? fileChangeActionError.value[key] ?? '' : ''
+}
+
+function fileChangeNextAction(summary: TurnFileChangeSummary | null): 'undo' | 'redo' {
+  const status = fileChangeActionStatus(summary)
+  return status === 'undone' || status === 'redoing' ? 'redo' : 'undo'
+}
+
+function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
+  const status = fileChangeActionStatus(summary)
+  if (status === 'undoing') return 'Undoing'
+  if (status === 'redoing') return 'Redoing'
+  return fileChangeNextAction(summary) === 'redo' ? 'Redo' : 'Undo'
 }
 
 async function runFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): Promise<void> {
@@ -2056,7 +2052,7 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
 
   const result = await updateThreadFileChanges(props.activeThreadId, summary.turnId, props.cwd, action)
   if (result.errors.length > 0) {
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'error' }
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: action === 'undo' ? 'undone' : 'redone' }
     fileChangeActionError.value = { ...fileChangeActionError.value, [key]: result.errors.join('; ') }
     return
   }
