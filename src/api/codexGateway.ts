@@ -1547,18 +1547,28 @@ export async function rollbackThread(threadId: string, numTurns: number): Promis
   return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
-export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
+export async function updateThreadFileChanges(threadId: string, turnId: string, cwd: string, action: 'undo' | 'redo'): Promise<{ changed: number; errors: string[]; message?: string }> {
   try {
     const response = await fetch('/codex-api/thread/rollback-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId, turnId, cwd }),
+      body: JSON.stringify({ threadId, turnId, cwd, action }),
     })
-    if (!response.ok) return { reverted: 0, errors: ['Server error'] }
-    return (await response.json()) as { reverted: number; errors: string[] }
+    if (!response.ok) return { changed: 0, errors: ['Server error'] }
+    const payload = (await response.json()) as { changed?: number; reverted?: number; applied?: number; errors?: string[]; message?: string }
+    return {
+      changed: payload.changed ?? payload.reverted ?? payload.applied ?? 0,
+      errors: Array.isArray(payload.errors) ? payload.errors : [],
+      message: payload.message,
+    }
   } catch {
-    return { reverted: 0, errors: ['Network error'] }
+    return { changed: 0, errors: ['Network error'] }
   }
+}
+
+export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
+  const result = await updateThreadFileChanges(threadId, turnId, cwd, 'undo')
+  return { reverted: result.changed, errors: result.errors }
 }
 
 function normalizeThreadIdFromPayload(payload: unknown): string {

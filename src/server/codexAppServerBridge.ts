@@ -2609,6 +2609,132 @@ function reverseV4aDiff(fileContent: string, diffText: string): string | null {
   return result.join('\n')
 }
 
+function applyV4aDiff(fileContent: string, diffText: string): string | null {
+  const fileLines = fileContent.split('\n')
+  const rawDiffLines = diffText.split('\n')
+  while (rawDiffLines.length > 0 && rawDiffLines[rawDiffLines.length - 1]?.trim() === '') rawDiffLines.pop()
+  const result = [...fileLines]
+
+  type DiffEntry = { type: 'context' | 'add' | 'remove'; text: string }
+  const hunks: DiffEntry[][] = []
+  let currentHunk: DiffEntry[] | null = null
+
+  for (const dl of rawDiffLines) {
+    if (dl.startsWith('@@')) {
+      if (currentHunk) hunks.push(currentHunk)
+      currentHunk = []
+      continue
+    }
+    if (!currentHunk) continue
+    if (dl.startsWith('+')) {
+      currentHunk.push({ type: 'add', text: dl.slice(1) })
+    } else if (dl.startsWith('-')) {
+      currentHunk.push({ type: 'remove', text: dl.slice(1) })
+    } else if (dl.startsWith(' ')) {
+      currentHunk.push({ type: 'context', text: dl.slice(1) })
+    } else {
+      currentHunk.push({ type: 'context', text: dl })
+    }
+  }
+  if (currentHunk) hunks.push(currentHunk)
+
+  for (const hunk of hunks) {
+    const expectedSequence = hunk
+      .filter((e) => e.type === 'context' || e.type === 'remove')
+      .map((e) => e.text)
+
+    let seqStart = -1
+    if (expectedSequence.length === 0) {
+      seqStart = result.length
+    } else {
+      outer: for (let ri = 0; ri <= result.length - expectedSequence.length; ri++) {
+        for (let si = 0; si < expectedSequence.length; si++) {
+          if (result[ri + si] !== expectedSequence[si]) continue outer
+        }
+        seqStart = ri
+        break
+      }
+    }
+
+    if (seqStart < 0) return null
+
+    const newLines: string[] = []
+    let seqIdx = 0
+    for (const entry of hunk) {
+      if (entry.type === 'context') {
+        newLines.push(result[seqStart + seqIdx]!)
+        seqIdx++
+      } else if (entry.type === 'remove') {
+        seqIdx++
+      } else if (entry.type === 'add') {
+        newLines.push(entry.text)
+      }
+    }
+
+    result.splice(seqStart, expectedSequence.length, ...newLines)
+  }
+
+  return result.join('\n')
+}
+
+async function applyTurnFileChanges(
+  cwd: string,
+  turnInfos: Map<string, CollectedTurnFileInfo>,
+): Promise<{ applied: number; errors: string[] }> {
+  if (turnInfos.size === 0) return { applied: 0, errors: [] }
+
+  let applied = 0
+  const errors: string[] = []
+  const allPatchInputs = [...turnInfos.values()].flatMap((info) => info.patchInputs)
+
+  for (const patch of allPatchInputs) {
+    const changes = parseApplyPatchInput(patch.input)
+    for (const change of changes) {
+      const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+      const movedToPath = change.movedToPath
+        ? (isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath))
+        : null
+
+      try {
+        if (change.operation === 'add') {
+          await mkdir(dirname(filePath), { recursive: true })
+          await writeFile(filePath, change.diff ? `${change.diff}\n` : '', 'utf8')
+          applied++
+          continue
+        }
+
+        if (change.operation === 'delete') {
+          await rm(filePath, { force: true })
+          applied++
+          continue
+        }
+
+        let targetPath = filePath
+        if (movedToPath) {
+          await mkdir(dirname(movedToPath), { recursive: true })
+          await rename(filePath, movedToPath)
+          targetPath = movedToPath
+        }
+
+        const currentContent = await readFile(targetPath, 'utf8')
+        const newContent = applyV4aDiff(currentContent, change.diff)
+        if (newContent === null) {
+          errors.push(`Could not apply patch for ${targetPath}`)
+          continue
+        }
+        if (newContent !== currentContent) {
+          await writeFile(targetPath, newContent, 'utf8')
+        }
+        applied++
+      } catch (err) {
+        errors.push(`Failed to apply patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+  }
+
+  return { applied, errors }
+}
+
 async function revertTurnFileChanges(
   cwd: string,
   turnInfos: Map<string, CollectedTurnFileInfo>,
@@ -6767,6 +6893,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const threadId = readNonEmptyString(body?.threadId)
           const turnId = readNonEmptyString(body?.turnId)
           const cwd = readNonEmptyString(body?.cwd)
+          const action = readNonEmptyString(body?.action) === 'redo' ? 'redo' : 'undo'
           if (!threadId || !turnId || !cwd) {
             setJson(res, 400, { error: 'Missing threadId, turnId, or cwd' })
             return
@@ -6811,12 +6938,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           const turnInfos = collectFileChangesForTurns(sessionLogRaw, turnIdsToRevert, cwd)
           if (turnInfos.size === 0) {
-            setJson(res, 200, { reverted: 0, errors: [], message: 'No file changes to revert' })
+            setJson(res, 200, { changed: 0, errors: [], message: action === 'redo' ? 'No file changes to redo' : 'No file changes to revert' })
+            return
+          }
+
+          if (action === 'redo') {
+            const result = await applyTurnFileChanges(cwd, turnInfos)
+            setJson(res, 200, { ...result, changed: result.applied, message: `Reapplied ${result.applied} file change(s)` })
             return
           }
 
           const result = await revertTurnFileChanges(cwd, turnInfos)
-          setJson(res, 200, { ...result, message: `Reverted ${result.reverted} file change(s)` })
+          setJson(res, 200, { ...result, changed: result.reverted, message: `Reverted ${result.reverted} file change(s)` })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })
         }

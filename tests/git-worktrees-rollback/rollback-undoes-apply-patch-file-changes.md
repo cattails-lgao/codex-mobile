@@ -25,3 +25,30 @@
 
 #### Rollback/Cleanup
 - No cleanup required — rolled-back files are already restored.
+
+### Feature: Chat file-change undo and redo
+
+#### Prerequisites
+- App is running from this repository (`pnpm run dev`).
+- A thread exists with at least one completed assistant turn that applied file changes via `apply_patch`.
+- The thread's `cwd` points to a writable worktree.
+
+#### Steps
+1. Open a thread with a visible file-change summary under an assistant response.
+2. Expand the file-change summary and note one changed file's current contents on disk.
+3. Click `Undo` in the file-change action row.
+4. Confirm the button enters a pending state and then changes to `Undone`.
+5. Verify the file contents on disk are restored to the pre-turn state.
+6. Click `Redo` in the same file-change action row.
+7. Confirm the button enters a pending state and then changes to `Redone`.
+8. Verify the file contents on disk match the assistant turn's changes again.
+9. Repeat steps 1-8 in light theme and dark theme.
+
+#### Expected Results
+- Undo reverts only the saved file changes for the selected turn and later dependent turn changes handled by the existing rollback-files endpoint.
+- Redo reapplies the saved `apply_patch` input from the session log without changing chat history.
+- Any backend error appears inline in the file-change panel.
+- The action row uses themed controls that remain readable in light and dark theme.
+
+#### Rollback/Cleanup
+- Click `Undo` again if the test should leave the worktree without the assistant's file changes.
