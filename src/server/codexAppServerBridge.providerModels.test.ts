@@ -20,6 +20,16 @@ describe('provider model discovery payload normalization', () => {
     })).toEqual(['gpt-5.4', 'gpt-5.3-codex'])
   })
 
+  it('falls back to models rows when data rows are empty', () => {
+    expect(normalizeProviderModelsData({
+      data: [],
+      models: [
+        { slug: 'gpt-5.4' },
+        { slug: 'gpt-5.3-codex' },
+      ],
+    })).toEqual(['gpt-5.4', 'gpt-5.3-codex'])
+  })
+
   it('accepts string rows and common model fields while preserving first-seen order', () => {
     expect(normalizeProviderModelsData({
       models: [

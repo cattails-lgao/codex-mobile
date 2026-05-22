@@ -1228,11 +1228,9 @@ function buildProviderModelsUrl(baseUrl: string, queryParams: unknown): URL {
 
 export function normalizeProviderModelsData(payload: unknown): string[] {
   const record = asRecord(payload)
-  const rows = Array.isArray(record?.data)
-    ? record.data
-    : Array.isArray(record?.models)
-      ? record.models
-      : null
+  const dataRows = Array.isArray(record?.data) ? record.data : null
+  const modelRows = Array.isArray(record?.models) ? record.models : null
+  const rows = dataRows?.length ? dataRows : modelRows?.length ? modelRows : dataRows ?? modelRows
   if (!rows) {
     throw new Error('provider /models payload is missing a data/models array')
   }
