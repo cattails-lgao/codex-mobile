@@ -29,6 +29,7 @@ Return to the [manual test index](../../tests.md).
 | [Android published CLI loads Codex app-server models through local proxy](android-published-cli-loads-codex-app-server-models-through-local-proxy.md) |
 | [OpenCode Zen status returns current provider models](opencode-zen-status-returns-current-provider-models.md) |
 | [Provider models load without Codex model-list dependency](provider-models-load-without-codex-model-list-dependency.md) |
+| [Provider models accept Codex catalog payloads](provider-models-accepts-codex-catalog-payload.md) |
 | [Thread-locked providers across Zen, Codex, and OpenRouter](thread-locked-providers-across-zen-codex-and-openrouter.md) |
 | [Selected thread loads do not refetch provider models](selected-thread-loads-do-not-refetch-provider-models.md) |
 | [Provider-backed scheduled refreshes keep model menus populated](provider-backed-scheduled-refreshes-keep-model-menus-populated.md) |

@@ -1226,17 +1226,25 @@ function buildProviderModelsUrl(baseUrl: string, queryParams: unknown): URL {
   return url
 }
 
-function normalizeProviderModelsData(payload: unknown): string[] {
+export function normalizeProviderModelsData(payload: unknown): string[] {
   const record = asRecord(payload)
-  const rows = Array.isArray(record?.data) ? record.data : null
+  const rows = Array.isArray(record?.data)
+    ? record.data
+    : Array.isArray(record?.models)
+      ? record.models
+      : null
   if (!rows) {
-    throw new Error('provider /models payload is missing a data array')
+    throw new Error('provider /models payload is missing a data/models array')
   }
 
   const ids: string[] = []
   for (const row of rows) {
+    const candidateFromString = readNonEmptyString(row)
     const entry = asRecord(row)
-    const candidate = readNonEmptyString(entry?.id)
+    const candidate = candidateFromString
+      || readNonEmptyString(entry?.id)
+      || readNonEmptyString(entry?.model)
+      || readNonEmptyString(entry?.slug)
     if (!candidate || ids.includes(candidate)) continue
     ids.push(candidate)
   }
