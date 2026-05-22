@@ -1236,6 +1236,7 @@ export function normalizeProviderModelsData(payload: unknown): string[] {
   }
 
   const ids: string[] = []
+  const seen = new Set<string>()
   for (const row of rows) {
     const candidateFromString = readNonEmptyString(row)
     const entry = asRecord(row)
@@ -1243,7 +1244,8 @@ export function normalizeProviderModelsData(payload: unknown): string[] {
       || readNonEmptyString(entry?.id)
       || readNonEmptyString(entry?.model)
       || readNonEmptyString(entry?.slug)
-    if (!candidate || ids.includes(candidate)) continue
+    if (!candidate || seen.has(candidate)) continue
+    seen.add(candidate)
     ids.push(candidate)
   }
   return ids
