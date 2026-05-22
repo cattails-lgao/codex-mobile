@@ -5,8 +5,9 @@ Provider-backed model discovery accepts both OpenAI-compatible and Codex catalog
 
 #### Prerequisites/Setup
 1. Build the project with `pnpm run build`.
-2. Configure Codex with a `responses` provider whose `/models` endpoint returns `{"models":[{"slug":"..."}]}`.
-3. Start the app and open it in the browser.
+2. Start the app and open it in the browser.
+3. In Settings, choose `Custom endpoint`, set API format to `Responses`, and point the endpoint URL at a test provider base URL such as `http://127.0.0.1:8666/v1`.
+4. Have that provider return `{"models":[{"slug":"gpt-5.4"}]}` from `GET /v1/models`.
 
 #### Steps
 1. Open the model selector for the provider-backed thread or new-chat composer.
