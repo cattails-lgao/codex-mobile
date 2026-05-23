@@ -522,7 +522,17 @@ export function handleUnifiedResponsesProxyRequest(
       }
 
       const requestFn = upstreamUrl.protocol === 'http:' ? httpRequest : httpsRequest
-      const upstreamHeaders = options.upstreamHeaders?.(payload) ?? {}
+      let upstreamHeaders: Record<string, string>
+      try {
+        upstreamHeaders = options.upstreamHeaders?.(payload) ?? {}
+      } catch (error) {
+        if (process.env.CODEXUI_PROXY_DEBUG === '1') {
+          console.warn('[unified-responses-proxy] upstream header hook failed', error)
+        }
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: { message: 'Upstream header hook error' } }))
+        return
+      }
       const proxyReq = requestFn({
         hostname: upstreamUrl.hostname,
         port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),

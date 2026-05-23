@@ -5,6 +5,7 @@ import { handleUnifiedResponsesProxyRequest } from './unifiedResponsesProxy.js'
 const ZEN_RESPONSES_ENDPOINT = 'https://opencode.ai/zen/v1/responses'
 const ZEN_CHAT_COMPLETIONS_ENDPOINT = 'https://opencode.ai/zen/v1/chat/completions'
 const OPENCODE_ZEN_PUBLIC_TOKEN = 'public'
+// Mirrors the public OpenCode CLI identity that Zen accepts for unauthenticated free-model calls.
 const OPENCODE_ZEN_USER_AGENT = `opencode/1.15.9 ai-sdk/provider-utils/4.0.23 runtime/node/${process.versions.node}`
 const OPENCODE_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
