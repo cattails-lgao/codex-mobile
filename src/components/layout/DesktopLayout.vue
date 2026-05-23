@@ -110,14 +110,14 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 @reference "tailwindcss";
 
 .desktop-layout {
-  @apply grid bg-slate-100 text-slate-900 overflow-hidden;
+  @apply isolate grid bg-slate-100 text-slate-900 overflow-hidden;
   height: 100vh;
   height: 100dvh;
   grid-template-columns: var(--layout-columns);
 }
 
 .desktop-sidebar {
-  @apply bg-slate-100 min-h-0 overflow-hidden;
+  @apply relative z-0 bg-slate-100 min-h-0 overflow-hidden;
 }
 
 .desktop-resize-handle {
@@ -130,7 +130,7 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 }
 
 .desktop-main {
-  @apply bg-white min-h-0 overflow-y-hidden overflow-x-visible;
+  @apply relative z-[100] bg-white min-h-0 overflow-y-hidden overflow-x-visible;
 }
 
 .mobile-drawer-backdrop {

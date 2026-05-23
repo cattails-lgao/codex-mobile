@@ -239,14 +239,44 @@
           </div>
         </div>
       </div>
-      <div v-else-if="!composioStatus.authenticated" class="directory-empty">
-        <div class="directory-empty-copy">
-          <p class="directory-empty-text">Composio is available but not logged in.</p>
-          <div class="directory-card-actions">
+      <div v-else-if="!composioStatus.authenticated" class="composio-preview">
+        <article class="composio-preview-hero">
+          <div class="composio-preview-copy">
+            <div class="directory-card-fallback composio-fallback">C</div>
+            <div>
+              <p class="composio-preview-kicker">Connector catalog preview</p>
+              <h3 class="composio-preview-title">Connect everyday apps like Gmail, Calendar, Reddit, YouTube, and Drive.</h3>
+              <p class="composio-preview-text">
+                Composio is installed locally. Login to browse the live catalog, connect your accounts, and try simple actions from this machine.
+              </p>
+            </div>
+          </div>
+          <div class="composio-preview-actions">
             <button class="directory-action primary" type="button" :disabled="isStartingComposioLogin" @click="startComposioCliLogin">
-              {{ isStartingComposioLogin ? 'Opening...' : 'Login' }}
+              {{ isStartingComposioLogin ? 'Opening...' : 'Login to Composio' }}
+            </button>
+            <button class="directory-action-link" type="button" @click="openExternalUrl(composioStatus.webUrl || 'https://dashboard.composio.dev/')">
+              Open dashboard
             </button>
           </div>
+        </article>
+        <div class="composio-preview-grid">
+          <article v-for="connector in visibleComposioPreviewConnectors" :key="connector.slug" class="directory-card composio-preview-card">
+            <div class="directory-card-top">
+              <div class="directory-card-fallback composio-fallback">{{ connector.initial }}</div>
+              <div class="directory-card-main">
+                <div class="directory-card-title-row">
+                  <span class="directory-card-title">{{ connector.name }}</span>
+                  <span class="directory-badge is-muted">Preview</span>
+                </div>
+                <span class="directory-card-meta">{{ connector.meta }}</span>
+              </div>
+            </div>
+            <p class="directory-card-description">{{ connector.description }}</p>
+            <div class="directory-chip-row">
+              <span v-for="chip in connector.chips" :key="chip" class="directory-chip">{{ chip }}</span>
+            </div>
+          </article>
         </div>
       </div>
       <div v-else class="directory-section composio-section">
@@ -740,6 +770,57 @@ const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
   { id: 'skills', label: 'Skills', subtitle: 'MCPs first, then installed skills and GitHub sync state.' },
 ]
 
+const composioPreviewConnectors = [
+  {
+    name: 'Gmail',
+    slug: 'gmail',
+    initial: 'G',
+    meta: 'Inbox, drafts, attachments',
+    description: 'Find emails, summarize threads, draft replies, and pull attachment context into a chat.',
+    chips: ['Email', 'Search', 'Drafts'],
+  },
+  {
+    name: 'Google Calendar',
+    slug: 'google-calendar',
+    initial: 'C',
+    meta: 'Events and availability',
+    description: 'Check what is next, find open time, and turn follow-ups into calendar blocks.',
+    chips: ['Events', 'Availability', 'Reminders'],
+  },
+  {
+    name: 'Reddit',
+    slug: 'reddit',
+    initial: 'R',
+    meta: 'Posts, comments, communities',
+    description: 'Search communities, inspect posts, and prepare natural replies before posting.',
+    chips: ['Search', 'Comments', 'Posts'],
+  },
+  {
+    name: 'YouTube',
+    slug: 'youtube',
+    initial: 'Y',
+    meta: 'Videos, channels, comments',
+    description: 'Look up channel details, inspect video metadata, and help manage comment workflows.',
+    chips: ['Videos', 'Channels', 'Comments'],
+  },
+  {
+    name: 'Google Drive',
+    slug: 'google-drive',
+    initial: 'D',
+    meta: 'Files, docs, folders',
+    description: 'Find files, read shared docs, and bring Drive context into a Codex thread.',
+    chips: ['Files', 'Docs', 'Search'],
+  },
+  {
+    name: 'X',
+    slug: 'x',
+    initial: 'X',
+    meta: 'Posts, replies, profiles',
+    description: 'Research public posts, draft replies, and keep social workflows reviewable.',
+    chips: ['Posts', 'Replies', 'Profiles'],
+  },
+]
+
 function isDirectoryTab(value: unknown): value is DirectoryTab {
   return value === 'plugins' || value === 'apps' || value === 'composio' || value === 'skills'
 }
@@ -845,6 +926,17 @@ const visibleComposioConnectors = computed(() => sortComposioConnectors(
   composioSortMode.value,
   composioSearchQuery.value,
 ))
+const visibleComposioPreviewConnectors = computed(() => {
+  const query = normalizeSearch(composioSearchQuery.value)
+  if (!query) return composioPreviewConnectors
+  return composioPreviewConnectors.filter((connector) => includesSearch([
+    connector.name,
+    connector.slug,
+    connector.meta,
+    connector.description,
+    ...connector.chips,
+  ], query))
+})
 const visibleMcpServers = computed(() => sortMcpServers(mcpServers.value, 'popular'))
 const hasMoreComposioConnectors = computed(() => composioNextCursor.value !== null)
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
@@ -1953,6 +2045,42 @@ button.directory-card {
   @apply min-h-0;
 }
 
+.composio-preview {
+  @apply flex flex-col gap-3;
+}
+
+.composio-preview-hero {
+  @apply flex flex-col gap-4 overflow-hidden rounded-xl border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-center sm:justify-between;
+}
+
+.composio-preview-copy {
+  @apply flex min-w-0 items-start gap-3;
+}
+
+.composio-preview-kicker {
+  @apply m-0 text-xs font-semibold uppercase text-sky-700;
+}
+
+.composio-preview-title {
+  @apply m-0 mt-1 max-w-2xl text-lg font-semibold leading-snug text-zinc-950;
+}
+
+.composio-preview-text {
+  @apply m-0 mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600;
+}
+
+.composio-preview-actions {
+  @apply flex shrink-0 flex-wrap items-center gap-2;
+}
+
+.composio-preview-grid {
+  @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
+}
+
+.composio-preview-card {
+  @apply border-sky-100 bg-white;
+}
+
 .composio-fallback {
   @apply bg-sky-100 text-sky-700;
 }
@@ -2083,6 +2211,26 @@ button.directory-card {
 
 :global(:root.dark) .directory-auth-status.is-muted {
   @apply border-zinc-700 bg-zinc-900 text-zinc-400;
+}
+
+:global(:root.dark) .composio-preview-hero {
+  @apply border-sky-900/70 bg-sky-950/40;
+}
+
+:global(:root.dark) .composio-preview-card {
+  @apply border-sky-900/60 bg-zinc-900;
+}
+
+:global(:root.dark) .composio-preview-kicker {
+  @apply text-sky-300;
+}
+
+:global(:root.dark) .composio-preview-title {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .composio-preview-text {
+  @apply text-zinc-400;
 }
 
 :global(:root.dark) .directory-auth-status.is-error,

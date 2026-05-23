@@ -5,9 +5,11 @@ const { resolve } = require('node:path')
 const baseUrl = process.env.PROFILE_BASE_URL || 'http://localhost:5173'
 const route = process.env.PROFILE_ROUTE || '/'
 const waitMs = Number.parseInt(process.env.PROFILE_WAIT_MS || '7000', 10)
+const threadLoadTimeoutMs = Number.parseInt(process.env.PROFILE_THREAD_LOAD_TIMEOUT_MS || '15000', 10)
 const headless = process.env.PROFILE_HEADLESS !== 'false'
 const outputDir = resolve(process.cwd(), 'output/playwright')
 const runStamp = new Date().toISOString().replace(/[:.]/g, '-')
+const THREAD_LOADING_TEXT = 'Loading threads...'
 
 function routeSlug() {
   const raw = route.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -47,7 +49,8 @@ function buildWarnings(duplicateCounts, apiSummary, apiRows) {
 
   if (duplicateCounts.threadListFirstPage > 1) warnings.push(`threadListFirstPage=${duplicateCounts.threadListFirstPage}`)
   if (duplicateCounts.threadResume > 1) warnings.push(`threadResume=${duplicateCounts.threadResume}`)
-  if (duplicateCounts.threadRead > 0) warnings.push(`threadRead=${duplicateCounts.threadRead}`)
+  if (duplicateCounts.threadReadWithTurns > 1) warnings.push(`threadReadWithTurns=${duplicateCounts.threadReadWithTurns}`)
+  if (duplicateCounts.threadReadDuplicateKeys > 0) warnings.push(`threadReadDuplicateKeys=${duplicateCounts.threadReadDuplicateKeys}`)
   if (duplicateCounts.skillsList > 1) warnings.push(`skillsList=${duplicateCounts.skillsList}`)
   if (duplicateCounts.rateLimitsRead > 1) warnings.push(`rateLimitsRead=${duplicateCounts.rateLimitsRead}`)
   if (providerModels && providerModels.maxMs > 1000) warnings.push(`providerModels=${providerModels.maxMs}ms`)
@@ -60,6 +63,9 @@ function requestKey(row) {
   if (row.rpc === 'thread/list') {
     return row.cursor ? 'thread/list:cursor' : 'thread/list:first-page'
   }
+  if (row.rpc === 'thread/read') {
+    return `thread/read:${row.threadId || 'unknown'}:${row.includeTurns === true ? 'turns' : 'summary'}`
+  }
   return row.rpc || row.path
 }
 
@@ -69,6 +75,10 @@ function parseJson(value) {
   } catch {
     return null
   }
+}
+
+function hasThreadLoadingText(value) {
+  return typeof value === 'string' && value.includes(THREAD_LOADING_TEXT)
 }
 
 function toTargetUrl() {
@@ -133,6 +143,10 @@ async function main() {
       cursor: parsedBody?.params && typeof parsedBody.params === 'object' && typeof parsedBody.params.cursor === 'string'
         ? parsedBody.params.cursor
         : '',
+      threadId: parsedBody?.params && typeof parsedBody.params === 'object' && typeof parsedBody.params.threadId === 'string'
+        ? parsedBody.params.threadId
+        : '',
+      includeTurns: parsedBody?.params && typeof parsedBody.params === 'object' && parsedBody.params.includeTurns === true,
       requestBytes: body ? Buffer.byteLength(body, 'utf8') : 0,
     }
   })
@@ -154,6 +168,8 @@ async function main() {
       path: new URL(response.url()).pathname,
       rpc: profile.rpc,
       cursor: profile.cursor,
+      threadId: profile.threadId,
+      includeTurns: profile.includeTurns,
       status: response.status(),
       ms: round(performance.now() - profile.startedAt),
       requestBytes: profile.requestBytes,
@@ -168,11 +184,25 @@ async function main() {
   const startedAt = performance.now()
   await page.goto(targetUrl, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(Number.isFinite(waitMs) && waitMs >= 0 ? waitMs : 7000)
+  let threadLoadingTimedOut = false
+  const resolvedThreadLoadTimeoutMs = Number.isFinite(threadLoadTimeoutMs) && threadLoadTimeoutMs >= 0
+    ? threadLoadTimeoutMs
+    : 15000
+  try {
+    await page.waitForFunction(
+      (loadingText) => !document.body.innerText.includes(loadingText),
+      THREAD_LOADING_TEXT,
+      { timeout: resolvedThreadLoadTimeoutMs },
+    )
+  } catch {
+    threadLoadingTimedOut = true
+  }
   const totalMs = round(performance.now() - startedAt)
 
   const finalUrl = page.url()
   const title = await page.title()
   const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '')
+  const stillLoadingThreads = threadLoadingTimedOut || hasThreadLoadingText(bodyText)
   const performanceData = await collectPerformance(page)
   const screenshotPath = resolve(outputDir, `${artifactPrefix}.png`)
   await page.screenshot({ path: screenshotPath, fullPage: true })
@@ -197,6 +227,17 @@ async function main() {
     threadListCursor: apiRows.filter((row) => row.rpc === 'thread/list' && row.cursor).length,
     threadResume: apiRows.filter((row) => row.rpc === 'thread/resume').length,
     threadRead: apiRows.filter((row) => row.rpc === 'thread/read').length,
+    threadReadWithTurns: apiRows.filter((row) => row.rpc === 'thread/read' && row.includeTurns === true).length,
+    threadReadDuplicateKeys: Array.from(
+      apiRows
+        .filter((row) => row.rpc === 'thread/read')
+        .reduce((counts, row) => {
+          const key = requestKey(row)
+          counts.set(key, (counts.get(key) || 0) + 1)
+          return counts
+        }, new Map())
+        .values(),
+    ).filter((count) => count > 1).length,
     skillsList: apiRows.filter((row) => row.rpc === 'skills/list').length,
     rateLimitsRead: apiRows.filter((row) => row.rpc === 'account/rateLimits/read').length,
     providerModels: apiRows.filter((row) => row.path === '/codex-api/provider-models').length,
@@ -213,6 +254,11 @@ async function main() {
     duplicateCounts,
     warnings: diagnostics.warnings,
     totalApiKB: diagnostics.totalApiKB,
+    pageState: {
+      threadLoadingText: THREAD_LOADING_TEXT,
+      threadLoadTimeoutMs: resolvedThreadLoadTimeoutMs,
+      stillLoadingThreads,
+    },
     bodyTextHead: bodyText.slice(0, 1000),
     performance: performanceData,
     apiSummary,
@@ -233,10 +279,16 @@ async function main() {
     totalMs,
     duplicateCounts,
     warnings: diagnostics.warnings,
+    pageState: report.pageState,
     totalApiKB: diagnostics.totalApiKB,
     topApiSummary: apiSummary.slice(0, 12),
     slowestApiRows: report.slowestApiRows.slice(0, 10),
   }, null, 2))
+
+  if (stillLoadingThreads) {
+    console.error(`Profile failed: page still contains "${THREAD_LOADING_TEXT}" after ${resolvedThreadLoadTimeoutMs}ms. Report: ${reportPath}`)
+    process.exitCode = 2
+  }
 }
 
 main().catch((error) => {

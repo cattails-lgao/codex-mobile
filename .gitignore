@@ -3,6 +3,7 @@ dist/
 dist-cli/
 output/
 .playwright-cli/
+test-results/
 *.tsbuildinfo
 
 package-lock.json
@@ -11,5 +12,4 @@ pnpm-lock.yaml
 .env.local
 
 package.json
-DYNAMIC_INSTRUCTIONS.md
 .omx/

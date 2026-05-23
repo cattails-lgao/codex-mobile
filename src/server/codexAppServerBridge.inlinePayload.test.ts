@@ -1,12 +1,23 @@
 import { existsSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { sanitizeThreadTurnsInlinePayloads } from './codexAppServerBridge'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  BackendQueueProcessor,
+  mergeSessionSkillInputsIntoTurns,
+  parseAutomationToml,
+  sanitizeThreadTurnsInlinePayloads,
+  toAutomationApiRecord,
+} from './codexAppServerBridge'
 
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const pngDataUrl = `data:image/png;base64,${pngBase64}`
 const gifBase64 = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const jpegBase64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2w=='
 const webpBase64 = 'UklGRiIAAABXRUJQVlA4IC4AAAAwAQCdASoBAAEAAQAcJaQAA3AA/vuUAAA='
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 function localImagePathFromProxyUrl(value: string): string {
   const parsed = new URL(value, 'http://localhost')
@@ -224,5 +235,185 @@ describe('thread inline media sanitization', () => {
     const result = await sanitizeThreadTurnsInlinePayloads('thread/list', payload)
 
     expect(result).toBe(payload)
+  })
+})
+
+describe('thread session skill recovery', () => {
+  it('adds selected skill inputs from session JSONL to matching user messages', () => {
+    const turns = [{
+      id: 'turn-1',
+      items: [{
+        id: 'item-1',
+        type: 'userMessage',
+        content: [{ type: 'text', text: 'use a skill', text_elements: [] }],
+      }],
+    }]
+    const sessionLog = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'use a skill' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n---\n# Browser\n</skill>',
+          }],
+        },
+      }),
+    ].join('\n')
+
+    const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
+    expect(merged[0].items[0].content).toEqual([
+      { type: 'text', text: 'use a skill', text_elements: [] },
+      { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+    ])
+  })
+
+  it('does not duplicate skill inputs that are already present', () => {
+    const turns = [{
+      id: 'turn-1',
+      items: [{
+        id: 'item-1',
+        type: 'userMessage',
+        content: [
+          { type: 'text', text: 'use a skill', text_elements: [] },
+          { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+        ],
+      }],
+    }]
+    const sessionLog = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n</skill>',
+          }],
+        },
+      }),
+    ].join('\n')
+
+    expect(mergeSessionSkillInputsIntoTurns(turns, sessionLog)).toBe(turns)
+  })
+
+  it('adds selected skill inputs to the last user message in a multi-message turn', () => {
+    const turns = [{
+      id: 'turn-1',
+      items: [
+        {
+          id: 'item-1',
+          type: 'userMessage',
+          content: [{ type: 'text', text: 'first message', text_elements: [] }],
+        },
+        {
+          id: 'item-2',
+          type: 'agentMessage',
+          content: [{ type: 'text', text: 'assistant reply', text_elements: [] }],
+        },
+        {
+          id: 'item-3',
+          type: 'userMessage',
+          content: [{ type: 'text', text: 'second message', text_elements: [] }],
+        },
+      ],
+    }]
+    const sessionLog = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n</skill>',
+          }],
+        },
+      }),
+    ].join('\n')
+
+    const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
+    expect(merged[0].items[0].content).toEqual([{ type: 'text', text: 'first message', text_elements: [] }])
+    expect(merged[0].items[2].content).toEqual([
+      { type: 'text', text: 'second message', text_elements: [] },
+      { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+    ])
+  })
+})
+
+describe('backend queue scheduling', () => {
+  it('reschedules a pending drain when a run-now request needs an earlier drain', async () => {
+    vi.useFakeTimers()
+    const processor = new BackendQueueProcessor({
+      onNotification: () => () => undefined,
+    } as never)
+    const processThreadQueue = vi
+      .spyOn(processor as unknown as { processThreadQueue: (threadId: string) => Promise<void> }, 'processThreadQueue')
+      .mockResolvedValue(undefined)
+
+    processor.scheduleThreadQueueDrain('thread-1', 5000)
+    processor.scheduleThreadQueueDrain('thread-1', 0)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(processThreadQueue).toHaveBeenCalledTimes(1)
+    expect(processThreadQueue).toHaveBeenCalledWith('thread-1')
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(processThreadQueue).toHaveBeenCalledTimes(1)
+
+    processor.dispose()
+  })
+})
+
+describe('automation TOML handling', () => {
+  it('parses TOML string arrays without requiring JSON-only syntax', () => {
+    const automation = parseAutomationToml([
+      'version = 1',
+      'id = "cron-smoke"',
+      'kind = "cron"',
+      'name = "Cron Smoke"',
+      'prompt = "run"',
+      'status = "ACTIVE"',
+      'rrule = "FREQ=DAILY"',
+      "cwds = ['/tmp/project-one', '/tmp/project,two']",
+      'created_at = 111',
+      'updated_at = 222',
+      '[scheduler]',
+      'execution_environment = "local"',
+    ].join('\n'))
+
+    expect(automation?.cwds).toEqual(['/tmp/project-one', '/tmp/project,two'])
+    expect(automation?.createdAtMs).toBe(111)
+    expect(automation?.extraTomlLines).toContain('[scheduler]')
+  })
+
+  it('omits preserved TOML internals from automation API records', () => {
+    const automation = parseAutomationToml([
+      'version = 1',
+      'id = "cron-smoke"',
+      'kind = "cron"',
+      'name = "Cron Smoke"',
+      'prompt = "run"',
+      'status = "ACTIVE"',
+      'rrule = "FREQ=DAILY"',
+      'cwds = ["/tmp/project-one"]',
+      '[scheduler]',
+      'execution_environment = "local"',
+    ].join('\n'))
+
+    expect(automation).toBeTruthy()
+    expect(toAutomationApiRecord(automation as NonNullable<typeof automation>)).not.toHaveProperty('extraTomlLines')
   })
 })

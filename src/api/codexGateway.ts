@@ -25,6 +25,7 @@ import {
   readActiveTurnIdFromResponse,
   normalizeThreadGroupsV2,
   normalizeThreadMessagesV2,
+  normalizeThreadSummaryV2,
   readThreadInProgressFromResponse,
 } from './normalizers/v2'
 import type {
@@ -38,6 +39,7 @@ import type {
   UiFileChange,
   UiMessage,
   UiProjectGroup,
+  UiThread,
   UiReviewAction,
   UiReviewActionLevel,
   UiReviewFile,
@@ -47,6 +49,7 @@ import type {
   UiReviewResult,
   UiReviewScope,
   UiReviewSnapshot,
+  UiReviewSummary,
   UiReviewWorkspaceView,
   UiRateLimitSnapshot,
   UiRateLimitWindow,
@@ -246,6 +249,7 @@ type DirectoryComposioConnectorPage = {
 
 type ProviderModelsResponse = {
   data?: unknown
+  exclusive?: unknown
 }
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
@@ -275,6 +279,9 @@ export type WorkspaceRootsState = {
     label: string
   }>
 }
+
+let workspaceRootsStatePromise: Promise<WorkspaceRootsState> | null = null
+let cachedWorkspaceRootsState: WorkspaceRootsState | null = null
 
 export type StoredQueuedMessage = {
   id: string
@@ -325,6 +332,15 @@ export type GitCommitOption = {
   shortSha: string
   subject: string
   date: string
+}
+
+export type GitCommitFileChange = {
+  path: string
+  previousPath: string | null
+  status: string
+  label: string
+  addedLineCount: number | null
+  removedLineCount: number | null
 }
 
 export type GitRepositoryStatus = {
@@ -583,17 +599,24 @@ function normalizeThreadFileChangeFallback(value: unknown): ThreadFileChangeFall
   return normalized
 }
 
-function buildTurnIndexByTurnId(payload: ThreadReadResponse): ThreadTurnIndexById {
+function buildTurnIndexByTurnId(payload: ThreadReadResponse, baseTurnIndex = 0): ThreadTurnIndexById {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const lookup: ThreadTurnIndexById = {}
 
-  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
-    const turn = turns[turnIndex]
+  for (let turnOffset = 0; turnOffset < turns.length; turnOffset += 1) {
+    const turnIndex = baseTurnIndex + turnOffset
+    const turn = turns[turnOffset]
     if (typeof turn?.id !== 'string' || turn.id.length === 0) continue
     lookup[turn.id] = turnIndex
   }
 
   return lookup
+}
+
+function readThreadTurnStartIndex(payload: ThreadReadResponse): number {
+  const record = asRecord(payload)
+  const raw = record?.threadTurnStartIndex
+  return Math.max(0, Math.floor(typeof raw === 'number' ? raw : 0))
 }
 
 async function fetchThreadFileChangeFallback(threadId: string): Promise<ThreadFileChangeFallbackEntry[]> {
@@ -697,6 +720,15 @@ export type ThreadGroupsPage = {
   nextCursor: string | null
 }
 
+export type ThreadTurnPage = {
+  messages: UiMessage[]
+  inProgress: boolean
+  activeTurnId: string
+  hasMoreOlder: boolean
+  startTurnIndex: number
+  turnIndexByTurnId: ThreadTurnIndexById
+}
+
 async function getThreadGroupsPageV2(cursor: string | null, limit: number): Promise<ThreadGroupsPage> {
   const payload = await callRpc<ThreadListResponse>('thread/list', {
     archived: false,
@@ -718,25 +750,70 @@ async function getThreadMessagesV2(threadId: string): Promise<UiMessage[]> {
     threadId,
     includeTurns: true,
   })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
+}
+
+async function getThreadSummaryV2(threadId: string): Promise<UiThread> {
+  const payload = await callRpc<ThreadReadResponse>('thread/read', {
+    threadId,
+    includeTurns: false,
+  })
+  return normalizeThreadSummaryV2(payload)
 }
 
 async function getThreadDetailV2(threadId: string): Promise<{
+  model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
     includeTurns: true,
   })
-  const normalized = normalizeThreadMessagesV2(payload)
+  const startTurnIndex = readThreadTurnStartIndex(payload)
+  const normalized = normalizeThreadMessagesV2(payload, startTurnIndex)
   return {
+    model: normalizeThreadModelFromPayload(payload),
+    modelProvider: normalizeThreadModelProviderFromPayload(payload),
     messages: normalized,
     inProgress: readThreadInProgressFromResponse(payload),
     activeTurnId: readActiveTurnIdFromResponse(payload),
-    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
+    hasMoreOlder: startTurnIndex > 0,
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+  }
+}
+
+async function getOlderThreadMessagesV2(threadId: string, beforeTurnId: string, limit = 10): Promise<ThreadTurnPage> {
+  const params = new URLSearchParams({
+    threadId,
+    beforeTurnId,
+    limit: String(limit),
+  })
+  const response = await fetch(`/codex-api/thread-turn-page?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error(`Older thread page request failed with ${response.status}`)
+  }
+  const payload = await response.json() as {
+    result?: ThreadReadResponse
+    hasMoreOlder?: unknown
+    startTurnIndex?: unknown
+  }
+  if (!payload.result) {
+    throw new Error('Older thread page response did not include a thread result')
+  }
+  const startTurnIndex = Math.max(0, Math.floor(typeof payload.startTurnIndex === 'number' ? payload.startTurnIndex : 0))
+
+  return {
+    messages: normalizeThreadMessagesV2(payload.result, startTurnIndex),
+    inProgress: readThreadInProgressFromResponse(payload.result),
+    activeTurnId: readActiveTurnIdFromResponse(payload.result),
+    hasMoreOlder: payload.hasMoreOlder === true,
+    startTurnIndex,
+    turnIndexByTurnId: buildTurnIndexByTurnId(payload.result, startTurnIndex),
   }
 }
 
@@ -771,16 +848,35 @@ export async function getThreadMessages(threadId: string): Promise<UiMessage[]> 
   }
 }
 
+export async function getThreadSummary(threadId: string): Promise<UiThread> {
+  try {
+    return await getThreadSummaryV2(threadId)
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
+  }
+}
+
 export async function getThreadDetail(threadId: string): Promise<{
+  model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }> {
   try {
     return await getThreadDetailV2(threadId)
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to load thread ${threadId}`, 'thread/read')
+  }
+}
+
+export async function getOlderThreadMessages(threadId: string, beforeTurnId: string, limit?: number): Promise<ThreadTurnPage> {
+  try {
+    return await getOlderThreadMessagesV2(threadId, beforeTurnId, limit)
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to load earlier messages for thread ${threadId}`, 'thread/read')
   }
 }
 
@@ -867,7 +963,8 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
   const envelope = asRecord(payload)
   const data = asRecord(envelope?.data)
   const summaryRecord = asRecord(data?.summary)
-  const scope = readString(data?.scope) === 'baseBranch' ? 'baseBranch' : 'workspace'
+  const rawScope = readString(data?.scope)
+  const scope = rawScope === 'baseBranch' || rawScope === 'commit' ? rawScope : 'workspace'
   const workspaceView = readString(data?.workspaceView) === 'staged' ? 'staged' : 'unstaged'
 
   return {
@@ -882,6 +979,7 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
         .map((entry) => readString(entry))
         .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
       : [],
+    commitSha: readString(data?.commitSha),
     headBranch: readString(data?.headBranch),
     mergeBaseSha: readString(data?.mergeBaseSha),
     generatedAtIso: readString(data?.generatedAtIso) ?? '',
@@ -895,6 +993,16 @@ function normalizeReviewSnapshot(payload: unknown): UiReviewSnapshot {
         .map((entry) => normalizeReviewFile(entry))
         .filter((entry): entry is UiReviewFile => entry !== null)
       : [],
+  }
+}
+
+function normalizeReviewSummary(payload: unknown): UiReviewSummary {
+  const envelope = asRecord(payload)
+  const data = asRecord(envelope?.data)
+  return {
+    fileCount: readNumber(data?.fileCount) ?? 0,
+    addedLineCount: readNumber(data?.addedLineCount) ?? 0,
+    removedLineCount: readNumber(data?.removedLineCount) ?? 0,
   }
 }
 
@@ -1027,39 +1135,70 @@ function asAutomation(record: unknown): UiThreadAutomation | null {
     rrule,
     status,
     targetThreadId: readString(row.targetThreadId),
+    cwds: Array.isArray(row.cwds) ? row.cwds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [],
     createdAtMs: readNumber(row.createdAtMs),
     updatedAtMs: readNumber(row.updatedAtMs),
     nextRunAtMs: readNumber(row.nextRunAtMs),
   }
 }
 
-export async function getThreadAutomationMap(): Promise<Record<string, UiThreadAutomation>> {
+function asAutomationArray(value: unknown): UiThreadAutomation[] {
+  if (Array.isArray(value)) return value.flatMap((item) => {
+    const automation = asAutomation(item)
+    return automation ? [automation] : []
+  })
+  const automation = asAutomation(value)
+  return automation ? [automation] : []
+}
+
+export async function getThreadAutomationMap(): Promise<Record<string, UiThreadAutomation[]>> {
   const response = await fetch('/codex-api/thread-automations')
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to load thread automations'))
   }
   const data = asRecord(asRecord(payload)?.data)
-  const next: Record<string, UiThreadAutomation> = {}
+  const next: Record<string, UiThreadAutomation[]> = {}
   if (!data) return next
   for (const [threadId, value] of Object.entries(data)) {
-    const automation = asAutomation(value)
-    if (automation) next[threadId] = automation
+    const automations = asAutomationArray(value)
+    if (automations.length > 0) next[threadId] = automations
   }
   return next
 }
 
-export async function getThreadAutomation(threadId: string): Promise<UiThreadAutomation | null> {
-  const response = await fetch(`/codex-api/thread-automation?threadId=${encodeURIComponent(threadId)}`)
+export async function getProjectAutomationMap(): Promise<Record<string, UiThreadAutomation[]>> {
+  const response = await fetch('/codex-api/project-automations')
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to load project automations'))
+  }
+  const data = asRecord(asRecord(payload)?.data)
+  const next: Record<string, UiThreadAutomation[]> = {}
+  if (!data) return next
+  for (const [projectName, value] of Object.entries(data)) {
+    const automations = asAutomationArray(value)
+    if (automations.length > 0) next[projectName] = automations
+  }
+  return next
+}
+
+export async function getThreadAutomation(threadId: string, automationId?: string): Promise<UiThreadAutomation | null> {
+  const query = new URLSearchParams({ threadId })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/thread-automation?${query.toString()}`)
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to load thread automation'))
   }
-  return asAutomation(asRecord(payload)?.data)
+  const data = asRecord(payload)?.data
+  if (automationId) return asAutomation(data)
+  return asAutomationArray(data)[0] ?? null
 }
 
 export async function upsertThreadAutomation(input: {
   threadId: string
+  id?: string
   name: string
   prompt: string
   rrule: string
@@ -1079,13 +1218,61 @@ export async function upsertThreadAutomation(input: {
   return automation
 }
 
-export async function deleteThreadAutomation(threadId: string): Promise<void> {
-  const response = await fetch(`/codex-api/thread-automation?threadId=${encodeURIComponent(threadId)}`, {
+export async function upsertProjectAutomation(input: {
+  projectName: string
+  id?: string
+  name: string
+  prompt: string
+  rrule: string
+  status: UiThreadAutomationStatus
+}): Promise<UiThreadAutomation> {
+  const response = await fetch('/codex-api/project-automation', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to save project automation'))
+  }
+  const automation = asAutomation(asRecord(payload)?.data)
+  if (!automation) throw new Error('Project automation response was malformed')
+  return automation
+}
+
+export async function deleteThreadAutomation(threadId: string, automationId?: string): Promise<void> {
+  const query = new URLSearchParams({ threadId })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/thread-automation?${query.toString()}`, {
     method: 'DELETE',
   })
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, 'Failed to delete thread automation'))
+  }
+}
+
+export async function deleteProjectAutomation(projectName: string, automationId?: string): Promise<void> {
+  const query = new URLSearchParams({ projectName })
+  if (automationId) query.set('automationId', automationId)
+  const response = await fetch(`/codex-api/project-automation?${query.toString()}`, {
+    method: 'DELETE',
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to delete project automation'))
+  }
+}
+
+export async function runThreadAutomationNow(threadId: string, automationId: string): Promise<void> {
+  const response = await fetch('/codex-api/thread-automation/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ threadId, automationId }),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload, 'Failed to run thread automation'))
   }
 }
 
@@ -1312,21 +1499,51 @@ export async function removeAccount(storageId: string): Promise<AccountsListResu
 
 export type ResumedThread = {
   model: string
+  modelProvider: string
   messages: UiMessage[]
   inProgress: boolean
   activeTurnId: string
+  hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
 }
 
+const RESUME_THREAD_COALESCE_TTL_MS = 30_000
+const recentResumeThreadById = new Map<string, Promise<ResumedThread>>()
+
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
-  const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
-  return {
-    model: normalizeThreadModelFromPayload(payload),
-    messages: normalizeThreadMessagesV2(payload),
-    inProgress: readThreadInProgressFromResponse(payload),
-    activeTurnId: readActiveTurnIdFromResponse(payload),
-    turnIndexByTurnId: buildTurnIndexByTurnId(payload),
-  }
+  const existing = recentResumeThreadById.get(threadId)
+  if (existing) return existing
+
+  const promise = (async () => {
+    const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
+    const startTurnIndex = readThreadTurnStartIndex(payload)
+    const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
+    return {
+      model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
+      messages,
+      inProgress: readThreadInProgressFromResponse(payload),
+      activeTurnId: readActiveTurnIdFromResponse(payload),
+      hasMoreOlder: startTurnIndex > 0,
+      turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+    }
+  })()
+
+  recentResumeThreadById.set(threadId, promise)
+  const hardEvictionTimer = globalThis.setTimeout(() => {
+    if (recentResumeThreadById.get(threadId) === promise) {
+      recentResumeThreadById.delete(threadId)
+    }
+  }, RESUME_THREAD_COALESCE_TTL_MS)
+  void promise.finally(() => {
+    globalThis.clearTimeout(hardEvictionTimer)
+    globalThis.setTimeout(() => {
+      if (recentResumeThreadById.get(threadId) === promise) {
+        recentResumeThreadById.delete(threadId)
+      }
+    }, 2000)
+  }).catch(() => undefined)
+  return promise
 }
 
 export async function archiveThread(threadId: string): Promise<void> {
@@ -1339,21 +1556,60 @@ export async function renameThread(threadId: string, threadName: string): Promis
 
 export async function rollbackThread(threadId: string, numTurns: number): Promise<UiMessage[]> {
   const payload = await callRpc<ThreadReadResponse>('thread/rollback', { threadId, numTurns })
-  return normalizeThreadMessagesV2(payload)
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
-export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
+export async function updateThreadFileChanges(
+  threadId: string,
+  turnId: string,
+  cwd: string,
+  action: 'undo' | 'redo',
+  patchIds?: string[],
+  scope?: 'single_turn' | 'turn_and_later',
+): Promise<{ changed: number; errors: string[]; message?: string; revertedPatchIds?: string[]; appliedPatchIds?: string[] }> {
   try {
     const response = await fetch('/codex-api/thread/rollback-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId, turnId, cwd }),
+      body: JSON.stringify({ threadId, turnId, cwd, action, patchIds, scope }),
     })
-    if (!response.ok) return { reverted: 0, errors: ['Server error'] }
-    return (await response.json()) as { reverted: number; errors: string[] }
-  } catch {
-    return { reverted: 0, errors: ['Network error'] }
+    const payload = (await response.json().catch(() => ({}))) as {
+      changed?: number
+      reverted?: number
+      applied?: number
+      errors?: string[]
+      message?: string
+      error?: string
+      revertedPatchIds?: string[]
+      appliedPatchIds?: string[]
+    }
+    if (!response.ok) {
+      const message = typeof payload.message === 'string' && payload.message.trim()
+        ? payload.message.trim()
+        : typeof payload.error === 'string' && payload.error.trim()
+          ? payload.error.trim()
+          : 'Server error'
+      return {
+        changed: 0,
+        errors: Array.isArray(payload.errors) && payload.errors.length > 0 ? payload.errors : [message],
+        message: payload.message,
+      }
+    }
+    return {
+      changed: payload.changed ?? payload.reverted ?? payload.applied ?? 0,
+      errors: Array.isArray(payload.errors) ? payload.errors : [],
+      message: payload.message,
+      revertedPatchIds: Array.isArray(payload.revertedPatchIds) ? payload.revertedPatchIds : [],
+      appliedPatchIds: Array.isArray(payload.appliedPatchIds) ? payload.appliedPatchIds : [],
+    }
+  } catch (error) {
+    return { changed: 0, errors: [error instanceof Error ? error.message : 'Network error'] }
   }
+}
+
+export async function revertThreadFileChanges(threadId: string, turnId: string, cwd: string): Promise<{ reverted: number; errors: string[] }> {
+  const result = await updateThreadFileChanges(threadId, turnId, cwd, 'undo')
+  return { reverted: result.changed, errors: result.errors }
 }
 
 function normalizeThreadIdFromPayload(payload: unknown): string {
@@ -1390,9 +1646,19 @@ function normalizeThreadModelFromPayload(payload: unknown): string {
   return typeof model === 'string' ? model.trim() : ''
 }
 
+function normalizeThreadModelProviderFromPayload(payload: unknown): string {
+  const record = asRecord(payload)
+  if (!record) return ''
+  const modelProvider = readString(record.modelProvider)?.trim() ?? ''
+  if (modelProvider) return modelProvider
+  const thread = asRecord(record.thread)
+  return readString(thread?.modelProvider)?.trim() ?? ''
+}
+
 export type StartedThread = {
   threadId: string
   model: string
+  modelProvider: string
 }
 
 export type ForkedThread = {
@@ -1419,6 +1685,7 @@ export async function startThread(cwd?: string, model?: string): Promise<Started
     return {
       threadId,
       model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
     }
   } catch (error) {
     throw normalizeCodexApiError(error, 'Failed to start a new thread', 'thread/start')
@@ -1446,7 +1713,7 @@ export async function forkThread(
         threadId: forkedThreadId,
         cwd: normalizeThreadCwdFromPayload(payload),
         model: normalizeThreadModelFromPayload(payload),
-        messages: normalizeThreadMessagesV2(payload),
+        messages: normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload)),
       }
     } catch (error) {
       throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
@@ -1475,6 +1742,7 @@ export async function forkThread(
     return {
       threadId: nextThreadId,
       model: normalizeThreadModelFromPayload(payload),
+      modelProvider: normalizeThreadModelProviderFromPayload(payload),
     }
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to fork thread ${threadId}`, 'thread/fork')
@@ -1685,6 +1953,7 @@ export async function setCodexSpeedMode(mode: SpeedMode): Promise<void> {
 
 export interface FreeModeStatus {
   enabled: boolean
+  hasCodexAuth?: boolean
   keyCount: number
   models: string[]
   currentModel: string | null
@@ -1736,7 +2005,45 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-export async function getAvailableModelIds(options: { includeProviderModels?: boolean } = {}): Promise<string[]> {
+async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string[], exclusive: boolean } | null> {
+  try {
+    const normalizedProviderId = providerId?.trim() ?? ''
+    const url = normalizedProviderId
+      ? `/codex-api/provider-models?provider=${encodeURIComponent(normalizedProviderId)}`
+      : '/codex-api/provider-models'
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+    })
+    let providerPayload: ProviderModelsResponse | null = null
+    try {
+      providerPayload = await response.json() as ProviderModelsResponse
+    } catch {
+      providerPayload = null
+    }
+
+    if (response.ok && Array.isArray(providerPayload?.data)) {
+      return {
+        ids: providerPayload.data
+          .map((candidate) => typeof candidate === 'string' ? candidate.trim() : '')
+          .filter((candidate, index, candidates): candidate is string =>
+            candidate.length > 0 && candidates.indexOf(candidate) === index),
+        exclusive: providerPayload.exclusive === true,
+      }
+    }
+  } catch {
+    // Keep Codex usable when the provider-models endpoint is unavailable.
+  }
+  return null
+}
+
+export async function getAvailableModelIds(options: { includeProviderModels?: boolean; requireProviderModels?: boolean; providerId?: string } = {}): Promise<string[]> {
+  const shouldIncludeProviderModels = options.includeProviderModels !== false
+  const providerModels = shouldIncludeProviderModels ? await fetchProviderModelIds(options.providerId) : null
+
+  if (providerModels?.exclusive || options.requireProviderModels) {
+    return providerModels?.ids ?? []
+  }
+
   const payload = await callRpc<ModelListResponse>('model/list', {})
   const ids: string[] = []
   for (const row of payload.data) {
@@ -1745,36 +2052,11 @@ export async function getAvailableModelIds(options: { includeProviderModels?: bo
     ids.push(candidate)
   }
 
-  if (options.includeProviderModels === false) {
-    return ids
+  if (!shouldIncludeProviderModels || !providerModels) return ids
+
+  for (const candidate of providerModels.ids) {
+    if (!ids.includes(candidate)) ids.push(candidate)
   }
-
-  try {
-    const response = await fetch('/codex-api/provider-models', {
-      signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
-    })
-    let providerPayload: (ProviderModelsResponse & { exclusive?: boolean }) | null = null
-    try {
-      providerPayload = await response.json() as ProviderModelsResponse & { exclusive?: boolean }
-    } catch {
-      providerPayload = null
-    }
-
-    if (response.ok && Array.isArray(providerPayload?.data)) {
-      if (providerPayload.exclusive) {
-        return providerPayload.data.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
-      }
-      for (const candidate of providerPayload.data) {
-        if (typeof candidate !== 'string') continue
-        const normalized = candidate.trim()
-        if (!normalized || ids.includes(normalized)) continue
-        ids.push(normalized)
-      }
-    }
-  } catch {
-    // Keep Codex usable when the provider-models endpoint is unavailable.
-  }
-
   return ids
 }
 
@@ -2297,6 +2579,23 @@ function normalizeThreadQueueState(value: unknown): ThreadQueueState {
 }
 
 export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
+  if (cachedWorkspaceRootsState) {
+    return cloneWorkspaceRootsState(cachedWorkspaceRootsState)
+  }
+  if (!workspaceRootsStatePromise) {
+    workspaceRootsStatePromise = fetchWorkspaceRootsState()
+      .then((state) => {
+        cachedWorkspaceRootsState = state
+        return state
+      })
+      .finally(() => {
+        workspaceRootsStatePromise = null
+      })
+  }
+  return cloneWorkspaceRootsState(await workspaceRootsStatePromise)
+}
+
+async function fetchWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   const response = await fetch('/codex-api/workspace-roots-state')
   const payload = (await response.json()) as unknown
   if (!response.ok) {
@@ -2307,6 +2606,20 @@ export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
       ? (payload as Record<string, unknown>)
       : {}
   return normalizeWorkspaceRootsState(envelope.data)
+}
+
+function cloneWorkspaceRootsState(state: WorkspaceRootsState): WorkspaceRootsState {
+  return {
+    order: [...state.order],
+    labels: { ...state.labels },
+    active: [...state.active],
+    projectOrder: [...state.projectOrder],
+    remoteProjects: state.remoteProjects?.map((item) => ({ ...item })) ?? [],
+  }
+}
+
+function invalidateWorkspaceRootsStateCache(): void {
+  cachedWorkspaceRootsState = null
 }
 
 export async function getThreadQueueState(): Promise<ThreadQueueState> {
@@ -2492,11 +2805,15 @@ export async function checkoutGitBranch(cwd: string, branch: string): Promise<st
   return typeof branchName === 'string' && branchName.trim() ? branchName.trim() : null
 }
 
-export async function getGitBranchCommits(cwd: string, branch: string): Promise<GitCommitOption[]> {
+export async function getGitBranchCommits(cwd: string, branch: string, options: { includeResetHistory?: boolean } = {}): Promise<GitCommitOption[]> {
   const normalizedCwd = cwd.trim()
   const normalizedBranch = branch.trim()
   if (!normalizedCwd || !normalizedBranch) return []
-  const query = new URLSearchParams({ cwd: normalizedCwd, branch: normalizedBranch })
+  const query = new URLSearchParams({
+    cwd: normalizedCwd,
+    branch: normalizedBranch,
+    includeResetHistory: options.includeResetHistory === false ? 'false' : 'true',
+  })
   const response = await fetch(`/codex-api/git/branch-commits?${query.toString()}`)
   const payload = (await response.json()) as { data?: unknown; error?: string }
   if (!response.ok) {
@@ -2512,6 +2829,34 @@ export async function getGitBranchCommits(cwd: string, branch: string): Promise<
     const date = typeof record.date === 'string' ? record.date.trim() : ''
     if (!sha || !shortSha) return []
     return [{ sha, shortSha, subject: subject || shortSha, date }]
+  })
+}
+
+export async function getGitCommitFiles(cwd: string, sha: string): Promise<GitCommitFileChange[]> {
+  const normalizedCwd = cwd.trim()
+  const normalizedSha = sha.trim()
+  if (!normalizedCwd || !normalizedSha) return []
+  const query = new URLSearchParams({
+    cwd: normalizedCwd,
+    sha: normalizedSha,
+  })
+  const response = await fetch(`/codex-api/git/commit-files?${query.toString()}`)
+  const payload = (await response.json()) as { data?: unknown; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load commit files')
+  }
+  const rawList = Array.isArray(payload.data) ? payload.data : []
+  return rawList.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === 'string' ? record.path : ''
+    const previousPath = typeof record.previousPath === 'string' && record.previousPath.length > 0 ? record.previousPath : null
+    const status = typeof record.status === 'string' ? record.status.trim() : ''
+    const label = typeof record.label === 'string' ? record.label.trim() : ''
+    const addedLineCount = typeof record.addedLineCount === 'number' && Number.isFinite(record.addedLineCount) ? record.addedLineCount : null
+    const removedLineCount = typeof record.removedLineCount === 'number' && Number.isFinite(record.removedLineCount) ? record.removedLineCount : null
+    if (!path || !status) return []
+    return [{ path, previousPath, status, label: label || status, addedLineCount, removedLineCount }]
   })
 }
 
@@ -2549,10 +2894,14 @@ export async function getReviewSnapshot(
   scope: UiReviewScope,
   workspaceView: UiReviewWorkspaceView,
   baseBranch?: string | null,
+  commitSha?: string | null,
 ): Promise<UiReviewSnapshot> {
   const query = new URLSearchParams({ cwd, scope, workspaceView })
   if (baseBranch && baseBranch.trim()) {
     query.set('baseBranch', baseBranch.trim())
+  }
+  if (commitSha && commitSha.trim()) {
+    query.set('commitSha', commitSha.trim())
   }
   const response = await fetch(`/codex-api/review/snapshot?${query.toString()}`)
   const payload = (await response.json()) as unknown
@@ -2560,6 +2909,19 @@ export async function getReviewSnapshot(
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to load review snapshot'))
   }
   return normalizeReviewSnapshot(payload)
+}
+
+export async function getReviewSummary(
+  cwd: string,
+  workspaceView: UiReviewWorkspaceView,
+): Promise<UiReviewSummary> {
+  const query = new URLSearchParams({ cwd, workspaceView })
+  const response = await fetch(`/codex-api/review/summary?${query.toString()}`)
+  const payload = (await response.json()) as unknown
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load review summary'))
+  }
+  return normalizeReviewSummary(payload)
 }
 
 export async function applyReviewAction(payload: {
@@ -2686,6 +3048,7 @@ export async function setWorkspaceRootsState(nextState: WorkspaceRootsState): Pr
   if (!response.ok) {
     throw new Error('Failed to save workspace roots state')
   }
+  cachedWorkspaceRootsState = cloneWorkspaceRootsState(nextState)
 }
 
 export async function openProjectRoot(path: string, options?: { createIfMissing?: boolean; label?: string }): Promise<string> {
@@ -2712,6 +3075,7 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
       ? (record.data as Record<string, unknown>)
       : {}
   const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  invalidateWorkspaceRootsStateCache()
   return normalizedPath
 }
 
@@ -2724,6 +3088,32 @@ export async function createLocalDirectory(path: string): Promise<string> {
   const payload = await readJsonResponse(response)
   if (!response.ok) {
     const message = getErrorMessageFromPayload(payload, 'Failed to create local directory')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  if (normalizedPath) {
+    invalidateWorkspaceRootsStateCache()
+  }
+  return normalizedPath
+}
+
+export async function cloneGithubRepository(url: string, basePath: string): Promise<string> {
+  const response = await fetch('/codex-api/github-clone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, basePath }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to clone GitHub repository')
     throw new Error(message)
   }
   const record =

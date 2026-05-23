@@ -48,6 +48,20 @@ The bridge should not send those strings directly to the browser. Instead, threa
 
 This is a read-path/UI-payload optimization. It does not compact historical JSONL files on disk.
 
+## Chat Link Parsing And Thread URLs
+
+`ThreadConversation.vue` also owns local inline parsing for chat links. A PR #174 review follow-up established these rules for Codex thread links and bold-wrapped URLs:
+
+- bare `codex://threads/<id>` should render as a browser-openable local web thread URL
+- Markdown links such as `[Open thread](codex://threads/<id>)` should preserve the authored label as visible text while rewriting only the href
+- the rewritten thread URL must use the current browser origin and app path, not a hardcoded `http://localhost:5173`
+- bold and triple-asterisk wrappers around bare URLs or Markdown links should not leak literal `*` characters into visible text or hrefs
+
+Review-bot comments on this path should be verified against current code before patching. In PR #174, Qodo and CodeRabbit surfaced three real issues: triple-asterisk parsing, Markdown label loss, and fixed-port thread URLs. The fixed-port issue was resolved by building local thread URLs from `window.location.origin` plus the current pathname, with a server-side fallback of `/#/thread/<id>`.
+
+Source:
+- [Codex thread link rendering and PR #174 review follow-up](../../raw/fixes/codex-thread-link-pr174.md)
+
 ## Verification Notes
 
 Use `scripts/profile-testchat-realtime.cjs` for realtime rendering checks and `scripts/profile-browser-runtime.cjs` for startup/large-thread profiles.
@@ -57,5 +71,7 @@ Useful assertions:
 - no persistent `todo-render-profile-*` directories remain after TestChat profiling
 - long task count remains low/zero during streaming
 - file links still render with correct href/title/text
+- Codex thread links render with the current app origin; Markdown labels such as `Open thread` remain visible
+- bold/triple-asterisk wrapped links render without stray `*` characters
 - large image-heavy threads render images through `/codex-local-image`, not `data:` URLs
 - `thread/resume` payloads stay bounded even when raw JSONL files are tens of MB

@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink, realpath } from 'node:fs/promises'
 import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
@@ -12,18 +12,28 @@ import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
+import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
 import {
   getRandomFreeKey,
   getFreeKeyCount,
-  FREE_MODE_PROVIDER_ID,
   FREE_MODE_DEFAULT_MODEL,
+  getCachedFreeModels,
   getFreeModels,
+  refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
+  OPENCODE_ZEN_DEFAULT_MODEL,
+  OPENCODE_ZEN_PROVIDER_ID,
+  createDefaultOpenCodeZenFreeModeState,
+  filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
+  getProviderCompatibilityConfigArgs,
+  shouldMarkOpenRouterKeyAsCustom,
+  shouldCreateDefaultFreeModeStateForMissingAuth,
+  shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
 } from './freeMode.js'
 import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
@@ -36,6 +46,7 @@ import {
   resolveRipgrepCommand,
 } from '../commandResolution.js'
 import type { CollaborationModeKind, ReasoningEffort } from '../types/codex.js'
+import { isAbsoluteLikePath } from '../pathUtils.js'
 
 type JsonRpcCall = {
   jsonrpc: '2.0'
@@ -60,6 +71,10 @@ type RpcProxyRequest = {
   params?: unknown
 }
 
+type RpcExecutor = {
+  rpc: (method: string, params: unknown) => Promise<unknown>
+}
+
 type ServerRequestReply = {
   result?: unknown
   error?: {
@@ -68,7 +83,7 @@ type ServerRequestReply = {
   }
 }
 
-type WorkspaceRootsState = {
+export type WorkspaceRootsState = {
   order: string[]
   labels: Record<string, string>
   active: string[]
@@ -212,9 +227,12 @@ const COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX = 1000
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 
 const THREAD_RESPONSE_TURN_LIMIT = 10
+const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
+const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS = 100
+const PROJECTLESS_THREAD_READABLE_DIRECTORY_ATTEMPTS = 20
 const PROJECTLESS_THREAD_SLUG_MAX_LENGTH = 80
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
 const API_PERF_MS_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_MS_THRESHOLD'
@@ -237,6 +255,191 @@ type SessionRecoveredTurnFileChanges = {
   turnId: string
   turnIndex: number
   fileChanges: SessionRecoveredFileChange[]
+}
+
+type SessionRecoveredSkillInput = {
+  name: string
+  path: string
+}
+
+type SessionSkillInputCacheEntry = {
+  size: number
+  mtimeMs: number
+  skillsByTurnId: Map<string, SessionRecoveredSkillInput[]>
+}
+
+const SESSION_SKILL_INPUT_CACHE_LIMIT = 64
+const sessionSkillInputCache = new Map<string, SessionSkillInputCacheEntry>()
+
+function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('<skill>')) return null
+  const name = trimmed.match(/<name>\s*([\s\S]*?)\s*<\/name>/u)?.[1]?.trim() ?? ''
+  const path = trimmed.match(/<path>\s*([\s\S]*?)\s*<\/path>/u)?.[1]?.trim() ?? ''
+  if (!name || !path) return null
+  return { name, path }
+}
+
+function buildSessionSkillInputsByTurn(sessionLogRaw: string): Map<string, SessionRecoveredSkillInput[]> {
+  let currentTurnId = ''
+  const skillsByTurnId = new Map<string, SessionRecoveredSkillInput[]>()
+
+  for (const line of sessionLogRaw.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown> | null = null
+    try {
+      row = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    if (row.type === 'turn_context') {
+      const payloadRecord = asRecord(row.payload)
+      currentTurnId = readNonEmptyString(payloadRecord?.turn_id) || currentTurnId
+      continue
+    }
+    if (row.type === 'event_msg') {
+      const payloadRecord = asRecord(row.payload)
+      if (payloadRecord?.type === 'task_started') {
+        currentTurnId = readNonEmptyString(payloadRecord.turn_id) || currentTurnId
+      }
+      continue
+    }
+
+    if (row.type !== 'response_item' || !currentTurnId) continue
+    const payloadRecord = asRecord(row.payload)
+    if (payloadRecord?.type !== 'message' || payloadRecord.role !== 'user') continue
+    const content = Array.isArray(payloadRecord.content) ? payloadRecord.content : []
+
+    for (const contentItem of content) {
+      const contentRecord = asRecord(contentItem)
+      if (contentRecord?.type !== 'input_text' || typeof contentRecord.text !== 'string') continue
+      const skill = parseSessionSkillText(contentRecord.text)
+      if (!skill) continue
+      const existing = skillsByTurnId.get(currentTurnId) ?? []
+      if (!existing.some((item) => item.path === skill.path)) {
+        existing.push(skill)
+        skillsByTurnId.set(currentTurnId, existing)
+      }
+    }
+  }
+
+  return skillsByTurnId
+}
+
+async function readCachedSessionSkillInputsByTurn(sessionPath: string): Promise<Map<string, SessionRecoveredSkillInput[]>> {
+  const sessionStat = await stat(sessionPath)
+  const cached = sessionSkillInputCache.get(sessionPath)
+  if (cached && cached.size === sessionStat.size && cached.mtimeMs === sessionStat.mtimeMs) {
+    return cached.skillsByTurnId
+  }
+
+  const sessionLogRaw = await readFile(sessionPath, 'utf8')
+  const skillsByTurnId = buildSessionSkillInputsByTurn(sessionLogRaw)
+  sessionSkillInputCache.set(sessionPath, {
+    size: sessionStat.size,
+    mtimeMs: sessionStat.mtimeMs,
+    skillsByTurnId,
+  })
+  if (sessionSkillInputCache.size > SESSION_SKILL_INPUT_CACHE_LIMIT) {
+    const oldestKey = sessionSkillInputCache.keys().next().value
+    if (oldestKey) sessionSkillInputCache.delete(oldestKey)
+  }
+  return skillsByTurnId
+}
+
+function mergeSessionSkillInputsIntoTurnsFromMap(
+  turns: unknown[],
+  skillsByTurnId: Map<string, SessionRecoveredSkillInput[]>,
+): unknown[] {
+  const turnIds = new Set<string>()
+  for (const turn of turns) {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    if (turnId) turnIds.add(turnId)
+  }
+  if (turnIds.size === 0) return turns
+
+  if (skillsByTurnId.size === 0) return turns
+
+  let changed = false
+  const nextTurns = turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    const skills = turnId ? skillsByTurnId.get(turnId) : undefined
+    const items = Array.isArray(turnRecord?.items) ? turnRecord.items : null
+    if (!turnRecord || !skills || skills.length === 0 || !items) return turn
+
+    let targetUserMessageIndex = -1
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const itemRecord = asRecord(items[index])
+      if (itemRecord?.type === 'userMessage' && Array.isArray(itemRecord.content)) {
+        targetUserMessageIndex = index
+        break
+      }
+    }
+    if (targetUserMessageIndex < 0) return turn
+
+    let addedToMessage = false
+    const nextItems = items.map((item, index) => {
+      const itemRecord = asRecord(item)
+      const content = Array.isArray(itemRecord?.content) ? itemRecord.content : null
+      if (index !== targetUserMessageIndex || itemRecord?.type !== 'userMessage' || !content) return item
+
+      const existingSkillPaths = new Set(
+        content.flatMap((contentItem) => {
+          const contentRecord = asRecord(contentItem)
+          const path = typeof contentRecord?.path === 'string' ? contentRecord.path.trim() : ''
+          return contentRecord?.type === 'skill' && path ? [path] : []
+        }),
+      )
+      const missingSkills = skills.filter((skill) => !existingSkillPaths.has(skill.path))
+      if (missingSkills.length === 0) return item
+
+      addedToMessage = true
+      changed = true
+      return {
+        ...itemRecord,
+        content: [
+          ...content,
+          ...missingSkills.map((skill) => ({ type: 'skill', name: skill.name, path: skill.path })),
+        ],
+      }
+    })
+
+    return addedToMessage ? { ...turnRecord, items: nextItems } : turn
+  })
+
+  return changed ? nextTurns : turns
+}
+
+export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  return mergeSessionSkillInputsIntoTurnsFromMap(turns, buildSessionSkillInputsByTurn(sessionLogRaw))
+}
+
+async function mergeSessionSkillInputsIntoThreadResult(result: unknown): Promise<unknown> {
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  const sessionPath = readNonEmptyString(thread?.path)
+  if (!record || !thread || !turns || turns.length === 0 || !sessionPath || !isAbsolute(sessionPath)) {
+    return result
+  }
+
+  try {
+    const skillsByTurnId = await readCachedSessionSkillInputsByTurn(sessionPath)
+    const mergedTurns = mergeSessionSkillInputsIntoTurnsFromMap(turns, skillsByTurnId)
+    if (mergedTurns === turns) return result
+    return {
+      ...record,
+      thread: {
+        ...thread,
+        turns: mergedTurns,
+      },
+    }
+  } catch {
+    return result
+  }
 }
 
 function readEnvValueFromFile(filePath: string, key: string): string | null {
@@ -693,12 +896,14 @@ function trimThreadTurnsInRpcResult(method: string, result: unknown): unknown {
   const thread = asRecord(record?.thread)
   const turns = Array.isArray(thread?.turns) ? thread.turns : null
   if (!record || !thread || !turns || turns.length <= THREAD_RESPONSE_TURN_LIMIT) return result
+  const startTurnIndex = Math.max(0, turns.length - THREAD_RESPONSE_TURN_LIMIT)
 
   return {
     ...record,
+    threadTurnStartIndex: startTurnIndex,
     thread: {
       ...thread,
-      turns: turns.slice(-THREAD_RESPONSE_TURN_LIMIT),
+      turns: turns.slice(startTurnIndex),
     },
   }
 }
@@ -711,6 +916,8 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   const record = asRecord(payload)
   if (!record) return fallback
 
+  if (typeof record.message === 'string' && record.message.length > 0) return record.message
+
   const error = record.error
   if (typeof error === 'string' && error.length > 0) return error
 
@@ -720,6 +927,134 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   }
 
   return fallback
+}
+
+export function isUnauthenticatedRateLimitError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('authentication required') && message.includes('rate limits')
+}
+
+export function isEmptyThreadReadError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('failed to read thread') && message.includes('rollout') && message.includes('is empty')
+}
+
+export function isThreadMaterializationPendingError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('not materialized yet') && message.includes('includeturns is unavailable before first user message')
+}
+
+export function isThreadNotFoundError(error: unknown): boolean {
+  const message = getErrorMessage(error, '').toLowerCase()
+  return message.includes('thread not found') || message.includes('no rollout found for thread id')
+}
+
+function readStreamTurnId(params: Record<string, unknown>): string {
+  const directTurnId = readNonEmptyString(params.turnId) || readNonEmptyString(params.turn_id)
+  if (directTurnId) return directTurnId
+  const turn = asRecord(params.turn)
+  return readNonEmptyString(turn?.id)
+}
+
+function readStreamTurnErrorMessage(frame: StreamEventFrame): { turnId: string; message: string } | null {
+  const params = asRecord(frame.params)
+  if (!params) return null
+  const turnId = readStreamTurnId(params)
+  if (!turnId) return null
+
+  if (frame.method === 'turn/completed') {
+    const turn = asRecord(params.turn)
+    if (turn?.status !== 'failed') return null
+    const message = getErrorMessage(turn.error, '')
+    return message ? { turnId, message } : null
+  }
+
+  if (frame.method === 'error' && params.willRetry !== true) {
+    const message = getErrorMessage(params.error, '') || readNonEmptyString(params.message)
+    return message ? { turnId, message } : null
+  }
+
+  return null
+}
+
+function mergeStreamTurnErrorsIntoThreadResult(appServer: AppServerProcess, result: unknown): unknown {
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const threadId = readNonEmptyString(thread?.id)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  if (!record || !thread || !threadId || !turns || turns.length === 0) return result
+
+  const errorsByTurnId = new Map<string, string>()
+  for (const frame of appServer.getStreamEvents(threadId, STREAM_EVENT_BUFFER_LIMIT)) {
+    const error = readStreamTurnErrorMessage(frame)
+    if (error) errorsByTurnId.set(error.turnId, error.message)
+  }
+  if (errorsByTurnId.size === 0) return result
+
+  let changed = false
+  const mergedTurns = turns.map((turn) => {
+    const turnRecord = asRecord(turn)
+    const turnId = readNonEmptyString(turnRecord?.id)
+    const message = turnId ? errorsByTurnId.get(turnId) : ''
+    if (!turnRecord || !turnId || !message) return turn
+    const existingErrorMessage = getErrorMessage(turnRecord.error, '')
+    if (turnRecord.status === 'failed' && existingErrorMessage) return turn
+    changed = true
+    return {
+      ...turnRecord,
+      status: 'failed',
+      error: {
+        message,
+        codexErrorInfo: null,
+        additionalDetails: null,
+      },
+    }
+  })
+
+  if (!changed) return result
+  return {
+    ...record,
+    thread: {
+      ...thread,
+      turns: mergedTurns,
+    },
+  }
+}
+
+const warnedCodexAuthReadFailures = new Set<string>()
+
+function getErrorCode(error: unknown): string | null {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : null
+}
+
+function getCodexAuthReadErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : String(error)
+}
+
+function warnCodexAuthReadFailure(authPath: string, error: unknown): void {
+  const message = getCodexAuthReadErrorMessage(error)
+  const warningKey = `${authPath}:${message}`
+  if (warnedCodexAuthReadFailures.has(warningKey)) return
+  warnedCodexAuthReadFailures.add(warningKey)
+  console.warn('[codex-auth] Unable to read Codex auth state', { path: authPath, error: message })
+}
+
+export async function hasUsableCodexAuth(): Promise<boolean> {
+  const authPath = getCodexAuthPath()
+  try {
+    const raw = await readFile(authPath, 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return Boolean(auth.tokens?.access_token?.trim() || auth.tokens?.refresh_token?.trim())
+  } catch (error) {
+    if (getErrorCode(error) !== 'ENOENT') {
+      warnCodexAuthReadFailure(authPath, error)
+    }
+    return false
+  }
 }
 
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -752,6 +1087,19 @@ function buildProjectlessPromptSlug(prompt: string | null): string {
   return slug && slug.length > 0 ? slug : 'new-chat'
 }
 
+function buildProjectlessUniqueSuffix(): string {
+  return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
+}
+
+export function buildProjectlessFolderName(slug: string, index: number, uniqueSuffix = buildProjectlessUniqueSuffix()): string {
+  if (index === 0) return slug
+  if (index < PROJECTLESS_THREAD_READABLE_DIRECTORY_ATTEMPTS) return `${slug}-${index + 1}`
+
+  const suffix = `-${uniqueSuffix}`
+  const maxSlugLength = Math.max(1, PROJECTLESS_THREAD_SLUG_MAX_LENGTH - suffix.length)
+  return `${slug.slice(0, maxSlugLength)}${suffix}`
+}
+
 async function ensureRealDirectory(path: string, label: string): Promise<void> {
   const info = await lstat(path)
   if (info.isSymbolicLink() || !info.isDirectory()) {
@@ -770,7 +1118,7 @@ async function createProjectlessThreadDirectory(prompt: string | null): Promise<
 
   const slug = buildProjectlessPromptSlug(prompt)
   for (let index = 0; index < PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS; index += 1) {
-    const folderName = index === 0 ? slug : `${slug}-${index + 1}`
+    const folderName = buildProjectlessFolderName(slug, index)
     const cwd = join(dateDir, folderName)
     try {
       await mkdir(cwd, { recursive: false })
@@ -785,6 +1133,62 @@ async function createProjectlessThreadDirectory(prompt: string | null): Promise<
   }
 
   throw new Error('Unable to create a unique new chat folder')
+}
+
+function normalizeGithubCloneUrl(rawUrl: string): { url: string; repoName: string } {
+  const trimmedUrl = rawUrl.trim()
+  if (!trimmedUrl) throw new Error('Missing GitHub repository URL')
+
+  const sshMatch = trimmedUrl.match(/^git@github\.com:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/u)
+  if (sshMatch) {
+    const repoName = sshMatch[2]
+    return { url: `git@github.com:${sshMatch[1]}/${repoName}.git`, repoName }
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmedUrl)
+  } catch {
+    throw new Error('Enter a valid GitHub repository URL')
+  }
+  if (parsed.hostname.toLowerCase() !== 'github.com') {
+    throw new Error('Only github.com repository URLs are supported')
+  }
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  if (segments.length < 2) {
+    throw new Error('Enter a GitHub repository URL with owner and repository name')
+  }
+  const owner = segments[0]
+  const repoName = segments[1].replace(/\.git$/iu, '')
+  if (!/^[A-Za-z0-9_.-]+$/u.test(owner) || !/^[A-Za-z0-9_.-]+$/u.test(repoName)) {
+    throw new Error('GitHub repository owner or name contains unsupported characters')
+  }
+  return { url: `https://github.com/${owner}/${repoName}.git`, repoName }
+}
+
+async function cloneGithubRepositoryIntoBase(rawUrl: string, rawBasePath: string): Promise<string> {
+  const basePath = rawBasePath.trim()
+  if (!basePath) throw new Error('Missing clone destination folder')
+  const normalizedBasePath = isAbsolute(basePath) ? basePath : resolve(basePath)
+  await ensureRealDirectory(normalizedBasePath, 'Clone destination folder')
+
+  const { url, repoName } = normalizeGithubCloneUrl(rawUrl)
+  const targetPath = join(normalizedBasePath, repoName)
+  try {
+    await stat(targetPath)
+    throw new Error(`Destination already exists: ${targetPath}`)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+  }
+
+  try {
+    await runCommand('git', ['clone', url, targetPath], { cwd: normalizedBasePath, timeoutMs: 5 * 60_000 })
+  } catch (error) {
+    await rm(targetPath, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+  await persistWorkspaceRoot(targetPath, '')
+  return targetPath
 }
 
 function normalizeHeaderValue(value: unknown): string | null {
@@ -822,18 +1226,26 @@ function buildProviderModelsUrl(baseUrl: string, queryParams: unknown): URL {
   return url
 }
 
-function normalizeProviderModelsData(payload: unknown): string[] {
+export function normalizeProviderModelsData(payload: unknown): string[] {
   const record = asRecord(payload)
-  const rows = Array.isArray(record?.data) ? record.data : null
+  const dataRows = Array.isArray(record?.data) ? record.data : null
+  const modelRows = Array.isArray(record?.models) ? record.models : null
+  const rows = dataRows?.length ? dataRows : modelRows?.length ? modelRows : dataRows ?? modelRows
   if (!rows) {
-    throw new Error('provider /models payload is missing a data array')
+    throw new Error('provider /models payload is missing a data/models array')
   }
 
   const ids: string[] = []
+  const seen = new Set<string>()
   for (const row of rows) {
+    const candidateFromString = readNonEmptyString(row)
     const entry = asRecord(row)
-    const candidate = readNonEmptyString(entry?.id)
-    if (!candidate || ids.includes(candidate)) continue
+    const candidate = candidateFromString
+      || readNonEmptyString(entry?.id)
+      || readNonEmptyString(entry?.model)
+      || readNonEmptyString(entry?.slug)
+    if (!candidate || seen.has(candidate)) continue
+    seen.add(candidate)
     ids.push(candidate)
   }
   return ids
@@ -854,6 +1266,25 @@ async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string):
   } catch {
     return ''
   }
+}
+
+async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
+  const headers: Record<string, string> = {}
+  if (apiKey && apiKey !== 'dummy') {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
+  const response = await fetch('https://opencode.ai/zen/v1/models', {
+    headers,
+    signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+  })
+  if (!response.ok) return []
+  return normalizeProviderModelsData(await response.json() as unknown)
+}
+
+function sortOpenCodeZenModelIds(modelIds: string[]): string[] {
+  const freeIds = modelIds.filter((id) => id.endsWith('-free') || id === OPENCODE_ZEN_DEFAULT_MODEL)
+  const paidIds = modelIds.filter((id) => !id.endsWith('-free') && id !== OPENCODE_ZEN_DEFAULT_MODEL)
+  return [...freeIds, ...paidIds]
 }
 
 async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<ProviderModelsResponse> {
@@ -969,6 +1400,46 @@ async function readProviderBackedModelIds(appServer: AppServerProcess): Promise<
   }
 }
 
+async function readProviderModelIdsForProvider(
+  appServer: AppServerProcess,
+  providerId: string,
+): Promise<ProviderModelsResponse> {
+  const normalizedProviderId = providerId.trim().toLowerCase().replace(/_/g, '-')
+  if (!normalizedProviderId || normalizedProviderId === 'codex' || normalizedProviderId === 'openai') {
+    return { data: [], providerId: '', source: 'provider' }
+  }
+
+  const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+  if (normalizedProviderId === 'opencode-zen') {
+    try {
+      const modelIds = filterOpenCodeZenModelsForAuthState(
+        sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState?.provider === 'opencode-zen' ? fmState.apiKey : null)),
+        fmState?.provider === 'opencode-zen' ? fmState.apiKey : null,
+      )
+      if (modelIds.length > 0) {
+        return { data: modelIds, providerId: 'opencode-zen', source: 'provider' }
+      }
+    } catch {
+      // Fall through to the offline Zen defaults.
+    }
+    return {
+      data: ['big-pickle', 'minimax-m2.5-free', 'nemotron-3-super-free', 'trinity-large-preview-free'],
+      providerId: 'opencode-zen',
+      source: 'provider',
+    }
+  }
+
+  if (normalizedProviderId === 'openrouter-free' || normalizedProviderId === 'openrouter') {
+    return {
+      data: await getFreeModels(),
+      providerId: 'openrouter-free',
+      source: 'provider',
+    }
+  }
+
+  return readProviderBackedModelIds(appServer)
+}
+
 function extractThreadMessageText(threadReadPayload: unknown): string {
   const payload = asRecord(threadReadPayload)
   const thread = asRecord(payload?.thread)
@@ -1009,6 +1480,73 @@ function extractThreadMessageText(threadReadPayload: unknown): string {
 
 function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value : ''
+}
+
+function readThreadArchiveFallbackName(threadReadResult: unknown): string {
+  const record = asRecord(threadReadResult)
+  const thread = asRecord(record?.thread)
+  return (
+    readNonEmptyString(thread?.name)
+    || readNonEmptyString(thread?.title)
+    || readNonEmptyString(thread?.preview)
+    || 'Untitled thread'
+  )
+}
+
+function isArchivedThreadReadResult(threadReadResult: unknown): boolean {
+  const record = asRecord(threadReadResult)
+  const thread = asRecord(record?.thread)
+  const sessionPath = readNonEmptyString(thread?.path)
+  return sessionPath.split(/[\\/]+/u).includes('archived_sessions')
+}
+
+export async function callRpcWithArchiveRecovery(
+  appServer: RpcExecutor,
+  method: string,
+  params: unknown,
+): Promise<unknown> {
+  try {
+    const result = await callRpcWithRateLimitDecodeRecovery(appServer, method, params)
+    return method === 'thread/list'
+      ? await canonicalizeThreadListResponseForRead(result)
+      : result
+  } catch (error) {
+    const paramsRecord = asRecord(params)
+    const threadId = readNonEmptyString(paramsRecord?.threadId)
+
+    if (method === 'turn/start' && threadId && isThreadNotFoundError(error)) {
+      await appServer.rpc('thread/resume', { threadId })
+      return appServer.rpc(method, params ?? null)
+    }
+
+    if (method !== 'thread/archive') {
+      throw error
+    }
+
+    const errorMessage = getErrorMessage(error, '')
+    if (!threadId || !errorMessage.includes('no rollout found')) {
+      throw error
+    }
+
+    let threadReadResult: unknown = null
+    try {
+      threadReadResult = await appServer.rpc('thread/read', {
+        threadId,
+        includeTurns: false,
+      })
+      if (isArchivedThreadReadResult(threadReadResult)) {
+        return null
+      }
+    } catch {
+      // If metadata cannot be read, still try materializing a title before retrying archive.
+    }
+
+    await appServer.rpc('thread/name/set', {
+      threadId,
+      name: readThreadArchiveFallbackName(threadReadResult),
+    })
+    return appServer.rpc(method, params ?? null)
+  }
 }
 
 type TerminalQuickCommand = {
@@ -2082,17 +2620,182 @@ function reverseV4aDiff(fileContent: string, diffText: string): string | null {
   return result.join('\n')
 }
 
+function applyV4aDiff(fileContent: string, diffText: string): string | null {
+  const fileLines = fileContent === '' ? [] : fileContent.split('\n')
+  const rawDiffLines = diffText.split('\n')
+  while (rawDiffLines.length > 0 && rawDiffLines[rawDiffLines.length - 1]?.trim() === '') rawDiffLines.pop()
+  const result = [...fileLines]
+
+  type DiffEntry = { type: 'context' | 'add' | 'remove'; text: string }
+  type DiffHunk = { oldStart: number; entries: DiffEntry[] }
+  const hunks: DiffHunk[] = []
+  let currentHunk: DiffHunk | null = null
+
+  for (const dl of rawDiffLines) {
+    const hunkMatch = dl.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/u)
+    if (hunkMatch) {
+      if (currentHunk) hunks.push(currentHunk)
+      currentHunk = { oldStart: Math.max(Number(hunkMatch[1] ?? '1') - 1, 0), entries: [] }
+      continue
+    }
+    if (!currentHunk) continue
+    if (dl.startsWith('+')) {
+      currentHunk.entries.push({ type: 'add', text: dl.slice(1) })
+    } else if (dl.startsWith('-')) {
+      currentHunk.entries.push({ type: 'remove', text: dl.slice(1) })
+    } else if (dl.startsWith(' ')) {
+      currentHunk.entries.push({ type: 'context', text: dl.slice(1) })
+    } else {
+      currentHunk.entries.push({ type: 'context', text: dl })
+    }
+  }
+  if (currentHunk) hunks.push(currentHunk)
+
+  for (const hunk of hunks) {
+    const expectedSequence = hunk.entries
+      .filter((e) => e.type === 'context' || e.type === 'remove')
+      .map((e) => e.text)
+
+    let seqStart = -1
+    if (expectedSequence.length === 0) {
+      seqStart = Math.min(hunk.oldStart, result.length)
+    } else {
+      const maxStart = result.length - expectedSequence.length
+      if (maxStart < 0) return null
+      const preferredStart = Math.min(hunk.oldStart, Math.max(maxStart, 0))
+      const candidateStarts = [
+        ...Array.from({ length: maxStart + 1 }, (_, index) => preferredStart + index).filter((value) => value <= maxStart),
+        ...Array.from({ length: preferredStart }, (_, index) => preferredStart - index - 1),
+      ]
+      outer: for (const ri of candidateStarts) {
+        for (let si = 0; si < expectedSequence.length; si++) {
+          if (result[ri + si] !== expectedSequence[si]) continue outer
+        }
+        seqStart = ri
+        break
+      }
+    }
+
+    if (seqStart < 0) return null
+
+    const newLines: string[] = []
+    let seqIdx = 0
+    for (const entry of hunk.entries) {
+      if (entry.type === 'context') {
+        newLines.push(result[seqStart + seqIdx]!)
+        seqIdx++
+      } else if (entry.type === 'remove') {
+        seqIdx++
+      } else if (entry.type === 'add') {
+        newLines.push(entry.text)
+      }
+    }
+
+    result.splice(seqStart, expectedSequence.length, ...newLines)
+  }
+
+  return result.join('\n')
+}
+
+async function applyTurnFileChanges(
+  cwd: string,
+  turnInfos: Map<string, CollectedTurnFileInfo>,
+  allowedPatchIds?: Set<string>,
+): Promise<{ applied: number; errors: string[]; appliedPatchIds: string[] }> {
+  if (turnInfos.size === 0) return { applied: 0, errors: [], appliedPatchIds: [] }
+
+  let applied = 0
+  const errors: string[] = []
+  const appliedPatchIds: string[] = []
+  const allPatchInputs = [...turnInfos.values()]
+    .flatMap((info) => info.patchInputs)
+    .filter((patch) => !allowedPatchIds || allowedPatchIds.has(patch.callId))
+
+  for (const patch of allPatchInputs) {
+    let patchApplied = false
+    let patchHadError = false
+    const changes = parseApplyPatchInput(patch.input)
+    for (const change of changes) {
+      const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+      const movedToPath = change.movedToPath
+        ? (isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath))
+        : null
+
+      try {
+        if (change.operation === 'add') {
+          await mkdir(dirname(filePath), { recursive: true })
+          await writeFile(filePath, change.diff ? `${change.diff}\n` : '', 'utf8')
+          applied++
+          patchApplied = true
+          continue
+        }
+
+        if (change.operation === 'delete') {
+          await rm(filePath, { force: true })
+          applied++
+          patchApplied = true
+          continue
+        }
+
+        let sourcePath = filePath
+        if (movedToPath) {
+          const sourceStat = await stat(sourcePath).catch(() => null)
+          if (!sourceStat) {
+            const movedStat = await stat(movedToPath).catch(() => null)
+            if (movedStat) sourcePath = movedToPath
+          }
+        }
+
+        const currentContent = await readFile(sourcePath, 'utf8')
+        const newContent = applyV4aDiff(currentContent, change.diff)
+        if (newContent === null) {
+          patchHadError = true
+          errors.push(`Could not apply patch for ${sourcePath}`)
+          continue
+        }
+
+        if (movedToPath) {
+          if (sourcePath === movedToPath) {
+            if (newContent !== currentContent) {
+              await writeFile(movedToPath, newContent, 'utf8')
+            }
+          } else {
+            await mkdir(dirname(movedToPath), { recursive: true })
+            await writeFile(movedToPath, newContent, 'utf8')
+            await rm(filePath, { force: true })
+          }
+        } else if (newContent !== currentContent) {
+          await writeFile(filePath, newContent, 'utf8')
+        }
+        applied++
+        patchApplied = true
+      } catch (err) {
+        patchHadError = true
+        errors.push(`Failed to apply patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    if (patchApplied && !patchHadError) appliedPatchIds.push(patch.callId)
+  }
+
+  return { applied, errors, appliedPatchIds }
+}
+
 async function revertTurnFileChanges(
   cwd: string,
   turnInfos: Map<string, CollectedTurnFileInfo>,
-): Promise<{ reverted: number; errors: string[] }> {
-  if (turnInfos.size === 0) return { reverted: 0, errors: [] }
+  allowedPatchIds?: Set<string>,
+): Promise<{ reverted: number; errors: string[]; revertedPatchIds: string[] }> {
+  if (turnInfos.size === 0) return { reverted: 0, errors: [], revertedPatchIds: [] }
 
   let reverted = 0
   const errors: string[] = []
+  const revertedPatchIds: string[] = []
 
   const allEntries = [...turnInfos.values()]
-  const allPatchInputs = allEntries.flatMap((info) => info.patchInputs).reverse()
+  const allPatchInputs = allEntries
+    .flatMap((info) => info.patchInputs)
+    .filter((patch) => !allowedPatchIds || allowedPatchIds.has(patch.callId))
+    .reverse()
   const allCommandPaths = new Set(allEntries.flatMap((info) => info.commandFilePaths))
 
   let isGitRepo = false
@@ -2115,10 +2818,15 @@ async function revertTurnFileChanges(
   const patchRevertedPaths = new Set<string>()
 
   for (const patch of allPatchInputs) {
+    let patchReverted = false
+    let patchHadError = false
     const changes = parseApplyPatchInput(patch.input)
     for (let ci = changes.length - 1; ci >= 0; ci--) {
       const change = changes[ci]!
       const filePath = isAbsolute(change.path) ? change.path : join(cwd, change.path)
+      const movedToPath = change.movedToPath
+        ? (isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath))
+        : null
 
       try {
         if (change.operation === 'add') {
@@ -2127,17 +2835,35 @@ async function revertTurnFileChanges(
             await rm(filePath, { force: true })
             reverted++
             patchRevertedPaths.add(filePath)
+            patchReverted = true
           }
-        } else if (change.operation === 'update' && change.diff) {
+        } else if (change.operation === 'update' && (change.diff || movedToPath)) {
           let reversed = false
           try {
-            const currentContent = await readFile(filePath, 'utf8')
+            const sourcePath = movedToPath ?? filePath
+            const currentContent = await readFile(sourcePath, 'utf8')
             const newContent = reverseV4aDiff(currentContent, change.diff)
             if (newContent !== null && newContent !== currentContent) {
               const { writeFile } = await import('node:fs/promises')
-              await writeFile(filePath, newContent)
+              if (movedToPath) {
+                await mkdir(dirname(filePath), { recursive: true })
+                await writeFile(filePath, newContent)
+                await rm(movedToPath, { force: true })
+              } else {
+                await writeFile(filePath, newContent)
+              }
               reverted++
               patchRevertedPaths.add(filePath)
+              if (movedToPath) patchRevertedPaths.add(movedToPath)
+              patchReverted = true
+              reversed = true
+            } else if (newContent !== null && movedToPath) {
+              await mkdir(dirname(filePath), { recursive: true })
+              await rename(movedToPath, filePath)
+              reverted++
+              patchRevertedPaths.add(filePath)
+              patchRevertedPaths.add(movedToPath)
+              patchReverted = true
               reversed = true
             }
           } catch { /* file read/write failed */ }
@@ -2148,12 +2874,19 @@ async function revertTurnFileChanges(
               const relativePath = filePath.startsWith(gitRoot + '/') ? filePath.slice(gitRoot.length + 1) : filePath
               try {
                 await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
+                if (movedToPath) {
+                  await rm(movedToPath, { force: true })
+                }
                 reverted++
                 patchRevertedPaths.add(filePath)
+                if (movedToPath) patchRevertedPaths.add(movedToPath)
+                patchReverted = true
               } catch {
+                patchHadError = true
                 errors.push(`Could not revert: ${filePath}`)
               }
             } else {
+              patchHadError = true
               errors.push(`Could not reverse patch for untracked file: ${filePath}`)
             }
           }
@@ -2165,15 +2898,19 @@ async function revertTurnFileChanges(
               await runCommand('git', ['checkout', 'HEAD', '--', relativePath], { cwd: gitRoot })
               reverted++
               patchRevertedPaths.add(filePath)
+              patchReverted = true
             } catch {
+              patchHadError = true
               errors.push(`Could not restore deleted file: ${filePath}`)
             }
           }
         }
       } catch (err) {
+        patchHadError = true
         errors.push(`Failed to revert patch for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
+    if (patchReverted) revertedPatchIds.push(patch.callId)
   }
 
   for (const filePath of allCommandPaths) {
@@ -2190,7 +2927,7 @@ async function revertTurnFileChanges(
     }
   }
 
-  return { reverted, errors }
+  return { reverted, errors, revertedPatchIds }
 }
 
 function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
@@ -2412,7 +3149,7 @@ async function removeComposerPromptFile(promptPath: string): Promise<boolean> {
   }
 }
 
-async function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
@@ -2421,10 +3158,32 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
     })
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    let closed = false
+    const timeout =
+      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+        ? setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+          setTimeout(() => {
+            if (!closed) proc.kill('SIGKILL')
+          }, 5_000).unref()
+        }, options.timeoutMs)
+        : null
+    timeout?.unref()
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on('error', reject)
+    proc.on('error', (error) => {
+      if (timeout) clearTimeout(timeout)
+      reject(error)
+    })
     proc.on('close', (code) => {
+      closed = true
+      if (timeout) clearTimeout(timeout)
+      if (timedOut) {
+        reject(new Error(`Command timed out after ${options.timeoutMs}ms (${command} ${args.join(' ')})`))
+        return
+      }
       if (code === 0) {
         resolve()
         return
@@ -2467,6 +3226,10 @@ async function ensureRepoHasInitialCommit(repoRoot: string): Promise<void> {
 }
 
 async function runCommandCapture(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
+  return (await runCommandCaptureRaw(command, args, options)).trim()
+}
+
+async function runCommandCaptureRaw(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
@@ -2480,7 +3243,7 @@ async function runCommandCapture(command: string, args: string[], options: { cwd
     proc.on('error', reject)
     proc.on('close', (code) => {
       if (code === 0) {
-        resolve(stdout.trim())
+        resolve(stdout)
         return
       }
       const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
@@ -2503,22 +3266,107 @@ function toHeaderGitResetHistoryRef(branchName: string, commitSha: string): stri
 }
 
 const HEADER_GIT_RESET_HISTORY_REF_LIMIT = 25
+const HEADER_GIT_UNTRACKED_BACKUP_DIR = '.codex/untracked-backups'
 
 async function assertLocalGitBranch(repoRoot: string, branchName: string): Promise<void> {
   await runCommandCapture('git', ['show-ref', '--verify', `refs/heads/${branchName}`], { cwd: repoRoot })
 }
 
-async function checkoutGitBranchWithWorktreeRecovery(repoRoot: string, branchName: string): Promise<void> {
-  try {
-    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
-  } catch (checkoutError) {
-    const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, branchName)
-    if (!blockingWorktreePath) {
-      throw checkoutError
+function splitGitPathList(raw: string): string[] {
+  return raw
+    .split('\0')
+    .filter((entry) => entry.length > 0)
+}
+
+function isSafeGitRelativePath(filePath: string): boolean {
+  return Boolean(filePath) && !isAbsolute(filePath) && !filePath.split('/').includes('..')
+}
+
+function resolveGitRelativePath(repoRoot: string, filePath: string): string {
+  return join(repoRoot, ...filePath.split('/'))
+}
+
+type PreservedUntrackedFile = {
+  filePath: string
+  sourcePath: string
+  backupPath: string
+}
+
+function gitPathsConflict(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+}
+
+async function removeEmptyGitRelativeParents(repoRoot: string, filePath: string): Promise<void> {
+  let current = dirname(resolveGitRelativePath(repoRoot, filePath))
+  while (current !== repoRoot && current.startsWith(`${repoRoot}/`)) {
+    try {
+      await rm(current, { recursive: false })
+    } catch {
+      return
     }
-    await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
-    await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+    current = dirname(current)
   }
+}
+
+async function rollbackPreservedUntrackedFiles(entries: PreservedUntrackedFile[]): Promise<void> {
+  for (const entry of entries.slice().reverse()) {
+    try {
+      if (existsSync(entry.backupPath) && !existsSync(entry.sourcePath)) {
+        await mkdir(dirname(entry.sourcePath), { recursive: true })
+        await rename(entry.backupPath, entry.sourcePath)
+      }
+    } catch {
+      // Preserve the original git failure; best-effort rollback avoids masking it.
+    }
+  }
+}
+
+async function preserveUntrackedFilesForGitTarget(repoRoot: string, targetRef: string): Promise<PreservedUntrackedFile[]> {
+  const [untrackedRaw, targetTreeRaw] = await Promise.all([
+    runCommandCaptureRaw('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: repoRoot }),
+    runCommandCaptureRaw('git', ['ls-tree', '-r', '--name-only', '-z', `${targetRef}^{tree}`], { cwd: repoRoot }),
+  ])
+  const targetPaths = splitGitPathList(targetTreeRaw)
+  const conflictingUntrackedPaths = splitGitPathList(untrackedRaw)
+    .filter((filePath) => isSafeGitRelativePath(filePath) && targetPaths.some((targetPath) => gitPathsConflict(filePath, targetPath)))
+  if (conflictingUntrackedPaths.length === 0) return []
+
+  const backupRoot = join(repoRoot, HEADER_GIT_UNTRACKED_BACKUP_DIR, new Date().toISOString().replace(/[:.]/g, '-'))
+  const movedFiles: PreservedUntrackedFile[] = []
+  for (const filePath of conflictingUntrackedPaths) {
+    const sourcePath = resolveGitRelativePath(repoRoot, filePath)
+    const backupPath = join(backupRoot, ...filePath.split('/'))
+    await mkdir(dirname(backupPath), { recursive: true })
+    await rename(sourcePath, backupPath)
+    movedFiles.push({ filePath, sourcePath, backupPath })
+    await removeEmptyGitRelativeParents(repoRoot, filePath)
+  }
+  return movedFiles
+}
+
+async function withPreservedUntrackedFilesForGitTarget(repoRoot: string, targetRef: string, operation: () => Promise<void>): Promise<void> {
+  const movedFiles = await preserveUntrackedFilesForGitTarget(repoRoot, targetRef)
+  try {
+    await operation()
+  } catch (error) {
+    await rollbackPreservedUntrackedFiles(movedFiles)
+    throw error
+  }
+}
+
+async function checkoutGitBranchWithWorktreeRecovery(repoRoot: string, branchName: string): Promise<void> {
+  await withPreservedUntrackedFilesForGitTarget(repoRoot, branchName, async () => {
+    try {
+      await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+    } catch (checkoutError) {
+      const blockingWorktreePath = extractBranchLockedWorktreePath(checkoutError, branchName)
+      if (!blockingWorktreePath) {
+        throw checkoutError
+      }
+      await runCommand('git', ['checkout', '--detach'], { cwd: blockingWorktreePath })
+      await runCommand('git', ['checkout', branchName], { cwd: repoRoot })
+    }
+  })
 }
 
 async function pruneHeaderGitResetHistoryRefs(repoRoot: string, branchName: string): Promise<void> {
@@ -2851,6 +3699,50 @@ async function readCodexAuth(): Promise<{ accessToken: string; accountId?: strin
   }
 }
 
+function hasUsableCodexAuthSync(): boolean {
+  try {
+    const raw = readFileSync(getCodexAuthPath(), 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return Boolean(auth.tokens?.access_token?.trim())
+  } catch {
+    return false
+  }
+}
+
+function readFreeModeStateSync(statePath: string): FreeModeState | null {
+  try {
+    return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
+  } catch {
+    return null
+  }
+}
+
+export async function writeFreeModeStateFile(statePath: string, state: FreeModeState): Promise<void> {
+  await mkdir(dirname(statePath), { recursive: true })
+  await writeFile(statePath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 })
+}
+
+export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
+  const current = readFreeModeStateSync(statePath)
+  const hasUsableCodexAuth = hasUsableCodexAuthSync()
+  if (shouldSuppressCommunityFreeModeForCodexAuth(current, hasUsableCodexAuth)) {
+    return null
+  }
+  if (!shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuth)) {
+    return current
+  }
+
+  return createDefaultOpenCodeZenFreeModeState()
+}
+
+function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false
+  const normalized = remoteAddress.startsWith('::ffff:')
+    ? remoteAddress.slice('::ffff:'.length)
+    : remoteAddress
+  return normalized === '127.0.0.1' || normalized === '::1'
+}
+
 function getCodexGlobalStatePath(): string {
   return join(getCodexHomeDir(), '.codex-global-state.json')
 }
@@ -2877,6 +3769,8 @@ type ThreadAutomationRecord = {
   rrule: string
   status: ThreadAutomationStatus
   targetThreadId: string | null
+  cwds: string[]
+  extraTomlLines: string[]
   createdAtMs: number | null
   updatedAtMs: number | null
   nextRunAtMs: number | null
@@ -2898,24 +3792,114 @@ function serializeTomlString(value: string): string {
   return JSON.stringify(value)
 }
 
-function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
+function parseTomlStringArray(value: string): string[] {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return []
+  const values: string[] = []
+  let index = 1
+  const endIndex = trimmed.length - 1
+
+  while (index < endIndex) {
+    while (index < endIndex && /[\s,]/u.test(trimmed[index] ?? '')) index += 1
+    if (index >= endIndex) break
+
+    const quote = trimmed[index]
+    if (quote !== '"' && quote !== "'") return []
+    const start = index
+    index += 1
+    let valueText = ''
+
+    if (quote === "'") {
+      const closeIndex = trimmed.indexOf("'", index)
+      if (closeIndex < 0 || closeIndex > endIndex) return []
+      valueText = trimmed.slice(index, closeIndex)
+      index = closeIndex + 1
+    } else {
+      let escaped = false
+      while (index < endIndex) {
+        const char = trimmed[index] ?? ''
+        if (escaped) {
+          escaped = false
+        } else if (char === '\\') {
+          escaped = true
+        } else if (char === '"') {
+          break
+        }
+        index += 1
+      }
+      if (index >= endIndex || trimmed[index] !== '"') return []
+      try {
+        valueText = JSON.parse(trimmed.slice(start, index + 1)) as string
+      } catch {
+        return []
+      }
+      index += 1
+    }
+
+    if (valueText.trim().length > 0) values.push(valueText)
+    while (index < endIndex && /\s/u.test(trimmed[index] ?? '')) index += 1
+    if (index < endIndex && trimmed[index] !== ',') return []
+  }
+
+  return values
+}
+
+function serializeTomlStringArray(values: string[]): string {
+  return `[${values.map((value) => serializeTomlString(value)).join(', ')}]`
+}
+
+export function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
   const values: Record<string, string> = {}
+  const extraTomlLines: string[] = []
+  const knownKeys = new Set([
+    'version',
+    'id',
+    'kind',
+    'name',
+    'prompt',
+    'status',
+    'rrule',
+    'target_thread_id',
+    'cwds',
+    'created_at',
+    'updated_at',
+  ])
+  let isInsideExtraTable = false
   for (const line of raw.split(/\r?\n/u)) {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
+    if (!trimmed || trimmed.startsWith('#')) continue
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      isInsideExtraTable = true
+      extraTomlLines.push(trimmed)
+      continue
+    }
+    if (isInsideExtraTable) {
+      extraTomlLines.push(trimmed)
+      continue
+    }
+    if (!trimmed.includes('=')) {
+      extraTomlLines.push(trimmed)
+      continue
+    }
     const separatorIndex = trimmed.indexOf('=')
     const key = trimmed.slice(0, separatorIndex).trim()
     const value = trimmed.slice(separatorIndex + 1).trim()
-    if (key) values[key] = value
+    if (!key) continue
+    if (knownKeys.has(key)) {
+      values[key] = value
+    } else {
+      extraTomlLines.push(trimmed)
+    }
   }
 
   const id = readTomlString(values.id ?? '')
-  const kindValue = readTomlString(values.kind ?? 'heartbeat')
+  const kindValue = readTomlString(values.kind ?? (values.cwds ? 'cron' : 'heartbeat'))
   const name = readTomlString(values.name ?? '')
   const prompt = readTomlString(values.prompt ?? '')
   const rrule = readTomlString(values.rrule ?? '')
   const statusValue = readTomlString(values.status ?? 'ACTIVE')
   const targetThreadId = readTomlString(values.target_thread_id ?? '') || null
+  const cwds = parseTomlStringArray(values.cwds ?? '')
   const createdAtMs = Number.parseInt(values.created_at ?? '', 10)
   const updatedAtMs = Number.parseInt(values.updated_at ?? '', 10)
 
@@ -2931,6 +3915,8 @@ function parseAutomationToml(raw: string): ThreadAutomationRecord | null {
     rrule,
     status: statusValue,
     targetThreadId,
+    cwds,
+    extraTomlLines,
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : null,
     updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : null,
     nextRunAtMs: null,
@@ -2946,11 +3932,42 @@ function serializeAutomationToml(record: ThreadAutomationRecord): string {
     `prompt = ${serializeTomlString(record.prompt)}`,
     `status = ${serializeTomlString(record.status)}`,
     `rrule = ${serializeTomlString(record.rrule)}`,
-    `target_thread_id = ${serializeTomlString(record.targetThreadId ?? '')}`,
+  ]
+  if (record.targetThreadId) {
+    lines.push(`target_thread_id = ${serializeTomlString(record.targetThreadId)}`)
+  }
+  if (record.cwds.length > 0) {
+    lines.push(`cwds = ${serializeTomlStringArray(record.cwds)}`)
+  }
+  lines.push(
     `created_at = ${String(record.createdAtMs ?? Date.now())}`,
     `updated_at = ${String(record.updatedAtMs ?? Date.now())}`,
-  ]
+  )
+  lines.push(...record.extraTomlLines)
   return `${lines.join('\n')}\n`
+}
+
+export function toAutomationApiRecord(record: ThreadAutomationRecord): Omit<ThreadAutomationRecord, 'extraTomlLines'> {
+  const { extraTomlLines: _extraTomlLines, ...apiRecord } = record
+  return apiRecord
+}
+
+function toAutomationApiMap(
+  automationsByTarget: Record<string, ThreadAutomationRecord[]>,
+): Record<string, Array<Omit<ThreadAutomationRecord, 'extraTomlLines'>>> {
+  return Object.fromEntries(
+    Object.entries(automationsByTarget).map(([target, automations]) => [
+      target,
+      automations.map(toAutomationApiRecord),
+    ]),
+  )
+}
+
+function toAutomationApiData(
+  automation: ThreadAutomationRecord | ThreadAutomationRecord[] | null,
+): Omit<ThreadAutomationRecord, 'extraTomlLines'> | Array<Omit<ThreadAutomationRecord, 'extraTomlLines'>> | null {
+  if (Array.isArray(automation)) return automation.map(toAutomationApiRecord)
+  return automation ? toAutomationApiRecord(automation) : null
 }
 
 function slugifyAutomationId(threadId: string, name: string): string {
@@ -2968,9 +3985,9 @@ async function readAutomationRecordFromFile(filePath: string): Promise<ThreadAut
   }
 }
 
-async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord>> {
+async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAutomationRecord[]>> {
   const automationRoot = getCodexAutomationsDir()
-  const next: Record<string, ThreadAutomationRecord> = {}
+  const next: Record<string, ThreadAutomationRecord[]> = {}
   let entries
   try {
     entries = await readdir(automationRoot, { withFileTypes: true })
@@ -2982,19 +3999,45 @@ async function listThreadHeartbeatAutomations(): Promise<Record<string, ThreadAu
     if (!entry.isDirectory()) continue
     const automation = await readAutomationRecordFromFile(join(automationRoot, entry.name, 'automation.toml'))
     if (!automation || automation.kind !== 'heartbeat' || !automation.targetThreadId) continue
-    next[automation.targetThreadId] = automation
+    next[automation.targetThreadId] = [...(next[automation.targetThreadId] ?? []), automation]
+  }
+
+  for (const automations of Object.values(next)) {
+    automations.sort((first, second) => {
+      const firstCreatedAt = first.createdAtMs ?? 0
+      const secondCreatedAt = second.createdAtMs ?? 0
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt - secondCreatedAt
+      return first.id.localeCompare(second.id)
+    })
   }
 
   return next
 }
 
-async function readThreadHeartbeatAutomation(threadId: string): Promise<ThreadAutomationRecord | null> {
+async function readThreadHeartbeatAutomations(threadId: string): Promise<ThreadAutomationRecord[]> {
   const all = await listThreadHeartbeatAutomations()
-  return all[threadId] ?? null
+  return all[threadId] ?? []
+}
+
+async function readThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<ThreadAutomationRecord | null> {
+  const automations = await readThreadHeartbeatAutomations(threadId)
+  if (automationId) return automations.find((automation) => automation.id === automationId) ?? null
+  return automations[0] ?? null
+}
+
+function resolveUniqueAutomationId(existingIds: Set<string>, threadId: string, name: string): string {
+  const baseId = slugifyAutomationId(threadId, name)
+  if (!existingIds.has(baseId)) return baseId
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${baseId}-${index}`
+    if (!existingIds.has(candidate)) return candidate
+  }
+  return `${baseId}-${randomBytes(4).toString('hex')}`
 }
 
 async function writeThreadHeartbeatAutomation(input: {
   threadId: string
+  id?: string
   name: string
   prompt: string
   rrule: string
@@ -3010,8 +4053,10 @@ async function writeThreadHeartbeatAutomation(input: {
 
   const automationRoot = getCodexAutomationsDir()
   await mkdir(automationRoot, { recursive: true })
-  const existing = await readThreadHeartbeatAutomation(threadId)
-  const id = existing?.id ?? slugifyAutomationId(threadId, name)
+  const existing = input.id ? await readThreadHeartbeatAutomation(threadId, input.id.trim()) : null
+  const entries = await readdir(automationRoot, { withFileTypes: true }).catch(() => [])
+  const existingIds = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name))
+  const id = existing?.id ?? resolveUniqueAutomationId(existingIds, threadId, name)
   const automationDir = join(automationRoot, id)
   const now = Date.now()
   const record: ThreadAutomationRecord = {
@@ -3022,6 +4067,8 @@ async function writeThreadHeartbeatAutomation(input: {
     rrule,
     status: input.status,
     targetThreadId: threadId,
+    cwds: [],
+    extraTomlLines: existing?.extraTomlLines ?? [],
     createdAtMs: existing?.createdAtMs ?? now,
     updatedAtMs: now,
     nextRunAtMs: null,
@@ -3038,10 +4085,145 @@ async function writeThreadHeartbeatAutomation(input: {
   return record
 }
 
-async function deleteThreadHeartbeatAutomation(threadId: string): Promise<boolean> {
-  const automation = await readThreadHeartbeatAutomation(threadId.trim())
-  if (!automation) return false
-  await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+async function deleteThreadHeartbeatAutomation(threadId: string, automationId = ''): Promise<boolean> {
+  const normalizedThreadId = threadId.trim()
+  const normalizedAutomationId = automationId.trim()
+  if (normalizedAutomationId) {
+    const automation = await readThreadHeartbeatAutomation(normalizedThreadId, normalizedAutomationId)
+    if (!automation) return false
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    return true
+  }
+
+  const automations = await readThreadHeartbeatAutomations(normalizedThreadId)
+  if (automations.length === 0) return false
+  await Promise.all(automations.map((automation) => rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })))
+  return true
+}
+
+async function listProjectCronAutomations(): Promise<Record<string, ThreadAutomationRecord[]>> {
+  const automationRoot = getCodexAutomationsDir()
+  const next: Record<string, ThreadAutomationRecord[]> = {}
+  let entries
+  try {
+    entries = await readdir(automationRoot, { withFileTypes: true })
+  } catch {
+    return next
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const automation = await readAutomationRecordFromFile(join(automationRoot, entry.name, 'automation.toml'))
+    if (!automation || automation.kind !== 'cron' || automation.cwds.length === 0) continue
+    for (const cwd of automation.cwds) {
+      next[cwd] = [...(next[cwd] ?? []), automation]
+    }
+  }
+
+  for (const automations of Object.values(next)) {
+    automations.sort((first, second) => {
+      const firstCreatedAt = first.createdAtMs ?? 0
+      const secondCreatedAt = second.createdAtMs ?? 0
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt - secondCreatedAt
+      return first.id.localeCompare(second.id)
+    })
+  }
+
+  return next
+}
+
+async function readProjectCronAutomations(projectName: string): Promise<ThreadAutomationRecord[]> {
+  const all = await listProjectCronAutomations()
+  return all[projectName] ?? []
+}
+
+async function readProjectCronAutomation(projectName: string, automationId = ''): Promise<ThreadAutomationRecord | null> {
+  const automations = await readProjectCronAutomations(projectName)
+  if (automationId) return automations.find((automation) => automation.id === automationId) ?? null
+  return automations[0] ?? null
+}
+
+async function writeProjectCronAutomation(input: {
+  projectName: string
+  id?: string
+  name: string
+  prompt: string
+  rrule: string
+  status: ThreadAutomationStatus
+}): Promise<ThreadAutomationRecord> {
+  const projectName = input.projectName.trim()
+  const name = input.name.trim()
+  const prompt = input.prompt.trim()
+  const rrule = input.rrule.trim()
+  if (!projectName || !name || !prompt || !rrule) {
+    throw new Error('projectName, name, prompt, and rrule are required')
+  }
+  if (!isAbsoluteLikePath(projectName)) {
+    throw new Error('Project automation cwd must be an absolute path')
+  }
+
+  const automationRoot = getCodexAutomationsDir()
+  await mkdir(automationRoot, { recursive: true })
+  const existing = input.id ? await readProjectCronAutomation(projectName, input.id.trim()) : null
+  const entries = await readdir(automationRoot, { withFileTypes: true }).catch(() => [])
+  const existingIds = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name))
+  const id = existing?.id ?? resolveUniqueAutomationId(existingIds, projectName, name)
+  const automationDir = join(automationRoot, id)
+  const now = Date.now()
+  const record: ThreadAutomationRecord = {
+    id,
+    kind: 'cron',
+    name,
+    prompt,
+    rrule,
+    status: input.status,
+    targetThreadId: null,
+    cwds: Array.from(new Set([...(existing?.cwds ?? []), projectName])),
+    extraTomlLines: existing?.extraTomlLines ?? [],
+    createdAtMs: existing?.createdAtMs ?? now,
+    updatedAtMs: now,
+    nextRunAtMs: null,
+  }
+
+  await mkdir(automationDir, { recursive: true })
+  await writeFile(join(automationDir, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+  const memoryPath = join(automationDir, 'memory.md')
+  try {
+    await stat(memoryPath)
+  } catch {
+    await writeFile(memoryPath, '', 'utf8')
+  }
+  return record
+}
+
+async function deleteProjectCronAutomation(projectName: string, automationId = ''): Promise<boolean> {
+  const normalizedProjectName = projectName.trim()
+  const normalizedAutomationId = automationId.trim()
+  if (!normalizedProjectName || !isAbsoluteLikePath(normalizedProjectName)) return false
+  if (normalizedAutomationId) {
+    const automation = await readProjectCronAutomation(normalizedProjectName, normalizedAutomationId)
+    if (!automation) return false
+    const remainingCwds = automation.cwds.filter((cwd) => cwd !== normalizedProjectName)
+    if (remainingCwds.length > 0) {
+      const record = { ...automation, cwds: remainingCwds, updatedAtMs: Date.now() }
+      await writeFile(join(getCodexAutomationsDir(), automation.id, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+    } else {
+      await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+    }
+    return true
+  }
+
+  const automations = await readProjectCronAutomations(normalizedProjectName)
+  if (automations.length === 0) return false
+  await Promise.all(automations.map(async (automation) => {
+    const remainingCwds = automation.cwds.filter((cwd) => cwd !== normalizedProjectName)
+    if (remainingCwds.length > 0) {
+      const record = { ...automation, cwds: remainingCwds, updatedAtMs: Date.now() }
+      await writeFile(join(getCodexAutomationsDir(), automation.id, 'automation.toml'), serializeAutomationToml(record), 'utf8')
+      return
+    }
+    await rm(join(getCodexAutomationsDir(), automation.id), { recursive: true, force: true })
+  }))
   return true
 }
 
@@ -3224,6 +4406,11 @@ type BackendQueuedTurn = {
   message: StoredQueuedMessage
 }
 
+type ThreadQueueStateUpdate<T> = {
+  nextState: ThreadQueueState
+  result: T
+}
+
 type ResolvedCollaborationModeSettings = {
   model: string
   reasoningEffort: ReasoningEffort | null
@@ -3288,6 +4475,8 @@ function normalizeThreadQueueState(value: unknown): ThreadQueueState {
   return state
 }
 
+let threadQueueMutationChain: Promise<unknown> = Promise.resolve()
+
 async function readThreadQueueState(): Promise<ThreadQueueState> {
   const statePath = getCodexGlobalStatePath()
   try {
@@ -3299,7 +4488,7 @@ async function readThreadQueueState(): Promise<ThreadQueueState> {
   }
 }
 
-async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+async function writeThreadQueueStateUnlocked(nextState: ThreadQueueState): Promise<void> {
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
   try {
@@ -3315,6 +4504,38 @@ async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void>
     delete payload[THREAD_QUEUE_STATE_KEY]
   }
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function withThreadQueueStateUpdate<T>(
+  update: (state: ThreadQueueState) => ThreadQueueStateUpdate<T> | Promise<ThreadQueueStateUpdate<T>>,
+): Promise<T> {
+  const run = threadQueueMutationChain.then(async () => {
+    const currentState = await readThreadQueueState()
+    const { nextState, result } = await update(currentState)
+    await writeThreadQueueStateUnlocked(nextState)
+    return result
+  })
+  threadQueueMutationChain = run.catch(() => {})
+  return run
+}
+
+async function writeThreadQueueState(nextState: ThreadQueueState): Promise<void> {
+  await withThreadQueueStateUpdate(() => ({
+    nextState: normalizeThreadQueueState(nextState),
+    result: undefined,
+  }))
+}
+
+async function appendThreadQueuedMessage(threadId: string, message: StoredQueuedMessage): Promise<void> {
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) throw new Error('threadId is required')
+  await withThreadQueueStateUpdate((state) => ({
+    nextState: {
+      ...state,
+      [normalizedThreadId]: [...(state[normalizedThreadId] ?? []), message],
+    },
+    result: undefined,
+  }))
 }
 
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
@@ -3347,6 +4568,30 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
     prefix += `\n## ${f.label}: ${f.path}\n`
   }
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
+}
+
+function escapeHeartbeatXmlText(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+}
+
+function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
+  return {
+    id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
+    text: `<heartbeat>
+<automation_id>${escapeHeartbeatXmlText(automation.id)}</automation_id>
+<current_time_iso>${new Date().toISOString()}</current_time_iso>
+<instructions>
+${escapeHeartbeatXmlText(automation.prompt)}
+</instructions>
+</heartbeat>`,
+    imageUrls: [],
+    skills: [],
+    fileAttachments: [],
+    collaborationMode: 'default',
+  }
 }
 
 function fileNameFromPath(pathValue: string): string {
@@ -3479,6 +4724,108 @@ async function readMergedThreadTitleCache(): Promise<ThreadTitleCache> {
   return mergeThreadTitleCaches(persistedCache, sessionIndexCache)
 }
 
+type PathRealpathResolver = (path: string) => Promise<string>
+
+async function canonicalizeWorkspaceRootPath(
+  value: string,
+  pathRealpath: PathRealpathResolver,
+): Promise<string> {
+  if (!isAbsolute(value)) return value
+  try {
+    return await pathRealpath(value)
+  } catch {
+    return value
+  }
+}
+
+async function canonicalizeWorkspaceRootPathList(
+  values: string[],
+  pathRealpath: PathRealpathResolver,
+): Promise<string[]> {
+  return normalizeStringArray(await Promise.all(values.map((value) => canonicalizeWorkspaceRootPath(value, pathRealpath))))
+}
+
+export async function canonicalizeWorkspaceRootsState(
+  state: WorkspaceRootsState,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<WorkspaceRootsState> {
+  const [order, active, projectOrder] = await Promise.all([
+    canonicalizeWorkspaceRootPathList(state.order, pathRealpath),
+    canonicalizeWorkspaceRootPathList(state.active, pathRealpath),
+    canonicalizeWorkspaceRootPathList(state.projectOrder, pathRealpath),
+  ])
+  const labelEntries = await Promise.all(
+    Object.entries(state.labels)
+      .sort(([first], [second]) => first.localeCompare(second))
+      .map(async ([key, label]) => {
+        const canonicalKey = await canonicalizeWorkspaceRootPath(key, pathRealpath)
+        return {
+          canonicalKey,
+          label,
+          isCanonicalSource: canonicalKey === key,
+        }
+      }),
+  )
+  const labels: Record<string, string> = {}
+  const labelSourceByCanonicalKey = new Map<string, { isCanonicalSource: boolean }>()
+  for (const entry of labelEntries) {
+    const existing = labelSourceByCanonicalKey.get(entry.canonicalKey)
+    if (existing?.isCanonicalSource === true && !entry.isCanonicalSource) continue
+    if (existing && existing.isCanonicalSource === entry.isCanonicalSource) continue
+    labels[entry.canonicalKey] = entry.label
+    labelSourceByCanonicalKey.set(entry.canonicalKey, {
+      isCanonicalSource: entry.isCanonicalSource,
+    })
+  }
+
+  return {
+    order,
+    labels,
+    active,
+    projectOrder,
+    remoteProjects: state.remoteProjects.map((project) => ({ ...project })),
+  }
+}
+
+export async function canonicalizeWorkspaceRootsStateForRead(
+  state: WorkspaceRootsState,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<WorkspaceRootsState> {
+  return await canonicalizeWorkspaceRootsState(state, pathRealpath)
+}
+
+async function canonicalizeThreadCwdRecord(
+  value: unknown,
+  canonicalizeCwd: (cwd: string) => Promise<string>,
+): Promise<unknown> {
+  const record = asRecord(value)
+  const cwd = typeof record?.cwd === 'string' ? record.cwd : ''
+  if (!record || !cwd) return value
+  const canonicalCwd = await canonicalizeCwd(cwd)
+  return canonicalCwd === cwd ? value : { ...record, cwd: canonicalCwd }
+}
+
+export async function canonicalizeThreadListResponseForRead(
+  payload: unknown,
+  pathRealpath: PathRealpathResolver = realpath,
+): Promise<unknown> {
+  const record = asRecord(payload)
+  if (!record || !Array.isArray(record.data)) return payload
+  const cwdCanonicalizationByValue = new Map<string, Promise<string>>()
+  const canonicalizeCwd = (cwd: string): Promise<string> => {
+    let canonicalized = cwdCanonicalizationByValue.get(cwd)
+    if (!canonicalized) {
+      canonicalized = canonicalizeWorkspaceRootPath(cwd, pathRealpath)
+      cwdCanonicalizationByValue.set(cwd, canonicalized)
+    }
+    return canonicalized
+  }
+  return {
+    ...record,
+    data: await Promise.all(record.data.map((item) => canonicalizeThreadCwdRecord(item, canonicalizeCwd))),
+  }
+}
+
 async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
@@ -3491,16 +4838,17 @@ async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
     payload = {}
   }
 
-  return {
+  return await canonicalizeWorkspaceRootsState({
     order: normalizeStringArray(payload['electron-saved-workspace-roots']),
     labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
     active: normalizeStringArray(payload['active-workspace-roots']),
     projectOrder: normalizeStringArray(payload['project-order']),
     remoteProjects: normalizeRemoteProjects(payload['remote-projects']),
-  }
+  })
 }
 
-async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+export async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+  const state = await canonicalizeWorkspaceRootsState(nextState)
   const statePath = getCodexGlobalStatePath()
   let payload: Record<string, unknown> = {}
   try {
@@ -3510,12 +4858,77 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
     payload = {}
   }
 
-  payload['electron-saved-workspace-roots'] = normalizeStringArray(nextState.order)
-  payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels)
-  payload['active-workspace-roots'] = normalizeStringArray(nextState.active)
-  payload['project-order'] = normalizeStringArray(nextState.projectOrder)
+  payload['electron-saved-workspace-roots'] = normalizeStringArray(state.order)
+  payload['electron-workspace-root-labels'] = normalizeStringRecord(state.labels)
+  payload['active-workspace-roots'] = normalizeStringArray(state.active)
+  payload['project-order'] = normalizeStringArray(state.projectOrder)
 
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+let workspaceRootsMutation: Promise<void> = Promise.resolve()
+
+function queueWorkspaceRootsMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const run = workspaceRootsMutation.catch(() => undefined).then(mutation)
+  workspaceRootsMutation = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+function prependUniqueString(value: string, items: string[]): string[] {
+  return [value, ...items.filter((item) => item !== value)]
+}
+
+async function updateWorkspaceRootsState(
+  updater: (existingState: WorkspaceRootsState) => WorkspaceRootsState,
+): Promise<void> {
+  await queueWorkspaceRootsMutation(async () => {
+    const existingState = await readWorkspaceRootsState()
+    await writeWorkspaceRootsState(updater(existingState))
+  })
+}
+
+async function persistWorkspaceRoot(workspaceRoot: string, label = ''): Promise<void> {
+  const normalizedRoot = workspaceRoot.trim()
+  if (!normalizedRoot) return
+
+  await updateWorkspaceRootsState((existingState) => {
+    const nextLabels = { ...existingState.labels }
+    const trimmedLabel = label.trim()
+    if (trimmedLabel.length > 0) {
+      nextLabels[normalizedRoot] = trimmedLabel
+    }
+    return {
+      order: prependUniqueString(normalizedRoot, existingState.order),
+      labels: nextLabels,
+      active: prependUniqueString(normalizedRoot, existingState.active),
+      projectOrder: prependUniqueString(normalizedRoot, existingState.projectOrder),
+      remoteProjects: existingState.remoteProjects,
+    }
+  })
+}
+
+async function rollbackCreatedWorktree(
+  gitRoot: string,
+  worktreeCwd: string,
+  cleanupDirectory?: string,
+  branchName?: string,
+): Promise<void> {
+  try {
+    await runCommand('git', ['worktree', 'remove', '--force', worktreeCwd], { cwd: gitRoot })
+  } catch {
+    await rm(worktreeCwd, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  if (cleanupDirectory && cleanupDirectory !== worktreeCwd) {
+    await rm(cleanupDirectory, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  if (branchName) {
+    await runCommand('git', ['branch', '-D', branchName], { cwd: gitRoot }).catch(() => undefined)
+  }
 }
 
 function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
@@ -3832,12 +5245,14 @@ class AppServerProcess {
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>()
   private readonly notificationListeners = new Set<(value: { method: string; params: unknown }) => void>()
   private readonly pendingServerRequests = new Map<number, PendingServerRequest>()
-  private readonly appServerArgs = buildAppServerArgs()
   private readonly streamEventsByThreadId = new Map<string, StreamEventFrame[]>()
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
+  private readonly threadTurnPageReadCacheByThreadId = new Map<string, { result: unknown; expiresAt: number }>()
+  private readonly threadTurnPageReadPromiseByThreadId = new Map<string, Promise<unknown>>()
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
   private chatgptAuthRefreshPromise: Promise<ChatgptAuthTokensRefreshResponse> | null = null
+  private activeConfigSignature = ''
 
 
   private getCodexCommand(): string {
@@ -3849,23 +5264,38 @@ class AppServerProcess {
   }
 
   private buildAppServerConfig(): { args: string[]; env: Record<string, string> } {
-    const args = [
-      'app-server',
-      '-c', 'approval_policy="never"',
-      '-c', 'sandbox_mode="danger-full-access"',
-    ]
+    const args = buildAppServerArgs()
     let extraEnv: Record<string, string> = {}
     const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
+    args.push(...getProviderCompatibilityConfigArgs(serverPort))
     const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
     try {
-      const raw = readFileSync(statePath, 'utf8')
-      const state = JSON.parse(raw) as FreeModeState
-      args.push(...getFreeModeConfigArgs(state, serverPort))
-      extraEnv = getFreeModeEnvVars(state)
+      const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+      if (state) {
+        args.push(...getFreeModeConfigArgs(state, serverPort))
+        extraEnv = getFreeModeEnvVars(state)
+      }
     } catch {
       // No free-mode state or invalid — use defaults
     }
     return { args, env: extraEnv }
+  }
+
+  private getAppServerConfigSignature(config: { args: string[]; env: Record<string, string> }): string {
+    return JSON.stringify({
+      args: config.args,
+      env: Object.keys(config.env)
+        .sort()
+        .map((key) => [key, config.env[key]]),
+    })
+  }
+
+  private disposeIfConfigChanged(): void {
+    if (!this.process) return
+    const config = this.buildAppServerConfig()
+    const nextSignature = this.getAppServerConfigSignature(config)
+    if (this.activeConfigSignature === nextSignature) return
+    this.dispose()
   }
 
   private start(): void {
@@ -3873,6 +5303,7 @@ class AppServerProcess {
 
     this.stopping = false
     const config = this.buildAppServerConfig()
+    this.activeConfigSignature = this.getAppServerConfigSignature(config)
     const invocation = getSpawnInvocation(this.getCodexCommand(), config.args)
     const spawnEnv = Object.keys(config.env).length > 0
       ? { ...process.env, ...config.env }
@@ -3969,7 +5400,10 @@ class AppServerProcess {
     this.recordStreamEvent(notification)
     this.captureItemFromNotification(notification)
     const nThreadId = this.extractThreadIdFromParams(notification.params)
-    if (nThreadId) this.invalidateLiveStateCache(nThreadId)
+    if (nThreadId) {
+      this.invalidateLiveStateCache(nThreadId)
+      this.threadTurnPageReadCacheByThreadId.delete(nThreadId)
+    }
     for (const listener of this.notificationListeners) {
       listener(notification)
     }
@@ -4023,10 +5457,37 @@ class AppServerProcess {
 
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
     this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
+    this.threadTurnPageReadCacheByThreadId.delete(threadId)
   }
 
   getLastThreadReadSnapshot(threadId: string): unknown | null {
     return this.lastThreadReadSnapshotByThreadId.get(threadId) ?? null
+  }
+
+  async readThreadForTurnPage(threadId: string): Promise<unknown> {
+    const now = Date.now()
+    const cached = this.threadTurnPageReadCacheByThreadId.get(threadId)
+    if (cached && cached.expiresAt > now) return cached.result
+    if (cached) this.threadTurnPageReadCacheByThreadId.delete(threadId)
+
+    const pending = this.threadTurnPageReadPromiseByThreadId.get(threadId)
+    if (pending) return pending
+
+    const promise = this.rpc('thread/read', {
+      threadId,
+      includeTurns: true,
+    }).then((result) => {
+      this.threadTurnPageReadCacheByThreadId.set(threadId, {
+        result,
+        expiresAt: Date.now() + THREAD_TURN_PAGE_READ_CACHE_TTL_MS,
+      })
+      return result
+    }).finally(() => {
+      this.threadTurnPageReadPromiseByThreadId.delete(threadId)
+    })
+
+    this.threadTurnPageReadPromiseByThreadId.set(threadId, promise)
+    return promise
   }
 
   cacheLiveState(threadId: string, data: unknown, turnCount: number, sessionSize: number): void {
@@ -4268,6 +5729,7 @@ class AppServerProcess {
   }
 
   async rpc(method: string, params: unknown): Promise<unknown> {
+    this.disposeIfConfigChanged()
     await this.ensureInitialized()
     return this.call(method, params)
   }
@@ -4323,6 +5785,7 @@ class AppServerProcess {
     this.process = null
     this.initialized = false
     this.initializePromise = null
+    this.activeConfigSignature = ''
     this.readBuffer = ''
 
     const failure = new Error('codex app-server stopped')
@@ -4357,9 +5820,10 @@ class AppServerProcess {
   }
 }
 
-class BackendQueueProcessor {
+export class BackendQueueProcessor {
   private readonly processingThreadIds = new Set<string>()
   private readonly queueDrainTimersByThreadId = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly queueDrainDueAtByThreadId = new Map<string, number>()
   private readonly unsubscribe: () => void
 
   constructor(private readonly appServer: AppServerProcess) {
@@ -4378,6 +5842,7 @@ class BackendQueueProcessor {
       clearTimeout(timer)
     }
     this.queueDrainTimersByThreadId.clear()
+    this.queueDrainDueAtByThreadId.clear()
     this.processingThreadIds.clear()
   }
 
@@ -4393,13 +5858,25 @@ class BackendQueueProcessor {
   }
 
   scheduleThreadQueueDrain(threadId: string, delayMs = 5000): void {
-    if (!threadId || this.queueDrainTimersByThreadId.has(threadId)) return
+    if (!threadId) return
+    const normalizedDelayMs = Math.max(0, delayMs)
+    const nextDueAt = Date.now() + normalizedDelayMs
+    const existingDueAt = this.queueDrainDueAtByThreadId.get(threadId)
+    const existingTimer = this.queueDrainTimersByThreadId.get(threadId)
+    if (existingTimer) {
+      if (existingDueAt !== undefined && existingDueAt <= nextDueAt) return
+      clearTimeout(existingTimer)
+      this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
+    }
     const timer = setTimeout(() => {
       this.queueDrainTimersByThreadId.delete(threadId)
+      this.queueDrainDueAtByThreadId.delete(threadId)
       void this.processThreadQueue(threadId)
-    }, Math.max(0, delayMs))
+    }, normalizedDelayMs)
     timer.unref?.()
     this.queueDrainTimersByThreadId.set(threadId, timer)
+    this.queueDrainDueAtByThreadId.set(threadId, nextDueAt)
   }
 
   async processThreadQueue(threadId: string): Promise<void> {
@@ -4452,27 +5929,33 @@ class BackendQueueProcessor {
   }
 
   private async popNextQueuedTurn(threadId: string): Promise<BackendQueuedTurn | null> {
-    const state = await readThreadQueueState()
-    const queue = state[threadId]
-    if (!queue || queue.length === 0) return null
+    return withThreadQueueStateUpdate((state) => {
+      const queue = state[threadId]
+      if (!queue || queue.length === 0) {
+        return { nextState: state, result: null }
+      }
 
-    const [message, ...rest] = queue
-    const nextState = { ...state }
-    if (rest.length > 0) {
-      nextState[threadId] = rest
-    } else {
-      delete nextState[threadId]
-    }
-    await writeThreadQueueState(nextState)
-    return { threadId, message }
+      const [message, ...rest] = queue
+      const nextState = { ...state }
+      if (rest.length > 0) {
+        nextState[threadId] = rest
+      } else {
+        delete nextState[threadId]
+      }
+      return { nextState, result: { threadId, message } }
+    })
   }
 
   private async restoreQueuedTurn(turn: BackendQueuedTurn): Promise<void> {
-    const state = await readThreadQueueState()
-    const queue = state[turn.threadId] ?? []
-    await writeThreadQueueState({
-      ...state,
-      [turn.threadId]: [turn.message, ...queue],
+    await withThreadQueueStateUpdate((state) => {
+      const queue = state[turn.threadId] ?? []
+      return {
+        nextState: {
+          ...state,
+          [turn.threadId]: [turn.message, ...queue],
+        },
+        result: undefined,
+      }
     })
   }
 
@@ -4900,13 +6383,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       const url = new URL(req.url, 'http://localhost')
 
       if (url.pathname === '/codex-api/zen-proxy/v1/responses' && req.method === 'POST') {
+        if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+          setJson(res, 403, { error: 'Zen proxy is only available from localhost' })
+          return
+        }
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
         let bearerToken = ''
-        let wireApi: 'responses' | 'chat' = 'chat'
+        let wireApi: 'responses' | 'chat' = 'responses'
         try {
-          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          bearerToken = state.apiKey ?? ''
-          wireApi = state.wireApi === 'responses' ? 'responses' : 'chat'
+          const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+          bearerToken = state?.apiKey ?? ''
+          if (state) {
+            wireApi = state.wireApi === 'responses' ? 'responses' : 'chat'
+          }
         } catch { /* use empty */ }
         handleZenProxyRequest(req, res, bearerToken, wireApi)
         return
@@ -4917,9 +6406,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         let bearerToken = ''
         let wireApi: 'responses' | 'chat' = 'responses'
         try {
-          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          bearerToken = state.apiKey ?? ''
-          wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
+          const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+          bearerToken = state?.apiKey ?? ''
+          wireApi = state?.wireApi === 'chat' ? 'chat' : 'responses'
         } catch { /* use empty */ }
         handleOpenRouterProxyRequest(req, res, bearerToken, wireApi)
         return
@@ -4931,10 +6420,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         let wireApi: 'responses' | 'chat' = 'responses'
         let baseUrl = ''
         try {
-          const state = JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          bearerToken = state.apiKey ?? ''
-          wireApi = state.wireApi === 'chat' ? 'chat' : 'responses'
-          baseUrl = state.customBaseUrl ?? ''
+          const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+          bearerToken = state?.apiKey ?? ''
+          wireApi = state?.wireApi === 'chat' ? 'chat' : 'responses'
+          baseUrl = state?.customBaseUrl ?? ''
         } catch { /* use empty */ }
         handleCustomEndpointProxyRequest(req, res, { baseUrl, bearerToken, wireApi })
         return
@@ -4944,11 +6433,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
 
         function readFreeModeState(): FreeModeState {
-          try {
-            return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-          } catch {
-            return { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
-          }
+          return ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+            ?? { enabled: false, apiKey: null, model: FREE_MODE_DEFAULT_MODEL }
         }
 
         if (req.method === 'POST' && url.pathname === '/codex-api/free-mode') {
@@ -4976,7 +6462,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 wireApi: prev.wireApi === 'chat' ? 'chat' : 'responses',
                 providerKeys: prevKeys,
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               const freeModels = await getFreeModels()
               setJson(res, 200, {
@@ -4999,7 +6485,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 wireApi: prev.wireApi === 'chat' ? 'chat' : 'responses',
                 providerKeys: prevKeys,
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, enabled: false })
             }
@@ -5012,20 +6498,52 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         if (req.method === 'GET' && url.pathname === '/codex-api/free-mode/status') {
           try {
             const state = readFreeModeState()
-            const freeModels = await getFreeModels()
             const maskedKey = state.apiKey && state.customKey
               ? state.apiKey.substring(0, 12) + '...' + state.apiKey.substring(state.apiKey.length - 4)
               : null
+            let models = getCachedFreeModels()
+            let currentModel = state.enabled ? state.model : null
+            let wireApi = state.wireApi ?? null
+            if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
+              currentModel = state.enabled ? (state.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL) : null
+              try {
+                const zenModels = filterOpenCodeZenModelsForAuthState(
+                  sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(state.apiKey)),
+                  state.apiKey,
+                )
+                if (zenModels.length > 0) {
+                  models = zenModels
+                } else {
+                  models = [
+                    OPENCODE_ZEN_DEFAULT_MODEL,
+                    'minimax-m2.5-free',
+                    'nemotron-3-super-free',
+                    'trinity-large-preview-free',
+                  ]
+                }
+              } catch {
+                models = [
+                  OPENCODE_ZEN_DEFAULT_MODEL,
+                  'minimax-m2.5-free',
+                  'nemotron-3-super-free',
+                  'trinity-large-preview-free',
+                ]
+              }
+              wireApi = 'responses'
+            } else {
+              refreshFreeModelsInBackground()
+            }
             setJson(res, 200, {
               enabled: state.enabled,
+              hasCodexAuth: hasUsableCodexAuthSync(),
               keyCount: getFreeKeyCount(),
-              models: freeModels,
-              currentModel: state.enabled ? state.model : null,
+              models,
+              currentModel,
               customKey: Boolean(state.customKey),
               maskedKey,
               provider: state.provider ?? 'openrouter',
               customBaseUrl: state.customBaseUrl ?? null,
-              wireApi: state.wireApi ?? null,
+              wireApi,
             })
           } catch (error) {
             setJson(res, 500, { error: getErrorMessage(error, 'Failed to read free mode status') })
@@ -5042,7 +6560,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             const current = readFreeModeState()
             const state: FreeModeState = { ...current, apiKey, customKey: false }
-            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            await writeFreeModeStateFile(statePath, state)
             appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {
@@ -5066,7 +6584,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 provider: 'openrouter',
                 wireApi: current.wireApi === 'chat' ? 'chat' : 'responses',
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: true })
             } else {
@@ -5078,7 +6596,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 provider: 'openrouter',
                 wireApi: current.wireApi === 'chat' ? 'chat' : 'responses',
               }
-              await writeFile(statePath, JSON.stringify(state), 'utf8')
+              await writeFreeModeStateFile(statePath, state)
               appServer.dispose()
               setJson(res, 200, { ok: true, customKey: false })
             }
@@ -5112,22 +6630,25 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             if (resolvedKey) {
               prevKeys[providerType] = resolvedKey
             }
+            const currentModel = (current.model ?? '').trim()
             const resolvedModel = providerType === 'openrouter'
-              ? (current.model || FREE_MODE_DEFAULT_MODEL)
+              ? (currentModel.includes('/') ? currentModel : FREE_MODE_DEFAULT_MODEL)
               : providerType === 'custom'
                 ? await fetchCustomEndpointDefaultModel(baseUrl, resolvedKey)
-                : ''
+                : OPENCODE_ZEN_DEFAULT_MODEL
             const state: FreeModeState = {
               enabled: true,
               apiKey: resolvedKey,
               model: resolvedModel,
-              customKey: providerType === 'openrouter' ? current.customKey : true,
+              customKey: providerType === 'openrouter'
+                ? shouldMarkOpenRouterKeyAsCustom(current, apiKey)
+                : true,
               provider: providerType,
               customBaseUrl: providerType === 'custom' ? baseUrl : undefined,
               wireApi,
               providerKeys: prevKeys,
             }
-            await writeFile(statePath, JSON.stringify(state), 'utf8')
+            await writeFreeModeStateFile(statePath, state)
             appServer.dispose()
             setJson(res, 200, { ok: true })
           } catch (error) {
@@ -5271,25 +6792,137 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
         rpcMethod = body?.method && typeof body.method === 'string' ? body.method : null
 
-        if (!body || typeof body.method !== 'string' || body.method.length === 0) {
-          setJson(res, 400, { error: 'Invalid body: expected { method, params? }' })
-          return
-        }
+	        if (!body || typeof body.method !== 'string' || body.method.length === 0) {
+	          setJson(res, 400, { error: 'Invalid body: expected { method, params? }' })
+	          return
+	        }
 
-        const rpcResult = await appServer.rpc(body.method, body.params ?? null)
+	        if (body.method === 'generate-thread-title') {
+	          setJson(res, 200, { result: { title: '' } })
+	          return
+	        }
+
+	        if (body.method === 'account/rateLimits/read' && !(await hasUsableCodexAuth())) {
+	          setJson(res, 200, { result: null })
+	          return
+	        }
+
+        let rpcResult: unknown
+        try {
+          rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+        } catch (error) {
+	          if (body.method === 'account/rateLimits/read' && isUnauthenticatedRateLimitError(error)) {
+	            setJson(res, 200, { result: null })
+	            return
+	          }
+		          if (body.method === 'thread/read' && isEmptyThreadReadError(error)) {
+		            const params = asRecord(body.params)
+		            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+		            const snapshot = threadId ? appServer.getLastThreadReadSnapshot(threadId) : null
+		            if (snapshot) {
+		              setJson(res, 200, { result: snapshot })
+		              return
+		            }
+		          }
+          if (body.method === 'thread/read' && isThreadMaterializationPendingError(error)) {
+            const params = asRecord(body.params)
+            const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+            if (threadId) {
+              setJson(res, 200, {
+                result: {
+                  thread: {
+                    id: threadId,
+                    turns: [],
+                    status: { type: 'inProgress' },
+                  },
+                },
+              })
+              return
+            }
+          }
+		          throw error
+		        }
         const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
-        const result = await sanitizeThreadTurnsInlinePayloads(body.method, trimmedResult)
+        const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
+          ? mergeStreamTurnErrorsIntoThreadResult(appServer, trimmedResult)
+          : trimmedResult
+        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, errorMergedResult)
+        const result = THREAD_METHODS_WITH_TURNS.has(body.method)
+          ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
+          : sanitizedResult
 
-        if (THREAD_METHODS_WITH_TURNS.has(body.method)) {
-          const rpcRecord = asRecord(result)
-          const rpcThread = asRecord(rpcRecord?.thread)
-          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
+	        if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(body.method)) {
+	          const rpcRecord = asRecord(result)
+	          const rpcThread = asRecord(rpcRecord?.thread)
+	          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
           if (rpcThreadId) {
             appServer.storeThreadReadSnapshot(rpcThreadId, result)
           }
         }
 
         setJson(res, 200, { result })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-turn-page') {
+        try {
+          const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+          const beforeTurnId = url.searchParams.get('beforeTurnId')?.trim() ?? ''
+          const limitRaw = url.searchParams.get('limit')?.trim() ?? String(THREAD_RESPONSE_TURN_LIMIT)
+          const limit = Math.max(1, Math.min(50, Number.parseInt(limitRaw, 10) || THREAD_RESPONSE_TURN_LIMIT))
+          if (!threadId) {
+            setJson(res, 400, { error: 'Missing threadId' })
+            return
+          }
+
+          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.readThreadForTurnPage(threadId))
+          const record = asRecord(threadReadResult)
+          const thread = asRecord(record?.thread)
+          if (!record || !thread) {
+            setJson(res, 502, { error: 'thread/read returned an invalid thread response' })
+            return
+          }
+
+          const turns = Array.isArray(thread.turns) ? thread.turns : []
+          const beforeIndex = beforeTurnId
+            ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
+            : turns.length
+          if (beforeTurnId && beforeIndex < 0) {
+            setJson(res, 200, {
+              result: {
+                ...record,
+                thread: {
+                  ...thread,
+                  turns: [],
+                },
+              },
+              startTurnIndex: 0,
+              hasMoreOlder: false,
+            })
+            return
+          }
+
+          const endIndex = beforeIndex
+          const startIndex = Math.max(0, endIndex - limit)
+          const pageTurns = turns.slice(startIndex, endIndex)
+          const pagedResult = {
+            ...record,
+            thread: {
+              ...thread,
+              turns: pageTurns,
+            },
+          }
+          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
+          const result = await mergeSessionSkillInputsIntoThreadResult(sanitized)
+
+          setJson(res, 200, {
+            result,
+            startTurnIndex: startIndex,
+            hasMoreOlder: startIndex > 0,
+          })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load earlier thread messages') })
+        }
         return
       }
 
@@ -5342,10 +6975,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          const threadReadResult = await appServer.rpc('thread/read', {
+          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.rpc('thread/read', {
             threadId,
             includeTurns: true,
-          })
+          }))
           const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
           appServer.storeThreadReadSnapshot(threadId, sanitized)
 
@@ -5398,6 +7031,17 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           setJson(res, 200, responseData)
         } catch (error) {
+          if (isThreadMaterializationPendingError(error)) {
+            setJson(res, 200, {
+              threadId,
+              conversationState: { turns: [] },
+              ownerClientId: null,
+              liveStateError: null,
+              isInProgress: true,
+            })
+            return
+          }
+
           const snapshot = appServer.getLastThreadReadSnapshot(threadId)
           if (snapshot) {
             const record = asRecord(snapshot)
@@ -5436,6 +7080,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const threadId = readNonEmptyString(body?.threadId)
           const turnId = readNonEmptyString(body?.turnId)
           const cwd = readNonEmptyString(body?.cwd)
+          const action = readNonEmptyString(body?.action) === 'redo' ? 'redo' : 'undo'
+          const scope = readNonEmptyString(body?.scope) === 'single_turn' ? 'single_turn' : 'turn_and_later'
+          const patchIds = Array.isArray(body?.patchIds)
+            ? new Set(body.patchIds.filter((value): value is string => typeof value === 'string' && value.length > 0))
+            : undefined
           if (!threadId || !turnId || !cwd) {
             setJson(res, 400, { error: 'Missing threadId, turnId, or cwd' })
             return
@@ -5462,6 +7111,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             }
             if (foundTurnIndex >= 0 && id) {
               turnIdsToRevert.add(id)
+              if (scope === 'single_turn') break
             }
           }
 
@@ -5480,12 +7130,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           const turnInfos = collectFileChangesForTurns(sessionLogRaw, turnIdsToRevert, cwd)
           if (turnInfos.size === 0) {
-            setJson(res, 200, { reverted: 0, errors: [], message: 'No file changes to revert' })
+            setJson(res, 200, { changed: 0, errors: [], message: action === 'redo' ? 'No file changes to redo' : 'No file changes to revert' })
             return
           }
 
-          const result = await revertTurnFileChanges(cwd, turnInfos)
-          setJson(res, 200, { ...result, message: `Reverted ${result.reverted} file change(s)` })
+          if (action === 'redo') {
+            const result = await applyTurnFileChanges(cwd, turnInfos, patchIds)
+            setJson(res, 200, { ...result, changed: result.applied, message: `Reapplied ${result.applied} file change(s)` })
+            return
+          }
+
+          const result = await revertTurnFileChanges(cwd, turnInfos, patchIds)
+          setJson(res, 200, { ...result, changed: result.reverted, message: `Reverted ${result.reverted} file change(s)` })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })
         }
@@ -5613,22 +7269,24 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/provider-models') {
         try {
-          const fmState = JSON.parse(readFileSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE), 'utf8')) as FreeModeState
-          if (fmState.enabled) {
+          const requestedProvider = url.searchParams.get('provider')?.trim() ?? ''
+          if (requestedProvider) {
+            setJson(res, 200, {
+              ...(await readProviderModelIdsForProvider(appServer, requestedProvider)),
+              exclusive: true,
+            })
+            return
+          }
+          const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+          if (fmState?.enabled) {
             if (fmState.provider === 'opencode-zen') {
               try {
-                const modelsUrl = 'https://opencode.ai/zen/v1/models'
-                const headers: Record<string, string> = {}
-                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
-                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
-                }
-                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
-                if (resp.ok) {
-                  const json = await resp.json() as { data?: Array<{ id: string }> }
-                  const allIds = (json.data ?? []).map(m => m.id).filter(Boolean)
-                  const freeIds = allIds.filter(id => id.endsWith('-free') || id === 'big-pickle')
-                  const paidIds = allIds.filter(id => !id.endsWith('-free') && id !== 'big-pickle')
-                  setJson(res, 200, { data: [...freeIds, ...paidIds], exclusive: true, source: 'opencode-zen' })
+                const modelIds = filterOpenCodeZenModelsForAuthState(
+                  sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey)),
+                  fmState.apiKey,
+                )
+                if (modelIds.length > 0) {
+                  setJson(res, 200, { data: modelIds, exclusive: true, source: 'opencode-zen' })
                   return
                 }
               } catch {
@@ -5755,6 +7413,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '--detach', worktreeCwd, startPoint], { cwd: gitRoot })
           }
+          try {
+            await persistWorkspaceRoot(worktreeCwd)
+          } catch (error) {
+            await rollbackCreatedWorktree(gitRoot, worktreeCwd, worktreeParent)
+            throw error
+          }
 
           setJson(res, 200, {
             data: {
@@ -5823,6 +7487,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             if (!isMissingHeadError(error)) throw error
             await ensureRepoHasInitialCommit(gitRoot)
             await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeCwd, 'HEAD'], { cwd: gitRoot })
+          }
+          try {
+            await persistWorkspaceRoot(worktreeCwd)
+          } catch (error) {
+            await rollbackCreatedWorktree(gitRoot, worktreeCwd, undefined, branchName)
+            throw error
           }
 
           setJson(res, 200, {
@@ -6051,6 +7721,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await assertNoTrackedGitChanges(gitRoot)
+          await assertLocalGitBranch(gitRoot, targetBranch)
           await checkoutGitBranchWithWorktreeRecovery(gitRoot, targetBranch)
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
@@ -6062,6 +7733,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'GET' && url.pathname === '/codex-api/git/branch-commits') {
         const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
         const branch = (url.searchParams.get('branch') ?? '').trim()
+        const includeResetHistory = url.searchParams.get('includeResetHistory') !== 'false'
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
           return
@@ -6074,20 +7746,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
           await runCommandCapture('git', ['rev-parse', '--verify', `${branch}^{commit}`], { cwd: gitRoot })
-          const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
-          const resetHistoryRefsRaw = await runCommandCapture(
-            'git',
-            ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
-            { cwd: gitRoot },
-          ).catch(() => '')
-          const resetHistoryRefs = resetHistoryRefsRaw
-            .split('\n')
-            .map((entry) => entry.trim())
-            .filter(Boolean)
-            .slice(0, HEADER_GIT_RESET_HISTORY_REF_LIMIT)
+          let resetHistoryRefs: string[] = []
+          if (includeResetHistory) {
+            const resetHistoryRefPrefix = `refs/codex/header-git-reset-history/${branch}/`
+            const resetHistoryRefsRaw = await runCommandCapture(
+              'git',
+              ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', resetHistoryRefPrefix],
+              { cwd: gitRoot },
+            ).catch(() => '')
+            resetHistoryRefs = resetHistoryRefsRaw
+              .split('\n')
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+              .slice(0, HEADER_GIT_RESET_HISTORY_REF_LIMIT)
+          }
           const output = await runCommandCapture(
             'git',
-            ['log', '-n', '12', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
+            ['log', '-n', '50', '--date=short', '--format=%H%x09%h%x09%cd%x09%s', branch, ...resetHistoryRefs],
             { cwd: gitRoot },
           )
           const commits = output.split('\n').flatMap((line) => {
@@ -6100,6 +7775,94 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 200, { data: commits })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to load branch commits') })
+        }
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/git/commit-files') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        const sha = (url.searchParams.get('sha') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        if (!sha) {
+          setJson(res, 400, { error: 'Missing sha' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
+          await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
+          const output = await runCommandCaptureRaw(
+            'git',
+            ['diff-tree', '--root', '--no-commit-id', '--name-status', '-r', '-M', '-z', sha],
+            { cwd: gitRoot },
+          )
+          const numstatOutput = await runCommandCaptureRaw(
+            'git',
+            ['diff-tree', '--root', '--no-commit-id', '--numstat', '-r', '-M', '-z', sha],
+            { cwd: gitRoot },
+          )
+          const splitNumstatRecord = (record: string): { addedRaw: string; removedRaw: string; path: string } | null => {
+            const firstTab = record.indexOf('\t')
+            if (firstTab < 0) return null
+            const secondTab = record.indexOf('\t', firstTab + 1)
+            if (secondTab < 0) return null
+            return {
+              addedRaw: record.slice(0, firstTab),
+              removedRaw: record.slice(firstTab + 1, secondTab),
+              path: record.slice(secondTab + 1),
+            }
+          }
+          const lineCountsByPath = new Map<string, { addedLineCount: number | null; removedLineCount: number | null }>()
+          const numstatRecords = splitGitPathList(numstatOutput)
+          for (let index = 0; index < numstatRecords.length; index += 1) {
+            const record = splitNumstatRecord(numstatRecords[index] ?? '')
+            if (!record) continue
+            const { addedRaw, removedRaw } = record
+            const path = record.path || numstatRecords[index + 2] || numstatRecords[index + 1] || ''
+            if (!record.path) index += 2
+            if (!path) continue
+            const addedLineCount = /^\d+$/.test(addedRaw) ? Number(addedRaw) : null
+            const removedLineCount = /^\d+$/.test(removedRaw) ? Number(removedRaw) : null
+            lineCountsByPath.set(path, { addedLineCount, removedLineCount })
+          }
+          const nameStatusRecords = splitGitPathList(output)
+          const files: Array<{
+            path: string
+            previousPath: string | null
+            status: string
+            label: string
+            addedLineCount: number | null
+            removedLineCount: number | null
+          }> = []
+          for (let index = 0; index < nameStatusRecords.length; index += 1) {
+            const status = nameStatusRecords[index] ?? ''
+            if (!status) continue
+            const statusKind = status.charAt(0)
+            const isRenameOrCopy = statusKind === 'R' || statusKind === 'C'
+            const previousPath = isRenameOrCopy ? nameStatusRecords[index + 1] || null : null
+            const path = isRenameOrCopy ? nameStatusRecords[index + 2] || '' : nameStatusRecords[index + 1] || ''
+            index += isRenameOrCopy ? 2 : 1
+            if (!path) continue
+            const label = statusKind === 'A'
+              ? 'Added'
+              : statusKind === 'D'
+                ? 'Deleted'
+                : statusKind === 'R'
+                  ? 'Renamed'
+                  : statusKind === 'C'
+                    ? 'Copied'
+                    : statusKind === 'M'
+                      ? 'Modified'
+                      : status
+            const lineCounts = lineCountsByPath.get(path) ?? { addedLineCount: null, removedLineCount: null }
+            files.push({ path, previousPath, status, label, ...lineCounts })
+          }
+          setJson(res, 200, { data: files })
+        } catch (error) {
+          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load commit files') })
         }
         return
       }
@@ -6141,7 +7904,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const targetSha = await runCommandCapture('git', ['rev-parse', '--verify', `${sha}^{commit}`], { cwd: gitRoot })
           await runCommand('git', ['update-ref', toHeaderGitResetHistoryRef(branch, previousTip.trim()), previousTip.trim()], { cwd: gitRoot })
           await pruneHeaderGitResetHistoryRefs(gitRoot, branch)
-          await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
+          await withPreservedUntrackedFilesForGitTarget(gitRoot, targetSha.trim(), async () => {
+            await runCommand('git', ['reset', '--hard', targetSha.trim()], { cwd: gitRoot })
+          })
           setJson(res, 200, { data: await readGitHeaderState(gitRoot) })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to reset branch to commit') })
@@ -6158,8 +7923,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'Invalid body: expected object' })
           return
         }
-        const existingState = await readWorkspaceRootsState()
-        const nextState: WorkspaceRootsState = {
+        await updateWorkspaceRootsState((existingState) => ({
           order: normalizeStringArray(record.order),
           labels: normalizeStringRecord(record.labels),
           active: normalizeStringArray(record.active),
@@ -6167,8 +7931,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ? normalizeStringArray(record.projectOrder)
             : existingState.projectOrder,
           remoteProjects: existingState.remoteProjects,
-        }
-        await writeWorkspaceRootsState(nextState)
+        }))
         setJson(res, 200, { ok: true })
         return
       }
@@ -6215,20 +7978,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
 
-        const existingState = await readWorkspaceRootsState()
-        const nextOrder = [normalizedPath, ...existingState.order.filter((item) => item !== normalizedPath)]
-        const nextActive = [normalizedPath, ...existingState.active.filter((item) => item !== normalizedPath)]
-        const nextLabels = { ...existingState.labels }
-        if (label.trim().length > 0) {
-          nextLabels[normalizedPath] = label.trim()
-        }
-        await writeWorkspaceRootsState({
-          order: nextOrder,
-          labels: nextLabels,
-          active: nextActive,
-          projectOrder: [normalizedPath, ...existingState.projectOrder.filter((item) => item !== normalizedPath)],
-          remoteProjects: existingState.remoteProjects,
-        })
+        await persistWorkspaceRoot(normalizedPath, label)
         setJson(res, 200, { data: { path: normalizedPath } })
         return
       }
@@ -6253,6 +8003,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         setJson(res, 200, { data: { path: normalizedPath } })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/github-clone') {
+        const payload = asRecord(await readJsonBody(req))
+        const repoUrl = typeof payload?.url === 'string' ? payload.url.trim() : ''
+        const basePath = typeof payload?.basePath === 'string' ? payload.basePath.trim() : ''
+        try {
+          const clonedPath = await cloneGithubRepositoryIntoBase(repoUrl, basePath)
+          setJson(res, 200, { data: { path: clonedPath } })
+        } catch (error) {
+          setJson(res, 400, { error: error instanceof Error ? error.message : 'Failed to clone GitHub repository' })
+        }
         return
       }
 
@@ -6398,18 +8161,41 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-automations') {
         const automationsByThreadId = await listThreadHeartbeatAutomations()
-        setJson(res, 200, { data: automationsByThreadId })
+        setJson(res, 200, { data: toAutomationApiMap(automationsByThreadId) })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-automations') {
+        const automationsByProjectName = await listProjectCronAutomations()
+        setJson(res, 200, { data: toAutomationApiMap(automationsByProjectName) })
         return
       }
 
       if (req.method === 'GET' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const automation = await readThreadHeartbeatAutomation(threadId)
-        setJson(res, 200, { data: automation })
+        const automation = automationId
+          ? await readThreadHeartbeatAutomation(threadId, automationId)
+          : await readThreadHeartbeatAutomations(threadId)
+        setJson(res, 200, { data: toAutomationApiData(automation) })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-automation') {
+        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
+        if (!projectName) {
+          setJson(res, 400, { error: 'Missing projectName' })
+          return
+        }
+        const automation = automationId
+          ? await readProjectCronAutomation(projectName, automationId)
+          : await readProjectCronAutomations(projectName)
+        setJson(res, 200, { data: toAutomationApiData(automation) })
         return
       }
 
@@ -6467,6 +8253,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       if (req.method === 'PUT' && url.pathname === '/codex-api/thread-automation') {
         const payload = asRecord(await readJsonBody(req))
         const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
         const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
         const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
         const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
@@ -6475,18 +8262,71 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           setJson(res, 400, { error: 'threadId, name, prompt, and rrule are required' })
           return
         }
-        const automation = await writeThreadHeartbeatAutomation({ threadId, name, prompt, rrule, status })
-        setJson(res, 200, { data: automation })
+        const automation = await writeThreadHeartbeatAutomation({ threadId, id, name, prompt, rrule, status })
+        setJson(res, 200, { data: toAutomationApiRecord(automation) })
+        return
+      }
+
+      if (req.method === 'PUT' && url.pathname === '/codex-api/project-automation') {
+        const payload = asRecord(await readJsonBody(req))
+        const projectName = typeof payload?.projectName === 'string' ? payload.projectName.trim() : ''
+        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
+        const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
+        const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
+        const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
+        const status = payload?.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE'
+        if (!projectName || !name || !prompt || !rrule) {
+          setJson(res, 400, { error: 'projectName, name, prompt, and rrule are required' })
+          return
+        }
+        if (!isAbsoluteLikePath(projectName)) {
+          setJson(res, 400, { error: 'Project automation cwd must be an absolute path' })
+          return
+        }
+        const automation = await writeProjectCronAutomation({ projectName, id, name, prompt, rrule, status })
+        setJson(res, 200, { data: toAutomationApiRecord(automation) })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/thread-automation/run') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        const automationId = typeof payload?.automationId === 'string' ? payload.automationId.trim() : ''
+        if (!threadId || !automationId) {
+          setJson(res, 400, { error: 'threadId and automationId are required' })
+          return
+        }
+        const automation = await readThreadHeartbeatAutomation(threadId, automationId)
+        if (!automation) {
+          setJson(res, 404, { error: 'Automation not found for thread' })
+          return
+        }
+        await appendThreadQueuedMessage(threadId, buildHeartbeatQueuedMessage(automation))
+        backendQueueProcessor.scheduleThreadQueueDrain(threadId, 0)
+        setJson(res, 200, { data: { queued: true } })
         return
       }
 
       if (req.method === 'DELETE' && url.pathname === '/codex-api/thread-automation') {
         const threadId = url.searchParams.get('threadId')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
         if (!threadId) {
           setJson(res, 400, { error: 'Missing threadId' })
           return
         }
-        const removed = await deleteThreadHeartbeatAutomation(threadId)
+        const removed = await deleteThreadHeartbeatAutomation(threadId, automationId)
+        setJson(res, 200, { data: { removed } })
+        return
+      }
+
+      if (req.method === 'DELETE' && url.pathname === '/codex-api/project-automation') {
+        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
+        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
+        if (!projectName) {
+          setJson(res, 400, { error: 'Missing projectName' })
+          return
+        }
+        const removed = await deleteProjectCronAutomation(projectName, automationId)
         setJson(res, 200, { data: { removed } })
         return
       }

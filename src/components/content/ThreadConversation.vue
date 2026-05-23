@@ -14,10 +14,10 @@
         <button
           type="button"
           class="load-more-button"
-          :disabled="isLoadingMore"
+          :disabled="isLoadingMore || isLoadingPersistedAbove"
           @click="loadMoreAbove"
         >
-          {{ isLoadingMore ? 'Loading…' : 'Load earlier messages' }}
+          {{ isLoadingMore || isLoadingPersistedAbove ? 'Loading…' : 'Load earlier messages' }}
         </button>
       </li>
       <template v-for="message in visibleMessages" :key="message.id">
@@ -186,6 +186,25 @@
                         </span>
                       </li>
                     </ul>
+                    <div v-if="isFileChangeActionable(readStandaloneFileChangeSummary(message))" class="file-change-actions">
+                      <p v-if="fileChangeActionErrorText(readStandaloneFileChangeSummary(message))" class="file-change-action-error">
+                        {{ fileChangeActionErrorText(readStandaloneFileChangeSummary(message)) }}
+                      </p>
+                      <button
+                        type="button"
+                        class="file-change-action-button"
+                        :disabled="fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redoing'"
+                        :title="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        :aria-label="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        @click="runFileChangeAction(readStandaloneFileChangeSummary(message), fileChangeNextAction(readStandaloneFileChangeSummary(message)))"
+                      >
+                        <IconTablerArrowBackUp
+                          class="icon-svg file-change-action-icon"
+                          :class="{ 'file-change-action-icon-redo': fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' }"
+                        />
+                        {{ fileChangeActionLabel(readStandaloneFileChangeSummary(message)) }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -230,7 +249,24 @@
                 </span>
               </div>
 
+              <div v-if="message.skills && message.skills.length > 0" class="message-skill-attachments">
+                <a
+                  v-for="skill in message.skills"
+                  :key="`${message.id}:${skill.path}`"
+                  class="message-skill-chip"
+                  :href="toBrowseUrl(skill.path)"
+                  :title="skill.path"
+                >
+                  <span class="message-skill-chip-prefix">Skill</span>
+                  <span class="message-skill-chip-name">{{ skill.name }}</span>
+                </a>
+              </div>
+
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
+                <div v-if="message.isAutomationRun" class="automation-message-label">
+                  <span>Sent via automation</span>
+                  <code v-if="message.automationDisplayName">{{ message.automationDisplayName }}</code>
+                </div>
                 <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
                   <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
                     <span class="worked-separator-line" aria-hidden="true" />
@@ -555,6 +591,14 @@
                     </button>
                   </template>
                 </div>
+                <a
+                  v-if="isTurnErrorMessage(message)"
+                  class="turn-error-feedback"
+                  :href="feedbackMailto"
+                  @click="prepareTurnErrorFeedback($event, message.text)"
+                >
+                  Send feedback
+                </a>
               </article>
 
               <section v-if="readAnchoredFileChangeSummary(message)" class="file-change-summary-block file-change-summary-block-inline">
@@ -620,6 +664,25 @@
                         </span>
                       </li>
                     </ul>
+                    <div v-if="isFileChangeActionable(readAnchoredFileChangeSummary(message))" class="file-change-actions">
+                      <p v-if="fileChangeActionErrorText(readAnchoredFileChangeSummary(message))" class="file-change-action-error">
+                        {{ fileChangeActionErrorText(readAnchoredFileChangeSummary(message)) }}
+                      </p>
+                      <button
+                        type="button"
+                        class="file-change-action-button"
+                        :disabled="fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redoing'"
+                        :title="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        :aria-label="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
+                        @click="runFileChangeAction(readAnchoredFileChangeSummary(message), fileChangeNextAction(readAnchoredFileChangeSummary(message)))"
+                      >
+                        <IconTablerArrowBackUp
+                          class="icon-svg file-change-action-icon"
+                          :class="{ 'file-change-action-icon-redo': fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' }"
+                        />
+                        {{ fileChangeActionLabel(readAnchoredFileChangeSummary(message)) }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -680,7 +743,10 @@
               >
                 {{ liveOverlay.reasoningText }}
               </p>
-              <p v-if="liveOverlay.errorText" class="live-overlay-error">{{ liveOverlay.errorText }}</p>
+              <div v-if="liveOverlay.errorText" class="live-overlay-error">
+                <span>{{ liveOverlay.errorText }}</span>
+                <a class="live-overlay-feedback" :href="feedbackMailto" @click="prepareLiveErrorFeedback($event, liveOverlay.errorText)">Send feedback</a>
+              </div>
             </article>
           </div>
         </div>
@@ -853,8 +919,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
+import { updateThreadFileChanges } from '../../api/codexGateway'
+import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useMobile } from '../../composables/useMobile'
 
+import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
@@ -878,6 +947,24 @@ const fileLinkContextMenuY = ref(0)
 const fileLinkContextBrowseUrl = ref('')
 const fileLinkContextEditUrl = ref('')
 const { isMobile } = useMobile()
+const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const feedbackMailto = feedbackMailtoBase()
+
+function prepareLiveErrorFeedback(event: MouseEvent, message: string): void {
+  recordVisibleFailure(message)
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
+}
+
+function prepareTurnErrorFeedback(event: MouseEvent, message: string): void {
+  recordVisibleFailure(message)
+  const target = event.currentTarget
+  if (target instanceof HTMLAnchorElement) {
+    target.href = buildFeedbackMailto()
+  }
+}
 
 function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
   const normalized = text.replace(/\r\n/g, '\n').trim()
@@ -932,6 +1019,10 @@ function isCommandMessage(message: UiMessage): boolean {
 
 function isPlanMessage(message: UiMessage): boolean {
   return message.messageType === 'plan' || message.messageType === 'plan.live'
+}
+
+function isTurnErrorMessage(message: UiMessage): boolean {
+  return message.messageType === 'turnError'
 }
 
 function buildPlanMessageText(explanation: string, steps: UiPlanStep[]): string {
@@ -1221,6 +1312,9 @@ const props = defineProps<{
   isLoading: boolean
   activeThreadId: string
   cwd: string
+  hasMorePersistedAbove?: boolean
+  isLoadingPersistedAbove?: boolean
+  loadEarlierMessages?: (threadId: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -1234,6 +1328,9 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const copiedResponseAnchorId = ref('')
+const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
+const fileChangeActionError = ref<Record<string, string>>({})
+const fileChangeRedoPatchIds = ref<Record<string, string[]>>({})
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
@@ -1336,7 +1433,7 @@ const renderWindowStart = ref(0)
 const isLoadingMore = ref(false)
 
 const visibleMessages = computed(() => props.messages.slice(renderWindowStart.value))
-const hasMoreAbove = computed(() => renderWindowStart.value > 0)
+const hasMoreAbove = computed(() => renderWindowStart.value > 0 || props.hasMorePersistedAbove === true)
 
 const showJumpToLatestButton = computed(
   () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
@@ -1385,6 +1482,7 @@ type TurnFileChangeSummary = {
   changes: UiFileChange[]
   sourceMessageIds: string[]
   source: 'assistant' | 'metadata'
+  turnId: string
 }
 type DiffViewerLineKind = 'meta' | 'hunk' | 'add' | 'remove' | 'context'
 type DiffViewerLine = {
@@ -1549,6 +1647,57 @@ function trimLinkWrappers(value: string): { core: string; leading: string; trail
   return { core, leading, trailing }
 }
 
+function countAsterisksBefore(value: string, endIndex: number, minIndex: number): number {
+  let count = 0
+  let index = endIndex - 1
+  while (index >= minIndex && value[index] === '*') {
+    count += 1
+    index -= 1
+  }
+  return count
+}
+
+function countAsterisksAfter(value: string, startIndex: number): number {
+  let count = 0
+  let index = startIndex
+  while (index < value.length && value[index] === '*') {
+    count += 1
+    index += 1
+  }
+  return count
+}
+
+function readAsteriskLinkWrapper(
+  source: string,
+  matchStart: number,
+  matchEnd: number,
+  cursor: number,
+  matchedToken: string,
+): { segmentStart: number; segmentEnd: number; tokenEndTrim: number } | null {
+  const leadingCount = countAsterisksBefore(source, matchStart, cursor)
+  if (leadingCount < 2) return null
+
+  const trailingOutsideCount = countAsterisksAfter(source, matchEnd)
+  if (trailingOutsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd + leadingCount,
+      tokenEndTrim: 0,
+    }
+  }
+
+  const trailingInsideCount = countAsterisksBefore(matchedToken, matchedToken.length, 0)
+  if (trailingInsideCount >= leadingCount) {
+    return {
+      segmentStart: matchStart - leadingCount,
+      segmentEnd: matchEnd,
+      tokenEndTrim: leadingCount,
+    }
+  }
+
+  return null
+}
+
 function parseMarkdownLinkToken(value: string): { label: string; target: string } | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('[') || !trimmed.endsWith(')')) return null
@@ -1562,6 +1711,14 @@ function parseMarkdownLinkToken(value: string): { label: string; target: string 
   const target = trimLinkWrappers(targetRaw).core.trim()
   if (!target) return null
   return { label, target }
+}
+
+function toLocalThreadUrl(value: string): string | null {
+  const match = value.trim().match(/^codex:\/\/threads\/([A-Za-z0-9-]+)$/u)
+  if (!match) return null
+  if (typeof window === 'undefined') return `/#/thread/${match[1]}`
+  const basePath = window.location.pathname.replace(/\/?$/u, '/')
+  return `${window.location.origin}${basePath}#/thread/${match[1]}`
 }
 
 function headingTag(level: number): string {
@@ -1771,6 +1928,7 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
           changes: aggregateFileChanges(message.fileChanges),
           sourceMessageIds: [],
           source: 'assistant',
+          turnId: message.turnId ?? '',
         })
       }
     }
@@ -1786,10 +1944,12 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
   for (const [turnKey, messages] of fileChangeMessagesByTurnKey.entries()) {
     const anchorId = assistantAnchorIdByTurnKey.get(turnKey)
     if (!anchorId) continue
+    const assistantTurnId = assistantSummaryByAnchorId.get(anchorId)?.turnId ?? ''
     summaries[anchorId] = {
       changes: aggregateFileChanges(messages.flatMap((message) => message.fileChanges ?? [])),
       sourceMessageIds: messages.map((message) => message.id),
       source: 'metadata',
+      turnId: messages.find((message) => typeof message.turnId === 'string' && message.turnId.length > 0)?.turnId ?? assistantTurnId,
     }
   }
 
@@ -1827,6 +1987,7 @@ const standaloneFileChangeSummaryByMessageId = computed<Record<string, TurnFileC
       changes: aggregateFileChanges(messages.flatMap((message) => message.fileChanges ?? [])),
       sourceMessageIds: messages.map((message) => message.id),
       source: 'metadata',
+      turnId: visibleMessage.turnId ?? messages.find((message) => typeof message.turnId === 'string' && message.turnId.length > 0)?.turnId ?? '',
     }
   }
 
@@ -1856,6 +2017,87 @@ function readAnchoredFileChangeSummary(message: UiMessage): TurnFileChangeSummar
 
 function readStandaloneFileChangeSummary(message: UiMessage): TurnFileChangeSummary | null {
   return standaloneFileChangeSummaryByMessageId.value[message.id] ?? null
+}
+
+function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
+  return summary?.turnId && props.activeThreadId ? `thread:${props.activeThreadId}:turn:${summary.turnId}` : ''
+}
+
+function isFileChangeActionable(summary: TurnFileChangeSummary | null): boolean {
+  return fileChangeActionKey(summary).length > 0
+}
+
+function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' {
+  const key = fileChangeActionKey(summary)
+  return key ? fileChangeActionState.value[key] ?? 'idle' : 'idle'
+}
+
+function fileChangeActionErrorText(summary: TurnFileChangeSummary | null): string {
+  const key = fileChangeActionKey(summary)
+  return key ? fileChangeActionError.value[key] ?? '' : ''
+}
+
+function fileChangeNextAction(summary: TurnFileChangeSummary | null): 'undo' | 'redo' {
+  const status = fileChangeActionStatus(summary)
+  return status === 'undone' || status === 'redoing' ? 'redo' : 'undo'
+}
+
+function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
+  const status = fileChangeActionStatus(summary)
+  if (status === 'undoing') return 'Undoing'
+  if (status === 'redoing') return 'Redoing'
+  return fileChangeNextAction(summary) === 'redo' ? 'Redo' : 'Undo'
+}
+
+async function runFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): Promise<void> {
+  const key = fileChangeActionKey(summary)
+  if (!summary || !key || !props.activeThreadId || !props.cwd) return
+  const previousState = fileChangeActionStatus(summary)
+  const pendingState = action === 'undo' ? 'undoing' : 'redoing'
+  fileChangeActionState.value = { ...fileChangeActionState.value, [key]: pendingState }
+  fileChangeActionError.value = { ...fileChangeActionError.value, [key]: '' }
+
+  let result: Awaited<ReturnType<typeof updateThreadFileChanges>>
+  try {
+    const patchIds = fileChangeRedoPatchIds.value[key] ?? []
+    result = await updateThreadFileChanges(
+      props.activeThreadId,
+      summary.turnId,
+      props.cwd,
+      action,
+      patchIds.length > 0 ? patchIds : undefined,
+      'single_turn',
+    )
+  } catch (error) {
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
+    fileChangeActionError.value = {
+      ...fileChangeActionError.value,
+      [key]: error instanceof Error ? error.message : 'Failed to update file changes.',
+    }
+    return
+  }
+
+  if (result.errors.length > 0) {
+    if (action === 'undo') {
+      fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
+      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+    } else {
+      if ((result.appliedPatchIds ?? []).length > 0) {
+        fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
+      }
+      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+    }
+    fileChangeActionError.value = { ...fileChangeActionError.value, [key]: result.errors.join('; ') }
+    return
+  }
+
+  if (action === 'undo') {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
+  } else {
+    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'redone' }
+  }
 }
 
 function fileChangeOperationLabel(change: UiFileChange): string {
@@ -2185,25 +2427,35 @@ function editMessage(messageId: string): void {
   emit('rollback', { turnId })
 }
 
-function splitPlainTextByLinks(text: string): InlineSegment[] {
+function splitPlainTextByLinks(
+  text: string,
+  options: { applyMarkdownMarkers?: boolean } = {},
+): InlineSegment[] {
   const segments: InlineSegment[] = []
-  const pattern = /https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
+  const pattern = /codex:\/\/threads\/[A-Za-z0-9-]+|https?:\/\/[^\s<>"'`，。；：！？、()[\]{}「」『』《》]+|file:\/\/[^\n<>"'`，。；：！？、[\]{}「」『』《》]+|["'](?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^\n"']+["']|`(?:[A-Za-z]:[\\/]|~\/|\.{1,2}\/|\/)[^`\n]+`/gu
   let cursor = 0
 
   for (const match of text.matchAll(pattern)) {
     if (typeof match.index !== 'number') continue
     const start = match.index
     const end = start + match[0].length
-
-    if (start > cursor) {
-      segments.push({ kind: 'text', value: text.slice(cursor, start) })
-    }
-
     let token = match[0]
     let trailingPunctuation = ''
     while (/[.,;:!?，。；：！？、]$/u.test(token)) {
       trailingPunctuation = token.slice(-1) + trailingPunctuation
       token = token.slice(0, -1)
+    }
+
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, token)
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
+
+    if (segmentStart > cursor) {
+      segments.push({ kind: 'text', value: text.slice(cursor, segmentStart) })
+    }
+
+    if (asteriskWrapper?.tokenEndTrim) {
+      token = token.slice(0, -asteriskWrapper.tokenEndTrim)
     }
     const wrapped = trimLinkWrappers(token)
     token = wrapped.core
@@ -2214,7 +2466,14 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       segments.push({ kind: 'text', value: leading })
     }
 
-    if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
+    const localThreadUrl = toLocalThreadUrl(token)
+
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: localThreadUrl, href: localThreadUrl })
+      if (trailing) {
+        segments.push({ kind: 'text', value: trailing })
+      }
+    } else if (token.startsWith('**') && token.endsWith('**') && token.length > 4) {
       segments.push({ kind: 'bold', value: token.slice(2, -2) })
       if (trailing) {
         segments.push({ kind: 'text', value: trailing })
@@ -2242,14 +2501,14 @@ function splitPlainTextByLinks(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
+    cursor = segmentEnd
   }
 
   if (cursor < text.length) {
     segments.push({ kind: 'text', value: text.slice(cursor) })
   }
 
-  return applyInlineMarkdownMarkers(segments)
+  return options.applyMarkdownMarkers === false ? segments : applyInlineMarkdownMarkers(segments)
 }
 
 function applyDelimitedMarkersAcrossTextSegments(
@@ -2347,7 +2606,10 @@ function applyInlineMarkdownMarkers(segments: InlineSegment[]): InlineSegment[] 
   return next
 }
 
-function splitTextByFileUrls(text: string): InlineSegment[] {
+function splitTextByFileUrls(
+  text: string,
+  options: { applyMarkdownMarkers?: boolean } = {},
+): InlineSegment[] {
   const segments: InlineSegment[] = []
   let cursor = 0
   let scanFrom = 0
@@ -2401,22 +2663,28 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
     const match = findNextMarkdownLink(text, scanFrom)
     if (!match) break
     const { start, end, token } = match
+    const asteriskWrapper = readAsteriskLinkWrapper(text, start, end, cursor, token)
+    const segmentStart = asteriskWrapper?.segmentStart ?? start
+    const segmentEnd = asteriskWrapper?.segmentEnd ?? end
 
-    if (start > cursor) {
-      segments.push(...splitPlainTextByLinks(text.slice(cursor, start)))
+    if (segmentStart > cursor) {
+      segments.push(...splitPlainTextByLinks(text.slice(cursor, segmentStart), options))
     }
 
     const markdownToken = parseMarkdownLinkToken(token)
     if (!markdownToken) {
-      segments.push(...splitPlainTextByLinks(text.slice(start, end)))
-      cursor = end
-      scanFrom = end
+      segments.push(...splitPlainTextByLinks(text.slice(segmentStart, segmentEnd), options))
+      cursor = segmentEnd
+      scanFrom = segmentEnd
       continue
     }
     const label = markdownToken.label
     const target = markdownToken.target
+    const localThreadUrl = toLocalThreadUrl(target)
 
-    if (/^https?:\/\//u.test(target)) {
+    if (localThreadUrl) {
+      segments.push({ kind: 'url', value: label || localThreadUrl, href: localThreadUrl })
+    } else if (/^https?:\/\//u.test(target)) {
       segments.push({ kind: 'url', value: label || target, href: target })
     } else {
       const ref = parseFileReference(target)
@@ -2433,22 +2701,25 @@ function splitTextByFileUrls(text: string): InlineSegment[] {
       }
     }
 
-    cursor = end
-    scanFrom = end
+    cursor = segmentEnd
+    scanFrom = segmentEnd
   }
 
   if (cursor < text.length) {
-    segments.push(...splitPlainTextByLinks(text.slice(cursor)))
+    segments.push(...splitPlainTextByLinks(text.slice(cursor), options))
   }
 
   return segments
 }
 
 function parseInlineSegmentsUncached(text: string): InlineSegment[] {
-  const linkFirstSegments = splitTextByFileUrls(text)
-  if (!text.includes('`')) return linkFirstSegments
+  const hasInlineCodeMarker = text.includes('`')
+  const linkFirstSegments = splitTextByFileUrls(text, {
+    applyMarkdownMarkers: !hasInlineCodeMarker,
+  })
+  if (!hasInlineCodeMarker) return linkFirstSegments
   if (!linkFirstSegments.some((segment) => segment.kind === 'text' && segment.value.includes('`'))) {
-    return linkFirstSegments
+    return applyInlineMarkdownMarkers(linkFirstSegments)
   }
 
   const parseCodeAwareTextSegments = (value: string): InlineSegment[] => {
@@ -2501,7 +2772,14 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
       if (token.length > 0) {
         const markdownLink = parseMarkdownLinkToken(token)
         if (markdownLink) {
-          if (/^https?:\/\//u.test(markdownLink.target)) {
+          const localThreadUrl = toLocalThreadUrl(markdownLink.target)
+          if (localThreadUrl) {
+            segments.push({
+              kind: 'url',
+              value: markdownLink.label || localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\//u.test(markdownLink.target)) {
             segments.push({
               kind: 'url',
               value: markdownLink.label || markdownLink.target,
@@ -2521,27 +2799,36 @@ function parseInlineSegmentsUncached(text: string): InlineSegment[] {
               segments.push({ kind: 'code', value: token })
             }
           }
-        } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
-          segments.push({
-            kind: 'url',
-            value: token,
-            href: token,
-          })
         } else {
-          const fileReference = parseFileReference(token)
-          if (fileReference) {
-            const displayPath = fileReference.line
-              ? `${fileReference.path}:${String(fileReference.line)}`
-              : fileReference.path
+          const localThreadUrl = toLocalThreadUrl(token)
+          if (localThreadUrl) {
             segments.push({
-              kind: 'file',
+              kind: 'url',
+              value: localThreadUrl,
+              href: localThreadUrl,
+            })
+          } else if (/^https?:\/\/[^\s]+$/u.test(token)) {
+            segments.push({
+              kind: 'url',
               value: token,
-              path: fileReference.path,
-              displayPath,
-              downloadName: getBasename(fileReference.path),
+              href: token,
             })
           } else {
-            segments.push({ kind: 'code', value: token })
+            const fileReference = parseFileReference(token)
+            if (fileReference) {
+              const displayPath = fileReference.line
+                ? `${fileReference.path}:${String(fileReference.line)}`
+                : fileReference.path
+              segments.push({
+                kind: 'file',
+                value: token,
+                path: fileReference.path,
+                displayPath,
+                downloadName: getBasename(fileReference.path),
+              })
+            } else {
+              segments.push({ kind: 'code', value: token })
+            }
           }
         }
       } else {
@@ -3994,7 +4281,7 @@ function jumpToLatest(): void {
 
 async function loadMoreAbove(): Promise<void> {
   const container = conversationListRef.value
-  if (!container || !hasMoreAbove.value || isLoadingMore.value) return
+  if (!container || !hasMoreAbove.value || isLoadingMore.value || props.isLoadingPersistedAbove === true) return
 
   isLoadingMore.value = true
   const threadIdAtStart = props.activeThreadId
@@ -4002,13 +4289,20 @@ async function loadMoreAbove(): Promise<void> {
   const prevScrollHeight = container.scrollHeight
   const prevScrollTop = container.scrollTop
 
-  renderWindowStart.value = Math.max(0, renderWindowStart.value - LOAD_MORE_CHUNK)
+  try {
+    if (renderWindowStart.value > 0) {
+      renderWindowStart.value = Math.max(0, renderWindowStart.value - LOAD_MORE_CHUNK)
+    } else if (props.hasMorePersistedAbove === true) {
+      await props.loadEarlierMessages?.(threadIdAtStart)
+    }
 
-  await nextTick()
+    await nextTick()
 
-  // Discard scroll restoration if the thread changed while we were awaiting.
-  if (props.activeThreadId === threadIdAtStart) {
-    container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
+    // Discard scroll restoration if the thread changed while we were awaiting.
+    if (props.activeThreadId === threadIdAtStart) {
+      container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
+    }
+  } finally {
     isLoadingMore.value = false
   }
 }
@@ -4153,6 +4447,9 @@ watch(
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
+    fileChangeActionState.value = {}
+    fileChangeActionError.value = {}
+    fileChangeRedoPatchIds.value = {}
     // Apply immediately for cached threads where isLoading never toggles.
     renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
     await scheduleConversationScroll()
@@ -4385,7 +4682,15 @@ onBeforeUnmount(() => {
 }
 
 .live-overlay-error {
-  @apply m-0 text-sm leading-5 text-rose-600 whitespace-pre-wrap;
+  @apply m-0 flex items-start justify-between gap-3 text-sm leading-5 text-rose-600 whitespace-pre-wrap;
+}
+
+.live-overlay-feedback {
+  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+}
+
+.turn-error-feedback {
+  @apply mt-3 inline-flex w-fit rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
 }
 
 .message-body {
@@ -4467,8 +4772,24 @@ onBeforeUnmount(() => {
   @apply mb-2 flex flex-wrap gap-1.5;
 }
 
+.message-skill-attachments {
+  @apply mb-2 flex flex-wrap justify-end gap-1.5;
+}
+
 .message-file-chip {
   @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
+}
+
+.message-skill-chip {
+  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800 no-underline transition hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-900;
+}
+
+.message-skill-chip-prefix {
+  @apply shrink-0 font-medium text-emerald-700;
+}
+
+.message-skill-chip-name {
+  @apply min-w-0 max-w-48 truncate font-mono;
 }
 
 .message-file-chip-icon {
@@ -4606,7 +4927,7 @@ onBeforeUnmount(() => {
 }
 
 .plan-card-markdown :deep(.message-inline-code) {
-  @apply rounded-md bg-slate-200/80 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-900;
+  @apply bg-transparent p-0 font-sans text-[1em] font-semibold text-inherit;
 }
 
 .plan-card-markdown :deep(.message-file-link) {
@@ -4780,7 +5101,8 @@ onBeforeUnmount(() => {
 }
 
 .message-inline-code {
-  @apply rounded-md border border-slate-200 bg-slate-100/60 px-1.5 py-0.5 text-[0.875em] leading-[1.4] text-slate-900 font-mono;
+  @apply bg-transparent p-0 font-sans text-[1em] font-semibold text-inherit;
+  line-height: inherit;
 }
 
 .message-code-block {
@@ -4831,9 +5153,29 @@ onBeforeUnmount(() => {
   align-self: flex-end;
 }
 
+.automation-message-label {
+  @apply mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+}
+
+.automation-message-label code {
+  @apply rounded-full bg-white/70 px-2 py-0.5 text-[10px] normal-case tracking-normal text-slate-600;
+}
+
 .message-card[data-role='assistant'],
 .message-card[data-role='system'] {
   @apply px-0 py-0 bg-transparent border-none rounded-none;
+}
+
+:global(.dark) .message-file-chip {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-200;
+}
+
+:global(.dark) .message-skill-chip {
+  @apply border-emerald-800/70 bg-emerald-950/50 text-emerald-100;
+}
+
+:global(.dark) .message-skill-chip-prefix {
+  @apply text-emerald-300;
 }
 
 .conversation-item[data-message-type='worked'] .message-stack,
@@ -5064,6 +5406,26 @@ onBeforeUnmount(() => {
 
 .file-change-delta {
   @apply ml-auto inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-600;
+}
+
+.file-change-actions {
+  @apply mt-2 flex flex-wrap items-center justify-end gap-2;
+}
+
+.file-change-action-button {
+  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.file-change-action-icon {
+  @apply text-sm;
+}
+
+.file-change-action-icon-redo {
+  transform: scaleX(-1);
+}
+
+.file-change-action-error {
+  @apply m-0 min-w-0 flex-1 text-xs text-rose-600;
 }
 
 .file-change-signed-count {
