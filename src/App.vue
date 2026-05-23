@@ -169,7 +169,7 @@
                   <div v-else class="sidebar-settings-account-list">
                   <article
                     v-for="account in accounts"
-                    :key="account.accountId"
+                    :key="account.storageId"
                     class="sidebar-settings-account-item"
                     :class="{
                       'is-active': account.isActive,
@@ -178,8 +178,8 @@
                       'is-remove-visible': isRemoveVisible(account),
                     }"
                     :title="buildAccountTitle(account)"
-                    @mouseenter="onAccountCardPointerEnter(account.accountId)"
-                    @mouseleave="onAccountCardPointerLeave(account.accountId)"
+                    @mouseenter="onAccountCardPointerEnter(account.storageId)"
+                    @mouseleave="onAccountCardPointerLeave(account.storageId)"
                   >
                     <div class="sidebar-settings-account-main">
                       <p class="sidebar-settings-account-email">{{ account.email || t('Account') }}</p>
@@ -198,7 +198,7 @@
                         class="sidebar-settings-account-switch"
                         type="button"
                         :disabled="isAccountActionDisabled(account) || account.isActive || isAccountUnavailable(account)"
-                        @click="onSwitchAccount(account.accountId)"
+                        @click="onSwitchAccount(account.storageId)"
                       >
                         {{ getAccountSwitchLabel(account) }}
                       </button>
@@ -210,7 +210,7 @@
                         }"
                         type="button"
                         :disabled="isAccountActionDisabled(account)"
-                        @click="onRemoveAccount(account.accountId)"
+                        @click="onRemoveAccount(account.storageId)"
                       >
                         {{ getAccountRemoveLabel(account) }}
                       </button>
@@ -2394,15 +2394,15 @@ function isAccountUnavailable(account: UiAccountEntry): boolean {
 
 function isAccountActionDisabled(account: UiAccountEntry): boolean {
   return isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value || removingAccountId.value.length > 0
-    || (account.isActive && removingAccountId.value !== account.accountId && isAccountSwitchBlocked.value)
+    || (account.isActive && removingAccountId.value !== account.storageId && isAccountSwitchBlocked.value)
 }
 
 function isRemoveConfirmationActive(account: UiAccountEntry): boolean {
-  return confirmingRemoveAccountId.value === account.accountId
+  return confirmingRemoveAccountId.value === account.storageId
 }
 
 function isRemoveVisible(account: UiAccountEntry): boolean {
-  return hoveredAccountId.value === account.accountId || isRemoveConfirmationActive(account)
+  return hoveredAccountId.value === account.storageId || isRemoveConfirmationActive(account)
 }
 
 function getAccountSwitchLabel(account: UiAccountEntry): string {
@@ -2413,7 +2413,7 @@ function getAccountSwitchLabel(account: UiAccountEntry): string {
 }
 
 function getAccountRemoveLabel(account: UiAccountEntry): string {
-  if (removingAccountId.value === account.accountId) return t('Removing…')
+  if (removingAccountId.value === account.storageId) return t('Removing…')
   if (isRemoveConfirmationActive(account)) return t('Click again to remove')
   return t('Remove')
 }
@@ -2502,10 +2502,10 @@ async function loadAccountsState(options: { silent?: boolean } = {}): Promise<vo
   try {
     const result = await getAccounts()
     accounts.value = result.accounts
-    if (!result.accounts.some((account) => account.accountId === hoveredAccountId.value)) {
+    if (!result.accounts.some((account) => account.storageId === hoveredAccountId.value)) {
       hoveredAccountId.value = ''
     }
-    if (!result.accounts.some((account) => account.accountId === confirmingRemoveAccountId.value)) {
+    if (!result.accounts.some((account) => account.storageId === confirmingRemoveAccountId.value)) {
       confirmingRemoveAccountId.value = ''
     }
   } catch (error) {
@@ -2532,6 +2532,36 @@ async function onRefreshAccounts(): Promise<void> {
     accountActionError.value = error instanceof Error ? error.message : t('Failed to refresh accounts')
   } finally {
     isRefreshingAccounts.value = false
+  }
+}
+
+async function onSwitchAccount(storageId: string): Promise<void> {
+  if (isSwitchingAccounts.value || isRefreshingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
+  if (isAccountSwitchBlocked.value) {
+    accountActionError.value = t('Finish the current turn and pending requests before switching accounts.')
+    return
+  }
+  accountActionError.value = ''
+  hoveredAccountId.value = ''
+  confirmingRemoveAccountId.value = ''
+  isSwitchingAccounts.value = true
+  try {
+    const nextActiveAccount = await switchAccount(storageId)
+    accounts.value = accounts.value.map((account) => (
+      account.storageId === storageId
+        ? nextActiveAccount
+        : { ...account, isActive: false }
+    ))
+    stopPolling()
+    startPolling()
+    void refreshAll({
+      includeSelectedThreadMessages: true,
+    })
+    void loadAccountsState({ silent: true })
+  } catch (error) {
+    accountActionError.value = error instanceof Error ? error.message : t('Failed to switch account')
+  } finally {
+    isSwitchingAccounts.value = false
   }
 }
 
@@ -2588,42 +2618,12 @@ async function completeCodexLoginFromCallback(callbackUrl: string): Promise<void
   }
 }
 
-async function onSwitchAccount(accountId: string): Promise<void> {
-  if (isSwitchingAccounts.value || isRefreshingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value) return
-  if (isAccountSwitchBlocked.value) {
-    accountActionError.value = t('Finish the current turn and pending requests before switching accounts.')
-    return
-  }
-  accountActionError.value = ''
-  hoveredAccountId.value = ''
-  confirmingRemoveAccountId.value = ''
-  isSwitchingAccounts.value = true
-  try {
-    const nextActiveAccount = await switchAccount(accountId)
-    accounts.value = accounts.value.map((account) => (
-      account.accountId === accountId
-        ? nextActiveAccount
-        : { ...account, isActive: false }
-    ))
-    stopPolling()
-    startPolling()
-    void refreshAll({
-      includeSelectedThreadMessages: true,
-    })
-    void loadAccountsState({ silent: true })
-  } catch (error) {
-    accountActionError.value = error instanceof Error ? error.message : t('Failed to switch account')
-  } finally {
-    isSwitchingAccounts.value = false
-  }
-}
-
-async function onRemoveAccount(accountId: string): Promise<void> {
+async function onRemoveAccount(storageId: string): Promise<void> {
   if (isRefreshingAccounts.value || isSwitchingAccounts.value || isStartingCodexLogin.value || isCompletingCodexLogin.value || removingAccountId.value.length > 0) return
-  const targetAccount = accounts.value.find((account) => account.accountId === accountId) ?? null
+  const targetAccount = accounts.value.find((account) => account.storageId === storageId) ?? null
   if (!targetAccount) return
-  if (confirmingRemoveAccountId.value !== accountId) {
-    confirmingRemoveAccountId.value = accountId
+  if (confirmingRemoveAccountId.value !== storageId) {
+    confirmingRemoveAccountId.value = storageId
     return
   }
   if (targetAccount.isActive && isAccountSwitchBlocked.value) {
@@ -2634,9 +2634,9 @@ async function onRemoveAccount(accountId: string): Promise<void> {
   const removedWasActive = targetAccount.isActive
   accountActionError.value = ''
   confirmingRemoveAccountId.value = ''
-  removingAccountId.value = accountId
+  removingAccountId.value = storageId
   try {
-    const result = await removeAccount(accountId)
+    const result = await removeAccount(storageId)
     accounts.value = result.accounts
     stopPolling()
     startPolling()
