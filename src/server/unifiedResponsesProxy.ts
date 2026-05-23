@@ -64,6 +64,7 @@ export type UnifiedProxyOptions = {
   allowToolFallbackToResponses: boolean
   responsesPayloadFormat?: 'raw' | 'chat'
   sanitizeResponsesRequest?: (payload: Record<string, unknown>) => Record<string, unknown>
+  upstreamHeaders?: (payload: string) => Record<string, string>
 }
 
 function readRequestBody(req: IncomingMessage): Promise<Buffer> {
@@ -521,12 +522,14 @@ export function handleUnifiedResponsesProxyRequest(
       }
 
       const requestFn = upstreamUrl.protocol === 'http:' ? httpRequest : httpsRequest
+      const upstreamHeaders = options.upstreamHeaders?.(payload) ?? {}
       const proxyReq = requestFn({
         hostname: upstreamUrl.hostname,
         port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),
         path: upstreamUrl.pathname,
         method: 'POST',
         headers: {
+          ...upstreamHeaders,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
           ...(options.bearerToken ? { 'Authorization': `Bearer ${options.bearerToken}` } : {}),

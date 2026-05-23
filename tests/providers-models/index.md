@@ -24,6 +24,7 @@ Return to the [manual test index](../../tests.md).
 | [Provider-scoped model defaults + OpenRouter completions bash fallback](provider-scoped-model-defaults-openrouter-completions-bash-fallback.md) |
 | [Unified provider proxy: OpenRouter + OpenCode Zen tool-capable completions](unified-provider-proxy-openrouter-opencode-zen-tool-capable-completions.md) |
 | [OpenCode Zen Responses Payload Normalization](opencode-zen-responses-payload-normalization.md) |
+| [OpenCode Zen Public Client Headers](opencode-zen-public-client-headers.md) |
 | [Custom endpoint Completions via local Responses proxy](custom-endpoint-completions-via-local-responses-proxy.md) |
 | [TestChat GLM-5 new-thread model selection](testchat-glm-5-new-thread-model-selection.md) |
 | [Android published CLI loads Codex app-server models through local proxy](android-published-cli-loads-codex-app-server-models-through-local-proxy.md) |
