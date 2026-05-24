@@ -444,6 +444,90 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
     }
   })
 
+  it('does not synthesize OpenCode Zen when config.toml explicitly selects a model provider', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-config-provider-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'config.toml'), [
+        'model = "gpt-5.5"',
+        'model_provider = "azure"',
+        '',
+        '[model_providers.azure]',
+        'base_url = "https://example.openai.azure.com/openai/v1"',
+        'wire_api = "responses"',
+      ].join('\n'))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('detects quoted top-level model_provider keys in config.toml', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-quoted-config-provider-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'config.toml'), [
+        '"model_provider" = "azure"',
+        '',
+        '[model_providers.azure]',
+        'base_url = "https://example.openai.azure.com/openai/v1"',
+        'wire_api = "responses"',
+      ].join('\n'))
+
+      expect(ensureDefaultFreeModeStateForMissingAuthSync(statePath)).toBeNull()
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores commented and nested model_provider keys when deciding the runtime fallback', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-nested-provider-config-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'config.toml'), [
+        '# model_provider = "azure"',
+        '',
+        '[profiles.work]',
+        'model_provider = "azure"',
+      ].join('\n'))
+
+      const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+
+      expect(state?.enabled).toBe(true)
+      expect(state?.provider).toBe('opencode-zen')
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores model_provider text inside multiline TOML strings', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-multiline-provider-config-'))
+    const statePath = join(codexHome, 'webui-custom-providers.json')
+    process.env.CODEX_HOME = codexHome
+    try {
+      await writeFile(join(codexHome, 'config.toml'), [
+        'banner = """',
+        'model_provider = "azure"',
+        '"""',
+      ].join('\n'))
+
+      const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
+
+      expect(state?.enabled).toBe(true)
+      expect(state?.provider).toBe('opencode-zen')
+      await expect(stat(statePath)).rejects.toThrow()
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
   it('ignores community provider state after Codex auth appears', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-community-provider-'))
     const statePath = join(codexHome, 'webui-custom-providers.json')
