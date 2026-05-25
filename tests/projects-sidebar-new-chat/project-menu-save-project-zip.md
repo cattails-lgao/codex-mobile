@@ -10,12 +10,14 @@
 2. Click `Save project`.
 3. Confirm the browser receives a `.zip` download for the selected project.
 4. Inspect the ZIP contents.
-5. On the new-thread screen, click `Import Project` next to `Create Project`, choose `Import from ZIP`, choose the downloaded archive, and import it.
-6. Click `Import Project` again, choose `Import from folder`, select a local folder in the browser folder picker, and upload it.
-7. Switch to dark theme and repeat steps 1-3.
+5. Open a thread action menu for a thread inside the same project, click `Save project`, and confirm it downloads the same project ZIP.
+6. On the new-thread screen, click `Import Project` next to `Create Project`, choose `Import from ZIP`, choose the downloaded archive, and import it.
+7. Click `Import Project` again, choose `Import from folder`, select a local folder in the browser folder picker, and upload it.
+8. Switch to dark theme and repeat steps 1-3.
 
 #### Expected Results
 - The project menu contains `Save project` between `Browse files` and automation actions.
+- Each thread menu contains `Save project` after `Browse files`, exporting that thread's project folder.
 - Clicking `Save project` downloads a ZIP blob without navigating away from the app.
 - The archive includes project files under relative paths.
 - `.git`, `node_modules`, and `.DS_Store` entries are not included.

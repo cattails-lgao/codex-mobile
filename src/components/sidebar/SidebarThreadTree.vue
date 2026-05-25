@@ -618,6 +618,9 @@
         <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(openThreadMenuThread.id)">
           Browse files
         </button>
+        <button class="thread-menu-item" type="button" @click="onSaveThreadProject(openThreadMenuThread.id)">
+          Save project
+        </button>
         <button class="thread-menu-item" type="button" @click="onCopyThreadPath(openThreadMenuThread.id)">
           Copy path
         </button>
@@ -922,6 +925,7 @@ const emit = defineEmits<{
   archive: [threadId: string]
   'start-new-thread': [projectName: string]
   'browse-thread-files': [threadId: string]
+  'save-thread-project': [threadId: string]
   'browse-project-files': [projectName: string]
   'save-project': [projectName: string]
   'request-project-git-status': [projectName: string]
@@ -1728,6 +1732,11 @@ function onStartNewThread(projectName: string): void {
 
 function onBrowseThreadFiles(threadId: string): void {
   emit('browse-thread-files', threadId)
+  closeThreadMenu()
+}
+
+function onSaveThreadProject(threadId: string): void {
+  emit('save-thread-project', threadId)
   closeThreadMenu()
 }
 

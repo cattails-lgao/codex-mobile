@@ -91,6 +91,7 @@
             @select="onSelectThread"
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-thread-files="onBrowseThreadFiles"
+            @save-thread-project="onSaveThreadProject"
             @browse-project-files="onBrowseProjectFiles"
             @save-project="onSaveProject"
             @request-project-git-status="onRequestProjectGitStatus"
@@ -2790,6 +2791,23 @@ function onBrowseProjectFiles(projectName: string): void {
 
 async function onSaveProject(projectName: string): Promise<void> {
   const targetCwd = getProjectCwd(projectName)
+  await saveProjectZipForCwd(targetCwd)
+}
+
+async function onSaveThreadProject(threadId: string): Promise<void> {
+  const targetCwd = getThreadCwd(threadId)
+  await saveProjectZipForCwd(targetCwd)
+}
+
+function getThreadCwd(threadId: string): string {
+  for (const group of projectGroups.value) {
+    const thread = group.threads.find((row) => row.id === threadId)
+    if (thread?.cwd?.trim()) return thread.cwd.trim()
+  }
+  return ''
+}
+
+async function saveProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
   try {
     await validateProjectZipDownload(targetCwd)
