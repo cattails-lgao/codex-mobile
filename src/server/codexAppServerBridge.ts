@@ -1100,6 +1100,7 @@ type ImportedSessionRecord = {
   cwd: string
   createdAtMs: number
   updatedAtMs: number
+  model: string
   modelProvider: string
   cliVersion: string
   firstUserMessage: string
@@ -1408,6 +1409,49 @@ function readSessionMetaCwd(raw: string): string {
   }
 }
 
+function normalizeImportedModelProviderId(modelProvider: string): string {
+  if (modelProvider === OPENCODE_ZEN_PROVIDER_ID) return 'opencode_zen'
+  if (modelProvider === 'custom-endpoint') return 'custom_endpoint'
+  if (modelProvider === 'openrouter-free') return 'openrouter_free'
+  return modelProvider
+}
+
+function getActiveImportedSessionModelFallback(): { model: string; modelProvider: string } | null {
+  const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+  if (!fmState?.enabled) return null
+  if (fmState.provider === 'opencode-zen') {
+    return {
+      model: fmState.model?.trim() || OPENCODE_ZEN_DEFAULT_MODEL,
+      modelProvider: 'opencode_zen',
+    }
+  }
+  if (fmState.provider === 'custom' && fmState.customBaseUrl?.trim()) {
+    return {
+      model: fmState.model?.trim() || '',
+      modelProvider: 'custom_endpoint',
+    }
+  }
+  if (fmState.apiKey?.trim()) {
+    return {
+      model: fmState.model?.trim() || FREE_MODE_DEFAULT_MODEL,
+      modelProvider: 'openrouter_free',
+    }
+  }
+  return null
+}
+
+function resolveImportedSessionModelDefaults(importedModelProvider: string, importedModel: string): { model: string; modelProvider: string } | null {
+  const modelProvider = normalizeImportedModelProviderId(importedModelProvider.trim())
+  const model = importedModel.trim()
+  if (modelProvider && modelProvider !== 'openai') {
+    return { model, modelProvider }
+  }
+  if (modelProvider === 'openai' && hasUsableCodexAuthSync()) {
+    return { model, modelProvider }
+  }
+  return getActiveImportedSessionModelFallback()
+}
+
 function rewriteImportedSession(raw: string, importedCwd: string, importedThreadId: string): string {
   const lines: string[] = []
   let hasUserMessageEvent = false
@@ -1430,6 +1474,14 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
         payload.timestamp = importedAtIso
         payload.source = 'cli'
         payload.imported = true
+        const modelDefaults = resolveImportedSessionModelDefaults(
+          readNonEmptyString(payload.model_provider),
+          readNonEmptyString(payload.model),
+        )
+        if (modelDefaults) {
+          payload.model = modelDefaults.model
+          payload.model_provider = modelDefaults.modelProvider
+        }
       }
       lines.push(JSON.stringify(parsed))
       if (!hasUserMessageEvent && payload && record?.type === 'response_item' && readNonEmptyString(payload.role) === 'user') {
@@ -1457,6 +1509,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
   let id = fallbackId
   let createdAtMs = Date.now()
   let updatedAtMs = createdAtMs
+  let model = ''
   let modelProvider = 'openai'
   let cliVersion = ''
   let firstUserMessage = ''
@@ -1477,6 +1530,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
         const metaTime = readNonEmptyString(payload.timestamp)
         const metaMs = metaTime ? Date.parse(metaTime) : NaN
         if (Number.isFinite(metaMs)) createdAtMs = metaMs
+        model = readNonEmptyString(payload.model) || model
         modelProvider = readNonEmptyString(payload.model_provider) || modelProvider
         cliVersion = readNonEmptyString(payload.cli_version) || cliVersion
       }
@@ -1505,7 +1559,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
   const now = Date.now()
   createdAtMs = Math.min(createdAtMs, now)
   updatedAtMs = Math.min(Math.max(updatedAtMs, createdAtMs), now)
-  return { id, path, cwd, createdAtMs, updatedAtMs, modelProvider, cliVersion, firstUserMessage }
+  return { id, path, cwd, createdAtMs, updatedAtMs, model, modelProvider, cliVersion, firstUserMessage }
 }
 
 function sqlString(value: string): string {
@@ -1534,6 +1588,7 @@ function registerImportedSessionInStateDb(session: ImportedSessionRecord): void 
     created_at: String(createdAt),
     updated_at: String(updatedAt),
     source: "'cli'",
+    model: sqlString(session.model),
     model_provider: sqlString(session.modelProvider),
     cwd: sqlString(session.cwd),
     title: sqlString(title),
