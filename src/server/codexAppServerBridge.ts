@@ -1359,7 +1359,7 @@ function isSameOrDescendantPath(candidate: string, root: string): boolean {
   return candidate.startsWith(rootWithSeparator)
 }
 
-async function resolveAllowedProjectZipCwd(rawCwd: string): Promise<string> {
+async function resolveAllowedProjectZipCwd(rawCwd: string, threadId = ''): Promise<string> {
   const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
   const cwdInfo = await stat(cwd)
   if (!cwdInfo.isDirectory()) {
@@ -1374,6 +1374,9 @@ async function resolveAllowedProjectZipCwd(rawCwd: string): Promise<string> {
     ...rootsState.projectOrder,
   ])
   if (allowedRoots.some((root) => isSameOrDescendantPath(canonicalCwd, root))) {
+    return canonicalCwd
+  }
+  if (threadId && await isThreadSessionCwd(canonicalCwd, threadId)) {
     return canonicalCwd
   }
   throw new Error('Project ZIP export is only available for saved project roots')
@@ -1406,6 +1409,52 @@ function readSessionMetaCwd(raw: string): string {
     return readNonEmptyString(payload?.cwd)
   } catch {
     return ''
+  }
+}
+
+function readSessionMetaId(raw: string): string {
+  const firstLine = raw.split(/\r?\n/u, 1)[0]?.trim()
+  if (!firstLine) return ''
+  try {
+    const parsed = JSON.parse(firstLine) as unknown
+    const record = asRecord(parsed)
+    const payload = asRecord(record?.payload)
+    return readNonEmptyString(payload?.id)
+  } catch {
+    return ''
+  }
+}
+
+async function findThreadSessionMetaCwd(threadId: string): Promise<string> {
+  const normalizedThreadId = threadId.trim()
+  if (!normalizedThreadId) return ''
+  const roots = [
+    join(getCodexHomeDir(), 'sessions'),
+    join(getCodexHomeDir(), 'archived_sessions'),
+  ]
+  for (const root of roots) {
+    if (!existsSync(root)) continue
+    for await (const filePath of walkFiles(root)) {
+      if (extname(filePath) !== '.jsonl') continue
+      if (basename(filePath, '.jsonl') !== normalizedThreadId) continue
+      const raw = await readFile(filePath, 'utf8')
+      if (readSessionMetaId(raw) === normalizedThreadId) {
+        return readSessionMetaCwd(raw)
+      }
+    }
+  }
+  return ''
+}
+
+async function isThreadSessionCwd(rawCwd: string, threadId: string): Promise<boolean> {
+  const sessionCwd = await findThreadSessionMetaCwd(threadId)
+  if (!sessionCwd) return false
+  try {
+    const canonicalRequested = await realpath(rawCwd)
+    const canonicalSession = await realpath(sessionCwd)
+    return canonicalRequested === canonicalSession
+  } catch {
+    return false
   }
 }
 
@@ -8844,13 +8893,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/codex-api/project-zip') {
         const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        const threadId = (url.searchParams.get('threadId') ?? '').trim()
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
           return
         }
         let cwd = ''
         try {
-          cwd = await resolveAllowedProjectZipCwd(rawCwd)
+          cwd = await resolveAllowedProjectZipCwd(rawCwd, threadId)
         } catch (error) {
           const message = getErrorMessage(error, 'Failed to validate project')
           if (message === 'cwd is not a directory') {

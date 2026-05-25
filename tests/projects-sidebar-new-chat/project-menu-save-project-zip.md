@@ -17,7 +17,7 @@
 
 #### Expected Results
 - The project menu contains `Save project` between `Browse files` and automation actions.
-- Each thread menu contains `Save project` after `Browse files`, exporting that thread's project folder.
+- Each thread menu contains `Save project` after `Browse files`, exporting that thread's project folder, including projectless chat folders that are not saved project roots.
 - Clicking `Save project` downloads a ZIP blob without navigating away from the app.
 - The archive includes project files under relative paths.
 - `.git`, `node_modules`, and `.DS_Store` entries are not included.

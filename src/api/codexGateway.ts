@@ -3079,13 +3079,14 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
   return normalizedPath
 }
 
-export function getProjectZipDownloadUrl(cwd: string): string {
+export function getProjectZipDownloadUrl(cwd: string, options?: { threadId?: string }): string {
   const query = new URLSearchParams({ cwd })
+  if (options?.threadId) query.set('threadId', options.threadId)
   return `/codex-api/project-zip?${query.toString()}`
 }
 
-export async function validateProjectZipDownload(cwd: string): Promise<void> {
-  const response = await fetch(getProjectZipDownloadUrl(cwd), { method: 'HEAD' })
+export async function validateProjectZipDownload(cwd: string, options?: { threadId?: string }): Promise<void> {
+  const response = await fetch(getProjectZipDownloadUrl(cwd, options), { method: 'HEAD' })
   if (!response.ok) {
     const payload = await readJsonResponse(response)
     const message = getErrorMessageFromPayload(payload, 'Failed to export project')
