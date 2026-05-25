@@ -23,7 +23,7 @@
 - `.git`, `node_modules`, and `.DS_Store` entries are not included.
 - Matching Codex session JSONL files are included under `.codex-project/chats/`.
 - Import creates a new project folder, restores project files, registers the imported project in the sidebar, and writes imported chat sessions into the active `CODEX_HOME` with `cwd` rewritten to the new project folder.
-- `Import from folder` opens a browser folder picker, uploads the selected folder through the project import flow, and registers the imported copy as the active project without requiring a ZIP file.
+- `Import from folder` opens a browser folder picker, uploads the selected folder through the project import flow, registers the imported copy as the active project, and shows it under Projects even when it has no threads yet.
 - Imported chat sessions are rewritten to the destination home's current model and provider so resumed imported threads use the active local configuration.
 - The menu item remains readable and aligned in both light and dark themes.
 

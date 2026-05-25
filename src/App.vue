@@ -3718,6 +3718,7 @@ async function onDirectProjectImportFileChange(event: Event): Promise<void> {
     newThreadCwd.value = result.path
     pinProjectToTop(getProjectOrderNameForPath(result.path))
     await loadWorkspaceRootOptionsState()
+    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
     await refreshDefaultProjectName()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to import project.'
@@ -3742,6 +3743,7 @@ async function onDirectProjectImportFolderChange(event: Event): Promise<void> {
     newThreadCwd.value = result.path
     pinProjectToTop(getProjectOrderNameForPath(result.path))
     await loadWorkspaceRootOptionsState()
+    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
     await refreshDefaultProjectName()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to import project folder.'
@@ -3830,6 +3832,7 @@ async function onConfirmExistingFolder(path = resolvedExistingFolderPath.value):
     newThreadCwd.value = normalizedPath
     pinProjectToTop(getProjectOrderNameForPath(normalizedPath))
     await loadWorkspaceRootOptionsState()
+    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
     await refreshDefaultProjectName()
     onCloseExistingFolderPanel()
   } catch (error) {

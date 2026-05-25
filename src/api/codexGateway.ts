@@ -3266,8 +3266,12 @@ export async function importProjectZip(file: Blob, parent: string): Promise<{ pa
     record.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
       : {}
+  const normalizedPath = typeof data.path === 'string' ? normalizePathForUi(data.path) : ''
+  if (normalizedPath) {
+    invalidateWorkspaceRootsStateCache()
+  }
   return {
-    path: typeof data.path === 'string' ? normalizePathForUi(data.path) : '',
+    path: normalizedPath,
     importedSessions: typeof data.importedSessions === 'number' ? data.importedSessions : 0,
   }
 }

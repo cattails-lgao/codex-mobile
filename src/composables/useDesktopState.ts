@@ -4603,7 +4603,7 @@ export function useDesktopState() {
   }
 
   async function refreshAll(
-    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean } = {},
+    options: { includeSelectedThreadMessages?: boolean; awaitAncillaryRefreshes?: boolean; providerChanged?: boolean; forceThreadRefresh?: boolean } = {},
   ) {
     error.value = ''
     codexCliMissingError.value = ''
@@ -4612,7 +4612,7 @@ export function useDesktopState() {
 
     try {
       await loadPersistedQueueStateIfNeeded()
-      await loadThreads()
+      await loadThreads({ force: options.forceThreadRefresh === true })
       if (includeSelectedThreadMessages) {
         try {
           await loadMessages(selectedThreadId.value)
