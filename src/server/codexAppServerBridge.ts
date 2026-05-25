@@ -1456,6 +1456,9 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
         payload.timestamp = importedAtIso
         payload.source = 'cli'
         payload.imported = true
+        if (!readNonEmptyString(payload.originator)) {
+          payload.originator = 'codex_cli_rs'
+        }
         if (modelDefaults) {
           payload.model = modelDefaults.model
           payload.model_provider = modelDefaults.modelProvider
