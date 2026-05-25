@@ -10,8 +10,9 @@
 2. Click `Save project`.
 3. Confirm the browser receives a `.zip` download for the selected project.
 4. Inspect the ZIP contents.
-5. On the new-thread screen, click `Import Project` next to `Create Project`, choose the downloaded archive, and import it.
-6. Switch to dark theme and repeat steps 1-3.
+5. On the new-thread screen, click `Import Project` next to `Create Project`, choose `Import from ZIP`, choose the downloaded archive, and import it.
+6. Click `Import Project` again, choose `Import from folder`, select an existing folder, and open it.
+7. Switch to dark theme and repeat steps 1-3.
 
 #### Expected Results
 - The project menu contains `Save project` between `Browse files` and automation actions.
@@ -20,6 +21,7 @@
 - `.git`, `node_modules`, and `.DS_Store` entries are not included.
 - Matching Codex session JSONL files are included under `.codex-project/chats/`.
 - Import creates a new project folder, restores project files, registers the imported project in the sidebar, and writes imported chat sessions into the active `CODEX_HOME` with `cwd` rewritten to the new project folder.
+- `Import from folder` opens the existing folder picker and registers the selected folder as the active project without requiring a ZIP file.
 - Imported chat sessions are rewritten to the destination home's current model and provider so resumed imported threads use the active local configuration.
 - The menu item remains readable and aligned in both light and dark themes.
 
