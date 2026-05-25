@@ -1409,14 +1409,7 @@ function readSessionMetaCwd(raw: string): string {
   }
 }
 
-function normalizeImportedModelProviderId(modelProvider: string): string {
-  if (modelProvider === OPENCODE_ZEN_PROVIDER_ID) return 'opencode_zen'
-  if (modelProvider === 'custom-endpoint') return 'custom_endpoint'
-  if (modelProvider === 'openrouter-free') return 'openrouter_free'
-  return modelProvider
-}
-
-function getActiveImportedSessionModelFallback(): { model: string; modelProvider: string } | null {
+function getCurrentImportedSessionModelDefaults(): { model: string; modelProvider: string } | null {
   const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
   if (!fmState?.enabled) return null
   if (fmState.provider === 'opencode-zen') {
@@ -1440,22 +1433,11 @@ function getActiveImportedSessionModelFallback(): { model: string; modelProvider
   return null
 }
 
-function resolveImportedSessionModelDefaults(importedModelProvider: string, importedModel: string): { model: string; modelProvider: string } | null {
-  const modelProvider = normalizeImportedModelProviderId(importedModelProvider.trim())
-  const model = importedModel.trim()
-  if (modelProvider && modelProvider !== 'openai') {
-    return { model, modelProvider }
-  }
-  if (modelProvider === 'openai' && hasUsableCodexAuthSync()) {
-    return { model, modelProvider }
-  }
-  return getActiveImportedSessionModelFallback()
-}
-
 function rewriteImportedSession(raw: string, importedCwd: string, importedThreadId: string): string {
   const lines: string[] = []
   let hasUserMessageEvent = false
   const importedAtIso = new Date().toISOString()
+  const modelDefaults = getCurrentImportedSessionModelDefaults()
   for (const line of raw.split(/\r?\n/u)) {
     if (!line.trim()) continue
     try {
@@ -1474,10 +1456,6 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
         payload.timestamp = importedAtIso
         payload.source = 'cli'
         payload.imported = true
-        const modelDefaults = resolveImportedSessionModelDefaults(
-          readNonEmptyString(payload.model_provider),
-          readNonEmptyString(payload.model),
-        )
         if (modelDefaults) {
           payload.model = modelDefaults.model
           payload.model_provider = modelDefaults.modelProvider
