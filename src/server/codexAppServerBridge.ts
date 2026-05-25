@@ -1118,6 +1118,18 @@ function assertZipUInt32(value: number, label: string): void {
   }
 }
 
+function assertZipEntryCount(value: number): void {
+  if (value > 0xffff) {
+    throw new Error('Project has too many files for ZIP export')
+  }
+}
+
+function addZipOffset(offset: number, size: number): number {
+  const next = offset + size
+  assertZipUInt32(next, 'ZIP archive')
+  return next
+}
+
 function writeZipUInt32(buffer: Buffer, value: number, offset: number): void {
   buffer.writeUInt32LE(value >>> 0, offset)
 }
@@ -1148,6 +1160,7 @@ function buildZipDataDescriptor(crc32: number, size: number): Buffer {
 }
 
 function buildZipCentralHeader(entry: ZipCentralDirectoryEntry): Buffer {
+  assertZipUInt32(entry.localHeaderOffset, 'ZIP local header offset')
   const name = Buffer.from(entry.path, 'utf8')
   const header = Buffer.alloc(46 + name.length)
   writeZipUInt32(header, 0x02014b50, 0)
@@ -1170,9 +1183,7 @@ function buildZipCentralHeader(entry: ZipCentralDirectoryEntry): Buffer {
 function buildZipEndOfCentralDirectory(entryCount: number, centralSize: number, centralOffset: number): Buffer {
   assertZipUInt32(centralSize, 'ZIP central directory')
   assertZipUInt32(centralOffset, 'ZIP central directory offset')
-  if (entryCount > 0xffff) {
-    throw new Error('Project has too many files for ZIP export')
-  }
+  assertZipEntryCount(entryCount)
   const footer = Buffer.alloc(22)
   writeZipUInt32(footer, 0x06054b50, 0)
   footer.writeUInt16LE(entryCount, 8)
@@ -1188,8 +1199,19 @@ function toZipEntryPath(root: string, absolutePath: string, isDirectory: boolean
 }
 
 async function writeZipChunk(res: ServerResponse, chunk: Buffer): Promise<void> {
+  if (res.destroyed || res.writableEnded) {
+    throw new Error('Response closed during ZIP export')
+  }
   if (!res.write(chunk)) {
-    await once(res, 'drain')
+    await Promise.race([
+      once(res, 'drain'),
+      once(res, 'close').then(() => {
+        throw new Error('Response closed during ZIP export')
+      }),
+      once(res, 'error').then(([error]) => {
+        throw error instanceof Error ? error : new Error('Response failed during ZIP export')
+      }),
+    ])
   }
 }
 
@@ -1219,7 +1241,7 @@ async function streamProjectZip(root: string, res: ServerResponse): Promise<void
     const localHeaderOffset = offset
     const localHeader = buildZipLocalHeader(zipPath, entry.mtime)
     await writeZipChunk(res, localHeader)
-    offset += localHeader.length
+    offset = addZipOffset(offset, localHeader.length)
 
     let crc = 0xffffffff
     let size = 0
@@ -1230,14 +1252,15 @@ async function streamProjectZip(root: string, res: ServerResponse): Promise<void
         size += buffer.length
         assertZipUInt32(size, 'Project file')
         await writeZipChunk(res, buffer)
-        offset += buffer.length
+        offset = addZipOffset(offset, buffer.length)
       }
     }
     const crc32 = (crc ^ 0xffffffff) >>> 0
     const descriptor = buildZipDataDescriptor(crc32, size)
     await writeZipChunk(res, descriptor)
-    offset += descriptor.length
+    offset = addZipOffset(offset, descriptor.length)
 
+    assertZipEntryCount(centralEntries.length + 1)
     const { dosDate, dosTime } = toDosDateTime(entry.mtime)
     centralEntries.push({
       path: zipPath,
@@ -1257,8 +1280,8 @@ async function streamProjectZip(root: string, res: ServerResponse): Promise<void
   for (const entry of centralEntries) {
     const header = buildZipCentralHeader(entry)
     await writeZipChunk(res, header)
-    centralSize += header.length
-    offset += header.length
+    centralSize = addZipOffset(centralSize, header.length)
+    offset = addZipOffset(offset, header.length)
   }
   const footer = buildZipEndOfCentralDirectory(centralEntries.length, centralSize, centralOffset)
   await writeZipChunk(res, footer)
@@ -1276,6 +1299,32 @@ function setProjectZipHeaders(res: ServerResponse, fileName: string): void {
   res.setHeader('Content-Type', 'application/zip')
   res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/"/g, '')}"; filename*=UTF-8''${encodedName}`)
   res.setHeader('Cache-Control', 'private, no-store')
+}
+
+function isSameOrDescendantPath(candidate: string, root: string): boolean {
+  if (candidate === root) return true
+  const rootWithSeparator = root.endsWith(sep) ? root : `${root}${sep}`
+  return candidate.startsWith(rootWithSeparator)
+}
+
+async function resolveAllowedProjectZipCwd(rawCwd: string): Promise<string> {
+  const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+  const cwdInfo = await stat(cwd)
+  if (!cwdInfo.isDirectory()) {
+    throw new Error('cwd is not a directory')
+  }
+
+  const canonicalCwd = await realpath(cwd)
+  const rootsState = await readWorkspaceRootsState()
+  const allowedRoots = normalizeStringArray([
+    ...rootsState.order,
+    ...rootsState.active,
+    ...rootsState.projectOrder,
+  ])
+  if (allowedRoots.some((root) => isSameOrDescendantPath(canonicalCwd, root))) {
+    return canonicalCwd
+  }
+  throw new Error('Project ZIP export is only available for saved project roots')
 }
 
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
@@ -8296,26 +8345,33 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/project-zip') {
+      if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/codex-api/project-zip') {
         const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
         if (!rawCwd) {
           setJson(res, 400, { error: 'Missing cwd' })
           return
         }
-        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        let cwd = ''
         try {
-          const cwdInfo = await stat(cwd)
-          if (!cwdInfo.isDirectory()) {
-            setJson(res, 400, { error: 'cwd is not a directory' })
-            return
+          cwd = await resolveAllowedProjectZipCwd(rawCwd)
+        } catch (error) {
+          const message = getErrorMessage(error, 'Failed to validate project')
+          if (message === 'cwd is not a directory') {
+            setJson(res, 400, { error: message })
+          } else if (getErrorCode(error) === 'ENOENT') {
+            setJson(res, 404, { error: 'cwd does not exist' })
+          } else {
+            setJson(res, 403, { error: message })
           }
-        } catch {
-          setJson(res, 404, { error: 'cwd does not exist' })
           return
         }
 
         try {
           setProjectZipHeaders(res, toProjectZipFileName(cwd))
+          if (req.method === 'HEAD') {
+            res.end()
+            return
+          }
           await streamProjectZip(cwd, res)
           res.end()
         } catch (error) {

@@ -3079,32 +3079,17 @@ export async function openProjectRoot(path: string, options?: { createIfMissing?
   return normalizedPath
 }
 
-function readFilenameFromContentDisposition(value: string | null): string {
-  if (!value) return ''
-  const encodedMatch = value.match(/filename\*=UTF-8''([^;]+)/i)
-  if (encodedMatch?.[1]) {
-    try {
-      return decodeURIComponent(encodedMatch[1])
-    } catch {
-      return encodedMatch[1]
-    }
-  }
-  const plainMatch = value.match(/filename="([^"]+)"/i) ?? value.match(/filename=([^;]+)/i)
-  return plainMatch?.[1]?.trim() ?? ''
+export function getProjectZipDownloadUrl(cwd: string): string {
+  const query = new URLSearchParams({ cwd })
+  return `/codex-api/project-zip?${query.toString()}`
 }
 
-export async function fetchProjectZip(cwd: string): Promise<{ blob: Blob; fileName: string }> {
-  const query = new URLSearchParams({ cwd })
-  const response = await fetch(`/codex-api/project-zip?${query.toString()}`)
+export async function validateProjectZipDownload(cwd: string): Promise<void> {
+  const response = await fetch(getProjectZipDownloadUrl(cwd), { method: 'HEAD' })
   if (!response.ok) {
     const payload = await readJsonResponse(response)
     const message = getErrorMessageFromPayload(payload, 'Failed to export project')
     throw new Error(message)
-  }
-  const blob = await response.blob()
-  return {
-    blob,
-    fileName: readFilenameFromContentDisposition(response.headers.get('Content-Disposition')) || 'project.zip',
   }
 }
 

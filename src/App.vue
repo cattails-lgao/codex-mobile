@@ -1143,7 +1143,7 @@ import {
   createPermanentWorktree,
   createWorktree,
   createProjectlessThreadDirectory,
-  fetchProjectZip,
+  getProjectZipDownloadUrl,
   getGitBranchState,
   getGitBranchCommits,
   getGitCommitFiles,
@@ -1170,6 +1170,7 @@ import {
   startCodexLogin,
   searchThreads,
   switchAccount,
+  validateProjectZipDownload,
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
@@ -2746,15 +2747,13 @@ async function onSaveProject(projectName: string): Promise<void> {
   const targetCwd = getProjectCwd(projectName)
   if (!targetCwd || typeof document === 'undefined') return
   try {
-    const { blob, fileName } = await fetchProjectZip(targetCwd)
-    const objectUrl = URL.createObjectURL(blob)
+    await validateProjectZipDownload(targetCwd)
     const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = fileName
+    link.href = getProjectZipDownloadUrl(targetCwd)
+    link.download = ''
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to export project.'
     window.alert(message)
