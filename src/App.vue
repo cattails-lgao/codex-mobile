@@ -651,6 +651,15 @@
                     accept=".zip,application/zip"
                     @change="onDirectProjectImportFileChange"
                   />
+                  <input
+                    ref="projectImportFolderInputRef"
+                    class="new-thread-project-import-input"
+                    type="file"
+                    webkitdirectory
+                    directory
+                    multiple
+                    @change="onDirectProjectImportFolderChange"
+                  />
                 </div>
                 <section v-if="showFirstLaunchPluginsCard" class="new-thread-launch-card" aria-label="Plugins and Apps announcement">
                   <div class="new-thread-launch-card-copy">
@@ -1188,6 +1197,7 @@ import {
   getThreadTerminalQuickCommands,
   getThreadTerminalStatus,
   getWorkspaceRootsState,
+  importProjectFolder,
   importProjectZip,
   listLocalDirectories,
   openProjectRoot,
@@ -1631,6 +1641,7 @@ const projectSetupError = ref('')
 const isProjectSetupSubmitting = ref(false)
 const projectSetupPrimaryInputRef = ref<HTMLInputElement | null>(null)
 const projectImportInputRef = ref<HTMLInputElement | null>(null)
+const projectImportFolderInputRef = ref<HTMLInputElement | null>(null)
 const projectImportMenuRef = ref<HTMLElement | null>(null)
 const isExistingFolderPickerOpen = ref(false)
 const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
@@ -3669,7 +3680,10 @@ function onChooseProjectImportZip(): void {
 function onChooseProjectImportFolder(): void {
   if (isProjectImporting.value) return
   isProjectImportMenuOpen.value = false
-  void onOpenExistingFolder()
+  const input = projectImportFolderInputRef.value
+  if (!input) return
+  input.value = ''
+  input.click()
 }
 
 async function onDirectProjectImportFileChange(event: Event): Promise<void> {
@@ -3689,6 +3703,30 @@ async function onDirectProjectImportFileChange(event: Event): Promise<void> {
     await refreshDefaultProjectName()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to import project.'
+    window.alert(message)
+  } finally {
+    isProjectImporting.value = false
+    if (input) input.value = ''
+  }
+}
+
+async function onDirectProjectImportFolderChange(event: Event): Promise<void> {
+  const input = event.target instanceof HTMLInputElement ? event.target : null
+  const files = input?.files ?? null
+  if (!files || files.length === 0 || isProjectImporting.value) return
+
+  isProjectImporting.value = true
+  try {
+    const baseDir = await resolveProjectBaseDirectory()
+    if (!baseDir) return
+    const result = await importProjectFolder(files, baseDir)
+    if (!result.path) return
+    newThreadCwd.value = result.path
+    pinProjectToTop(getProjectOrderNameForPath(result.path))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to import project folder.'
     window.alert(message)
   } finally {
     isProjectImporting.value = false

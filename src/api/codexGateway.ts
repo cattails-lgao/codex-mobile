@@ -3093,7 +3093,160 @@ export async function validateProjectZipDownload(cwd: string): Promise<void> {
   }
 }
 
-export async function importProjectZip(file: File, parent: string): Promise<{ path: string; importedSessions: number }> {
+type StoredZipEntry = {
+  path: string
+  data: Uint8Array
+  modifiedAt: Date
+}
+
+const FOLDER_IMPORT_SKIPPED_SEGMENTS = new Set(['.git', 'node_modules'])
+const FOLDER_IMPORT_SKIPPED_FILES = new Set(['.DS_Store'])
+
+const ZIP_CRC_TABLE = new Uint32Array(256)
+for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
+  let value = index
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+  }
+  ZIP_CRC_TABLE[index] = value >>> 0
+}
+
+function updateZipCrc32(crc: number, data: Uint8Array): number {
+  let value = crc
+  for (let index = 0; index < data.length; index += 1) {
+    value = (value >>> 8) ^ ZIP_CRC_TABLE[(value ^ data[index]) & 0xff]
+  }
+  return value >>> 0
+}
+
+function getZipCrc32(data: Uint8Array): number {
+  return (updateZipCrc32(0xffffffff, data) ^ 0xffffffff) >>> 0
+}
+
+function getZipDosDateTime(date: Date): { dosDate: number; dosTime: number } {
+  const year = Math.max(1980, Math.min(2107, date.getFullYear()))
+  return {
+    dosDate: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+    dosTime: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+  }
+}
+
+function writeZipUInt32(view: DataView, offset: number, value: number): void {
+  view.setUint32(offset, value >>> 0, true)
+}
+
+function writeZipUInt16(view: DataView, offset: number, value: number): void {
+  view.setUint16(offset, value, true)
+}
+
+function encodeZipText(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
+function toBlobPart(data: Uint8Array): BlobPart {
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+}
+
+function buildStoredZipFromEntries(entries: StoredZipEntry[]): Blob {
+  const chunks: BlobPart[] = []
+  const centralChunks: Uint8Array[] = []
+  let offset = 0
+
+  for (const entry of entries) {
+    const name = encodeZipText(entry.path)
+    const { dosDate, dosTime } = getZipDosDateTime(entry.modifiedAt)
+    const crc32 = getZipCrc32(entry.data)
+    const localHeader = new Uint8Array(30 + name.length)
+    const localView = new DataView(localHeader.buffer)
+    writeZipUInt32(localView, 0, 0x04034b50)
+    writeZipUInt16(localView, 4, 20)
+    writeZipUInt16(localView, 6, 0x0800)
+    writeZipUInt16(localView, 8, 0)
+    writeZipUInt16(localView, 10, dosTime)
+    writeZipUInt16(localView, 12, dosDate)
+    writeZipUInt32(localView, 14, crc32)
+    writeZipUInt32(localView, 18, entry.data.length)
+    writeZipUInt32(localView, 22, entry.data.length)
+    writeZipUInt16(localView, 26, name.length)
+    localHeader.set(name, 30)
+    chunks.push(toBlobPart(localHeader), toBlobPart(entry.data))
+
+    const centralHeader = new Uint8Array(46 + name.length)
+    const centralView = new DataView(centralHeader.buffer)
+    writeZipUInt32(centralView, 0, 0x02014b50)
+    writeZipUInt16(centralView, 4, 0x0314)
+    writeZipUInt16(centralView, 6, 20)
+    writeZipUInt16(centralView, 8, 0x0800)
+    writeZipUInt16(centralView, 10, 0)
+    writeZipUInt16(centralView, 12, dosTime)
+    writeZipUInt16(centralView, 14, dosDate)
+    writeZipUInt32(centralView, 16, crc32)
+    writeZipUInt32(centralView, 20, entry.data.length)
+    writeZipUInt32(centralView, 24, entry.data.length)
+    writeZipUInt16(centralView, 28, name.length)
+    writeZipUInt32(centralView, 42, offset)
+    centralHeader.set(name, 46)
+    centralChunks.push(centralHeader)
+    offset += localHeader.length + entry.data.length
+  }
+
+  const centralOffset = offset
+  const centralSize = centralChunks.reduce((total, chunk) => total + chunk.length, 0)
+  chunks.push(...centralChunks.map(toBlobPart))
+  const footer = new Uint8Array(22)
+  const footerView = new DataView(footer.buffer)
+  writeZipUInt32(footerView, 0, 0x06054b50)
+  writeZipUInt16(footerView, 8, entries.length)
+  writeZipUInt16(footerView, 10, entries.length)
+  writeZipUInt32(footerView, 12, centralSize)
+  writeZipUInt32(footerView, 16, centralOffset)
+  chunks.push(toBlobPart(footer))
+  return new Blob(chunks, { type: 'application/zip' })
+}
+
+function normalizeFolderImportFilePath(file: File): { rootName: string; path: string } | null {
+  const relativePath = file.webkitRelativePath || file.name
+  const segments = relativePath.split('/').filter(Boolean)
+  if (segments.length === 0) return null
+  const rootName = segments[0] || 'imported-project'
+  const fileSegments = segments.slice(1)
+  if (fileSegments.length === 0) return null
+  if (fileSegments.some((segment) => segment === '.' || segment === '..' || FOLDER_IMPORT_SKIPPED_SEGMENTS.has(segment))) return null
+  const fileName = fileSegments[fileSegments.length - 1] || ''
+  if (FOLDER_IMPORT_SKIPPED_FILES.has(fileName)) return null
+  return { rootName, path: fileSegments.join('/') }
+}
+
+export async function importProjectFolder(files: FileList | File[], parent: string): Promise<{ path: string; importedSessions: number }> {
+  const projectFiles = Array.from(files)
+  if (projectFiles.length === 0) throw new Error('No folder files selected')
+  const entries: StoredZipEntry[] = []
+  let projectName = ''
+  for (const file of projectFiles) {
+    const normalized = normalizeFolderImportFilePath(file)
+    if (!normalized) continue
+    projectName ||= normalized.rootName
+    entries.push({
+      path: normalized.path,
+      data: new Uint8Array(await file.arrayBuffer()),
+      modifiedAt: new Date(file.lastModified || Date.now()),
+    })
+  }
+  if (entries.length === 0) throw new Error('Selected folder does not contain importable files')
+  const manifest = {
+    projectName: projectName || 'imported-project',
+    exportedAt: new Date().toISOString(),
+    source: 'folder-upload',
+  }
+  entries.push({
+    path: '.codex-project/manifest.json',
+    data: encodeZipText(JSON.stringify(manifest)),
+    modifiedAt: new Date(),
+  })
+  return importProjectZip(buildStoredZipFromEntries(entries), parent)
+}
+
+export async function importProjectZip(file: Blob, parent: string): Promise<{ path: string; importedSessions: number }> {
   const query = new URLSearchParams({ parent })
   const response = await fetch(`/codex-api/project-import?${query.toString()}`, {
     method: 'POST',
