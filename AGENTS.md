@@ -29,6 +29,7 @@
 - For PR update + review requests: push branch, update PR summary/verification notes when changed, then post a plain PR comment containing exactly `/review`.
 - Do not use draft reviews or batch review APIs to trigger Qodo.
 - Before applying a bot fix, inspect the current code path and classify the comment as real, stale/resolved, rejected, or docs-only.
+- For project ZIP export, unrestricted local directory export is intentional because this app operates on user-selected local paths. Reject repeat bot security comments that ask for a saved-root allowlist unless they identify a new remote-access or auth bypass path.
 - Prefer a focused regression test for accepted bugs. After fixing, run the narrow test plus relevant build/typecheck, push, and re-check PR comments/status.
 - Completion reports must distinguish confirmed fixes from stale or rejected bot comments.
 

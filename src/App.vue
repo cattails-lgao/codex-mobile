@@ -2796,7 +2796,7 @@ async function onSaveProject(projectName: string): Promise<void> {
 
 async function onSaveThreadProject(threadId: string): Promise<void> {
   const targetCwd = getThreadCwd(threadId)
-  await saveProjectZipForCwd(targetCwd, threadId)
+  await saveProjectZipForCwd(targetCwd)
 }
 
 function getThreadCwd(threadId: string): string {
@@ -2807,13 +2807,12 @@ function getThreadCwd(threadId: string): string {
   return ''
 }
 
-async function saveProjectZipForCwd(targetCwd: string, threadId = ''): Promise<void> {
+async function saveProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
-  const options = threadId ? { threadId } : undefined
   try {
-    await validateProjectZipDownload(targetCwd, options)
+    await validateProjectZipDownload(targetCwd)
     const link = document.createElement('a')
-    link.href = getProjectZipDownloadUrl(targetCwd, options)
+    link.href = getProjectZipDownloadUrl(targetCwd)
     link.download = ''
     document.body.appendChild(link)
     link.click()
