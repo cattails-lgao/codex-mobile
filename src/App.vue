@@ -624,6 +624,16 @@
                   <button class="new-thread-folder-action" type="button" @click="onOpenProjectSetupModal">
                     {{ t('Create Project') }}
                   </button>
+                  <button class="new-thread-folder-action" type="button" :disabled="isProjectImporting" @click="onChooseProjectImportZip">
+                    {{ isProjectImporting ? t('Importing…') : t('Import Project') }}
+                  </button>
+                  <input
+                    ref="projectImportInputRef"
+                    class="new-thread-project-import-input"
+                    type="file"
+                    accept=".zip,application/zip"
+                    @change="onDirectProjectImportFileChange"
+                  />
                 </div>
                 <section v-if="showFirstLaunchPluginsCard" class="new-thread-launch-card" aria-label="Plugins and Apps announcement">
                   <div class="new-thread-launch-card-copy">
@@ -838,7 +848,7 @@
                           @keydown.enter.prevent="onSubmitProjectSetup"
                         />
                       </label>
-                      <label v-else class="new-thread-project-field">
+                      <label v-else-if="projectSetupMode === 'clone'" class="new-thread-project-field">
                         <span class="new-thread-open-folder-label">{{ t('GitHub repository URL') }}</span>
                         <input
                           ref="projectSetupPrimaryInputRef"
@@ -1161,6 +1171,7 @@ import {
   getThreadTerminalQuickCommands,
   getThreadTerminalStatus,
   getWorkspaceRootsState,
+  importProjectZip,
   listLocalDirectories,
   openProjectRoot,
   persistFirstLaunchPluginsCardPreference,
@@ -1597,9 +1608,11 @@ const projectSetupMode = ref<'create' | 'clone'>('create')
 const projectSetupBaseDir = ref('')
 const projectNameDraft = ref('')
 const githubCloneUrlDraft = ref('')
+const isProjectImporting = ref(false)
 const projectSetupError = ref('')
 const isProjectSetupSubmitting = ref(false)
 const projectSetupPrimaryInputRef = ref<HTMLInputElement | null>(null)
+const projectImportInputRef = ref<HTMLInputElement | null>(null)
 const isExistingFolderPickerOpen = ref(false)
 const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
@@ -1951,9 +1964,11 @@ const createFolderSubmitLabel = computed(() => {
 })
 const projectSetupSubmitLabel = computed(() => {
   if (isProjectSetupSubmitting.value) {
-    return projectSetupMode.value === 'clone' ? t('Cloning…') : t('Creating…')
+    if (projectSetupMode.value === 'clone') return t('Cloning…')
+    return t('Creating…')
   }
-  return projectSetupMode.value === 'clone' ? t('Clone repository') : t('Create project')
+  if (projectSetupMode.value === 'clone') return t('Clone repository')
+  return t('Create project')
 })
 const canBrowseExistingFolderParent = computed(() => {
   const current = existingFolderBrowsePath.value.trim()
@@ -3615,6 +3630,38 @@ async function onSubmitProjectSetup(): Promise<void> {
   }
 }
 
+function onChooseProjectImportZip(): void {
+  if (isProjectImporting.value) return
+  const input = projectImportInputRef.value
+  if (!input) return
+  input.value = ''
+  input.click()
+}
+
+async function onDirectProjectImportFileChange(event: Event): Promise<void> {
+  const input = event.target instanceof HTMLInputElement ? event.target : null
+  const file = input?.files?.[0] ?? null
+  if (!file || isProjectImporting.value) return
+
+  isProjectImporting.value = true
+  try {
+    const baseDir = await resolveProjectBaseDirectory()
+    if (!baseDir) return
+    const result = await importProjectZip(file, baseDir)
+    if (!result.path) return
+    newThreadCwd.value = result.path
+    pinProjectToTop(getProjectOrderNameForPath(result.path))
+    await loadWorkspaceRootOptionsState()
+    await refreshDefaultProjectName()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to import project.'
+    window.alert(message)
+  } finally {
+    isProjectImporting.value = false
+    if (input) input.value = ''
+  }
+}
+
 async function onOpenExistingFolder(): Promise<void> {
   const startPath = newThreadCwd.value.trim() || await resolveProjectBaseDirectory()
   if (!startPath) return
@@ -5047,6 +5094,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .new-thread-folder-actions {
   @apply mt-3 flex w-full max-w-3xl flex-wrap items-center justify-center gap-2;
+}
+
+.new-thread-project-import-input {
+  @apply sr-only;
 }
 
 .new-thread-launch-card {

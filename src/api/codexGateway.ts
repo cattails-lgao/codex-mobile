@@ -3093,6 +3093,32 @@ export async function validateProjectZipDownload(cwd: string): Promise<void> {
   }
 }
 
+export async function importProjectZip(file: File, parent: string): Promise<{ path: string; importedSessions: number }> {
+  const query = new URLSearchParams({ parent })
+  const response = await fetch(`/codex-api/project-import?${query.toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/zip' },
+    body: file,
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to import project')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data =
+    record.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : {}
+  return {
+    path: typeof data.path === 'string' ? normalizePathForUi(data.path) : '',
+    importedSessions: typeof data.importedSessions === 'number' ? data.importedSessions : 0,
+  }
+}
+
 export async function createLocalDirectory(path: string): Promise<string> {
   const response = await fetch('/codex-api/local-directory', {
     method: 'POST',

@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink, realpath } from 'node:fs/promises'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -7,7 +7,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
 import { once } from 'node:events'
 import { writeFile } from 'node:fs/promises'
@@ -1082,6 +1082,29 @@ type ZipCentralDirectoryEntry = {
   isDirectory: boolean
 }
 
+type ProjectZipVirtualEntry = {
+  path: string
+  data: Buffer
+  mtime: Date
+}
+
+type ParsedProjectZipEntry = {
+  path: string
+  data: Buffer
+  isDirectory: boolean
+}
+
+type ImportedSessionRecord = {
+  id: string
+  path: string
+  cwd: string
+  createdAtMs: number
+  updatedAtMs: number
+  modelProvider: string
+  cliVersion: string
+  firstUserMessage: string
+}
+
 const ZIP_CRC_TABLE = new Uint32Array(256)
 for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
   let value = index
@@ -1231,47 +1254,75 @@ async function* walkProjectZipEntries(root: string, current = root): AsyncGenera
   }
 }
 
-async function streamProjectZip(root: string, res: ServerResponse): Promise<void> {
+async function writeProjectZipEntry(
+  res: ServerResponse,
+  centralEntries: ZipCentralDirectoryEntry[],
+  offset: number,
+  entry: { zipPath: string; mtime: Date; isDirectory: boolean; chunks: AsyncIterable<Buffer> },
+): Promise<number> {
+  if (!entry.zipPath) return offset
+  const localHeaderOffset = offset
+  const localHeader = buildZipLocalHeader(entry.zipPath, entry.mtime)
+  await writeZipChunk(res, localHeader)
+  offset = addZipOffset(offset, localHeader.length)
+
+  let crc = 0xffffffff
+  let size = 0
+  if (!entry.isDirectory) {
+    for await (const buffer of entry.chunks) {
+      crc = updateZipCrc32(crc, buffer)
+      size += buffer.length
+      assertZipUInt32(size, 'Project file')
+      await writeZipChunk(res, buffer)
+      offset = addZipOffset(offset, buffer.length)
+    }
+  }
+
+  const crc32 = (crc ^ 0xffffffff) >>> 0
+  const descriptor = buildZipDataDescriptor(crc32, size)
+  await writeZipChunk(res, descriptor)
+  offset = addZipOffset(offset, descriptor.length)
+
+  assertZipEntryCount(centralEntries.length + 1)
+  const { dosDate, dosTime } = toDosDateTime(entry.mtime)
+  centralEntries.push({
+    path: entry.zipPath,
+    crc32,
+    compressedSize: size,
+    uncompressedSize: size,
+    localHeaderOffset,
+    dosDate,
+    dosTime,
+    externalAttributes: entry.isDirectory ? 0x10 : 0,
+    isDirectory: entry.isDirectory,
+  })
+  return offset
+}
+
+async function* singleZipBufferChunk(data: Buffer): AsyncGenerator<Buffer> {
+  yield data
+}
+
+async function streamProjectZip(root: string, res: ServerResponse, virtualEntries: ProjectZipVirtualEntry[] = []): Promise<void> {
   const centralEntries: ZipCentralDirectoryEntry[] = []
   let offset = 0
 
   for await (const entry of walkProjectZipEntries(root)) {
     const zipPath = toZipEntryPath(root, entry.path, entry.isDirectory)
-    if (!zipPath) continue
-    const localHeaderOffset = offset
-    const localHeader = buildZipLocalHeader(zipPath, entry.mtime)
-    await writeZipChunk(res, localHeader)
-    offset = addZipOffset(offset, localHeader.length)
-
-    let crc = 0xffffffff
-    let size = 0
-    if (!entry.isDirectory) {
-      for await (const chunk of createReadStream(entry.path)) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        crc = updateZipCrc32(crc, buffer)
-        size += buffer.length
-        assertZipUInt32(size, 'Project file')
-        await writeZipChunk(res, buffer)
-        offset = addZipOffset(offset, buffer.length)
-      }
-    }
-    const crc32 = (crc ^ 0xffffffff) >>> 0
-    const descriptor = buildZipDataDescriptor(crc32, size)
-    await writeZipChunk(res, descriptor)
-    offset = addZipOffset(offset, descriptor.length)
-
-    assertZipEntryCount(centralEntries.length + 1)
-    const { dosDate, dosTime } = toDosDateTime(entry.mtime)
-    centralEntries.push({
-      path: zipPath,
-      crc32,
-      compressedSize: size,
-      uncompressedSize: size,
-      localHeaderOffset,
-      dosDate,
-      dosTime,
-      externalAttributes: entry.isDirectory ? 0x10 : 0,
+    offset = await writeProjectZipEntry(res, centralEntries, offset, {
+      zipPath,
+      mtime: entry.mtime,
       isDirectory: entry.isDirectory,
+      chunks: entry.isDirectory ? singleZipBufferChunk(Buffer.alloc(0)) : createReadStream(entry.path) as AsyncIterable<Buffer>,
+    })
+  }
+
+  for (const entry of virtualEntries) {
+    offset = await writeProjectZipEntry(res, centralEntries, offset, {
+      zipPath: entry.path,
+      mtime: entry.mtime,
+      isDirectory: false,
+      chunks: singleZipBufferChunk(entry.data),
     })
   }
 
@@ -1325,6 +1376,413 @@ async function resolveAllowedProjectZipCwd(rawCwd: string): Promise<string> {
     return canonicalCwd
   }
   throw new Error('Project ZIP export is only available for saved project roots')
+}
+
+async function* walkFiles(root: string, current = root): AsyncGenerator<string> {
+  let entries
+  try {
+    entries = await readdir(current, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const absolutePath = join(current, entry.name)
+    if (entry.isDirectory()) {
+      yield* walkFiles(root, absolutePath)
+    } else if (entry.isFile()) {
+      yield absolutePath
+    }
+  }
+}
+
+function readSessionMetaCwd(raw: string): string {
+  const firstLine = raw.split(/\r?\n/u, 1)[0]?.trim()
+  if (!firstLine) return ''
+  try {
+    const parsed = JSON.parse(firstLine) as unknown
+    const record = asRecord(parsed)
+    const payload = asRecord(record?.payload)
+    return readNonEmptyString(payload?.cwd)
+  } catch {
+    return ''
+  }
+}
+
+function rewriteImportedSession(raw: string, importedCwd: string, importedThreadId: string): string {
+  const lines: string[] = []
+  let hasUserMessageEvent = false
+  const importedAtIso = new Date().toISOString()
+  for (const line of raw.split(/\r?\n/u)) {
+    if (!line.trim()) continue
+    try {
+      const parsed = JSON.parse(line) as unknown
+      const record = asRecord(parsed)
+      const payload = asRecord(record?.payload)
+      if (record?.type === 'event_msg' && readNonEmptyString(payload?.type) === 'user_message') {
+        hasUserMessageEvent = true
+      }
+      if (payload && typeof payload.cwd === 'string') {
+        payload.cwd = importedCwd
+      }
+      if (record?.type === 'session_meta' && payload) {
+        record.timestamp = importedAtIso
+        payload.id = importedThreadId
+        payload.timestamp = importedAtIso
+        payload.source = 'cli'
+        payload.imported = true
+      }
+      lines.push(JSON.stringify(parsed))
+      if (!hasUserMessageEvent && payload && record?.type === 'response_item' && readNonEmptyString(payload.role) === 'user') {
+        const content = Array.isArray(payload.content) ? payload.content : []
+        const text = content
+          .map((item) => readNonEmptyString(asRecord(item)?.text))
+          .find((value) => value.length > 0)
+        if (text) {
+          lines.push(JSON.stringify({
+            timestamp: readNonEmptyString(record.timestamp) || new Date().toISOString(),
+            type: 'event_msg',
+            payload: { type: 'user_message', message: text, images: [] },
+          }))
+          hasUserMessageEvent = true
+        }
+      }
+    } catch {
+      lines.push(line)
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
+function readImportedSessionRecord(raw: string, path: string, cwd: string, fallbackId: string): ImportedSessionRecord {
+  let id = fallbackId
+  let createdAtMs = Date.now()
+  let updatedAtMs = createdAtMs
+  let modelProvider = 'openai'
+  let cliVersion = ''
+  let firstUserMessage = ''
+
+  for (const line of raw.split(/\r?\n/u)) {
+    if (!line.trim()) continue
+    try {
+      const parsed = JSON.parse(line) as unknown
+      const record = asRecord(parsed)
+      const payload = asRecord(record?.payload)
+      const timestamp = readNonEmptyString(record?.timestamp) || readNonEmptyString(payload?.timestamp)
+      const timeMs = timestamp ? Date.parse(timestamp) : NaN
+      if (Number.isFinite(timeMs)) {
+        updatedAtMs = Math.max(updatedAtMs, timeMs)
+      }
+      if (record?.type === 'session_meta' && payload) {
+        id = readNonEmptyString(payload.id) || id
+        const metaTime = readNonEmptyString(payload.timestamp)
+        const metaMs = metaTime ? Date.parse(metaTime) : NaN
+        if (Number.isFinite(metaMs)) createdAtMs = metaMs
+        modelProvider = readNonEmptyString(payload.model_provider) || modelProvider
+        cliVersion = readNonEmptyString(payload.cli_version) || cliVersion
+      }
+      if (!firstUserMessage && record?.type === 'event_msg' && readNonEmptyString(payload?.type) === 'user_message') {
+        firstUserMessage = readNonEmptyString(payload?.message)
+      }
+      if (!firstUserMessage && record?.type === 'response_item') {
+        const role = readNonEmptyString(payload?.role)
+        if (role === 'user') {
+          const content = Array.isArray(payload?.content) ? payload.content : []
+          for (const item of content) {
+            const itemRecord = asRecord(item)
+            const text = readNonEmptyString(itemRecord?.text)
+            if (text) {
+              firstUserMessage = text
+              break
+            }
+          }
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  const now = Date.now()
+  createdAtMs = Math.min(createdAtMs, now)
+  updatedAtMs = Math.min(Math.max(updatedAtMs, createdAtMs), now)
+  return { id, path, cwd, createdAtMs, updatedAtMs, modelProvider, cliVersion, firstUserMessage }
+}
+
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function registerImportedSessionInStateDb(session: ImportedSessionRecord): void {
+  const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
+  if (!existsSync(stateDbPath)) return
+  const columnsResult = spawnSync('sqlite3', [stateDbPath, 'PRAGMA table_info(threads);'], { encoding: 'utf8' })
+  if (columnsResult.status !== 0) {
+    console.warn('[project-import] failed to inspect state database', columnsResult.stderr || columnsResult.stdout)
+    return
+  }
+  const availableColumns = new Set(columnsResult.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.split('|')[1])
+    .filter((value): value is string => Boolean(value)))
+  const title = session.firstUserMessage || 'Imported chat'
+  const createdAt = Math.floor(session.createdAtMs / 1000)
+  const updatedAt = Math.floor(session.updatedAtMs / 1000)
+  const sandboxPolicy = JSON.stringify({ type: 'workspace-write', network_access: true })
+  const values: Record<string, string> = {
+    id: sqlString(session.id),
+    rollout_path: sqlString(session.path),
+    created_at: String(createdAt),
+    updated_at: String(updatedAt),
+    source: "'cli'",
+    model_provider: sqlString(session.modelProvider),
+    cwd: sqlString(session.cwd),
+    title: sqlString(title),
+    sandbox_policy: sqlString(sandboxPolicy),
+    approval_mode: "'on-request'",
+    tokens_used: '0',
+    has_user_event: '1',
+    archived: '0',
+    archived_at: 'NULL',
+    git_sha: 'NULL',
+    git_branch: 'NULL',
+    git_origin_url: 'NULL',
+    cli_version: sqlString(session.cliVersion),
+    first_user_message: sqlString(session.firstUserMessage),
+    created_at_ms: String(Math.trunc(session.createdAtMs)),
+    updated_at_ms: String(Math.trunc(session.updatedAtMs)),
+    thread_source: "'user'",
+    preview: sqlString(title),
+  }
+  const columns = Object.keys(values).filter((column) => availableColumns.has(column))
+  const sql = `INSERT OR REPLACE INTO threads (${columns.join(', ')}) VALUES (${columns.map((column) => values[column]).join(', ')});`
+  const result = spawnSync('sqlite3', [stateDbPath, sql], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    console.warn('[project-import] failed to register imported session in state database', result.stderr || result.stdout)
+  }
+}
+
+function listImportedThreadsFromStateDb(): Array<Record<string, unknown>> {
+  const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
+  if (!existsSync(stateDbPath)) return []
+  const sql = `
+SELECT id, rollout_path, created_at, updated_at, source, model_provider, cwd, title,
+       cli_version, first_user_message, archived
+FROM threads
+WHERE archived = 0 AND rollout_path LIKE '%/sessions/%' AND id IN (
+  SELECT id FROM threads WHERE first_user_message != '' OR title != ''
+)
+ORDER BY updated_at DESC
+LIMIT 200;
+`
+  const result = spawnSync('sqlite3', ['-json', stateDbPath, sql], { encoding: 'utf8' })
+  if (result.status !== 0 || !result.stdout.trim()) return []
+  try {
+    const rows = JSON.parse(result.stdout) as unknown
+    if (!Array.isArray(rows)) return []
+    return rows.flatMap((row) => {
+      const record = asRecord(row)
+      const id = readNonEmptyString(record?.id)
+      const path = readNonEmptyString(record?.rollout_path)
+      const cwd = readNonEmptyString(record?.cwd)
+      if (!id || !path || !cwd) return []
+      const title = readNonEmptyString(record?.title) || readNonEmptyString(record?.first_user_message) || 'Imported chat'
+      const createdAt = typeof record?.created_at === 'number' ? record.created_at : Math.floor(Date.now() / 1000)
+      const updatedAt = typeof record?.updated_at === 'number' ? record.updated_at : createdAt
+      return [{
+        id,
+        preview: title,
+        modelProvider: readNonEmptyString(record?.model_provider) || 'openai',
+        createdAt,
+        updatedAt,
+        path,
+        cwd,
+        cliVersion: readNonEmptyString(record?.cli_version),
+        source: 'cli',
+        gitInfo: null,
+        turns: [],
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
+function mergeImportedThreadsIntoThreadListResult(result: unknown): unknown {
+  const record = asRecord(result)
+  const data = Array.isArray(record?.data) ? record.data : null
+  if (!record || !data) return result
+  const existingIds = new Set(data.flatMap((item) => {
+    const id = readNonEmptyString(asRecord(item)?.id)
+    return id ? [id] : []
+  }))
+  const imported = listImportedThreadsFromStateDb().filter((thread) => !existingIds.has(readNonEmptyString(thread.id)))
+  if (imported.length === 0) return result
+  return {
+    ...record,
+    data: [...data, ...imported].sort((a, b) => {
+      const aUpdated = typeof asRecord(a)?.updatedAt === 'number' ? asRecord(a)?.updatedAt as number : 0
+      const bUpdated = typeof asRecord(b)?.updatedAt === 'number' ? asRecord(b)?.updatedAt as number : 0
+      return bUpdated - aUpdated
+    }),
+  }
+}
+
+async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
+  const canonicalProjectRoot = await realpath(projectRoot)
+  const codexHome = getCodexHomeDir()
+  const roots = [
+    { disk: join(codexHome, 'sessions'), zip: '.codex-project/chats/sessions' },
+    { disk: join(codexHome, 'archived_sessions'), zip: '.codex-project/chats/archived_sessions' },
+  ]
+  const entries: ProjectZipVirtualEntry[] = [{
+    path: '.codex-project/manifest.json',
+    data: Buffer.from(JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      projectRoot: canonicalProjectRoot,
+      projectName: basename(canonicalProjectRoot) || 'project',
+    }, null, 2)),
+    mtime: new Date(),
+  }]
+
+  for (const root of roots) {
+    for await (const sessionPath of walkFiles(root.disk)) {
+      if (extname(sessionPath) !== '.jsonl') continue
+      let raw = ''
+      try {
+        raw = await readFile(sessionPath, 'utf8')
+      } catch {
+        continue
+      }
+      const sessionCwd = readSessionMetaCwd(raw)
+      if (!sessionCwd) continue
+      let canonicalSessionCwd = ''
+      try {
+        canonicalSessionCwd = await realpath(sessionCwd)
+      } catch {
+        canonicalSessionCwd = isAbsolute(sessionCwd) ? resolve(sessionCwd) : resolve(sessionCwd)
+      }
+      if (!isSameOrDescendantPath(canonicalSessionCwd, canonicalProjectRoot)) continue
+      const rel = relative(root.disk, sessionPath).split(sep).join('/')
+      entries.push({
+        path: `${root.zip}/${rel}`,
+        data: Buffer.from(raw, 'utf8'),
+        mtime: new Date(),
+      })
+    }
+  }
+  return entries
+}
+
+function readZipUInt16(buffer: Buffer, offset: number): number {
+  if (offset + 2 > buffer.length) throw new Error('Invalid project ZIP')
+  return buffer.readUInt16LE(offset)
+}
+
+function readZipUInt32(buffer: Buffer, offset: number): number {
+  if (offset + 4 > buffer.length) throw new Error('Invalid project ZIP')
+  return buffer.readUInt32LE(offset)
+}
+
+function normalizeImportedZipPath(value: string): string {
+  const normalized = value.replace(/\\/g, '/').replace(/^\/+/u, '')
+  const segments = normalized.endsWith('/') ? normalized.slice(0, -1).split('/') : normalized.split('/')
+  if (!normalized || segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error('Project ZIP contains an unsafe path')
+  }
+  return normalized
+}
+
+function parseStoredProjectZip(buffer: Buffer): ParsedProjectZipEntry[] {
+  const eocdSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06])
+  const eocdOffset = buffer.lastIndexOf(eocdSignature)
+  if (eocdOffset < 0) throw new Error('Project ZIP is missing a central directory')
+  const entryCount = readZipUInt16(buffer, eocdOffset + 10)
+  const centralOffset = readZipUInt32(buffer, eocdOffset + 16)
+  const entries: ParsedProjectZipEntry[] = []
+  let cursor = centralOffset
+
+  for (let index = 0; index < entryCount; index += 1) {
+    if (readZipUInt32(buffer, cursor) !== 0x02014b50) throw new Error('Project ZIP central directory is invalid')
+    const method = readZipUInt16(buffer, cursor + 10)
+    if (method !== 0) throw new Error('Project ZIP import only supports stored entries')
+    const compressedSize = readZipUInt32(buffer, cursor + 20)
+    const fileNameLength = readZipUInt16(buffer, cursor + 28)
+    const extraLength = readZipUInt16(buffer, cursor + 30)
+    const commentLength = readZipUInt16(buffer, cursor + 32)
+    const externalAttributes = readZipUInt32(buffer, cursor + 38)
+    const localHeaderOffset = readZipUInt32(buffer, cursor + 42)
+    const rawPath = buffer.subarray(cursor + 46, cursor + 46 + fileNameLength).toString('utf8')
+    const path = normalizeImportedZipPath(rawPath)
+    const isDirectory = path.endsWith('/') || ((externalAttributes >>> 4) & 0x10) === 0x10
+
+    if (readZipUInt32(buffer, localHeaderOffset) !== 0x04034b50) throw new Error('Project ZIP local header is invalid')
+    const localNameLength = readZipUInt16(buffer, localHeaderOffset + 26)
+    const localExtraLength = readZipUInt16(buffer, localHeaderOffset + 28)
+    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength
+    entries.push({
+      path,
+      data: isDirectory ? Buffer.alloc(0) : buffer.subarray(dataOffset, dataOffset + compressedSize),
+      isDirectory,
+    })
+    cursor += 46 + fileNameLength + extraLength + commentLength
+  }
+  return entries
+}
+
+async function importProjectZip(buffer: Buffer, destinationParent: string): Promise<{ projectPath: string; importedSessions: number }> {
+  const entries = parseStoredProjectZip(buffer)
+  const manifestEntry = entries.find((entry) => entry.path === '.codex-project/manifest.json' && !entry.isDirectory)
+  let projectName = 'imported-project'
+  if (manifestEntry) {
+    try {
+      const manifest = asRecord(JSON.parse(manifestEntry.data.toString('utf8')) as unknown)
+      projectName = readNonEmptyString(manifest?.projectName) || projectName
+    } catch {
+      projectName = 'imported-project'
+    }
+  }
+  projectName = projectName.replace(/[\\/]+/g, '-').replace(/[\u0000-\u001f]+/g, '').trim() || 'imported-project'
+
+  const parent = await realpath(destinationParent)
+  let projectPath = join(parent, projectName)
+  for (let index = 2; existsSync(projectPath); index += 1) {
+    projectPath = join(parent, `${projectName}-${index}`)
+  }
+  await mkdir(projectPath, { recursive: true })
+
+  let importedSessions = 0
+  const importedSessionsRoot = join(getCodexHomeDir(), 'sessions')
+  for (const entry of entries) {
+    if (entry.path.startsWith('.codex-project/chats/')) {
+      if (entry.isDirectory || extname(entry.path) !== '.jsonl') continue
+      const rel = entry.path.replace(/^\.codex-project\/chats\/(?:sessions|archived_sessions)\//u, '')
+      const safeRel = normalizeImportedZipPath(rel)
+      const importedThreadId = randomUUID()
+      const parsed = safeRel.split('/')
+      parsed[parsed.length - 1] = `${importedThreadId}.jsonl`
+      if (parsed[0] === 'imported') parsed.shift()
+      const target = join(importedSessionsRoot, ...parsed)
+      await mkdir(dirname(target), { recursive: true })
+      const importedSessionRaw = rewriteImportedSession(entry.data.toString('utf8'), projectPath, importedThreadId)
+      await writeFile(target, importedSessionRaw, 'utf8')
+      registerImportedSessionInStateDb(readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId))
+      importedSessions += 1
+      continue
+    }
+    if (entry.path.startsWith('.codex-project/')) continue
+    const target = join(projectPath, entry.path)
+    if (!isSameOrDescendantPath(target, projectPath)) throw new Error('Project ZIP contains an unsafe path')
+    if (entry.isDirectory) {
+      await mkdir(target, { recursive: true })
+    } else {
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, entry.data)
+    }
+  }
+
+  await persistWorkspaceRoot(projectPath, projectName)
+  return { projectPath, importedSessions }
 }
 
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
@@ -7242,7 +7700,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? mergeStreamTurnErrorsIntoThreadResult(appServer, trimmedResult)
           : trimmedResult
-        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, errorMergedResult)
+        const listMergedResult = body.method === 'thread/list'
+          ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
+          : errorMergedResult
+        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, listMergedResult)
         const result = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
           : sanitizedResult
@@ -8372,7 +8833,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             res.end()
             return
           }
-          await streamProjectZip(cwd, res)
+          const chatEntries = await collectProjectChatZipEntries(cwd)
+          await streamProjectZip(cwd, res, chatEntries)
           res.end()
         } catch (error) {
           if (!res.headersSent) {
@@ -8380,6 +8842,38 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           } else {
             res.destroy(error instanceof Error ? error : new Error('Failed to export project'))
           }
+        }
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/project-import') {
+        const rawParent = (url.searchParams.get('parent') ?? '').trim()
+        if (!rawParent) {
+          setJson(res, 400, { error: 'Missing parent' })
+          return
+        }
+        const parent = isAbsolute(rawParent) ? rawParent : resolve(rawParent)
+        try {
+          const parentInfo = await stat(parent)
+          if (!parentInfo.isDirectory()) {
+            setJson(res, 400, { error: 'Destination folder is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'Destination folder does not exist' })
+          return
+        }
+
+        try {
+          const buffer = await readRawBody(req)
+          if (buffer.length === 0) {
+            setJson(res, 400, { error: 'Missing project ZIP' })
+            return
+          }
+          const result = await importProjectZip(buffer, parent)
+          setJson(res, 200, { data: { path: result.projectPath, importedSessions: result.importedSessions } })
+        } catch (error) {
+          setJson(res, 400, { error: getErrorMessage(error, 'Failed to import project') })
         }
         return
       }
