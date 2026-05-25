@@ -7,8 +7,9 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
+import { once } from 'node:events'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
@@ -1061,6 +1062,220 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(payload))
+}
+
+const PROJECT_ZIP_SKIPPED_NAMES = new Set([
+  '.DS_Store',
+  '.git',
+  'node_modules',
+])
+
+type ZipCentralDirectoryEntry = {
+  path: string
+  crc32: number
+  compressedSize: number
+  uncompressedSize: number
+  localHeaderOffset: number
+  dosTime: number
+  dosDate: number
+  externalAttributes: number
+  isDirectory: boolean
+}
+
+const ZIP_CRC_TABLE = new Uint32Array(256)
+for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
+  let value = index
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+  }
+  ZIP_CRC_TABLE[index] = value >>> 0
+}
+
+function updateZipCrc32(crc: number, chunk: Buffer): number {
+  let value = crc
+  for (let index = 0; index < chunk.length; index += 1) {
+    value = (value >>> 8) ^ ZIP_CRC_TABLE[(value ^ chunk[index]) & 0xff]
+  }
+  return value >>> 0
+}
+
+function toDosDateTime(date: Date): { dosDate: number; dosTime: number } {
+  const year = Math.max(1980, Math.min(2107, date.getFullYear()))
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  const seconds = Math.floor(date.getSeconds() / 2)
+  return {
+    dosDate: ((year - 1980) << 9) | (month << 5) | day,
+    dosTime: (hours << 11) | (minutes << 5) | seconds,
+  }
+}
+
+function assertZipUInt32(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0 || value > 0xffffffff) {
+    throw new Error(`${label} is too large for ZIP export`)
+  }
+}
+
+function writeZipUInt32(buffer: Buffer, value: number, offset: number): void {
+  buffer.writeUInt32LE(value >>> 0, offset)
+}
+
+function buildZipLocalHeader(path: string, timestamp: Date): Buffer {
+  const name = Buffer.from(path, 'utf8')
+  const { dosDate, dosTime } = toDosDateTime(timestamp)
+  const header = Buffer.alloc(30 + name.length)
+  writeZipUInt32(header, 0x04034b50, 0)
+  header.writeUInt16LE(20, 4)
+  header.writeUInt16LE(0x0808, 6)
+  header.writeUInt16LE(0, 8)
+  header.writeUInt16LE(dosTime, 10)
+  header.writeUInt16LE(dosDate, 12)
+  header.writeUInt16LE(name.length, 26)
+  name.copy(header, 30)
+  return header
+}
+
+function buildZipDataDescriptor(crc32: number, size: number): Buffer {
+  assertZipUInt32(size, 'Project file')
+  const descriptor = Buffer.alloc(16)
+  writeZipUInt32(descriptor, 0x08074b50, 0)
+  writeZipUInt32(descriptor, crc32, 4)
+  writeZipUInt32(descriptor, size, 8)
+  writeZipUInt32(descriptor, size, 12)
+  return descriptor
+}
+
+function buildZipCentralHeader(entry: ZipCentralDirectoryEntry): Buffer {
+  const name = Buffer.from(entry.path, 'utf8')
+  const header = Buffer.alloc(46 + name.length)
+  writeZipUInt32(header, 0x02014b50, 0)
+  header.writeUInt16LE(0x0314, 4)
+  header.writeUInt16LE(20, 6)
+  header.writeUInt16LE(0x0808, 8)
+  header.writeUInt16LE(0, 10)
+  header.writeUInt16LE(entry.dosTime, 12)
+  header.writeUInt16LE(entry.dosDate, 14)
+  writeZipUInt32(header, entry.crc32, 16)
+  writeZipUInt32(header, entry.compressedSize, 20)
+  writeZipUInt32(header, entry.uncompressedSize, 24)
+  header.writeUInt16LE(name.length, 28)
+  writeZipUInt32(header, entry.externalAttributes, 38)
+  writeZipUInt32(header, entry.localHeaderOffset, 42)
+  name.copy(header, 46)
+  return header
+}
+
+function buildZipEndOfCentralDirectory(entryCount: number, centralSize: number, centralOffset: number): Buffer {
+  assertZipUInt32(centralSize, 'ZIP central directory')
+  assertZipUInt32(centralOffset, 'ZIP central directory offset')
+  if (entryCount > 0xffff) {
+    throw new Error('Project has too many files for ZIP export')
+  }
+  const footer = Buffer.alloc(22)
+  writeZipUInt32(footer, 0x06054b50, 0)
+  footer.writeUInt16LE(entryCount, 8)
+  footer.writeUInt16LE(entryCount, 10)
+  writeZipUInt32(footer, centralSize, 12)
+  writeZipUInt32(footer, centralOffset, 16)
+  return footer
+}
+
+function toZipEntryPath(root: string, absolutePath: string, isDirectory: boolean): string {
+  const path = relative(root, absolutePath).split(sep).join('/')
+  return isDirectory && !path.endsWith('/') ? `${path}/` : path
+}
+
+async function writeZipChunk(res: ServerResponse, chunk: Buffer): Promise<void> {
+  if (!res.write(chunk)) {
+    await once(res, 'drain')
+  }
+}
+
+async function* walkProjectZipEntries(root: string, current = root): AsyncGenerator<{ path: string; isDirectory: boolean; mtime: Date }> {
+  const entries = await readdir(current, { withFileTypes: true })
+  for (const entry of entries) {
+    if (PROJECT_ZIP_SKIPPED_NAMES.has(entry.name)) continue
+    const absolutePath = join(current, entry.name)
+    const info = await lstat(absolutePath)
+    if (info.isSymbolicLink()) continue
+    if (info.isDirectory()) {
+      yield { path: absolutePath, isDirectory: true, mtime: info.mtime }
+      yield* walkProjectZipEntries(root, absolutePath)
+    } else if (info.isFile()) {
+      yield { path: absolutePath, isDirectory: false, mtime: info.mtime }
+    }
+  }
+}
+
+async function streamProjectZip(root: string, res: ServerResponse): Promise<void> {
+  const centralEntries: ZipCentralDirectoryEntry[] = []
+  let offset = 0
+
+  for await (const entry of walkProjectZipEntries(root)) {
+    const zipPath = toZipEntryPath(root, entry.path, entry.isDirectory)
+    if (!zipPath) continue
+    const localHeaderOffset = offset
+    const localHeader = buildZipLocalHeader(zipPath, entry.mtime)
+    await writeZipChunk(res, localHeader)
+    offset += localHeader.length
+
+    let crc = 0xffffffff
+    let size = 0
+    if (!entry.isDirectory) {
+      for await (const chunk of createReadStream(entry.path)) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        crc = updateZipCrc32(crc, buffer)
+        size += buffer.length
+        assertZipUInt32(size, 'Project file')
+        await writeZipChunk(res, buffer)
+        offset += buffer.length
+      }
+    }
+    const crc32 = (crc ^ 0xffffffff) >>> 0
+    const descriptor = buildZipDataDescriptor(crc32, size)
+    await writeZipChunk(res, descriptor)
+    offset += descriptor.length
+
+    const { dosDate, dosTime } = toDosDateTime(entry.mtime)
+    centralEntries.push({
+      path: zipPath,
+      crc32,
+      compressedSize: size,
+      uncompressedSize: size,
+      localHeaderOffset,
+      dosDate,
+      dosTime,
+      externalAttributes: entry.isDirectory ? 0x10 : 0,
+      isDirectory: entry.isDirectory,
+    })
+  }
+
+  const centralOffset = offset
+  let centralSize = 0
+  for (const entry of centralEntries) {
+    const header = buildZipCentralHeader(entry)
+    await writeZipChunk(res, header)
+    centralSize += header.length
+    offset += header.length
+  }
+  const footer = buildZipEndOfCentralDirectory(centralEntries.length, centralSize, centralOffset)
+  await writeZipChunk(res, footer)
+}
+
+function toProjectZipFileName(cwd: string): string {
+  const rawName = basename(cwd) || 'project'
+  const safeName = rawName.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'project'
+  return `${safeName}.zip`
+}
+
+function setProjectZipHeaders(res: ServerResponse, fileName: string): void {
+  const encodedName = encodeURIComponent(fileName)
+  res.statusCode = 200
+  res.setHeader('Content-Type', 'application/zip')
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/"/g, '')}"; filename*=UTF-8''${encodedName}`)
+  res.setHeader('Cache-Control', 'private, no-store')
 }
 
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
@@ -8078,6 +8293,38 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         await writeThreadQueueState(normalizeThreadQueueState(record))
         void backendQueueProcessor.scheduleAllQueuedThreads()
         setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/project-zip') {
+        const rawCwd = (url.searchParams.get('cwd') ?? '').trim()
+        if (!rawCwd) {
+          setJson(res, 400, { error: 'Missing cwd' })
+          return
+        }
+        const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd)
+        try {
+          const cwdInfo = await stat(cwd)
+          if (!cwdInfo.isDirectory()) {
+            setJson(res, 400, { error: 'cwd is not a directory' })
+            return
+          }
+        } catch {
+          setJson(res, 404, { error: 'cwd does not exist' })
+          return
+        }
+
+        try {
+          setProjectZipHeaders(res, toProjectZipFileName(cwd))
+          await streamProjectZip(cwd, res)
+          res.end()
+        } catch (error) {
+          if (!res.headersSent) {
+            setJson(res, 500, { error: getErrorMessage(error, 'Failed to export project') })
+          } else {
+            res.destroy(error instanceof Error ? error : new Error('Failed to export project'))
+          }
+        }
         return
       }
 

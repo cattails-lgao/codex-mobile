@@ -92,6 +92,7 @@
             @archive="onArchiveThread" @start-new-thread="onStartNewThread" @rename-project="onRenameProject"
             @browse-thread-files="onBrowseThreadFiles"
             @browse-project-files="onBrowseProjectFiles"
+            @save-project="onSaveProject"
             @request-project-git-status="onRequestProjectGitStatus"
             @create-project-worktree="onCreateProjectWorktree"
             @rename-thread="onRenameThread"
@@ -1142,6 +1143,7 @@ import {
   createPermanentWorktree,
   createWorktree,
   createProjectlessThreadDirectory,
+  fetchProjectZip,
   getGitBranchState,
   getGitBranchCommits,
   getGitCommitFiles,
@@ -2738,6 +2740,25 @@ function onBrowseProjectFiles(projectName: string): void {
   const targetCwd = getProjectCwd(projectName)
   if (!targetCwd || typeof window === 'undefined') return
   window.open(`/codex-local-browse${encodeURI(targetCwd)}`, '_blank', 'noopener,noreferrer')
+}
+
+async function onSaveProject(projectName: string): Promise<void> {
+  const targetCwd = getProjectCwd(projectName)
+  if (!targetCwd || typeof document === 'undefined') return
+  try {
+    const { blob, fileName } = await fetchProjectZip(targetCwd)
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to export project.'
+    window.alert(message)
+  }
 }
 
 async function onCreateProjectWorktree(projectName: string): Promise<void> {

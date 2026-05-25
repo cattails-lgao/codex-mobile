@@ -334,6 +334,9 @@
                       <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
                         Browse files
                       </button>
+                      <button class="project-menu-item" type="button" @click="onSaveProject(group.projectName)">
+                        Save project
+                      </button>
                       <button class="project-menu-item" type="button" @click="openProjectAutomationDialog(group.projectName)">
                         {{ projectHasAutomation(group.projectName) ? 'Manage automations…' : 'Add automation…' }}
                       </button>
@@ -920,6 +923,7 @@ const emit = defineEmits<{
   'start-new-thread': [projectName: string]
   'browse-thread-files': [threadId: string]
   'browse-project-files': [projectName: string]
+  'save-project': [projectName: string]
   'request-project-git-status': [projectName: string]
   'create-project-worktree': [projectName: string]
   'rename-project': [payload: { projectName: string; displayName: string }]
@@ -2273,6 +2277,11 @@ function openRenameProjectMenu(group: UiProjectGroup): void {
 
 function onBrowseProjectFiles(projectName: string): void {
   emit('browse-project-files', projectName)
+  closeProjectMenu()
+}
+
+function onSaveProject(projectName: string): void {
+  emit('save-project', projectName)
   closeProjectMenu()
 }
 
