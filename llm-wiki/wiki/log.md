@@ -1,5 +1,11 @@
 # Log
 
+## [2026-05-26] ingest | project ZIP portability and local security posture
+- Added source: `raw/features/project-zip-portability.md`.
+- Created wiki page: `concepts/project-zip-portability.md`.
+- Documents: project/thread `Save project`, ZIP and folder import, `.codex-project/chats/` chat JSONL portability, imported provider/model rewrite to current local config, sidebar refresh for threadless imports, `.codex-project/` round-trip behavior, and rejection of remote-attacker security hardening comments for local-only project import/export.
+- Updated `index.md`.
+
 ## [2026-05-15] ingest | codex thread link rendering review follow-up
 - Added source: `raw/fixes/codex-thread-link-pr174.md`.
 - Updated wiki page: `concepts/realtime-chat-rendering.md`.

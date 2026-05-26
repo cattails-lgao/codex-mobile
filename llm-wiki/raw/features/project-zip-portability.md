@@ -1,0 +1,26 @@
+# Project ZIP portability source
+
+Date: 2026-05-26
+
+Project portability adds local project export/import flows to `codex-web-local`.
+
+Implementation facts:
+- Project and thread context menus expose `Save project`, exporting the selected project folder as a browser-downloaded ZIP.
+- The new-thread home actions expose `Import Project` next to `Create Project`.
+- Import supports both an exported ZIP file and a browser folder picker upload.
+- Exported archives include project files and matching Codex chat JSONL history under `.codex-project/chats/`.
+- Imported chat JSONL is rewritten into the active `CODEX_HOME` with the imported project path as `cwd`.
+- Imported chat provider/model metadata is rewritten to the current local provider/model so resumed imported threads use the destination app configuration.
+- Imported project roots are persisted and forced into the sidebar refresh path so projects with no imported threads still appear under Projects.
+- Existing non-chat files under a project's `.codex-project/` folder are restored as normal project files; `.codex-project/chats/` remains the reserved chat-import namespace.
+
+Local-only security posture:
+- The app server is local-user facing and is not designed as a public internet service.
+- Local project import/export intentionally trusts user-selected local paths.
+- Review-bot hardening suggestions that assume a hostile remote caller should be rejected for this feature unless they show a concrete path where the local server becomes remotely reachable or bypasses existing authentication.
+- Rejected local-only hardening examples include saved-root export allowlists, import parent restrictions, ZIP upload caps, and local path redaction from the project manifest.
+
+Verification facts:
+- `pnpm run build` passed after the project import/export changes.
+- Folder import was verified in an isolated `CODEX_HOME` and showed the imported project in the sidebar even when it had no threads.
+- Manual coverage lives in `tests/projects-sidebar-new-chat/project-menu-save-project-zip.md`.
