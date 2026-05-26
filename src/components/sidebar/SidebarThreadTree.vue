@@ -618,8 +618,8 @@
         <button class="thread-menu-item" type="button" @click="onCopyThreadPath(openThreadMenuThread.id)">
           Copy path
         </button>
-        <button class="thread-menu-item" type="button" @click="onExportThread(openThreadMenuThread.id)">
-          Export chat
+        <button class="thread-menu-item" type="button" @click="onCopyThreadChat(openThreadMenuThread.id)">
+          Copy chat
         </button>
         <button class="thread-menu-item" type="button" @click="onForkThread(openThreadMenuThread.id)">
           Create chat fork
@@ -925,7 +925,7 @@ const emit = defineEmits<{
   'rename-thread': [payload: { threadId: string; title: string }]
   'remove-project': [projectName: string]
   'reorder-project': [payload: { projectName: string; toIndex: number }]
-  'export-thread': [threadId: string]
+  'copy-thread-chat': [threadId: string]
   'fork-thread': [threadId: string]
   'start-new-chat': []
   'automations-changed': []
@@ -1678,8 +1678,8 @@ function setAutomationScheduleMode(mode: AutomationScheduleMode): void {
   syncAutomationRruleFromScheduleDraft()
 }
 
-function onExportThread(threadId: string): void {
-  emit('export-thread', threadId)
+function onCopyThreadChat(threadId: string): void {
+  emit('copy-thread-chat', threadId)
   closeThreadMenu()
 }
 

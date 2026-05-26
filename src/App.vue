@@ -97,7 +97,7 @@
             @rename-thread="onRenameThread"
             @fork-thread="onForkThread"
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
-            @export-thread="onExportThread"
+            @copy-thread-chat="onCopyThreadChat"
             @automations-changed="onAutomationsChanged"
             @start-new-chat="onStartNewThreadFromToolbar" />
         </div>
@@ -2360,14 +2360,14 @@ function onAutomationsChanged(): void {
   void automationsPanelRef.value?.loadAutomations()
 }
 
-async function onExportThread(threadId: string): Promise<void> {
+async function onCopyThreadChat(threadId: string): Promise<void> {
   if (!threadId) return
   if (selectedThreadId.value !== threadId) {
     await selectThread(threadId)
     await router.push({ name: 'thread', params: { threadId } })
   }
   await nextTick()
-  onExportChat()
+  await copySelectedThreadChat()
 }
 
 function shortAccountId(accountId: string): string {
@@ -3959,20 +3959,15 @@ function onImplementPlan(payload: { turnId: string }): void {
 }
 
 
-function onExportChat(): void {
-  if (isHomeRoute.value || isSkillsRoute.value || isAutomationsRoute.value || typeof document === 'undefined') return
+async function copySelectedThreadChat(): Promise<void> {
+  if (isHomeRoute.value || isSkillsRoute.value || isAutomationsRoute.value) return
   if (!selectedThread.value || filteredMessages.value.length === 0) return
   const markdown = buildThreadMarkdown()
-  const fileName = buildExportFileName()
-  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
-  const objectUrl = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = objectUrl
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+  try {
+    await copyTextToClipboard(markdown)
+  } catch {
+    // Clipboard writes can be blocked by browser permissions; keep the menu action best-effort.
+  }
 }
 
 function buildThreadMarkdown(): string {
@@ -4032,19 +4027,35 @@ function buildThreadMarkdown(): string {
   return `${lines.join('\n').trimEnd()}\n`
 }
 
-function buildExportFileName(): string {
-  const threadTitle = selectedThread.value?.title?.trim() || 'chat'
-  const sanitized = threadTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  const base = sanitized || 'chat'
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  return `${base}-${stamp}.md`
-}
-
 function escapeMarkdownText(value: string): string {
   return value.replace(/([\\`*_{}\[\]()#+\-.!])/g, '\\$1')
+}
+
+function copyTextWithSelectionFallback(text: string): boolean {
+  if (typeof document === 'undefined') return false
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    return document.execCommand('copy')
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  if (!copyTextWithSelectionFallback(text)) {
+    throw new Error('Clipboard write failed')
+  }
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
