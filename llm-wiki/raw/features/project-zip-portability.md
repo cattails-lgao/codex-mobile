@@ -28,4 +28,6 @@ Local-only security posture:
 Verification facts:
 - `pnpm run build` passed after the project import/export changes.
 - Folder import was verified in an isolated `CODEX_HOME` and showed the imported project in the sidebar even when it had no threads.
+- Docker endpoint validation should use the fast reusable base image workflow for project import/export: build once from `scripts/docker-fast-test-base.Dockerfile`, then mount the current repo and run `node /repo/dist-cli/index.js`.
+- Packaged Docker images are only needed when testing package install, postinstall, auth/provider startup, or published runtime behavior.
 - Manual coverage lives in `tests/projects-sidebar-new-chat/project-menu-save-project-zip.md`.

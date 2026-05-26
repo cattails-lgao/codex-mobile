@@ -31,3 +31,11 @@ Source: [project-zip-portability.md](../../raw/features/project-zip-portability.
 The project import/export server endpoints intentionally do not add saved-root allowlists, import parent restrictions, ZIP upload caps, or local path redaction solely to satisfy review-bot comments. Those comments assume a hostile remote caller, while this app server is local-user facing and not meant to be exposed publicly. Treat such comments as rejected unless they show a concrete remote reachability or auth-bypass path.
 
 Source: [project-zip-portability.md](../../raw/features/project-zip-portability.md)
+
+## Docker Validation
+
+Project import/export Docker tests should use the fast reusable test image instead of reinstalling the packed app on every run. Build the base image once from `scripts/docker-fast-test-base.Dockerfile`, then run `scripts/run-docker-fast-test.sh`; the script builds the current repo, mounts it read-only into Docker, reuses a Docker `CODEX_HOME` volume, and starts `node /repo/dist-cli/index.js`.
+
+Use the slower packed-image Docker workflow only when validating package install contents, postinstall behavior, auth/provider startup, or published runtime behavior.
+
+Source: [project-zip-portability.md](../../raw/features/project-zip-portability.md)
