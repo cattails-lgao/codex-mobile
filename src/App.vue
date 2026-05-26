@@ -1078,6 +1078,9 @@
       <div class="project-zip-progress-track">
         <div class="project-zip-progress-fill" :style="{ width: projectZipProgressWidth }" />
       </div>
+      <p v-if="projectZipExportStatus.error" class="project-zip-modal-error" role="alert">
+        {{ projectZipExportStatus.error }}
+      </p>
       <div class="project-zip-modal-actions">
         <button class="project-zip-modal-cancel" type="button" :disabled="projectZipExportStatus.phase === 'exporting'" @click="onCloseProjectZipExportModal">
           {{ t('Close') }}
@@ -1530,12 +1533,13 @@ const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, 
   labels: {},
   projectOrder: [],
 })
-const projectZipExportStatus = ref<{ phase: 'idle' | 'exporting' | 'ready'; loaded: number; total: number | null; blob: Blob | null; fileName: string }>({
+const projectZipExportStatus = ref<{ phase: 'idle' | 'exporting' | 'ready'; loaded: number; total: number | null; blob: Blob | null; fileName: string; error: string }>({
   phase: 'idle',
   loaded: 0,
   total: null,
   blob: null,
   fileName: '',
+  error: '',
 })
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
@@ -2876,12 +2880,13 @@ async function shareProjectZip(blob: Blob, fileName: string): Promise<void> {
 
 function onCloseProjectZipExportModal(): void {
   if (projectZipExportStatus.value.phase === 'exporting') return
-  projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '' }
+  projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '', error: '' }
 }
 
 function onDownloadProjectZipExport(): void {
   const { blob, fileName } = projectZipExportStatus.value
   if (!blob || !fileName) return
+  projectZipExportStatus.value = { ...projectZipExportStatus.value, error: '' }
   downloadProjectZipFallback(blob, fileName)
 }
 
@@ -2889,24 +2894,32 @@ async function onShareProjectZipExport(): Promise<void> {
   const { blob, fileName } = projectZipExportStatus.value
   if (!blob || !fileName) return
   try {
+    projectZipExportStatus.value = { ...projectZipExportStatus.value, error: '' }
     await shareProjectZip(blob, fileName)
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return
-    const message = error instanceof Error ? error.message : 'Failed to share project.'
-    window.alert(message)
+    const message = error instanceof Error ? error.message : ''
+    const wasBlocked = error instanceof DOMException && error.name === 'NotAllowedError'
+      || /permission denied|notallowed|not allowed|gesture/iu.test(message)
+    projectZipExportStatus.value = {
+      ...projectZipExportStatus.value,
+      error: wasBlocked
+        ? t('This browser blocked sharing the ZIP. Use Download instead.')
+        : (message || t('Failed to share project. Use Download instead.')),
+    }
   }
 }
 
 async function exportProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
-  projectZipExportStatus.value = { phase: 'exporting', loaded: 0, total: null, blob: null, fileName: '' }
+  projectZipExportStatus.value = { phase: 'exporting', loaded: 0, total: null, blob: null, fileName: '', error: '' }
   try {
     const { blob, fileName } = await downloadProjectZip(targetCwd, ({ loaded, total }) => {
       projectZipExportStatus.value = { ...projectZipExportStatus.value, phase: 'exporting', loaded, total }
     })
-    projectZipExportStatus.value = { phase: 'ready', loaded: blob.size, total: blob.size, blob, fileName }
+    projectZipExportStatus.value = { phase: 'ready', loaded: blob.size, total: blob.size, blob, fileName, error: '' }
   } catch (error) {
-    projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '' }
+    projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '', error: '' }
     if (error instanceof DOMException && error.name === 'AbortError') return
     const message = error instanceof Error ? error.message : 'Failed to export project.'
     window.alert(message)
@@ -6007,6 +6020,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply min-h-5 truncate text-sm text-zinc-600;
 }
 
+.project-zip-modal-error {
+  @apply rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900;
+}
+
 .project-zip-progress-label {
   @apply flex items-center justify-between gap-3 text-sm font-semibold;
 }
@@ -6048,6 +6065,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 :root.dark .project-zip-modal-copy {
   @apply text-zinc-400;
+}
+
+:root.dark .project-zip-modal-error {
+  @apply border-amber-900/60 bg-amber-950/40 text-amber-100;
 }
 
 :root.dark .project-zip-modal-action-primary {
