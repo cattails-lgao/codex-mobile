@@ -618,7 +618,13 @@
         <button class="thread-menu-item" type="button" @click="onCopyThreadPath(openThreadMenuThread.id)">
           Copy path
         </button>
-        <button class="thread-menu-item" type="button" @click="onCopyThreadChat(openThreadMenuThread.id)">
+        <button
+          class="thread-menu-item"
+          type="button"
+          :disabled="openThreadMenuThread.id !== selectedThreadId"
+          :title="openThreadMenuThread.id === selectedThreadId ? 'Copy chat' : 'Open this chat before copying'"
+          @click="onCopyThreadChat(openThreadMenuThread.id)"
+        >
           Copy chat
         </button>
         <button class="thread-menu-item" type="button" @click="onForkThread(openThreadMenuThread.id)">
@@ -1679,6 +1685,7 @@ function setAutomationScheduleMode(mode: AutomationScheduleMode): void {
 }
 
 function onCopyThreadChat(threadId: string): void {
+  if (threadId !== props.selectedThreadId) return
   emit('copy-thread-chat', threadId)
   closeThreadMenu()
 }
@@ -3252,6 +3259,10 @@ onBeforeUnmount(() => {
 
 .thread-menu-item {
   @apply rounded px-2 py-1 text-left text-sm text-zinc-700 hover:bg-zinc-100;
+}
+
+.thread-menu-item:disabled {
+  @apply cursor-not-allowed text-zinc-400 hover:bg-transparent;
 }
 
 .thread-menu-item-danger {

@@ -1175,6 +1175,7 @@ import type { ComposerDraftPayload, ThreadComposerExposed } from './components/c
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
+import { copyTextToClipboard } from './utils/clipboard'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
@@ -2362,11 +2363,7 @@ function onAutomationsChanged(): void {
 
 async function onCopyThreadChat(threadId: string): Promise<void> {
   if (!threadId) return
-  if (selectedThreadId.value !== threadId) {
-    await selectThread(threadId)
-    await router.push({ name: 'thread', params: { threadId } })
-  }
-  await nextTick()
+  if (selectedThreadId.value !== threadId) return
   await copySelectedThreadChat()
 }
 
@@ -4029,33 +4026,6 @@ function buildThreadMarkdown(): string {
 
 function escapeMarkdownText(value: string): string {
   return value.replace(/([\\`*_{}\[\]()#+\-.!])/g, '\\$1')
-}
-
-function copyTextWithSelectionFallback(text: string): boolean {
-  if (typeof document === 'undefined') return false
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  try {
-    return document.execCommand('copy')
-  } finally {
-    document.body.removeChild(textarea)
-  }
-}
-
-async function copyTextToClipboard(text: string): Promise<void> {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-  if (!copyTextWithSelectionFallback(text)) {
-    throw new Error('Clipboard write failed')
-  }
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
