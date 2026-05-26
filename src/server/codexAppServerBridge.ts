@@ -1138,6 +1138,11 @@ type ImportedSessionRecord = {
   firstUserMessage: string
 }
 
+type ExportedThreadMetadata = {
+  title: string
+  updatedAtMs: number
+}
+
 const ZIP_CRC_TABLE = new Uint32Array(256)
 for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
   let value = index
@@ -1711,6 +1716,55 @@ LIMIT 200;
   }
 }
 
+function readStateDbThreadExportMetadata(): Map<string, ExportedThreadMetadata> {
+  const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
+  if (!existsSync(stateDbPath)) return new Map()
+  const columnsResult = spawnSync('sqlite3', [stateDbPath, 'PRAGMA table_info(threads);'], { encoding: 'utf8' })
+  if (columnsResult.status !== 0) return new Map()
+  const availableColumns = new Set(columnsResult.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.split('|')[1])
+    .filter((value): value is string => Boolean(value)))
+  if (!availableColumns.has('id')) return new Map()
+  const selectColumns = [
+    'id',
+    availableColumns.has('title') ? 'title' : "'' AS title",
+    availableColumns.has('preview') ? 'preview' : "'' AS preview",
+    availableColumns.has('updated_at') ? 'updated_at' : '0 AS updated_at',
+    availableColumns.has('updated_at_ms') ? 'updated_at_ms' : '0 AS updated_at_ms',
+  ]
+  const archivedPredicate = availableColumns.has('archived') ? 'WHERE archived = 0' : ''
+  const sql = `
+SELECT ${selectColumns.join(', ')}
+FROM threads
+${archivedPredicate};
+`
+  const result = spawnSync('sqlite3', ['-json', stateDbPath, sql], { encoding: 'utf8' })
+  if (result.status !== 0 || !result.stdout.trim()) return new Map()
+  try {
+    const rows = JSON.parse(result.stdout) as unknown
+    if (!Array.isArray(rows)) return new Map()
+    const metadata = new Map<string, ExportedThreadMetadata>()
+    for (const row of rows) {
+      const record = asRecord(row)
+      const id = readNonEmptyString(record?.id)
+      if (!id) continue
+      const title = readNonEmptyString(record?.title) || readNonEmptyString(record?.preview)
+      const updatedAtMs =
+        typeof record?.updated_at_ms === 'number' && Number.isFinite(record.updated_at_ms)
+          ? Math.trunc(record.updated_at_ms)
+          : typeof record?.updated_at === 'number' && Number.isFinite(record.updated_at)
+            ? Math.trunc(record.updated_at * 1000)
+            : 0
+      if (!title && updatedAtMs <= 0) continue
+      metadata.set(id, { title, updatedAtMs })
+    }
+    return metadata
+  } catch {
+    return new Map()
+  }
+}
+
 function mergeImportedThreadsIntoThreadListResult(result: unknown): unknown {
   const record = asRecord(result)
   const data = Array.isArray(record?.data) ? record.data : null
@@ -1735,7 +1789,9 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
   const canonicalProjectRoot = await realpath(projectRoot)
   const codexHome = getCodexHomeDir()
   const threadTitles = await readMergedThreadTitleCache()
+  const stateDbThreadMetadata = readStateDbThreadExportMetadata()
   const exportedTitles: Record<string, string> = {}
+  const exportedThreads: Record<string, ExportedThreadMetadata> = {}
   const roots = [
     { disk: join(codexHome, 'sessions'), zip: '.codex-project/chats/sessions' },
     { disk: join(codexHome, 'archived_sessions'), zip: '.codex-project/chats/archived_sessions' },
@@ -1772,8 +1828,15 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
       const rel = relative(root.disk, sessionPath).split(sep).join('/')
       const zipPath = `${root.zip}/${rel}`
       const sessionId = readSessionMetaId(raw)
-      const title = sessionId ? readNonEmptyString(threadTitles.titles[sessionId]) : ''
+      const stateMetadata = sessionId ? stateDbThreadMetadata.get(sessionId) : undefined
+      const title = readNonEmptyString(stateMetadata?.title) || (sessionId ? readNonEmptyString(threadTitles.titles[sessionId]) : '')
       if (title) exportedTitles[zipPath] = title
+      if (title || (stateMetadata?.updatedAtMs ?? 0) > 0) {
+        exportedThreads[zipPath] = {
+          title,
+          updatedAtMs: stateMetadata?.updatedAtMs ?? 0,
+        }
+      }
       entries.push({
         path: zipPath,
         filePath: sessionPath,
@@ -1781,10 +1844,10 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
       })
     }
   }
-  if (Object.keys(exportedTitles).length > 0) {
+  if (Object.keys(exportedTitles).length > 0 || Object.keys(exportedThreads).length > 0) {
     entries.push({
       path: '.codex-project/chats/thread-titles.json',
-      data: Buffer.from(JSON.stringify({ version: 1, titles: exportedTitles }, null, 2)),
+      data: Buffer.from(JSON.stringify({ version: 2, titles: exportedTitles, threads: exportedThreads }, null, 2)),
       mtime: new Date(),
     })
   }
@@ -1861,7 +1924,7 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
   }
   projectName = projectName.replace(/[\\/]+/g, '-').replace(/[\u0000-\u001f]+/g, '').trim() || 'imported-project'
   const titleEntry = entries.find((entry) => entry.path === '.codex-project/chats/thread-titles.json' && !entry.isDirectory)
-  const importedTitles = new Map<string, string>()
+  const importedThreadMetadata = new Map<string, ExportedThreadMetadata>()
   if (titleEntry) {
     try {
       const payload = asRecord(JSON.parse(titleEntry.data.toString('utf8')) as unknown)
@@ -1869,7 +1932,18 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
       if (titles) {
         for (const [key, value] of Object.entries(titles)) {
           const title = readNonEmptyString(value)
-          if (key && title) importedTitles.set(key, title)
+          if (key && title) importedThreadMetadata.set(key, { title, updatedAtMs: 0 })
+        }
+      }
+      const threads = asRecord(payload?.threads)
+      if (threads) {
+        for (const [key, value] of Object.entries(threads)) {
+          const record = asRecord(value)
+          const title = readNonEmptyString(record?.title) || importedThreadMetadata.get(key)?.title || ''
+          const updatedAtMs = typeof record?.updatedAtMs === 'number' && Number.isFinite(record.updatedAtMs)
+            ? Math.trunc(record.updatedAtMs)
+            : 0
+          if (key && (title || updatedAtMs > 0)) importedThreadMetadata.set(key, { title, updatedAtMs })
         }
       }
     } catch {
@@ -1899,8 +1973,12 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
       await mkdir(dirname(target), { recursive: true })
       const importedSessionRaw = rewriteImportedSession(entry.data.toString('utf8'), projectPath, importedThreadId)
       await writeFile(target, importedSessionRaw, 'utf8')
-      const importedTitle = importedTitles.get(entry.path) || ''
-      const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, importedTitle)
+      const importedMetadata = importedThreadMetadata.get(entry.path)
+      const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, importedMetadata?.title ?? '')
+      if ((importedMetadata?.updatedAtMs ?? 0) > 0) {
+        importedRecord.updatedAtMs = importedMetadata?.updatedAtMs ?? importedRecord.updatedAtMs
+        importedRecord.createdAtMs = Math.min(importedRecord.createdAtMs, importedRecord.updatedAtMs)
+      }
       registerImportedSessionInStateDb(importedRecord)
       if (importedRecord.title) {
         const cache = await readThreadTitleCache()
