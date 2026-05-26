@@ -1065,21 +1065,44 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
 }
 
 const PROJECT_ZIP_SKIPPED_NAMES = new Set([
+  '.build',
+  '.cache',
+  '.coverage',
   '.DS_Store',
   '.eggs',
+  '.eslintcache',
+  '.gradle',
   '.git',
+  '.ipynb_checkpoints',
   '.mypy_cache',
+  '.next',
   '.nox',
+  '.nuxt',
+  '.nyc_output',
+  '.parcel-cache',
   '.pytest_cache',
   '.ruff_cache',
+  '.svelte-kit',
+  '.turbo',
   '.tox',
   '.venv',
+  '.vite',
   '__pycache__',
+  'bin',
   'build',
+  'coverage',
+  'DerivedData',
   'dist',
+  'htmlcov',
   'node_modules',
+  'obj',
+  'target',
   'venv',
 ])
+
+function isProjectZipSkippedName(name: string): boolean {
+  return PROJECT_ZIP_SKIPPED_NAMES.has(name) || name.startsWith('.venv-')
+}
 
 type ZipCentralDirectoryEntry = {
   path: string
@@ -1251,16 +1274,47 @@ async function writeZipChunk(res: ServerResponse, chunk: Buffer): Promise<void> 
   }
 }
 
-async function* walkProjectZipEntries(root: string, current = root): AsyncGenerator<{ path: string; isDirectory: boolean; mtime: Date }> {
+type ProjectZipIgnoreMatcher = {
+  isIgnored: (path: string) => boolean
+}
+
+async function createProjectZipIgnoreMatcher(root: string): Promise<ProjectZipIgnoreMatcher> {
+  try {
+    const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd: root })
+    const rawIgnored = await runCommandCaptureRaw(
+      'git',
+      ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'],
+      { cwd: gitRoot },
+    )
+    const ignoredPaths = rawIgnored
+      .split('\0')
+      .filter(Boolean)
+      .map((entry) => resolve(gitRoot, entry))
+    return {
+      isIgnored(path) {
+        return ignoredPaths.some((ignoredPath) => isSameOrDescendantPath(path, ignoredPath))
+      },
+    }
+  } catch {
+    return { isIgnored: () => false }
+  }
+}
+
+async function* walkProjectZipEntries(
+  root: string,
+  ignoreMatcher: ProjectZipIgnoreMatcher,
+  current = root,
+): AsyncGenerator<{ path: string; isDirectory: boolean; mtime: Date }> {
   const entries = await readdir(current, { withFileTypes: true })
   for (const entry of entries) {
-    if (PROJECT_ZIP_SKIPPED_NAMES.has(entry.name)) continue
+    if (isProjectZipSkippedName(entry.name)) continue
     const absolutePath = join(current, entry.name)
+    if (ignoreMatcher.isIgnored(absolutePath)) continue
     const info = await lstat(absolutePath)
     if (info.isSymbolicLink()) continue
     if (info.isDirectory()) {
       yield { path: absolutePath, isDirectory: true, mtime: info.mtime }
-      yield* walkProjectZipEntries(root, absolutePath)
+      yield* walkProjectZipEntries(root, ignoreMatcher, absolutePath)
     } else if (info.isFile()) {
       yield { path: absolutePath, isDirectory: false, mtime: info.mtime }
     }
@@ -1319,8 +1373,9 @@ async function* singleZipBufferChunk(data: Buffer): AsyncGenerator<Buffer> {
 async function streamProjectZip(root: string, res: ServerResponse, virtualEntries: ProjectZipVirtualEntry[] = []): Promise<void> {
   const centralEntries: ZipCentralDirectoryEntry[] = []
   let offset = 0
+  const ignoreMatcher = await createProjectZipIgnoreMatcher(root)
 
-  for await (const entry of walkProjectZipEntries(root)) {
+  for await (const entry of walkProjectZipEntries(root, ignoreMatcher)) {
     const zipPath = toZipEntryPath(root, entry.path, entry.isDirectory)
     if (zipPath === '.codex-project/manifest.json') continue
     offset = await writeProjectZipEntry(res, centralEntries, offset, {
