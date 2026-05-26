@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink, realpath } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rename, rm, mkdir, stat, cp, lstat, readlink, symlink, realpath, utimes } from 'node:fs/promises'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { request as httpRequest } from 'node:http'
@@ -1508,7 +1508,6 @@ function getCurrentImportedSessionModelDefaults(): { model: string; modelProvide
 function rewriteImportedSession(raw: string, importedCwd: string, importedThreadId: string): string {
   const lines: string[] = []
   let hasUserMessageEvent = false
-  const importedAtIso = new Date().toISOString()
   const modelDefaults = getCurrentImportedSessionModelDefaults()
   for (const line of raw.split(/\r?\n/u)) {
     if (!line.trim()) continue
@@ -1523,9 +1522,7 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
         payload.cwd = importedCwd
       }
       if (record?.type === 'session_meta' && payload) {
-        record.timestamp = importedAtIso
         payload.id = importedThreadId
-        payload.timestamp = importedAtIso
         payload.source = 'cli'
         payload.imported = true
         if (!readNonEmptyString(payload.originator)) {
@@ -1621,9 +1618,45 @@ function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
+function ensureImportedThreadsStateDbTable(stateDbPath: string): boolean {
+  const sql = `
+CREATE TABLE IF NOT EXISTS threads (
+  id TEXT PRIMARY KEY,
+  rollout_path TEXT,
+  created_at INTEGER,
+  updated_at INTEGER,
+  source TEXT,
+  model TEXT,
+  model_provider TEXT,
+  cwd TEXT,
+  title TEXT,
+  sandbox_policy TEXT,
+  approval_mode TEXT,
+  tokens_used INTEGER,
+  has_user_event INTEGER,
+  archived INTEGER,
+  archived_at INTEGER,
+  git_sha TEXT,
+  git_branch TEXT,
+  git_origin_url TEXT,
+  cli_version TEXT,
+  first_user_message TEXT,
+  created_at_ms INTEGER,
+  updated_at_ms INTEGER,
+  thread_source TEXT,
+  preview TEXT
+);`
+  const result = spawnSync('sqlite3', [stateDbPath, sql], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    console.warn('[project-import] failed to initialize state database', result.stderr || result.stdout)
+    return false
+  }
+  return true
+}
+
 function registerImportedSessionInStateDb(session: ImportedSessionRecord): void {
   const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
-  if (!existsSync(stateDbPath)) return
+  if (!ensureImportedThreadsStateDbTable(stateDbPath)) return
   const columnsResult = spawnSync('sqlite3', [stateDbPath, 'PRAGMA table_info(threads);'], { encoding: 'utf8' })
   if (columnsResult.status !== 0) {
     console.warn('[project-import] failed to inspect state database', columnsResult.stderr || columnsResult.stdout)
@@ -1770,15 +1803,27 @@ function mergeImportedThreadsIntoThreadListResult(result: unknown): unknown {
   const record = asRecord(result)
   const data = Array.isArray(record?.data) ? record.data : null
   if (!record || !data) return result
-  const existingIds = new Set(data.flatMap((item) => {
+  const importedById = new Map<string, Record<string, unknown>>()
+  for (const thread of listImportedThreadsFromStateDb()) {
+    const id = readNonEmptyString(thread.id)
+    if (id) importedById.set(id, thread)
+  }
+  if (importedById.size === 0) return result
+  const mergedData: unknown[] = []
+  for (const item of data) {
     const id = readNonEmptyString(asRecord(item)?.id)
-    return id ? [id] : []
-  }))
-  const imported = listImportedThreadsFromStateDb().filter((thread) => !existingIds.has(readNonEmptyString(thread.id)))
-  if (imported.length === 0) return result
+    const imported = id ? importedById.get(id) : undefined
+    if (imported) {
+      mergedData.push({ ...asRecord(item), ...imported })
+      importedById.delete(id)
+    } else {
+      mergedData.push(item)
+    }
+  }
+  mergedData.push(...importedById.values())
   return {
     ...record,
-    data: [...data, ...imported].sort((a, b) => {
+    data: mergedData.sort((a, b) => {
       const aUpdated = typeof asRecord(a)?.updatedAt === 'number' ? asRecord(a)?.updatedAt as number : 0
       const bUpdated = typeof asRecord(b)?.updatedAt === 'number' ? asRecord(b)?.updatedAt as number : 0
       return bUpdated - aUpdated
@@ -1961,36 +2006,40 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
 
   let importedSessions = 0
   const importedSessionsRoot = join(getCodexHomeDir(), 'sessions')
+  const chatEntries = entries
+    .filter((entry) => entry.path.startsWith('.codex-project/chats/') && !entry.isDirectory && extname(entry.path) === '.jsonl')
+    .map((entry) => {
+      const importedMetadata = importedThreadMetadata.get(entry.path)
+      const sourceSessionRaw = entry.data.toString('utf8')
+      const sourceRecord = readImportedSessionRecord(sourceSessionRaw, entry.path, projectPath, readSessionMetaId(sourceSessionRaw) || randomUUID(), importedMetadata?.title ?? '')
+      const updatedAtMs = (importedMetadata?.updatedAtMs ?? 0) > 0 ? importedMetadata?.updatedAtMs ?? 0 : sourceRecord.updatedAtMs
+      return { entry, importedMetadata, sourceSessionRaw, sourceRecord, updatedAtMs }
+    })
+    .sort((first, second) => second.updatedAtMs - first.updatedAtMs)
+
+  for (const [index, chatEntry] of chatEntries.entries()) {
+    const importedThreadId = randomUUID()
+    const target = join(importedSessionsRoot, 'imported', `${String(index + 1).padStart(6, '0')}-${importedThreadId}.jsonl`)
+    await mkdir(dirname(target), { recursive: true })
+    const importedSessionRaw = rewriteImportedSession(chatEntry.sourceSessionRaw, projectPath, importedThreadId)
+    await writeFile(target, importedSessionRaw, 'utf8')
+    const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, chatEntry.importedMetadata?.title ?? '')
+    if (chatEntry.updatedAtMs > 0) {
+      importedRecord.updatedAtMs = chatEntry.updatedAtMs
+      importedRecord.createdAtMs = Math.min(chatEntry.sourceRecord.createdAtMs, importedRecord.updatedAtMs)
+      const updatedAtDate = new Date(chatEntry.updatedAtMs)
+      await utimes(target, updatedAtDate, updatedAtDate).catch(() => {})
+    }
+    registerImportedSessionInStateDb(importedRecord)
+    if (importedRecord.title) {
+      const cache = await readThreadTitleCache()
+      await writeThreadTitleCache(updateThreadTitleCache(cache, importedThreadId, importedRecord.title))
+    }
+    importedSessions += 1
+  }
+
   for (const entry of entries) {
     if (entry.path.startsWith('.codex-project/chats/')) {
-      if (entry.isDirectory || extname(entry.path) !== '.jsonl') continue
-      const rel = entry.path.replace(/^\.codex-project\/chats\/(?:sessions|archived_sessions)\//u, '')
-      const safeRel = normalizeImportedZipPath(rel)
-      const importedThreadId = randomUUID()
-      const parsed = safeRel.split('/')
-      parsed[parsed.length - 1] = `${importedThreadId}.jsonl`
-      if (parsed[0] === 'imported') parsed.shift()
-      const target = join(importedSessionsRoot, ...parsed)
-      await mkdir(dirname(target), { recursive: true })
-      const sourceSessionRaw = entry.data.toString('utf8')
-      const importedMetadata = importedThreadMetadata.get(entry.path)
-      const sourceRecord = readImportedSessionRecord(sourceSessionRaw, target, projectPath, importedThreadId, importedMetadata?.title ?? '')
-      const importedSessionRaw = rewriteImportedSession(sourceSessionRaw, projectPath, importedThreadId)
-      await writeFile(target, importedSessionRaw, 'utf8')
-      const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, importedMetadata?.title ?? '')
-      if ((importedMetadata?.updatedAtMs ?? 0) > 0) {
-        importedRecord.updatedAtMs = importedMetadata?.updatedAtMs ?? importedRecord.updatedAtMs
-        importedRecord.createdAtMs = Math.min(importedRecord.createdAtMs, importedRecord.updatedAtMs)
-      } else if (sourceRecord.updatedAtMs > 0) {
-        importedRecord.updatedAtMs = sourceRecord.updatedAtMs
-        importedRecord.createdAtMs = Math.min(sourceRecord.createdAtMs, importedRecord.updatedAtMs)
-      }
-      registerImportedSessionInStateDb(importedRecord)
-      if (importedRecord.title) {
-        const cache = await readThreadTitleCache()
-        await writeThreadTitleCache(updateThreadTitleCache(cache, importedThreadId, importedRecord.title))
-      }
-      importedSessions += 1
       continue
     }
     const target = join(projectPath, entry.path)
