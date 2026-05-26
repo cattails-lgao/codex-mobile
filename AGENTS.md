@@ -81,6 +81,7 @@
 ## UI Rules
 
 - For shared route surfaces and large feature UIs, put decisive dark-theme overrides in `src/style.css` instead of relying only on component-scoped `:global(:root.dark)` blocks.
+- Do not introduce native browser dropdowns (`<select>`) for app controls such as provider, model, branch, runtime, folder, language, or settings pickers. Use the app's custom dropdown/menu components so styling, search, dark theme, and option layout stay consistent.
 - Browser assertions must inspect the real changed UI, not sidebar previews or base page load.
 - For refresh-persistence fixes, include post-refresh evidence that the state persisted.
 

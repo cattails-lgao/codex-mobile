@@ -714,21 +714,14 @@
             </div>
 
             <div class="automation-target-dropdown">
-              <input
-                v-model="automationTargetSearch"
-                class="rename-thread-input"
-                type="search"
-                :placeholder="automationTargetMode === 'project' ? 'Search projects' : 'Search chats'"
+              <ComposerDropdown
+                v-model="automationTargetValue"
+                class="automation-thread-dropdown"
+                :options="automationTargetDropdownOptions"
+                :placeholder="automationTargetMode === 'project' ? 'Select project' : 'Select chat'"
+                enable-search
+                :search-placeholder="automationTargetMode === 'project' ? 'Search projects' : 'Search chats'"
               />
-              <select v-model="automationTargetValue" class="automation-thread-select" size="5">
-                <option
-                  v-for="option in filteredAutomationTargetOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
             </div>
           </div>
 
@@ -808,15 +801,13 @@
                 step="1"
                 @input="syncAutomationRruleFromScheduleDraft"
               />
-              <select
-                v-model="automationScheduleDraft.intervalUnit"
-                class="automation-schedule-unit"
-                @change="syncAutomationRruleFromScheduleDraft"
-              >
-                <option value="minutes">minutes</option>
-                <option value="hours">hours</option>
-                <option value="days">days</option>
-              </select>
+              <ComposerDropdown
+                class="automation-schedule-unit-dropdown"
+                :model-value="automationScheduleDraft.intervalUnit"
+                :options="automationIntervalUnitOptions"
+                placeholder="Unit"
+                @update:model-value="onAutomationIntervalUnitChange"
+              />
             </div>
 
             <input
@@ -830,13 +821,16 @@
             <p class="automation-schedule-preview">{{ automationSchedulePreview }}</p>
           </div>
 
-          <label class="automation-thread-field">
+          <div class="automation-thread-field">
             <span class="automation-thread-label">Status</span>
-            <select v-model="automationDraft.status" class="automation-thread-select">
-              <option value="ACTIVE">{{ t('Active') }}</option>
-              <option value="PAUSED">{{ t('Paused') }}</option>
-            </select>
-          </label>
+            <ComposerDropdown
+              class="automation-thread-dropdown"
+              :model-value="automationDraft.status"
+              :options="automationStatusOptions"
+              :placeholder="t('Status')"
+              @update:model-value="onAutomationStatusChange"
+            />
+          </div>
 
           <p v-if="automationDialogError" class="rename-thread-subtitle automation-thread-error">{{ automationDialogError }}</p>
           <p v-else-if="automationDialogNotice" class="rename-thread-subtitle automation-thread-notice">{{ automationDialogNotice }}</p>
@@ -901,6 +895,7 @@ import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { getPathLeafName, getPathParent, isAbsoluteLikePath, isProjectlessChatPath } from '../../pathUtils.js'
+import ComposerDropdown from '../content/ComposerDropdown.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 import { reconcilePinnedThreadIds } from './pinnedThreadUtils'
 
@@ -1021,7 +1016,6 @@ const automationDialogAutomationId = ref('')
 const automationDialogMode = ref<'create' | 'edit'>('create')
 const automationTargetPickerVisible = ref(false)
 const automationTargetMode = ref<AutomationTargetMode>('thread')
-const automationTargetSearch = ref('')
 const automationTargetValue = ref('')
 const automationDialogError = ref('')
 const automationDialogNotice = ref('')
@@ -1092,14 +1086,22 @@ const automationProjectTargetOptions = computed(() => {
   }
   return rows
 })
-const filteredAutomationTargetOptions = computed(() => {
-  const query = automationTargetSearch.value.trim().toLowerCase()
+const automationTargetDropdownOptions = computed(() => {
   const source = automationTargetMode.value === 'project'
     ? automationProjectTargetOptions.value
     : automationThreadTargetOptions.value
-  return query ? source.filter((option) => option.searchText.includes(query)) : source
+  return source.map((option) => ({ value: option.value, label: option.label }))
 })
-watch(filteredAutomationTargetOptions, (options) => {
+const automationIntervalUnitOptions = [
+  { value: 'minutes', label: 'minutes' },
+  { value: 'hours', label: 'hours' },
+  { value: 'days', label: 'days' },
+]
+const automationStatusOptions = computed(() => [
+  { value: 'ACTIVE', label: t('Active') },
+  { value: 'PAUSED', label: t('Paused') },
+])
+watch(automationTargetDropdownOptions, (options) => {
   if (!automationTargetPickerVisible.value) return
   if (options.some((option) => option.value === automationTargetValue.value)) return
   automationTargetValue.value = options[0]?.value ?? ''
@@ -1672,6 +1674,23 @@ function syncAutomationRruleFromScheduleDraft(): void {
   }
 }
 
+function onAutomationIntervalUnitChange(value: string): void {
+  if (value !== 'minutes' && value !== 'hours' && value !== 'days') return
+  automationScheduleDraft.value = {
+    ...automationScheduleDraft.value,
+    intervalUnit: value,
+  }
+  syncAutomationRruleFromScheduleDraft()
+}
+
+function onAutomationStatusChange(value: string): void {
+  if (value !== 'ACTIVE' && value !== 'PAUSED') return
+  automationDraft.value = {
+    ...automationDraft.value,
+    status: value,
+  }
+}
+
 function syncAutomationScheduleDraftFromRrule(): void {
   automationScheduleDraft.value = createScheduleDraftFromRrule(automationDraft.value.rrule)
 }
@@ -1906,7 +1925,6 @@ function openAutomationEditorFromPanel(payload: {
 function openAutomationCreatorFromPanel(): void {
   automationTargetPickerVisible.value = true
   automationTargetMode.value = 'thread'
-  automationTargetSearch.value = ''
   automationTargetValue.value = automationThreadTargetOptions.value[0]?.value ?? ''
   automationDialogScope.value = 'thread'
   automationDialogThreadId.value = ''
@@ -1921,14 +1939,9 @@ function openAutomationCreatorFromPanel(): void {
 
 function setAutomationTargetMode(mode: AutomationTargetMode): void {
   automationTargetMode.value = mode
-  automationTargetSearch.value = ''
   automationTargetValue.value = ''
   automationDialogScope.value = mode === 'project' ? 'project' : 'thread'
-  if (mode === 'thread') {
-    automationTargetValue.value = filteredAutomationTargetOptions.value[0]?.value ?? ''
-  } else if (mode === 'project') {
-    automationTargetValue.value = filteredAutomationTargetOptions.value[0]?.value ?? ''
-  }
+  automationTargetValue.value = automationTargetDropdownOptions.value[0]?.value ?? ''
 }
 
 function startNewAutomationDraft(): void {
@@ -3447,9 +3460,16 @@ onBeforeUnmount(() => {
   @apply text-xs font-medium uppercase tracking-wide text-zinc-500;
 }
 
-.automation-thread-textarea,
-.automation-thread-select {
+.automation-thread-textarea {
   @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+}
+
+.automation-thread-dropdown :deep(.composer-dropdown-trigger) {
+  @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900;
+}
+
+.automation-thread-dropdown :deep(.composer-dropdown-value) {
+  @apply min-w-0 flex-1 text-left;
 }
 
 .automation-schedule-mode-group {
@@ -3476,6 +3496,10 @@ onBeforeUnmount(() => {
 .automation-schedule-number,
 .automation-schedule-unit {
   @apply rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500;
+}
+
+.automation-schedule-unit-dropdown :deep(.composer-dropdown-trigger) {
+  @apply min-h-8 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900;
 }
 
 .automation-schedule-number {
