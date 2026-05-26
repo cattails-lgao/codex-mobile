@@ -1054,13 +1054,41 @@
       </section>
     </template>
   </DesktopLayout>
-  <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-progress" role="status" aria-live="polite">
-    <div class="project-zip-progress-label">
-      <span>{{ projectZipExportStatus.phase === 'exporting' ? t('Exporting Project') : t('Project ZIP ready') }}</span>
-      <span>{{ projectZipProgressText }}</span>
-    </div>
-    <div class="project-zip-progress-track">
-      <div class="project-zip-progress-fill" :style="{ width: projectZipProgressWidth }" />
+  <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-modal-backdrop" role="presentation">
+    <div class="project-zip-modal" role="dialog" aria-modal="true" :aria-label="t('Export Project')" @click.stop>
+      <div class="project-zip-modal-header">
+        <h2 class="project-zip-modal-title">{{ t('Export Project') }}</h2>
+        <button
+          class="project-zip-modal-close"
+          type="button"
+          :aria-label="t('Close')"
+          :disabled="projectZipExportStatus.phase === 'exporting'"
+          @click="onCloseProjectZipExportModal"
+        >
+          ×
+        </button>
+      </div>
+      <p class="project-zip-modal-copy">
+        {{ projectZipExportStatus.phase === 'exporting' ? t('Preparing project ZIP...') : projectZipExportStatus.fileName }}
+      </p>
+      <div class="project-zip-progress-label" role="status" aria-live="polite">
+        <span>{{ projectZipExportStatus.phase === 'exporting' ? t('Exporting') : t('Ready') }}</span>
+        <span>{{ projectZipProgressText }}</span>
+      </div>
+      <div class="project-zip-progress-track">
+        <div class="project-zip-progress-fill" :style="{ width: projectZipProgressWidth }" />
+      </div>
+      <div class="project-zip-modal-actions">
+        <button class="project-zip-modal-cancel" type="button" :disabled="projectZipExportStatus.phase === 'exporting'" @click="onCloseProjectZipExportModal">
+          {{ t('Close') }}
+        </button>
+        <button class="project-zip-modal-action" type="button" :disabled="!projectZipExportStatus.blob" @click="onDownloadProjectZipExport">
+          {{ t('Download') }}
+        </button>
+        <button class="project-zip-modal-action project-zip-modal-action-primary" type="button" :disabled="!projectZipExportStatus.blob" @click="onShareProjectZipExport">
+          {{ t('Share') }}
+        </button>
+      </div>
     </div>
   </div>
   <div
@@ -1502,10 +1530,12 @@ const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, 
   labels: {},
   projectOrder: [],
 })
-const projectZipExportStatus = ref<{ phase: 'idle' | 'exporting' | 'ready'; loaded: number; total: number | null }>({
+const projectZipExportStatus = ref<{ phase: 'idle' | 'exporting' | 'ready'; loaded: number; total: number | null; blob: Blob | null; fileName: string }>({
   phase: 'idle',
   loaded: 0,
   total: null,
+  blob: null,
+  fileName: '',
 })
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
@@ -2839,42 +2869,44 @@ async function shareProjectZip(blob: Blob, fileName: string): Promise<void> {
     && typeof navigator.share === 'function'
     && (typeof navigator.canShare !== 'function' || navigator.canShare(shareData))
   if (!canShareFiles) {
-    downloadProjectZipFallback(blob, fileName)
-    return
+    throw new Error('File sharing is not supported in this browser.')
   }
+  await navigator.share(shareData)
+}
+
+function onCloseProjectZipExportModal(): void {
+  if (projectZipExportStatus.value.phase === 'exporting') return
+  projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '' }
+}
+
+function onDownloadProjectZipExport(): void {
+  const { blob, fileName } = projectZipExportStatus.value
+  if (!blob || !fileName) return
+  downloadProjectZipFallback(blob, fileName)
+}
+
+async function onShareProjectZipExport(): Promise<void> {
+  const { blob, fileName } = projectZipExportStatus.value
+  if (!blob || !fileName) return
   try {
-    await navigator.share(shareData)
+    await shareProjectZip(blob, fileName)
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return
-    const message = error instanceof Error ? error.message : ''
-    if (error instanceof DOMException && error.name === 'NotAllowedError') {
-      downloadProjectZipFallback(blob, fileName)
-      return
-    }
-    if (message.includes('Must be handling a user gesture')) {
-      downloadProjectZipFallback(blob, fileName)
-      return
-    }
-    throw error
+    const message = error instanceof Error ? error.message : 'Failed to share project.'
+    window.alert(message)
   }
 }
 
 async function exportProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
-  projectZipExportStatus.value = { phase: 'exporting', loaded: 0, total: null }
+  projectZipExportStatus.value = { phase: 'exporting', loaded: 0, total: null, blob: null, fileName: '' }
   try {
     const { blob, fileName } = await downloadProjectZip(targetCwd, ({ loaded, total }) => {
-      projectZipExportStatus.value = { phase: 'exporting', loaded, total }
+      projectZipExportStatus.value = { ...projectZipExportStatus.value, phase: 'exporting', loaded, total }
     })
-    await shareProjectZip(blob, fileName)
-    projectZipExportStatus.value = { phase: 'ready', loaded: blob.size, total: blob.size }
-    window.setTimeout(() => {
-      if (projectZipExportStatus.value.phase === 'ready') {
-        projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null }
-      }
-    }, 1800)
+    projectZipExportStatus.value = { phase: 'ready', loaded: blob.size, total: blob.size, blob, fileName }
   } catch (error) {
-    projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null }
+    projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null, blob: null, fileName: '' }
     if (error instanceof DOMException && error.name === 'AbortError') return
     const message = error instanceof Error ? error.message : 'Failed to export project.'
     window.alert(message)
@@ -5951,12 +5983,32 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   transform: translateY(8px);
 }
 
-.project-zip-progress {
-  @apply fixed right-4 bottom-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 shadow-xl;
+.project-zip-modal-backdrop {
+  @apply fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4;
+}
+
+.project-zip-modal {
+  @apply flex w-full max-w-md flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-2xl;
+}
+
+.project-zip-modal-header {
+  @apply flex items-center justify-between gap-3;
+}
+
+.project-zip-modal-title {
+  @apply text-base font-semibold;
+}
+
+.project-zip-modal-close {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-lg leading-none text-zinc-600 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.project-zip-modal-copy {
+  @apply min-h-5 truncate text-sm text-zinc-600;
 }
 
 .project-zip-progress-label {
-  @apply mb-2 flex items-center justify-between gap-3 font-semibold;
+  @apply flex items-center justify-between gap-3 text-sm font-semibold;
 }
 
 .project-zip-progress-label span:last-child {
@@ -5971,8 +6023,35 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply h-full rounded-full bg-emerald-600 transition-all duration-150;
 }
 
-:root.dark .project-zip-progress {
+.project-zip-modal-actions {
+  @apply flex items-center justify-end gap-2;
+}
+
+.project-zip-modal-cancel,
+.project-zip-modal-action {
+  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+}
+
+.project-zip-modal-action-primary {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+}
+
+:root.dark .project-zip-modal {
   @apply border-zinc-700 bg-zinc-900 text-zinc-100;
+}
+
+:root.dark .project-zip-modal-close,
+:root.dark .project-zip-modal-cancel,
+:root.dark .project-zip-modal-action {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .project-zip-modal-copy {
+  @apply text-zinc-400;
+}
+
+:root.dark .project-zip-modal-action-primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
 }
 
 :root.dark .project-zip-progress-label span:last-child {
