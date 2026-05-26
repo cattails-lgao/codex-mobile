@@ -1561,7 +1561,7 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
 function readImportedSessionRecord(raw: string, path: string, cwd: string, fallbackId: string, importedTitle = ''): ImportedSessionRecord {
   let id = fallbackId
   let createdAtMs = Date.now()
-  let updatedAtMs = createdAtMs
+  let updatedAtMs = 0
   let model = ''
   let modelProvider = 'openai'
   let cliVersion = ''
@@ -1612,6 +1612,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
 
   const now = Date.now()
   createdAtMs = Math.min(createdAtMs, now)
+  if (updatedAtMs <= 0) updatedAtMs = createdAtMs
   updatedAtMs = Math.min(Math.max(updatedAtMs, createdAtMs), now)
   return { id, path, cwd, title, createdAtMs, updatedAtMs, model, modelProvider, cliVersion, firstUserMessage }
 }
@@ -1971,13 +1972,18 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
       if (parsed[0] === 'imported') parsed.shift()
       const target = join(importedSessionsRoot, ...parsed)
       await mkdir(dirname(target), { recursive: true })
-      const importedSessionRaw = rewriteImportedSession(entry.data.toString('utf8'), projectPath, importedThreadId)
-      await writeFile(target, importedSessionRaw, 'utf8')
+      const sourceSessionRaw = entry.data.toString('utf8')
       const importedMetadata = importedThreadMetadata.get(entry.path)
+      const sourceRecord = readImportedSessionRecord(sourceSessionRaw, target, projectPath, importedThreadId, importedMetadata?.title ?? '')
+      const importedSessionRaw = rewriteImportedSession(sourceSessionRaw, projectPath, importedThreadId)
+      await writeFile(target, importedSessionRaw, 'utf8')
       const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, importedMetadata?.title ?? '')
       if ((importedMetadata?.updatedAtMs ?? 0) > 0) {
         importedRecord.updatedAtMs = importedMetadata?.updatedAtMs ?? importedRecord.updatedAtMs
         importedRecord.createdAtMs = Math.min(importedRecord.createdAtMs, importedRecord.updatedAtMs)
+      } else if (sourceRecord.updatedAtMs > 0) {
+        importedRecord.updatedAtMs = sourceRecord.updatedAtMs
+        importedRecord.createdAtMs = Math.min(sourceRecord.createdAtMs, importedRecord.updatedAtMs)
       }
       registerImportedSessionInStateDb(importedRecord)
       if (importedRecord.title) {

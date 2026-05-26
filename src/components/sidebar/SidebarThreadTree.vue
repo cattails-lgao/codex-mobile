@@ -335,7 +335,7 @@
                         Browse files
                       </button>
                       <button class="project-menu-item" type="button" @click="onSaveProject(group.projectName)">
-                        Save project
+                        Save Project to Zip
                       </button>
                       <button class="project-menu-item" type="button" @click="openProjectAutomationDialog(group.projectName)">
                         {{ projectHasAutomation(group.projectName) ? 'Manage automations…' : 'Add automation…' }}
@@ -619,7 +619,7 @@
           Browse files
         </button>
         <button class="thread-menu-item" type="button" @click="onSaveThreadProject(openThreadMenuThread.id)">
-          Save project
+          Save Project to Zip
         </button>
         <button class="thread-menu-item" type="button" @click="onCopyThreadPath(openThreadMenuThread.id)">
           Copy path

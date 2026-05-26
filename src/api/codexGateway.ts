@@ -3084,13 +3084,64 @@ export function getProjectZipDownloadUrl(cwd: string): string {
   return `/codex-api/project-zip?${query.toString()}`
 }
 
-export async function validateProjectZipDownload(cwd: string): Promise<void> {
-  const response = await fetch(getProjectZipDownloadUrl(cwd), { method: 'HEAD' })
+function readDownloadFileName(response: Response, fallback: string): string {
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/iu)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/iu)
+  return plainMatch?.[1]?.trim() || fallback
+}
+
+export async function downloadProjectZip(
+  cwd: string,
+  onProgress?: (progress: { loaded: number; total: number | null }) => void,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await fetch(getProjectZipDownloadUrl(cwd))
   if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const fallback = 'Failed to export project'
+    const payloadMessage = getErrorMessageFromPayload(payload, fallback)
     const statusLabel = [response.status ? String(response.status) : '', response.statusText].filter(Boolean).join(' ')
-    const message = statusLabel ? `Failed to export project: ${statusLabel}` : 'Failed to export project'
+    const message = payloadMessage !== fallback
+      ? payloadMessage
+      : statusLabel ? `Failed to export project: ${statusLabel}` : fallback
     throw new Error(message)
   }
+
+  const totalHeader = Number(response.headers.get('content-length') ?? '')
+  const total = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : null
+  const fileName = readDownloadFileName(response, 'project.zip')
+  const reader = response.body?.getReader()
+  if (!reader) {
+    const blob = await response.blob()
+    onProgress?.({ loaded: blob.size, total: blob.size || total })
+    return { blob, fileName }
+  }
+
+  const chunks: Uint8Array[] = []
+  let loaded = 0
+  onProgress?.({ loaded, total })
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    chunks.push(new Uint8Array(value))
+    loaded += value.byteLength
+    onProgress?.({ loaded, total })
+  }
+
+  const blobParts = chunks.map((chunk) => {
+    const copy = new Uint8Array(chunk.byteLength)
+    copy.set(chunk)
+    return copy.buffer
+  })
+  return { blob: new Blob(blobParts, { type: response.headers.get('content-type') ?? 'application/zip' }), fileName }
 }
 
 type StoredZipEntry = {

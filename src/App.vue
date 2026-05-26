@@ -1078,6 +1078,15 @@
       </section>
     </template>
   </DesktopLayout>
+  <div v-if="projectZipSaveStatus.phase !== 'idle'" class="project-zip-progress" role="status" aria-live="polite">
+    <div class="project-zip-progress-label">
+      <span>{{ projectZipSaveStatus.phase === 'saving' ? t('Saving Project to Zip') : t('Project ZIP saved') }}</span>
+      <span>{{ projectZipProgressText }}</span>
+    </div>
+    <div class="project-zip-progress-track">
+      <div class="project-zip-progress-fill" :style="{ width: projectZipProgressWidth }" />
+    </div>
+  </div>
   <div
     v-if="isCodexLoginModalOpen"
     class="codex-login-modal-backdrop"
@@ -1180,7 +1189,7 @@ import {
   createPermanentWorktree,
   createWorktree,
   createProjectlessThreadDirectory,
-  getProjectZipDownloadUrl,
+  downloadProjectZip,
   getGitBranchState,
   getGitBranchCommits,
   getGitCommitFiles,
@@ -1209,7 +1218,6 @@ import {
   startCodexLogin,
   searchThreads,
   switchAccount,
-  validateProjectZipDownload,
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
@@ -1519,6 +1527,11 @@ const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, 
   labels: {},
   projectOrder: [],
 })
+const projectZipSaveStatus = ref<{ phase: 'idle' | 'saving' | 'saved'; loaded: number; total: number | null }>({
+  phase: 'idle',
+  loaded: 0,
+  total: null,
+})
 const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: string; message: string }>({
   phase: 'idle',
   title: '',
@@ -1602,6 +1615,20 @@ const dictationClickToToggle = ref(loadBoolPref(DICTATION_CLICK_TO_TOGGLE_KEY, f
 const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
+const projectZipProgressText = computed(() => {
+  const { loaded, total } = projectZipSaveStatus.value
+  const loadedLabel = formatByteCount(loaded)
+  if (total && total > 0) {
+    return `${loadedLabel} / ${formatByteCount(total)}`
+  }
+  return loaded > 0 ? loadedLabel : t('Preparing...')
+})
+const projectZipProgressWidth = computed(() => {
+  const { loaded, total, phase } = projectZipSaveStatus.value
+  if (phase === 'saved') return '100%'
+  if (!total || total <= 0) return loaded > 0 ? '55%' : '20%'
+  return `${Math.min(100, Math.max(5, Math.round((loaded / total) * 100)))}%`
+})
 const showFirstLaunchPluginsCard = ref(false)
 const freeModeEnabled = ref(false)
 const freeModeLoading = ref(false)
@@ -2807,17 +2834,41 @@ function getThreadCwd(threadId: string): string {
   return ''
 }
 
+function formatByteCount(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
+}
+
 async function saveProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
+  projectZipSaveStatus.value = { phase: 'saving', loaded: 0, total: null }
   try {
-    await validateProjectZipDownload(targetCwd)
+    const { blob, fileName } = await downloadProjectZip(targetCwd, ({ loaded, total }) => {
+      projectZipSaveStatus.value = { phase: 'saving', loaded, total }
+    })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = getProjectZipDownloadUrl(targetCwd)
-    link.download = ''
+    link.href = url
+    link.download = fileName
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+    projectZipSaveStatus.value = { phase: 'saved', loaded: blob.size, total: blob.size }
+    window.setTimeout(() => {
+      if (projectZipSaveStatus.value.phase === 'saved') {
+        projectZipSaveStatus.value = { phase: 'idle', loaded: 0, total: null }
+      }
+    }, 1800)
   } catch (error) {
+    projectZipSaveStatus.value = { phase: 'idle', loaded: 0, total: null }
     const message = error instanceof Error ? error.message : 'Failed to export project.'
     window.alert(message)
   }
@@ -5936,6 +5987,42 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 .settings-panel-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+.project-zip-progress {
+  @apply fixed right-4 bottom-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 shadow-xl;
+}
+
+.project-zip-progress-label {
+  @apply mb-2 flex items-center justify-between gap-3 font-semibold;
+}
+
+.project-zip-progress-label span:last-child {
+  @apply shrink-0 text-xs font-medium text-zinc-500;
+}
+
+.project-zip-progress-track {
+  @apply h-2 overflow-hidden rounded-full bg-zinc-100;
+}
+
+.project-zip-progress-fill {
+  @apply h-full rounded-full bg-emerald-600 transition-all duration-150;
+}
+
+:root.dark .project-zip-progress {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100;
+}
+
+:root.dark .project-zip-progress-label span:last-child {
+  @apply text-zinc-400;
+}
+
+:root.dark .project-zip-progress-track {
+  @apply bg-zinc-800;
+}
+
+:root.dark .project-zip-progress-fill {
+  @apply bg-emerald-500;
 }
 
 .sidebar-settings-context-row {
