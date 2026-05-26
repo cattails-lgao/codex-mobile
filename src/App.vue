@@ -2842,7 +2842,21 @@ async function shareProjectZip(blob: Blob, fileName: string): Promise<void> {
     downloadProjectZipFallback(blob, fileName)
     return
   }
-  await navigator.share(shareData)
+  try {
+    await navigator.share(shareData)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    const message = error instanceof Error ? error.message : ''
+    if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      downloadProjectZipFallback(blob, fileName)
+      return
+    }
+    if (message.includes('Must be handling a user gesture')) {
+      downloadProjectZipFallback(blob, fileName)
+      return
+    }
+    throw error
+  }
 }
 
 async function exportProjectZipForCwd(targetCwd: string): Promise<void> {
