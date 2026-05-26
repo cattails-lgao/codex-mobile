@@ -8,7 +8,7 @@ Source: [project-zip-portability.md](../../raw/features/project-zip-portability.
 
 Project and thread menus expose `Save project`. The exported ZIP contains project files, matching Codex session JSONL files under `.codex-project/chats/`, and matching generated thread titles under `.codex-project/chats/thread-titles.json`. Standard heavyweight/generated metadata such as `.git`, `node_modules`, standard Python virtualenv/cache folders, JS framework caches, Gradle/Rust/.NET outputs, coverage folders, `build`, `dist`, `target`, and OS metadata are excluded by the feature tests. When the export source is inside a Git repo, Git-ignored files are also excluded.
 
-The manifest may include the source project path because the server is local-user facing and the archive is created by the user for their own portability flow.
+The manifest records portable project metadata such as export time and project name. It does not need the source machine's absolute project path for import.
 
 Source: [project-zip-portability.md](../../raw/features/project-zip-portability.md)
 
@@ -21,6 +21,16 @@ Browser folder import preserves every selected file from the picker, including g
 Imported files are written to a new project folder. Chat JSONL entries under `.codex-project/chats/` are rewritten into the destination `CODEX_HOME` with `cwd` set to the imported project path. Exported title metadata is written into the destination state database and title cache so imported rows keep the original generated titles. Provider/model metadata is rewritten to the current local provider/model so resumed imported threads use the destination configuration.
 
 Project root state is refreshed after import so a newly imported project appears in the sidebar even when it has no threads yet.
+
+Source: [project-zip-portability.md](../../raw/features/project-zip-portability.md)
+
+## Performance
+
+Project ZIP export streams the archive to the HTTP response instead of building the final ZIP buffer in memory. The stream writer handles response backpressure and client disconnects, and the project walker skips generated folders, dependency directories, build outputs, caches, OS metadata, and Git-ignored files when Git is available.
+
+Chat export scans matching session JSONL files and adds them to `.codex-project/chats/`; project import parses the selected ZIP into memory once because the browser provides the upload as a single file. Imported chat state database writes are batched into one SQLite transaction per import instead of spawning SQLite once per chat.
+
+Measured validation for this branch: `pnpm run build` passes, and a fresh `dev2` import of `MiloAgent (4).zip` restored 10 visible imported chat rows in timestamp order on `http://127.0.0.1:5177/`. Full profiler traces were not captured for this local portability flow.
 
 Source: [project-zip-portability.md](../../raw/features/project-zip-portability.md)
 

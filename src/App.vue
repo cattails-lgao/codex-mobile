@@ -650,6 +650,8 @@
                     class="new-thread-project-import-input"
                     type="file"
                     accept=".zip,application/zip"
+                    tabindex="-1"
+                    aria-hidden="true"
                     @change="onDirectProjectImportFileChange"
                   />
                   <input
@@ -659,6 +661,8 @@
                     webkitdirectory
                     directory
                     multiple
+                    tabindex="-1"
+                    aria-hidden="true"
                     @change="onDirectProjectImportFolderChange"
                   />
                 </div>
@@ -5253,7 +5257,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-project-import-input {
-  @apply sr-only;
+  display: none;
 }
 
 .new-thread-launch-card {

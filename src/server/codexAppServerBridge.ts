@@ -1654,23 +1654,12 @@ CREATE TABLE IF NOT EXISTS threads (
   return true
 }
 
-function registerImportedSessionInStateDb(session: ImportedSessionRecord): void {
-  const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
-  if (!ensureImportedThreadsStateDbTable(stateDbPath)) return
-  const columnsResult = spawnSync('sqlite3', [stateDbPath, 'PRAGMA table_info(threads);'], { encoding: 'utf8' })
-  if (columnsResult.status !== 0) {
-    console.warn('[project-import] failed to inspect state database', columnsResult.stderr || columnsResult.stdout)
-    return
-  }
-  const availableColumns = new Set(columnsResult.stdout
-    .split(/\r?\n/u)
-    .map((line) => line.split('|')[1])
-    .filter((value): value is string => Boolean(value)))
+function buildImportedSessionStateDbValues(session: ImportedSessionRecord): Record<string, string> {
   const title = session.title || session.firstUserMessage || 'Imported chat'
   const createdAt = Math.floor(session.createdAtMs / 1000)
   const updatedAt = Math.floor(session.updatedAtMs / 1000)
   const sandboxPolicy = JSON.stringify({ type: 'workspace-write', network_access: true })
-  const values: Record<string, string> = {
+  return {
     id: sqlString(session.id),
     rollout_path: sqlString(session.path),
     created_at: String(createdAt),
@@ -1696,11 +1685,31 @@ function registerImportedSessionInStateDb(session: ImportedSessionRecord): void 
     thread_source: "'user'",
     preview: sqlString(title),
   }
+}
+
+function registerImportedSessionsInStateDb(sessions: ImportedSessionRecord[]): void {
+  if (sessions.length === 0) return
+  const stateDbPath = join(getCodexHomeDir(), 'state_5.sqlite')
+  if (!ensureImportedThreadsStateDbTable(stateDbPath)) return
+  const columnsResult = spawnSync('sqlite3', [stateDbPath, 'PRAGMA table_info(threads);'], { encoding: 'utf8' })
+  if (columnsResult.status !== 0) {
+    console.warn('[project-import] failed to inspect state database', columnsResult.stderr || columnsResult.stdout)
+    return
+  }
+  const availableColumns = new Set(columnsResult.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.split('|')[1])
+    .filter((value): value is string => Boolean(value)))
+  const values = buildImportedSessionStateDbValues(sessions[0])
   const columns = Object.keys(values).filter((column) => availableColumns.has(column))
-  const sql = `INSERT OR REPLACE INTO threads (${columns.join(', ')}) VALUES (${columns.map((column) => values[column]).join(', ')});`
+  const inserts = sessions.map((session) => {
+    const sessionValues = buildImportedSessionStateDbValues(session)
+    return `INSERT OR REPLACE INTO threads (${columns.join(', ')}) VALUES (${columns.map((column) => sessionValues[column]).join(', ')});`
+  })
+  const sql = ['BEGIN;', ...inserts, 'COMMIT;'].join('\n')
   const result = spawnSync('sqlite3', [stateDbPath, sql], { encoding: 'utf8' })
   if (result.status !== 0) {
-    console.warn('[project-import] failed to register imported session in state database', result.stderr || result.stdout)
+    console.warn('[project-import] failed to register imported sessions in state database', result.stderr || result.stdout)
   }
 }
 
@@ -2005,6 +2014,7 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
   await mkdir(projectPath, { recursive: true })
 
   let importedSessions = 0
+  const importedSessionRecords: ImportedSessionRecord[] = []
   const importedSessionsRoot = join(getCodexHomeDir(), 'sessions')
   const chatEntries = entries
     .filter((entry) => entry.path.startsWith('.codex-project/chats/') && !entry.isDirectory && extname(entry.path) === '.jsonl')
@@ -2030,13 +2040,14 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
       const updatedAtDate = new Date(chatEntry.updatedAtMs)
       await utimes(target, updatedAtDate, updatedAtDate).catch(() => {})
     }
-    registerImportedSessionInStateDb(importedRecord)
+    importedSessionRecords.push(importedRecord)
     if (importedRecord.title) {
       const cache = await readThreadTitleCache()
       await writeThreadTitleCache(updateThreadTitleCache(cache, importedThreadId, importedRecord.title))
     }
     importedSessions += 1
   }
+  registerImportedSessionsInStateDb(importedSessionRecords)
 
   for (const entry of entries) {
     if (entry.path.startsWith('.codex-project/chats/')) {
