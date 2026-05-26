@@ -5,7 +5,7 @@ Date: 2026-05-26
 Project portability adds local project export/import flows to `codex-web-local`.
 
 Implementation facts:
-- Project and thread context menus expose `Save project`, exporting the selected project folder as a browser-downloaded ZIP.
+- Project and thread context menus expose `Export Project`, sharing the selected project folder as a ZIP file.
 - The new-thread home actions expose `Import Project` next to `Create Project`.
 - Import supports exported ZIP files.
 - Exported archives include project files and matching Codex chat JSONL history under `.codex-project/chats/`.

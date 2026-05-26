@@ -1054,9 +1054,9 @@
       </section>
     </template>
   </DesktopLayout>
-  <div v-if="projectZipSaveStatus.phase !== 'idle'" class="project-zip-progress" role="status" aria-live="polite">
+  <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-progress" role="status" aria-live="polite">
     <div class="project-zip-progress-label">
-      <span>{{ projectZipSaveStatus.phase === 'saving' ? t('Saving Project to Zip') : t('Project ZIP saved') }}</span>
+      <span>{{ projectZipExportStatus.phase === 'exporting' ? t('Exporting Project') : t('Project ZIP ready') }}</span>
       <span>{{ projectZipProgressText }}</span>
     </div>
     <div class="project-zip-progress-track">
@@ -1502,7 +1502,7 @@ const workspaceRootOptionsState = ref<{ order: string[]; labels: Record<string, 
   labels: {},
   projectOrder: [],
 })
-const projectZipSaveStatus = ref<{ phase: 'idle' | 'saving' | 'saved'; loaded: number; total: number | null }>({
+const projectZipExportStatus = ref<{ phase: 'idle' | 'exporting' | 'ready'; loaded: number; total: number | null }>({
   phase: 'idle',
   loaded: 0,
   total: null,
@@ -1591,7 +1591,7 @@ const dictationAutoSend = ref(loadBoolPref(DICTATION_AUTO_SEND_KEY, true))
 const dictationLanguage = ref(loadDictationLanguagePref())
 const dictationLanguageOptions = computed(() => buildDictationLanguageOptions())
 const projectZipProgressText = computed(() => {
-  const { loaded, total } = projectZipSaveStatus.value
+  const { loaded, total } = projectZipExportStatus.value
   const loadedLabel = formatByteCount(loaded)
   if (total && total > 0) {
     return `${loadedLabel} / ${formatByteCount(total)}`
@@ -1599,8 +1599,8 @@ const projectZipProgressText = computed(() => {
   return loaded > 0 ? loadedLabel : t('Preparing...')
 })
 const projectZipProgressWidth = computed(() => {
-  const { loaded, total, phase } = projectZipSaveStatus.value
-  if (phase === 'saved') return '100%'
+  const { loaded, total, phase } = projectZipExportStatus.value
+  if (phase === 'ready') return '100%'
   if (!total || total <= 0) return loaded > 0 ? '55%' : '20%'
   return `${Math.min(100, Math.max(5, Math.round((loaded / total) * 100)))}%`
 })
@@ -2790,12 +2790,12 @@ function onBrowseProjectFiles(projectName: string): void {
 
 async function onSaveProject(projectName: string): Promise<void> {
   const targetCwd = getProjectCwd(projectName)
-  await saveProjectZipForCwd(targetCwd)
+  await exportProjectZipForCwd(targetCwd)
 }
 
 async function onSaveThreadProject(threadId: string): Promise<void> {
   const targetCwd = getThreadCwd(threadId)
-  await saveProjectZipForCwd(targetCwd)
+  await exportProjectZipForCwd(targetCwd)
 }
 
 function getThreadCwd(threadId: string): string {
@@ -2818,29 +2818,50 @@ function formatByteCount(bytes: number): string {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
 }
 
-async function saveProjectZipForCwd(targetCwd: string): Promise<void> {
+function downloadProjectZipFallback(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+}
+
+async function shareProjectZip(blob: Blob, fileName: string): Promise<void> {
+  const file = new File([blob], fileName, { type: blob.type || 'application/zip' })
+  const shareData = {
+    files: [file],
+    title: fileName,
+  }
+  const canShareFiles = typeof navigator !== 'undefined'
+    && typeof navigator.share === 'function'
+    && (typeof navigator.canShare !== 'function' || navigator.canShare(shareData))
+  if (!canShareFiles) {
+    downloadProjectZipFallback(blob, fileName)
+    return
+  }
+  await navigator.share(shareData)
+}
+
+async function exportProjectZipForCwd(targetCwd: string): Promise<void> {
   if (!targetCwd || typeof document === 'undefined') return
-  projectZipSaveStatus.value = { phase: 'saving', loaded: 0, total: null }
+  projectZipExportStatus.value = { phase: 'exporting', loaded: 0, total: null }
   try {
     const { blob, fileName } = await downloadProjectZip(targetCwd, ({ loaded, total }) => {
-      projectZipSaveStatus.value = { phase: 'saving', loaded, total }
+      projectZipExportStatus.value = { phase: 'exporting', loaded, total }
     })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = fileName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.setTimeout(() => URL.revokeObjectURL(url), 30000)
-    projectZipSaveStatus.value = { phase: 'saved', loaded: blob.size, total: blob.size }
+    await shareProjectZip(blob, fileName)
+    projectZipExportStatus.value = { phase: 'ready', loaded: blob.size, total: blob.size }
     window.setTimeout(() => {
-      if (projectZipSaveStatus.value.phase === 'saved') {
-        projectZipSaveStatus.value = { phase: 'idle', loaded: 0, total: null }
+      if (projectZipExportStatus.value.phase === 'ready') {
+        projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null }
       }
     }, 1800)
   } catch (error) {
-    projectZipSaveStatus.value = { phase: 'idle', loaded: 0, total: null }
+    projectZipExportStatus.value = { phase: 'idle', loaded: 0, total: null }
+    if (error instanceof DOMException && error.name === 'AbortError') return
     const message = error instanceof Error ? error.message : 'Failed to export project.'
     window.alert(message)
   }

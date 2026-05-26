@@ -1,4 +1,4 @@
-### Feature: Project menu Save project ZIP export
+### Feature: Project menu Export Project ZIP share
 
 #### Prerequisites / Setup
 - Start the app from a checkout with at least one saved local project root.
@@ -7,17 +7,17 @@
 
 #### Actions
 1. Open the sidebar project action menu in light theme.
-2. Click `Save Project to Zip`.
-3. Confirm the browser receives a `.zip` download for the selected project.
+2. Click `Export Project`.
+3. Confirm the browser share sheet receives a `.zip` file for the selected project, or the browser downloads the ZIP when file sharing is unsupported.
 4. Inspect the ZIP contents.
-5. Open a thread action menu for a thread inside the same project, click `Save Project to Zip`, and confirm it downloads the same project ZIP.
+5. Open a thread action menu for a thread inside the same project, click `Export Project`, and confirm it shares the same project ZIP.
 6. On the new-thread screen, click `Import Project` next to `Create Project`, choose the downloaded archive in the ZIP file picker, and import it.
 7. Switch to dark theme and repeat steps 1-3.
 
 #### Expected Results
-- The project menu contains `Save Project to Zip` between `Browse files` and automation actions.
-- Each thread menu contains `Save Project to Zip` after `Browse files`, exporting that thread's project folder, including projectless chat folders and other local directories.
-- Clicking `Save Project to Zip` shows progress while the ZIP downloads into a blob, then saves the blob without navigating away from the app.
+- The project menu contains `Export Project` between `Browse files` and automation actions.
+- Each thread menu contains `Export Project` after `Browse files`, exporting that thread's project folder, including projectless chat folders and other local directories.
+- Clicking `Export Project` shows progress while the ZIP downloads into a blob, then triggers file sharing without navigating away from the app.
 - The archive includes project files under relative paths.
 - `.git`, `node_modules`, common language/package cache folders, standard virtualenv folders, build output folders, coverage folders, OS metadata files, and Git-ignored files are not included when export runs inside a Git repo.
 - Existing non-chat files under a project's `.codex-project/` folder round-trip through import; chat JSONL files under `.codex-project/chats/` are handled as imported Codex sessions.
@@ -29,5 +29,5 @@
 - The menu item remains readable and aligned in both light and dark themes.
 
 #### Rollback / Cleanup
-- Delete the downloaded ZIP files from the browser download location.
+- Delete any shared/exported ZIP files from the chosen share destination or browser download location.
 - Delete the imported project folder and any imported test sessions from the isolated `CODEX_HOME`.
