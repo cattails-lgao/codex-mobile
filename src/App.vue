@@ -99,7 +99,7 @@
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @copy-thread-chat="onCopyThreadChat"
             @automations-changed="onAutomationsChanged"
-            @start-new-chat="onStartNewThreadFromToolbar" />
+            @start-new-chat="onStartProjectlessNewChat" />
         </div>
 
         <div
@@ -2788,6 +2788,14 @@ function onStartNewThreadFromToolbar(): void {
   if (resolvedCwd) {
     newThreadCwd.value = resolvedCwd
   }
+  newThreadRuntime.value = 'local'
+  if (isMobile.value) setSidebarCollapsed(true)
+  if (isHomeRoute.value) return
+  void router.push({ name: 'home' })
+}
+
+function onStartProjectlessNewChat(): void {
+  newThreadCwd.value = ''
   newThreadRuntime.value = 'local'
   if (isMobile.value) setSidebarCollapsed(true)
   if (isHomeRoute.value) return
