@@ -3099,41 +3099,6 @@ type StoredZipEntry = {
   modifiedAt: Date
 }
 
-const FOLDER_IMPORT_SKIPPED_SEGMENTS = new Set([
-  '.build',
-  '.cache',
-  '.eggs',
-  '.eslintcache',
-  '.gradle',
-  '.git',
-  '.ipynb_checkpoints',
-  '.mypy_cache',
-  '.next',
-  '.nox',
-  '.nuxt',
-  '.nyc_output',
-  '.parcel-cache',
-  '.pytest_cache',
-  '.ruff_cache',
-  '.svelte-kit',
-  '.turbo',
-  '.tox',
-  '.venv',
-  '.vite',
-  '__pycache__',
-  'bin',
-  'build',
-  'coverage',
-  'DerivedData',
-  'dist',
-  'htmlcov',
-  'node_modules',
-  'obj',
-  'target',
-  'venv',
-])
-const FOLDER_IMPORT_SKIPPED_FILES = new Set(['.coverage', '.DS_Store'])
-
 const ZIP_CRC_TABLE = new Uint32Array(256)
 for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
   let value = index
@@ -3243,9 +3208,7 @@ function normalizeFolderImportFilePath(file: File): { rootName: string; path: st
   const rootName = segments[0] || 'imported-project'
   const fileSegments = segments.slice(1)
   if (fileSegments.length === 0) return null
-  if (fileSegments.some((segment) => segment === '.' || segment === '..' || FOLDER_IMPORT_SKIPPED_SEGMENTS.has(segment))) return null
-  const fileName = fileSegments[fileSegments.length - 1] || ''
-  if (FOLDER_IMPORT_SKIPPED_FILES.has(fileName)) return null
+  if (fileSegments.some((segment) => segment === '.' || segment === '..')) return null
   return { rootName, path: fileSegments.join('/') }
 }
 
