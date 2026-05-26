@@ -235,7 +235,6 @@ const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const PROJECTLESS_THREAD_DIRECTORY_MAX_ATTEMPTS = 100
 const PROJECTLESS_THREAD_READABLE_DIRECTORY_ATTEMPTS = 20
 const PROJECTLESS_THREAD_SLUG_MAX_LENGTH = 80
-const PROJECT_IMPORT_MAX_BYTES = 200 * 1024 * 1024
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
 const API_PERF_MS_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_MS_THRESHOLD'
 const API_PERF_BODY_MB_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_BODY_MB_THRESHOLD'
@@ -1667,6 +1666,7 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
     data: Buffer.from(JSON.stringify({
       version: 1,
       exportedAt: new Date().toISOString(),
+      projectRoot: canonicalProjectRoot,
       projectName: basename(canonicalProjectRoot) || 'project',
     }, null, 2)),
     mtime: new Date(),
@@ -5886,18 +5886,10 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(text) as unknown
 }
 
-async function readRawBody(req: IncomingMessage, maxBytes?: number): Promise<Buffer> {
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Uint8Array[] = []
-  let totalBytes = 0
   for await (const chunk of req) {
-    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
-    totalBytes += buffer.length
-    if (typeof maxBytes === 'number' && totalBytes > maxBytes) {
-      const error = new Error('Project ZIP is too large')
-      Object.assign(error, { code: 'ERR_BODY_TOO_LARGE' })
-      throw error
-    }
-    chunks.push(buffer)
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
   }
   return Buffer.concat(chunks)
 }
@@ -8899,7 +8891,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          const buffer = await readRawBody(req, PROJECT_IMPORT_MAX_BYTES)
+          const buffer = await readRawBody(req)
           if (buffer.length === 0) {
             setJson(res, 400, { error: 'Missing project ZIP' })
             return
@@ -8907,10 +8899,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const result = await importProjectZip(buffer, parent)
           setJson(res, 200, { data: { path: result.projectPath, importedSessions: result.importedSessions } })
         } catch (error) {
-          if (getErrorCode(error) === 'ERR_BODY_TOO_LARGE') {
-            setJson(res, 413, { error: 'Project ZIP is too large' })
-            return
-          }
           setJson(res, 400, { error: getErrorMessage(error, 'Failed to import project') })
         }
         return
