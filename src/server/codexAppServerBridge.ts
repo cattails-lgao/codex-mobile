@@ -1100,10 +1100,6 @@ const PROJECT_ZIP_SKIPPED_NAMES = new Set([
   'venv',
 ])
 
-function isProjectZipSkippedName(name: string): boolean {
-  return PROJECT_ZIP_SKIPPED_NAMES.has(name) || name.startsWith('.venv-')
-}
-
 type ZipCentralDirectoryEntry = {
   path: string
   crc32: number
@@ -1308,7 +1304,7 @@ async function* walkProjectZipEntries(
 ): AsyncGenerator<{ path: string; isDirectory: boolean; mtime: Date }> {
   const entries = await readdir(current, { withFileTypes: true })
   for (const entry of entries) {
-    if (isProjectZipSkippedName(entry.name)) continue
+    if (PROJECT_ZIP_SKIPPED_NAMES.has(entry.name)) continue
     const absolutePath = join(current, entry.name)
     if (ignoreMatcher.isIgnored(absolutePath)) continue
     const info = await lstat(absolutePath)

@@ -3134,10 +3134,6 @@ const FOLDER_IMPORT_SKIPPED_SEGMENTS = new Set([
 ])
 const FOLDER_IMPORT_SKIPPED_FILES = new Set(['.coverage', '.DS_Store'])
 
-function isFolderImportSkippedSegment(segment: string): boolean {
-  return FOLDER_IMPORT_SKIPPED_SEGMENTS.has(segment) || segment.startsWith('.venv-')
-}
-
 const ZIP_CRC_TABLE = new Uint32Array(256)
 for (let index = 0; index < ZIP_CRC_TABLE.length; index += 1) {
   let value = index
@@ -3247,7 +3243,7 @@ function normalizeFolderImportFilePath(file: File): { rootName: string; path: st
   const rootName = segments[0] || 'imported-project'
   const fileSegments = segments.slice(1)
   if (fileSegments.length === 0) return null
-  if (fileSegments.some((segment) => segment === '.' || segment === '..' || isFolderImportSkippedSegment(segment))) return null
+  if (fileSegments.some((segment) => segment === '.' || segment === '..' || FOLDER_IMPORT_SKIPPED_SEGMENTS.has(segment))) return null
   const fileName = fileSegments[fileSegments.length - 1] || ''
   if (FOLDER_IMPORT_SKIPPED_FILES.has(fileName)) return null
   return { rootName, path: fileSegments.join('/') }

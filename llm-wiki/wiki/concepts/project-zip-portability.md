@@ -6,7 +6,7 @@ Source: [project-zip-portability.md](../../raw/features/project-zip-portability.
 
 ## Export
 
-Project and thread menus expose `Save project`. The exported ZIP contains project files, matching Codex session JSONL files under `.codex-project/chats/`, and matching generated thread titles under `.codex-project/chats/thread-titles.json`. Standard heavyweight/generated metadata such as `.git`, `node_modules`, Python virtualenv/cache folders including `.venv-*`, JS framework caches, Gradle/Rust/.NET outputs, coverage folders, `build`, `dist`, `target`, and OS metadata are excluded by the feature tests. When the export source is inside a Git repo, Git-ignored files are also excluded.
+Project and thread menus expose `Save project`. The exported ZIP contains project files, matching Codex session JSONL files under `.codex-project/chats/`, and matching generated thread titles under `.codex-project/chats/thread-titles.json`. Standard heavyweight/generated metadata such as `.git`, `node_modules`, standard Python virtualenv/cache folders, JS framework caches, Gradle/Rust/.NET outputs, coverage folders, `build`, `dist`, `target`, and OS metadata are excluded by the feature tests. When the export source is inside a Git repo, Git-ignored files are also excluded.
 
 The manifest may include the source project path because the server is local-user facing and the archive is created by the user for their own portability flow.
 
