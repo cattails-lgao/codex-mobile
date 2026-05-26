@@ -21,6 +21,8 @@
 - Clicking `Save project` downloads a ZIP blob without navigating away from the app.
 - The archive includes project files under relative paths.
 - `.git`, `node_modules`, and `.DS_Store` entries are not included.
+- The generated `.codex-project/manifest.json` does not include the source machine's absolute project path.
+- Existing non-chat files under a project's `.codex-project/` folder round-trip through import; chat JSONL files under `.codex-project/chats/` are handled as imported Codex sessions.
 - Matching Codex session JSONL files are included under `.codex-project/chats/`.
 - Import creates a new project folder, restores project files, registers the imported project in the sidebar, and writes imported chat sessions into the active `CODEX_HOME` with `cwd` rewritten to the new project folder.
 - `Import from folder` opens a browser folder picker, uploads the selected folder through the project import flow, registers the imported copy as the active project, and shows it under Projects even when it has no threads yet.

@@ -3087,8 +3087,8 @@ export function getProjectZipDownloadUrl(cwd: string): string {
 export async function validateProjectZipDownload(cwd: string): Promise<void> {
   const response = await fetch(getProjectZipDownloadUrl(cwd), { method: 'HEAD' })
   if (!response.ok) {
-    const payload = await readJsonResponse(response)
-    const message = getErrorMessageFromPayload(payload, 'Failed to export project')
+    const statusLabel = [response.status ? String(response.status) : '', response.statusText].filter(Boolean).join(' ')
+    const message = statusLabel ? `Failed to export project: ${statusLabel}` : 'Failed to export project'
     throw new Error(message)
   }
 }
