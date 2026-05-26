@@ -7,12 +7,11 @@ Project portability adds local project export/import flows to `codex-web-local`.
 Implementation facts:
 - Project and thread context menus expose `Save project`, exporting the selected project folder as a browser-downloaded ZIP.
 - The new-thread home actions expose `Import Project` next to `Create Project`.
-- Import supports both an exported ZIP file and a browser folder picker upload.
+- Import supports exported ZIP files.
 - Exported archives include project files and matching Codex chat JSONL history under `.codex-project/chats/`.
 - The export manifest records portable project metadata, including project name and export time, but does not include the source machine's absolute project path.
 - Exported archives include matching thread title metadata under `.codex-project/chats/thread-titles.json`.
 - Project ZIP export skips generated dependency/cache/build folders, including `.git`, `node_modules`, standard Python virtualenv/cache folders, JS framework caches, Gradle/Rust/.NET outputs, coverage folders, `build`, `dist`, and `target`.
-- Browser folder import preserves every selected file from the browser picker, except unsafe relative paths containing `.` or `..` segments.
 - Project ZIP export also skips Git-ignored files when the source folder is inside a Git repository.
 - Imported chat JSONL is rewritten into the active `CODEX_HOME` with the imported project path as `cwd`.
 - Imported chats preserve exported title metadata in the destination state database and title cache.
@@ -28,7 +27,7 @@ Local-only security posture:
 
 Verification facts:
 - `pnpm run build` passed after the project import/export changes.
-- Folder import was verified in an isolated `CODEX_HOME` and showed the imported project in the sidebar even when it had no threads.
+- ZIP import was verified in an isolated `CODEX_HOME` and showed the imported project and chats in the sidebar.
 - Docker endpoint validation should use the fast reusable base image workflow for project import/export: build once from `scripts/docker-fast-test-base.Dockerfile`, then mount the current repo and run `node /repo/dist-cli/index.js`.
 - Packaged Docker images are only needed when testing package install, postinstall, auth/provider startup, or published runtime behavior.
 - Manual coverage lives in `tests/projects-sidebar-new-chat/project-menu-save-project-zip.md`.

@@ -625,26 +625,9 @@
                   <button class="new-thread-folder-action" type="button" @click="onOpenProjectSetupModal">
                     {{ t('Create Project') }}
                   </button>
-                  <div ref="projectImportMenuRef" class="new-thread-project-import-menu">
-                    <button
-                      class="new-thread-folder-action"
-                      type="button"
-                      :aria-expanded="isProjectImportMenuOpen"
-                      aria-haspopup="menu"
-                      :disabled="isProjectImporting"
-                      @click="onToggleProjectImportMenu"
-                    >
-                      {{ isProjectImporting ? t('Importing…') : t('Import Project') }}
-                    </button>
-                    <div v-if="isProjectImportMenuOpen" class="new-thread-project-import-menu-panel" role="menu">
-                      <button class="new-thread-project-import-menu-item" type="button" role="menuitem" @click="onChooseProjectImportZip">
-                        {{ t('Import from ZIP') }}
-                      </button>
-                      <button class="new-thread-project-import-menu-item" type="button" role="menuitem" @click="onChooseProjectImportFolder">
-                        {{ t('Import from folder') }}
-                      </button>
-                    </div>
-                  </div>
+                  <button class="new-thread-folder-action" type="button" :disabled="isProjectImporting" @click="onChooseProjectImportZip">
+                    {{ isProjectImporting ? t('Importing…') : t('Import Project') }}
+                  </button>
                   <input
                     ref="projectImportInputRef"
                     class="new-thread-project-import-input"
@@ -653,17 +636,6 @@
                     tabindex="-1"
                     aria-hidden="true"
                     @change="onDirectProjectImportFileChange"
-                  />
-                  <input
-                    ref="projectImportFolderInputRef"
-                    class="new-thread-project-import-input"
-                    type="file"
-                    webkitdirectory
-                    directory
-                    multiple
-                    tabindex="-1"
-                    aria-hidden="true"
-                    @change="onDirectProjectImportFolderChange"
                   />
                 </div>
                 <section v-if="showFirstLaunchPluginsCard" class="new-thread-launch-card" aria-label="Plugins and Apps announcement">
@@ -1211,7 +1183,6 @@ import {
   getThreadTerminalQuickCommands,
   getThreadTerminalStatus,
   getWorkspaceRootsState,
-  importProjectFolder,
   importProjectZip,
   listLocalDirectories,
   openProjectRoot,
@@ -1668,13 +1639,10 @@ const projectSetupBaseDir = ref('')
 const projectNameDraft = ref('')
 const githubCloneUrlDraft = ref('')
 const isProjectImporting = ref(false)
-const isProjectImportMenuOpen = ref(false)
 const projectSetupError = ref('')
 const isProjectSetupSubmitting = ref(false)
 const projectSetupPrimaryInputRef = ref<HTMLInputElement | null>(null)
 const projectImportInputRef = ref<HTMLInputElement | null>(null)
-const projectImportFolderInputRef = ref<HTMLInputElement | null>(null)
-const projectImportMenuRef = ref<HTMLElement | null>(null)
 const isExistingFolderPickerOpen = ref(false)
 const existingFolderPathInputRef = ref<HTMLInputElement | null>(null)
 const existingFolderFilterInputRef = ref<HTMLInputElement | null>(null)
@@ -3293,9 +3261,6 @@ function onDocumentPointerDown(event: PointerEvent): void {
       resetTerminalKeyboardFocusState()
     }
   }
-  if (isProjectImportMenuOpen.value && !projectImportMenuRef.value?.contains(target)) {
-    isProjectImportMenuOpen.value = false
-  }
   if (!isSettingsOpen.value) return
   if (settingsPanelRef.value?.contains(target)) return
   if (settingsButtonRef.value?.contains(target)) return
@@ -3736,23 +3701,12 @@ async function onSubmitProjectSetup(): Promise<void> {
   }
 }
 
-function onToggleProjectImportMenu(): void {
-  if (isProjectImporting.value) return
-  isProjectImportMenuOpen.value = !isProjectImportMenuOpen.value
-}
-
 function onChooseProjectImportZip(): void {
   openProjectImportInput(projectImportInputRef.value)
 }
 
-function onChooseProjectImportFolder(): void {
-  if (isProjectImporting.value) return
-  openProjectImportInput(projectImportFolderInputRef.value)
-}
-
 function openProjectImportInput(input: HTMLInputElement | null): void {
   if (isProjectImporting.value || !input) return
-  isProjectImportMenuOpen.value = false
   input.value = ''
   input.click()
 }
@@ -3788,14 +3742,6 @@ async function onDirectProjectImportFileChange(event: Event): Promise<void> {
   if (!file || isProjectImporting.value) return
 
   await finishProjectImport(input, (baseDir) => importProjectZip(file, baseDir), 'Failed to import project.')
-}
-
-async function onDirectProjectImportFolderChange(event: Event): Promise<void> {
-  const input = event.target instanceof HTMLInputElement ? event.target : null
-  const files = input?.files ?? null
-  if (!files || files.length === 0 || isProjectImporting.value) return
-
-  await finishProjectImport(input, (baseDir) => importProjectFolder(files, baseDir), 'Failed to import project folder.')
 }
 
 async function onOpenExistingFolder(): Promise<void> {
@@ -5231,18 +5177,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .new-thread-folder-actions {
   @apply mt-3 flex w-full max-w-3xl flex-wrap items-center justify-center gap-2;
-}
-
-.new-thread-project-import-menu {
-  @apply relative;
-}
-
-.new-thread-project-import-menu-panel {
-  @apply absolute left-1/2 top-[calc(100%+0.5rem)] z-30 flex w-48 -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 text-left shadow-xl shadow-zinc-950/10;
-}
-
-.new-thread-project-import-menu-item {
-  @apply rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400;
 }
 
 .new-thread-project-import-input {

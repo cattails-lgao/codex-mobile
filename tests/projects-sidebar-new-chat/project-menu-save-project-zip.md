@@ -11,9 +11,8 @@
 3. Confirm the browser receives a `.zip` download for the selected project.
 4. Inspect the ZIP contents.
 5. Open a thread action menu for a thread inside the same project, click `Save Project to Zip`, and confirm it downloads the same project ZIP.
-6. On the new-thread screen, click `Import Project` next to `Create Project`, choose `Import from ZIP`, choose the downloaded archive, and import it.
-7. Click `Import Project` again, choose `Import from folder`, select a local folder in the browser folder picker, and upload it.
-8. Switch to dark theme and repeat steps 1-3.
+6. On the new-thread screen, click `Import Project` next to `Create Project`, choose the downloaded archive in the ZIP file picker, and import it.
+7. Switch to dark theme and repeat steps 1-3.
 
 #### Expected Results
 - The project menu contains `Save Project to Zip` between `Browse files` and automation actions.
@@ -26,7 +25,6 @@
 - Matching thread titles and update timestamps are included under `.codex-project/chats/thread-titles.json`.
 - Import creates a new project folder, restores project files, registers the imported project in the sidebar, and writes imported chat sessions into the active `CODEX_HOME` with `cwd` rewritten to the new project folder.
 - Imported chat rows keep the original generated title and source ordering when title metadata is available, and sessions without explicit DB timestamp metadata keep their source JSONL ordering instead of being treated as newly updated.
-- `Import from folder` opens a browser folder picker, uploads every selected file without generated-folder filtering, registers the imported copy as the active project, and shows it under Projects even when it has no threads yet.
 - Imported chat sessions are rewritten to the destination home's current model and provider so resumed imported threads use the active local configuration.
 - The menu item remains readable and aligned in both light and dark themes.
 

@@ -14,9 +14,7 @@ Source: [project-zip-portability.md](../../raw/features/project-zip-portability.
 
 ## Import
 
-The new-thread home screen exposes `Import Project` next to `Create Project`. Import supports either an exported ZIP or a browser folder picker upload.
-
-Browser folder import preserves every selected file from the picker, including generated folders and OS metadata. It only rejects unsafe relative paths containing `.` or `..` segments.
+The new-thread home screen exposes `Import Project` next to `Create Project`. Clicking it opens the ZIP file picker for an exported project archive.
 
 Imported files are written to a new project folder. Chat JSONL entries under `.codex-project/chats/` are rewritten into the destination `CODEX_HOME` with `cwd` set to the imported project path. Exported title metadata is written into the destination state database and title cache so imported rows keep the original generated titles. Provider/model metadata is rewritten to the current local provider/model so resumed imported threads use the destination configuration.
 
