@@ -1133,6 +1133,7 @@ type ImportedSessionRecord = {
   id: string
   path: string
   cwd: string
+  title: string
   createdAtMs: number
   updatedAtMs: number
   model: string
@@ -1466,6 +1467,19 @@ function readSessionMetaCwd(raw: string): string {
   }
 }
 
+function readSessionMetaId(raw: string): string {
+  const firstLine = raw.split(/\r?\n/u, 1)[0]?.trim()
+  if (!firstLine) return ''
+  try {
+    const parsed = JSON.parse(firstLine) as unknown
+    const record = asRecord(parsed)
+    const payload = asRecord(record?.payload)
+    return readNonEmptyString(payload?.id)
+  } catch {
+    return ''
+  }
+}
+
 function getCurrentImportedSessionModelDefaults(): { model: string; modelProvider: string } | null {
   const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
   if (!fmState?.enabled) return null
@@ -1543,7 +1557,7 @@ function rewriteImportedSession(raw: string, importedCwd: string, importedThread
   return `${lines.join('\n')}\n`
 }
 
-function readImportedSessionRecord(raw: string, path: string, cwd: string, fallbackId: string): ImportedSessionRecord {
+function readImportedSessionRecord(raw: string, path: string, cwd: string, fallbackId: string, importedTitle = ''): ImportedSessionRecord {
   let id = fallbackId
   let createdAtMs = Date.now()
   let updatedAtMs = createdAtMs
@@ -1551,6 +1565,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
   let modelProvider = 'openai'
   let cliVersion = ''
   let firstUserMessage = ''
+  const title = importedTitle.trim()
 
   for (const line of raw.split(/\r?\n/u)) {
     if (!line.trim()) continue
@@ -1597,7 +1612,7 @@ function readImportedSessionRecord(raw: string, path: string, cwd: string, fallb
   const now = Date.now()
   createdAtMs = Math.min(createdAtMs, now)
   updatedAtMs = Math.min(Math.max(updatedAtMs, createdAtMs), now)
-  return { id, path, cwd, createdAtMs, updatedAtMs, model, modelProvider, cliVersion, firstUserMessage }
+  return { id, path, cwd, title, createdAtMs, updatedAtMs, model, modelProvider, cliVersion, firstUserMessage }
 }
 
 function sqlString(value: string): string {
@@ -1616,7 +1631,7 @@ function registerImportedSessionInStateDb(session: ImportedSessionRecord): void 
     .split(/\r?\n/u)
     .map((line) => line.split('|')[1])
     .filter((value): value is string => Boolean(value)))
-  const title = session.firstUserMessage || 'Imported chat'
+  const title = session.title || session.firstUserMessage || 'Imported chat'
   const createdAt = Math.floor(session.createdAtMs / 1000)
   const updatedAt = Math.floor(session.updatedAtMs / 1000)
   const sandboxPolicy = JSON.stringify({ type: 'workspace-write', network_access: true })
@@ -1723,6 +1738,8 @@ function mergeImportedThreadsIntoThreadListResult(result: unknown): unknown {
 async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
   const canonicalProjectRoot = await realpath(projectRoot)
   const codexHome = getCodexHomeDir()
+  const threadTitles = await readMergedThreadTitleCache()
+  const exportedTitles: Record<string, string> = {}
   const roots = [
     { disk: join(codexHome, 'sessions'), zip: '.codex-project/chats/sessions' },
     { disk: join(codexHome, 'archived_sessions'), zip: '.codex-project/chats/archived_sessions' },
@@ -1757,12 +1774,23 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
       }
       if (!isSameOrDescendantPath(canonicalSessionCwd, canonicalProjectRoot)) continue
       const rel = relative(root.disk, sessionPath).split(sep).join('/')
+      const zipPath = `${root.zip}/${rel}`
+      const sessionId = readSessionMetaId(raw)
+      const title = sessionId ? readNonEmptyString(threadTitles.titles[sessionId]) : ''
+      if (title) exportedTitles[zipPath] = title
       entries.push({
-        path: `${root.zip}/${rel}`,
+        path: zipPath,
         filePath: sessionPath,
         mtime: new Date(),
       })
     }
+  }
+  if (Object.keys(exportedTitles).length > 0) {
+    entries.push({
+      path: '.codex-project/chats/thread-titles.json',
+      data: Buffer.from(JSON.stringify({ version: 1, titles: exportedTitles }, null, 2)),
+      mtime: new Date(),
+    })
   }
   return entries
 }
@@ -1836,6 +1864,22 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
     }
   }
   projectName = projectName.replace(/[\\/]+/g, '-').replace(/[\u0000-\u001f]+/g, '').trim() || 'imported-project'
+  const titleEntry = entries.find((entry) => entry.path === '.codex-project/chats/thread-titles.json' && !entry.isDirectory)
+  const importedTitles = new Map<string, string>()
+  if (titleEntry) {
+    try {
+      const payload = asRecord(JSON.parse(titleEntry.data.toString('utf8')) as unknown)
+      const titles = asRecord(payload?.titles)
+      if (titles) {
+        for (const [key, value] of Object.entries(titles)) {
+          const title = readNonEmptyString(value)
+          if (key && title) importedTitles.set(key, title)
+        }
+      }
+    } catch {
+      // Ignore malformed optional title metadata; imported chats still fall back to first user messages.
+    }
+  }
 
   const parent = await realpath(destinationParent)
   let projectPath = join(parent, projectName)
@@ -1859,7 +1903,13 @@ async function importProjectZip(buffer: Buffer, destinationParent: string): Prom
       await mkdir(dirname(target), { recursive: true })
       const importedSessionRaw = rewriteImportedSession(entry.data.toString('utf8'), projectPath, importedThreadId)
       await writeFile(target, importedSessionRaw, 'utf8')
-      registerImportedSessionInStateDb(readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId))
+      const importedTitle = importedTitles.get(entry.path) || ''
+      const importedRecord = readImportedSessionRecord(importedSessionRaw, target, projectPath, importedThreadId, importedTitle)
+      registerImportedSessionInStateDb(importedRecord)
+      if (importedRecord.title) {
+        const cache = await readThreadTitleCache()
+        await writeThreadTitleCache(updateThreadTitleCache(cache, importedThreadId, importedRecord.title))
+      }
       importedSessions += 1
       continue
     }
