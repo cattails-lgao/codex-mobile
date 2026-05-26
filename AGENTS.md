@@ -104,6 +104,6 @@
 - `llm-wiki/raw/` is immutable source material; never edit raw files after creation.
 - Prefer updating existing pages under `llm-wiki/wiki/` over creating duplicates.
 - Keep factual wiki claims tied to one or more raw source files.
-- For ingest: add raw source, update/create topic pages, update `llm-wiki/wiki/index.md`, append `llm-wiki/wiki/log.md`.
+- For ingest: add raw source, update/create topic pages, and update `llm-wiki/wiki/index.md`. Do not maintain `llm-wiki/wiki/log.md`; use git commit history as the chronological ingest/change log.
 - For query: read `llm-wiki/wiki/index.md` first, then relevant pages.
-- For lint: check orphans, stale/contradictory claims, and add follow-up questions to the log.
+- For lint: check orphans and stale/contradictory claims; put follow-up questions in the relevant wiki topic page or a tracked issue, not a wiki log file.
