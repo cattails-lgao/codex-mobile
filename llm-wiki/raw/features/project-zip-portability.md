@@ -9,6 +9,7 @@ Implementation facts:
 - The new-thread home actions expose `Import Project` next to `Create Project`.
 - Import supports both an exported ZIP file and a browser folder picker upload.
 - Exported archives include project files and matching Codex chat JSONL history under `.codex-project/chats/`.
+- The export manifest records portable project metadata, including project name and export time, but does not include the source machine's absolute project path.
 - Exported archives include matching thread title metadata under `.codex-project/chats/thread-titles.json`.
 - Project ZIP export skips generated dependency/cache/build folders, including `.git`, `node_modules`, standard Python virtualenv/cache folders, JS framework caches, Gradle/Rust/.NET outputs, coverage folders, `build`, `dist`, and `target`.
 - Browser folder import preserves every selected file from the browser picker, except unsafe relative paths containing `.` or `..` segments.
@@ -23,7 +24,7 @@ Local-only security posture:
 - The app server is local-user facing and is not designed as a public internet service.
 - Local project import/export intentionally trusts user-selected local paths.
 - Review-bot hardening suggestions that assume a hostile remote caller should be rejected for this feature unless they show a concrete path where the local server becomes remotely reachable or bypasses existing authentication.
-- Rejected local-only hardening examples include saved-root export allowlists, import parent restrictions, ZIP upload caps, and local path redaction from the project manifest.
+- Rejected local-only hardening examples include saved-root export allowlists, import parent restrictions, and ZIP upload caps.
 
 Verification facts:
 - `pnpm run build` passed after the project import/export changes.

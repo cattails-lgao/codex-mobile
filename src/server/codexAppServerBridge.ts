@@ -1856,7 +1856,6 @@ async function collectProjectChatZipEntries(projectRoot: string): Promise<Projec
     data: Buffer.from(JSON.stringify({
       version: 1,
       exportedAt: new Date().toISOString(),
-      projectRoot: canonicalProjectRoot,
       projectName: basename(canonicalProjectRoot) || 'project',
     }, null, 2)),
     mtime: new Date(),

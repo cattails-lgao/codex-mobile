@@ -3742,21 +3742,44 @@ function onToggleProjectImportMenu(): void {
 }
 
 function onChooseProjectImportZip(): void {
-  if (isProjectImporting.value) return
-  isProjectImportMenuOpen.value = false
-  const input = projectImportInputRef.value
-  if (!input) return
-  input.value = ''
-  input.click()
+  openProjectImportInput(projectImportInputRef.value)
 }
 
 function onChooseProjectImportFolder(): void {
   if (isProjectImporting.value) return
+  openProjectImportInput(projectImportFolderInputRef.value)
+}
+
+function openProjectImportInput(input: HTMLInputElement | null): void {
+  if (isProjectImporting.value || !input) return
   isProjectImportMenuOpen.value = false
-  const input = projectImportFolderInputRef.value
-  if (!input) return
   input.value = ''
   input.click()
+}
+
+async function finishProjectImport(
+  input: HTMLInputElement | null,
+  importer: (baseDir: string) => Promise<{ path: string }>,
+  fallbackMessage: string,
+): Promise<void> {
+  isProjectImporting.value = true
+  try {
+    const baseDir = await resolveProjectBaseDirectory()
+    if (!baseDir) return
+    const result = await importer(baseDir)
+    if (!result.path) return
+    newThreadCwd.value = result.path
+    pinProjectToTop(getProjectOrderNameForPath(result.path))
+    await loadWorkspaceRootOptionsState()
+    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
+    await refreshDefaultProjectName()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : fallbackMessage
+    window.alert(message)
+  } finally {
+    isProjectImporting.value = false
+    if (input) input.value = ''
+  }
 }
 
 async function onDirectProjectImportFileChange(event: Event): Promise<void> {
@@ -3764,24 +3787,7 @@ async function onDirectProjectImportFileChange(event: Event): Promise<void> {
   const file = input?.files?.[0] ?? null
   if (!file || isProjectImporting.value) return
 
-  isProjectImporting.value = true
-  try {
-    const baseDir = await resolveProjectBaseDirectory()
-    if (!baseDir) return
-    const result = await importProjectZip(file, baseDir)
-    if (!result.path) return
-    newThreadCwd.value = result.path
-    pinProjectToTop(getProjectOrderNameForPath(result.path))
-    await loadWorkspaceRootOptionsState()
-    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
-    await refreshDefaultProjectName()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to import project.'
-    window.alert(message)
-  } finally {
-    isProjectImporting.value = false
-    if (input) input.value = ''
-  }
+  await finishProjectImport(input, (baseDir) => importProjectZip(file, baseDir), 'Failed to import project.')
 }
 
 async function onDirectProjectImportFolderChange(event: Event): Promise<void> {
@@ -3789,24 +3795,7 @@ async function onDirectProjectImportFolderChange(event: Event): Promise<void> {
   const files = input?.files ?? null
   if (!files || files.length === 0 || isProjectImporting.value) return
 
-  isProjectImporting.value = true
-  try {
-    const baseDir = await resolveProjectBaseDirectory()
-    if (!baseDir) return
-    const result = await importProjectFolder(files, baseDir)
-    if (!result.path) return
-    newThreadCwd.value = result.path
-    pinProjectToTop(getProjectOrderNameForPath(result.path))
-    await loadWorkspaceRootOptionsState()
-    await refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
-    await refreshDefaultProjectName()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to import project folder.'
-    window.alert(message)
-  } finally {
-    isProjectImporting.value = false
-    if (input) input.value = ''
-  }
+  await finishProjectImport(input, (baseDir) => importProjectFolder(files, baseDir), 'Failed to import project folder.')
 }
 
 async function onOpenExistingFolder(): Promise<void> {
