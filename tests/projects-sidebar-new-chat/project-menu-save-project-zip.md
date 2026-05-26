@@ -2,7 +2,7 @@
 
 #### Prerequisites / Setup
 - Start the app from a checkout with at least one saved local project root.
-- Use a project folder containing a small known file, and ensure `.git` and `node_modules` may be present for exclusion checks.
+- Use a project folder containing a small known file, and ensure generated folders such as `.git`, `node_modules`, `.venv`, `venv`, and `__pycache__` may be present for exclusion checks.
 - For chat export/import coverage, use an isolated `CODEX_HOME` containing at least one session JSONL whose `session_meta.payload.cwd` points at the project folder.
 
 #### Actions
@@ -20,7 +20,7 @@
 - Each thread menu contains `Save project` after `Browse files`, exporting that thread's project folder, including projectless chat folders and other local directories.
 - Clicking `Save project` downloads a ZIP blob without navigating away from the app.
 - The archive includes project files under relative paths.
-- `.git`, `node_modules`, and `.DS_Store` entries are not included.
+- `.git`, `node_modules`, Python virtualenv/cache folders, build output folders, and `.DS_Store` entries are not included.
 - Existing non-chat files under a project's `.codex-project/` folder round-trip through import; chat JSONL files under `.codex-project/chats/` are handled as imported Codex sessions.
 - Matching Codex session JSONL files are included under `.codex-project/chats/`.
 - Import creates a new project folder, restores project files, registers the imported project in the sidebar, and writes imported chat sessions into the active `CODEX_HOME` with `cwd` rewritten to the new project folder.

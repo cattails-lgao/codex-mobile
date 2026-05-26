@@ -3099,7 +3099,21 @@ type StoredZipEntry = {
   modifiedAt: Date
 }
 
-const FOLDER_IMPORT_SKIPPED_SEGMENTS = new Set(['.git', 'node_modules'])
+const FOLDER_IMPORT_SKIPPED_SEGMENTS = new Set([
+  '.eggs',
+  '.git',
+  '.mypy_cache',
+  '.nox',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.tox',
+  '.venv',
+  '__pycache__',
+  'build',
+  'dist',
+  'node_modules',
+  'venv',
+])
 const FOLDER_IMPORT_SKIPPED_FILES = new Set(['.DS_Store'])
 
 const ZIP_CRC_TABLE = new Uint32Array(256)

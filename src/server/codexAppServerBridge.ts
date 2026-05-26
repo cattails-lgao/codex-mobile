@@ -1066,8 +1066,19 @@ function setJson(res: ServerResponse, statusCode: number, payload: unknown): voi
 
 const PROJECT_ZIP_SKIPPED_NAMES = new Set([
   '.DS_Store',
+  '.eggs',
   '.git',
+  '.mypy_cache',
+  '.nox',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.tox',
+  '.venv',
+  '__pycache__',
+  'build',
+  'dist',
   'node_modules',
+  'venv',
 ])
 
 type ZipCentralDirectoryEntry = {

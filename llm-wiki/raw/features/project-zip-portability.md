@@ -9,6 +9,7 @@ Implementation facts:
 - The new-thread home actions expose `Import Project` next to `Create Project`.
 - Import supports both an exported ZIP file and a browser folder picker upload.
 - Exported archives include project files and matching Codex chat JSONL history under `.codex-project/chats/`.
+- Export and browser folder import skip generated dependency/cache/build folders, including `.git`, `node_modules`, Python virtualenv/cache folders, `build`, and `dist`.
 - Imported chat JSONL is rewritten into the active `CODEX_HOME` with the imported project path as `cwd`.
 - Imported chat provider/model metadata is rewritten to the current local provider/model so resumed imported threads use the destination app configuration.
 - Imported project roots are persisted and forced into the sidebar refresh path so projects with no imported threads still appear under Projects.
