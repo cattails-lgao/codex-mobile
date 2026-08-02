@@ -2910,14 +2910,15 @@ function hasThreads(group: UiProjectGroup): boolean {
 }
 
 function shouldShowThreadIndicator(thread: UiThread): boolean {
-  return Boolean(thread.pendingRequestState) || thread.inProgress || thread.unread
+  return Boolean(thread.pendingRequestState) || thread.inProgress || thread.unread || thread.externalSession?.active === true
 }
 
 function threadRequestLabel(thread: UiThread): string {
   return thread.pendingRequestState === 'approval' ? 'Awaiting approval' : 'Awaiting response'
 }
 
-function getThreadState(thread: UiThread): 'awaiting-approval' | 'awaiting-response' | 'working' | 'unread' | 'idle' {
+function getThreadState(thread: UiThread): 'external' | 'awaiting-approval' | 'awaiting-response' | 'working' | 'unread' | 'idle' {
+  if (thread.externalSession?.active === true) return 'external'
   if (thread.pendingRequestState === 'approval') return 'awaiting-approval'
   if (thread.pendingRequestState === 'response') return 'awaiting-response'
   if (thread.inProgress) return 'working'
@@ -3356,6 +3357,10 @@ onBeforeUnmount(() => {
   @apply border-2 border-zinc-500 border-t-transparent bg-transparent animate-spin;
 }
 
+.thread-status-indicator[data-state='external'] {
+  @apply bg-amber-500;
+}
+
 .thread-status-indicator[data-state='awaiting-approval'] {
   @apply bg-emerald-500;
 }
@@ -3366,10 +3371,12 @@ onBeforeUnmount(() => {
 
 .thread-row:hover .thread-status-indicator[data-state='unread'],
 .thread-row:hover .thread-status-indicator[data-state='working'],
+.thread-row:hover .thread-status-indicator[data-state='external'],
 .thread-row:hover .thread-status-indicator[data-state='awaiting-approval'],
 .thread-row:hover .thread-status-indicator[data-state='awaiting-response'],
 .thread-row:focus-within .thread-status-indicator[data-state='unread'],
 .thread-row:focus-within .thread-status-indicator[data-state='working'],
+.thread-row:focus-within .thread-status-indicator[data-state='external'],
 .thread-row:focus-within .thread-status-indicator[data-state='awaiting-approval'],
 .thread-row:focus-within .thread-status-indicator[data-state='awaiting-response'] {
   @apply opacity-0;

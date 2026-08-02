@@ -71,10 +71,17 @@ export type UiThread = {
   preview: string
   unread: boolean
   inProgress: boolean
+  externalSession?: UiExternalSession | null
   pendingRequestState?: UiPendingRequestState | null
 }
 
 export type UiPendingRequestState = 'approval' | 'response'
+
+export type UiExternalSession = {
+  origin: string
+  active: boolean
+  lastWriteAt: string | null
+}
 
 export type UiThreadAutomationStatus = 'ACTIVE' | 'PAUSED'
 
