@@ -992,6 +992,9 @@
                 </div>
 
                 <div class="composer-with-queue">
+                  <div v-if="isSelectedThreadExternalActive" class="external-session-banner" role="alert">
+                    {{ t('This thread is running in the Codex TUI') }}
+                  </div>
                   <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
                     <span>{{ t(codexCliMissingError) }}</span>
                     <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
@@ -1037,6 +1040,7 @@
                     :is-turn-in-progress="isSelectedThreadInProgress"
                     :is-stop-pending="isSelectedThreadInterruptPending"
                     :is-interrupting-turn="isInterruptingTurn"
+                    :external-session-active="isSelectedThreadExternalActive"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
                     :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
@@ -1801,6 +1805,7 @@ const isTerminalKeyboardLayoutActive = computed(() => (
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
+const isSelectedThreadExternalActive = computed(() => !isHomeRoute.value && selectedThread.value?.externalSession?.active === true)
 const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && !isAutomationsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
@@ -5148,6 +5153,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .composer-runtime-error {
   @apply flex w-full items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 shadow-sm;
+}
+
+.external-session-banner {
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm;
 }
 
 .visible-error-with-feedback {

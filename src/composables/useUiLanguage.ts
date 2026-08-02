@@ -126,6 +126,7 @@ const zhCN: Record<string, string> = {
   'Thinking': '思考强度',
   'Saving thread before stop is available': '线程保存后才能停止',
   'Stop': '停止',
+  'This thread is running in the Codex TUI': '该线程正在 Codex TUI 中运行',
   'Queue message': '加入队列',
   'Send message': '发送消息',
   'Send': '发送',
