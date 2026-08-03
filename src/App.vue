@@ -486,6 +486,15 @@
                   {{ threadContextPrimaryText }}
                   <span class="sidebar-settings-context-meta">{{ threadContextSecondaryText }}</span>
                 </span>
+                <button
+                  v-if="showCompactContextButton"
+                  class="sidebar-settings-context-compact"
+                  type="button"
+                  :disabled="isCompactContextPending"
+                  @click.stop="onCompactContext"
+                >
+                  {{ isCompactContextPending ? t('Compacting…') : t('Compact') }}
+                </button>
               </div>
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
@@ -1444,6 +1453,8 @@ const {
   setThreadTerminalOpen,
   toggleSelectedThreadTerminal,
   archiveThreadById,
+  compactThreadById,
+  compactingThreadIds,
   forkThreadById,
   renameThreadById,
   forkThreadFromTurn,
@@ -1875,6 +1886,19 @@ const threadContextSecondaryText = computed(() => {
 })
 
 const threadContextTooltip = computed(() => buildThreadContextTooltip(selectedThreadTokenUsage.value))
+
+const isCompactContextPending = computed(() => {
+  const threadId = selectedThreadId.value
+  return threadId.trim().length > 0 && compactingThreadIds.value.has(threadId)
+})
+const showCompactContextButton = computed(() =>
+  threadContextBadgeState.value === 'warning' || threadContextBadgeState.value === 'danger',
+)
+function onCompactContext(): void {
+  const threadId = selectedThreadId.value
+  if (!threadId) return
+  void compactThreadById(threadId)
+}
 
 function hasDuplicateFolderLeaf(path: string, knownPaths: string[]): boolean {
   const normalizedPath = normalizePathForUi(path).trim()
@@ -6089,6 +6113,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-context-row {
   @apply cursor-default;
+}
+
+.sidebar-settings-context-compact {
+  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] leading-4 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-800 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-context-value {

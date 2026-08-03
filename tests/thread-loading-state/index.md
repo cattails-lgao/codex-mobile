@@ -10,6 +10,7 @@ Return to the [manual test index](../../tests.md).
 | --- |
 | [Pinned threads remain visible during background pagination](pinned-threads-remain-visible-during-background-pagination.md) |
 | [Thread archive recovery and sidebar pruning](thread-archive-recovery-and-sidebar-pruning.md) |
+| [Thread context compaction button](thread-context-compaction-button.md) |
 | [Unread thread cutoff state](unread-thread-cutoff-state.md) |
 | [Feature: Deferred ancillary startup refreshes](deferred-ancillary-startup-refreshes.md) |
 | [Feature: No automatic restore of last active thread on startup](no-automatic-restore-of-last-active-thread-on-startup.md) |

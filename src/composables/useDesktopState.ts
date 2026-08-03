@@ -28,6 +28,7 @@ import {
   persistThreadTitle,
   generateThreadTitle,
   resumeThread,
+  compactThread,
 
   startThread,
   subscribeCodexNotifications,
@@ -1475,6 +1476,8 @@ export function useDesktopState() {
   const isInterruptingTurn = ref(false)
   const isUpdatingSpeedMode = ref(false)
   const isRollingBack = ref(false)
+  const compactingThreadIds = ref(new Set<string>())
+  const COMPACT_STATE_TIMEOUT_MS = 60_000
 
   const error = ref('')
   const isPolling = ref(false)
@@ -3752,6 +3755,19 @@ export function useDesktopState() {
       }
     }
 
+    if (notification.method === 'thread/compacted') {
+      const params = asRecord(notification.params)
+      const threadId = readString(params?.threadId)
+      if (threadId) {
+        markThreadCompacting(threadId, false)
+        // queueEventDrivenSync (called by the notification subscriber) already
+        // refreshes the thread list for any thread/* notification; mark the
+        // message payload dirty so the compaction summary is re-read too.
+        pendingThreadMessageRefresh.add(threadId)
+      }
+      return
+    }
+
     if (notification.method === 'account/rateLimits/updated') {
       setCodexRateLimit(pickCodexRateLimitSnapshot(notification.params))
       return
@@ -5252,6 +5268,31 @@ export function useDesktopState() {
     }
   }
 
+  function markThreadCompacting(threadId: string, compacting: boolean): void {
+    const next = new Set(compactingThreadIds.value)
+    if (compacting) next.add(threadId)
+    else next.delete(threadId)
+    compactingThreadIds.value = next
+  }
+
+  async function compactThreadById(threadId: string): Promise<void> {
+    const normalized = threadId.trim()
+    if (!normalized || compactingThreadIds.value.has(normalized)) return
+
+    markThreadCompacting(normalized, true)
+    try {
+      await compactThread(normalized)
+      // Keep the pending state until the thread/compacted notification clears it;
+      // a timeout guards against a lost notification.
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => markThreadCompacting(normalized, false), COMPACT_STATE_TIMEOUT_MS)
+      }
+    } catch (unknownError) {
+      error.value = unknownError instanceof Error ? unknownError.message : 'Failed to compact thread'
+      markThreadCompacting(normalized, false)
+    }
+  }
+
   let renameProjectTimer: ReturnType<typeof setTimeout> | null = null
 
   async function persistProjectLabelToGlobalState(projectName: string, displayName: string): Promise<void> {
@@ -5691,6 +5732,7 @@ export function useDesktopState() {
     isInterruptingTurn,
     isUpdatingSpeedMode,
     isRollingBack,
+    compactingThreadIds,
 
     error,
     refreshAll,
@@ -5702,6 +5744,7 @@ export function useDesktopState() {
     setThreadTerminalOpen,
     toggleSelectedThreadTerminal,
     archiveThreadById,
+    compactThreadById,
     renameThreadById,
     forkThreadById,
     forkThreadFromTurn,
