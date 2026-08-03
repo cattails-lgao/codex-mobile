@@ -121,6 +121,9 @@
               </span>
             </button>
           </template>
+          <div v-else-if="fileMentionNoCwdShown" class="thread-composer-file-mention-empty">
+            {{ t('No searchable directory for this thread') }}
+          </div>
           <div v-else class="thread-composer-file-mention-empty">{{ t('No matching files') }}</div>
         </div>
         <textarea
@@ -409,6 +412,9 @@ import {
   getComposerPrompts,
   removeComposerPrompt,
   searchComposerFiles,
+  startFuzzyFileSearchSession,
+  stopFuzzyFileSearchSession,
+  updateFuzzyFileSearchSession,
   uploadFile,
   type ComposerFileSuggestion,
   type ComposerPromptInfo,
@@ -435,6 +441,7 @@ type SkillItem = { name: string; displayName?: string; description: string; path
 const props = defineProps<{
   activeThreadId: string
   cwd?: string
+  fuzzyFileSearchResults?: Array<{ path: string }>
   collaborationModes?: CollaborationModeOption[]
   selectedCollaborationMode: CollaborationModeKind
   models: string[]
@@ -483,6 +490,7 @@ export type ThreadComposerExposed = {
 const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   interrupt: []
+  'register-fuzzy-session': [sessionId: string]
   'update:selected-collaboration-mode': [mode: CollaborationModeKind]
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
@@ -578,6 +586,8 @@ let composerOverflowMeasurementQueued = false
 const draftGeneration = ref(0)
 let fileMentionSearchToken = 0
 let fileMentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let fileMentionSessionId = ''
+let fileMentionNoCwdShown = false
 let isHoldPressActive = false
 let dragDepth = 0
 let attachmentSessionToken = 0
@@ -1602,6 +1612,12 @@ function closeFileMention(): void {
   mentionQuery.value = ''
   fileMentionSuggestions.value = []
   fileMentionHighlightedIndex.value = 0
+  fileMentionNoCwdShown = false
+  if (fileMentionSessionId) {
+    const sessionId = fileMentionSessionId
+    fileMentionSessionId = ''
+    void stopFuzzyFileSearchSession(sessionId)
+  }
 }
 
 function updateFileMentionState(): void {
@@ -1632,21 +1648,43 @@ async function queueFileMentionSearch(): Promise<void> {
   const cwd = (props.cwd ?? '').trim()
   if (!cwd) {
     fileMentionSuggestions.value = []
+    fileMentionNoCwdShown = true
     return
   }
+  fileMentionNoCwdShown = false
   if (fileMentionDebounceTimer) {
     clearTimeout(fileMentionDebounceTimer)
   }
   const token = ++fileMentionSearchToken
   fileMentionDebounceTimer = setTimeout(async () => {
+    const sessionId = `composer-${token}`
+    const query = mentionQuery.value
     try {
-      const rows = await searchComposerFiles(cwd, mentionQuery.value, 20)
+      if (!fileMentionSessionId) {
+        await startFuzzyFileSearchSession([cwd], sessionId)
+        fileMentionSessionId = sessionId
+        emit('register-fuzzy-session', sessionId)
+      }
+      await updateFuzzyFileSearchSession(fileMentionSessionId, query)
       if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
-      fileMentionSuggestions.value = rows
+      // If the RPC calls succeeded, the sessionUpdated notification drives the
+      // suggestion list through the fuzzyFileSearchResults prop.
+      fileMentionSuggestions.value = (props.fuzzyFileSearchResults ?? []).map((row) => ({ path: row.path }))
       fileMentionHighlightedIndex.value = 0
     } catch {
       if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
-      fileMentionSuggestions.value = []
+      // Fall back to the local endpoint when the server does not expose the
+      // fuzzyFileSearch session methods (older Codex versions).
+      fileMentionSessionId = ''
+      try {
+        const rows = await searchComposerFiles(cwd, query, 20)
+        if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+        fileMentionSuggestions.value = rows
+        fileMentionHighlightedIndex.value = 0
+      } catch {
+        if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+        fileMentionSuggestions.value = []
+      }
     }
   }, 120)
 }
@@ -1866,6 +1904,15 @@ watch(
     if (isFileMentionOpen.value) {
       void queueFileMentionSearch()
     }
+  },
+)
+
+watch(
+  () => props.fuzzyFileSearchResults,
+  (results) => {
+    if (!isFileMentionOpen.value || !fileMentionSessionId) return
+    fileMentionSuggestions.value = (results ?? []).map((row) => ({ path: row.path }))
+    fileMentionHighlightedIndex.value = 0
   },
 )
 

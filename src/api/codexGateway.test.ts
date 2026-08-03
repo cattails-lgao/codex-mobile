@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, resumeThread, startThreadTurn } from './codexGateway'
+import { compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, normalizeFuzzyFileSearchResults, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -285,5 +285,82 @@ describe('compactThread', () => {
     expect(requests).toEqual([
       { method: 'thread/compact/start', params: { threadId: 'thread-compact-me' } },
     ])
+  })
+})
+
+describe('fuzzyFileSearch session methods', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('starts a session with roots and a session id', async () => {
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string; params: Record<string, unknown> }
+        : { method: '', params: {} }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await startFuzzyFileSearchSession(['/root/a', '/root/b'], 'sess-1')
+
+    expect(requests).toEqual([
+      { method: 'fuzzyFileSearch/sessionStart', params: { sessionId: 'sess-1', roots: ['/root/a', '/root/b'] } },
+    ])
+  })
+
+  it('updates a session with a query', async () => {
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string; params: Record<string, unknown> }
+        : { method: '', params: {} }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await updateFuzzyFileSearchSession('sess-1', 'src/App')
+
+    expect(requests).toEqual([
+      { method: 'fuzzyFileSearch/sessionUpdate', params: { sessionId: 'sess-1', query: 'src/App' } },
+    ])
+  })
+
+  it('normalizes sessionUpdated payload files into suggestions', () => {
+    const suggestions = normalizeFuzzyFileSearchResults({
+      sessionId: 'sess-1',
+      query: 'App',
+      files: [
+        { root: '/root/a', path: '/root/a/src/App.vue', matchType: 'File', fileName: 'App.vue', score: 10 },
+        { root: '/root/a', path: '/root/a/src/App.test.ts', matchType: 'File', fileName: 'App.test.ts', score: 5 },
+      ],
+    })
+
+    expect(suggestions).toEqual([
+      { path: '/root/a/src/App.vue' },
+      { path: '/root/a/src/App.test.ts' },
+    ])
+  })
+
+  it('ignores malformed files in the payload', () => {
+    const suggestions = normalizeFuzzyFileSearchResults({
+      sessionId: 'sess-1',
+      query: 'App',
+      files: [
+        null,
+        { path: '/ok.ts' },
+        'nope',
+        { noPath: true },
+      ],
+    })
+
+    expect(suggestions).toEqual([{ path: '/ok.ts' }])
   })
 })

@@ -951,6 +951,8 @@
                 />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
+                  :fuzzy-file-search-results="fuzzyFileSearchResults"
+                  @register-fuzzy-session="registerFuzzyFileSearchSession"
                   :collaboration-modes="availableCollaborationModes"
                   :selected-collaboration-mode="selectedCollaborationMode"
                   :models="availableModelIds" :selected-model="composerSelectedModelId"
@@ -1033,6 +1035,8 @@
                     ref="threadComposerRef"
                     :active-thread-id="composerThreadContextId"
                     :cwd="composerCwd"
+                    :fuzzy-file-search-results="fuzzyFileSearchResults"
+                    @register-fuzzy-session="registerFuzzyFileSearchSession"
                     :collaboration-modes="availableCollaborationModes"
                     :selected-collaboration-mode="selectedCollaborationMode"
                     :models="availableModelIds"
@@ -1455,6 +1459,8 @@ const {
   archiveThreadById,
   compactThreadById,
   compactingThreadIds,
+  fuzzyFileSearchResults,
+  registerFuzzyFileSearchSession,
   forkThreadById,
   renameThreadById,
   forkThreadFromTurn,

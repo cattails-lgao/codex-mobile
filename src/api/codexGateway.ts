@@ -298,6 +298,47 @@ export type ComposerFileSuggestion = {
   path: string
 }
 
+export type FuzzyFileSearchSession = {
+  sessionId: string
+  query: string
+  files: ComposerFileSuggestion[]
+}
+
+export async function startFuzzyFileSearchSession(roots: string[], sessionId: string): Promise<void> {
+  await callRpc('fuzzyFileSearch/sessionStart', {
+    sessionId,
+    roots,
+  })
+}
+
+export async function updateFuzzyFileSearchSession(sessionId: string, query: string): Promise<void> {
+  await callRpc('fuzzyFileSearch/sessionUpdate', {
+    sessionId,
+    query,
+  })
+}
+
+export async function stopFuzzyFileSearchSession(sessionId: string): Promise<void> {
+  await callRpc('fuzzyFileSearch/sessionStop', { sessionId }).catch(() => undefined)
+}
+
+export function normalizeFuzzyFileSearchResults(payload: unknown): ComposerFileSuggestion[] {
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {}
+  const files = Array.isArray(record.files) ? record.files : []
+  const suggestions: ComposerFileSuggestion[] = []
+  for (const item of files) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Record<string, unknown>
+    const rawPath = row.path
+    const value = typeof rawPath === 'string' ? rawPath.trim() : ''
+    if (!value) continue
+    suggestions.push({ path: value })
+  }
+  return suggestions
+}
+
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
   { value: 'plan', label: 'Plan' },

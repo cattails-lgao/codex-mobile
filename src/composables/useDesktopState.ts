@@ -29,6 +29,7 @@ import {
   generateThreadTitle,
   resumeThread,
   compactThread,
+  normalizeFuzzyFileSearchResults,
 
   startThread,
   subscribeCodexNotifications,
@@ -1478,6 +1479,8 @@ export function useDesktopState() {
   const isRollingBack = ref(false)
   const compactingThreadIds = ref(new Set<string>())
   const COMPACT_STATE_TIMEOUT_MS = 60_000
+  const fuzzyFileSearchResults = ref<Array<{ path: string }>>([])
+  let fuzzyFileSearchSessionId = ''
 
   const error = ref('')
   const isPolling = ref(false)
@@ -3768,6 +3771,24 @@ export function useDesktopState() {
       return
     }
 
+    if (notification.method === 'fuzzyFileSearch/sessionUpdated') {
+      const params = asRecord(notification.params)
+      const sessionId = readString(params?.sessionId)
+      if (sessionId && sessionId === fuzzyFileSearchSessionId) {
+        fuzzyFileSearchResults.value = normalizeFuzzyFileSearchResults(params)
+      }
+      return
+    }
+
+    if (notification.method === 'fuzzyFileSearch/sessionCompleted') {
+      const params = asRecord(notification.params)
+      const sessionId = readString(params?.sessionId)
+      if (sessionId && sessionId === fuzzyFileSearchSessionId) {
+        fuzzyFileSearchSessionId = ''
+      }
+      return
+    }
+
     if (notification.method === 'account/rateLimits/updated') {
       setCodexRateLimit(pickCodexRateLimitSnapshot(notification.params))
       return
@@ -5275,6 +5296,11 @@ export function useDesktopState() {
     compactingThreadIds.value = next
   }
 
+  function registerFuzzyFileSearchSession(sessionId: string): void {
+    fuzzyFileSearchSessionId = sessionId.trim()
+    fuzzyFileSearchResults.value = []
+  }
+
   async function compactThreadById(threadId: string): Promise<void> {
     const normalized = threadId.trim()
     if (!normalized || compactingThreadIds.value.has(normalized)) return
@@ -5733,6 +5759,8 @@ export function useDesktopState() {
     isUpdatingSpeedMode,
     isRollingBack,
     compactingThreadIds,
+    fuzzyFileSearchResults,
+    registerFuzzyFileSearchSession,
 
     error,
     refreshAll,
