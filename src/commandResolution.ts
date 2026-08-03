@@ -1,7 +1,10 @@
-import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
+import { spawnSyncCommand } from './utils/commandInvocation.js'
+
+const require = createRequire(import.meta.url)
 
 export type CommandInvocation = {
   command: string
@@ -52,20 +55,19 @@ function getPotentialCodexPackageDirs(prefix: string): string[] {
 }
 
 function getPotentialCodexExecutables(prefix: string): string[] {
-  return getPotentialCodexPackageDirs(prefix).map((packageDir) => (
-    process.platform === 'win32'
-      ? join(
-          packageDir,
-          'node_modules',
-          '@openai',
-          'codex-win32-x64',
-          'vendor',
-          'x86_64-pc-windows-msvc',
-          'codex',
-          'codex.exe',
-        )
-      : join(packageDir, 'bin', 'codex')
-  ))
+  return getPotentialCodexPackageDirs(prefix).flatMap((packageDir) => {
+    const candidates: string[] = []
+    if (process.platform === 'win32') {
+      candidates.push(
+        join(packageDir, 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'codex', 'codex.exe'),
+        // Current @openai/codex layout: the binary lives directly under vendor/.
+        join(packageDir, 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe'),
+      )
+    } else {
+      candidates.push(join(packageDir, 'bin', 'codex'))
+    }
+    return candidates
+  })
 }
 
 function getPotentialRipgrepExecutables(prefix: string): string[] {
@@ -86,7 +88,10 @@ function getPotentialRipgrepExecutables(prefix: string): string[] {
 }
 
 export function canRunCommand(command: string, args: string[] = []): boolean {
-  const result = spawnSync(command, args, {
+  // Route through the cmd.exe wrapper so Windows .cmd/.bat shims (pnpm/npm
+  // global bins like codex.CMD) can be probed on Node >=20.12, which rejects
+  // spawning them directly with EINVAL.
+  const result = spawnSyncCommand(command, args, {
     stdio: 'ignore',
     windowsHide: true,
   })
@@ -117,15 +122,107 @@ export function prependPathEntry(existingPath: string, entry: string): string {
   return existingPath ? `${normalizedEntry}${delimiter}${existingPath}` : normalizedEntry
 }
 
+const WINDOWS_CODEX_EXE_LAYOUTS = [
+  'vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe',
+  'node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe',
+]
+
+function findCodexShimPaths(): string[] {
+  const exts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+  const names = exts.map((ext) => 'codex' + ext)
+  const found: string[] = []
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    const trimmed = dir.trim()
+    if (!trimmed) continue
+    for (const name of names) {
+      const candidate = join(trimmed, name)
+      if (existsSync(candidate)) {
+        found.push(candidate)
+        break
+      }
+    }
+  }
+  return found
+}
+
+function extractCodexPackageDir(shimContent: string, shimPath: string): string | null {
+  const match = shimContent.match(/([^"'\r\n]*node_modules[\\/]@openai[\\/]codex)/i)
+  if (!match) return null
+  let rawPath = match[1]
+  // npm/pnpm shims use `%~dp0\` (npm legacy `%dp0%`); the trailing `%` is optional.
+  // Replace only the `%dp0` token and keep the following `\` separator.
+  rawPath = rawPath.replace(/%(~?)dp0%?/gi, dirname(shimPath))
+  const normalized = rawPath.replace(/[\\/]/g, '\\')
+  const markerPath = 'node_modules\\@openai\\codex'
+  const markerIndex = normalized.toLowerCase().indexOf(markerPath.toLowerCase())
+  if (markerIndex === -1) return null
+  const packageDir = normalized.slice(0, markerIndex) + markerPath
+  return existsSync(packageDir) ? packageDir : null
+}
+
+function getWindowsCodexTargetTriple(): string {
+  return process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
+}
+
+/**
+ * On Windows the bare `codex` on PATH is usually a .cmd/.bat shim (npm/pnpm
+ * global bin). Spawning those through cmd.exe corrupts arguments that contain
+ * both quotes and spaces (e.g. -c model_providers.*="OpenCode Zen"), so the
+ * app-server dies at startup. Resolve the real codex.exe and run it directly
+ * instead.
+ */
+function resolveWindowsRealCodexExecutable(): string | null {
+  for (const shimPath of findCodexShimPaths()) {
+    if (/\.exe$/i.test(shimPath)) {
+      return shimPath
+    }
+    if (!/\.(cmd|bat)$/i.test(shimPath)) continue
+    let packageDir: string | null = null
+    try {
+      packageDir = extractCodexPackageDir(readFileSync(shimPath, 'utf8'), shimPath)
+    } catch {
+      packageDir = null
+    }
+    if (!packageDir) continue
+    for (const layout of WINDOWS_CODEX_EXE_LAYOUTS) {
+      const candidate = join(packageDir, layout)
+      if (isRunnableCommand(candidate, ['--version'])) {
+        return candidate
+      }
+    }
+    // Modern @openai/codex ships a JS launcher whose native binary lives in
+    // the platform optional dependency (@openai/codex-win32-x64). Resolve it
+    // the same way the launcher does: from the real (symlink-resolved) package
+    // dir, which for pnpm points into the store where the platform package is
+    // a sibling.
+    try {
+      const realDir = realpathSync(packageDir)
+      const platformPackage = process.arch === 'arm64' ? '@openai/codex-win32-arm64' : '@openai/codex-win32-x64'
+      const platformPackageJson = require.resolve(`${platformPackage}/package.json`, { paths: [realDir] })
+      const candidate = join(dirname(platformPackageJson), 'vendor', getWindowsCodexTargetTriple(), 'bin', 'codex.exe')
+      if (isRunnableCommand(candidate, ['--version'])) {
+        return candidate
+      }
+    } catch {
+      // Not a JS-launcher layout; keep probing other shims.
+    }
+  }
+  return null
+}
+
 export function resolveCodexCommand(): string | null {
   const explicit = process.env.CODEXUI_CODEX_COMMAND?.trim()
   const packageCandidates = getPotentialNpmPrefixes().flatMap(getPotentialCodexExecutables)
+  const shimRealExe = process.platform === 'win32' ? resolveWindowsRealCodexExecutable() : null
   const fallbackCandidates = process.platform === 'win32'
-    ? [...packageCandidates, 'codex']
+    ? [shimRealExe, ...packageCandidates, 'codex']
     : ['codex', ...packageCandidates]
 
   for (const candidate of uniqueStrings([explicit, ...fallbackCandidates])) {
-    if (isRunnableCommand(candidate, ['--version'])) {
+    if (candidate && isRunnableCommand(candidate, ['--version'])) {
       return candidate
     }
   }
