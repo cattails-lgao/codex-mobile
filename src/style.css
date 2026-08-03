@@ -107,6 +107,10 @@
   @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
 }
 
+:root.dark .sidebar-settings-context-compact {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+}
+
 :root.dark .sidebar-settings-account-login-link {
   @apply text-sky-300 hover:text-sky-200;
 }
