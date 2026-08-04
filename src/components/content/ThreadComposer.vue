@@ -126,6 +126,12 @@
           </div>
           <div v-else class="thread-composer-file-mention-empty">{{ t('No matching files') }}</div>
         </div>
+        <ComposerSlashMenu
+          v-if="isSlashMenuOpen"
+          :commands="slashMatchedCommands"
+          :highlighted-index="slashHighlightedIndex"
+          @select="applySlashCommand"
+        />
         <textarea
           ref="inputRef"
           v-model="draft"
@@ -429,6 +435,13 @@ import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
+import ComposerSlashMenu from './ComposerSlashMenu.vue'
+import {
+  matchSlashCommands,
+  parseSlashQuery,
+  SLASH_COMMANDS,
+  type SlashCommand,
+} from './slashCommands'
 
 type SkillSourceBadge = {
   badge: string
@@ -492,6 +505,7 @@ const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   interrupt: []
   'register-fuzzy-session': [sessionId: string]
+  'slash-command': [commandId: string]
   'update:selected-collaboration-mode': [mode: CollaborationModeKind]
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
@@ -581,6 +595,11 @@ const mentionQuery = ref('')
 const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
 const isFileMentionOpen = ref(false)
 const fileMentionHighlightedIndex = ref(0)
+const isSlashMenuOpen = ref(false)
+const slashStartIndex = ref<number | null>(null)
+const slashQuery = ref('')
+const slashHighlightedIndex = ref(0)
+const slashMatchedCommands = ref<SlashCommand[]>(SLASH_COMMANDS)
 const isComposerExpanded = ref(false)
 const isDraftOverflowing = ref(false)
 let composerOverflowMeasurementQueued = false
@@ -1009,6 +1028,7 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   pendingAttachmentCount.value = 0
   isAttachMenuOpen.value = false
   closeFileMention()
+  closeSlashMenu()
   attachmentSessionToken += 1
 }
 
@@ -1560,6 +1580,7 @@ function onInputChange(): void {
   }
   queueComposerOverflowMeasurement()
   updateFileMentionState()
+  updateSlashCommandState()
 }
 
 function onInputKeydown(event: KeyboardEvent): void {
@@ -1592,6 +1613,39 @@ function onInputKeydown(event: KeyboardEvent): void {
         applyFileMention(selected)
       } else {
         closeFileMention()
+      }
+      return
+    }
+  }
+  if (isSlashMenuOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSlashMenu()
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      if (slashMatchedCommands.value.length > 0) {
+        slashHighlightedIndex.value =
+          (slashHighlightedIndex.value + 1) % slashMatchedCommands.value.length
+      }
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (slashMatchedCommands.value.length > 0) {
+        const size = slashMatchedCommands.value.length
+        slashHighlightedIndex.value = (slashHighlightedIndex.value + size - 1) % size
+      }
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      const selected = slashMatchedCommands.value[slashHighlightedIndex.value]
+      if (selected) {
+        applySlashCommand(selected)
+      } else {
+        closeSlashMenu()
       }
       return
     }
@@ -1638,10 +1692,65 @@ function updateFileMentionState(): void {
   const mentionToken = match[2] ?? ''
   const mentionOffset = mentionToken.length
   const startIndex = cursor - mentionOffset
+  if (isSlashMenuOpen.value) closeSlashMenu()
   mentionStartIndex.value = startIndex
   mentionQuery.value = mentionToken.slice(1)
   isFileMentionOpen.value = true
   void queueFileMentionSearch()
+}
+
+function closeSlashMenu(): void {
+  isSlashMenuOpen.value = false
+  slashStartIndex.value = null
+  slashQuery.value = ''
+  slashHighlightedIndex.value = 0
+  slashMatchedCommands.value = SLASH_COMMANDS
+}
+
+function updateSlashCommandState(): void {
+  const input = inputRef.value
+  if (!input) {
+    closeSlashMenu()
+    return
+  }
+  const cursor = input.selectionStart ?? draft.value.length
+  const beforeCursor = draft.value.slice(0, cursor)
+  const parsed = parseSlashQuery(beforeCursor)
+  if (!parsed) {
+    closeSlashMenu()
+    return
+  }
+  if (isFileMentionOpen.value) closeFileMention()
+  slashStartIndex.value = parsed.startIndex
+  slashQuery.value = parsed.query
+  slashMatchedCommands.value = matchSlashCommands(SLASH_COMMANDS, parsed.query)
+  slashHighlightedIndex.value = 0
+  isSlashMenuOpen.value = true
+}
+
+function applySlashCommand(command: SlashCommand): void {
+  const input = inputRef.value
+  const start = slashStartIndex.value
+  if (start !== null && input) {
+    const cursor = input.selectionStart ?? draft.value.length
+    draft.value = `${draft.value.slice(0, start)}${draft.value.slice(cursor)}`
+  }
+  closeSlashMenu()
+  if (command.kind === 'rpc') {
+    emit('slash-command', command.id)
+    return
+  }
+  if (command.kind === 'text' && command.insertText) {
+    draft.value = draft.value.trimEnd()
+    draft.value = draft.value.length > 0 ? `${draft.value} ${command.insertText}` : command.insertText
+  }
+  if (command.kind === 'local' && command.id === 'clear') {
+    draft.value = ''
+  }
+  void nextTick(() => {
+    input?.focus()
+    updateComposerOverflowState()
+  })
 }
 
 async function queueFileMentionSearch(): Promise<void> {

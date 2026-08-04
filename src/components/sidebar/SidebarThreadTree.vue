@@ -2162,6 +2162,7 @@ function getProjectDisplayName(projectName: string): string {
 defineExpose({
   openAutomationEditorFromPanel,
   openAutomationCreatorFromPanel,
+  openRenameThreadDialog,
 })
 
 function isPathLikeProjectName(value: string): boolean {
