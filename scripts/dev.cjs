@@ -17,6 +17,9 @@ function isAndroidRuntime() {
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     stdio: 'inherit',
+    // Windows .cmd/.bat shims (e.g. vite.cmd) require a shell since Node 20.12,
+    // otherwise spawnSync fails with EINVAL.
+    shell: process.platform === 'win32',
     env: {
       ...process.env,
       CODEXUI_SANDBOX_MODE: process.env.CODEXUI_SANDBOX_MODE || 'danger-full-access',

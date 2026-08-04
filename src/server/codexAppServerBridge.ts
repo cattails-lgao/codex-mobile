@@ -17,6 +17,7 @@ import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
+import { createExternalSessionTracker } from './externalSessionTracker.js'
 import {
   getRandomFreeKey,
   getFreeKeyCount,
@@ -7440,6 +7441,8 @@ async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<Thre
 
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   const { appServer, terminalManager, methodCatalog, telegramBridge, backendQueueProcessor } = getSharedBridgeState()
+  const externalSessionTracker = createExternalSessionTracker()
+  externalSessionTracker.start()
   let threadSearchIndex: ThreadSearchIndex | null = null
   let threadSearchIndexPromise: Promise<ThreadSearchIndex> | null = null
 
@@ -7466,6 +7469,37 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       telegramBridge.start()
     })
     .catch(() => {})
+
+  function readExternalSessionForThread(threadId: string) {
+    if (!threadId) return null
+    return externalSessionTracker.getExternalSession(threadId)
+  }
+
+  function overlayExternalSessionOnThreadList(result: unknown): unknown {
+    const record = asRecord(result)
+    if (!record || !Array.isArray(record.data)) return result
+    let changed = false
+    const data = record.data.map((row) => {
+      const rowRecord = asRecord(row)
+      if (!rowRecord) return row
+      const threadId = readNonEmptyString(rowRecord.id)
+      const externalSession = readExternalSessionForThread(threadId)
+      if (!externalSession) return row
+      changed = true
+      return { ...rowRecord, externalSession }
+    })
+    return changed ? { ...record, data } : result
+  }
+
+  function overlayExternalSessionOnThreadResult(result: unknown): unknown {
+    const record = asRecord(result)
+    const thread = asRecord(record?.thread)
+    if (!record || !thread) return result
+    const threadId = readNonEmptyString(thread.id)
+    const externalSession = readExternalSessionForThread(threadId)
+    if (!externalSession) return result
+    return { ...record, thread: { ...thread, externalSession } }
+  }
 
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const requestStartNs = process.hrtime.bigint()
@@ -7998,7 +8032,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
         }
 
-        setJson(res, 200, { result })
+        const externalOverlaidResult = body.method === 'thread/list'
+          ? overlayExternalSessionOnThreadList(result)
+          : THREAD_METHODS_WITH_TURNS.has(body.method)
+            ? overlayExternalSessionOnThreadResult(result)
+            : result
+
+        setJson(res, 200, { result: externalOverlaidResult })
         return
       }
 
@@ -8133,9 +8173,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             } catch { /* missing */ }
           }
 
+          const externalSession = externalSessionTracker.getExternalSession(threadId)
           const cached = appServer.getCachedLiveState(threadId, rawTurns.length, sessionSize)
           if (cached) {
-            setJson(res, 200, cached)
+            setJson(res, 200, externalSession ? { ...cached, externalSession } : cached)
             return
           }
 
@@ -8151,7 +8192,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
 
           const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
-          const isInProgress = lastTurn?.status === 'inProgress'
+          const isInProgress = lastTurn?.status === 'inProgress' || externalSession?.active === true
 
           const responseData = {
             threadId,
@@ -8161,6 +8202,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ownerClientId: null,
             liveStateError: null,
             isInProgress,
+            ...(externalSession ? { externalSession } : {}),
           }
 
           if (!isInProgress) {
@@ -9629,6 +9671,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     telegramBridge.stop()
     terminalManager.dispose()
     backendQueueProcessor.dispose()
+    externalSessionTracker.stop()
     appServer.dispose()
   }
   middleware.subscribeNotifications = (
@@ -9646,9 +9689,20 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         atIso: new Date().toISOString(),
       })
     })
+    const unsubscribeExternalSession = externalSessionTracker.subscribe((event) => {
+      if (event.params.threadId) {
+        appServer.invalidateLiveStateCache(event.params.threadId)
+      }
+      listener({
+        method: event.method,
+        params: event.params,
+        atIso: event.atIso,
+      })
+    })
     return () => {
       unsubscribeAppServer()
       unsubscribeTerminal()
+      unsubscribeExternalSession()
     }
   }
 
