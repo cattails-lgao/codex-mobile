@@ -9461,13 +9461,35 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           return
         }
 
-        const index = await getThreadSearchIndex()
-        const matchedIds = Array.from(index.docsById.entries())
-          .filter(([, doc]) => isExactPhraseMatch(query, doc))
-          .slice(0, limit)
-          .map(([id]) => id)
+        // Prefer the official thread/search RPC; fall back to the local index
+        // when the app-server does not expose it (older Codex CLI versions).
+        let matchedIds: string[]
+        let indexedThreadCount: number
+        try {
+          const searchResult = asRecord(await appServer.rpc('thread/search', {
+            searchTerm: query,
+            limit,
+          }))
+          const data = Array.isArray(searchResult?.data) ? searchResult.data : []
+          matchedIds = data
+            .map((item) => {
+              const thread = asRecord(asRecord(item)?.thread)
+              return typeof thread?.id === 'string' ? thread.id : ''
+            })
+            .filter((id) => id.length > 0)
+          // The official RPC does not expose an indexed count; keep the field for
+          // shape compatibility with the local-index fallback.
+          indexedThreadCount = 0
+        } catch {
+          const index = await getThreadSearchIndex()
+          matchedIds = Array.from(index.docsById.entries())
+            .filter(([, doc]) => isExactPhraseMatch(query, doc))
+            .slice(0, limit)
+            .map(([id]) => id)
+          indexedThreadCount = index.docsById.size
+        }
 
-        setJson(res, 200, { data: { threadIds: matchedIds, indexedThreadCount: index.docsById.size } })
+        setJson(res, 200, { data: { threadIds: matchedIds, indexedThreadCount } })
         return
       }
 
