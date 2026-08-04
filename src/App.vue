@@ -971,7 +971,8 @@
                   @update:selected-collaboration-mode="onSelectCollaborationMode"
                   @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
-                  @update:selected-speed-mode="onSelectSpeedMode" />
+                  @update:selected-speed-mode="onSelectSpeedMode"
+                  @slash-command="onSlashCommand" />
               </div>
             </div>
           </template>
@@ -1062,7 +1063,7 @@
                     @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                     @update:selected-reasoning-effort="onSelectReasoningEffort"
                     @update:selected-speed-mode="onSelectSpeedMode"
-                    @interrupt="onInterruptTurn" />
+                    @interrupt="onInterruptTurn" @slash-command="onSlashCommand" />
                 </div>
               </template>
             </div>
@@ -1498,6 +1499,7 @@ const { isMobile } = useMobile()
 type SidebarThreadTreeExposed = {
   openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
   openAutomationCreatorFromPanel: () => void
+  openRenameThreadDialog: (threadId: string, currentTitle: string) => void
 }
 type AutomationsPanelExposed = {
   loadAutomations: () => Promise<void>
@@ -4207,6 +4209,38 @@ function onSelectSpeedMode(mode: SpeedMode): void {
 
 function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
+}
+
+function onSlashCommand(commandId: string): void {
+  const threadId = selectedThreadId.value.trim()
+  switch (commandId) {
+    case 'compact':
+      if (threadId) void compactThreadById(threadId)
+      break
+    case 'review':
+      if (!threadId) return
+      reviewInitialFilePath.value = ''
+      reviewInitialCommitSha.value = ''
+      isReviewPaneOpen.value = true
+      break
+    case 'rename':
+      if (threadId) sidebarThreadTreeRef.value?.openRenameThreadDialog(threadId, selectedThread.value?.title ?? '')
+      break
+    case 'archive':
+      if (threadId) void archiveThreadById(threadId)
+      break
+    case 'fork':
+      if (threadId) void forkThreadById(threadId)
+      break
+    case 'new':
+      onStartNewThreadFromToolbar()
+      break
+    case 'skills':
+      if (!isSkillsRoute.value) void router.push({ name: 'skills' })
+      break
+    default:
+      break
+  }
 }
 
 function onRollback(payload: { turnId: string }): void {
