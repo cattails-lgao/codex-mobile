@@ -26,6 +26,7 @@ import {
   normalizeThreadGroupsV2,
   normalizeThreadMessagesV2,
   normalizeThreadSummaryV2,
+  readExternalSessionFromResponse,
   readThreadInProgressFromResponse,
 } from './normalizers/v2'
 import type {
@@ -40,6 +41,7 @@ import type {
   UiMessage,
   UiProjectGroup,
   UiThread,
+  UiExternalSession,
   UiReviewAction,
   UiReviewActionLevel,
   UiReviewFile,
@@ -810,6 +812,7 @@ async function getThreadDetailV2(threadId: string): Promise<{
   activeTurnId: string
   hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
+  externalSession: UiExternalSession | null
 }> {
   const payload = await callRpc<ThreadReadResponse>('thread/read', {
     threadId,
@@ -825,6 +828,7 @@ async function getThreadDetailV2(threadId: string): Promise<{
     activeTurnId: readActiveTurnIdFromResponse(payload),
     hasMoreOlder: startTurnIndex > 0,
     turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+    externalSession: readExternalSessionFromResponse(payload),
   }
 }
 
@@ -905,6 +909,7 @@ export async function getThreadDetail(threadId: string): Promise<{
   activeTurnId: string
   hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
+  externalSession: UiExternalSession | null
 }> {
   try {
     return await getThreadDetailV2(threadId)
@@ -1546,6 +1551,7 @@ export type ResumedThread = {
   activeTurnId: string
   hasMoreOlder: boolean
   turnIndexByTurnId: ThreadTurnIndexById
+  externalSession: UiExternalSession | null
 }
 
 const RESUME_THREAD_COALESCE_TTL_MS = 30_000
@@ -1567,6 +1573,7 @@ export async function resumeThread(threadId: string): Promise<ResumedThread> {
       activeTurnId: readActiveTurnIdFromResponse(payload),
       hasMoreOlder: startTurnIndex > 0,
       turnIndexByTurnId: buildTurnIndexByTurnId(payload, startTurnIndex),
+      externalSession: readExternalSessionFromResponse(payload),
     }
   })()
 

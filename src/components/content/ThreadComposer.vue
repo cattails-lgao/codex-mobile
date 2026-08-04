@@ -340,7 +340,7 @@
             type="button"
             :aria-label="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
             :title="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
-            :disabled="disabled || !activeThreadId || isInterruptingTurn || isStopPending"
+            :disabled="disabled || !activeThreadId || isInterruptingTurn || isStopPending || externalSessionActive === true"
             @click="onInterrupt"
           >
             <span v-if="isStopPending" class="thread-composer-stop-spinner" aria-hidden="true" />
@@ -454,6 +454,7 @@ const props = defineProps<{
   isTurnInProgress?: boolean
   isStopPending?: boolean
   isInterruptingTurn?: boolean
+  externalSessionActive?: boolean
   isUpdatingSpeedMode?: boolean
   disabled?: boolean
   hasQueueAbove?: boolean
@@ -665,7 +666,7 @@ const standaloneFileAttachments = computed(() => {
   }
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
-const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId)
+const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || props.externalSessionActive === true)
 const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => /^gpt-5\.(?:4|5)(?:$|-)/.test(props.selectedModel.trim()))
 const showFastModeModelIcon = computed(() =>

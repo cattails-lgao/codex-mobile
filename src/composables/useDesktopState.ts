@@ -60,6 +60,7 @@ import type {
   UiThreadTokenUsage,
   UiTokenUsageBreakdown,
   UiThread,
+  UiExternalSession,
 } from '../types/codex'
 import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 
@@ -1402,6 +1403,7 @@ export function useDesktopState() {
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
+  const externalSessionByThreadId = ref<Record<string, UiExternalSession | null>>({})
   type FileAttachment = { label: string; path: string; fsPath: string }
   type QueuedMessage = {
     id: string
@@ -2163,7 +2165,8 @@ export function useDesktopState() {
     const flaggedGroups: UiProjectGroup[] = withTitles.map((group) => ({
       projectName: group.projectName,
       threads: group.threads.map((thread) => {
-        const inProgress = inProgressById.value[thread.id] === true
+        const externalSession = externalSessionByThreadId.value[thread.id] ?? thread.externalSession ?? null
+        const inProgress = inProgressById.value[thread.id] === true || externalSession?.active === true
         const pendingRequestState = readPendingRequestState(getThreadPendingRequests(thread.id))
         const isSelected = selectedThreadId.value === thread.id
         const unreadByEvent = eventUnreadByThreadId.value[thread.id] === true
@@ -2179,6 +2182,7 @@ export function useDesktopState() {
           inProgress,
           unread,
           pendingRequestState,
+          ...(externalSession ? { externalSession } : {}),
         }
       }),
     }))
@@ -4210,6 +4214,12 @@ export function useDesktopState() {
       inProgressById.value,
       new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id)),
     )
+    const listedThreadIds = new Set(flattenThreads(sourceGroups.value).map((thread) => thread.id))
+    const nextExternalSessions: Record<string, UiExternalSession | null> = {}
+    for (const thread of flattenThreads(sourceGroups.value)) {
+      nextExternalSessions[thread.id] = thread.externalSession ?? externalSessionByThreadId.value[thread.id] ?? null
+    }
+    externalSessionByThreadId.value = nextExternalSessions
     applyThreadFlags()
   }
 
@@ -4494,6 +4504,12 @@ export function useDesktopState() {
         }
       }
       setThreadInProgress(threadId, inProgress)
+      if (detail.externalSession) {
+        externalSessionByThreadId.value = {
+          ...externalSessionByThreadId.value,
+          [threadId]: detail.externalSession,
+        }
+      }
       clearTransientTurnErrorForThread(threadId)
       if (activeTurnId) {
         activeTurnIdByThreadId.value = {
@@ -5582,6 +5598,36 @@ export function useDesktopState() {
     await syncFromNotifications()
   }
 
+  function handleExternalSessionChanged(notification: RpcNotification): void {
+    const params = asRecord(notification.params)
+    const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
+    if (!threadId) return
+    const rawExternal = asRecord(params?.externalSession)
+    const externalSession = rawExternal && typeof rawExternal.origin === 'string' && rawExternal.origin.trim().length > 0
+      ? {
+          origin: rawExternal.origin.trim(),
+          active: rawExternal.active === true,
+          lastWriteAt: typeof rawExternal.lastWriteAt === 'string' ? rawExternal.lastWriteAt : null,
+        }
+      : null
+    externalSessionByThreadId.value = {
+      ...externalSessionByThreadId.value,
+      [threadId]: externalSession,
+    }
+    setThreadInProgress(threadId, externalSession?.active === true)
+    applyThreadFlags()
+    pendingThreadsRefresh = true
+    if (selectedThreadId.value === threadId) {
+      pendingThreadMessageRefresh.add(threadId)
+    }
+    if (eventSyncTimer === null && typeof window !== 'undefined') {
+      eventSyncTimer = window.setTimeout(() => {
+        eventSyncTimer = null
+        void syncFromNotifications()
+      }, EVENT_SYNC_DEBOUNCE_MS)
+    }
+  }
+
   function startPolling(): void {
     if (typeof window === 'undefined') return
 
@@ -5591,6 +5637,10 @@ export function useDesktopState() {
       if (notification.method === 'ready') {
         clearAllTransientTurnErrors()
         void recoverBridgeState()
+        return
+      }
+      if (notification.method === 'externalSessionChanged') {
+        handleExternalSessionChanged(notification)
         return
       }
       applyRealtimeUpdates(notification)

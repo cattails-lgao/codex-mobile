@@ -11,6 +11,7 @@ import type {
   UiFileAttachment,
   UiFileChange,
   UiFileChangeStatus,
+  UiExternalSession,
   UiMessage,
   UiPlanData,
   UiPlanStep,
@@ -556,6 +557,24 @@ function isTurnInProgress(turn: Turn | null | undefined): boolean {
   return turn?.status === 'inProgress'
 }
 
+export function readExternalSessionFromThread(summary: Thread): UiExternalSession | null {
+  const rawSummary = summary as Record<string, unknown>
+  const raw = rawSummary.externalSession
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  const origin = typeof record.origin === 'string' && record.origin.trim().length > 0 ? record.origin.trim() : ''
+  if (!origin) return null
+  return {
+    origin,
+    active: record.active === true,
+    lastWriteAt: typeof record.lastWriteAt === 'string' ? record.lastWriteAt : null,
+  }
+}
+
+function isExternalSessionActive(summary: Thread): boolean {
+  return readExternalSessionFromThread(summary)?.active === true
+}
+
 function readThreadInProgress(summary: Thread): boolean {
   const rawSummary = summary as Record<string, unknown>
   if (rawSummary.inProgress === true) return true
@@ -568,7 +587,7 @@ function readThreadInProgress(summary: Thread): boolean {
 
   const turns = Array.isArray(summary.turns) ? summary.turns : []
   const lastTurn = turns.at(-1)
-  return isTurnInProgress(lastTurn)
+  return isTurnInProgress(lastTurn) || isExternalSessionActive(summary)
 }
 
 function toUiThread(summary: Thread): UiThread {
@@ -594,6 +613,7 @@ function toUiThread(summary: Thread): UiThread {
     preview: summary.preview,
     unread: false,
     inProgress: readThreadInProgress(summary),
+    externalSession: readExternalSessionFromThread(summary),
   }
 }
 
@@ -662,6 +682,10 @@ export function readThreadInProgressFromResponse(payload: ThreadReadResponse): b
   if (readThreadInProgress(payload.thread)) return true
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   return isTurnInProgress(turns.at(-1))
+}
+
+export function readExternalSessionFromResponse(payload: ThreadReadResponse): UiExternalSession | null {
+  return readExternalSessionFromThread(payload.thread)
 }
 
 export function readActiveTurnIdFromResponse(payload: ThreadReadResponse): string {
