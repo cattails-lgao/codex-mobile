@@ -116,6 +116,7 @@ export default defineConfig({
       ignored: [
         '**/.omx/**',
         '**/.cursor/**',
+        '**/.codex/**',
         '**/.playwright-cli/**',
         '**/dist/**',
         '**/dist-cli/**',
