@@ -391,8 +391,8 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           <tr>
             <td rowspan="5">P1</td>
             <td>P1-1 线程搜索</td>
-            <td><strong class="warn-text">部分完成</strong></td>
-            <td><code>searchThreads</code> 已接入搜索框,但走自定义端点 <code>/codex-api/thread-search</code>,未切换到方案要求的官方 <code>thread/search</code> RPC</td>
+            <td><strong class="ok-text">已完成</strong></td>
+            <td>commit <code>9b625b5</code>;<code>/codex-api/thread-search</code> 已切换到官方 <code>thread/search</code> RPC（<code>searchTerm</code> 参数）,保留自研索引为旧版 codex 的降级路径</td>
           </tr>
           <tr>
             <td>P1-2 模糊文件搜索</td>
@@ -423,7 +423,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>总体进度:</strong> 方案 11 个任务项中,3 项已完成(P0-1、P1-2、P1-4),2 项部分完成(P1-1、P1-5),6 项未开始(P0-2、P1-3、P2 全部)。下一优先级建议为 P0-2 实时语音或 P1-1 线程搜索切换到官方 RPC,均属用户可感知能力。
+          <strong>总体进度:</strong> 方案 11 个任务项中,4 项已完成(P0-1、P1-1、P1-2、P1-4),1 项部分完成(P1-5),6 项未开始(P0-2、P1-3、P2 全部)。下一优先级建议为 P0-2 实时语音,属用户可感知能力。
         </div>
       </section>
 
