@@ -62,26 +62,6 @@
         </span>
       </div>
 
-      <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
-        <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
-          <button
-            class="thread-composer-skill-chip-name"
-            type="button"
-            :title="skillMarkdownPath(skill.path)"
-            :aria-label="`Open ${skill.displayName || skill.name} SKILL.md`"
-            @click="openSkillMarkdown(skill)"
-          >
-            {{ skill.displayName || skill.name }}
-          </button>
-          <button
-            class="thread-composer-skill-chip-remove"
-            type="button"
-            :aria-label="`Remove skill ${skill.displayName || skill.name}`"
-            @click="removeSkill(skill.path)"
-          >×</button>
-        </span>
-      </div>
-
       <div
         class="thread-composer-input-wrap"
         :class="{
@@ -1312,22 +1292,6 @@ function removeImage(id: string): void {
   selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
 }
 
-function removeSkill(path: string): void {
-  selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
-}
-
-function skillMarkdownPath(path: string): string {
-  const trimmed = path.trim()
-  if (!trimmed) return ''
-  return trimmed.endsWith('/SKILL.md') ? trimmed : `${trimmed.replace(/\/+$/, '')}/SKILL.md`
-}
-
-function openSkillMarkdown(skill: SkillItem): void {
-  const markdownPath = skillMarkdownPath(skill.path)
-  if (!markdownPath || typeof window === 'undefined') return
-  window.open(`/codex-local-browse${encodeURI(markdownPath)}`, '_blank', 'noopener,noreferrer')
-}
-
 function removeFileAttachment(fsPath: string): void {
   fileAttachments.value = fileAttachments.value.filter((a) => a.fsPath !== fsPath)
 }
@@ -2229,22 +2193,6 @@ watch(
 
 .thread-composer-file-chip-remove {
   @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 text-xs leading-none p-0;
-}
-
-.thread-composer-skill-chips {
-  @apply mb-2 flex flex-wrap gap-1.5;
-}
-
-.thread-composer-skill-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700;
-}
-
-.thread-composer-skill-chip-name {
-  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500;
-}
-
-.thread-composer-skill-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
 }
 
 .thread-composer-rate-limit {

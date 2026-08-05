@@ -17,6 +17,8 @@ export type SlashCommand = {
   group?: SlashCommandGroup
   /** Skill path when kind === 'skill'; used to attach the skill to the message. */
   skillPath?: string
+  /** Full display name when kind === 'skill' and it differs from the normalized id. */
+  displayName?: string
 }
 
 export const SLASH_MENTION_REGEX = /(^|\s)(\/[a-zA-Z]*)$/
@@ -62,7 +64,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 ]
 
 /** Builds skill slash commands from the installed skill list. */
-export function buildSkillSlashCommands(skills: Array<{ name: string; description?: string; path: string }>): SlashCommand[] {
+export function buildSkillSlashCommands(skills: Array<{ name: string; description?: string; path: string; displayName?: string }>): SlashCommand[] {
   const commands: SlashCommand[] = []
   const seen = new Set<string>()
   for (const skill of skills) {
@@ -75,6 +77,7 @@ export function buildSkillSlashCommands(skills: Array<{ name: string; descriptio
       kind: 'skill',
       group: 'skill',
       skillPath: skill.path,
+      displayName: skill.displayName?.trim() || skill.name.trim(),
     })
   }
   return commands.sort((a, b) => a.id.localeCompare(b.id))
