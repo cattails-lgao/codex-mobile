@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addDirectoryMarketplace, compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, normalizeFuzzyFileSearchResults, removeDirectoryMarketplace, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
+import { addDirectoryMarketplace, checkoutPluginShare, compactThread, deletePluginShare, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, normalizeFuzzyFileSearchResults, removeDirectoryMarketplace, resumeThread, savePluginShare, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -491,5 +491,82 @@ describe('marketplace management', () => {
       upgradedRoots: ['/repo/.codex/marketplaces/openai'],
       errors: [],
     })
+  })
+})
+
+describe('plugin share', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('saves a share by plugin path', async () => {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({
+        result: {
+          remotePluginId: 'share-1',
+          share_url: 'https://share.example/plugin-1',
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    const result = await savePluginShare('/repo/.codex/marketplaces/openai/example')
+
+    expect(requests).toEqual([
+      { method: 'plugin/share/save', params: { pluginPath: '/repo/.codex/marketplaces/openai/example' } },
+    ])
+    expect(result).toEqual({ remotePluginId: 'share-1', shareUrl: 'https://share.example/plugin-1' })
+  })
+
+  it('lists shares with camel/snake normalization and skips malformed rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      result: {
+        data: [
+          { remotePluginId: 'share-1', pluginName: 'Example', shareUrl: 'https://share.example/1', createdAt: '2026-08-05' },
+          { id: 'share-2', name: 'Other', url: 'https://share.example/2', created_at: '2026-08-04' },
+          { pluginName: 'no-id' },
+          null,
+        ],
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const shares = await listPluginShares()
+
+    expect(shares).toEqual([
+      { remotePluginId: 'share-1', pluginName: 'Example', shareUrl: 'https://share.example/1', createdAt: '2026-08-05' },
+      { remotePluginId: 'share-2', pluginName: 'Other', shareUrl: 'https://share.example/2', createdAt: '2026-08-04' },
+    ])
+  })
+
+  it('deletes and checks out by remotePluginId', async () => {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await deletePluginShare('share-1')
+    await checkoutPluginShare('share-1')
+
+    expect(requests).toEqual([
+      { method: 'plugin/share/delete', params: { remotePluginId: 'share-1' } },
+      { method: 'plugin/share/checkout', params: { remotePluginId: 'share-1' } },
+    ])
   })
 })

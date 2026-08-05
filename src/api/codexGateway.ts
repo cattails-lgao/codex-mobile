@@ -1232,6 +1232,59 @@ export async function upgradeDirectoryMarketplaces(): Promise<UiMarketplaceUpgra
   }
 }
 
+export interface UiPluginShareSummary {
+  remotePluginId: string
+  pluginName: string
+  shareUrl: string
+  createdAt: string
+}
+
+export interface UiPluginShareSaveResult {
+  remotePluginId: string
+  shareUrl: string
+}
+
+function normalizePluginShareSummary(value: unknown): UiPluginShareSummary | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const remotePluginId = readString(record.remotePluginId ?? record.remote_plugin_id ?? record.id)
+  if (!remotePluginId) return null
+  return {
+    remotePluginId,
+    pluginName: readString(record.pluginName ?? record.plugin_name ?? record.name) ?? remotePluginId,
+    shareUrl: readString(record.shareUrl ?? record.share_url ?? record.url) ?? '',
+    createdAt: readString(record.createdAt ?? record.created_at) ?? '',
+  }
+}
+
+export async function savePluginShare(pluginPath: string): Promise<UiPluginShareSaveResult> {
+  const payload = await callRpc<{
+    remotePluginId?: unknown
+    remote_plugin_id?: unknown
+    shareUrl?: unknown
+    share_url?: unknown
+    url?: unknown
+  }>('plugin/share/save', { pluginPath })
+  return {
+    remotePluginId: readString(payload.remotePluginId ?? payload.remote_plugin_id) ?? '',
+    shareUrl: readString(payload.shareUrl ?? payload.share_url ?? payload.url) ?? '',
+  }
+}
+
+export async function listPluginShares(): Promise<UiPluginShareSummary[]> {
+  const payload = await callRpc<{ data?: unknown[]; shares?: unknown[] }>('plugin/share/list', {})
+  const rows = payload.data ?? payload.shares ?? []
+  return rows.map(normalizePluginShareSummary).filter((row): row is UiPluginShareSummary => row !== null)
+}
+
+export async function deletePluginShare(remotePluginId: string): Promise<void> {
+  await callRpc('plugin/share/delete', { remotePluginId })
+}
+
+export async function checkoutPluginShare(remotePluginId: string): Promise<void> {
+  await callRpc('plugin/share/checkout', { remotePluginId })
+}
+
 export async function getNotificationCatalog(): Promise<string[]> {
   return fetchRpcNotificationCatalog()
 }
