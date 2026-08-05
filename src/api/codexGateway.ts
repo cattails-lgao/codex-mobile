@@ -1823,6 +1823,10 @@ export async function archiveThread(threadId: string): Promise<void> {
   await callRpc('thread/archive', { threadId })
 }
 
+export async function unarchiveThread(threadId: string): Promise<void> {
+  await callRpc('thread/unarchive', { threadId })
+}
+
 export async function compactThread(threadId: string): Promise<void> {
   await callRpc('thread/compact/start', { threadId })
 }

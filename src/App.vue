@@ -101,6 +101,7 @@
             @remove-project="onRemoveProject" @reorder-project="onReorderProject"
             @copy-thread-chat="onCopyThreadChat"
             @automations-changed="onAutomationsChanged"
+            @restore-thread="onRestoreThread"
             @start-new-chat="onStartProjectlessNewChat" />
         </div>
 
@@ -1146,6 +1147,7 @@
                     :approval-policy-notice="approvalPolicyNotice"
                     @update:approval-policy="onApprovalPolicyChange"
                     @save-approval-policy="onSaveApprovalPolicy"
+                    :plan-panel="composerPlanPanel"
                     @interrupt="onInterruptTurn" @slash-command="onSlashCommand" />
                 </div>
               </template>
@@ -1457,6 +1459,7 @@ import type { ApprovalPolicy } from './api/codexGateway'
 import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
+import { readPlanData } from './utils/plan'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
@@ -2194,6 +2197,21 @@ const latestUserTurnId = computed(() => {
     if (turnId.length > 0) return turnId
   }
   return ''
+})
+const composerPlanPanel = computed(() => {
+  for (let index = filteredMessages.value.length - 1; index >= 0; index -= 1) {
+    const message = filteredMessages.value[index]
+    if (message.messageType !== 'plan' && message.messageType !== 'plan.live') continue
+    const data = readPlanData(message)
+    if (!data) return null
+    return {
+      id: message.id,
+      streaming: message.messageType === 'plan.live',
+      explanation: data.explanation,
+      steps: data.steps,
+    }
+  }
+  return null
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
@@ -3176,6 +3194,10 @@ async function onRemoveAccount(storageId: string): Promise<void> {
 
 function onArchiveThread(threadId: string): void {
   void archiveThreadById(threadId)
+}
+
+function onRestoreThread(_threadId: string): void {
+  void refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
 }
 
 async function onForkThread(threadId: string): Promise<void> {
@@ -5676,7 +5698,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   }
 
   .content-right-panel.is-mobile-open {
-    transform: translateX(0);
+    translate: 0 0;
   }
 }
 

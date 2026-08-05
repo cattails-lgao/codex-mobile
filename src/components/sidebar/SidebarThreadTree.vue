@@ -167,6 +167,10 @@
                 <span>{{ t('Updated') }}</span>
                 <span v-if="chatSortMode === 'updated'">✓</span>
               </button>
+              <div class="organize-menu-separator" />
+              <button class="organize-menu-item" type="button" @click="openRecycleBin">
+                <span>{{ t('Recycle bin') }}</span>
+              </button>
             </div>
           </div>
         </template>
@@ -648,49 +652,76 @@
       </div>
     </Teleport>
 
-    <Teleport to="body">
-      <div v-if="renameThreadDialogVisible" class="rename-thread-overlay" @click.self="closeRenameThreadDialog">
-        <div class="rename-thread-panel" role="dialog" aria-modal="true" :aria-label="t('Thread title')">
-          <h3 class="rename-thread-title">{{ t('Rename thread') }}</h3>
-          <p class="rename-thread-subtitle">{{ t('Make it short and recognizable.') }}</p>
-          <input
-            ref="renameThreadInputRef"
-            v-model="renameThreadDraft"
-            class="rename-thread-input"
-            type="text"
-            :placeholder="t('Add title...')"
-            @keydown.enter.prevent="submitRenameThread"
-            @keydown.esc.prevent="closeRenameThreadDialog"
-          />
-          <div class="rename-thread-actions">
-            <button class="rename-thread-button" type="button" @click="closeRenameThreadDialog">{{ t('Cancel') }}</button>
-            <button class="rename-thread-button rename-thread-button-primary" type="button" @click="submitRenameThread">{{ t('Save') }}</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <AppDialog
+      :open="renameThreadDialogVisible"
+      :title="t('Rename thread')"
+      :subtitle="t('Make it short and recognizable.')"
+      @close="closeRenameThreadDialog"
+    >
+      <input
+        ref="renameThreadInputRef"
+        v-model="renameThreadDraft"
+        class="rename-thread-input"
+        type="text"
+        :placeholder="t('Add title...')"
+        @keydown.enter.prevent="submitRenameThread"
+      />
+      <template #footer>
+        <button class="rename-thread-button" type="button" @click="closeRenameThreadDialog">{{ t('Cancel') }}</button>
+        <button class="rename-thread-button rename-thread-button-primary" type="button" @click="submitRenameThread">{{ t('Save') }}</button>
+      </template>
+    </AppDialog>
 
-    <Teleport to="body">
-      <div v-if="deleteThreadDialogVisible" class="rename-thread-overlay" @click.self="closeDeleteThreadDialog">
-        <div class="rename-thread-panel" role="dialog" aria-modal="true" :aria-label="t('Delete thread')">
-          <h3 class="rename-thread-title">{{ deleteThreadHasAutomation ? t('Archive chat and remove automations?') : t('Delete thread?') }}</h3>
-          <p class="rename-thread-subtitle">
-            <template v-if="deleteThreadHasAutomation">
-              {{ t('This will archive the thread "{title}" and remove the attached heartbeat automations.', { title: deleteThreadTitle }) }}
-            </template>
-            <template v-else>
-              {{ t('This will archive the thread "{title}". You can find it later in archived threads.', { title: deleteThreadTitle }) }}
-            </template>
-          </p>
-          <div class="rename-thread-actions">
-            <button class="rename-thread-button" type="button" @click="closeDeleteThreadDialog">{{ t('Cancel') }}</button>
-            <button class="rename-thread-button rename-thread-button-danger" type="button" @click="submitDeleteThread">
-              {{ deleteThreadHasAutomation ? t('Archive and remove') : t('Delete') }}
+    <AppDialog
+      :open="deleteThreadDialogVisible"
+      :title="deleteThreadHasAutomation ? t('Archive chat and remove automations?') : t('Delete thread?')"
+      :subtitle="deleteThreadDialogSubtitle"
+      @close="closeDeleteThreadDialog"
+    >
+      <template #footer>
+        <button class="rename-thread-button" type="button" @click="closeDeleteThreadDialog">{{ t('Cancel') }}</button>
+        <button class="rename-thread-button rename-thread-button-danger" type="button" @click="submitDeleteThread">
+          {{ deleteThreadHasAutomation ? t('Archive and remove') : t('Delete') }}
+        </button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="isRecycleBinOpen"
+      :title="t('Recycle bin')"
+      :subtitle="t('Threads you removed are kept here so you can restore them.')"
+      size="md"
+      @close="isRecycleBinOpen = false"
+    >
+      <div v-if="recycleBinRecords.length === 0" class="recycle-bin-empty">{{ t('Recycle bin is empty.') }}</div>
+      <ul v-else class="recycle-bin-list">
+        <li v-for="record in recycleBinRecords" :key="record.id" class="recycle-bin-item">
+          <div class="recycle-bin-item-copy">
+            <span class="recycle-bin-item-title">{{ record.title }}</span>
+            <span v-if="record.projectName" class="recycle-bin-item-meta">{{ record.projectName }}</span>
+            <span class="recycle-bin-item-time">{{ formatArchivedAt(record.archivedAtIso) }}</span>
+          </div>
+          <div class="recycle-bin-item-actions">
+            <button
+              class="recycle-bin-button recycle-bin-button-primary"
+              type="button"
+              :disabled="restoringThreadId === record.id"
+              @click="onRestoreArchivedThread(record.id)"
+            >
+              {{ restoringThreadId === record.id ? t('Restoring…') : t('Restore') }}
+            </button>
+            <button
+              class="recycle-bin-button recycle-bin-button-danger"
+              type="button"
+              @click="removeArchivedRecord(record.id)"
+            >
+              {{ t('Delete permanently') }}
             </button>
           </div>
-        </div>
-      </div>
-    </Teleport>
+        </li>
+      </ul>
+      <p v-if="recycleBinError" class="recycle-bin-error" role="alert">{{ recycleBinError }}</p>
+    </AppDialog>
 
     <Teleport to="body">
       <div v-if="automationDialogVisible" class="rename-thread-overlay" @click.self="closeAutomationDialog">
@@ -900,8 +931,10 @@ import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
+import { useThreadRecycleBin } from '../../composables/useThreadRecycleBin'
 import { getPathLeafName, getPathParent, isAbsoluteLikePath, isProjectlessChatPath } from '../../pathUtils.js'
 import ComposerDropdown from '../content/ComposerDropdown.vue'
+import AppDialog from '../content/AppDialog.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 import { reconcilePinnedThreadIds } from './pinnedThreadUtils'
 
@@ -938,7 +971,42 @@ const emit = defineEmits<{
   'fork-thread': [threadId: string]
   'start-new-chat': []
   'automations-changed': []
+  'restore-thread': [threadId: string]
 }>()
+
+const {
+  records: recycleBinRecords,
+  loadRecords: loadRecycleBinRecords,
+  recordArchivedThread,
+  removeArchivedRecord,
+  restoreArchivedThread,
+} = useThreadRecycleBin()
+const isRecycleBinOpen = ref(false)
+const recycleBinError = ref('')
+const restoringThreadId = ref('')
+
+function openRecycleBin(): void {
+  isOrganizeMenuOpen.value = false
+  recycleBinError.value = ''
+  loadRecycleBinRecords()
+  isRecycleBinOpen.value = true
+}
+
+async function onRestoreArchivedThread(threadId: string): Promise<void> {
+  if (restoringThreadId.value) return
+  restoringThreadId.value = threadId
+  recycleBinError.value = ''
+  try {
+    const result = await restoreArchivedThread(threadId)
+    if (result.ok) {
+      emit('restore-thread', threadId)
+    } else {
+      recycleBinError.value = result.error ?? 'Failed to restore thread'
+    }
+  } finally {
+    restoringThreadId.value = ''
+  }
+}
 
 type PendingProjectDrag = {
   projectName: string
@@ -1002,6 +1070,7 @@ const inlineDeleteConfirmThreadId = ref('')
 const optimisticallyArchivedThreadIds = ref<string[]>([])
 const openProjectMenuId = ref('')
 const openThreadMenuId = ref('')
+const threadMenuOpenSource = ref<'hover' | 'contextmenu'>('hover')
 const projectMenuDirectionById = ref<Record<string, MenuDirection>>({})
 const threadMenuDirectionById = ref<Record<string, MenuDirection>>({})
 const openThreadMenuStyle = ref<Record<string, string>>({})
@@ -1398,6 +1467,14 @@ onMounted(async () => {
 
 const deleteThreadHasAutomation = computed(() => threadHasAutomation(deleteThreadDialogThreadId.value))
 
+const deleteThreadDialogSubtitle = computed(() => {
+  const title = deleteThreadTitle.value
+  if (deleteThreadHasAutomation.value) {
+    return t('This will archive the thread "{title}" and remove the attached heartbeat automations.', { title })
+  }
+  return t('This will archive the thread "{title}". You can find it later in archived threads.', { title })
+})
+
 const threadProjectNameById = computed(() => {
   const map = new Map<string, string>()
   for (const group of props.groups) {
@@ -1524,6 +1601,17 @@ function formatRelativeThread(thread: UiThread): string {
     return formatRelative(timestamp)
   }
   return formatRelative(new Date(thread.updatedAtIso || thread.createdAtIso).getTime())
+}
+
+function formatArchivedAt(iso: string): string {
+  const timestamp = new Date(iso).getTime()
+  if (Number.isNaN(timestamp)) return ''
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function isPinned(threadId: string): boolean {
@@ -1753,6 +1841,11 @@ async function onCopyThreadPath(threadId: string): Promise<void> {
 
 function onThreadRowLeave(threadId: string, event?: MouseEvent): void {
   if (openThreadMenuId.value !== threadId) return
+  // Only hover-opened menus close on mouse leave. Right-click (context menu)
+  // menus behave like native context menus: they stay open until dismissed
+  // by clicking outside, an action, or Escape — moving the pointer away
+  // must not dismiss them.
+  if (threadMenuOpenSource.value !== 'hover') return
   if (event) {
     const relatedTarget = event.relatedTarget
     const panelElement = openThreadMenuPanelRef.value
@@ -1767,6 +1860,7 @@ function isThreadMenuOpen(threadId: string): boolean {
 
 function closeThreadMenu(): void {
   openThreadMenuId.value = ''
+  threadMenuOpenSource.value = 'hover'
   openThreadMenuStyle.value = {}
 }
 
@@ -1777,6 +1871,7 @@ function toggleThreadMenu(threadId: string): void {
     return
   }
 
+  threadMenuOpenSource.value = 'hover'
   closeProjectMenu()
   isOrganizeMenuOpen.value = false
   openThreadMenuId.value = threadId
@@ -1788,6 +1883,7 @@ function toggleThreadMenu(threadId: string): void {
 function onThreadRowContextMenu(event: MouseEvent, threadId: string): void {
   event.preventDefault()
   inlineDeleteConfirmThreadId.value = ''
+  threadMenuOpenSource.value = 'contextmenu'
   openThreadMenuId.value = threadId
 }
 
@@ -1858,6 +1954,15 @@ function deleteThreadById(threadId: string): void {
   }
   inlineDeleteConfirmThreadId.value = ''
   closeThreadMenu()
+
+  const thread = threadById.value.get(threadId) ?? null
+  recordArchivedThread({
+    id: threadId,
+    title: thread?.title?.trim() || '(untitled)',
+    cwd: thread?.cwd?.trim() ?? '',
+    projectName: threadProjectNameById.value.get(threadId) ?? '',
+  })
+
   pinnedThreadIds.value = pinnedThreadIds.value.filter((id) => id !== threadId)
   emit('archive', threadId)
 
@@ -3076,6 +3181,87 @@ onBeforeUnmount(() => {
 
 .organize-menu-item[data-active='true'] {
   @apply bg-zinc-100 text-zinc-900;
+}
+
+.recycle-bin-empty {
+  @apply py-6 text-center text-sm text-zinc-500;
+}
+
+.recycle-bin-list {
+  @apply m-0 flex list-none flex-col gap-1.5 p-0;
+}
+
+.recycle-bin-item {
+  @apply flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2;
+}
+
+.recycle-bin-item-copy {
+  @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.recycle-bin-item-title {
+  @apply truncate text-sm font-medium text-zinc-800;
+}
+
+.recycle-bin-item-meta {
+  @apply truncate font-mono text-[11px] text-zinc-400;
+}
+
+.recycle-bin-item-time {
+  @apply text-[11px] text-zinc-400;
+}
+
+.recycle-bin-item-actions {
+  @apply flex shrink-0 items-center gap-1.5;
+}
+
+.recycle-bin-button {
+  @apply rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.recycle-bin-button-primary {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-black;
+}
+
+.recycle-bin-button-danger {
+  @apply border-rose-200 text-rose-600 hover:bg-rose-50;
+}
+
+.recycle-bin-error {
+  @apply mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700;
+}
+
+:global(:root.dark) .recycle-bin-item {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:global(:root.dark) .recycle-bin-item-title {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .recycle-bin-item-meta,
+:global(:root.dark) .recycle-bin-item-time {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .recycle-bin-button {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-700;
+}
+
+:global(:root.dark) .recycle-bin-button-primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-900 hover:bg-zinc-200;
+}
+
+:global(:root.dark) .recycle-bin-button-danger {
+  @apply border-rose-800 text-rose-400 hover:bg-zinc-800;
+}
+
+:global(:root.dark) .recycle-bin-error {
+  @apply border-rose-800 bg-rose-950/40 text-rose-300;
+}
+
+:global(:root.dark) .organize-menu-separator {
+  @apply bg-zinc-700;
 }
 
 .thread-start-button {

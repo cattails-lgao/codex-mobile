@@ -11,6 +11,23 @@
 
     <div v-if="isLoading" class="rfp-empty">{{ t('Loading files...') }}</div>
     <div v-else-if="loadError" class="rfp-empty is-error">{{ loadError }}</div>
+    <div v-else-if="previewFile && isPreviewImage" class="rfp-inline-preview">
+      <div class="rfp-inline-preview-header">
+        <span class="rfp-inline-preview-name" :title="previewFile.path">{{ previewFile.label }}</span>
+        <button
+          class="rfp-inline-preview-close"
+          type="button"
+          :aria-label="t('Close')"
+          :title="t('Close')"
+          @click="closePreview"
+        >
+          ×
+        </button>
+      </div>
+      <div class="rfp-inline-preview-body">
+        <img class="rfp-inline-preview-image" :src="previewBrowseUrl" :alt="previewFile.label" />
+      </div>
+    </div>
     <div v-else-if="groups.length === 0" class="rfp-empty">{{ t('No files in workspace.') }}</div>
     <div v-else class="rfp-groups">
       <div v-for="group in groups" :key="group.name" class="rfp-group">
@@ -41,7 +58,7 @@
     </div>
 
     <FilePreviewModal
-      v-if="previewFile"
+      v-if="previewFile && !isPreviewImage"
       :open="true"
       :file-path="previewFile.path"
       :name="previewFile.label"
@@ -127,6 +144,20 @@ function openFile(file: FileRow): void {
 function closePreview(): void {
   previewFile.value = null
 }
+
+const IMAGE_EXT_RE = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i
+
+const isPreviewImage = computed(() => {
+  const path = previewFile.value?.path ?? ''
+  if (!path) return false
+  return IMAGE_EXT_RE.test(path.replace(/[?#].*$/, ''))
+})
+
+const previewBrowseUrl = computed(() => {
+  const path = previewFile.value?.path ?? ''
+  const normalized = path.replace(/\\/g, '/')
+  return `/codex-local-browse${encodeURI(normalized)}`
+})
 
 async function loadFiles(): Promise<void> {
   const cwd = props.cwd.trim()
@@ -218,6 +249,46 @@ watch(
 
 .rfp-empty {
   @apply px-3 py-3 text-xs text-zinc-500;
+}
+
+.rfp-inline-preview {
+  @apply flex min-h-0 flex-1 flex-col;
+}
+
+.rfp-inline-preview-header {
+  @apply flex shrink-0 items-center gap-2 border-b border-zinc-200 px-2 py-1.5;
+}
+
+.rfp-inline-preview-name {
+  @apply min-w-0 flex-1 truncate text-xs font-semibold text-zinc-800;
+}
+
+.rfp-inline-preview-close {
+  @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-sm leading-none text-zinc-500 transition hover:bg-zinc-100;
+}
+
+.rfp-inline-preview-body {
+  @apply flex min-h-0 flex-1 items-center justify-center overflow-auto bg-zinc-100 p-2;
+}
+
+.rfp-inline-preview-image {
+  @apply max-h-full max-w-full object-contain;
+}
+
+:global(:root.dark) .rfp-inline-preview-header {
+  @apply border-zinc-700;
+}
+
+:global(:root.dark) .rfp-inline-preview-name {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .rfp-inline-preview-close {
+  @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800;
+}
+
+:global(:root.dark) .rfp-inline-preview-body {
+  @apply bg-zinc-950;
 }
 
 .rfp-empty.is-error {

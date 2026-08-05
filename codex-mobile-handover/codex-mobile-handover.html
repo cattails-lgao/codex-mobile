@@ -726,6 +726,66 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第七轮交接需求（2026-08-06 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-06 第七轮进展：</strong>9 条需求/问题中 8 条已实现（1/2/3/4/5/6/7/8），需求 9 为现状调研结论（见下）。本轮改动尚在工作区（未 commit/推送）。验证：<code>vue-tsc --noEmit</code> 通过、<code>vite build</code> 通过；Playwright（本机 Edge channel）冒烟 16/16 通过（回收站开/归档/还原、H5 加号 popover 的 Plan mode/Approval policy、独立按钮隐藏、文件 tab 图片内联预览），明暗主题截图见 <code>output/playwright/smoke-*.png</code>。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ThreadConversation.vue</code>、<code>SidebarThreadTree.vue</code>、<code>RightFilesPanel.vue</code>、<code>codexGateway.ts</code>、<code>useUiLanguage.ts</code>，并新增 <code>AppDialog.vue</code>、<code>useThreadRecycleBin.ts</code>、<code>utils/plan.ts</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>需求</th><th>实现方式</th></tr>
+          <tr>
+            <td>1</td>
+            <td>Plan 面板固定到输入框上方（可折叠），不再随消息被顶走</td>
+            <td>新增 <code>src/utils/plan.ts</code>（<code>parsePlanFromMessageText</code> / <code>readPlanData</code>，优先结构化 <code>message.plan</code>，回退解析 <code>- [x]</code>/<code>-[~]</code>/<code>- [ ]</code> 文本）；<code>ThreadConversation.vue</code> 改为复用该工具；<code>App.vue</code> 新增 <code>composerPlanPanel</code> computed（倒序找最近一条 plan/plan.live 消息），通过 <code>:plan-panel</code> 传给 <code>ThreadComposer.vue</code>，在输入框上方渲染 <code>.thread-composer-plan-panel</code>（标题/Updating 徽章/x-y 进度/解释与步骤列表，点击 header 折叠，明暗主题齐全）</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>命令被堆叠看不出是哪一步执行的，需像 trae-work 一样清晰</td>
+            <td><code>ThreadConversation.vue</code> 分组命令与 worked 命令模板加 <code>v-for</code> 序号，新增 <code>.cmd-step-index</code> 步骤序号徽章（<code>title="Step N"</code>），明暗主题样式齐全</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Dialog 弹出层抽成公共组件</td>
+            <td>新增 <code>src/components/content/AppDialog.vue</code>（Teleport 到 body、<code>open</code>/<code>title</code>/<code>subtitle</code>/<code>ariaLabel</code>/<code>size</code> sm|md|lg、遮罩点击与 ESC 关闭、默认 header 带关闭按钮、body + footer 插槽、明暗主题齐全）；<code>SidebarThreadTree.vue</code> 的重命名/删除/回收站对话框与删除确认子标题（<code>deleteThreadDialogSubtitle</code> computed 规避模板引号冲突）改用 <code>AppDialog</code></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>H5 模式下规划模式与审批策略放进「+」popover，选中切换沿用执行中发送（Steer/Queue）样式</td>
+            <td><code>ThreadComposer.vue</code> 加号 <code>ComposerPopover</code> 内新增 <code>v-if="isMobile"</code> 的 Plan mode / Approval policy 两组按钮（复用 <code>.thread-composer-attach-mode</code> 区块样式，选中带 <code>is-active</code>）；独立 plan/approval popover 加 <code>v-if="!isMobile"</code>；<code>onMobileCollaborationModeSelect</code> 选中后关闭 attach 菜单；Playwright 验证移动端独立触发按钮隐藏</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>H5 模式右侧边栏无法显示，需兼容 H5</td>
+            <td>根因：Tailwind v4 的 <code>translate-x-full</code> 使用 CSS <code>translate</code> 属性，旧覆盖用 <code>transform: translateX(0)</code> 无效（样式被计算值 <code>translate: 100%</code> 覆盖）。<code>App.vue</code> 的 <code>@media (max-width: 767px)</code> 中 <code>.content-right-panel.is-mobile-open</code> 改为 <code>translate: 0 0</code>；Playwright 实测面板 rect x=56.25 可见</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>右侧文件 tab 点击图片直接在 tab 内预览，不用弹窗</td>
+            <td><code>RightFilesPanel.vue</code> 新增 <code>isPreviewImage</code>（正则 <code>\.(avif|bmp|gif|jpe?g|png|svg|webp)$</code>）与 <code>previewBrowseUrl</code>（<code>/codex-local-browse</code> 路径）；图片文件走内联 <code>.rfp-inline-preview</code>（header + 关闭按钮 + <code>&lt;img&gt;</code>），非图片仍走 <code>FilePreviewModal</code>；明暗主题样式齐全；Playwright 实测点击 <code>chat-mobile.png</code> 内联预览可见</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>左侧线程右键菜单移开即消失；正常打开后点空白不消失</td>
+            <td><code>SidebarThreadTree.vue</code> 新增 <code>threadMenuOpenSource: 'hover' | 'contextmenu'</code>：hover 打开（dots 按钮）仍随移开关闭，右键打开不随鼠标离开关闭，仅由空白点击/再次操作关闭；Playwright 验证 A（右键后移开→保持）/ B（空白点击→关闭）/ C（dots 打开+移开→关闭）符合预期</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>线程移除后无还原入口，需要线程回收站</td>
+            <td>新增 <code>src/composables/useThreadRecycleBin.ts</code>（localStorage <code>codex-web-local.recycle-bin.v1</code> 持久化）；<code>codexGateway.ts</code> 新增 <code>unarchiveThread</code>（<code>thread/unarchive</code>）；<code>SidebarThreadTree.vue</code> 删除线程时 <code>recordArchivedThread</code> 入回收站，组织菜单新增「Recycle bin」打开 <code>AppDialog</code> 回收站（列表/还原/永久删除/空状态/时间格式化），还原调用 <code>restoreArchivedThread</code> → unarchive 并 emit <code>restore-thread</code>；<code>App.vue</code> <code>onRestoreThread</code> 调 <code>refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })</code> 刷新列表；i18n 中文字典补充；Playwright 实测归档→回收站可见→还原→记录移除全链路通过</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>（问题）thinking 中点击停止后最新会话消息消失，是否正常</td>
+            <td>调研结论：属 codex app-server 的 turn 语义，非本应用 UI bug。<code>turn/interrupt</code> 中断一个尚未产出任何 agent 输出的 turn 时，服务端会将该 turn（含用户消息）从线程历史整体移除（未提交的事务式回滚）；随后本应用 <code>interruptSelectedThreadTurn</code> 会 <code>pendingThreadMessageRefresh + syncFromNotifications</code> 刷新，本地合并 <code>preserveMissing</code> 虽会短暂保留乐观消息，但侧栏摘要已按服务端重建、后续权威刷新后消息即永久消失。<code>blockInterruptUntilThreadIsPersisted</code> 本意是防止此窗口，但 <code>turn/started</code> 到达即解除阻塞（<code>maybeUnblockInterruptForActiveTurn</code>）仍留有小竞态窗口。是否在 UI 侧保留「已停止、消息未提交」的提示或把未提交文本回填输入框，待产品决策</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout">
+          <strong>验证说明：</strong>需求 1 的 plan 面板在当前环境无真实 plan 消息可端到端验证，已通过 <code>vite dev</code> 动态 import <code>/src/utils/plan.ts</code> 实测解析（x/~/' ' 状态与 explanation 提取正确）并依赖 vue-tsc/构建覆盖；需求 2 的步骤序号无 command 消息样本，代码路径经 vue-tsc 与代码复查确认；其余 5/6/7/8 均 Playwright 实测。遗留：需求 9 为调研结论待产品决策；回收站为本地（localStorage）记录 + 服务端 archive/unarchive，跨设备同步依赖服务端线程列表本身。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
           <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>b71bbaf</code>（第六轮：文件预览 + 中英翻译补齐）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
@@ -749,7 +809,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第五轮 8 条反馈已实现并验证 + 第六轮文件预览与中英翻译已推送） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策） · 内容已脱敏
     </footer>
   </article>
 </body>
