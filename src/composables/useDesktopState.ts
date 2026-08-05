@@ -66,6 +66,16 @@ import type {
 } from '../types/codex'
 import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined') {
+      window.setTimeout(resolve, ms)
+    } else {
+      globalThis.setTimeout(resolve, ms)
+    }
+  })
+}
+
 function flattenThreads(groups: UiProjectGroup[]): UiThread[] {
   return groups.flatMap((group) => group.threads)
 }
@@ -1671,7 +1681,20 @@ export function useDesktopState() {
     const liveCommands = liveCommandsByThreadId.value[threadId] ?? []
     const liveFileChanges = liveFileChangeMessagesByThreadId.value[threadId] ?? []
     const injected = injectedSystemMessagesByThreadId.value[threadId] ?? []
-    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...injected]
+
+    // When a compaction is not in progress and a compaction.done row already
+    // exists in persisted messages (ContextCompaction item), drop any stale
+    // injected pending row so the spinner and the done label never show at the
+    // same time.
+    const persistedHasCompactionDone = persisted.some(
+      (message) => message.messageType === 'compaction.done',
+    )
+    const compactionStillActive = compactingThreadIds.value.has(threadId)
+    const effectiveInjected = persistedHasCompactionDone && !compactionStillActive
+      ? injected.filter((message) => message.messageType !== 'compaction.pending')
+      : injected
+
+    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...effectiveInjected]
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -5538,15 +5561,38 @@ export function useDesktopState() {
     injectCompactionMessage(normalized, 'pending')
     try {
       await compactThread(normalized)
-      // Keep the pending state until the thread/compacted notification clears it;
-      // a timeout guards against a lost notification.
-      if (typeof window !== 'undefined') {
-        window.setTimeout(() => {
-          if (compactingThreadIds.value.has(normalized)) {
-            markThreadCompacting(normalized, false)
-            injectCompactionMessage(normalized, 'done')
+      // Modern codex app-servers no longer emit the deprecated
+      // `thread/compacted` notification; the compaction result arrives as a
+      // ContextCompaction item in the thread payload. Poll the thread detail
+      // until that item lands (or the notification path clears the flag), then
+      // swap the pending row for the done row. A timeout guards against stalls.
+      const COMPACTION_POLL_MS = 2_000
+      const COMPACTION_POLL_MAX = 14
+      const timeoutAt = Date.now() + COMPACT_STATE_TIMEOUT_MS
+      let pollCount = 0
+      while (Date.now() < timeoutAt && pollCount < COMPACTION_POLL_MAX) {
+        if (!compactingThreadIds.value.has(normalized)) break
+        const detail = await getThreadDetail(normalized)
+        const hasCompactionItem = detail.messages.some(
+          (message) => message.messageType === 'compaction.done',
+        )
+        if (hasCompactionItem) {
+          markThreadCompacting(normalized, false)
+          // Re-read the thread so the persisted ContextCompaction item is
+          // normalized into a compaction.done message in the feed.
+          if (selectedThreadId.value === normalized) {
+            await loadMessages(normalized, { silent: true, force: true })
           }
-        }, COMPACT_STATE_TIMEOUT_MS)
+          injectCompactionMessage(normalized, 'done')
+          break
+        }
+        pollCount += 1
+        await delay(COMPACTION_POLL_MS)
+      }
+      // Final safety net: clear any stuck pending state.
+      if (compactingThreadIds.value.has(normalized)) {
+        markThreadCompacting(normalized, false)
+        injectCompactionMessage(normalized, 'done')
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to compact thread'
