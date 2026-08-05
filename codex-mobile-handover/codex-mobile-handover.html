@@ -256,7 +256,7 @@
         <div class="cell"><div class="label">Dev 状态</div><div class="value ok">运行中 · HTTP 200</div></div>
         <div class="cell"><div class="label">App-server</div><div class="value ok">正常响应 RPC</div></div>
         <div class="cell"><div class="label">工具链</div><div class="value">pnpm 11.18.0 · Node 22</div></div>
-        <div class="cell"><div class="label">最近提交</div><div class="value">2830cdc</div></div>
+        <div class="cell"><div class="label">最近提交</div><div class="value">eedf148</div></div>
       </div>
     </header>
 
@@ -322,6 +322,29 @@
         <div class="callout warn">
           <strong>排查方法。</strong> 转圈时不要只看进程是否存在，要发真实请求验证：<code>curl.exe -s -o NUL -w "%{http_code}" --max-time 8 http://127.0.0.1:4173/</code>。若超时即进程僵死，重启即可。
         </div>
+
+        <h3>第三轮验收修复（commit <code>eedf148</code>）</h3>
+        <p>针对第三轮验收的 3 个问题做了修复，均已通过 Playwright 端到端验证（dev 环境：<code>http://127.0.0.1:4173/</code>）：</p>
+        <div class="table-wrap">
+        <table>
+          <tr><th>问题</th><th>修复</th><th>验证</th></tr>
+          <tr>
+            <td>压缩进度条在会话顶部独立横幅显示，不随消息流走</td>
+            <td>移除 <code>App.vue</code> 顶部横幅；压缩时向消息流注入 <code>compaction.pending</code> 行（旋转动画），收到 <code>thread/compacted</code> 或 60s 超时后替换为 <code>compaction.done</code> 行</td>
+            <td>Playwright：输入 <code>/compact</code> 后消息流内出现 "Compacting thread context…"，60s 后切换为 "Context compacted"，两态互斥</td>
+          </tr>
+          <tr>
+            <td>无权限时希望提示用户同意 codex 自带的审批策略配置文件</td>
+            <td>设置面板新增「审批策略」区块：读写 <code>CODEX_HOME/config.toml</code> 的 <code>approval_policy</code>（<code>untrusted</code>/<code>on-failure</code>/<code>on-request</code>/<code>never</code>），写入去重保留其余配置；读取优先 <code>CODEXUI_APPROVAL_POLICY</code> 环境变量再回退配置文件</td>
+            <td>Playwright：面板渲染 4 个选项，保存后 GET 返回新值、配置文件无重复行；TRAE 沙箱下写 <code>~/.codex</code> 会被拦截，需将 <code>CODEX_HOME</code> 指向项目内 <code>.codex/</code></td>
+          </tr>
+          <tr>
+            <td>斜杠命令未集成已安装的技能，无法分组展示</td>
+            <td><code>slashCommands.ts</code> 新增 <code>buildSkillSlashCommands()</code> 按技能生成 <code>/技能名</code> 命令；<code>ComposerSlashMenu.vue</code> 分组渲染（Commands / Skills），技能行绿色前缀，选中后附加技能到消息</td>
+            <td>Playwright：菜单显示 Commands 12 项 + Skills 10 项；单测 20/20 通过</td>
+          </tr>
+        </table>
+        </div>
       </section>
 
       <section>
@@ -343,29 +366,29 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
 
       <section>
         <h2>已提交的改动</h2>
-        <p>本次修复已提交到 <code>main</code>（commit <code>2860a54</code>，尚未推送，见「未完成事项」）：</p>
+        <p>全部改动已提交并推送到 <code>main</code>（远程 <code>origin/main</code> 已同步）。环境修复见下方表格；2026-08-05 的验收轮次提交如下：</p>
         <div class="table-wrap">
         <table>
-          <tr><th>文件</th><th>改动</th><th>作用</th></tr>
+          <tr><th>提交</th><th>改动</th><th>作用</th></tr>
           <tr>
-            <td><code>pnpm-workspace.yaml</code></td>
-            <td>新增，<code>allowBuilds</code> 声明 <code>@firebase/util</code>、<code>esbuild</code>、<code>node-pty</code>、<code>protobufjs</code></td>
-            <td>pnpm 11 下允许依赖构建，恢复 <code>pnpm install</code> 与 dev 启动</td>
+            <td><code>6c25ba1</code></td>
+            <td>第一轮 5 个验收问题：文件夹拖拽关闭、展开 composer 的 z-index、裸斜杠菜单、压缩横幅、空提及结果</td>
+            <td>修复验收发现的 UI/交互缺陷</td>
           </tr>
           <tr>
-            <td><code>vite.config.ts</code></td>
-            <td><code>watch.ignored</code> 增加 <code>**/.codex/**</code></td>
-            <td>CODEX_HOME 指向项目内时避免文件变更触发页面频繁 reload</td>
+            <td><code>299210a</code></td>
+            <td>第二轮验收：斜杠菜单滚动、H5 控件溢出、worktree 变更文件、压缩改为线程消息</td>
+            <td>修复第二轮验收发现的缺陷</td>
           </tr>
           <tr>
-            <td><code>package.json</code></td>
-            <td>追加 <code>packageManager: pnpm@11.18.0</code></td>
-            <td>固定工具链版本</td>
+            <td><code>eedf148</code></td>
+            <td>第三轮验收：压缩进度改为消息流内渲染（pending/done 行 + 60s 超时兜底）；设置面板新增审批策略（读写 <code>CODEX_HOME/config.toml</code> 的 <code>approval_policy</code>，优先读 <code>CODEXUI_APPROVAL_POLICY</code> 环境变量）；斜杠菜单按已装技能生成 <code>/技能名</code> 命令并分组展示（Commands / Skills）</td>
+            <td>压缩状态可见性、权限审批配置、技能入口发现</td>
           </tr>
           <tr>
-            <td><code>docs/codex-cli-not-found-troubleshooting.md</code></td>
-            <td>新增排查记录</td>
-            <td>完整记录三层根因与解决方案（已脱敏）</td>
+            <td><code>2860a54</code> 等早期提交</td>
+            <td><code>pnpm-workspace.yaml</code>（<code>allowBuilds</code>）、<code>vite.config.ts</code>（watch ignore）、<code>package.json</code>（packageManager）、<code>docs/codex-cli-not-found-troubleshooting.md</code>、P0/P1/P2 功能补齐</td>
+            <td>环境修复与功能补齐（见下方方案完成情况表）</td>
           </tr>
         </table>
         </div>
@@ -430,9 +453,10 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>推送本地提交</strong>：<code>main</code> 领先 <code>origin/main</code> 一个提交（<code>2860a54</code>），交接前确认是否推送：<code>git push origin main</code></li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至 <code>eedf148</code>），无需再推送</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code> 等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
+          <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查（无硬编码路径、路径均经 <code>node:path</code> 组装、TOML 读写兼容 CRLF/LF），但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
         </ul>
       </section>
 
@@ -449,7 +473,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 三轮验收修复已推送） · 内容已脱敏
     </footer>
   </article>
 </body>
