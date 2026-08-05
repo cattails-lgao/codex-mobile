@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSkillSlashCommands,
   matchSlashCommands,
   parseSlashQuery,
   SLASH_COMMANDS,
@@ -87,5 +88,40 @@ describe('SLASH_COMMANDS catalog', () => {
     for (const tuiOnly of ['quit', 'theme', 'keymap', 'vim', 'statusline', 'pets']) {
       expect(ids).not.toContain(tuiOnly)
     }
+  })
+
+  it('marks builtin commands with the builtin group', () => {
+    for (const command of SLASH_COMMANDS) {
+      expect(command.group).toBe('builtin')
+    }
+  })
+})
+
+describe('buildSkillSlashCommands', () => {
+  it('builds a skill command per skill with normalized ids', () => {
+    const commands = buildSkillSlashCommands([
+      { name: 'Frontend Code Review', description: 'Review frontend code', path: 'c:/skills/frontend-code-review/SKILL.md' },
+      { name: 'HTML Report', description: 'Create HTML reports', path: 'c:/skills/html-report/SKILL.md' },
+    ])
+    expect(commands.map((command) => command.id)).toEqual(['frontend-code-review', 'html-report'])
+    for (const command of commands) {
+      expect(command.kind).toBe('skill')
+      expect(command.group).toBe('skill')
+      expect(command.skillPath).toBeTruthy()
+    }
+  })
+
+  it('deduplicates skills with the same normalized id', () => {
+    const commands = buildSkillSlashCommands([
+      { name: 'My Skill', path: 'a/SKILL.md' },
+      { name: 'my-skill', path: 'b/SKILL.md' },
+    ])
+    expect(commands).toHaveLength(1)
+  })
+
+  it('matches skill commands through the shared matcher', () => {
+    const commands = buildSkillSlashCommands([{ name: 'PDF', description: 'PDF tooling', path: 'c:/skills/pdf/SKILL.md' }])
+    const matches = matchSlashCommands(commands, 'pdf')
+    expect(matches.map((command) => command.id)).toEqual(['pdf'])
   })
 })

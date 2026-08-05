@@ -3,7 +3,9 @@
 // Only commands with a concrete codex-mobile action are listed; TUI-only commands
 // (/quit, /theme, /keymap, ...) are intentionally omitted to avoid misleading rows.
 
-export type SlashCommandKind = 'rpc' | 'text' | 'local'
+export type SlashCommandKind = 'rpc' | 'text' | 'local' | 'skill'
+
+export type SlashCommandGroup = 'builtin' | 'skill'
 
 export type SlashCommand = {
   id: string
@@ -11,22 +13,27 @@ export type SlashCommand = {
   kind: SlashCommandKind
   /** Text to replace the command token with when kind === 'text'. */
   insertText?: string
+  /** Group used for sectioned rendering in the slash menu. */
+  group?: SlashCommandGroup
+  /** Skill path when kind === 'skill'; used to attach the skill to the message. */
+  skillPath?: string
 }
 
 export const SLASH_MENTION_REGEX = /(^|\s)(\/[a-zA-Z]*)$/
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { id: 'compact', description: 'Compact the current thread context', kind: 'rpc' },
-  { id: 'review', description: 'Open the code review pane', kind: 'rpc' },
-  { id: 'rename', description: 'Rename the current thread', kind: 'rpc' },
-  { id: 'archive', description: 'Archive the current thread', kind: 'rpc' },
-  { id: 'fork', description: 'Fork the current thread', kind: 'rpc' },
-  { id: 'new', description: 'Start a new thread', kind: 'rpc' },
-  { id: 'skills', description: 'Open the skills page', kind: 'rpc' },
+  { id: 'compact', description: 'Compact the current thread context', kind: 'rpc', group: 'builtin' },
+  { id: 'review', description: 'Open the code review pane', kind: 'rpc', group: 'builtin' },
+  { id: 'rename', description: 'Rename the current thread', kind: 'rpc', group: 'builtin' },
+  { id: 'archive', description: 'Archive the current thread', kind: 'rpc', group: 'builtin' },
+  { id: 'fork', description: 'Fork the current thread', kind: 'rpc', group: 'builtin' },
+  { id: 'new', description: 'Start a new thread', kind: 'rpc', group: 'builtin' },
+  { id: 'skills', description: 'Open the skills page', kind: 'rpc', group: 'builtin' },
   {
     id: 'init',
     description: 'Generate or update AGENTS.md',
     kind: 'text',
+    group: 'builtin',
     insertText:
       'Create or update the AGENTS.md file for this project: include an overview, architecture notes, development conventions, and a workflow guide based on the codebase.',
   },
@@ -34,22 +41,44 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     id: 'help',
     description: 'Show help about Codex',
     kind: 'text',
+    group: 'builtin',
     insertText: 'How do I use Codex? Point me to the official documentation and explain the available commands.',
   },
   {
     id: 'mention',
     description: 'Mention files with @',
     kind: 'text',
+    group: 'builtin',
     insertText: 'Please review the files I mention with @, starting with: ',
   },
   {
     id: 'diff',
     description: 'Show the current git diff',
     kind: 'text',
+    group: 'builtin',
     insertText: 'Show the current git diff of this project and summarize the changes.',
   },
-  { id: 'clear', description: 'Clear the input', kind: 'local' },
+  { id: 'clear', description: 'Clear the input', kind: 'local', group: 'builtin' },
 ]
+
+/** Builds skill slash commands from the installed skill list. */
+export function buildSkillSlashCommands(skills: Array<{ name: string; description?: string; path: string }>): SlashCommand[] {
+  const commands: SlashCommand[] = []
+  const seen = new Set<string>()
+  for (const skill of skills) {
+    const id = skill.name.trim().replace(/^\//u, '').toLowerCase().replace(/\s+/gu, '-')
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    commands.push({
+      id,
+      description: skill.description?.trim() || 'Run this skill',
+      kind: 'skill',
+      group: 'skill',
+      skillPath: skill.path,
+    })
+  }
+  return commands.sort((a, b) => a.id.localeCompare(b.id))
+}
 
 /** Parses the text before the cursor for a slash command token, e.g. "/comp". */
 export function parseSlashQuery(beforeCursor: string): { query: string; token: string; startIndex: number } | null {

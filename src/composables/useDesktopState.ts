@@ -3933,19 +3933,7 @@ export function useDesktopState() {
         // Surface the compaction as a message inside the thread feed instead of
         // a transient overlay; the injected entry survives later message
         // reloads because it lives in its own store.
-        const previousInjected = injectedSystemMessagesByThreadId.value[threadId] ?? []
-        injectedSystemMessagesByThreadId.value = {
-          ...injectedSystemMessagesByThreadId.value,
-          [threadId]: [
-            ...previousInjected,
-            {
-              id: `compaction:${threadId}:${Date.now()}`,
-              role: 'system',
-              text: '',
-              messageType: 'compaction',
-            },
-          ],
-        }
+        injectCompactionMessage(threadId, 'done')
         // queueEventDrivenSync (called by the notification subscriber) already
         // refreshes the thread list for any thread/* notification; mark the
         // message payload dirty so the compaction summary is re-read too.
@@ -5513,6 +5501,23 @@ export function useDesktopState() {
     }
   }
 
+  function injectCompactionMessage(threadId: string, state: 'pending' | 'done'): void {
+    const previous = injectedSystemMessagesByThreadId.value[threadId] ?? []
+    // Drop any previous pending/done compaction rows for this thread so the feed
+    // keeps a single, latest record per compaction run.
+    const remaining = previous.filter((message) => message.messageType !== 'compaction.pending' && message.messageType !== 'compaction.done')
+    remaining.push({
+      id: `compaction:${state}:${threadId}:${Date.now()}`,
+      role: 'system',
+      text: '',
+      messageType: state === 'pending' ? 'compaction.pending' : 'compaction.done',
+    })
+    injectedSystemMessagesByThreadId.value = {
+      ...injectedSystemMessagesByThreadId.value,
+      [threadId]: remaining,
+    }
+  }
+
   function markThreadCompacting(threadId: string, compacting: boolean): void {
     const next = new Set(compactingThreadIds.value)
     if (compacting) next.add(threadId)
@@ -5530,16 +5535,23 @@ export function useDesktopState() {
     if (!normalized || compactingThreadIds.value.has(normalized)) return
 
     markThreadCompacting(normalized, true)
+    injectCompactionMessage(normalized, 'pending')
     try {
       await compactThread(normalized)
       // Keep the pending state until the thread/compacted notification clears it;
       // a timeout guards against a lost notification.
       if (typeof window !== 'undefined') {
-        window.setTimeout(() => markThreadCompacting(normalized, false), COMPACT_STATE_TIMEOUT_MS)
+        window.setTimeout(() => {
+          if (compactingThreadIds.value.has(normalized)) {
+            markThreadCompacting(normalized, false)
+            injectCompactionMessage(normalized, 'done')
+          }
+        }, COMPACT_STATE_TIMEOUT_MS)
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to compact thread'
       markThreadCompacting(normalized, false)
+      injectCompactionMessage(normalized, 'done')
     }
   }
 
