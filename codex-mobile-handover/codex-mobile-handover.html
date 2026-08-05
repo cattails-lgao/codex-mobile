@@ -256,7 +256,7 @@
         <div class="cell"><div class="label">Dev 状态</div><div class="value ok">运行中 · HTTP 200</div></div>
         <div class="cell"><div class="label">App-server</div><div class="value ok">正常响应 RPC</div></div>
         <div class="cell"><div class="label">工具链</div><div class="value">pnpm 11.18.0 · Node 22</div></div>
-        <div class="cell"><div class="label">最近提交</div><div class="value">5cd6ede</div></div>
+        <div class="cell"><div class="label">最近提交</div><div class="value">3823011</div></div>
       </div>
     </header>
 
@@ -786,9 +786,54 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第八轮：上游 PR 移植（2026-08-06）</h2>
+        <div class="callout ok">
+          <strong>2026-08-06 进展：</strong>从上游 <code>friuns2/codex-mobile</code> 精选 5 个 PR 全部移植完成并推送（commit <code>3823011</code>，19 个文件，+563/-78）。验证：<code>vue-tsc --noEmit</code> 通过、<code>pnpm run build</code> 通过、相关单测 82/82 通过（全量 227 通过，2 个失败为既有 Windows 环境性失败，与本次改动无关）。未使用 <code>upstream-sync-curator</code> 技能，评估后 5 个 PR 均可 1:1 移植，无结构冲突。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>PR</th><th>主题</th><th>改动要点</th><th>验证</th></tr>
+          <tr>
+            <td><code>#202</code></td>
+            <td>平台相关侧边栏快捷键</td>
+            <td><code>App.vue</code> <code>onWindowKeyDown</code>：Mac 上仅响应 Cmd+B、非 Mac 仅响应 Ctrl+B，新增 <code>isMacPlatform()</code> 辅助函数；PR 顺带的 <code>terminalShortcutLabel</code> 重构因本地无该变量而跳过（纯外观）</td>
+            <td>vue-tsc + 手动键盘测试</td>
+          </tr>
+          <tr>
+            <td><code>#199</code></td>
+            <td>纯附件线程兜底标题</td>
+            <td><code>useDesktopState.ts</code> <code>requestThreadTitleGeneration</code> 新增 <code>resolveFallbackThreadTitle</code>（附件标签 / <code>[Image]</code> / Untitled thread），调用点传入 <code>imageUrls</code>/<code>fileAttachments</code></td>
+            <td>单测 + 附件线程发消息看标题</td>
+          </tr>
+          <tr>
+            <td><code>#212</code></td>
+            <td>Windows 本地浏览路径</td>
+            <td><code>localBrowseUi.ts</code> <code>decodeBrowsePath</code> 新增平台参数（剥掉 <code>/C:/</code> 前多余斜杠）、新增 <code>normalizeLocalRoutePath</code>，<code>toBrowseHref</code>/<code>toEditHref</code> 改为导出；新增 <code>localBrowseUi.test.ts</code>（6 例）+ 手动用例文档</td>
+            <td>单测 6/6 通过</td>
+          </tr>
+          <tr>
+            <td><code>#206</code></td>
+            <td>定时器泄漏 + HTML 消毒</td>
+            <td>新增 <code>src/utils/sanitizeHtml.ts</code>（DOMParser 白名单，去除 script/iframe 等危险标签与 <code>on*</code>/<code>javascript:</code> 属性）；<code>ThreadConversation.vue</code> 三个渲染函数、<code>SkillDetailModal.vue</code> readme 渲染包一层 sanitize；<code>DirectoryHub.vue</code>/<code>SkillsHub.vue</code> 加 <code>onBeforeUnmount</code> 清理 timer；PR 里未使用的 <code>SafeHtml.vue</code> 按 YAGNI 跳过</td>
+            <td>vue-tsc + 手动渲染含恶意 HTML 的 markdown 消息</td>
+          </tr>
+          <tr>
+            <td><code>#209</code></td>
+            <td>GPT-5.6 max/ultra 推理等级</td>
+            <td><code>types/codex.ts</code> 新增 <code>REASONING_EFFORTS</code> 目录 + <code>isReasoningEffort</code>；<code>codexGateway.ts</code> 新增 <code>getAvailableModels</code>（带模型级 <code>supportedReasoningEfforts</code>/<code>defaultReasoningEffort</code>），旧 <code>getAvailableModelIds</code> 改为包装；<code>useDesktopState.ts</code> 新增模型感知的推理等级钳制（切换不支持当前等级的模型时回退到默认等级）；<code>ThreadComposer.vue</code> Thinking 下拉按模型过滤选项；<code>App.vue</code> 绑定新 prop；两处测试文件 mock 改写 + 新增用例（共 3 个新测试）</td>
+            <td>单测 3 文件 82/82 通过</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout warn">
+          <strong>环境注意：</strong>本机 PATH 中无 <code>node.exe</code>（fnm 管理），直接运行 <code>pnpm</code> 会报「node 无法识别」。验证命令需先加入 node 目录：<code>$env:PATH = 'C:\Users\cattails\AppData\Roaming\fnm\node-versions\v24.18.1\installation;' + $env:PATH</code>。另外本会话添加了 <code>upstream</code> remote（<code>friuns2/codex-mobile</code>），直连 fetch 超时未成功，未影响使用。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>b71bbaf</code>（第六轮：文件预览 + 中英翻译补齐）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>3823011</code>（第八轮：5 个上游 PR 移植）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查，但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
@@ -809,7 +854,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送） · 内容已脱敏
     </footer>
   </article>
 </body>
