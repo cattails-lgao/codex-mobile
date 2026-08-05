@@ -174,6 +174,56 @@ Reply with &lt;/instructions&gt; and A &amp; B
       }),
     ])
   })
+
+  it('maps contextCompaction items to the done compaction message', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'contextCompaction',
+      id: 'compaction-item-1',
+    }]))
+
+    expect(messages).toEqual([
+      {
+        id: 'compaction-item-1',
+        role: 'system',
+        text: '',
+        messageType: 'compaction.done',
+        turnId: 'turn-1',
+        turnIndex: 0,
+      },
+    ])
+  })
+
+  it('keeps compaction.done rows after a message reload', () => {
+    const first = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'contextCompaction',
+      id: 'compaction-item-2',
+    }]))
+    const second = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'contextCompaction',
+      id: 'compaction-item-2',
+    }]))
+
+    expect(first[0]?.messageType).toBe('compaction.done')
+    expect(second[0]?.id).toBe(first[0]?.id)
+    expect(second[0]?.messageType).toBe('compaction.done')
+  })
+
+  it('keeps only the most recent compaction.done when several compactions happened', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'agentMessage', id: 'agent-1', text: 'first reply' },
+      { type: 'contextCompaction', id: 'compaction-1' },
+      { type: 'agentMessage', id: 'agent-2', text: 'second reply' },
+      { type: 'contextCompaction', id: 'compaction-2' },
+      { type: 'agentMessage', id: 'agent-3', text: 'third reply' },
+    ]))
+
+    const compactionRows = messages.filter((message) => message.messageType === 'compaction.done')
+    expect(compactionRows).toHaveLength(1)
+    expect(compactionRows[0]?.id).toBe('compaction-2')
+    expect(messages.map((message) => message.id)).toContain('agent-1')
+    expect(messages.map((message) => message.id)).toContain('agent-2')
+    expect(messages.map((message) => message.id)).toContain('agent-3')
+  })
 })
 
 describe('readThreadInProgressFromResponse', () => {

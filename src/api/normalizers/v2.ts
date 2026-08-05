@@ -524,6 +524,21 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
     ]
   }
 
+  // Modern codex app-servers surface context compaction as a ContextCompaction
+  // turn item instead of the deprecated `thread/compacted` notification. Map it
+  // to the same done message used by the in-feed compaction indicator so the
+  // spinner is cleared as soon as the compaction lands in persisted messages.
+  if (item.type === 'contextCompaction') {
+    return [
+      {
+        id: item.id,
+        role: 'system',
+        text: '',
+        messageType: 'compaction.done',
+      },
+    ]
+  }
+
   return []
 }
 
@@ -675,7 +690,24 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
       })
     }
   }
-  return messages
+  // A thread accumulates one ContextCompaction item per compaction run. Keep
+  // only the most recent one in the feed so repeated compactions do not stack
+  // up rows of "Context compacted"; older summaries are superseded.
+  return collapseCompactionDoneMessages(messages)
+}
+
+function collapseCompactionDoneMessages(messages: UiMessage[]): UiMessage[] {
+  let lastCompactionIndex = -1
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.messageType === 'compaction.done') {
+      lastCompactionIndex = index
+      break
+    }
+  }
+  if (lastCompactionIndex < 0) return messages
+  return messages.filter((message, index) => (
+    message.messageType !== 'compaction.done' || index === lastCompactionIndex
+  ))
 }
 
 export function readThreadInProgressFromResponse(payload: ThreadReadResponse): boolean {
