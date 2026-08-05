@@ -6,7 +6,7 @@ import {
   getAvailableCollaborationModes,
   getAccountRateLimits,
   renameThread,
-  getAvailableModelIds,
+  getAvailableModels,
   getCurrentModelConfig,
   getPendingServerRequests,
   getSkillsList,
@@ -36,6 +36,7 @@ import {
   startThreadTurn,
   listHooks,
   type RpcNotification,
+  type AvailableModel,
   type SkillInfo,
   type ThreadQueueState,
   type UiHooksListEntry,
@@ -43,6 +44,7 @@ import {
 } from '../api/codexGateway'
 import { CodexApiError } from '../api/codexErrors'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
+import { REASONING_EFFORTS } from '../types/codex'
 import type {
   CollaborationModeKind,
   CollaborationModeOption,
@@ -106,7 +108,7 @@ const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
 const RECENT_SKILLS_LOAD_REUSE_MS = 2000
-const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
+const REASONING_EFFORT_OPTIONS: readonly ReasoningEffort[] = REASONING_EFFORTS
 const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
 const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
@@ -1484,6 +1486,8 @@ export function useDesktopState() {
   let hasLoadedPersistedQueueState = false
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
+  const availableModelReasoningEfforts = ref<Record<string, ReasoningEffort[]>>({})
+  const availableModelDefaultReasoningEfforts = ref<Record<string, ReasoningEffort>>({})
   const availableCollaborationModes = ref<CollaborationModeOption[]>([
     { value: 'default', label: 'Default' },
     { value: 'plan', label: 'Plan' },
@@ -1737,6 +1741,42 @@ export function useDesktopState() {
     return normalizeProviderContextId(threadModelProviderByThreadId.value[normalizedThreadId] ?? activeProviderId.value)
   }
 
+  function readSupportedReasoningEffortsForModel(modelId: string): readonly ReasoningEffort[] {
+    return availableModelReasoningEfforts.value[modelId.trim()] ?? REASONING_EFFORT_OPTIONS
+  }
+
+  function pickReasoningEffortForModel(
+    modelId: string,
+    preferredEffort: ReasoningEffort | '' = selectedReasoningEffort.value,
+  ): ReasoningEffort | '' {
+    const normalizedModelId = modelId.trim()
+    const supportedEfforts = readSupportedReasoningEffortsForModel(normalizedModelId)
+    if (preferredEffort && supportedEfforts.includes(preferredEffort)) return preferredEffort
+
+    const defaultEffort = availableModelDefaultReasoningEfforts.value[normalizedModelId]
+    if (defaultEffort && supportedEfforts.includes(defaultEffort)) return defaultEffort
+    return supportedEfforts[0] ?? ''
+  }
+
+  function ensureReasoningEffortSupportedForModel(modelId: string): void {
+    selectedReasoningEffort.value = pickReasoningEffortForModel(modelId)
+  }
+
+  function setAvailableModelMetadata(models: AvailableModel[]): void {
+    const reasoningEfforts: Record<string, ReasoningEffort[]> = {}
+    const defaultReasoningEfforts: Record<string, ReasoningEffort> = {}
+    for (const model of models) {
+      if (model.supportedReasoningEfforts !== null) {
+        reasoningEfforts[model.id] = [...model.supportedReasoningEfforts]
+      }
+      if (model.defaultReasoningEffort) {
+        defaultReasoningEfforts[model.id] = model.defaultReasoningEffort
+      }
+    }
+    availableModelReasoningEfforts.value = reasoningEfforts
+    availableModelDefaultReasoningEfforts.value = defaultReasoningEfforts
+  }
+
   function ensureAvailableModelIds(...modelIds: string[]): void {
     const nextModelIds = [...availableModelIds.value]
     for (const modelId of modelIds) {
@@ -1764,6 +1804,7 @@ export function useDesktopState() {
       saveSelectedThreadId(nextThreadId)
     }
     selectedModelId.value = readProviderCompatibleSelectedModel(readModelIdForThread(nextThreadId))
+    ensureReasoningEffortSupportedForModel(selectedModelId.value)
     selectedCollaborationMode.value = readSelectedCollaborationMode(
       selectedCollaborationModeByContext.value,
       nextThreadId,
@@ -1795,9 +1836,10 @@ export function useDesktopState() {
       }
       selectedModelIdByContext.value = nextModelMap
     }
-    if (threadId.trim() === selectedThreadId.value) {
+    if (contextId === toThreadContextId(selectedThreadId.value)) {
       selectedModelId.value = readModelIdForThread(selectedThreadId.value)
       ensureAvailableModelIds(selectedModelId.value)
+      ensureReasoningEffortSupportedForModel(selectedModelId.value)
     } else {
       ensureAvailableModelIds(normalizedModelId)
     }
@@ -1823,6 +1865,7 @@ export function useDesktopState() {
     ensureAvailableModelIds(normalizedModelId)
     if (selectedThreadId.value === normalizedThreadId) {
       selectedModelId.value = readModelIdForThread(selectedThreadId.value)
+      ensureReasoningEffortSupportedForModel(selectedModelId.value)
     }
     saveSelectedModelMap(selectedModelIdByContext.value)
   }
@@ -2009,7 +2052,7 @@ export function useDesktopState() {
   }
 
   function setSelectedReasoningEffort(effort: ReasoningEffort | ''): void {
-    if (effort && !REASONING_EFFORT_OPTIONS.includes(effort)) {
+    if (effort && !readSupportedReasoningEffortsForModel(selectedModelId.value).includes(effort)) {
       return
     }
     selectedReasoningEffort.value = effort
@@ -2070,11 +2113,13 @@ export function useDesktopState() {
       const targetProviderId = readProviderIdForThread(selectedThreadId.value)
       const isProviderBacked = targetProviderId !== 'codex'
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
-      const modelIds = await getAvailableModelIds({
+      const models = await getAvailableModels({
         includeProviderModels: isProviderBacked || options?.includeProviderModels !== false,
         requireProviderModels: isProviderBacked,
         providerId: isProviderBacked ? targetProviderId : undefined,
       })
+      const modelIds = models.map((model) => model.id)
+      setAvailableModelMetadata(models)
       const providerModelContextId = toProviderModelContextId(targetProviderId)
       const providerScopedModelId = providerModelContextId
         ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
@@ -2126,12 +2171,10 @@ export function useDesktopState() {
         saveSelectedModelMap(selectedModelIdByContext.value)
       }
 
-      if (
-        currentConfig.reasoningEffort &&
-        REASONING_EFFORT_OPTIONS.includes(currentConfig.reasoningEffort)
-      ) {
-        selectedReasoningEffort.value = currentConfig.reasoningEffort
-      }
+      selectedReasoningEffort.value = pickReasoningEffortForModel(
+        selectedModelId.value,
+        currentConfig.reasoningEffort,
+      )
       selectedSpeedMode.value = currentConfig.speedMode
     } catch (unknownError) {
       if (isCodexCliMissingError(unknownError)) {
@@ -4341,10 +4384,35 @@ export function useDesktopState() {
     }
   }
 
-  async function requestThreadTitleGeneration(threadId: string, prompt: string, cwd: string | null): Promise<void> {
+  function resolveFallbackThreadTitle(prompt: string, imageUrls: string[], fileAttachments: FileAttachment[]): string {
+    const trimmed = prompt.trim()
+    if (trimmed) return toOptimisticThreadTitle(trimmed)
+
+    const firstAttachmentLabel = fileAttachments
+      .map((attachment) => attachment.label.trim())
+      .find((label) => label.length > 0)
+    if (firstAttachmentLabel) return toOptimisticThreadTitle(firstAttachmentLabel)
+
+    if (imageUrls.length > 0) return toOptimisticThreadTitle('[Image]')
+    return 'Untitled thread'
+  }
+
+  async function requestThreadTitleGeneration(
+    threadId: string,
+    prompt: string,
+    cwd: string | null,
+    imageUrls: string[] = [],
+    fileAttachments: FileAttachment[] = [],
+  ): Promise<void> {
     if (threadTitleById.value[threadId]) return
     const trimmed = prompt.trim()
-    if (!trimmed) return
+    if (!trimmed) {
+      const fallbackTitle = resolveFallbackThreadTitle(prompt, imageUrls, fileAttachments)
+      threadTitleById.value = { ...threadTitleById.value, [threadId]: fallbackTitle }
+      applyThreadFlags()
+      void persistThreadTitle(threadId, fallbackTitle)
+      return
+    }
     const truncated = trimmed.length > 300 ? trimmed.slice(0, 300) : trimmed
     try {
       const title = await generateThreadTitle(truncated, cwd)
@@ -5293,7 +5361,7 @@ export function useDesktopState() {
         .finally(() => {
           isSendingMessage.value = false
         })
-      void requestThreadTitleGeneration(capturedThreadId, capturedPrompt, capturedCwd)
+      void requestThreadTitleGeneration(capturedThreadId, capturedPrompt, capturedCwd, imageUrls, fileAttachments)
       return threadId
     } catch (unknownError) {
       shouldAutoScrollOnNextAgentEvent = false
@@ -6057,6 +6125,7 @@ export function useDesktopState() {
     selectedThreadId,
     availableCollaborationModes,
     availableModelIds,
+    availableModelReasoningEfforts,
     selectedCollaborationMode,
     selectedModelId,
     selectedReasoningEffort,

@@ -944,6 +944,7 @@ import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { copyTextToClipboard, copyTextWithSelectionFallback } from '../../utils/clipboard'
+import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { readPlanData } from '../../utils/plan'
 
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
@@ -3670,6 +3671,10 @@ function renderHighlightedCodeAsHtmlUncached(language: string, value: string): s
 }
 
 function renderCachedHighlightedCodeAsHtml(language: string, value: string): string {
+  return sanitizeHtml(_renderCachedHighlightedCodeAsHtml(language, value))
+}
+
+function _renderCachedHighlightedCodeAsHtml(language: string, value: string): string {
   const cacheKey = `${highlightCacheVersion.value}\u0000${normalizeCodeLanguage(language)}\u0000${language}\u0000${value}`
   const cached = highlightHtmlCache.get(cacheKey)
   if (cached !== undefined) {
@@ -3720,7 +3725,7 @@ function renderListItemParagraphsAsHtml(item: ListItem): string {
 function renderListItemContentAsHtml(item: ListItem): string {
   const paragraphsHtml = renderListItemParagraphsAsHtml(item)
   const childrenHtml = item.children?.map((block) => renderMessageBlockAsHtml(block)).join('') ?? ''
-  return paragraphsHtml + childrenHtml
+  return sanitizeHtml(paragraphsHtml + childrenHtml)
 }
 
 function tableCellAlignmentStyle(alignment: TableAlignment): string {
@@ -3798,9 +3803,10 @@ function renderMarkdownBlocksAsHtml(text: string): string {
     markdownHtmlCache.set(cacheKey, cached)
     return cached.html
   }
-  const html = parseMessageBlocks(text)
+  const rawHtml = parseMessageBlocks(text)
     .map((block) => renderMessageBlockAsHtml(block))
     .join('')
+  const html = sanitizeHtml(rawHtml)
   return setBoundedCacheEntry(
     markdownHtmlCache,
     cacheKey,

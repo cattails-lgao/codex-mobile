@@ -772,7 +772,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
@@ -1009,6 +1009,10 @@ const pluginShareActionName = ref('')
 const pluginShareError = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 let composioSearchTimer: ReturnType<typeof setTimeout> | null = null
+onBeforeUnmount(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+  if (composioSearchTimer) clearTimeout(composioSearchTimer)
+})
 let isComposioLoadQueued = false
 
 const activeCopy = computed(() => tabs.value.find((tab) => tab.id === activeTab.value) ?? tabs.value[0])

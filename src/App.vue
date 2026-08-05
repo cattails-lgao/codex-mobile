@@ -1035,7 +1035,8 @@
                   @register-fuzzy-session="registerFuzzyFileSearchSession"
                   :collaboration-modes="availableCollaborationModes"
                   :selected-collaboration-mode="selectedCollaborationMode"
-                  :models="availableModelIds" :selected-model="composerSelectedModelId"
+                  :models="availableModelIds" :model-reasoning-efforts="availableModelReasoningEfforts"
+                  :selected-model="composerSelectedModelId"
                   :selected-reasoning-effort="selectedReasoningEffort"
                   :selected-speed-mode="selectedSpeedMode"
                   :is-updating-speed-mode="isUpdatingSpeedMode"
@@ -1122,6 +1123,7 @@
                     :collaboration-modes="availableCollaborationModes"
                     :selected-collaboration-mode="selectedCollaborationMode"
                     :models="availableModelIds"
+                    :model-reasoning-efforts="availableModelReasoningEfforts"
                     :selected-model="composerSelectedModelId"
                     :selected-reasoning-effort="selectedReasoningEffort"
                     :selected-speed-mode="selectedSpeedMode"
@@ -1635,6 +1637,7 @@ const {
   selectedThreadId,
   availableCollaborationModes,
   availableModelIds,
+  availableModelReasoningEfforts,
   selectedCollaborationMode,
   selectedModelId,
   selectedReasoningEffort,
@@ -1698,6 +1701,9 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useMobile()
+function isMacPlatform(): boolean {
+  return typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform)
+}
 type SidebarThreadTreeExposed = {
   openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
   openAutomationCreatorFromPanel: () => void
@@ -3559,6 +3565,10 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.shiftKey || event.altKey) return
   const key = event.key.toLowerCase()
   if (key === 'b') {
+    const isSidebarShortcut = isMacPlatform()
+      ? event.metaKey && !event.ctrlKey
+      : event.ctrlKey && !event.metaKey
+    if (!isSidebarShortcut) return
     event.preventDefault()
     setSidebarCollapsed(!isSidebarCollapsed.value)
     return
