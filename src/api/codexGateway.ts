@@ -1157,6 +1157,52 @@ export async function getMethodCatalog(): Promise<string[]> {
   return fetchRpcMethodCatalog()
 }
 
+export interface UiHookSummary {
+  event: string
+  command: string
+  timeout: number | null
+  enabled: boolean | null
+}
+
+export interface UiHooksListEntry {
+  cwd: string
+  hooks: UiHookSummary[]
+  warnings: string[]
+  errors: string[]
+}
+
+function normalizeHookSummary(value: unknown): UiHookSummary | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const event = readString(record.event ?? record.name ?? record.hookName)
+  const command = readString(record.command ?? record.cmd)
+  if (!event || !command) return null
+  return {
+    event,
+    command,
+    timeout: readNumber(record.timeout ?? record.timeout_ms),
+    enabled: readBoolean(record.enabled ?? record.active),
+  }
+}
+
+export async function listHooks(): Promise<UiHooksListEntry[]> {
+  const payload = await callRpc<{ data?: unknown[] }>('hooks/list', {})
+  const entries: UiHooksListEntry[] = []
+  for (const value of payload.data ?? []) {
+    const record = asRecord(value)
+    if (!record) continue
+    entries.push({
+      cwd: readString(record.cwd) ?? '',
+      hooks: Array.isArray(record.hooks)
+        ? record.hooks.map(normalizeHookSummary).filter((row): row is UiHookSummary => row !== null)
+        : [],
+      warnings: readStringArray(record.warnings),
+      errors: readStringArray(record.errors),
+    })
+  }
+  return entries
+}
+
 export async function getNotificationCatalog(): Promise<string[]> {
   return fetchRpcNotificationCatalog()
 }

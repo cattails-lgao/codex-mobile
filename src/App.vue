@@ -221,6 +221,39 @@
                   </div>
                 </template>
               </div>
+              <div class="sidebar-settings-hooks-section">
+                <div class="sidebar-settings-hooks-header">
+                  <span class="sidebar-settings-hooks-title">{{ t('Hooks') }}</span>
+                  <button
+                    class="sidebar-settings-hooks-reload"
+                    type="button"
+                    :disabled="isHooksLoading"
+                    :title="t('Reload lifecycle hooks')"
+                    @click="refreshHooks({ force: true })"
+                  >
+                    {{ isHooksLoading ? t('Reloading…') : t('Reload') }}
+                  </button>
+                </div>
+                <p v-if="!supportsHooks" class="sidebar-settings-hooks-empty">
+                  {{ t('Hooks are not supported by this Codex version.') }}
+                </p>
+                <template v-else>
+                  <p v-if="isHooksLoading" class="sidebar-settings-hooks-empty">{{ t('Loading hooks…') }}</p>
+                  <p v-else-if="hooksList.length === 0" class="sidebar-settings-hooks-empty">{{ t('No hooks registered.') }}</p>
+                  <div v-else class="sidebar-settings-hooks-list">
+                    <div v-for="entry in hooksList" :key="entry.cwd || '__global__'" class="sidebar-settings-hooks-entry">
+                      <p class="sidebar-settings-hooks-cwd">{{ entry.cwd || t('Global') }}</p>
+                      <div v-for="(hook, index) in entry.hooks" :key="`${entry.cwd}:${hook.event}:${index}`" class="sidebar-settings-hooks-item">
+                        <span class="sidebar-settings-hooks-state" :class="{ 'is-on': hook.enabled !== false }">
+                          {{ hook.enabled === false ? t('Disabled') : t('Enabled') }}
+                        </span>
+                        <span class="sidebar-settings-hooks-event">{{ hook.event }}</span>
+                        <code class="sidebar-settings-hooks-command">{{ hook.command }}</code>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">{{ t('Require ⌘ + enter to send') }}</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -1248,7 +1281,7 @@ import {
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
 
@@ -1458,6 +1491,9 @@ const {
   error: desktopError,
   refreshAll,
   refreshSkills,
+  refreshHooks,
+  hooksList,
+  isHooksLoading,
   onRealtimeEvent,
   selectThread,
   ensureThreadMessagesLoaded,
@@ -1601,6 +1637,22 @@ const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
+
+const methodsLoaded = ref(false)
+const methodSet = ref<Set<string>>(new Set())
+async function loadSettingsMethods(): Promise<void> {
+  try {
+    methodSet.value = new Set(await getMethodCatalog())
+  } catch {
+    // keep previous set on failure
+  } finally {
+    methodsLoaded.value = true
+  }
+}
+const supportsHooks = computed(() => !methodsLoaded.value || methodSet.value.has('hooks/list'))
+watch(isSettingsOpen, (open) => {
+  if (open) void refreshHooks()
+})
 const reviewInitialFilePath = ref('')
 const reviewInitialCommitSha = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
@@ -2186,6 +2238,7 @@ onMounted(() => {
   })
   void initialize()
   void loadHomeDirectory()
+  void loadSettingsMethods()
   void loadFirstLaunchPluginsCardPreference()
   void loadWorkspaceRootOptionsState()
   void refreshDefaultProjectName()
@@ -5715,6 +5768,58 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-row + .sidebar-settings-row {
   @apply border-t border-zinc-100;
+}
+
+.sidebar-settings-hooks-section {
+  @apply border-t border-zinc-100 px-3 py-2.5;
+}
+
+.sidebar-settings-hooks-header {
+  @apply flex items-center justify-between;
+}
+
+.sidebar-settings-hooks-title {
+  @apply text-sm font-medium text-zinc-700;
+}
+
+.sidebar-settings-hooks-reload {
+  @apply rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+}
+
+.sidebar-settings-hooks-empty {
+  @apply mt-1.5 text-xs text-zinc-500;
+}
+
+.sidebar-settings-hooks-list {
+  @apply mt-1.5 flex flex-col gap-1.5;
+}
+
+.sidebar-settings-hooks-entry {
+  @apply rounded-md border border-zinc-200 bg-zinc-50/70 px-2 py-1.5;
+}
+
+.sidebar-settings-hooks-cwd {
+  @apply mb-1 font-mono text-[10px] uppercase tracking-wide text-zinc-400 break-all;
+}
+
+.sidebar-settings-hooks-item {
+  @apply flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs;
+}
+
+.sidebar-settings-hooks-state {
+  @apply rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-medium text-zinc-500;
+}
+
+.sidebar-settings-hooks-state.is-on {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.sidebar-settings-hooks-event {
+  @apply font-medium text-zinc-700;
+}
+
+.sidebar-settings-hooks-command {
+  @apply min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500;
 }
 
 .sidebar-settings-telegram-panel {

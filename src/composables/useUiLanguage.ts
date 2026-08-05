@@ -426,6 +426,13 @@ const zhCN: Record<string, string> = {
   'Standard': '标准',
   'Wide': '宽',
   'Extra wide': '超宽',
+  'Hooks': 'Hooks',
+  'Reload lifecycle hooks': '重新加载生命周期 Hooks',
+  'Hooks are not supported by this Codex version.': '当前 Codex 版本不支持 Hooks。',
+  'Loading hooks…': '加载 Hooks 中…',
+  'No hooks registered.': '未注册任何 Hooks。',
+  'Global': '全局',
+  'Enabled': '已启用',
 }
 
 const LANGUAGE_LABELS: Record<UiLanguage, string> = {
