@@ -415,6 +415,11 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
             <td><code>pnpm-workspace.yaml</code>（<code>allowBuilds</code>）、<code>vite.config.ts</code>（watch ignore）、<code>package.json</code>（packageManager）、<code>docs/codex-cli-not-found-troubleshooting.md</code>、P0/P1/P2 功能补齐</td>
             <td>环境修复与功能补齐（见下方方案完成情况表）</td>
           </tr>
+          <tr>
+            <td><code>b71bbaf</code></td>
+            <td>第六轮交接需求：右侧文件面板点击文件改为面板内弹窗预览（<code>/codex-local-preview</code> 双通道路由 + 新增 <code>FilePreviewModal.vue</code>，文本 512KB 截断、图片内联、二进制提示并可「Open in browser」）；中英文翻译补齐（<code>useUiLanguage.ts</code> 中文字典大幅扩充，右键菜单、编辑消息弹窗、自动化/技能/Git/Review 面板等界面硬编码文案全部包 <code>t()</code>）</td>
+            <td>文件预览 + 简体中文全覆盖</td>
+          </tr>
         </table>
         </div>
       </section>
@@ -696,9 +701,34 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第六轮交接需求（2026-08-05 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-05 第六轮进展：</strong>2 条需求已全部实现并验证（<code>vue-tsc --noEmit</code> 通过；单测 214 通过，4 个失败为 Windows 基线环境性失败与改动无关），本轮改动已 commit 并推送（<code>b71bbaf</code>）。涉及 <code>localBrowseUi.ts</code>、<code>httpServer.ts</code>、<code>vite.config.ts</code>、<code>codexGateway.ts</code>、<code>RightFilesPanel.vue</code>、<code>useUiLanguage.ts</code> 及 20+ 组件，并新增 <code>FilePreviewModal.vue</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>需求</th><th>实现方式</th></tr>
+          <tr>
+            <td>1</td>
+            <td>右侧文件面板中，点击文件需要进行文件预览</td>
+            <td><code>localBrowseUi.ts</code> 新增 <code>getFilePreview()</code>（文本截断 512KB）；<code>GET /codex-local-preview?path=</code> 双通道注册（<code>httpServer.ts</code> Express + <code>vite.config.ts</code> dev 中间件）；<code>codexGateway.previewLocalFile(path)</code>；新增 <code>FilePreviewModal.vue</code>（文本用 <code>pre</code> 等宽块展示、图片 <code>&lt;img&gt;</code> 内联、二进制显示提示 + 「Open in browser」按钮 <code>window.open('/codex-local-browse' + encodeURI(path))</code>、超过 512KB 显示截断提示、ESC/关闭按钮/点击遮罩均可关闭）；<code>RightFilesPanel.vue</code> 点击文件行改为打开面板内预览弹窗，不再新开浏览器页</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>项目中的中英文翻译不全</td>
+            <td>采用「扫描清单 → 加字典 key → 逐组件包 <code>t()</code> → vue-tsc 验证」循环补齐 <code>useUiLanguage.ts</code> 中文字典并覆盖各界面硬编码文案：①首轮补主要模板文本约 100 条；②脚本扫描 <code>script</code> 字符串字面量（token 统计、额度、插件/技能/自动化 toast、RRULE 等）约 70 条；③右键菜单（复制聊天/创建聊天分叉/固定线程/取消固定线程/重命名项目/重命名线程等）、编辑消息确认弹窗（编辑此消息？/撤销、重做文件变更及说明、命令状态标签、6 个审批标题）、自动化面板（新建/刷新/心跳/项目/总计/空状态）、技能面板（搜索/加载/安装/卸载/更新失败提示）、Git 面板（分支/提交/检出/重置/复制提交引用/脏状态长警告/current·remote 徽章）、Review 面板（Added/Deleted/Renamed/Modified）等约 90 条；修复后中文模式下上述界面已无英文残留（仅保留 <code>ID</code> 等技术性标识）</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout">
+          <strong>验证说明：</strong>需求 2 的右键菜单残留经全量 grep 复查后清零（<code>SidebarThreadTree.vue</code> 的 Copy chat / Create chat fork / Pin thread / Unpin thread / Rename project / Open this chat before copying，<code>ReviewPane.vue</code> 的 <code>formatOperation</code>）；<code>vue-tsc</code> 无重复 key、无类型错误；手动测试文档新增一节（<code>tests/theme-layout-terminal/composer-fifth-round-feedback.md</code>）。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（<code>40aae45</code> 第三轮调整 + 第四轮调整，经 <code>git push origin main</code>）</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>b71bbaf</code>（第六轮：文件预览 + 中英翻译补齐）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查，但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
@@ -719,7 +749,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第五轮 8 条反馈已实现并验证） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第五轮 8 条反馈已实现并验证 + 第六轮文件预览与中英翻译已推送） · 内容已脱敏
     </footer>
   </article>
 </body>
