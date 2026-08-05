@@ -31,6 +31,28 @@
           <span v-if="currentCommitSummary" class="header-git-state-meta">{{ currentCommitSummary }}</span>
         </div>
 
+        <div v-if="props.worktreeChanges.length > 0" class="header-git-worktree-changes">
+          <div class="header-git-worktree-changes-head">
+            <span class="header-git-worktree-changes-label">{{ props.worktreeChanges.length }} {{ props.worktreeChanges.length === 1 ? 'file changed' : 'files changed' }}</span>
+          </div>
+          <div class="header-git-file-list">
+            <button
+              v-for="file in props.worktreeChanges"
+              :key="`${file.status}:${file.previousPath ?? ''}:${file.path}`"
+              class="header-git-file"
+              type="button"
+              :title="file.previousPath ? `${file.previousPath} → ${file.path}` : file.path"
+              @click="openWorktreeFile(file.path)"
+            >
+              <span class="header-git-file-meta-row">
+                <span class="header-git-file-status">{{ file.label }}</span>
+              </span>
+              <span class="header-git-file-path">{{ file.path }}</span>
+              <span v-if="file.previousPath" class="header-git-file-previous-path">← {{ file.previousPath }}</span>
+            </button>
+          </div>
+        </div>
+
         <div v-if="statusMessage" class="header-git-status" :class="{ 'is-error': statusKind === 'error' }">
           <span>{{ statusMessage }}</span>
           <a v-if="statusKind === 'error'" class="header-git-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">Send feedback</a>
@@ -204,6 +226,7 @@ const props = defineProps<{
   detached: boolean
   dirty: boolean
   worktreeChangeSummary: { addedLineCount: number; removedLineCount: number }
+  worktreeChanges: GitCommitFileChange[]
   branches: WorktreeBranchOption[]
   commitsByBranch: Record<string, GitCommitOption[]>
   commitsLoadingFor: string
@@ -355,6 +378,16 @@ function formatFileLineCount(value: number | null): string {
 function openCommitFile(filePath: string): void {
   if (!selectedCommit.value) return
   emit('openCommitFile', { sha: selectedCommit.value.sha, path: filePath })
+  isOpen.value = false
+  searchQuery.value = ''
+  commitSearchQuery.value = ''
+  selectedCommitSha.value = ''
+  copiedCommitSha.value = ''
+}
+
+function openWorktreeFile(filePath: string): void {
+  if (!props.headSha) return
+  emit('openCommitFile', { sha: props.headSha, path: filePath })
   isOpen.value = false
   searchQuery.value = ''
   commitSearchQuery.value = ''
@@ -524,6 +557,18 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onDocumentPointe
 
 .header-git-status {
   @apply mx-1 my-1 flex items-start justify-between gap-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800;
+}
+
+.header-git-worktree-changes {
+  @apply mx-1 my-1 rounded-lg border border-zinc-100 bg-zinc-50 p-1;
+}
+
+.header-git-worktree-changes-head {
+  @apply px-1 pb-1;
+}
+
+.header-git-worktree-changes-label {
+  @apply text-[0.68rem] font-semibold uppercase tracking-wide text-zinc-500;
 }
 
 .header-git-status.is-error {

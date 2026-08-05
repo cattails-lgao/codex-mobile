@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import type { SlashCommand, SlashCommandKind } from './slashCommands'
 
-defineProps<{
+const props = defineProps<{
   commands: SlashCommand[]
   highlightedIndex: number
 }>()
@@ -13,6 +14,16 @@ const emit = defineEmits<{
 
 const { t } = useUiLanguage()
 
+const rootRef = ref<HTMLElement | null>(null)
+
+watch(
+  () => props.highlightedIndex,
+  async () => {
+    await nextTick()
+    rootRef.value?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' })
+  },
+)
+
 function kindLabel(kind: SlashCommandKind): string {
   if (kind === 'rpc') return t('Action')
   if (kind === 'text') return t('Prompt')
@@ -21,7 +32,7 @@ function kindLabel(kind: SlashCommandKind): string {
 </script>
 
 <template>
-  <div class="composer-popover" role="listbox" :aria-label="t('Commands')">
+  <div ref="rootRef" class="composer-popover" role="listbox" :aria-label="t('Commands')">
     <button
       v-for="(command, index) in commands"
       :key="command.id"

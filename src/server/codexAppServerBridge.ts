@@ -4398,6 +4398,14 @@ async function readGitHeaderState(cwd: string): Promise<{
   detached: boolean
   dirty: boolean
   gitRoot: string
+  changedFiles: Array<{
+    path: string
+    previousPath: string | null
+    status: string
+    label: string
+    addedLineCount: number | null
+    removedLineCount: number | null
+  }>
 }> {
   const gitRoot = await runCommandCapture('git', ['rev-parse', '--show-toplevel'], { cwd })
   const currentBranchRaw = await runCommandCapture('git', ['branch', '--show-current'], { cwd: gitRoot })
@@ -4414,7 +4422,62 @@ async function readGitHeaderState(cwd: string): Promise<{
     detached: !currentBranch,
     dirty: statusRaw.trim().length > 0,
     gitRoot,
+    changedFiles: parsePorcelainChangedFiles(statusRaw),
   }
+}
+
+function parsePorcelainChangedFiles(statusRaw: string): Array<{
+  path: string
+  previousPath: string | null
+  status: string
+  label: string
+  addedLineCount: number | null
+  removedLineCount: number | null
+}> {
+  const files: Array<{
+    path: string
+    previousPath: string | null
+    status: string
+    label: string
+    addedLineCount: number | null
+    removedLineCount: number | null
+  }> = []
+  for (const line of statusRaw.split('\n')) {
+    const trimmed = line.trimEnd()
+    if (!trimmed || trimmed.length < 3) continue
+    const xy = trimmed.slice(0, 2)
+    let pathPart = trimmed.slice(3)
+    let previousPath: string | null = null
+    const arrowIndex = pathPart.indexOf(' -> ')
+    if (arrowIndex >= 0) {
+      previousPath = pathPart.slice(0, arrowIndex)
+      pathPart = pathPart.slice(arrowIndex + 4)
+    }
+    const path = pathPart.trim()
+    if (!path) continue
+    const worktreeStatus = xy.charAt(1)
+    const indexStatus = xy.charAt(0)
+    const statusKind = worktreeStatus !== ' ' ? worktreeStatus : indexStatus
+    const status = worktreeStatus !== ' ' ? `${indexStatus}${worktreeStatus}` : indexStatus
+    let label: string
+    if (status === '??') {
+      label = 'Untracked'
+    } else if (statusKind === 'A') {
+      label = 'Added'
+    } else if (statusKind === 'D') {
+      label = 'Deleted'
+    } else if (statusKind === 'R') {
+      label = 'Renamed'
+    } else if (statusKind === 'C') {
+      label = 'Copied'
+    } else if (statusKind === 'U') {
+      label = 'Unmerged'
+    } else {
+      label = 'Modified'
+    }
+    files.push({ path, previousPath, status, label, addedLineCount: null, removedLineCount: null })
+  }
+  return files
 }
 
 async function assertNoTrackedGitChanges(repoRoot: string): Promise<void> {
