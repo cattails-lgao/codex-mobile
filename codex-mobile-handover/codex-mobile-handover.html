@@ -574,6 +574,35 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           </tr>
         </table>
         </div>
+
+        <h3>需求 6 产品决策（2026-08-06）：对齐 trae-work 工作过程风格</h3>
+        <div class="callout ok">
+          <strong>2026-08-06 决策：</strong>需求 6 不再对齐 TUI，改为按 trae-work 的工作过程风格改造消息展示，用户已确认「全量重构」。本会话仅记录调研与选择，<strong>不实施代码改动</strong>，重构留待后续会话执行。
+        </div>
+        <p>改造目标（trae-work 工作过程风格）与当前实现对照：</p>
+        <div class="table-wrap">
+        <table>
+          <tr><th>维度</th><th>当前实现</th><th>改造目标（trae-work 风格）</th></tr>
+          <tr>
+            <td>命令执行</td>
+            <td>折叠行（<code>cmd-row</code>：▶ + 命令 + 状态），点击展开输出；连续命令可分组折叠；worked 消息需先点分隔条展开</td>
+            <td>独立「工作块」：左侧步骤序号圆点 + 命令 + 状态标签（完成/进行中带旋转动画），命令与输出同块，点击整块展开；worked 明细直接平铺、步骤连续编号（1/2/3），去掉中间一层交互</td>
+          </tr>
+          <tr>
+            <td>文件变更</td>
+            <td>独立文件变更卡片：操作徽标（+/-/M）+ 路径 + 行数，可展开 diff，支持 undo/redo</td>
+            <td>保持卡片但改为工作区内联，操作徽标（+/M）着色区分增改，路径与行数右对齐，undo/redo 保留</td>
+          </tr>
+          <tr>
+            <td>总结文本</td>
+            <td>随消息流混排</td>
+            <td>与工作过程分离，作为独立段落出现在工作块之后</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout">
+          <strong>涉及文件（预计）：</strong><code>ThreadConversation.vue</code>（模板 + <code>getCommandsForWorked</code>/<code>getGroupedCommandsForLatest</code>/<code>commandStatusClass</code> 等命令渲染逻辑与 CSS）、相关 i18n。数据层不变，风险可控。命令与 worked 本质是同一套渲染逻辑（<code>getCommandsForWorked</code> 与命令分组），建议合并改造而非分两次改模板。
+        </div>
       </section>
 
       <section>
@@ -836,7 +865,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>3823011</code>（第八轮：5 个上游 PR 移植）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
-          <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查，但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
+          <li><strong>跨平台回归（2026-08-06 已完成 Linux 侧）</strong>：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——<code>vue-tsc --noEmit</code> 无类型错误、<code>vite build</code> 成功（4.58s）、<code>tsup</code> CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（<code>~/.local/share/fnm</code>）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 <code>~/codex-linux-check</code>（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 <code>/mnt/c</code> 共享解压，fnm 1.39.0 二进制同理</li>
           <li><strong>验收遗留</strong>：plan/approval popover 当前无 Enter/方向键键盘导航，后续如需可补；ExecPlans 待后端 Codex 版本支持后自动变为可选</li>
         </ul>
       </section>
@@ -854,7 +883,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构待实施 + WSL Linux 侧跨平台回归已完成） · 内容已脱敏
     </footer>
   </article>
 </body>
