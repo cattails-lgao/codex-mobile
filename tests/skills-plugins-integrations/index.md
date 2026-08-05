@@ -31,6 +31,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Mixed local+remote AGENTS edits do not stall Startup Sync](mixed-local-remote-agents-edits-do-not-stall-startup-sync.md) |
 | [Feature: Startup sync uses deterministic pull reconcile (`fetch + reset --hard`) before local replay](startup-sync-uses-deterministic-pull-reconcile-fetch-reset-hard-before-local-replay.md) |
 | [Codex.app-style Plugins Directory](codex-app-style-plugins-directory.md) |
+| [Feature: Settings Hooks panel (P2-1)](settings-hooks-panel.md) |
 | [Skills tab npx skills search](skills-tab-npx-skills-search.md) |
 | [Feature: Nested skill bundles are grouped in discovery](nested-skill-bundles-are-grouped-in-discovery.md) |
 | [First-launch home card for Plugins and Apps](first-launch-home-card-for-plugins-and-apps.md) |

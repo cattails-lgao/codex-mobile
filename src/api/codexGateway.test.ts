@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, normalizeFuzzyFileSearchResults, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession } from './codexGateway'
+import { compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, normalizeFuzzyFileSearchResults, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -362,5 +362,69 @@ describe('fuzzyFileSearch session methods', () => {
     })
 
     expect(suggestions).toEqual([{ path: '/ok.ts' }])
+  })
+})
+
+describe('listHooks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sends hooks/list with an empty params object', async () => {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: { data: [] } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await listHooks()
+
+    expect(requests).toEqual([{ method: 'hooks/list', params: {} }])
+  })
+
+  it('normalizes per-cwd entries and hook rows with camel/snake fallbacks', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      result: {
+        data: [
+          {
+            cwd: '/repo',
+            hooks: [
+              { event: 'PreToolUse', command: 'pre.sh', timeout: 5, enabled: true },
+              { name: 'PostToolUse', cmd: 'post.sh', timeout_ms: 10, active: false },
+              { event: 'Broken' },
+              null,
+              'nope',
+            ],
+            warnings: ['w1'],
+            errors: ['e1'],
+          },
+          { cwd: '/empty' },
+        ],
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const entries = await listHooks()
+
+    expect(entries).toEqual([
+      {
+        cwd: '/repo',
+        hooks: [
+          { event: 'PreToolUse', command: 'pre.sh', timeout: 5, enabled: true },
+          { event: 'PostToolUse', command: 'post.sh', timeout: 10, enabled: false },
+        ],
+        warnings: ['w1'],
+        errors: ['e1'],
+      },
+      { cwd: '/empty', hooks: [], warnings: [], errors: [] },
+    ])
   })
 })

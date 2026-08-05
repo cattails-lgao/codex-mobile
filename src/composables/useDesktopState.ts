@@ -34,9 +34,11 @@ import {
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
+  listHooks,
   type RpcNotification,
   type SkillInfo,
   type ThreadQueueState,
+  type UiHooksListEntry,
   type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { CodexApiError } from '../api/codexErrors'
@@ -115,8 +117,6 @@ const KNOWN_IGNORED_NOTIFICATION_METHODS = new Set<string>([
   'externalAgentConfig/import/progress',
   'fs/changed', // no directory-browse surface in this UI (DirectoryHub has no fs view)
   'guardianWarning',
-  'hook/completed',
-  'hook/started',
   'item/autoApprovalReview/completed', // Guardian auto-review; no approval panel surface
   'item/autoApprovalReview/started', // Guardian auto-review; no approval panel surface
   'item/mcpToolCall/progress',
@@ -1518,6 +1518,8 @@ export function useDesktopState() {
 
   const installedSkills = ref<SkillInfo[]>([])
   const accountRateLimitSnapshots = ref<UiRateLimitSnapshot[]>([])
+  const hooksList = ref<UiHooksListEntry[]>([])
+  const isHooksLoading = ref(false)
 
   const isLoadingThreads = ref(false)
   const isLoadingMessages = ref(false)
@@ -1571,8 +1573,10 @@ export function useDesktopState() {
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let refreshSkillsPromise: Promise<void> | null = null
+  let refreshHooksPromise: Promise<void> | null = null
   let lastThreadListLoadAt = 0
   let hasLoadedSkills = false
+  let hasLoadedHooks = false
   let lastSkillsLoadAt = 0
   let lastSkillsLoadKey = ''
   let rateLimitRefreshPromise: Promise<void> | null = null
@@ -3861,6 +3865,11 @@ export function useDesktopState() {
       return
     }
 
+    if (notification.method === 'hook/started' || notification.method === 'hook/completed') {
+      void refreshHooks({ force: true })
+      return
+    }
+
     if (notification.method === 'thread/status/changed') {
       const threadId = extractThreadIdFromNotification(notification)
       // A status change (e.g. another client started a turn) may alter the
@@ -4781,6 +4790,30 @@ export function useDesktopState() {
     })()
 
     await refreshSkillsPromise
+  }
+
+  async function refreshHooks(options: { force?: boolean } = {}): Promise<void> {
+    if (refreshHooksPromise) {
+      await refreshHooksPromise
+      return
+    }
+    if (options.force !== true && hasLoadedHooks) {
+      return
+    }
+    isHooksLoading.value = true
+    refreshHooksPromise = (async () => {
+      try {
+        hooksList.value = await listHooks()
+        hasLoadedHooks = true
+      } catch {
+        // keep previous hooks on failure
+      } finally {
+        isHooksLoading.value = false
+        refreshHooksPromise = null
+      }
+    })()
+
+    await refreshHooksPromise
   }
 
   async function refreshAncillaryState(
@@ -5972,6 +6005,9 @@ export function useDesktopState() {
     error,
     refreshAll,
     refreshSkills,
+    refreshHooks,
+    hooksList,
+    isHooksLoading,
     onRealtimeEvent,
     selectThread,
     loadMessages,

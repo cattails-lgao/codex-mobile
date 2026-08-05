@@ -27,6 +27,7 @@ const gatewayMocks = vi.hoisted(() => ({
   getWorkspaceRootsState: vi.fn(),
   generateThreadTitle: vi.fn(),
   interruptThreadTurn: vi.fn(),
+  listHooks: vi.fn(),
   persistThreadTitle: vi.fn(),
   renameThread: vi.fn(),
   replyToServerRequest: vi.fn(),
@@ -1331,5 +1332,50 @@ describe('P1-3 notification surface', () => {
 
     await state.loadMessages('thread-1', { silent: true, force: true })
     expect(messageFetchCalls()).toBeGreaterThan(callsAfterFirstLoad)
+  })
+})
+
+describe('hooks notifications', () => {
+  it('loads hooks once and force-refreshes on hook/started and hook/completed', async () => {
+    installTestWindow()
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    gatewayMocks.listHooks.mockResolvedValue([{ cwd: '/repo', hooks: [], warnings: [], errors: [] }])
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+
+    const state = useDesktopState()
+    await state.refreshHooks()
+    expect(gatewayMocks.listHooks).toHaveBeenCalledTimes(1)
+
+    state.startPolling()
+    expect(notificationHandler).toBeDefined()
+    notificationHandler!({ method: 'hook/started' })
+    await Promise.resolve()
+    await Promise.resolve()
+    notificationHandler!({ method: 'hook/completed' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.listHooks).toHaveBeenCalledTimes(3)
+    expect(state.hooksList.value).toEqual([{ cwd: '/repo', hooks: [], warnings: [], errors: [] }])
+  })
+
+  it('keeps previous hooks when the refresh fails', async () => {
+    installTestWindow()
+    gatewayMocks.listHooks
+      .mockResolvedValueOnce([{ cwd: '/repo', hooks: [{ event: 'PreToolUse', command: 'pre.sh', timeout: null, enabled: null }], warnings: [], errors: [] }])
+      .mockRejectedValueOnce(new Error('boom'))
+
+    const state = useDesktopState()
+    await state.refreshHooks()
+    await state.refreshHooks({ force: true })
+
+    expect(state.hooksList.value).toEqual([
+      { cwd: '/repo', hooks: [{ event: 'PreToolUse', command: 'pre.sh', timeout: null, enabled: null }], warnings: [], errors: [] },
+    ])
+    expect(state.isHooksLoading.value).toBe(false)
   })
 })

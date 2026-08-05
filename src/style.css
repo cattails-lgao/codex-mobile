@@ -61,6 +61,46 @@
   @apply border-zinc-700;
 }
 
+:root.dark .sidebar-settings-hooks-section {
+  @apply border-zinc-700;
+}
+
+:root.dark .sidebar-settings-hooks-title {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-hooks-reload {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:root.dark .sidebar-settings-hooks-empty {
+  @apply text-zinc-500;
+}
+
+:root.dark .sidebar-settings-hooks-entry {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:root.dark .sidebar-settings-hooks-cwd {
+  @apply text-zinc-500;
+}
+
+:root.dark .sidebar-settings-hooks-state {
+  @apply bg-zinc-700 text-zinc-400;
+}
+
+:root.dark .sidebar-settings-hooks-state.is-on {
+  @apply bg-emerald-900/60 text-emerald-300;
+}
+
+:root.dark .sidebar-settings-hooks-event {
+  @apply text-zinc-200;
+}
+
+:root.dark .sidebar-settings-hooks-command {
+  @apply text-zinc-400;
+}
+
 :root.dark .sidebar-settings-context-value {
   @apply text-zinc-300;
 }
