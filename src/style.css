@@ -299,6 +299,31 @@
   @apply bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200;
 }
 
+:root.dark .thread-composer-realtime {
+  @apply bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200;
+}
+
+:root.dark .thread-composer-realtime--active {
+  @apply bg-sky-950 text-sky-300 hover:bg-sky-900 hover:text-sky-200;
+}
+
+:root.dark .thread-composer-realtime-bubble {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300;
+}
+
+:root.dark .thread-composer-realtime-bubble-title,
+:root.dark .thread-composer-realtime-role {
+  @apply text-zinc-400;
+}
+
+:root.dark .thread-composer-realtime-bubble-stop {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:root.dark .thread-composer-realtime-placeholder {
+  @apply text-zinc-500;
+}
+
 :root.dark .thread-composer-stop {
   @apply bg-zinc-200 text-zinc-900 hover:bg-white;
 }

@@ -3376,6 +3376,50 @@ export async function searchThreads(
   return payload.data ?? { threadIds: [], indexedThreadCount: 0 }
 }
 
+export type RealtimeVoices = {
+  v1: string[]
+  v2: string[]
+  defaultV1: string
+  defaultV2: string
+}
+
+export type RealtimeAudioChunk = {
+  data: string
+  sampleRate: number
+  numChannels: number
+  samplesPerChannel?: number
+}
+
+export type RealtimeTranscriptPart = {
+  role: string
+  text: string
+}
+
+export async function listRealtimeVoices(): Promise<RealtimeVoices> {
+  const payload = await callRpc<{ voices: RealtimeVoices }>('thread/realtime/listVoices', {})
+  return payload.voices
+}
+
+export async function startRealtimeSession(params: {
+  threadId: string
+  outputModality: 'text' | 'audio'
+  includeStartupContext?: boolean
+  voice?: string
+}): Promise<void> {
+  await callRpc<Record<string, never>>('thread/realtime/start', params)
+}
+
+export async function appendRealtimeAudio(params: {
+  threadId: string
+  audio: RealtimeAudioChunk
+}): Promise<void> {
+  await callRpc<Record<string, never>>('thread/realtime/appendAudio', params)
+}
+
+export async function stopRealtimeSession(threadId: string): Promise<void> {
+  await callRpc<Record<string, never>>('thread/realtime/stop', { threadId })
+}
+
 export async function configureTelegramBot(
   botToken: string,
   allowedUserIds: Array<number | '*'>,

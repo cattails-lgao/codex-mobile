@@ -307,6 +307,37 @@
         </template>
 
         <div
+          v-if="isRealtimeVoiceSessionActive || realtimeVoiceState === 'connecting'"
+          class="thread-composer-realtime-bubble"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="thread-composer-realtime-bubble-head">
+            <span class="thread-composer-realtime-bubble-title">
+              {{ realtimeVoiceState === 'connecting' ? t('Connecting voice...') : t('Voice conversation') }}
+            </span>
+            <button
+              class="thread-composer-realtime-bubble-stop"
+              type="button"
+              :aria-label="t('Stop voice conversation')"
+              :title="t('Stop voice conversation')"
+              @click="onRealtimeVoiceToggle"
+            >
+              <IconTablerPlayerStopFilled class="thread-composer-realtime-bubble-stop-icon" />
+            </button>
+          </div>
+          <div class="thread-composer-realtime-transcript">
+            <template v-if="realtimeTranscriptParts.length > 0">
+              <p v-for="(part, index) in realtimeTranscriptParts" :key="`${part.role}-${index}`" class="thread-composer-realtime-part">
+                <span class="thread-composer-realtime-role">{{ part.role === 'user' ? t('You') : t('Codex') }}</span>
+                {{ part.text }}
+              </p>
+            </template>
+            <p v-else class="thread-composer-realtime-placeholder">{{ t('Listening...') }}</p>
+          </div>
+        </div>
+
+        <div
           class="thread-composer-actions"
           :class="{ 'thread-composer-actions--recording': isDictationRecording }"
         >
@@ -319,7 +350,7 @@
           </span>
 
           <button
-            v-if="isDictationSupported"
+            v-if="isDictationSupported && !isRealtimeVoiceSessionActive"
             class="thread-composer-mic"
             :class="{
               'thread-composer-mic--active': dictationState === 'recording',
@@ -338,6 +369,23 @@
               class="thread-composer-mic-icon thread-composer-mic-icon--stop"
             />
             <IconTablerMicrophone v-else class="thread-composer-mic-icon" />
+          </button>
+
+          <button
+            v-if="isRealtimeVoiceSupported && dictationState !== 'recording'"
+            class="thread-composer-realtime"
+            :class="{ 'thread-composer-realtime--active': isRealtimeVoiceSessionActive }"
+            type="button"
+            :aria-label="realtimeVoiceButtonLabel"
+            :title="realtimeVoiceButtonLabel"
+            :disabled="isInteractionDisabled || !isRealtimeVoiceContextReady"
+            @click="onRealtimeVoiceToggle"
+          >
+            <IconTablerPlayerStopFilled
+              v-if="isRealtimeVoiceSessionActive"
+              class="thread-composer-mic-icon thread-composer-mic-icon--stop"
+            />
+            <IconTablerBolt v-else class="thread-composer-mic-icon" />
           </button>
 
           <button
@@ -411,6 +459,7 @@ import type {
   UiTokenUsageBreakdown,
 } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
+import { useRealtimeVoice } from '../../composables/useRealtimeVoice'
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
@@ -584,6 +633,17 @@ const {
   },
 })
 const attachMenuRootRef = ref<HTMLElement | null>(null)
+const realtimeVoiceErrorText = ref('')
+const {
+  state: realtimeVoiceState,
+  isSupported: isRealtimeVoiceSupported,
+  transcriptParts: realtimeTranscriptParts,
+  toggle: toggleRealtimeVoice,
+} = useRealtimeVoice({
+  onError: (error) => {
+    realtimeVoiceErrorText.value = error instanceof Error ? error.message : String(error)
+  },
+})
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const folderPickerInputRef = ref<HTMLInputElement | null>(null)
@@ -686,6 +746,21 @@ const standaloneFileAttachments = computed(() => {
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || props.externalSessionActive === true)
+const isRealtimeVoiceSessionActive = computed(
+  () => realtimeVoiceState.value === 'active' || realtimeVoiceState.value === 'connecting' || realtimeVoiceState.value === 'stopping',
+)
+// A realtime voice session needs a real thread; the '__new-thread__' placeholder
+// on the home route has no server-side thread yet, so start would fail.
+const isRealtimeVoiceContextReady = computed(() => !!props.activeThreadId && props.activeThreadId !== '__new-thread__')
+const realtimeVoiceButtonLabel = computed(() => {
+  if (isRealtimeVoiceSessionActive.value) return t('Stop voice conversation')
+  if (!isRealtimeVoiceContextReady.value) return t('Start a conversation before using voice')
+  return t('Voice conversation')
+})
+function onRealtimeVoiceToggle(): void {
+  if (!isRealtimeVoiceContextReady.value) return
+  toggleRealtimeVoice(props.activeThreadId)
+}
 const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => /^gpt-5\.(?:4|5)(?:$|-)/.test(props.selectedModel.trim()))
 const showFastModeModelIcon = computed(() =>
@@ -2391,6 +2466,51 @@ watch(
 
 .thread-composer-mic-icon {
   @apply h-5 w-5;
+}
+
+.thread-composer-realtime {
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-realtime--active {
+  @apply bg-sky-100 text-sky-600 hover:bg-sky-200 hover:text-sky-700;
+}
+
+.thread-composer-realtime-bubble {
+  @apply mb-2 ml-auto flex w-full max-w-md flex-col gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700;
+}
+
+.thread-composer-realtime-bubble-head {
+  @apply flex items-center justify-between gap-2;
+}
+
+.thread-composer-realtime-bubble-title {
+  @apply text-xs font-semibold uppercase tracking-wide text-zinc-500;
+}
+
+.thread-composer-realtime-bubble-stop {
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-full border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-900;
+}
+
+.thread-composer-realtime-bubble-stop-icon {
+  @apply h-4 w-4;
+}
+
+.thread-composer-realtime-transcript {
+  @apply flex flex-col gap-1 overflow-y-auto text-sm;
+  max-height: 9rem;
+}
+
+.thread-composer-realtime-part {
+  @apply m-0 whitespace-pre-wrap break-words;
+}
+
+.thread-composer-realtime-role {
+  @apply mr-1.5 font-semibold text-zinc-500;
+}
+
+.thread-composer-realtime-placeholder {
+  @apply m-0 text-zinc-400;
 }
 
 .thread-composer-dictation-waveform-wrap {
