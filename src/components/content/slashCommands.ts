@@ -69,8 +69,13 @@ export function buildSkillSlashCommands(skills: Array<{ name: string; descriptio
   const seen = new Set<string>()
   for (const skill of skills) {
     const id = skill.name.trim().replace(/^\//u, '').toLowerCase().replace(/\s+/gu, '-')
-    if (!id || seen.has(id)) continue
-    seen.add(id)
+    if (!id) continue
+    // Dedupe by path so the same skill file (e.g. surfaced from multiple
+    // cwds) yields one command, while same-named skills from different
+    // scopes (user/repo/system/plugin) all stay visible.
+    const key = skill.path.trim() || id
+    if (seen.has(key)) continue
+    seen.add(key)
     commands.push({
       id,
       description: skill.description?.trim() || 'Run this skill',

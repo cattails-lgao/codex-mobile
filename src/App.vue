@@ -275,47 +275,6 @@
                   </div>
                 </template>
               </div>
-              <div class="sidebar-settings-approval-section">
-                <div class="sidebar-settings-approval-header">
-                  <span class="sidebar-settings-approval-title">{{ t('Approval policy') }}</span>
-                </div>
-                <p v-if="isApprovalPolicyLoading" class="sidebar-settings-approval-empty">{{ t('Loading…') }}</p>
-                <template v-else>
-                  <p class="sidebar-settings-approval-description">
-                    {{ t('Choose when Codex asks for your permission before running commands or changing files.') }}
-                  </p>
-                  <div class="sidebar-settings-approval-options" role="radiogroup" :aria-label="t('Approval policy')">
-                    <label
-                      v-for="option in approvalPolicyOptions"
-                      :key="option.value"
-                      class="sidebar-settings-approval-option"
-                      :class="{ 'is-selected': approvalPolicy === option.value }"
-                    >
-                      <input
-                        v-model="approvalPolicy"
-                        class="sidebar-settings-approval-radio"
-                        type="radio"
-                        name="approval-policy"
-                        :value="option.value"
-                        :disabled="isApprovalPolicySaving"
-                      />
-                      <span class="sidebar-settings-approval-option-label">{{ t(option.label) }}</span>
-                    </label>
-                  </div>
-                  <p v-if="approvalPolicyError" class="sidebar-settings-approval-error">{{ approvalPolicyError }}</p>
-                  <p v-if="approvalPolicyNotice" class="sidebar-settings-approval-notice">{{ approvalPolicyNotice }}</p>
-                  <div class="sidebar-settings-approval-actions">
-                    <button
-                      class="sidebar-settings-approval-save"
-                      type="button"
-                      :disabled="isApprovalPolicySaving"
-                      @click="onSaveApprovalPolicy"
-                    >
-                      {{ isApprovalPolicySaving ? t('Saving…') : t('Save') }}
-                    </button>
-                  </div>
-                </template>
-              </div>
               <div class="sidebar-settings-remote-section">
                 <div class="sidebar-settings-remote-header">
                   <span class="sidebar-settings-remote-title">{{ t('Remote control') }}</span>
@@ -709,12 +668,12 @@
           </template>
           <template #actions>
             <button
-              v-if="isMobile && canShowRightPanel"
+              v-if="canShowRightPanel"
               class="content-header-right-panel-toggle"
               type="button"
-              :aria-label="isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')"
-              :title="isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')"
-              @click="isMobileRightPanelOpen = !isMobileRightPanelOpen"
+              :aria-label="isMobile ? (isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')) : (isRightPanelCollapsed ? t('Open side panel') : t('Close side panel'))"
+              :title="isMobile ? (isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')) : (isRightPanelCollapsed ? t('Open side panel') : t('Close side panel'))"
+              @click="onToggleRightPanelToggle"
             >
               <IconTablerLayoutSidebar class="content-header-right-panel-toggle-icon" />
             </button>
@@ -1092,6 +1051,13 @@
                   @update:selected-model="onSelectModel"
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
                   @update:selected-speed-mode="onSelectSpeedMode"
+                  :approval-policy="approvalPolicy"
+                  :approval-policy-options="approvalPolicyOptions"
+                  :is-approval-policy-saving="isApprovalPolicySaving"
+                  :approval-policy-error="approvalPolicyError"
+                  :approval-policy-notice="approvalPolicyNotice"
+                  @update:approval-policy="onApprovalPolicyChange"
+                  @save-approval-policy="onSaveApprovalPolicy"
                   @slash-command="onSlashCommand" />
               </div>
             </div>
@@ -1175,6 +1141,13 @@
                     @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
                     @update:selected-reasoning-effort="onSelectReasoningEffort"
                     @update:selected-speed-mode="onSelectSpeedMode"
+                    :approval-policy="approvalPolicy"
+                    :approval-policy-options="approvalPolicyOptions"
+                    :is-approval-policy-saving="isApprovalPolicySaving"
+                    :approval-policy-error="approvalPolicyError"
+                    :approval-policy-notice="approvalPolicyNotice"
+                    @update:approval-policy="onApprovalPolicyChange"
+                    @save-approval-policy="onSaveApprovalPolicy"
                     @interrupt="onInterruptTurn" @slash-command="onSlashCommand" />
                 </div>
               </template>
@@ -1183,10 +1156,17 @@
         </section>
       </section>
       <aside
-        v-if="canShowRightPanel"
+        v-if="canShowRightPanel && (isMobile || !isRightPanelCollapsed)"
         class="content-right-panel"
         :class="{ 'is-mobile-open': isMobileRightPanelOpen }"
+        :style="{ '--right-panel-width': `${rightPanelWidth}px` }"
       >
+        <div
+          v-if="!isMobile"
+          class="content-right-panel-resize-handle"
+          aria-hidden="true"
+          @mousedown="onRightResizeHandleMouseDown"
+        />
         <div class="content-right-panel-header">
           <div class="content-right-panel-tabs" role="tablist">
             <button
@@ -1199,17 +1179,6 @@
             >
               <IconTablerGitFork class="content-right-panel-tab-icon" />
               {{ t('Git') }}
-            </button>
-            <button
-              class="content-right-panel-tab"
-              :class="{ 'is-active': activeRightPanelTab === 'terminal' }"
-              type="button"
-              role="tab"
-              :aria-selected="activeRightPanelTab === 'terminal'"
-              @click="selectRightPanelTab('terminal')"
-            >
-              <IconTablerTerminal class="content-right-panel-tab-icon" />
-              {{ t('Terminal') }}
             </button>
           </div>
           <div class="content-right-panel-actions">
@@ -1236,12 +1205,11 @@
               </Transition>
             </div>
             <button
-              v-if="isMobile"
               class="content-right-panel-close"
               type="button"
               :aria-label="t('Close panel')"
               :title="t('Close panel')"
-              @click="isMobileRightPanelOpen = false"
+              @click="onCloseRightPanel"
             >
               <IconTablerX class="content-right-panel-close-icon" />
             </button>
@@ -1754,6 +1722,49 @@ const isThreadTerminalAvailable = ref(true)
 const activeRightPanelTab = ref<'git' | 'terminal'>('git')
 const isRightPanelMenuOpen = ref(false)
 const isMobileRightPanelOpen = ref(false)
+const isRightPanelCollapsed = ref(false)
+const RIGHT_PANEL_WIDTH_KEY = 'codex-web-local.right-panel-width.v1'
+const MIN_RIGHT_PANEL_WIDTH = 260
+const MAX_RIGHT_PANEL_WIDTH = 640
+const DEFAULT_RIGHT_PANEL_WIDTH = 320
+const rightPanelWidth = ref(loadRightPanelWidth())
+
+function clampRightPanelWidth(value: number): number {
+  return Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, value))
+}
+
+function loadRightPanelWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH
+  const raw = window.localStorage.getItem(RIGHT_PANEL_WIDTH_KEY)
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return DEFAULT_RIGHT_PANEL_WIDTH
+  return clampRightPanelWidth(parsed)
+}
+
+function saveRightPanelWidth(value: number): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, String(value))
+}
+
+function onRightResizeHandleMouseDown(event: MouseEvent): void {
+  event.preventDefault()
+  const startX = event.clientX
+  const startWidth = rightPanelWidth.value
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const delta = startX - moveEvent.clientX
+    rightPanelWidth.value = clampRightPanelWidth(startWidth + delta)
+  }
+
+  const onMouseUp = () => {
+    saveRightPanelWidth(rightPanelWidth.value)
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const directoryTryInFlightKey = ref('')
@@ -1869,6 +1880,10 @@ async function refreshApprovalPolicy(options: { force?: boolean } = {}): Promise
   } finally {
     isApprovalPolicyLoading.value = false
   }
+}
+
+function onApprovalPolicyChange(value: string): void {
+  approvalPolicy.value = value as ApprovalPolicy
 }
 
 async function onSaveApprovalPolicy(): Promise<void> {
@@ -2533,6 +2548,7 @@ onMounted(() => {
   void refreshTelegramStatus()
   void loadFreeModeStatus()
   void refreshThreadTerminalStatus()
+  void refreshApprovalPolicy()
 })
 
 watch(visibleFeedbackErrors, (values, oldValues) => {
@@ -3528,6 +3544,9 @@ function toggleRightPanelTerminal(): void {
   if (isMobile.value && !isMobileRightPanelOpen.value) {
     isMobileRightPanelOpen.value = true
   }
+  if (!isMobile.value) {
+    isRightPanelCollapsed.value = false
+  }
   activeRightPanelTab.value = activeRightPanelTab.value === 'terminal' ? 'git' : 'terminal'
   if (activeRightPanelTab.value !== 'terminal') {
     resetTerminalKeyboardFocusState()
@@ -3537,10 +3556,35 @@ function toggleRightPanelTerminal(): void {
 function selectRightPanelTab(tab: 'git' | 'terminal'): void {
   activeRightPanelTab.value = tab
   isRightPanelMenuOpen.value = false
+  if (!isMobile.value) {
+    isRightPanelCollapsed.value = false
+  }
   if (isMobile.value) {
     isMobileRightPanelOpen.value = true
   }
   if (tab !== 'terminal') {
+    resetTerminalKeyboardFocusState()
+  }
+}
+
+function onCloseRightPanel(): void {
+  if (isMobile.value) {
+    isMobileRightPanelOpen.value = false
+    return
+  }
+  isRightPanelCollapsed.value = true
+  isRightPanelMenuOpen.value = false
+  resetTerminalKeyboardFocusState()
+}
+
+function onToggleRightPanelToggle(): void {
+  if (isMobile.value) {
+    isMobileRightPanelOpen.value = !isMobileRightPanelOpen.value
+    return
+  }
+  isRightPanelCollapsed.value = !isRightPanelCollapsed.value
+  if (isRightPanelCollapsed.value) {
+    isRightPanelMenuOpen.value = false
     resetTerminalKeyboardFocusState()
   }
 }
@@ -5481,7 +5525,22 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel {
-  @apply relative z-10 flex h-full min-h-0 w-80 shrink-0 flex-col border-l border-zinc-200 bg-slate-50;
+  @apply relative z-10 flex h-full min-h-0 shrink-0 flex-col border-l border-zinc-200 bg-slate-50;
+  width: var(--right-panel-width, 20rem);
+}
+
+.content-right-panel-resize-handle {
+  @apply absolute -left-1.5 top-0 bottom-0 z-[1100] w-3 cursor-col-resize;
+}
+
+.content-right-panel-resize-handle::after {
+  content: '';
+  @apply absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-transparent transition;
+}
+
+.content-right-panel-resize-handle:hover::after,
+.content-right-panel-resize-handle.is-dragging::after {
+  @apply bg-zinc-300;
 }
 
 .content-right-panel-header {
@@ -5559,6 +5618,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 :global(:root.dark) .content-right-panel {
   @apply border-zinc-800 bg-zinc-900;
+}
+
+:global(:root.dark) .content-right-panel-resize-handle:hover::after,
+:global(:root.dark) .content-right-panel-resize-handle.is-dragging::after {
+  @apply bg-zinc-600;
 }
 
 :global(:root.dark) .content-right-panel-header {
@@ -6086,86 +6150,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-remote-section {
   @apply border-t border-zinc-100 px-3 py-2.5;
-}
-
-.sidebar-settings-approval-section {
-  @apply border-t border-zinc-100 px-3 py-2.5;
-}
-
-.sidebar-settings-approval-header {
-  @apply flex items-center justify-between;
-}
-
-.sidebar-settings-approval-title {
-  @apply text-sm font-medium text-zinc-700;
-}
-
-.sidebar-settings-approval-empty {
-  @apply mt-1.5 text-xs text-zinc-500;
-}
-
-.sidebar-settings-approval-description {
-  @apply mt-1.5 text-xs leading-relaxed text-zinc-500;
-}
-
-.sidebar-settings-approval-options {
-  @apply mt-2 flex flex-col gap-1;
-}
-
-.sidebar-settings-approval-option {
-  @apply flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
-}
-
-.sidebar-settings-approval-option.is-selected {
-  @apply bg-zinc-50 text-zinc-900;
-}
-
-.sidebar-settings-approval-radio {
-  @apply h-3.5 w-3.5 shrink-0 accent-zinc-900;
-}
-
-.sidebar-settings-approval-option-label {
-  @apply min-w-0;
-}
-
-.sidebar-settings-approval-error {
-  @apply mt-1.5 text-xs text-red-600;
-}
-
-.sidebar-settings-approval-notice {
-  @apply mt-1.5 text-xs text-emerald-700;
-}
-
-.sidebar-settings-approval-actions {
-  @apply mt-2 flex items-center justify-end;
-}
-
-.sidebar-settings-approval-save {
-  @apply rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-50;
-}
-
-:root.dark .sidebar-settings-approval-section {
-  @apply border-zinc-800;
-}
-
-:root.dark .sidebar-settings-approval-title {
-  @apply text-zinc-300;
-}
-
-:root.dark .sidebar-settings-approval-option {
-  @apply text-zinc-300 hover:bg-zinc-800;
-}
-
-:root.dark .sidebar-settings-approval-option.is-selected {
-  @apply bg-zinc-800 text-zinc-100;
-}
-
-:root.dark .sidebar-settings-approval-radio {
-  @apply accent-zinc-200;
-}
-
-:root.dark .sidebar-settings-approval-save {
-  @apply bg-zinc-100 text-zinc-900 hover:bg-white;
 }
 
 .sidebar-settings-remote-header {

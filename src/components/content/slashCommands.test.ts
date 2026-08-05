@@ -111,12 +111,14 @@ describe('buildSkillSlashCommands', () => {
     }
   })
 
-  it('deduplicates skills with the same normalized id', () => {
+  it('keeps same-named skills from different paths and dedupes by path', () => {
     const commands = buildSkillSlashCommands([
       { name: 'My Skill', path: 'a/SKILL.md' },
       { name: 'my-skill', path: 'b/SKILL.md' },
+      { name: 'my-skill', path: 'b/SKILL.md' },
     ])
-    expect(commands).toHaveLength(1)
+    expect(commands).toHaveLength(2)
+    expect(commands.map((command) => command.skillPath)).toEqual(['a/SKILL.md', 'b/SKILL.md'])
   })
 
   it('matches skill commands through the shared matcher', () => {
