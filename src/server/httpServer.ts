@@ -6,7 +6,7 @@ import { writeFile, stat } from 'node:fs/promises'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, listWorkspaceFiles, normalizeLocalPath } from './localBrowseUi.js'
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getFilePreview, getLocalDirectoryListing, isTextEditableFile, listWorkspaceFiles, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -168,6 +168,27 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       res.status(200).json({ data })
     } catch {
       res.status(404).json({ error: 'Directory not found.' })
+    }
+  })
+
+  // 5c. File preview metadata + text content for the right-side "Files" panel.
+  app.get('/codex-local-preview', async (req, res) => {
+    const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
+    const localPath = normalizeLocalPath(rawPath)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local file path.' })
+      return
+    }
+    try {
+      const fileStat = await stat(localPath)
+      if (!fileStat.isFile()) {
+        res.status(400).json({ error: 'Expected file path.' })
+        return
+      }
+      const preview = await getFilePreview(localPath)
+      res.status(200).json({ data: preview })
+    } catch {
+      res.status(404).json({ error: 'File not found.' })
     }
   })
 

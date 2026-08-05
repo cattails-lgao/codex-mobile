@@ -2,7 +2,7 @@
   <div class="right-git-panel">
     <button v-if="showReview" class="rgp-review" type="button" @click="emit('toggleReview')">
       <IconTablerFilePencil class="rgp-review-icon" />
-      <span class="rgp-review-label">{{ reviewOpen ? 'Review Worktree Changes (Open)' : 'Review Worktree Changes' }}</span>
+      <span class="rgp-review-label">{{ reviewOpen ? t('Review Worktree Changes (Open)') : t('Review Worktree Changes') }}</span>
       <span class="rgp-review-delta">
         <span class="rgp-added">+{{ worktreeChangeSummary.addedLineCount }}</span>
         <span class="rgp-removed">-{{ worktreeChangeSummary.removedLineCount }}</span>
@@ -10,19 +10,19 @@
     </button>
 
     <div class="rgp-state">
-      <span class="rgp-state-label">{{ detached ? 'Detached HEAD' : 'Current branch' }}</span>
+      <span class="rgp-state-label">{{ detached ? t('Detached HEAD') : t('Current branch') }}</span>
       <span class="rgp-state-value">{{ displayLabel }}</span>
       <span v-if="currentCommitSummary" class="rgp-state-meta">{{ currentCommitSummary }}</span>
     </div>
 
     <div v-if="statusMessage" class="rgp-status" :class="{ 'is-error': statusKind === 'error' }">
       <span>{{ statusMessage }}</span>
-      <a v-if="statusKind === 'error'" class="rgp-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">Send feedback</a>
+      <a v-if="statusKind === 'error'" class="rgp-feedback" :href="feedbackMailto" @click="prepareHeaderFeedback($event, statusMessage)">{{ t('Send feedback') }}</a>
     </div>
 
     <div v-if="props.worktreeChanges.length > 0" class="rgp-section">
       <div class="rgp-section-title">
-        {{ props.worktreeChanges.length }} {{ props.worktreeChanges.length === 1 ? 'file changed' : 'files changed' }}
+        {{ props.worktreeChanges.length }} {{ props.worktreeChanges.length === 1 ? t('file changed') : t('files changed') }}
       </div>
       <div class="rgp-file-list">
         <button
@@ -41,14 +41,14 @@
     </div>
 
     <div class="rgp-section">
-      <div class="rgp-section-title">Branches</div>
+      <div class="rgp-section-title">{{ t('Branches') }}</div>
       <div class="rgp-search-wrap">
         <input
           ref="searchInputRef"
           v-model="searchQuery"
           class="rgp-search"
           type="text"
-          placeholder="Search branches..."
+          :placeholder="t('Search branches...')"
         />
       </div>
       <ul class="rgp-branches" role="listbox">
@@ -62,8 +62,8 @@
               @click="selectBranch(branch.value)"
             >
               <span class="rgp-branch-name">{{ branch.label }}</span>
-              <span v-if="branch.value === currentBranch" class="rgp-branch-meta">current</span>
-              <span v-else-if="branch.isRemote" class="rgp-branch-meta">remote</span>
+              <span v-if="branch.value === currentBranch" class="rgp-branch-meta">{{ t('current') }}</span>
+              <span v-else-if="branch.isRemote" class="rgp-branch-meta">{{ t('remote') }}</span>
             </button>
             <button
               v-if="branch.value === selectedBranch && branch.value !== currentBranch && !branch.isRemote"
@@ -72,31 +72,31 @@
               :disabled="busy"
               @click="emit('checkoutBranch', branch.value)"
             >
-              Checkout
+              {{ t('Checkout') }}
             </button>
           </div>
         </li>
-        <li v-if="filteredBranches.length === 0" class="rgp-empty">No branches found.</li>
+        <li v-if="filteredBranches.length === 0" class="rgp-empty">{{ t('No branches found.') }}</li>
       </ul>
     </div>
 
     <div class="rgp-section">
-      <div class="rgp-section-title">Commits</div>
+      <div class="rgp-section-title">{{ t('Commits') }}</div>
       <div class="rgp-search-wrap">
         <input
           v-model="commitSearchQuery"
           class="rgp-search"
           type="text"
-          placeholder="Search commits..."
+          :placeholder="t('Search commits...')"
         />
       </div>
       <label class="rgp-toggle-row">
         <input v-model="showResetHistoryRefs" type="checkbox" @change="reloadSelectedBranchCommits" />
-        <span>Reset-history refs</span>
+        <span>{{ t('Reset-history refs') }}</span>
       </label>
       <div class="rgp-commit-list">
-        <div v-if="!selectedBranch" class="rgp-empty">Select a branch.</div>
-        <div v-else-if="commitsLoadingFor === selectedBranchCommitsKey" class="rgp-empty">Loading commits...</div>
+        <div v-if="!selectedBranch" class="rgp-empty">{{ t('Select a branch.') }}</div>
+        <div v-else-if="commitsLoadingFor === selectedBranchCommitsKey" class="rgp-empty">{{ t('Loading commits...') }}</div>
         <div v-else-if="commitsError" class="rgp-empty is-error">{{ commitsError }}</div>
         <template v-else>
           <button
@@ -114,7 +114,7 @@
                 class="rgp-ref"
                 role="button"
                 tabindex="0"
-                :title="copiedCommitSha === commit.sha ? 'Copied commit ref' : `Copy ${commit.sha}`"
+                :title="copiedCommitSha === commit.sha ? t('Copied commit ref') : `${t('Copy')} ${commit.sha}`"
                 @click.stop="copyCommitRef(commit)"
                 @keydown.enter.prevent.stop="copyCommitRef(commit)"
                 @keydown.space.prevent.stop="copyCommitRef(commit)"
@@ -122,20 +122,20 @@
                 {{ commit.shortSha }}
               </span>
               <span class="rgp-commit-meta">
-                <span v-if="isCurrentCommit(commit)" class="rgp-branch-meta">current</span>
+                <span v-if="isCurrentCommit(commit)" class="rgp-branch-meta">{{ t('current') }}</span>
                 <span>{{ commit.date }}</span>
               </span>
             </span>
             <span class="rgp-commit-subject">{{ commit.subject }}</span>
           </button>
-          <div v-if="filteredSelectedBranchCommits.length === 0" class="rgp-empty">No commits found.</div>
+          <div v-if="filteredSelectedBranchCommits.length === 0" class="rgp-empty">{{ t('No commits found.') }}</div>
         </template>
       </div>
     </div>
 
     <div v-if="selectedCommit" class="rgp-section">
       <div class="rgp-section-title">
-        <span class="rgp-ref" role="button" tabindex="0" :title="copiedCommitSha === selectedCommit.sha ? 'Copied commit ref' : `Copy ${selectedCommit.sha}`" @click.stop="copyCommitRef(selectedCommit)" @keydown.enter.prevent.stop="copyCommitRef(selectedCommit)">
+        <span class="rgp-ref" role="button" tabindex="0" :title="copiedCommitSha === selectedCommit.sha ? t('Copied commit ref') : `${t('Copy')} ${selectedCommit.sha}`" @click.stop="copyCommitRef(selectedCommit)" @keydown.enter.prevent.stop="copyCommitRef(selectedCommit)">
           {{ selectedCommit.shortSha }}
         </span>
         <button
@@ -144,12 +144,12 @@
           :disabled="busy || selectedBranchIsRemote || !selectedBranch"
           @click="resetSelectedCommit"
         >
-          Reset
+          {{ t('Reset') }}
         </button>
       </div>
       <p class="rgp-commit-detail-subject">{{ selectedCommit.subject }}</p>
       <div class="rgp-file-list">
-        <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="rgp-empty">Loading files...</div>
+        <div v-if="commitFilesLoadingFor === selectedCommit.sha" class="rgp-empty">{{ t('Loading files...') }}</div>
         <div v-else-if="commitFilesError" class="rgp-empty is-error">{{ commitFilesError }}</div>
         <template v-else>
           <button
@@ -170,7 +170,7 @@
             <span class="rgp-file-path">{{ file.path }}</span>
             <span v-if="file.previousPath" class="rgp-file-previous-path">← {{ file.previousPath }}</span>
           </button>
-          <div v-if="selectedCommitFiles.length === 0" class="rgp-empty">No file changes.</div>
+          <div v-if="selectedCommitFiles.length === 0" class="rgp-empty">{{ t('No file changes.') }}</div>
         </template>
       </div>
     </div>
@@ -182,6 +182,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { GitCommitFileChange, GitCommitOption, WorktreeBranchOption } from '../../api/codexGateway'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
+import { useUiLanguage } from '../../composables/useUiLanguage'
 import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps<{
@@ -226,6 +227,7 @@ const lastCurrentBranch = ref('')
 const showResetHistoryRefs = ref(true)
 const showReview = computed(() => props.showReview !== false)
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const { t } = useUiLanguage()
 const feedbackMailto = feedbackMailtoBase()
 
 function prepareHeaderFeedback(event: MouseEvent, message: string): void {
@@ -239,8 +241,8 @@ function prepareHeaderFeedback(event: MouseEvent, message: string): void {
 const displayLabel = computed(() => {
   if (props.currentBranch) return props.currentBranch
   if (props.headSubject) return props.headSubject
-  if (props.headSha) return `Detached ${props.headSha}`
-  return props.loading ? 'Loading branch...' : 'Detached HEAD'
+  if (props.headSha) return `${t('Detached')} ${props.headSha}`
+  return props.loading ? t('Loading branch...') : t('Detached HEAD')
 })
 const currentCommitSummary = computed(() => {
   const details = [props.headSha, props.headDate].filter(Boolean).join(' · ')
@@ -249,7 +251,7 @@ const currentCommitSummary = computed(() => {
   return subject || details
 })
 const busy = computed(() => props.busy || props.loading)
-const statusMessage = computed(() => props.error || (props.dirty ? 'Tracked changes must be committed, stashed, or discarded before switching or resetting. Untracked files are allowed unless Git would overwrite them.' : ''))
+const statusMessage = computed(() => props.error || (props.dirty ? t('Tracked changes must be committed, stashed, or discarded before switching or resetting. Untracked files are allowed unless Git would overwrite them.') : ''))
 const statusKind = computed(() => props.error ? 'error' : 'info')
 const filteredBranches = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -302,7 +304,7 @@ function isCurrentCommit(commit: GitCommitOption): boolean {
 }
 
 function selectedBranchCommitActionTitle(commit: GitCommitOption): string {
-  return `Show ${commit.shortSha} files`
+  return `${t('Show')} ${commit.shortSha} ${t('files')}`
 }
 
 function onSelectCommit(commit: GitCommitOption): void {

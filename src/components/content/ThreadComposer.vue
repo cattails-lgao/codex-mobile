@@ -92,7 +92,7 @@
         @drop="onInputDrop"
       >
         <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
-          <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
+          <span class="thread-composer-drop-overlay-copy">{{ t('Drop images or files') }}</span>
         </div>
         <div v-if="isFileMentionOpen" class="composer-popover">
           <template v-if="fileMentionSuggestions.length > 0">
@@ -762,13 +762,13 @@ function formatResetTime(resetsAt: number | null): string {
   if (diffMs <= 0) return 'resetting now'
 
   const totalMinutes = Math.round(diffMs / 60000)
-  if (totalMinutes < 60) return `resets in ${Math.max(1, totalMinutes)}m`
+  if (totalMinutes < 60) return `${t('resets in')} ${Math.max(1, totalMinutes)}m`
 
   const totalHours = Math.round(totalMinutes / 60)
-  if (totalHours < 48) return `resets in ${Math.max(1, totalHours)}h`
+  if (totalHours < 48) return `${t('resets in')} ${Math.max(1, totalHours)}h`
 
   const totalDays = Math.round(totalHours / 24)
-  return `resets in ${Math.max(1, totalDays)}d`
+  return `${t('resets in')} ${Math.max(1, totalDays)}d`
 }
 
 function formatResetDate(resetsAt: number | null): string {
@@ -823,9 +823,9 @@ function buildQuotaSummaryText(quota: UiRateLimitSnapshot | null): string {
   }
 
   if (segments.length === 0 && quota.credits?.unlimited) {
-    segments.push('Unlimited credits')
+    segments.push(t('Unlimited credits'))
   } else if (segments.length === 0 && quota.credits?.hasCredits && quota.credits.balance) {
-    segments.push(`${quota.credits.balance} credits`)
+    segments.push(`${quota.credits.balance} ${t('credits')}`)
   }
 
   return segments.join(' · ')
@@ -837,30 +837,30 @@ function buildQuotaTooltipText(quota: UiRateLimitSnapshot | null): string {
   const lines: string[] = []
   const plan = formatPlanType(quota.planType)
   if (plan) {
-    lines.push(`Plan: ${plan}`)
+    lines.push(`${t('Plan')}: ${plan}`)
   }
 
   if (quota.primary) {
     const reset = formatResetTime(quota.primary.resetsAt)
-    lines.push(`Primary window: ${formatWindowSummary(quota.primary)}${reset ? `, ${reset}` : ''}`)
+    lines.push(`${t('Primary window')}: ${formatWindowSummary(quota.primary)}${reset ? `, ${reset}` : ''}`)
   }
 
   if (quota.secondary) {
     const reset = formatResetTime(quota.secondary.resetsAt)
-    lines.push(`Secondary window: ${formatWindowSummary(quota.secondary)}${reset ? `, ${reset}` : ''}`)
+    lines.push(`${t('Secondary window')}: ${formatWindowSummary(quota.secondary)}${reset ? `, ${reset}` : ''}`)
   }
 
   if (quota.credits?.unlimited) {
-    lines.push('Credits: unlimited')
+    lines.push(`${t('Credits')}: ${t('unlimited')}`)
   } else if (quota.credits?.hasCredits && quota.credits.balance) {
-    lines.push(`Credits: ${quota.credits.balance}`)
+    lines.push(`${t('Credits')}: ${quota.credits.balance}`)
   }
 
   const weeklyWindow = pickWeeklyQuotaWindow(quota)
   if (weeklyWindow) {
     const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
     if (weeklyRefreshDate) {
-      lines.push(`Weekly refresh: ${weeklyRefreshDate}`)
+      lines.push(`${t('Weekly refresh')}: ${weeklyRefreshDate}`)
     }
   }
 
@@ -872,7 +872,7 @@ function buildQuotaWeeklyRefreshText(quota: UiRateLimitSnapshot | null): string 
   const weeklyWindow = pickWeeklyQuotaWindow(quota)
   if (!weeklyWindow) return ''
   const weeklyRefreshDate = formatResetDate(weeklyWindow.resetsAt)
-  return weeklyRefreshDate ? `Weekly refresh ${weeklyRefreshDate}` : ''
+  return weeklyRefreshDate ? `${t('Weekly refresh')} ${weeklyRefreshDate}` : ''
 }
 
 function formatCompactTokenCount(value: number): string {
@@ -892,17 +892,17 @@ function formatCompactTokenCount(value: number): string {
 function formatBreakdownSummary(breakdown: UiTokenUsageBreakdown): string {
   const nonCachedInput = Math.max(0, breakdown.inputTokens - breakdown.cachedInputTokens)
   const parts = [
-    `${formatCompactTokenCount(breakdown.totalTokens)} total`,
-    `${formatCompactTokenCount(nonCachedInput)} input`,
+    `${formatCompactTokenCount(breakdown.totalTokens)} ${t('total')}`,
+    `${formatCompactTokenCount(nonCachedInput)} ${t('input')}`,
   ]
   if (breakdown.cachedInputTokens > 0) {
-    parts.push(`${formatCompactTokenCount(breakdown.cachedInputTokens)} cached`)
+    parts.push(`${formatCompactTokenCount(breakdown.cachedInputTokens)} ${t('cached')}`)
   }
   if (breakdown.outputTokens > 0) {
-    parts.push(`${formatCompactTokenCount(breakdown.outputTokens)} output`)
+    parts.push(`${formatCompactTokenCount(breakdown.outputTokens)} ${t('output')}`)
   }
   if (breakdown.reasoningOutputTokens > 0) {
-    parts.push(`${formatCompactTokenCount(breakdown.reasoningOutputTokens)} reasoning`)
+    parts.push(`${formatCompactTokenCount(breakdown.reasoningOutputTokens)} ${t('reasoning')}`)
   }
   return parts.join(' · ')
 }
@@ -947,10 +947,10 @@ function buildContextUsageView(
   return {
     summaryText: `${percentRemaining}% · ${formatCompactTokenCount(tokensInContext)} / ${formatCompactTokenCount(contextWindow)}`,
     tooltipText: [
-      `Context window: ${percentRemaining}% left (${percentUsed}% used)`,
-      `In context: ${tokensInContext.toLocaleString()} / ${contextWindow.toLocaleString()} tokens`,
-      `Last turn: ${formatBreakdownSummary(usage.last)}`,
-      `Session total: ${formatBreakdownSummary(usage.total)}`,
+      `${t('Context window')}: ${percentRemaining}% ${t('left')} (${percentUsed}% ${t('used')})`,
+      `${t('In context')}: ${tokensInContext.toLocaleString()} / ${contextWindow.toLocaleString()} tokens`,
+      `${t('Last turn')}: ${formatBreakdownSummary(usage.last)}`,
+      `${t('Session total')}: ${formatBreakdownSummary(usage.total)}`,
     ].join('\n'),
     percentRemaining,
     tone,
@@ -989,7 +989,7 @@ function replaceDraftState(payload: ComposerDraftPayload): void {
   draft.value = payload.text
   selectedImages.value = payload.imageUrls.map((url, index) => ({
     id: `queued-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `Image ${index + 1}`,
+    name: `${t('Image')} ${index + 1}`,
     url,
   }))
   selectedSkills.value = payload.skills.map((skill) => (

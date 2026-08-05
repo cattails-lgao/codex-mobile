@@ -1,12 +1,12 @@
 <template>
   <section class="conversation-root" @contextmenu.capture="onConversationContextMenu">
-    <p v-if="isLoading" class="conversation-loading">Loading messages...</p>
+    <p v-if="isLoading" class="conversation-loading">{{ t('Loading messages...') }}</p>
 
     <p
       v-else-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay"
       class="conversation-empty"
     >
-      No messages in this thread yet.
+      {{ t('No messages in this thread yet.') }}
     </p>
 
     <ul v-else ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
@@ -30,11 +30,11 @@
         <div v-if="isCompactionPendingMessage(message)" class="message-row thread-compaction-row" data-role="system">
           <div class="thread-compaction-inline thread-compaction-inline--pending" role="status">
             <span class="thread-compaction-spinner" aria-hidden="true" />
-            <span>Compacting thread context…</span>
+            <span>{{ t('Compacting thread context…') }}</span>
           </div>
         </div>
         <div v-else-if="isCompactionDoneMessage(message)" class="message-row thread-compaction-row" data-role="system">
-          <div class="thread-compaction-inline thread-compaction-inline--done" role="status">Context compacted</div>
+          <div class="thread-compaction-inline thread-compaction-inline--done" role="status">{{ t('Context compacted') }}</div>
         </div>
         <div v-else-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
@@ -266,7 +266,7 @@
                   :href="toBrowseUrl(skill.path)"
                   :title="skill.path"
                 >
-                  <span class="message-skill-chip-prefix">Skill</span>
+                  <span class="message-skill-chip-prefix">{{ t('Skill') }}</span>
                   <span class="message-skill-chip-name">{{ skill.name }}</span>
                 </a>
               </div>
@@ -322,8 +322,8 @@
                 </div>
                 <div v-else-if="isPlanMessage(message)" class="plan-card" :data-streaming="message.messageType === 'plan.live'">
                   <div class="plan-card-header">
-                    <p class="plan-card-title">Plan</p>
-                    <span v-if="message.messageType === 'plan.live'" class="plan-card-badge">Updating</span>
+                    <p class="plan-card-title">{{ t('Plan') }}</p>
+                    <span v-if="message.messageType === 'plan.live'" class="plan-card-badge">{{ t('Updating') }}</span>
                   </div>
                   <div
                     v-if="readPlanExplanation(message)"
@@ -606,7 +606,7 @@
                   :href="feedbackMailto"
                   @click="prepareTurnErrorFeedback($event, message.text)"
                 >
-                  Send feedback
+                  {{ t('Send feedback') }}
                 </a>
               </article>
 
@@ -705,31 +705,31 @@
                   v-if="showEditMessageButton(message)"
                   type="button"
                   class="message-edit-button"
-                  aria-label="Edit this message"
-                  title="Edit this message"
+                  :aria-label="t('Edit this message')"
+                  :title="t('Edit this message')"
                   @click="editMessage(message.id)"
                 >
                   <IconTablerFilePencil class="icon-svg message-edit-icon" />
-                  <span class="message-edit-label">Edit message</span>
+                  <span class="message-edit-label">{{ t('Edit message') }}</span>
                 </button>
                 <button
                   v-if="showForkResponseButton(message)"
                   type="button"
                   class="message-fork-button"
-                  aria-label="Fork thread from this response"
-                  title="Fork thread from this response"
+                  :aria-label="t('Fork thread from this response')"
+                  :title="t('Fork thread from this response')"
                   @click="forkResponse(message.id)"
                 >
                   <IconTablerGitFork class="icon-svg message-fork-icon" />
-                  <span class="message-fork-label">Fork</span>
+                  <span class="message-fork-label">{{ t('Fork') }}</span>
                 </button>
                 <button
                   v-if="showCopyResponseButton(message)"
                   type="button"
                   class="message-copy-button"
                   :data-copied="copiedResponseAnchorId === message.id"
-                  :aria-label="copiedResponseAnchorId === message.id ? 'Response copied' : 'Copy response'"
-                  :title="copiedResponseAnchorId === message.id ? 'Response copied' : 'Copy response'"
+                  :aria-label="copiedResponseAnchorId === message.id ? t('Response copied') : t('Copy response')"
+                  :title="copiedResponseAnchorId === message.id ? t('Response copied') : t('Copy response')"
                   @click="copyResponse(message.id)"
                 >
                   <IconTablerCopy class="icon-svg message-copy-icon" />
@@ -754,7 +754,7 @@
               </p>
               <div v-if="liveOverlay.errorText" class="live-overlay-error">
                 <span>{{ liveOverlay.errorText }}</span>
-                <a class="live-overlay-feedback" :href="feedbackMailto" @click="prepareLiveErrorFeedback($event, liveOverlay.errorText)">Send feedback</a>
+                <a class="live-overlay-feedback" :href="feedbackMailto" @click="prepareLiveErrorFeedback($event, liveOverlay.errorText)">{{ t('Send feedback') }}</a>
               </div>
             </article>
           </div>
@@ -767,8 +767,8 @@
       v-if="showJumpToLatestButton"
       type="button"
       class="jump-to-latest-button"
-      title="Jump to latest"
-      aria-label="Jump to latest output"
+      :title="t('Jump to latest')"
+      :aria-label="t('Jump to latest output')"
       @click="jumpToLatest"
     >
       <IconTablerArrowUp class="icon-svg jump-to-latest-icon" />
@@ -776,10 +776,10 @@
 
     <div v-if="modalImageUrl.length > 0" class="image-modal-backdrop" @click="closeImageModal">
       <div class="image-modal-content" @click.stop>
-        <button class="image-modal-close" type="button" aria-label="Close image preview" @click="closeImageModal">
+        <button class="image-modal-close" type="button" :aria-label="t('Close image preview')" @click="closeImageModal">
           <IconTablerX class="icon-svg" />
         </button>
-        <img class="image-modal-image" :src="modalImageUrl" alt="Expanded message image" />
+        <img class="image-modal-image" :src="modalImageUrl" :alt="t('Expanded message image')" />
       </div>
     </div>
 
@@ -810,7 +810,7 @@
       <div class="diff-viewer-shell" @click.stop>
         <aside v-if="!isMobile" class="diff-viewer-sidebar">
           <div class="diff-viewer-sidebar-header">
-            <p class="diff-viewer-sidebar-title">Changed files</p>
+            <p class="diff-viewer-sidebar-title">{{ t('Changed files') }}</p>
             <p class="diff-viewer-sidebar-count">{{ formatFileChangeCountLabel(diffViewerChanges.length) }}</p>
           </div>
           <div class="diff-viewer-sidebar-list">
@@ -855,15 +855,15 @@
               >
                 {{ formatFileChangeCountLabel(diffViewerChanges.length) }}
               </button>
-              <button class="image-modal-close diff-viewer-close" type="button" aria-label="Close diff viewer" @click="closeDiffViewer">
+              <button class="image-modal-close diff-viewer-close" type="button" :aria-label="t('Close diff viewer')" @click="closeDiffViewer">
                 <IconTablerX class="icon-svg" />
               </button>
             </div>
           </div>
 
           <div v-if="!hasDiffViewerContent(activeDiffViewerChange)" class="diff-viewer-empty">
-            <p class="diff-viewer-empty-title">No diff available</p>
-            <p class="diff-viewer-empty-text">This summary was restored from the final answer text, but the thread history does not include patch diff content for this file.</p>
+            <p class="diff-viewer-empty-title">{{ t('No diff available') }}</p>
+            <p class="diff-viewer-empty-text">{{ t('This summary was restored from the final answer text, but the thread history does not include patch diff content for this file.') }}</p>
           </div>
 
           <div v-else class="diff-viewer-panel">
@@ -895,7 +895,7 @@
             <div class="diff-viewer-mobile-sheet" @click.stop>
               <div class="diff-viewer-mobile-sheet-handle" aria-hidden="true"></div>
               <div class="diff-viewer-mobile-sheet-header">
-                <p class="diff-viewer-sidebar-title">Changed files</p>
+                <p class="diff-viewer-sidebar-title">{{ t('Changed files') }}</p>
                 <p class="diff-viewer-sidebar-count">{{ formatFileChangeCountLabel(diffViewerChanges.length) }}</p>
               </div>
               <div class="diff-viewer-mobile-sheet-list">
@@ -940,6 +940,7 @@ import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerReques
 import { updateThreadFileChanges } from '../../api/codexGateway'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useMobile } from '../../composables/useMobile'
+import { useUiLanguage } from '../../composables/useUiLanguage'
 import { copyTextToClipboard, copyTextWithSelectionFallback } from '../../utils/clipboard'
 
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
@@ -968,6 +969,7 @@ const fileLinkContextBrowseUrl = ref('')
 const fileLinkContextEditUrl = ref('')
 const { isMobile } = useMobile()
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
+const { t } = useUiLanguage()
 const feedbackMailto = feedbackMailtoBase()
 
 function prepareLiveErrorFeedback(event: MouseEvent, message: string): void {
@@ -1231,8 +1233,8 @@ function commandGroupSummaryLabel(message: UiMessage): string {
   const commands = getCommandBlockForLatest(message)
   const count = commands.length
   const latestCommand = message.commandExecution?.command?.trim() || '(command)'
-  const countLabel = count === 1 ? '1 command' : `${count} commands`
-  return `${countLabel} · latest: ${latestCommand}`
+  const countLabel = count === 1 ? `1 ${t('command')}` : `${count} ${t('commands')}`
+  return `${countLabel} · ${t('latest:')} ${latestCommand}`
 }
 
 function commandGroupSummaryStatus(message: UiMessage): string {
@@ -1298,11 +1300,11 @@ function commandStatusLabel(message: UiMessage): string {
   if (!ce) return ''
   const compact = isCommandCompact(message)
   switch (ce.status) {
-    case 'inProgress': return compact ? 'Running' : '⟳ Running'
-    case 'completed': return ce.exitCode === 0 ? (compact ? 'Done' : '✓ Completed') : `Exit ${ce.exitCode ?? '?'}`
-    case 'failed': return compact ? 'Failed' : '✗ Failed'
-    case 'declined': return compact ? 'Declined' : '⊘ Declined'
-    case 'interrupted': return compact ? 'Stopped' : '⊘ Interrupted'
+    case 'inProgress': return compact ? t('Running') : `⟳ ${t('Running')}`
+    case 'completed': return ce.exitCode === 0 ? (compact ? t('Done') : `✓ ${t('Completed')}`) : `${t('Exit')} ${ce.exitCode ?? '?'}`
+    case 'failed': return compact ? t('Failed') : `✗ ${t('Failed')}`
+    case 'declined': return compact ? t('Declined') : `⊘ ${t('Declined')}`
+    case 'interrupted': return compact ? t('Stopped') : `⊘ ${t('Interrupted')}`
     default: return ''
   }
 }
@@ -1374,18 +1376,18 @@ const pendingConfirm = ref<PendingEditConfirm | PendingFileChangeConfirm | null>
 const pendingConfirmTitle = computed(() => {
   const pending = pendingConfirm.value
   if (!pending) return ''
-  if (pending.kind === 'edit-message') return 'Edit this message?'
-  return pending.action === 'undo' ? 'Undo file changes?' : 'Redo file changes?'
+  if (pending.kind === 'edit-message') return t('Edit this message?')
+  return pending.action === 'undo' ? t('Undo file changes?') : t('Redo file changes?')
 })
 const pendingConfirmMessage = computed(() => {
   const pending = pendingConfirm.value
   if (!pending) return ''
   if (pending.kind === 'edit-message') {
-    return 'This rolls the thread back to this turn so you can edit the message. Later replies will be removed.'
+    return t('This rolls the thread back to this turn so you can edit the message. Later replies will be removed.')
   }
   return pending.action === 'undo'
-    ? 'Undo the file changes from this turn? This modifies the working tree and Codex cannot revert it automatically.'
-    : 'Redo the file changes from this turn? This reapplies the edits to the working tree.'
+    ? t('Undo the file changes from this turn? This modifies the working tree and Codex cannot revert it automatically.')
+    : t('Redo the file changes from this turn? This reapplies the edits to the working tree.')
 })
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
@@ -2100,9 +2102,9 @@ function fileChangeNextAction(summary: TurnFileChangeSummary | null): 'undo' | '
 
 function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
   const status = fileChangeActionStatus(summary)
-  if (status === 'undoing') return 'Undoing'
-  if (status === 'redoing') return 'Redoing'
-  return fileChangeNextAction(summary) === 'redo' ? 'Redo' : 'Undo'
+  if (status === 'undoing') return t('Undoing')
+  if (status === 'redoing') return t('Redoing')
+  return fileChangeNextAction(summary) === 'redo' ? t('Redo') : t('Undo')
 }
 
 async function runFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): Promise<void> {
@@ -2128,7 +2130,7 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
     fileChangeActionError.value = {
       ...fileChangeActionError.value,
-      [key]: error instanceof Error ? error.message : 'Failed to update file changes.',
+      [key]: error instanceof Error ? error.message : t('Failed to update file changes.'),
     }
     return
   }
@@ -2154,7 +2156,7 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
     fileChangeActionError.value = {
       ...fileChangeActionError.value,
-      [key]: result.message || (action === 'undo' ? 'No file changes to undo.' : 'No file changes to redo.'),
+      [key]: result.message || (action === 'undo' ? t('No file changes to undo.') : t('No file changes to redo.')),
     }
     return
   }
@@ -2173,11 +2175,11 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
 
 function fileChangeOperationLabel(change: UiFileChange): string {
   if (change.operation === 'update' && change.movedToPath) {
-    return change.addedLineCount > 0 || change.removedLineCount > 0 ? 'Moved + edited' : 'Moved'
+    return change.addedLineCount > 0 || change.removedLineCount > 0 ? t('Moved + edited') : t('Moved')
   }
-  if (change.operation === 'add') return 'Added'
-  if (change.operation === 'delete') return 'Deleted'
-  return 'Edited'
+  if (change.operation === 'add') return t('Added')
+  if (change.operation === 'delete') return t('Deleted')
+  return t('Edited')
 }
 
 function fileChangeOperationTone(change: UiFileChange): 'add' | 'delete' | 'update' | 'move' {
@@ -2212,7 +2214,7 @@ function fileChangeDeltaParts(change: UiFileChange): FileChangeDeltaPart[] {
 }
 
 function formatFileChangeCountLabel(count: number): string {
-  return count === 1 ? '1 file changed' : `${count} files changed`
+  return count === 1 ? `1 ${t('file changed')}` : `${count} ${t('files changed')}`
 }
 
 function summarizeFileChangeKinds(summary: TurnFileChangeSummary | null): string {
@@ -2239,15 +2241,15 @@ function summarizeFileChangeKinds(summary: TurnFileChangeSummary | null): string
   }
 
   const parts: string[] = []
-  if (edited > 0) parts.push(`${edited} edited`)
-  if (added > 0) parts.push(`${added} added`)
-  if (deleted > 0) parts.push(`${deleted} deleted`)
-  if (moved > 0) parts.push(`${moved} moved`)
+  if (edited > 0) parts.push(`${edited} ${t('edited')}`)
+  if (added > 0) parts.push(`${added} ${t('added')}`)
+  if (deleted > 0) parts.push(`${deleted} ${t('deleted')}`)
+  if (moved > 0) parts.push(`${moved} ${t('moved')}`)
   return parts.join(', ')
 }
 
 function fileChangeSummaryLabel(summary: TurnFileChangeSummary | null): string {
-  if (!summary || summary.changes.length === 0) return 'Modified files'
+  if (!summary || summary.changes.length === 0) return t('Modified files')
   const countLabel = formatFileChangeCountLabel(summary.changes.length)
   const kindSummary = summarizeFileChangeKinds(summary)
   return kindSummary ? `${countLabel} · ${kindSummary}` : countLabel
@@ -2279,7 +2281,7 @@ function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string 
     const delta = formatFileChangeDelta(change)
     return `- ${fileChangeOperationLabel(change)}: ${pathLabel}${movedLabel}${delta ? ` (${delta})` : ''}`
   })
-  return `Modified files:\n${lines.join('\n')}`.trim()
+  return `${t('Modified files')}:\n${lines.join('\n')}`.trim()
 }
 
 const diffViewerChanges = computed<UiFileChange[]>(() => activeDiffViewerSummary.value?.changes ?? [])
@@ -3878,12 +3880,12 @@ function readRequestReason(request: UiServerRequest): string {
 }
 
 function requestDisplayTitle(request: UiServerRequest): string {
-  if (request.method === 'item/commandExecution/requestApproval') return 'Command approval required'
-  if (request.method === 'item/fileChange/requestApproval') return 'File change approval required'
-  if (request.method === 'item/permissions/requestApproval') return 'Permissions approval required'
-  if (request.method === 'mcpServer/elicitation/request') return 'MCP server input required'
-  if (request.method === 'item/tool/requestUserInput') return 'Input required'
-  if (request.method === 'item/tool/call') return 'Tool call waiting for response'
+  if (request.method === 'item/commandExecution/requestApproval') return t('Command approval required')
+  if (request.method === 'item/fileChange/requestApproval') return t('File change approval required')
+  if (request.method === 'item/permissions/requestApproval') return t('Permissions approval required')
+  if (request.method === 'mcpServer/elicitation/request') return t('MCP server input required')
+  if (request.method === 'item/tool/requestUserInput') return t('Input required')
+  if (request.method === 'item/tool/call') return t('Tool call waiting for response')
   return request.method
 }
 
@@ -4227,7 +4229,7 @@ function onRespondToolCallFailure(requestId: number): void {
       contentItems: [
         {
           type: 'inputText',
-          text: 'Tool call rejected from codex-web-local UI.',
+          text: t('Tool call rejected from codex-web-local UI.'),
         },
       ],
     },
@@ -4256,7 +4258,7 @@ function onRejectUnknownRequest(requestId: number): void {
     id: requestId,
     error: {
       code: -32000,
-      message: 'Rejected from codex-web-local UI.',
+      message: t('Rejected from codex-web-local UI.'),
     },
   })
 }

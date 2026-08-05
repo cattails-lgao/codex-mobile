@@ -39,10 +39,10 @@
                   class="thread-delete-button"
                   type="button"
                   :data-confirming="isInlineDeleteConfirming(thread.id)"
-                  :title="isInlineDeleteConfirming(thread.id) ? 'Confirm delete' : t('Delete thread')"
+                  :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
                   @click.stop="onInlineDeleteClick(thread.id)"
                 >
-                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">Confirm</span>
+                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
                   <IconTablerTrash v-else class="thread-icon" />
                 </button>
               </span>
@@ -207,10 +207,10 @@
                 class="thread-delete-button"
                 type="button"
                 :data-confirming="isInlineDeleteConfirming(thread.id)"
-                :title="isInlineDeleteConfirming(thread.id) ? 'Confirm delete' : t('Delete thread')"
+                :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
                 @click.stop="onInlineDeleteClick(thread.id)"
               >
-                <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">Confirm</span>
+                <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
                 <IconTablerTrash v-else class="thread-icon" />
               </button>
             </span>
@@ -332,13 +332,13 @@
                   >
                     <template v-if="projectMenuMode === 'actions'">
                       <button class="project-menu-item" type="button" @click="onBrowseProjectFiles(group.projectName)">
-                        Browse files
+                        {{ t('Browse files') }}
                       </button>
                       <button class="project-menu-item" type="button" @click="onSaveProject(group.projectName)">
-                        Export Project
+                        {{ t('Export Project') }}
                       </button>
                       <button class="project-menu-item" type="button" @click="openProjectAutomationDialog(group.projectName)">
-                        {{ projectHasAutomation(group.projectName) ? 'Manage automations…' : 'Add automation…' }}
+                        {{ projectHasAutomation(group.projectName) ? t('Manage automations…') : t('Add automation…') }}
                       </button>
                       <button
                         v-if="projectGitRepoByName[group.projectName]"
@@ -346,17 +346,17 @@
                         type="button"
                         @click="onCreateProjectWorktree(group.projectName)"
                       >
-                        New worktree
+                        {{ t('New worktree') }}
                       </button>
                       <button class="project-menu-item" type="button" @click="openRenameProjectMenu(group)">
-                        Rename project
+                        {{ t('Rename project') }}
                       </button>
                       <button
                         class="project-menu-item project-menu-item-danger"
                         type="button"
                         @click="onRemoveProject(group.projectName)"
                       >
-                        Remove
+                        {{ t('Remove') }}
                       </button>
                     </template>
                     <template v-else>
@@ -412,10 +412,10 @@
                       class="thread-delete-button"
                       type="button"
                       :data-confirming="isInlineDeleteConfirming(thread.id)"
-                      :title="isInlineDeleteConfirming(thread.id) ? 'Confirm delete' : t('Delete thread')"
+                      :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
                       @click.stop="onInlineDeleteClick(thread.id)"
                     >
-                      <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">Confirm</span>
+                      <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
                       <IconTablerTrash v-else class="thread-icon" />
                     </button>
                   </span>
@@ -541,10 +541,10 @@
                   class="thread-delete-button"
                   type="button"
                   :data-confirming="isInlineDeleteConfirming(thread.id)"
-                  :title="isInlineDeleteConfirming(thread.id) ? 'Confirm delete' : t('Delete thread')"
+                  :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
                   @click.stop="onInlineDeleteClick(thread.id)"
                 >
-                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">Confirm</span>
+                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
                   <IconTablerTrash v-else class="thread-icon" />
                 </button>
               </span>
@@ -613,31 +613,31 @@
         @click.stop
       >
         <button class="thread-menu-item" type="button" @click="openAutomationDialog(openThreadMenuThread.id)">
-          {{ threadHasAutomation(openThreadMenuThread.id) ? 'Manage automations…' : 'Add automation…' }}
+          {{ threadHasAutomation(openThreadMenuThread.id) ? t('Manage automations…') : t('Add automation…') }}
         </button>
         <button class="thread-menu-item" type="button" @click="onBrowseThreadFiles(openThreadMenuThread.id)">
-          Browse files
+          {{ t('Browse files') }}
         </button>
         <button class="thread-menu-item" type="button" @click="onSaveThreadProject(openThreadMenuThread.id)">
-          Export Project
+          {{ t('Export Project') }}
         </button>
         <button class="thread-menu-item" type="button" @click="onCopyThreadPath(openThreadMenuThread.id)">
-          Copy path
+          {{ t('Copy path') }}
         </button>
         <button
           class="thread-menu-item"
           type="button"
           :disabled="openThreadMenuThread.id !== selectedThreadId"
-          :title="openThreadMenuThread.id === selectedThreadId ? 'Copy chat' : 'Open this chat before copying'"
+          :title="openThreadMenuThread.id === selectedThreadId ? t('Copy chat') : t('Open this chat before copying')"
           @click="onCopyThreadChat(openThreadMenuThread.id)"
         >
-          Copy chat
+          {{ t('Copy chat') }}
         </button>
         <button class="thread-menu-item" type="button" @click="onForkThread(openThreadMenuThread.id)">
-          Create chat fork
+          {{ t('Create chat fork') }}
         </button>
         <button class="thread-menu-item" type="button" @click="onTogglePinFromMenu(openThreadMenuThread.id)">
-          {{ isPinned(openThreadMenuThread.id) ? 'Unpin thread' : 'Pin thread' }}
+          {{ isPinned(openThreadMenuThread.id) ? t('Unpin thread') : t('Pin thread') }}
         </button>
         <button class="thread-menu-item" type="button" @click="openRenameThreadDialog(openThreadMenuThread.id, openThreadMenuThread.title)">
           {{ t('Rename thread') }}
@@ -650,15 +650,15 @@
 
     <Teleport to="body">
       <div v-if="renameThreadDialogVisible" class="rename-thread-overlay" @click.self="closeRenameThreadDialog">
-        <div class="rename-thread-panel" role="dialog" aria-modal="true" aria-label="Thread title">
+        <div class="rename-thread-panel" role="dialog" aria-modal="true" :aria-label="t('Thread title')">
           <h3 class="rename-thread-title">{{ t('Rename thread') }}</h3>
-          <p class="rename-thread-subtitle">Make it short and recognizable.</p>
+          <p class="rename-thread-subtitle">{{ t('Make it short and recognizable.') }}</p>
           <input
             ref="renameThreadInputRef"
             v-model="renameThreadDraft"
             class="rename-thread-input"
             type="text"
-            placeholder="Add title..."
+            :placeholder="t('Add title...')"
             @keydown.enter.prevent="submitRenameThread"
             @keydown.esc.prevent="closeRenameThreadDialog"
           />
@@ -672,20 +672,20 @@
 
     <Teleport to="body">
       <div v-if="deleteThreadDialogVisible" class="rename-thread-overlay" @click.self="closeDeleteThreadDialog">
-        <div class="rename-thread-panel" role="dialog" aria-modal="true" aria-label="Delete thread">
-          <h3 class="rename-thread-title">{{ deleteThreadHasAutomation ? 'Archive chat and remove automations?' : 'Delete thread?' }}</h3>
+        <div class="rename-thread-panel" role="dialog" aria-modal="true" :aria-label="t('Delete thread')">
+          <h3 class="rename-thread-title">{{ deleteThreadHasAutomation ? t('Archive chat and remove automations?') : t('Delete thread?') }}</h3>
           <p class="rename-thread-subtitle">
             <template v-if="deleteThreadHasAutomation">
-              This will archive the thread "{{ deleteThreadTitle }}" and remove the attached heartbeat automations.
+              {{ t('This will archive the thread "{title}" and remove the attached heartbeat automations.', { title: deleteThreadTitle }) }}
             </template>
             <template v-else>
-              This will archive the thread "{{ deleteThreadTitle }}". You can find it later in archived threads.
+              {{ t('This will archive the thread "{title}". You can find it later in archived threads.', { title: deleteThreadTitle }) }}
             </template>
           </p>
           <div class="rename-thread-actions">
-            <button class="rename-thread-button" type="button" @click="closeDeleteThreadDialog">Cancel</button>
+            <button class="rename-thread-button" type="button" @click="closeDeleteThreadDialog">{{ t('Cancel') }}</button>
             <button class="rename-thread-button rename-thread-button-danger" type="button" @click="submitDeleteThread">
-              {{ deleteThreadHasAutomation ? 'Archive and remove' : 'Delete' }}
+              {{ deleteThreadHasAutomation ? t('Archive and remove') : t('Delete') }}
             </button>
           </div>
         </div>
@@ -694,8 +694,8 @@
 
     <Teleport to="body">
       <div v-if="automationDialogVisible" class="rename-thread-overlay" @click.self="closeAutomationDialog">
-        <div class="rename-thread-panel automation-thread-panel" role="dialog" aria-modal="true" :aria-label="automationDialogScope === 'project' ? 'Project automation' : 'Thread automation'">
-          <h3 class="rename-thread-title">{{ automationDialogMode === 'edit' ? 'Edit automation' : 'Add automation' }}</h3>
+        <div class="rename-thread-panel automation-thread-panel" role="dialog" aria-modal="true" :aria-label="automationDialogScope === 'project' ? t('Project automation') : t('Thread automation')">
+          <h3 class="rename-thread-title">{{ automationDialogMode === 'edit' ? t('Edit automation') : t('Add automation') }}</h3>
           <p class="rename-thread-subtitle">{{ automationDialogSubtitle }}</p>
 
           <div v-if="automationTargetPickerVisible && automationDialogMode === 'create'" class="automation-target-picker">
@@ -744,22 +744,22 @@
               <small>{{ automation.status === 'PAUSED' ? 'Paused' : 'Active' }}</small>
             </button>
             <button class="automation-thread-list-item automation-thread-list-add" type="button" @click="startNewAutomationDraft">
-              Add another automation
+              {{ t('Add another automation') }}
             </button>
           </div>
 
           <label class="automation-thread-field">
-            <span class="automation-thread-label">Name</span>
-            <input v-model="automationDraft.name" class="rename-thread-input" type="text" placeholder="Automation name" />
+            <span class="automation-thread-label">{{ t('Name') }}</span>
+            <input v-model="automationDraft.name" class="rename-thread-input" type="text" :placeholder="t('Automation name')" />
           </label>
 
           <label class="automation-thread-field">
-            <span class="automation-thread-label">Prompt</span>
-            <textarea v-model="automationDraft.prompt" class="automation-thread-textarea" rows="6" placeholder="Describe what the automation should do"></textarea>
+            <span class="automation-thread-label">{{ t('Prompt') }}</span>
+            <textarea v-model="automationDraft.prompt" class="automation-thread-textarea" rows="6" :placeholder="t('Describe what the automation should do')"></textarea>
           </label>
 
           <div class="automation-thread-field">
-            <span class="automation-thread-label">Schedule</span>
+            <span class="automation-thread-label">{{ t('Schedule') }}</span>
             <div class="automation-schedule-mode-group" role="radiogroup" aria-label="Automation schedule type">
               <button
                 class="automation-schedule-mode"
@@ -767,7 +767,7 @@
                 type="button"
                 @click="setAutomationScheduleMode('daily')"
               >
-                Daily
+                {{ t('Daily') }}
               </button>
               <button
                 class="automation-schedule-mode"
@@ -775,7 +775,7 @@
                 type="button"
                 @click="setAutomationScheduleMode('interval')"
               >
-                Interval
+                {{ t('Interval') }}
               </button>
               <button
                 class="automation-schedule-mode"
@@ -788,7 +788,7 @@
             </div>
 
             <div v-if="automationScheduleDraft.mode === 'daily'" class="automation-schedule-row">
-              <span class="automation-schedule-copy">Run every day at</span>
+              <span class="automation-schedule-copy">{{ t('Run every day at') }}</span>
               <input
                 v-model="automationScheduleDraft.dailyTime"
                 class="automation-schedule-time"
@@ -798,7 +798,7 @@
             </div>
 
             <div v-else-if="automationScheduleDraft.mode === 'interval'" class="automation-schedule-row">
-              <span class="automation-schedule-copy">Run every</span>
+              <span class="automation-schedule-copy">{{ t('Run every') }}</span>
               <input
                 v-model.number="automationScheduleDraft.interval"
                 class="automation-schedule-number"
@@ -811,7 +811,7 @@
                 class="automation-schedule-unit-dropdown"
                 :model-value="automationScheduleDraft.intervalUnit"
                 :options="automationIntervalUnitOptions"
-                placeholder="Unit"
+                :placeholder="t('Unit')"
                 @update:model-value="onAutomationIntervalUnitChange"
               />
             </div>
@@ -828,7 +828,7 @@
           </div>
 
           <div class="automation-thread-field">
-            <span class="automation-thread-label">Status</span>
+            <span class="automation-thread-label">{{ t('Status') }}</span>
             <ComposerDropdown
               class="automation-thread-dropdown"
               :model-value="automationDraft.status"
@@ -849,7 +849,7 @@
               :disabled="isSavingAutomation || isRunningAutomation"
               @click="onRunAutomationFromDialog"
             >
-              {{ isRunningAutomation ? 'Running…' : 'Run now' }}
+              {{ isRunningAutomation ? t('Running…') : t('Run now') }}
             </button>
             <button
               v-if="automationDialogMode === 'edit'"
@@ -858,13 +858,13 @@
               :disabled="isSavingAutomation || isRunningAutomation"
               @click="onDeleteAutomationFromDialog"
             >
-              Remove
+              {{ t('Remove') }}
             </button>
             <button class="rename-thread-button" type="button" :disabled="isSavingAutomation || isRunningAutomation" @click="closeAutomationDialog">
               {{ t('Cancel') }}
             </button>
             <button class="rename-thread-button rename-thread-button-primary" type="button" :disabled="isSavingAutomation || isRunningAutomation" @click="submitAutomationDialog">
-              {{ isSavingAutomation ? 'Saving…' : 'Save' }}
+              {{ isSavingAutomation ? t('Saving…') : t('Save') }}
             </button>
           </div>
         </div>
@@ -1058,12 +1058,12 @@ const automationDialogAutomations = computed(() => {
 const automationSchedulePreview = computed(() => describeAutomationSchedule(automationDraft.value.rrule))
 const automationDialogSubtitle = computed(() => {
   if (automationTargetPickerVisible.value && automationDialogMode.value === 'create') {
-    if (automationTargetMode.value === 'thread') return 'This creates a heartbeat automation attached to the selected chat.'
-    return 'This creates a project automation attached to the selected project folder.'
+    if (automationTargetMode.value === 'thread') return t('This creates a heartbeat automation attached to the selected chat.')
+    return t('This creates a project automation attached to the selected project folder.')
   }
   return automationDialogScope.value === 'project'
-    ? 'This creates project automations attached to the selected project folder.'
-    : 'This creates heartbeat automations attached to the selected thread.'
+    ? t('This creates project automations attached to the selected project folder.')
+    : t('This creates heartbeat automations attached to the selected thread.')
 })
 const automationThreadTargetOptions = computed(() => {
   const rows: Array<{ value: string; label: string; searchText: string }> = []
@@ -1101,9 +1101,9 @@ const automationTargetDropdownOptions = computed(() => {
   return source.map((option) => ({ value: option.value, label: option.label }))
 })
 const automationIntervalUnitOptions = [
-  { value: 'minutes', label: 'minutes' },
-  { value: 'hours', label: 'hours' },
-  { value: 'days', label: 'days' },
+  { value: 'minutes', label: t('minutes') },
+  { value: 'hours', label: t('hours') },
+  { value: 'days', label: t('days') },
 ]
 const automationStatusOptions = computed(() => [
   { value: 'ACTIVE', label: t('Active') },
@@ -1506,7 +1506,7 @@ function formatRelative(timestamp: number): string {
   if (Number.isNaN(timestamp)) return 'n/a'
 
   const diffMs = Math.abs(Date.now() - timestamp)
-  if (diffMs < 60000) return 'now'
+  if (diffMs < 60000) return t('now')
 
   const minutes = Math.floor(diffMs / 60000)
   if (minutes < 60) return `${minutes}m`
@@ -1570,15 +1570,15 @@ function automationTooltip(automations: UiThreadAutomation[]): string {
   if (automations.length === 0) return ''
   if (automations.length > 1) {
     const activeCount = automations.filter((automation) => automation.status === 'ACTIVE').length
-    return `${automations.length} automations • ${activeCount} active`
+    return `${automations.length} ${t('automations')} • ${activeCount} ${t('active')}`
   }
   const [automation] = automations
   const nextRunLabel = automation.status === 'PAUSED'
     ? '-'
     : automation.nextRunAtMs
       ? new Date(automation.nextRunAtMs).toLocaleString()
-      : 'Not scheduled'
-  return `${automation.name} • Next run: ${nextRunLabel}`
+       : t('Not scheduled')
+  return `${automation.name} • ${t('Next run')}: ${nextRunLabel}`
 }
 
 function threadAutomationTooltip(threadId: string): string {
@@ -1665,12 +1665,12 @@ function describeAutomationSchedule(rrule: string): string {
   if (frequency === 'DAILY' && parts.BYHOUR !== undefined && parts.BYMINUTE !== undefined && interval === 1) {
     const hour = Math.min(23, Math.max(0, Number(parts.BYHOUR) || 0))
     const minute = Math.min(59, Math.max(0, Number(parts.BYMINUTE) || 0))
-    return `RRULE: ${rrule} · runs daily at ${padRruleNumber(hour)}:${padRruleNumber(minute)}`
+    return `${t('RRULE')}: ${rrule} · ${t('runs daily at')} ${padRruleNumber(hour)}:${padRruleNumber(minute)}`
   }
-  if (frequency === 'MINUTELY') return `RRULE: ${rrule} · runs every ${interval} minute${interval === 1 ? '' : 's'}`
-  if (frequency === 'HOURLY') return `RRULE: ${rrule} · runs every ${interval} hour${interval === 1 ? '' : 's'}`
-  if (frequency === 'DAILY' && parts.INTERVAL !== undefined) return `RRULE: ${rrule} · runs every ${interval} day${interval === 1 ? '' : 's'}`
-  return rrule ? `RRULE: ${rrule}` : 'RRULE is required.'
+  if (frequency === 'MINUTELY') return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('minute(s)')}`
+  if (frequency === 'HOURLY') return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('hour(s)')}`
+  if (frequency === 'DAILY' && parts.INTERVAL !== undefined) return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('day(s)')}`
+  return rrule ? `${t('RRULE')}: ${rrule}` : t('RRULE is required.')
 }
 
 function syncAutomationRruleFromScheduleDraft(): void {
@@ -1723,7 +1723,7 @@ function onForkThread(threadId: string): void {
 }
 
 function getNewThreadButtonAriaLabel(projectName: string): string {
-  return `start new thread ${getProjectDisplayName(projectName)}`
+  return `${t('start new thread')} ${getProjectDisplayName(projectName)}`
 }
 
 function onStartNewThread(projectName: string): void {
@@ -1891,7 +1891,7 @@ function openProjectAutomationDialog(projectName: string): void {
     automationDialogThreadId.value = ''
     automationDialogProjectName.value = ''
     automationTargetPickerVisible.value = false
-    automationDialogError.value = 'Project automation requires a resolved absolute project path.'
+    automationDialogError.value = t('Project automation requires a resolved absolute project path.')
     automationDialogNotice.value = ''
     automationDialogVisible.value = true
     closeProjectMenu()
@@ -2076,10 +2076,10 @@ async function submitAutomationDialog(): Promise<void> {
       }
     }
     if (automationDialogScope.value === 'thread' && !threadId) {
-      throw new Error('Select a chat target for this automation')
+      throw new Error(t('Select a chat target for this automation'))
     }
     if (automationDialogScope.value === 'project' && !projectName) {
-      throw new Error('Select a project target for this automation')
+      throw new Error(t('Select a project target for this automation'))
     }
     const input = {
       id: automationDialogAutomationId.value || undefined,
@@ -2098,10 +2098,10 @@ async function submitAutomationDialog(): Promise<void> {
     }
     emit('automations-changed')
     selectAutomationForEditing(saved.id)
-    automationDialogNotice.value = 'Automation saved.'
+    automationDialogNotice.value = t('Automation saved.')
     isSavingAutomation.value = false
   } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : 'Failed to save automation'
+    automationDialogError.value = error instanceof Error ? error.message : t('Failed to save automation')
     isSavingAutomation.value = false
   }
 }
@@ -2133,7 +2133,7 @@ async function onDeleteAutomationFromDialog(): Promise<void> {
     emit('automations-changed')
     isSavingAutomation.value = false
   } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : 'Failed to remove automation'
+    automationDialogError.value = error instanceof Error ? error.message : t('Failed to remove automation')
     isSavingAutomation.value = false
   }
 }
@@ -2147,9 +2147,9 @@ async function onRunAutomationFromDialog(): Promise<void> {
   automationDialogNotice.value = ''
   try {
     await runThreadAutomationNow(threadId, automationId)
-    automationDialogNotice.value = 'Automation run queued.'
+    automationDialogNotice.value = t('Automation run queued.')
   } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : 'Failed to run automation'
+    automationDialogError.value = error instanceof Error ? error.message : t('Failed to run automation')
   } finally {
     isRunningAutomation.value = false
   }
@@ -2318,7 +2318,7 @@ function onRemoveProject(projectName: string): void {
       .then(reloadProjectAutomations)
       .catch(async (error) => {
         automationByProjectName.value = previousAutomationByProjectName
-        const message = error instanceof Error ? error.message : 'Failed to delete project automation'
+        const message = error instanceof Error ? error.message : t('Failed to delete project automation')
         projectAutomationActionError.value = message
         recordVisibleFailure(message)
         try {
@@ -2915,7 +2915,7 @@ function shouldShowThreadIndicator(thread: UiThread): boolean {
 }
 
 function threadRequestLabel(thread: UiThread): string {
-  return thread.pendingRequestState === 'approval' ? 'Awaiting approval' : 'Awaiting response'
+  return thread.pendingRequestState === 'approval' ? t('Awaiting approval') : t('Awaiting response')
 }
 
 function getThreadState(thread: UiThread): 'external' | 'awaiting-approval' | 'awaiting-response' | 'working' | 'unread' | 'idle' {

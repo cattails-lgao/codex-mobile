@@ -446,7 +446,7 @@
                       :disabled="freeModeCustomKeySaving || freeModeLoading"
                       @click="setOpenRouterWireApi('responses')"
                     >
-                      Responses
+                      {{ t('Responses') }}
                     </button>
                     <button
                       type="button"
@@ -455,7 +455,7 @@
                       :disabled="freeModeCustomKeySaving || freeModeLoading"
                       @click="setOpenRouterWireApi('chat')"
                     >
-                      Completions
+                      {{ t('Completions') }}
                     </button>
                   </div>
                 </div>
@@ -522,7 +522,7 @@
                       :class="{ 'is-active': customEndpointWireApi === 'responses' }"
                       @click="customEndpointWireApi = 'responses'"
                     >
-                      Responses
+                      {{ t('Responses') }}
                     </button>
                     <button
                       type="button"
@@ -530,7 +530,7 @@
                       :class="{ 'is-active': customEndpointWireApi === 'chat' }"
                       @click="customEndpointWireApi = 'chat'"
                     >
-                      Completions
+                      {{ t('Completions') }}
                     </button>
                   </div>
                 </div>
@@ -4924,7 +4924,7 @@ function buildDictationLanguageOptions(): Array<{ value: string; label: string }
     seen.add(value)
     options.push({
       value,
-      label: `Preferred: ${formatLanguageLabel(value)}`,
+      label: `${t('Preferred')}: ${formatLanguageLabel(value)}`,
     })
   }
 

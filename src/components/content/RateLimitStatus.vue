@@ -30,6 +30,9 @@
 
 <script setup lang="ts">
 import type { UiRateLimitSnapshot, UiRateLimitWindow } from '../../types/codex'
+import { useUiLanguage } from '../../composables/useUiLanguage'
+
+const { t } = useUiLanguage()
 
 defineProps<{
   snapshots: UiRateLimitSnapshot[]
@@ -45,7 +48,7 @@ function getSnapshotKey(snapshot: UiRateLimitSnapshot): string {
 }
 
 function getSnapshotTitle(snapshot: UiRateLimitSnapshot): string {
-  return snapshot.limitName?.trim() || snapshot.limitId?.trim() || 'Rate limits'
+  return snapshot.limitName?.trim() || snapshot.limitId?.trim() || t('Rate limits')
 }
 
 function formatPlanType(value: string): string {
@@ -57,7 +60,7 @@ function formatPlanType(value: string): string {
 }
 
 function formatWindowDuration(windowDurationMins: number | null): string {
-  if (!windowDurationMins || windowDurationMins <= 0) return 'Window'
+  if (!windowDurationMins || windowDurationMins <= 0) return t('Window')
   if (windowDurationMins % 1440 === 0) return `${windowDurationMins / 1440}d`
   if (windowDurationMins % 60 === 0) return `${windowDurationMins / 60}h`
   if (windowDurationMins < 60) return `${windowDurationMins}m`
@@ -66,7 +69,7 @@ function formatWindowDuration(windowDurationMins: number | null): string {
 
 function formatRemainingPercent(value: number): string {
   const remaining = Math.max(0, Math.min(100, 100 - value))
-  return `${Math.round(remaining)}% left`
+  return `${Math.round(remaining)}% ${t('left')}`
 }
 
 function formatUsedPercent(value: number): string {
@@ -102,20 +105,20 @@ function formatRelativeResetText(window: UiRateLimitWindow | null): string {
   if (!window?.resetsAt) return ''
 
   const diffMs = window.resetsAt * 1000 - Date.now()
-  if (diffMs <= 0) return 'Resetting now'
+  if (diffMs <= 0) return t('Resetting now')
 
   const diffMinutes = Math.round(diffMs / 60000)
   if (diffMinutes < 60) {
-    return `Resets in ${diffMinutes}m`
+    return `${t('Resets in')} ${diffMinutes}m`
   }
 
   const diffHours = Math.round(diffMinutes / 60)
   if (diffHours < 24) {
-    return `Resets in ${diffHours}h`
+    return `${t('Resets in')} ${diffHours}h`
   }
 
   const diffDays = Math.round(diffHours / 24)
-  return `Resets in ${diffDays}d`
+  return `${t('Resets in')} ${diffDays}d`
 }
 
 function getResetWindows(snapshot: UiRateLimitSnapshot): UiRateLimitWindow[] {
@@ -154,9 +157,9 @@ function getWeeklyResetText(snapshot: UiRateLimitSnapshot): string {
 function getCreditsText(snapshot: UiRateLimitSnapshot): string {
   const credits = snapshot.credits
   if (!credits) return ''
-  if (credits.unlimited) return 'Unlimited credits'
-  if (credits.balance) return `Credits ${credits.balance}`
-  if (credits.hasCredits) return 'Credits available'
+  if (credits.unlimited) return t('Unlimited credits')
+  if (credits.balance) return `${t('Credits')} ${credits.balance}`
+  if (credits.hasCredits) return t('Credits available')
   return ''
 }
 

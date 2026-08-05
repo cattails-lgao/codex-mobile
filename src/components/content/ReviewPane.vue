@@ -282,7 +282,7 @@
         <div class="review-pane-sheet" @click.stop>
           <div class="review-pane-sheet-handle" aria-hidden="true"></div>
           <div class="review-pane-sheet-header">
-            <p class="review-pane-sheet-title">Changed files</p>
+            <p class="review-pane-sheet-title">{{ t('Changed files') }}</p>
             <p class="review-pane-sheet-count">{{ snapshot.files.length }}</p>
           </div>
           <div class="review-pane-sheet-list">
@@ -720,10 +720,10 @@ function treeFileIndentStyle(): Record<string, string> {
 }
 
 function formatOperation(operation: string): string {
-  if (operation === 'add') return 'Added'
-  if (operation === 'delete') return 'Deleted'
-  if (operation === 'rename') return 'Renamed'
-  return 'Modified'
+  if (operation === 'add') return t('Added')
+  if (operation === 'delete') return t('Deleted')
+  if (operation === 'rename') return t('Renamed')
+  return t('Modified')
 }
 
 function extractNotificationThreadId(notification: RpcNotification): string {
