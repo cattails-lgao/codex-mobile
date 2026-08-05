@@ -34,6 +34,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Settings Hooks panel (P2-1)](settings-hooks-panel.md) |
 | [Feature: Directory Marketplaces management (P2-2)](directory-marketplaces.md) |
 | [Feature: Plugin sharing panel (P2-3)](plugin-sharing-panel.md) |
+| [Feature: Settings Remote control panel (P2-4)](settings-remote-control-panel.md) |
 | [Skills tab npx skills search](skills-tab-npx-skills-search.md) |
 | [Feature: Nested skill bundles are grouped in discovery](nested-skill-bundles-are-grouped-in-discovery.md) |
 | [First-launch home card for Plugins and Apps](first-launch-home-card-for-plugins-and-apps.md) |

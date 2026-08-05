@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addDirectoryMarketplace, checkoutPluginShare, compactThread, deletePluginShare, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, normalizeFuzzyFileSearchResults, removeDirectoryMarketplace, resumeThread, savePluginShare, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
+import { addDirectoryMarketplace, checkoutPluginShare, compactThread, deletePluginShare, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, listRemoteControlClients, normalizeFuzzyFileSearchResults, readRemoteControlStatus, removeDirectoryMarketplace, resumeThread, revokeRemoteControlClient, savePluginShare, setRemoteControlEnabled, startFuzzyFileSearchSession, startRemoteControlPairing, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -567,6 +567,81 @@ describe('plugin share', () => {
     expect(requests).toEqual([
       { method: 'plugin/share/delete', params: { remotePluginId: 'share-1' } },
       { method: 'plugin/share/checkout', params: { remotePluginId: 'share-1' } },
+    ])
+  })
+})
+
+describe('remote control', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function mockRpc(respondWith: () => unknown): { requests: Array<{ method: string, params: unknown }> } {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: respondWith() }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+    return { requests }
+  }
+
+  it('reads status with camel/snake client normalization', async () => {
+    mockRpc(() => ({
+      enabled: true,
+      clients: [
+        { clientId: 'c1', deviceName: 'Phone', lastSeenAt: '2026-08-05T00:00:00Z' },
+        { id: 'c2', name: 'Laptop', last_seen_at: '2026-08-04T00:00:00Z' },
+        { deviceName: 'no-id' },
+      ],
+    }))
+
+    const status = await readRemoteControlStatus()
+
+    expect(status).toEqual({
+      enabled: true,
+      clients: [
+        { clientId: 'c1', deviceName: 'Phone', lastSeenAt: '2026-08-05T00:00:00Z' },
+        { clientId: 'c2', deviceName: 'Laptop', lastSeenAt: '2026-08-04T00:00:00Z' },
+      ],
+    })
+  })
+
+  it('enables and disables with the matching RPC method', async () => {
+    const { requests } = mockRpc(() => ({}))
+
+    await setRemoteControlEnabled(true)
+    await setRemoteControlEnabled(false)
+
+    expect(requests).toEqual([
+      { method: 'remoteControl/enable', params: {} },
+      { method: 'remoteControl/disable', params: {} },
+    ])
+  })
+
+  it('starts pairing and returns the code with fallbacks', async () => {
+    mockRpc(() => ({ pairing_code: 'AB12-CD34', expires_at: '2026-08-05T00:10:00Z' }))
+
+    const pairing = await startRemoteControlPairing()
+
+    expect(pairing).toEqual({ pairingCode: 'AB12-CD34', expiresAt: '2026-08-05T00:10:00Z' })
+  })
+
+  it('lists clients and revokes by clientId', async () => {
+    const { requests } = mockRpc(() => ({ data: [{ clientId: 'c1', deviceName: 'Phone', lastSeenAt: null }] }))
+
+    const clients = await listRemoteControlClients()
+    await revokeRemoteControlClient('c1')
+
+    expect(clients).toEqual([{ clientId: 'c1', deviceName: 'Phone', lastSeenAt: null }])
+    expect(requests).toEqual([
+      { method: 'remoteControl/client/list', params: {} },
+      { method: 'remoteControl/client/revoke', params: { clientId: 'c1' } },
     ])
   })
 })

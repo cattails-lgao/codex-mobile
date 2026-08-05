@@ -126,7 +126,6 @@ const KNOWN_IGNORED_NOTIFICATION_METHODS = new Set<string>([
   'model/verification',
   'process/exited',
   'process/outputDelta',
-  'remoteControl/status/changed',
   'sessionConfigured',
   'thread/environment/connected',
   'thread/environment/disconnected',
@@ -3854,7 +3853,8 @@ export function useDesktopState() {
     if (
       notification.method === 'app/list/updated' ||
       notification.method === 'mcpServer/startupStatus/updated' ||
-      notification.method === 'mcpServer/oauthLogin/completed'
+      notification.method === 'mcpServer/oauthLogin/completed' ||
+      notification.method === 'remoteControl/status/changed'
     ) {
       emitRealtimeEvent(notification.method)
       return
