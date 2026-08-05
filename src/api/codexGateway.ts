@@ -1321,6 +1321,33 @@ export async function readRemoteControlStatus(): Promise<UiRemoteControlStatus> 
   }
 }
 
+export type ApprovalPolicy = 'untrusted' | 'on-failure' | 'on-request' | 'never'
+
+export async function readApprovalPolicy(): Promise<ApprovalPolicy> {
+  const response = await fetch('/codex-api/approval-policy')
+  const payload = (await response.json()) as { data?: { policy?: unknown }; error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to read approval policy')
+  }
+  const policy = readString(payload.data?.policy) ?? ''
+  if (policy === 'untrusted' || policy === 'on-failure' || policy === 'on-request' || policy === 'never') {
+    return policy
+  }
+  return 'never'
+}
+
+export async function writeApprovalPolicy(policy: ApprovalPolicy): Promise<void> {
+  const response = await fetch('/codex-api/approval-policy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ policy }),
+  })
+  const payload = (await response.json()) as { error?: string }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to save approval policy')
+  }
+}
+
 export async function setRemoteControlEnabled(enabled: boolean): Promise<void> {
   await callRpc(enabled ? 'remoteControl/enable' : 'remoteControl/disable', {})
 }

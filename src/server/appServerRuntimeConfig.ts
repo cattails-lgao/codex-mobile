@@ -26,6 +26,13 @@ const DEFAULT_RUNTIME_CONFIG: AppServerRuntimeConfig = {
   memories: true,
 }
 
+const APPROVAL_POLICY_LABELS: Record<CodexApprovalPolicy, string> = {
+  untrusted: 'Only untrusted commands',
+  'on-failure': 'After a command fails',
+  'on-request': 'When Codex requests it',
+  never: 'Never',
+}
+
 function normalizeRuntimeValue(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? ''
 }
@@ -86,4 +93,15 @@ export function parseSandboxMode(value: string): CodexSandboxMode | null {
 export function parseApprovalPolicy(value: string): CodexApprovalPolicy | null {
   const candidate = value.trim().toLowerCase()
   return APPROVAL_POLICIES.has(candidate as CodexApprovalPolicy) ? candidate as CodexApprovalPolicy : null
+}
+
+export function approvalPolicyLabel(policy: CodexApprovalPolicy): string {
+  return APPROVAL_POLICY_LABELS[policy] ?? policy
+}
+
+export function approvalPolicyOptions(): Array<{ value: CodexApprovalPolicy; label: string }> {
+  return Array.from(APPROVAL_POLICIES).map((value) => ({
+    value,
+    label: APPROVAL_POLICY_LABELS[value] ?? value,
+  }))
 }

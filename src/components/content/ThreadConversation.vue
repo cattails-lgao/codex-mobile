@@ -27,8 +27,14 @@
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
-        <div v-if="isCompactionMessage(message)" class="message-row thread-compaction-row" data-role="system">
-          <div class="thread-compaction-inline" role="status">Context compacted</div>
+        <div v-if="isCompactionPendingMessage(message)" class="message-row thread-compaction-row" data-role="system">
+          <div class="thread-compaction-inline thread-compaction-inline--pending" role="status">
+            <span class="thread-compaction-spinner" aria-hidden="true" />
+            <span>Compacting thread context…</span>
+          </div>
+        </div>
+        <div v-else-if="isCompactionDoneMessage(message)" class="message-row thread-compaction-row" data-role="system">
+          <div class="thread-compaction-inline thread-compaction-inline--done" role="status">Context compacted</div>
         </div>
         <div v-else-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
@@ -1021,8 +1027,12 @@ function isCommandMessage(message: UiMessage): boolean {
   return message.messageType === 'commandExecution' && !!message.commandExecution
 }
 
-function isCompactionMessage(message: UiMessage): boolean {
-  return message.messageType === 'compaction'
+function isCompactionPendingMessage(message: UiMessage): boolean {
+  return message.messageType === 'compaction.pending'
+}
+
+function isCompactionDoneMessage(message: UiMessage): boolean {
+  return message.messageType === 'compaction.done'
 }
 
 function isPlanMessage(message: UiMessage): boolean {
@@ -4566,11 +4576,27 @@ onBeforeUnmount(() => {
 }
 
 .thread-compaction-inline {
-  @apply rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-500;
+  @apply inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-500;
+}
+
+.thread-compaction-inline--done {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+
+.thread-compaction-spinner {
+  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
 }
 
 :root.dark .thread-compaction-inline {
   @apply border-zinc-700 bg-zinc-800 text-zinc-400;
+}
+
+:root.dark .thread-compaction-inline--done {
+  @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
+}
+
+:root.dark .thread-compaction-spinner {
+  @apply border-zinc-600 border-t-zinc-300;
 }
 
 .conversation-bottom-anchor {

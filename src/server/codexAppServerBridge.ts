@@ -12,7 +12,7 @@ import { createInterface } from 'node:readline'
 import { once } from 'node:events'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
-import { buildAppServerArgs } from './appServerRuntimeConfig.js'
+import { buildAppServerArgs, parseApprovalPolicy, type CodexApprovalPolicy } from './appServerRuntimeConfig.js'
 import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
@@ -4053,6 +4053,73 @@ async function listFilesWithRipgrep(cwd: string): Promise<string[]> {
 function getCodexHomeDir(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
   return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
+}
+
+function getCodexConfigPath(): string {
+  return join(getCodexHomeDir(), 'config.toml')
+}
+
+const APPROVAL_POLICY_KEY = 'approval_policy'
+
+async function resolveEffectiveApprovalPolicy(): Promise<CodexApprovalPolicy> {
+  // The runtime env var is authoritative (it is what the app-server is
+  // actually launched with), then the config file, then the default.
+  const envPolicy = parseApprovalPolicy(process.env.CODEXUI_APPROVAL_POLICY ?? '')
+  if (envPolicy) return envPolicy
+  const filePolicy = readApprovalPolicyFromConfigFile()
+  return filePolicy ?? 'never'
+}
+
+function readApprovalPolicyFromConfigFile(): CodexApprovalPolicy | null {
+  try {
+    if (!existsSync(getCodexConfigPath())) return null
+    const raw = readFileSync(getCodexConfigPath(), 'utf8')
+    const lines = raw.split(/\r?\n/u)
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('[')) continue
+      const match = /^approval_policy\s*=\s*"([^"]+)"/u.exec(trimmed)
+      if (!match) continue
+      const policy = parseApprovalPolicy(match[1] ?? '')
+      if (policy) return policy
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function writeApprovalPolicyToConfigFile(policy: CodexApprovalPolicy): Promise<void> {
+  const configPath = getCodexConfigPath()
+  await mkdir(dirname(configPath), { recursive: true })
+  let nextContent = ''
+  if (existsSync(configPath)) {
+    const raw = await readFile(configPath, 'utf8')
+    const lines = raw.split(/\r?\n/u)
+    const kept: string[] = []
+    let replaced = false
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('approval_policy=')) {
+        if (replaced) continue
+        replaced = true
+        kept.push(`approval_policy = "${policy}"`)
+        continue
+      }
+      kept.push(line)
+    }
+    if (replaced) {
+      nextContent = kept.join('\n').replace(/\n{3,}/gu, '\n\n').trimEnd() + '\n'
+    } else {
+      const header = lines.some((line) => line.trim().length > 0 && !line.trim().startsWith('#'))
+        ? `${raw.trimEnd()}\n\napproval_policy = "${policy}"\n`
+        : `approval_policy = "${policy}"\n`
+      nextContent = header
+    }
+  } else {
+    nextContent = `approval_policy = "${policy}"\n`
+  }
+  await writeFile(configPath, nextContent, 'utf8')
 }
 
 function getSkillsInstallDir(): string {
@@ -9711,6 +9778,24 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
       if (req.method === 'GET' && url.pathname === '/codex-api/telegram/status') {
         setJson(res, 200, { data: telegramBridge.getStatus() })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/codex-api/approval-policy') {
+        setJson(res, 200, { data: { policy: await resolveEffectiveApprovalPolicy() } })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/codex-api/approval-policy') {
+        const payload = asRecord(await readJsonBody(req))
+        const rawPolicy = typeof payload?.policy === 'string' ? payload.policy.trim() : ''
+        const policy = parseApprovalPolicy(rawPolicy)
+        if (!policy) {
+          setJson(res, 400, { error: 'Invalid approval policy. Expected one of: untrusted, on-failure, on-request, never.' })
+          return
+        }
+        await writeApprovalPolicyToConfigFile(policy)
+        setJson(res, 200, { ok: true, data: { policy } })
         return
       }
 

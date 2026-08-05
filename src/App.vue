@@ -254,6 +254,47 @@
                   </div>
                 </template>
               </div>
+              <div class="sidebar-settings-approval-section">
+                <div class="sidebar-settings-approval-header">
+                  <span class="sidebar-settings-approval-title">{{ t('Approval policy') }}</span>
+                </div>
+                <p v-if="isApprovalPolicyLoading" class="sidebar-settings-approval-empty">{{ t('Loading…') }}</p>
+                <template v-else>
+                  <p class="sidebar-settings-approval-description">
+                    {{ t('Choose when Codex asks for your permission before running commands or changing files.') }}
+                  </p>
+                  <div class="sidebar-settings-approval-options" role="radiogroup" :aria-label="t('Approval policy')">
+                    <label
+                      v-for="option in approvalPolicyOptions"
+                      :key="option.value"
+                      class="sidebar-settings-approval-option"
+                      :class="{ 'is-selected': approvalPolicy === option.value }"
+                    >
+                      <input
+                        v-model="approvalPolicy"
+                        class="sidebar-settings-approval-radio"
+                        type="radio"
+                        name="approval-policy"
+                        :value="option.value"
+                        :disabled="isApprovalPolicySaving"
+                      />
+                      <span class="sidebar-settings-approval-option-label">{{ t(option.label) }}</span>
+                    </label>
+                  </div>
+                  <p v-if="approvalPolicyError" class="sidebar-settings-approval-error">{{ approvalPolicyError }}</p>
+                  <p v-if="approvalPolicyNotice" class="sidebar-settings-approval-notice">{{ approvalPolicyNotice }}</p>
+                  <div class="sidebar-settings-approval-actions">
+                    <button
+                      class="sidebar-settings-approval-save"
+                      type="button"
+                      :disabled="isApprovalPolicySaving"
+                      @click="onSaveApprovalPolicy"
+                    >
+                      {{ isApprovalPolicySaving ? t('Saving…') : t('Save') }}
+                    </button>
+                  </div>
+                </template>
+              </div>
               <div class="sidebar-settings-remote-section">
                 <div class="sidebar-settings-remote-header">
                   <span class="sidebar-settings-remote-title">{{ t('Remote control') }}</span>
@@ -1088,10 +1129,6 @@
 
               <template v-else>
                 <div class="content-thread">
-                  <div v-if="isCompactContextPending" class="thread-compaction-banner" role="status">
-                    <span class="thread-compaction-banner-spinner" aria-hidden="true" />
-                    <span>{{ t('Compacting thread context…') }}</span>
-                  </div>
                   <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
@@ -1349,7 +1386,8 @@ import {
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient, readApprovalPolicy, writeApprovalPolicy } from './api/codexGateway'
+import type { ApprovalPolicy } from './api/codexGateway'
 import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
@@ -1726,6 +1764,7 @@ const supportsRemoteControl = computed(() =>
 watch(isSettingsOpen, (open) => {
   if (open) {
     void refreshHooks()
+    void refreshApprovalPolicy()
     if (supportsRemoteControl.value) void refreshRemoteControl()
   }
 })
@@ -1740,6 +1779,52 @@ const remoteControlNotice = ref('')
 let remoteControlNoticeTimer: ReturnType<typeof setTimeout> | null = null
 let hasLoadedRemoteControl = false
 let stopRemoteControlRealtime: (() => void) | null = null
+
+const approvalPolicy = ref<ApprovalPolicy>('never')
+const isApprovalPolicyLoading = ref(false)
+const isApprovalPolicySaving = ref(false)
+const approvalPolicyError = ref('')
+const approvalPolicyNotice = ref('')
+let hasLoadedApprovalPolicy = false
+const approvalPolicyOptions: Array<{ value: ApprovalPolicy; label: string }> = [
+  { value: 'untrusted', label: 'Only untrusted commands' },
+  { value: 'on-failure', label: 'After a command fails' },
+  { value: 'on-request', label: 'When Codex requests it' },
+  { value: 'never', label: 'Never' },
+]
+const approvalPolicyConsented = ref(false)
+
+async function refreshApprovalPolicy(options: { force?: boolean } = {}): Promise<void> {
+  if (options.force !== true && hasLoadedApprovalPolicy) return
+  isApprovalPolicyLoading.value = true
+  approvalPolicyError.value = ''
+  try {
+    approvalPolicy.value = await readApprovalPolicy()
+    hasLoadedApprovalPolicy = true
+  } catch (error) {
+    approvalPolicyError.value = error instanceof Error ? error.message : 'Failed to load approval policy'
+  } finally {
+    isApprovalPolicyLoading.value = false
+  }
+}
+
+async function onSaveApprovalPolicy(): Promise<void> {
+  isApprovalPolicySaving.value = true
+  approvalPolicyError.value = ''
+  approvalPolicyNotice.value = ''
+  try {
+    await writeApprovalPolicy(approvalPolicy.value)
+    approvalPolicyConsented.value = true
+    approvalPolicyNotice.value = 'Approval policy saved. Codex will now ask for permission before risky actions.'
+    if (approvalPolicyNoticeTimer) clearTimeout(approvalPolicyNoticeTimer)
+    approvalPolicyNoticeTimer = setTimeout(() => { approvalPolicyNotice.value = '' }, 5000)
+  } catch (error) {
+    approvalPolicyError.value = error instanceof Error ? error.message : 'Failed to save approval policy'
+  } finally {
+    isApprovalPolicySaving.value = false
+  }
+}
+let approvalPolicyNoticeTimer: ReturnType<typeof setTimeout> | null = null
 
 async function refreshRemoteControl(options: { force?: boolean } = {}): Promise<void> {
   if (options.force !== true && hasLoadedRemoteControl) return
@@ -6031,6 +6116,86 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-remote-section {
   @apply border-t border-zinc-100 px-3 py-2.5;
+}
+
+.sidebar-settings-approval-section {
+  @apply border-t border-zinc-100 px-3 py-2.5;
+}
+
+.sidebar-settings-approval-header {
+  @apply flex items-center justify-between;
+}
+
+.sidebar-settings-approval-title {
+  @apply text-sm font-medium text-zinc-700;
+}
+
+.sidebar-settings-approval-empty {
+  @apply mt-1.5 text-xs text-zinc-500;
+}
+
+.sidebar-settings-approval-description {
+  @apply mt-1.5 text-xs leading-relaxed text-zinc-500;
+}
+
+.sidebar-settings-approval-options {
+  @apply mt-2 flex flex-col gap-1;
+}
+
+.sidebar-settings-approval-option {
+  @apply flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+}
+
+.sidebar-settings-approval-option.is-selected {
+  @apply bg-zinc-50 text-zinc-900;
+}
+
+.sidebar-settings-approval-radio {
+  @apply h-3.5 w-3.5 shrink-0 accent-zinc-900;
+}
+
+.sidebar-settings-approval-option-label {
+  @apply min-w-0;
+}
+
+.sidebar-settings-approval-error {
+  @apply mt-1.5 text-xs text-red-600;
+}
+
+.sidebar-settings-approval-notice {
+  @apply mt-1.5 text-xs text-emerald-700;
+}
+
+.sidebar-settings-approval-actions {
+  @apply mt-2 flex items-center justify-end;
+}
+
+.sidebar-settings-approval-save {
+  @apply rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-50;
+}
+
+:root.dark .sidebar-settings-approval-section {
+  @apply border-zinc-800;
+}
+
+:root.dark .sidebar-settings-approval-title {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-approval-option {
+  @apply text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .sidebar-settings-approval-option.is-selected {
+  @apply bg-zinc-800 text-zinc-100;
+}
+
+:root.dark .sidebar-settings-approval-radio {
+  @apply accent-zinc-200;
+}
+
+:root.dark .sidebar-settings-approval-save {
+  @apply bg-zinc-100 text-zinc-900 hover:bg-white;
 }
 
 .sidebar-settings-remote-header {

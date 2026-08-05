@@ -486,6 +486,7 @@ import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import {
+  buildSkillSlashCommands,
   matchSlashCommands,
   parseSlashQuery,
   SLASH_COMMANDS,
@@ -660,6 +661,10 @@ const slashStartIndex = ref<number | null>(null)
 const slashQuery = ref('')
 const slashHighlightedIndex = ref(0)
 const slashMatchedCommands = ref<SlashCommand[]>(SLASH_COMMANDS)
+const allSlashCommands = computed<SlashCommand[]>(() => [
+  ...SLASH_COMMANDS,
+  ...buildSkillSlashCommands(props.skills ?? []),
+])
 const isComposerExpanded = ref(false)
 const isDraftOverflowing = ref(false)
 let composerOverflowMeasurementQueued = false
@@ -1779,7 +1784,7 @@ function closeSlashMenu(): void {
   slashStartIndex.value = null
   slashQuery.value = ''
   slashHighlightedIndex.value = 0
-  slashMatchedCommands.value = SLASH_COMMANDS
+  slashMatchedCommands.value = allSlashCommands.value
 }
 
 function updateSlashCommandState(): void {
@@ -1798,7 +1803,7 @@ function updateSlashCommandState(): void {
   if (isFileMentionOpen.value) closeFileMention()
   slashStartIndex.value = parsed.startIndex
   slashQuery.value = parsed.query
-  slashMatchedCommands.value = matchSlashCommands(SLASH_COMMANDS, parsed.query)
+  slashMatchedCommands.value = matchSlashCommands(allSlashCommands.value, parsed.query)
   slashHighlightedIndex.value = 0
   isSlashMenuOpen.value = true
 }
@@ -1811,6 +1816,20 @@ function applySlashCommand(command: SlashCommand): void {
     draft.value = `${draft.value.slice(0, start)}${draft.value.slice(cursor)}`
   }
   closeSlashMenu()
+  if (command.kind === 'skill') {
+    // Attach the skill and prompt the model to use it.
+    const skill = (props.skills ?? []).find((entry) => entry.path === command.skillPath || entry.name === command.id)
+    if (skill && !selectedSkills.value.some((entry) => entry.path === skill.path)) {
+      selectedSkills.value = [...selectedSkills.value, { ...skill }]
+    }
+    const promptText = draft.value.trim()
+    draft.value = promptText.length > 0 ? `${promptText} (Use the ${command.id} skill.)` : `Use the ${command.id} skill.`
+    void nextTick(() => {
+      input?.focus()
+      updateComposerOverflowState()
+    })
+    return
+  }
   if (command.kind === 'rpc') {
     emit('slash-command', command.id)
     return
