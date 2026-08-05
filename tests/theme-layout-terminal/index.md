@@ -26,3 +26,4 @@ Return to the [manual test index](../../tests.md).
 | [Mobile terminal command dropdown stays on screen](mobile-terminal-command-dropdown-stays-on-screen.md) |
 | [Composer popover shared surface, dark theme coverage, and placeholder parity](composer-popover-dark-and-placeholder-parity.md) |
 | [Three-column layout, settings dialog, and destructive confirmations](three-column-layout-settings-dialog-and-destructive-confirmations.md) |
+| [Right panel resize/collapse, composer approval policy tabs, skills chips, and slash skill names](right-panel-resize-collapse-and-composer-approval-tabs.md) |

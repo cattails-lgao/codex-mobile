@@ -572,9 +572,51 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第三轮验收调整（2026-08-05 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-05 第三轮进展：</strong>6 条调整已全部实现（本轮工作区改动，待 commit 后推送）。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ComposerSlashMenu.vue</code>、<code>slashCommands.ts</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>调整</th><th>实现方式</th></tr>
+          <tr>
+            <td>1</td>
+            <td>右侧面板可拖动宽度 + 可收起（桌面端）</td>
+            <td><code>App.vue</code> 新增 <code>rightPanelWidth</code>（localStorage 持久化 <code>codex-web-local.right-panel-width.v1</code>，范围 260-640px）与左侧边缘拖拽手柄 <code>.content-right-panel-resize-handle</code>；桌面端新增收起/展开（<code>isRightPanelCollapsed</code>，头部侧栏按钮与面板内 <code>×</code> 均可收起）</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>右侧面板 tab 默认只有 Git</td>
+            <td>移除头部 Terminal tab 按钮，仅保留 Git tab；终端面板通过 <code>+</code> popover 添加</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>审批策略移到输入框下方，4 个 tab 切换</td>
+            <td>设置对话框中的审批策略区整体移除；<code>ThreadComposer</code> 新增 <code>approvalPolicy*</code> props 与 <code>update:approval-policy</code>/<code>save-approval-policy</code> 事件，输入框下方渲染 4 个策略 tab（Only untrusted commands / After a command fails / When Codex requests it / Never），点击即保存；<code>App.vue</code> 挂载时 <code>refreshApprovalPolicy()</code> 预载</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>移除输入框下的技能下拉（已并入斜杠命令）</td>
+            <td>删除 <code>ComposerSearchDropdown</code> 组件及 prompts 相关死代码（<code>getComposerPrompts</code>/<code>createComposerPrompt</code>/<code>removeComposerPrompt</code>、<code>savedPrompts</code>、<code>skillDropdownOptions</code>、<code>reloadPrompts</code> 等）</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>斜杠命令选中技能后恢复输入框上方技能 chips</td>
+            <td>恢复 <code>.thread-composer-skill-chips</code> 渲染与 <code>removeSkill</code>/<code>skillMarkdownPath</code>/<code>openSkillMarkdown</code> 函数及样式</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>斜杠命令技能组完整显示技能名称 + 系统技能加入</td>
+            <td><code>ComposerSlashMenu</code> 技能名改用不截断样式（<code>.thread-composer-slash-skill-name</code>）；<code>buildSkillSlashCommands</code> 改为按路径去重（同名不同 scope 的技能全部保留，系统技能不再被同名技能顶掉）</td>
+          </tr>
+        </table>
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至 <code>5cd6ede</code>），无需再推送</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至第二轮提交 <code>81116c0</code>）；第三轮调整改动未提交，需 commit 后推送</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code> 等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查（无硬编码路径、路径均经 <code>node:path</code> 组装、TOML 读写兼容 CRLF/LF），但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
@@ -594,7 +636,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 待办需求 7 项已记录） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第三轮 6 条调整已实现待提交） · 内容已脱敏
     </footer>
   </article>
 </body>

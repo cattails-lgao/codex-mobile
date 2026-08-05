@@ -62,7 +62,7 @@ function kindLabel(kind: SlashCommandKind): string {
       <div class="composer-popover-group-label composer-popover-group-label--skills">{{ t('Skills') }}</div>
       <button
         v-for="(command, index) in skillCommands"
-        :key="command.id"
+        :key="command.skillPath || command.id"
         class="thread-composer-slash-row"
         :class="{ 'is-active': builtinCommands.length + index === highlightedIndex }"
         type="button"
@@ -72,7 +72,7 @@ function kindLabel(kind: SlashCommandKind): string {
       >
         <span class="thread-composer-slash-prefix thread-composer-slash-prefix--skill" aria-hidden="true">/</span>
         <span class="thread-composer-slash-body">
-          <span class="thread-composer-slash-name">{{ command.displayName || command.id }}</span>
+          <span class="thread-composer-slash-skill-name">{{ command.displayName || command.id }}</span>
           <span class="thread-composer-slash-desc">{{ command.description }}</span>
         </span>
         <span class="thread-composer-slash-kind">{{ kindLabel(command.kind) }}</span>
@@ -114,6 +114,10 @@ function kindLabel(kind: SlashCommandKind): string {
 
 .thread-composer-slash-name {
   @apply truncate font-medium text-zinc-900;
+}
+
+.thread-composer-slash-skill-name {
+  @apply whitespace-normal break-words font-medium text-zinc-900;
 }
 
 .thread-composer-slash-desc {

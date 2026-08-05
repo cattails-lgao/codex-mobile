@@ -62,6 +62,26 @@
         </span>
       </div>
 
+      <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
+        <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
+          <button
+            class="thread-composer-skill-chip-name"
+            type="button"
+            :title="skillMarkdownPath(skill.path)"
+            :aria-label="`Open ${skill.displayName || skill.name} SKILL.md`"
+            @click="openSkillMarkdown(skill)"
+          >
+            {{ skill.displayName || skill.name }}
+          </button>
+          <button
+            class="thread-composer-skill-chip-remove"
+            type="button"
+            :aria-label="`Remove skill ${skill.displayName || skill.name}`"
+            @click="removeSkill(skill.path)"
+          >×</button>
+        </span>
+      </div>
+
       <div
         class="thread-composer-input-wrap"
         :class="{
@@ -259,22 +279,6 @@
             @update:model-value="onModelSelect"
           />
 
-          <ComposerSearchDropdown
-            class="thread-composer-control"
-            :options="skillDropdownOptions"
-            :selected-values="selectedSkillPaths"
-            :placeholder="t('Skills')"
-            :search-placeholder="t('Search skills and prompts...')"
-            :create-label="t('Add new prompt')"
-            :allow-remove="true"
-            :remove-label="t('Remove prompt')"
-            open-direction="up"
-            :disabled="isComposerConfigDisabled"
-            @toggle="onSkillDropdownToggle"
-            @create="onCreatePrompt"
-            @remove="onRemovePrompt"
-          />
-
           <ComposerDropdown
             class="thread-composer-control"
             :model-value="selectedReasoningEffort"
@@ -395,6 +399,25 @@
         </div>
       </div>
 
+      <div v-if="approvalPolicyOptions && approvalPolicyOptions.length > 0" class="thread-composer-approval">
+        <span class="thread-composer-approval-title">{{ t('Approval policy') }}</span>
+        <div class="thread-composer-approval-tabs" role="tablist" :aria-label="t('Approval policy')">
+          <button
+            v-for="option in approvalPolicyOptions"
+            :key="option.value"
+            class="thread-composer-approval-tab"
+            :class="{ 'is-active': approvalPolicy === option.value }"
+            type="button"
+            role="tab"
+            :aria-selected="approvalPolicy === option.value"
+            :disabled="isApprovalPolicySaving"
+            @click="onApprovalPolicySelect(option.value)"
+          >{{ t(option.label) }}</button>
+        </div>
+        <p v-if="approvalPolicyError" class="thread-composer-approval-error" role="alert">{{ approvalPolicyError }}</p>
+        <p v-if="approvalPolicyNotice" class="thread-composer-approval-notice">{{ approvalPolicyNotice }}</p>
+      </div>
+
     </div>
     <input
       ref="photoLibraryInputRef"
@@ -443,16 +466,12 @@ import { useRealtimeVoice } from '../../composables/useRealtimeVoice'
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
-  createComposerPrompt,
-  getComposerPrompts,
-  removeComposerPrompt,
   searchComposerFiles,
   startFuzzyFileSearchSession,
   stopFuzzyFileSearchSession,
   updateFuzzyFileSearchSession,
   uploadFile,
   type ComposerFileSuggestion,
-  type ComposerPromptInfo,
 } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
@@ -463,7 +482,6 @@ import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
-import ComposerSearchDropdown from './ComposerSearchDropdown.vue'
 import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import {
   buildSkillSlashCommands,
@@ -472,12 +490,6 @@ import {
   SLASH_COMMANDS,
   type SlashCommand,
 } from './slashCommands'
-
-type SkillSourceBadge = {
-  badge: string
-  badgeLabel: string
-  badgeTone: 'repo' | 'system' | 'plugin' | 'user' | 'prompt'
-}
 
 type SkillItem = { name: string; displayName?: string; description: string; path: string; scope?: string; enabled?: boolean }
 
@@ -506,6 +518,11 @@ const props = defineProps<{
   dictationClickToToggle?: boolean
   dictationAutoSend?: boolean
   dictationLanguage?: string
+  approvalPolicy?: string
+  approvalPolicyOptions?: Array<{ value: string; label: string }>
+  isApprovalPolicySaving?: boolean
+  approvalPolicyError?: string
+  approvalPolicyNotice?: string
 }>()
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
@@ -540,6 +557,8 @@ const emit = defineEmits<{
   'update:selected-model': [modelId: string]
   'update:selected-reasoning-effort': [effort: ReasoningEffort | '']
   'update:selected-speed-mode': [mode: SpeedMode]
+  'update:approval-policy': [value: string]
+  'save-approval-policy': []
 }>()
 const { t } = useUiLanguage()
 
@@ -566,12 +585,10 @@ type AttachmentBatchStats = {
 
 const CONTEXT_WINDOW_BASELINE_TOKENS = 12000
 const PASTED_TEXT_FILE_THRESHOLD = 2000
-const PROMPT_OPTION_PREFIX = 'prompt:'
 
 const draft = ref('')
 const selectedImages = ref<SelectedImage[]>([])
 const selectedSkills = ref<SkillItem[]>([])
-const savedPrompts = ref<ComposerPromptInfo[]>([])
 const fileAttachments = ref<FileAttachment[]>([])
 const folderUploadGroups = ref<FolderUploadGroup[]>([])
 
@@ -679,33 +696,6 @@ const isPlanModeSelected = computed(() => props.selectedCollaborationMode === 'p
 
 const isPlanModeWaitingForModel = computed(() =>
   props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
-)
-
-const selectedSkillPaths = computed(() => selectedSkills.value.map((s) => s.path))
-const skillDropdownOptions = computed(() =>
-  [
-    ...(props.skills ?? []).map((s) => {
-      const source = skillSourceBadge(s)
-      return {
-        value: s.path,
-        label: s.name,
-        description: s.description,
-        badge: source.badge,
-        badgeLabel: source.badgeLabel,
-        badgeTone: source.badgeTone,
-        removable: false,
-      }
-    }),
-    ...savedPrompts.value.map((prompt) => ({
-      value: promptOptionValue(prompt.path),
-      label: prompt.name,
-      description: prompt.description,
-      badge: 'T',
-      badgeLabel: 'Prompt',
-      badgeTone: 'prompt' as const,
-      removable: true,
-    })),
-  ],
 )
 
 const canSubmit = computed(() => {
@@ -1231,6 +1221,12 @@ function onToggleSpeedMode(): void {
   emit('update:selected-speed-mode', props.selectedSpeedMode === 'fast' ? 'standard' : 'fast')
 }
 
+function onApprovalPolicySelect(value: string): void {
+  if (props.approvalPolicy === value || props.isApprovalPolicySaving === true) return
+  emit('update:approval-policy', value)
+  emit('save-approval-policy')
+}
+
 function onDictationToggle(): void {
   if (!props.dictationClickToToggle) return
   if (dictationFeedback.value) {
@@ -1290,6 +1286,22 @@ function triggerFolderPicker(): void {
 
 function removeImage(id: string): void {
   selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
+}
+
+function removeSkill(path: string): void {
+  selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
+}
+
+function skillMarkdownPath(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  return trimmed.endsWith('/SKILL.md') ? trimmed : `${trimmed.replace(/\/+$/, '')}/SKILL.md`
+}
+
+function openSkillMarkdown(skill: SkillItem): void {
+  const markdownPath = skillMarkdownPath(skill.path)
+  if (!markdownPath || typeof window === 'undefined') return
+  window.open(`/codex-local-browse${encodeURI(markdownPath)}`, '_blank', 'noopener,noreferrer')
 }
 
 function removeFileAttachment(fsPath: string): void {
@@ -1904,45 +1916,6 @@ function appendTextToDraft(text: string): void {
   nextTick(() => inputRef.value?.focus())
 }
 
-async function reloadPrompts(): Promise<void> {
-  savedPrompts.value = await getComposerPrompts()
-}
-
-function promptOptionValue(path: string): string {
-  return `${PROMPT_OPTION_PREFIX}${path}`
-}
-
-function promptPathFromOptionValue(value: string): string | null {
-  return value.startsWith(PROMPT_OPTION_PREFIX) ? value.slice(PROMPT_OPTION_PREFIX.length) : null
-}
-
-async function onCreatePrompt(): Promise<void> {
-  const name = window.prompt(t('Prompt name'))?.trim() ?? ''
-  if (!name) return
-  const content = window.prompt(t('Prompt content')) ?? ''
-  if (!content.trim()) return
-  const created = await createComposerPrompt(name, content)
-  if (!created) return
-  await reloadPrompts()
-  appendTextToDraft(created.content)
-}
-
-async function onRemovePrompt(path: string): Promise<void> {
-  const promptPath = promptPathFromOptionValue(path) ?? path
-  const target = savedPrompts.value.find((prompt) => prompt.path === promptPath)
-  const confirmed = window.confirm(target ? `${t('Remove prompt')} "${target.name}"?` : t('Remove prompt'))
-  if (!confirmed) return
-  const removed = await removeComposerPrompt(promptPath)
-  if (!removed) return
-  await reloadPrompts()
-}
-
-function onPromptDropdownToggle(path: string): void {
-  const prompt = savedPrompts.value.find((entry) => entry.path === path)
-  if (!prompt) return
-  appendTextToDraft(prompt.content)
-}
-
 function getMentionFileName(path: string): string {
   const idx = path.lastIndexOf('/')
   if (idx < 0) return path
@@ -1985,37 +1958,6 @@ function isMarkdownFile(path: string): boolean {
   return ext === 'md' || ext === 'mdx'
 }
 
-function skillSourceBadge(skill: SkillItem): SkillSourceBadge {
-  const path = skill.path.toLowerCase()
-  if (path.includes('/plugins/cache/')) {
-    return { badge: 'P', badgeLabel: 'Plugin', badgeTone: 'plugin' }
-  }
-  if (skill.scope === 'repo') {
-    return { badge: 'R', badgeLabel: 'Repo', badgeTone: 'repo' }
-  }
-  if (skill.scope === 'system') {
-    return { badge: 'S', badgeLabel: 'System', badgeTone: 'system' }
-  }
-  return { badge: 'U', badgeLabel: 'User', badgeTone: 'user' }
-}
-
-function onSkillDropdownToggle(path: string, checked: boolean): void {
-  const promptPath = promptPathFromOptionValue(path)
-  if (promptPath) {
-    onPromptDropdownToggle(promptPath)
-    return
-  }
-
-  if (checked) {
-    const skill = (props.skills ?? []).find((s) => s.path === path)
-    if (skill && !selectedSkills.value.some((s) => s.path === path)) {
-      selectedSkills.value = [...selectedSkills.value, skill]
-    }
-  } else {
-    selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
-  }
-}
-
 function onDocumentClick(event: MouseEvent): void {
   if (!isAttachMenuOpen.value) return
   const root = attachMenuRootRef.value
@@ -2030,7 +1972,6 @@ onMounted(() => {
   window.addEventListener('drop', onWindowDragCleanup)
   window.addEventListener('dragend', onWindowDragCleanup)
   window.addEventListener('blur', onWindowDragCleanup)
-  void reloadPrompts()
   queueComposerOverflowMeasurement()
 })
 
@@ -2193,6 +2134,22 @@ watch(
 
 .thread-composer-file-chip-remove {
   @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 text-xs leading-none p-0;
+}
+
+.thread-composer-skill-chips {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.thread-composer-skill-chip {
+  @apply inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700;
+}
+
+.thread-composer-skill-chip-name {
+  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500;
+}
+
+.thread-composer-skill-chip-remove {
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
 }
 
 .thread-composer-rate-limit {
@@ -2426,6 +2383,34 @@ watch(
 
 .thread-composer-actions {
   @apply ml-auto flex min-w-0 items-center gap-2;
+}
+
+.thread-composer-approval {
+  @apply mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-zinc-100 pt-2;
+}
+
+.thread-composer-approval-title {
+  @apply text-[11px] font-medium uppercase tracking-wide text-zinc-400;
+}
+
+.thread-composer-approval-tabs {
+  @apply inline-flex flex-wrap items-center gap-1;
+}
+
+.thread-composer-approval-tab {
+  @apply rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.thread-composer-approval-tab.is-active {
+  @apply border-zinc-900 bg-zinc-900 text-white;
+}
+
+.thread-composer-approval-error {
+  @apply basis-full text-xs text-red-600;
+}
+
+.thread-composer-approval-notice {
+  @apply basis-full text-xs text-emerald-600;
 }
 
 .thread-composer-actions--recording {
