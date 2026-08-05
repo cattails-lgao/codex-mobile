@@ -424,13 +424,20 @@
   @apply border-zinc-600 bg-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100;
 }
 
+:root.dark .composer-dropdown-trigger--pill {
+  @apply border-zinc-600 bg-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100;
+}
+
+:root.dark .composer-dropdown-trigger--pill .composer-dropdown-chevron {
+  @apply text-zinc-400;
+}
+
 :root.dark .thread-composer-plan-trigger.is-active,
 :root.dark .thread-composer-approval-trigger.is-active {
   @apply border-zinc-200 bg-zinc-200 text-zinc-900 hover:text-zinc-900;
 }
 
-:root.dark .thread-composer-plan-menu,
-:root.dark .thread-composer-approval-menu {
+:root.dark .composer-popover-panel {
   @apply border-zinc-600 bg-zinc-800;
 }
 
@@ -462,8 +469,8 @@
   @apply text-red-400;
 }
 
-:root.dark .thread-composer-menu-notice {
-  @apply text-emerald-400;
+:root.dark .thread-composer-approval-tip {
+  @apply border-emerald-700 bg-emerald-900/80 text-emerald-300;
 }
 
 :root.dark .thread-composer-stop {
@@ -550,10 +557,6 @@
 
 :root.dark .rate-limit-card-footer {
   @apply text-zinc-400;
-}
-
-:root.dark .thread-composer-attach-menu {
-  @apply border-zinc-600 bg-zinc-800;
 }
 
 :root.dark .thread-composer-attach-item {
@@ -2067,7 +2070,7 @@
    Extracted so both popovers share the same geometry, surface tokens, and
    entrance motion instead of duplicating the container rules per component. */
 .composer-popover {
-  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
   animation: composer-popover-in 150ms ease-out;
 }
 

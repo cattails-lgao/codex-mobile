@@ -6,7 +6,7 @@ import { writeFile, stat } from 'node:fs/promises'
 import express, { type Express } from 'express'
 import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
-import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, normalizeLocalPath } from './localBrowseUi.js'
+import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getLocalDirectoryListing, isTextEditableFile, listWorkspaceFiles, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -143,6 +143,28 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         return
       }
       const data = await getLocalDirectoryListing(localPath, { showHidden })
+      res.status(200).json({ data })
+    } catch {
+      res.status(404).json({ error: 'Directory not found.' })
+    }
+  })
+
+  // 5b. Recursive workspace file list for the right-side "Files" panel.
+  app.get('/codex-local-files', async (req, res) => {
+    const rawPath = typeof req.query.path === 'string' ? req.query.path : ''
+    const localPath = normalizeLocalPath(rawPath)
+    if (!localPath || !isAbsolute(localPath)) {
+      res.status(400).json({ error: 'Expected absolute local directory path.' })
+      return
+    }
+
+    try {
+      const fileStat = await stat(localPath)
+      if (!fileStat.isDirectory()) {
+        res.status(400).json({ error: 'Expected directory path.' })
+        return
+      }
+      const data = await listWorkspaceFiles(localPath)
       res.status(200).json({ data })
     } catch {
       res.status(404).json({ error: 'Directory not found.' })

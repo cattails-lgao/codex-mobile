@@ -1,4 +1,4 @@
-import { dirname, extname, join } from 'node:path'
+import { dirname, extname, join, relative } from 'node:path'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 
 type DirectoryItem = {
@@ -238,6 +238,79 @@ export async function getLocalDirectoryListing(
     parentPath: dirname(localPath),
     entries: directories,
   }
+}
+
+export type WorkspaceFileEntry = {
+  /** Absolute path on disk. */
+  path: string
+  /** Path relative to the workspace root, using forward slashes. */
+  relativePath: string
+  isDirectory: boolean
+}
+
+const IGNORED_WORKSPACE_DIRS = new Set([
+  '.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
+  'coverage', '__pycache__', '.cache', '.turbo', 'target', '.venv',
+  'venv', '.idea', '.vscode', 'output',
+])
+
+function isIgnoredWorkspaceDirName(name: string): boolean {
+  if (name.startsWith('.')) return true
+  return IGNORED_WORKSPACE_DIRS.has(name)
+}
+
+function toRelativePath(rootPath: string, entryPath: string): string {
+  return relative(rootPath, entryPath).split('\\').join('/')
+}
+
+/**
+ * Recursively lists the files under a workspace root (directories first, then
+ * files, both alphabetically). Heavy/generated directories and hidden entries
+ * are skipped so the list stays useful for the right-side "Files" panel.
+ */
+export async function listWorkspaceFiles(
+  rootPath: string,
+  options: { maxEntries?: number; maxDepth?: number } = {},
+): Promise<WorkspaceFileEntry[]> {
+  const maxEntries = options.maxEntries ?? 2000
+  const maxDepth = options.maxDepth ?? 8
+  const rows: WorkspaceFileEntry[] = []
+  const visited = new Set<string>()
+
+  async function walk(dirPath: string, depth: number): Promise<void> {
+    if (rows.length >= maxEntries || depth > maxDepth || visited.has(dirPath)) return
+    visited.add(dirPath)
+    let entries
+    try {
+      entries = await readdir(dirPath, { withFileTypes: true })
+    } catch {
+      return
+    }
+    entries.sort((a, b) => {
+      const aDir = a.isDirectory() ? 0 : 1
+      const bDir = b.isDirectory() ? 0 : 1
+      if (aDir !== bDir) return aDir - bDir
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    })
+    for (const entry of entries) {
+      if (rows.length >= maxEntries) return
+      const name = entry.name
+      const entryPath = join(dirPath, name)
+      if (entry.isDirectory()) {
+        if (isIgnoredWorkspaceDirName(name)) continue
+        if (dirPath === rootPath) {
+          rows.push({ path: entryPath, relativePath: toRelativePath(rootPath, entryPath), isDirectory: true })
+        }
+        await walk(entryPath, depth + 1)
+      } else {
+        if (name.startsWith('.')) continue
+        rows.push({ path: entryPath, relativePath: toRelativePath(rootPath, entryPath), isDirectory: false })
+      }
+    }
+  }
+
+  await walk(rootPath, 0)
+  return rows
 }
 
 export async function createDirectoryListingHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {

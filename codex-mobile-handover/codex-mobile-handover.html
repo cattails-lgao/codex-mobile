@@ -641,6 +641,61 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第五轮反馈（2026-08-05 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-05 第五轮进展：</strong>8 条需求已全部实现并验证（vue-tsc / build / 单测 216 通过，2 个失败为 Windows 基线环境性失败与改动无关；Playwright 用本机 Edge channel 8/8 通过，截图见 <code>output/playwright/round5-*.png</code>）。本轮改动涉及 <code>ThreadComposer.vue</code>、<code>ComposerDropdown.vue</code>、<code>ComposerSlashMenu.vue</code>、<code>codexAppServerBridge.ts</code>、<code>localBrowseUi.ts</code>、<code>httpServer.ts</code>、<code>vite.config.ts</code>、<code>codexGateway.ts</code>、<code>App.vue</code>、<code>style.css</code>，并新增 <code>ComposerPopover.vue</code>、<code>RightFilesPanel.vue</code>、<code>IconTablerFiles.vue</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>需求</th><th>实现方式</th></tr>
+          <tr>
+            <td>1</td>
+            <td>模型列表没有模型</td>
+            <td>根因：审批策略写入器匹配正则不匹配自己写的行（写入 <code>approval_policy = "..."</code> 带空格，匹配用 <code>approval_policy=</code> 无空格），每次保存追加重复 key，最终 TOML 解析失败 → <code>config/read</code>、<code>provider-models</code>、<code>skills/list</code> 全挂。<code>writeApprovalPolicyToConfigFile</code> 改为 <code>APPROVAL_POLICY_ASSIGNMENT = /^approval_policy\s*=/u</code>：删除所有现有赋值行去重后把 key 放文件顶部（避免落入 <code>[table]</code>）；同时手动修复被破坏的 <code>.codex/config.toml</code>（删除 5 个重复 key）。验证后恢复审批策略为 untrusted，确认写入幂等</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>popover 抽取为公用组件</td>
+            <td>新增 <code>ComposerPopover.vue</code>（受控 <code>open</code>/<code>update:open</code>、<code>align</code> start|end、<code>width</code> md|lg、<code>panelClass</code>、<code>ariaLabel</code>，trigger slot 暴露 <code>toggle</code>/<code>isOpen</code>）；<code>ThreadComposer</code> 的 attach/plan/approval 三个菜单重构为 <code>ComposerPopover</code>，删除旧 <code>attachMenuRootRef</code> 等 ref 与旧菜单样式类；<code>onDocumentClick</code> 改用 <code>.composer-popover-anchor</code> 判断点击内外</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>审批策略选中提示改为 tip</td>
+            <td>保存后不再弹出长文案通知，改为按钮上方悬浮 tip（<code>.thread-composer-approval-tip</code> 圆角胶囊，<code>role="status"</code>，2200ms 自动消失）；<code>App.vue</code> 提示文本用 <code>t('Approval policy saved')</code>，明暗主题样式同步到 <code>style.css</code></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>斜杠命令中技能组不见了</td>
+            <td>与需求 1 同根因：config.toml 损坏导致 <code>skills/list</code> 失败，技能组随配置层一起挂掉；配置修复后技能组恢复（验证 10 行技能，含系统/用户/仓库 scope）</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>技能组每项描述最多两行，超出隐藏</td>
+            <td><code>.thread-composer-slash-desc--skill</code> 加 <code>-webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere</code></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>每组每项宽度不能超过 popover 宽度</td>
+            <td><code>.thread-composer-slash-row</code> 加 <code>min-w-0 max-w-full overflow-hidden</code>；<code>.thread-composer-slash-skill-name</code> 加 <code>min-w-0</code> 与 <code>overflow-wrap: anywhere</code>；<code>.composer-popover</code> 加 <code>min-w-0 max-w-full overflow-x-hidden</code>（Playwright 实测行宽 ≤ popover 宽）</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>模型按钮和模型强度改为和规划模式按钮一样的样式</td>
+            <td><code>ComposerDropdown</code> 新增 <code>variant?: 'plain' | 'pill'</code>；模型与模型强度两个下拉用 <code>variant="pill"</code>，走与规划模式按钮同款 pill 样式（<code>.composer-dropdown-trigger--pill</code>：<code>h-8 rounded-full border border-zinc-200 bg-white px-2.5 text-xs</code>），dark 主题同步</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>右边栏添加显示文件功能（显示工作区文件，作用域在工作区）</td>
+            <td><code>localBrowseUi.ts</code> 新增 <code>listWorkspaceFiles</code>（忽略 <code>.git/node_modules/dist/build/out/.next/.nuxt/coverage/__pycache__/.cache/.turbo/target/.venv/venv/.idea/.vscode/output</code>，目录优先 + 字母排序，maxEntries 2000 / maxDepth 8）；<code>GET /codex-local-files?path=</code> 路由（<code>httpServer.ts</code> + <code>vite.config.ts</code> dev 中间件）；<code>codexGateway.listWorkspaceFiles(cwd)</code>；新增 <code>RightFilesPanel.vue</code>（搜索过滤、按顶层目录分组折叠、点击文件 <code>window.open('/codex-local-browse'+encodeURI(path))</code>）与 <code>IconTablerFiles.vue</code>；<code>App.vue</code> 右侧栏新增 Files tab 与 <code>+</code> 菜单项（验证 1080 文件 / 11 组）</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout">
+          <strong>验证说明：</strong>需求 1/4 属于同一配置层损坏的根因修复，其余为 UI 改造；Playwright（<code>chromium.launch({ channel: 'msedge' })</code>）8/8 断言通过：pill 触发按钮 ≥2、模型下拉选项 &gt;0、斜杠菜单 Skills 组存在、行宽不超 popover、描述两行截断（实测高度断言）、approval 菜单、tip 文本、Files tab 文件列表；明暗主题截图齐全。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
           <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（<code>40aae45</code> 第三轮调整 + 第四轮调整，经 <code>git push origin main</code>）</li>
@@ -664,7 +719,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第四轮 3 条调整已实现并推送） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 第五轮 8 条反馈已实现并验证） · 内容已脱敏
     </footer>
   </article>
 </body>

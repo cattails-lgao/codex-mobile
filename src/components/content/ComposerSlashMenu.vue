@@ -92,7 +92,7 @@ function skillBadgeLabel(scope: string | undefined): string {
         >{{ skillBadgeText(command.scope) }}</span>
         <span class="thread-composer-slash-body thread-composer-slash-body--skill">
           <span class="thread-composer-slash-skill-name">{{ command.displayName || command.id }}</span>
-          <span class="thread-composer-slash-desc">{{ command.description }}</span>
+          <span class="thread-composer-slash-desc thread-composer-slash-desc--skill">{{ command.description }}</span>
         </span>
       </button>
     </template>
@@ -111,7 +111,7 @@ function skillBadgeLabel(scope: string | undefined): string {
 }
 
 .thread-composer-slash-row {
-  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
 }
 
 .thread-composer-slash-row.is-active {
@@ -155,11 +155,22 @@ function skillBadgeLabel(scope: string | undefined): string {
 }
 
 .thread-composer-slash-skill-name {
-  @apply whitespace-normal break-words font-medium text-zinc-900;
+  @apply min-w-0 whitespace-normal break-words font-medium text-zinc-900;
+  overflow-wrap: anywhere;
 }
 
 .thread-composer-slash-desc {
   @apply truncate text-zinc-400;
+}
+
+.thread-composer-slash-desc--skill {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .thread-composer-slash-kind {

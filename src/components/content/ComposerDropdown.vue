@@ -2,6 +2,7 @@
   <div ref="rootRef" class="composer-dropdown">
     <button
       class="composer-dropdown-trigger"
+      :class="variantClass"
       type="button"
       :title="triggerAccessibleLabel"
       :aria-label="triggerAccessibleLabel"
@@ -77,6 +78,7 @@ const props = defineProps<{
   enableSearch?: boolean
   searchPlaceholder?: string
   emptyLabel?: string
+  variant?: 'plain' | 'pill'
 }>()
 
 const emit = defineEmits<{
@@ -102,6 +104,9 @@ const openDirection = computed(() => props.openDirection ?? 'down')
 const menuAlign = computed(() => props.menuAlign ?? 'start')
 const iconOnly = computed(() => props.iconOnly === true)
 const enableSearch = computed(() => props.enableSearch === true)
+const variantClass = computed(() => (
+  props.variant === 'pill' ? 'composer-dropdown-trigger--pill' : ''
+))
 const searchPlaceholderText = computed(() => props.searchPlaceholder?.trim() || 'Quick search projects')
 const emptyText = computed(() => props.emptyLabel?.trim() || 'No results')
 const triggerAccessibleLabel = computed(() => selectedLabel.value || props.placeholder?.trim() || 'Select option')
@@ -231,6 +236,14 @@ onBeforeUnmount(() => {
 
 .composer-dropdown-trigger {
   @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-zinc-500 outline-none transition;
+}
+
+.composer-dropdown-trigger--pill {
+  @apply h-8 rounded-full border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.composer-dropdown-trigger--pill .composer-dropdown-chevron {
+  @apply text-zinc-400;
 }
 
 .composer-dropdown-prefix-icon {

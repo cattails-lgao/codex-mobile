@@ -425,6 +425,12 @@ export type LocalDirectoryListing = {
   entries: LocalDirectoryEntry[]
 }
 
+export type WorkspaceFileEntry = {
+  path: string
+  relativePath: string
+  isDirectory: boolean
+}
+
 export type ThreadTerminalSession = {
   id: string
   threadId: string
@@ -3326,6 +3332,34 @@ export async function listLocalDirectories(path: string, options?: { showHidden?
       return name && entryPath ? [{ name, path: entryPath }] : []
     }),
   }
+}
+
+export async function listWorkspaceFiles(cwd: string): Promise<WorkspaceFileEntry[]> {
+  const query = new URLSearchParams({ path: cwd })
+  const response = await fetch(`/codex-local-files?${query.toString()}`)
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to load workspace files')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data = record.data
+  const entriesRaw = Array.isArray(data) ? data : []
+  return entriesRaw.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === 'string' ? normalizePathForUi(record.path) : ''
+    const relativePath = typeof record.relativePath === 'string' ? record.relativePath.trim() : ''
+    if (!path || !relativePath) return []
+    return [{
+      path,
+      relativePath,
+      isDirectory: record.isDirectory === true,
+    }]
+  })
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

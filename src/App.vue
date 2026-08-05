@@ -1178,6 +1178,17 @@
               <IconTablerGitFork class="content-right-panel-tab-icon" />
               {{ t('Git') }}
             </button>
+            <button
+              class="content-right-panel-tab"
+              :class="{ 'is-active': activeRightPanelTab === 'files' }"
+              type="button"
+              role="tab"
+              :aria-selected="activeRightPanelTab === 'files'"
+              @click="selectRightPanelTab('files')"
+            >
+              <IconTablerFiles class="content-right-panel-tab-icon" />
+              {{ t('Files') }}
+            </button>
           </div>
           <div class="content-right-panel-actions">
             <div class="content-right-panel-add-wrap">
@@ -1198,6 +1209,10 @@
                   <button type="button" @click="selectRightPanelTab('git')">
                     <IconTablerGitFork class="content-right-panel-menu-icon" />
                     {{ t('Git panel') }}
+                  </button>
+                  <button type="button" @click="selectRightPanelTab('files')">
+                    <IconTablerFiles class="content-right-panel-menu-icon" />
+                    {{ t('Files panel') }}
                   </button>
                 </div>
               </Transition>
@@ -1242,6 +1257,10 @@
             @load-commits="loadThreadBranchCommits"
             @load-commit-files="loadThreadCommitFiles"
             @open-commit-file="onOpenContentHeaderCommitFile"
+          />
+          <RightFilesPanel
+            v-else-if="activeRightPanelTab === 'files'"
+            :cwd="composerCwd"
           />
           <ThreadTerminalPanel
             v-else
@@ -1382,11 +1401,13 @@ import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import RightGitPanel from './components/content/RightGitPanel.vue'
+import RightFilesPanel from './components/content/RightFilesPanel.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
 import IconTablerGitFork from './components/icons/IconTablerGitFork.vue'
+import IconTablerFiles from './components/icons/IconTablerFiles.vue'
 import IconTablerLayoutSidebar from './components/icons/IconTablerLayoutSidebar.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
@@ -1717,7 +1738,7 @@ const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const isTerminalInputFocused = ref(false)
 const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
-const activeRightPanelTab = ref<'git' | 'terminal'>('git')
+const activeRightPanelTab = ref<'git' | 'files' | 'terminal'>('git')
 const isRightPanelMenuOpen = ref(false)
 const isMobileRightPanelOpen = ref(false)
 const isRightPanelCollapsed = ref(false)
@@ -1885,9 +1906,9 @@ async function onSaveApprovalPolicy(): Promise<void> {
   try {
     await writeApprovalPolicy(approvalPolicy.value)
     approvalPolicyConsented.value = true
-    approvalPolicyNotice.value = 'Approval policy saved. Codex will now ask for permission before risky actions.'
+    approvalPolicyNotice.value = t('Approval policy saved')
     if (approvalPolicyNoticeTimer) clearTimeout(approvalPolicyNoticeTimer)
-    approvalPolicyNoticeTimer = setTimeout(() => { approvalPolicyNotice.value = '' }, 5000)
+    approvalPolicyNoticeTimer = setTimeout(() => { approvalPolicyNotice.value = '' }, 2200)
   } catch (error) {
     approvalPolicyError.value = error instanceof Error ? error.message : 'Failed to save approval policy'
   } finally {
@@ -3545,7 +3566,7 @@ function toggleRightPanelTerminal(): void {
   }
 }
 
-function selectRightPanelTab(tab: 'git' | 'terminal'): void {
+function selectRightPanelTab(tab: 'git' | 'files' | 'terminal'): void {
   activeRightPanelTab.value = tab
   isRightPanelMenuOpen.value = false
   if (!isMobile.value) {
