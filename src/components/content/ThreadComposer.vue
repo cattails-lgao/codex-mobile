@@ -2360,7 +2360,7 @@ watch(
 }
 
 .thread-composer-controls {
-  @apply relative mt-2 sm:mt-3 flex items-center gap-2 sm:gap-4 overflow-visible pb-px;
+  @apply relative mt-2 sm:mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-4 overflow-visible pb-px;
 }
 
 .thread-composer-controls--recording {

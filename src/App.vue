@@ -667,6 +667,7 @@
               :detached="isThreadDetachedHead"
               :dirty="isThreadWorktreeDirty"
               :worktree-change-summary="threadWorktreeChangeSummary"
+              :worktree-changes="threadWorktreeChangedFiles"
               :branches="threadBranchOptions"
               :commits-by-branch="threadBranchCommitsByBranch"
               :commits-loading-for="threadBranchCommitsLoadingFor"
@@ -1090,9 +1091,6 @@
                   <div v-if="isCompactContextPending" class="thread-compaction-banner" role="status">
                     <span class="thread-compaction-banner-spinner" aria-hidden="true" />
                     <span>{{ t('Compacting thread context…') }}</span>
-                  </div>
-                  <div v-else-if="compactionCompleteNotice" class="thread-compaction-banner is-done" role="status">
-                    <span>{{ t('Context compacted') }}</span>
                   </div>
                   <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
@@ -1833,6 +1831,7 @@ const currentThreadHeadDate = ref<string | null>(null)
 const isThreadDetachedHead = ref(false)
 const isThreadWorktreeDirty = ref(false)
 const threadWorktreeChangeSummary = ref({ addedLineCount: 0, removedLineCount: 0 })
+const threadWorktreeChangedFiles = ref<GitCommitFileChange[]>([])
 const threadBranchError = ref('')
 const threadBranchCommitsByBranch = ref<Record<string, GitCommitOption[]>>({})
 const threadBranchCommitsLoadingFor = ref('')
@@ -2138,22 +2137,6 @@ const isCompactContextPending = computed(() => {
 const showCompactContextButton = computed(() =>
   threadContextBadgeState.value === 'warning' || threadContextBadgeState.value === 'danger',
 )
-const compactionCompleteNotice = ref(false)
-let awaitingCompactionCompletion = false
-let compactionCompleteNoticeTimer: ReturnType<typeof setTimeout> | null = null
-watch(isCompactContextPending, (compacting) => {
-  if (compacting) {
-    awaitingCompactionCompletion = true
-    compactionCompleteNotice.value = false
-    return
-  }
-  if (awaitingCompactionCompletion) {
-    awaitingCompactionCompletion = false
-    compactionCompleteNotice.value = true
-    if (compactionCompleteNoticeTimer) clearTimeout(compactionCompleteNoticeTimer)
-    compactionCompleteNoticeTimer = setTimeout(() => { compactionCompleteNotice.value = false }, 4000)
-  }
-})
 function onCompactContext(): void {
   const threadId = selectedThreadId.value
   if (!threadId) return
@@ -2479,10 +2462,6 @@ onUnmounted(() => {
   if (remoteControlNoticeTimer) {
     clearTimeout(remoteControlNoticeTimer)
     remoteControlNoticeTimer = null
-  }
-  if (compactionCompleteNoticeTimer) {
-    clearTimeout(compactionCompleteNoticeTimer)
-    compactionCompleteNoticeTimer = null
   }
 })
 
@@ -3816,6 +3795,7 @@ function resetThreadBranchState(): void {
   isThreadDetachedHead.value = false
   isThreadWorktreeDirty.value = false
   threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+  threadWorktreeChangedFiles.value = []
   threadBranchCommitsByBranch.value = {}
   threadBranchCommitsLoadingFor.value = ''
   threadBranchCommitsError.value = ''
@@ -3866,6 +3846,7 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     currentThreadHeadDate.value = state.headDate
     isThreadDetachedHead.value = state.detached
     isThreadWorktreeDirty.value = state.dirty
+    threadWorktreeChangedFiles.value = state.changedFiles
     loadThreadWorktreeChangeSummary(targetCwd)
     const defaultBranchForCommits = state.currentBranch?.trim() || state.options[0]?.value?.trim() || ''
     if (defaultBranchForCommits) loadThreadBranchCommits({ branch: defaultBranchForCommits, includeResetHistory: true })
@@ -3879,6 +3860,7 @@ async function loadThreadBranches(cwd: string): Promise<void> {
     isThreadDetachedHead.value = false
     isThreadWorktreeDirty.value = false
     threadWorktreeChangeSummary.value = { addedLineCount: 0, removedLineCount: 0 }
+    threadWorktreeChangedFiles.value = []
   } finally {
     if (requestId === threadBranchesRequestId) {
       isLoadingThreadBranches.value = false
@@ -3886,13 +3868,14 @@ async function loadThreadBranches(cwd: string): Promise<void> {
   }
 }
 
-function applyThreadGitState(state: { currentBranch: string | null; headSha: string | null; headSubject: string | null; headDate: string | null; detached: boolean; dirty: boolean }): void {
+function applyThreadGitState(state: { currentBranch: string | null; headSha: string | null; headSubject: string | null; headDate: string | null; detached: boolean; dirty: boolean; changedFiles: GitCommitFileChange[] }): void {
   currentThreadBranch.value = state.currentBranch
   currentThreadHeadSha.value = state.headSha
   currentThreadHeadSubject.value = state.headSubject
   currentThreadHeadDate.value = state.headDate
   isThreadDetachedHead.value = state.detached
   isThreadWorktreeDirty.value = state.dirty
+  threadWorktreeChangedFiles.value = state.changedFiles
   loadThreadWorktreeChangeSummary(composerCwd.value)
 }
 

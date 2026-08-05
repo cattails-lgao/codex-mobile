@@ -1445,6 +1445,7 @@ export function useDesktopState() {
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const livePlanMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
+  const injectedSystemMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
@@ -1669,7 +1670,8 @@ export function useDesktopState() {
     const liveAgent = liveAgentMessagesByThreadId.value[threadId] ?? []
     const liveCommands = liveCommandsByThreadId.value[threadId] ?? []
     const liveFileChanges = liveFileChangeMessagesByThreadId.value[threadId] ?? []
-    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent]
+    const injected = injectedSystemMessagesByThreadId.value[threadId] ?? []
+    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...injected]
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -3928,6 +3930,22 @@ export function useDesktopState() {
       const threadId = readString(params?.threadId)
       if (threadId) {
         markThreadCompacting(threadId, false)
+        // Surface the compaction as a message inside the thread feed instead of
+        // a transient overlay; the injected entry survives later message
+        // reloads because it lives in its own store.
+        const previousInjected = injectedSystemMessagesByThreadId.value[threadId] ?? []
+        injectedSystemMessagesByThreadId.value = {
+          ...injectedSystemMessagesByThreadId.value,
+          [threadId]: [
+            ...previousInjected,
+            {
+              id: `compaction:${threadId}:${Date.now()}`,
+              role: 'system',
+              text: '',
+              messageType: 'compaction',
+            },
+          ],
+        }
         // queueEventDrivenSync (called by the notification subscriber) already
         // refreshes the thread list for any thread/* notification; mark the
         // message payload dirty so the compaction summary is re-read too.

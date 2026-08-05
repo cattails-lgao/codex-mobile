@@ -368,6 +368,7 @@ export type GitBranchState = {
   dirty: boolean
   gitRoot: string
   options: WorktreeBranchOption[]
+  changedFiles: GitCommitFileChange[]
 }
 
 export type GitCommitOption = {
@@ -2960,7 +2961,7 @@ export async function getWorktreeBranchOptions(sourceCwd: string): Promise<Workt
 export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
   const normalizedCwd = cwd.trim()
   if (!normalizedCwd) {
-    return { currentBranch: null, headSha: null, headSubject: null, headDate: null, detached: false, dirty: false, gitRoot: '', options: [] }
+    return { currentBranch: null, headSha: null, headSubject: null, headDate: null, detached: false, dirty: false, gitRoot: '', options: [], changedFiles: [] }
   }
   const query = new URLSearchParams({ cwd: normalizedCwd })
   const response = await fetch(`/codex-api/git/branches?${query.toString()}`)
@@ -2999,6 +3000,7 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
   const headSubjectRaw = record.headSubject
   const headDateRaw = record.headDate
   const gitRootRaw = record.gitRoot
+  const changedFiles = normalizeGitChangedFiles(record.changedFiles)
   return {
     currentBranch,
     headSha: typeof headShaRaw === 'string' && headShaRaw.trim() ? headShaRaw.trim() : null,
@@ -3008,7 +3010,33 @@ export async function getGitBranchState(cwd: string): Promise<GitBranchState> {
     dirty: record.dirty === true,
     gitRoot: typeof gitRootRaw === 'string' ? normalizePathForUi(gitRootRaw) : '',
     options,
+    changedFiles,
   }
+}
+
+function normalizeGitChangedFiles(value: unknown): GitCommitFileChange[] {
+  const rows = Array.isArray(value) ? value : []
+  const files: GitCommitFileChange[] = []
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+    const record = row as Record<string, unknown>
+    const rawPath = record.path
+    const path = typeof rawPath === 'string' ? normalizePathForUi(rawPath.trim()) : ''
+    if (!path) continue
+    const rawStatus = record.status
+    const status = typeof rawStatus === 'string' ? rawStatus.trim() : ''
+    const rawLabel = record.label
+    const label = typeof rawLabel === 'string' && rawLabel.trim() ? rawLabel.trim() : status
+    files.push({
+      path,
+      previousPath: typeof record.previousPath === 'string' && record.previousPath.trim() ? normalizePathForUi(record.previousPath.trim()) : null,
+      status,
+      label,
+      addedLineCount: typeof record.addedLineCount === 'number' ? record.addedLineCount : null,
+      removedLineCount: typeof record.removedLineCount === 'number' ? record.removedLineCount : null,
+    })
+  }
+  return files
 }
 
 export async function getGitRepositoryStatus(cwd: string): Promise<GitRepositoryStatus> {
@@ -3129,6 +3157,7 @@ export async function resetGitBranchToCommit(cwd: string, branch: string, sha: s
     dirty: record.dirty === true,
     gitRoot: typeof record.gitRoot === 'string' ? normalizePathForUi(record.gitRoot) : '',
     options: [],
+    changedFiles: normalizeGitChangedFiles(record.changedFiles),
   }
 }
 

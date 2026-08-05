@@ -27,7 +27,10 @@
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
-        <div v-if="isCommandMessage(message)" class="message-row" data-role="system">
+        <div v-if="isCompactionMessage(message)" class="message-row thread-compaction-row" data-role="system">
+          <div class="thread-compaction-inline" role="status">Context compacted</div>
+        </div>
+        <div v-else-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
             <button
               v-if="getGroupedCommandsForLatest(message).length > 0"
@@ -1016,6 +1019,10 @@ function readPlanData(message: UiMessage): { explanation: string; steps: UiPlanS
 
 function isCommandMessage(message: UiMessage): boolean {
   return message.messageType === 'commandExecution' && !!message.commandExecution
+}
+
+function isCompactionMessage(message: UiMessage): boolean {
+  return message.messageType === 'compaction'
 }
 
 function isPlanMessage(message: UiMessage): boolean {
@@ -4552,6 +4559,18 @@ onBeforeUnmount(() => {
 .message-row[data-role='assistant'],
 .message-row[data-role='system'] {
   @apply justify-start;
+}
+
+.thread-compaction-row {
+  @apply justify-center py-1.5;
+}
+
+.thread-compaction-inline {
+  @apply rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-500;
+}
+
+:root.dark .thread-compaction-inline {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-400;
 }
 
 .conversation-bottom-anchor {
