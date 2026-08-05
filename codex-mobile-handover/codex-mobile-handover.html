@@ -251,12 +251,12 @@
       <h1>codexapp 本地开发环境交接</h1>
       <p class="sub">本仓库是 <code>codexapp</code>（Codex 的轻量级浏览器 Web UI，跑在 Codex app-server 之上）。本文档记录本地环境当前状态、启动方式、本次会话解决的「Codex CLI not found」与页面转圈问题，以及交接时需要注意的事项。</p>
       <div class="snapshot">
-        <div class="cell"><div class="label">Git 分支</div><div class="value">main (ahead 2)</div></div>
+        <div class="cell"><div class="label">Git 分支</div><div class="value">main (synced)</div></div>
         <div class="cell"><div class="label">Dev 端口</div><div class="value">4173</div></div>
         <div class="cell"><div class="label">Dev 状态</div><div class="value ok">运行中 · HTTP 200</div></div>
         <div class="cell"><div class="label">App-server</div><div class="value ok">正常响应 RPC</div></div>
         <div class="cell"><div class="label">工具链</div><div class="value">pnpm 11.18.0 · Node 22</div></div>
-        <div class="cell"><div class="label">最近提交</div><div class="value">eedf148</div></div>
+        <div class="cell"><div class="label">最近提交</div><div class="value">5cd6ede</div></div>
       </div>
     </header>
 
@@ -345,6 +345,26 @@
           </tr>
         </table>
         </div>
+
+        <h3>第四轮修复（commit <code>5cd6ede</code>）：压缩状态两个 bug</h3>
+        <p>第三轮把压缩进度改为消息流内渲染后出现两个问题，根因同源——<mark class="key">新版本 codex app-server 已废弃 <code>thread/compacted</code> 通知</mark>（协议 schema 标注 <code>Deprecated: Use 'ContextCompaction' item type instead.</code>），压缩完成改为在消息 payload 中插入 <code>contextCompaction</code> item，而旧实现只等废弃通知：</p>
+        <div class="table-wrap">
+        <table>
+          <tr><th>问题</th><th>根因</th><th>修复</th><th>验证</th></tr>
+          <tr>
+            <td>执行 <code>/compact</code> 后 thinking 已结束但 spinner 仍转圈</td>
+            <td><code>thread/compacted</code> 通知收不到（已废弃），只能等 60s 超时兜底才切换 done</td>
+            <td><code>src/api/normalizers/v2.ts</code> 将 <code>contextCompaction</code> item 归一化为 <code>compaction.done</code> 消息；<code>compactThreadById</code> 在 <code>thread/compact/start</code> 后轮询线程详情（2s 间隔、上限 28s）检测到 done 即收尾；兼容旧版通知路径</td>
+            <td>Playwright：pending 短暂显示后立即切换 done，不再等 60s</td>
+          </tr>
+          <tr>
+            <td>压缩成功后刷新页面，完成提示消失</td>
+            <td>完成消息是内存注入的（<code>injectedSystemMessagesByThreadId</code>），不持久化，刷新即失</td>
+            <td><code>contextCompaction</code> item 来自服务端持久化数据，归一化后随消息加载自然保留；多次压缩只保留最近一条 done（<code>collapseCompactionDoneMessages</code>）；无压缩进行中且已有持久化 done 时丢弃残留 pending 行</td>
+            <td>Playwright：刷新后仍有 "Context compacted"、无 spinner、只显示 1 条；单测新增 3 例通过</td>
+          </tr>
+        </table>
+        </div>
       </section>
 
       <section>
@@ -386,6 +406,11 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
             <td>压缩状态可见性、权限审批配置、技能入口发现</td>
           </tr>
           <tr>
+            <td><code>5cd6ede</code></td>
+            <td>第四轮修复（压缩状态两个 bug）：新版本 app-server 已废弃 <code>thread/compacted</code> 通知（改用 <code>contextCompaction</code> item），导致 spinner 收不到完成信号只能等 60s 超时、且完成消息不持久化刷新即失；修复为归一化 <code>contextCompaction</code> item 为 <code>compaction.done</code> 消息 + 压缩后轮询线程详情（2s 间隔、上限 28s）直到 done 出现 + 多次压缩只保留最近一条 done + 无压缩进行中时丢弃残留 pending 行</td>
+            <td>压缩 spinner 立即结束、完成状态刷新后保留</td>
+          </tr>
+          <tr>
             <td><code>2860a54</code> 等早期提交</td>
             <td><code>pnpm-workspace.yaml</code>（<code>allowBuilds</code>）、<code>vite.config.ts</code>（watch ignore）、<code>package.json</code>（packageManager）、<code>docs/codex-cli-not-found-troubleshooting.md</code>、P0/P1/P2 功能补齐</td>
             <td>环境修复与功能补齐（见下方方案完成情况表）</td>
@@ -404,7 +429,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
             <td rowspan="2">P0</td>
             <td>P0-1 上下文压缩</td>
             <td><strong class="ok-text">已完成</strong></td>
-            <td>commit <code>04709d9</code>;<code>compactThread</code>、<code>thread/compacted</code> 通知处理、压缩按钮与单测均已落地</td>
+            <td>commit <code>04709d9</code>;<code>compactThread</code>、<code>thread/compacted</code> 通知处理、压缩按钮与单测均已落地；第四轮（<code>5cd6ede</code>）补充新版 <code>contextCompaction</code> item 归一化与轮询收尾，spinner 不再等 60s 超时、完成状态刷新后保留</td>
           </tr>
           <tr>
             <td>P0-2 实时语音</td>
@@ -546,7 +571,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至 <code>eedf148</code>），无需再推送</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至 <code>5cd6ede</code>），无需再推送</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code> 等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归</strong>：本轮改动已做静态跨平台审查（无硬编码路径、路径均经 <code>node:path</code> 组装、TOML 读写兼容 CRLF/LF），但仅在本机 Windows 实机验证；建议在 Linux/macOS 各跑一次 <code>pnpm run build</code> 与关键单测确认</li>
@@ -566,7 +591,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 三轮验收修复已推送 + 待办需求 7 项已记录） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 四轮验收修复已推送 + 待办需求 7 项已记录） · 内容已脱敏
     </footer>
   </article>
 </body>
