@@ -595,6 +595,74 @@
             >
               {{ props.tryInFlightKey === pluginTryKey(selectedPlugin) ? 'Starting...' : 'Try it!' }}
             </button>
+            <button
+              v-if="supportsPluginShare && selectedPlugin && selectedPlugin.installed"
+              class="directory-action"
+              type="button"
+              @click="openPluginSharePanel"
+            >
+              Share
+            </button>
+          </div>
+        </article>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="isPluginShareOpen" class="directory-modal-overlay" @click.self="closePluginSharePanel">
+        <article class="directory-modal directory-modal--share">
+          <div class="directory-modal-header">
+            <div class="directory-card-main">
+              <h3 class="directory-modal-title">Plugin shares</h3>
+              <span class="directory-card-meta">{{ selectedPlugin?.displayName || 'Plugin' }}</span>
+            </div>
+            <button class="directory-modal-close" type="button" aria-label="Close plugin shares" @click="closePluginSharePanel">Close</button>
+          </div>
+
+          <div class="directory-modal-body">
+            <div v-if="pluginShareError" class="directory-error">{{ pluginShareError }}</div>
+            <div v-else-if="isPluginShareLoading" class="directory-loading">Loading shares...</div>
+            <template v-else>
+              <p v-if="pluginShares.length === 0" class="directory-empty">No shares yet. Share this plugin to make it available on other devices.</p>
+              <div v-else class="directory-share-list">
+                <div v-for="share in pluginShares" :key="share.remotePluginId" class="directory-share-row">
+                  <div class="directory-share-info">
+                    <span class="directory-share-name">{{ share.pluginName }}</span>
+                    <a
+                      v-if="share.shareUrl"
+                      class="directory-share-link"
+                      :href="share.shareUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                    >{{ share.shareUrl }}</a>
+                  </div>
+                  <button
+                    class="directory-share-checkout"
+                    type="button"
+                    :disabled="isPluginShareActionInFlight"
+                    @click="checkoutPluginShareRow(share.remotePluginId)"
+                  >
+                    {{ pluginShareActionName === `checkout:${share.remotePluginId}` ? 'Checking out...' : 'Checkout' }}
+                  </button>
+                  <button
+                    class="directory-share-delete"
+                    type="button"
+                    :disabled="isPluginShareActionInFlight"
+                    @click="deletePluginShareRow(share.remotePluginId)"
+                  >
+                    {{ pluginShareActionName === `delete:${share.remotePluginId}` ? 'Removing...' : 'Remove' }}
+                  </button>
+                </div>
+              </div>
+              <button
+                class="directory-action primary"
+                type="button"
+                :disabled="isPluginShareActionInFlight || !selectedPluginPath()"
+                @click="saveSelectedPluginShare"
+              >
+                {{ pluginShareActionName === 'save' ? 'Sharing...' : 'Share this plugin' }}
+              </button>
+            </template>
           </div>
         </article>
       </div>
@@ -708,6 +776,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   addDirectoryMarketplace,
+  checkoutPluginShare,
+  deletePluginShare,
   getDirectoryComposioStatus,
   getMethodCatalog,
   installDirectoryPlugin,
@@ -716,10 +786,12 @@ import {
   listDirectoryApps,
   listDirectoryMcpServers,
   listDirectoryPlugins,
+  listPluginShares,
   readDirectoryComposioConnector,
   readDirectoryPlugin,
   reloadDirectoryMcpServers,
   removeDirectoryMarketplace,
+  savePluginShare,
   setDirectoryAppEnabled,
   setDirectoryPluginEnabled,
   startDirectoryComposioCliLogin,
@@ -736,6 +808,7 @@ import {
   type DirectoryPluginAppSummary,
   type DirectoryPluginDetail,
   type DirectoryPluginSummary,
+  type UiPluginShareSummary,
 } from '../../api/codexGateway'
 import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
 import SkillsHub from './SkillsHub.vue'
@@ -926,6 +999,12 @@ const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
 const marketplaceSourceUrl = ref('')
 const marketplaceActionName = ref('')
 const isMarketplaceActionInFlight = ref(false)
+const pluginShares = ref<UiPluginShareSummary[]>([])
+const isPluginShareOpen = ref(false)
+const isPluginShareLoading = ref(false)
+const isPluginShareActionInFlight = ref(false)
+const pluginShareActionName = ref('')
+const pluginShareError = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 let composioSearchTimer: ReturnType<typeof setTimeout> | null = null
 let isComposioLoadQueued = false
@@ -942,6 +1021,10 @@ const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/log
 const supportsMarketplace = computed(() =>
   !methodsLoaded.value ||
   ['marketplace/add', 'marketplace/remove', 'marketplace/upgrade'].every((method) => methodSet.value.has(method)),
+)
+const supportsPluginShare = computed(() =>
+  !methodsLoaded.value ||
+  ['plugin/share/save', 'plugin/share/list', 'plugin/share/delete'].every((method) => methodSet.value.has(method)),
 )
 const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length > 0)
 const selectedPluginDescription = computed(() =>
@@ -1605,6 +1688,78 @@ function closePluginDetail(): void {
   isPluginDetailOpen.value = false
 }
 
+function selectedPluginPath(): string {
+  const plugin = selectedPlugin.value
+  if (!plugin) return ''
+  if (plugin.marketplacePath) {
+    return `${plugin.marketplacePath.replace(/[\\/]+$/, '')}/${plugin.name}`
+  }
+  return plugin.sourceUrl || ''
+}
+
+async function openPluginSharePanel(): Promise<void> {
+  pluginShareError.value = ''
+  isPluginShareOpen.value = true
+  isPluginShareLoading.value = true
+  try {
+    pluginShares.value = await listPluginShares()
+  } catch (error) {
+    pluginShareError.value = error instanceof Error ? error.message : 'Failed to load plugin shares'
+  } finally {
+    isPluginShareLoading.value = false
+  }
+}
+
+async function saveSelectedPluginShare(): Promise<void> {
+  const pluginPath = selectedPluginPath()
+  if (!pluginPath) return
+  isPluginShareActionInFlight.value = true
+  pluginShareActionName.value = 'save'
+  try {
+    const result = await savePluginShare(pluginPath)
+    showToast(result.shareUrl ? 'Plugin shared' : 'Plugin shared (no URL returned)')
+    await openPluginSharePanel()
+  } catch (error) {
+    pluginShareError.value = error instanceof Error ? error.message : 'Failed to share plugin'
+  } finally {
+    isPluginShareActionInFlight.value = false
+    pluginShareActionName.value = ''
+  }
+}
+
+async function deletePluginShareRow(remotePluginId: string): Promise<void> {
+  isPluginShareActionInFlight.value = true
+  pluginShareActionName.value = `delete:${remotePluginId}`
+  try {
+    await deletePluginShare(remotePluginId)
+    pluginShares.value = pluginShares.value.filter((share) => share.remotePluginId !== remotePluginId)
+    showToast('Share removed')
+  } catch (error) {
+    pluginShareError.value = error instanceof Error ? error.message : 'Failed to remove share'
+  } finally {
+    isPluginShareActionInFlight.value = false
+    pluginShareActionName.value = ''
+  }
+}
+
+async function checkoutPluginShareRow(remotePluginId: string): Promise<void> {
+  isPluginShareActionInFlight.value = true
+  pluginShareActionName.value = `checkout:${remotePluginId}`
+  try {
+    await checkoutPluginShare(remotePluginId)
+    showToast('Plugin checked out')
+  } catch (error) {
+    pluginShareError.value = error instanceof Error ? error.message : 'Failed to checkout plugin'
+  } finally {
+    isPluginShareActionInFlight.value = false
+    pluginShareActionName.value = ''
+  }
+}
+
+function closePluginSharePanel(): void {
+  isPluginShareOpen.value = false
+}
+
 async function openComposioDetail(slug: string): Promise<void> {
   isComposioDetailOpen.value = true
   isLoadingComposioDetail.value = true
@@ -2039,6 +2194,39 @@ onMounted(async () => {
   @apply shrink-0 rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 cursor-pointer disabled:opacity-50;
 }
 
+.directory-share-list {
+  @apply flex flex-col gap-1.5;
+}
+
+.directory-share-row {
+  @apply flex min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+}
+
+.directory-share-info {
+  @apply flex min-w-0 flex-1 flex-col gap-0.5;
+}
+
+.directory-share-name {
+  @apply text-xs font-medium text-zinc-800;
+}
+
+.directory-share-link {
+  @apply truncate font-mono text-[11px] text-zinc-500 hover:text-zinc-800 hover:underline;
+}
+
+.directory-share-checkout,
+.directory-share-delete {
+  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-zinc-50 cursor-pointer disabled:opacity-50;
+}
+
+.directory-share-checkout:hover {
+  @apply text-zinc-900;
+}
+
+.directory-share-delete:hover {
+  @apply bg-rose-50 text-rose-600;
+}
+
 .directory-grid {
   @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
 }
@@ -2437,6 +2625,29 @@ button.directory-card {
 }
 
 :global(:root.dark) .directory-marketplace-remove:hover {
+  @apply bg-rose-900/50 text-rose-300;
+}
+
+:global(:root.dark) .directory-share-row,
+:global(:root.dark) .directory-share-checkout,
+:global(:root.dark) .directory-share-delete {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:global(:root.dark) .directory-share-name {
+  @apply text-zinc-200;
+}
+
+:global(:root.dark) .directory-share-link {
+  @apply text-zinc-500 hover:text-zinc-300;
+}
+
+:global(:root.dark) .directory-share-checkout,
+:global(:root.dark) .directory-share-delete {
+  @apply text-zinc-400 hover:bg-zinc-700;
+}
+
+:global(:root.dark) .directory-share-delete:hover {
   @apply bg-rose-900/50 text-rose-300;
 }
 
