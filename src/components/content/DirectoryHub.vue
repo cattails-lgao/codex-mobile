@@ -65,6 +65,52 @@
           </button>
         </div>
       </div>
+      <div v-if="supportsMarketplace" class="directory-marketplace">
+        <div class="directory-marketplace-header">
+          <span class="directory-marketplace-title">Marketplaces</span>
+          <button
+            class="directory-marketplace-upgrade"
+            type="button"
+            :disabled="isMarketplaceActionInFlight"
+            @click="upgradeAllMarketplaces"
+          >
+            {{ marketplaceActionName === 'upgrade' ? 'Upgrading...' : 'Upgrade all' }}
+          </button>
+        </div>
+        <div v-if="marketplaces.length === 0" class="directory-marketplace-empty">No marketplaces configured.</div>
+        <div v-else class="directory-marketplace-list">
+          <div v-for="marketplace in marketplaces" :key="marketplace.name" class="directory-marketplace-row">
+            <span class="directory-marketplace-name">{{ marketplace.displayName }}</span>
+            <code v-if="marketplace.path" class="directory-marketplace-path">{{ marketplace.path }}</code>
+            <button
+              class="directory-marketplace-remove"
+              type="button"
+              :disabled="isMarketplaceActionInFlight"
+              @click="removeMarketplace(marketplace.name)"
+            >
+              {{ marketplaceActionName === `remove:${marketplace.name}` ? 'Removing...' : 'Remove' }}
+            </button>
+          </div>
+        </div>
+        <div class="directory-marketplace-add">
+          <input
+            v-model="marketplaceSourceUrl"
+            class="directory-marketplace-source"
+            type="url"
+            placeholder="Git URL to add a marketplace"
+            aria-label="Marketplace Git URL"
+            @keydown.enter="addMarketplace"
+          />
+          <button
+            class="directory-marketplace-add-button"
+            type="button"
+            :disabled="isMarketplaceActionInFlight || !marketplaceSourceUrl.trim()"
+            @click="addMarketplace"
+          >
+            {{ marketplaceActionName === 'add' ? 'Adding...' : 'Add' }}
+          </button>
+        </div>
+      </div>
       <div v-if="!supportsPlugins" class="directory-empty">
         Plugin APIs unavailable in this Codex CLI. Update Codex CLI to use plugin catalog features.
       </div>
@@ -661,6 +707,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  addDirectoryMarketplace,
   getDirectoryComposioStatus,
   getMethodCatalog,
   installDirectoryPlugin,
@@ -672,12 +719,14 @@ import {
   readDirectoryComposioConnector,
   readDirectoryPlugin,
   reloadDirectoryMcpServers,
+  removeDirectoryMarketplace,
   setDirectoryAppEnabled,
   setDirectoryPluginEnabled,
   startDirectoryComposioCliLogin,
   startDirectoryComposioLogin,
   startDirectoryMcpLogin,
   uninstallDirectoryPlugin,
+  upgradeDirectoryMarketplaces,
   type DirectoryAppInfo,
   type DirectoryComposioConnection,
   type DirectoryComposioConnector,
@@ -874,6 +923,9 @@ const installAuthApps = ref<DirectoryPluginAppSummary[]>([])
 const mcpLoginServerName = ref('')
 const expandedMcpNames = ref<Set<string>>(new Set())
 const toast = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+const marketplaceSourceUrl = ref('')
+const marketplaceActionName = ref('')
+const isMarketplaceActionInFlight = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 let composioSearchTimer: ReturnType<typeof setTimeout> | null = null
 let isComposioLoadQueued = false
@@ -887,6 +939,10 @@ const supportsApps = computed(() => !methodsLoaded.value || methodSet.value.has(
 const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has('mcpServerStatus/list'))
 const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
 const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/login'))
+const supportsMarketplace = computed(() =>
+  !methodsLoaded.value ||
+  ['marketplace/add', 'marketplace/remove', 'marketplace/upgrade'].every((method) => methodSet.value.has(method)),
+)
 const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length > 0)
 const selectedPluginDescription = computed(() =>
   selectedPluginDetail.value?.description ||
@@ -920,6 +976,20 @@ const selectedPluginInstallUnavailable = computed(() =>
   (selectedPluginDetail.value?.apps.some((app) => isPluginDetailAppUnavailable(app)) ?? false),
 )
 const visiblePlugins = computed(() => limitPopularRows(sortPlugins(filterPlugins(plugins.value, pluginSearchQuery.value), pluginSortMode.value), pluginSortMode.value, pluginSearchQuery.value))
+const marketplaces = computed(() => {
+  const seen = new Map<string, { name: string; displayName: string; path: string | null }>()
+  for (const plugin of plugins.value) {
+    if (!plugin.marketplaceName) continue
+    const key = plugin.marketplaceName
+    if (seen.has(key)) continue
+    seen.set(key, {
+      name: plugin.marketplaceName,
+      displayName: plugin.marketplaceDisplayName || plugin.marketplaceName,
+      path: plugin.marketplacePath,
+    })
+  }
+  return [...seen.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+})
 const visibleApps = computed(() => limitPopularApps(sortApps(filterApps(apps.value, appSearchQuery.value), appSortMode.value), appSortMode.value, appSearchQuery.value))
 const visibleComposioConnectors = computed(() => sortComposioConnectors(
   filterComposioConnectors(composioConnectors.value, composioSearchQuery.value),
@@ -1316,6 +1386,58 @@ async function loadPlugins(): Promise<void> {
     pluginError.value = error instanceof Error ? error.message : 'Failed to load plugins'
   } finally {
     isLoadingPlugins.value = false
+  }
+}
+
+async function addMarketplace(): Promise<void> {
+  const source = marketplaceSourceUrl.value.trim()
+  if (!source) return
+  isMarketplaceActionInFlight.value = true
+  marketplaceActionName.value = 'add'
+  try {
+    await addDirectoryMarketplace(source)
+    marketplaceSourceUrl.value = ''
+    showToast('Marketplace added')
+    await loadPlugins()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to add marketplace', 'error')
+  } finally {
+    isMarketplaceActionInFlight.value = false
+    marketplaceActionName.value = ''
+  }
+}
+
+async function removeMarketplace(marketplaceName: string): Promise<void> {
+  isMarketplaceActionInFlight.value = true
+  marketplaceActionName.value = `remove:${marketplaceName}`
+  try {
+    await removeDirectoryMarketplace(marketplaceName)
+    showToast('Marketplace removed')
+    await loadPlugins()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to remove marketplace', 'error')
+  } finally {
+    isMarketplaceActionInFlight.value = false
+    marketplaceActionName.value = ''
+  }
+}
+
+async function upgradeAllMarketplaces(): Promise<void> {
+  isMarketplaceActionInFlight.value = true
+  marketplaceActionName.value = 'upgrade'
+  try {
+    const result = await upgradeDirectoryMarketplaces()
+    if (result.errors.length > 0) {
+      showToast(result.errors.join('; '), 'error')
+    } else {
+      showToast(`Upgraded ${result.upgradedRoots.length || result.selectedMarketplaces.length || 'all'} marketplace${(result.upgradedRoots.length + result.selectedMarketplaces.length) === 1 ? '' : 's'}`)
+    }
+    await loadPlugins()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to upgrade marketplaces', 'error')
+  } finally {
+    isMarketplaceActionInFlight.value = false
+    marketplaceActionName.value = ''
   }
 }
 
@@ -1865,6 +1987,58 @@ onMounted(async () => {
   @apply bg-white text-zinc-900 shadow-sm;
 }
 
+.directory-marketplace {
+  @apply mt-2 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 py-2.5;
+}
+
+.directory-marketplace-header {
+  @apply flex items-center justify-between;
+}
+
+.directory-marketplace-title {
+  @apply text-sm font-semibold text-zinc-700;
+}
+
+.directory-marketplace-upgrade {
+  @apply rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+}
+
+.directory-marketplace-empty {
+  @apply mt-2 text-xs text-zinc-500;
+}
+
+.directory-marketplace-list {
+  @apply mt-2 flex flex-col gap-1.5;
+}
+
+.directory-marketplace-row {
+  @apply flex min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+}
+
+.directory-marketplace-name {
+  @apply shrink-0 text-xs font-medium text-zinc-800;
+}
+
+.directory-marketplace-path {
+  @apply min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500;
+}
+
+.directory-marketplace-remove {
+  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer disabled:opacity-50;
+}
+
+.directory-marketplace-add {
+  @apply mt-2 flex items-center gap-2;
+}
+
+.directory-marketplace-source {
+  @apply min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400;
+}
+
+.directory-marketplace-add-button {
+  @apply shrink-0 rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 cursor-pointer disabled:opacity-50;
+}
+
 .directory-grid {
   @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
 }
@@ -2222,6 +2396,48 @@ button.directory-card {
 
 :global(:root.dark) .directory-sort-group {
   @apply border-zinc-700 bg-zinc-950;
+}
+
+:global(:root.dark) .directory-marketplace,
+:global(:root.dark) .directory-marketplace-row,
+:global(:root.dark) .directory-marketplace-source,
+:global(:root.dark) .directory-marketplace-upgrade,
+:global(:root.dark) .directory-marketplace-remove {
+  @apply border-zinc-700;
+}
+
+:global(:root.dark) .directory-marketplace {
+  @apply bg-zinc-900/60;
+}
+
+:global(:root.dark) .directory-marketplace-title,
+:global(:root.dark) .directory-marketplace-name {
+  @apply text-zinc-200;
+}
+
+:global(:root.dark) .directory-marketplace-row,
+:global(:root.dark) .directory-marketplace-source,
+:global(:root.dark) .directory-marketplace-upgrade,
+:global(:root.dark) .directory-marketplace-remove {
+  @apply bg-zinc-800;
+}
+
+:global(:root.dark) .directory-marketplace-path,
+:global(:root.dark) .directory-marketplace-empty {
+  @apply text-zinc-500;
+}
+
+:global(:root.dark) .directory-marketplace-source {
+  @apply text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500;
+}
+
+:global(:root.dark) .directory-marketplace-upgrade,
+:global(:root.dark) .directory-marketplace-remove {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:global(:root.dark) .directory-marketplace-remove:hover {
+  @apply bg-rose-900/50 text-rose-300;
 }
 
 :global(:root.dark) .directory-auth-status.is-muted {

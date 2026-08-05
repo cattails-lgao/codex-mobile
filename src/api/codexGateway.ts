@@ -1203,6 +1203,35 @@ export async function listHooks(): Promise<UiHooksListEntry[]> {
   return entries
 }
 
+export interface UiMarketplaceUpgradeResult {
+  selectedMarketplaces: string[]
+  upgradedRoots: string[]
+  errors: string[]
+}
+
+export async function addDirectoryMarketplace(source: string): Promise<void> {
+  await callRpc('marketplace/add', { source })
+}
+
+export async function removeDirectoryMarketplace(marketplaceName: string): Promise<void> {
+  await callRpc('marketplace/remove', { marketplaceName })
+}
+
+export async function upgradeDirectoryMarketplaces(): Promise<UiMarketplaceUpgradeResult> {
+  const payload = await callRpc<{
+    selectedMarketplaces?: unknown[] | null
+    selected_marketplaces?: unknown[] | null
+    upgradedRoots?: unknown[] | null
+    upgraded_roots?: unknown[] | null
+    errors?: unknown[] | null
+  }>('marketplace/upgrade', {})
+  return {
+    selectedMarketplaces: readStringArray(payload.selectedMarketplaces ?? payload.selected_marketplaces),
+    upgradedRoots: readStringArray(payload.upgradedRoots ?? payload.upgraded_roots),
+    errors: readStringArray(payload.errors),
+  }
+}
+
 export async function getNotificationCatalog(): Promise<string[]> {
   return fetchRpcNotificationCatalog()
 }

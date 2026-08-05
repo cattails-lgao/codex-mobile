@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, normalizeFuzzyFileSearchResults, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession } from './codexGateway'
+import { addDirectoryMarketplace, compactThread, getAvailableModelIds, getThreadDetail, listDirectoryComposioConnectors, listHooks, normalizeFuzzyFileSearchResults, removeDirectoryMarketplace, resumeThread, startFuzzyFileSearchSession, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -426,5 +426,70 @@ describe('listHooks', () => {
       },
       { cwd: '/empty', hooks: [], warnings: [], errors: [] },
     ])
+  })
+})
+
+describe('marketplace management', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('adds a marketplace by source URL', async () => {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await addDirectoryMarketplace('https://github.com/example/marketplace')
+
+    expect(requests).toEqual([
+      { method: 'marketplace/add', params: { source: 'https://github.com/example/marketplace' } },
+    ])
+  })
+
+  it('removes a marketplace by name', async () => {
+    const requests: Array<{ method: string, params: unknown }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string, params: unknown }
+        : { method: '', params: null }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    await removeDirectoryMarketplace('openai')
+
+    expect(requests).toEqual([{ method: 'marketplace/remove', params: { marketplaceName: 'openai' } }])
+  })
+
+  it('normalizes the upgrade result with camel/snake fallbacks', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      result: {
+        selectedMarketplaces: ['openai'],
+        upgraded_roots: ['/repo/.codex/marketplaces/openai'],
+        errors: [],
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const result = await upgradeDirectoryMarketplaces()
+
+    expect(result).toEqual({
+      selectedMarketplaces: ['openai'],
+      upgradedRoots: ['/repo/.codex/marketplaces/openai'],
+      errors: [],
+    })
   })
 })
