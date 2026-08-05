@@ -29,22 +29,7 @@ Return to the [section index](index.md).
 
 ### Feature: Approval policy tabs below the composer input
 
-#### Prerequisites
-- Desktop or mobile viewport, dev server on 4173, and a Codex backend that supports `readApprovalPolicy`/`writeApprovalPolicy`.
-
-#### Steps
-1. Scroll to the composer input box. Below the input controls there is an "Approval policy" row with four tab buttons: "Only untrusted commands", "After a command fails", "When Codex requests it", "Never".
-2. Click a different tab (e.g. "When Codex requests it").
-3. Open the Settings dialog (gear) and confirm the Approval policy section is no longer listed there.
-4. In dark theme, confirm the tabs, active tab, and error/notice text remain readable.
-
-#### Expected Results
-- Selecting a tab updates the active highlight immediately and saves the policy (no separate Save button).
-- The settings dialog no longer contains an Approval policy section.
-- Light and dark themes both show the tab bar legibly; long tab labels wrap without clipping.
-
-#### Rollback/Cleanup
-- Set the policy back to the original value by clicking its tab.
+> Superseded: the four-tab approval row was replaced by the three-way Approval policy popover (see [Composer control layout, collaboration mode menu, approval policy menu, and slash skill rows](composer-control-layout-and-collaboration-mode-menu.md)).
 
 ### Feature: Skill chips above the composer input and full skill names in the slash menu
 

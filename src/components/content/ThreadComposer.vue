@@ -1,9 +1,5 @@
 <template>
   <form class="thread-composer" @submit.prevent="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')">
-    <p v-if="dictationErrorText" class="thread-composer-dictation-error">
-      {{ dictationErrorText }}
-    </p>
-
     <div
       class="thread-composer-shell"
       :class="{
@@ -82,6 +78,8 @@
         </span>
       </div>
 
+      <div class="thread-composer-main">
+      <div class="thread-composer-input-row">
       <div
         class="thread-composer-input-wrap"
         :class="{
@@ -156,6 +154,34 @@
         </button>
       </div>
 
+      <div class="thread-composer-actions">
+        <button
+          v-if="isTurnInProgress && !hasSubmitContent"
+          class="thread-composer-stop"
+          type="button"
+          :aria-label="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
+          :title="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
+          :disabled="disabled || !activeThreadId || isInterruptingTurn || isStopPending || externalSessionActive === true"
+          @click="onInterrupt"
+        >
+          <span v-if="isStopPending" class="thread-composer-stop-spinner" aria-hidden="true" />
+          <IconTablerPlayerStopFilled v-else class="thread-composer-stop-icon" />
+        </button>
+        <button
+          v-else
+          class="thread-composer-submit"
+          :class="{ 'thread-composer-submit--queue': isTurnInProgress && activeInProgressMode === 'queue' }"
+          type="button"
+          :aria-label="isTurnInProgress && activeInProgressMode === 'queue' ? t('Queue message') : t('Send message')"
+          :title="isTurnInProgress ? `${t('Send')} ${activeInProgressMode === 'queue' ? t('Queue') : t('Steer')}` : t('Send')"
+          :disabled="!canSubmit"
+          @click="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')"
+        >
+          <IconTablerArrowUp class="thread-composer-submit-icon" />
+        </button>
+      </div>
+      </div>
+
       <div
         class="thread-composer-controls"
         :class="{ 'thread-composer-controls--recording': isDictationRecording }"
@@ -220,204 +246,106 @@
                 </button>
               </div>
             </div>
-            <div class="thread-composer-attach-separator" />
-            <button
-              v-if="isFastModeSupported"
-              class="thread-composer-attach-setting"
-              type="button"
-              role="switch"
-              :aria-checked="selectedSpeedMode === 'fast'"
-              :aria-label="`${t('Fast mode')} ${selectedSpeedMode === 'fast' ? t('enabled') : t('disabled')}`"
-              :disabled="isSpeedToggleDisabled"
-              @click="onToggleSpeedMode"
-            >
-              <span class="thread-composer-attach-setting-copy">
-                <span class="thread-composer-attach-setting-label">{{ t('Fast mode') }}</span>
-                <span class="thread-composer-attach-setting-description">{{ speedModeDescription }}</span>
-              </span>
-              <span
-                class="thread-composer-attach-switch"
-                :class="{
-                  'is-on': selectedSpeedMode === 'fast',
-                  'is-busy': isUpdatingSpeedMode,
-                  'is-disabled': isSpeedToggleDisabled,
-                }"
-              />
-            </button>
-            <button
-              class="thread-composer-attach-setting"
-              type="button"
-              role="switch"
-              :aria-checked="isPlanModeSelected"
-              :aria-label="isPlanModeSelected ? t('Disable plan mode') : t('Enable plan mode')"
-              :disabled="isComposerConfigDisabled"
-              @click="toggleCollaborationMode"
-            >
-              <span class="thread-composer-attach-setting-copy">
-                <span class="thread-composer-attach-setting-label">{{ t('Plan mode') }}</span>
-                <span class="thread-composer-attach-setting-description">{{ t('Agent proposes a plan before acting') }}</span>
-              </span>
-              <span
-                class="thread-composer-attach-switch"
-                :class="{ 'is-on': isPlanModeSelected }"
-              />
-            </button>
           </div>
         </div>
 
-        <template v-if="!isDictationRecording">
-          <ComposerDropdown
-            class="thread-composer-control"
-            :model-value="selectedModel"
-            :options="modelOptions"
-            :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
-            :placeholder="t('Model')"
-            open-direction="up"
-            :disabled="isComposerConfigDisabled || models.length === 0"
-            enable-search
-            :search-placeholder="t('Search models...')"
-            @update:model-value="onModelSelect"
-          />
-
-          <ComposerDropdown
-            class="thread-composer-control"
-            :model-value="selectedReasoningEffort"
-            :options="reasoningOptions"
-            :placeholder="t('Thinking')"
-            open-direction="up"
+        <div ref="planMenuRootRef" class="thread-composer-plan">
+          <button
+            class="thread-composer-plan-trigger"
+            :class="{ 'is-active': isPlanMenuOpen }"
+            type="button"
+            :aria-label="t('Plan mode')"
             :disabled="isComposerConfigDisabled"
-            @update:model-value="onReasoningEffortSelect"
-          />
-        </template>
-
-        <div
-          v-if="isRealtimeVoiceSessionActive || realtimeVoiceState === 'connecting'"
-          class="thread-composer-realtime-bubble"
-          role="status"
-          aria-live="polite"
-        >
-          <div class="thread-composer-realtime-bubble-head">
-            <span class="thread-composer-realtime-bubble-title">
-              {{ realtimeVoiceState === 'connecting' ? t('Connecting voice...') : t('Voice conversation') }}
-            </span>
-            <button
-              class="thread-composer-realtime-bubble-stop"
-              type="button"
-              :aria-label="t('Stop voice conversation')"
-              :title="t('Stop voice conversation')"
-              @click="onRealtimeVoiceToggle"
-            >
-              <IconTablerPlayerStopFilled class="thread-composer-realtime-bubble-stop-icon" />
-            </button>
-          </div>
-          <div class="thread-composer-realtime-transcript">
-            <template v-if="realtimeTranscriptParts.length > 0">
-              <p v-for="(part, index) in realtimeTranscriptParts" :key="`${part.role}-${index}`" class="thread-composer-realtime-part">
-                <span class="thread-composer-realtime-role">{{ part.role === 'user' ? t('You') : t('Codex') }}</span>
-                {{ part.text }}
-              </p>
-            </template>
-            <p v-else class="thread-composer-realtime-placeholder">{{ t('Listening...') }}</p>
-          </div>
+            @click="togglePlanMenu"
+          >
+            <span class="thread-composer-plan-trigger-label">{{ t('Plan mode') }}</span>
+            <IconTablerChevronDown class="thread-composer-plan-trigger-chevron" />
+          </button>
+          <Transition name="composer-popover">
+            <div v-if="isPlanMenuOpen" class="thread-composer-plan-menu" role="menu" :aria-label="t('Plan mode')">
+              <button
+                v-for="choice in collaborationModeChoices"
+                :key="choice.value"
+                class="thread-composer-menu-item"
+                :class="{ 'is-active': selectedCollaborationMode === choice.value }"
+                type="button"
+                role="menuitemradio"
+                :aria-checked="selectedCollaborationMode === choice.value"
+                :disabled="choice.disabled || isComposerConfigDisabled"
+                @click="onCollaborationModeSelect(choice.value)"
+              >
+                <span class="thread-composer-menu-item-copy">
+                  <span class="thread-composer-menu-item-title">{{ t(choice.labelKey) }}</span>
+                  <span v-if="choice.subLabel" class="thread-composer-menu-item-sub">{{ choice.subLabel }}</span>
+                  <span v-if="choice.disabled" class="thread-composer-menu-item-hint">{{ t('Not supported by this Codex version') }}</span>
+                </span>
+                <span v-if="selectedCollaborationMode === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
+              </button>
+            </div>
+          </Transition>
         </div>
 
-        <div
-          class="thread-composer-actions"
-          :class="{ 'thread-composer-actions--recording': isDictationRecording }"
-        >
-          <div v-if="dictationState === 'recording'" class="thread-composer-dictation-waveform-wrap" aria-hidden="true">
-            <canvas ref="dictationWaveformCanvasRef" class="thread-composer-dictation-waveform" />
-          </div>
-
-          <span v-if="dictationState === 'recording'" class="thread-composer-dictation-timer">
-            {{ dictationDurationLabel }}
-          </span>
-
+        <div ref="approvalMenuRootRef" class="thread-composer-approval-toggle">
           <button
-            v-if="isDictationSupported && !isRealtimeVoiceSessionActive"
-            class="thread-composer-mic"
-            :class="{
-              'thread-composer-mic--active': dictationState === 'recording',
-            }"
+            class="thread-composer-approval-trigger"
+            :class="{ 'is-active': isApprovalMenuOpen }"
             type="button"
-            :aria-label="dictationButtonLabel"
-            :title="dictationButtonLabel"
-            :disabled="isInteractionDisabled"
-            @click="onDictationToggle"
-            @pointerdown="onDictationPressStart"
-            @pointerup="onDictationPressEnd"
-            @pointercancel="onDictationPressEnd"
+            :aria-label="t('Approval policy')"
+            :disabled="isComposerConfigDisabled"
+            @click="toggleApprovalMenu"
           >
-            <IconTablerPlayerStopFilled
-              v-if="dictationState === 'recording'"
-              class="thread-composer-mic-icon thread-composer-mic-icon--stop"
-            />
-            <IconTablerMicrophone v-else class="thread-composer-mic-icon" />
+            <span class="thread-composer-approval-trigger-label">{{ t('Approval policy') }}</span>
+            <IconTablerChevronDown class="thread-composer-approval-trigger-chevron" />
           </button>
-
-          <button
-            v-if="isRealtimeVoiceSupported && dictationState !== 'recording'"
-            class="thread-composer-realtime"
-            :class="{ 'thread-composer-realtime--active': isRealtimeVoiceSessionActive }"
-            type="button"
-            :aria-label="realtimeVoiceButtonLabel"
-            :title="realtimeVoiceButtonLabel"
-            :disabled="isInteractionDisabled || !isRealtimeVoiceContextReady"
-            @click="onRealtimeVoiceToggle"
-          >
-            <IconTablerPlayerStopFilled
-              v-if="isRealtimeVoiceSessionActive"
-              class="thread-composer-mic-icon thread-composer-mic-icon--stop"
-            />
-            <IconTablerBolt v-else class="thread-composer-mic-icon" />
-          </button>
-
-          <button
-            v-if="isTurnInProgress && !hasSubmitContent"
-            class="thread-composer-stop"
-            type="button"
-            :aria-label="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
-            :title="isStopPending ? t('Saving thread before stop is available') : t('Stop')"
-            :disabled="disabled || !activeThreadId || isInterruptingTurn || isStopPending || externalSessionActive === true"
-            @click="onInterrupt"
-          >
-            <span v-if="isStopPending" class="thread-composer-stop-spinner" aria-hidden="true" />
-            <IconTablerPlayerStopFilled v-else class="thread-composer-stop-icon" />
-          </button>
-          <button
-            v-else
-            class="thread-composer-submit"
-            :class="{ 'thread-composer-submit--queue': isTurnInProgress && activeInProgressMode === 'queue' }"
-            type="button"
-            :aria-label="isTurnInProgress && activeInProgressMode === 'queue' ? t('Queue message') : t('Send message')"
-            :title="isTurnInProgress ? `${t('Send')} ${activeInProgressMode === 'queue' ? t('Queue') : t('Steer')}` : t('Send')"
-            :disabled="!canSubmit"
-            @click="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')"
-          >
-            <IconTablerArrowUp class="thread-composer-submit-icon" />
-          </button>
+          <Transition name="composer-popover">
+            <div v-if="isApprovalMenuOpen" class="thread-composer-approval-menu" role="menu" :aria-label="t('Approval policy')">
+              <button
+                v-for="choice in approvalPolicyChoices"
+                :key="choice.value"
+                class="thread-composer-menu-item"
+                :class="{ 'is-active': approvalPolicy === choice.value }"
+                type="button"
+                role="menuitemradio"
+                :aria-checked="approvalPolicy === choice.value"
+                :disabled="isApprovalPolicySaving"
+                @click="onApprovalPolicySelect(choice.value)"
+              >
+                <span class="thread-composer-menu-item-copy">
+                  <span class="thread-composer-menu-item-title">{{ t(choice.label) }}</span>
+                </span>
+                <span v-if="approvalPolicy === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
+              </button>
+              <p v-if="approvalPolicyError" class="thread-composer-menu-error" role="alert">{{ approvalPolicyError }}</p>
+              <p v-if="approvalPolicyNotice" class="thread-composer-menu-notice">{{ approvalPolicyNotice }}</p>
+            </div>
+          </Transition>
         </div>
+
+        <ComposerDropdown
+          class="thread-composer-control"
+          :model-value="selectedModel"
+          :options="modelOptions"
+          :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
+          :placeholder="t('Model')"
+          open-direction="up"
+          :disabled="isComposerConfigDisabled || models.length === 0"
+          enable-search
+          :search-placeholder="t('Search models...')"
+          @update:model-value="onModelSelect"
+        />
+
+        <ComposerDropdown
+          class="thread-composer-control"
+          :model-value="selectedReasoningEffort"
+          :options="reasoningOptions"
+          :placeholder="t('Thinking')"
+          open-direction="up"
+          :disabled="isComposerConfigDisabled"
+          @update:model-value="onReasoningEffortSelect"
+        />
       </div>
 
-      <div v-if="approvalPolicyOptions && approvalPolicyOptions.length > 0" class="thread-composer-approval">
-        <span class="thread-composer-approval-title">{{ t('Approval policy') }}</span>
-        <div class="thread-composer-approval-tabs" role="tablist" :aria-label="t('Approval policy')">
-          <button
-            v-for="option in approvalPolicyOptions"
-            :key="option.value"
-            class="thread-composer-approval-tab"
-            :class="{ 'is-active': approvalPolicy === option.value }"
-            type="button"
-            role="tab"
-            :aria-selected="approvalPolicy === option.value"
-            :disabled="isApprovalPolicySaving"
-            @click="onApprovalPolicySelect(option.value)"
-          >{{ t(option.label) }}</button>
-        </div>
-        <p v-if="approvalPolicyError" class="thread-composer-approval-error" role="alert">{{ approvalPolicyError }}</p>
-        <p v-if="approvalPolicyNotice" class="thread-composer-approval-notice">{{ approvalPolicyNotice }}</p>
-      </div>
-
+    </div>
     </div>
     <input
       ref="photoLibraryInputRef"
@@ -462,7 +390,6 @@ import type {
   UiTokenUsageBreakdown,
 } from '../../types/codex'
 import { useDictation } from '../../composables/useDictation'
-import { useRealtimeVoice } from '../../composables/useRealtimeVoice'
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
@@ -475,10 +402,10 @@ import {
 } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
+import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerMaximize from '../icons/IconTablerMaximize.vue'
-import IconTablerMicrophone from '../icons/IconTablerMicrophone.vue'
 import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
@@ -519,7 +446,6 @@ const props = defineProps<{
   dictationAutoSend?: boolean
   dictationLanguage?: string
   approvalPolicy?: string
-  approvalPolicyOptions?: Array<{ value: string; label: string }>
   isApprovalPolicySaving?: boolean
   approvalPolicyError?: string
   approvalPolicyNotice?: string
@@ -631,23 +557,16 @@ const {
   },
 })
 const attachMenuRootRef = ref<HTMLElement | null>(null)
-const realtimeVoiceErrorText = ref('')
-const {
-  state: realtimeVoiceState,
-  isSupported: isRealtimeVoiceSupported,
-  transcriptParts: realtimeTranscriptParts,
-  toggle: toggleRealtimeVoice,
-} = useRealtimeVoice({
-  onError: (error) => {
-    realtimeVoiceErrorText.value = error instanceof Error ? error.message : String(error)
-  },
-})
+const planMenuRootRef = ref<HTMLElement | null>(null)
+const approvalMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const folderPickerInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const { isMobile } = useMobile()
 const isAttachMenuOpen = ref(false)
+const isPlanMenuOpen = ref(false)
+const isApprovalMenuOpen = ref(false)
 const mentionStartIndex = ref<number | null>(null)
 const mentionQuery = ref('')
 const fileMentionSuggestions = ref<ComposerFileSuggestion[]>([])
@@ -692,7 +611,24 @@ function formatModelLabel(modelId: string): string {
 const modelOptions = computed(() =>
   props.models.map((modelId) => ({ value: modelId, label: formatModelLabel(modelId) })),
 )
-const isPlanModeSelected = computed(() => props.selectedCollaborationMode === 'plan')
+const collaborationModeChoices = computed<Array<{
+  value: CollaborationModeKind
+  labelKey: string
+  subLabel: string
+  disabled: boolean
+}>>(() => {
+  const available = new Set((props.collaborationModes ?? []).map((mode) => mode.value))
+  return [
+    { value: 'default', labelKey: 'Default', subLabel: '', disabled: false },
+    { value: 'plan', labelKey: 'Plan mode', subLabel: t('Agent proposes a plan before acting'), disabled: false },
+    { value: 'execplans', labelKey: 'Execution plans', subLabel: '', disabled: !available.has('execplans') },
+  ]
+})
+const approvalPolicyChoices: Array<{ value: string; label: string }> = [
+  { value: 'on-request', label: 'When Codex requests it' },
+  { value: 'untrusted', label: 'Unless trusted' },
+  { value: 'never', label: 'Never' },
+]
 
 const isPlanModeWaitingForModel = computed(() =>
   props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,
@@ -721,37 +657,11 @@ const standaloneFileAttachments = computed(() => {
   return fileAttachments.value.filter((att) => !grouped.has(att.fsPath))
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || props.externalSessionActive === true)
-const isRealtimeVoiceSessionActive = computed(
-  () => realtimeVoiceState.value === 'active' || realtimeVoiceState.value === 'connecting' || realtimeVoiceState.value === 'stopping',
-)
-// A realtime voice session needs a real thread; the '__new-thread__' placeholder
-// on the home route has no server-side thread yet, so start would fail.
-const isRealtimeVoiceContextReady = computed(() => !!props.activeThreadId && props.activeThreadId !== '__new-thread__')
-const realtimeVoiceButtonLabel = computed(() => {
-  if (isRealtimeVoiceSessionActive.value) return t('Stop voice conversation')
-  if (!isRealtimeVoiceContextReady.value) return t('Start a conversation before using voice')
-  return t('Voice conversation')
-})
-function onRealtimeVoiceToggle(): void {
-  if (!isRealtimeVoiceContextReady.value) return
-  toggleRealtimeVoice(props.activeThreadId)
-}
 const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
 const isFastModeSupported = computed(() => /^gpt-5\.(?:4|5)(?:$|-)/.test(props.selectedModel.trim()))
 const showFastModeModelIcon = computed(() =>
   props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
 )
-const isSpeedToggleDisabled = computed(() =>
-  isInteractionDisabled.value || props.isUpdatingSpeedMode === true,
-)
-const speedModeDescription = computed(() => {
-  if (props.isUpdatingSpeedMode) {
-    return t('Saving speed setting...')
-  }
-  return props.selectedSpeedMode === 'fast'
-    ? t('About 1.5x faster, with credits used at 2x')
-    : t('Default speed with normal credit usage')
-})
 const inProgressMode = computed<'steer' | 'queue'>(() =>
   props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
 )
@@ -1208,17 +1118,17 @@ function onModelSelect(value: string): void {
   emit('update:selected-model', value)
 }
 
-function toggleCollaborationMode(): void {
-  emit('update:selected-collaboration-mode', isPlanModeSelected.value ? 'default' : 'plan')
+function onCollaborationModeSelect(mode: CollaborationModeKind): void {
+  if (mode === props.selectedCollaborationMode) {
+    isPlanMenuOpen.value = false
+    return
+  }
+  emit('update:selected-collaboration-mode', mode)
+  isPlanMenuOpen.value = false
 }
 
 function onReasoningEffortSelect(value: string): void {
   emit('update:selected-reasoning-effort', value as ReasoningEffort)
-}
-
-function onToggleSpeedMode(): void {
-  if (isSpeedToggleDisabled.value) return
-  emit('update:selected-speed-mode', props.selectedSpeedMode === 'fast' ? 'standard' : 'fast')
 }
 
 function onApprovalPolicySelect(value: string): void {
@@ -1270,6 +1180,22 @@ function onDictationPressEnd(): void {
 function toggleAttachMenu(): void {
   if (isInteractionDisabled.value) return
   isAttachMenuOpen.value = !isAttachMenuOpen.value
+  isPlanMenuOpen.value = false
+  isApprovalMenuOpen.value = false
+}
+
+function togglePlanMenu(): void {
+  if (isComposerConfigDisabled.value) return
+  isPlanMenuOpen.value = !isPlanMenuOpen.value
+  isAttachMenuOpen.value = false
+  isApprovalMenuOpen.value = false
+}
+
+function toggleApprovalMenu(): void {
+  if (isComposerConfigDisabled.value) return
+  isApprovalMenuOpen.value = !isApprovalMenuOpen.value
+  isAttachMenuOpen.value = false
+  isPlanMenuOpen.value = false
 }
 
 function triggerPhotoLibrary(): void {
@@ -1959,12 +1885,14 @@ function isMarkdownFile(path: string): boolean {
 }
 
 function onDocumentClick(event: MouseEvent): void {
-  if (!isAttachMenuOpen.value) return
-  const root = attachMenuRootRef.value
-  if (!root) return
+  if (!isAttachMenuOpen.value && !isPlanMenuOpen.value && !isApprovalMenuOpen.value) return
   const target = event.target as Node | null
-  if (!target || root.contains(target)) return
+  if (!target) return
+  const roots = [attachMenuRootRef.value, planMenuRootRef.value, approvalMenuRootRef.value]
+  if (roots.some((root) => root && root.contains(target))) return
   isAttachMenuOpen.value = false
+  isPlanMenuOpen.value = false
+  isApprovalMenuOpen.value = false
 }
 
 onMounted(() => {
@@ -2191,8 +2119,24 @@ watch(
   background: var(--context-usage-accent);
 }
 
+.thread-composer-main {
+  @apply flex flex-col gap-2 sm:gap-2.5;
+}
+
+.thread-composer-input-row {
+  @apply flex items-end gap-2;
+}
+
+.thread-composer-main:has(.thread-composer-input-wrap--expanded) {
+  @apply min-h-0 flex-1;
+}
+
+.thread-composer-input-row:has(.thread-composer-input-wrap--expanded) {
+  @apply min-h-0 flex-1 items-stretch;
+}
+
 .thread-composer-input-wrap {
-  @apply relative;
+  @apply relative min-w-0 flex-1;
 }
 
 .thread-composer-input-wrap--expanded {
@@ -2284,7 +2228,7 @@ watch(
 }
 
 .thread-composer-controls {
-  @apply relative mt-2 sm:mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-4 overflow-visible pb-px;
+  @apply relative flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3 overflow-visible pb-px;
 }
 
 .thread-composer-controls--recording {
@@ -2331,45 +2275,77 @@ watch(
   @apply bg-zinc-900 text-white hover:text-white;
 }
 
-.thread-composer-attach-setting {
-  @apply flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
+.thread-composer-plan,
+.thread-composer-approval-toggle {
+  @apply relative shrink-0;
 }
 
-.thread-composer-attach-setting-copy {
+.thread-composer-plan-trigger,
+.thread-composer-approval-trigger {
+  @apply inline-flex h-8 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+}
+
+.thread-composer-plan-trigger.is-active,
+.thread-composer-approval-trigger.is-active {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:text-white;
+}
+
+.thread-composer-plan-trigger-chevron,
+.thread-composer-approval-trigger-chevron {
+  @apply h-3.5 w-3.5;
+}
+
+.thread-composer-plan-menu,
+.thread-composer-approval-menu {
+  @apply absolute bottom-11 left-0 z-20 w-64 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+}
+
+.thread-composer-approval-menu {
+  @apply left-auto right-0;
+}
+
+.thread-composer-menu-item {
+  @apply flex w-full items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.thread-composer-menu-item.is-active {
+  @apply bg-zinc-50;
+}
+
+.thread-composer-menu-item-copy {
   @apply min-w-0 flex flex-col;
 }
 
-.thread-composer-attach-setting-label {
+.thread-composer-menu-item-title {
   @apply text-sm text-zinc-800;
 }
 
-.thread-composer-attach-setting-description {
+.thread-composer-menu-item-sub {
   @apply mt-0.5 text-xs text-zinc-500;
 }
 
-.thread-composer-attach-switch {
-  @apply relative h-5 w-9 shrink-0 rounded-full bg-zinc-300 transition-colors;
+.thread-composer-menu-item-hint {
+  @apply mt-0.5 text-xs text-amber-600;
 }
 
-.thread-composer-attach-switch::after {
-  content: '';
-  @apply absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform shadow-sm;
+.thread-composer-menu-item-check {
+  @apply shrink-0 text-sm font-semibold text-zinc-900;
 }
 
-.thread-composer-attach-switch.is-on {
-  @apply bg-emerald-600;
+.thread-composer-menu-error {
+  @apply px-3 py-1 text-xs text-red-600;
 }
 
-.thread-composer-attach-switch.is-on::after {
-  transform: translateX(16px);
+.thread-composer-menu-notice {
+  @apply px-3 py-1 text-xs text-emerald-600;
 }
 
-.thread-composer-attach-switch.is-busy {
-  @apply opacity-70;
+.composer-popover-enter-active {
+  animation: composer-popover-in 150ms ease-out;
 }
 
-.thread-composer-attach-switch.is-disabled {
-  @apply opacity-50;
+.composer-popover-leave-active {
+  animation: composer-popover-in 150ms ease-out reverse;
 }
 
 .thread-composer-control {
@@ -2383,112 +2359,6 @@ watch(
 
 .thread-composer-actions {
   @apply ml-auto flex min-w-0 items-center gap-2;
-}
-
-.thread-composer-approval {
-  @apply mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-zinc-100 pt-2;
-}
-
-.thread-composer-approval-title {
-  @apply text-[11px] font-medium uppercase tracking-wide text-zinc-400;
-}
-
-.thread-composer-approval-tabs {
-  @apply inline-flex flex-wrap items-center gap-1;
-}
-
-.thread-composer-approval-tab {
-  @apply rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60;
-}
-
-.thread-composer-approval-tab.is-active {
-  @apply border-zinc-900 bg-zinc-900 text-white;
-}
-
-.thread-composer-approval-error {
-  @apply basis-full text-xs text-red-600;
-}
-
-.thread-composer-approval-notice {
-  @apply basis-full text-xs text-emerald-600;
-}
-
-.thread-composer-actions--recording {
-  @apply ml-0 flex-1;
-}
-
-.thread-composer-mic {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
-  touch-action: none;
-}
-
-.thread-composer-mic--active {
-  @apply bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700;
-}
-
-.thread-composer-mic-icon {
-  @apply h-5 w-5;
-}
-
-.thread-composer-realtime {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-realtime--active {
-  @apply bg-sky-100 text-sky-600 hover:bg-sky-200 hover:text-sky-700;
-}
-
-.thread-composer-realtime-bubble {
-  @apply mb-2 ml-auto flex w-full max-w-md flex-col gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700;
-}
-
-.thread-composer-realtime-bubble-head {
-  @apply flex items-center justify-between gap-2;
-}
-
-.thread-composer-realtime-bubble-title {
-  @apply text-xs font-semibold uppercase tracking-wide text-zinc-500;
-}
-
-.thread-composer-realtime-bubble-stop {
-  @apply inline-flex h-6 w-6 items-center justify-center rounded-full border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-900;
-}
-
-.thread-composer-realtime-bubble-stop-icon {
-  @apply h-4 w-4;
-}
-
-.thread-composer-realtime-transcript {
-  @apply flex flex-col gap-1 overflow-y-auto text-sm;
-  max-height: 9rem;
-}
-
-.thread-composer-realtime-part {
-  @apply m-0 whitespace-pre-wrap break-words;
-}
-
-.thread-composer-realtime-role {
-  @apply mr-1.5 font-semibold text-zinc-500;
-}
-
-.thread-composer-realtime-placeholder {
-  @apply m-0 text-zinc-400;
-}
-
-.thread-composer-dictation-waveform-wrap {
-  @apply min-w-0 flex-1;
-}
-
-.thread-composer-dictation-waveform {
-  @apply block h-9 w-full text-zinc-500;
-}
-
-.thread-composer-dictation-timer {
-  @apply shrink-0 text-sm text-zinc-500 tabular-nums;
-}
-
-.thread-composer-dictation-error {
-  @apply mb-2 px-1 text-xs text-amber-700;
 }
 
 .thread-composer-submit {

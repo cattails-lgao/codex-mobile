@@ -2718,7 +2718,7 @@ export async function getAvailableCollaborationModes(): Promise<CollaborationMod
 
     for (const row of payload.data) {
       const mode = row.mode
-      if (mode !== 'default' && mode !== 'plan') continue
+      if (mode !== 'default' && mode !== 'plan' && mode !== 'execplans') continue
       if (seen.has(mode)) continue
       seen.add(mode)
       normalized.push({
