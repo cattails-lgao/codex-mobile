@@ -433,6 +433,8 @@ const zhCN: Record<string, string> = {
   'No hooks registered.': '未注册任何 Hooks。',
   'Global': '全局',
   'Enabled': '已启用',
+  'Compacting thread context…': '正在压缩上下文…',
+  'Context compacted': '上下文已压缩',
   'Remote control': '远程控制',
   'Enable or disable remote control': '启用或禁用远程控制',
   'Remote control is not supported by this Codex version.': '当前 Codex 版本不支持远程控制。',

@@ -11,6 +11,14 @@ describe('parseSlashQuery', () => {
     expect(parseSlashQuery('/comp')).toEqual({ query: 'comp', token: '/comp', startIndex: 0 })
   })
 
+  it('matches a bare slash to show the full command list', () => {
+    expect(parseSlashQuery('/')).toEqual({ query: '', token: '/', startIndex: 0 })
+  })
+
+  it('matches a bare slash after whitespace', () => {
+    expect(parseSlashQuery('please /')).toEqual({ query: '', token: '/', startIndex: 7 })
+  })
+
   it('matches a slash command after whitespace', () => {
     expect(parseSlashQuery('please /rev')).toEqual({ query: 'rev', token: '/rev', startIndex: 7 })
   })

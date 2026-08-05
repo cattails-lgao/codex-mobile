@@ -774,7 +774,7 @@
                   </div>
                 </section>
                 <Teleport to="body">
-                  <div v-if="isExistingFolderPickerOpen" class="new-thread-open-folder-overlay" @click.self="onCloseExistingFolderPanel">
+                  <div v-if="isExistingFolderPickerOpen" class="new-thread-open-folder-overlay" @mousedown.self="onFolderOverlayPressedSelf" @mouseup="onFolderOverlayReleaseClose">
                     <div class="new-thread-open-folder" role="dialog" aria-modal="true" :aria-label="t('Select folder')" @keydown.esc.prevent="onCloseExistingFolderPanel">
                       <div class="new-thread-open-folder-header">
                         <p class="new-thread-open-folder-title">{{ t('Select folder') }}</p>
@@ -903,7 +903,7 @@
                   </div>
                 </Teleport>
                 <Teleport to="body">
-                  <div v-if="isProjectSetupModalOpen" class="new-thread-open-folder-overlay" @click.self="onCloseProjectSetupModal">
+                  <div v-if="isProjectSetupModalOpen" class="new-thread-open-folder-overlay" @mousedown.self="onProjectOverlayPressedSelf" @mouseup="onProjectOverlayReleaseClose">
                     <div class="new-thread-project-modal" role="dialog" aria-modal="true" :aria-label="t('Create or clone project')" @keydown.esc.prevent="onCloseProjectSetupModal">
                       <div class="new-thread-open-folder-header">
                         <p class="new-thread-open-folder-title">{{ t('Create or clone project') }}</p>
@@ -1087,6 +1087,13 @@
 
               <template v-else>
                 <div class="content-thread">
+                  <div v-if="isCompactContextPending" class="thread-compaction-banner" role="status">
+                    <span class="thread-compaction-banner-spinner" aria-hidden="true" />
+                    <span>{{ t('Compacting thread context…') }}</span>
+                  </div>
+                  <div v-else-if="compactionCompleteNotice" class="thread-compaction-banner is-done" role="status">
+                    <span>{{ t('Context compacted') }}</span>
+                  </div>
                   <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
@@ -2131,6 +2138,22 @@ const isCompactContextPending = computed(() => {
 const showCompactContextButton = computed(() =>
   threadContextBadgeState.value === 'warning' || threadContextBadgeState.value === 'danger',
 )
+const compactionCompleteNotice = ref(false)
+let awaitingCompactionCompletion = false
+let compactionCompleteNoticeTimer: ReturnType<typeof setTimeout> | null = null
+watch(isCompactContextPending, (compacting) => {
+  if (compacting) {
+    awaitingCompactionCompletion = true
+    compactionCompleteNotice.value = false
+    return
+  }
+  if (awaitingCompactionCompletion) {
+    awaitingCompactionCompletion = false
+    compactionCompleteNotice.value = true
+    if (compactionCompleteNoticeTimer) clearTimeout(compactionCompleteNoticeTimer)
+    compactionCompleteNoticeTimer = setTimeout(() => { compactionCompleteNotice.value = false }, 4000)
+  }
+})
 function onCompactContext(): void {
   const threadId = selectedThreadId.value
   if (!threadId) return
@@ -2456,6 +2479,10 @@ onUnmounted(() => {
   if (remoteControlNoticeTimer) {
     clearTimeout(remoteControlNoticeTimer)
     remoteControlNoticeTimer = null
+  }
+  if (compactionCompleteNoticeTimer) {
+    clearTimeout(compactionCompleteNoticeTimer)
+    compactionCompleteNoticeTimer = null
   }
 })
 
@@ -4020,6 +4047,29 @@ function onCloseProjectSetupModal(): void {
   if (isProjectSetupSubmitting.value) return
   isProjectSetupModalOpen.value = false
   projectSetupError.value = ''
+}
+
+let folderOverlayPressedSelf = false
+let projectOverlayPressedSelf = false
+
+function onFolderOverlayPressedSelf(): void {
+  folderOverlayPressedSelf = true
+}
+
+function onFolderOverlayReleaseClose(): void {
+  if (!folderOverlayPressedSelf) return
+  folderOverlayPressedSelf = false
+  onCloseExistingFolderPanel()
+}
+
+function onProjectOverlayPressedSelf(): void {
+  projectOverlayPressedSelf = true
+}
+
+function onProjectOverlayReleaseClose(): void {
+  if (!projectOverlayPressedSelf) return
+  projectOverlayPressedSelf = false
+  onCloseProjectSetupModal()
 }
 
 async function createProjectFromSetupModal(): Promise<string> {
