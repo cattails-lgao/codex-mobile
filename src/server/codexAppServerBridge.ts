@@ -4089,36 +4089,29 @@ function readApprovalPolicyFromConfigFile(): CodexApprovalPolicy | null {
   }
 }
 
+const APPROVAL_POLICY_ASSIGNMENT = /^approval_policy\s*=/u
+
 async function writeApprovalPolicyToConfigFile(policy: CodexApprovalPolicy): Promise<void> {
   const configPath = getCodexConfigPath()
   await mkdir(dirname(configPath), { recursive: true })
-  let nextContent = ''
-  if (existsSync(configPath)) {
-    const raw = await readFile(configPath, 'utf8')
-    const lines = raw.split(/\r?\n/u)
-    const kept: string[] = []
-    let replaced = false
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('approval_policy=')) {
-        if (replaced) continue
-        replaced = true
-        kept.push(`approval_policy = "${policy}"`)
-        continue
-      }
-      kept.push(line)
-    }
-    if (replaced) {
-      nextContent = kept.join('\n').replace(/\n{3,}/gu, '\n\n').trimEnd() + '\n'
-    } else {
-      const header = lines.some((line) => line.trim().length > 0 && !line.trim().startsWith('#'))
-        ? `${raw.trimEnd()}\n\napproval_policy = "${policy}"\n`
-        : `approval_policy = "${policy}"\n`
-      nextContent = header
-    }
-  } else {
-    nextContent = `approval_policy = "${policy}"\n`
+  const policyLine = `approval_policy = "${policy}"`
+  if (!existsSync(configPath)) {
+    await writeFile(configPath, `${policyLine}\n`, 'utf8')
+    return
   }
+  const raw = await readFile(configPath, 'utf8')
+  // Drop every existing approval_policy assignment regardless of whitespace
+  // around "=" (the previous writer only matched `approval_policy=` with no
+  // spaces, so repeated saves appended duplicate keys and broke the TOML file).
+  const kept = raw.split(/\r?\n/u).filter((line) => !APPROVAL_POLICY_ASSIGNMENT.test(line.trim()))
+  // The key must stay top-level: any bare key written after a [table] header
+  // would land inside that table, so put it at the very top of the file.
+  const body = kept
+    .join('\n')
+    .replace(/^\n+/, '')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trimEnd()
+  const nextContent = body.length > 0 ? `${policyLine}\n\n${body}\n` : `${policyLine}\n`
   await writeFile(configPath, nextContent, 'utf8')
 }
 

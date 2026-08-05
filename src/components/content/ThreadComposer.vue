@@ -186,140 +186,155 @@
         class="thread-composer-controls"
         :class="{ 'thread-composer-controls--recording': isDictationRecording }"
       >
-        <div ref="attachMenuRootRef" class="thread-composer-attach">
+        <ComposerPopover
+          :open="isAttachMenuOpen"
+          align="start"
+          width="lg"
+          :aria-label="t('Add photos & files')"
+          @update:open="isAttachMenuOpen = $event"
+        >
+          <template #trigger>
+            <button
+              class="thread-composer-attach-trigger"
+              type="button"
+              :aria-label="t('Add photos & files')"
+              :disabled="isInteractionDisabled"
+              @click="toggleAttachMenu"
+            >
+              +
+            </button>
+          </template>
           <button
-            class="thread-composer-attach-trigger"
+            class="thread-composer-attach-item"
             type="button"
-            :aria-label="t('Add photos & files')"
             :disabled="isInteractionDisabled"
-            @click="toggleAttachMenu"
+            @click="triggerPhotoLibrary"
           >
-            +
+            {{ t('Add photos & files') }}
           </button>
-
-          <div v-if="isAttachMenuOpen" class="thread-composer-attach-menu">
-            <button
-              class="thread-composer-attach-item"
-              type="button"
-              :disabled="isInteractionDisabled"
-              @click="triggerPhotoLibrary"
-            >
-              {{ t('Add photos & files') }}
-            </button>
-            <button
-              class="thread-composer-attach-item"
-              type="button"
-              :disabled="isInteractionDisabled"
-              @click="triggerFolderPicker"
-            >
-              {{ t('Add folder') }}
-            </button>
-            <button
-              class="thread-composer-attach-item"
-              type="button"
-              :disabled="isInteractionDisabled"
-              @click="triggerCameraCapture"
-            >
-              {{ t('Take photo') }}
-            </button>
-            <div class="thread-composer-attach-separator" />
-            <div class="thread-composer-attach-mode">
-              <span class="thread-composer-attach-mode-label">{{ t('In-progress send') }}</span>
-              <div class="thread-composer-attach-mode-buttons">
-                <button
-                  class="thread-composer-attach-mode-button"
-                  :class="{ 'is-active': activeInProgressMode === 'steer' }"
-                  type="button"
-                  :disabled="isInteractionDisabled"
-                  @click="setActiveInProgressMode('steer')"
-                >
-                  {{ t('Steer') }}
-                </button>
-                <button
-                  class="thread-composer-attach-mode-button"
-                  :class="{ 'is-active': activeInProgressMode === 'queue' }"
-                  type="button"
-                  :disabled="isInteractionDisabled"
-                  @click="setActiveInProgressMode('queue')"
-                >
-                  {{ t('Queue') }}
-                </button>
-              </div>
+          <button
+            class="thread-composer-attach-item"
+            type="button"
+            :disabled="isInteractionDisabled"
+            @click="triggerFolderPicker"
+          >
+            {{ t('Add folder') }}
+          </button>
+          <button
+            class="thread-composer-attach-item"
+            type="button"
+            :disabled="isInteractionDisabled"
+            @click="triggerCameraCapture"
+          >
+            {{ t('Take photo') }}
+          </button>
+          <div class="thread-composer-attach-separator" />
+          <div class="thread-composer-attach-mode">
+            <span class="thread-composer-attach-mode-label">{{ t('In-progress send') }}</span>
+            <div class="thread-composer-attach-mode-buttons">
+              <button
+                class="thread-composer-attach-mode-button"
+                :class="{ 'is-active': activeInProgressMode === 'steer' }"
+                type="button"
+                :disabled="isInteractionDisabled"
+                @click="setActiveInProgressMode('steer')"
+              >
+                {{ t('Steer') }}
+              </button>
+              <button
+                class="thread-composer-attach-mode-button"
+                :class="{ 'is-active': activeInProgressMode === 'queue' }"
+                type="button"
+                :disabled="isInteractionDisabled"
+                @click="setActiveInProgressMode('queue')"
+              >
+                {{ t('Queue') }}
+              </button>
             </div>
           </div>
-        </div>
+        </ComposerPopover>
 
-        <div ref="planMenuRootRef" class="thread-composer-plan">
+        <ComposerPopover
+          :open="isPlanMenuOpen"
+          align="start"
+          width="md"
+          :aria-label="t('Plan mode')"
+          @update:open="isPlanMenuOpen = $event"
+        >
+          <template #trigger>
+            <button
+              class="thread-composer-plan-trigger"
+              :class="{ 'is-active': isPlanMenuOpen }"
+              type="button"
+              :aria-label="t('Plan mode')"
+              :disabled="isComposerConfigDisabled"
+              @click="togglePlanMenu"
+            >
+              <span class="thread-composer-plan-trigger-label">{{ t('Plan mode') }}</span>
+              <IconTablerChevronDown class="thread-composer-plan-trigger-chevron" />
+            </button>
+          </template>
           <button
-            class="thread-composer-plan-trigger"
-            :class="{ 'is-active': isPlanMenuOpen }"
+            v-for="choice in collaborationModeChoices"
+            :key="choice.value"
+            class="thread-composer-menu-item"
+            :class="{ 'is-active': selectedCollaborationMode === choice.value }"
             type="button"
-            :aria-label="t('Plan mode')"
-            :disabled="isComposerConfigDisabled"
-            @click="togglePlanMenu"
+            role="menuitemradio"
+            :aria-checked="selectedCollaborationMode === choice.value"
+            :disabled="choice.disabled || isComposerConfigDisabled"
+            @click="onCollaborationModeSelect(choice.value)"
           >
-            <span class="thread-composer-plan-trigger-label">{{ t('Plan mode') }}</span>
-            <IconTablerChevronDown class="thread-composer-plan-trigger-chevron" />
+            <span class="thread-composer-menu-item-copy">
+              <span class="thread-composer-menu-item-title">{{ t(choice.labelKey) }}</span>
+              <span v-if="choice.subLabel" class="thread-composer-menu-item-sub">{{ choice.subLabel }}</span>
+              <span v-if="choice.disabled" class="thread-composer-menu-item-hint">{{ t('Not supported by this Codex version') }}</span>
+            </span>
+            <span v-if="selectedCollaborationMode === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
           </button>
-          <Transition name="composer-popover">
-            <div v-if="isPlanMenuOpen" class="thread-composer-plan-menu" role="menu" :aria-label="t('Plan mode')">
-              <button
-                v-for="choice in collaborationModeChoices"
-                :key="choice.value"
-                class="thread-composer-menu-item"
-                :class="{ 'is-active': selectedCollaborationMode === choice.value }"
-                type="button"
-                role="menuitemradio"
-                :aria-checked="selectedCollaborationMode === choice.value"
-                :disabled="choice.disabled || isComposerConfigDisabled"
-                @click="onCollaborationModeSelect(choice.value)"
-              >
-                <span class="thread-composer-menu-item-copy">
-                  <span class="thread-composer-menu-item-title">{{ t(choice.labelKey) }}</span>
-                  <span v-if="choice.subLabel" class="thread-composer-menu-item-sub">{{ choice.subLabel }}</span>
-                  <span v-if="choice.disabled" class="thread-composer-menu-item-hint">{{ t('Not supported by this Codex version') }}</span>
-                </span>
-                <span v-if="selectedCollaborationMode === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
-              </button>
-            </div>
-          </Transition>
-        </div>
+        </ComposerPopover>
 
-        <div ref="approvalMenuRootRef" class="thread-composer-approval-toggle">
+        <ComposerPopover
+          :open="isApprovalMenuOpen"
+          align="end"
+          width="md"
+          :aria-label="t('Approval policy')"
+          @update:open="isApprovalMenuOpen = $event"
+        >
+          <template #trigger>
+            <button
+              class="thread-composer-approval-trigger"
+              :class="{ 'is-active': isApprovalMenuOpen }"
+              type="button"
+              :aria-label="t('Approval policy')"
+              :disabled="isComposerConfigDisabled"
+              @click="toggleApprovalMenu"
+            >
+              <span class="thread-composer-approval-trigger-label">{{ t('Approval policy') }}</span>
+              <IconTablerChevronDown class="thread-composer-approval-trigger-chevron" />
+            </button>
+          </template>
           <button
-            class="thread-composer-approval-trigger"
-            :class="{ 'is-active': isApprovalMenuOpen }"
+            v-for="choice in approvalPolicyChoices"
+            :key="choice.value"
+            class="thread-composer-menu-item"
+            :class="{ 'is-active': approvalPolicy === choice.value }"
             type="button"
-            :aria-label="t('Approval policy')"
-            :disabled="isComposerConfigDisabled"
-            @click="toggleApprovalMenu"
+            role="menuitemradio"
+            :aria-checked="approvalPolicy === choice.value"
+            :disabled="isApprovalPolicySaving"
+            @click="onApprovalPolicySelect(choice.value)"
           >
-            <span class="thread-composer-approval-trigger-label">{{ t('Approval policy') }}</span>
-            <IconTablerChevronDown class="thread-composer-approval-trigger-chevron" />
+            <span class="thread-composer-menu-item-copy">
+              <span class="thread-composer-menu-item-title">{{ t(choice.label) }}</span>
+            </span>
+            <span v-if="approvalPolicy === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
           </button>
-          <Transition name="composer-popover">
-            <div v-if="isApprovalMenuOpen" class="thread-composer-approval-menu" role="menu" :aria-label="t('Approval policy')">
-              <button
-                v-for="choice in approvalPolicyChoices"
-                :key="choice.value"
-                class="thread-composer-menu-item"
-                :class="{ 'is-active': approvalPolicy === choice.value }"
-                type="button"
-                role="menuitemradio"
-                :aria-checked="approvalPolicy === choice.value"
-                :disabled="isApprovalPolicySaving"
-                @click="onApprovalPolicySelect(choice.value)"
-              >
-                <span class="thread-composer-menu-item-copy">
-                  <span class="thread-composer-menu-item-title">{{ t(choice.label) }}</span>
-                </span>
-                <span v-if="approvalPolicy === choice.value" class="thread-composer-menu-item-check" aria-hidden="true">✓</span>
-              </button>
-              <p v-if="approvalPolicyError" class="thread-composer-menu-error" role="alert">{{ approvalPolicyError }}</p>
-              <p v-if="approvalPolicyNotice" class="thread-composer-menu-notice">{{ approvalPolicyNotice }}</p>
-            </div>
+          <p v-if="approvalPolicyError" class="thread-composer-menu-error" role="alert">{{ approvalPolicyError }}</p>
+          <Transition name="approval-tip">
+            <span v-if="approvalPolicyNotice" class="thread-composer-approval-tip" role="status">{{ approvalPolicyNotice }}</span>
           </Transition>
-        </div>
+        </ComposerPopover>
 
         <ComposerDropdown
           class="thread-composer-control"
@@ -328,6 +343,7 @@
           :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
           :placeholder="t('Model')"
           open-direction="up"
+          variant="pill"
           :disabled="isComposerConfigDisabled || models.length === 0"
           enable-search
           :search-placeholder="t('Search models...')"
@@ -340,6 +356,7 @@
           :options="reasoningOptions"
           :placeholder="t('Thinking')"
           open-direction="up"
+          variant="pill"
           :disabled="isComposerConfigDisabled"
           @update:model-value="onReasoningEffortSelect"
         />
@@ -409,6 +426,7 @@ import IconTablerMaximize from '../icons/IconTablerMaximize.vue'
 import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
 import ComposerDropdown from './ComposerDropdown.vue'
+import ComposerPopover from './ComposerPopover.vue'
 import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import {
   buildSkillSlashCommands,
@@ -556,9 +574,6 @@ const {
     dictationFeedback.value = error instanceof Error ? error.message : 'Dictation failed.'
   },
 })
-const attachMenuRootRef = ref<HTMLElement | null>(null)
-const planMenuRootRef = ref<HTMLElement | null>(null)
-const approvalMenuRootRef = ref<HTMLElement | null>(null)
 const photoLibraryInputRef = ref<HTMLInputElement | null>(null)
 const cameraCaptureInputRef = ref<HTMLInputElement | null>(null)
 const folderPickerInputRef = ref<HTMLInputElement | null>(null)
@@ -1886,10 +1901,9 @@ function isMarkdownFile(path: string): boolean {
 
 function onDocumentClick(event: MouseEvent): void {
   if (!isAttachMenuOpen.value && !isPlanMenuOpen.value && !isApprovalMenuOpen.value) return
-  const target = event.target as Node | null
+  const target = event.target as Element | null
   if (!target) return
-  const roots = [attachMenuRootRef.value, planMenuRootRef.value, approvalMenuRootRef.value]
-  if (roots.some((root) => root && root.contains(target))) return
+  if (typeof target.closest === 'function' && target.closest('.composer-popover-anchor')) return
   isAttachMenuOpen.value = false
   isPlanMenuOpen.value = false
   isApprovalMenuOpen.value = false
@@ -2235,16 +2249,8 @@ watch(
   @apply gap-1 sm:gap-2;
 }
 
-.thread-composer-attach {
-  @apply relative shrink-0;
-}
-
 .thread-composer-attach-trigger {
   @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border-0 bg-transparent pb-px text-xl leading-tight text-zinc-700 transition hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-attach-menu {
-  @apply absolute bottom-11 left-0 z-20 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .thread-composer-attach-item {
@@ -2275,11 +2281,6 @@ watch(
   @apply bg-zinc-900 text-white hover:text-white;
 }
 
-.thread-composer-plan,
-.thread-composer-approval-toggle {
-  @apply relative shrink-0;
-}
-
 .thread-composer-plan-trigger,
 .thread-composer-approval-trigger {
   @apply inline-flex h-8 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
@@ -2293,15 +2294,6 @@ watch(
 .thread-composer-plan-trigger-chevron,
 .thread-composer-approval-trigger-chevron {
   @apply h-3.5 w-3.5;
-}
-
-.thread-composer-plan-menu,
-.thread-composer-approval-menu {
-  @apply absolute bottom-11 left-0 z-20 w-64 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
-}
-
-.thread-composer-approval-menu {
-  @apply left-auto right-0;
 }
 
 .thread-composer-menu-item {
@@ -2336,16 +2328,26 @@ watch(
   @apply px-3 py-1 text-xs text-red-600;
 }
 
-.thread-composer-menu-notice {
-  @apply px-3 py-1 text-xs text-emerald-600;
+.thread-composer-approval-tip {
+  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm;
+  transform: translateX(-50%);
 }
 
-.composer-popover-enter-active {
-  animation: composer-popover-in 150ms ease-out;
+.approval-tip-enter-active,
+.approval-tip-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
-.composer-popover-leave-active {
-  animation: composer-popover-in 150ms ease-out reverse;
+.approval-tip-enter-from,
+.approval-tip-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 4px);
+}
+
+.approval-tip-enter-to,
+.approval-tip-leave-from {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .thread-composer-control {

@@ -28,3 +28,4 @@ Return to the [manual test index](../../tests.md).
 | [Three-column layout, settings dialog, and destructive confirmations](three-column-layout-settings-dialog-and-destructive-confirmations.md) |
 | [Right panel resize/collapse, composer approval policy tabs, skills chips, and slash skill names](right-panel-resize-collapse-and-composer-approval-tabs.md) |
 | [Composer control layout, collaboration mode menu, approval policy menu, and slash skill rows](composer-control-layout-and-collaboration-mode-menu.md) |
+| [Composer fifth-round feedback: shared popover, approval tip, slash skill rows, pill controls, and Files panel](composer-fifth-round-feedback.md) |
