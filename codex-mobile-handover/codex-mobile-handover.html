@@ -251,12 +251,12 @@
       <h1>codexapp 本地开发环境交接</h1>
       <p class="sub">本仓库是 <code>codexapp</code>（Codex 的轻量级浏览器 Web UI，跑在 Codex app-server 之上）。本文档记录本地环境当前状态、启动方式、本次会话解决的「Codex CLI not found」与页面转圈问题，以及交接时需要注意的事项。</p>
       <div class="snapshot">
-        <div class="cell"><div class="label">Git 分支</div><div class="value">main (ahead 1)</div></div>
+        <div class="cell"><div class="label">Git 分支</div><div class="value">main (ahead 2)</div></div>
         <div class="cell"><div class="label">Dev 端口</div><div class="value">4173</div></div>
         <div class="cell"><div class="label">Dev 状态</div><div class="value ok">运行中 · HTTP 200</div></div>
         <div class="cell"><div class="label">App-server</div><div class="value ok">正常响应 RPC</div></div>
         <div class="cell"><div class="label">工具链</div><div class="value">pnpm 11.18.0 · Node 22</div></div>
-        <div class="cell"><div class="label">最近提交</div><div class="value">2860a54</div></div>
+        <div class="cell"><div class="label">最近提交</div><div class="value">2830cdc</div></div>
       </div>
     </header>
 
@@ -411,8 +411,8 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           </tr>
           <tr>
             <td>P1-5 UI 同步与视觉一致性</td>
-            <td><strong class="warn-text">部分完成</strong></td>
-            <td>新增组件(命令菜单、压缩按钮)已带 dark 变体,但 composer 文案对齐、弹层动效统一、375x812/768x1024 视口回归未系统化验证;Windows 无 Codex.app 参考图,parity blocker 仍在</td>
+            <td><strong class="ok-text">已完成</strong></td>
+            <td>commit <code>2830cdc</code>;composer placeholder 对齐 Codex.app 引导文案(en/zh-CN);提及弹层与命令菜单共用 <code>.composer-popover</code> 弹层样式并统一 150ms 淡入+上移动效;补齐 file-mention 子元素 dark 覆盖;单测通过,Playwright light/dark + 375x812/768x1024 验证 12/12;Windows 无 Codex.app 参考图,parity blocker 仍在</td>
           </tr>
           <tr>
             <td>P2</td>
@@ -423,7 +423,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>总体进度:</strong> 方案 11 个任务项中,6 项已完成(P0-1、P0-2、P1-1、P1-2、P1-3、P1-4),1 项部分完成(P1-5),4 项未开始(P2 全部)。下一优先级建议为 P1-5 UI 同步与视觉一致性。
+          <strong>总体进度:</strong> 方案 11 个任务项中,7 项已完成(P0-1、P0-2、P1-1、P1-2、P1-3、P1-4、P1-5),4 项未开始(P2 全部)。下一优先级建议为 P2 生态能力(Hooks / Marketplace / Plugin 分享 / 远程控制)。
         </div>
       </section>
 
@@ -449,7 +449,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-04 · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P1-5 已完成） · 内容已脱敏
     </footer>
   </article>
 </body>
