@@ -96,7 +96,7 @@
         <div v-if="isDragActive" class="thread-composer-drop-overlay" aria-hidden="true">
           <span class="thread-composer-drop-overlay-copy">Drop images or files</span>
         </div>
-        <div v-if="isFileMentionOpen" class="thread-composer-file-mentions">
+        <div v-if="isFileMentionOpen" class="composer-popover">
           <template v-if="fileMentionSuggestions.length > 0">
             <button
               v-for="(item, index) in fileMentionSuggestions"
@@ -824,7 +824,7 @@ const placeholderText = computed(() =>
     ? t('Select a thread to send a message')
     : isPlanModeWaitingForModel.value
       ? t('Loading models for plan mode...')
-      : t('Type a message... (@ for files)'),
+      : t('Ask Codex anything, @ to add files, / for commands'),
 )
 const hasSubmitContent = computed(() =>
   draft.value.trim().length > 0 || selectedImages.value.length > 0 || fileAttachments.value.length > 0,
@@ -2271,10 +2271,6 @@ watch(
 
 .thread-composer-drop-overlay-copy {
   @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
-}
-
-.thread-composer-file-mentions {
-  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .thread-composer-file-mention-row {

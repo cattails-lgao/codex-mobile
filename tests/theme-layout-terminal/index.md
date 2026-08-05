@@ -24,3 +24,4 @@ Return to the [manual test index](../../tests.md).
 | [Terminal focus does not fullscreen panel](terminal-focus-does-not-fullscreen-panel.md) |
 | [Terminal quick commands from project files](terminal-quick-commands-from-project-files.md) |
 | [Mobile terminal command dropdown stays on screen](mobile-terminal-command-dropdown-stays-on-screen.md) |
+| [Composer popover shared surface, dark theme coverage, and placeholder parity](composer-popover-dark-and-placeholder-parity.md) |

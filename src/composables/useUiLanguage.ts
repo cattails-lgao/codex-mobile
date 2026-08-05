@@ -385,7 +385,7 @@ const zhCN: Record<string, string> = {
   'files.': '个文件。',
   'Select a thread to send a message': '选择一个线程后才能发送消息',
   'Loading models for plan mode...': '正在为规划模式加载模型...',
-  'Type a message... (@ for files)': '输入消息...（@ 选择文件）',
+  'Ask Codex anything, @ to add files, / for commands': '向 Codex 提问，@ 添加文件，/ 执行命令',
   'Hide': '隐藏',
   'Terminal': '终端',
   'Terminal input failed': '终端输入失败',

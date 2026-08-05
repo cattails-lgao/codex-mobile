@@ -21,7 +21,7 @@ function kindLabel(kind: SlashCommandKind): string {
 </script>
 
 <template>
-  <div class="thread-composer-slash-menu" role="listbox" :aria-label="t('Commands')">
+  <div class="composer-popover" role="listbox" :aria-label="t('Commands')">
     <button
       v-for="(command, index) in commands"
       :key="command.id"
@@ -44,10 +44,6 @@ function kindLabel(kind: SlashCommandKind): string {
 
 <style scoped>
 @reference "tailwindcss";
-
-.thread-composer-slash-menu {
-  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
-}
 
 .thread-composer-slash-row {
   @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
