@@ -72,7 +72,7 @@ function kindLabel(kind: SlashCommandKind): string {
       >
         <span class="thread-composer-slash-prefix thread-composer-slash-prefix--skill" aria-hidden="true">/</span>
         <span class="thread-composer-slash-body">
-          <span class="thread-composer-slash-name">{{ command.id }}</span>
+          <span class="thread-composer-slash-name">{{ command.displayName || command.id }}</span>
           <span class="thread-composer-slash-desc">{{ command.description }}</span>
         </span>
         <span class="thread-composer-slash-kind">{{ kindLabel(command.kind) }}</span>

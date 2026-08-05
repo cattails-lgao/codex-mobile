@@ -110,13 +110,34 @@
           class="sidebar-settings-area"
           @click="onSettingsAreaClick"
         >
-          <Transition name="settings-panel">
+        <Teleport to="body">
+          <div
+            v-if="isSettingsOpen"
+            class="settings-dialog-backdrop"
+            role="presentation"
+            @click.self="isSettingsOpen = false"
+          >
             <div
-              v-if="isSettingsOpen"
               ref="settingsPanelRef"
               class="sidebar-settings-panel"
+              role="dialog"
+              aria-modal="true"
+              :aria-label="t('Settings')"
               @click.stop
             >
+              <div class="settings-dialog-header">
+                <h2 class="settings-dialog-title">{{ t('Settings') }}</h2>
+                <button
+                  class="settings-dialog-close"
+                  type="button"
+                  :aria-label="t('Close')"
+                  :title="t('Close')"
+                  @click="isSettingsOpen = false"
+                >
+                  <IconTablerX class="settings-dialog-close-icon" />
+                </button>
+              </div>
+              <div class="settings-dialog-body">
               <div class="sidebar-settings-account-section">
                 <div class="sidebar-settings-account-header">
                   <div class="sidebar-settings-account-header-main">
@@ -639,8 +660,10 @@
               <div class="sidebar-settings-build-label" :aria-label="t('Worktree name and version')">
                 WT {{ worktreeName }} · v{{ appVersion }}
               </div>
+              </div>
             </div>
-          </Transition>
+          </div>
+        </Teleport>
           <button
             ref="settingsButtonRef"
             class="sidebar-settings-button"
@@ -658,11 +681,11 @@
     </template>
 
     <template #content>
+      <div class="content-root-wrap">
       <section
         class="content-root"
         :class="{
           'is-virtual-keyboard-open': isTerminalKeyboardLayoutActive,
-          'is-terminal-open': isComposerTerminalOpen,
         }"
         :style="contentStyle"
       >
@@ -685,49 +708,16 @@
             </span>
           </template>
           <template #actions>
-            <ComposerDropdown
-              v-if="canShowTerminalToggle"
-              class="content-header-terminal-command"
-              :class="{ 'is-open': isComposerTerminalOpen }"
-              :model-value="terminalHeaderDropdownValue"
-              :options="terminalHeaderDropdownOptions"
-              :placeholder="terminalCommandPlaceholder"
-              :selected-prefix-icon="IconTablerTerminal"
-              :icon-only="true"
-              menu-align="end"
-              :empty-label="t('No commands')"
-              @update:model-value="onSelectHeaderTerminalCommand"
-            />
-            <HeaderGitBranchDropdown
-              v-if="canShowContentHeaderBranchDropdown"
-              class="content-header-branch-dropdown"
-              :current-branch="currentThreadBranch"
-              :head-sha="currentThreadHeadSha"
-              :head-subject="currentThreadHeadSubject"
-              :head-date="currentThreadHeadDate"
-              :detached="isThreadDetachedHead"
-              :dirty="isThreadWorktreeDirty"
-              :worktree-change-summary="threadWorktreeChangeSummary"
-              :worktree-changes="threadWorktreeChangedFiles"
-              :branches="threadBranchOptions"
-              :commits-by-branch="threadBranchCommitsByBranch"
-              :commits-loading-for="threadBranchCommitsLoadingFor"
-              :commits-error="threadBranchCommitsError"
-              :commit-files-by-sha="threadCommitFilesBySha"
-              :commit-files-loading-for="threadCommitFilesLoadingFor"
-              :commit-files-error="threadCommitFilesError"
-              :loading="isLoadingThreadBranches"
-              :busy="isSwitchingThreadBranch"
-              :error="threadBranchError"
-              :review-open="isReviewPaneOpen"
-              :show-review="route.name === 'thread' && selectedThreadId.length > 0"
-              @toggle-review="onToggleContentHeaderReview"
-              @checkout-branch="onCheckoutContentHeaderBranch"
-              @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
-              @load-commits="loadThreadBranchCommits"
-              @load-commit-files="loadThreadCommitFiles"
-              @open-commit-file="onOpenContentHeaderCommitFile"
-            />
+            <button
+              v-if="isMobile && canShowRightPanel"
+              class="content-header-right-panel-toggle"
+              type="button"
+              :aria-label="isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')"
+              :title="isMobileRightPanelOpen ? t('Close side panel') : t('Open side panel')"
+              @click="isMobileRightPanelOpen = !isMobileRightPanelOpen"
+            >
+              <IconTablerLayoutSidebar class="content-header-right-panel-toggle-icon" />
+            </button>
           </template>
         </ContentHeader>
 
@@ -1079,15 +1069,6 @@
                   <span>{{ t(codexCliMissingError) }}</span>
                   <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
                 </div>
-                <ThreadTerminalPanel
-                  v-if="homeTerminalOpen && composerCwd"
-                  ref="homeTerminalPanelRef"
-                  class="content-thread-terminal-panel"
-                  :thread-id="composerThreadContextId"
-                  :cwd="composerCwd"
-                  @hide="onHideHomeTerminal"
-                  @terminal-focus-change="onTerminalFocusChange"
-                />
                 <ThreadComposer ref="homeThreadComposerRef" :active-thread-id="composerThreadContextId"
                   :cwd="composerCwd"
                   :fuzzy-file-search-results="fuzzyFileSearchResults"
@@ -1158,15 +1139,6 @@
                     @delete="removeQueuedMessage"
                     @reorder="onReorderQueuedMessage"
                   />
-                  <ThreadTerminalPanel
-                    v-if="selectedThreadTerminalOpen && selectedThreadId && composerCwd"
-                    ref="threadTerminalPanelRef"
-                    class="content-thread-terminal-panel"
-                    :thread-id="selectedThreadId"
-                    :cwd="composerCwd"
-                    @hide="onHideSelectedThreadTerminal"
-                    @terminal-focus-change="onTerminalFocusChange"
-                  />
                   <ThreadPendingRequestPanel
                     v-if="selectedThreadPendingRequest"
                     :request="selectedThreadPendingRequest"
@@ -1210,6 +1182,112 @@
           </template>
         </section>
       </section>
+      <aside
+        v-if="canShowRightPanel"
+        class="content-right-panel"
+        :class="{ 'is-mobile-open': isMobileRightPanelOpen }"
+      >
+        <div class="content-right-panel-header">
+          <div class="content-right-panel-tabs" role="tablist">
+            <button
+              class="content-right-panel-tab"
+              :class="{ 'is-active': activeRightPanelTab === 'git' }"
+              type="button"
+              role="tab"
+              :aria-selected="activeRightPanelTab === 'git'"
+              @click="selectRightPanelTab('git')"
+            >
+              <IconTablerGitFork class="content-right-panel-tab-icon" />
+              {{ t('Git') }}
+            </button>
+            <button
+              class="content-right-panel-tab"
+              :class="{ 'is-active': activeRightPanelTab === 'terminal' }"
+              type="button"
+              role="tab"
+              :aria-selected="activeRightPanelTab === 'terminal'"
+              @click="selectRightPanelTab('terminal')"
+            >
+              <IconTablerTerminal class="content-right-panel-tab-icon" />
+              {{ t('Terminal') }}
+            </button>
+          </div>
+          <div class="content-right-panel-actions">
+            <div class="content-right-panel-add-wrap">
+              <button
+                ref="rightPanelAddButtonRef"
+                class="content-right-panel-add"
+                type="button"
+                :aria-label="t('Add panel')"
+                :title="t('Add panel')"
+                @click.stop="isRightPanelMenuOpen = !isRightPanelMenuOpen"
+              >+</button>
+              <Transition name="right-panel-menu">
+                <div v-if="isRightPanelMenuOpen" class="content-right-panel-menu">
+                  <button type="button" @click="selectRightPanelTab('terminal')">
+                    <IconTablerTerminal class="content-right-panel-menu-icon" />
+                    {{ t('Terminal panel') }}
+                  </button>
+                  <button type="button" @click="selectRightPanelTab('git')">
+                    <IconTablerGitFork class="content-right-panel-menu-icon" />
+                    {{ t('Git panel') }}
+                  </button>
+                </div>
+              </Transition>
+            </div>
+            <button
+              v-if="isMobile"
+              class="content-right-panel-close"
+              type="button"
+              :aria-label="t('Close panel')"
+              :title="t('Close panel')"
+              @click="isMobileRightPanelOpen = false"
+            >
+              <IconTablerX class="content-right-panel-close-icon" />
+            </button>
+          </div>
+        </div>
+        <div class="content-right-panel-body">
+          <RightGitPanel
+            v-if="activeRightPanelTab === 'git'"
+            :current-branch="currentThreadBranch"
+            :head-sha="currentThreadHeadSha"
+            :head-subject="currentThreadHeadSubject"
+            :head-date="currentThreadHeadDate"
+            :detached="isThreadDetachedHead"
+            :dirty="isThreadWorktreeDirty"
+            :worktree-change-summary="threadWorktreeChangeSummary"
+            :worktree-changes="threadWorktreeChangedFiles"
+            :branches="threadBranchOptions"
+            :commits-by-branch="threadBranchCommitsByBranch"
+            :commits-loading-for="threadBranchCommitsLoadingFor"
+            :commits-error="threadBranchCommitsError"
+            :commit-files-by-sha="threadCommitFilesBySha"
+            :commit-files-loading-for="threadCommitFilesLoadingFor"
+            :commit-files-error="threadCommitFilesError"
+            :loading="isLoadingThreadBranches"
+            :busy="isSwitchingThreadBranch"
+            :error="threadBranchError"
+            :review-open="isReviewPaneOpen"
+            :show-review="route.name === 'thread' && selectedThreadId.length > 0"
+            @toggle-review="onToggleContentHeaderReview"
+            @checkout-branch="onCheckoutContentHeaderBranch"
+            @reset-branch-to-commit="onResetContentHeaderBranchToCommit"
+            @load-commits="loadThreadBranchCommits"
+            @load-commit-files="loadThreadCommitFiles"
+            @open-commit-file="onOpenContentHeaderCommitFile"
+          />
+          <ThreadTerminalPanel
+            v-else
+            ref="threadTerminalPanelRef"
+            :thread-id="composerThreadContextId"
+            :cwd="composerCwd"
+            @hide="onHideRightPanelTerminal"
+            @terminal-focus-change="onTerminalFocusChange"
+          />
+        </div>
+      </aside>
+      </div>
     </template>
   </DesktopLayout>
   <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-modal-backdrop" role="presentation">
@@ -1335,13 +1413,15 @@ import ThreadPendingRequestPanel from './components/content/ThreadPendingRequest
 import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
-import HeaderGitBranchDropdown from './components/content/HeaderGitBranchDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
+import RightGitPanel from './components/content/RightGitPanel.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
+import IconTablerGitFork from './components/icons/IconTablerGitFork.vue'
+import IconTablerLayoutSidebar from './components/icons/IconTablerLayoutSidebar.vue'
 import IconTablerX from './components/icons/IconTablerX.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
@@ -1369,7 +1449,6 @@ import {
   getTelegramConfig,
   getProjectRootSuggestion,
   getTelegramStatus,
-  getThreadTerminalQuickCommands,
   getThreadTerminalStatus,
   getWorkspaceRootsState,
   importProjectZip,
@@ -1385,7 +1464,7 @@ import {
 } from './api/codexGateway'
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
-import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
+import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient, readApprovalPolicy, writeApprovalPolicy } from './api/codexGateway'
 import type { ApprovalPolicy } from './api/codexGateway'
 import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGateway'
@@ -1401,8 +1480,6 @@ const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
 const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
-const TERMINAL_QUICK_COMMAND_STORAGE_KEY = 'codex-web-local.terminal-quick-commands.v1'
-const TOGGLE_TERMINAL_COMMAND_VALUE = '__toggle_terminal__'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 const SETTINGS_HELP = {
@@ -1416,15 +1493,6 @@ const SETTINGS_HELP = {
 } as const
 
 type ChatWidthMode = 'standard' | 'wide' | 'extra-wide'
-
-type TerminalHeaderQuickCommand = {
-  label: string
-  value: string
-  custom?: boolean
-  usageCount: number
-  lastUsedAt: number
-  sourceIndex?: number
-}
 
 type ThreadTerminalPanelExposed = {
   runQuickCommand: (command: string, custom?: boolean) => Promise<void>
@@ -1571,7 +1639,6 @@ const {
   projectDisplayNameById,
   selectedThread,
   selectedThreadTokenUsage,
-  selectedThreadTerminalOpen,
   selectedThreadServerRequests,
   selectedLiveOverlay,
   codexQuota,
@@ -1606,8 +1673,6 @@ const {
   ensureThreadMessagesLoaded,
   loadMessages,
   loadOlderMessages,
-  setThreadTerminalOpen,
-  toggleSelectedThreadTerminal,
   archiveThreadById,
   compactThreadById,
   compactingThreadIds,
@@ -1682,15 +1747,13 @@ function prepareFeedbackLink(event: MouseEvent, message?: string): void {
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
-const homeTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
-const homeTerminalOpen = ref(false)
 const isTerminalInputFocused = ref(false)
 const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
-const terminalProjectQuickCommands = ref<ThreadTerminalQuickCommand[]>([])
-const terminalStoredQuickCommands = ref<TerminalHeaderQuickCommand[]>(loadTerminalStoredQuickCommands())
-const terminalHeaderDropdownValue = ref('')
+const activeRightPanelTab = ref<'git' | 'terminal'>('git')
+const isRightPanelMenuOpen = ref(false)
+const isMobileRightPanelOpen = ref(false)
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const directoryTryInFlightKey = ref('')
@@ -2115,18 +2178,14 @@ const composerCwd = computed(() => {
   if (isHomeRoute.value) return newThreadCwd.value.trim()
   return selectedThread.value?.cwd?.trim() ?? ''
 })
-const canShowTerminalToggle = computed(() => (
+const canShowRightPanel = computed(() => (
   isThreadTerminalAvailable.value && (
     (isHomeRoute.value && composerCwd.value.length > 0) ||
     (route.name === 'thread' && selectedThreadId.value.length > 0)
   )
 ))
-const canShowContentHeaderBranchDropdown = computed(() => (
-  (route.name === 'thread' && selectedThreadId.value.length > 0) ||
-  (isHomeRoute.value && isNewThreadCwdGitRepo.value)
-))
-const isComposerTerminalOpen = computed(() => (
-  isHomeRoute.value ? homeTerminalOpen.value : selectedThreadTerminalOpen.value
+const isRightPanelTerminalActive = computed(() => (
+  canShowRightPanel.value && activeRightPanelTab.value === 'terminal'
 ))
 const isVirtualKeyboardOpen = computed(() => {
   if (!isMobile.value) return false
@@ -2135,7 +2194,7 @@ const isVirtualKeyboardOpen = computed(() => {
 })
 const isTerminalKeyboardLayoutActive = computed(() => (
   isVirtualKeyboardOpen.value ||
-  (isComposerTerminalOpen.value && isTerminalKeyboardFocusFallbackActive.value)
+  (isRightPanelTerminalActive.value && isTerminalKeyboardFocusFallbackActive.value)
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
@@ -2420,35 +2479,6 @@ const existingFolderFilteredEntries = computed(() => {
 })
 const darkModeMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
 const chatWidthLabel = computed(() => t(CHAT_WIDTH_PRESETS[chatWidth.value].label))
-const terminalShortcutLabel = computed(() => {
-  if (typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform)) {
-    return '⌘J'
-  }
-  return 'Ctrl+J'
-})
-const terminalCommandPlaceholder = computed(() => (
-  isComposerTerminalOpen.value ? t('Terminal') : t('Open terminal')
-))
-const terminalHeaderQuickCommands = computed<TerminalHeaderQuickCommand[]>(() => {
-  const storedByValue = new Map(terminalStoredQuickCommands.value.map((command) => [command.value, command]))
-  const combined: TerminalHeaderQuickCommand[] = [
-    ...terminalProjectQuickCommands.value.map((command, index) => ({
-      label: command.label,
-      value: command.value,
-      usageCount: 0,
-      lastUsedAt: 0,
-      ...(storedByValue.get(command.value) ?? {}),
-      custom: false,
-      sourceIndex: index,
-    })),
-  ]
-  return combined
-    .sort(compareTerminalQuickCommands)
-})
-const terminalHeaderDropdownOptions = computed(() => [
-  { label: isComposerTerminalOpen.value ? t('Hide terminal') : t('Open terminal'), value: TOGGLE_TERMINAL_COMMAND_VALUE },
-  ...terminalHeaderQuickCommands.value.map((command) => ({ label: command.label, value: command.value })),
-])
 const contentStyle = computed(() => {
   const preset = CHAT_WIDTH_PRESETS[chatWidth.value]
   const keyboardInset = Math.max(
@@ -2503,7 +2533,6 @@ onMounted(() => {
   void refreshTelegramStatus()
   void loadFreeModeStatus()
   void refreshThreadTerminalStatus()
-  void refreshTerminalQuickCommands()
 })
 
 watch(visibleFeedbackErrors, (values, oldValues) => {
@@ -3485,173 +3514,43 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   }
   if (key === 'j' && route.name === 'thread' && selectedThreadId.value) {
     event.preventDefault()
-    toggleComposerTerminal()
+    toggleRightPanelTerminal()
     return
   }
   if (key === 'j' && isHomeRoute.value && composerCwd.value) {
     event.preventDefault()
-    toggleComposerTerminal()
+    toggleRightPanelTerminal()
   }
 }
 
-function toggleComposerTerminal(): void {
-  if (!isThreadTerminalAvailable.value) return
-  if (isHomeRoute.value) {
-    if (!composerCwd.value) return
-    homeTerminalOpen.value = !homeTerminalOpen.value
-    if (!homeTerminalOpen.value) {
-      resetTerminalKeyboardFocusState()
-    }
-    return
+function toggleRightPanelTerminal(): void {
+  if (!canShowRightPanel.value) return
+  if (isMobile.value && !isMobileRightPanelOpen.value) {
+    isMobileRightPanelOpen.value = true
   }
-  toggleSelectedThreadTerminal()
-  if (!selectedThreadTerminalOpen.value) {
+  activeRightPanelTab.value = activeRightPanelTab.value === 'terminal' ? 'git' : 'terminal'
+  if (activeRightPanelTab.value !== 'terminal') {
     resetTerminalKeyboardFocusState()
   }
 }
 
-function onSelectHeaderTerminalCommand(command: string): void {
-  terminalHeaderDropdownValue.value = ''
-  if (!command) return
-  if (command === TOGGLE_TERMINAL_COMMAND_VALUE) {
-    toggleComposerTerminal()
-    return
+function selectRightPanelTab(tab: 'git' | 'terminal'): void {
+  activeRightPanelTab.value = tab
+  isRightPanelMenuOpen.value = false
+  if (isMobile.value) {
+    isMobileRightPanelOpen.value = true
   }
-  void openTerminalAndRunCommand(command)
-}
-
-async function openTerminalAndRunCommand(command: string): Promise<void> {
-  if (!isThreadTerminalAvailable.value || !composerCwd.value) return
-  if (isHomeRoute.value) {
-    homeTerminalOpen.value = true
-  } else if (selectedThreadId.value) {
-    setThreadTerminalOpen(selectedThreadId.value, true)
-  } else {
-    return
-  }
-  const panel = await waitForTerminalPanel()
-  if (!panel) return
-  try {
-    await panel.runQuickCommand(command)
-    recordHeaderTerminalCommandUse(command)
-  } catch {
-    // ThreadTerminalPanel renders the terminal-specific error in place.
+  if (tab !== 'terminal') {
+    resetTerminalKeyboardFocusState()
   }
 }
 
-async function waitForTerminalPanel(): Promise<ThreadTerminalPanelExposed | null> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await nextTick()
-    const panel = isHomeRoute.value ? homeTerminalPanelRef.value : threadTerminalPanelRef.value
-    if (panel) return panel
-    await new Promise((resolve) => window.setTimeout(resolve, 25))
+function onHideRightPanelTerminal(): void {
+  activeRightPanelTab.value = 'git'
+  if (isMobile.value) {
+    isMobileRightPanelOpen.value = false
   }
-  return null
-}
-
-async function refreshTerminalQuickCommands(): Promise<void> {
-  const cwd = composerCwd.value.trim()
-  if (!cwd) {
-    terminalProjectQuickCommands.value = []
-    return
-  }
-  try {
-    terminalProjectQuickCommands.value = await getThreadTerminalQuickCommands(cwd)
-  } catch {
-    terminalProjectQuickCommands.value = []
-  }
-}
-
-function recordHeaderTerminalCommandUse(command: string): void {
-  const normalized = normalizeTerminalQuickCommandValue(command)
-  if (!normalized) return
-  const existing = terminalStoredQuickCommands.value.find((row) => row.value === normalized)
-  const projectCommandIndex = terminalProjectQuickCommands.value.findIndex((row) => row.value === normalized)
-  const projectCommand = projectCommandIndex >= 0 ? terminalProjectQuickCommands.value[projectCommandIndex] : null
-  if (!projectCommand) return
-  const nextCommand: TerminalHeaderQuickCommand = {
-    label: existing?.label || projectCommand?.label || normalized,
-    value: normalized,
-    custom: false,
-    usageCount: (existing?.usageCount ?? 0) + 1,
-    lastUsedAt: Date.now(),
-    sourceIndex: projectCommandIndex >= 0 ? projectCommandIndex : undefined,
-  }
-  const next = [
-    ...terminalStoredQuickCommands.value.filter((row) => row.value !== normalized),
-    nextCommand,
-  ]
-  terminalStoredQuickCommands.value = next
-  saveTerminalStoredQuickCommands(next)
-}
-
-function normalizeTerminalQuickCommandValue(value: string): string {
-  return value.trim().replace(/\s+/g, ' ')
-}
-
-function compareTerminalQuickCommands(first: TerminalHeaderQuickCommand, second: TerminalHeaderQuickCommand): number {
-  if (second.usageCount !== first.usageCount) return second.usageCount - first.usageCount
-  if (second.lastUsedAt !== first.lastUsedAt) return second.lastUsedAt - first.lastUsedAt
-  const firstSource = typeof first.sourceIndex === 'number' ? first.sourceIndex : Number.MAX_SAFE_INTEGER
-  const secondSource = typeof second.sourceIndex === 'number' ? second.sourceIndex : Number.MAX_SAFE_INTEGER
-  return firstSource - secondSource
-}
-
-function loadTerminalStoredQuickCommands(): TerminalHeaderQuickCommand[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(TERMINAL_QUICK_COMMAND_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    const seen = new Set<string>()
-    const commands: TerminalHeaderQuickCommand[] = []
-    for (const row of parsed) {
-      const record = row !== null && typeof row === 'object' && !Array.isArray(row)
-        ? row as Record<string, unknown>
-        : null
-      const value = normalizeTerminalQuickCommandValue(readTerminalString(record?.value))
-      if (!value || seen.has(value)) continue
-      seen.add(value)
-      commands.push({
-        label: readTerminalString(record?.label) || value,
-        value,
-        custom: record?.custom !== false,
-        usageCount: readTerminalPositiveInteger(record?.usageCount),
-        lastUsedAt: readTerminalPositiveInteger(record?.lastUsedAt),
-      })
-    }
-    return commands
-  } catch {
-    return []
-  }
-}
-
-function saveTerminalStoredQuickCommands(commands: TerminalHeaderQuickCommand[]): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(
-    TERMINAL_QUICK_COMMAND_STORAGE_KEY,
-    JSON.stringify(commands.map((command) => ({
-      label: command.label,
-      value: command.value,
-      custom: command.custom === true,
-      usageCount: command.usageCount,
-      lastUsedAt: command.lastUsedAt,
-    }))),
-  )
-}
-
-function readTerminalString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function readTerminalPositiveInteger(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.trunc(value))
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed))
-  }
-  return 0
+  resetTerminalKeyboardFocusState()
 }
 
 function onTerminalFocusChange(focused: boolean): void {
@@ -3671,18 +3570,6 @@ function onTerminalFocusChange(focused: boolean): void {
   }, 1500)
 }
 
-function onHideHomeTerminal(): void {
-  homeTerminalOpen.value = false
-  resetTerminalKeyboardFocusState()
-}
-
-function onHideSelectedThreadTerminal(): void {
-  if (selectedThreadId.value) {
-    setThreadTerminalOpen(selectedThreadId.value, false)
-  }
-  resetTerminalKeyboardFocusState()
-}
-
 function resetTerminalKeyboardFocusState(): void {
   isTerminalInputFocused.value = false
   isTerminalKeyboardFocusFallbackActive.value = false
@@ -3699,15 +3586,15 @@ async function refreshThreadTerminalStatus(): Promise<void> {
   try {
     const status = await getThreadTerminalStatus()
     isThreadTerminalAvailable.value = status.available
-    if (!status.available) {
-      homeTerminalOpen.value = false
-      if (selectedThreadId.value) {
-        setThreadTerminalOpen(selectedThreadId.value, false)
-      }
+    if (!status.available && activeRightPanelTab.value === 'terminal') {
+      activeRightPanelTab.value = 'git'
+      resetTerminalKeyboardFocusState()
     }
   } catch {
     isThreadTerminalAvailable.value = false
-    homeTerminalOpen.value = false
+    if (activeRightPanelTab.value === 'terminal') {
+      activeRightPanelTab.value = 'git'
+    }
   }
 }
 
@@ -5137,13 +5024,6 @@ watch(
 )
 
 watch(
-  () => composerCwd.value,
-  () => {
-    void refreshTerminalQuickCommands()
-  },
-)
-
-watch(
   () => [selectedThreadId.value, composerCwd.value] as const,
   () => {
     clearCommitReviewContext()
@@ -5554,10 +5434,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
 }
 
-.content-root.is-virtual-keyboard-open .content-thread-terminal-panel {
-  min-height: 0;
-}
-
 .content-root.is-virtual-keyboard-open .content-keyboard-spacer {
   display: none;
 }
@@ -5600,73 +5476,131 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
 }
 
-.content-thread-terminal-panel {
-  @apply w-full;
+.content-root-wrap {
+  @apply flex h-full min-h-0 min-w-0;
 }
 
-.content-header-terminal-command {
-  @apply max-w-48;
+.content-right-panel {
+  @apply relative z-10 flex h-full min-h-0 w-80 shrink-0 flex-col border-l border-zinc-200 bg-slate-50;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-trigger) {
-  @apply h-8 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 outline-none transition hover:bg-zinc-50 focus:border-zinc-300;
+.content-right-panel-header {
+  @apply flex h-10 shrink-0 items-center justify-between gap-1 border-b border-zinc-200 bg-white px-1.5;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-prefix-icon) {
-  @apply h-4 w-4 text-zinc-500;
+.content-right-panel-tabs {
+  @apply flex min-w-0 flex-1 items-center gap-0.5;
 }
 
-.content-header-terminal-command.is-open :deep(.composer-dropdown-trigger) {
-  @apply border-zinc-300 bg-zinc-100 text-zinc-950;
+.content-right-panel-tab {
+  @apply inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-menu-wrap) {
-  left: auto;
-  right: 0;
+.content-right-panel-tab.is-active {
+  @apply border-zinc-200 bg-zinc-100 text-zinc-950;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-menu) {
-  width: min(18rem, calc(100vw - 1rem));
-  min-width: min(14rem, calc(100vw - 1rem));
+.content-right-panel-tab-icon,
+.content-right-panel-menu-icon,
+.content-right-panel-close-icon,
+.content-header-right-panel-toggle-icon {
+  @apply h-4 w-4 shrink-0;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-option) {
-  @apply block truncate;
+.content-right-panel-actions {
+  @apply flex shrink-0 items-center gap-1;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-trigger) {
-  @apply rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+.content-right-panel-add-wrap {
+  @apply relative;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-prefix-icon),
-.content-header-branch-dropdown :deep(.composer-dropdown-prefix-icon) {
-  @apply h-4 w-4 text-zinc-600;
+.content-right-panel-add {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-white text-sm text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
 }
 
-.content-header-terminal-command :deep(.composer-dropdown-trigger),
-.content-header-branch-dropdown :deep(.composer-dropdown-trigger) {
-  @apply gap-0.5;
+.content-right-panel-menu {
+  @apply absolute right-0 top-8 z-[1100] flex w-40 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
-.content-header-branch-dropdown :deep(.composer-dropdown-trigger) {
-  @apply rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50;
+.content-right-panel-menu button {
+  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
 }
 
-.content-header-branch-dropdown :deep(.composer-dropdown-value) {
-  @apply max-w-40 truncate;
+.content-right-panel-close {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
 }
 
-.content-header-branch-dropdown :deep(.composer-dropdown-menu-wrap) {
-  left: auto;
-  right: 0;
+.content-right-panel-body {
+  @apply flex-1 min-h-0 overflow-hidden;
 }
 
-.content-header-branch-dropdown.is-review-open :deep(.composer-dropdown-trigger) {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+.content-right-panel-body :deep(.thread-terminal-panel) {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  border: none;
 }
 
-.content-header-branch-dropdown.is-review-open :deep(.composer-dropdown-chevron) {
-  @apply text-white;
+.content-header-right-panel-toggle {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
+}
+
+.right-panel-menu-enter-active,
+.right-panel-menu-leave-active {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.right-panel-menu-enter-from,
+.right-panel-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+:global(:root.dark) .content-right-panel {
+  @apply border-zinc-800 bg-zinc-900;
+}
+
+:global(:root.dark) .content-right-panel-header {
+  @apply border-zinc-800 bg-zinc-950;
+}
+
+:global(:root.dark) .content-right-panel-tab {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:global(:root.dark) .content-right-panel-tab.is-active {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
+}
+
+:global(:root.dark) .content-right-panel-add {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:global(:root.dark) .content-right-panel-menu {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:global(:root.dark) .content-right-panel-menu button {
+  @apply text-zinc-300 hover:bg-zinc-800;
+}
+
+:global(:root.dark) .content-right-panel-close {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:global(:root.dark) .content-header-right-panel-toggle {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+@media (max-width: 767px) {
+  .content-right-panel {
+    @apply fixed right-0 top-0 bottom-0 z-[1100] w-[min(85vw,20rem)] translate-x-full shadow-2xl transition-transform duration-200;
+  }
+
+  .content-right-panel.is-mobile-open {
+    transform: translateX(0);
+  }
 }
 
 .new-thread-empty {
@@ -6035,7 +5969,43 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-panel {
-  @apply mb-1 max-h-[min(70vh,36rem)] overflow-y-auto rounded-lg border border-zinc-200 bg-white;
+  @apply flex max-h-[min(82vh,44rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
+}
+
+.settings-dialog-backdrop {
+  @apply fixed inset-0 z-[1150] flex items-center justify-center bg-black/40 p-3 sm:p-6;
+}
+
+.settings-dialog-header {
+  @apply flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 px-4;
+}
+
+.settings-dialog-title {
+  @apply m-0 text-sm font-semibold text-zinc-900;
+}
+
+.settings-dialog-close {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
+}
+
+.settings-dialog-close-icon {
+  @apply h-4.5 w-4.5;
+}
+
+.settings-dialog-body {
+  @apply min-h-0 flex-1 overflow-y-auto;
+}
+
+:global(:root.dark) .settings-dialog-header {
+  @apply border-zinc-700;
+}
+
+:global(:root.dark) .settings-dialog-title {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .settings-dialog-close {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
 .sidebar-settings-row {
@@ -6641,17 +6611,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 :root.dark .sidebar-settings-key-clear {
   @apply border-zinc-600 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500;
-}
-
-.settings-panel-enter-active,
-.settings-panel-leave-active {
-  transition: all 150ms ease;
-}
-
-.settings-panel-enter-from,
-.settings-panel-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
 }
 
 .project-zip-modal-backdrop {

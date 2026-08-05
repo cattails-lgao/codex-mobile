@@ -124,4 +124,15 @@ describe('buildSkillSlashCommands', () => {
     const matches = matchSlashCommands(commands, 'pdf')
     expect(matches.map((command) => command.id)).toEqual(['pdf'])
   })
+
+  it('carries the full display name and falls back to the raw name', () => {
+    const commands = buildSkillSlashCommands([
+      { name: 'frontend-code-review', description: 'Review frontend code', path: 'a/SKILL.md', displayName: 'Frontend Code Review' },
+      { name: 'HTML Report', description: 'Create HTML reports', path: 'b/SKILL.md' },
+    ])
+    expect(commands.map((command) => command.displayName)).toEqual(['Frontend Code Review', 'HTML Report'])
+    for (const command of commands) {
+      expect(command.id).toBeTruthy()
+    }
+  })
 })

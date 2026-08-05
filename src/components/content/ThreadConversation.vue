@@ -205,7 +205,7 @@
                         :disabled="fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readStandaloneFileChangeSummary(message)) === 'redoing'"
                         :title="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
                         :aria-label="fileChangeNextAction(readStandaloneFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
-                        @click="runFileChangeAction(readStandaloneFileChangeSummary(message), fileChangeNextAction(readStandaloneFileChangeSummary(message)))"
+                        @click="requestFileChangeAction(readStandaloneFileChangeSummary(message), fileChangeNextAction(readStandaloneFileChangeSummary(message)))"
                       >
                         <IconTablerArrowBackUp
                           class="icon-svg file-change-action-icon"
@@ -683,7 +683,7 @@
                         :disabled="fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'undoing' || fileChangeActionStatus(readAnchoredFileChangeSummary(message)) === 'redoing'"
                         :title="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
                         :aria-label="fileChangeNextAction(readAnchoredFileChangeSummary(message)) === 'redo' ? 'Redo file changes from this turn' : 'Undo file changes from this turn'"
-                        @click="runFileChangeAction(readAnchoredFileChangeSummary(message), fileChangeNextAction(readAnchoredFileChangeSummary(message)))"
+                        @click="requestFileChangeAction(readAnchoredFileChangeSummary(message), fileChangeNextAction(readAnchoredFileChangeSummary(message)))"
                       >
                         <IconTablerArrowBackUp
                           class="icon-svg file-change-action-icon"
@@ -923,6 +923,15 @@
       </div>
     </div>
   </section>
+  <ConfirmDialog
+    :visible="pendingConfirm !== null"
+    :title="pendingConfirmTitle"
+    :message="pendingConfirmMessage"
+    confirm-label="Confirm"
+    danger
+    @confirm="confirmPendingAction"
+    @cancel="pendingConfirm = null"
+  />
 </template>
 
 <script setup lang="ts">
@@ -939,6 +948,7 @@ import IconTablerCopy from '../icons/IconTablerCopy.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerX from '../icons/IconTablerX.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
 
@@ -1350,6 +1360,33 @@ const copiedResponseAnchorId = ref('')
 const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
 const fileChangeActionError = ref<Record<string, string>>({})
 const fileChangeRedoPatchIds = ref<Record<string, string[]>>({})
+
+type PendingFileChangeConfirm = {
+  kind: 'file-change'
+  summary: TurnFileChangeSummary | null
+  action: 'undo' | 'redo'
+}
+type PendingEditConfirm = {
+  kind: 'edit-message'
+  messageId: string
+}
+const pendingConfirm = ref<PendingEditConfirm | PendingFileChangeConfirm | null>(null)
+const pendingConfirmTitle = computed(() => {
+  const pending = pendingConfirm.value
+  if (!pending) return ''
+  if (pending.kind === 'edit-message') return 'Edit this message?'
+  return pending.action === 'undo' ? 'Undo file changes?' : 'Redo file changes?'
+})
+const pendingConfirmMessage = computed(() => {
+  const pending = pendingConfirm.value
+  if (!pending) return ''
+  if (pending.kind === 'edit-message') {
+    return 'This rolls the thread back to this turn so you can edit the message. Later replies will be removed.'
+  }
+  return pending.action === 'undo'
+    ? 'Undo the file changes from this turn? This modifies the working tree and Codex cannot revert it automatically.'
+    : 'Redo the file changes from this turn? This reapplies the edits to the working tree.'
+})
 const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
@@ -2430,9 +2467,25 @@ function showEditMessageButton(message: UiMessage): boolean {
 }
 
 function editMessage(messageId: string): void {
-  const turnId = editableTurnIdByMessageId.value[messageId]
-  if (!turnId) return
-  emit('rollback', { turnId })
+  if (!editableTurnIdByMessageId.value[messageId]) return
+  pendingConfirm.value = { kind: 'edit-message', messageId }
+}
+
+function requestFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): void {
+  if (!fileChangeActionKey(summary)) return
+  pendingConfirm.value = { kind: 'file-change', summary, action }
+}
+
+function confirmPendingAction(): void {
+  const pending = pendingConfirm.value
+  pendingConfirm.value = null
+  if (!pending) return
+  if (pending.kind === 'edit-message') {
+    const turnId = editableTurnIdByMessageId.value[pending.messageId]
+    if (turnId) emit('rollback', { turnId })
+    return
+  }
+  void runFileChangeAction(pending.summary, pending.action)
 }
 
 function splitPlainTextByLinks(
