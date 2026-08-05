@@ -29,3 +29,4 @@ Return to the [manual test index](../../tests.md).
 | [Right panel resize/collapse, composer approval policy tabs, skills chips, and slash skill names](right-panel-resize-collapse-and-composer-approval-tabs.md) |
 | [Composer control layout, collaboration mode menu, approval policy menu, and slash skill rows](composer-control-layout-and-collaboration-mode-menu.md) |
 | [Composer fifth-round feedback: shared popover, approval tip, slash skill rows, pill controls, and Files panel](composer-fifth-round-feedback.md) |
+| [H5 right-sidebar compatibility and inline image preview in the Files tab](h5-right-sidebar-files-inline-preview.md) |

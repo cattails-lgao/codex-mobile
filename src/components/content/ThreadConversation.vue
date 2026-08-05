@@ -56,7 +56,7 @@
             >
               <div class="cmd-group-inner">
                 <div
-                  v-for="cmd in getCommandBlockForLatest(message)"
+                  v-for="(cmd, cmdIndex) in getCommandBlockForLatest(message)"
                   :key="`grouped-cmd-${cmd.id}`"
                   class="worked-cmd-item"
                 >
@@ -72,6 +72,7 @@
                     ]"
                     @click="toggleCommandExpand(cmd)"
                   >
+                    <span class="cmd-step-index" :title="t('Step') + ' ' + (cmdIndex + 1)">{{ cmdIndex + 1 }}</span>
                     <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
                     <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
                     <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
@@ -285,7 +286,7 @@
                   </button>
                   <div v-if="isWorkedExpanded(message)" class="worked-details">
                     <div
-                      v-for="cmd in getCommandsForWorked(messages, messages.indexOf(message))"
+                      v-for="(cmd, workedCmdIndex) in getCommandsForWorked(messages, messages.indexOf(message))"
                       :key="`worked-cmd-${cmd.id}`"
                       class="worked-cmd-item"
                     >
@@ -301,6 +302,7 @@
                         ]"
                         @click="toggleCommandExpand(cmd)"
                       >
+                        <span class="cmd-step-index" :title="t('Step') + ' ' + (workedCmdIndex + 1)">{{ workedCmdIndex + 1 }}</span>
                         <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
                         <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
                         <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
@@ -942,6 +944,7 @@ import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { copyTextToClipboard, copyTextWithSelectionFallback } from '../../utils/clipboard'
+import { readPlanData } from '../../utils/plan'
 
 import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -986,53 +989,6 @@ function prepareTurnErrorFeedback(event: MouseEvent, message: string): void {
   if (target instanceof HTMLAnchorElement) {
     target.href = buildFeedbackMailto()
   }
-}
-
-function parsePlanFromMessageText(text: string): { explanation: string; steps: UiPlanStep[] } | null {
-  const normalized = text.replace(/\r\n/g, '\n').trim()
-  if (!normalized) return null
-
-  const steps: UiPlanStep[] = []
-  const explanationLines: string[] = []
-
-  for (const line of normalized.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) {
-      if (steps.length === 0) explanationLines.push('')
-      continue
-    }
-
-    const match = trimmed.match(/^[-*]\s+\[([ xX~>|-])\]\s+(.+)$/)
-    if (match) {
-      const marker = (match[1] ?? ' ').toLowerCase()
-      let status: UiPlanStep['status'] = 'pending'
-      if (marker === 'x') status = 'completed'
-      if (marker === '~' || marker === '>' || marker === '-') status = 'inProgress'
-      steps.push({
-        step: match[2]?.trim() ?? '',
-        status,
-      })
-      continue
-    }
-
-    explanationLines.push(trimmed)
-  }
-
-  if (steps.length === 0) return null
-  return {
-    explanation: explanationLines.join('\n').trim(),
-    steps: steps.filter((step) => step.step.length > 0),
-  }
-}
-
-function readPlanData(message: UiMessage): { explanation: string; steps: UiPlanStep[] } | null {
-  if (message.plan && message.plan.steps.length > 0) {
-    return {
-      explanation: message.plan.explanation?.trim() ?? '',
-      steps: message.plan.steps,
-    }
-  }
-  return parsePlanFromMessageText(message.text)
 }
 
 function isCommandMessage(message: UiMessage): boolean {
@@ -5350,6 +5306,14 @@ onBeforeUnmount(() => {
 
 .cmd-chevron {
   @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
+}
+
+.cmd-step-index {
+  @apply flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-zinc-200 px-1 text-[10px] font-semibold leading-none text-zinc-600 tabular-nums;
+}
+
+:global(:root.dark) .cmd-step-index {
+  @apply bg-zinc-700 text-zinc-200;
 }
 
 .cmd-chevron-open {

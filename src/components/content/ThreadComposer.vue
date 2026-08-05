@@ -7,6 +7,42 @@
         'thread-composer-shell--drag-active': isDragActive,
       }"
     >
+    <div
+      v-if="planPanel"
+      class="thread-composer-plan-panel"
+      :data-streaming="planPanel.streaming"
+    >
+      <button
+        type="button"
+        class="thread-composer-plan-panel-header"
+        :aria-expanded="isPlanPanelExpanded"
+        @click="isPlanPanelExpanded = !isPlanPanelExpanded"
+      >
+        <span class="thread-composer-plan-panel-chevron" :class="{ 'is-open': isPlanPanelExpanded }">▶</span>
+        <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
+        <span v-if="planPanel.streaming" class="thread-composer-plan-panel-badge">{{ t('Updating') }}</span>
+        <span class="thread-composer-plan-panel-progress">
+          {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
+        </span>
+      </button>
+      <div v-if="isPlanPanelExpanded" class="thread-composer-plan-panel-body">
+        <p v-if="planPanel.explanation" class="thread-composer-plan-panel-explanation">{{ planPanel.explanation }}</p>
+        <ol class="thread-composer-plan-panel-steps">
+          <li
+            v-for="(step, index) in planPanel.steps"
+            :key="`composer-plan-${planPanel.id}-${index}`"
+            class="thread-composer-plan-panel-step"
+            :data-status="step.status"
+          >
+            <span class="thread-composer-plan-panel-step-status" :data-status="step.status">
+              {{ planStepStatusIcon(step.status) }}
+            </span>
+            <span class="thread-composer-plan-panel-step-text">{{ step.step }}</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
           <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
@@ -252,9 +288,50 @@
               </button>
             </div>
           </div>
+          <template v-if="isMobile">
+            <div class="thread-composer-attach-separator" />
+            <div class="thread-composer-attach-mode">
+              <span class="thread-composer-attach-mode-label">{{ t('Plan mode') }}</span>
+              <div class="thread-composer-attach-mode-buttons">
+                <button
+                  v-for="choice in collaborationModeChoices"
+                  :key="`mobile-plan-${choice.value}`"
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': selectedCollaborationMode === choice.value }"
+                  type="button"
+                  :disabled="choice.disabled || isComposerConfigDisabled"
+                  @click="onMobileCollaborationModeSelect(choice.value)"
+                >
+                  {{ t(choice.labelKey) }}
+                </button>
+              </div>
+            </div>
+            <div class="thread-composer-attach-separator" />
+            <div class="thread-composer-attach-mode">
+              <span class="thread-composer-attach-mode-label">{{ t('Approval policy') }}</span>
+              <div class="thread-composer-attach-mode-buttons">
+                <button
+                  v-for="choice in approvalPolicyChoices"
+                  :key="`mobile-approval-${choice.value}`"
+                  class="thread-composer-attach-mode-button"
+                  :class="{ 'is-active': approvalPolicy === choice.value }"
+                  type="button"
+                  :disabled="isApprovalPolicySaving"
+                  @click="onApprovalPolicySelect(choice.value)"
+                >
+                  {{ t(choice.label) }}
+                </button>
+              </div>
+            </div>
+            <p v-if="approvalPolicyError" class="thread-composer-menu-error" role="alert">{{ approvalPolicyError }}</p>
+            <Transition name="approval-tip">
+              <span v-if="approvalPolicyNotice" class="thread-composer-approval-tip" role="status">{{ approvalPolicyNotice }}</span>
+            </Transition>
+          </template>
         </ComposerPopover>
 
         <ComposerPopover
+          v-if="!isMobile"
           :open="isPlanMenuOpen"
           align="start"
           width="md"
@@ -295,6 +372,7 @@
         </ComposerPopover>
 
         <ComposerPopover
+          v-if="!isMobile"
           :open="isApprovalMenuOpen"
           align="end"
           width="md"
@@ -467,7 +545,15 @@ const props = defineProps<{
   isApprovalPolicySaving?: boolean
   approvalPolicyError?: string
   approvalPolicyNotice?: string
+  planPanel?: ComposerPlanPanelData | null
 }>()
+
+export type ComposerPlanPanelData = {
+  id: string
+  streaming: boolean
+  explanation: string
+  steps: Array<{ step: string; status: 'pending' | 'inProgress' | 'completed' }>
+}
 
 export type FileAttachment = { label: string; path: string; fsPath: string }
 
@@ -597,6 +683,21 @@ const allSlashCommands = computed<SlashCommand[]>(() => [
   ...buildSkillSlashCommands(props.skills ?? []),
 ])
 const isComposerExpanded = ref(false)
+const isPlanPanelExpanded = ref(true)
+const completedPlanStepCount = computed(() => {
+  const steps = props.planPanel?.steps ?? []
+  return steps.filter((step) => step.status === 'completed').length
+})
+function planStepStatusIcon(status: 'pending' | 'inProgress' | 'completed'): string {
+  switch (status) {
+    case 'completed':
+      return '✓'
+    case 'inProgress':
+      return '•'
+    default:
+      return '○'
+  }
+}
 const isDraftOverflowing = ref(false)
 let composerOverflowMeasurementQueued = false
 const draftGeneration = ref(0)
@@ -1140,6 +1241,15 @@ function onCollaborationModeSelect(mode: CollaborationModeKind): void {
   }
   emit('update:selected-collaboration-mode', mode)
   isPlanMenuOpen.value = false
+}
+
+function onMobileCollaborationModeSelect(mode: CollaborationModeKind): void {
+  if (mode === props.selectedCollaborationMode) {
+    isAttachMenuOpen.value = false
+    return
+  }
+  emit('update:selected-collaboration-mode', mode)
+  isAttachMenuOpen.value = false
 }
 
 function onReasoningEffortSelect(value: string): void {
@@ -2018,6 +2128,102 @@ watch(
   @apply rounded-t-none border-t-0;
 }
 
+.thread-composer-plan-panel {
+  @apply mb-2 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50;
+}
+
+.thread-composer-plan-panel[data-streaming='true'] {
+  @apply border-sky-200 bg-sky-50;
+}
+
+.thread-composer-plan-panel-header {
+  @apply flex w-full items-center gap-2 border-0 bg-transparent px-2.5 py-1.5 text-left;
+}
+
+.thread-composer-plan-panel-chevron {
+  @apply text-[10px] text-zinc-400 transition-transform duration-150;
+}
+
+.thread-composer-plan-panel-chevron.is-open {
+  @apply rotate-90;
+}
+
+.thread-composer-plan-panel-title {
+  @apply text-xs font-semibold text-zinc-800;
+}
+
+.thread-composer-plan-panel-badge {
+  @apply rounded-full bg-sky-500 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white;
+}
+
+.thread-composer-plan-panel-progress {
+  @apply ml-auto text-[11px] tabular-nums text-zinc-500;
+}
+
+.thread-composer-plan-panel-body {
+  @apply border-t border-zinc-200 px-2.5 py-2;
+}
+
+.thread-composer-plan-panel-explanation {
+  @apply m-0 mb-1.5 text-xs leading-5 text-zinc-500;
+}
+
+.thread-composer-plan-panel-steps {
+  @apply m-0 flex list-none flex-col gap-1 p-0;
+}
+
+.thread-composer-plan-panel-step {
+  @apply flex items-start gap-1.5 text-xs leading-5 text-zinc-700;
+}
+
+.thread-composer-plan-panel-step-status {
+  @apply w-3 shrink-0 text-center;
+}
+
+.thread-composer-plan-panel-step-status[data-status='completed'] {
+  @apply text-emerald-600;
+}
+
+.thread-composer-plan-panel-step-status[data-status='inProgress'] {
+  @apply text-sky-600;
+}
+
+.thread-composer-plan-panel-step-status[data-status='pending'] {
+  @apply text-zinc-400;
+}
+
+.thread-composer-plan-panel-step-text {
+  @apply min-w-0;
+}
+
+:global(:root.dark) .thread-composer-plan-panel {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:global(:root.dark) .thread-composer-plan-panel[data-streaming='true'] {
+  @apply border-sky-800 bg-sky-950/40;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-title {
+  @apply text-zinc-100;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-body {
+  @apply border-zinc-700;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-explanation {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-step {
+  @apply text-zinc-300;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-progress {
+  @apply text-zinc-400;
+}
+
 .thread-composer-attachments {
   @apply mb-2 flex flex-wrap gap-2;
 }
@@ -2262,7 +2468,7 @@ watch(
 }
 
 .thread-composer-attach-mode {
-  @apply px-3 py-2 flex items-center justify-between gap-2;
+  @apply px-3 py-2 flex flex-wrap items-center justify-between gap-2;
 }
 
 .thread-composer-attach-mode-label {

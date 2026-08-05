@@ -44,3 +44,4 @@ Return to the [manual test index](../../tests.md).
 | [First user message is visible immediately in new chats](first-user-message-is-visible-immediately-in-new-chats.md) |
 | [New chat live thinking and stop controls](new-chat-live-thinking-and-stop-controls.md) |
 | [Bold URL trailing punctuation parsing](bold-url-trailing-punctuation-parsing.md) |
+| [Composer plan panel, command step index, and H5 plus-popover controls](composer-plan-panel-command-steps-h5-popover.md) |

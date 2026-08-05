@@ -25,3 +25,4 @@ Return to the [manual test index](../../tests.md).
 | [Thread search uses official RPC with local-index fallback](thread-search-uses-official-rpc-with-local-index-fallback.md) |
 | [Sidebar scroll position survives collapse](sidebar-scroll-position-survives-collapse.md) |
 | [Toolbar new thread keeps active project](toolbar-new-thread-keeps-active-project.md) |
+| [Thread context-menu persistence and thread recycle bin](thread-context-menu-and-recycle-bin.md) |
