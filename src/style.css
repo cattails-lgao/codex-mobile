@@ -101,6 +101,66 @@
   @apply text-zinc-400;
 }
 
+:root.dark .sidebar-settings-remote-section {
+  @apply border-zinc-700;
+}
+
+:root.dark .sidebar-settings-remote-title {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-remote-toggle-track {
+  @apply bg-zinc-600;
+}
+
+:root.dark .sidebar-settings-remote-toggle-track.is-on {
+  @apply bg-emerald-600;
+}
+
+:root.dark .sidebar-settings-remote-toggle-label {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-remote-empty {
+  @apply text-zinc-500;
+}
+
+:root.dark .sidebar-settings-remote-error {
+  @apply text-rose-400;
+}
+
+:root.dark .sidebar-settings-remote-notice {
+  @apply text-emerald-400;
+}
+
+:root.dark .sidebar-settings-remote-row,
+:root.dark .sidebar-settings-remote-reload,
+:root.dark .sidebar-settings-remote-client,
+:root.dark .sidebar-settings-remote-client-revoke {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .sidebar-settings-remote-row {
+  @apply text-zinc-300 hover:bg-zinc-700;
+}
+
+:root.dark .sidebar-settings-remote-label,
+:root.dark .sidebar-settings-remote-client-name {
+  @apply text-zinc-300;
+}
+
+:root.dark .sidebar-settings-remote-value {
+  @apply text-zinc-400;
+}
+
+:root.dark .sidebar-settings-remote-reload {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:root.dark .sidebar-settings-remote-client-revoke {
+  @apply text-zinc-400 hover:bg-rose-900/50 hover:text-rose-300;
+}
+
 :root.dark .sidebar-settings-context-value {
   @apply text-zinc-300;
 }

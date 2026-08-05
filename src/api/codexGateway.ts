@@ -1285,6 +1285,69 @@ export async function checkoutPluginShare(remotePluginId: string): Promise<void>
   await callRpc('plugin/share/checkout', { remotePluginId })
 }
 
+export interface UiRemoteControlStatus {
+  enabled: boolean
+  clients: Array<{ clientId: string; deviceName: string; lastSeenAt: string | null }>
+}
+
+export interface UiRemotePairingCode {
+  pairingCode: string
+  expiresAt: string | null
+}
+
+function normalizeRemoteClient(value: unknown): { clientId: string; deviceName: string; lastSeenAt: string | null } | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const clientId = readString(record.clientId ?? record.client_id ?? record.id)
+  if (!clientId) return null
+  return {
+    clientId,
+    deviceName: readString(record.deviceName ?? record.device_name ?? record.name) ?? '',
+    lastSeenAt: readString(record.lastSeenAt ?? record.last_seen_at ?? record.lastSeen),
+  }
+}
+
+export async function readRemoteControlStatus(): Promise<UiRemoteControlStatus> {
+  const payload = await callRpc<{
+    enabled?: unknown
+    clients?: unknown[] | null
+    data?: unknown[] | null
+  }>('remoteControl/status/read', {})
+  const clients = Array.isArray(payload.clients) ? payload.clients : Array.isArray(payload.data) ? payload.data : []
+  return {
+    enabled: readBoolean(payload.enabled) ?? false,
+    clients: clients.map(normalizeRemoteClient).filter((row): row is { clientId: string; deviceName: string; lastSeenAt: string | null } => row !== null),
+  }
+}
+
+export async function setRemoteControlEnabled(enabled: boolean): Promise<void> {
+  await callRpc(enabled ? 'remoteControl/enable' : 'remoteControl/disable', {})
+}
+
+export async function startRemoteControlPairing(): Promise<UiRemotePairingCode> {
+  const payload = await callRpc<{
+    pairingCode?: unknown
+    pairing_code?: unknown
+    code?: unknown
+    expiresAt?: unknown
+    expires_at?: unknown
+  }>('remoteControl/pairing/start', {})
+  return {
+    pairingCode: readString(payload.pairingCode ?? payload.pairing_code ?? payload.code) ?? '',
+    expiresAt: readString(payload.expiresAt ?? payload.expires_at),
+  }
+}
+
+export async function listRemoteControlClients(): Promise<Array<{ clientId: string; deviceName: string; lastSeenAt: string | null }>> {
+  const payload = await callRpc<{ clients?: unknown[] | null; data?: unknown[] | null }>('remoteControl/client/list', {})
+  const clients = Array.isArray(payload.clients) ? payload.clients : Array.isArray(payload.data) ? payload.data : []
+  return clients.map(normalizeRemoteClient).filter((row): row is { clientId: string; deviceName: string; lastSeenAt: string | null } => row !== null)
+}
+
+export async function revokeRemoteControlClient(clientId: string): Promise<void> {
+  await callRpc('remoteControl/client/revoke', { clientId })
+}
+
 export async function getNotificationCatalog(): Promise<string[]> {
   return fetchRpcNotificationCatalog()
 }

@@ -254,6 +254,69 @@
                   </div>
                 </template>
               </div>
+              <div class="sidebar-settings-remote-section">
+                <div class="sidebar-settings-remote-header">
+                  <span class="sidebar-settings-remote-title">{{ t('Remote control') }}</span>
+                  <button
+                    class="sidebar-settings-remote-toggle"
+                    type="button"
+                    :disabled="isRemoteControlActionInFlight || isRemoteControlLoading"
+                    :title="t('Enable or disable remote control')"
+                    @click="toggleRemoteControl"
+                  >
+                    <span class="sidebar-settings-remote-toggle-track" :class="{ 'is-on': remoteControlStatus.enabled }">
+                      <span class="sidebar-settings-remote-toggle-thumb" />
+                    </span>
+                    <span class="sidebar-settings-remote-toggle-label">{{ remoteControlStatus.enabled ? t('Enabled') : t('Disabled') }}</span>
+                  </button>
+                </div>
+                <p v-if="!supportsRemoteControl" class="sidebar-settings-remote-empty">
+                  {{ t('Remote control is not supported by this Codex version.') }}
+                </p>
+                <template v-else>
+                  <p v-if="remoteControlError" class="sidebar-settings-remote-error">{{ remoteControlError }}</p>
+                  <p v-if="remoteControlNotice" class="sidebar-settings-remote-notice">{{ remoteControlNotice }}</p>
+                  <p v-if="isRemoteControlLoading" class="sidebar-settings-remote-empty">{{ t('Loading…') }}</p>
+                  <template v-else>
+                    <button
+                      class="sidebar-settings-remote-row"
+                      type="button"
+                      :disabled="!remoteControlStatus.enabled || isRemoteControlActionInFlight"
+                      @click="startRemotePairing"
+                    >
+                      <span class="sidebar-settings-remote-label">{{ t('Pair a new device') }}</span>
+                      <span class="sidebar-settings-remote-value">
+                        {{ remoteControlActionName === 'pairing' ? t('Starting…') : pairingCode?.pairingCode ? pairingCode.pairingCode : t('Generate code') }}
+                      </span>
+                    </button>
+                    <div class="sidebar-settings-remote-clients">
+                      <div class="sidebar-settings-remote-clients-header">
+                        <span class="sidebar-settings-remote-label">{{ t('Paired devices') }}</span>
+                        <button
+                          class="sidebar-settings-remote-reload"
+                          type="button"
+                          :disabled="isRemoteControlActionInFlight"
+                          @click="refreshRemoteClients"
+                        >
+                          {{ remoteControlActionName === 'clients' ? t('Reloading…') : t('Reload') }}
+                        </button>
+                      </div>
+                      <p v-if="remoteControlStatus.clients.length === 0" class="sidebar-settings-remote-empty">{{ t('No paired devices.') }}</p>
+                      <div v-for="client in remoteControlStatus.clients" :key="client.clientId" class="sidebar-settings-remote-client">
+                        <span class="sidebar-settings-remote-client-name">{{ client.deviceName || client.clientId }}</span>
+                        <button
+                          class="sidebar-settings-remote-client-revoke"
+                          type="button"
+                          :disabled="isRemoteControlActionInFlight"
+                          @click="revokeRemoteClient(client.clientId)"
+                        >
+                          {{ remoteControlActionName === `revoke:${client.clientId}` ? t('Removing…') : t('Revoke') }}
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </template>
+              </div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">{{ t('Require ⌘ + enter to send') }}</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -1281,7 +1344,8 @@ import {
 import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, ThreadTerminalQuickCommand, WorktreeBranchOption } from './api/codexGateway'
-import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog } from './api/codexGateway'
+import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient } from './api/codexGateway'
+import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
 
@@ -1650,9 +1714,108 @@ async function loadSettingsMethods(): Promise<void> {
   }
 }
 const supportsHooks = computed(() => !methodsLoaded.value || methodSet.value.has('hooks/list'))
+const supportsRemoteControl = computed(() =>
+  !methodsLoaded.value ||
+  ['remoteControl/status/read', 'remoteControl/enable', 'remoteControl/pairing/start', 'remoteControl/client/list'].every((method) => methodSet.value.has(method)),
+)
 watch(isSettingsOpen, (open) => {
-  if (open) void refreshHooks()
+  if (open) {
+    void refreshHooks()
+    if (supportsRemoteControl.value) void refreshRemoteControl()
+  }
 })
+
+const remoteControlStatus = ref<UiRemoteControlStatus>({ enabled: false, clients: [] })
+const pairingCode = ref<UiRemotePairingCode | null>(null)
+const isRemoteControlLoading = ref(false)
+const isRemoteControlActionInFlight = ref(false)
+const remoteControlActionName = ref('')
+const remoteControlError = ref('')
+const remoteControlNotice = ref('')
+let remoteControlNoticeTimer: ReturnType<typeof setTimeout> | null = null
+let hasLoadedRemoteControl = false
+let stopRemoteControlRealtime: (() => void) | null = null
+
+async function refreshRemoteControl(options: { force?: boolean } = {}): Promise<void> {
+  if (options.force !== true && hasLoadedRemoteControl) return
+  isRemoteControlLoading.value = true
+  remoteControlError.value = ''
+  try {
+    const status = await readRemoteControlStatus()
+    remoteControlStatus.value = status
+    hasLoadedRemoteControl = true
+  } catch (error) {
+    remoteControlError.value = error instanceof Error ? error.message : 'Failed to load remote control status'
+  } finally {
+    isRemoteControlLoading.value = false
+  }
+}
+
+async function toggleRemoteControl(): Promise<void> {
+  const target = !remoteControlStatus.value.enabled
+  isRemoteControlActionInFlight.value = true
+  remoteControlActionName.value = target ? 'enable' : 'disable'
+  try {
+    await setRemoteControlEnabled(target)
+    remoteControlStatus.value = { ...remoteControlStatus.value, enabled: target }
+    showRemoteControlNotice(target ? 'Remote control enabled' : 'Remote control disabled')
+  } catch (error) {
+    remoteControlError.value = error instanceof Error ? error.message : 'Failed to update remote control'
+  } finally {
+    isRemoteControlActionInFlight.value = false
+    remoteControlActionName.value = ''
+  }
+}
+
+async function startRemotePairing(): Promise<void> {
+  isRemoteControlActionInFlight.value = true
+  remoteControlActionName.value = 'pairing'
+  try {
+    pairingCode.value = await startRemoteControlPairing()
+  } catch (error) {
+    remoteControlError.value = error instanceof Error ? error.message : 'Failed to start pairing'
+  } finally {
+    isRemoteControlActionInFlight.value = false
+    remoteControlActionName.value = ''
+  }
+}
+
+async function refreshRemoteClients(): Promise<void> {
+  isRemoteControlActionInFlight.value = true
+  remoteControlActionName.value = 'clients'
+  try {
+    remoteControlStatus.value = { ...remoteControlStatus.value, clients: await listRemoteControlClients() }
+  } catch (error) {
+    remoteControlError.value = error instanceof Error ? error.message : 'Failed to load remote clients'
+  } finally {
+    isRemoteControlActionInFlight.value = false
+    remoteControlActionName.value = ''
+  }
+}
+
+async function revokeRemoteClient(clientId: string): Promise<void> {
+  isRemoteControlActionInFlight.value = true
+  remoteControlActionName.value = `revoke:${clientId}`
+  try {
+    await revokeRemoteControlClient(clientId)
+    remoteControlStatus.value = {
+      ...remoteControlStatus.value,
+      clients: remoteControlStatus.value.clients.filter((client) => client.clientId !== clientId),
+    }
+    showRemoteControlNotice('Remote client removed')
+  } catch (error) {
+    remoteControlError.value = error instanceof Error ? error.message : 'Failed to remove remote client'
+  } finally {
+    isRemoteControlActionInFlight.value = false
+    remoteControlActionName.value = ''
+  }
+}
+
+function showRemoteControlNotice(text: string): void {
+  remoteControlNotice.value = text
+  if (remoteControlNoticeTimer) clearTimeout(remoteControlNoticeTimer)
+  remoteControlNoticeTimer = setTimeout(() => { remoteControlNotice.value = '' }, 3000)
+}
 const reviewInitialFilePath = ref('')
 const reviewInitialCommitSha = ref('')
 const threadBranchOptions = ref<WorktreeBranchOption[]>([])
@@ -2236,6 +2399,9 @@ onMounted(() => {
     if (!directoryHubRef.value) return
     directoryHubRef.value.refreshFromNotification(method)
   })
+  stopRemoteControlRealtime = onRealtimeEvent((method) => {
+    if (method === 'remoteControl/status/changed') void refreshRemoteControl({ force: true })
+  })
   void initialize()
   void loadHomeDirectory()
   void loadSettingsMethods()
@@ -2282,6 +2448,14 @@ onUnmounted(() => {
   if (stopRealtimeEventForwarding) {
     stopRealtimeEventForwarding()
     stopRealtimeEventForwarding = null
+  }
+  if (stopRemoteControlRealtime) {
+    stopRemoteControlRealtime()
+    stopRemoteControlRealtime = null
+  }
+  if (remoteControlNoticeTimer) {
+    clearTimeout(remoteControlNoticeTimer)
+    remoteControlNoticeTimer = null
   }
 })
 
@@ -5820,6 +5994,90 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .sidebar-settings-hooks-command {
   @apply min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500;
+}
+
+.sidebar-settings-remote-section {
+  @apply border-t border-zinc-100 px-3 py-2.5;
+}
+
+.sidebar-settings-remote-header {
+  @apply flex items-center justify-between;
+}
+
+.sidebar-settings-remote-title {
+  @apply text-sm font-medium text-zinc-700;
+}
+
+.sidebar-settings-remote-toggle {
+  @apply flex items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-0.5 transition cursor-pointer disabled:opacity-50;
+}
+
+.sidebar-settings-remote-toggle-track {
+  @apply relative inline-flex h-4 w-8 items-center rounded-full bg-zinc-300 transition;
+}
+
+.sidebar-settings-remote-toggle-track.is-on {
+  @apply bg-emerald-500;
+}
+
+.sidebar-settings-remote-toggle-thumb {
+  @apply inline-block h-3 w-3 transform rounded-full bg-white shadow transition translate-x-0.5;
+}
+
+.sidebar-settings-remote-toggle-track.is-on .sidebar-settings-remote-toggle-thumb {
+  @apply translate-x-4;
+}
+
+.sidebar-settings-remote-toggle-label {
+  @apply text-xs text-zinc-600;
+}
+
+.sidebar-settings-remote-empty {
+  @apply mt-1.5 text-xs text-zinc-500;
+}
+
+.sidebar-settings-remote-error {
+  @apply mt-1.5 text-xs text-rose-600;
+}
+
+.sidebar-settings-remote-notice {
+  @apply mt-1.5 text-xs text-emerald-600;
+}
+
+.sidebar-settings-remote-row {
+  @apply flex w-full items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50 mt-1.5 cursor-pointer disabled:opacity-50;
+}
+
+.sidebar-settings-remote-label {
+  @apply text-xs text-zinc-700;
+}
+
+.sidebar-settings-remote-value {
+  @apply font-mono text-xs font-medium text-zinc-600;
+}
+
+.sidebar-settings-remote-clients {
+  @apply mt-1.5;
+}
+
+.sidebar-settings-remote-clients-header {
+  @apply flex items-center justify-between;
+}
+
+.sidebar-settings-remote-reload {
+  @apply rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+}
+
+.sidebar-settings-remote-client {
+  @apply mt-1 flex items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+}
+
+.sidebar-settings-remote-client-name {
+  @apply min-w-0 flex-1 truncate text-xs text-zinc-700;
+}
+
+.sidebar-settings-remote-client-revoke {
+  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-telegram-panel {

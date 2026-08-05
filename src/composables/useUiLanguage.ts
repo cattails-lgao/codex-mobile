@@ -433,6 +433,15 @@ const zhCN: Record<string, string> = {
   'No hooks registered.': '未注册任何 Hooks。',
   'Global': '全局',
   'Enabled': '已启用',
+  'Remote control': '远程控制',
+  'Enable or disable remote control': '启用或禁用远程控制',
+  'Remote control is not supported by this Codex version.': '当前 Codex 版本不支持远程控制。',
+  'Pair a new device': '配对新设备',
+  'Generate code': '生成配对码',
+  'Paired devices': '已配对设备',
+  'No paired devices.': '暂无已配对设备。',
+  'Revoke': '撤销',
+  'Starting…': '启动中…',
 }
 
 const LANGUAGE_LABELS: Record<UiLanguage, string> = {
