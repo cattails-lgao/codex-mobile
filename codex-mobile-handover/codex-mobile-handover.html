@@ -451,6 +451,99 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>待办需求（下一轮，2026-08-05 提出）</h2>
+        <p>以下需求来自下一轮产品验收，均未实现。前 5 条为明确的界面改造，第 6 条是现状调研结论（供决定是否对齐 TUI），第 7 条为交互防误触。涉及组件：<code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ComposerSlashMenu.vue</code>、<code>ThreadConversation.vue</code>、<code>ContentHeader.vue</code>。</p>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>需求</th><th>现状</th><th>改动要点</th></tr>
+          <tr>
+            <td>1</td>
+            <td>输入框下的技能 chips 可移除</td>
+            <td>技能已集成到斜杠菜单（<code>/技能名</code>，见 <code>eedf148</code>），但输入框下方仍有 <code>.thread-composer-skill-chips</code> 技能 chips（<code>ThreadComposer.vue</code> 第 65 行起），<code>selectedSkills</code> 会随选中技能追加</td>
+            <td>删除技能 chips 的渲染与相关样式；保留 <code>selectedSkills</code> 状态本身（提交消息时仍需携带 <code>skills</code> 载荷），仅移除其视觉呈现，或将选中态改为仅体现在斜杠菜单高亮</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>设置面板从侧边栏提出来</td>
+            <td>设置面板是侧边栏底部的内嵌浮层（<code>.sidebar-settings-panel</code>，<code>App.vue</code> 第 117 行），由 <code>.sidebar-settings-button</code> 打开，缩在侧边栏内</td>
+            <td>改为独立对话框/全屏抽屉（<code>dialog</code> 或覆盖层），或新增独立设置路由；面板内容（账号、Hooks、Marketplace、Plugin 分享、远程控制、审批策略）原样迁移，需保留现有 <code>v-if</code> 逻辑与状态</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>去掉右上角终端按钮与 Detached Head 按钮</td>
+            <td><code>ContentHeader</code> actions 区有两个入口：终端命令下拉（<code>ComposerDropdown</code> + <code>IconTablerTerminal</code>，<code>App.vue</code> 第 688-700 行）与 git 分支下拉（<code>HeaderGitBranchDropdown</code>，第 701 行起，含 detached head 标识）；打开的是 <code>ThreadTerminalPanel</code></td>
+            <td>移除这两个头部入口及其相关状态（<code>canShowTerminalToggle</code>、<code>isComposerTerminalOpen</code>、<code>canShowContentHeaderBranchDropdown</code> 等）；终端与 git 面板能力并入第 4 点的右侧边栏 tab</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>布局改 3 栏：左侧边栏 + 消息 + 右侧边栏</td>
+            <td>当前为 2 栏：<code>Sidebar</code>（左侧）+ <code>content-root</code>（消息），无右侧面板；终端/文件变更等以弹层或行内方式呈现</td>
+            <td>新增右侧边栏：顶部 tab 栏 + 一个 <code>+</code> 按钮，点击弹出 pover 可选「终端面板」「Git 面板」，默认显示 Git 面板；左侧边栏与消息区保持不变；新面板复用现有 <code>ThreadTerminalPanel</code> 与 git 下拉的数据逻辑</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>斜杠菜单技能组展示完整技能名称</td>
+            <td><code>ComposerSlashMenu.vue</code> 技能行显示 <code>command.id</code>（由技能名规范化而来，如 <code>frontend-code-review</code>），非完整展示名；<code>SkillItem</code> 已带 <code>displayName</code> 字段可用</td>
+            <td>技能行主文本改用 <code>displayName</code>（无则回退 <code>name</code>），<code>id</code> 仅用于匹配与插槽文本</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>当前消息展示 vs TUI 的差异（调研结论）</td>
+            <td>见下方「消息展示现状与 TUI 对比」</td>
+            <td>是否对齐 TUI 待产品决策，下方对比可作输入</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>编辑 / 回退消息需确认提示</td>
+            <td><code>editMessage()</code>（<code>ThreadConversation.vue</code> 第 2432 行）点击即把消息文本填入草稿、<code>onRollback()</code>（<code>App.vue</code> 第 4615 行）点击即回退线程，均无确认</td>
+            <td>为编辑/回退/撤销文件变更等破坏性操作增加确认弹层（如「确认编辑此消息？」/「确认回退到该轮？后续回复将被移除」），或至少编辑态进入前提示</td>
+          </tr>
+        </table>
+        </div>
+
+        <h3>消息展示现状与 TUI 对比（需求 6 调研）</h3>
+        <div class="table-wrap">
+        <table>
+          <tr><th>维度</th><th>codex-mobile 现状（ThreadConversation.vue）</th><th>codex TUI</th></tr>
+          <tr>
+            <td>整体形态</td>
+            <td>Web 纵向消息流，按 <code>data-role</code>（user/assistant/system）区分样式，支持明暗主题与移动端</td>
+            <td>终端内全屏分栏（会话列表 + 对话区 + 输入区），ANSI 色块与边框线绘制</td>
+          </tr>
+          <tr>
+            <td>文本渲染</td>
+            <td>markdown 分段渲染：段落、加粗/斜体/删除线、行内文件链接（<code>getMessageBlocks</code>/<code>getInlineSegments</code>）</td>
+            <td>纯文本 + 终端内粗体/链接高亮，markdown 仅部分支持</td>
+          </tr>
+          <tr>
+            <td>命令执行</td>
+            <td>折叠行（<code>cmd-row</code>，▶ + 命令 + 状态），点击展开输出；连续命令可分组折叠；worked 消息带分隔线可展开明细</td>
+            <td>带边框的「工作块」缩进展示，命令与输出实时流式出现</td>
+          </tr>
+          <tr>
+            <td>文件变更</td>
+            <td>独立文件变更卡片：操作徽标（+/-/M）+ 路径 + 行数，可展开 diff 视图，支持 undo/redo 文件变更</td>
+            <td>以 git diff 风格内联展示，无独立 undo/redo 按钮</td>
+          </tr>
+          <tr>
+            <td>计划 / 推理</td>
+            <td>Plan 卡片（步骤列表 + 状态图标 + Implement 按钮）；live overlay 展示推理与活动标签</td>
+            <td>计划以文本块展示，推理过程在状态栏/工作区滚动</td>
+          </tr>
+          <tr>
+            <td>附件与富交互</td>
+            <td>图片预览（可点开大图）、文件/技能 chips（可点开浏览）、复制/编辑/分叉工具栏按钮、自动化消息标签</td>
+            <td>无图片预览与链接式附件，交互以键盘快捷键为主</td>
+          </tr>
+          <tr>
+            <td>差异结论</td>
+            <td colspan="2">Web 版是「增强型」展示：折叠/展开、diff、undo/redo、图片、按钮式交互均为 TUI 没有或弱化的能力；TUI 的优势在终端环境下的实时滚动与无鼠标操作。对齐建议：不追求像素级一致，保留 Web 折叠/交互能力，仅需在视觉密度与信息层级上参考 TUI（如命令块边框、状态色）即可</td>
+          </tr>
+        </table>
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
           <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步（截至 <code>eedf148</code>），无需再推送</li>
@@ -473,7 +566,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 三轮验收修复已推送） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成 + 三轮验收修复已推送 + 待办需求 7 项已记录） · 内容已脱敏
     </footer>
   </article>
 </body>
