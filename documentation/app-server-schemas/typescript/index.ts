@@ -219,8 +219,6 @@ export type { TurnCompleteEvent } from "./TurnCompleteEvent";
 export type { TurnDiffEvent } from "./TurnDiffEvent";
 export type { TurnItem } from "./TurnItem";
 export type { TurnStartedEvent } from "./TurnStartedEvent";
-export type { UndoCompletedEvent } from "./UndoCompletedEvent";
-export type { UndoStartedEvent } from "./UndoStartedEvent";
 export type { UpdatePlanArgs } from "./UpdatePlanArgs";
 export type { UserInfoResponse } from "./UserInfoResponse";
 export type { UserInput } from "./UserInput";

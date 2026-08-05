@@ -1195,3 +1195,141 @@ describe('findAdjacentThreadId', () => {
     expect(findAdjacentThreadId([thread('selected-thread', '/tmp/project')], 'selected-thread')).toBe('')
   })
 })
+
+describe('P1-3 notification surface', () => {
+  function captureNotificationHandler(): (notification: { method: string; params?: unknown }) => void {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getSkillsList.mockResolvedValue([])
+    return (notification) => notificationHandler!(notification)
+  }
+
+  it('forwards app/list/updated to realtime event listeners', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    const received: string[] = []
+    const stopListening = state.onRealtimeEvent((method) => received.push(method))
+
+    sendNotification({ method: 'app/list/updated', params: { data: [] } })
+    sendNotification({ method: 'mcpServer/startupStatus/updated', params: { name: 'server', status: 'running' } })
+    sendNotification({ method: 'mcpServer/oauthLogin/completed', params: { name: 'server', success: true } })
+
+    expect(received).toEqual([
+      'app/list/updated',
+      'mcpServer/startupStatus/updated',
+      'mcpServer/oauthLogin/completed',
+    ])
+    stopListening()
+  })
+
+  it('refreshes installed skills on skills/changed', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+    state.startPolling()
+    const callsBefore = gatewayMocks.getSkillsList.mock.calls.length
+
+    sendNotification({ method: 'skills/changed', params: {} })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getSkillsList.mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  it('refreshes the thread list on thread lifecycle notifications', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    const callsBefore = gatewayMocks.getThreadGroupsPage.mock.calls.length
+
+    sendNotification({ method: 'thread/archived', params: { threadId: 'thread-1' } })
+    sendNotification({ method: 'thread/deleted', params: { threadId: 'thread-1' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  it('silently ignores known notifications with no UI consumer', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    const listCallsBefore = gatewayMocks.getThreadGroupsPage.mock.calls.length
+
+    sendNotification({ method: 'model/rerouted', params: { threadId: 'thread-1', turnId: 'turn-1', fromModel: 'a', toModel: 'b', reason: 'fallback' } })
+    sendNotification({ method: 'turn/moderationMetadata', params: { threadId: 'thread-1', turnId: 'turn-1', metadata: {} } })
+    sendNotification({ method: 'item/mcpToolCall/progress', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1', message: 'progress' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBe(listCallsBefore)
+  })
+
+  it('does not reload the thread list for high-frequency realtime voice blocks', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    const listCallsBefore = gatewayMocks.getThreadGroupsPage.mock.calls.length
+
+    sendNotification({ method: 'thread/realtime/outputAudio/delta', params: { threadId: 'thread-1', itemId: 'item-1', deltaBase64: 'abc' } })
+    sendNotification({ method: 'thread/realtime/transcript/delta', params: { threadId: 'thread-1', itemId: 'item-1', delta: 'hi' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBe(listCallsBefore)
+  })
+
+  it('bypasses recent-load reuse when force is set', async () => {
+    installTestWindow()
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: '',
+      modelProvider: '',
+      messages: [{ id: 'user-1', role: 'user', text: 'hi', messageType: 'userMessage' }],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      model: '',
+      modelProvider: '',
+      messages: [{ id: 'user-1', role: 'user', text: 'hi', messageType: 'userMessage' }],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-1')
+    const messageFetchCalls = () =>
+      gatewayMocks.resumeThread.mock.calls.length + gatewayMocks.getThreadDetail.mock.calls.length
+
+    await state.loadMessages('thread-1')
+    const callsAfterFirstLoad = messageFetchCalls()
+    expect(callsAfterFirstLoad).toBeGreaterThan(0)
+
+    await state.loadMessages('thread-1', { silent: true })
+    expect(messageFetchCalls()).toBe(callsAfterFirstLoad)
+
+    await state.loadMessages('thread-1', { silent: true, force: true })
+    expect(messageFetchCalls()).toBeGreaterThan(callsAfterFirstLoad)
+  })
+})

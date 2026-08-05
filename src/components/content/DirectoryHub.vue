@@ -1405,6 +1405,21 @@ function refreshActiveTab(forceReload = false): void {
   }
 }
 
+function refreshFromNotification(method: string): void {
+  if (method === 'app/list/updated') {
+    void loadApps()
+    return
+  }
+  if (method === 'mcpServer/startupStatus/updated' || method === 'mcpServer/oauthLogin/completed') {
+    // Re-read MCP status so the panel reflects startup or OAuth state changes.
+    void loadMcps()
+  }
+}
+
+defineExpose({
+  refreshFromNotification,
+})
+
 async function manualRefreshActiveTab(): Promise<void> {
   isManualRefreshInFlight.value = true
   try {
