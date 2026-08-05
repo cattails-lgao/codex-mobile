@@ -11,6 +11,7 @@ Return to the [manual test index](../../tests.md).
 | [Codex thread deep links render as local web thread URLs](codex-thread-deep-links-render-as-local-web-thread-urls.md) |
 | [Composer @ file mention uses server fuzzy search with fallback](composer-at-file-mention-uses-server-fuzzy-search.md) |
 | [Composer / slash command menu](composer-slash-command-menu.md) |
+| [Composer realtime voice conversation button](composer-realtime-voice-conversation-button.md) |
 | [Bold-wrapped Markdown links render without literal markers](bold-wrapped-markdown-links-render-without-literal-markers.md) |
 | [Composer expands long drafts to full screen](composer-expands-long-drafts-to-full-screen.md) |
 | [Composer mode scoping and Fast mode support](composer-mode-scoping-and-fast-mode-support.md) |

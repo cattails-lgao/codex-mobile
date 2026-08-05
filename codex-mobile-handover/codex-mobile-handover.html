@@ -385,8 +385,8 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           </tr>
           <tr>
             <td>P0-2 实时语音</td>
-            <td><strong class="warn-text">未开始</strong></td>
-            <td>代码库无 <code>thread/realtime/*</code>、<code>listVoices</code> 等实现,仅有离线 dictation</td>
+            <td><strong class="ok-text">已完成</strong></td>
+            <td><code>useRealtimeVoice.ts</code> + <code>thread/realtime/*</code> 网关封装(committed);composer 新增实时语音按钮与转录气泡,单测 7/7 通过,Playwright 验证 start/stop 与气泡显隐</td>
           </tr>
           <tr>
             <td rowspan="5">P1</td>
@@ -423,7 +423,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>总体进度:</strong> 方案 11 个任务项中,4 项已完成(P0-1、P1-1、P1-2、P1-4),1 项部分完成(P1-5),6 项未开始(P0-2、P1-3、P2 全部)。下一优先级建议为 P0-2 实时语音,属用户可感知能力。
+          <strong>总体进度:</strong> 方案 11 个任务项中,5 项已完成(P0-1、P0-2、P1-1、P1-2、P1-4),1 项部分完成(P1-5),5 项未开始(P1-3、P2 全部)。下一优先级建议为 P1-3 通知面补齐。
         </div>
       </section>
 
