@@ -1052,7 +1052,6 @@
                   @update:selected-reasoning-effort="onSelectReasoningEffort"
                   @update:selected-speed-mode="onSelectSpeedMode"
                   :approval-policy="approvalPolicy"
-                  :approval-policy-options="approvalPolicyOptions"
                   :is-approval-policy-saving="isApprovalPolicySaving"
                   :approval-policy-error="approvalPolicyError"
                   :approval-policy-notice="approvalPolicyNotice"
@@ -1142,7 +1141,6 @@
                     @update:selected-reasoning-effort="onSelectReasoningEffort"
                     @update:selected-speed-mode="onSelectSpeedMode"
                     :approval-policy="approvalPolicy"
-                    :approval-policy-options="approvalPolicyOptions"
                     :is-approval-policy-saving="isApprovalPolicySaving"
                     :approval-policy-error="approvalPolicyError"
                     :approval-policy-notice="approvalPolicyNotice"
@@ -1430,7 +1428,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
+import type { CollaborationModeKind, ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient, readApprovalPolicy, writeApprovalPolicy } from './api/codexGateway'
@@ -1860,12 +1858,6 @@ const isApprovalPolicySaving = ref(false)
 const approvalPolicyError = ref('')
 const approvalPolicyNotice = ref('')
 let hasLoadedApprovalPolicy = false
-const approvalPolicyOptions: Array<{ value: ApprovalPolicy; label: string }> = [
-  { value: 'untrusted', label: 'Only untrusted commands' },
-  { value: 'on-failure', label: 'After a command fails' },
-  { value: 'on-request', label: 'When Codex requests it' },
-  { value: 'never', label: 'Never' },
-]
 const approvalPolicyConsented = ref(false)
 
 async function refreshApprovalPolicy(options: { force?: boolean } = {}): Promise<void> {
@@ -4990,7 +4982,7 @@ function normalizeMessageType(rawType: string | undefined, role: string): string
   return role.trim() || 'message'
 }
 
-function onSelectCollaborationMode(mode: 'default' | 'plan'): void {
+function onSelectCollaborationMode(mode: CollaborationModeKind): void {
   setSelectedCollaborationMode(mode)
 }
 

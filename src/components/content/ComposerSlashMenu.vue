@@ -33,6 +33,20 @@ function kindLabel(kind: SlashCommandKind): string {
   if (kind === 'skill') return t('Skill')
   return t('Local')
 }
+
+function skillBadgeText(scope: string | undefined): string {
+  if (scope === 'system') return 'S'
+  if (scope === 'repo') return 'R'
+  if (scope === 'plugin') return 'P'
+  return 'U'
+}
+
+function skillBadgeLabel(scope: string | undefined): string {
+  if (scope === 'system') return t('System')
+  if (scope === 'repo') return t('Repo')
+  if (scope === 'plugin') return t('Plugin')
+  return t('User')
+}
 </script>
 
 <template>
@@ -63,19 +77,23 @@ function kindLabel(kind: SlashCommandKind): string {
       <button
         v-for="(command, index) in skillCommands"
         :key="command.skillPath || command.id"
-        class="thread-composer-slash-row"
+        class="thread-composer-slash-row thread-composer-slash-row--skill"
         :class="{ 'is-active': builtinCommands.length + index === highlightedIndex }"
         type="button"
         role="option"
         :aria-selected="builtinCommands.length + index === highlightedIndex"
         @mousedown.prevent="emit('select', command)"
       >
-        <span class="thread-composer-slash-prefix thread-composer-slash-prefix--skill" aria-hidden="true">/</span>
-        <span class="thread-composer-slash-body">
+        <span
+          class="thread-composer-slash-skill-icon"
+          :class="`is-${command.scope || 'user'}`"
+          :aria-label="skillBadgeLabel(command.scope)"
+          :title="skillBadgeLabel(command.scope)"
+        >{{ skillBadgeText(command.scope) }}</span>
+        <span class="thread-composer-slash-body thread-composer-slash-body--skill">
           <span class="thread-composer-slash-skill-name">{{ command.displayName || command.id }}</span>
           <span class="thread-composer-slash-desc">{{ command.description }}</span>
         </span>
-        <span class="thread-composer-slash-kind">{{ kindLabel(command.kind) }}</span>
       </button>
     </template>
   </div>
@@ -104,12 +122,32 @@ function kindLabel(kind: SlashCommandKind): string {
   @apply inline-flex h-5 min-w-5 items-center justify-center rounded bg-zinc-700 px-1 text-[9px] font-semibold leading-none text-white;
 }
 
-.thread-composer-slash-prefix--skill {
-  @apply bg-emerald-600;
+.thread-composer-slash-skill-icon {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold leading-none;
+}
+
+.thread-composer-slash-skill-icon.is-user {
+  @apply bg-sky-100 text-sky-700;
+}
+
+.thread-composer-slash-skill-icon.is-system {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.thread-composer-slash-skill-icon.is-repo {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.thread-composer-slash-skill-icon.is-plugin {
+  @apply bg-violet-100 text-violet-700;
 }
 
 .thread-composer-slash-body {
   @apply min-w-0 flex items-baseline gap-2;
+}
+
+.thread-composer-slash-body--skill {
+  @apply flex flex-col items-start gap-0.5;
 }
 
 .thread-composer-slash-name {
