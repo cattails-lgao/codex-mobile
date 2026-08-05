@@ -1856,6 +1856,20 @@ async function queueFileMentionSearch(): Promise<void> {
       // suggestion list through the fuzzyFileSearchResults prop.
       fileMentionSuggestions.value = (props.fuzzyFileSearchResults ?? []).map((row) => ({ path: row.path }))
       fileMentionHighlightedIndex.value = 0
+      // The official session can legitimately return no results (e.g. an empty
+      // query, or a sessionUpdated notification that never arrives). Fall back
+      // to the local endpoint so the picker still lists files to choose from.
+      if (fileMentionSuggestions.value.length === 0) {
+        try {
+          const rows = await searchComposerFiles(cwd, query, 20)
+          if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+          fileMentionSuggestions.value = rows
+          fileMentionHighlightedIndex.value = 0
+        } catch {
+          if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
+          fileMentionSuggestions.value = []
+        }
+      }
     } catch {
       if (!isFileMentionOpen.value || token !== fileMentionSearchToken) return
       // Fall back to the local endpoint when the server does not expose the
@@ -2119,7 +2133,7 @@ watch(
 }
 
 .thread-composer:has(.thread-composer-input-wrap--expanded) {
-  @apply fixed inset-0 z-50 max-w-none bg-white/95 p-3 sm:p-6;
+  @apply fixed inset-0 z-[300] max-w-none bg-white/95 p-3 sm:p-6;
 }
 
 .thread-composer-shell {

@@ -13,7 +13,7 @@ export type SlashCommand = {
   insertText?: string
 }
 
-export const SLASH_MENTION_REGEX = /(^|\s)(\/[a-zA-Z][^\s]*)$/
+export const SLASH_MENTION_REGEX = /(^|\s)(\/[a-zA-Z]*)$/
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { id: 'compact', description: 'Compact the current thread context', kind: 'rpc' },
