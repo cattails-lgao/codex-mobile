@@ -2,21 +2,21 @@
   <div class="automations-panel">
     <div class="automations-toolbar">
       <div class="automations-summary">
-        <span>{{ automationRows.length }} total</span>
-        <span>{{ activeCount }} active</span>
-        <span>{{ pausedCount }} paused</span>
+        <span>{{ automationRows.length }} {{ t('total') }}</span>
+        <span>{{ activeCount }} {{ t('active') }}</span>
+        <span>{{ pausedCount }} {{ t('paused') }}</span>
       </div>
       <div class="automations-actions">
         <button
           class="automations-create"
           type="button"
-          title="Create a new automation"
+          :title="t('Create a new automation')"
           @click="emitCreateAutomation"
         >
-          New automation
+          {{ t('New automation') }}
         </button>
         <button class="automations-refresh" type="button" :disabled="isLoading" @click="loadAutomations">
-          {{ isLoading ? 'Refreshing...' : 'Refresh' }}
+          {{ isLoading ? t('Refreshing...') : t('Refresh') }}
         </button>
       </div>
     </div>
@@ -25,17 +25,17 @@
 
     <div v-if="isLoading && automationRows.length === 0" class="automations-empty">
       <IconTablerBolt class="automations-empty-icon" />
-      <p>Loading automations...</p>
+      <p>{{ t('Loading automations...') }}</p>
     </div>
 
     <div v-else-if="automationRows.length === 0" class="automations-empty">
       <IconTablerBolt class="automations-empty-icon" />
-      <p>No automations yet</p>
-      <span>Use a thread or project menu to add an automation.</span>
+      <p>{{ t('No automations yet') }}</p>
+      <span>{{ t('Use a thread or project menu to add an automation.') }}</span>
     </div>
 
     <div v-else class="automations-layout">
-      <section class="automations-list" aria-label="Automations">
+      <section class="automations-list" :aria-label="t('Automations')">
         <div
           v-for="row in automationRows"
           :key="row.rowKey"
@@ -60,12 +60,12 @@
             <span class="automation-row-schedule">{{ row.scheduleLabel }}</span>
           </span>
           <button class="automation-edit-button" type="button" @click.stop="emitEditAutomation(row)">
-            Edit
+            {{ t('Edit') }}
           </button>
         </div>
       </section>
 
-      <aside v-if="selectedRow" class="automation-detail" aria-label="Automation details">
+      <aside v-if="selectedRow" class="automation-detail" :aria-label="t('Automation details')">
         <div class="automation-detail-heading">
           <span class="automation-detail-icon" :data-status="selectedRow.automation.status">
             <IconTablerPlayerStopFilled v-if="selectedRow.automation.status === 'PAUSED'" />
@@ -76,21 +76,21 @@
             <span>{{ selectedRow.scopeLabel }}</span>
           </div>
           <button class="automation-detail-edit" type="button" @click="emitEditAutomation(selectedRow)">
-            Edit
+            {{ t('Edit') }}
           </button>
         </div>
 
         <dl class="automation-detail-grid">
           <div>
-            <dt>Status</dt>
+            <dt>{{ t('Status') }}</dt>
             <dd>{{ statusLabel(selectedRow.automation.status) }}</dd>
           </div>
           <div>
-            <dt>Schedule</dt>
+            <dt>{{ t('Schedule') }}</dt>
             <dd>{{ selectedRow.scheduleLabel }}</dd>
           </div>
           <div>
-            <dt>Target</dt>
+            <dt>{{ t('Target') }}</dt>
             <dd :title="selectedRow.targetTitle">{{ selectedRow.targetLabel }}</dd>
           </div>
           <div>
@@ -100,7 +100,7 @@
         </dl>
 
         <section class="automation-detail-prompt">
-          <h3>Prompt</h3>
+          <h3>{{ t('Prompt') }}</h3>
           <p>{{ selectedRow.automation.prompt }}</p>
         </section>
       </aside>
@@ -114,6 +114,7 @@ import { getProjectAutomationMap, getThreadAutomationMap } from '../../api/codex
 import type { UiProjectGroup, UiThreadAutomation, UiThreadAutomationStatus } from '../../types/codex'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
+import { useUiLanguage } from '../../composables/useUiLanguage'
 
 const props = defineProps<{
   groups: UiProjectGroup[]
@@ -146,6 +147,7 @@ type AutomationEditRequest = {
 
 const threadAutomations = ref<Record<string, UiThreadAutomation[]>>({})
 const projectAutomations = ref<Record<string, UiThreadAutomation[]>>({})
+const { t } = useUiLanguage()
 const isLoading = ref(false)
 const loadError = ref('')
 const selectedAutomationId = ref(props.selectedAutomationId ?? '')
@@ -180,7 +182,7 @@ const automationRows = computed<AutomationRow[]>(() => {
         rowKey: getAutomationRowKey('thread', threadId, automation.id),
         automation,
         scope: 'thread',
-        scopeLabel: 'Heartbeat',
+        scopeLabel: t('Heartbeat'),
         targetLabel: threadTitle,
         targetTitle: threadId,
         scheduleLabel: describeAutomationSchedule(automation),
@@ -194,7 +196,7 @@ const automationRows = computed<AutomationRow[]>(() => {
         rowKey: getAutomationRowKey('project', cwd, automation.id),
         automation,
         scope: 'project',
-        scopeLabel: 'Project',
+        scopeLabel: t('Project'),
         targetLabel: projectLabel,
         targetTitle: cwd,
         scheduleLabel: describeAutomationSchedule(automation),
@@ -273,14 +275,14 @@ async function loadAutomations(): Promise<void> {
     threadAutomations.value = threadMap
     projectAutomations.value = projectMap
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load automations'
+    loadError.value = error instanceof Error ? error.message : t('Failed to load automations')
   } finally {
     isLoading.value = false
   }
 }
 
 function statusLabel(status: UiThreadAutomationStatus): string {
-  return status === 'PAUSED' ? 'Paused' : 'Active'
+  return status === 'PAUSED' ? t('Paused') : t('Active')
 }
 
 function emitEditAutomation(row: AutomationRow): void {
@@ -309,20 +311,20 @@ function getAutomationRowKey(scope: 'thread' | 'project', target: string, automa
 }
 
 function describeAutomationSchedule(automation: UiThreadAutomation): string {
-  if (automation.status === 'PAUSED') return 'Paused'
-  if (automation.nextRunAtMs) return `Next ${formatDateTime(automation.nextRunAtMs)}`
+  if (automation.status === 'PAUSED') return t('Paused')
+  if (automation.nextRunAtMs) return `${t('Next')} ${formatDateTime(automation.nextRunAtMs)}`
   const rrule = automation.rrule.trim()
   if (/FREQ=MINUTELY/i.test(rrule)) {
     const interval = /INTERVAL=(\d+)/i.exec(rrule)?.[1] ?? '1'
-    return interval === '1' ? 'Every minute' : `Every ${interval} minutes`
+    return interval === '1' ? t('Every minute') : `${t('Every')} ${interval} ${t('minutes')}`
   }
   if (/FREQ=HOURLY/i.test(rrule)) {
     const interval = /INTERVAL=(\d+)/i.exec(rrule)?.[1] ?? '1'
-    return interval === '1' ? 'Hourly' : `Every ${interval} hours`
+    return interval === '1' ? t('Hourly') : `${t('Every')} ${interval} ${t('hours')}`
   }
-  if (/FREQ=DAILY/i.test(rrule)) return 'Daily'
-  if (/FREQ=WEEKLY/i.test(rrule)) return 'Weekly'
-  return 'Custom schedule'
+  if (/FREQ=DAILY/i.test(rrule)) return t('Daily')
+  if (/FREQ=WEEKLY/i.test(rrule)) return t('Weekly')
+    return t('Custom schedule')
 }
 
 function formatDateTime(value: number): string {

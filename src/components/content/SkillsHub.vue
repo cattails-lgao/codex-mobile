@@ -73,7 +73,7 @@
           class="skills-search-input"
           type="search"
           :placeholder="t('Search skills...')"
-          aria-label="Search skills"
+          :aria-label="t('Search skills')"
         />
         <button class="skills-hub-sort" type="submit" :disabled="isSearchingSkills || skillSearchQuery.trim().length < 2">
           {{ isSearchingSkills ? t('Searching...') : t('Search') }}
@@ -255,7 +255,7 @@ async function fetchSkills(): Promise<void> {
     const data = (await resp.json()) as SkillsHubPayload
     applySkillsPayload(data)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load skills'
+    error.value = e instanceof Error ? e.message : t('Failed to load skills')
   } finally {
     isLoading.value = false
   }
@@ -287,7 +287,7 @@ async function searchSkills(): Promise<void> {
       showToast(t('No matching skills found.'), 'error')
     }
   } catch (e) {
-    skillSearchError.value = e instanceof Error ? e.message : 'Failed to search skills'
+    skillSearchError.value = e instanceof Error ? e.message : t('Failed to search skills')
   } finally {
     isSearchingSkills.value = false
   }
@@ -303,19 +303,19 @@ async function handleInstall(skill: HubSkill): Promise<void> {
       body: JSON.stringify({ owner: skill.owner, name: skill.name, source: skill.source }),
     })
     const data = (await resp.json()) as { ok?: boolean; error?: string; path?: string }
-    if (!data.ok) throw new Error(data.error || 'Install failed')
-    if (!data.path) throw new Error('Install completed but no local skill path was returned')
+    if (!data.ok) throw new Error(data.error || t('Install failed'))
+    if (!data.path) throw new Error(t('Install completed but no local skill path was returned'))
     await fetchSkills()
     const installed = installedSkills.value.find((candidate) => candidate.name === skill.name)
     if (!installed?.path) {
-      throw new Error('Install completed but the local skill was not found after refresh')
+      throw new Error(t('Install completed but the local skill was not found after refresh'))
     }
     detailSkill.value = localSearchSkill(installed, skill)
-    showToast(`${skill.displayName || skill.name} skill installed`)
+    showToast(`${skill.displayName || skill.name} ${t('skill installed')}`)
     isDetailOpen.value = false
     emit('skills-changed')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to install skill', 'error')
+    showToast(e instanceof Error ? e.message : t('Failed to install skill'), 'error')
   } finally {
     isInstallActionInFlight.value = false
   }
@@ -331,13 +331,13 @@ async function handleUninstall(skill: HubSkill): Promise<void> {
       body: JSON.stringify({ name: skill.name, path: skill.path }),
     })
     const data = (await resp.json()) as { ok?: boolean; error?: string }
-    if (!data.ok) throw new Error(data.error || 'Uninstall failed')
+    if (!data.ok) throw new Error(data.error || t('Uninstall failed'))
     installedSkills.value = installedSkills.value.filter((s) => s.name !== skill.name)
-    showToast(`${skill.displayName || skill.name} skill uninstalled`)
+    showToast(`${skill.displayName || skill.name} ${t('skill uninstalled')}`)
     isDetailOpen.value = false
     emit('skills-changed')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to uninstall skill', 'error')
+    showToast(e instanceof Error ? e.message : t('Failed to uninstall skill'), 'error')
   } finally {
     isUninstallActionInFlight.value = false
   }
@@ -350,12 +350,12 @@ async function handleToggleEnabled(skill: HubSkill, enabled: boolean): Promise<v
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ method: 'skills/config/write', params: { path: skill.path, enabled } }),
     })
-    if (!resp.ok) throw new Error('Failed to update skill')
+    if (!resp.ok) throw new Error(t('Failed to update skill'))
     await fetch('/codex-api/skills-sync/push', { method: 'POST' })
-    showToast(`${skill.displayName || skill.name} skill ${enabled ? 'enabled' : 'disabled'}`)
+    showToast(`${skill.displayName || skill.name} ${t('skill')} ${enabled ? t('enabled') : t('disabled')}`)
     await fetchSkills()
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed to update skill', 'error')
+    showToast(e instanceof Error ? e.message : t('Failed to update skill'), 'error')
   }
 }
 

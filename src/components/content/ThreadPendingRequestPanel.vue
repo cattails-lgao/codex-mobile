@@ -430,9 +430,9 @@ function formatPermissionsPreview(value: unknown): string {
 
   const readPaths = Array.isArray(fileSystem?.read) ? fileSystem.read.filter((entry): entry is string => typeof entry === 'string') : []
   const writePaths = Array.isArray(fileSystem?.write) ? fileSystem.write.filter((entry): entry is string => typeof entry === 'string') : []
-  if (readPaths.length > 0) parts.push(`Read: ${readPaths.join(', ')}`)
-  if (writePaths.length > 0) parts.push(`Write: ${writePaths.join(', ')}`)
-  if (network?.enabled === true) parts.push('Network access')
+  if (readPaths.length > 0) parts.push(`${t('Read')}: ${readPaths.join(', ')}`)
+  if (writePaths.length > 0) parts.push(`${t('Write')}: ${writePaths.join(', ')}`)
+  if (network?.enabled === true) parts.push(t('Network access'))
 
   return parts.join(' • ')
 }
@@ -811,8 +811,8 @@ function validateMcpElicitationRequest(request: UiServerRequest): string {
     .map((field) => field.label)
 
   if (missingLabels.length === 0) return ''
-  if (missingLabels.length === 1) return `Answer the required field: ${missingLabels[0]}.`
-  return `Answer the required fields: ${missingLabels.join(', ')}.`
+  if (missingLabels.length === 1) return `${t('Answer the required field')}: ${missingLabels[0]}.`
+  return `${t('Answer the required field')}: ${missingLabels.join(', ')}.`
 }
 
 function buildMcpElicitationContent(request: UiServerRequest): Record<string, unknown> {

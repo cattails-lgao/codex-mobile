@@ -1,11 +1,11 @@
 <template>
   <aside class="api-panel-root">
     <header class="api-panel-header">
-      <h2 class="api-panel-title">AppServer API</h2>
-      <p class="api-panel-count">{{ methods.length }} methods</p>
+      <h2 class="api-panel-title">{{ t('AppServer API') }}</h2>
+      <p class="api-panel-count">{{ methods.length }} {{ t('methods') }}</p>
     </header>
 
-    <p v-if="isLoading" class="api-panel-loading">Loading method catalog...</p>
+    <p v-if="isLoading" class="api-panel-loading">{{ t('Loading method catalog...') }}</p>
 
     <ul v-else class="api-method-list">
       <li v-for="method in methods" :key="method" class="api-method-item">
@@ -16,10 +16,14 @@
 </template>
 
 <script setup lang="ts">
+import { useUiLanguage } from '../../composables/useUiLanguage'
+
 defineProps<{
   methods: string[]
   isLoading: boolean
 }>()
+
+const { t } = useUiLanguage()
 </script>
 
 <style scoped>

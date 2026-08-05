@@ -95,9 +95,9 @@ const publishedLabel = computed(() => {
   const d = new Date(ts)
   const now = Date.now()
   const diff = now - ts
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
-  if (diff < 2592000_000) return `${Math.floor(diff / 86400_000)}d ago`
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}${t('ago')}`
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}${t('ago')}`
+  if (diff < 2592000_000) return `${Math.floor(diff / 86400_000)}${t('ago')}`
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 })
 

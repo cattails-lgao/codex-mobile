@@ -7,7 +7,7 @@
 
     <div v-if="isOpen" class="account-menu-panel">
       <div class="account-menu-header">
-        <p class="account-menu-title">Accounts</p>
+        <p class="account-menu-title">{{ t('Accounts') }}</p>
       </div>
 
       <p v-if="error" class="account-menu-error">{{ error }}</p>
@@ -46,6 +46,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { UiAccountEntry } from '../../types/codex'
+import { useUiLanguage } from '../../composables/useUiLanguage'
 
 const props = defineProps<{
   accounts: UiAccountEntry[]
@@ -60,10 +61,11 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
+const { t } = useUiLanguage()
 
 const activeLabel = computed(() => {
   const active = props.accounts.find((account) => account.isActive) ?? null
-  if (!active) return 'Accounts'
+  if (!active) return t('Accounts')
   return active.email || shortAccountId(active.accountId)
 })
 

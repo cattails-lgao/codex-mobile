@@ -2,7 +2,7 @@
   <div class="directory-hub">
     <div class="directory-header">
       <div>
-        <h2 class="directory-title">Skills & Apps</h2>
+        <h2 class="directory-title">{{ t('Skills') }} & {{ t('Apps') }}</h2>
         <p class="directory-subtitle">{{ activeCopy.subtitle }}</p>
       </div>
       <div class="directory-header-actions">
@@ -53,7 +53,7 @@
             type="button"
             @click="pluginSortMode = 'name'"
           >
-            A-Z
+            {{ t('A-Z') }}
           </button>
           <button
             class="directory-sort-button"
@@ -88,7 +88,7 @@
               :disabled="isMarketplaceActionInFlight"
               @click="removeMarketplace(marketplace.name)"
             >
-              {{ marketplaceActionName === `remove:${marketplace.name}` ? 'Removing...' : 'Remove' }}
+              {{ marketplaceActionName === `remove:${marketplace.name}` ? t('Removing...') : t('Remove') }}
             </button>
           </div>
         </div>
@@ -140,10 +140,10 @@
             <div class="directory-card-main">
               <div class="directory-card-title-row">
                 <span class="directory-card-title">{{ plugin.displayName }}</span>
-                <span v-if="plugin.installed && !plugin.enabled" class="directory-badge is-muted">Disabled</span>
-                <span v-else-if="plugin.installed" class="directory-badge">Installed</span>
+                <span v-if="plugin.installed && !plugin.enabled" class="directory-badge is-muted">{{ t('Disabled') }}</span>
+                <span v-else-if="plugin.installed" class="directory-badge">{{ t('Installed') }}</span>
               </div>
-              <span class="directory-card-meta">{{ plugin.developerName || plugin.marketplaceDisplayName || plugin.marketplaceName || 'Plugin' }}</span>
+              <span class="directory-card-meta">{{ plugin.developerName || plugin.marketplaceDisplayName || plugin.marketplaceName || t('Plugin') }}</span>
             </div>
           </div>
           <p v-if="plugin.description" class="directory-card-description">{{ plugin.description }}</p>
@@ -179,7 +179,7 @@
             type="button"
             @click="appSortMode = 'name'"
           >
-            A-Z
+            {{ t('A-Z') }}
           </button>
           <button
             class="directory-sort-button"
@@ -205,8 +205,8 @@
             <div class="directory-card-main">
               <div class="directory-card-title-row">
                 <span class="directory-card-title">{{ app.name }}</span>
-                <span v-if="!app.isEnabled" class="directory-badge is-muted">Disabled</span>
-                <span v-else-if="app.isAccessible" class="directory-badge">Connected</span>
+                <span v-if="!app.isEnabled" class="directory-badge is-muted">{{ t('Disabled') }}</span>
+                <span v-else-if="app.isAccessible" class="directory-badge">{{ t('Connected') }}</span>
               </div>
               <span class="directory-card-meta">{{ appMetaLabel(app) }}</span>
             </div>
@@ -261,7 +261,7 @@
             type="button"
             @click="composioSortMode = 'name'"
           >
-            A-Z
+            {{ t('A-Z') }}
           </button>
           <button
             class="directory-sort-button"
@@ -331,10 +331,10 @@
             <div class="directory-card-fallback composio-fallback">C</div>
             <div class="directory-card-main">
               <div class="directory-card-title-row">
-                <span class="directory-card-title">Composio workspace</span>
-                <span class="directory-badge">Connected</span>
+                <span class="directory-card-title">{{ t('Composio workspace') }}</span>
+                <span class="directory-badge">{{ t('Connected') }}</span>
               </div>
-              <span class="directory-card-meta">{{ composioStatus.email || composioStatus.defaultOrgName || 'Authenticated' }}</span>
+              <span class="directory-card-meta">{{ composioStatus.email || composioStatus.defaultOrgName || t('Authenticated') }}</span>
             </div>
           </div>
           <p class="directory-card-description">
@@ -363,8 +363,8 @@
               <div class="directory-card-main">
                 <div class="directory-card-title-row">
                   <span class="directory-card-title">{{ connector.name }}</span>
-                  <span v-if="connector.activeCount > 0" class="directory-badge">Connected</span>
-                  <span v-else-if="connector.isNoAuth" class="directory-badge">No auth</span>
+                  <span v-if="connector.activeCount > 0" class="directory-badge">{{ t('Connected') }}</span>
+                  <span v-else-if="connector.isNoAuth" class="directory-badge">{{ t('No auth') }}</span>
                 </div>
                 <span class="directory-card-meta">{{ composioMetaLabel(connector) }}</span>
               </div>
@@ -482,11 +482,11 @@
               />
               <div v-else class="directory-card-fallback">{{ selectedPlugin?.displayName.charAt(0) }}</div>
               <div class="directory-card-main">
-                <h3 class="directory-modal-title">{{ selectedPlugin?.displayName || 'Plugin' }}</h3>
+                <h3 class="directory-modal-title">{{ selectedPlugin?.displayName || t('Plugin') }}</h3>
                 <span class="directory-card-meta">{{ selectedPlugin?.developerName || selectedPlugin?.marketplaceDisplayName || selectedPlugin?.marketplaceName }}</span>
               </div>
             </div>
-            <button class="directory-modal-close" type="button" aria-label="Close plugin detail" @click="closePluginDetail">Close</button>
+            <button class="directory-modal-close" type="button" :aria-label="t('Close plugin detail')" @click="closePluginDetail">{{ t('Close') }}</button>
           </div>
 
           <div class="directory-modal-body">
@@ -504,7 +504,7 @@
 
               <div class="directory-detail-grid">
                 <div v-if="selectedPluginDetail.apps.length > 0" class="directory-detail-block">
-                  <h4 class="directory-detail-heading">Apps</h4>
+                  <h4 class="directory-detail-heading">{{ t('Apps') }}</h4>
                   <div v-for="app in selectedPluginDetail.apps" :key="app.id" class="directory-include-row">
                     <span>{{ app.name }}</span>
                     <span v-if="isPluginDetailAppUnavailable(app)" class="directory-auth-status is-warning">GPT Plus account required</span>
@@ -512,7 +512,7 @@
                   </div>
                 </div>
                 <div v-if="selectedPluginDetail.skills.length > 0" class="directory-detail-block">
-                  <h4 class="directory-detail-heading">Skills</h4>
+                  <h4 class="directory-detail-heading">{{ t('Skills') }}</h4>
                   <p class="directory-mini-list">{{ selectedPluginDetail.skills.map((skill) => skill.displayName || skill.name).join(', ') }}</p>
                 </div>
                 <div v-if="selectedPluginDetail.mcpServers.length > 0" class="directory-detail-block">
@@ -541,10 +541,10 @@
               </div>
 
               <div v-if="installAuthApps.length > 0" class="directory-auth-panel">
-                <strong>Apps needing auth</strong>
+                <strong>{{ t('Apps needing auth') }}</strong>
                 <div v-for="app in installAuthApps" :key="app.id" class="directory-include-row">
                   <span>{{ app.name }}</span>
-                  <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">Login</button>
+                  <button v-if="app.installUrl" type="button" @click="openExternalUrl(app.installUrl)">{{ t('Login') }}</button>
                 </div>
               </div>
             </template>
@@ -601,7 +601,7 @@
               type="button"
               @click="openPluginSharePanel"
             >
-              Share
+              {{ t('Share') }}
             </button>
           </div>
         </article>
@@ -613,10 +613,10 @@
         <article class="directory-modal directory-modal--share">
           <div class="directory-modal-header">
             <div class="directory-card-main">
-              <h3 class="directory-modal-title">Plugin shares</h3>
-              <span class="directory-card-meta">{{ selectedPlugin?.displayName || 'Plugin' }}</span>
+              <h3 class="directory-modal-title">{{ t('Plugin shares') }}</h3>
+              <span class="directory-card-meta">{{ selectedPlugin?.displayName || t('Plugin') }}</span>
             </div>
-            <button class="directory-modal-close" type="button" aria-label="Close plugin shares" @click="closePluginSharePanel">Close</button>
+            <button class="directory-modal-close" type="button" :aria-label="t('Close plugin shares')" @click="closePluginSharePanel">{{ t('Close') }}</button>
           </div>
 
           <div class="directory-modal-body">
@@ -642,7 +642,7 @@
                     :disabled="isPluginShareActionInFlight"
                     @click="checkoutPluginShareRow(share.remotePluginId)"
                   >
-                    {{ pluginShareActionName === `checkout:${share.remotePluginId}` ? 'Checking out...' : 'Checkout' }}
+                    {{ pluginShareActionName === `checkout:${share.remotePluginId}` ? t('Checking out...') : t('Checkout') }}
                   </button>
                   <button
                     class="directory-share-delete"
@@ -650,7 +650,7 @@
                     :disabled="isPluginShareActionInFlight"
                     @click="deletePluginShareRow(share.remotePluginId)"
                   >
-                    {{ pluginShareActionName === `delete:${share.remotePluginId}` ? 'Removing...' : 'Remove' }}
+                    {{ pluginShareActionName === `delete:${share.remotePluginId}` ? t('Removing...') : t('Remove') }}
                   </button>
                 </div>
               </div>
@@ -660,7 +660,7 @@
                 :disabled="isPluginShareActionInFlight || !selectedPluginPath()"
                 @click="saveSelectedPluginShare"
               >
-                {{ pluginShareActionName === 'save' ? 'Sharing...' : 'Share this plugin' }}
+                {{ pluginShareActionName === 'save' ? t('Sharing...') : t('Share this plugin') }}
               </button>
             </template>
           </div>
@@ -683,10 +683,10 @@
               <div v-else class="directory-card-fallback composio-fallback">{{ selectedComposioDetail?.connector.name.charAt(0) }}</div>
               <div class="directory-card-main">
                 <h3 class="directory-modal-title">{{ selectedComposioDetail?.connector.name || 'Composio' }}</h3>
-                <span class="directory-card-meta">{{ selectedComposioDetail ? composioMetaLabel(selectedComposioDetail.connector) : 'Connector' }}</span>
+                <span class="directory-card-meta">{{ selectedComposioDetail ? composioMetaLabel(selectedComposioDetail.connector) : t('Connector') }}</span>
               </div>
             </div>
-            <button class="directory-modal-close" type="button" aria-label="Close Composio detail" @click="closeComposioDetail">Close</button>
+            <button class="directory-modal-close" type="button" :aria-label="t('Close Composio detail')" @click="closeComposioDetail">{{ t('Close') }}</button>
           </div>
 
           <div class="directory-modal-body">
@@ -774,6 +774,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useUiLanguage } from '../../composables/useUiLanguage'
 import {
   addDirectoryMarketplace,
   checkoutPluginShare,
@@ -884,13 +885,14 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useUiLanguage()
 
-const tabs: Array<{ id: DirectoryTab; label: string; subtitle: string }> = [
-  { id: 'plugins', label: 'Plugins', subtitle: 'Plugins make Codex work your way.' },
-  { id: 'apps', label: 'Apps', subtitle: 'Connect Codex to external apps and services.' },
-  { id: 'composio', label: 'Composio', subtitle: 'Browse Composio connectors, auth state, and ready-to-try integrations.' },
-  { id: 'skills', label: 'Skills', subtitle: 'MCPs first, then installed skills and GitHub sync state.' },
-]
+const tabs = computed<Array<{ id: DirectoryTab; label: string; subtitle: string }>>(() => [
+  { id: 'plugins', label: t('Plugins'), subtitle: t('Plugins make Codex work your way.') },
+  { id: 'apps', label: t('Apps'), subtitle: t('Connect Codex to external apps and services.') },
+  { id: 'composio', label: 'Composio', subtitle: t('Browse Composio connectors, auth state, and ready-to-try integrations.') },
+  { id: 'skills', label: t('Skills'), subtitle: t('MCPs first, then installed skills and GitHub sync state.') },
+])
 
 const composioPreviewConnectors = [
   {
@@ -1009,7 +1011,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 let composioSearchTimer: ReturnType<typeof setTimeout> | null = null
 let isComposioLoadQueued = false
 
-const activeCopy = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
+const activeCopy = computed(() => tabs.value.find((tab) => tab.id === activeTab.value) ?? tabs.value[0])
 const supportsPlugins = computed(() =>
   !methodsLoaded.value ||
   ['plugin/list', 'plugin/read', 'plugin/install', 'plugin/uninstall'].every((method) => methodSet.value.has(method)),
@@ -1095,13 +1097,13 @@ const hasMoreComposioConnectors = computed(() => composioNextCursor.value !== nu
 const mcpStatusByName = computed(() => new Map(mcpServers.value.map((server) => [server.name, server])))
 const composioWorkspaceSummary = computed(() => {
   const status = composioStatus.value
-  if (!status) return 'Composio CLI shares the login and connections from this machine.'
+  if (!status) return t('Composio CLI shares the login and connections from this machine.')
   const parts = [
     status.email || status.defaultOrgName,
     status.defaultOrgId ? `org ${status.defaultOrgId}` : '',
     status.baseUrl || '',
   ].filter(Boolean)
-  return parts.join(' · ') || 'Composio CLI shares the login and connections from this machine.'
+  return parts.join(' · ') || t('Composio CLI shares the login and connections from this machine.')
 })
 
 function normalizeSearch(value: string): string {
@@ -1171,13 +1173,13 @@ function normalizePluginAppName(name: string): string {
 }
 
 function formatDistributionChannel(value: string): string {
-  if (value === 'DEFAULT_OAI_CATALOG') return 'OpenAI catalog'
-  if (value === 'ECOSYSTEM_DIRECTORY') return 'Ecosystem directory'
+  if (value === 'DEFAULT_OAI_CATALOG') return t('OpenAI catalog')
+  if (value === 'ECOSYSTEM_DIRECTORY') return t('Ecosystem directory')
   return value ? value.replace(/_/gu, ' ').toLowerCase().replace(/\b\w/gu, (char) => char.toUpperCase()) : ''
 }
 
 function appMetaLabel(app: DirectoryAppInfo): string {
-  return app.developer || formatDistributionChannel(app.distributionChannel) || 'App'
+  return app.developer || formatDistributionChannel(app.distributionChannel) || t('App')
 }
 
 function getMcpAuthStatus(serverName: string): string {
@@ -1186,11 +1188,11 @@ function getMcpAuthStatus(serverName: string): string {
 
 function formatMcpAuthStatus(serverName: string): string {
   const status = getMcpAuthStatus(serverName)
-  if (status === 'oAuth') return 'Logged in'
-  if (status === 'bearerToken') return 'Bearer token'
-  if (status === 'notLoggedIn') return 'Login required'
-  if (status === 'unsupported') return 'Auth unsupported'
-  return 'Status unknown'
+  if (status === 'oAuth') return t('Logged in')
+  if (status === 'bearerToken') return t('Bearer token')
+  if (status === 'notLoggedIn') return t('Login required')
+  if (status === 'unsupported') return t('Auth unsupported')
+  return t('Status unknown')
 }
 
 function mcpAuthStatusClass(serverName: string): string {
@@ -1339,11 +1341,11 @@ function appLogoSrc(app: DirectoryAppInfo): string {
 
 function composioMetaLabel(connector: DirectoryComposioConnector): string {
   if (connector.activeCount > 0) {
-    return `${connector.activeCount} connected ${connector.activeCount === 1 ? 'account' : 'accounts'}`
+    return `${connector.activeCount} ${t('connected')} ${connector.activeCount === 1 ? t('account') : t('accounts')}`
   }
-  if (connector.isNoAuth) return 'No auth required'
+  if (connector.isNoAuth) return t('No auth required')
   if (connector.connectionStatuses.length > 0) return connector.connectionStatuses.join(', ')
-  return connector.authModes.join(', ') || 'Connection required'
+  return connector.authModes.join(', ') || t('Connection required')
 }
 
 function composioHasUsableConnection(connector: DirectoryComposioConnector): boolean {
@@ -1352,18 +1354,18 @@ function composioHasUsableConnection(connector: DirectoryComposioConnector): boo
 
 function composioPrimaryActionLabel(connector: DirectoryComposioConnector): string {
   if (connector.isNoAuth) return ''
-  if (connector.activeCount > 0) return 'Manage'
-  if (connector.totalConnections > 0) return 'Reconnect'
-  return 'Connect'
+  if (connector.activeCount > 0) return t('Manage')
+  if (connector.totalConnections > 0) return t('Reconnect')
+  return t('Connect')
 }
 
 function composioConnectionStatusLabel(status: string): string {
   const normalized = status.trim().toUpperCase()
-  if (normalized === 'ACTIVE') return 'Active'
-  if (normalized === 'EXPIRED') return 'Expired'
-  if (normalized === 'FAILED') return 'Failed'
-  if (normalized === 'INITIATED') return 'Pending'
-  return normalized || 'Unknown'
+  if (normalized === 'ACTIVE') return t('Active')
+  if (normalized === 'EXPIRED') return t('Expired')
+  if (normalized === 'FAILED') return t('Failed')
+  if (normalized === 'INITIATED') return t('Pending')
+  return normalized || t('Unknown')
 }
 
 function composioConnectionStatusClass(status: string): string {
@@ -1663,13 +1665,13 @@ async function loginMcpServer(serverName: string): Promise<boolean> {
   try {
     const result = await startDirectoryMcpLogin(serverName)
     if (!result.authorizationUrl) {
-      showToast(`No login URL returned for ${serverName}`, 'error')
+      showToast(t('No login URL returned for {name}', { name: serverName }), 'error')
       return false
     }
     openExternalUrl(result.authorizationUrl)
     return true
   } catch (error) {
-    showToast(error instanceof Error ? error.message : `Failed to start login for ${serverName}`, 'error')
+    showToast(error instanceof Error ? error.message : t('Failed to start login for {name}', { name: serverName }), 'error')
     return false
   } finally {
     mcpLoginServerName.value = ''
@@ -1783,17 +1785,17 @@ async function startComposioConnect(connector: DirectoryComposioConnector): Prom
   try {
     const result = await startDirectoryComposioLogin(connector.slug)
     if (!result.redirectUrl) {
-      showToast(`No login URL returned for ${connector.name}`, 'error')
+      showToast(t('No login URL returned for {name}', { name: connector.name }), 'error')
       return
     }
     openExternalUrl(result.redirectUrl)
-    showToast(`Opened ${connector.name} authorization`)
+    showToast(t('Opened {name} authorization', { name: connector.name }))
     await loadComposio()
     if (isComposioDetailOpen.value && selectedComposioDetail.value?.connector.slug === connector.slug) {
       await openComposioDetail(connector.slug)
     }
   } catch (error) {
-    showToast(error instanceof Error ? error.message : `Failed to connect ${connector.name}`, 'error')
+    showToast(error instanceof Error ? error.message : t('Failed to connect {name}', { name: connector.name }), 'error')
   } finally {
     composioActionSlug.value = ''
   }
@@ -1851,7 +1853,7 @@ async function installSelectedPlugin(): Promise<void> {
   try {
     const result = await installDirectoryPlugin(selectedPlugin.value)
     installAuthApps.value = result.appsNeedingAuth
-    showToast(`${selectedPlugin.value.displayName} plugin installed`)
+    showToast(`${selectedPlugin.value.displayName} ${t('plugin installed')}`)
     const openedAppLogin = openFirstAppLoginIfNeeded(result.appsNeedingAuth)
     await loadPlugins()
     const updated = plugins.value.find((plugin) => plugin.id === selectedPlugin.value?.id)
@@ -1874,7 +1876,7 @@ async function uninstallSelectedPlugin(): Promise<void> {
   try {
     const name = selectedPlugin.value.displayName
     await uninstallDirectoryPlugin(selectedPlugin.value.id)
-    showToast(`${name} plugin uninstalled`)
+    showToast(`${name} ${t('plugin uninstalled')}`)
     closePluginDetail()
     await loadPlugins()
   } catch (error) {
@@ -1897,7 +1899,7 @@ async function toggleSelectedPlugin(): Promise<void> {
         summary: { ...selectedPluginDetail.value.summary, enabled: next },
       }
     }
-    showToast(`${selectedPlugin.value.displayName} plugin ${next ? 'enabled' : 'disabled'}`)
+    showToast(`${selectedPlugin.value.displayName} ${t('plugin')} ${next ? t('enabled') : t('disabled')}`)
     await loadPlugins()
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Failed to update plugin', 'error')
@@ -1912,7 +1914,7 @@ async function toggleApp(app: DirectoryAppInfo): Promise<void> {
     const next = !app.isEnabled
     await setDirectoryAppEnabled(app.id, next)
     apps.value = apps.value.map((row) => row.id === app.id ? { ...row, isEnabled: next } : row)
-    showToast(`${app.name} app ${next ? 'enabled' : 'disabled'}`)
+    showToast(`${app.name} ${t('app')} ${next ? t('enabled') : t('disabled')}`)
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Failed to update app', 'error')
   } finally {

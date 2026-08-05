@@ -31,7 +31,7 @@
             class="rfp-file"
             type="button"
             :title="file.relativePath"
-            @click="openFile(file.path)"
+            @click="openFile(file)"
           >
             <span class="rfp-file-label">{{ file.label }}</span>
             <span class="rfp-file-sub">{{ file.sub }}</span>
@@ -39,6 +39,14 @@
         </div>
       </div>
     </div>
+
+    <FilePreviewModal
+      v-if="previewFile"
+      :open="true"
+      :file-path="previewFile.path"
+      :name="previewFile.label"
+      @close="closePreview"
+    />
   </div>
 </template>
 
@@ -46,6 +54,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { listWorkspaceFiles, type WorkspaceFileEntry } from '../../api/codexGateway'
 import { useUiLanguage } from '../../composables/useUiLanguage'
+import FilePreviewModal from './FilePreviewModal.vue'
 
 const props = defineProps<{
   cwd: string
@@ -58,6 +67,7 @@ const isLoading = ref(false)
 const loadError = ref('')
 const filterQuery = ref('')
 const collapsedGroups = ref<Set<string>>(new Set())
+const previewFile = ref<FileRow | null>(null)
 
 type FileRow = { path: string; relativePath: string; label: string; sub: string }
 type FileGroup = { name: string; files: FileRow[] }
@@ -110,9 +120,12 @@ function toggleGroup(name: string): void {
   collapsedGroups.value = next
 }
 
-function openFile(path: string): void {
-  const normalized = path.replace(/\\/g, '/')
-  window.open(`/codex-local-browse${encodeURI(normalized)}`, '_blank', 'noopener,noreferrer')
+function openFile(file: FileRow): void {
+  previewFile.value = file
+}
+
+function closePreview(): void {
+  previewFile.value = null
 }
 
 async function loadFiles(): Promise<void> {

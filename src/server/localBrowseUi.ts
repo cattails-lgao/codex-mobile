@@ -1,4 +1,4 @@
-import { dirname, extname, join, relative } from 'node:path'
+import { basename, dirname, extname, join, relative } from 'node:path'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 
 type DirectoryItem = {
@@ -311,6 +311,58 @@ export async function listWorkspaceFiles(
 
   await walk(rootPath, 0)
   return rows
+}
+
+const IMAGE_PREVIEW_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.avif', '.ico',
+])
+
+const MAX_PREVIEW_BYTES = 512 * 1024
+
+export type FilePreviewResult = {
+  /** Absolute path on disk. */
+  path: string
+  name: string
+  size: number
+  isText: boolean
+  isImage: boolean
+  /** UTF-8 text content, only present for text-like files. */
+  content?: string
+  /** True when the content was cut at MAX_PREVIEW_BYTES. */
+  truncated: boolean
+}
+
+/**
+ * Prepares a file for the right-side "Files" panel preview. Text-like files
+ * get their UTF-8 content (truncated to MAX_PREVIEW_BYTES); image files are
+ * flagged so the client can render them from /codex-local-browse; other
+ * binary files are returned without content.
+ */
+export async function getFilePreview(localPath: string): Promise<FilePreviewResult> {
+  const fileStat = await stat(localPath)
+  const extension = extname(localPath).toLowerCase()
+  const isImage = IMAGE_PREVIEW_EXTENSIONS.has(extension)
+  const isText = !isImage && (await isTextEditableFile(localPath))
+  let content: string | undefined
+  let truncated = false
+  if (isText) {
+    const buffer = await readFile(localPath)
+    if (buffer.length > MAX_PREVIEW_BYTES) {
+      content = buffer.subarray(0, MAX_PREVIEW_BYTES).toString('utf8')
+      truncated = true
+    } else {
+      content = buffer.toString('utf8')
+    }
+  }
+  return {
+    path: localPath,
+    name: basename(localPath),
+    size: fileStat.size,
+    isText,
+    isImage,
+    content,
+    truncated,
+  }
 }
 
 export async function createDirectoryListingHtml(localPath: string, options?: { newProjectName?: string }): Promise<string> {

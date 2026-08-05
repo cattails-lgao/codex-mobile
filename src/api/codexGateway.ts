@@ -3362,6 +3362,42 @@ export async function listWorkspaceFiles(cwd: string): Promise<WorkspaceFileEntr
   })
 }
 
+export type LocalFilePreview = {
+  path: string
+  name: string
+  size: number
+  isText: boolean
+  isImage: boolean
+  content?: string
+  truncated: boolean
+}
+
+export async function previewLocalFile(filePath: string): Promise<LocalFilePreview> {
+  const query = new URLSearchParams({ path: filePath })
+  const response = await fetch(`/codex-local-preview?${query.toString()}`)
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    const message = getErrorMessageFromPayload(payload, 'Failed to preview file')
+    throw new Error(message)
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {}
+  const data = record.data
+  const preview =
+    data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : {}
+  return {
+    path: typeof preview.path === 'string' ? preview.path : filePath,
+    name: typeof preview.name === 'string' ? preview.name : '',
+    size: typeof preview.size === 'number' ? preview.size : 0,
+    isText: preview.isText === true,
+    isImage: preview.isImage === true,
+    content: typeof preview.content === 'string' ? preview.content : undefined,
+    truncated: preview.truncated === true,
+  }
+}
+
 async function readJsonResponse(response: Response): Promise<unknown> {
   const raw = await response.text()
   if (!raw) return {}
