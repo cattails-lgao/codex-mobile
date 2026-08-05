@@ -417,13 +417,13 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           <tr>
             <td>P2</td>
             <td>Hooks / Marketplace / Plugin 分享 / 远程控制</td>
-            <td><strong class="warn-text">全部未开始</strong></td>
-            <td>代码库无 <code>hooks/list</code>、<code>marketplace/*</code>、<code>plugin/share/*</code>、<code>remoteControl/*</code> 实现;实施前需先做 <code>getMethodCatalog()</code> 特性探测</td>
+            <td><strong class="ok-text">全部完成</strong></td>
+            <td>P2-1 Hooks 设置面板（commit <code>934b807</code>）、P2-2 Marketplace 管理（commit <code>691fe28</code>）、P2-3 Plugin 分享（commit <code>6d47a75</code>）、P2-4 远程控制（commit <code>ecd0d6e</code>）；全部走 <code>getMethodCatalog()</code> 特性探测，能力缺失时 UI 降级提示；单测 + Playwright light/dark/移动端验证通过；详见 <code>tests/skills-plugins-integrations/</code> 下 4 篇手动用例</td>
           </tr>
         </table>
         </div>
         <div class="callout">
-          <strong>总体进度:</strong> 方案 11 个任务项中,7 项已完成(P0-1、P0-2、P1-1、P1-2、P1-3、P1-4、P1-5),4 项未开始(P2 全部)。下一优先级建议为 P2 生态能力(Hooks / Marketplace / Plugin 分享 / 远程控制)。
+          <strong>总体进度:</strong> 方案 11 个任务项已全部完成(P0-1、P0-2、P1-1 ~ P1-5、P2-1 ~ P2-4)。
         </div>
       </section>
 
@@ -449,7 +449,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-05（P1-5 已完成） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-05（P2 全部完成） · 内容已脱敏
     </footer>
   </article>
 </body>
