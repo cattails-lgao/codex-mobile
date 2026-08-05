@@ -401,8 +401,8 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           </tr>
           <tr>
             <td>P1-3 通知面补齐</td>
-            <td><strong class="warn-text">未开始</strong></td>
-            <td><code>thread/status/changed</code>、<code>thread/archived</code>、<code>item/autoApprovalReview/*</code> 等通知分支未实现</td>
+            <td><strong class="ok-text">已完成</strong></td>
+            <td><code>applyRealtimeUpdates</code> 补齐 <code>app/list/updated</code>、<code>thread/status/changed</code>、<code>thread/archived</code>、<code>thread/deleted</code>、<code>thread/closed</code>、<code>thread/unarchived</code>、<code>item/fileChange/patchUpdated</code>、<code>turn/diff/updated</code>、<code>skills/changed</code>、<code>mcpServer/*</code> 分支;40+ 已知忽略通知显式空分支 + debug 日志;App.vue 事件转发给 DirectoryHub;undo/redo 真实化(无实际变更不再假报 undone/redone,成功后重取消息);清理 <code>UndoStartedEvent</code>/<code>UndoCompletedEvent</code> 死代码;单测 43/43 通过</td>
           </tr>
           <tr>
             <td>P1-4 输入框命令菜单</td>
@@ -423,7 +423,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>总体进度:</strong> 方案 11 个任务项中,5 项已完成(P0-1、P0-2、P1-1、P1-2、P1-4),1 项部分完成(P1-5),5 项未开始(P1-3、P2 全部)。下一优先级建议为 P1-3 通知面补齐。
+          <strong>总体进度:</strong> 方案 11 个任务项中,6 项已完成(P0-1、P0-2、P1-1、P1-2、P1-3、P1-4),1 项部分完成(P1-5),4 项未开始(P2 全部)。下一优先级建议为 P1-5 UI 同步与视觉一致性。
         </div>
       </section>
 

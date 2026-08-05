@@ -596,6 +596,7 @@
         <section class="content-body">
           <template v-if="isSkillsRoute">
             <DirectoryHub
+              ref="directoryHubRef"
               :cwd="directoryCwd"
               :thread-id="routeThreadId"
               :try-in-flight-key="directoryTryInFlightKey"
@@ -1000,6 +1001,7 @@
                     @fork-thread="onForkThreadFromMessage"
                     @rollback="onRollback"
                     @implement-plan="onImplementPlan"
+                    @file-changes-changed="onFileChangesChanged"
                     @respond-server-request="onRespondServerRequest" />
                 </div>
 
@@ -1456,8 +1458,10 @@ const {
   error: desktopError,
   refreshAll,
   refreshSkills,
+  onRealtimeEvent,
   selectThread,
   ensureThreadMessagesLoaded,
+  loadMessages,
   loadOlderMessages,
   setThreadTerminalOpen,
   toggleSelectedThreadTerminal,
@@ -1511,6 +1515,11 @@ type AutomationEditRequest = {
 }
 const sidebarThreadTreeRef = ref<SidebarThreadTreeExposed | null>(null)
 const automationsPanelRef = ref<AutomationsPanelExposed | null>(null)
+type DirectoryHubExposed = {
+  refreshFromNotification: (method: string) => void
+}
+const directoryHubRef = ref<DirectoryHubExposed | null>(null)
+let stopRealtimeEventForwarding: (() => void) | null = null
 const {
   buildFeedbackMailto,
   feedbackMailtoBase,
@@ -2171,6 +2180,10 @@ onMounted(() => {
   updateVisualViewportState()
   applyDarkMode()
   darkModeMediaQuery?.addEventListener('change', applyDarkMode)
+  stopRealtimeEventForwarding = onRealtimeEvent((method) => {
+    if (!directoryHubRef.value) return
+    directoryHubRef.value.refreshFromNotification(method)
+  })
   void initialize()
   void loadHomeDirectory()
   void loadFirstLaunchPluginsCardPreference()
@@ -2213,6 +2226,10 @@ onUnmounted(() => {
   }
   clearTerminalKeyboardFocusFallbackTimer()
   stopPolling()
+  if (stopRealtimeEventForwarding) {
+    stopRealtimeEventForwarding()
+    stopRealtimeEventForwarding = null
+  }
 })
 
 function updateVisualViewportState(): void {
@@ -2302,6 +2319,13 @@ async function maybeImportExternalCodexAuthAccount(): Promise<boolean> {
 
 function onSkillsChanged(): void {
   void refreshSkills({ force: true })
+}
+
+function onFileChangesChanged(threadId: string): void {
+  if (!threadId) return
+  // Re-read the thread payload after an undo/redo so the file-change summary
+  // and diff cache stay in sync with the disk state.
+  void loadMessages(threadId, { silent: true, force: true })
 }
 
 async function refreshTelegramStatus(): Promise<void> {

@@ -101,6 +101,53 @@ const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
 const CODEX_CLI_MISSING_MESSAGE = 'Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
+// Official app-server notifications with no UI consumer in codex-mobile.
+// Each gets an explicit no-op branch (with debug log) so a future unknown
+// notification can never fall through into the error path by accident.
+const KNOWN_IGNORED_NOTIFICATION_METHODS = new Set<string>([
+  'account/login/completed',
+  'account/updated',
+  'authStatusChange',
+  'command/exec/outputDelta',
+  'configWarning',
+  'deprecationNotice',
+  'externalAgentConfig/import/completed',
+  'externalAgentConfig/import/progress',
+  'fs/changed', // no directory-browse surface in this UI (DirectoryHub has no fs view)
+  'guardianWarning',
+  'hook/completed',
+  'hook/started',
+  'item/autoApprovalReview/completed', // Guardian auto-review; no approval panel surface
+  'item/autoApprovalReview/started', // Guardian auto-review; no approval panel surface
+  'item/mcpToolCall/progress',
+  'loginChatGptComplete',
+  'model/rerouted',
+  'model/safetyBuffering/updated',
+  'model/verification',
+  'process/exited',
+  'process/outputDelta',
+  'remoteControl/status/changed',
+  'sessionConfigured',
+  'thread/environment/connected',
+  'thread/environment/disconnected',
+  'thread/goal/cleared',
+  'thread/goal/updated',
+  'thread/realtime/closed', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/error', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/itemAdded', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/outputAudio/delta', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/sdp', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/started', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/transcript/delta', // consumed by useRealtimeVoice's own subscription
+  'thread/realtime/transcript/done', // consumed by useRealtimeVoice's own subscription
+  'thread/settings/updated',
+  'thread/started',
+  'turn/moderationMetadata',
+  'warning',
+  'windows/worldWritableWarning',
+  'windowsSandbox/setupCompleted',
+])
+
 function isCodexCliMissingError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
   return message.includes('Codex CLI is not available')
@@ -3742,8 +3789,113 @@ export function useDesktopState() {
     return false
   }
 
+  type RealtimeEventListener = (method: string) => void
+  const realtimeEventListeners = new Set<RealtimeEventListener>()
+
+  function emitRealtimeEvent(method: string): void {
+    for (const listener of realtimeEventListeners) {
+      try {
+        listener(method)
+      } catch {
+        // A listener failure must not break the notification pipeline.
+      }
+    }
+  }
+
+  function onRealtimeEvent(listener: RealtimeEventListener): () => void {
+    realtimeEventListeners.add(listener)
+    return () => {
+      realtimeEventListeners.delete(listener)
+    }
+  }
+
+  function upsertLiveFileChangePatch(threadId: string, itemId: string, changes: UiFileChange[]): void {
+    if (!threadId || !itemId) return
+    const messages = liveFileChangeMessagesByThreadId.value[threadId]
+    if (!messages) return
+    const index = messages.findIndex((message) => message.id === itemId || message.turnId === itemId)
+    if (index < 0) return
+    const next = [...messages]
+    next[index] = { ...next[index], fileChanges: changes }
+    setLiveFileChangeMessagesForThread(threadId, next)
+  }
+
+  function upsertTurnDiff(threadId: string, turnId: string, diff: string): void {
+    if (!threadId || !turnId) return
+    const messages = liveFileChangeMessagesByThreadId.value[threadId]
+    if (!messages) return
+    const index = messages.findIndex((message) => message.turnId === turnId)
+    if (index < 0) return
+    const next = [...messages]
+    const target = next[index]
+    next[index] = {
+      ...target,
+      fileChanges: (target.fileChanges ?? []).map((change) => ({ ...change, diff })),
+    }
+    setLiveFileChangeMessagesForThread(threadId, next)
+  }
+
   function applyRealtimeUpdates(notification: RpcNotification): void {
     if (handleServerRequestNotification(notification)) {
+      return
+    }
+
+    if (KNOWN_IGNORED_NOTIFICATION_METHODS.has(notification.method)) {
+      if (import.meta.env?.DEV) {
+        console.debug(`[codex-notify] ignore ${notification.method}`)
+      }
+      return
+    }
+
+    if (
+      notification.method === 'app/list/updated' ||
+      notification.method === 'mcpServer/startupStatus/updated' ||
+      notification.method === 'mcpServer/oauthLogin/completed'
+    ) {
+      emitRealtimeEvent(notification.method)
+      return
+    }
+
+    if (notification.method === 'skills/changed') {
+      void refreshSkills({ force: true })
+      return
+    }
+
+    if (notification.method === 'thread/status/changed') {
+      const threadId = extractThreadIdFromNotification(notification)
+      // A status change (e.g. another client started a turn) may alter the
+      // message payload of the selected thread; queueEventDrivenSync refreshes
+      // the thread list for any thread/* notification.
+      if (threadId && threadId === selectedThreadId.value) {
+        pendingThreadMessageRefresh.add(threadId)
+      }
+      return
+    }
+
+    if (
+      notification.method === 'thread/archived' ||
+      notification.method === 'thread/unarchived' ||
+      notification.method === 'thread/deleted' ||
+      notification.method === 'thread/closed'
+    ) {
+      // queueEventDrivenSync already refreshes the thread list for thread/*
+      // notifications; nothing else to do here beyond observability.
+      return
+    }
+
+    if (notification.method === 'item/fileChange/patchUpdated' || notification.method === 'turn/diff/updated') {
+      const params = asRecord(notification.params)
+      const threadId = readString(params?.threadId)
+      if (threadId) {
+        if (notification.method === 'item/fileChange/patchUpdated') {
+          upsertLiveFileChangePatch(threadId, readString(params?.itemId), toUiFileChanges(params?.changes))
+        } else {
+          upsertTurnDiff(threadId, readString(params?.turnId), readString(params?.diff) ?? '')
+        }
+        if (threadId === selectedThreadId.value) {
+          pendingThreadMessageRefresh.add(threadId)
+        }
+      }
       return
     }
 
@@ -4037,6 +4189,9 @@ export function useDesktopState() {
 
   function queueEventDrivenSync(notification: RpcNotification): void {
     if (notification.method === 'thread/tokenUsage/updated') return
+    // High-frequency realtime voice blocks are consumed by useRealtimeVoice's
+    // own subscription; exclude them so they never force thread-list reloads.
+    if (notification.method.startsWith('thread/realtime/')) return
 
     const method = notification.method
     const shouldRefreshMessages =
@@ -4406,7 +4561,7 @@ export function useDesktopState() {
     await loadThreadsPromise
   }
 
-  async function loadMessages(threadId: string, options: { silent?: boolean } = {}) {
+  async function loadMessages(threadId: string, options: { silent?: boolean; force?: boolean } = {}) {
     if (!threadId) {
       return
     }
@@ -4417,7 +4572,7 @@ export function useDesktopState() {
     }
 
     const existingLoad = loadMessagePromiseByThreadId.get(threadId)
-    if (existingLoad) {
+    if (existingLoad && options.force !== true) {
       await existingLoad
       return
     }
@@ -4435,14 +4590,16 @@ export function useDesktopState() {
       const loadedRecently =
         Date.now() - (lastMessageLoadAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
       const canReuseLoadedMessages =
-        alreadyLoaded &&
-        (
-          loadedRecently ||
+        options.force === true
+          ? false
+          : alreadyLoaded &&
           (
-            (version.length === 0 || loadedVersion === version) &&
-            inProgressById.value[threadId] !== true
+            loadedRecently ||
+            (
+              (version.length === 0 || loadedVersion === version) &&
+              inProgressById.value[threadId] !== true
+            )
           )
-        )
 
       if (canReuseLoadedMessages) {
         markThreadAsRead(threadId)
@@ -5815,6 +5972,7 @@ export function useDesktopState() {
     error,
     refreshAll,
     refreshSkills,
+    onRealtimeEvent,
     selectThread,
     loadMessages,
     loadOlderMessages,

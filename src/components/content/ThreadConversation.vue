@@ -1323,6 +1323,7 @@ const emit = defineEmits<{
   rollback: [payload: { turnId: string }]
   implementPlan: [payload: { turnId: string }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
+  fileChangesChanged: [threadId: string]
 }>()
 
 const conversationListRef = ref<HTMLElement | null>(null)
@@ -2092,6 +2093,18 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
     return
   }
 
+  if ((result.changed ?? 0) <= 0) {
+    // Nothing was actually reverted/reapplied (e.g. another client already ran
+    // this action). Keep the previous state and surface the server message
+    // instead of assuming a local undone/redone that the disk does not reflect.
+    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
+    fileChangeActionError.value = {
+      ...fileChangeActionError.value,
+      [key]: result.message || (action === 'undo' ? 'No file changes to undo.' : 'No file changes to redo.'),
+    }
+    return
+  }
+
   if (action === 'undo') {
     fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
@@ -2099,6 +2112,9 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
     fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'redone' }
   }
+  // Re-read the thread's file-change state so the UI reflects the disk state
+  // (covers multi-client sync and refresh consistency).
+  emit('fileChangesChanged', props.activeThreadId)
 }
 
 function fileChangeOperationLabel(change: UiFileChange): string {
