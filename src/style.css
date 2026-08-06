@@ -1443,14 +1443,6 @@
   @apply bg-black/55;
 }
 
-:root.dark .worked-separator-text {
-  @apply text-zinc-300;
-}
-
-:root.dark .worked-separator-line {
-  @apply bg-zinc-700;
-}
-
 :root.dark .request-card {
   @apply border-amber-700 bg-amber-900/30;
 }

@@ -38,90 +38,48 @@
         </div>
         <div v-else-if="isCommandMessage(message)" class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
-            <button
-              v-if="getGroupedCommandsForLatest(message).length > 0"
-              type="button"
-              class="cmd-row cmd-row-group cmd-compact"
-              :class="[commandStatusClass(message), { 'cmd-expanded': isCommandGroupExpanded(message) }]"
-              @click="toggleCommandGroup(message)"
-            >
-              <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandGroupExpanded(message) }">▶</span>
-              <span class="cmd-group-label">{{ commandGroupSummaryLabel(message) }}</span>
-              <span class="cmd-status">{{ commandGroupSummaryStatus(message) }}</span>
-            </button>
-            <div
-              v-if="getGroupedCommandsForLatest(message).length > 0"
-              class="cmd-group-wrap"
-              :class="{ 'cmd-group-visible': isCommandGroupExpanded(message) }"
-            >
-              <div class="cmd-group-inner">
-                <div
-                  v-for="(cmd, cmdIndex) in getCommandBlockForLatest(message)"
-                  :key="`grouped-cmd-${cmd.id}`"
-                  class="worked-cmd-item"
+            <div class="work-block-list">
+              <div
+                v-for="(cmd, cmdIndex) in getWorkBlockCommands(message)"
+                :key="`work-cmd-${cmd.id}`"
+                class="work-block"
+                :class="[
+                  commandStatusClass(cmd),
+                  {
+                    'work-block-expanded': isCommandExpanded(cmd),
+                    'work-block-compact': isCommandCompact(cmd),
+                  },
+                ]"
+              >
+                <button
+                  type="button"
+                  class="work-block-header"
+                  :aria-expanded="isCommandExpanded(cmd)"
+                  @click="toggleCommandExpand(cmd)"
                 >
-                  <button
-                    type="button"
-                    class="cmd-row"
-                    :class="[
-                      commandStatusClass(cmd),
-                      {
-                        'cmd-expanded': isCommandExpanded(cmd),
-                        'cmd-compact': true,
-                      },
-                    ]"
-                    @click="toggleCommandExpand(cmd)"
-                  >
-                    <span class="cmd-step-index" :title="t('Step') + ' ' + (cmdIndex + 1)">{{ cmdIndex + 1 }}</span>
-                    <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
-                    <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
-                    <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
-                  </button>
-                  <div
-                    class="cmd-output-wrap"
-                    :class="{ 'cmd-output-visible': isCommandExpanded(cmd) }"
-                  >
-                    <div class="cmd-output-inner">
-                      <pre
-                        class="cmd-output"
-                        :class="{ 'cmd-output-condensed': isCommandOutputCondensed(cmd) }"
-                        v-text="cmd.commandExecution?.aggregatedOutput || '(no output)'"
-                      ></pre>
-                    </div>
+                  <span class="work-step-dot" :title="t('Step') + ' ' + (cmdIndex + 1)">{{ cmdIndex + 1 }}</span>
+                  <code class="work-block-command">{{ cmd.commandExecution?.command || '(command)' }}</code>
+                  <span class="work-block-status">
+                    <span v-if="cmd.commandExecution?.status === 'inProgress'" class="work-block-spinner" aria-hidden="true" />
+                    <span v-else-if="cmd.commandExecution?.status === 'completed' && cmd.commandExecution?.exitCode === 0" class="work-block-status-icon" aria-hidden="true">✓</span>
+                    <span v-else-if="cmd.commandExecution?.status === 'failed'" class="work-block-status-icon" aria-hidden="true">✗</span>
+                    {{ commandStatusLabel(cmd) }}
+                  </span>
+                </button>
+                <div
+                  class="work-block-output-wrap"
+                  :class="{ 'work-block-output-visible': isCommandExpanded(cmd) }"
+                >
+                  <div class="work-block-output-inner">
+                    <pre
+                      class="work-block-output"
+                      :class="{ 'cmd-output-condensed': isCommandOutputCondensed(cmd) }"
+                      v-text="cmd.commandExecution?.aggregatedOutput || '(no output)'"
+                    ></pre>
                   </div>
                 </div>
               </div>
             </div>
-            <template v-else>
-              <button
-                type="button"
-                class="cmd-row"
-                :class="[
-                  commandStatusClass(message),
-                  {
-                    'cmd-expanded': isCommandExpanded(message),
-                    'cmd-compact': isCommandCompact(message),
-                  },
-                ]"
-                @click="toggleCommandExpand(message)"
-              >
-                <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(message) }">▶</span>
-                <code class="cmd-label">{{ message.commandExecution?.command || '(command)' }}</code>
-                <span class="cmd-status">{{ commandStatusLabel(message) }}</span>
-              </button>
-              <div
-                class="cmd-output-wrap"
-                :class="{ 'cmd-output-visible': isCommandExpanded(message) }"
-              >
-                <div class="cmd-output-inner">
-                  <pre
-                    class="cmd-output"
-                    :class="{ 'cmd-output-condensed': isCommandOutputCondensed(message) }"
-                    v-text="message.commandExecution?.aggregatedOutput || '(no output)'"
-                  ></pre>
-                </div>
-              </div>
-            </template>
           </div>
         </div>
 
@@ -163,8 +121,8 @@
                         :key="`file-change:${message.id}:${change.path}:${change.movedToPath || ''}`"
                         class="file-change-item"
                       >
-                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
-                          {{ fileChangeOperationLabel(change) }}
+                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)" :title="fileChangeOperationLabel(change)">
+                          {{ fileChangeBadgeLabel(change) }}
                         </span>
                         <button
                           type="button"
@@ -277,50 +235,8 @@
                   <span>Sent via automation</span>
                   <code v-if="message.automationDisplayName">{{ message.automationDisplayName }}</code>
                 </div>
-                <div v-if="message.messageType === 'worked'" class="worked-separator-wrap" aria-live="polite">
-                  <button type="button" class="worked-separator" @click="toggleWorkedExpand(message)">
-                    <span class="worked-separator-line" aria-hidden="true" />
-                    <span class="worked-chevron" :class="{ 'worked-chevron-open': isWorkedExpanded(message) }">▶</span>
-                    <p class="worked-separator-text">{{ message.text }}</p>
-                    <span class="worked-separator-line" aria-hidden="true" />
-                  </button>
-                  <div v-if="isWorkedExpanded(message)" class="worked-details">
-                    <div
-                      v-for="(cmd, workedCmdIndex) in getCommandsForWorked(messages, messages.indexOf(message))"
-                      :key="`worked-cmd-${cmd.id}`"
-                      class="worked-cmd-item"
-                    >
-                      <button
-                        type="button"
-                        class="cmd-row"
-                        :class="[
-                          commandStatusClass(cmd),
-                          {
-                            'cmd-expanded': isCommandExpanded(cmd),
-                            'cmd-compact': isCommandCompact(cmd),
-                          },
-                        ]"
-                        @click="toggleCommandExpand(cmd)"
-                      >
-                        <span class="cmd-step-index" :title="t('Step') + ' ' + (workedCmdIndex + 1)">{{ workedCmdIndex + 1 }}</span>
-                        <span class="cmd-chevron" :class="{ 'cmd-chevron-open': isCommandExpanded(cmd) }">▶</span>
-                        <code class="cmd-label">{{ cmd.commandExecution?.command || '(command)' }}</code>
-                        <span class="cmd-status">{{ commandStatusLabel(cmd) }}</span>
-                      </button>
-                      <div
-                        class="cmd-output-wrap"
-                        :class="{ 'cmd-output-visible': isCommandExpanded(cmd) }"
-                      >
-                        <div class="cmd-output-inner">
-                          <pre
-                            class="cmd-output"
-                            :class="{ 'cmd-output-condensed': isCommandOutputCondensed(cmd) }"
-                            v-text="cmd.commandExecution?.aggregatedOutput || '(no output)'"
-                          ></pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div v-if="message.messageType === 'worked'" class="work-summary-wrap" aria-live="polite">
+                  <p class="work-summary-text">{{ message.text }}</p>
                 </div>
                 <div v-else-if="isPlanMessage(message)" class="plan-card" :data-streaming="message.messageType === 'plan.live'">
                   <div class="plan-card-header">
@@ -642,8 +558,8 @@
                         :key="`file-change:inline:${message.id}:${change.path}:${change.movedToPath || ''}`"
                         class="file-change-item"
                       >
-                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)">
-                          {{ fileChangeOperationLabel(change) }}
+                        <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)" :title="fileChangeOperationLabel(change)">
+                          {{ fileChangeBadgeLabel(change) }}
                         </span>
                         <button
                           type="button"
@@ -959,8 +875,6 @@ type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
 
 const expandedCommandIds = ref<Set<string>>(new Set())
 const collapsedAutoCommandIds = ref<Set<string>>(new Set())
-const expandedCommandGroupIds = ref<Set<string>>(new Set())
-const expandedWorkedIds = ref<Set<string>>(new Set())
 const expandedFileChangeSummaryIds = ref<Set<string>>(new Set())
 const activeDiffViewerSummary = ref<TurnFileChangeSummary | null>(null)
 const activeDiffViewerChangeKey = ref('')
@@ -1168,45 +1082,9 @@ function getGroupedCommandsForLatest(message: UiMessage): UiMessage[] {
   return groupedCommandsByLatestId.value[message.id] ?? []
 }
 
-function getCommandBlockForLatest(message: UiMessage): UiMessage[] {
+function getWorkBlockCommands(message: UiMessage): UiMessage[] {
   if (!isCommandMessage(message)) return []
   return [...getGroupedCommandsForLatest(message), message]
-}
-
-function toggleCommandGroup(message: UiMessage): void {
-  const groupedCommands = getGroupedCommandsForLatest(message)
-  if (groupedCommands.length === 0) return
-  const next = new Set(expandedCommandGroupIds.value)
-  if (next.has(message.id)) next.delete(message.id)
-  else next.add(message.id)
-  expandedCommandGroupIds.value = next
-}
-
-function isCommandGroupExpanded(message: UiMessage): boolean {
-  return expandedCommandGroupIds.value.has(message.id)
-}
-
-function commandGroupSummaryLabel(message: UiMessage): string {
-  const commands = getCommandBlockForLatest(message)
-  const count = commands.length
-  const latestCommand = message.commandExecution?.command?.trim() || '(command)'
-  const countLabel = count === 1 ? `1 ${t('command')}` : `${count} ${t('commands')}`
-  return `${countLabel} · ${t('latest:')} ${latestCommand}`
-}
-
-function commandGroupSummaryStatus(message: UiMessage): string {
-  return commandStatusLabel(message)
-}
-
-function toggleWorkedExpand(message: UiMessage): void {
-  const next = new Set(expandedWorkedIds.value)
-  if (next.has(message.id)) next.delete(message.id)
-  else next.add(message.id)
-  expandedWorkedIds.value = next
-}
-
-function isWorkedExpanded(message: UiMessage): boolean {
-  return expandedWorkedIds.value.has(message.id)
 }
 
 function toggleFileChangeSummary(message: UiMessage): void {
@@ -1255,13 +1133,12 @@ function selectDiffViewerChange(change: UiFileChange): void {
 function commandStatusLabel(message: UiMessage): string {
   const ce = message.commandExecution
   if (!ce) return ''
-  const compact = isCommandCompact(message)
   switch (ce.status) {
-    case 'inProgress': return compact ? t('Running') : `⟳ ${t('Running')}`
-    case 'completed': return ce.exitCode === 0 ? (compact ? t('Done') : `✓ ${t('Completed')}`) : `${t('Exit')} ${ce.exitCode ?? '?'}`
-    case 'failed': return compact ? t('Failed') : `✗ ${t('Failed')}`
-    case 'declined': return compact ? t('Declined') : `⊘ ${t('Declined')}`
-    case 'interrupted': return compact ? t('Stopped') : `⊘ ${t('Interrupted')}`
+    case 'inProgress': return t('Running')
+    case 'completed': return ce.exitCode === 0 ? t('Done') : `${t('Exit')} ${ce.exitCode ?? '?'}`
+    case 'failed': return t('Failed')
+    case 'declined': return t('Declined')
+    case 'interrupted': return t('Stopped')
     default: return ''
   }
 }
@@ -1280,16 +1157,6 @@ function pruneCommandIdSet(source: Set<string>, validIds: Set<string>): Set<stri
     if (validIds.has(id)) next.add(id)
   }
   return next.size === source.size ? source : next
-}
-
-function getCommandsForWorked(messages: UiMessage[], workedIndex: number): UiMessage[] {
-  const result: UiMessage[] = []
-  for (let i = workedIndex - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m.messageType === 'commandExecution') result.unshift(m)
-    else if (m.role === 'user' || m.messageType === 'worked') break
-  }
-  return result
 }
 
 const props = defineProps<{
@@ -2137,6 +2004,13 @@ function fileChangeOperationLabel(change: UiFileChange): string {
   if (change.operation === 'add') return t('Added')
   if (change.operation === 'delete') return t('Deleted')
   return t('Edited')
+}
+
+function fileChangeBadgeLabel(change: UiFileChange): string {
+  if (change.operation === 'update' && change.movedToPath) return '→'
+  if (change.operation === 'add') return '+'
+  if (change.operation === 'delete') return '−'
+  return 'M'
 }
 
 function fileChangeOperationTone(change: UiFileChange): 'add' | 'delete' | 'update' | 'move' {
@@ -4379,10 +4253,6 @@ watch(
     )
     expandedCommandIds.value = pruneCommandIdSet(expandedCommandIds.value, commandIds)
     collapsedAutoCommandIds.value = pruneCommandIdSet(collapsedAutoCommandIds.value, commandIds)
-    expandedCommandGroupIds.value = pruneCommandIdSet(
-      expandedCommandGroupIds.value,
-      new Set(Object.keys(groupedCommandsByLatestId.value)),
-    )
     expandedFileChangeSummaryIds.value = pruneCommandIdSet(
       expandedFileChangeSummaryIds.value,
       new Set([
@@ -5227,36 +5097,16 @@ onBeforeUnmount(() => {
   @apply w-full max-w-full;
 }
 
-.worked-separator-wrap {
+.work-summary-wrap {
   @apply w-full flex flex-col gap-0;
 }
 
-.worked-separator {
-  @apply w-full flex items-center gap-3 bg-transparent border-none cursor-pointer p-0;
-}
-
-.worked-chevron {
-  @apply text-[9px] text-zinc-400 transition-transform duration-200 flex-shrink-0;
-}
-
-.worked-chevron-open {
-  transform: rotate(90deg);
-}
-
-.worked-separator-line {
-  @apply h-px bg-zinc-300/80 flex-1;
-}
-
-.worked-separator-text {
+.work-summary-text {
   @apply m-0 text-sm leading-relaxed font-normal text-slate-800;
 }
 
-.worked-details {
-  @apply flex flex-col gap-1.5 pt-2;
-}
-
-.worked-cmd-item {
-  @apply flex flex-col;
+:global(:root.dark) .work-summary-text {
+  @apply text-slate-100;
 }
 
 .image-modal-backdrop {
@@ -5277,6 +5127,163 @@ onBeforeUnmount(() => {
 
 .icon-svg {
   @apply w-5 h-5;
+}
+
+.work-block-list {
+  @apply flex w-full min-w-0 flex-col gap-1.5;
+}
+
+.work-block {
+  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80 transition-colors;
+}
+
+.work-block:not(.work-block-compact) {
+  @apply border-l-4 border-l-zinc-300;
+}
+
+.work-block.work-block-compact {
+  @apply border-l-2;
+}
+
+.work-block.work-block-compact .work-block-header {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.work-block.work-block-compact .work-step-dot {
+  @apply h-4 min-w-4 text-[10px];
+}
+
+.work-block.work-block-compact .work-block-command {
+  font-size: 0.75rem;
+}
+
+.work-block.work-block-compact .work-block-status {
+  max-width: 4.5rem;
+  font-size: 0.75rem;
+}
+
+.work-block.cmd-status-running {
+  @apply border-l-amber-400;
+}
+
+.work-block.cmd-status-ok {
+  @apply border-l-emerald-400;
+}
+
+.work-block.cmd-status-error {
+  @apply border-l-rose-400;
+}
+
+.work-block-header {
+  @apply flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left cursor-pointer transition-colors hover:bg-zinc-100/80;
+}
+
+.work-step-dot {
+  @apply flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[11px] font-semibold leading-none text-zinc-600 tabular-nums;
+}
+
+.work-block.cmd-status-running .work-step-dot {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.work-block.cmd-status-ok .work-step-dot {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.work-block.cmd-status-error .work-step-dot {
+  @apply bg-rose-100 text-rose-700;
+}
+
+.work-block-command {
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
+}
+
+.work-block-status {
+  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium;
+}
+
+.work-block.cmd-status-running .work-block-status {
+  @apply text-amber-600;
+}
+
+.work-block.cmd-status-ok .work-block-status {
+  @apply text-emerald-600;
+}
+
+.work-block.cmd-status-error .work-block-status {
+  @apply text-rose-600;
+}
+
+.work-block-status-icon {
+  @apply inline-flex shrink-0 items-center text-[11px] leading-none;
+}
+
+.work-block-spinner {
+  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500/40 border-t-amber-500;
+}
+
+.work-block-output-wrap {
+  @apply rounded-b-xl bg-zinc-900;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms ease-out, border-color 300ms ease-out;
+  border: 1px solid transparent;
+  border-top: none;
+}
+
+.work-block-output-wrap.work-block-output-visible {
+  grid-template-rows: 1fr;
+  border-color: #e4e4e7;
+}
+
+.work-block-output-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.work-block-output {
+  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+}
+
+.work-block-output.cmd-output-condensed {
+  max-height: 9rem;
+}
+
+:global(:root.dark) .work-block {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:global(:root.dark) .work-block-header:hover {
+  @apply bg-zinc-800/70;
+}
+
+:global(:root.dark) .work-step-dot {
+  @apply bg-zinc-700 text-zinc-200;
+}
+
+:global(:root.dark) .work-block.cmd-status-running .work-step-dot {
+  @apply bg-amber-900/60 text-amber-300;
+}
+
+:global(:root.dark) .work-block.cmd-status-ok .work-step-dot {
+  @apply bg-emerald-900/60 text-emerald-300;
+}
+
+:global(:root.dark) .work-block.cmd-status-error .work-step-dot {
+  @apply bg-rose-900/60 text-rose-300;
+}
+
+:global(:root.dark) .work-block-command {
+  @apply text-zinc-200;
+}
+
+:global(:root.dark) .work-block-output-wrap {
+  @apply bg-black/70;
+}
+
+:global(:root.dark) .work-block-output-wrap.work-block-output-visible {
+  border-color: #3f3f46;
 }
 
 .cmd-row {
@@ -5312,14 +5319,6 @@ onBeforeUnmount(() => {
 
 .cmd-chevron {
   @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
-}
-
-.cmd-step-index {
-  @apply flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-zinc-200 px-1 text-[10px] font-semibold leading-none text-zinc-600 tabular-nums;
-}
-
-:global(:root.dark) .cmd-step-index {
-  @apply bg-zinc-700 text-zinc-200;
 }
 
 .cmd-chevron-open {
