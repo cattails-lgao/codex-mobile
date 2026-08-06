@@ -4,6 +4,8 @@ import {
   collectWorkspaceRootPathsForProjectRemoval,
   filterGroupsByWorkspaceRoots,
   findAdjacentThreadId,
+  mergeLiveMessages,
+  mergePersistedReasoning,
   removeThreadFromGroups,
   isThreadUnreadByLastRead,
   useDesktopState,
@@ -1587,5 +1589,74 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
 
     expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 2)
+  })
+})
+
+describe('message stream merge helpers', () => {
+  function persistedMessage(id: string, role: 'user' | 'assistant' | 'system', turnIndex: number | undefined, extra: Record<string, unknown> = {}) {
+    return { id, role, text: id, turnIndex, ...extra } as Parameters<typeof mergePersistedReasoning>[0][number]
+  }
+
+  it('inserts persisted reasoning after the user message of its turn', () => {
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('a1', 'assistant', 0),
+      persistedMessage('u2', 'user', 1),
+      persistedMessage('a2', 'assistant', 1),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning' }),
+      persistedMessage('r2', 'system', 1, { messageType: 'reasoning' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'a1', 'u2', 'r2', 'a2'])
+  })
+
+  it('keeps multiple reasoning messages of one turn in archive order', () => {
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning' }),
+      persistedMessage('r2', 'system', 0, { messageType: 'reasoning' }),
+      persistedMessage('r3', 'system', 0, { messageType: 'reasoning' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'r2', 'r3', 'a1'])
+  })
+
+  it('appends reasoning without a matching turn to the end', () => {
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('rNoTurn', 'system', undefined, { messageType: 'reasoning' }),
+      persistedMessage('rOtherTurn', 'system', 5, { messageType: 'reasoning' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'a1', 'rNoTurn', 'rOtherTurn'])
+  })
+
+  it('interleaves live messages by first-seen arrival order', () => {
+    const liveCommands = [
+      persistedMessage('cmd2', 'system', 0, { messageType: 'commandExecution' }),
+    ]
+    const liveAgent = [
+      persistedMessage('agent1', 'assistant', 0, { messageType: 'agentMessage.live' }),
+      persistedMessage('agent3', 'assistant', 0, { messageType: 'agentMessage.live' }),
+    ]
+    // 到达顺序：agent1 先到（上一轮 computed 已注册），随后 cmd2、agent3。
+    mergeLiveMessages('thread-x', [[], [], [], [liveAgent[0]]], [])
+    const merged = mergeLiveMessages('thread-x', [[], liveCommands, [], liveAgent], [])
+    expect(merged.map((message) => message.id)).toEqual(['agent1', 'cmd2', 'agent3'])
+  })
+
+  it('drops live messages whose id already exists in persisted', () => {
+    const persisted = [persistedMessage('cmd1', 'system', 0, { messageType: 'commandExecution' })]
+    const live = [persistedMessage('cmd1', 'system', 0, { messageType: 'commandExecution' })]
+    const merged = mergeLiveMessages('thread-y', [live], persisted)
+    expect(merged.map((message) => message.id)).toEqual([])
   })
 })

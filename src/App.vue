@@ -1102,7 +1102,7 @@
                     @respond-server-request="onRespondServerRequest" />
                 </div>
 
-                <div class="composer-with-queue">
+                <div class="composer-with-queue" ref="composerQueueRef">
                   <div v-if="isSelectedThreadExternalActive" class="external-session-banner" role="alert">
                     {{ t('This thread is running in the Codex TUI') }}
                   </div>
@@ -1122,6 +1122,7 @@
                     :request="selectedThreadPendingRequest"
                     :request-count="selectedThreadServerRequests.length"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                    :panel-width="composerShellWidthPx"
                     @respond-server-request="onRespondServerRequest"
                   />
                   <ThreadComposer
@@ -1790,6 +1791,18 @@ function prepareFeedbackLink(event: MouseEvent, message?: string): void {
 }
 const homeThreadComposerRef = ref<ThreadComposerExposed | null>(null)
 const threadComposerRef = ref<ThreadComposerExposed | null>(null)
+// 审核/询问面板悬浮在视口底部，宽度需与输入框 shell 一致：实测
+// `.composer-with-queue`（输入框所在容器）的内容宽度传给面板。
+const composerQueueRef = ref<HTMLElement | null>(null)
+const composerShellWidthPx = ref(0)
+let composerQueueResizeObserver: ResizeObserver | null = null
+function updateComposerShellWidth(): void {
+  const el = composerQueueRef.value
+  if (!el) return
+  const style = window.getComputedStyle(el)
+  const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+  composerShellWidthPx.value = Math.max(0, el.clientWidth - (Number.isFinite(horizontalPadding) ? horizontalPadding : 0))
+}
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const isTerminalInputFocused = ref(false)
@@ -2311,12 +2324,15 @@ const composerPlanPanel = computed(() => {
       && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
     ))
     const requested = implementedPlanRequestId.value !== null && message.id === implementedPlanRequestId.value
+    // 计划一旦已实施（用户点过 Implement，或后续轮次已经执行了工作项），
+    // 输入框上方的计划面板整体隐藏，不再残留“已完成”的计划。
+    if (hasLaterWork || requested) return null
     return {
       id: message.id,
       streaming: message.messageType === 'plan.live',
       explanation: data.explanation,
       steps: data.steps,
-      implemented: hasLaterWork || requested,
+      implemented: false,
     }
   }
   return null
@@ -2636,6 +2652,19 @@ watch(visibleFeedbackErrors, (values, oldValues) => {
   })
 })
 
+// 输入框容器出现/尺寸变化时同步测量宽度（路由切换 home/thread 会重建容器）。
+watch(composerQueueRef, (el) => {
+  if (composerQueueResizeObserver) {
+    composerQueueResizeObserver.disconnect()
+    composerQueueResizeObserver = null
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    composerQueueResizeObserver = new ResizeObserver(updateComposerShellWidth)
+    if (el) composerQueueResizeObserver.observe(el)
+  }
+  updateComposerShellWidth()
+}, { immediate: true })
+
 onUnmounted(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onWindowKeyDown)
@@ -2646,6 +2675,10 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', updateVisualViewportState)
   window.visualViewport?.removeEventListener('scroll', updateVisualViewportState)
   darkModeMediaQuery?.removeEventListener('change', applyDarkMode)
+  if (composerQueueResizeObserver) {
+    composerQueueResizeObserver.disconnect()
+    composerQueueResizeObserver = null
+  }
   if (accountStatePollTimer !== null) {
     window.clearInterval(accountStatePollTimer)
     accountStatePollTimer = null
