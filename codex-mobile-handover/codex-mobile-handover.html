@@ -865,7 +865,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       <section>
         <h2>第八轮交接需求（requirement-8，2026-08-06 提出）</h2>
         <div class="callout ok">
-          <strong>2026-08-06 进展：</strong>14 条需求/问题全部落地（含 2 条调研修复），验证：<code>vue-tsc --noEmit</code> 通过、<code>pnpm build</code> 通过、单测 230/232 通过（2 个失败为既有 Windows 环境性失败：<code>codexAppServerBridge.archive.test.ts</code> 的 symlink EPERM 与 chmod 权限位，与本次改动无关）；Playwright 冒烟（<code>127.0.0.1:4173</code> 现有 app-server 上的新构建）无 console 报错，回收站入口、设置分组标题、context 胶囊、文件预览 tab、<code>/codex-local-browse/</code> 图片 URL 全部实测通过。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ThreadConversation.vue</code>、<code>ComposerPopover.vue</code>、<code>RightFilesPanel.vue</code>、<code>RightGitPanel.vue</code>、<code>api/normalizers/v2.ts</code>、<code>types/codex.ts</code>、<code>useUiLanguage.ts</code>、<code>SidebarThreadTree.vue</code>，并新增 <code>RightFilePreview.vue</code>、删除 <code>FilePreviewModal.vue</code>。
+          <strong>2026-08-06 进展：</strong>14 条需求/问题全部落地（含 2 条调研修复），验证：<code>vue-tsc --noEmit</code> 通过、<code>pnpm build</code> 通过、单测 230/232 通过（2 个失败为既有 Windows 环境性失败：<code>codexAppServerBridge.archive.test.ts</code> 的 symlink EPERM 与 chmod 权限位，与本次改动无关）；Playwright 冒烟（<code>127.0.0.1:4173</code> 现有 app-server 上的新构建）无 console 报错，回收站入口、设置分组标题、context 胶囊、文件预览 tab、<code>/codex-local-browse/</code> 图片 URL 全部实测通过。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ThreadConversation.vue</code>、<code>ComposerPopover.vue</code>、<code>RightFilesPanel.vue</code>、<code>RightGitPanel.vue</code>、<code>api/normalizers/v2.ts</code>、<code>types/codex.ts</code>、<code>useUiLanguage.ts</code>、<code>SidebarThreadTree.vue</code>，并新增 <code>RightFilePreview.vue</code>、删除 <code>FilePreviewModal.vue</code>。本轮已提交并推送：<code>a8f27fb</code>（requirement-8 主体）+ <code>7bf5b1b</code>（侧栏按钮图标化）。
         </div>
         <div class="table-wrap">
         <table>
@@ -918,7 +918,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
           <tr>
             <td>10+11</td>
             <td>回收站入口放到左侧边栏底部 settings 区域</td>
-            <td><code>App.vue</code> <code>sidebar-settings-area</code> 改为双按钮布局（Settings + Recycle bin，垃圾桶图标）；<code>SidebarThreadTree.vue</code> <code>defineExpose</code> 增加 <code>openRecycleBin</code>；<code>onOpenRecycleBin</code> 直接打开回收站对话框</td>
+            <td><code>App.vue</code> <code>sidebar-settings-area</code> 改为双按钮布局（Settings + Recycle bin，垃圾桶图标）；<code>SidebarThreadTree.vue</code> <code>defineExpose</code> 增加 <code>openRecycleBin</code>；<code>onOpenRecycleBin</code> 直接打开回收站对话框；随后按用户要求将两个按钮简化为纯图标（<code>.sidebar-settings-icon-button</code>，36×36 居中排列，去掉文字与版本号，保留 title/aria-label；<code>style.css</code> 暗色选择器同步改名，commit <code>7bf5b1b</code>）</td>
           </tr>
           <tr>
             <td>12</td>
@@ -938,14 +938,14 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>验证说明：</strong>计划面板/思考块/工具调用需要真实 plan/reasoning 消息才能端到端看渲染，当前账号可见线程为纯文本测试会话，故这三项依赖归一化单测 + vue-tsc + 构建覆盖；其余（回收站入口、设置分组、context 胶囊、文件预览 tab、明暗主题、无 console 错误）均已 Playwright 实测。工具调用「消失」的根因（<code>mcpToolCall</code> 未归一化被丢弃）已修复并有单测锁定。
+          <strong>验证说明：</strong>计划面板/思考块/工具调用需要真实 plan/reasoning 消息才能端到端看渲染，当前账号可见线程为纯文本测试会话，故这三项依赖归一化单测 + vue-tsc + 构建覆盖；其余（回收站入口、设置分组、context 胶囊、文件预览 tab、明暗主题、无 console 错误）均已 Playwright 实测。工具调用「消失」的根因（<code>mcpToolCall</code> 未归一化被丢弃）已修复并有单测锁定。侧栏图标按钮另有 Playwright 实测：底部 2 个图标按钮、无文字残留、点击设置图标正常打开设置面板。
         </div>
       </section>
 
       <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>3823011</code>（第八轮：5 个上游 PR 移植）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>7bf5b1b</code>（第八轮 requirement-8 十四项需求 <code>a8f27fb</code> + 侧栏按钮图标化 <code>7bf5b1b</code>）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归（2026-08-06 已完成 Linux 侧）</strong>：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——<code>vue-tsc --noEmit</code> 无类型错误、<code>vite build</code> 成功（4.58s）、<code>tsup</code> CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（<code>~/.local/share/fnm</code>）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 <code>~/codex-linux-check</code>（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 <code>/mnt/c</code> 共享解压，fnm 1.39.0 二进制同理</li>
@@ -966,7 +966,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地，待 commit/推送） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送） · 内容已脱敏
     </footer>
   </article>
 </body>
