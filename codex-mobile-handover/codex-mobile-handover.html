@@ -1003,7 +1003,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
         </table>
         </div>
         <div class="callout">
-          <strong>验证说明：</strong>Playwright（本机 Edge channel）桌面 1280×800 与 H5 375×812 双视口断言通过：侧栏底部 2 个图标按钮均宽 120px（各占一半）、高 40px、图标 24×24；模型触发按钮桌面 160px / H5 128px，value 计算样式 <code>text-overflow: ellipsis</code>；H5 下模型/模型强度/上下文按钮高 28px、字号 11px。上下文按钮依赖线程 token 数据（<code>contextUsageView</code>）在当前测试线程不渲染，改以注入同 class 元素（带 scoped 属性）验证样式。过程中发现 4173 dev server 对 <code>ThreadComposer.vue</code> 的样式转换缓存过期（模板更新但 CSS 未刷新），按交接文档沙箱启动方式（<code>CODEX_HOME</code> 指向项目内 <code>.codex/</code>）重启 dev server 后恢复。
+          <strong>验证说明：</strong>Playwright（本机 Edge channel）桌面 1280×800 与 H5 375×812 双视口断言通过：侧栏底部 2 个图标按钮均宽 120px（各占一半）、高 40px、图标 24×24；模型触发按钮桌面 160px / H5 128px，value 计算样式 <code>text-overflow: ellipsis</code>；H5 下模型/模型强度/上下文按钮高 28px、字号 11px。上下文按钮为数据驱动的条件渲染（<code>v-if="contextUsageView"</code>，依赖 <code>thread/tokenUsage/updated</code> 服务端通知写入的 <code>threadTokenUsage</code>，无数据或 <code>modelContextWindow</code> 无效时返回 null 不显示），空闲纯文本会话截图上看不到属预期；向 localStorage（<code>codex-web-local.thread-token-usage.v1</code>）注入模拟 usage（含 <code>modelContextWindow: 200000</code>）后桌面/H5 均正常渲染「85% · 40k / 200k」，高度桌面 32px / H5 28px，H5 缩小样式生效。过程中发现 4173 dev server 对 <code>ThreadComposer.vue</code> 的样式转换缓存过期（模板更新但 CSS 未刷新），按交接文档沙箱启动方式（<code>CODEX_HOME</code> 指向项目内 <code>.codex/</code>）重启 dev server 后恢复。
         </div>
       </section>
 
