@@ -147,33 +147,43 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > **总体进度：** 方案 11 个任务项已全部完成（P0-1、P0-2、P1-1 ~ P1-5、P2-1 ~ P2-4）。
 
-## 待办需求（下一轮，2026-08-05 提出）
+## 待办需求（2026-08-05 提出，已全部落地）
 
-> **2026-08-05 第二轮进展：** 需求 1、2、3、4、5、7 已实现（本轮工作区改动，未提交/未推送，需 commit 后推送）；需求 6（消息展示 vs TUI）为调研结论，按用户指示保留、不做实现，待产品决策（2026-08-06 已决策改为对齐 trae-work 工作过程风格并全量重构实施，commit `0f1a970`，见下）。具体改动见下方各条的「现状」与「改动要点」。
+> **2026-08-05 第二轮进展：** 需求 1、2、3、4、5、7 已实现，commit `81116c0`（next-round backlog）已提交并推送；需求 6（消息展示 vs TUI）为调研结论，按用户指示保留、不做实现，待产品决策（2026-08-06 已决策改为对齐 trae-work 工作过程风格并全量重构实施，commit `0f1a970`，见下）。至此 7 条需求全部落地；其中需求 1 在同日第三轮验收中按用户要求恢复技能 chips（见下）。
 
 以下需求来自下一轮产品验收。前 5 条为明确的界面改造，第 6 条是现状调研结论（供决定是否对齐 TUI），第 7 条为交互防误触。涉及组件：`App.vue`、`ThreadComposer.vue`、`ComposerSlashMenu.vue`、`ThreadConversation.vue`、`ContentHeader.vue`。
 
 ### 1. 输入框下的技能 chips 可移除
+
+> **已实现（commit `81116c0`），但随后按用户要求恢复，当前存在。** 第三轮验收（同日）调整项 5「斜杠命令选中技能后恢复输入框上方技能 chips」撤销了本项：恢复 `.thread-composer-skill-chips` 渲染与 `removeSkill`/`skillMarkdownPath`/`openSkillMarkdown` 函数及样式，`ThreadComposer.vue` 第 121 行起当前仍渲染技能 chips（`selectedSkills` 保留用于消息载荷）。如需再次移除，按下方改动要点执行即可。
 
 - **现状**：技能已集成到斜杠菜单（`/技能名`，见 `eedf148`），但输入框下方仍有 `.thread-composer-skill-chips` 技能 chips（`ThreadComposer.vue` 第 65 行起），`selectedSkills` 会随选中技能追加
 - **改动要点**：删除技能 chips 的渲染与相关样式；保留 `selectedSkills` 状态本身（提交消息时仍需携带 `skills` 载荷），仅移除其视觉呈现，或将选中态改为仅体现在斜杠菜单高亮
 
 ### 2. 设置面板从侧边栏提出来
 
+> **已实现（commit `81116c0`）。** 设置面板改为居中模态对话框（`dialog`，带背板/Esc 关闭），不再缩在侧边栏内；后续轮次又做了布局分组归纳（见 requirement-8 第 12 条）。
+
 - **现状**：设置面板是侧边栏底部的内嵌浮层（`.sidebar-settings-panel`，`App.vue` 第 117 行），由 `.sidebar-settings-button` 打开，缩在侧边栏内
 - **改动要点**：改为独立对话框/全屏抽屉（`dialog` 或覆盖层），或新增独立设置路由；面板内容（账号、Hooks、Marketplace、Plugin 分享、远程控制、审批策略）原样迁移，需保留现有 `v-if` 逻辑与状态
 
 ### 3. 去掉右上角终端按钮与 Detached Head 按钮
+
+> **已实现（commit `81116c0`）。** 移除两个头部入口（`HeaderGitBranchDropdown` 组件整体删除，-792 行）；终端与 git 面板能力并入第 4 点的右侧边栏 tab（Ctrl/Cmd+J 切换面板 tab）。
 
 - **现状**：`ContentHeader` actions 区有两个入口：终端命令下拉（`ComposerDropdown` + `IconTablerTerminal`，`App.vue` 第 688-700 行）与 git 分支下拉（`HeaderGitBranchDropdown`，第 701 行起，含 detached head 标识）；打开的是 `ThreadTerminalPanel`
 - **改动要点**：移除这两个头部入口及其相关状态（`canShowTerminalToggle`、`isComposerTerminalOpen`、`canShowContentHeaderBranchDropdown` 等）；终端与 git 面板能力并入第 4 点的右侧边栏 tab
 
 ### 4. 布局改 3 栏：左侧边栏 + 消息 + 右侧边栏
 
+> **已实现（commit `81116c0`）。** 新增右侧边栏（Git/Terminal tab + `+` popover，默认 Git）；后续轮次持续演进：可拖拽宽度/可收起（第三轮调整 1）、默认仅 Git tab（调整 2）、Files/Preview tab（第五/八轮）等。
+
 - **现状**：当前为 2 栏：`Sidebar`（左侧）+ `content-root`（消息），无右侧面板；终端/文件变更等以弹层或行内方式呈现
 - **改动要点**：新增右侧边栏：顶部 tab 栏 + 一个 `+` 按钮，点击弹出 popover 可选「终端面板」「Git 面板」，默认显示 Git 面板；左侧边栏与消息区保持不变；新面板复用现有 `ThreadTerminalPanel` 与 git 下拉的数据逻辑
 
 ### 5. 斜杠菜单技能组展示完整技能名称
+
+> **已实现（commit `81116c0`）。** 技能行主文本改用 `displayName`；第四轮反馈又为技能行加了 scope 图标布局（见第四轮反馈 1）。
 
 - **现状**：`ComposerSlashMenu.vue` 技能行显示 `command.id`（由技能名规范化而来，如 `frontend-code-review`），非完整展示名；`SkillItem` 已带 `displayName` 字段可用
 - **改动要点**：技能行主文本改用 `displayName`（无则回退 `name`），`id` 仅用于匹配与插槽文本
@@ -184,6 +194,8 @@ pnpm run dev --host 127.0.0.1 --port 4173
 - **改动要点**：2026-08-06 已决策不对齐 TUI，改为按 trae-work 工作过程风格全量重构（commit `0f1a970`），见下
 
 ### 7. 编辑 / 回退消息需确认提示
+
+> **已实现（commit `81116c0`）。** 新增 `ConfirmDialog.vue` 公共组件；编辑消息（edit）、文件变更撤销/重做（file-change）两类破坏性操作在 `ThreadConversation.vue` 中经 `pendingConfirm` 确认后执行，保留至今。
 
 - **现状**：`editMessage()`（`ThreadConversation.vue` 第 2432 行）点击即把消息文本填入草稿、`onRollback()`（`App.vue` 第 4615 行）点击即回退线程，均无确认
 - **改动要点**：为编辑/回退/撤销文件变更等破坏性操作增加确认弹层（如「确认编辑此消息？」/「确认回退到该轮？后续回复将被移除」），或至少编辑态进入前提示
