@@ -639,4 +639,37 @@ watch(selectedBranchCommits, (commits) => {
 :global(:root.dark) .rgp-file-previous-path {
   @apply text-zinc-400;
 }
+
+:global(:root.dark) .rgp-status {
+  @apply bg-amber-950/50 text-amber-300;
+}
+
+:global(:root.dark) .rgp-status.is-error {
+  @apply bg-red-950/50 text-red-300;
+}
+
+:global(:root.dark) .rgp-feedback {
+  @apply border-red-900 bg-zinc-900 text-red-300 hover:bg-zinc-800;
+}
+
+:global(:root.dark) .rgp-toggle-row {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .rgp-branch-checkout {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:global(:root.dark) .rgp-state-meta,
+:global(:root.dark) .rgp-commit-top {
+  @apply text-zinc-500;
+}
+
+:global(:root.dark) .rgp-reset-commit {
+  @apply border-zinc-600 bg-zinc-100 text-zinc-900 hover:bg-white disabled:border-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-500;
+}
+
+:global(:root.dark) .rgp-empty.is-error {
+  @apply text-red-400;
+}
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="composer-popover-anchor" :class="{ 'is-align-end': align === 'end' }">
+  <div ref="rootRef" class="composer-popover-anchor" :class="{ 'is-align-end': align === 'end', 'is-align-center': align === 'center' }">
     <slot name="trigger" :toggle="toggle" :is-open="isOpen" />
     <Transition name="composer-popover">
       <div
@@ -21,7 +21,7 @@ import { computed, ref } from 'vue'
 const props = defineProps<{
   open: boolean
   /** Horizontal alignment of the panel relative to the anchor. */
-  align?: 'start' | 'end'
+  align?: 'start' | 'end' | 'center'
   /** Panel width preset. */
   width?: 'md' | 'lg'
   /** Extra classes appended to the panel surface. */
@@ -68,6 +68,10 @@ defineExpose({ root: rootRef })
 
 .composer-popover-anchor.is-align-end .composer-popover-panel {
   @apply left-auto right-0;
+}
+
+.composer-popover-anchor.is-align-center .composer-popover-panel {
+  @apply left-1/2 right-auto -translate-x-1/2;
 }
 
 .composer-popover-enter-active {

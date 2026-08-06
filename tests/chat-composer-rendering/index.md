@@ -47,3 +47,4 @@ Return to the [manual test index](../../tests.md).
 | [Bold URL trailing punctuation parsing](bold-url-trailing-punctuation-parsing.md) |
 | [Composer plan panel, command step index, and H5 plus-popover controls](composer-plan-panel-command-steps-h5-popover.md) |
 | [Work-step blocks, inline file changes, and separated work summaries](work-step-blocks-and-inline-file-changes.md) |
+| [Work-process feed, thinking blocks, plan-in-composer, preview tabs, and sidebar polish](work-process-thinking-and-preview-tabs.md) |
