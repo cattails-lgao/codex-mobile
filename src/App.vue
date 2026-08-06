@@ -610,25 +610,23 @@
         <div class="sidebar-settings-actions">
           <button
             ref="settingsButtonRef"
-            class="sidebar-settings-button"
+            class="sidebar-settings-icon-button"
             type="button"
+            :title="t('Settings')"
+            :aria-label="t('Settings')"
             @click.stop="isSettingsOpen = !isSettingsOpen"
           >
             <IconTablerSettings class="sidebar-settings-icon" />
-            <span>{{ t('Settings') }}</span>
-            <span class="sidebar-settings-button-version">
-              {{ worktreeName }} · v{{ appVersion }}
-            </span>
           </button>
           <button
             ref="recycleBinButtonRef"
-            class="sidebar-settings-button sidebar-settings-button--recycle"
+            class="sidebar-settings-icon-button"
             type="button"
             :title="t('Recycle bin')"
+            :aria-label="t('Recycle bin')"
             @click.stop="onOpenRecycleBin"
           >
             <IconTablerTrash class="sidebar-settings-icon" />
-            <span>{{ t('Recycle bin') }}</span>
           </button>
         </div>
       </div>
@@ -6091,26 +6089,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-actions {
-  @apply flex w-full items-stretch gap-1;
+  @apply flex w-full items-center justify-center gap-1;
 }
 
-.sidebar-settings-button {
-  @apply flex items-center gap-2 min-w-0 flex-1 rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
-}
-
-.sidebar-settings-button--recycle {
-  @apply max-w-[8.5rem] shrink-0;
-}
-
-.sidebar-settings-button-version {
-  @apply ml-auto min-w-0 truncate text-right text-xs;
+.sidebar-settings-icon-button {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
 }
 
 :global(:root.dark) .sidebar-settings-area {
   @apply border-zinc-800 bg-zinc-950;
 }
 
-:global(:root.dark) .sidebar-settings-button {
+:global(:root.dark) .sidebar-settings-icon-button {
   @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
