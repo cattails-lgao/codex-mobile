@@ -31,3 +31,4 @@ Return to the [manual test index](../../tests.md).
 | [Composer fifth-round feedback: shared popover, approval tip, slash skill rows, pill controls, and Files panel](composer-fifth-round-feedback.md) |
 | [H5 right-sidebar compatibility and inline image preview in the Files tab](h5-right-sidebar-files-inline-preview.md) |
 | [Settings group navigation, pending-request scroll, and thinking persistence](settings-group-navigation-pending-scroll-thinking-persistence.md) |
+| [R13: settings fixed height, live thinking, floating pending panel, plan panel fixes](r13-settings-height-live-thinking-floating-pending-plan-panel.md) |

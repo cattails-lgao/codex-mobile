@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
-| 最近提交 | 7d81389（第十三轮修复，已推送） |
+| 最近提交 | 026c8a9（第十三轮修复 + 文档，已推送） |
 
 ---
 
@@ -127,6 +127,17 @@ pnpm run dev --host 127.0.0.1 --port 4173
 - **`5cd6ede`**：第四轮修复（压缩状态两个 bug）——新版本 app-server 已废弃 `thread/compacted` 通知（改用 `contextCompaction` item），导致 spinner 收不到完成信号只能等 60s 超时、且完成消息不持久化刷新即失；修复为归一化 `contextCompaction` item 为 `compaction.done` 消息 + 压缩后轮询线程详情（2s 间隔、上限 28s）直到 done 出现 + 多次压缩只保留最近一条 done + 无压缩进行中时丢弃残留 pending 行。作用：压缩 spinner 立即结束、完成状态刷新后保留
 - **`2860a54` 等早期提交**：`pnpm-workspace.yaml`（`allowBuilds`）、`vite.config.ts`（watch ignore）、`package.json`（packageManager）、`docs/codex-cli-not-found-troubleshooting.md`、P0/P1/P2 功能补齐。作用：环境修复与功能补齐（见下方方案完成情况表）
 - **`b71bbaf`**：第六轮交接需求——右侧文件面板点击文件改为面板内弹窗预览（`/codex-local-preview` 双通道路由 + 新增 `FilePreviewModal.vue`，文本 512KB 截断、图片内联、二进制提示并可「Open in browser」）；中英文翻译补齐（`useUiLanguage.ts` 中文字典大幅扩充，右键菜单、编辑消息弹窗、自动化/技能/Git/Review 面板等界面硬编码文案全部包 `t()`）。作用：文件预览 + 简体中文全覆盖
+- **`729a936`**：第七轮反馈 8 项——可折叠计划面板（`.thread-composer-plan-panel` 折叠/展开 + Implement plan 按钮）、命令步骤徽标、共享 `AppDialog` 组件、H5 plus-popover 的 plan/approval 入口、H5 右侧栏修复、行内文件图片预览、右键菜单状态持久化、线程回收站。作用：桌面/H5 交互与视觉一致性
+- **`3823011`**：第八轮上游 PR 移植（`upstream-sync-curator` 选择性引入 5 个：reasoning levels、sanitize、windows paths、fallback titles、sidebar shortcut），随后全量重构
+- **`a8f27fb`**：第八轮反馈 14 项（requirement-8）——无 plan 卡片的 feed、持久化 thinking 块、tool-call chips、工作过程排序、composer 计划最新步骤 popover、右侧面板 preview tabs、暗色主题修复、上下文 pill、侧栏回收站、设置分组等
+- **`7bf5b1b`**：侧栏底部设置/回收站按钮图标化
+- **`0f1a970`**：需求 6 决策落地——消息展示按 trae-work 工作过程风格全量重构（工作块 `work-block`：步骤序号圆点 + 命令 + 状态标签、命令与输出同块点击展开、连续命令平铺连续编号；worked 独立总结段落；文件变更徽标 +/M/−/→ 着色、路径行数右对齐）。作用：消息展示对齐 trae-work 工作过程风格
+- **`793315b`**：第九轮 4 条修复——策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话
+- **`3389de3`**：第十轮 3 条——侧栏底部设置/回收图标各占半宽且图标增大（24px）、模型切换按钮固定宽度超出省略（`truncate`）、H5 下模型/模型强度/上下文按钮改小（28px / 11px）
+- **`483c869`**：第十一轮 7 个问题——设置弹框背板关闭后幽灵点击重开（`settingsCloseAtMs` 守卫）、移动端右侧面板遮罩、H5 输入控件行不换行、plan 面板 markdown 回退解析、命令权限拦截提示（`commandPermissionHint`）、plan 展开面板同宽（`:deep()` + `min-w-full`）、命令与叙述时间序交错恢复（桥接层会话日志恢复 `mergeSessionCommandsIntoThreadResult`）
+- **`289665d`**：第十二轮 3 条——设置面板左右布局（`.settings-group-nav` 四组导航）、Awaiting response 面板滚动上限（`max-h-[min(70vh,36rem)]`）、thinking 本地持久化展示（`rememberPersistedReasoning` → localStorage `codex-web-local.thread-reasoning.v1`，消息列表 Thinking process 折叠块）
+- **`7d81389`**：第十三轮 8 项——设置面板固定高度（`h-[min(84vh,46rem)]`，切换分组不再跳动）、thinking 实时显示（捕获 `item/started`+`item/completed` 全量 reasoning，本 app-server 不推 `item/reasoning/*TextDelta`）、Awaiting response 面板悬浮化（`position: fixed` 视口底部居中，脱离文档流）+ 明暗主题（暗色覆盖移入 `src/style.css`，scoped `:global(:root.dark)` 构建中不生效）+ 中文文案、计划面板 plan item 实时捕获 + turn 后强制重载、编号列表优先解析（35 步→6 步）、Implement 防重复点击（`implemented` 判定 + 计划已执行文案）、Implement popover 内部样式补齐、面板文案 i18n（15 键）。作用：第十三轮验收 8 项问题
+- **`026c8a9`**：交接文档快照更新（第十三轮已推送记录 + 手动测试索引）
 
 ## Codex 功能补齐方案完成情况
 
