@@ -577,7 +577,10 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
 
         <h3>需求 6 产品决策（2026-08-06）：对齐 trae-work 工作过程风格</h3>
         <div class="callout ok">
-          <strong>2026-08-06 决策：</strong>需求 6 不再对齐 TUI，改为按 trae-work 的工作过程风格改造消息展示，用户已确认「全量重构」。本会话仅记录调研与选择，<strong>不实施代码改动</strong>，重构留待后续会话执行。
+          <strong>2026-08-06 决策：</strong>需求 6 不再对齐 TUI，改为按 trae-work 的工作过程风格改造消息展示，用户已确认「全量重构」。
+        </div>
+        <div class="callout ok">
+          <strong>2026-08-06 实施完成：</strong>全量重构已落地（commit 待记录）：命令消息改为独立「工作块」（<code>.work-block</code>：步骤序号圆点 + 命令 + 状态标签 ✓/✗/运行中 spinner，命令与输出同块，点击整块展开，连续命令直接平铺连续编号，删除组折叠行与 worked 分隔条展开两层交互）；worked 消息渲染为独立总结段落（<code>.work-summary-text</code>）；文件变更徽标改为 <code>+/M/−/→</code> 符号着色（title 保留完整操作名），路径与行数右对齐，undo/redo 保留。清理死代码（<code>getCommandsForWorked</code>/<code>toggleWorkedExpand</code>/<code>toggleCommandGroup</code>/<code>expandedCommandGroupIds</code>/<code>expandedWorkedIds</code> 及对应 CSS，含 <code>src/style.css</code> 残留）。构建（vue-tsc + vite + tsup）通过；Playwright（Edge channel）mock 线程数据验证：3 个工作块步骤 1/2/3、状态 ✓ Done / ✗ Failed / Running、点击展开输出、文件变更徽标 +/M 与行数右对齐均正常，旧类 <code>cmd-step-index</code>/<code>worked-separator</code> 计数为 0；明暗主题截图 <code>output/playwright/req6-work-blocks-{light,dark}.png</code>。手动测试文档 <code>tests/chat-composer-rendering/work-step-blocks-and-inline-file-changes.md</code>。
         </div>
         <p>改造目标（trae-work 工作过程风格）与当前实现对照：</p>
         <div class="table-wrap">
@@ -883,7 +886,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构待实施 + WSL Linux 侧跨平台回归已完成） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成） · 内容已脱敏
     </footer>
   </article>
 </body>
