@@ -149,7 +149,7 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 ## 待办需求（下一轮，2026-08-05 提出）
 
-> **2026-08-05 第二轮进展：** 需求 1、2、3、4、5、7 已实现（本轮工作区改动，未提交/未推送，需 commit 后推送）；需求 6（消息展示 vs TUI）为调研结论，按用户指示保留、不做实现，待产品决策。具体改动见下方各条的「现状」与「改动要点」。
+> **2026-08-05 第二轮进展：** 需求 1、2、3、4、5、7 已实现（本轮工作区改动，未提交/未推送，需 commit 后推送）；需求 6（消息展示 vs TUI）为调研结论，按用户指示保留、不做实现，待产品决策（2026-08-06 已决策改为对齐 trae-work 工作过程风格并全量重构实施，commit `0f1a970`，见下）。具体改动见下方各条的「现状」与「改动要点」。
 
 以下需求来自下一轮产品验收。前 5 条为明确的界面改造，第 6 条是现状调研结论（供决定是否对齐 TUI），第 7 条为交互防误触。涉及组件：`App.vue`、`ThreadComposer.vue`、`ComposerSlashMenu.vue`、`ThreadConversation.vue`、`ContentHeader.vue`。
 
@@ -181,7 +181,7 @@ pnpm run dev --host 127.0.0.1 --port 4173
 ### 6. 当前消息展示 vs TUI 的差异（调研结论）
 
 - **现状**：见下方「消息展示现状与 TUI 对比」
-- **改动要点**：是否对齐 TUI 待产品决策，下方对比可作输入
+- **改动要点**：2026-08-06 已决策不对齐 TUI，改为按 trae-work 工作过程风格全量重构（commit `0f1a970`），见下
 
 ### 7. 编辑 / 回退消息需确认提示
 
@@ -204,7 +204,7 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > **2026-08-06 决策：** 需求 6 不再对齐 TUI，改为按 trae-work 的工作过程风格改造消息展示，用户已确认「全量重构」。
 
-> **2026-08-06 实施完成：** 全量重构已落地（commit 待记录）：命令消息改为独立「工作块」（`.work-block`：步骤序号圆点 + 命令 + 状态标签 ✓/✗/运行中 spinner，命令与输出同块，点击整块展开，连续命令直接平铺连续编号，删除组折叠行与 worked 分隔条展开两层交互）；worked 消息渲染为独立总结段落（`.work-summary-text`）；文件变更徽标改为 `+/M/−/→` 符号着色（title 保留完整操作名），路径与行数右对齐，undo/redo 保留。清理死代码（`getCommandsForWorked`/`toggleWorkedExpand`/`toggleCommandGroup`/`expandedCommandGroupIds`/`expandedWorkedIds` 及对应 CSS，含 `src/style.css` 残留）。构建（vue-tsc + vite + tsup）通过；Playwright（Edge channel）mock 线程数据验证：3 个工作块步骤 1/2/3、状态 ✓ Done / ✗ Failed / Running、点击展开输出、文件变更徽标 +/M 与行数右对齐均正常，旧类 `cmd-step-index`/`worked-separator` 计数为 0；明暗主题截图 `output/playwright/req6-work-blocks-{light,dark}.png`。手动测试文档 `tests/chat-composer-rendering/work-step-blocks-and-inline-file-changes.md`。
+> **2026-08-06 实施完成：** 全量重构已落地（commit `0f1a970`）：命令消息改为独立「工作块」（`.work-block`：步骤序号圆点 + 命令 + 状态标签 ✓/✗/运行中 spinner，命令与输出同块，点击整块展开，连续命令直接平铺连续编号，删除组折叠行与 worked 分隔条展开两层交互）；worked 消息渲染为独立总结段落（`.work-summary-text`）；文件变更徽标改为 `+/M/−/→` 符号着色（title 保留完整操作名），路径与行数右对齐，undo/redo 保留。清理死代码（`getCommandsForWorked`/`toggleWorkedExpand`/`toggleCommandGroup`/`expandedCommandGroupIds`/`expandedWorkedIds` 及对应 CSS，含 `src/style.css` 残留）。构建（vue-tsc + vite + tsup）通过；Playwright（Edge channel）mock 线程数据验证：3 个工作块步骤 1/2/3、状态 ✓ Done / ✗ Failed / Running、点击展开输出、文件变更徽标 +/M 与行数右对齐均正常，旧类 `cmd-step-index`/`worked-separator` 计数为 0；明暗主题截图 `output/playwright/req6-work-blocks-{light,dark}.png`。手动测试文档 `tests/chat-composer-rendering/work-step-blocks-and-inline-file-changes.md`。
 
 改造目标（trae-work 工作过程风格）与当前实现对照：
 
@@ -271,9 +271,9 @@ pnpm run dev --host 127.0.0.1 --port 4173
 6. **右侧文件 tab 点击图片直接在 tab 内预览，不用弹窗**：`RightFilesPanel.vue` 新增 `isPreviewImage`（正则 `\.(avif|bmp|gif|jpe?g|png|svg|webp)$`）与 `previewBrowseUrl`（`/codex-local-browse` 路径）；图片文件走内联 `.rfp-inline-preview`（header + 关闭按钮 + `<img>`），非图片仍走 `FilePreviewModal`；明暗主题样式齐全；Playwright 实测点击 `chat-mobile.png` 内联预览可见
 7. **左侧线程右键菜单移开即消失；正常打开后点空白不消失**：`SidebarThreadTree.vue` 新增 `threadMenuOpenSource: 'hover' | 'contextmenu'`：hover 打开（dots 按钮）仍随移开关闭，右键打开不随鼠标离开关闭，仅由空白点击/再次操作关闭；Playwright 验证 A（右键后移开→保持）/ B（空白点击→关闭）/ C（dots 打开+移开→关闭）符合预期
 8. **线程移除后无还原入口，需要线程回收站**：新增 `src/composables/useThreadRecycleBin.ts`（localStorage `codex-web-local.recycle-bin.v1` 持久化）；`codexGateway.ts` 新增 `unarchiveThread`（`thread/unarchive`）；`SidebarThreadTree.vue` 删除线程时 `recordArchivedThread` 入回收站，组织菜单新增「Recycle bin」打开 `AppDialog` 回收站（列表/还原/永久删除/空状态/时间格式化），还原调用 `restoreArchivedThread` → unarchive 并 emit `restore-thread`；`App.vue` `onRestoreThread` 调 `refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })` 刷新列表；i18n 中文字典补充；Playwright 实测归档→回收站可见→还原→记录移除全链路通过
-9. **（问题）thinking 中点击停止后最新会话消息消失，是否正常**：调研结论：属 codex app-server 的 turn 语义，非本应用 UI bug。`turn/interrupt` 中断一个尚未产出任何 agent 输出的 turn 时，服务端会将该 turn（含用户消息）从线程历史整体移除（未提交的事务式回滚）；随后本应用 `interruptSelectedThreadTurn` 会 `pendingThreadMessageRefresh + syncFromNotifications` 刷新，本地合并 `preserveMissing` 虽会短暂保留乐观消息，但侧栏摘要已按服务端重建、后续权威刷新后消息即永久消失。`blockInterruptUntilThreadIsPersisted` 本意是防止此窗口，但 `turn/started` 到达即解除阻塞（`maybeUnblockInterruptForActiveTurn`）仍留有小竞态窗口。是否在 UI 侧保留「已停止、消息未提交」的提示或把未提交文本回填输入框，待产品决策
+9. **（问题）thinking 中点击停止后最新会话消息消失，是否正常**：调研结论：属 codex app-server 的 turn 语义，非本应用 UI bug。`turn/interrupt` 中断一个尚未产出任何 agent 输出的 turn 时，服务端会将该 turn（含用户消息）从线程历史整体移除（未提交的事务式回滚）；随后本应用 `interruptSelectedThreadTurn` 会 `pendingThreadMessageRefresh + syncFromNotifications` 刷新，本地合并 `preserveMissing` 虽会短暂保留乐观消息，但侧栏摘要已按服务端重建、后续权威刷新后消息即永久消失。`blockInterruptUntilThreadIsPersisted` 本意是防止此窗口，但 `turn/started` 到达即解除阻塞（`maybeUnblockInterruptForActiveTurn`）仍留有小竞态窗口。结论已确认：行为属正常语义，非 UI bug；UI 侧是否额外提示（保留「已停止、消息未提交」提示或把未提交文本回填输入框）为可选优化，暂无实施计划
 
-> **验证说明：** 需求 1 的 plan 面板在当前环境无真实 plan 消息可端到端验证，已通过 `vite dev` 动态 import `/src/utils/plan.ts` 实测解析（x/~/' ' 状态与 explanation 提取正确）并依赖 vue-tsc/构建覆盖；需求 2 的步骤序号无 command 消息样本，代码路径经 vue-tsc 与代码复查确认；其余 5/6/7/8 均 Playwright 实测。遗留：需求 9 为调研结论待产品决策；回收站为本地（localStorage）记录 + 服务端 archive/unarchive，跨设备同步依赖服务端线程列表本身。
+> **验证说明：** 需求 1 的 plan 面板在当前环境无真实 plan 消息可端到端验证，已通过 `vite dev` 动态 import `/src/utils/plan.ts` 实测解析（x/~/' ' 状态与 explanation 提取正确）并依赖 vue-tsc/构建覆盖；需求 2 的步骤序号无 command 消息样本，代码路径经 vue-tsc 与代码复查确认；其余 5/6/7/8 均 Playwright 实测。遗留：需求 9 调研结论已确认（服务端 turn 语义、非 UI bug，UI 提示为可选优化未实施）；回收站为本地（localStorage）记录 + 服务端 archive/unarchive，跨设备同步依赖服务端线程列表本身。
 
 ## 第八轮：上游 PR 移植（2026-08-06）
 
@@ -361,4 +361,4 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 ---
 
-*codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复） · 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复） · 内容已脱敏*
