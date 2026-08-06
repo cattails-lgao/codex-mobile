@@ -47,36 +47,59 @@ export function parsePlanFromMessageText(text: string): ParsedPlan | null {
   if (steps.length === 0) {
     // No checkbox steps: try the markdown fallback so codex `<proposed_plan>`
     // bodies (headings + bullets) render in the plan panel instead of being
-    // dropped as unparseable.
-    const markdownSteps: UiPlanStep[] = []
-    const markdownExplanationLines: string[] = []
-    for (const line of normalized.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) {
-        if (markdownSteps.length === 0) markdownExplanationLines.push('')
-        continue
-      }
-      const bullet = trimmed.match(/^[-*]\s+(.+)$/) ?? trimmed.match(/^\d+[.)]\s+(.+)$/)
-      if (bullet) {
-        const step = bullet[1]?.trim()
-        if (step) {
-          markdownSteps.push({ step, status: 'pending' })
-          continue
-        }
-      }
-      markdownExplanationLines.push(trimmed)
-    }
-    if (markdownSteps.length === 0) return null
-    return {
-      explanation: markdownExplanationLines.join('\n').trim(),
-      steps: markdownSteps,
-    }
+    // dropped as unparseable. Numbered items (1. / 1)) represent the ordered
+    // execution steps and take precedence: plans written by codex CLI put the
+    // real step list under a numbered section, while bullets elsewhere are
+    // details (e.g. rule lists), not steps.
+    const markdown = parseMarkdownPlan(normalized)
+    if (markdown) return markdown
+    return null
   }
 
   return {
     explanation: explanationLines.join('\n').trim(),
     steps: steps.filter((step) => step.step.length > 0),
   }
+}
+
+function parseMarkdownPlan(normalized: string): ParsedPlan | null {
+  const numberedSteps: UiPlanStep[] = []
+  const bulletSteps: UiPlanStep[] = []
+  const explanationLines: string[] = []
+  for (const line of normalized.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      if (numberedSteps.length === 0 && bulletSteps.length === 0) explanationLines.push('')
+      continue
+    }
+    const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/)
+    if (numbered) {
+      numberedSteps.push({ step: numbered[1]?.trim() ?? '', status: 'pending' })
+      continue
+    }
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/)
+    if (bullet) {
+      bulletSteps.push({ step: bullet[1]?.trim() ?? '', status: 'pending' })
+      continue
+    }
+    explanationLines.push(trimmed)
+  }
+  const chosen = numberedSteps.length > 0 ? numberedSteps : bulletSteps
+  if (chosen.length === 0) return null
+  return {
+    explanation: cleanPlanExplanation(explanationLines.join('\n')),
+    steps: chosen.filter((step) => step.step.length > 0),
+  }
+}
+
+// Strip markdown heading markers from the explanation so the plan popover
+// shows readable prose instead of raw `## Section` markers.
+function cleanPlanExplanation(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => line.replace(/^\s*#{1,6}\s*/, ''))
+    .join('\n')
+    .trim()
 }
 
 /**

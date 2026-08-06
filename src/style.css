@@ -441,6 +441,112 @@
   @apply border-zinc-600 bg-zinc-800;
 }
 
+/* ThreadPendingRequestPanel：Awaiting response / 权限审核面板暗色覆盖
+   （scoped :global(:root.dark) 在此构建中不生效，按仓库规则放全局样式表） */
+:root.dark .thread-pending-request-shell {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100;
+}
+
+:root.dark .thread-pending-request-eyebrow {
+  @apply text-zinc-500;
+}
+
+:root.dark .thread-pending-request-title {
+  @apply text-zinc-50;
+}
+
+:root.dark .thread-pending-request-counter {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-400;
+}
+
+:root.dark .thread-pending-request-command-line,
+:root.dark .thread-pending-request-preview {
+  @apply bg-zinc-800/85 text-zinc-100;
+}
+
+:root.dark .thread-pending-request-option {
+  @apply border-zinc-800 bg-transparent hover:border-zinc-600 hover:bg-zinc-800/70;
+}
+
+:root.dark .thread-pending-request-option.is-selected {
+  @apply border-zinc-500 bg-zinc-800/95;
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 245, 0.14);
+}
+
+:root.dark .thread-pending-request-option-index {
+  @apply text-zinc-500;
+}
+
+:root.dark .thread-pending-request-option-label {
+  @apply text-zinc-50;
+}
+
+:root.dark .thread-pending-request-inline-input {
+  @apply border-zinc-800 bg-zinc-800/70 text-zinc-400 focus-within:border-zinc-500 focus-within:bg-zinc-800/90;
+}
+
+:root.dark .thread-pending-request-inline-input.is-active {
+  @apply text-zinc-100;
+}
+
+:root.dark .thread-pending-request-inline-control {
+  @apply text-zinc-100 placeholder:text-zinc-500;
+}
+
+:root.dark .thread-pending-request-question {
+  @apply border-zinc-800 bg-zinc-900/75;
+}
+
+:root.dark .thread-pending-request-question-title {
+  @apply text-zinc-50;
+}
+
+:root.dark .thread-pending-request-question-text,
+:root.dark .thread-pending-request-question-description {
+  @apply text-zinc-400;
+}
+
+:root.dark .thread-pending-request-validation-error {
+  @apply text-rose-300;
+}
+
+:root.dark .thread-pending-request-link {
+  @apply border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800;
+}
+
+:root.dark .thread-pending-request-input {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .thread-pending-request-input:focus {
+  @apply border-zinc-500;
+  box-shadow: 0 0 0 1px rgba(244, 244, 245, 0.18);
+}
+
+:root.dark .thread-pending-request-dropdown .composer-dropdown-trigger {
+  @apply border-zinc-700 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .thread-pending-request-input::placeholder {
+  @apply text-zinc-500;
+}
+
+:root.dark .thread-pending-request-checkbox-row {
+  @apply text-zinc-200;
+}
+
+:root.dark .thread-pending-request-checkbox {
+  @apply border-zinc-600 bg-zinc-950 text-zinc-100;
+}
+
+:root.dark .thread-pending-request-primary {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+}
+
+:root.dark .thread-pending-request-secondary {
+  @apply border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800;
+}
+
 :root.dark .thread-composer-menu-item:hover {
   @apply bg-zinc-700;
 }

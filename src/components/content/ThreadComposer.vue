@@ -59,10 +59,11 @@
         <button
           type="button"
           class="thread-composer-plan-panel-implement"
-          :disabled="planPanel.streaming"
+          :disabled="planPanel.streaming || planPanel.implemented"
+          :data-state="planPanel.implemented ? 'done' : planPanel.streaming ? 'running' : 'idle'"
           @click="onPlanPanelImplement"
         >
-          {{ t('Implement plan') }}
+          {{ planPanel.implemented ? t('Plan executed') : planPanel.streaming ? t('Implementing…') : t('Implement plan') }}
         </button>
       </ComposerPopover>
     </div>
@@ -594,6 +595,7 @@ export type ComposerPlanPanelData = {
   streaming: boolean
   explanation: string
   steps: Array<{ step: string; status: 'pending' | 'inProgress' | 'completed' }>
+  implemented: boolean
 }
 
 export type FileAttachment = { label: string; path: string; fsPath: string }

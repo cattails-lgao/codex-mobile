@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
-| 最近提交 | 289665d |
+| 最近提交 | 289665d → 第十三轮修复（待提交） |
 
 ---
 
@@ -369,13 +369,29 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > **调研结论（第 4 条现象「Worked for 11m 35s」）：** 属正常 turn 语义，非 bug。「长任务测试」线程（cwd `D:\code\codex-project\test`）唯一 turn `durationMs=695100`（11m35s，19:55:49 → 20:07:24），该时长是 turn 墙钟时间，**包含模型等待用户回答 3 个决策问题的时间**；模型通过 `request_user_input` 提问（function_call，JSONL 可见）→ 用户回答 → 模型产出完整 plan 后 turn 结束（idle），此时需点「Implement plan」继续执行。另外该 turn 的问答环节（request_user_input 的 function_call/output）未持久化到 thread/read，消息流中只看到模型文字，属 app-server 持久化语义。
 
+## 第十三轮反馈（2026-08-06 提出）
+
+> **2026-08-06 第十三轮进展：** 8 个问题已修复，1 个调研结论已确认。验证：`vue-tsc --noEmit` 通过、`vite build` 通过、单测 240 通过（新增 5 例：plan 解析 5 + reasoning/plan item 捕获 2；2 个失败为既有 Windows 环境性失败）、Playwright 实测——计划面板 6 步（35→6）+ 已执行禁用、live thinking 实时显示（459 字符）、等待响应面板悬浮 + 明暗主题 + 中文、H5 无溢出、设置面板四组高度恒定 672px。涉及 `App.vue`、`ThreadComposer.vue`、`ThreadPendingRequestPanel.vue`、`useDesktopState.ts`、`useDesktopState.test.ts`、`utils/plan.ts`、`utils/plan.test.ts`、`useUiLanguage.ts`、`style.css`。手动测试文档：`tests/theme-layout-terminal/r13-settings-height-live-thinking-floating-pending-plan-panel.md`。
+
+1. **设置面板高度随分组伸缩跳动**：`.sidebar-settings-panel` 由 `max-h-[min(84vh,46rem)]`（内容撑开、切换分组高度变化）改为 `h-[min(84vh,46rem)]` 固定高度，内容区内部滚动。验证：Playwright 四组（常规/模型/集成/用量）高度均 672px 恒定
+2. **thinking 一直显示但无内容**：实测确认根因——本 app-server（codex-cli 0.146.0）**不推送 `item/reasoning/*TextDelta` 增量通道**（SSE 实测 50s 无任何 reasoning 增量），reasoning 内容只随 `item/started`/`item/completed` 全量 item 到达（payload 内嵌 `content[{type:"reasoning_text",text}]`），而前端只处理 delta 通道 → 整个思考阶段 live overlay 只有空「Thinking」。修复：新增 `readReasoningItemNotification`（从 item/started + item/completed 提取 reasoning 全量文本）+ `appendReasoningItemProgress`（按 itemId 增量去重，started/completed 重复推送不重复追加），实时写入 `liveReasoningTextByThreadId`；`clearLiveReasoningForThread` 清 map。验证：真实 turn 中 live overlay 实时显示 459 字符思考文本；单测新增（started→completed 前缀去重 → agent 开始存档）
+3. **Awaiting response 面板过大且顶走输入框**：`.thread-pending-request` 改为 `position: fixed`（视口底部居中，`bottom: max(1rem, env(safe-area-inset-bottom))`、`z-index: 900`、`width: min(calc(100vw - 1rem), 30rem)`），不再占文档流；面板精简紧凑（标题 15px、选项行高 40px、max-h 60vh）。验证：Playwright 桌面/H5——wrapper `fixed`、与 composer 无重叠、375px 下宽 359px 无横向溢出
+4. **Worked 后输入框上方无 Implement plan 按钮**：根因一——持久化 plan item（`item/completed` 全量通知）未被实时捕获，turn 结束后旧代码只靠 `turn/plan/updated` 通道（本 app-server 不推送）+ 消息刷新，计划面板要等刷新才有。修复：新增 `readPlanItemNotification` 捕获 plan item 全量通知并 upsert 到 live plan 消息（附 turnId/turnIndex）；`syncFromNotifications` 在 turn 事件后强制重载消息（`force: isActiveDirty`），绕开 updatedAt 版本不变时的复用缓存。验证：真实 plan 线程消息流含 plan 消息、计划面板可见
+5. **Implement plan popover 内部样式缺失**：根因——popover 面板类 `thread-composer-plan-panel-popover` 在 `ComposerPopover` 内部元素上，ThreadComposer scoped 样式选择器不匹配（需 `:deep()`）。修复：`:deep(.thread-composer-plan-panel-popover)` + `min-w-full max-h-[min(60vh,28rem)]` 滚动；popover 底部按钮补明暗主题（`--implement` 新增 `:global(:root.dark)` 覆盖）。验证：展开面板步骤列表/explanation/执行按钮样式完整，宽 683px 与折叠条对齐
+6. **Implement plan 点击后仍可重复点击**：`composerPlanPanel` 新增 `implemented` 判定——计划 turn 之后存在工作消息（commandExecution/worked/toolCall/fileChange/agentMessage/plan）或已点击过（`implementedPlanRequestId`）即为已执行；按钮 `disabled` + 文案「计划已执行」（流式中「执行中…」）。验证：Playwright「重命名小工具」线程按钮 disabled + 中文「计划已执行」；单测 57 通过
+7. **（调研）trae-work 会话消息参考**：`https://work.trae.cn/session/…` 链接需登录，WebFetch 返回 TraeWork 通用落地页，无法直接取到会话消息内容做像素级对齐参考；本仓库消息展示已按 trae-work 工作过程风格重构（requirement-6），本轮不再追加
+8. **面板文案硬编码英文**：`ThreadPendingRequestPanel.vue` 标题/提示/选项（Awaiting approval/response、Yes、Yes for Session、pending 计数）未走 `t()`。修复：全部包 `t()`，`useUiLanguage.ts` 补充中文字典（等待响应/等待审批/是/本次会话内允许/条待处理/是否运行此命令？等 15 键）。验证：真实 waitingOnUserInput 线程面板全中文
+9. **面板浅色外观下是黑色**：根因——面板固定深色（`bg-zinc-900`），无浅色/明暗覆盖；且 scoped 内 `:global(:root.dark)` 在本项目构建中**不生效**（Vite 会把选择器破坏成 `[data-v] :root.dark …`，已实测 0 条规则生效）。修复：浅色基样式 + 暗色覆盖全部移入全局 `src/style.css`（`:root.dark .thread-pending-request-*` 约 20 条规则）。验证：Playwright——LIGHT shell 白底 / DARK shell `oklch(0.21…)`（zinc-900），options/inputs/按钮明暗均正确
+
+
 ## 未完成事项
 
-- **已推送**：`main` 与 `origin/main` 已同步至 `289665d`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交））。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可
+- **已推送**：`main` 与 `origin/main` 已同步至 `289665d`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交）+ 第十三轮 8 项修复与文档（本条记录后提交））。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可
 - **未跟踪文件**：工作区存在 `.codegraph/`、`codex-parity-plan/`、`documentation/app-server-schemas/typescript/`、`codex-config-summary.md`（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧）**：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
 - **验收遗留**：plan/approval popover 当前无 Enter/方向键键盘导航，后续如需可补；ExecPlans 待后端 Codex 版本支持后自动变为可选
+- **本轮测试遗留（非仓库文件）**：验证脚本在 `D:\code\codex-project\test\hello.txt` 创建了一个测试文件（不在仓库允许操作范围内，未能自动清理），如不需要可手动删除；测试期间创建的 5 个临时线程已通过 `thread/delete` 清理
 
 ## 交接注意事项
 
@@ -387,4 +403,4 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 ---
 
-*codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）） · 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）+ 第十三轮 8 个问题已修复（设置面板固定高度、thinking 实时显示、Awaiting response 悬浮面板 + 明暗主题 + 中文、计划面板 item 捕获 + 编号优先解析 35→6、Implement 防重复点击、popover 内部样式、面板文案 i18n）且 trae-work 会话链接调研结论已确认） · 内容已脱敏*
