@@ -23,7 +23,11 @@ function run(command, args, options = {}) {
     env: {
       ...process.env,
       CODEXUI_SANDBOX_MODE: process.env.CODEXUI_SANDBOX_MODE || 'danger-full-access',
-      CODEXUI_APPROVAL_POLICY: process.env.CODEXUI_APPROVAL_POLICY || 'never',
+      // Do not force a default here: with no env value the runtime falls back
+      // to the `approval_policy` in CODEX_HOME/config.toml (defaulting to
+      // 'never' only when the file is absent), so policy changes made in the
+      // settings UI actually take effect on the running app-server.
+      ...(process.env.CODEXUI_APPROVAL_POLICY ? { CODEXUI_APPROVAL_POLICY: process.env.CODEXUI_APPROVAL_POLICY } : {}),
     },
     ...options,
   })

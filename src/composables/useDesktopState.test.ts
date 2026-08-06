@@ -1426,3 +1426,71 @@ describe('hooks notifications', () => {
     expect(state.isHooksLoading.value).toBe(false)
   })
 })
+
+describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
+  function installRollbackState(threadId: string, options: { inProgress: boolean; activeTurnId: string }) {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'do the thing',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        },
+        {
+          id: 'agent-1',
+          role: 'assistant',
+          text: options.inProgress ? 'working...' : 'done',
+          messageType: 'agentMessage',
+          turnId: 'turn-2',
+          turnIndex: 1,
+        },
+      ],
+      inProgress: options.inProgress,
+      activeTurnId: options.activeTurnId,
+      turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.interruptThreadTurn.mockResolvedValue(null)
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.rollbackThread.mockResolvedValue([
+      {
+        id: 'user-1',
+        role: 'user',
+        text: 'do the thing',
+        messageType: 'userMessage',
+        turnId: 'turn-1',
+        turnIndex: 0,
+      },
+    ])
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('stops the active turn before rolling back when the thread is in progress', async () => {
+    const state = installRollbackState('thread-rollback', { inProgress: true, activeTurnId: 'turn-2' })
+    await state.loadMessages('thread-rollback')
+
+    await state.rollbackSelectedThread('turn-1')
+
+    expect(gatewayMocks.interruptThreadTurn).toHaveBeenCalledWith('thread-rollback', 'turn-2')
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 2)
+  })
+
+  it('skips the interrupt and rolls back directly when the thread is idle', async () => {
+    const state = installRollbackState('thread-rollback-idle', { inProgress: false, activeTurnId: '' })
+    await state.loadMessages('thread-rollback-idle')
+
+    await state.rollbackSelectedThread('turn-1')
+
+    expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 2)
+  })
+})
