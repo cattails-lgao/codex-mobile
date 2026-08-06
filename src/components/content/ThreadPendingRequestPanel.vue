@@ -1,5 +1,5 @@
 <template>
-  <section v-if="request" class="thread-pending-request">
+  <section v-if="request" class="thread-pending-request" :style="panelStyle">
     <article
       class="thread-pending-request-shell"
       :class="{ 'thread-pending-request-shell--no-top-radius': hasQueueAbove }"
@@ -275,11 +275,18 @@ const props = defineProps<{
   request: UiServerRequest | null
   requestCount?: number
   hasQueueAbove?: boolean
+  /** 输入框 shell 的实测宽度（px）；大于 0 时覆盖默认固定宽度，保证面板与输入框同宽。 */
+  panelWidth?: number
 }>()
 
 const emit = defineEmits<{
   respondServerRequest: [payload: UiServerRequestReply]
 }>()
+
+const panelStyle = computed(() => {
+  const width = typeof props.panelWidth === 'number' && props.panelWidth > 0 ? props.panelWidth : 0
+  return width > 0 ? { width: `${width}px` } : {}
+})
 
 const selectedApprovalDecision = ref<ApprovalDecision>('accept')
 const approvalFreeformText = ref('')

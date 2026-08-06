@@ -73,6 +73,17 @@
 
 **验证**：`.thread-composer-plan-panel-steps` flex 列表、`.thread-composer-plan-panel-step` 状态图标 ○/•/✓ 着色、`.thread-composer-plan-panel-implement` 为按钮样式（白字黑底 / 暗色黑字白底）；展开面板宽与折叠条对齐（min-w-full）。
 
+## 7. 审核/询问面板与输入框 shell 同宽
+
+**背景**：`.thread-pending-request` 固定宽度 `min(100vw-1rem, 30rem)`（480px），比输入框（内容列宽度）窄很多。现由 `App.vue` 实测 `.composer-with-queue` 内容宽度（`composerShellWidthPx`，ResizeObserver 跟踪）通过 `panel-width` prop 传入，面板宽度与 `.thread-composer-shell` 一致。
+
+**操作**：
+
+1. 触发 `request_user_input` 或权限审核请求
+2. 断言 `.thread-pending-request` 的 `width` 与 `.thread-composer-shell` 的 `getBoundingClientRect().width` 相等（本机 1280 桌面实测均 711px）
+
+**验证**：面板宽度 == 输入框 shell 宽度；窄视口（375px）下不超出视口（内容列自身有边距）。
+
 ## 回滚
 
 - 无数据变更；thinking 存档仍在 localStorage `codex-web-local.thread-reasoning.v1`，清除即可移除历史思考块。

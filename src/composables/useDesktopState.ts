@@ -1472,6 +1472,96 @@ export function filterGroupsByWorkspaceRoots(
   return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
 }
 
+// Live 消息按到达顺序交错展示：messages computed 若把 livePlan/liveCommands/
+// liveFileChanges/liveAgent 四组数组按组拼接，会出现“命令一堆、文本一堆、
+// 思考一堆”的扎堆观感。这里用单调递增 sortKey 记录每条 live 消息首次出现的
+// 顺序（通知本身按真实时间序到达），合并时整体按 sortKey 排序还原交错。
+const liveMessageSortKeyByComposite = new Map<string, number>()
+let liveMessageSortCounter = 0
+
+function sortKeyForLiveMessage(threadId: string, message: UiMessage): number {
+  const composite = `${threadId}:${message.id}`
+  const existing = liveMessageSortKeyByComposite.get(composite)
+  if (existing !== undefined) return existing
+  liveMessageSortCounter += 1
+  liveMessageSortKeyByComposite.set(composite, liveMessageSortCounter)
+  return liveMessageSortCounter
+}
+
+function pruneLiveMessageSortKeys(threadId: string): void {
+  const prefix = `${threadId}:`
+  for (const composite of [...liveMessageSortKeyByComposite.keys()]) {
+    if (composite.startsWith(prefix)) liveMessageSortKeyByComposite.delete(composite)
+  }
+}
+
+// 把本地存档的思考（persistedReasoning）按轮次插回消息流：插入到该轮用户
+// 消息之后，形成“提问 -> 思考 -> 回复”的阅读顺序；旧存档没有 turnIndex 时
+// 回退到消息流末尾（与历史行为一致）。同一轮多条思考按存档顺序排列。
+export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessages: UiMessage[]): UiMessage[] {
+  if (reasoningMessages.length === 0) return persisted
+  const result = [...persisted]
+  const unattached: UiMessage[] = []
+  // 逆序插入，保证同一轮内多条思考按时间正序排列。
+  for (const reasoningMessage of [...reasoningMessages].reverse()) {
+    const turnIndex = reasoningMessage.turnIndex
+    if (typeof turnIndex !== 'number' || !Number.isFinite(turnIndex)) {
+      unattached.push(reasoningMessage)
+      continue
+    }
+    let lastUserIndex = -1
+    let lastTurnMessageIndex = -1
+    for (let index = 0; index < result.length; index += 1) {
+      if (result[index].turnIndex !== turnIndex) continue
+      lastTurnMessageIndex = index
+      if (result[index].role === 'user') lastUserIndex = index
+    }
+    if (lastUserIndex >= 0) {
+      result.splice(lastUserIndex + 1, 0, reasoningMessage)
+    } else if (lastTurnMessageIndex >= 0) {
+      result.splice(lastTurnMessageIndex + 1, 0, reasoningMessage)
+    } else {
+      unattached.push(reasoningMessage)
+    }
+  }
+  // 主循环是逆序迭代（保证同轮多条思考正序），unattached 因此被反序收集，这里还原。
+  return unattached.length > 0 ? [...result, ...unattached.reverse()] : result
+}
+
+// 合并 live 四组消息：先去掉已在持久化消息里出现的 id（turn 中刷新会把当前
+// 轮部分项写入 persisted，避免重复展示），再按首次到达顺序排序追加到末尾。
+export function mergeLiveMessages(threadId: string, liveGroups: UiMessage[][], persisted: UiMessage[]): UiMessage[] {
+  const persistedIds = new Set(persisted.map((message) => message.id))
+  const unique = new Map<string, UiMessage>()
+  for (const group of liveGroups) {
+    for (const message of group) {
+      if (persistedIds.has(message.id)) continue
+      if (!unique.has(message.id)) unique.set(message.id, message)
+    }
+  }
+  const messages = Array.from(unique.values())
+  // 先给全部 live 消息分配 sortKey 再排序：若在比较器内惰性分配，
+  // key 的赋值顺序取决于排序算法内部的比较序列，结果不确定。
+  for (const message of messages) {
+    sortKeyForLiveMessage(threadId, message)
+  }
+  return messages.sort((a, b) => (
+    sortKeyForLiveMessage(threadId, a) - sortKeyForLiveMessage(threadId, b)
+  ))
+}
+
+function mergeThreadMessageStreams(
+  threadId: string,
+  persisted: UiMessage[],
+  persistedReasoning: UiMessage[],
+  liveGroups: UiMessage[][],
+  injected: UiMessage[],
+): UiMessage[] {
+  const mergedPersisted = mergePersistedReasoning(persisted, persistedReasoning)
+  const liveMessages = mergeLiveMessages(threadId, liveGroups, mergedPersisted)
+  return [...mergedPersisted, ...liveMessages, ...injected]
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -1486,6 +1576,10 @@ export function useDesktopState() {
   // 内容只随 item/started + item/completed 全量 item 到达；这里按 itemId 记录已
   // 追加的文本，避免 started/completed 重复追加或遗漏增量。
   const reasoningAppendedTextByItemId = new Map<string, string>()
+  // 记录每条 reasoning 流属于哪个 turn（turn/completed 通知会先清掉
+  // activeTurnIdByThreadId，clearLiveReasoningForThread 时已取不到，故在
+  // reasoning 开始时先记一份），供存档时打上轮次以便插回正确位置。
+  const activeReasoningTurnIdByThreadId = new Map<string, string>()
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
@@ -1727,7 +1821,13 @@ export function useDesktopState() {
       ? injected.filter((message) => message.messageType !== 'compaction.pending')
       : injected
 
-    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...effectiveInjected, ...persistedReasoning]
+    const combined = mergeThreadMessageStreams(
+      threadId,
+      persisted,
+      persistedReasoning,
+      [livePlan, liveCommands, liveFileChanges, liveAgent],
+      effectiveInjected,
+    )
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -2418,6 +2518,18 @@ export function useDesktopState() {
     turnActivityByThreadId.value = pruneThreadStateMap(turnActivityByThreadId.value, activeThreadIds)
     turnErrorByThreadId.value = pruneThreadStateMap(turnErrorByThreadId.value, activeThreadIds)
     activeTurnIdByThreadId.value = pruneThreadStateMap(activeTurnIdByThreadId.value, activeThreadIds)
+    if (activeReasoningTurnIdByThreadId.size > 0) {
+      for (const threadId of [...activeReasoningTurnIdByThreadId.keys()]) {
+        if (!activeThreadIds.has(threadId)) activeReasoningTurnIdByThreadId.delete(threadId)
+      }
+    }
+    if (liveMessageSortKeyByComposite.size > 0) {
+      for (const composite of [...liveMessageSortKeyByComposite.keys()]) {
+        const separatorIndex = composite.indexOf(':')
+        const threadId = separatorIndex > 0 ? composite.slice(0, separatorIndex) : ''
+        if (!activeThreadIds.has(threadId)) liveMessageSortKeyByComposite.delete(composite)
+      }
+    }
     interruptBlockedUntilPersistedByThreadId.value = pruneThreadStateMap(
       interruptBlockedUntilPersistedByThreadId.value,
       activeThreadIds,
@@ -2778,17 +2890,26 @@ export function useDesktopState() {
     setLiveReasoningText(threadId, `${previous}${delta}`)
   }
 
+  function recordActiveReasoningTurn(threadId: string): void {
+    if (!threadId) return
+    const activeTurnId = activeTurnIdByThreadId.value[threadId] ?? ''
+    if (activeTurnId) activeReasoningTurnIdByThreadId.set(threadId, activeTurnId)
+  }
+
   function clearLiveReasoningForThread(threadId: string): void {
     if (!threadId) return
     reasoningAppendedTextByItemId.clear()
     const current = liveReasoningTextByThreadId.value[threadId]
     if (current === undefined) return
-    rememberPersistedReasoning(threadId, current)
+    const turnId = activeReasoningTurnIdByThreadId.get(threadId) ?? activeTurnIdByThreadId.value[threadId] ?? ''
+    activeReasoningTurnIdByThreadId.delete(threadId)
+    const turnIndex = turnId ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] : undefined
+    rememberPersistedReasoning(threadId, current, turnId || undefined, turnIndex)
     liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
   }
 
   // 把完整 thinking 文本存档为 reasoning 消息（本地持久化，刷新后仍展示）。
-  function rememberPersistedReasoning(threadId: string, text: string): void {
+  function rememberPersistedReasoning(threadId: string, text: string, turnId?: string, turnIndex?: number): void {
     if (!threadId) return
     const normalized = text.trim()
     if (!normalized) return
@@ -2800,6 +2921,8 @@ export function useDesktopState() {
       text: normalized,
       messageType: 'reasoning',
       reasoning: { summary: [], content: [normalized] },
+      turnId: turnId || undefined,
+      turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     }
     // ponytail: 每线程最多保留 20 条，防止 localStorage 无限增长；如需更多
     // 历史可改为按容量或按天裁剪。
@@ -2827,6 +2950,7 @@ export function useDesktopState() {
     if (!threadId) return
     clearLivePlansForThread(threadId)
     clearLiveReasoningForThread(threadId)
+    pruneLiveMessageSortKeys(threadId)
     setTurnActivityForThread(threadId, null)
     if (threadId === selectedThreadId.value) {
       activeReasoningItemId = ''
@@ -4338,6 +4462,7 @@ export function useDesktopState() {
     const startedReasoningItemId = readReasoningStartedItemId(notification)
     if (startedReasoningItemId) {
       activeReasoningItemId = startedReasoningItemId
+      recordActiveReasoningTurn(notificationThreadId)
     }
 
     const liveReasoningDelta = readReasoningDelta(notification)
@@ -4348,6 +4473,7 @@ export function useDesktopState() {
     const reasoningItem = readReasoningItemNotification(notification)
     if (reasoningItem) {
       appendReasoningItemProgress(notificationThreadId, reasoningItem.itemId, reasoningItem.text)
+      recordActiveReasoningTurn(notificationThreadId)
     }
 
     const sectionBreakMessageId = readReasoningSectionBreakMessageId(notification)
@@ -6210,6 +6336,9 @@ export function useDesktopState() {
     turnSummaryByThreadId.value = {}
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
+    activeReasoningTurnIdByThreadId.clear()
+    liveMessageSortKeyByComposite.clear()
+    liveMessageSortCounter = 0
     interruptBlockedUntilPersistedByThreadId.value = {}
     threadListedByServerById.value = {}
     persistedUserMessageByThreadId.value = {}

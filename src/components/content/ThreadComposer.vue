@@ -42,29 +42,44 @@
             <IconTablerChevronDown class="thread-composer-plan-panel-chevron" />
           </button>
         </template>
-        <p v-if="planPanel.explanation" class="thread-composer-plan-panel-explanation">{{ planPanel.explanation }}</p>
-        <ol class="thread-composer-plan-panel-steps">
-          <li
-            v-for="(step, index) in planPanel.steps"
-            :key="`composer-plan-${planPanel.id}-${index}`"
-            class="thread-composer-plan-panel-step"
-            :data-status="step.status"
-          >
-            <span class="thread-composer-plan-panel-step-status" :data-status="step.status">
-              {{ planStepStatusIcon(step.status) }}
+        <div class="thread-composer-plan-panel-popover-content">
+          <header class="thread-composer-plan-panel-popover-head">
+            <span class="thread-composer-plan-panel-icon" aria-hidden="true">🗒</span>
+            <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
+            <span class="thread-composer-plan-panel-progress">
+              {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
             </span>
-            <span class="thread-composer-plan-panel-step-text">{{ step.step }}</span>
-          </li>
-        </ol>
-        <button
-          type="button"
-          class="thread-composer-plan-panel-implement"
-          :disabled="planPanel.streaming || planPanel.implemented"
-          :data-state="planPanel.implemented ? 'done' : planPanel.streaming ? 'running' : 'idle'"
-          @click="onPlanPanelImplement"
-        >
-          {{ planPanel.implemented ? t('Plan executed') : planPanel.streaming ? t('Implementing…') : t('Implement plan') }}
-        </button>
+          </header>
+          <section v-if="planPanel.explanation" class="thread-composer-plan-panel-popover-section">
+            <p class="thread-composer-plan-panel-section-label">{{ t('Summary') }}</p>
+            <p class="thread-composer-plan-panel-explanation">{{ planPanel.explanation }}</p>
+          </section>
+          <section class="thread-composer-plan-panel-popover-section">
+            <p class="thread-composer-plan-panel-section-label">{{ t('Steps') }} ({{ planPanel.steps.length }})</p>
+            <ol class="thread-composer-plan-panel-steps">
+              <li
+                v-for="(step, index) in planPanel.steps"
+                :key="`composer-plan-${planPanel.id}-${index}`"
+                class="thread-composer-plan-panel-step"
+                :data-status="step.status"
+              >
+                <span class="thread-composer-plan-panel-step-status" :data-status="step.status">
+                  {{ planStepStatusIcon(step.status) }}
+                </span>
+                <span class="thread-composer-plan-panel-step-text">{{ step.step }}</span>
+              </li>
+            </ol>
+          </section>
+          <button
+            type="button"
+            class="thread-composer-plan-panel-implement"
+            :disabled="planPanel.streaming || planPanel.implemented"
+            :data-state="planPanel.implemented ? 'done' : planPanel.streaming ? 'running' : 'idle'"
+            @click="onPlanPanelImplement"
+          >
+            {{ planPanel.implemented ? t('Plan executed') : planPanel.streaming ? t('Implementing…') : t('Implement plan') }}
+          </button>
+        </div>
       </ComposerPopover>
     </div>
 
@@ -2301,43 +2316,23 @@ watch(
 }
 
 :deep(.thread-composer-plan-panel-popover) {
-  @apply min-w-full max-h-[min(60vh,28rem)] overflow-y-auto;
+  @apply min-w-full max-h-[min(60vh,28rem)] overflow-y-auto p-0;
 }
 
-:global(:root.dark) .thread-composer-plan-panel {
-  @apply border-zinc-700 bg-zinc-900;
+.thread-composer-plan-panel-popover-content {
+  @apply flex flex-col gap-3 p-2.5;
 }
 
-:global(:root.dark) .thread-composer-plan-panel[data-streaming='true'] {
-  @apply border-sky-800 bg-sky-950/40;
+.thread-composer-plan-panel-popover-head {
+  @apply flex items-center gap-2 border-b border-zinc-200 pb-2;
 }
 
-:global(:root.dark) .thread-composer-plan-panel-header:hover {
-  @apply bg-zinc-800/70;
+.thread-composer-plan-panel-popover-section {
+  @apply min-w-0;
 }
 
-:global(:root.dark) .thread-composer-plan-panel-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .thread-composer-plan-panel-explanation {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .thread-composer-plan-panel-step {
-  @apply text-zinc-300;
-}
-
-:global(:root.dark) .thread-composer-plan-panel-progress {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .thread-composer-plan-panel-latest-text {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .thread-composer-plan-panel-implement {
-  @apply bg-zinc-100 text-zinc-900 hover:bg-white disabled:bg-zinc-700 disabled:text-zinc-400;
+.thread-composer-plan-panel-section-label {
+  @apply m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400;
 }
 
 .thread-composer-attachments {

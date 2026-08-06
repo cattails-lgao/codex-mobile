@@ -666,9 +666,19 @@
         <div class="message-row">
           <div class="message-stack">
             <article class="live-overlay-inline" aria-live="polite">
-              <p class="live-overlay-label">{{ liveOverlay.activityLabel }}</p>
-              <p
+              <button
                 v-if="liveOverlay.reasoningText"
+                type="button"
+                class="live-overlay-heading"
+                :aria-expanded="isLiveReasoningExpanded"
+                @click="toggleLiveReasoning"
+              >
+                <span class="live-overlay-label">{{ liveOverlay.activityLabel }}</span>
+                <span class="live-overlay-toggle" aria-hidden="true">{{ isLiveReasoningExpanded ? '▾' : '▸' }}</span>
+              </button>
+              <p v-else class="live-overlay-label">{{ liveOverlay.activityLabel }}</p>
+              <p
+                v-if="liveOverlay.reasoningText && isLiveReasoningExpanded"
                 class="live-overlay-reasoning"
               >
                 {{ liveOverlay.reasoningText }}
@@ -940,6 +950,12 @@ function toggleReasoningExpand(message: UiMessage): void {
   if (next.has(message.id)) next.delete(message.id)
   else next.add(message.id)
   expandedReasoningIds.value = next
+}
+
+// live overlay 的思考流默认展开（保持现有展示），可点击 Thinking 收起/展开。
+const isLiveReasoningExpanded = ref(true)
+function toggleLiveReasoning(): void {
+  isLiveReasoningExpanded.value = !isLiveReasoningExpanded.value
 }
 
 function reasoningSummaryText(message: UiMessage): string {
@@ -4626,6 +4642,14 @@ onBeforeUnmount(() => {
   @apply m-0 text-sm leading-5 font-medium text-zinc-600;
 }
 
+.live-overlay-heading {
+  @apply flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left transition hover:opacity-80;
+}
+
+.live-overlay-toggle {
+  @apply shrink-0 text-xs leading-5 text-zinc-400;
+}
+
 .live-overlay-reasoning {
   @apply m-0 text-sm leading-5 text-zinc-500 whitespace-pre-wrap break-words;
   display: block;
@@ -4982,10 +5006,6 @@ onBeforeUnmount(() => {
   @apply m-0 text-sm leading-relaxed font-normal text-slate-800;
 }
 
-:global(:root.dark) .work-summary-text {
-  @apply text-slate-100;
-}
-
 .image-modal-backdrop {
   @apply fixed inset-0 z-50 bg-black/40 p-6 flex items-center justify-center;
 }
@@ -5131,46 +5151,6 @@ onBeforeUnmount(() => {
   @apply mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800;
 }
 
-:global(:root.dark) .work-block-permission-hint {
-  @apply border-amber-900 bg-amber-950/50 text-amber-300;
-}
-
-:global(:root.dark) .work-block {
-  @apply border-zinc-700 bg-zinc-900/60;
-}
-
-:global(:root.dark) .work-block-header:hover {
-  @apply bg-zinc-800/70;
-}
-
-:global(:root.dark) .work-step-dot {
-  @apply bg-zinc-700 text-zinc-200;
-}
-
-:global(:root.dark) .work-block.cmd-status-running .work-step-dot {
-  @apply bg-amber-900/60 text-amber-300;
-}
-
-:global(:root.dark) .work-block.cmd-status-ok .work-step-dot {
-  @apply bg-emerald-900/60 text-emerald-300;
-}
-
-:global(:root.dark) .work-block.cmd-status-error .work-step-dot {
-  @apply bg-rose-900/60 text-rose-300;
-}
-
-:global(:root.dark) .work-block-command {
-  @apply text-zinc-200;
-}
-
-:global(:root.dark) .work-block-output-wrap {
-  @apply bg-black/70;
-}
-
-:global(:root.dark) .work-block-output-wrap.work-block-output-visible {
-  border-color: #3f3f46;
-}
-
 .reasoning-block {
   @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80;
 }
@@ -5200,37 +5180,14 @@ onBeforeUnmount(() => {
 }
 
 .reasoning-block-content {
-  @apply max-h-72 overflow-y-auto;
+  @apply max-h-72 overflow-y-auto text-[13px] leading-relaxed text-zinc-500;
 }
 
 .reasoning-block-content :deep(.message-text),
 .reasoning-block-content :deep(.message-heading),
 .reasoning-block-content :deep(.message-list) {
+  @apply text-[13px] leading-relaxed text-zinc-500;
   color: inherit;
-}
-
-:global(:root.dark) .reasoning-block {
-  @apply border-zinc-700 bg-zinc-900/60;
-}
-
-:global(:root.dark) .reasoning-block-header:hover {
-  @apply bg-zinc-800/70;
-}
-
-:global(:root.dark) .reasoning-block-title {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .reasoning-block-body {
-  @apply border-zinc-700;
-}
-
-:global(:root.dark) .reasoning-block-summary {
-  @apply text-zinc-500;
-}
-
-:global(:root.dark) .reasoning-block-content :deep(.message-text) {
-  @apply text-zinc-200;
 }
 
 .tool-call-block {
@@ -5279,38 +5236,6 @@ onBeforeUnmount(() => {
 
 .tool-call-block.tool-call-error .tool-call-status {
   @apply text-rose-600;
-}
-
-:global(:root.dark) .tool-call-block {
-  @apply border-zinc-700 bg-zinc-900/60;
-}
-
-:global(:root.dark) .tool-call-server {
-  @apply bg-zinc-700 text-zinc-300;
-}
-
-:global(:root.dark) .tool-call-name {
-  @apply text-zinc-200;
-}
-
-:global(:root.dark) .tool-call-status {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .tool-call-block.tool-call-running {
-  @apply border-amber-800;
-}
-
-:global(:root.dark) .tool-call-block.tool-call-running .tool-call-status {
-  @apply text-amber-400;
-}
-
-:global(:root.dark) .tool-call-block.tool-call-ok .tool-call-status-icon {
-  @apply text-emerald-400;
-}
-
-:global(:root.dark) .tool-call-block.tool-call-error .tool-call-status {
-  @apply text-rose-400;
 }
 
 .cmd-row {
