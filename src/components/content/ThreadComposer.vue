@@ -439,7 +439,7 @@
         </ComposerPopover>
 
         <ComposerDropdown
-          class="thread-composer-control"
+          class="thread-composer-control thread-composer-model-control"
           :model-value="selectedModel"
           :options="modelOptions"
           :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
@@ -2689,6 +2689,14 @@ watch(
   @apply truncate;
 }
 
+.thread-composer-model-control {
+  @apply w-40 min-w-0;
+}
+
+.thread-composer-model-control :deep(.composer-dropdown-trigger) {
+  @apply w-full;
+}
+
 .thread-composer-thinking-control :deep(.composer-dropdown-options) {
   @apply max-h-64;
 }
@@ -2723,5 +2731,23 @@ watch(
 
 .thread-composer-hidden-input {
   @apply hidden;
+}
+
+@media (max-width: 767px) {
+  .thread-composer-model-control {
+    @apply w-32;
+  }
+
+  .thread-composer-control :deep(.composer-dropdown-trigger--pill) {
+    @apply h-7 px-2 text-[11px];
+  }
+
+  .thread-composer-control :deep(.composer-dropdown-chevron) {
+    @apply h-3 w-3;
+  }
+
+  .thread-composer-context-usage-inline {
+    @apply h-7 px-2 text-[11px];
+  }
 }
 </style>
