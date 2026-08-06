@@ -412,6 +412,43 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > **验证说明：** 单测新增 5 例锁定合并逻辑（`mergePersistedReasoning` 按轮次插入/同轮多条顺序/无匹配轮次回退末尾、`mergeLiveMessages` 按到达交错/对 persisted 去重，两函数已导出）。Playwright 实测：已实施面板隐藏、popover 三段式布局、reasoning 归位（注入带 turnIndex 存档）、展开字体 13px/zinc-500、宽度 711px==711px、真实多命令 turn 交错、暗色主题（面板/思考块/工作块）。遗留：live Thinking 折叠因本环境模型思考太快（reasoning 随 item 全量到达即存档）未能在真实 turn 中稳定复现交互点击，折叠/展开逻辑经代码与 DOM 渲染（heading + aria-expanded + 默认展开）确认。
 
+## 第十五轮交接需求（2026-08-07 提出）
+
+> **2026-08-07 第十五轮进展：** `ThreadConversation.vue` 拆分重构完成（5701 行 / 201KB → 2951 行 / 104KB，-48%）：3 个纯函数 utils + 8 个 UI 子组件。`vue-tsc --noEmit` 通过、`pnpm run build` 通过、单测 245 通过（2 个既有 Windows 环境性失败与改动无关）、Playwright 桌面/暗色/H5 全链路实测通过。手动测试文档：`tests/chat-composer-rendering/thread-conversation-split-refactor.md`。
+
+1. **`src/utils/conversationPaths.ts`**：路径/文件引用解析纯函数（`isFilePath`/`resolveRelativePath`/`parseFileReference`/`toLocalThreadUrl`/`headingTag` 等），从 `ThreadConversation.vue` 迁出，零组件依赖。
+2. **`src/utils/conversationMarkdown.ts`**：`InlineSegment`/`MessageBlock`/`ListItem`/`TableAlignment`/`TaskListItem` 类型 + 整条 markdown 解析链（`parseInlineSegmentsUncached`/`parseMessageBlocks` + 约 40 个内部辅助函数），含图片 URL 归一化 `toRenderableImageUrl`。
+3. **`src/utils/conversationFileChanges.ts`**：`TurnFileChangeSummary`/`DiffViewerLine` 类型 + fileChange 聚合（`aggregateFileChanges` 等）/展示（`fileChangeSummaryLabel` 等，`t`/`cwd` 参数化）/diff 行构建（`buildDiffViewerLines` 等）。`CODE_LANGUAGE_ALIASES` 同步迁入。
+4. **`WorkBlockItem.vue`**（238 行）：命令工作块——步骤序号圆点、命令、状态标签、输出展开（grid-template-rows 动画）、权限拦截提示。props：`command`/`stepIndex`/`expanded`/`compact`/`outputCondensed`；emit `toggle`。
+5. **`ToolCallRow.vue`**（116 行）：工具调用行，自含状态标签/类名/title 计算。
+6. **`ReasoningBlock.vue`**（88 行）：思考块，props `message`/`expanded`/`contentHtml`；`summary` 提取内聚到组件；13px/zinc-500 字体规则随迁。
+7. **`LiveOverlayItem.vue`**（103 行）：live overlay（Thinking 折叠/展开 + 错误反馈链接），`isLiveReasoningExpanded` 状态内聚，反馈诊断 composable 自引用。
+8. **`MessageToolbar.vue`**（110 行）：edit/fork/copy 工具栏，`:global(.message-row:hover)` 保持悬停显隐；图标组件随迁。
+9. **`FileLinkContextMenu.vue`**（129 行）：文件链接右键菜单自包含——`browseUrl`/`editUrl` props + `close` emit，window pointerdown/blur/Escape 监听内聚（`watch(visible)` 挂载/卸载），复制走 `copyTextToClipboard`。
+10. **`FileChangeSummaryBlock.vue`**（232 行）：文件变更摘要，standalone 与 anchored 两处模板合一（`inline` prop 区分），`actionable`/`actionStatus`/`actionErrorText`/`nextAction`/`actionLabel` 由父组件传入；emit `toggle`/`open-diff`/`request-action`。
+11. **`DiffViewer.vue`**（429 行）：diff 查看器全套（桌面侧栏 + 移动 sheet + 行渲染），props `change`/`changes`/`lines`/`isMobile`/`isFileListOpen`/`cwd`；emit `close`/`select-change`/`toggle-file-list`/`close-file-list`。
+12. **模板等价性验证**：沙箱 app-server 的 `thread-file-change-fallback` 端点返回空（无会话文件变更记录），fileChange/diff 无法用真实数据触发；改用 git 对照——`DiffViewer` 新旧 class 集合缺失 0，`FileChangeSummaryBlock` 4 个动态绑定一一对应（`cmd-expanded`/`cmd-chevron-open`/`cmd-group-visible`/`file-change-action-icon-redo`），渲染条件均未改动。
+13. **（顺带）** 拆除了大量死代码：live overlay 相关 4 个函数、toolCall 3 个函数、command 状态 3 个函数 + `PERMISSION_BLOCKED_PATTERNS`、右键菜单 8 个函数与 3 个 window 监听、`fileChangeKey` 本地副本、7 个未使用 import、约 900 行样式（随组件迁出）。
+
+> **验证说明：** Playwright 实测 24 项全部通过——work-block 渲染（12）/展开（0px→240px）、message-toolbar（20）、右键菜单开/关、ReasoningBlock（注入存档：渲染/折叠/摘要/13px 字体）、LiveOverlayItem（真实 turn 流式期间出现）、暗色（html.dark + work-block 边框 + toolbar）、H5（375×812 抽屉进入、无横向溢出、work-block 渲染/展开）。回归脚本留存 `output/playwright/r15-*.cjs`。后续全量移植方案见下方「Reasonix 消息列表全量移植方案」。
+
+## Reasonix 消息列表全量移植方案
+
+> 依据 2026-08-07 对 `D:\DeepSeek-Reasonix-main-v2`（React + TS 桌面前端）消息列表架构的调研（`Transcript.tsx` + `transcriptGrouping.ts` + `useController.ts`）。ThreadConversation 拆分重构已为以下改造清障（改 `ThreadConversation.vue` 时不再有巨文件负担）。
+
+1. **阶段 A（低风险）**
+   - 流式思考截断：移植 `displayReasoningText`（流式中只保留最后 12,000 字符 / 240 行），两处调用点（live overlay + reasoning block）
+   - Process Fold 基础版：按 `turnIndex` 把同轮思考块 + 工作块 + 工具调用包进可折叠容器（对应 Reasonix `TurnCollapse`），折叠条 `耗时 · 工具数 · 思考数`；沿用现有手动展开/收起交互，运行中自动展开、完成自动收起（含 `processFoldPreference` 持久化）
+2. **阶段 B（架构改造，依赖阶段 A 产物）**
+   - hot/warm/cold 三区：现有 `renderWindowStart`（50 条）+ `LOAD_MORE_CHUNK`（30）升级为三层——hot 区全量渲染（最近 N 轮）、warm 区可折叠摘要卡（提问预览 ≤80 字 + 工具数 + 回答预览，单轮展开）、cold 区分页「Load earlier」
+   - 流式渲染隔离：warm/cold 区 JSX 子树不随 token 重建（Vue 侧用 `defineComponent` + props 引用比较 + `shallowRef`；Reasonix 用 `React.memo` + `LiveStreamContext`，Vue 对应 provide/inject）
+3. **阶段 C（增强）**
+   - 问题导航 JumpBar（每轮一个圆点 + 悬停预览 + 点击跳转，对应 Reasonix `QuestionJumpBar`）
+   - 工具聚合：连续只读工具合并 `ReadOnlyBatch`、同类工具合并 `ToolGroup`（creation 模式）
+   - `partitionTurnItems` 通道拆分：有正文的回答留在折叠外，一轮内「回答后又干活」另起新折叠，warn/extension 永不折叠、steer 渲染在用户侧
+
+每个阶段独立验收（vue-tsc + vitest + Playwright 桌面/暗色/H5），阶段 A 的 Fold 容器是阶段 B 的组成部分，不返工。
+
 ## 未完成事项
 
 - **已推送**：`main` 与 `origin/main` 已同步至 `7d81389`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交）+ 第十三轮 8 项修复与文档 `7d81389`/`026c8a9` + 交接文档补齐提交记录 `c4f0a8c`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）

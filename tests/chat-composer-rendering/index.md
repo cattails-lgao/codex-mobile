@@ -50,3 +50,4 @@ Return to the [manual test index](../../tests.md).
 | [Work-process feed, thinking blocks, plan-in-composer, preview tabs, and sidebar polish](work-process-thinking-and-preview-tabs.md) |
 | [Composer policy buttons show selection, approval applies to app-server, Medium default effort, edit-message stops active turn](composer-policy-buttons-approval-effort-rollback-interrupt.md) |
 | [Plan popover layout, reasoning turn placement, thinking font, live interleave](plan-popover-layout-reasoning-turn-thinking-toggle.md) |
+| [ThreadConversation split refactor (3 utils + 8 child components)](thread-conversation-split-refactor.md) |
