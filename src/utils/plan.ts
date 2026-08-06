@@ -8,6 +8,11 @@ export type ParsedPlan = {
 /**
  * Parse plan text in the `- [ ] step` / `- [x] step` / `- [~] step` form into
  * steps with status, keeping any leading non-step lines as the explanation.
+ *
+ * Falls back to parsing markdown-style plan bodies (the shape the codex CLI
+ * persists from its `<proposed_plan>` blocks): section headings and prose
+ * become the explanation, while `- ` / `* ` bullets and numbered list items
+ * become pending steps.
  */
 export function parsePlanFromMessageText(text: string): ParsedPlan | null {
   const normalized = text.replace(/\r\n/g, '\n').trim()
@@ -39,7 +44,35 @@ export function parsePlanFromMessageText(text: string): ParsedPlan | null {
     explanationLines.push(trimmed)
   }
 
-  if (steps.length === 0) return null
+  if (steps.length === 0) {
+    // No checkbox steps: try the markdown fallback so codex `<proposed_plan>`
+    // bodies (headings + bullets) render in the plan panel instead of being
+    // dropped as unparseable.
+    const markdownSteps: UiPlanStep[] = []
+    const markdownExplanationLines: string[] = []
+    for (const line of normalized.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        if (markdownSteps.length === 0) markdownExplanationLines.push('')
+        continue
+      }
+      const bullet = trimmed.match(/^[-*]\s+(.+)$/) ?? trimmed.match(/^\d+[.)]\s+(.+)$/)
+      if (bullet) {
+        const step = bullet[1]?.trim()
+        if (step) {
+          markdownSteps.push({ step, status: 'pending' })
+          continue
+        }
+      }
+      markdownExplanationLines.push(trimmed)
+    }
+    if (markdownSteps.length === 0) return null
+    return {
+      explanation: markdownExplanationLines.join('\n').trim(),
+      steps: markdownSteps,
+    }
+  }
+
   return {
     explanation: explanationLines.join('\n').trim(),
     steps: steps.filter((step) => step.step.length > 0),

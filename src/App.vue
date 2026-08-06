@@ -614,7 +614,7 @@
             type="button"
             :title="t('Settings')"
             :aria-label="t('Settings')"
-            @click.stop="isSettingsOpen = !isSettingsOpen"
+            @click.stop="onToggleSettings"
           >
             <IconTablerSettings class="sidebar-settings-icon" />
           </button>
@@ -1150,6 +1150,12 @@
           </template>
         </section>
       </section>
+      <div
+        v-if="isMobile && isMobileRightPanelOpen"
+        class="content-right-panel-backdrop"
+        role="presentation"
+        @click="onCloseRightPanel"
+      />
       <aside
         v-if="canShowRightPanel && (isMobile || !isRightPanelCollapsed)"
         class="content-right-panel"
@@ -1874,6 +1880,23 @@ let threadWorktreeSummaryRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+// Guard against the mobile/desktop ghost-click sequence: pointerdown on the
+// dialog backdrop closes the settings dialog, then the browser retargets the
+// synthesized click to the settings trigger button underneath, which would
+// reopen the dialog. Remember when the dialog was closed by a backdrop
+// pointerdown and ignore a trigger click within a short window.
+let settingsCloseAtMs = 0
+const SETTINGS_TRIGGER_IGNORE_MS = 400
+
+function onToggleSettings(): void {
+  if (isSettingsOpen.value) {
+    settingsCloseAtMs = Date.now()
+    isSettingsOpen.value = false
+    return
+  }
+  if (Date.now() - settingsCloseAtMs < SETTINGS_TRIGGER_IGNORE_MS) return
+  isSettingsOpen.value = true
+}
 const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
 
@@ -3702,6 +3725,7 @@ function onDocumentPointerDown(event: PointerEvent): void {
   if (!isSettingsOpen.value) return
   if (settingsPanelRef.value?.contains(target)) return
   if (settingsButtonRef.value?.contains(target)) return
+  settingsCloseAtMs = Date.now()
   isSettingsOpen.value = false
 }
 
@@ -3711,6 +3735,7 @@ function onSettingsAreaClick(event: MouseEvent): void {
   if (!(target instanceof Node)) return
   if (settingsPanelRef.value?.contains(target)) return
   if (settingsButtonRef.value?.contains(target)) return
+  settingsCloseAtMs = Date.now()
   isSettingsOpen.value = false
 }
 
@@ -5732,6 +5757,10 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
   .content-right-panel.is-mobile-open {
     translate: 0 0;
+  }
+
+  .content-right-panel-backdrop {
+    @apply fixed inset-0 z-[1050] bg-black/40;
   }
 }
 

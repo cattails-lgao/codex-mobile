@@ -2298,8 +2298,8 @@ watch(
   @apply mt-2 w-full rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
 }
 
-.thread-composer-plan-panel-popover {
-  @apply max-h-[min(60vh,28rem)] overflow-y-auto;
+:deep(.thread-composer-plan-panel-popover) {
+  @apply min-w-full max-h-[min(60vh,28rem)] overflow-y-auto;
 }
 
 :global(:root.dark) .thread-composer-plan-panel {
@@ -2734,6 +2734,10 @@ watch(
 }
 
 @media (max-width: 767px) {
+  .thread-composer-controls {
+    @apply flex-nowrap;
+  }
+
   .thread-composer-model-control {
     @apply w-32;
   }
@@ -2747,7 +2751,7 @@ watch(
   }
 
   .thread-composer-context-usage-inline {
-    @apply h-7 px-2 text-[11px];
+    @apply h-7 px-2 text-[11px] shrink min-w-0;
   }
 }
 </style>
