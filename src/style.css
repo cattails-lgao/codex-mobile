@@ -45,7 +45,7 @@
   @apply bg-zinc-900 border-zinc-700;
 }
 
-:root.dark .sidebar-settings-button {
+:root.dark .sidebar-settings-icon-button {
   @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200;
 }
 
