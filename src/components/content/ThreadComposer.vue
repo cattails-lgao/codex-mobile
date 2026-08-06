@@ -371,7 +371,7 @@
               :disabled="isComposerConfigDisabled"
               @click="togglePlanMenu"
             >
-              <span class="thread-composer-plan-trigger-label">{{ t('Plan mode') }}</span>
+              <span class="thread-composer-plan-trigger-label">{{ planModeTriggerLabel }}</span>
               <IconTablerChevronDown class="thread-composer-plan-trigger-chevron" />
             </button>
           </template>
@@ -412,7 +412,7 @@
               :disabled="isComposerConfigDisabled"
               @click="toggleApprovalMenu"
             >
-              <span class="thread-composer-approval-trigger-label">{{ t('Approval policy') }}</span>
+              <span class="thread-composer-approval-trigger-label">{{ approvalPolicyTriggerLabel }}</span>
               <IconTablerChevronDown class="thread-composer-approval-trigger-chevron" />
             </button>
           </template>
@@ -809,6 +809,15 @@ const approvalPolicyChoices: Array<{ value: string; label: string }> = [
   { value: 'untrusted', label: 'Unless trusted' },
   { value: 'never', label: 'Never' },
 ]
+
+const planModeTriggerLabel = computed(() => {
+  const choice = collaborationModeChoices.value.find((candidate) => candidate.value === props.selectedCollaborationMode)
+  return choice ? t(choice.labelKey) : t('Plan mode')
+})
+const approvalPolicyTriggerLabel = computed(() => {
+  const choice = approvalPolicyChoices.find((candidate) => candidate.value === props.approvalPolicy)
+  return choice ? t(choice.label) : t('Approval policy')
+})
 
 const isPlanModeWaitingForModel = computed(() =>
   props.selectedCollaborationMode === 'plan' && props.selectedModel.trim().length === 0,

@@ -1,3 +1,7 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
 const SANDBOX_MODES = new Set([
   'read-only',
   'workspace-write',
@@ -50,7 +54,34 @@ function readApprovalPolicyFromEnv(): CodexApprovalPolicy {
   if (APPROVAL_POLICIES.has(candidate as CodexApprovalPolicy)) {
     return candidate as CodexApprovalPolicy
   }
+  const filePolicy = readApprovalPolicyFromConfigFileSync()
+  if (filePolicy) return filePolicy
   return DEFAULT_RUNTIME_CONFIG.approvalPolicy
+}
+
+function getCodexHomeDir(): string {
+  const codexHome = process.env.CODEX_HOME?.trim() ?? ''
+  return codexHome && codexHome.length > 0 ? codexHome : join(homedir(), '.codex')
+}
+
+function readApprovalPolicyFromConfigFileSync(): CodexApprovalPolicy | null {
+  try {
+    const configPath = join(getCodexHomeDir(), 'config.toml')
+    if (!existsSync(configPath)) return null
+    const raw = readFileSync(configPath, 'utf8')
+    const lines = raw.split(/\r?\n/u)
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('[')) continue
+      const match = /^approval_policy\s*=\s*"([^"]+)"/u.exec(trimmed)
+      if (!match) continue
+      const policy = parseApprovalPolicy(match[1] ?? '')
+      if (policy) return policy
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 function readMemoriesFromEnv(): boolean {

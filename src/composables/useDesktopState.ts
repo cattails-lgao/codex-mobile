@@ -1752,7 +1752,7 @@ export function useDesktopState() {
     const normalizedModelId = modelId.trim()
     const supportedEfforts = readSupportedReasoningEffortsForModel(normalizedModelId)
     if (preferredEffort && supportedEfforts.includes(preferredEffort)) return preferredEffort
-
+    if (supportedEfforts.includes('medium')) return 'medium'
     const defaultEffort = availableModelDefaultReasoningEfforts.value[normalizedModelId]
     if (defaultEffort && supportedEfforts.includes(defaultEffort)) return defaultEffort
     return supportedEfforts[0] ?? ''
@@ -5557,18 +5557,24 @@ export function useDesktopState() {
     if (isRollingBack.value) return
     if (!turnId.trim()) return
 
-    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    const matchedMessage = persisted.find((message) => message.turnId === turnId)
-    const turnIndex = typeof matchedMessage?.turnIndex === 'number' ? matchedMessage.turnIndex : -1
-    if (turnIndex < 0) return
-    const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
-    if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
-    const numTurns = maxTurnIndex - turnIndex + 1
-    if (numTurns < 1) return
-
     isRollingBack.value = true
     error.value = ''
     try {
+      // Stop an in-flight turn before rolling back: the agent is still
+      // generating on the server side and an edit racing it would be lost.
+      if (inProgressById.value[threadId] === true) {
+        await interruptSelectedThreadTurn()
+      }
+
+      const persisted = persistedMessagesByThreadId.value[threadId] ?? []
+      const matchedMessage = persisted.find((message) => message.turnId === turnId)
+      const turnIndex = typeof matchedMessage?.turnIndex === 'number' ? matchedMessage.turnIndex : -1
+      if (turnIndex < 0) return
+      const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
+      if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
+      const numTurns = maxTurnIndex - turnIndex + 1
+      if (numTurns < 1) return
+
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
       if (threadCwd) {
         await revertThreadFileChanges(threadId, turnId, threadCwd)
