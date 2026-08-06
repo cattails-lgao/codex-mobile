@@ -10,8 +10,8 @@
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
-| 工具链 | pnpm 11.18.0 · Node 22 |
-| 最近提交 | 2ff6052 |
+| 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
+| 最近提交 | 289665d |
 
 ---
 
@@ -29,11 +29,11 @@
 开发服务器正在 `http://127.0.0.1:4173/` 运行，页面与静态资源返回 200，codex app-server 的 RPC 调用（`thread/list`、`skills/list`、`config/read`、`provider-models`）均正常响应。以下为本次启动的实际日志：
 
 ```text
-VITE v6.4.3  ready in 7934 ms
+VITE v6.4.3  ready in 2029 ms
 ➜  Local:   http://127.0.0.1:4173/
-[codex-api-perf] POST /codex-api/rpc -> 200 (1483ms, rpcMethod=thread/list)
-[codex-api-perf] POST /codex-api/rpc -> 200 (1980ms, rpcMethod=skills/list)
-[codex-api-perf] POST /codex-api/rpc -> 200 (1604ms, rpcMethod=config/read)
+[codex-api-perf] POST /codex-api/rpc -> 200 (986ms, rpcMethod=thread/list)
+[codex-api-perf] GET /codex-api/meta/methods -> 200 (2372ms)
+[codex-api-perf] GET /codex-api/provider-models -> 200 (1694ms)
 ```
 
 端口占用情况：`5173` 被本机 HBuilderX uniapp 项目占用（非本仓库），因此开发统一使用 `4173` 规避冲突。
@@ -103,11 +103,15 @@ pnpm run dev --host 127.0.0.1 --port 4173
 ### TRAE 沙箱内
 
 ```powershell
+# PATH 必须含两段：fnm node 目录 + codex CLI 所在目录
+$env:PATH = 'C:\Users\cattails\AppData\Roaming\fnm\node-versions\v24.18.1\installation;C:\Users\cattails\AppData\Local\pnpm\bin;' + $env:PATH
 $env:CODEX_HOME='<项目目录>\.codex'
 pnpm run dev --host 127.0.0.1 --port 4173
 ```
 
 `CODEX_HOME` 必须指向沙箱允许写入的位置；项目内 `.codex/` 已被 `.gitignore` 忽略，不会污染 git。
+
+> **重要（2026-08-06 实测教训）**：`resolveCodexCommand()` 通过 PATH 里的 `codex.CMD` shim 定位 codex CLI。本机 codex-cli 0.146.0 由 pnpm 全局安装在 `C:\Users\cattails\AppData\Local\pnpm\bin`（shim `codex.CMD`），该目录不在默认 PATH 中。若只补 node 目录而漏掉 pnpm bin 目录，页面会报 `Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.`（`/codex-api/rpc` 502）。把 `AppData\Local\pnpm\bin` 前置进 PATH 后正常。
 
 ### 端口冲突
 
@@ -367,7 +371,7 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 ## 未完成事项
 
-- **已推送**：`main` 与 `origin/main` 已同步至 `2ff6052`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052`）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 `socks5h://127.0.0.1:10808` 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，或配置持久代理
+- **已推送**：`main` 与 `origin/main` 已同步至 `289665d`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交））。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可
 - **未跟踪文件**：工作区存在 `.codegraph/`、`codex-parity-plan/`、`documentation/app-server-schemas/typescript/`、`codex-config-summary.md`（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧）**：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
