@@ -3328,7 +3328,7 @@ function parseExecCommandOutput(output: string): { exitCode: number | null; wall
 
   for (const line of output.split('\n')) {
     if (!pastHeader) {
-      const exitMatch = line.match(/^Process exited with code (\d+)/)
+      const exitMatch = line.match(/^Process exited with code (\d+)/) ?? line.match(/^Exit code:\s*(\d+)/)
       if (exitMatch) {
         exitCode = Number.parseInt(exitMatch[1]!, 10)
         continue
@@ -3407,13 +3407,18 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
       continue
     }
 
-    if (payload.type === 'function_call' && payload.name === 'exec_command') {
+    if (payload.type === 'function_call') {
+      const toolName = readNonEmptyString(payload.name)
+      const isCommandCall = toolName === 'exec_command' || toolName === 'shell_command'
+      if (!isCommandCall) continue
       const callId = readNonEmptyString(payload.call_id)
       if (!callId) continue
       let cmd = ''
       try {
         const args = JSON.parse(payload.arguments as string) as Record<string, unknown>
-        cmd = typeof args.cmd === 'string' ? args.cmd : ''
+        cmd = typeof args.cmd === 'string'
+          ? args.cmd
+          : (typeof args.command === 'string' ? args.command : '')
       } catch { /* empty */ }
       const command: SessionRecoveredCommand = {
         id: `session-cmd-${callId}`,
@@ -3957,16 +3962,16 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
     if (!slots || slots.length === 0) return turn
 
     const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
-    const alreadyHasRecoveredItems = existingItems.some((it) => it.type === 'commandExecution' || it.type === 'fileChange')
-    if (alreadyHasRecoveredItems) return turn
+    // Idempotence: a turn that already went through session-log recovery
+    // carries session-recovered item ids.
+    if (existingItems.some((it) => typeof it.id === 'string' && it.id.startsWith('session-'))) return turn
 
     const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
-    const nonAgentNonUserItems = existingItems.filter((it) => it.type !== 'agentMessage' && it.type !== 'userMessage')
     const userMessages = existingItems.filter((it) => it.type === 'userMessage')
 
     let agentIdx = 0
     const interleaved: Record<string, unknown>[] = [...userMessages]
-
+    const recoveredIds = new Set<string>()
     for (const slot of slots) {
       if (slot.type === 'agentMessage') {
         if (agentIdx < agentMessages.length) {
@@ -3975,8 +3980,10 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
         }
       } else if (slot.type === 'commandExecution' && slot.command) {
         interleaved.push(slot.command as unknown as Record<string, unknown>)
+        recoveredIds.add(slot.command.id)
       } else if (slot.type === 'fileChange' && slot.fileChange) {
         interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
+        recoveredIds.add(slot.fileChange.id)
       }
     }
 
@@ -3985,13 +3992,63 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
       agentIdx++
     }
 
-    interleaved.push(...nonAgentNonUserItems)
+    // Append whatever else the server persisted (reasoning, tool calls, plan,
+    // turn errors, …) that the session-log slots did not cover. When the
+    // session log recovered this turn's commands/file changes, drop the
+    // commandExecution/fileChange rows the bridge captured from live
+    // notifications (they were appended at the end and would otherwise stack).
+    const hasRecoveredWorkItems = recoveredIds.size > 0
+    for (const item of existingItems) {
+      if (item.type === 'userMessage' || item.type === 'agentMessage') continue
+      if (recoveredIds.has(String(item.id ?? ''))) continue
+      if (hasRecoveredWorkItems && (item.type === 'commandExecution' || item.type === 'fileChange')) continue
+      interleaved.push(item)
+    }
 
     return {
       ...turnRecord,
       items: interleaved,
     }
   })
+}
+
+function stripWindowsLongPathPrefix(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('\\\\?\\UNC\\')) return `\\\\${trimmed.slice('\\\\?\\UNC\\'.length)}`
+  if (trimmed.startsWith('\\\\?\\')) return trimmed.slice('\\\\?\\'.length)
+  return trimmed
+}
+
+/**
+ * Apply deterministic session-log chronology recovery to a thread/read result:
+ * read the session log at `thread.path`, then interleave assistant messages
+ * with the commands/file changes the CLI actually ran, in the order they were
+ * streamed. This makes the persisted feed match the live view instead of
+ * stacking all commands and all text into separate groups.
+ */
+async function mergeSessionCommandsIntoThreadResult(result: unknown): Promise<unknown> {
+  const record = asRecord(result)
+  const thread = asRecord(record?.thread)
+  const turns = Array.isArray(thread?.turns) ? thread.turns : null
+  const sessionPath = stripWindowsLongPathPrefix(readNonEmptyString(thread?.path))
+  if (!record || !thread || !turns || turns.length === 0 || !sessionPath || !isAbsolute(sessionPath)) {
+    return result
+  }
+
+  try {
+    const sessionLogRaw = await readFile(sessionPath, 'utf8')
+    const mergedTurns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
+    if (mergedTurns === turns) return result
+    return {
+      ...record,
+      thread: {
+        ...thread,
+        turns: mergedTurns,
+      },
+    }
+  } catch {
+    return result
+  }
 }
 
 function isExactPhraseMatch(query: string, doc: ThreadSearchDocument): boolean {
@@ -8139,9 +8196,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
           : errorMergedResult
         const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, listMergedResult)
-        const result = THREAD_METHODS_WITH_TURNS.has(body.method)
+        const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
           : sanitizedResult
+        const result = THREAD_METHODS_WITH_TURNS.has(body.method)
+          ? await mergeSessionCommandsIntoThreadResult(skillMergedResult)
+          : skillMergedResult
 
 	        if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(body.method)) {
 	          const rpcRecord = asRecord(result)
@@ -8211,7 +8271,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             },
           }
           const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
-          const result = await mergeSessionSkillInputsIntoThreadResult(sanitized)
+          const skillMerged = await mergeSessionSkillInputsIntoThreadResult(sanitized)
+          const result = await mergeSessionCommandsIntoThreadResult(skillMerged)
 
           setJson(res, 200, {
             result,

@@ -704,30 +704,6 @@ export function normalizeThreadGroupsV2(payload: ThreadListResponse): UiProjectG
   return groupThreadsByProject(uiThreads)
 }
 
-const TURN_WORK_MESSAGE_TYPES = new Set(['reasoning', 'plan', 'plan.live', 'commandExecution', 'toolCall'])
-
-/**
- * Real codex sessions persist a turn's items in chronological order, which
- * places the streamed agent text BEFORE the commands/tools that the assistant
- * actually ran. To match the trae-work process style ("work happens right
- * after the user message, summary text follows"), move a turn's work items
- * (reasoning, plan, command execution, tool calls) to directly after the
- * turn's first user message, preserving their relative order.
- */
-function reorderTurnForWorkProcess(messages: UiMessage[]): UiMessage[] {
-  if (messages.length === 0) return messages
-  const isWorkMessage = (message: UiMessage): boolean =>
-    TURN_WORK_MESSAGE_TYPES.has(message.messageType ?? '')
-  const work = messages.filter(isWorkMessage)
-  if (work.length === 0) return messages
-  const rest = messages.filter((message) => !isWorkMessage(message))
-  const firstUserIndex = rest.findIndex((message) => message.role === 'user')
-  if (firstUserIndex < 0) return [...work, ...rest]
-  const before = rest.slice(0, firstUserIndex + 1)
-  const after = rest.slice(firstUserIndex + 1)
-  return [...before, ...work, ...after]
-}
-
 export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnIndex = 0): UiMessage[] {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const messages: UiMessage[] = []
@@ -755,7 +731,11 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
         turnIndex,
       })
     }
-    messages.push(...reorderTurnForWorkProcess(turnMessages))
+    // Keep the server-provided item order: the app-server (and the bridge's
+    // session-log recovery) already persists a turn chronologically, so
+    // assistant text and tool/command items interleave naturally. Re-grouping
+    // them here stacks all work items together, which reads as disconnected.
+    messages.push(...turnMessages)
   }
   // A thread accumulates one ContextCompaction item per compaction run. Keep
   // only the most recent one in the feed so repeated compactions do not stack

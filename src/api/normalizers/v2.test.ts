@@ -225,7 +225,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.map((message) => message.id)).toContain('agent-3')
   })
 
-  it('moves work items (reasoning/commands/tools/plan) right after the user message', () => {
+  it('keeps work items in the persisted chronological order', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
       { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
       { type: 'agentMessage', id: 'agent-1', text: 'I will work on it' },
@@ -234,9 +234,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
     ]))
 
     const order = messages.map((message) => message.id)
-    expect(order.indexOf('user-1')).toBe(0)
-    expect(order.indexOf('cmd-1')).toBe(1)
-    expect(order.indexOf('cmd-1')).toBeLessThan(order.indexOf('agent-2'))
+    expect(order).toEqual(['user-1', 'agent-1', 'cmd-1', 'agent-2'])
     expect(messages.find((message) => message.id === 'cmd-1')?.messageType).toBe('commandExecution')
   })
 

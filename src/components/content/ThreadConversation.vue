@@ -78,6 +78,9 @@
                     ></pre>
                   </div>
                 </div>
+                <p v-if="commandPermissionHint(cmd)" class="work-block-permission-hint" role="note">
+                  {{ commandPermissionHint(cmd) }}
+                </p>
               </div>
             </div>
           </div>
@@ -1165,6 +1168,32 @@ function commandStatusClass(message: UiMessage): string {
   if (s === 'inProgress') return 'cmd-status-running'
   if (s === 'completed' && message.commandExecution?.exitCode === 0) return 'cmd-status-ok'
   return 'cmd-status-error'
+}
+
+const PERMISSION_BLOCKED_PATTERNS = [
+  /access to the path .* is denied/iu,
+  /access is denied/iu,
+  /permission denied/iu,
+  /not permitted/iu,
+  /EACCES|EPERM/iu,
+  /denied access|deny access/iu,
+  /拒绝访问/iu,
+  /没有权限/iu,
+  /权限不足/iu,
+  /要求提权|需要提权|require_escalated/iu,
+]
+
+function commandPermissionHint(message: UiMessage): string {
+  const execution = message.commandExecution
+  if (!execution) return ''
+  const failed =
+    execution.status === 'failed' ||
+    execution.status === 'declined' ||
+    (typeof execution.exitCode === 'number' && execution.exitCode !== 0)
+  if (!failed) return ''
+  const output = execution.aggregatedOutput ?? ''
+  if (!output || !PERMISSION_BLOCKED_PATTERNS.some((pattern) => pattern.test(output))) return ''
+  return t('Command blocked by a permission or sandbox restriction; no approval prompt was shown. Check the approval policy or trusted directories if you expected one.')
 }
 
 function pruneCommandIdSet(source: Set<string>, validIds: Set<string>): Set<string> {
@@ -5096,6 +5125,14 @@ onBeforeUnmount(() => {
 
 .work-block-output.cmd-output-condensed {
   max-height: 9rem;
+}
+
+.work-block-permission-hint {
+  @apply mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800;
+}
+
+:global(:root.dark) .work-block-permission-hint {
+  @apply border-amber-900 bg-amber-950/50 text-amber-300;
 }
 
 :global(:root.dark) .work-block {

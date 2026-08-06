@@ -747,6 +747,7 @@ const zhCN: Record<string, string> = {
   'Select a chat target for this automation': '为此自动化选择一个聊天目标',
   'Select a project target for this automation': '为此自动化选择一个项目目标',
   'Stopped': '已停止',
+  'Command blocked by a permission or sandbox restriction; no approval prompt was shown. Check the approval policy or trusted directories if you expected one.': '命令因权限或沙箱限制被拦截，未弹出审批提示。如预期应出现审批，请检查审批策略或受信任目录。',
   'Target': '目标',
   'This creates a heartbeat automation attached to the selected chat.': '这会在所选聊天上创建一个心跳自动化。',
   'This creates a project automation attached to the selected project folder.': '这会在所选项目文件夹上创建一个项目自动化。',
