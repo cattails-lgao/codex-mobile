@@ -2268,6 +2268,7 @@ defineExpose({
   openAutomationEditorFromPanel,
   openAutomationCreatorFromPanel,
   openRenameThreadDialog,
+  openRecycleBin,
 })
 
 function isPathLikeProjectName(value: string): boolean {

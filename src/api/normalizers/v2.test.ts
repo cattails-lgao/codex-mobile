@@ -224,6 +224,59 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.map((message) => message.id)).toContain('agent-2')
     expect(messages.map((message) => message.id)).toContain('agent-3')
   })
+
+  it('moves work items (reasoning/commands/tools/plan) right after the user message', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
+      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it' },
+      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
+      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass' },
+    ]))
+
+    const order = messages.map((message) => message.id)
+    expect(order.indexOf('user-1')).toBe(0)
+    expect(order.indexOf('cmd-1')).toBe(1)
+    expect(order.indexOf('cmd-1')).toBeLessThan(order.indexOf('agent-2'))
+    expect(messages.find((message) => message.id === 'cmd-1')?.messageType).toBe('commandExecution')
+  })
+
+  it('renders persisted reasoning items with summary and content', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'think hard', text_elements: [] }] },
+      { type: 'reasoning', id: 'reason-1', summary: ['step one'], content: ['line one', 'line two'] },
+      { type: 'agentMessage', id: 'agent-1', text: 'done' },
+    ]))
+
+    expect(messages).toHaveLength(3)
+    const reasoning = messages.find((message) => message.id === 'reason-1')
+    expect(reasoning?.messageType).toBe('reasoning')
+    expect(reasoning?.text).toBe('line one\nline two')
+    expect(reasoning?.reasoning).toEqual({ summary: ['step one'], content: ['line one', 'line two'] })
+    expect(messages.map((message) => message.id).indexOf('reason-1')).toBe(1)
+  })
+
+  it('renders persisted mcpToolCall items with a toolCall payload', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'use a tool', text_elements: [] }] },
+      {
+        type: 'mcpToolCall',
+        id: 'tool-1',
+        server: 'github',
+        tool: 'create_issue',
+        status: 'completed',
+        arguments: {},
+        result: { content: [], structuredContent: {} },
+        error: null,
+        durationMs: 42,
+      },
+      { type: 'agentMessage', id: 'agent-1', text: 'opened' },
+    ]))
+
+    const tool = messages.find((message) => message.id === 'tool-1')
+    expect(tool?.messageType).toBe('toolCall')
+    expect(tool?.toolCall).toMatchObject({ server: 'github', tool: 'create_issue', status: 'completed', durationMs: 42 })
+    expect(messages.map((message) => message.id).indexOf('tool-1')).toBe(1)
+  })
 })
 
 describe('readThreadInProgressFromResponse', () => {

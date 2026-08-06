@@ -471,7 +471,48 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
   }
 
   if (item.type === 'reasoning') {
-    return []
+    const raw = item as unknown as Record<string, unknown>
+    const summary = Array.isArray(raw.summary) ? raw.summary.filter((entry): entry is string => typeof entry === 'string') : []
+    const content = Array.isArray(raw.content) ? raw.content.filter((entry): entry is string => typeof entry === 'string') : []
+    const summaryText = summary.join('\n').trim()
+    const contentText = content.join('\n').trim()
+    const text = contentText || summaryText
+    if (!text) return []
+    return [
+      {
+        id: item.id,
+        role: 'assistant',
+        text,
+        messageType: 'reasoning',
+        reasoning: { summary, content },
+      },
+    ]
+  }
+
+  if (item.type === 'mcpToolCall') {
+    const raw = item as unknown as Record<string, unknown>
+    const server = typeof raw.server === 'string' ? raw.server : ''
+    const tool = typeof raw.tool === 'string' ? raw.tool : ''
+    if (!server && !tool) return []
+    const rawStatus = raw.status as Record<string, unknown> | string | undefined
+    let status: 'inProgress' | 'completed' | 'failed' = 'completed'
+    const statusType = typeof rawStatus === 'string' ? rawStatus : rawStatus?.type
+    if (statusType === 'inProgress' || statusType === 'in_progress') status = 'inProgress'
+    if (statusType === 'failed' || statusType === 'error') status = 'failed'
+    const error =
+      typeof raw.error === 'object' && raw.error !== null
+        ? String((raw.error as Record<string, unknown>).message ?? '')
+        : ''
+    const durationMs = typeof raw.durationMs === 'number' ? raw.durationMs : null
+    return [
+      {
+        id: item.id,
+        role: 'system' as const,
+        text: tool,
+        messageType: 'toolCall',
+        toolCall: { server, tool, status, error, durationMs },
+      },
+    ]
   }
 
 
@@ -663,6 +704,30 @@ export function normalizeThreadGroupsV2(payload: ThreadListResponse): UiProjectG
   return groupThreadsByProject(uiThreads)
 }
 
+const TURN_WORK_MESSAGE_TYPES = new Set(['reasoning', 'plan', 'plan.live', 'commandExecution', 'toolCall'])
+
+/**
+ * Real codex sessions persist a turn's items in chronological order, which
+ * places the streamed agent text BEFORE the commands/tools that the assistant
+ * actually ran. To match the trae-work process style ("work happens right
+ * after the user message, summary text follows"), move a turn's work items
+ * (reasoning, plan, command execution, tool calls) to directly after the
+ * turn's first user message, preserving their relative order.
+ */
+function reorderTurnForWorkProcess(messages: UiMessage[]): UiMessage[] {
+  if (messages.length === 0) return messages
+  const isWorkMessage = (message: UiMessage): boolean =>
+    TURN_WORK_MESSAGE_TYPES.has(message.messageType ?? '')
+  const work = messages.filter(isWorkMessage)
+  if (work.length === 0) return messages
+  const rest = messages.filter((message) => !isWorkMessage(message))
+  const firstUserIndex = rest.findIndex((message) => message.role === 'user')
+  if (firstUserIndex < 0) return [...work, ...rest]
+  const before = rest.slice(0, firstUserIndex + 1)
+  const after = rest.slice(firstUserIndex + 1)
+  return [...before, ...work, ...after]
+}
+
 export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnIndex = 0): UiMessage[] {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const messages: UiMessage[] = []
@@ -672,15 +737,16 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
     const rawTurnId = typeof turn?.id === 'string' ? turn.id.trim() : ''
     const turnId = rawTurnId.length > 0 ? rawTurnId : undefined
     const items = Array.isArray(turn.items) ? turn.items : []
+    const turnMessages: UiMessage[] = []
     for (const item of items) {
       for (const msg of toUiMessages(item)) {
-        messages.push({ ...msg, turnId, turnIndex })
+        turnMessages.push({ ...msg, turnId, turnIndex })
       }
     }
     const errorText = readTurnErrorText(turn)
     if (turn.status === 'failed' && errorText) {
       const errorIdBase = turnId ?? `turn-${turnIndex}`
-      messages.push({
+      turnMessages.push({
         id: `${errorIdBase}-error`,
         role: 'system',
         text: errorText,
@@ -689,6 +755,7 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
         turnIndex,
       })
     }
+    messages.push(...reorderTurnForWorkProcess(turnMessages))
   }
   // A thread accumulates one ContextCompaction item per compaction run. Keep
   // only the most recent one in the feed so repeated compactions do not stack

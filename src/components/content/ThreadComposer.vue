@@ -12,20 +12,36 @@
       class="thread-composer-plan-panel"
       :data-streaming="planPanel.streaming"
     >
-      <button
-        type="button"
-        class="thread-composer-plan-panel-header"
-        :aria-expanded="isPlanPanelExpanded"
-        @click="isPlanPanelExpanded = !isPlanPanelExpanded"
+      <ComposerPopover
+        :open="isPlanDetailOpen"
+        align="center"
+        width="lg"
+        panel-class="thread-composer-plan-panel-popover"
+        :aria-label="t('Plan')"
+        @update:open="isPlanDetailOpen = $event"
       >
-        <span class="thread-composer-plan-panel-chevron" :class="{ 'is-open': isPlanPanelExpanded }">▶</span>
-        <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
-        <span v-if="planPanel.streaming" class="thread-composer-plan-panel-badge">{{ t('Updating') }}</span>
-        <span class="thread-composer-plan-panel-progress">
-          {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
-        </span>
-      </button>
-      <div v-if="isPlanPanelExpanded" class="thread-composer-plan-panel-body">
+        <template #trigger>
+          <button
+            type="button"
+            class="thread-composer-plan-panel-header"
+            :aria-expanded="isPlanDetailOpen"
+            @click="isPlanDetailOpen = !isPlanDetailOpen"
+          >
+            <span class="thread-composer-plan-panel-icon" aria-hidden="true">🗒</span>
+            <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
+            <span v-if="planPanel.streaming" class="thread-composer-plan-panel-badge">{{ t('Updating') }}</span>
+            <span class="thread-composer-plan-panel-progress">
+              {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
+            </span>
+            <span class="thread-composer-plan-panel-latest" :title="latestPlanStep?.step ?? ''">
+              <span v-if="latestPlanStep" class="thread-composer-plan-panel-latest-status" :data-status="latestPlanStep.status">
+                {{ planStepStatusIcon(latestPlanStep.status) }}
+              </span>
+              <span class="thread-composer-plan-panel-latest-text">{{ latestPlanStep?.step ?? '' }}</span>
+            </span>
+            <IconTablerChevronDown class="thread-composer-plan-panel-chevron" />
+          </button>
+        </template>
         <p v-if="planPanel.explanation" class="thread-composer-plan-panel-explanation">{{ planPanel.explanation }}</p>
         <ol class="thread-composer-plan-panel-steps">
           <li
@@ -40,7 +56,15 @@
             <span class="thread-composer-plan-panel-step-text">{{ step.step }}</span>
           </li>
         </ol>
-      </div>
+        <button
+          type="button"
+          class="thread-composer-plan-panel-implement"
+          :disabled="planPanel.streaming"
+          @click="onPlanPanelImplement"
+        >
+          {{ t('Implement plan') }}
+        </button>
+      </ComposerPopover>
     </div>
 
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
@@ -374,7 +398,7 @@
         <ComposerPopover
           v-if="!isMobile"
           :open="isApprovalMenuOpen"
-          align="end"
+          align="center"
           width="md"
           :aria-label="t('Approval policy')"
           @update:open="isApprovalMenuOpen = $event"
@@ -438,6 +462,22 @@
           :disabled="isComposerConfigDisabled || reasoningOptions.length === 0"
           @update:model-value="onReasoningEffortSelect"
         />
+
+        <button
+          v-if="contextUsageView"
+          type="button"
+          class="thread-composer-context-usage-inline"
+          :class="{
+            'is-warning': contextUsageTone === 'warning',
+            'is-danger': contextUsageTone === 'danger',
+          }"
+          :title="contextUsageTooltipText"
+          :aria-label="t('Context')"
+          @click="onRequestCompactContext"
+        >
+          <span class="thread-composer-context-usage-value">{{ contextUsageSummaryText }}</span>
+          <span v-if="contextUsageTone !== 'healthy'" class="thread-composer-context-usage-compact">{{ t('Compact') }}</span>
+        </button>
       </div>
 
     </div>
@@ -590,6 +630,8 @@ const emit = defineEmits<{
   'update:selected-speed-mode': [mode: SpeedMode]
   'update:approval-policy': [value: string]
   'save-approval-policy': []
+  'implement-plan': []
+  'compact-context': []
 }>()
 const { t } = useUiLanguage()
 
@@ -684,10 +726,19 @@ const allSlashCommands = computed<SlashCommand[]>(() => [
   ...buildSkillSlashCommands(props.skills ?? []),
 ])
 const isComposerExpanded = ref(false)
-const isPlanPanelExpanded = ref(true)
+const isPlanDetailOpen = ref(false)
 const completedPlanStepCount = computed(() => {
   const steps = props.planPanel?.steps ?? []
   return steps.filter((step) => step.status === 'completed').length
+})
+const latestPlanStep = computed(() => {
+  const steps = props.planPanel?.steps ?? []
+  if (steps.length === 0) return null
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]
+    if (step.status === 'inProgress') return step
+  }
+  return steps[steps.length - 1]
 })
 function planStepStatusIcon(status: 'pending' | 'inProgress' | 'completed'): string {
   switch (status) {
@@ -698,6 +749,10 @@ function planStepStatusIcon(status: 'pending' | 'inProgress' | 'completed'): str
     default:
       return '○'
   }
+}
+function onPlanPanelImplement(): void {
+  isPlanDetailOpen.value = false
+  emit('implement-plan')
 }
 const isDraftOverflowing = ref(false)
 let composerOverflowMeasurementQueued = false
@@ -851,6 +906,11 @@ const contextUsageSummaryText = computed(() => contextUsageView.value?.summaryTe
 const contextUsageTooltipText = computed(() => contextUsageView.value?.tooltipText ?? '')
 const contextUsageRemainingPercent = computed(() => contextUsageView.value?.percentRemaining ?? 0)
 const contextUsageTone = computed(() => contextUsageView.value?.tone ?? 'healthy')
+
+function onRequestCompactContext(): void {
+  if (contextUsageTone.value === 'healthy') return
+  emit('compact-context')
+}
 
 function formatPlanType(planType: string | null | undefined): string {
   if (!planType || planType === 'unknown') return ''
@@ -2138,7 +2198,7 @@ watch(
 }
 
 .thread-composer-plan-panel {
-  @apply mb-2 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50;
+  @apply mb-2 overflow-visible rounded-xl border border-zinc-200 bg-zinc-50;
 }
 
 .thread-composer-plan-panel[data-streaming='true'] {
@@ -2146,15 +2206,15 @@ watch(
 }
 
 .thread-composer-plan-panel-header {
-  @apply flex w-full items-center gap-2 border-0 bg-transparent px-2.5 py-1.5 text-left;
+  @apply flex w-full items-center gap-2 border-0 bg-transparent px-2.5 py-1.5 text-left transition hover:bg-zinc-100;
+}
+
+.thread-composer-plan-panel-icon {
+  @apply text-sm leading-none;
 }
 
 .thread-composer-plan-panel-chevron {
-  @apply text-[10px] text-zinc-400 transition-transform duration-150;
-}
-
-.thread-composer-plan-panel-chevron.is-open {
-  @apply rotate-90;
+  @apply h-3.5 w-3.5 shrink-0 text-zinc-400;
 }
 
 .thread-composer-plan-panel-title {
@@ -2166,15 +2226,35 @@ watch(
 }
 
 .thread-composer-plan-panel-progress {
-  @apply ml-auto text-[11px] tabular-nums text-zinc-500;
+  @apply shrink-0 text-[11px] tabular-nums text-zinc-500;
 }
 
-.thread-composer-plan-panel-body {
-  @apply border-t border-zinc-200 px-2.5 py-2;
+.thread-composer-plan-panel-latest {
+  @apply flex min-w-0 flex-1 items-center gap-1.5;
+}
+
+.thread-composer-plan-panel-latest-status {
+  @apply shrink-0 text-xs leading-none;
+}
+
+.thread-composer-plan-panel-latest-status[data-status='completed'] {
+  @apply text-emerald-600;
+}
+
+.thread-composer-plan-panel-latest-status[data-status='inProgress'] {
+  @apply text-sky-600;
+}
+
+.thread-composer-plan-panel-latest-status[data-status='pending'] {
+  @apply text-zinc-400;
+}
+
+.thread-composer-plan-panel-latest-text {
+  @apply min-w-0 truncate text-xs text-zinc-600;
 }
 
 .thread-composer-plan-panel-explanation {
-  @apply m-0 mb-1.5 text-xs leading-5 text-zinc-500;
+  @apply m-0 mb-1.5 whitespace-pre-wrap text-xs leading-5 text-zinc-500;
 }
 
 .thread-composer-plan-panel-steps {
@@ -2205,6 +2285,14 @@ watch(
   @apply min-w-0;
 }
 
+.thread-composer-plan-panel-implement {
+  @apply mt-2 w-full rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
+}
+
+.thread-composer-plan-panel-popover {
+  @apply max-h-[min(60vh,28rem)] overflow-y-auto;
+}
+
 :global(:root.dark) .thread-composer-plan-panel {
   @apply border-zinc-700 bg-zinc-900;
 }
@@ -2213,12 +2301,12 @@ watch(
   @apply border-sky-800 bg-sky-950/40;
 }
 
-:global(:root.dark) .thread-composer-plan-panel-title {
-  @apply text-zinc-100;
+:global(:root.dark) .thread-composer-plan-panel-header:hover {
+  @apply bg-zinc-800/70;
 }
 
-:global(:root.dark) .thread-composer-plan-panel-body {
-  @apply border-zinc-700;
+:global(:root.dark) .thread-composer-plan-panel-title {
+  @apply text-zinc-100;
 }
 
 :global(:root.dark) .thread-composer-plan-panel-explanation {
@@ -2231,6 +2319,14 @@ watch(
 
 :global(:root.dark) .thread-composer-plan-panel-progress {
   @apply text-zinc-400;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-latest-text {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .thread-composer-plan-panel-implement {
+  @apply bg-zinc-100 text-zinc-900 hover:bg-white disabled:bg-zinc-700 disabled:text-zinc-400;
 }
 
 .thread-composer-attachments {
@@ -2323,29 +2419,40 @@ watch(
 
 .thread-composer-context-usage-inline {
   --context-usage-accent: rgb(34 197 94);
-  @apply ml-auto inline-flex min-w-0 max-w-[56%] items-center gap-2 text-right;
+  @apply inline-flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 text-xs transition hover:bg-zinc-100;
 }
 
 .thread-composer-context-usage-inline.is-warning {
   --context-usage-accent: rgb(245 158 11);
+  @apply border-amber-200 bg-amber-50 hover:bg-amber-100;
 }
 
 .thread-composer-context-usage-inline.is-danger {
   --context-usage-accent: rgb(239 68 68);
+  @apply border-rose-200 bg-rose-50 hover:bg-rose-100;
 }
 
-.thread-composer-context-usage-inline-value {
+.thread-composer-context-usage-value {
   @apply min-w-0 truncate font-medium tabular-nums;
   color: var(--context-usage-accent);
 }
 
-.thread-composer-context-usage-inline-bar {
-  @apply block h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-zinc-200/80;
+.thread-composer-context-usage-compact {
+  @apply shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold;
+  color: var(--context-usage-accent);
+  background: color-mix(in srgb, var(--context-usage-accent) 15%, transparent);
 }
 
-.thread-composer-context-usage-inline-bar-fill {
-  @apply block h-full rounded-full transition-[width] duration-200 ease-out;
-  background: var(--context-usage-accent);
+:global(:root.dark) .thread-composer-context-usage-inline {
+  @apply border-zinc-700 bg-zinc-900 hover:bg-zinc-800;
+}
+
+:global(:root.dark) .thread-composer-context-usage-inline.is-warning {
+  @apply border-amber-900 bg-amber-950/50 hover:bg-amber-950;
+}
+
+:global(:root.dark) .thread-composer-context-usage-inline.is-danger {
+  @apply border-rose-900 bg-rose-950/50 hover:bg-rose-950;
 }
 
 .thread-composer-main {

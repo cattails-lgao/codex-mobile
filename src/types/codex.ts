@@ -239,11 +239,26 @@ export type UiMessage = {
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData
+  reasoning?: UiReasoningData
+  toolCall?: UiToolCallData
   plan?: UiPlanData
   turnId?: string
   turnIndex?: number
   isAutomationRun?: boolean
   automationDisplayName?: string | null
+}
+
+export type UiReasoningData = {
+  summary: string[]
+  content: string[]
+}
+
+export type UiToolCallData = {
+  server: string
+  tool: string
+  status: 'inProgress' | 'completed' | 'failed'
+  error?: string
+  durationMs?: number | null
 }
 
 export type UiServerRequest = {

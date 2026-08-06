@@ -83,6 +83,22 @@
           </div>
         </div>
 
+        <div v-else-if="isToolCallMessage(message)" class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
+            <div class="tool-call-block" :class="toolCallStatusClass(message)" :title="toolCallTitle(message)">
+              <span class="tool-call-icon" aria-hidden="true">🛠</span>
+              <span v-if="message.toolCall?.server" class="tool-call-server">{{ message.toolCall.server }}</span>
+              <code class="tool-call-name">{{ message.toolCall?.tool || message.text || '(tool)' }}</code>
+              <span class="tool-call-status">
+                <span v-if="message.toolCall?.status === 'inProgress'" class="work-block-spinner" aria-hidden="true" />
+                <span v-else-if="message.toolCall?.status === 'completed'" class="tool-call-status-icon" aria-hidden="true">✓</span>
+                <span v-else class="tool-call-status-icon" aria-hidden="true">✗</span>
+                {{ toolCallStatusLabel(message) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div
           v-else-if="isFileChangeMessage(message)"
           class="message-row"
@@ -238,36 +254,20 @@
                 <div v-if="message.messageType === 'worked'" class="work-summary-wrap" aria-live="polite">
                   <p class="work-summary-text">{{ message.text }}</p>
                 </div>
-                <div v-else-if="isPlanMessage(message)" class="plan-card" :data-streaming="message.messageType === 'plan.live'">
-                  <div class="plan-card-header">
-                    <p class="plan-card-title">{{ t('Plan') }}</p>
-                    <span v-if="message.messageType === 'plan.live'" class="plan-card-badge">{{ t('Updating') }}</span>
-                  </div>
-                  <div
-                    v-if="readPlanExplanation(message)"
-                    class="plan-card-explanation plan-card-markdown"
-                    v-html="renderMarkdownBlocksAsHtml(readPlanExplanation(message))"
-                  />
-                  <ol v-if="readPlanSteps(message).length > 0" class="plan-step-list">
-                    <li
-                      v-for="(step, stepIndex) in readPlanSteps(message)"
-                      :key="`${message.id}:plan-step:${stepIndex}`"
-                      class="plan-step-item"
-                      :data-status="step.status"
-                    >
-                      <span class="plan-step-status" :data-status="step.status">{{ planStepStatusIcon(step.status) }}</span>
-                      <div class="plan-step-text plan-card-markdown" v-html="renderMarkdownBlocksAsHtml(step.step)" />
-                    </li>
-                  </ol>
-                  <div v-else class="plan-card-markdown" v-html="renderMarkdownBlocksAsHtml(message.text)" />
-                  <div v-if="showImplementPlanButton(message)" class="plan-card-actions">
-                    <button
-                      type="button"
-                      class="plan-card-implement-button"
-                      @click="implementPlan(message)"
-                    >
-                      Implement plan
-                    </button>
+                <div v-else-if="isReasoningMessage(message)" class="reasoning-block" :data-state="isReasoningExpanded(message) ? 'expanded' : 'collapsed'">
+                  <button
+                    type="button"
+                    class="reasoning-block-header"
+                    :aria-expanded="isReasoningExpanded(message)"
+                    @click="toggleReasoningExpand(message)"
+                  >
+                    <span class="reasoning-block-icon" aria-hidden="true">🧠</span>
+                    <span class="reasoning-block-title">{{ t('Thinking process') }}</span>
+                    <span class="reasoning-block-toggle" aria-hidden="true">{{ isReasoningExpanded(message) ? '▾' : '▸' }}</span>
+                  </button>
+                  <div v-if="isReasoningExpanded(message)" class="reasoning-block-body">
+                    <p v-if="reasoningSummaryText(message)" class="reasoning-block-summary">{{ reasoningSummaryText(message) }}</p>
+                    <div class="reasoning-block-content message-card" v-html="renderMarkdownBlocksAsHtml(message.text)" />
                   </div>
                 </div>
                 <div
@@ -922,33 +922,69 @@ function isPlanMessage(message: UiMessage): boolean {
   return message.messageType === 'plan' || message.messageType === 'plan.live'
 }
 
+function isReasoningMessage(message: UiMessage): boolean {
+  return message.messageType === 'reasoning' && Boolean(message.reasoning)
+}
+
+const expandedReasoningIds = ref<Set<string>>(new Set())
+
+function isReasoningExpanded(message: UiMessage): boolean {
+  return expandedReasoningIds.value.has(message.id)
+}
+
+function toggleReasoningExpand(message: UiMessage): void {
+  const next = new Set(expandedReasoningIds.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedReasoningIds.value = next
+}
+
+function reasoningSummaryText(message: UiMessage): string {
+  const summary = message.reasoning?.summary ?? []
+  return summary
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+function isToolCallMessage(message: UiMessage): boolean {
+  return message.messageType === 'toolCall' && Boolean(message.toolCall)
+}
+
+function toolCallStatusLabel(message: UiMessage): string {
+  const toolCall = message.toolCall
+  if (!toolCall) return ''
+  switch (toolCall.status) {
+    case 'inProgress': return t('Running')
+    case 'failed': return t('Failed')
+    default: return t('Done')
+  }
+}
+
+function toolCallStatusClass(message: UiMessage): string {
+  switch (message.toolCall?.status) {
+    case 'inProgress': return 'tool-call-running'
+    case 'failed': return 'tool-call-error'
+    default: return 'tool-call-ok'
+  }
+}
+
+function toolCallTitle(message: UiMessage): string {
+  const toolCall = message.toolCall
+  if (!toolCall) return ''
+  const parts: string[] = []
+  if (toolCall.server) parts.push(toolCall.server)
+  parts.push(toolCall.tool)
+  if (toolCall.error) parts.push(toolCall.error)
+  if (typeof toolCall.durationMs === 'number' && toolCall.durationMs >= 0) {
+    parts.push(`${toolCall.durationMs}ms`)
+  }
+  return parts.join(' · ')
+}
+
 function isTurnErrorMessage(message: UiMessage): boolean {
   return message.messageType === 'turnError'
-}
-
-function buildPlanMessageText(explanation: string, steps: UiPlanStep[]): string {
-  const lines: string[] = []
-  if (explanation.trim()) {
-    lines.push(explanation.trim())
-  }
-  for (const step of steps) {
-    const marker = step.status === 'completed' ? 'x' : step.status === 'inProgress' ? '~' : ' '
-    lines.push(`- [${marker}] ${step.step}`)
-  }
-  return lines.join('\n').trim()
-}
-
-function showImplementPlanButton(message: UiMessage): boolean {
-  return isPlanMessage(message)
-    && message.messageType !== 'plan.live'
-    && message.role === 'assistant'
-    && Boolean(message.turnId)
-}
-
-function implementPlan(message: UiMessage): void {
-  const turnId = message.turnId?.trim() ?? ''
-  if (!turnId) return
-  emit('implementPlan', { turnId })
 }
 
 function isFileChangeMessage(message: UiMessage): boolean {
@@ -1018,25 +1054,6 @@ const hiddenGroupedCommandIds = computed(() => {
   }
   return next
 })
-
-function readPlanExplanation(message: UiMessage): string {
-  return readPlanData(message)?.explanation ?? ''
-}
-
-function readPlanSteps(message: UiMessage): UiPlanStep[] {
-  return readPlanData(message)?.steps ?? []
-}
-
-function planStepStatusIcon(status: UiPlanStep['status']): string {
-  switch (status) {
-    case 'completed':
-      return '✓'
-    case 'inProgress':
-      return '•'
-    default:
-      return '○'
-  }
-}
 
 function isCommandAutoExpanded(message: UiMessage): boolean {
   return !hasLiveAssistantText.value && message.id === activeCommandMessageId.value
@@ -1174,7 +1191,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   forkThread: [payload: { threadId: string; turnIndex: number }]
   rollback: [payload: { turnId: string }]
-  implementPlan: [payload: { turnId: string }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
   fileChangesChanged: [threadId: string]
 }>()
@@ -1314,7 +1330,9 @@ const LOAD_MORE_SCROLL_THRESHOLD_PX = 200
 const renderWindowStart = ref(0)
 const isLoadingMore = ref(false)
 
-const visibleMessages = computed(() => props.messages.slice(renderWindowStart.value))
+const visibleMessages = computed(() =>
+  props.messages.slice(renderWindowStart.value).filter((message) => !isPlanMessage(message)),
+)
 const hasMoreAbove = computed(() => renderWindowStart.value > 0 || props.hasMorePersistedAbove === true)
 
 const showJumpToLatestButton = computed(
@@ -4721,176 +4739,6 @@ onBeforeUnmount(() => {
   @apply flex flex-col gap-2;
 }
 
-.plan-card {
-  @apply flex max-w-[min(var(--chat-card-max,76ch),100%)] flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-slate-900;
-}
-
-.plan-card-header {
-  @apply flex items-center justify-between gap-3;
-}
-
-.plan-card-title {
-  @apply m-0 text-sm font-semibold leading-5 text-sky-900;
-}
-
-.plan-card-badge {
-  @apply inline-flex items-center rounded-full bg-sky-200 px-2 py-0.5 text-[11px] font-medium leading-4 text-sky-900;
-}
-
-.plan-card-explanation {
-  @apply text-slate-700;
-}
-
-.plan-card-markdown {
-  @apply flex flex-col gap-2;
-}
-
-.plan-card-markdown :deep(.message-text),
-.plan-card-markdown :deep(.message-heading),
-.plan-card-markdown :deep(.message-blockquote),
-.plan-card-markdown :deep(.message-list),
-.plan-card-markdown :deep(.message-table-wrap),
-.plan-card-markdown :deep(.message-code-block),
-.plan-card-markdown :deep(.message-divider) {
-  @apply m-0;
-}
-
-.plan-card-markdown :deep(.message-text) {
-  @apply text-sm leading-relaxed whitespace-pre-wrap text-slate-800;
-}
-
-.plan-card-markdown :deep(.message-heading) {
-  @apply text-slate-900 tracking-tight;
-}
-
-.plan-card-markdown :deep(.message-heading-h1) {
-  @apply text-2xl font-semibold leading-tight;
-}
-
-.plan-card-markdown :deep(.message-heading-h2) {
-  @apply text-xl font-semibold leading-tight;
-}
-
-.plan-card-markdown :deep(.message-heading-h3) {
-  @apply text-lg font-semibold leading-snug;
-}
-
-.plan-card-markdown :deep(.message-heading-h4) {
-  @apply text-base font-semibold leading-snug;
-}
-
-.plan-card-markdown :deep(.message-heading-h5) {
-  @apply text-sm font-semibold leading-snug uppercase tracking-[0.02em];
-}
-
-.plan-card-markdown :deep(.message-heading-h6) {
-  @apply text-xs font-semibold leading-snug uppercase tracking-[0.04em] text-slate-600;
-}
-
-.plan-card-markdown :deep(.message-blockquote) {
-  @apply border-l-4 border-slate-300 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 bg-slate-50/70 rounded-r-lg;
-}
-
-.plan-card-markdown :deep(.message-list) {
-  @apply pl-5 text-sm leading-relaxed text-slate-800 flex flex-col gap-1.5;
-}
-
-.plan-card-markdown :deep(.message-list-unordered) {
-  @apply list-disc;
-}
-
-.plan-card-markdown :deep(.message-list-ordered) {
-  @apply list-decimal;
-}
-
-.plan-card-markdown :deep(.message-list-item) {
-  @apply pl-1;
-}
-
-.plan-card-markdown :deep(.message-list-item-text) {
-  @apply whitespace-pre-wrap;
-}
-
-.plan-card-markdown :deep(.message-list-item-paragraph + .message-list-item-paragraph) {
-  @apply mt-2;
-}
-
-.plan-card-markdown :deep(.message-task-list) {
-  @apply list-none pl-0;
-}
-
-.plan-card-markdown :deep(.message-task-item) {
-  @apply flex items-start gap-2;
-}
-
-.plan-card-markdown :deep(.message-task-checkbox) {
-  @apply mt-0.5 text-sm leading-none text-slate-500 select-none;
-}
-
-.plan-card-markdown :deep(.message-code-block) {
-  @apply overflow-hidden rounded-xl border border-slate-200 bg-slate-950/95 text-slate-100;
-}
-
-.plan-card-markdown :deep(.message-code-language) {
-  @apply border-b border-slate-800 bg-slate-900/90 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400;
-}
-
-.plan-card-markdown :deep(.message-code-pre) {
-  @apply m-0 overflow-x-auto px-3 py-3 text-[13px] leading-6;
-}
-
-.plan-card-markdown :deep(.message-inline-code) {
-  @apply bg-transparent p-0 font-sans text-[1em] font-semibold text-inherit;
-}
-
-.plan-card-markdown :deep(.message-file-link) {
-  @apply text-sky-700 underline decoration-sky-300 underline-offset-2;
-}
-
-.plan-card-markdown :deep(.message-table) {
-  @apply bg-white/90;
-}
-
-.plan-step-list {
-  @apply m-0 flex list-none flex-col gap-2 p-0;
-}
-
-.plan-step-item {
-  @apply flex items-start gap-2 rounded-xl border border-white/70 bg-white/80 px-3 py-2 text-sm leading-relaxed text-slate-800;
-}
-
-.plan-step-item[data-status='completed'] {
-  @apply border-emerald-200 bg-emerald-50/80;
-}
-
-.plan-step-item[data-status='inProgress'] {
-  @apply border-amber-200 bg-amber-50/80;
-}
-
-.plan-step-status {
-  @apply mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700;
-}
-
-.plan-step-status[data-status='completed'] {
-  @apply bg-emerald-200 text-emerald-900;
-}
-
-.plan-step-status[data-status='inProgress'] {
-  @apply bg-amber-200 text-amber-900;
-}
-
-.plan-step-text {
-  @apply min-w-0 flex-1;
-}
-
-.plan-card-actions {
-  @apply mt-3 flex justify-end;
-}
-
-.plan-card-implement-button {
-  @apply inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50;
-}
-
 .message-text {
   @apply m-0 text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-800;
   overflow-wrap: anywhere;
@@ -5284,6 +5132,148 @@ onBeforeUnmount(() => {
 
 :global(:root.dark) .work-block-output-wrap.work-block-output-visible {
   border-color: #3f3f46;
+}
+
+.reasoning-block {
+  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80;
+}
+
+.reasoning-block-header {
+  @apply flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-100;
+}
+
+.reasoning-block-icon {
+  @apply text-sm leading-none;
+}
+
+.reasoning-block-title {
+  @apply flex-1 text-xs font-semibold text-zinc-600;
+}
+
+.reasoning-block-toggle {
+  @apply text-xs text-zinc-400;
+}
+
+.reasoning-block-body {
+  @apply border-t border-zinc-200 px-3 py-2;
+}
+
+.reasoning-block-summary {
+  @apply mb-2 whitespace-pre-wrap text-xs text-zinc-500;
+}
+
+.reasoning-block-content {
+  @apply max-h-72 overflow-y-auto;
+}
+
+.reasoning-block-content :deep(.message-text),
+.reasoning-block-content :deep(.message-heading),
+.reasoning-block-content :deep(.message-list) {
+  color: inherit;
+}
+
+:global(:root.dark) .reasoning-block {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:global(:root.dark) .reasoning-block-header:hover {
+  @apply bg-zinc-800/70;
+}
+
+:global(:root.dark) .reasoning-block-title {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .reasoning-block-body {
+  @apply border-zinc-700;
+}
+
+:global(:root.dark) .reasoning-block-summary {
+  @apply text-zinc-500;
+}
+
+:global(:root.dark) .reasoning-block-content :deep(.message-text) {
+  @apply text-zinc-200;
+}
+
+.tool-call-block {
+  @apply flex w-full min-w-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2.5 py-1.5;
+}
+
+.tool-call-icon {
+  @apply shrink-0 text-xs leading-none;
+}
+
+.tool-call-server {
+  @apply shrink-0 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] leading-3 text-zinc-600;
+}
+
+.tool-call-name {
+  @apply min-w-0 flex-1 truncate font-mono text-xs text-zinc-700;
+}
+
+.tool-call-status {
+  @apply flex shrink-0 items-center gap-1 text-[11px] font-medium text-zinc-500;
+}
+
+.tool-call-status-icon {
+  @apply text-xs leading-none;
+}
+
+.tool-call-block.tool-call-running {
+  @apply border-amber-300;
+}
+
+.tool-call-block.tool-call-running .tool-call-status {
+  @apply text-amber-600;
+}
+
+.tool-call-block.tool-call-ok {
+  @apply border-emerald-300;
+}
+
+.tool-call-block.tool-call-ok .tool-call-status-icon {
+  @apply text-emerald-600;
+}
+
+.tool-call-block.tool-call-error {
+  @apply border-rose-300;
+}
+
+.tool-call-block.tool-call-error .tool-call-status {
+  @apply text-rose-600;
+}
+
+:global(:root.dark) .tool-call-block {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:global(:root.dark) .tool-call-server {
+  @apply bg-zinc-700 text-zinc-300;
+}
+
+:global(:root.dark) .tool-call-name {
+  @apply text-zinc-200;
+}
+
+:global(:root.dark) .tool-call-status {
+  @apply text-zinc-400;
+}
+
+:global(:root.dark) .tool-call-block.tool-call-running {
+  @apply border-amber-800;
+}
+
+:global(:root.dark) .tool-call-block.tool-call-running .tool-call-status {
+  @apply text-amber-400;
+}
+
+:global(:root.dark) .tool-call-block.tool-call-ok .tool-call-status-icon {
+  @apply text-emerald-400;
+}
+
+:global(:root.dark) .tool-call-block.tool-call-error .tool-call-status {
+  @apply text-rose-400;
 }
 
 .cmd-row {

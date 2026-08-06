@@ -243,102 +243,7 @@
                   </div>
                 </template>
               </div>
-              <div class="sidebar-settings-hooks-section">
-                <div class="sidebar-settings-hooks-header">
-                  <span class="sidebar-settings-hooks-title">{{ t('Hooks') }}</span>
-                  <button
-                    class="sidebar-settings-hooks-reload"
-                    type="button"
-                    :disabled="isHooksLoading"
-                    :title="t('Reload lifecycle hooks')"
-                    @click="refreshHooks({ force: true })"
-                  >
-                    {{ isHooksLoading ? t('Reloading…') : t('Reload') }}
-                  </button>
-                </div>
-                <p v-if="!supportsHooks" class="sidebar-settings-hooks-empty">
-                  {{ t('Hooks are not supported by this Codex version.') }}
-                </p>
-                <template v-else>
-                  <p v-if="isHooksLoading" class="sidebar-settings-hooks-empty">{{ t('Loading hooks…') }}</p>
-                  <p v-else-if="hooksList.length === 0" class="sidebar-settings-hooks-empty">{{ t('No hooks registered.') }}</p>
-                  <div v-else class="sidebar-settings-hooks-list">
-                    <div v-for="entry in hooksList" :key="entry.cwd || '__global__'" class="sidebar-settings-hooks-entry">
-                      <p class="sidebar-settings-hooks-cwd">{{ entry.cwd || t('Global') }}</p>
-                      <div v-for="(hook, index) in entry.hooks" :key="`${entry.cwd}:${hook.event}:${index}`" class="sidebar-settings-hooks-item">
-                        <span class="sidebar-settings-hooks-state" :class="{ 'is-on': hook.enabled !== false }">
-                          {{ hook.enabled === false ? t('Disabled') : t('Enabled') }}
-                        </span>
-                        <span class="sidebar-settings-hooks-event">{{ hook.event }}</span>
-                        <code class="sidebar-settings-hooks-command">{{ hook.command }}</code>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-              </div>
-              <div class="sidebar-settings-remote-section">
-                <div class="sidebar-settings-remote-header">
-                  <span class="sidebar-settings-remote-title">{{ t('Remote control') }}</span>
-                  <button
-                    class="sidebar-settings-remote-toggle"
-                    type="button"
-                    :disabled="isRemoteControlActionInFlight || isRemoteControlLoading"
-                    :title="t('Enable or disable remote control')"
-                    @click="toggleRemoteControl"
-                  >
-                    <span class="sidebar-settings-remote-toggle-track" :class="{ 'is-on': remoteControlStatus.enabled }">
-                      <span class="sidebar-settings-remote-toggle-thumb" />
-                    </span>
-                    <span class="sidebar-settings-remote-toggle-label">{{ remoteControlStatus.enabled ? t('Enabled') : t('Disabled') }}</span>
-                  </button>
-                </div>
-                <p v-if="!supportsRemoteControl" class="sidebar-settings-remote-empty">
-                  {{ t('Remote control is not supported by this Codex version.') }}
-                </p>
-                <template v-else>
-                  <p v-if="remoteControlError" class="sidebar-settings-remote-error">{{ remoteControlError }}</p>
-                  <p v-if="remoteControlNotice" class="sidebar-settings-remote-notice">{{ remoteControlNotice }}</p>
-                  <p v-if="isRemoteControlLoading" class="sidebar-settings-remote-empty">{{ t('Loading…') }}</p>
-                  <template v-else>
-                    <button
-                      class="sidebar-settings-remote-row"
-                      type="button"
-                      :disabled="!remoteControlStatus.enabled || isRemoteControlActionInFlight"
-                      @click="startRemotePairing"
-                    >
-                      <span class="sidebar-settings-remote-label">{{ t('Pair a new device') }}</span>
-                      <span class="sidebar-settings-remote-value">
-                        {{ remoteControlActionName === 'pairing' ? t('Starting…') : pairingCode?.pairingCode ? pairingCode.pairingCode : t('Generate code') }}
-                      </span>
-                    </button>
-                    <div class="sidebar-settings-remote-clients">
-                      <div class="sidebar-settings-remote-clients-header">
-                        <span class="sidebar-settings-remote-label">{{ t('Paired devices') }}</span>
-                        <button
-                          class="sidebar-settings-remote-reload"
-                          type="button"
-                          :disabled="isRemoteControlActionInFlight"
-                          @click="refreshRemoteClients"
-                        >
-                          {{ remoteControlActionName === 'clients' ? t('Reloading…') : t('Reload') }}
-                        </button>
-                      </div>
-                      <p v-if="remoteControlStatus.clients.length === 0" class="sidebar-settings-remote-empty">{{ t('No paired devices.') }}</p>
-                      <div v-for="client in remoteControlStatus.clients" :key="client.clientId" class="sidebar-settings-remote-client">
-                        <span class="sidebar-settings-remote-client-name">{{ client.deviceName || client.clientId }}</span>
-                        <button
-                          class="sidebar-settings-remote-client-revoke"
-                          type="button"
-                          :disabled="isRemoteControlActionInFlight"
-                          @click="revokeRemoteClient(client.clientId)"
-                        >
-                          {{ remoteControlActionName === `revoke:${client.clientId}` ? t('Removing…') : t('Revoke') }}
-                        </button>
-                      </div>
-                    </div>
-                  </template>
-                </template>
-              </div>
+              <div class="settings-group-heading">{{ t('General settings') }}</div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">{{ t('Require ⌘ + enter to send') }}</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -374,6 +279,19 @@
                 <span class="sidebar-settings-label">{{ t('Auto send dictation') }}</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': dictationAutoSend }" />
               </button>
+              <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
+                <span class="sidebar-settings-label">{{ t('Dictation language') }}</span>
+                <ComposerDropdown
+                  class="sidebar-settings-language-dropdown"
+                  :model-value="dictationLanguage"
+                  :options="dictationLanguageOptions"
+                  :placeholder="t('Auto-detect')"
+                  open-direction="up"
+                  :enable-search="true"
+                  :search-placeholder="t('Search language...')"
+                  @update:model-value="onDictationLanguageChange"
+                />
+              </div>
               <a
                 v-if="hasVisibleFeedbackError"
                 class="sidebar-settings-row sidebar-settings-feedback-row"
@@ -384,6 +302,7 @@
                 <span class="sidebar-settings-value">{{ t('Issue detected') }}</span>
               </a>
 
+              <div class="settings-group-heading">{{ t('Models & providers') }}</div>
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="t('Choose the API provider for the Codex backend')">
                 <span class="sidebar-settings-label">{{ t('Provider') }}</span>
                 <ComposerDropdown
@@ -536,19 +455,7 @@
                   </div>
                 </div>
               </div>
-              <div class="sidebar-settings-row sidebar-settings-row--select" :title="SETTINGS_HELP.dictationLanguage">
-                <span class="sidebar-settings-label">{{ t('Dictation language') }}</span>
-                <ComposerDropdown
-                  class="sidebar-settings-language-dropdown"
-                  :model-value="dictationLanguage"
-                  :options="dictationLanguageOptions"
-                  :placeholder="t('Auto-detect')"
-                  open-direction="up"
-                  :enable-search="true"
-                  :search-placeholder="t('Search language...')"
-                  @update:model-value="onDictationLanguageChange"
-                />
-              </div>
+              <div class="settings-group-heading">{{ t('Integrations') }}</div>
               <button class="sidebar-settings-row" type="button" aria-live="polite" @click="isTelegramConfigOpen = !isTelegramConfigOpen">
                 <span class="sidebar-settings-label">{{ t('Telegram') }}</span>
                 <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
@@ -593,27 +500,103 @@
                   </button>
                 </div>
               </div>
-              <div
-                v-if="showThreadContextBadge"
-                class="sidebar-settings-row sidebar-settings-context-row"
-                :data-state="threadContextBadgeState"
-                :title="threadContextTooltip"
-              >
-                <span class="sidebar-settings-label">{{ t('Context') }}</span>
-                <span class="sidebar-settings-context-value" :data-state="threadContextBadgeState">
-                  {{ threadContextPrimaryText }}
-                  <span class="sidebar-settings-context-meta">{{ threadContextSecondaryText }}</span>
-                </span>
-                <button
-                  v-if="showCompactContextButton"
-                  class="sidebar-settings-context-compact"
-                  type="button"
-                  :disabled="isCompactContextPending"
-                  @click.stop="onCompactContext"
-                >
-                  {{ isCompactContextPending ? t('Compacting…') : t('Compact') }}
-                </button>
+              <div class="sidebar-settings-hooks-section">
+                <div class="sidebar-settings-hooks-header">
+                  <span class="sidebar-settings-hooks-title">{{ t('Hooks') }}</span>
+                  <button
+                    class="sidebar-settings-hooks-reload"
+                    type="button"
+                    :disabled="isHooksLoading"
+                    :title="t('Reload lifecycle hooks')"
+                    @click="refreshHooks({ force: true })"
+                  >
+                    {{ isHooksLoading ? t('Reloading…') : t('Reload') }}
+                  </button>
+                </div>
+                <p v-if="!supportsHooks" class="sidebar-settings-hooks-empty">
+                  {{ t('Hooks are not supported by this Codex version.') }}
+                </p>
+                <template v-else>
+                  <p v-if="isHooksLoading" class="sidebar-settings-hooks-empty">{{ t('Loading hooks…') }}</p>
+                  <p v-else-if="hooksList.length === 0" class="sidebar-settings-hooks-empty">{{ t('No hooks registered.') }}</p>
+                  <div v-else class="sidebar-settings-hooks-list">
+                    <div v-for="entry in hooksList" :key="entry.cwd || '__global__'" class="sidebar-settings-hooks-entry">
+                      <p class="sidebar-settings-hooks-cwd">{{ entry.cwd || t('Global') }}</p>
+                      <div v-for="(hook, index) in entry.hooks" :key="`${entry.cwd}:${hook.event}:${index}`" class="sidebar-settings-hooks-item">
+                        <span class="sidebar-settings-hooks-state" :class="{ 'is-on': hook.enabled !== false }">
+                          {{ hook.enabled === false ? t('Disabled') : t('Enabled') }}
+                        </span>
+                        <span class="sidebar-settings-hooks-event">{{ hook.event }}</span>
+                        <code class="sidebar-settings-hooks-command">{{ hook.command }}</code>
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
+              <div class="sidebar-settings-remote-section">
+                <div class="sidebar-settings-remote-header">
+                  <span class="sidebar-settings-remote-title">{{ t('Remote control') }}</span>
+                  <button
+                    class="sidebar-settings-remote-toggle"
+                    type="button"
+                    :disabled="isRemoteControlActionInFlight || isRemoteControlLoading"
+                    :title="t('Enable or disable remote control')"
+                    @click="toggleRemoteControl"
+                  >
+                    <span class="sidebar-settings-remote-toggle-track" :class="{ 'is-on': remoteControlStatus.enabled }">
+                      <span class="sidebar-settings-remote-toggle-thumb" />
+                    </span>
+                    <span class="sidebar-settings-remote-toggle-label">{{ remoteControlStatus.enabled ? t('Enabled') : t('Disabled') }}</span>
+                  </button>
+                </div>
+                <p v-if="!supportsRemoteControl" class="sidebar-settings-remote-empty">
+                  {{ t('Remote control is not supported by this Codex version.') }}
+                </p>
+                <template v-else>
+                  <p v-if="remoteControlError" class="sidebar-settings-remote-error">{{ remoteControlError }}</p>
+                  <p v-if="remoteControlNotice" class="sidebar-settings-remote-notice">{{ remoteControlNotice }}</p>
+                  <p v-if="isRemoteControlLoading" class="sidebar-settings-remote-empty">{{ t('Loading…') }}</p>
+                  <template v-else>
+                    <button
+                      class="sidebar-settings-remote-row"
+                      type="button"
+                      :disabled="!remoteControlStatus.enabled || isRemoteControlActionInFlight"
+                      @click="startRemotePairing"
+                    >
+                      <span class="sidebar-settings-remote-label">{{ t('Pair a new device') }}</span>
+                      <span class="sidebar-settings-remote-value">
+                        {{ remoteControlActionName === 'pairing' ? t('Starting…') : pairingCode?.pairingCode ? pairingCode.pairingCode : t('Generate code') }}
+                      </span>
+                    </button>
+                    <div class="sidebar-settings-remote-clients">
+                      <div class="sidebar-settings-remote-clients-header">
+                        <span class="sidebar-settings-remote-label">{{ t('Paired devices') }}</span>
+                        <button
+                          class="sidebar-settings-remote-reload"
+                          type="button"
+                          :disabled="isRemoteControlActionInFlight"
+                          @click="refreshRemoteClients"
+                        >
+                          {{ remoteControlActionName === 'clients' ? t('Reloading…') : t('Reload') }}
+                        </button>
+                      </div>
+                      <p v-if="remoteControlStatus.clients.length === 0" class="sidebar-settings-remote-empty">{{ t('No paired devices.') }}</p>
+                      <div v-for="client in remoteControlStatus.clients" :key="client.clientId" class="sidebar-settings-remote-client">
+                        <span class="sidebar-settings-remote-client-name">{{ client.deviceName || client.clientId }}</span>
+                        <button
+                          class="sidebar-settings-remote-client-revoke"
+                          type="button"
+                          :disabled="isRemoteControlActionInFlight"
+                          @click="revokeRemoteClient(client.clientId)"
+                        >
+                          {{ remoteControlActionName === `revoke:${client.clientId}` ? t('Removing…') : t('Revoke') }}
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </template>
+              </div>
+              <div class="settings-group-heading">{{ t('Usage & about') }}</div>
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
@@ -624,6 +607,7 @@
             </div>
           </div>
         </Teleport>
+        <div class="sidebar-settings-actions">
           <button
             ref="settingsButtonRef"
             class="sidebar-settings-button"
@@ -636,7 +620,18 @@
               {{ worktreeName }} · v{{ appVersion }}
             </span>
           </button>
+          <button
+            ref="recycleBinButtonRef"
+            class="sidebar-settings-button sidebar-settings-button--recycle"
+            type="button"
+            :title="t('Recycle bin')"
+            @click.stop="onOpenRecycleBin"
+          >
+            <IconTablerTrash class="sidebar-settings-icon" />
+            <span>{{ t('Recycle bin') }}</span>
+          </button>
         </div>
+      </div>
       </section>
     </template>
 
@@ -1086,7 +1081,6 @@
                     :load-earlier-messages="loadOlderMessages"
                     @fork-thread="onForkThreadFromMessage"
                     @rollback="onRollback"
-                    @implement-plan="onImplementPlan"
                     @file-changes-changed="onFileChangesChanged"
                     @respond-server-request="onRespondServerRequest" />
                 </div>
@@ -1150,7 +1144,8 @@
                     @update:approval-policy="onApprovalPolicyChange"
                     @save-approval-policy="onSaveApprovalPolicy"
                     :plan-panel="composerPlanPanel"
-                    @interrupt="onInterruptTurn" @slash-command="onSlashCommand" />
+                    @interrupt="onInterruptTurn" @slash-command="onSlashCommand"
+                    @implement-plan="onImplementPlan" @compact-context="onCompactContext" />
                 </div>
               </template>
             </div>
@@ -1192,6 +1187,27 @@
             >
               <IconTablerFiles class="content-right-panel-tab-icon" />
               {{ t('Files') }}
+            </button>
+            <button
+              v-for="tab in filePreviewTabs"
+              :key="tab.key"
+              class="content-right-panel-tab content-right-panel-tab--preview"
+              :class="{ 'is-active': activeRightPanelTab === 'preview' && activeFilePreviewTabKey === tab.key }"
+              type="button"
+              role="tab"
+              :aria-selected="activeRightPanelTab === 'preview' && activeFilePreviewTabKey === tab.key"
+              :title="tab.path"
+              @click="selectFilePreviewTab(tab.key)"
+            >
+              <IconTablerFilePencil class="content-right-panel-tab-icon" />
+              <span class="content-right-panel-tab-label">{{ tab.label }}</span>
+              <span
+                class="content-right-panel-tab-close"
+                role="button"
+                :aria-label="t('Close')"
+                :title="t('Close')"
+                @click.stop="closeFilePreviewTab(tab.key)"
+              >×</span>
             </button>
           </div>
           <div class="content-right-panel-actions">
@@ -1265,6 +1281,12 @@
           <RightFilesPanel
             v-else-if="activeRightPanelTab === 'files'"
             :cwd="composerCwd"
+            @open-preview="onOpenFilePreview"
+          />
+          <RightFilePreview
+            v-else-if="activeRightPanelTab === 'preview' && activeFilePreviewTab"
+            :file-path="activeFilePreviewTab.path"
+            :name="activeFilePreviewTab.label"
           />
           <ThreadTerminalPanel
             v-else
@@ -1406,9 +1428,11 @@ import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdow
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import RightGitPanel from './components/content/RightGitPanel.vue'
 import RightFilesPanel from './components/content/RightFilesPanel.vue'
+import RightFilePreview from './components/content/RightFilePreview.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
+import IconTablerTrash from './components/icons/IconTablerTrash.vue'
 import IconTablerTerminal from './components/icons/IconTablerTerminal.vue'
 import IconTablerGitFork from './components/icons/IconTablerGitFork.vue'
 import IconTablerFiles from './components/icons/IconTablerFiles.vue'
@@ -1708,6 +1732,7 @@ type SidebarThreadTreeExposed = {
   openAutomationEditorFromPanel: (payload: AutomationEditRequest) => void
   openAutomationCreatorFromPanel: () => void
   openRenameThreadDialog: (threadId: string, currentTitle: string) => void
+  openRecycleBin: () => void
 }
 type AutomationsPanelExposed = {
   loadAutomations: () => Promise<void>
@@ -1747,7 +1772,14 @@ const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
 const isTerminalInputFocused = ref(false)
 const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
-const activeRightPanelTab = ref<'git' | 'files' | 'terminal'>('git')
+type RightPanelTab = 'git' | 'files' | 'terminal' | 'preview'
+type FilePreviewTab = { key: string; path: string; label: string }
+const activeRightPanelTab = ref<RightPanelTab>('git')
+const filePreviewTabs = ref<FilePreviewTab[]>([])
+const activeFilePreviewTabKey = ref('')
+const activeFilePreviewTab = computed<FilePreviewTab | null>(() =>
+  filePreviewTabs.value.find((tab) => tab.key === activeFilePreviewTabKey.value) ?? null,
+)
 const isRightPanelMenuOpen = ref(false)
 const isMobileRightPanelOpen = ref(false)
 const isRightPanelCollapsed = ref(false)
@@ -2251,41 +2283,12 @@ const isTerminalKeyboardLayoutActive = computed(() => (
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
 const isSelectedThreadExternalActive = computed(() => !isHomeRoute.value && selectedThread.value?.externalSession?.active === true)
-const showThreadContextBadge = computed(() => !isHomeRoute.value && !isSkillsRoute.value && !isAutomationsRoute.value && selectedThreadId.value.trim().length > 0)
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
   isInterruptingTurn.value ||
   isSelectedThreadInProgress.value ||
   selectedThreadServerRequests.value.length > 0,
 )
-
-function formatCompactTokenCount(value: number): string {
-  if (!Number.isFinite(value)) return '0'
-  return new Intl.NumberFormat('en-US', {
-    notation: value >= 1000 ? 'compact' : 'standard',
-    maximumFractionDigits: value >= 100000 ? 0 : 1,
-  }).format(Math.max(0, Math.trunc(value)))
-}
-
-function buildThreadContextTooltip(usage: UiThreadTokenUsage | null): string {
-  if (!usage) {
-    return t('Waiting for Codex thread/tokenUsage/updated events for this thread.')
-  }
-
-  const lines = [
-    `${t('Current context usage')}: ${usage.currentContextTokens.toLocaleString()} ${t('tokens')}`,
-    `${t('Cumulative thread usage')}: ${usage.total.totalTokens.toLocaleString()} ${t('tokens')}`,
-  ]
-
-  if (typeof usage.modelContextWindow === 'number') {
-    lines.unshift(`${t('Model context window')}: ${usage.modelContextWindow.toLocaleString()} ${t('tokens')}`)
-    lines.push(`${t('Remaining context')}: ${(usage.remainingContextTokens ?? 0).toLocaleString()} ${t('tokens')}`)
-  } else {
-    lines.push(t('Model context window is unavailable in the latest usage event.'))
-  }
-
-  return lines.join('\n')
-}
 
 function dismissFirstLaunchPluginsCard(): void {
   if (!showFirstLaunchPluginsCard.value) return
@@ -2298,41 +2301,6 @@ function onOpenPluginsHomeCard(): void {
   void router.push({ name: 'skills', query: { tab: 'plugins' } })
 }
 
-const threadContextBadgeState = computed(() => {
-  const remainingPercent = selectedThreadTokenUsage.value?.remainingContextPercent
-  if (remainingPercent === null || typeof remainingPercent !== 'number') return 'pending'
-  if (remainingPercent <= 10) return 'danger'
-  if (remainingPercent <= 25) return 'warning'
-  return 'ok'
-})
-
-const threadContextPrimaryText = computed(() => {
-  const usage = selectedThreadTokenUsage.value
-  if (!usage) return t('Awaiting data')
-  if (typeof usage.remainingContextTokens === 'number') {
-    return `${formatCompactTokenCount(usage.remainingContextTokens)} ${t('left')}`
-  }
-  return `${formatCompactTokenCount(usage.currentContextTokens)} ${t('used')}`
-})
-
-const threadContextSecondaryText = computed(() => {
-  const usage = selectedThreadTokenUsage.value
-  if (!usage) return t('Updates after the next token usage event')
-  if (typeof usage.modelContextWindow === 'number') {
-    return `${formatCompactTokenCount(usage.currentContextTokens)} ${t('used')} / ${formatCompactTokenCount(usage.modelContextWindow)}`
-  }
-  return t('Window size unavailable')
-})
-
-const threadContextTooltip = computed(() => buildThreadContextTooltip(selectedThreadTokenUsage.value))
-
-const isCompactContextPending = computed(() => {
-  const threadId = selectedThreadId.value
-  return threadId.trim().length > 0 && compactingThreadIds.value.has(threadId)
-})
-const showCompactContextButton = computed(() =>
-  threadContextBadgeState.value === 'warning' || threadContextBadgeState.value === 'danger',
-)
 function onCompactContext(): void {
   const threadId = selectedThreadId.value
   if (!threadId) return
@@ -3598,7 +3566,7 @@ function toggleRightPanelTerminal(): void {
   }
 }
 
-function selectRightPanelTab(tab: 'git' | 'files' | 'terminal'): void {
+function selectRightPanelTab(tab: RightPanelTab): void {
   activeRightPanelTab.value = tab
   isRightPanelMenuOpen.value = false
   if (!isMobile.value) {
@@ -3610,6 +3578,43 @@ function selectRightPanelTab(tab: 'git' | 'files' | 'terminal'): void {
   if (tab !== 'terminal') {
     resetTerminalKeyboardFocusState()
   }
+}
+
+function onOpenFilePreview(payload: { path: string; label: string }): void {
+  const existing = filePreviewTabs.value.find((tab) => tab.path === payload.path)
+  if (existing) {
+    activeFilePreviewTabKey.value = existing.key
+  } else {
+    const tab: FilePreviewTab = {
+      key: `preview-${Date.now()}`,
+      path: payload.path,
+      label: payload.label,
+    }
+    filePreviewTabs.value = [...filePreviewTabs.value, tab]
+    activeFilePreviewTabKey.value = tab.key
+  }
+  selectRightPanelTab('preview')
+}
+
+function selectFilePreviewTab(key: string): void {
+  if (!filePreviewTabs.value.some((tab) => tab.key === key)) return
+  activeFilePreviewTabKey.value = key
+  selectRightPanelTab('preview')
+}
+
+function closeFilePreviewTab(key: string): void {
+  const index = filePreviewTabs.value.findIndex((tab) => tab.key === key)
+  if (index < 0) return
+  const next = filePreviewTabs.value.filter((tab) => tab.key !== key)
+  filePreviewTabs.value = next
+  if (activeFilePreviewTabKey.value !== key) return
+  if (next.length === 0) {
+    activeFilePreviewTabKey.value = ''
+    activeRightPanelTab.value = 'files'
+    return
+  }
+  const fallback = next[Math.min(index, next.length - 1)]
+  activeFilePreviewTabKey.value = fallback.key
 }
 
 function onCloseRightPanel(): void {
@@ -3709,6 +3714,10 @@ function onSettingsAreaClick(event: MouseEvent): void {
   if (settingsPanelRef.value?.contains(target)) return
   if (settingsButtonRef.value?.contains(target)) return
   isSettingsOpen.value = false
+}
+
+function onOpenRecycleBin(): void {
+  sidebarThreadTreeRef.value?.openRecycleBin()
 }
 
 function onDocumentVisibilityChange(): void {
@@ -4605,7 +4614,7 @@ function onRollback(payload: { turnId: string }): void {
   void rollbackSelectedThread(payload.turnId)
 }
 
-function onImplementPlan(payload: { turnId: string }): void {
+function onImplementPlan(): void {
   if (isHomeRoute.value || !selectedThreadId.value) return
   setSelectedCollaborationMode('default')
   scheduleMobileConversationJumpToLatest()
@@ -5604,6 +5613,22 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-zinc-200 bg-zinc-100 text-zinc-950;
 }
 
+.content-right-panel-tab--preview {
+  @apply max-w-36;
+}
+
+.content-right-panel-tab-label {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.content-right-panel-tab-close {
+  @apply ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[11px] leading-none text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700;
+}
+
+:global(:root.dark) .content-right-panel-tab-close {
+  @apply text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
 .content-right-panel-tab-icon,
 .content-right-panel-menu-icon,
 .content-right-panel-close-icon,
@@ -6065,12 +6090,28 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply shrink-0 bg-slate-100 pt-2 px-2 pb-2 border-t border-zinc-200;
 }
 
+.sidebar-settings-actions {
+  @apply flex w-full items-stretch gap-1;
+}
+
 .sidebar-settings-button {
-  @apply flex items-center gap-2 w-full rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+  @apply flex items-center gap-2 min-w-0 flex-1 rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+}
+
+.sidebar-settings-button--recycle {
+  @apply max-w-[8.5rem] shrink-0;
 }
 
 .sidebar-settings-button-version {
   @apply ml-auto min-w-0 truncate text-right text-xs;
+}
+
+:global(:root.dark) .sidebar-settings-area {
+  @apply border-zinc-800 bg-zinc-950;
+}
+
+:global(:root.dark) .sidebar-settings-button {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
 .sidebar-settings-icon {
@@ -6103,6 +6144,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .settings-dialog-body {
   @apply min-h-0 flex-1 overflow-y-auto;
+}
+
+.settings-group-heading {
+  @apply sticky top-0 z-10 mt-2 border-y border-zinc-100 bg-zinc-50/95 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-zinc-400 backdrop-blur;
+}
+
+.settings-group-heading:first-child {
+  @apply mt-0 border-t-0;
+}
+
+:global(:root.dark) .settings-group-heading {
+  @apply border-zinc-800 bg-zinc-900/95 text-zinc-500;
 }
 
 :global(:root.dark) .settings-dialog-header {
