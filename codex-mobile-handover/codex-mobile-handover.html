@@ -978,9 +978,39 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第十轮交接需求（2026-08-06 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-06 第十轮进展：</strong>3 条需求已全部实现并验证（<code>vue-tsc --noEmit</code> 通过、<code>vite build</code> 通过、Playwright 桌面/H5 双视口断言 14/14 通过），截图见 <code>output/playwright/round10-{sidebar-desktop,h5}.png</code>。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>需求</th><th>实现方式</th></tr>
+          <tr>
+            <td>1</td>
+            <td>左侧栏底部设置和回收图标各占一半宽度，图标增大</td>
+            <td><code>App.vue</code>：<code>.sidebar-settings-actions</code> 去掉 <code>justify-center</code>；<code>.sidebar-settings-icon-button</code> 改 <code>h-10 flex-1</code>（两个按钮均分整行宽度）；<code>.sidebar-settings-icon</code> 由 <code>w-4.5 h-4.5</code> 增至 <code>w-6 h-6</code>（24px）</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>输入框下模型切换按钮固定宽度，超出省略</td>
+            <td><code>ThreadComposer.vue</code>：模型 <code>ComposerDropdown</code> 增加 <code>thread-composer-model-control</code> 类，根节点 <code>w-40 min-w-0</code>（H5 下 <code>w-32</code>），触发按钮 <code>w-full</code>，配合既有 <code>.composer-dropdown-value</code> 的 <code>truncate</code> 实现超出省略</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>H5 模式下模型/模型强度/上下文按钮改小</td>
+            <td><code>ThreadComposer.vue</code> 新增 <code>@media (max-width: 767px)</code>（与 <code>useMobile</code> 断点一致）：pill 触发按钮 <code>h-7 px-2 text-[11px]</code>、chevron <code>h-3 w-3</code>、<code>.thread-composer-context-usage-inline</code> <code>h-7 px-2 text-[11px]</code></td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout">
+          <strong>验证说明：</strong>Playwright（本机 Edge channel）桌面 1280×800 与 H5 375×812 双视口断言通过：侧栏底部 2 个图标按钮均宽 120px（各占一半）、高 40px、图标 24×24；模型触发按钮桌面 160px / H5 128px，value 计算样式 <code>text-overflow: ellipsis</code>；H5 下模型/模型强度/上下文按钮高 28px、字号 11px。上下文按钮依赖线程 token 数据（<code>contextUsageView</code>）在当前测试线程不渲染，改以注入同 class 元素（带 scoped 属性）验证样式。过程中发现 4173 dev server 对 <code>ThreadComposer.vue</code> 的样式转换缓存过期（模板更新但 CSS 未刷新），按交接文档沙箱启动方式（<code>CODEX_HOME</code> 指向项目内 <code>.codex/</code>）重启 dev server 后恢复。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>9236fba</code>（第八轮 requirement-8 十四项需求 <code>a8f27fb</code> + 侧栏按钮图标化 <code>7bf5b1b</code> + 交接文档 round-8 更新 <code>9236fba</code>）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>5dd1d8e</code>（第八轮 requirement-8 十四项需求 <code>a8f27fb</code> + 侧栏按钮图标化 <code>7bf5b1b</code> + 交接文档 round-8 更新 <code>9236fba</code> + 第九轮 4 条修复 <code>793315b</code> + 交接文档 round-9 更新 <code>5dd1d8e</code>）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归（2026-08-06 已完成 Linux 侧）</strong>：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——<code>vue-tsc --noEmit</code> 无类型错误、<code>vite build</code> 成功（4.58s）、<code>tsup</code> CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（<code>~/.local/share/fnm</code>）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 <code>~/codex-linux-check</code>（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 <code>/mnt/c</code> 共享解压，fnm 1.39.0 二进制同理</li>
@@ -1001,7 +1031,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小） · 内容已脱敏
     </footer>
   </article>
 </body>
