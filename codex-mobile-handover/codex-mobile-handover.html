@@ -256,7 +256,7 @@
         <div class="cell"><div class="label">Dev 状态</div><div class="value ok">运行中 · HTTP 200</div></div>
         <div class="cell"><div class="label">App-server</div><div class="value ok">正常响应 RPC</div></div>
         <div class="cell"><div class="label">工具链</div><div class="value">pnpm 11.18.0 · Node 22</div></div>
-        <div class="cell"><div class="label">最近提交</div><div class="value">3823011</div></div>
+        <div class="cell"><div class="label">最近提交</div><div class="value">483c869</div></div>
       </div>
     </header>
 
@@ -1008,9 +1008,66 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
       </section>
 
       <section>
+        <h2>第十一轮交接需求（2026-08-06 提出）</h2>
+        <div class="callout ok">
+          <strong>2026-08-06 第十一轮进展：</strong>7 个问题已全部修复并通过验证（<code>vue-tsc --noEmit</code> 通过、单测 v2 归一化 13 + gateway 29 + useDesktopState 49 全部通过、Playwright 桌面/H5 实测 7/7 通过）。本轮改动已提交并推送（commit <code>483c869</code>）。涉及 <code>App.vue</code>、<code>ThreadComposer.vue</code>、<code>ThreadConversation.vue</code>、<code>useUiLanguage.ts</code>、<code>utils/plan.ts</code>、<code>api/normalizers/v2.ts</code>、<code>api/normalizers/v2.test.ts</code>、<code>server/codexAppServerBridge.ts</code>。
+        </div>
+        <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>问题</th><th>根因与实现方式</th><th>验证</th></tr>
+          <tr>
+            <td>1</td>
+            <td>设置弹框点外部关闭后自动重开</td>
+            <td>背板 <code>pointerdown</code> 关闭弹框后，浏览器把合成的 click 重定向到被遮住的设置按钮，再次触发 <code>isSettingsOpen = !isSettingsOpen</code> 重开。<code>App.vue</code> 新增 <code>settingsCloseAtMs</code> 时间戳守卫：弹框关闭（含背板 pointerdown 与按钮 toggle 关闭）后 400ms 内忽略触发器点击；设置按钮改为 <code>onToggleSettings</code> 处理函数</td>
+            <td>Playwright：打开弹框 → 点击设置按钮位置（透过背板）→ 弹框保持关闭</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>移动端右侧面板无遮罩</td>
+            <td><code>App.vue</code> 新增 <code>.content-right-panel-backdrop</code>（<code>@media (max-width: 767px)</code> 下 fixed 全屏、z-1050，面板 z-1100），<code>v-if="isMobile &amp;&amp; isMobileRightPanelOpen"</code> 渲染，点击调用 <code>onCloseRightPanel</code></td>
+            <td>Playwright H5 375px：打开面板出现遮罩，点击遮罩后面板关闭（is-mobile-open 移除）</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>H5 输入控件行换行</td>
+            <td><code>ThreadComposer.vue</code> 移动端 media query 给 <code>.thread-composer-controls</code> 加 <code>flex-nowrap</code>，上下文按钮加 <code>shrink min-w-0</code>，整行不再溢出换行</td>
+            <td>Playwright H5：375px 下 <code>scrollWidth === clientWidth</code>（341px），无横向溢出</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>计划消息内容不完整（plan 面板丢弃内容）</td>
+            <td>codex CLI 持久化的 <code>&lt;proposed_plan&gt;</code> 是 markdown 格式（标题 + 项目符号），而 <code>parsePlanFromMessageText</code> 只认 <code>- [ ]</code> 复选框 → 返回 null，plan 面板空。新增 markdown 回退解析：标题/正文归入 explanation，<code>-</code>/<code>*</code>/<code>1.</code> 列表项归入 steps（pending）</td>
+            <td>Playwright「长任务测试」线程 plan 面板显示 21 个完整步骤（此前为空）</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>命令被权限/沙箱拦截时无任何提示</td>
+            <td>真实数据中命令带 <code>require_escalated</code> 但沙箱白名单（<code>SAFE_RM_ALLOWED_PATH</code>）直接拒绝，未产生审批请求，命令块只显示失败。新增 <code>commandPermissionHint</code>：命令失败且输出匹配 <code>Access is denied</code>/<code>permission denied</code>/<code>require_escalated</code>/<code>拒绝访问</code> 等模式时，命令块下方显示琥珀色提示「命令因权限或沙箱限制被拦截，未弹出审批提示…」；i18n 中文字典补充</td>
+            <td>Playwright「长任务测试2」出现 6 处权限提示，文案完整</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>Plan 展开面板宽度不一致</td>
+            <td><code>panel-class</code> 渲染在 <code>ComposerPopover</code> 内部元素上，ThreadComposer 的 scoped 样式选择器不匹配（需 <code>:deep()</code>）；且 <code>w-72</code> 覆盖 <code>w-full</code>。改为 <code>:deep(.thread-composer-plan-panel-popover)</code> + <code>min-w-full</code></td>
+            <td>Playwright：展开面板宽 683px ≈ 折叠条 685px，对齐一致</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>命令与叙述被强制分组，时间序错乱</td>
+            <td>三层根因：①<code>normalizers/v2.ts</code> 的 <code>reorderTurnForWorkProcess</code> 把 reasoning/plan/command/toolCall 全部搬到用户消息之后，打破真实执行顺序（如「叙述→命令→叙述→命令」被重排成命令堆叠）；②<code>mergeSessionCommandsIntoTurns</code> 只识别 <code>exec_command</code>，新 CLI 的命令是 <code>shell_command</code>，输出解析只认 <code>Process exited with code</code> 不认 <code>Exit code:</code>；③旧恢复逻辑把非 agentMessage 项全部追加到末尾导致命令聚集在会话尾部。<strong>修复</strong>：移除前端 <code>reorderTurnForWorkProcess</code> 恢复服务端时间序；桥接层 <code>mergeSessionCommandsIntoThreadResult</code>（thread/read 与 thread-turn-page 双路径）按会话日志流式顺序把 agentMessage 与 <code>shell_command</code>/<code>exec_command</code> 命令（含 <code>-Command</code> 参数提取、<code>Exit code:</code> 解析）交错还原；幂等（session- 前缀 id 检测）+ 去重（恢复出命令时丢弃实时捕获的行）</td>
+            <td>Playwright「长任务测试2」渲染顺序：用户 → 叙述 → 命令 → 叙述 → 命令…（交错还原）；v2 归一化单测更新为时间序断言并通过</td>
+          </tr>
+        </table>
+        </div>
+        <div class="callout warn">
+          <strong>环境注意：</strong>排查 7 号问题时发现本机 <code>D:\code\codex-project\test</code>（「长任务测试」会话的 cwd）在 TRAE 沙箱白名单之外，<code>approval_policy = "on-request"</code> 也不产生审批请求（命令直接被沙箱拒绝），这是环境配置问题而非应用 bug；后续在该目录执行命令需先把路径加入沙箱可写白名单。另外 <code>config.toml</code> 中 <code>codex-mobile</code>/<code>codex-project</code> 均被标记 <code>trusted</code>，信任目录内命令自动执行不弹窗属正常语义。
+        </div>
+      </section>
+
+      <section>
         <h2>未完成事项</h2>
         <ul>
-          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>5dd1d8e</code>（第八轮 requirement-8 十四项需求 <code>a8f27fb</code> + 侧栏按钮图标化 <code>7bf5b1b</code> + 交接文档 round-8 更新 <code>9236fba</code> + 第九轮 4 条修复 <code>793315b</code> + 交接文档 round-9 更新 <code>5dd1d8e</code>）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
+          <li><strong>已推送</strong>：<code>main</code> 与 <code>origin/main</code> 已同步至 <code>483c869</code>（第八轮 requirement-8 十四项需求 <code>a8f27fb</code> + 侧栏按钮图标化 <code>7bf5b1b</code> + 交接文档 round-8 更新 <code>9236fba</code> + 第九轮 4 条修复 <code>793315b</code> + 交接文档 round-9 更新 <code>5dd1d8e</code> + 第十轮 3 条修复 <code>3389de3</code> + 交接文档 round-10 更新 <code>1c9f857</code>/<code>2e469bf</code> + 第十一轮 7 个问题修复 <code>483c869</code>）。推送时直连 GitHub 网络不稳定（SSL reset / 443 超时），临时经本机 <code>socks5h://127.0.0.1:10808</code> 单次代理推送成功，未改全局 git 配置；后续推送若遇同类网络问题可复用 <code>git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push</code>，或配置持久代理</li>
           <li><strong>未跟踪文件</strong>：工作区存在 <code>.codegraph/</code>、<code>codex-parity-plan/</code>、<code>documentation/app-server-schemas/typescript/</code>、<code>codex-config-summary.md</code>（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制</li>
           <li><strong>依赖安装历史</strong>：若换机重新 <code>pnpm install</code>，观察 <code>allowBuilds</code> 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 <code>pnpm-workspace.yaml</code></li>
           <li><strong>跨平台回归（2026-08-06 已完成 Linux 侧）</strong>：已用本机 WSL2（Ubuntu）完成 Linux 侧验证——<code>vue-tsc --noEmit</code> 无类型错误、<code>vite build</code> 成功（4.58s）、<code>tsup</code> CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧尚未验证。WSL 环境配置：fnm 1.39.0（<code>~/.local/share/fnm</code>）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 <code>~/codex-linux-check</code>（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 <code>/mnt/c</code> 共享解压，fnm 1.39.0 二进制同理</li>
@@ -1031,7 +1088,7 @@ pnpm run dev --host 127.0.0.1 --port 4173</code></pre>
     </main>
 
     <footer>
-      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小） · 内容已脱敏
+      codexapp · 交接文档 · 2026-08-06（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 为调研结论待决策 + 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施 + WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复） · 内容已脱敏
     </footer>
   </article>
 </body>
