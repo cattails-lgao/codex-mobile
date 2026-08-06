@@ -67,6 +67,7 @@ import type {
   UiExternalSession,
 } from '../types/codex'
 import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
+import { parsePlanFromMessageText } from '../utils/plan'
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -1481,6 +1482,10 @@ export function useDesktopState() {
   const injectedSystemMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const persistedReasoningByThreadId = ref<Record<string, UiMessage[]>>(loadPersistedReasoningMap())
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
+  // 本 app-server（v0.146+）不推送 item/reasoning/textDelta 增量通道，reasoning
+  // 内容只随 item/started + item/completed 全量 item 到达；这里按 itemId 记录已
+  // 追加的文本，避免 started/completed 重复追加或遗漏增量。
+  const reasoningAppendedTextByItemId = new Map<string, string>()
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
@@ -2775,6 +2780,7 @@ export function useDesktopState() {
 
   function clearLiveReasoningForThread(threadId: string): void {
     if (!threadId) return
+    reasoningAppendedTextByItemId.clear()
     const current = liveReasoningTextByThreadId.value[threadId]
     if (current === undefined) return
     rememberPersistedReasoning(threadId, current)
@@ -2874,6 +2880,7 @@ export function useDesktopState() {
       steps,
       isStreaming: true,
     }
+    const turnIndex = turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
 
     return {
       threadId,
@@ -2883,6 +2890,8 @@ export function useDesktopState() {
         text: buildPlanMessageText(plan),
         messageType: 'plan.live',
         plan,
+        turnId: turnId || undefined,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       },
     }
   }
@@ -2901,6 +2910,7 @@ export function useDesktopState() {
     const nextPlan: UiPlanData | undefined = existing?.plan
       ? { ...existing.plan, isStreaming: true }
       : undefined
+    const turnIndex = turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
 
     return {
       threadId,
@@ -2910,6 +2920,8 @@ export function useDesktopState() {
         text: nextText,
         messageType: 'plan.live',
         plan: nextPlan,
+        turnId: turnId || undefined,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       },
     }
   }
@@ -3652,6 +3664,81 @@ export function useDesktopState() {
     return ''
   }
 
+  function readReasoningItemText(item: Record<string, unknown>): string {
+    const parts: string[] = []
+    for (const key of ['content', 'summary']) {
+      const rows = Array.isArray(item[key]) ? item[key] : []
+      for (const row of rows) {
+        const text = typeof row === 'string' ? row : asRecord(row)?.text
+        if (typeof text === 'string' && text.trim()) parts.push(text)
+      }
+    }
+    return parts.join('\n').trim()
+  }
+
+  // Full reasoning items arrive via item/started + item/completed (this
+  // app-server does not stream item/reasoning/*TextDelta), carrying the
+  // reasoning content inline; without handling them the live overlay shows an
+  // empty "Thinking" for the whole thinking phase.
+  function readReasoningItemNotification(notification: RpcNotification): { itemId: string; text: string } | null {
+    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || readString(item.type).toLowerCase() !== 'reasoning') return null
+    const itemId = readString(item.id)
+    if (!itemId) return null
+    return { itemId, text: readReasoningItemText(item) }
+  }
+
+  function appendReasoningItemProgress(threadId: string, itemId: string, text: string): void {
+    if (!threadId || !text) return
+    const current = liveReasoningTextByThreadId.value[threadId] ?? ''
+    const previous = reasoningAppendedTextByItemId.get(itemId) ?? ''
+    if (current.endsWith(text) || (previous && text === previous)) {
+      reasoningAppendedTextByItemId.set(itemId, text)
+      return
+    }
+    if (previous && text.startsWith(previous)) {
+      const delta = text.slice(previous.length)
+      if (delta) appendLiveReasoningText(threadId, delta)
+      reasoningAppendedTextByItemId.set(itemId, text)
+      return
+    }
+    const separator = current.length > 0 && !current.endsWith('\n') ? '\n\n' : ''
+    appendLiveReasoningText(threadId, `${separator}${text}`)
+    reasoningAppendedTextByItemId.set(itemId, text)
+  }
+
+  // Plan items also arrive as full item/started + item/completed payloads
+  // (alongside the turn/plan/updated / item/plan/delta channels), so the plan
+  // panel can appear as soon as the plan exists instead of waiting for a reload.
+  function readPlanItemNotification(notification: RpcNotification): { threadId: string; message: UiMessage } | null {
+    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return null
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    if (!item || readString(item.type).toLowerCase() !== 'plan') return null
+    const threadId = extractThreadIdFromNotification(notification)
+    const turnId = readString(params?.turnId) || readString(params?.turn_id)
+    const itemId = readString(item.id)
+    const text = readString(item.text)
+    if (!threadId || !itemId || !text) return null
+    const turnIndex = threadId && turnId
+      ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
+      : undefined
+    return {
+      threadId,
+      message: {
+        id: itemId,
+        role: 'assistant',
+        text,
+        messageType: notification.method === 'item/completed' ? 'plan' : 'plan.live',
+        plan: parsePlanFromMessageText(text) ?? undefined,
+        turnId: turnId || undefined,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+      },
+    }
+  }
+
   function readAgentMessageStartedId(notification: RpcNotification): string {
     const params = asRecord(notification.params)
     if (!params) return ''
@@ -4208,6 +4295,15 @@ export function useDesktopState() {
       })
     }
 
+    const planItem = readPlanItemNotification(notification)
+    if (planItem) {
+      upsertLivePlanMessage(planItem.threadId, planItem.message)
+      setTurnActivityForThread(planItem.threadId, {
+        label: 'Planning',
+        details: planItem.message.plan?.steps.map((step) => step.step).slice(0, 2) ?? [],
+      })
+    }
+
     if (!notificationThreadId || notificationThreadId !== selectedThreadId.value) return
 
     const startedAgentMessageId = readAgentMessageStartedId(notification)
@@ -4247,6 +4343,11 @@ export function useDesktopState() {
     const liveReasoningDelta = readReasoningDelta(notification)
     if (liveReasoningDelta) {
       appendLiveReasoningText(notificationThreadId, liveReasoningDelta.delta)
+    }
+
+    const reasoningItem = readReasoningItemNotification(notification)
+    if (reasoningItem) {
+      appendReasoningItemProgress(notificationThreadId, reasoningItem.itemId, reasoningItem.text)
     }
 
     const sectionBreakMessageId = readReasoningSectionBreakMessageId(notification)
@@ -5956,7 +6057,11 @@ export function useDesktopState() {
         (shouldRefreshThreads && loadedMessagesByThreadId.value[activeThreadId] !== true)
 
       if (shouldRefreshActiveThread) {
-        await loadMessages(activeThreadId, { silent: true })
+        // Force the reload after turn-level events: the thread's updatedAt
+        // version may not change when the server persists new items (e.g. a
+        // plan item), so the reuse-cache would otherwise skip the refresh and
+        // the plan panel would only appear after a manual page reload.
+        await loadMessages(activeThreadId, { silent: true, force: isActiveDirty })
       }
     } catch {
       // Keep UI stable on transient event sync failures.

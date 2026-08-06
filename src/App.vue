@@ -2283,17 +2283,40 @@ const latestUserTurnId = computed(() => {
   }
   return ''
 })
+const PLAN_WORK_MESSAGE_TYPES = new Set([
+  'commandExecution',
+  'worked',
+  'toolCall',
+  'fileChange',
+  'agentMessage',
+  'agentMessage.live',
+  'plan',
+])
+const implementedPlanRequestId = ref<string | null>(null)
 const composerPlanPanel = computed(() => {
-  for (let index = filteredMessages.value.length - 1; index >= 0; index -= 1) {
-    const message = filteredMessages.value[index]
+  const messages = filteredMessages.value
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
     if (message.messageType !== 'plan' && message.messageType !== 'plan.live') continue
     const data = readPlanData(message)
     if (!data) return null
+    const planTurnIndex = typeof message.turnIndex === 'number' ? message.turnIndex : -1
+    // A plan is "implemented" once a later turn has already acted on it (work
+    // items after the plan's turn), or the user already requested its
+    // implementation; either way the Implement button must not be re-clickable.
+    const hasLaterWork = planTurnIndex >= 0 && messages.some((candidate, candidateIndex) => (
+      candidateIndex > index
+      && typeof candidate.turnIndex === 'number'
+      && candidate.turnIndex > planTurnIndex
+      && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
+    ))
+    const requested = implementedPlanRequestId.value !== null && message.id === implementedPlanRequestId.value
     return {
       id: message.id,
       streaming: message.messageType === 'plan.live',
       explanation: data.explanation,
       steps: data.steps,
+      implemented: hasLaterWork || requested,
     }
   }
   return null
@@ -4665,6 +4688,9 @@ function onRollback(payload: { turnId: string }): void {
 
 function onImplementPlan(): void {
   if (isHomeRoute.value || !selectedThreadId.value) return
+  if (composerPlanPanel.value) {
+    implementedPlanRequestId.value = composerPlanPanel.value.id
+  }
   setSelectedCollaborationMode('default')
   scheduleMobileConversationJumpToLatest()
   void sendMessageToSelectedThread('Implement', [], [], 'steer', [], undefined, 'default')
@@ -6164,7 +6190,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-panel {
-  @apply flex max-h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
+  @apply flex h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
 }
 
 .settings-dialog-backdrop {

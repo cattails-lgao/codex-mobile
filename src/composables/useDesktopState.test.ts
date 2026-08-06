@@ -1364,6 +1364,80 @@ describe('P1-3 notification surface', () => {
     expect(stored).toContain('reasoning:local:thread-1:')
   })
 
+  it('captures full reasoning items from item/started + item/completed and archives them', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    // This app-server does not stream item/reasoning/textDelta; reasoning
+    // content arrives inline in the full item payloads.
+    sendNotification({ method: 'turn/started', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+    sendNotification({
+      method: 'item/started',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'rs-1',
+        item: { type: 'reasoning', id: 'rs-1', summary: [], content: [{ type: 'reasoning_text', text: '先探索环境' }] },
+      },
+    })
+    await Promise.resolve()
+    expect(state.selectedLiveOverlay.value?.reasoningText).toContain('先探索环境')
+
+    // item/completed re-emits the same item with the full text; only the
+    // missing suffix should be appended, not a duplicate.
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'rs-1',
+        item: { type: 'reasoning', id: 'rs-1', summary: [], content: [{ type: 'reasoning_text', text: '先探索环境，再规划步骤' }] },
+      },
+    })
+    await Promise.resolve()
+    expect(state.selectedLiveOverlay.value?.reasoningText).toBe('先探索环境，再规划步骤')
+
+    sendNotification({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '开始回答' } })
+    await Promise.resolve()
+
+    const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
+    expect(stored).toBeTruthy()
+    expect(stored).toContain('先探索环境，再规划步骤')
+  })
+
+  it('captures plan items from item/completed as live plan messages', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'turn-1-plan',
+        item: {
+          type: 'plan',
+          id: 'turn-1-plan',
+          text: '# 计划\n## 实施步骤\n1. 搭建目录\n2. 实现主程序\n3. 编写自测',
+        },
+      },
+    })
+    await Promise.resolve()
+
+    const plan = state.messages.value.find((message) => message.messageType === 'plan' || message.messageType === 'plan.live')
+    expect(plan).toBeTruthy()
+    // 编号列表优先：只解析 3 个真实步骤，而不是把每个项目符号都当步骤
+    expect(plan?.plan?.steps).toHaveLength(3)
+    expect(plan?.plan?.steps[0]?.step).toBe('搭建目录')
+    expect(plan?.turnId).toBe('turn-1')
+  })
+
   it('bypasses recent-load reuse when force is set', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })

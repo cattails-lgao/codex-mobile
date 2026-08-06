@@ -63,7 +63,7 @@
             <p class="thread-pending-request-eyebrow">{{ requestPanelTitle(request) }}</p>
             <p class="thread-pending-request-title">{{ requestPanelPrompt(request) }}</p>
           </div>
-          <span v-if="(requestCount ?? 0) > 1" class="thread-pending-request-counter">{{ requestCount ?? 0 }} pending</span>
+          <span v-if="(requestCount ?? 0) > 1" class="thread-pending-request-counter">{{ requestCount ?? 0 }} {{ t('pending') }}</span>
         </header>
 
         <div v-if="requestPreview(request)" class="thread-pending-request-preview">
@@ -354,22 +354,22 @@ function readRequestReason(request: UiServerRequest): string {
 }
 
 function requestPanelTitle(request: UiServerRequest): string {
-  if (isApprovalRequest(request)) return 'Awaiting approval'
-  if (isMcpElicitationRequest(request)) return 'MCP server input required'
-  if (request.method === 'item/tool/requestUserInput') return 'Awaiting response'
-  if (request.method === 'item/tool/call') return 'Tool call waiting for response'
+  if (isApprovalRequest(request)) return t('Awaiting approval')
+  if (isMcpElicitationRequest(request)) return t('MCP server input required')
+  if (request.method === 'item/tool/requestUserInput') return t('Awaiting response')
+  if (request.method === 'item/tool/call') return t('Tool call waiting for response')
   return request.method
 }
 
 function requestPanelPrompt(request: UiServerRequest): string {
   const explicit = readRequestReason(request)
   if (explicit) return explicit
-  if (isCommandApprovalRequest(request)) return 'Do you want to run this command?'
-  if (isFileApprovalRequest(request)) return 'Do you want to make these changes?'
-  if (isPermissionsApprovalRequest(request)) return 'Do you want to grant these permissions?'
-  if (isMcpElicitationRequest(request)) return 'An MCP server needs your input before Codex can continue.'
-  if (request.method === 'item/tool/requestUserInput') return 'Codex needs your answer before it can continue.'
-  return 'Codex is waiting for a response before it can continue.'
+  if (isCommandApprovalRequest(request)) return t('Do you want to run this command?')
+  if (isFileApprovalRequest(request)) return t('Do you want to make these changes?')
+  if (isPermissionsApprovalRequest(request)) return t('Do you want to grant these permissions?')
+  if (isMcpElicitationRequest(request)) return t('An MCP server needs your input before Codex can continue.')
+  if (request.method === 'item/tool/requestUserInput') return t('Codex needs your answer before it can continue.')
+  return t('Codex is waiting for a response before it can continue.')
 }
 
 function unwrapApprovalCommand(value: string): string {
@@ -440,8 +440,8 @@ function formatPermissionsPreview(value: unknown): string {
 function approvalOptionsForRequest(request: UiServerRequest | null): ApprovalOption[] {
   if (!request || !isApprovalRequest(request)) return []
   return [
-    { id: 'accept', label: 'Yes' },
-    { id: 'acceptForSession', label: 'Yes for Session' },
+    { id: 'accept', label: t('Yes') },
+    { id: 'acceptForSession', label: t('Yes for Session') },
   ]
 }
 
@@ -985,11 +985,16 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 @reference "tailwindcss";
 
 .thread-pending-request {
-  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 900;
+  width: min(calc(100vw - 1rem), 30rem);
 }
 
 .thread-pending-request-shell {
-  @apply w-full max-h-[min(70vh,36rem)] overflow-y-auto rounded-[1.75rem] border border-zinc-700 bg-zinc-900 px-4 py-4 sm:px-5 sm:py-4 text-zinc-100 shadow-xl;
+  @apply w-full max-h-[min(60vh,28rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-zinc-800 shadow-xl;
 }
 
 .thread-pending-request-shell--no-top-radius {
@@ -1009,16 +1014,16 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-title {
-  @apply m-0 text-[clamp(0.94rem,2vw,1.2rem)] leading-relaxed text-zinc-50 whitespace-pre-wrap break-words;
+  @apply m-0 text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap break-words;
 }
 
 .thread-pending-request-counter {
-  @apply shrink-0 rounded-full border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400;
+  @apply shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500;
 }
 
 .thread-pending-request-command-line,
 .thread-pending-request-preview {
-  @apply mt-3 rounded-xl bg-zinc-800/85 px-4 py-3 text-sm font-medium text-zinc-100;
+  @apply mt-3 rounded-xl bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700;
 }
 
 .thread-pending-request-preview-code {
@@ -1035,49 +1040,49 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-option {
-  @apply flex h-12 w-full items-center gap-3 rounded-2xl border border-zinc-800 bg-transparent px-4 text-left transition hover:border-zinc-600 hover:bg-zinc-800/70;
+  @apply flex h-10 w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 text-left transition hover:border-zinc-400 hover:bg-zinc-50;
 }
 
 .thread-pending-request-option.is-selected {
-  @apply border-zinc-500 bg-zinc-800/95;
-  box-shadow: inset 0 0 0 1px rgba(244, 244, 245, 0.14);
+  @apply border-zinc-500 bg-zinc-100;
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.06);
 }
 
 .thread-pending-request-option-index {
-  @apply shrink-0 text-base font-medium leading-none text-zinc-500;
+  @apply shrink-0 text-sm font-medium leading-none text-zinc-400;
 }
 
 .thread-pending-request-option-label {
-  @apply min-w-0 truncate text-sm leading-none text-zinc-50;
+  @apply min-w-0 truncate text-sm leading-none text-zinc-800;
 }
 
 .thread-pending-request-inline-input {
-  @apply flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-800/70 px-4 text-sm text-zinc-400 transition focus-within:border-zinc-500 focus-within:bg-zinc-800/90;
+  @apply flex h-10 min-w-0 flex-1 items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 text-sm text-zinc-400 transition focus-within:border-zinc-400 focus-within:bg-white;
 }
 
 .thread-pending-request-inline-input.is-active {
-  @apply text-zinc-100;
+  @apply text-zinc-900;
 }
 
 .thread-pending-request-inline-control {
-  @apply w-full min-w-0 border-none bg-transparent p-0 text-sm leading-none text-zinc-100 outline-none placeholder:text-zinc-500;
+  @apply w-full min-w-0 border-none bg-transparent p-0 text-sm leading-none text-zinc-900 outline-none placeholder:text-zinc-400;
 }
 
 .thread-pending-request-question {
-  @apply rounded-2xl border border-zinc-800 bg-zinc-900/75 px-3 py-3;
+  @apply rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 py-2.5;
 }
 
 .thread-pending-request-question-title {
-  @apply m-0 text-sm font-medium leading-relaxed text-zinc-50;
+  @apply m-0 text-sm font-medium leading-relaxed text-zinc-900;
 }
 
 .thread-pending-request-question-text,
 .thread-pending-request-question-description {
-  @apply m-0 mt-1 text-xs leading-relaxed text-zinc-400;
+  @apply m-0 mt-1 text-xs leading-relaxed text-zinc-500;
 }
 
 .thread-pending-request-validation-error {
-  @apply m-0 mt-3 text-sm leading-relaxed text-rose-300;
+  @apply m-0 mt-3 text-sm leading-relaxed text-rose-600;
 }
 
 .thread-pending-request-question-options,
@@ -1086,7 +1091,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-link {
-  @apply inline-flex w-fit items-center rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800;
+  @apply inline-flex w-fit items-center rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 transition hover:border-zinc-500 hover:bg-zinc-100;
 }
 
 .thread-pending-request-select-wrap {
@@ -1098,16 +1103,16 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-input {
-  @apply h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none;
+  @apply h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none;
 }
 
 .thread-pending-request-input:focus {
   @apply border-zinc-500;
-  box-shadow: 0 0 0 1px rgba(244, 244, 245, 0.18);
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.12);
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100;
+  @apply h-10 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900;
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-value) {
@@ -1115,15 +1120,15 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-input::placeholder {
-  @apply text-zinc-500;
+  @apply text-zinc-400;
 }
 
 .thread-pending-request-checkbox-row {
-  @apply flex items-center gap-2 text-sm text-zinc-200;
+  @apply flex items-center gap-2 text-sm text-zinc-700;
 }
 
 .thread-pending-request-checkbox {
-  @apply h-4 w-4 rounded border-zinc-600 bg-zinc-950 text-zinc-100;
+  @apply h-4 w-4 rounded border-zinc-400 bg-white text-zinc-900;
 }
 
 .thread-pending-request-checkbox-label {
@@ -1141,20 +1146,24 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 
 .thread-pending-request-primary,
 .thread-pending-request-secondary {
-  @apply h-12 shrink-0 rounded-full border px-5 text-sm font-medium transition;
+  @apply h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition;
 }
 
 .thread-pending-request-primary {
-  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700;
 }
 
 .thread-pending-request-secondary {
-  @apply border-zinc-700 bg-transparent text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800;
+  @apply border-zinc-300 bg-transparent text-zinc-600 hover:border-zinc-500 hover:bg-zinc-100;
 }
 
 @media (max-width: 640px) {
+  .thread-pending-request {
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
   .thread-pending-request-shell {
-    @apply rounded-[1.5rem] px-3 py-3;
+    @apply rounded-[1.25rem] px-3 py-3;
   }
 
   .thread-pending-request-footer--approval {
