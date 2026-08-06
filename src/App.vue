@@ -139,6 +139,21 @@
                 </button>
               </div>
               <div class="settings-dialog-body">
+                <nav class="settings-group-nav" :aria-label="t('Settings groups')">
+                  <button
+                    v-for="group in settingsGroups"
+                    :key="group.id"
+                    type="button"
+                    class="settings-group-nav-item"
+                    :class="{ 'is-active': activeSettingsGroup === group.id }"
+                    :aria-current="activeSettingsGroup === group.id ? 'true' : undefined"
+                    @click="activeSettingsGroup = group.id"
+                  >
+                    {{ t(group.label) }}
+                  </button>
+                </nav>
+                <div class="settings-group-content">
+                <div v-show="activeSettingsGroup === 'general'">
               <div class="sidebar-settings-account-section">
                 <div class="sidebar-settings-account-header">
                   <div class="sidebar-settings-account-header-main">
@@ -243,7 +258,6 @@
                   </div>
                 </template>
               </div>
-              <div class="settings-group-heading">{{ t('General settings') }}</div>
               <button class="sidebar-settings-row" type="button" :title="SETTINGS_HELP.sendWithEnter" @click="toggleSendWithEnter">
                 <span class="sidebar-settings-label">{{ t('Require ⌘ + enter to send') }}</span>
                 <span class="sidebar-settings-toggle" :class="{ 'is-on': !sendWithEnter }" />
@@ -302,7 +316,8 @@
                 <span class="sidebar-settings-value">{{ t('Issue detected') }}</span>
               </a>
 
-              <div class="settings-group-heading">{{ t('Models & providers') }}</div>
+                </div>
+                <div v-show="activeSettingsGroup === 'models'">
               <div class="sidebar-settings-row sidebar-settings-row--select" :title="t('Choose the API provider for the Codex backend')">
                 <span class="sidebar-settings-label">{{ t('Provider') }}</span>
                 <ComposerDropdown
@@ -455,7 +470,8 @@
                   </div>
                 </div>
               </div>
-              <div class="settings-group-heading">{{ t('Integrations') }}</div>
+                </div>
+                <div v-show="activeSettingsGroup === 'integrations'">
               <button class="sidebar-settings-row" type="button" aria-live="polite" @click="isTelegramConfigOpen = !isTelegramConfigOpen">
                 <span class="sidebar-settings-label">{{ t('Telegram') }}</span>
                 <span class="sidebar-settings-value">{{ telegramStatusText }}</span>
@@ -596,13 +612,16 @@
                   </template>
                 </template>
               </div>
-              <div class="settings-group-heading">{{ t('Usage & about') }}</div>
+                </div>
+                <div v-show="activeSettingsGroup === 'usage'">
               <div class="sidebar-settings-rate-limits">
                 <RateLimitStatus :snapshots="accountRateLimitSnapshots" />
               </div>
               <div class="sidebar-settings-build-label" :aria-label="t('Worktree name and version')">
                 WT {{ worktreeName }} · v{{ appVersion }}
               </div>
+                </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1880,6 +1899,13 @@ let threadWorktreeSummaryRequestId = 0
 const defaultNewProjectName = ref('New Project (1)')
 const homeDirectory = ref('')
 const isSettingsOpen = ref(false)
+const settingsGroups = [
+  { id: 'general', label: 'General settings' },
+  { id: 'models', label: 'Models & providers' },
+  { id: 'integrations', label: 'Integrations' },
+  { id: 'usage', label: 'Usage & about' },
+] as const
+const activeSettingsGroup = ref<'general' | 'models' | 'integrations' | 'usage'>('general')
 // Guard against the mobile/desktop ghost-click sequence: pointerdown on the
 // dialog backdrop closes the settings dialog, then the browser retargets the
 // synthesized click to the settings trigger button underneath, which would
@@ -6138,7 +6164,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-panel {
-  @apply flex max-h-[min(82vh,44rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
+  @apply flex max-h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
 }
 
 .settings-dialog-backdrop {
@@ -6162,19 +6188,35 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .settings-dialog-body {
-  @apply min-h-0 flex-1 overflow-y-auto;
+  @apply flex min-h-0 flex-1 overflow-hidden;
 }
 
-.settings-group-heading {
-  @apply sticky top-0 z-10 mt-2 border-y border-zinc-100 bg-zinc-50/95 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-zinc-400 backdrop-blur;
+.settings-group-nav {
+  @apply flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-zinc-100 p-2;
 }
 
-.settings-group-heading:first-child {
-  @apply mt-0 border-t-0;
+.settings-group-nav-item {
+  @apply w-full rounded-lg border-0 px-3 py-2 text-left text-[13px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 cursor-pointer;
 }
 
-:global(:root.dark) .settings-group-heading {
-  @apply border-zinc-800 bg-zinc-900/95 text-zinc-500;
+.settings-group-nav-item.is-active {
+  @apply bg-zinc-100 text-zinc-900;
+}
+
+.settings-group-content {
+  @apply min-h-0 min-w-0 flex-1 overflow-y-auto;
+}
+
+:global(:root.dark) .settings-group-nav {
+  @apply border-zinc-800;
+}
+
+:global(:root.dark) .settings-group-nav-item {
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+:global(:root.dark) .settings-group-nav-item.is-active {
+  @apply bg-zinc-800 text-zinc-50;
 }
 
 :global(:root.dark) .settings-dialog-header {

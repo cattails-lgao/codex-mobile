@@ -1343,6 +1343,27 @@ describe('P1-3 notification surface', () => {
     expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBe(listCallsBefore)
   })
 
+  it('archives live reasoning into the persisted message list when a turn completes', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-1', delta: '先确认环境' } })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-1', delta: '，再规划步骤' } })
+    await Promise.resolve()
+
+    // agent 内容开始 → clearLiveReasoningForThread 把 live thinking 存档
+    sendNotification({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '开始回答' } })
+    await Promise.resolve()
+
+    const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
+    expect(stored).toBeTruthy()
+    expect(stored).toContain('先确认环境，再规划步骤')
+    expect(stored).toContain('reasoning:local:thread-1:')
+  })
+
   it('bypasses recent-load reuse when force is set', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })

@@ -989,7 +989,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-shell {
-  @apply w-full rounded-[1.75rem] border border-zinc-700 bg-zinc-900 px-4 py-4 sm:px-5 sm:py-4 text-zinc-100 shadow-xl;
+  @apply w-full max-h-[min(70vh,36rem)] overflow-y-auto rounded-[1.75rem] border border-zinc-700 bg-zinc-900 px-4 py-4 sm:px-5 sm:py-4 text-zinc-100 shadow-xl;
 }
 
 .thread-pending-request-shell--no-top-radius {
