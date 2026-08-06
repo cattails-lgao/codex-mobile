@@ -91,6 +91,7 @@ export function findAdjacentThreadId(threads: UiThread[], threadId: string): str
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
+const THREAD_REASONING_STORAGE_KEY = 'codex-web-local.thread-reasoning.v1'
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY = 'codex-web-local.selected-model-by-context.v1'
@@ -188,6 +189,26 @@ function loadReadStateMap(): Record<string, string> {
 function saveReadStateMap(state: Record<string, string>): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(READ_STATE_STORAGE_KEY, JSON.stringify(state))
+}
+
+// app-server 不把 reasoning 持久化到 thread/read（仅流式通知），前端把 live
+// thinking 存档到 localStorage，刷新后仍能在消息列表展示（reasoning-block）。
+function loadPersistedReasoningMap(): Record<string, UiMessage[]> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_REASONING_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return parsed as Record<string, UiMessage[]>
+  } catch {
+    return {}
+  }
+}
+
+function savePersistedReasoningMap(state: Record<string, UiMessage[]>): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(THREAD_REASONING_STORAGE_KEY, JSON.stringify(state))
 }
 
 function loadUnreadCutoffIso(): string {
@@ -1458,6 +1479,7 @@ export function useDesktopState() {
   const livePlanMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const injectedSystemMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
+  const persistedReasoningByThreadId = ref<Record<string, UiMessage[]>>(loadPersistedReasoningMap())
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
@@ -1685,6 +1707,8 @@ export function useDesktopState() {
     const liveCommands = liveCommandsByThreadId.value[threadId] ?? []
     const liveFileChanges = liveFileChangeMessagesByThreadId.value[threadId] ?? []
     const injected = injectedSystemMessagesByThreadId.value[threadId] ?? []
+    // 本地存档的 thinking（app-server 不持久化 reasoning，见 rememberPersistedReasoning）
+    const persistedReasoning = persistedReasoningByThreadId.value[threadId] ?? []
 
     // When a compaction is not in progress and a compaction.done row already
     // exists in persisted messages (ContextCompaction item), drop any stale
@@ -1698,7 +1722,7 @@ export function useDesktopState() {
       ? injected.filter((message) => message.messageType !== 'compaction.pending')
       : injected
 
-    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...effectiveInjected]
+    const combined = [...persisted, ...livePlan, ...liveCommands, ...liveFileChanges, ...liveAgent, ...effectiveInjected, ...persistedReasoning]
 
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
@@ -2751,8 +2775,34 @@ export function useDesktopState() {
 
   function clearLiveReasoningForThread(threadId: string): void {
     if (!threadId) return
-    if (!(threadId in liveReasoningTextByThreadId.value)) return
+    const current = liveReasoningTextByThreadId.value[threadId]
+    if (current === undefined) return
+    rememberPersistedReasoning(threadId, current)
     liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
+  }
+
+  // 把完整 thinking 文本存档为 reasoning 消息（本地持久化，刷新后仍展示）。
+  function rememberPersistedReasoning(threadId: string, text: string): void {
+    if (!threadId) return
+    const normalized = text.trim()
+    if (!normalized) return
+    const previous = persistedReasoningByThreadId.value[threadId] ?? []
+    if (previous.some((message) => message.text === normalized)) return
+    const nextMessage: UiMessage = {
+      id: `reasoning:local:${threadId}:${Date.now()}`,
+      role: 'system',
+      text: normalized,
+      messageType: 'reasoning',
+      reasoning: { summary: [], content: [normalized] },
+    }
+    // ponytail: 每线程最多保留 20 条，防止 localStorage 无限增长；如需更多
+    // 历史可改为按容量或按天裁剪。
+    const next = [...previous, nextMessage].slice(-20)
+    persistedReasoningByThreadId.value = {
+      ...persistedReasoningByThreadId.value,
+      [threadId]: next,
+    }
+    savePersistedReasoningMap(persistedReasoningByThreadId.value)
   }
 
   function clearLivePlansForThread(threadId: string): void {
@@ -6047,6 +6097,7 @@ export function useDesktopState() {
     livePlanMessagesByThreadId.value = {}
     liveAgentMessagesByThreadId.value = {}
     liveReasoningTextByThreadId.value = {}
+    persistedReasoningByThreadId.value = {}
     liveCommandsByThreadId.value = {}
     liveFileChangeMessagesByThreadId.value = {}
     turnIndexByTurnIdByThreadId.value = {}
