@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
-| 最近提交 | 026c8a9（第十三轮修复 + 文档，已推送） |
+| 最近提交 | 4508827（第十四轮修复 + 文档，已提交） |
 
 ---
 
@@ -138,6 +138,7 @@ pnpm run dev --host 127.0.0.1 --port 4173
 - **`289665d`**：第十二轮 3 条——设置面板左右布局（`.settings-group-nav` 四组导航）、Awaiting response 面板滚动上限（`max-h-[min(70vh,36rem)]`）、thinking 本地持久化展示（`rememberPersistedReasoning` → localStorage `codex-web-local.thread-reasoning.v1`，消息列表 Thinking process 折叠块）
 - **`7d81389`**：第十三轮 8 项——设置面板固定高度（`h-[min(84vh,46rem)]`，切换分组不再跳动）、thinking 实时显示（捕获 `item/started`+`item/completed` 全量 reasoning，本 app-server 不推 `item/reasoning/*TextDelta`）、Awaiting response 面板悬浮化（`position: fixed` 视口底部居中，脱离文档流）+ 明暗主题（暗色覆盖移入 `src/style.css`，scoped `:global(:root.dark)` 构建中不生效）+ 中文文案、计划面板 plan item 实时捕获 + turn 后强制重载、编号列表优先解析（35 步→6 步）、Implement 防重复点击（`implemented` 判定 + 计划已执行文案）、Implement popover 内部样式补齐、面板文案 i18n（15 键）。作用：第十三轮验收 8 项问题
 - **`026c8a9`**：交接文档快照更新（第十三轮已推送记录 + 手动测试索引）
+- **`4508827`**：第十四轮 8 项（含暗色根因修复）——plan popover 三段式重排（标题行 `🗒 Plan N/M` + Summary/Steps 分区标签 + 步骤列表 + Implement 按钮）、思考块按轮次归位（`activeReasoningTurnIdByThreadId` 记录 reasoning 所属 turn，存档带 `turnId`/`turnIndex`，`mergePersistedReasoning` 插到该轮用户消息后，旧存档无 turnIndex 回退末尾）、已实施计划面板隐藏（`composerPlanPanel` 对 `hasLaterWork || requested` 直接 `return null`）、思考内容展开字体缩小至 13px + zinc-500（暗色 zinc-400）、live overlay Thinking 可点击折叠/展开（`.live-overlay-heading` + `▾/▸`，默认展开）、live 消息按到达顺序交错（`mergeLiveMessages` sortKey 记录首次到达序，去重后整体排序，修复命令/文本/思考扎堆）、审核/询问面板与输入框 shell 同宽（`composerShellWidthPx` ResizeObserver 实测 + `panel-width` prop）、暗色主题根因修复（ThreadComposer 计划面板 + ThreadConversation 思考块/工作块/工具调用的 `:global(:root.dark)` 规则整体迁入全局 `style.css`，此前全部失效）。作用：第十四轮反馈 8 项问题
 
 ## Codex 功能补齐方案完成情况
 
