@@ -6089,11 +6089,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-actions {
-  @apply flex w-full items-center justify-center gap-1;
+  @apply flex w-full items-center gap-1;
 }
 
 .sidebar-settings-icon-button {
-  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+  @apply flex h-10 flex-1 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
 }
 
 :global(:root.dark) .sidebar-settings-area {
@@ -6105,7 +6105,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-icon {
-  @apply w-4.5 h-4.5;
+  @apply w-6 h-6;
 }
 
 .sidebar-settings-panel {
