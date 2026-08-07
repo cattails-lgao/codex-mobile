@@ -15,3 +15,9 @@ pnpm-lock.yaml
 
 package.json
 .omx/
+
+# 本地开发/测试残留：一次性质检快照、连通性探测、沙箱外测试产物、TS schema 编译产物
+acceptance-plan/
+probe.txt
+tmp/
+documentation/app-server-schemas/typescript/**/*.js
