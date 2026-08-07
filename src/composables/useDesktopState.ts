@@ -903,6 +903,15 @@ type TurnErrorState = {
   transient: boolean
 }
 
+// 中断后服务端整体移除未提交 turn 时，回填输入框的用户消息载荷
+// （结构与 ThreadComposer 的 ComposerDraftPayload 一致）
+export type InterruptRecoverPayload = {
+  text: string
+  imageUrls: string[]
+  fileAttachments: Array<{ label: string; path: string; fsPath: string }>
+  skills: Array<{ name: string; path: string }>
+}
+
 type TurnStartedInfo = {
   threadId: string
   turnId: string
@@ -1643,6 +1652,11 @@ export function useDesktopState() {
   const interruptBlockedUntilPersistedByThreadId = ref<Record<string, boolean>>({})
   const threadListedByServerById = ref<Record<string, boolean>>({})
   const persistedUserMessageByThreadId = ref<Record<string, boolean>>({})
+
+  // 需求 9 UI 优化：turn/interrupt 中断一个尚未产出 agent 输出的 turn 时，服务端会
+  // 把该 turn（含用户消息）从线程历史整体移除（事务式回滚）。检测到该场景后把未
+  // 提交的用户消息载荷存于此，供 UI 回填输入框并提示，避免用户以为消息丢失。
+  const interruptedUnsubmittedByThreadId = ref<Record<string, InterruptRecoverPayload>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
   const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
@@ -1833,6 +1847,12 @@ export function useDesktopState() {
     const summary = turnSummaryByThreadId.value[threadId]
     if (!summary) return combined
     return insertTurnSummaryMessage(combined, summary)
+  })
+  // 需求 9：当前线程「中断后服务端移除未提交 turn」时待回填的用户消息载荷
+  const interruptedUnsubmittedMessage = computed<InterruptRecoverPayload | null>(() => {
+    const threadId = selectedThreadId.value
+    if (!threadId) return null
+    return interruptedUnsubmittedByThreadId.value[threadId] ?? null
   })
   const hasMoreOlderMessages = computed(() => {
     const threadId = selectedThreadId.value
@@ -5807,6 +5827,27 @@ export function useDesktopState() {
       throw new Error('Could not determine active turn id for interrupt')
     }
 
+    // 需求 9 UI 优化：turn/interrupt 中断一个「尚未产出任何 agent 输出」的 turn 时，
+    // 服务端会把该 turn（含用户消息）从线程历史整体移除（事务式回滚，见第七轮调研
+    // 结论）。在中断前按服务端语义判定：该 turn 无 agentMessage/命令/工具/文件变更/
+    // plan 等持久化产物（仅用户消息 + 思考不算），则中断后消息必然消失 → 回填输入框。
+    const turnMessages = messages.value.filter((message) => message.turnId === turnId)
+    const interruptedUserMessage = turnMessages.find((message) => message.role === 'user')
+    const hasAgentOutput = turnMessages.some((message) => {
+      if (message.role === 'assistant') return true
+      const type = message.messageType ?? ''
+      return (
+        type === 'commandExecution' ||
+        type === 'toolCall' ||
+        type === 'worked' ||
+        type === 'fileChange' ||
+        type === 'plan' ||
+        type === 'plan.live' ||
+        type === 'compaction.done' ||
+        type === 'turnError'
+      )
+    })
+
     isInterruptingTurn.value = true
     error.value = ''
     try {
@@ -5820,12 +5861,35 @@ export function useDesktopState() {
       pendingThreadMessageRefresh.add(threadId)
       pendingThreadsRefresh = true
       await syncFromNotifications()
+      if (interruptedUserMessage && !hasAgentOutput) {
+        interruptedUnsubmittedByThreadId.value = {
+          ...interruptedUnsubmittedByThreadId.value,
+          [threadId]: {
+            text: interruptedUserMessage.text ?? '',
+            imageUrls: interruptedUserMessage.images ?? [],
+            fileAttachments: (interruptedUserMessage.fileAttachments ?? []).map((attachment) => ({
+              label: attachment.label,
+              path: attachment.path,
+              fsPath: (attachment as { fsPath?: string }).fsPath ?? attachment.path,
+            })),
+            skills: interruptedUserMessage.skills ?? [],
+          },
+        }
+      }
     } catch (unknownError) {
       const errorMessage = unknownError instanceof Error ? unknownError.message : 'Failed to interrupt active turn'
       setTurnErrorForThread(threadId, errorMessage)
       error.value = errorMessage
     } finally {
       isInterruptingTurn.value = false
+    }
+  }
+
+  // 需求 9：UI 消费完「中断回填载荷」后清除（一次性消费，避免重复回填）
+  function clearInterruptedUnsubmittedMessage(threadId: string): void {
+    if (!threadId) return
+    if (interruptedUnsubmittedByThreadId.value[threadId]) {
+      interruptedUnsubmittedByThreadId.value = omitKey(interruptedUnsubmittedByThreadId.value, threadId)
     }
   }
 
@@ -6462,6 +6526,8 @@ export function useDesktopState() {
     sendMessageToSelectedThread,
     sendMessageToNewThread,
     interruptSelectedThreadTurn,
+    interruptedUnsubmittedMessage,
+    clearInterruptedUnsubmittedMessage,
     selectedThreadQueuedMessages,
     removeQueuedMessage,
     reorderQueuedMessage,

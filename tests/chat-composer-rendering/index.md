@@ -54,3 +54,4 @@ Return to the [manual test index](../../tests.md).
 | [Process Fold phase A and streaming reasoning truncation](process-fold-phase-a-and-streaming-reasoning-truncation.md) |
 | [Three-zone hot/warm/cold rendering (phase B)](three-zone-hot-warm-cold-rendering.md) |
 | [Phase C: question-nav JumpBar, tool aggregation, partitionTurnItems split](phase-c-jumpbar-tool-aggregation.md) |
+| [Composer popover keyboard nav + interrupt recover (requirement-9 UI)](composer-kb-nav-and-interrupt-recover.md) |
