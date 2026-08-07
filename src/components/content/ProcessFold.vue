@@ -77,31 +77,29 @@ function onToggle(): void {
 <style scoped>
 @reference "tailwindcss";
 
+/* 折叠条视觉降噪（round-17 反馈「不需要圆形边框和背景色、收起按钮放文本旁」）：
+   去掉圆角/边框/背景，toggle 紧跟文本（不再推到行尾）。 */
 .process-fold {
-  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/60;
+  @apply w-full min-w-0;
 }
 
-.process-fold--running {
-  @apply border-amber-200 bg-amber-50/50;
+.process-fold--running .process-fold-label {
+  @apply text-amber-600;
 }
 
 .process-fold-header {
-  @apply flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-100;
-}
-
-.process-fold--running .process-fold-header {
-  @apply hover:bg-amber-100/60;
+  @apply flex w-full min-w-0 items-center gap-1 px-0 py-0.5 text-left transition-colors;
 }
 
 .process-fold-label {
-  @apply min-w-0 flex-1 truncate text-xs font-semibold text-zinc-600;
+  @apply min-w-0 truncate text-xs font-medium text-zinc-500;
 }
 
 .process-fold-toggle {
-  @apply shrink-0 text-xs leading-none text-zinc-400;
+  @apply shrink-0 text-[10px] leading-none text-zinc-400;
 }
 
 .process-fold-body {
-  @apply flex flex-col gap-1.5 border-t border-zinc-200 px-2.5 py-2.5;
+  @apply flex flex-col gap-1 px-0 py-1.5;
 }
 </style>

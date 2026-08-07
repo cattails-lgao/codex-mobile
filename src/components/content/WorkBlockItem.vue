@@ -112,27 +112,23 @@ const permissionHint = computed(() => {
 @reference "tailwindcss";
 
 .work-block-list {
-  @apply flex w-full min-w-0 flex-col gap-1.5;
+  @apply flex w-full min-w-0 flex-col gap-1;
 }
 
+/* 命令块视觉降噪（round-16 反馈「命令执行块太显眼」+ round-17 反馈「不需要圆形
+   边框和背景色」）：去掉圆角/边框/背景，改为「序号 + 命令文本 + 状态」的朴素行，
+   颜色浅。输出区保持深色代码块。 */
 .work-block {
-  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/60 transition-colors;
-}
-
-/* 命令块视觉降噪（第十六轮反馈「命令执行块太显眼，灰一点」）：去掉左侧
-   4px 彩色粗边框，状态只通过步骤圆点底色与状态文字的弱化色体现。 */
-
-.work-block.work-block-compact {
-  border-left-width: 0;
+  @apply w-full min-w-0;
 }
 
 .work-block.work-block-compact .work-block-header {
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 
 .work-block.work-block-compact .work-step-dot {
-  @apply h-4 min-w-4 text-[10px];
+  font-size: 10px;
 }
 
 .work-block.work-block-compact .work-block-command {
@@ -145,31 +141,32 @@ const permissionHint = computed(() => {
 }
 
 .work-block-header {
-  @apply flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left cursor-pointer transition-colors hover:bg-zinc-100/60;
+  @apply flex w-full min-w-0 items-center gap-1.5 px-0 py-0.5 text-left cursor-pointer transition-colors;
 }
 
+/* 序号：纯文本数字，浅灰，无圆形徽章 */
 .work-step-dot {
-  @apply flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[11px] font-semibold leading-none text-zinc-500 tabular-nums;
+  @apply shrink-0 text-[11px] font-medium leading-none text-zinc-400 tabular-nums;
 }
 
 .work-block.cmd-status-running .work-step-dot {
-  @apply bg-amber-50 text-amber-600;
+  @apply text-amber-500;
 }
 
 .work-block.cmd-status-ok .work-step-dot {
-  @apply bg-emerald-50 text-emerald-600;
+  @apply text-emerald-500;
 }
 
 .work-block.cmd-status-error .work-step-dot {
-  @apply bg-rose-50 text-rose-600;
+  @apply text-rose-500;
 }
 
 .work-block-command {
-  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-600;
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-500;
 }
 
 .work-block-status {
-  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium;
+  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium text-zinc-400;
 }
 
 .work-block.cmd-status-running .work-block-status {
@@ -193,7 +190,7 @@ const permissionHint = computed(() => {
 }
 
 .work-block-output-wrap {
-  @apply rounded-b-xl bg-zinc-900;
+  @apply bg-zinc-900;
   display: grid;
   /* 列轨道固定为 minmax(0,1fr)：auto 轨道会被子项 max-content（超长行）撑开，
      导致 break-words 永不触发、输出无限变宽 */
