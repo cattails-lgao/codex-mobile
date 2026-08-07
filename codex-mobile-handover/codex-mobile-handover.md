@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
-| 最近提交 | a5d5ef9（阶段 A：流式思考截断 + Process Fold 基础版，已提交） |
+| 最近提交 | da8cabd（阶段 C：问题导航 JumpBar + 工具聚合 + partitionTurnItems 通道拆分，已提交） |
 
 ---
 
@@ -442,6 +442,8 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > **2026-08-07 阶段 B 已完成**：hot/warm/cold 三区渲染落地。`transcriptGrouping.ts` 纯函数层（移植 Reasonix：`buildTurnGroups` user 消息为界分组 + assistantPreview/toolCount、`warmPagination`/`warmColdPageForTurn` 三区边界、`WarmLayerState` 纯状态 sessionKey 隔离、`warmUserPreview`/`compactQuestionText` ≤80 字摘要、`messagesForTurnsFrom` hot 提取、`scrollVersion` 结构指纹）+ 单测 28 例；`WarmTurnCard.vue` 折叠摘要卡（head chevron + 提问预览 + 工具数 meta + 回答预览，点击展开/收起）；`ThreadConversation.vue` 渲染序列改为三区交错（warm 折叠轮次出卡片、展开轮次出「头部 + 该轮消息」、之后接 hot 区消息），顶部新增 cold 分页按钮「展开前 N 轮对话」（coldPage 单调递增、每页 20 轮），移除 `renderWindowStart`/`LOAD_MORE_CHUNK`/`RENDER_WINDOW_SIZE` 尾部窗口逻辑（滚动到顶时 cold 区优先展开一页、否则后端分页），`processFolds` 改在渲染出的消息序列上计算（阶段 A fold 与三区共存）；i18n 2 键；暗色覆盖入 `style.css`。验证：`vue-tsc` 通过、构建通过、单测 290/292（新增 28，2 个既有 Windows 环境性失败无关）、Playwright（Edge channel）17/17（mock 40 轮：hot 30 + warm 10 + cold 0；卡片预览/工具数/回答预览；展开 +1 消息可收起；mock 60 轮：30 hot + 20 warm + 10 cold + 分页按钮，点击后 warm 30 + cold 0；暗色深底；H5 无溢出）+ 阶段 A 回归 14/14（`r16-fold-check.cjs`）；脚本 `output/playwright/r17-zones-check.cjs`，截图 `r17-zones-{light,big-light,dark,h5}.png`；手动测试文档 `tests/chat-composer-rendering/three-zone-hot-warm-cold-rendering.md`。
 
+> **2026-08-07 阶段 C 已完成**：三项增强全部落地。①工具聚合——新增 `utils/toolAggregation.ts` 纯函数（`aggregateToolMessages` 连续相邻 + 已完成 + 可分类 toolCall 才聚合，running/未知工具名/非 toolCall 打断，`MIN_TOOL_BATCH_ITEMS=2` 单条保持平铺；`toolBatchKindFor` 按内置工具名分 readonly/modify/delegate，`buildToolBatchLabel` readonly 批按 read/search/other 计数）+ 单测 12 例；新增 `ToolBatchBlock.vue`（折叠头 + 计数徽标 + body 内逐条 ToolCallRow，暗色覆盖入 `style.css`），`ThreadConversation.vue` 折叠成员渲染改经 `aggregateToolMessages` 拆成「单条/聚合批」——连续只读工具合并为 ReadOnlyBatch（「Read N files · Search M files」），连续同类 modify/delegate 合并为 ToolGroup（「Modified N files」/「Delegated N tasks」）。②问题导航 JumpBar——新增 `QuestionJumpBar.vue`（每轮一个圆点，悬停圆点宽度阶梯 + 预览 tooltip 显示 `compactQuestionText` 问题文本，点击 `jumpToQuestion`：目标在 cold 区先 `warmColdPageForTurn` + `warmLayerWithColdPageAtLeast` 翻页、warm/cold 区 `warmLayerWithExpandedTurn` 展开，`nextTick` 后按锚点 `scrollIntoView` 计算滚动，解除 `autoFollowOutput`；锚点 warm-card li 挂 `question-anchor-{turn}`、hot 区 user 消息 li 挂锚点避免重复 id；H5 media query 隐藏）；`ThreadConversation.vue` 新增 `questionAnchors`/`activeQuestionTurn`（恒最后一个问题，对应 Reasonix 激活态）/`turnIndexByUserMessageId` computed。③`partitionTurnItems` 通道拆分——本地 `buildProcessFolds` 语义核对：agentMessage（有正文回答）非折叠类型天然留在折叠外并打断连续性（回答后又干活另起新折叠，既有测试锁定）、turnError（warn 类）永不折叠、steer 即 user 消息发送模式渲染在用户侧、compaction 保持独立行渲染；新增 2 个边界单测锁定（turnError 不并入折叠组、steer 前后同轮工作各自成组）。i18n 8 键（问题导航 + 工具批标签中英双语）。验证：`vue-tsc` 通过、构建通过、全量单测 306 用例（304 通过 + 2 个既有 Windows 环境性失败无关，本次新增 14 例）、Playwright（Edge channel）20/20（JumpBar 40 圆点/悬停预览/点击展开最老轮 + 向上滚动、fold 2 个（回答打断）、readonly batch「Read 3 files」+ modify batch「Modified 2 files」、展开 batch 3 行 tool、回答文本在折叠外、暗色 batch/dot 背景、H5 隐藏 JumpBar 无溢出）；脚本 `output/playwright/r18-phasec-check.cjs`，截图 `r18-{jumpbar-light,toolbatch-light,phasec-dark,phasec-h5}.png`；手动测试文档 `tests/chat-composer-rendering/phase-c-jumpbar-tool-aggregation.md`。
+
 1. **阶段 A（低风险）**
    - ~~流式思考截断：移植 `displayReasoningText`（流式中只保留最后 12,000 字符 / 240 行），两处调用点（live overlay + reasoning block）~~ **已完成**（见上方进展记录；reasoning block 为持久化内容按非流式不截断）
    - ~~Process Fold 基础版：按 `turnIndex` 把同轮思考块 + 工作块 + 工具调用包进可折叠容器（对应 Reasonix `TurnCollapse`），折叠条 `耗时 · 工具数 · 思考数`；沿用现有手动展开/收起交互，运行中自动展开、完成自动收起（含 `processFoldPreference` 持久化）~~ **已完成**（同轮 ≥2 条才折叠；折叠条追加 `K 个命令` 计数）
@@ -449,9 +451,9 @@ pnpm run dev --host 127.0.0.1 --port 4173
    - ~~hot/warm/cold 三区：现有 `renderWindowStart`（50 条）+ `LOAD_MORE_CHUNK`（30）升级为三层——hot 区全量渲染（最近 N 轮）、warm 区可折叠摘要卡（提问预览 ≤80 字 + 工具数 + 回答预览，单轮展开）、cold 区分页「Load earlier」~~ **已完成**（HOT_TURNS=30 / WARM_PAGE_SIZE=20；warm 区按轮折叠，cold 区前端分页按钮；顶部后端分页按钮保留）
    - ~~流式渲染隔离：warm/cold 区 JSX 子树不随 token 重建（Vue 侧用 `defineComponent` + props 引用比较 + `shallowRef`）~~ **已完成**（`WarmTurnCard` 为 `defineComponent`，props 仅原始值；live token 增量只改变消息文本、不改变 warm 轮次摘要字段 → props 值相等跳过重渲染；warm 轮次永远非流式轮，与 Reasonix `WarmZone` 语义一致）
 3. **阶段 C（增强）**
-   - 问题导航 JumpBar（每轮一个圆点 + 悬停预览 + 点击跳转，对应 Reasonix `QuestionJumpBar`）
-   - 工具聚合：连续只读工具合并 `ReadOnlyBatch`、同类工具合并 `ToolGroup`（creation 模式）
-   - `partitionTurnItems` 通道拆分：有正文的回答留在折叠外，一轮内「回答后又干活」另起新折叠，warn/extension 永不折叠、steer 渲染在用户侧
+   - ~~问题导航 JumpBar（每轮一个圆点 + 悬停预览 + 点击跳转，对应 Reasonix `QuestionJumpBar`）~~ **已完成**（`QuestionJumpBar.vue` + `jumpToQuestion`：cold 区自动翻页 + warm/cold 轮自动展开后按锚点滚动；H5 隐藏）
+   - ~~工具聚合：连续只读工具合并 `ReadOnlyBatch`、同类工具合并 `ToolGroup`（creation 模式）~~ **已完成**（`toolAggregation.ts` + `ToolBatchBlock.vue`：本地无 creation 模式，只读工具合并为 ReadOnlyBatch、非只读可分类工具按 modify/delegate 合并为 ToolGroup，未知工具名保持单条）
+   - ~~`partitionTurnItems` 通道拆分：有正文的回答留在折叠外，一轮内「回答后又干活」另起新折叠，warn/extension 永不折叠、steer 渲染在用户侧~~ **已完成**（本地 `buildProcessFolds` 天然满足：agentMessage 留折叠外并打断折叠、turnError 永不折叠、steer 即 user 消息在用户侧；2 个边界单测锁定）
 
 每个阶段独立验收（vue-tsc + vitest + Playwright 桌面/暗色/H5），阶段 A 的 Fold 容器是阶段 B 的组成部分，不返工。
 
@@ -509,4 +511,4 @@ Reasonix 是 React + TS，本地是 Vue 3。经逐个读取 `lib/reasoningDispla
 
 ---
 
-*codexapp · 交接文档 · 2026-08-07（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）+ 第十三轮 8 个问题已修复（设置面板固定高度、thinking 实时显示、Awaiting response 悬浮面板 + 明暗主题 + 中文、计划面板 item 捕获 + 编号优先解析 35→6、Implement 防重复点击、popover 内部样式、面板文案 i18n）且 trae-work 会话链接调研结论已确认 + 第十五轮拆分重构（ThreadConversation 5701→2951 行）已推送 + Reasonix 移植阶段 A（流式思考截断 + Process Fold 基础版）已推送 + 阶段 B（hot/warm/cold 三区渲染 + 流式渲染隔离）已完成并推送（commit 0c0676d）） · 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-07（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）+ 第十三轮 8 个问题已修复（设置面板固定高度、thinking 实时显示、Awaiting response 悬浮面板 + 明暗主题 + 中文、计划面板 item 捕获 + 编号优先解析 35→6、Implement 防重复点击、popover 内部样式、面板文案 i18n）且 trae-work 会话链接调研结论已确认 + 第十五轮拆分重构（ThreadConversation 5701→2951 行）已推送 + Reasonix 移植阶段 A（流式思考截断 + Process Fold 基础版）已推送 + 阶段 B（hot/warm/cold 三区渲染 + 流式渲染隔离）已完成并推送（commit 0c0676d）+ 阶段 C（问题导航 JumpBar + 工具聚合 ReadOnlyBatch/ToolGroup + partitionTurnItems 通道拆分）已完成并推送（commit da8cabd）） · 内容已脱敏*
