@@ -438,9 +438,11 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 > 依据 2026-08-07 对 `D:\DeepSeek-Reasonix-main-v2`（React + TS 桌面前端）消息列表架构的调研（`Transcript.tsx` + `transcriptGrouping.ts` + `useController.ts`）。ThreadConversation 拆分重构已为以下改造清障（改 `ThreadConversation.vue` 时不再有巨文件负担）。
 
+> **2026-08-07 阶段 A 已完成**（commit 见下）：①流式思考截断——移植 `reasoningDisplay.ts`（`displayReasoningText`，默认保留末尾 12,000 字符 / 240 行，前缀 `...`）+ 单测 6 例，live overlay 思考流接入（流式截断）；持久化思考块按 Reasonix 语义不截断（非流式，避免隐藏完整思考）。②Process Fold 基础版——`conversationFolds.ts` 纯函数分组（按 turnId 合并连续 reasoning/commandExecution/toolCall，同轮 ≥2 条才折叠，单命令轮次保持平铺）+ `processFoldPreference.ts`（`codex-web-local.process-fold.v1` 偏好持久化 + CustomEvent）+ `ProcessFold.vue` 容器（运行中自动展开、完成自动收起、手动点击后不再被自动收放）；折叠条文案 `耗时 · N 个工具 · M 条思考 · K 个命令`（worked 摘要消息补 `durationMs` 供耗时，折叠轮次的 worked 行隐藏）；i18n 5 键。验证：`vue-tsc` 通过、构建通过、单测 262/264（新增 17，2 个既有 Windows 环境性失败无关）、Playwright（Edge channel）14/14（桌面浅色折叠渲染/标签/点击展开、暗色 expanded 偏好 10/10 body、H5 无溢出）+ 中文标签实测（「已处理 · 2 个命令」）；脚本 `output/playwright/r16-*.cjs`，截图 `r16-fold-{light,dark,h5,zh}.png`；手动测试文档 `tests/chat-composer-rendering/process-fold-phase-a-and-streaming-reasoning-truncation.md`。
+
 1. **阶段 A（低风险）**
-   - 流式思考截断：移植 `displayReasoningText`（流式中只保留最后 12,000 字符 / 240 行），两处调用点（live overlay + reasoning block）
-   - Process Fold 基础版：按 `turnIndex` 把同轮思考块 + 工作块 + 工具调用包进可折叠容器（对应 Reasonix `TurnCollapse`），折叠条 `耗时 · 工具数 · 思考数`；沿用现有手动展开/收起交互，运行中自动展开、完成自动收起（含 `processFoldPreference` 持久化）
+   - ~~流式思考截断：移植 `displayReasoningText`（流式中只保留最后 12,000 字符 / 240 行），两处调用点（live overlay + reasoning block）~~ **已完成**（见上方进展记录；reasoning block 为持久化内容按非流式不截断）
+   - ~~Process Fold 基础版：按 `turnIndex` 把同轮思考块 + 工作块 + 工具调用包进可折叠容器（对应 Reasonix `TurnCollapse`），折叠条 `耗时 · 工具数 · 思考数`；沿用现有手动展开/收起交互，运行中自动展开、完成自动收起（含 `processFoldPreference` 持久化）~~ **已完成**（同轮 ≥2 条才折叠；折叠条追加 `K 个命令` 计数）
 2. **阶段 B（架构改造，依赖阶段 A 产物）**
    - hot/warm/cold 三区：现有 `renderWindowStart`（50 条）+ `LOAD_MORE_CHUNK`（30）升级为三层——hot 区全量渲染（最近 N 轮）、warm 区可折叠摘要卡（提问预览 ≤80 字 + 工具数 + 回答预览，单轮展开）、cold 区分页「Load earlier」
    - 流式渲染隔离：warm/cold 区 JSX 子树不随 token 重建（Vue 侧用 `defineComponent` + props 引用比较 + `shallowRef`；Reasonix 用 `React.memo` + `LiveStreamContext`，Vue 对应 provide/inject）

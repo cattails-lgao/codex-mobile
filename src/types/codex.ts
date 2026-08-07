@@ -244,6 +244,7 @@ export type UiMessage = {
   plan?: UiPlanData
   turnId?: string
   turnIndex?: number
+  durationMs?: number
   isAutomationRun?: boolean
   automationDisplayName?: string | null
 }

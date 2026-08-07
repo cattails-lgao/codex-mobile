@@ -22,7 +22,53 @@
       </li>
       <template v-for="message in visibleMessages" :key="message.id">
       <li
-        v-if="!hiddenGroupedCommandIds.has(message.id) && !hiddenFileChangeMessageIds.has(message.id)"
+        v-if="isFoldStart(message)"
+        class="conversation-item conversation-item-fold"
+        data-role="system"
+        data-message-type="processFold"
+      >
+        <div class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
+            <ProcessFold
+              :label="foldLabelFor(message)"
+              :running="foldRunningFor(message)"
+              :has-outside-content="foldHasOutsideFor(message)"
+            >
+              <template v-for="foldMessage in foldMessagesFor(message)" :key="foldMessage.id">
+                <template
+                  v-if="!hiddenGroupedCommandIds.has(foldMessage.id) && !hiddenFileChangeMessageIds.has(foldMessage.id)"
+                >
+                  <div v-if="isCommandMessage(foldMessage)" class="work-block-list">
+                    <WorkBlockItem
+                      v-for="(cmd, cmdIndex) in getWorkBlockCommands(foldMessage)"
+                      :key="`work-cmd-${cmd.id}`"
+                      :command="cmd"
+                      :step-index="cmdIndex"
+                      :expanded="isCommandExpanded(cmd)"
+                      :compact="isCommandCompact(cmd)"
+                      :output-condensed="isCommandOutputCondensed(cmd)"
+                      @toggle="toggleCommandExpand(cmd)"
+                    />
+                  </div>
+                  <ToolCallRow v-else-if="isToolCallMessage(foldMessage)" :message="foldMessage" />
+                  <ReasoningBlock
+                    v-else-if="isReasoningMessage(foldMessage)"
+                    :message="foldMessage"
+                    :expanded="isReasoningExpanded(foldMessage)"
+                    :content-html="renderMarkdownBlocksAsHtml(foldMessage.text)"
+                    @toggle="toggleReasoningExpand(foldMessage)"
+                  />
+                </template>
+              </template>
+            </ProcessFold>
+          </div>
+        </div>
+      </li>
+      <li
+        v-else-if="!isFoldMember(message)
+          && !hiddenGroupedCommandIds.has(message.id)
+          && !hiddenFileChangeMessageIds.has(message.id)
+          && !(isWorkedMessage(message) && hiddenWorkedTurnIds.has(message.turnId ?? ''))"
         class="conversation-item"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
@@ -539,9 +585,16 @@ import FileChangeSummaryBlock from './FileChangeSummaryBlock.vue'
 import FileLinkContextMenu from './FileLinkContextMenu.vue'
 import LiveOverlayItem from './LiveOverlayItem.vue'
 import MessageToolbar from './MessageToolbar.vue'
+import ProcessFold from './ProcessFold.vue'
 import ReasoningBlock from './ReasoningBlock.vue'
 import ToolCallRow from './ToolCallRow.vue'
 import WorkBlockItem from './WorkBlockItem.vue'
+import {
+  buildProcessFoldLabel,
+  buildProcessFolds,
+  type ProcessFoldItem,
+} from '../../utils/conversationFolds'
+import { formatTurnDuration } from '../../composables/useDesktopState'
 
 type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
 
@@ -887,6 +940,62 @@ const isLoadingMore = ref(false)
 const visibleMessages = computed(() =>
   props.messages.slice(renderWindowStart.value).filter((message) => !isPlanMessage(message)),
 )
+
+// Process Fold：把同一轮次的思考/工作块/工具调用包进可折叠容器（阶段 A 基础版）。
+const processFolds = computed(() => buildProcessFolds(visibleMessages.value))
+
+const foldByStartId = computed(() => {
+  const map = new Map<string, ProcessFoldItem>()
+  for (const fold of processFolds.value) {
+    const startId = fold.messages[0]?.id ?? ''
+    if (startId) map.set(startId, fold)
+  }
+  return map
+})
+
+const foldMemberIds = computed(() => {
+  const set = new Set<string>()
+  for (const fold of processFolds.value) {
+    for (const message of fold.messages) set.add(message.id)
+  }
+  return set
+})
+
+const hiddenWorkedTurnIds = computed(() => {
+  const set = new Set<string>()
+  for (const fold of processFolds.value) set.add(fold.turnId)
+  return set
+})
+
+function isFoldStart(message: UiMessage): boolean {
+  return foldByStartId.value.has(message.id)
+}
+
+function isFoldMember(message: UiMessage): boolean {
+  return foldMemberIds.value.has(message.id)
+}
+
+function foldMessagesFor(message: UiMessage): UiMessage[] {
+  return foldByStartId.value.get(message.id)?.messages ?? []
+}
+
+function foldLabelFor(message: UiMessage): string {
+  const fold = foldByStartId.value.get(message.id)
+  return fold ? buildProcessFoldLabel(fold, { t, formatDuration: formatTurnDuration }) : ''
+}
+
+function foldRunningFor(message: UiMessage): boolean {
+  return foldByStartId.value.get(message.id)?.running ?? false
+}
+
+function foldHasOutsideFor(message: UiMessage): boolean {
+  return foldByStartId.value.get(message.id)?.hasOutsideContent ?? true
+}
+
+function isWorkedMessage(message: UiMessage): boolean {
+  return message.messageType === 'worked'
+}
+
 const hasMoreAbove = computed(() => renderWindowStart.value > 0 || props.hasMorePersistedAbove === true)
 
 const showJumpToLatestButton = computed(

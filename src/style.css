@@ -514,6 +514,36 @@
   @apply text-zinc-400;
 }
 
+/* Process Fold（阶段 A 折叠容器）暗色覆盖：scoped :global 不生效，放全局 */
+:root.dark .process-fold {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:root.dark .process-fold--running {
+  border-color: #78350f;
+  @apply bg-zinc-900;
+}
+
+:root.dark .process-fold-header:hover {
+  @apply bg-zinc-800/70;
+}
+
+:root.dark .process-fold--running .process-fold-header:hover {
+  @apply bg-zinc-800/70;
+}
+
+:root.dark .process-fold-label {
+  @apply text-zinc-300;
+}
+
+:root.dark .process-fold-toggle {
+  @apply text-zinc-500;
+}
+
+:root.dark .process-fold-body {
+  @apply border-zinc-700;
+}
+
 /* ThreadConversation 工作块 / 工具调用暗色覆盖（同上：scoped :global 不生效） */
 :root.dark .work-summary-text {
   @apply text-slate-100;

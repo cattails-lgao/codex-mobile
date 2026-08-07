@@ -924,7 +924,7 @@ function parseIsoTimestamp(value: string): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
-function formatTurnDuration(durationMs: number): string {
+export function formatTurnDuration(durationMs: number): string {
   if (!Number.isFinite(durationMs) || durationMs <= 0) {
     return '<1s'
   }
@@ -972,6 +972,7 @@ function buildTurnSummaryMessage(summary: TurnSummaryState): UiMessage {
     text: `Worked for ${formatTurnDuration(summary.durationMs)}`,
     messageType: WORKED_MESSAGE_TYPE,
     turnId: summary.turnId,
+    durationMs: summary.durationMs,
   }
 }
 
