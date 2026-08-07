@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -194,14 +194,17 @@ describe('canonicalizeWorkspaceRootsStateForRead', () => {
 describe('writeWorkspaceRootsState', () => {
   it('persists workspace roots in canonical form', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-workspace-roots-'))
-    const canonicalRoot = join(codexHome, 'storage', 'projects', 'demo')
+    const canonicalRootRaw = join(codexHome, 'storage', 'projects', 'demo')
     const symlinkParent = join(codexHome, 'workspace-link', 'projects')
     const symlinkRoot = join(symlinkParent, 'demo')
     process.env.CODEX_HOME = codexHome
 
     try {
-      await mkdir(canonicalRoot, { recursive: true })
+      await mkdir(canonicalRootRaw, { recursive: true })
       await mkdir(symlinkParent, { recursive: true })
+      // macOS 上 tmpdir 的 /var 是指向 /private/var 的符号链接，realpath 后路径不同；
+      // 以 realpath 后的规范路径作为断言基准，与实现写入的规范形式保持一致
+      const canonicalRoot = await realpath(canonicalRootRaw)
       await symlink(canonicalRoot, symlinkRoot)
       await writeWorkspaceRootsState({
         order: [symlinkRoot, 'remote-project-id', canonicalRoot],
