@@ -28,6 +28,8 @@ const gatewayMocks = vi.hoisted(() => ({
   getThreadTitleCache: vi.fn(),
   getWorkspaceRootsState: vi.fn(),
   generateThreadTitle: vi.fn(),
+  getThreadReasoningArchive: vi.fn(),
+  persistThreadReasoningArchive: vi.fn(),
   interruptThreadTurn: vi.fn(),
   listHooks: vi.fn(),
   persistThreadTitle: vi.fn(),
@@ -1756,6 +1758,36 @@ describe('message stream merge helpers', () => {
     ]
     const merged = mergePersistedReasoning(persisted, reasoning)
     expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'r2', 'r3', 'a1'])
+  })
+
+  it('interleaves anchored reasoning after its preceding tool/command message', () => {
+    // round-23：思考项带时序锚点（reasoningAnchorMessageId）时插到对应
+    // 工具/命令之后，实现「提问 -> 思考 -> 工具 -> 思考 -> 回复」的真实时序。
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('cmd1', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('cmd2', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'u1' }),
+      persistedMessage('r2', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'cmd1' }),
+      persistedMessage('r3', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'cmd2' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'cmd1', 'r2', 'cmd2', 'r3', 'a1'])
+  })
+
+  it('falls back to turn placement when the anchor message is missing', () => {
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'gone-tool' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'a1'])
   })
 
   it('appends reasoning without a matching turn to the end', () => {

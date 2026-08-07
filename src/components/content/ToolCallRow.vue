@@ -71,15 +71,21 @@ const title = computed(() => {
 }
 
 .tool-call-server {
-  @apply shrink-0 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] leading-3 text-zinc-600;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply shrink-0 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] leading-3;
+  color: #737373;
 }
 
 .tool-call-name {
-  @apply min-w-0 flex-1 truncate font-mono text-xs text-zinc-700;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply min-w-0 flex-1 truncate font-mono text-xs;
+  color: #737373;
 }
 
 .tool-call-status {
-  @apply flex shrink-0 items-center gap-1 text-[11px] font-medium text-zinc-500;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply flex shrink-0 items-center gap-1 text-[11px] font-medium;
+  color: #737373;
 }
 
 .tool-call-status-icon {

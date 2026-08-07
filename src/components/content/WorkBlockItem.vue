@@ -162,11 +162,15 @@ const permissionHint = computed(() => {
 }
 
 .work-block-command {
-  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-500;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply flex-1 min-w-0 truncate text-xs font-mono;
+  color: #737373;
 }
 
 .work-block-status {
-  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium text-zinc-400;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium;
+  color: #737373;
 }
 
 .work-block.cmd-status-running .work-block-status {

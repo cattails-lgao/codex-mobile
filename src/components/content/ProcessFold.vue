@@ -92,7 +92,9 @@ function onToggle(): void {
 }
 
 .process-fold-label {
-  @apply min-w-0 truncate text-xs font-medium text-zinc-500;
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply min-w-0 truncate text-xs font-medium;
+  color: #737373;
 }
 
 .process-fold-toggle {

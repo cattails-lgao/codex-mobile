@@ -506,11 +506,11 @@
                 :role="message.role"
                 :show-edit="showEditMessageButton(message)"
                 :show-fork="showForkResponseButton(message)"
-                :show-copy="showCopyResponseButton(message)"
+                :show-copy="showCopyResponseButton(message) || isCopyableUserMessage(message)"
                 :copied="copiedResponseAnchorId === message.id"
                 @edit="editMessage(message.id)"
                 @fork="forkResponse(message.id)"
-                @copy="copyResponse(message.id)"
+                @copy="message.role === 'user' ? copyUserMessage(message.id) : copyResponse(message.id)"
               />
             </article>
           </div>
@@ -1368,6 +1368,41 @@ const forkableTurnIndexByAnchorId = computed<Record<string, number>>(() => {
 
 function showCopyResponseButton(message: UiMessage): boolean {
   return typeof copyableResponseContentByAnchorId.value[message.id] === 'string'
+}
+
+// round-23：用户消息下新增复制按钮，复制用户消息内容（文字 + 附件 + 图片）
+function isCopyableUserMessage(message: UiMessage): boolean {
+  return message.role === 'user' && buildCopyableMessageContent(message).length > 0
+}
+
+async function copyUserMessage(messageId: string): Promise<void> {
+  const message = props.messages.find((candidate) => candidate.id === messageId)
+  if (!message) return
+  const content = buildCopyableMessageContent(message)
+  if (!content) return
+
+  let copied = false
+  try {
+    await copyTextToClipboard(content)
+    copied = true
+  } catch {
+    copied = false
+  }
+  if (!copied) {
+    copied = copyTextWithSelectionFallback(content)
+  }
+  if (!copied) return
+
+  copiedResponseAnchorId.value = messageId
+  if (copiedMessageResetTimer) {
+    clearTimeout(copiedMessageResetTimer)
+  }
+  copiedMessageResetTimer = setTimeout(() => {
+    if (copiedResponseAnchorId.value === messageId) {
+      copiedResponseAnchorId.value = ''
+    }
+    copiedMessageResetTimer = null
+  }, 1800)
 }
 
 function showForkResponseButton(message: UiMessage): boolean {
@@ -2867,36 +2902,41 @@ onBeforeUnmount(() => {
 }
 
 .message-text {
-  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-800;
+  /* round-23 字体规范：正文 14px / #171717 */
+  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap break-words;
+  color: #171717;
   overflow-wrap: anywhere;
 }
 
 .message-heading {
-  @apply m-0 text-slate-900 tracking-tight;
+  /* round-23 字体规范：标题 16px / #17181a */
+  @apply m-0 font-semibold leading-snug;
+  color: #17181a;
+  font-size: 16px;
 }
 
 .message-heading-h1 {
-  @apply text-2xl font-semibold leading-tight;
+  @apply leading-tight;
 }
 
 .message-heading-h2 {
-  @apply text-xl font-semibold leading-tight;
+  @apply leading-tight;
 }
 
 .message-heading-h3 {
-  @apply text-lg font-semibold leading-snug;
+  @apply leading-snug;
 }
 
 .message-heading-h4 {
-  @apply text-base font-semibold leading-snug;
+  @apply leading-snug;
 }
 
 .message-heading-h5 {
-  @apply text-sm font-semibold leading-snug uppercase tracking-[0.02em];
+  @apply leading-snug tracking-[0.02em];
 }
 
 .message-heading-h6 {
-  @apply text-xs font-semibold leading-snug uppercase tracking-[0.04em] text-slate-600;
+  @apply leading-snug tracking-[0.04em];
 }
 
 .message-blockquote {
@@ -2905,7 +2945,9 @@ onBeforeUnmount(() => {
 }
 
 .message-list {
-  @apply m-0 pl-5 text-sm leading-relaxed text-slate-800 flex flex-col gap-1.5;
+  /* round-23 字体规范：列表正文 #171717 */
+  @apply m-0 pl-5 text-sm leading-relaxed flex flex-col gap-1.5;
+  color: #171717;
 }
 
 .message-list-unordered {
@@ -2973,7 +3015,9 @@ onBeforeUnmount(() => {
 }
 
 .message-bold-text {
-  @apply font-semibold text-slate-900;
+  /* round-23 字体规范：加粗 #17181a（与标题同色） */
+  @apply font-semibold;
+  color: #17181a;
 }
 
 .message-italic-text {
@@ -3069,7 +3113,9 @@ onBeforeUnmount(() => {
 }
 
 .work-summary-text {
-  @apply m-0 text-sm leading-relaxed font-normal text-slate-800;
+  /* round-23 字体规范：正文 #171717 */
+  @apply m-0 text-sm leading-relaxed font-normal;
+  color: #171717;
 }
 
 .image-modal-backdrop {

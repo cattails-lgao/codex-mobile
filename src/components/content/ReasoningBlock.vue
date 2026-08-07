@@ -60,7 +60,9 @@ const summaryText = computed(() => {
 }
 
 .reasoning-block-title {
-  @apply flex-1 text-xs font-semibold text-zinc-600;
+  /* round-23 字体规范：思考文字 #737373 */
+  @apply flex-1 text-xs font-semibold;
+  color: #737373;
 }
 
 .reasoning-block-toggle {
@@ -72,17 +74,21 @@ const summaryText = computed(() => {
 }
 
 .reasoning-block-summary {
-  @apply mb-2 whitespace-pre-wrap text-xs text-zinc-500;
+  /* round-23 字体规范：思考文字 #737373 */
+  @apply mb-2 whitespace-pre-wrap text-xs;
+  color: #737373;
 }
 
 .reasoning-block-content {
-  @apply max-h-72 overflow-y-auto text-[13px] leading-relaxed text-zinc-500;
+  /* round-23 字体规范：思考文字 #737373 */
+  @apply max-h-72 overflow-y-auto text-[13px] leading-relaxed;
+  color: #737373;
 }
 
 .reasoning-block-content :deep(.message-text),
 .reasoning-block-content :deep(.message-heading),
 .reasoning-block-content :deep(.message-list) {
-  @apply text-[13px] leading-relaxed text-zinc-500;
+  @apply text-[13px] leading-relaxed;
   color: inherit;
 }
 </style>

@@ -43,42 +43,48 @@
           </button>
         </template>
         <div class="thread-composer-plan-panel-popover-content">
-          <header class="thread-composer-plan-panel-popover-head">
-            <span class="thread-composer-plan-panel-icon" aria-hidden="true">🗒</span>
-            <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
-            <span class="thread-composer-plan-panel-progress">
-              {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
-            </span>
-          </header>
-          <section v-if="planPanel.explanation" class="thread-composer-plan-panel-popover-section">
-            <p class="thread-composer-plan-panel-section-label">{{ t('Summary') }}</p>
-            <p class="thread-composer-plan-panel-explanation">{{ planPanel.explanation }}</p>
-          </section>
-          <section class="thread-composer-plan-panel-popover-section">
-            <p class="thread-composer-plan-panel-section-label">{{ t('Steps') }} ({{ planPanel.steps.length }})</p>
-            <ol class="thread-composer-plan-panel-steps">
-              <li
-                v-for="(step, index) in planPanel.steps"
-                :key="`composer-plan-${planPanel.id}-${index}`"
-                class="thread-composer-plan-panel-step"
-                :data-status="step.status"
-              >
-                <span class="thread-composer-plan-panel-step-status" :data-status="step.status">
-                  {{ planStepStatusIcon(step.status) }}
-                </span>
-                <span class="thread-composer-plan-panel-step-text">{{ step.step }}</span>
-              </li>
-            </ol>
-          </section>
-          <button
-            type="button"
-            class="thread-composer-plan-panel-implement"
-            :disabled="planPanel.streaming || planPanel.implemented"
-            :data-state="planPanel.implemented ? 'done' : planPanel.streaming ? 'running' : 'idle'"
-            @click="onPlanPanelImplement"
-          >
-            {{ planPanel.implemented ? t('Plan executed') : planPanel.streaming ? t('Implementing…') : t('Implement plan') }}
-          </button>
+          <div class="thread-composer-plan-panel-popover-scroll">
+            <header class="thread-composer-plan-panel-popover-head">
+              <span class="thread-composer-plan-panel-icon" aria-hidden="true">🗒</span>
+              <span class="thread-composer-plan-panel-title">{{ t('Plan') }}</span>
+              <span class="thread-composer-plan-panel-progress">
+                {{ completedPlanStepCount }}/{{ planPanel.steps.length }}
+              </span>
+            </header>
+            <section v-if="planPanel.explanation" class="thread-composer-plan-panel-popover-section">
+              <p class="thread-composer-plan-panel-section-label">{{ t('Summary') }}</p>
+              <p class="thread-composer-plan-panel-explanation" :title="planPanel.explanation">
+                {{ planSummaryText }}
+              </p>
+            </section>
+            <section class="thread-composer-plan-panel-popover-section">
+              <p class="thread-composer-plan-panel-section-label">{{ t('Steps') }} ({{ planPanel.steps.length }})</p>
+              <ol class="thread-composer-plan-panel-steps">
+                <li
+                  v-for="(step, index) in planPanel.steps"
+                  :key="`composer-plan-${planPanel.id}-${index}`"
+                  class="thread-composer-plan-panel-step"
+                  :data-status="step.status"
+                >
+                  <span class="thread-composer-plan-panel-step-status" :data-status="step.status">
+                    {{ planStepStatusIcon(step.status) }}
+                  </span>
+                  <span class="thread-composer-plan-panel-step-text" :title="step.step">{{ step.step }}</span>
+                </li>
+              </ol>
+            </section>
+          </div>
+          <footer class="thread-composer-plan-panel-popover-footer">
+            <button
+              type="button"
+              class="thread-composer-plan-panel-implement"
+              :disabled="planPanel.streaming || planPanel.implemented"
+              :data-state="planPanel.implemented ? 'done' : planPanel.streaming ? 'running' : 'idle'"
+              @click="onPlanPanelImplement"
+            >
+              {{ planPanel.implemented ? t('Plan executed') : planPanel.streaming ? t('Implementing…') : t('Implement plan') }}
+            </button>
+          </footer>
         </div>
       </ComposerPopover>
     </div>
@@ -756,6 +762,15 @@ const latestPlanStep = computed(() => {
     if (step.status === 'inProgress') return step
   }
   return steps[steps.length - 1]
+})
+// round-23：摘要改为一句话（按中英文句末标点/换行截取第一句，超长截断加省略号）
+const planSummaryText = computed(() => {
+  const explanation = props.planPanel?.explanation?.trim() ?? ''
+  if (!explanation) return ''
+  const firstSentence = explanation.split(/[。！？!?\n]/u)[0]?.trim() ?? ''
+  if (!firstSentence) return explanation
+  const maxLength = 80
+  return firstSentence.length > maxLength ? `${firstSentence.slice(0, maxLength)}…` : firstSentence
 })
 function planStepStatusIcon(status: 'pending' | 'inProgress' | 'completed'): string {
   switch (status) {
@@ -2280,7 +2295,9 @@ watch(
 }
 
 .thread-composer-plan-panel-explanation {
-  @apply m-0 whitespace-pre-wrap rounded-xl bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-700;
+  /* round-23：摘要一句话 + 超出省略 */
+  @apply m-0 line-clamp-2 break-words rounded-xl bg-zinc-100 px-3 py-2 text-xs leading-5;
+  color: #4b5563;
 }
 
 .thread-composer-plan-panel-steps {
@@ -2288,7 +2305,9 @@ watch(
 }
 
 .thread-composer-plan-panel-step {
-  @apply flex items-start gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs leading-5 text-zinc-700;
+  /* round-23：步骤项改为一行，超出省略 */
+  @apply flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs leading-5;
+  color: #4b5563;
 }
 
 .thread-composer-plan-panel-step-status {
@@ -2308,19 +2327,28 @@ watch(
 }
 
 .thread-composer-plan-panel-step-text {
-  @apply min-w-0 flex-1;
+  @apply min-w-0 flex-1 truncate;
 }
 
 .thread-composer-plan-panel-implement {
-  @apply mt-1 h-10 w-full rounded-full bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
+  @apply h-10 w-full rounded-full bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
 }
 
 :deep(.thread-composer-plan-panel-popover) {
-  @apply min-w-full max-h-[min(60vh,28rem)] overflow-y-auto p-0;
+  /* round-23：popover 整体不滚动，内容区滚动、执行按钮固定在底部 */
+  @apply flex min-w-full max-h-[min(60vh,28rem)] flex-col overflow-hidden p-0;
 }
 
 .thread-composer-plan-panel-popover-content {
-  @apply flex flex-col gap-3 p-3.5;
+  @apply flex min-h-0 flex-1 flex-col;
+}
+
+.thread-composer-plan-panel-popover-scroll {
+  @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5;
+}
+
+.thread-composer-plan-panel-popover-footer {
+  @apply shrink-0 border-t border-zinc-200 p-3;
 }
 
 .thread-composer-plan-panel-popover-head {

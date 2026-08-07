@@ -5547,6 +5547,26 @@ type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
 const MAX_THREAD_TITLES = 500
 const EMPTY_THREAD_TITLE_CACHE: ThreadTitleCache = { titles: {}, order: [] }
 const PINNED_THREAD_IDS_KEY = 'pinned-thread-ids'
+const THREAD_REASONING_KEY = 'thread-reasoning'
+// round-23：跨浏览器共享的思考存档（app-server 不持久化 reasoning，只靠本地
+// localStorage 时换浏览器就丢）。每线程最多保留的思考消息数，与前端一致。
+const MAX_REASONING_MESSAGES_PER_THREAD = 20
+
+type ThreadReasoningArchive = Record<string, unknown[]>
+
+function normalizeThreadReasoningArchive(value: unknown): ThreadReasoningArchive {
+  const record = asRecord(value)
+  if (!record) return {}
+  const next: ThreadReasoningArchive = {}
+  for (const [threadId, rows] of Object.entries(record)) {
+    if (!Array.isArray(rows) || rows.length === 0) continue
+    const sanitized = rows
+      .filter((row) => asRecord(row) !== null)
+      .slice(-MAX_REASONING_MESSAGES_PER_THREAD)
+    if (sanitized.length > 0) next[threadId] = sanitized
+  }
+  return next
+}
 
 type SessionIndexThreadTitleCacheState = {
   fileSignature: string | null
@@ -5701,6 +5721,51 @@ async function writePinnedThreadIds(threadIds: string[]): Promise<void> {
 
   payload[PINNED_THREAD_IDS_KEY] = normalizePinnedThreadIds(threadIds)
   await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+// round-23：跨浏览器共享的思考存档。app-server 不把 reasoning 持久化到
+// thread/read（只有流式通知），前端存档只写 localStorage 时换浏览器即丢失；
+// 这里把存档镜像一份到桥接层的全局状态文件（与 thread-titles/pins 同源），
+// 供同一台机器上的其他浏览器/会话加载。
+async function readThreadReasoningArchive(): Promise<ThreadReasoningArchive> {
+  const statePath = getCodexGlobalStatePath()
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const payload = asRecord(JSON.parse(raw)) ?? {}
+    return normalizeThreadReasoningArchive(payload[THREAD_REASONING_KEY])
+  } catch {
+    return {}
+  }
+}
+
+async function writeThreadReasoningArchive(archive: ThreadReasoningArchive): Promise<void> {
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    payload = asRecord(JSON.parse(raw)) ?? {}
+  } catch {
+    payload = {}
+  }
+
+  const normalized = normalizeThreadReasoningArchive(archive)
+  if (Object.keys(normalized).length > 0) {
+    payload[THREAD_REASONING_KEY] = normalized
+  } else {
+    delete payload[THREAD_REASONING_KEY]
+  }
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function mergeThreadReasoningArchive(threadId: string, messages: unknown[]): Promise<void> {
+  const archive = await readThreadReasoningArchive()
+  const rows = Array.isArray(messages) ? messages.filter((row) => asRecord(row) !== null) : []
+  if (rows.length > 0) {
+    archive[threadId] = rows.slice(-MAX_REASONING_MESSAGES_PER_THREAD)
+  } else {
+    delete archive[threadId]
+  }
+  await writeThreadReasoningArchive(archive)
 }
 
 const FIRST_LAUNCH_PLUGINS_CARD_DISMISSED_KEY = 'first-launch-plugins-card-dismissed'
@@ -9586,6 +9651,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
+      if (req.method === 'GET' && url.pathname === '/codex-api/thread-reasoning') {
+        const archive = await readThreadReasoningArchive()
+        setJson(res, 200, { data: archive })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/codex-api/preferences/first-launch-plugins-card') {
         const dismissed = await readFirstLaunchPluginsCardDismissed()
         setJson(res, 200, { data: { dismissed } })
@@ -9693,6 +9764,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const payload = asRecord(await readJsonBody(req))
         const threadIds = normalizePinnedThreadIds(payload?.threadIds)
         await writePinnedThreadIds(threadIds)
+        setJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'PUT' && url.pathname === '/codex-api/thread-reasoning') {
+        const payload = asRecord(await readJsonBody(req))
+        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+        if (!threadId) {
+          setJson(res, 400, { error: 'Missing threadId' })
+          return
+        }
+        const messages = Array.isArray(payload?.messages) ? payload.messages : []
+        await mergeThreadReasoningArchive(threadId, messages)
         setJson(res, 200, { ok: true })
         return
       }

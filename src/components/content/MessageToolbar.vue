@@ -13,7 +13,7 @@
       @click="$emit('edit')"
     >
       <IconTablerArrowBackUp class="icon-svg message-rollback-icon" />
-      <span class="message-rollback-label">{{ t('Rollback') }}</span>
+      <span v-if="role !== 'user'" class="message-rollback-label">{{ t('Rollback') }}</span>
     </button>
     <button
       v-if="showFork"
@@ -74,6 +74,11 @@ const { t } = useUiLanguage()
 
 .message-toolbar {
   @apply mt-1 self-start flex items-center gap-1 opacity-[0.01] transition-opacity duration-200;
+}
+
+/* round-23：用户消息下的操作条默认常显（无需 hover）、图标化、整体右对齐 */
+.message-toolbar[data-role='user'] {
+  @apply self-end opacity-100;
 }
 
 /* hover 显隐规则放在组件 scoped 内会被 Vue scoped + `:global()` 组合编译坏

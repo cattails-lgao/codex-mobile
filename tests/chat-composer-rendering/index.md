@@ -57,3 +57,4 @@ Return to the [manual test index](../../tests.md).
 | [Composer popover keyboard nav + interrupt recover (requirement-9 UI)](composer-kb-nav-and-interrupt-recover.md) |
 | [Command execution long lines wrap without horizontal overflow](command-output-long-line-no-horizontal-overflow.md) |
 | [Round 16: message visual consistency, thinking blocks, rollback button, and interrupt cleanup](round16-message-visual-and-interrupt-cleanup.md) |
+| [Round 23: message fonts, user toolbar, live overlay, plan popover, pending panel, stale request cleanup](round23-message-fonts-overlay-toolbar-plan-pending.md) |
