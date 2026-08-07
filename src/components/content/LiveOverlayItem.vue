@@ -18,7 +18,7 @@
             v-if="overlay?.reasoningText && isReasoningExpanded"
             class="live-overlay-reasoning"
           >
-            {{ overlay.reasoningText }}
+            {{ visibleReasoning }}
           </p>
           <div v-if="overlay?.errorText" class="live-overlay-error">
             <span>{{ overlay.errorText }}</span>
@@ -31,12 +31,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { UiLiveOverlay } from '../../types/codex'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useUiLanguage } from '../../composables/useUiLanguage'
+import { displayReasoningText } from '../../utils/reasoningDisplay'
 
-defineProps<{
+const props = defineProps<{
   overlay: UiLiveOverlay | null
   feedbackMailto: string
 }>()
@@ -49,6 +50,11 @@ const isReasoningExpanded = ref(true)
 function toggleReasoning(): void {
   isReasoningExpanded.value = !isReasoningExpanded.value
 }
+
+// 流式思考只保留末尾（默认 12,000 字符 / 240 行），超长思考不再拖垮渲染。
+const visibleReasoning = computed(() =>
+  displayReasoningText(props.overlay?.reasoningText ?? '', { streaming: true }),
+)
 
 function prepareErrorFeedback(event: MouseEvent, message: string): void {
   recordVisibleFailure(message)
