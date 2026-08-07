@@ -1592,6 +1592,138 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
   })
 })
 
+describe('interruptSelectedThreadTurn removes the unsubmitted turn locally', () => {
+  function installInterruptState(threadId: string) {
+    // 预置一条属于 turn-1 的 thinking 存档：中断后应随该 turn 一并移除
+    installTestWindow({
+      'codex-web-local.thread-reasoning.v1': JSON.stringify({
+        [threadId]: [
+          {
+            id: 'reasoning:local:interrupt:1',
+            role: 'system',
+            text: 'thinking for the interrupted turn',
+            messageType: 'reasoning',
+            reasoning: { summary: [], content: ['thinking for the interrupted turn'] },
+            turnId: 'turn-1',
+            turnIndex: 0,
+          },
+        ],
+      }),
+    })
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.interruptThreadTurn.mockResolvedValue(null)
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    // 第一次 thread/read：turn-1 仅含用户消息（无 agent 输出）→ 中断判定成立；
+    // 第二次（中断后强制刷新）：服务端已把 turn-1 整体移除
+    gatewayMocks.getThreadDetail
+      .mockResolvedValueOnce({
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            text: 'do the thing',
+            messageType: 'userMessage',
+            turnId: 'turn-1',
+            turnIndex: 0,
+          },
+        ],
+        inProgress: true,
+        activeTurnId: 'turn-1',
+        turnIndexByTurnId: { 'turn-1': 0 },
+        hasMoreOlder: false,
+      })
+      .mockResolvedValueOnce({
+        messages: [],
+        inProgress: false,
+        activeTurnId: '',
+        turnIndexByTurnId: {},
+        hasMoreOlder: false,
+      })
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('drops the interrupted turn messages and thinking archive, and fills the composer payload', async () => {
+    const state = installInterruptState('thread-interrupt')
+    await state.loadMessages('thread-interrupt')
+    expect(state.messages.value.some((message) => message.id === 'user-1')).toBe(true)
+
+    await state.interruptSelectedThreadTurn()
+
+    expect(gatewayMocks.interruptThreadTurn).toHaveBeenCalledWith('thread-interrupt', 'turn-1')
+    // 需求 1：中断后消息列表不再残留被中断的用户消息
+    expect(state.messages.value.some((message) => message.id === 'user-1')).toBe(false)
+    // 被移除 turn 的思考存档一并清理
+    expect(state.messages.value.some((message) => message.messageType === 'reasoning' && message.turnId === 'turn-1')).toBe(false)
+    // 回填输入框的载荷保留原消息文本
+    expect(state.interruptedUnsubmittedMessage.value?.text).toBe('do the thing')
+  })
+
+  it('keeps persisted turns untouched when interrupting a turn that produced agent output', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.interruptThreadTurn.mockResolvedValue(null)
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    // turn-1 已有 agent 输出（命令执行）：中断不会移除该 turn
+    gatewayMocks.getThreadDetail
+      .mockResolvedValueOnce({
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            text: 'do the thing',
+            messageType: 'userMessage',
+            turnId: 'turn-1',
+            turnIndex: 0,
+          },
+          {
+            id: 'cmd-1',
+            role: 'system',
+            text: '',
+            messageType: 'commandExecution',
+            turnId: 'turn-1',
+            turnIndex: 0,
+            commandExecution: { command: 'ls', status: 'completed', exitCode: 0, aggregatedOutput: '' },
+          },
+        ],
+        inProgress: true,
+        activeTurnId: 'turn-1',
+        turnIndexByTurnId: { 'turn-1': 0 },
+        hasMoreOlder: false,
+      })
+      .mockResolvedValueOnce({
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            text: 'do the thing',
+            messageType: 'userMessage',
+            turnId: 'turn-1',
+            turnIndex: 0,
+          },
+        ],
+        inProgress: false,
+        activeTurnId: '',
+        turnIndexByTurnId: { 'turn-1': 0 },
+        hasMoreOlder: false,
+      })
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-interrupt-agent')
+    await state.loadMessages('thread-interrupt-agent')
+
+    await state.interruptSelectedThreadTurn()
+
+    // 有 agent 输出时不判定为「未提交 turn」：不回填、不移除消息
+    expect(state.interruptedUnsubmittedMessage.value).toBeNull()
+    expect(state.messages.value.some((message) => message.id === 'user-1')).toBe(true)
+  })
+})
+
 describe('message stream merge helpers', () => {
   function persistedMessage(id: string, role: 'user' | 'assistant' | 'system', turnIndex: number | undefined, extra: Record<string, unknown> = {}) {
     return { id, role, text: id, turnIndex, ...extra } as Parameters<typeof mergePersistedReasoning>[0][number]

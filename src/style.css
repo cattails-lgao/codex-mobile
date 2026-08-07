@@ -460,11 +460,11 @@
 }
 
 :root.dark .thread-composer-plan-panel-explanation {
-  @apply text-zinc-400;
+  @apply bg-zinc-800/70 text-zinc-400;
 }
 
 :root.dark .thread-composer-plan-panel-step {
-  @apply text-zinc-300;
+  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
 }
 
 :root.dark .thread-composer-plan-panel-progress {
@@ -1206,6 +1206,13 @@
 
 :root.dark .automation-message-label code {
   @apply bg-zinc-800/80 text-zinc-300;
+}
+
+/* MessageToolbar 悬停显隐：组件 scoped 内 `:global(.message-row:hover) .message-toolbar`
+   会被 Vue scoped 编译坏（产物 `.message-row:hover { opacity: 1 }` 作用在行上，
+   工具栏永不显示），按仓库规则放全局样式表。 */
+.message-row:hover .message-toolbar {
+  opacity: 1;
 }
 
 :root.dark .message-copy-button {

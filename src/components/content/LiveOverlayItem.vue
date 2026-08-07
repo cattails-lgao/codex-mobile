@@ -69,7 +69,10 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 @reference "tailwindcss";
 
 .live-overlay-inline {
-  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] px-0 py-1 flex flex-col gap-1;
+  /* 与消息卡片同宽（--chat-card-max 76ch），而不是整个聊天列宽：
+     否则实时 thinking 会比普通消息宽一大截（第十六轮反馈「thinking 宽度与其他
+     消息不一致」）。左对齐由 message-stack items-start 保证。 */
+  @apply w-full max-w-[min(var(--chat-card-max,76ch),100%)] px-0 py-1 flex flex-col gap-1;
 }
 
 .live-overlay-label {

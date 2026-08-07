@@ -20,10 +20,11 @@ describe('buildProcessFolds', () => {
       msg('a1', 'agentMessage', 't1', { role: 'assistant', text: 'done' }),
     ]
     const folds = buildProcessFolds(messages)
+    // reasoning 不参与折叠（思考块始终平铺），仅命令/工具折叠
     expect(folds).toHaveLength(1)
     expect(folds[0]?.turnId).toBe('t1')
-    expect(folds[0]?.messages.map((m) => m.id)).toEqual(['r1', 'c1', 'c2'])
-    expect(folds[0]?.thoughtCount).toBe(1)
+    expect(folds[0]?.messages.map((m) => m.id)).toEqual(['c1', 'c2'])
+    expect(folds[0]?.thoughtCount).toBe(0)
     expect(folds[0]?.toolCount).toBe(0)
   })
 
@@ -146,7 +147,8 @@ describe('buildProcessFoldLabel', () => {
   ])[0]!
 
   it('combines duration, tool count and thought count', () => {
-    expect(buildProcessFoldLabel(fold, { t, formatDuration })).toBe('150s · 2 tools · 1 thoughts')
+    // reasoning 不折叠，折叠条只统计命令/工具
+    expect(buildProcessFoldLabel(fold, { t, formatDuration })).toBe('150s · 2 tools')
   })
 
   it('shows a working label while the fold is running', () => {

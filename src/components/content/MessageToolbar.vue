@@ -7,13 +7,13 @@
     <button
       v-if="showEdit"
       type="button"
-      class="message-edit-button"
-      :aria-label="t('Edit this message')"
-      :title="t('Edit this message')"
+      class="message-rollback-button"
+      :aria-label="t('Rollback this message')"
+      :title="t('Rollback this message')"
       @click="$emit('edit')"
     >
-      <IconTablerFilePencil class="icon-svg message-edit-icon" />
-      <span class="message-edit-label">{{ t('Edit message') }}</span>
+      <IconTablerArrowBackUp class="icon-svg message-rollback-icon" />
+      <span class="message-rollback-label">{{ t('Rollback') }}</span>
     </button>
     <button
       v-if="showFork"
@@ -43,8 +43,8 @@
 
 <script setup lang="ts">
 import { useUiLanguage } from '../../composables/useUiLanguage'
+import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
-import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 
 withDefaults(defineProps<{
@@ -76,9 +76,10 @@ const { t } = useUiLanguage()
   @apply mt-1 self-start flex items-center gap-1 opacity-[0.01] transition-opacity duration-200;
 }
 
-:global(.message-row:hover) .message-toolbar {
-  @apply opacity-100;
-}
+/* hover 显隐规则放在组件 scoped 内会被 Vue scoped + `:global()` 组合编译坏
+   （实测产物为 `.message-row:hover { opacity: 1 }`，作用在行上而非工具栏，
+   工具栏永不显示），已迁移到全局 style.css：
+   `.message-row:hover .message-toolbar { opacity: 1 }`。 */
 
 .message-copy-button {
   @apply inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/90 px-1.25 py-0.5 text-[9px] font-medium leading-none text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-900;
@@ -92,19 +93,20 @@ const { t } = useUiLanguage()
   @apply border-emerald-200 bg-emerald-50 text-emerald-700;
 }
 
-.message-edit-button {
+/* 回退（原编辑）按钮：破坏性操作，琥珀色弱化呈现；暗色覆盖在全局 style.css */
+.message-rollback-button {
   @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-amber-600/70 transition hover:text-amber-700;
 }
 
 .message-fork-icon,
 .message-copy-icon,
-.message-edit-icon {
+.message-rollback-icon {
   @apply text-[10px];
 }
 
 .message-fork-label,
 .message-copy-label,
-.message-edit-label {
+.message-rollback-label {
   @apply leading-none;
 }
 </style>

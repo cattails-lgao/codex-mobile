@@ -24,9 +24,13 @@ export type FoldLabelDeps = {
   formatDuration: (durationMs: number) => string
 }
 
+// 折叠成员：仅命令执行与工具调用。思考块（reasoning）刻意排除在折叠之外——
+// 用户需要稳定看到「Thinking process」块（第十六轮反馈：思考过程块时有时无，
+// 根因就是它被 Process Fold 折叠后只在展开时才可见），reasoning 始终平铺在
+// 消息流中，宽度与普通消息一致、左对齐。
 export function isFoldableProcessMessage(message: UiMessage): boolean {
   const type = message.messageType
-  return type === 'reasoning' || type === 'commandExecution' || type === 'toolCall'
+  return type === 'commandExecution' || type === 'toolCall'
 }
 
 export function isRunningProcessMessage(message: UiMessage): boolean {
