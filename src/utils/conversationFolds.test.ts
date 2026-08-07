@@ -53,6 +53,38 @@ describe('buildProcessFolds', () => {
     expect(folds[1]?.messages.map((m) => m.id)).toEqual(['c4', 'c5'])
   })
 
+  it('keeps turnError (warn) messages outside folds and starts a new fold after them', () => {
+    // partitionTurnItems 语义：warn 永不折叠，且不并入相邻折叠组
+    const messages = [
+      msg('u1', 'user', 't1', { role: 'user' }),
+      msg('c1', 'commandExecution', 't1', { commandExecution: { command: 'a', status: 'completed' } }),
+      msg('c2', 'commandExecution', 't1', { commandExecution: { command: 'b', status: 'completed' } }),
+      msg('e1', 'turnError', 't1', { role: 'system', text: 'Access is denied' }),
+      msg('c3', 'commandExecution', 't1', { commandExecution: { command: 'c', status: 'completed' } }),
+      msg('c4', 'commandExecution', 't1', { commandExecution: { command: 'd', status: 'completed' } }),
+    ]
+    const folds = buildProcessFolds(messages)
+    expect(folds).toHaveLength(2)
+    expect(folds[0]?.messages.map((m) => m.id)).toEqual(['c1', 'c2'])
+    expect(folds[1]?.messages.map((m) => m.id)).toEqual(['c3', 'c4'])
+  })
+
+  it('keeps user (steer) messages out of folds, rendering them on the user side', () => {
+    // partitionTurnItems 语义：steer 是用户自己的话（本地为 user 消息发送模式），
+    // 永不进折叠；前后同轮工作消息各自独立成组
+    const messages = [
+      msg('c1', 'commandExecution', 't1', { commandExecution: { command: 'a', status: 'completed' } }),
+      msg('c2', 'commandExecution', 't1', { commandExecution: { command: 'b', status: 'completed' } }),
+      msg('u2', 'userMessage', 't2', { role: 'user', text: 'steer prompt' }),
+      msg('c3', 'commandExecution', 't2', { commandExecution: { command: 'c', status: 'completed' } }),
+      msg('c4', 'commandExecution', 't2', { commandExecution: { command: 'd', status: 'completed' } }),
+    ]
+    const folds = buildProcessFolds(messages)
+    expect(folds).toHaveLength(2)
+    expect(folds[0]?.messages.map((m) => m.id)).toEqual(['c1', 'c2'])
+    expect(folds[1]?.messages.map((m) => m.id)).toEqual(['c3', 'c4'])
+  })
+
   it('keeps work messages with no turnId ungrouped', () => {
     const messages = [
       msg('u1', 'user', 't1', { role: 'user' }),

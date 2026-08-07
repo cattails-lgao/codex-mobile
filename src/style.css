@@ -569,6 +569,40 @@
   @apply text-zinc-400;
 }
 
+/* ToolBatchBlock（阶段 C 工具聚合批）暗色覆盖 */
+:root.dark .tool-batch-block {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:root.dark .tool-batch-head:hover {
+  @apply bg-zinc-800/70;
+}
+
+:root.dark .tool-batch-label {
+  @apply text-zinc-300;
+}
+
+:root.dark .tool-batch-toggle {
+  @apply text-zinc-500;
+}
+
+:root.dark .tool-batch-count {
+  @apply bg-zinc-800 text-zinc-400;
+}
+
+:root.dark .tool-batch-body {
+  @apply border-zinc-700;
+}
+
+/* QuestionJumpBar（阶段 C 问题导航）暗色覆盖 */
+:root.dark .question-jump-dot {
+  background: #3f3f46; /* zinc-700 */
+}
+
+:root.dark .question-jump-preview {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-300 shadow-black/40;
+}
+
 /* cold 区分页按钮（Load earlier N turns）暗色覆盖 */
 :root.dark .conversation-warm-collapse .load-more-button {
   @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200;

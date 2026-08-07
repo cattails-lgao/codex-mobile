@@ -28,6 +28,7 @@
       <template v-for="item in renderItems" :key="item.key">
       <li
         v-if="item.kind === 'warm-card'"
+        :id="questionAnchorId(item.turn)"
         class="conversation-item conversation-item-warm-card"
         data-role="system"
         data-message-type="warmTurn"
@@ -59,30 +60,39 @@
               :running="foldRunningFor(message)"
               :has-outside-content="foldHasOutsideFor(message)"
             >
-              <template v-for="foldMessage in foldMessagesFor(message)" :key="foldMessage.id">
-                <template
-                  v-if="!hiddenGroupedCommandIds.has(foldMessage.id) && !hiddenFileChangeMessageIds.has(foldMessage.id)"
-                >
-                  <div v-if="isCommandMessage(foldMessage)" class="work-block-list">
-                    <WorkBlockItem
-                      v-for="(cmd, cmdIndex) in getWorkBlockCommands(foldMessage)"
-                      :key="`work-cmd-${cmd.id}`"
-                      :command="cmd"
-                      :step-index="cmdIndex"
-                      :expanded="isCommandExpanded(cmd)"
-                      :compact="isCommandCompact(cmd)"
-                      :output-condensed="isCommandOutputCondensed(cmd)"
-                      @toggle="toggleCommandExpand(cmd)"
-                    />
-                  </div>
-                  <ToolCallRow v-else-if="isToolCallMessage(foldMessage)" :message="foldMessage" />
-                  <ReasoningBlock
-                    v-else-if="isReasoningMessage(foldMessage)"
-                    :message="foldMessage"
-                    :expanded="isReasoningExpanded(foldMessage)"
-                    :content-html="renderMarkdownBlocksAsHtml(foldMessage.text)"
-                    @toggle="toggleReasoningExpand(foldMessage)"
-                  />
+              <template v-for="toolItem in aggregatedFoldItemsFor(message)" :key="toolItemKey(toolItem)">
+                <ToolBatchBlock
+                  v-if="toolItem.type === 'batch'"
+                  :kind="toolItem.kind"
+                  :messages="toolItem.messages"
+                />
+                <template v-else>
+                  <template v-for="foldMessage in [toolItem.message]" :key="foldMessage.id">
+                    <template
+                      v-if="!hiddenGroupedCommandIds.has(foldMessage.id) && !hiddenFileChangeMessageIds.has(foldMessage.id)"
+                    >
+                      <div v-if="isCommandMessage(foldMessage)" class="work-block-list">
+                        <WorkBlockItem
+                          v-for="(cmd, cmdIndex) in getWorkBlockCommands(foldMessage)"
+                          :key="`work-cmd-${cmd.id}`"
+                          :command="cmd"
+                          :step-index="cmdIndex"
+                          :expanded="isCommandExpanded(cmd)"
+                          :compact="isCommandCompact(cmd)"
+                          :output-condensed="isCommandOutputCondensed(cmd)"
+                          @toggle="toggleCommandExpand(cmd)"
+                        />
+                      </div>
+                      <ToolCallRow v-else-if="isToolCallMessage(foldMessage)" :message="foldMessage" />
+                      <ReasoningBlock
+                        v-else-if="isReasoningMessage(foldMessage)"
+                        :message="foldMessage"
+                        :expanded="isReasoningExpanded(foldMessage)"
+                        :content-html="renderMarkdownBlocksAsHtml(foldMessage.text)"
+                        @toggle="toggleReasoningExpand(foldMessage)"
+                      />
+                    </template>
+                  </template>
                 </template>
               </template>
             </ProcessFold>
@@ -94,6 +104,7 @@
           && !hiddenGroupedCommandIds.has(message.id)
           && !hiddenFileChangeMessageIds.has(message.id)
           && !(isWorkedMessage(message) && hiddenWorkedTurnIds.has(message.turnId ?? ''))"
+        :id="messageAnchorId(message)"
         class="conversation-item"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
@@ -512,6 +523,12 @@
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
 
+    <QuestionJumpBar
+      :anchors="questionAnchors"
+      :active-turn="activeQuestionTurn"
+      @jump="jumpToQuestion"
+    />
+
     <button
       v-if="showJumpToLatestButton"
       type="button"
@@ -613,7 +630,9 @@ import FileLinkContextMenu from './FileLinkContextMenu.vue'
 import LiveOverlayItem from './LiveOverlayItem.vue'
 import MessageToolbar from './MessageToolbar.vue'
 import ProcessFold from './ProcessFold.vue'
+import QuestionJumpBar, { type QuestionAnchor } from './QuestionJumpBar.vue'
 import ReasoningBlock from './ReasoningBlock.vue'
+import ToolBatchBlock from './ToolBatchBlock.vue'
 import ToolCallRow from './ToolCallRow.vue'
 import WarmTurnCard from './WarmTurnCard.vue'
 import WorkBlockItem from './WorkBlockItem.vue'
@@ -624,15 +643,22 @@ import {
 } from '../../utils/conversationFolds'
 import {
   buildTurnGroups,
+  compactQuestionText,
   createWarmLayerState,
   messagesForTurnsFrom,
+  warmColdPageForTurn,
   warmLayerForSession,
+  warmLayerWithColdPageAtLeast,
   warmLayerWithExpandedTurn,
   warmLayerWithNextColdPage,
   warmPagination,
   warmUserPreview,
   type WarmLayerState,
 } from '../../utils/transcriptGrouping'
+import {
+  aggregateToolMessages,
+  type ToolRenderItem,
+} from '../../utils/toolAggregation'
 import { formatTurnDuration } from '../../composables/useDesktopState'
 
 type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
@@ -1044,6 +1070,61 @@ function toggleWarmTurn(turn: number): void {
   )
 }
 
+// 阶段 C 问题导航 JumpBar：每个轮次（user 消息为界）一个圆点，悬停预览问题文本，
+// 点击翻页/展开后滚动到该轮锚点。
+const questionAnchors = computed<QuestionAnchor[]>(() =>
+  turnGroups.value.map((group, turn) => ({ turn, text: compactQuestionText(group.userItem.text) })),
+)
+
+const activeQuestionTurn = computed(() => Math.max(0, questionAnchors.value.length - 1))
+
+const turnIndexByUserMessageId = computed(() => {
+  const map = new Map<string, number>()
+  turnGroups.value.forEach((group, turn) => {
+    map.set(group.userItem.id, turn)
+  })
+  return map
+})
+
+function questionAnchorId(turn: number): string {
+  return `question-anchor-${turn}`
+}
+
+function messageAnchorId(message: UiMessage): string | undefined {
+  const turn = turnIndexByUserMessageId.value.get(message.id)
+  if (turn === undefined) return undefined
+  // warm/cold 区锚点在 warm-card 头部（含未展开轮），消息 li 只给 hot 区轮次挂锚点，避免重复 id
+  if (turn < warmEndTurn.value) return undefined
+  return questionAnchorId(turn)
+}
+
+function jumpToQuestion(turn: number): void {
+  if (turn < warmEndTurn.value) {
+    let next = warmLayerState.value
+    if (turn < warmStartTurn.value) {
+      const neededPage = warmColdPageForTurn({
+        turn,
+        turnCount: turnGroups.value.length,
+        hotTurns: HOT_TURNS,
+        pageSize: WARM_PAGE_SIZE,
+      })
+      next = warmLayerWithColdPageAtLeast(next, props.activeThreadId, neededPage)
+    }
+    next = warmLayerWithExpandedTurn(next, props.activeThreadId, turn, true)
+    warmLayerState.value = next
+  }
+  autoFollowOutput.value = false
+  void nextTick().then(() => {
+    const container = conversationListRef.value
+    const el = document.getElementById(questionAnchorId(turn))
+    if (!container || !el) return
+    const rect = el.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    const top = container.scrollTop + rect.top - containerRect.top - 12
+    container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  })
+}
+
 // Process Fold：只在「渲染出的消息序列」（warm 展开轮次 + hot 区）上计算，折叠成员必在序列内。
 const processFolds = computed(() => {
   const rendered: UiMessage[] = []
@@ -1086,6 +1167,17 @@ function isFoldMember(message: UiMessage): boolean {
 
 function foldMessagesFor(message: UiMessage): UiMessage[] {
   return foldByStartId.value.get(message.id)?.messages ?? []
+}
+
+// 阶段 C 工具聚合：折叠成员序列先经 aggregateToolMessages 拆成「单条/聚合批」再渲染，
+// 连续只读工具合并为 ReadOnlyBatch 样式，连续同类 modify/delegate 合并为 ToolGroup 样式。
+function aggregatedFoldItemsFor(message: UiMessage): ToolRenderItem[] {
+  return aggregateToolMessages(foldMessagesFor(message))
+}
+
+function toolItemKey(item: ToolRenderItem): string {
+  if (item.type === 'batch') return `tool-batch-${item.kind}-${item.messages[0]?.id ?? ''}`
+  return item.message.id
 }
 
 function foldLabelFor(message: UiMessage): string {
