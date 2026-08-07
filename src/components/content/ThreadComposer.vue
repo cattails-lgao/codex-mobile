@@ -2280,19 +2280,19 @@ watch(
 }
 
 .thread-composer-plan-panel-explanation {
-  @apply m-0 mb-1.5 whitespace-pre-wrap text-xs leading-5 text-zinc-500;
+  @apply m-0 whitespace-pre-wrap rounded-xl bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-700;
 }
 
 .thread-composer-plan-panel-steps {
-  @apply m-0 flex list-none flex-col gap-1 p-0;
+  @apply m-0 flex list-none flex-col gap-1.5 p-0;
 }
 
 .thread-composer-plan-panel-step {
-  @apply flex items-start gap-1.5 text-xs leading-5 text-zinc-700;
+  @apply flex items-start gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs leading-5 text-zinc-700;
 }
 
 .thread-composer-plan-panel-step-status {
-  @apply w-3 shrink-0 text-center;
+  @apply w-3.5 shrink-0 text-center;
 }
 
 .thread-composer-plan-panel-step-status[data-status='completed'] {
@@ -2308,11 +2308,11 @@ watch(
 }
 
 .thread-composer-plan-panel-step-text {
-  @apply min-w-0;
+  @apply min-w-0 flex-1;
 }
 
 .thread-composer-plan-panel-implement {
-  @apply mt-2 w-full rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
+  @apply mt-1 h-10 w-full rounded-full bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
 }
 
 :deep(.thread-composer-plan-panel-popover) {
@@ -2320,11 +2320,11 @@ watch(
 }
 
 .thread-composer-plan-panel-popover-content {
-  @apply flex flex-col gap-3 p-2.5;
+  @apply flex flex-col gap-3 p-3.5;
 }
 
 .thread-composer-plan-panel-popover-head {
-  @apply flex items-center gap-2 border-b border-zinc-200 pb-2;
+  @apply flex items-center gap-2 border-b border-zinc-200 pb-2.5;
 }
 
 .thread-composer-plan-panel-popover-section {

@@ -116,15 +116,14 @@ const permissionHint = computed(() => {
 }
 
 .work-block {
-  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80 transition-colors;
+  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/60 transition-colors;
 }
 
-.work-block:not(.work-block-compact) {
-  @apply border-l-4 border-l-zinc-300;
-}
+/* 命令块视觉降噪（第十六轮反馈「命令执行块太显眼，灰一点」）：去掉左侧
+   4px 彩色粗边框，状态只通过步骤圆点底色与状态文字的弱化色体现。 */
 
 .work-block.work-block-compact {
-  @apply border-l-2;
+  border-left-width: 0;
 }
 
 .work-block.work-block-compact .work-block-header {
@@ -145,40 +144,28 @@ const permissionHint = computed(() => {
   font-size: 0.75rem;
 }
 
-.work-block.cmd-status-running {
-  @apply border-l-amber-400;
-}
-
-.work-block.cmd-status-ok {
-  @apply border-l-emerald-400;
-}
-
-.work-block.cmd-status-error {
-  @apply border-l-rose-400;
-}
-
 .work-block-header {
-  @apply flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left cursor-pointer transition-colors hover:bg-zinc-100/80;
+  @apply flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left cursor-pointer transition-colors hover:bg-zinc-100/60;
 }
 
 .work-step-dot {
-  @apply flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[11px] font-semibold leading-none text-zinc-600 tabular-nums;
+  @apply flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[11px] font-semibold leading-none text-zinc-500 tabular-nums;
 }
 
 .work-block.cmd-status-running .work-step-dot {
-  @apply bg-amber-100 text-amber-700;
+  @apply bg-amber-50 text-amber-600;
 }
 
 .work-block.cmd-status-ok .work-step-dot {
-  @apply bg-emerald-100 text-emerald-700;
+  @apply bg-emerald-50 text-emerald-600;
 }
 
 .work-block.cmd-status-error .work-step-dot {
-  @apply bg-rose-100 text-rose-700;
+  @apply bg-rose-50 text-rose-600;
 }
 
 .work-block-command {
-  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
+  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-600;
 }
 
 .work-block-status {
@@ -186,15 +173,15 @@ const permissionHint = computed(() => {
 }
 
 .work-block.cmd-status-running .work-block-status {
-  @apply text-amber-600;
+  @apply text-amber-600/80;
 }
 
 .work-block.cmd-status-ok .work-block-status {
-  @apply text-emerald-600;
+  @apply text-emerald-600/80;
 }
 
 .work-block.cmd-status-error .work-block-status {
-  @apply text-rose-600;
+  @apply text-rose-600/80;
 }
 
 .work-block-status-icon {

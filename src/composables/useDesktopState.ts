@@ -5862,6 +5862,27 @@ export function useDesktopState() {
       pendingThreadsRefresh = true
       await syncFromNotifications()
       if (interruptedUserMessage && !hasAgentOutput) {
+        // 需求 1（第十六轮）：服务端已把该 turn 整体移除，本地也要同步移除，
+        // 否则消息列表残留「被编辑（被中断）」的用户消息。这里同时清理：
+        // 1) 持久化消息中该 turn 的全部消息（按 turnId）；
+        // 2) 该 turn 的思考存档（clearCompletedTurnLiveState 刚把 thinking
+        //    存进 persistedReasoning，若不清理会残留一个没有对应轮次的思考块）；
+        // 之后 preserveMissing 合并时 previous 已无这些消息，不会再次保留。
+        const turnMessagesRemaining = (persistedMessagesByThreadId.value[threadId] ?? []).filter(
+          (message) => message.turnId !== turnId,
+        )
+        setPersistedMessagesForThread(threadId, turnMessagesRemaining)
+        const reasoningForThread = persistedReasoningByThreadId.value[threadId]
+        if (reasoningForThread) {
+          const reasoningRemaining = reasoningForThread.filter((message) => message.turnId !== turnId)
+          if (reasoningRemaining.length !== reasoningForThread.length) {
+            persistedReasoningByThreadId.value = {
+              ...persistedReasoningByThreadId.value,
+              [threadId]: reasoningRemaining,
+            }
+            savePersistedReasoningMap(persistedReasoningByThreadId.value)
+          }
+        }
         interruptedUnsubmittedByThreadId.value = {
           ...interruptedUnsubmittedByThreadId.value,
           [threadId]: {

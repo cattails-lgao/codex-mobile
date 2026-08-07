@@ -933,7 +933,7 @@ const pendingConfirm = ref<PendingEditConfirm | PendingFileChangeConfirm | null>
 const pendingConfirmTitle = computed(() => {
   const pending = pendingConfirm.value
   if (!pending) return ''
-  if (pending.kind === 'edit-message') return t('Edit this message?')
+  if (pending.kind === 'edit-message') return t('Rollback this turn?')
   return pending.action === 'undo' ? t('Undo file changes?') : t('Redo file changes?')
 })
 const pendingConfirmMessage = computed(() => {
