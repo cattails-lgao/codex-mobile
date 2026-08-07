@@ -10,8 +10,8 @@
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
-| 工具链 | pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局） |
-| 最近提交 | 04f470b（macOS 跨平台回归：workspace-roots 断言基准 canonicalize，/var→/private/var 符号链接，已提交未推送） |
+| 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
+| 最近提交 | 8711455（交接文档 macOS 回归记录 + 04f470b 测试修复，均已推送） |
 
 ---
 
@@ -112,6 +112,21 @@ pnpm run dev --host 127.0.0.1 --port 4173
 `CODEX_HOME` 必须指向沙箱允许写入的位置；项目内 `.codex/` 已被 `.gitignore` 忽略，不会污染 git。
 
 > **重要（2026-08-06 实测教训）**：`resolveCodexCommand()` 通过 PATH 里的 `codex.CMD` shim 定位 codex CLI。本机 codex-cli 0.146.0 由 pnpm 全局安装在 `C:\Users\cattails\AppData\Local\pnpm\bin`（shim `codex.CMD`），该目录不在默认 PATH 中。若只补 node 目录而漏掉 pnpm bin 目录，页面会报 `Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.`（`/codex-api/rpc` 502）。把 `AppData\Local\pnpm\bin` 前置进 PATH 后正常。
+
+### macOS（2026-08-07 实测）
+
+```bash
+# 0) 首次需全局安装 codex CLI（macOS 默认没有；npm registry 已配国内镜像，无需代理）
+npm install -g @openai/codex
+# 1) npm 全局 bin 不在默认 PATH 时前置进 PATH
+export PATH="<npm 全局 bin 目录>:$PATH"
+# 2) TRAE 沙箱模式：CODEX_HOME 指向项目内 .codex/（已被 .gitignore 忽略）
+export CODEX_HOME='<项目目录>/.codex'
+# 3) 启动
+pnpm run dev --host 127.0.0.1 --port 4173
+```
+
+macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PATH）→ npm 全局 `@openai/codex` 包顺序定位，装上即用，无 `.cmd` shim 问题；`node-pty` postinstall 在 macOS 跳过（由 `scripts/fix-pty-native-build.cjs` 处理），不影响终端面板。GitHub 直连超时时经本机 FlClash 代理（`socks5h://127.0.0.1:7890`）推送。
 
 ### 端口冲突
 
@@ -511,6 +526,8 @@ Reasonix 是 React + TS，本地是 Vue 3。经逐个读取 `lib/reasoningDispla
 
 > **测试修复（commit `04f470b`）**：`codexAppServerBridge.archive.test.ts` 的「persists workspace roots in canonical form」在 macOS 上失败——测试用 `mkdtemp(tmpdir())` 构造期望路径 `/var/folders/.../storage/projects/demo`，而实现内部对工作区根做 `realpath` 规范化，macOS 上 `/var` 是指向 `/private/var` 的符号链接，realpath 后写入 `/private/var/folders/...`，与未规范化期望值不匹配（Linux/Windows 无此符号链接故不触发）。修复：断言基准改为先 `mkdir` 再 `realpath` 的规范路径，与实现写入形式一致；该文件 32 个测试全部通过。属测试断言加固，不涉及产品代码。
 
+> **macOS 环境补充（2026-08-07，启动服务实测）**：macOS 侧首次启动时发现本机无 codex CLI（`resolveCodexCommand()` 三处候选全空），已 `npm install -g @openai/codex` 安装 codex-cli 0.147.0（npm registry 为国内镜像 npmmirror，5s 完成；npm 全局 bin 在 TRAE 环境的 `npm-global/bin`，需前置进 PATH）；启动命令与 macOS 差异见「启动方式 → macOS」。GitHub 认证：TRAE 的 Git 扩展登录后凭据写入系统 keychain（`credential.helper osxkeychain`），命令行 git 直接复用——`git -c http.version=HTTP/1.1 -c http.proxy=socks5h://127.0.0.1:7890 -c https.proxy=socks5h://127.0.0.1:7890 push origin main` 实测可用（直连 GitHub 443 超时，需走本机 FlClash 代理；FlClash 由 CuteCloud/FlClashCore 提供，代理端口以进程存活为准）。
+
 ## 未完成事项
 
 - **已推送**：`main` 与 `origin/main` 已同步至 `7d81389`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交）+ 第十三轮 8 项修复与文档 `7d81389`/`026c8a9` + 交接文档补齐提交记录 `c4f0a8c` + 第十四轮 8 项修复 `4508827` + 第十五轮拆分重构 `4ea05b8`/`055cfc6` + Reasonix 复用清单与工期修正 `5e35d17`/`4f2b028` + 阶段 A（流式思考截断 + Process Fold 基础版）`a5d5ef9` + 交接文档阶段 A 快照 `b4ed593` + 阶段 B（hot/warm/cold 三区）`0c0676d` + 阶段 C（JumpBar + 工具聚合 + partitionTurnItems）`da8cabd` + 遗留项补齐（composer popover 键盘导航 + 需求 9 中断消息回填提示）`e192351` + 命令输出超长行横向溢出修复 `d536428`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）
@@ -530,4 +547,4 @@ Reasonix 是 React + TS，本地是 Vue 3。经逐个读取 `lib/reasoningDispla
 
 ---
 
-*codexapp · 交接文档 · 2026-08-07（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）+ 第十三轮 8 个问题已修复（设置面板固定高度、thinking 实时显示、Awaiting response 悬浮面板 + 明暗主题 + 中文、计划面板 item 捕获 + 编号优先解析 35→6、Implement 防重复点击、popover 内部样式、面板文案 i18n）且 trae-work 会话链接调研结论已确认 + 第十五轮拆分重构（ThreadConversation 5701→2951 行）已推送 + Reasonix 移植阶段 A（流式思考截断 + Process Fold 基础版）已推送 + 阶段 B（hot/warm/cold 三区渲染 + 流式渲染隔离）已完成并推送（commit 0c0676d）+ 阶段 C（问题导航 JumpBar + 工具聚合 ReadOnlyBatch/ToolGroup + partitionTurnItems 通道拆分）已完成并推送（commit da8cabd）+ 遗留项补齐：composer popover 键盘导航（↑/↓/Enter/Esc）+ 需求 9 UI 优化（中断未提交 turn 后消息回填输入框 + 提示条）已完成并推送（commit e192351）+ 命令执行消息超长内容横向溢出修复（work-block-list 全局样式 + 输出 grid 轨道约束，三视口无横滚）已完成并推送（commit d536428）+ macOS 侧跨平台回归已完成（依赖安装无新 Ignored build scripts、vue-tsc/vite build/tsup 全部通过、单测 306/306 通过；修复 macOS 特有 workspace-roots 断言环境性失败，commit 04f470b，未推送）） · 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-07（P2 全部完成 + 六轮验收修复已推送 + 第七轮 9 条需求/问题：8 条已实现、需求 9 调研结论已确认（服务端 turn 语义，非 UI bug）+ 第八轮 5 个上游 PR 移植已推送 + 需求 6 决策：对齐 trae-work 全量重构已实施（commit 0f1a970）+ WSL Linux 侧跨平台回归已完成 + requirement-8 十四项需求全部落地并推送 + 侧栏设置/回收站按钮图标化已推送 + 第九轮 4 条需求/问题全部修复：策略按钮显示选中值、审批策略 env 不再强制 never、模型强度默认 Medium、编辑消息先停止会话 + 第十轮 3 条需求全部实现：侧栏底部设置/回收图标各占半宽且图标增大、模型按钮固定宽度超出省略、H5 下模型/模型强度/上下文按钮改小 + 第十一轮 7 个问题全部修复：设置弹框幽灵点击重开、移动端右侧面板遮罩、H5 控件行换行、plan 面板 markdown 解析、命令权限拦截提示、plan 展开面板同宽、命令与叙述时间序交错恢复 + 第十二轮 3 条需求已实现（设置面板左右布局、Awaiting response 面板滚动、thinking 本地持久化展示）且「Worked for 11m35s」调研结论已确认（turn 墙钟时间含等待用户回答）+ 第十三轮 8 个问题已修复（设置面板固定高度、thinking 实时显示、Awaiting response 悬浮面板 + 明暗主题 + 中文、计划面板 item 捕获 + 编号优先解析 35→6、Implement 防重复点击、popover 内部样式、面板文案 i18n）且 trae-work 会话链接调研结论已确认 + 第十五轮拆分重构（ThreadConversation 5701→2951 行）已推送 + Reasonix 移植阶段 A（流式思考截断 + Process Fold 基础版）已推送 + 阶段 B（hot/warm/cold 三区渲染 + 流式渲染隔离）已完成并推送（commit 0c0676d）+ 阶段 C（问题导航 JumpBar + 工具聚合 ReadOnlyBatch/ToolGroup + partitionTurnItems 通道拆分）已完成并推送（commit da8cabd）+ 遗留项补齐：composer popover 键盘导航（↑/↓/Enter/Esc）+ 需求 9 UI 优化（中断未提交 turn 后消息回填输入框 + 提示条）已完成并推送（commit e192351）+ 命令执行消息超长内容横向溢出修复（work-block-list 全局样式 + 输出 grid 轨道约束，三视口无横滚）已完成并推送（commit d536428）+ macOS 侧跨平台回归已完成（依赖安装无新 Ignored build scripts、vue-tsc/vite build/tsup 全部通过、单测 306/306 通过；修复 macOS 特有 workspace-roots 断言环境性失败，commit 04f470b，未推送）+ macOS 启动环境补齐：本机缺 codex CLI 已 npm 全局安装 codex-cli 0.147.0、启动方式新增 macOS 小节、GitHub 认证经 TRAE 扩展登录共享 osxkeychain 凭据可直接命令行推送（直连超时走 FlClash 代理 7890）） · 内容已脱敏*
