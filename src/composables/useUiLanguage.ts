@@ -100,6 +100,8 @@ const zhCN: Record<string, string> = {
   'Modified {n} files': '已修改 {n} 个文件',
   'Delegated {n} tasks': '已委派 {n} 个任务',
   'Explored {n} items': '已探索 {n} 项',
+  'Stopped: message not submitted, restored to input.': '已停止：消息未提交，已回填到输入框。',
+  'Stopped: message not submitted.': '已停止：消息未提交。',
   'Load earlier ({n} turns)': '展开前 {n} 轮对话',
   'Load earlier messages': '加载更早的消息',
   'Steps': '步骤',

@@ -1117,6 +1117,17 @@
                     @delete="removeQueuedMessage"
                     @reorder="onReorderQueuedMessage"
                   />
+                  <div v-if="interruptedRecoverNotice" class="interrupt-recovered-banner" role="status">
+                    <span>{{ interruptedRecoverNotice }}</span>
+                    <button
+                      type="button"
+                      class="interrupt-recovered-dismiss"
+                      :aria-label="t('Dismiss')"
+                      @click="interruptedRecoverNotice = ''"
+                    >
+                      ×
+                    </button>
+                  </div>
                   <ThreadPendingRequestPanel
                     v-if="selectedThreadPendingRequest"
                     :request="selectedThreadPendingRequest"
@@ -1725,6 +1736,8 @@ const {
   sendMessageToSelectedThread,
   sendMessageToNewThread,
   interruptSelectedThreadTurn,
+  interruptedUnsubmittedMessage,
+  clearInterruptedUnsubmittedMessage,
   selectedThreadQueuedMessages,
   removeQueuedMessage,
   reorderQueuedMessage,
@@ -4670,6 +4683,31 @@ function onInterruptTurn(): void {
   void interruptSelectedThreadTurn()
 }
 
+// 需求 9 UI 优化：turn/interrupt 中断尚未产出 agent 输出的 turn 时，服务端会把该
+// turn（含用户消息）整体移除。检测到「中断回填载荷」后把未提交消息回填输入框并提示。
+const interruptedRecoverNotice = ref('')
+let interruptedRecoverNoticeTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(interruptedUnsubmittedMessage, (payload) => {
+  if (!payload) return
+  if (payload.text) {
+    threadComposerRef.value?.hydrateDraft({
+      text: payload.text,
+      imageUrls: payload.imageUrls,
+      fileAttachments: payload.fileAttachments,
+      skills: payload.skills,
+    })
+  }
+  interruptedRecoverNotice.value = payload.text
+    ? t('Stopped: message not submitted, restored to input.')
+    : t('Stopped: message not submitted.')
+  if (interruptedRecoverNoticeTimer) clearTimeout(interruptedRecoverNoticeTimer)
+  interruptedRecoverNoticeTimer = setTimeout(() => {
+    interruptedRecoverNotice.value = ''
+  }, 6000)
+  clearInterruptedUnsubmittedMessage(composerThreadContextId.value)
+})
+
 function onSlashCommand(commandId: string): void {
   const threadId = selectedThreadId.value.trim()
   switch (commandId) {
@@ -5672,6 +5710,14 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .external-session-banner {
   @apply flex w-full items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm;
+}
+
+.interrupt-recovered-banner {
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800 shadow-sm;
+}
+
+.interrupt-recovered-dismiss {
+  @apply shrink-0 cursor-pointer border-none bg-transparent text-base leading-none text-sky-500 transition hover:text-sky-800;
 }
 
 .visible-error-with-feedback {
