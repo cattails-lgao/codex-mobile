@@ -17,10 +17,35 @@
           :disabled="isLoadingMore || isLoadingPersistedAbove"
           @click="loadMoreAbove"
         >
-          {{ isLoadingMore || isLoadingPersistedAbove ? 'Loading…' : 'Load earlier messages' }}
+          {{ isLoadingMore || isLoadingPersistedAbove ? t('Loading…') : t('Load earlier messages') }}
         </button>
       </li>
-      <template v-for="message in visibleMessages" :key="message.id">
+      <li v-if="hasColdTurns" class="conversation-load-more conversation-warm-collapse">
+        <button type="button" class="load-more-button" :disabled="isLoadingMore" @click="nextColdPage">
+          {{ t('Load earlier ({n} turns)', { n: coldTurnCount }) }}
+        </button>
+      </li>
+      <template v-for="item in renderItems" :key="item.key">
+      <li
+        v-if="item.kind === 'warm-card'"
+        class="conversation-item conversation-item-warm-card"
+        data-role="system"
+        data-message-type="warmTurn"
+      >
+        <div class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
+            <WarmTurnCard
+              :user-text="item.userText"
+              :assistant-preview="item.assistantPreview"
+              :tool-count="item.toolCount"
+              :expanded="item.expanded"
+              @toggle="toggleWarmTurn(item.turn)"
+            />
+          </div>
+        </div>
+      </li>
+      <template v-else>
+      <template v-for="message in [item.message]" :key="message.id">
       <li
         v-if="isFoldStart(message)"
         class="conversation-item conversation-item-fold"
@@ -481,6 +506,8 @@
         </div>
       </li>
       </template>
+      </template>
+      </template>
       <LiveOverlayItem v-if="liveOverlay" :overlay="liveOverlay" :feedback-mailto="feedbackMailto" />
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
@@ -588,12 +615,24 @@ import MessageToolbar from './MessageToolbar.vue'
 import ProcessFold from './ProcessFold.vue'
 import ReasoningBlock from './ReasoningBlock.vue'
 import ToolCallRow from './ToolCallRow.vue'
+import WarmTurnCard from './WarmTurnCard.vue'
 import WorkBlockItem from './WorkBlockItem.vue'
 import {
   buildProcessFoldLabel,
   buildProcessFolds,
   type ProcessFoldItem,
 } from '../../utils/conversationFolds'
+import {
+  buildTurnGroups,
+  createWarmLayerState,
+  messagesForTurnsFrom,
+  warmLayerForSession,
+  warmLayerWithExpandedTurn,
+  warmLayerWithNextColdPage,
+  warmPagination,
+  warmUserPreview,
+  type WarmLayerState,
+} from '../../utils/transcriptGrouping'
 import { formatTurnDuration } from '../../composables/useDesktopState'
 
 type HighlightJsModule = (typeof import('highlight.js/lib/common'))['default']
@@ -930,19 +969,89 @@ function setBoundedCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, limit: n
   return value
 }
 
-const RENDER_WINDOW_SIZE = 50
-const LOAD_MORE_CHUNK = 30
+// hot/warm/cold 三区（阶段 B）：hot 区 = 最后 HOT_TURNS 轮全量渲染；其前轮次进 warm
+// （折叠摘要卡，单轮展开）与 cold（前端分页，Load earlier 按钮逐页展示）。
+const HOT_TURNS = 30
+const WARM_PAGE_SIZE = 20
 const LOAD_MORE_SCROLL_THRESHOLD_PX = 200
 
-const renderWindowStart = ref(0)
+const warmLayerState = ref<WarmLayerState>(createWarmLayerState(props.activeThreadId))
+const activeWarmLayer = computed(() => warmLayerForSession(warmLayerState.value, props.activeThreadId))
+
 const isLoadingMore = ref(false)
 
-const visibleMessages = computed(() =>
-  props.messages.slice(renderWindowStart.value).filter((message) => !isPlanMessage(message)),
+const filteredMessages = computed(() => props.messages.filter((message) => !isPlanMessage(message)))
+
+const turnGroups = computed(() => buildTurnGroups(filteredMessages.value))
+
+const warmPaginationResult = computed(() =>
+  warmPagination({
+    turnCount: turnGroups.value.length,
+    hotTurns: HOT_TURNS,
+    pageSize: WARM_PAGE_SIZE,
+    coldPage: activeWarmLayer.value.coldPage,
+  }),
 )
 
-// Process Fold：把同一轮次的思考/工作块/工具调用包进可折叠容器（阶段 A 基础版）。
-const processFolds = computed(() => buildProcessFolds(visibleMessages.value))
+const warmStartTurn = computed(() => warmPaginationResult.value.warmStartTurn)
+const warmEndTurn = computed(() => warmPaginationResult.value.warmEndTurn)
+const coldTurnCount = computed(() => warmPaginationResult.value.coldTurnCount)
+const hasColdTurns = computed(() => coldTurnCount.value > 0)
+const expandedWarmTurns = computed(() => activeWarmLayer.value.expandedWarmTurns)
+
+type WarmRenderItem =
+  | { kind: 'warm-card'; key: string; turn: number; userText: string; assistantPreview: string; toolCount: number; expanded: boolean }
+  | { kind: 'message'; key: string; message: UiMessage }
+
+// 三区交错渲染序列：warm 折叠轮次出卡片，展开轮次出「头部 + 该轮消息」，之后接 hot 区消息。
+const renderItems = computed<WarmRenderItem[]>(() => {
+  const messages = filteredMessages.value
+  const groups = turnGroups.value
+  const items: WarmRenderItem[] = []
+  const expanded = expandedWarmTurns.value
+  for (let g = warmStartTurn.value; g < warmEndTurn.value; g += 1) {
+    const group = groups[g]
+    if (!group) continue
+    const userText = warmUserPreview(group.userItem.text)
+    const assistantPreview = group.assistantPreview
+    const toolCount = group.toolCount
+    if (expanded.has(g)) {
+      items.push({ kind: 'warm-card', key: `warm-head-${g}`, turn: g, userText, assistantPreview, toolCount, expanded: true })
+      for (let i = group.startIdx; i < group.endIdx; i += 1) {
+        const message = messages[i]
+        if (message) items.push({ kind: 'message', key: message.id, message })
+      }
+    } else {
+      items.push({ kind: 'warm-card', key: `warm-${g}`, turn: g, userText, assistantPreview, toolCount, expanded: false })
+    }
+  }
+  for (const message of messagesForTurnsFrom(messages, groups, warmEndTurn.value)) {
+    items.push({ kind: 'message', key: message.id, message })
+  }
+  return items
+})
+
+function nextColdPage(): void {
+  warmLayerState.value = warmLayerWithNextColdPage(warmLayerState.value, props.activeThreadId)
+}
+
+function toggleWarmTurn(turn: number): void {
+  warmLayerState.value = warmLayerWithExpandedTurn(
+    warmLayerState.value,
+    props.activeThreadId,
+    turn,
+    !expandedWarmTurns.value.has(turn),
+  )
+}
+
+// Process Fold：只在「渲染出的消息序列」（warm 展开轮次 + hot 区）上计算，折叠成员必在序列内。
+const processFolds = computed(() => {
+  const rendered: UiMessage[] = []
+  for (const item of renderItems.value) {
+    if (item.kind === 'message') rendered.push(item.message)
+  }
+  return buildProcessFolds(rendered)
+})
 
 const foldByStartId = computed(() => {
   const map = new Map<string, ProcessFoldItem>()
@@ -996,7 +1105,7 @@ function isWorkedMessage(message: UiMessage): boolean {
   return message.messageType === 'worked'
 }
 
-const hasMoreAbove = computed(() => renderWindowStart.value > 0 || props.hasMorePersistedAbove === true)
+const hasMoreAbove = computed(() => props.hasMorePersistedAbove === true)
 
 const showJumpToLatestButton = computed(
   () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
@@ -2204,7 +2313,7 @@ function jumpToLatest(): void {
 
 async function loadMoreAbove(): Promise<void> {
   const container = conversationListRef.value
-  if (!container || !hasMoreAbove.value || isLoadingMore.value || props.isLoadingPersistedAbove === true) return
+  if (!container || !props.hasMorePersistedAbove || isLoadingMore.value || props.isLoadingPersistedAbove === true) return
 
   isLoadingMore.value = true
   const threadIdAtStart = props.activeThreadId
@@ -2213,11 +2322,7 @@ async function loadMoreAbove(): Promise<void> {
   const prevScrollTop = container.scrollTop
 
   try {
-    if (renderWindowStart.value > 0) {
-      renderWindowStart.value = Math.max(0, renderWindowStart.value - LOAD_MORE_CHUNK)
-    } else if (props.hasMorePersistedAbove === true) {
-      await props.loadEarlierMessages?.(threadIdAtStart)
-    }
+    await props.loadEarlierMessages?.(threadIdAtStart)
 
     await nextTick()
 
@@ -2295,17 +2400,6 @@ watch(
       ]),
     )
 
-    // Keep renderWindowStart in bounds whenever the message list changes length.
-    // Following output: always pin the window to the last RENDER_WINDOW_SIZE messages so
-    //   the rendered count stays bounded (handles both growth and shrink/rollback).
-    // Scrolled up: only clamp downward so renderWindowStart never exceeds the list length
-    //   (prevents visibleMessages from becoming empty after a rollback).
-    if (autoFollowOutput.value) {
-      renderWindowStart.value = Math.max(0, next.length - RENDER_WINDOW_SIZE)
-    } else {
-      renderWindowStart.value = Math.min(renderWindowStart.value, Math.max(0, next.length - 1))
-    }
-
     await scheduleConversationScroll()
   },
 )
@@ -2355,7 +2449,6 @@ watch(
   () => props.isLoading,
   async (loading) => {
     if (loading) return
-    renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
     await scheduleConversationScroll()
   },
 )
@@ -2369,8 +2462,7 @@ watch(
     fileChangeActionState.value = {}
     fileChangeActionError.value = {}
     fileChangeRedoPatchIds.value = {}
-    // Apply immediately for cached threads where isLoading never toggles.
-    renderWindowStart.value = Math.max(0, props.messages.length - RENDER_WINDOW_SIZE)
+    warmLayerState.value = createWarmLayerState(props.activeThreadId)
     await scheduleConversationScroll()
   },
   { flush: 'post' },
@@ -2380,8 +2472,12 @@ function onConversationScroll(): void {
   const container = conversationListRef.value
   if (!container || props.isLoading) return
   autoFollowOutput.value = isAtBottom(container)
-  if (hasMoreAbove.value && !isLoadingMore.value && container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX) {
-    void loadMoreAbove()
+  if (container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX && !isLoadingMore.value) {
+    if (hasColdTurns.value) {
+      nextColdPage()
+    } else if (props.hasMorePersistedAbove === true) {
+      void loadMoreAbove()
+    }
   }
 }
 

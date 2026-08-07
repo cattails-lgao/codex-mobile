@@ -544,6 +544,36 @@
   @apply border-zinc-700;
 }
 
+/* WarmTurnCard（阶段 B warm 区折叠摘要卡）暗色覆盖 */
+:root.dark .warm-turn {
+  @apply border-zinc-700 bg-zinc-900/60;
+}
+
+:root.dark .warm-turn__head:hover {
+  @apply bg-zinc-800/70;
+}
+
+:root.dark .warm-turn__chevron {
+  @apply text-zinc-500;
+}
+
+:root.dark .warm-turn__preview {
+  @apply text-zinc-100;
+}
+
+:root.dark .warm-turn__meta {
+  @apply text-zinc-500;
+}
+
+:root.dark .warm-turn__assistant {
+  @apply text-zinc-400;
+}
+
+/* cold 区分页按钮（Load earlier N turns）暗色覆盖 */
+:root.dark .conversation-warm-collapse .load-more-button {
+  @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200;
+}
+
 /* ThreadConversation 工作块 / 工具调用暗色覆盖（同上：scoped :global 不生效） */
 :root.dark .work-summary-text {
   @apply text-slate-100;

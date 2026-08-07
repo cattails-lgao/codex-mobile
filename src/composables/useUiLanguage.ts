@@ -92,6 +92,8 @@ const zhCN: Record<string, string> = {
   '{n} tools': '{n} 个工具',
   '{n} thoughts': '{n} 条思考',
   '{n} commands': '{n} 个命令',
+  'Load earlier ({n} turns)': '展开前 {n} 轮对话',
+  'Load earlier messages': '加载更早的消息',
   'Steps': '步骤',
   'Implement plan': '执行计划',
   'Plan executed': '计划已执行',
