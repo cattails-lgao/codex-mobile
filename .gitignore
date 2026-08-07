@@ -21,3 +21,6 @@ acceptance-plan/
 probe.txt
 tmp/
 documentation/app-server-schemas/typescript/**/*.js
+
+# macOS
+.DS_Store

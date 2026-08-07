@@ -1,0 +1,14 @@
+# 第十一轮交接需求（2026-08-06 提出）
+
+> **2026-08-06 第十一轮进展：** 7 个问题已全部修复并通过验证（`vue-tsc --noEmit` 通过、单测 v2 归一化 13 + gateway 29 + useDesktopState 49 全部通过、Playwright 桌面/H5 实测 7/7 通过）。本轮改动已提交并推送（commit `483c869`）。涉及 `App.vue`、`ThreadComposer.vue`、`ThreadConversation.vue`、`useUiLanguage.ts`、`utils/plan.ts`、`api/normalizers/v2.ts`、`api/normalizers/v2.test.ts`、`server/codexAppServerBridge.ts`。
+
+1. **设置弹框点外部关闭后自动重开**：背板 `pointerdown` 关闭弹框后，浏览器把合成的 click 重定向到被遮住的设置按钮，再次触发 `isSettingsOpen = !isSettingsOpen` 重开。`App.vue` 新增 `settingsCloseAtMs` 时间戳守卫：弹框关闭（含背板 pointerdown 与按钮 toggle 关闭）后 400ms 内忽略触发器点击；设置按钮改为 `onToggleSettings` 处理函数。验证：Playwright——打开弹框 → 点击设置按钮位置（透过背板）→ 弹框保持关闭
+2. **移动端右侧面板无遮罩**：`App.vue` 新增 `.content-right-panel-backdrop`（`@media (max-width: 767px)` 下 fixed 全屏、z-1050，面板 z-1100），`v-if="isMobile && isMobileRightPanelOpen"` 渲染，点击调用 `onCloseRightPanel`。验证：Playwright H5 375px——打开面板出现遮罩，点击遮罩后面板关闭（is-mobile-open 移除）
+3. **H5 输入控件行换行**：`ThreadComposer.vue` 移动端 media query 给 `.thread-composer-controls` 加 `flex-nowrap`，上下文按钮加 `shrink min-w-0`，整行不再溢出换行。验证：Playwright H5——375px 下 `scrollWidth === clientWidth`（341px），无横向溢出
+4. **计划消息内容不完整（plan 面板丢弃内容）**：codex CLI 持久化的 `<proposed_plan>` 是 markdown 格式（标题 + 项目符号），而 `parsePlanFromMessageText` 只认 `- [ ]` 复选框 → 返回 null，plan 面板空。新增 markdown 回退解析：标题/正文归入 explanation，`-`/`*`/`1.` 列表项归入 steps（pending）。验证：Playwright「长任务测试」线程 plan 面板显示 21 个完整步骤（此前为空）
+5. **命令被权限/沙箱拦截时无任何提示**：真实数据中命令带 `require_escalated` 但沙箱白名单（`SAFE_RM_ALLOWED_PATH`）直接拒绝，未产生审批请求，命令块只显示失败。新增 `commandPermissionHint`：命令失败且输出匹配 `Access is denied`/`permission denied`/`require_escalated`/`拒绝访问` 等模式时，命令块下方显示琥珀色提示「命令因权限或沙箱限制被拦截，未弹出审批提示…」；i18n 中文字典补充。验证：Playwright「长任务测试2」出现 6 处权限提示，文案完整
+6. **Plan 展开面板宽度不一致**：`panel-class` 渲染在 `ComposerPopover` 内部元素上，ThreadComposer 的 scoped 样式选择器不匹配（需 `:deep()`）；且 `w-72` 覆盖 `w-full`。改为 `:deep(.thread-composer-plan-panel-popover)` + `min-w-full`。验证：Playwright——展开面板宽 683px ≈ 折叠条 685px，对齐一致
+7. **命令与叙述被强制分组，时间序错乱**：三层根因：①`normalizers/v2.ts` 的 `reorderTurnForWorkProcess` 把 reasoning/plan/command/toolCall 全部搬到用户消息之后，打破真实执行顺序（如「叙述→命令→叙述→命令」被重排成命令堆叠）；②`mergeSessionCommandsIntoTurns` 只识别 `exec_command`，新 CLI 的命令是 `shell_command`，输出解析只认 `Process exited with code` 不认 `Exit code:`；③旧恢复逻辑把非 agentMessage 项全部追加到末尾导致命令聚集在会话尾部。**修复**：移除前端 `reorderTurnForWorkProcess` 恢复服务端时间序；桥接层 `mergeSessionCommandsIntoThreadResult`（thread/read 与 thread-turn-page 双路径）按会话日志流式顺序把 agentMessage 与 `shell_command`/`exec_command` 命令（含 `-Command` 参数提取、`Exit code:` 解析）交错还原；幂等（session- 前缀 id 检测）+ 去重（恢复出命令时丢弃实时捕获的行）。验证：Playwright「长任务测试2」渲染顺序：用户 → 叙述 → 命令 → 叙述 → 命令…（交错还原）；v2 归一化单测更新为时间序断言并通过
+
+> **环境注意：** 排查 7 号问题时发现本机 `D:\code\codex-project\test`（「长任务测试」会话的 cwd）在 TRAE 沙箱白名单之外，`approval_policy = "on-request"` 也不产生审批请求（命令直接被沙箱拒绝），这是环境配置问题而非应用 bug；后续在该目录执行命令需先把路径加入沙箱可写白名单。另外 `config.toml` 中 `codex-mobile`/`codex-project` 均被标记 `trusted`，信任目录内命令自动执行不弹窗属正常语义。
+
