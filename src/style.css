@@ -613,6 +613,13 @@
   @apply text-slate-100;
 }
 
+/* .work-block-list 由 ThreadConversation 模板渲染，样式定义在 WorkBlockItem 的 scoped
+   内不匹配（scoped 选择器带 data-v 只作用于组件内部元素），导致 display:block 且无
+   min-w-0，超长命令/输出会把消息行撑宽产生横向溢出。这里补全局基础规则。 */
+.work-block-list {
+  @apply flex w-full min-w-0 flex-col gap-1.5;
+}
+
 :root.dark .work-block-permission-hint {
   @apply border-amber-900 bg-amber-950/50 text-amber-300;
 }
