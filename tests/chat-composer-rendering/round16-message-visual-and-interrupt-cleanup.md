@@ -50,6 +50,14 @@ Feature/change: 9 feedback items from the round-16 review — interrupt cleanup 
 - Actions: look at a completed command work block.
 - Expected: no 4px colored left border; a thin 1px zinc border around the whole block, lighter background, neutral step dot with a soft status tint (amber/emerald/rose at reduced saturation), dimmed status text.
 
+## 7. Command blocks and Processed fold bar drop the card look (round 17)
+
+- Actions: look at a command work block and a collapsed "Processed · N commands" fold bar.
+- Expected:
+  - Command block: no rounded border, no background, no circular step badge — just `序号 + 命令文本 + 状态` as a plain light row; the expanded output keeps the dark code area.
+  - Fold bar: no rounded border, no background; the `▸/▾` toggle sits right next to the label text instead of being pushed to the row end.
+- Verification: `r21-verify.cjs` asserts `border-radius: 0px`, transparent backgrounds for both, a plain digit step label, and `toggleBesideLabel === true` (desktop light/dark + H5).
+
 ## Rollback/cleanup
 
 - Verification commands:
