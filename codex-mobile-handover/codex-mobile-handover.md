@@ -450,6 +450,41 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 每个阶段独立验收（vue-tsc + vitest + Playwright 桌面/暗色/H5），阶段 A 的 Fold 容器是阶段 B 的组成部分，不返工。
 
+### 代码复用清单（2026-08-07 逐文件核实）
+
+Reasonix 是 React + TS，本地是 Vue 3。经逐个读取 `lib/reasoningDisplay.ts`/`processFoldPreference.ts`/`transcriptGrouping.ts`/`attachmentDisplay.ts`/`Transcript.tsx` 确认依赖后，结论：**纯 TS 逻辑层约 40% 可原样搬运，React 组件层必须重写**。
+
+**可直接复用（零/仅浏览器 API 依赖，原样复制）**
+
+| Reasonix 文件 | 内容 | 备注 |
+|---|---|---|
+| `lib/reasoningDisplay.ts` | `displayReasoningText` + `STREAMING_REASONING_TAIL_CHARS`(12,000)/`_LINES`(240) | 无任何 import；配套 `reasoning-display.test.ts` 直接搬 |
+| `lib/processFoldPreference.ts` | `ProcessFoldPreference` 读写 + CustomEvent 广播（`get/set/onChange`） | 只改 key 前缀（`reasonix-process-fold` → `codex-web-local.process-fold.v1`） |
+| `lib/transcriptGrouping.ts` | `buildTurnGroups`/`buildStepGroups`（轮次/步骤分组）、`warmPagination`/`warmColdPageForTurn`（三区翻页边界）、`compactQuestionText`/`warmUserPreview`（≤80 字预览）、`scrollVersion`、WarmLayerState 状态机 6 函数 | 12 个纯函数直接搬；`Item` 类型字段映射本地 `UiMessage`；配套 `transcript-grouping.test.ts` 翻译后搬 |
+
+**需适配（逻辑可翻译，绑定 React 数据模型）**
+
+| 位置 | 内容 | 适配点 |
+|---|---|---|
+| `Transcript.tsx` 内 `partitionTurnItems` | 通道拆分（有正文回答留折叠外、回答后又干活另起折叠、warn/extension 不折叠、steer 在用户侧） | 纯函数但埋在组件文件内，需抽出；`Item.kind`（user/assistant/tool/extension）映射本地 `messageType` 体系 |
+| `TurnGroup`/`StepGroup` 类型 | 分组结构 | `Item` 替换为 `UiMessage` 字段 |
+| `attachmentDisplay.ts`/`refToken.ts` | 附件引用替换/转义 | 不必搬，本地 `conversationPaths.ts` 已有等价解析 |
+
+**必须重写（React 绑定，仅借鉴设计）**
+
+`Transcript.tsx` 的 HotLayer/WarmLayer/ColdLayer 渲染树、`TurnCollapse`、`QuestionJumpBar`、`ToolGroup`/`ReadOnlyBatch`（JSX + hooks + lucide-react + `useSyncExternalStore`/Context 流式）。落到本轮拆出的子组件重写；流式状态沿用本地 `useDesktopState` + `mergeLiveMessages`。
+
+### 修正工期（最大化复用后）
+
+| 阶段 | 原估算 | 复用后 | 压缩原因 |
+|---|---|---|---|
+| A-1 流式思考截断 | 0.5 天 | **0.25 天** | `reasoningDisplay.ts` 整文件搬运 |
+| A-2 Process Fold 基础版 | 1 天 | **0.5~0.75 天** | 偏好/分组函数直接搬，只写折叠容器 |
+| B hot/warm/cold 三区 | 2 天 | **1~1.25 天** | 翻页边界函数直接搬，渲染层仍重写 |
+| C JumpBar/工具聚合 | 1.5 天 | **0.75~1 天** | 摘要/导航函数直接搬，`partitionTurnItems` 抽出翻译 |
+
+**总计约 2.5~3.5 个工作日（原 4.5~5），压缩约 30~40%**；剩余工作量集中在 Vue 组件重写层。
+
 ## 未完成事项
 
 - **已推送**：`main` 与 `origin/main` 已同步至 `7d81389`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交）+ 第十三轮 8 项修复与文档 `7d81389`/`026c8a9` + 交接文档补齐提交记录 `c4f0a8c`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）
