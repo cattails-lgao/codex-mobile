@@ -53,3 +53,4 @@ Return to the [manual test index](../../tests.md).
 | [ThreadConversation split refactor (3 utils + 8 child components)](thread-conversation-split-refactor.md) |
 | [Process Fold phase A and streaming reasoning truncation](process-fold-phase-a-and-streaming-reasoning-truncation.md) |
 | [Three-zone hot/warm/cold rendering (phase B)](three-zone-hot-warm-cold-rendering.md) |
+| [Phase C: question-nav JumpBar, tool aggregation, partitionTurnItems split](phase-c-jumpbar-tool-aggregation.md) |
