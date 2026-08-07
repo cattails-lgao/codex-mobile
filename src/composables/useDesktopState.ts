@@ -27,6 +27,8 @@ import {
   getThreadTitleCache,
   persistThreadTitle,
   generateThreadTitle,
+  getThreadReasoningArchive,
+  persistThreadReasoningArchive,
   resumeThread,
   compactThread,
   normalizeFuzzyFileSearchResults,
@@ -209,7 +211,17 @@ function loadPersistedReasoningMap(): Record<string, UiMessage[]> {
 
 function savePersistedReasoningMap(state: Record<string, UiMessage[]>): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(THREAD_REASONING_STORAGE_KEY, JSON.stringify(state))
+  try {
+    window.localStorage.setItem(THREAD_REASONING_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+  // round-23：镜像到桥接层，换浏览器/刷新后仍能从同一台服务端恢复思考存档。
+  for (const [threadId, messages] of Object.entries(state)) {
+    if (threadId && messages.length > 0) {
+      void persistThreadReasoningArchive(threadId, messages)
+    }
+  }
 }
 
 function loadUnreadCutoffIso(): string {
@@ -1447,6 +1459,9 @@ function addWorkspaceRootPlaceholderGroups(
   return nextGroups
 }
 
+// round-23：线程名控制在 20 字以内（新线程占位名/兜底名统一收口）
+const OPTIMISTIC_THREAD_TITLE_MAX = 20
+
 function toOptimisticThreadTitle(message: string): string {
   const firstLine = message
     .split('\n')
@@ -1454,7 +1469,7 @@ function toOptimisticThreadTitle(message: string): string {
     .find((line) => line.length > 0)
 
   if (!firstLine) return 'Untitled thread'
-  return firstLine.slice(0, 80)
+  return firstLine.slice(0, OPTIMISTIC_THREAD_TITLE_MAX)
 }
 
 function toForkedThreadTitle(title: string): string {
@@ -1508,12 +1523,22 @@ function pruneLiveMessageSortKeys(threadId: string): void {
 // 把本地存档的思考（persistedReasoning）按轮次插回消息流：插入到该轮用户
 // 消息之后，形成“提问 -> 思考 -> 回复”的阅读顺序；旧存档没有 turnIndex 时
 // 回退到消息流末尾（与历史行为一致）。同一轮多条思考按存档顺序排列。
+// round-23：带 reasoningAnchorMessageId 的思考项插到对应工具/命令消息之后
+// （按真实出现时序与工具交错，而不是全部堆在轮次开头）。
 export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessages: UiMessage[]): UiMessage[] {
   if (reasoningMessages.length === 0) return persisted
   const result = [...persisted]
   const unattached: UiMessage[] = []
   // 逆序插入，保证同一轮内多条思考按时间正序排列。
   for (const reasoningMessage of [...reasoningMessages].reverse()) {
+    const anchorId = reasoningMessage.reasoningAnchorMessageId?.trim() ?? ''
+    if (anchorId) {
+      const anchorIndex = result.findIndex((message) => message.id === anchorId)
+      if (anchorIndex >= 0) {
+        result.splice(anchorIndex + 1, 0, reasoningMessage)
+        continue
+      }
+    }
     const turnIndex = reasoningMessage.turnIndex
     if (typeof turnIndex !== 'number' || !Number.isFinite(turnIndex)) {
       unattached.push(reasoningMessage)
@@ -1567,9 +1592,12 @@ function mergeThreadMessageStreams(
   liveGroups: UiMessage[][],
   injected: UiMessage[],
 ): UiMessage[] {
-  const mergedPersisted = mergePersistedReasoning(persisted, persistedReasoning)
-  const liveMessages = mergeLiveMessages(threadId, liveGroups, mergedPersisted)
-  return [...mergedPersisted, ...liveMessages, ...injected]
+  // round-23：先把持久化 + live 消息合并成完整时序，再插回思考存档——
+  // 这样思考的时序锚点既能命中持久化命令/工具，也能命中仍在 live 中的
+  // 命令/工具（turn 刚结束时无需等刷新即可按真实顺序交错展示）。
+  const liveMessages = mergeLiveMessages(threadId, liveGroups, persisted)
+  const combined = [...persisted, ...liveMessages]
+  return [...mergePersistedReasoning(combined, persistedReasoning), ...injected]
 }
 
 export function useDesktopState() {
@@ -1586,6 +1614,10 @@ export function useDesktopState() {
   // 内容只随 item/started + item/completed 全量 item 到达；这里按 itemId 记录已
   // 追加的文本，避免 started/completed 重复追加或遗漏增量。
   const reasoningAppendedTextByItemId = new Map<string, string>()
+  // round-23：按 item/started 到达顺序记录每轮「推理项/工具项」的时间线，
+  // 轮次结束后按真实时序把思考插回消息流，而不是全部堆在轮次开头。
+  const reasoningItemTextByItemId = new Map<string, string>()
+  const turnItemSequenceByThreadId = new Map<string, Array<{ itemId: string; kind: 'reasoning' | 'other' }>>()
   // 记录每条 reasoning 流属于哪个 turn（turn/completed 通知会先清掉
   // activeTurnIdByThreadId，clearLiveReasoningForThread 时已取不到，故在
   // reasoning 开始时先记一份），供存档时打上轮次以便插回正确位置。
@@ -1647,6 +1679,9 @@ export function useDesktopState() {
   const turnIndexByTurnIdByThreadId = ref<Record<string, Record<string, number>>>({})
   const turnSummaryByThreadId = ref<Record<string, TurnSummaryState>>({})
   const turnActivityByThreadId = ref<Record<string, TurnActivityState>>({})
+  // round-23：审批/询问面板回复失败时展示的可见错误（按 requestId），
+  // 让「点了没反应」不再无声发生。
+  const pendingReplyErrorByRequestId = ref<Record<string, string>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
   const interruptBlockedUntilPersistedByThreadId = ref<Record<string, boolean>>({})
@@ -2925,8 +2960,16 @@ export function useDesktopState() {
     const turnId = activeReasoningTurnIdByThreadId.get(threadId) ?? activeTurnIdByThreadId.value[threadId] ?? ''
     activeReasoningTurnIdByThreadId.delete(threadId)
     const turnIndex = turnId ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] : undefined
-    rememberPersistedReasoning(threadId, current, turnId || undefined, turnIndex)
+    // round-23：优先按 item 粒度按时序存档（思考项插回对应工具/命令之后），
+    // 拿不到 item 时间线时退回整段文本存档（旧行为）。
+    const reasoningItems = buildTurnReasoningItems(threadId)
+    if (reasoningItems.length > 0) {
+      rememberPersistedReasoningItems(threadId, reasoningItems, turnId || undefined, turnIndex)
+    } else {
+      rememberPersistedReasoning(threadId, current, turnId || undefined, turnIndex)
+    }
     liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
+    turnItemSequenceByThreadId.delete(threadId)
   }
 
   // 把完整 thinking 文本存档为 reasoning 消息（本地持久化，刷新后仍展示）。
@@ -2951,6 +2994,40 @@ export function useDesktopState() {
     persistedReasoningByThreadId.value = {
       ...persistedReasoningByThreadId.value,
       [threadId]: next,
+    }
+    savePersistedReasoningMap(persistedReasoningByThreadId.value)
+  }
+
+  // round-23：按 item 粒度按时序存档思考（每条带 reasoningAnchorMessageId，
+  // 合并时插到对应工具/命令之后，实现「提问 -> 思考 -> 工具 -> 思考 -> …」顺序）。
+  function rememberPersistedReasoningItems(
+    threadId: string,
+    items: Array<{ text: string; anchorMessageId: string }>,
+    turnId?: string,
+    turnIndex?: number,
+  ): void {
+    if (!threadId || items.length === 0) return
+    const previous = persistedReasoningByThreadId.value[threadId] ?? []
+    const next = [...previous]
+    for (const item of items) {
+      const normalized = item.text.trim()
+      if (!normalized) continue
+      if (next.some((message) => message.text === normalized && message.turnId === turnId)) continue
+      next.push({
+        id: `reasoning:local:${threadId}:${Date.now()}:${next.length}`,
+        role: 'system',
+        text: normalized,
+        messageType: 'reasoning',
+        reasoning: { summary: [], content: [normalized] },
+        turnId: turnId || undefined,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+        reasoningAnchorMessageId: item.anchorMessageId || undefined,
+      })
+    }
+    const pruned = next.slice(-20)
+    persistedReasoningByThreadId.value = {
+      ...persistedReasoningByThreadId.value,
+      [threadId]: pruned,
     }
     savePersistedReasoningMap(persistedReasoningByThreadId.value)
   }
@@ -3459,16 +3536,26 @@ export function useDesktopState() {
       }
     }
     pendingServerRequestsByThreadId.value = next
+    if (pendingReplyErrorByRequestId.value[String(requestId)]) {
+      pendingReplyErrorByRequestId.value = omitKey(pendingReplyErrorByRequestId.value, String(requestId))
+    }
     applyThreadFlags()
+  }
+
+  // round-23：读取某个待办请求的可见回复错误（供审批/询问面板展示）。
+  function pendingReplyErrorForRequest(requestId: number): string {
+    return pendingReplyErrorByRequestId.value[String(requestId)] ?? ''
   }
 
   function replacePendingServerRequests(requests: UiServerRequest[]): void {
     const next: Record<string, UiServerRequest[]> = {}
+    const liveIds = new Set<number>()
     for (const request of requests) {
       const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
       const current = next[threadId] ?? []
       current.push(request)
       next[threadId] = current
+      liveIds.add(request.id)
     }
 
     for (const rows of Object.values(next)) {
@@ -3476,6 +3563,11 @@ export function useDesktopState() {
     }
 
     pendingServerRequestsByThreadId.value = next
+    const nextErrors: Record<string, string> = {}
+    for (const [requestId, message] of Object.entries(pendingReplyErrorByRequestId.value)) {
+      if (liveIds.has(Number(requestId))) nextErrors[requestId] = message
+    }
+    pendingReplyErrorByRequestId.value = nextErrors
   }
 
   function handleServerRequestNotification(notification: RpcNotification): boolean {
@@ -3837,6 +3929,8 @@ export function useDesktopState() {
 
   function appendReasoningItemProgress(threadId: string, itemId: string, text: string): void {
     if (!threadId || !text) return
+    // round-23：记录每个推理项的完整文本，供轮次结束后按 item 粒度按时序存档。
+    if (text.trim()) reasoningItemTextByItemId.set(itemId, text.trim())
     const current = liveReasoningTextByThreadId.value[threadId] ?? ''
     const previous = reasoningAppendedTextByItemId.get(itemId) ?? ''
     if (current.endsWith(text) || (previous && text === previous)) {
@@ -3852,6 +3946,39 @@ export function useDesktopState() {
     const separator = current.length > 0 && !current.endsWith('\n') ? '\n\n' : ''
     appendLiveReasoningText(threadId, `${separator}${text}`)
     reasoningAppendedTextByItemId.set(itemId, text)
+  }
+
+  // round-23：记录 item/started|item/completed 的到达顺序（推理项与工具项），
+  // 供思考存档按真实时序插回消息流。
+  function recordTurnItemOrder(notification: RpcNotification): void {
+    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return
+    const params = asRecord(notification.params)
+    const item = asRecord(params?.item)
+    const itemId = readString(item?.id)
+    if (!itemId) return
+    const threadId = extractThreadIdFromNotification(notification)
+    if (!threadId) return
+    const kind = readString(item?.type).toLowerCase() === 'reasoning' ? 'reasoning' : 'other'
+    const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
+    if (sequence.some((entry) => entry.itemId === itemId)) return
+    turnItemSequenceByThreadId.set(threadId, [...sequence, { itemId, kind }])
+  }
+
+  // 从本轮时间线构建「按真实顺序排列的思考项」，每项带时序锚点：
+  // anchor = 该思考项之前最近一个工具/命令/agent 项的 id（插到它后面）。
+  function buildTurnReasoningItems(threadId: string): Array<{ text: string; anchorMessageId: string }> {
+    const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
+    const items: Array<{ text: string; anchorMessageId: string }> = []
+    let lastOtherItemId = ''
+    for (const entry of sequence) {
+      if (entry.kind === 'reasoning') {
+        const text = reasoningItemTextByItemId.get(entry.itemId)?.trim() ?? ''
+        if (text) items.push({ text, anchorMessageId: lastOtherItemId })
+      } else {
+        lastOtherItemId = entry.itemId
+      }
+    }
+    return items
   }
 
   // Plan items also arrive as full item/started + item/completed payloads
@@ -4191,6 +4318,15 @@ export function useDesktopState() {
   function applyRealtimeUpdates(notification: RpcNotification): void {
     if (handleServerRequestNotification(notification)) {
       return
+    }
+
+    // round-23：记录每轮「推理项/工具项」到达顺序，供思考按时序插回消息流。
+    recordTurnItemOrder(notification)
+    if (notification.method === 'turn/started') {
+      const startedThreadId = extractThreadIdFromNotification(notification)
+      if (startedThreadId) {
+        turnItemSequenceByThreadId.delete(startedThreadId)
+      }
     }
 
     if (KNOWN_IGNORED_NOTIFICATION_METHODS.has(notification.method)) {
@@ -4548,6 +4684,8 @@ export function useDesktopState() {
       activeReasoningItemId = ''
       shouldAutoScrollOnNextAgentEvent = false
       clearLiveReasoningForThread(notificationThreadId)
+      // round-23：清理本轮推理项文本缓存，避免跨轮残留。
+      reasoningItemTextByItemId.clear()
       if (liveCommandsByThreadId.value[notificationThreadId]) {
         liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, notificationThreadId)
       }
@@ -4715,9 +4853,11 @@ export function useDesktopState() {
     try {
       const title = await generateThreadTitle(truncated, cwd)
       if (!title || threadTitleById.value[threadId]) return
-      threadTitleById.value = { ...threadTitleById.value, [threadId]: title }
+      // round-23：总结结果收口到 20 字以内再重命名
+      const normalizedTitle = title.length > OPTIMISTIC_THREAD_TITLE_MAX ? title.slice(0, OPTIMISTIC_THREAD_TITLE_MAX) : title
+      threadTitleById.value = { ...threadTitleById.value, [threadId]: normalizedTitle }
       applyThreadFlags()
-      void persistThreadTitle(threadId, title)
+      void persistThreadTitle(threadId, normalizedTitle)
     } catch {
       // Title generation is best-effort.
     }
@@ -6340,6 +6480,7 @@ export function useDesktopState() {
 
     if (stopNotificationStream) return
     void loadPendingServerRequestsFromBridge()
+    void loadThreadReasoningArchiveIfNeeded()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       if (notification.method === 'ready') {
         clearAllTransientTurnErrors()
@@ -6367,6 +6508,41 @@ export function useDesktopState() {
     }
   }
 
+  // round-23：启动时从桥接层恢复跨浏览器思考存档（app-server 不持久化
+  // reasoning）。桥接层有该线程的存档时以它为准（覆盖本浏览器 localStorage，
+  // 保证换浏览器后一致）；没有时保留本地存档兜底。
+  async function loadThreadReasoningArchiveIfNeeded(): Promise<void> {
+    try {
+      const archive = await getThreadReasoningArchive()
+      const entries = Object.entries(archive)
+      if (entries.length === 0) return
+      const next = { ...persistedReasoningByThreadId.value }
+      let changed = false
+      for (const [threadId, rows] of entries) {
+        const messages = rows.filter(
+          (row): row is UiMessage => Boolean(row) && typeof (row as Record<string, unknown>).id === 'string',
+        )
+        if (messages.length === 0) continue
+        const local = next[threadId] ?? []
+        const localTexts = new Set(local.map((message) => message.text))
+        const merged = [...local]
+        for (const message of messages) {
+          if (localTexts.has(message.text)) continue
+          merged.push(message)
+          localTexts.add(message.text)
+        }
+        next[threadId] = merged.slice(-20)
+        changed = true
+      }
+      if (changed) {
+        persistedReasoningByThreadId.value = next
+        savePersistedReasoningMap(next)
+      }
+    } catch {
+      // Best-effort restore; localStorage remains the fallback.
+    }
+  }
+
   async function respondToPendingServerRequest(reply: UiServerRequestReply): Promise<boolean> {
     try {
       await replyToServerRequest(reply.id, {
@@ -6374,10 +6550,40 @@ export function useDesktopState() {
         error: reply.error,
       })
       removePendingServerRequestById(reply.id)
+      pendingReplyErrorByRequestId.value = omitKey(pendingReplyErrorByRequestId.value, String(reply.id))
       return true
     } catch (unknownError) {
-      error.value = unknownError instanceof Error ? unknownError.message : 'Failed to reply to server request'
+      // round-23：回复失败时与服务端待办列表对账。审批面板「发送/跳过点了没反应」
+      // 的根因通常是：请求已被服务端解决（超时自动拒绝、TUI 或另一浏览器已应答、
+      // app-server 重启）但本地没收到 resolved 通知，残留一个死面板；此时回 RPC
+      // 会报错但面板仍留着。对账后把服务端已不存在的请求移除，面板正常关闭。
+      const message = unknownError instanceof Error ? unknownError.message : 'Failed to reply to server request'
+      const stillPending = await pendingRequestStillExistsOnServer(reply.id)
+      if (!stillPending) {
+        removePendingServerRequestById(reply.id)
+        pendingReplyErrorByRequestId.value = omitKey(pendingReplyErrorByRequestId.value, String(reply.id))
+        return true
+      }
+      error.value = message
+      pendingReplyErrorByRequestId.value = {
+        ...pendingReplyErrorByRequestId.value,
+        [String(reply.id)]: message,
+      }
       return false
+    }
+  }
+
+  async function pendingRequestStillExistsOnServer(requestId: number): Promise<boolean> {
+    try {
+      const rows = await getPendingServerRequests()
+      for (const row of rows) {
+        const record = asRecord(row)
+        if (record?.id === requestId) return true
+      }
+      return false
+    } catch {
+      // 对账接口不可用时保守处理：视为仍存在，保留面板并展示错误。
+      return true
     }
   }
 
@@ -6423,6 +6629,8 @@ export function useDesktopState() {
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
     activeReasoningTurnIdByThreadId.clear()
+    reasoningItemTextByItemId.clear()
+    turnItemSequenceByThreadId.clear()
     liveMessageSortKeyByComposite.clear()
     liveMessageSortCounter = 0
     interruptBlockedUntilPersistedByThreadId.value = {}
@@ -6561,6 +6769,7 @@ export function useDesktopState() {
     setSelectedReasoningEffort,
     updateSelectedSpeedMode,
     respondToPendingServerRequest,
+    pendingReplyErrorForRequest,
     renameProject,
     removeProject,
     reorderProject,

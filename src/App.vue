@@ -1134,6 +1134,7 @@
                     :request-count="selectedThreadServerRequests.length"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     :panel-width="composerShellWidthPx"
+                    :panel-error="selectedPendingReplyError"
                     @respond-server-request="onRespondServerRequest"
                   />
                   <ThreadComposer
@@ -1749,6 +1750,7 @@ const {
   setSelectedReasoningEffort,
   updateSelectedSpeedMode,
   respondToPendingServerRequest,
+  pendingReplyErrorForRequest,
   renameProject,
   removeProject,
   reorderProject,
@@ -1814,7 +1816,14 @@ function updateComposerShellWidth(): void {
   if (!el) return
   const style = window.getComputedStyle(el)
   const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
-  composerShellWidthPx.value = Math.max(0, el.clientWidth - (Number.isFinite(horizontalPadding) ? horizontalPadding : 0))
+  const contentWidth = Math.max(0, el.clientWidth - (Number.isFinite(horizontalPadding) ? horizontalPadding : 0))
+  // round-23：审批/询问面板需与输入框同宽。输入框 max-width 为
+  // min(var(--chat-column-max), 100%) 且 mx-auto 居中；宽屏下面板若直接用
+  // 容器全宽会比输入框宽，这里按继承的 --chat-column-max 收口。
+  const inheritedColumnMax = window.getComputedStyle(el).getPropertyValue('--chat-column-max').trim()
+  const columnMaxPx = Number.parseFloat(inheritedColumnMax) * (inheritedColumnMax.endsWith('rem') ? 16 : 1)
+  const capped = Number.isFinite(columnMaxPx) && columnMaxPx > 0 ? Math.min(contentWidth, columnMaxPx) : contentWidth
+  composerShellWidthPx.value = capped
 }
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
@@ -2357,6 +2366,10 @@ const selectedThreadPendingRequest = computed<UiServerRequest | null>(() => {
   const rows = selectedThreadServerRequests.value
   return rows.length > 0 ? rows[rows.length - 1] : null
 })
+// round-23：审批/询问面板回复失败的可见错误（「点了没反应」不再无声发生）
+const selectedPendingReplyError = computed(() =>
+  selectedThreadPendingRequest.value ? pendingReplyErrorForRequest(selectedThreadPendingRequest.value.id) : '',
+)
 const composerCwd = computed(() => {
   if (isHomeRoute.value) return newThreadCwd.value.trim()
   return selectedThread.value?.cwd?.trim() ?? ''

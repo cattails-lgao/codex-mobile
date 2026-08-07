@@ -244,6 +244,8 @@ export type UiMessage = {
   plan?: UiPlanData
   turnId?: string
   turnIndex?: number
+  /** round-23：本地存档思考的时序锚点——插回到该消息 id 之后（按真实出现顺序与工具交错）。 */
+  reasoningAnchorMessageId?: string
   durationMs?: number
   isAutomationRun?: boolean
   automationDisplayName?: string | null

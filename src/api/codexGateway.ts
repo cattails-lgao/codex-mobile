@@ -3898,6 +3898,31 @@ export async function persistThreadTitle(id: string, title: string): Promise<voi
   }
 }
 
+// round-23：跨浏览器共享的思考存档。app-server 不持久化 reasoning，前端把
+// 存档镜像到桥接层（thread-reasoning），换浏览器/刷新后仍能从同一台服务端加载。
+export async function getThreadReasoningArchive(): Promise<Record<string, unknown[]>> {
+  try {
+    const response = await fetch('/codex-api/thread-reasoning')
+    if (!response.ok) return {}
+    const envelope = (await response.json()) as { data?: Record<string, unknown[]> }
+    return envelope.data ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export async function persistThreadReasoningArchive(threadId: string, messages: unknown[]): Promise<void> {
+  try {
+    await fetch('/codex-api/thread-reasoning', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId, messages }),
+    })
+  } catch {
+    // Best-effort persist
+  }
+}
+
 export async function getPinnedThreadState(): Promise<ThreadPinnedState> {
   try {
     const response = await fetch('/codex-api/thread-pins')

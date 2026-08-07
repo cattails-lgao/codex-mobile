@@ -54,6 +54,7 @@
               {{ t('Send') }}
             </button>
           </footer>
+          <p v-if="panelError" class="thread-pending-request-validation-error" role="alert">{{ panelError }}</p>
         </section>
       </template>
 
@@ -69,6 +70,8 @@
         <div v-if="requestPreview(request)" class="thread-pending-request-preview">
           <code class="thread-pending-request-preview-code">{{ requestPreview(request) }}</code>
         </div>
+
+        <p v-if="panelError" class="thread-pending-request-validation-error" role="alert">{{ panelError }}</p>
 
         <section v-if="request.method === 'mcpServer/elicitation/request'" class="thread-pending-request-user-input">
           <p v-if="readMcpElicitationServerName(request)" class="thread-pending-request-question-description">
@@ -277,6 +280,8 @@ const props = defineProps<{
   hasQueueAbove?: boolean
   /** 输入框 shell 的实测宽度（px）；大于 0 时覆盖默认固定宽度，保证面板与输入框同宽。 */
   panelWidth?: number
+  /** round-23：回复服务端请求失败的可见错误文本（服务端已解决/网络异常时展示）。 */
+  panelError?: string
 }>()
 
 const emit = defineEmits<{
@@ -993,10 +998,17 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 
 .thread-pending-request {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* round-23：居中不再用 transform（translateX 会成为 fixed 后代的包含块，
+     面板内 ComposerDropdown 的 fixed 定位菜单按视口坐标计算后被整体偏移，
+     导致询问面板下拉框点不开/选项落在错误位置）。改用 left+right+margin auto 居中。 */
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
   bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 900;
+  /* round-23：高于右侧面板的 resize 手柄（z-1100），避免手柄条叠在面板上
+     挡住发送/跳过按钮导致点不到 */
+  z-index: 1200;
   width: min(calc(100vw - 1rem), 30rem);
 }
 
@@ -1030,7 +1042,9 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 
 .thread-pending-request-command-line,
 .thread-pending-request-preview {
-  @apply mt-3 rounded-xl bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700;
+  /* round-23：命令过长时命令展示块内部滚动，避免撑爆整个审批面板 */
+  @apply mt-3 max-h-28 overflow-y-auto rounded-xl bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700;
+  overflow-wrap: anywhere;
 }
 
 .thread-pending-request-preview-code {

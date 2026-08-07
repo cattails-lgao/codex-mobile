@@ -3,17 +3,30 @@
     <div class="message-row">
       <div class="message-stack">
         <article class="live-overlay-inline" aria-live="polite">
-          <button
-            v-if="overlay?.reasoningText"
-            type="button"
-            class="live-overlay-heading"
-            :aria-expanded="isReasoningExpanded"
-            @click="toggleReasoning"
+          <div class="live-overlay-title-row">
+            <span v-if="!overlay?.errorText" class="live-overlay-spinner" aria-hidden="true" />
+            <button
+              v-if="overlay?.reasoningText"
+              type="button"
+              class="live-overlay-heading"
+              :aria-expanded="isReasoningExpanded"
+              @click="toggleReasoning"
+            >
+              <span class="live-overlay-label">{{ overlay?.activityLabel }}</span>
+              <span class="live-overlay-toggle" aria-hidden="true">{{ isReasoningExpanded ? '▾' : '▸' }}</span>
+            </button>
+            <p v-else class="live-overlay-label">{{ overlay?.activityLabel }}</p>
+          </div>
+          <p
+            v-if="overlay?.activityDetails && overlay.activityDetails.length > 0"
+            class="live-overlay-details"
           >
-            <span class="live-overlay-label">{{ overlay?.activityLabel }}</span>
-            <span class="live-overlay-toggle" aria-hidden="true">{{ isReasoningExpanded ? '▾' : '▸' }}</span>
-          </button>
-          <p v-else class="live-overlay-label">{{ overlay?.activityLabel }}</p>
+            <span
+              v-for="detail in overlay.activityDetails"
+              :key="detail"
+              class="live-overlay-detail"
+            >{{ detail }}</span>
+          </p>
           <p
             v-if="overlay?.reasoningText && isReasoningExpanded"
             class="live-overlay-reasoning"
@@ -68,6 +81,17 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 <style scoped>
 @reference "tailwindcss";
 
+/* 与普通消息同款的 message-row/message-stack：ThreadConversation 的 scoped
+   样式不会进入本组件，缺了 mx-auto/最大宽度会让 live overlay 与其他消息类型
+   左右不对齐（round-23 反馈「live-overlay-inline 上层 message-row 没有 margin」）。 */
+.message-row {
+  @apply relative w-full min-w-0 max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto flex;
+}
+
+.message-stack {
+  @apply flex flex-col w-full min-w-0;
+}
+
 .live-overlay-inline {
   /* 与消息卡片同宽（--chat-card-max 76ch），而不是整个聊天列宽：
      否则实时 thinking 会比普通消息宽一大截（第十六轮反馈「thinking 宽度与其他
@@ -76,7 +100,26 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-label {
-  @apply m-0 text-sm leading-5 font-medium text-zinc-600;
+  /* round-23 字体规范：工具与思考文字色 #737373 */
+  @apply m-0 text-sm leading-5 font-medium;
+  color: #737373;
+}
+
+.live-overlay-title-row {
+  @apply flex min-w-0 items-center gap-1.5;
+}
+
+/* round-23：运行中的脉冲提示，让「Thinking 但还没有内容」的阶段有可见活动感 */
+.live-overlay-spinner {
+  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
+}
+
+.live-overlay-details {
+  @apply m-0 flex min-w-0 flex-wrap items-center gap-1.5;
+}
+
+.live-overlay-detail {
+  @apply rounded-full bg-zinc-100 px-1.5 py-0.5 text-[11px] leading-none text-zinc-500;
 }
 
 .live-overlay-heading {
@@ -88,7 +131,9 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-reasoning {
-  @apply m-0 text-sm leading-5 text-zinc-500 whitespace-pre-wrap break-words;
+  /* round-23 字体规范：思考文字色 #737373 */
+  @apply m-0 text-sm leading-5 whitespace-pre-wrap break-words;
+  color: #737373;
   display: block;
   max-height: calc(1.25rem * 5);
   overflow: auto;

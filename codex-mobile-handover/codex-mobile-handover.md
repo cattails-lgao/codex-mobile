@@ -49,6 +49,7 @@
 | 遗留项补齐（键盘导航 + 中断回填 + 溢出修复） | [rounds/round-20-leftover.md](rounds/round-20-leftover.md) |
 | 第十六轮交接需求 9 条 | [rounds/round-21-feedback.md](rounds/round-21-feedback.md) |
 | 第十七轮样式强化（命令块/折叠条去卡片化） | [rounds/round-22-style.md](rounds/round-22-style.md) |
+| 第十八轮交接需求 10 条（字体/操作条/overlay/plan popover/面板/思考时序与跨浏览器存档） | [rounds/round-23-feedback.md](rounds/round-23-feedback.md) |
 
 ## 项目概况
 
