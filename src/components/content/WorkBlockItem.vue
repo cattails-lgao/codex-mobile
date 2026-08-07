@@ -208,6 +208,9 @@ const permissionHint = computed(() => {
 .work-block-output-wrap {
   @apply rounded-b-xl bg-zinc-900;
   display: grid;
+  /* 列轨道固定为 minmax(0,1fr)：auto 轨道会被子项 max-content（超长行）撑开，
+     导致 break-words 永不触发、输出无限变宽 */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 0fr;
   transition: grid-template-rows 300ms ease-out, border-color 300ms ease-out;
   border: 1px solid transparent;
@@ -222,6 +225,7 @@ const permissionHint = computed(() => {
 .work-block-output-inner {
   overflow: hidden;
   min-height: 0;
+  min-width: 0; /* grid 子项 min-width:auto 会让超长行无限撑宽，break-words 失效 → 强制约束后断行 */
 }
 
 .work-block-output {
