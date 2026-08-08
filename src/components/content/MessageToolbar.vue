@@ -86,27 +86,34 @@ const { t } = useUiLanguage()
    工具栏永不显示），已迁移到全局 style.css：
    `.message-row:hover .message-toolbar { opacity: 1 }`。 */
 
-.message-copy-button {
-  @apply inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-white/90 px-1.25 py-0.5 text-[9px] font-medium leading-none text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-900;
+.message-fork-button {
+  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[11px] font-medium leading-none text-slate-500 transition hover:text-slate-900;
 }
 
-.message-fork-button {
-  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-slate-500 transition hover:text-slate-900;
+/* round-24：用户消息下回退与复制按钮统一风格（同为朴素 icon 按钮）并加大：
+   之前回退按钮是无边框琥珀文字、复制按钮是带边框胶囊，两者风格不一且偏小。
+   现在统一为同款「图标 + 可选文字」按钮：同字号、同间距、同 hover 背景。 */
+.message-rollback-button,
+.message-copy-button {
+  @apply inline-flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[11px] font-medium leading-none transition;
+}
+
+.message-rollback-button {
+  @apply text-amber-600/80 hover:bg-amber-50 hover:text-amber-700;
+}
+
+.message-copy-button {
+  @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900;
 }
 
 .message-copy-button[data-copied='true'] {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
-}
-
-/* 回退（原编辑）按钮：破坏性操作，琥珀色弱化呈现；暗色覆盖在全局 style.css */
-.message-rollback-button {
-  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[9px] font-medium leading-none text-amber-600/70 transition hover:text-amber-700;
+  @apply text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700;
 }
 
 .message-fork-icon,
 .message-copy-icon,
 .message-rollback-icon {
-  @apply text-[10px];
+  @apply text-sm;
 }
 
 .message-fork-label,

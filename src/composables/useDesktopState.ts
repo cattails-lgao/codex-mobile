@@ -2429,12 +2429,23 @@ export function useDesktopState() {
 
   function applyCachedTitlesToGroups(groups: UiProjectGroup[]): UiProjectGroup[] {
     const titles = threadTitleById.value
-    if (Object.keys(titles).length === 0) return groups
+    // round-24：无论缓存命中与否，展示层统一把线程名收口到 20 字以内——
+    // app-server thread/list 返回的 title/preview 可能是第一轮用户消息全文，
+    // 仅依赖 thread/name/updated 通知截断覆盖不到（无缓存/刷新后仍超长）。
+    if (Object.keys(titles).length === 0) {
+      return groups.map((group) => ({
+        projectName: group.projectName,
+        threads: group.threads.map((thread) => ({ ...thread, title: toOptimisticThreadTitle(thread.title) })),
+      }))
+    }
     return groups.map((group) => ({
       projectName: group.projectName,
       threads: group.threads.map((thread) => {
         const cached = titles[thread.id]
-        return cached ? { ...thread, title: cached } : thread
+        return {
+          ...thread,
+          title: toOptimisticThreadTitle(cached ?? thread.title),
+        }
       }),
     }))
   }
@@ -3848,7 +3859,7 @@ export function useDesktopState() {
     return ''
   }
 
-  function readReasoningDelta(notification: RpcNotification): { messageId: string; delta: string } | null {
+  function readReasoningDelta(notification: RpcNotification): { messageId: string; itemId: string; delta: string } | null {
     const params = asRecord(notification.params)
     if (!params) return null
 
@@ -3857,7 +3868,7 @@ export function useDesktopState() {
       const itemId = readString(params.itemId)
       const delta = readString(params.delta)
       if (!itemId || !delta) return null
-      return { messageId: liveReasoningMessageId(itemId), delta }
+      return { messageId: liveReasoningMessageId(itemId), itemId, delta }
     }
 
     // codex also emits the full reasoning-chain stream as item/reasoning/textDelta
@@ -3868,7 +3879,7 @@ export function useDesktopState() {
       const itemId = readString(params.itemId)
       const delta = readString(params.delta)
       if (!itemId || !delta) return null
-      return { messageId: liveReasoningMessageId(itemId), delta }
+      return { messageId: liveReasoningMessageId(itemId), itemId, delta }
     }
 
     return null
@@ -3950,15 +3961,30 @@ export function useDesktopState() {
 
   // round-23：记录 item/started|item/completed 的到达顺序（推理项与工具项），
   // 供思考存档按真实时序插回消息流。
+  // round-24：real 环境 reasoning 常走 item/reasoning/textDelta / summaryTextDelta
+  // 增量通道（不伴随 item/started 的 reasoning 项）。若不记录，buildTurnReasoningItems
+  // 拿不到 reasoning 项 → 回退整段存档（无 reasoningAnchorMessageId）→ 刷新后
+  // 全部思考按 turnIndex 插到轮首。这里把增量通道的 itemId 也按 reasoning 记录。
   function recordTurnItemOrder(notification: RpcNotification): void {
-    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return
     const params = asRecord(notification.params)
-    const item = asRecord(params?.item)
-    const itemId = readString(item?.id)
+    if (!params) return
+
+    const isItemLifecycle = notification.method === 'item/started' || notification.method === 'item/completed'
+    const isReasoningDelta =
+      notification.method === 'item/reasoning/textDelta' ||
+      notification.method === 'item/reasoning/summaryTextDelta'
+    if (!isItemLifecycle && !isReasoningDelta) return
+
+    const item = asRecord(params.item)
+    const itemId = isReasoningDelta ? readString(params.itemId) : readString(item?.id)
     if (!itemId) return
     const threadId = extractThreadIdFromNotification(notification)
     if (!threadId) return
-    const kind = readString(item?.type).toLowerCase() === 'reasoning' ? 'reasoning' : 'other'
+    const kind = isReasoningDelta
+      ? 'reasoning'
+      : readString(item?.type).toLowerCase() === 'reasoning'
+        ? 'reasoning'
+        : 'other'
     const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
     if (sequence.some((entry) => entry.itemId === itemId)) return
     turnItemSequenceByThreadId.set(threadId, [...sequence, { itemId, kind }])
@@ -4403,9 +4429,12 @@ export function useDesktopState() {
       const threadId = readString(params?.threadId)
       const threadName = readString(params?.threadName)
       if (threadId && threadName) {
-        threadTitleById.value = { ...threadTitleById.value, [threadId]: threadName }
+        // round-24：app-server 推送的 threadName 常是第一轮用户消息全文，
+        // 未截断会覆盖本地已收口的 20 字标题。这里统一收口。
+        const normalizedName = toOptimisticThreadTitle(threadName)
+        threadTitleById.value = { ...threadTitleById.value, [threadId]: normalizedName }
         applyThreadFlags()
-        void persistThreadTitle(threadId, threadName)
+        void persistThreadTitle(threadId, normalizedName)
       }
     }
 
@@ -4625,6 +4654,16 @@ export function useDesktopState() {
     const liveReasoningDelta = readReasoningDelta(notification)
     if (liveReasoningDelta) {
       appendLiveReasoningText(notificationThreadId, liveReasoningDelta.delta)
+      // round-24：textDelta 增量也累积到 reasoningItemTextByItemId，
+      // 让 buildTurnReasoningItems 在轮末能生成带 anchor 的思考存档。
+      // （增量通道不伴随 item/started 全量项，此前该 map 无文本 → 回退
+      // 整段存档 → 刷新后思考全部插到轮首。）
+      if (liveReasoningDelta.itemId && liveReasoningDelta.delta) {
+        const previousItemText = reasoningItemTextByItemId.get(liveReasoningDelta.itemId) ?? ''
+        if (!previousItemText.endsWith(liveReasoningDelta.delta)) {
+          reasoningItemTextByItemId.set(liveReasoningDelta.itemId, `${previousItemText}${liveReasoningDelta.delta}`)
+        }
+      }
     }
 
     const reasoningItem = readReasoningItemNotification(notification)
@@ -4805,7 +4844,13 @@ export function useDesktopState() {
     try {
       const cache = await getThreadTitleCache()
       if (Object.keys(cache.titles).length > 0) {
-        threadTitleById.value = cache.titles
+        // round-24：缓存里可能存着 app-server 推送的未截断标题（第一轮用户
+        // 消息全文），加载时统一收口到 20 字，避免侧栏/标题展示超长。
+        const normalizedTitles: Record<string, string> = {}
+        for (const [threadId, title] of Object.entries(cache.titles)) {
+          normalizedTitles[threadId] = toOptimisticThreadTitle(title)
+        }
+        threadTitleById.value = normalizedTitles
       }
     } catch {
       // Title cache is optional; keep UI functional.

@@ -751,6 +751,52 @@ describe('live error overlay', () => {
 
     expect(state.selectedLiveOverlay.value).toBe(null)
   })
+
+  it('maps commandExecution started to the Running command overlay label', async () => {
+    // round-24：Running command 时 live-overlay-details 只含命令文本（命令文本
+    // 已显示在消息列表的 WorkBlockItem 里），LiveOverlayItem 据此隐藏 details。
+    installTestWindow()
+    let notificationHandler: (notification: { method: string; params?: unknown }) => void = () => {}
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler
+      return vi.fn()
+    })
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'run it',
+          messageType: 'userMessage',
+        },
+      ],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-running-cmd')
+    await state.loadMessages('thread-running-cmd')
+    state.startPolling()
+
+    notificationHandler?.({
+      method: 'item/started',
+      params: {
+        threadId: 'thread-running-cmd',
+        turnId: 'turn-1',
+        itemId: 'cmd-1',
+        item: { type: 'commandExecution', id: 'cmd-1', command: 'ls -la', status: 'in_progress' },
+      },
+    })
+
+    expect(state.selectedLiveOverlay.value?.activityLabel).toBe('Running command')
+    // details 只有命令文本（组件层面在 Running command 下隐藏展示）
+    expect(state.selectedLiveOverlay.value?.activityDetails).toEqual(['ls -la'])
+  })
 })
 
 describe('provider model selection', () => {
@@ -1410,6 +1456,45 @@ describe('P1-3 notification surface', () => {
     const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
     expect(stored).toBeTruthy()
     expect(stored).toContain('先探索环境，再规划步骤')
+  })
+
+  it('archives textDelta reasoning with per-item anchors when commands interleave', async () => {
+    // round-24：textDelta 增量通道不伴随 item/started 的 reasoning 项，
+    // 此前 turnItemSequenceByThreadId 没有 reasoning 条目 → buildTurnReasoningItems
+    // 为空 → 回退整段存档（无 reasoningAnchorMessageId）→ 刷新后全部思考
+    // 按 turnIndex 插到轮首。修复后增量通道也按 item 粒度记录时序与文本。
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({ method: 'turn/started', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+    // 思考A（增量）→ 命令 → 思考B（增量）→ agent 内容
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-1', delta: '思考A' } })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-1', delta: ' 追加' } })
+    sendNotification({
+      method: 'item/started',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'cmd-1',
+        item: { type: 'commandExecution', id: 'cmd-1', command: 'ls', status: 'in_progress' },
+      },
+    })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-2', delta: '思考B' } })
+    await Promise.resolve()
+
+    // agent 内容开始 → clearLiveReasoningForThread 把 live thinking 存档
+    sendNotification({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '开始回答' } })
+    await Promise.resolve()
+
+    const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
+    expect(stored).toBeTruthy()
+    expect(stored).toContain('思考A 追加')
+    expect(stored).toContain('思考B')
+    // 思考A 锚定该轮首条（无前置工具时为空锚点回退轮首），思考B 锚定命令 cmd-1
+    expect(stored).toContain('reasoningAnchorMessageId":"cmd-1"')
   })
 
   it('captures plan items from item/completed as live plan messages', async () => {
