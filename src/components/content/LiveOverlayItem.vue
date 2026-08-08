@@ -17,8 +17,10 @@
             </button>
             <p v-else class="live-overlay-label">{{ overlay?.activityLabel }}</p>
           </div>
+          <!-- round-24：Running command 时 details 只有命令文本，命令文本已显示在
+               消息列表的 WorkBlockItem 里，overlay 内重复展示多余，故隐藏。 -->
           <p
-            v-if="overlay?.activityDetails && overlay.activityDetails.length > 0"
+            v-if="overlay?.activityDetails && overlay.activityDetails.length > 0 && overlay.activityLabel !== 'Running command'"
             class="live-overlay-details"
           >
             <span

@@ -50,6 +50,7 @@
 | 第十六轮交接需求 9 条 | [rounds/round-21-feedback.md](rounds/round-21-feedback.md) |
 | 第十七轮样式强化（命令块/折叠条去卡片化） | [rounds/round-22-style.md](rounds/round-22-style.md) |
 | 第十八轮交接需求 10 条（字体/操作条/overlay/plan popover/面板/思考时序与跨浏览器存档） | [rounds/round-23-feedback.md](rounds/round-23-feedback.md) |
+| 第十九轮交接需求 7 条（用户操作条统一/思考块去卡片/overlay 冗余/fileChange 轮末/思考时序刷新/标题截断/工具块去卡片） | [rounds/round-24-feedback.md](rounds/round-24-feedback.md) |
 
 ## 项目概况
 

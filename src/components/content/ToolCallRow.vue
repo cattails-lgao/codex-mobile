@@ -62,8 +62,11 @@ const title = computed(() => {
 <style scoped>
 @reference "tailwindcss";
 
+/* round-24：工具调用块与 Running command（WorkBlockItem）同款朴素行——
+   round-22 命令块已去卡片化，工具块却仍保留背景/边框/圆角，视觉不一致。
+   这里去掉卡片，改为「图标 + server chip + 工具名 + 状态」的透明行。 */
 .tool-call-block {
-  @apply flex w-full min-w-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2.5 py-1.5;
+  @apply flex w-full min-w-0 items-center gap-2 px-0 py-0.5;
 }
 
 .tool-call-icon {
@@ -96,24 +99,12 @@ const title = computed(() => {
   @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500/40 border-t-amber-500;
 }
 
-.tool-call-block.tool-call-running {
-  @apply border-amber-300;
-}
-
 .tool-call-block.tool-call-running .tool-call-status {
   @apply text-amber-600;
 }
 
-.tool-call-block.tool-call-ok {
-  @apply border-emerald-300;
-}
-
 .tool-call-block.tool-call-ok .tool-call-status-icon {
   @apply text-emerald-600;
-}
-
-.tool-call-block.tool-call-error {
-  @apply border-rose-300;
 }
 
 .tool-call-block.tool-call-error .tool-call-status {

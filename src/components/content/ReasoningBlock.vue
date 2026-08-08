@@ -47,35 +47,38 @@ const summaryText = computed(() => {
 <style scoped>
 @reference "tailwindcss";
 
+/* round-24：思考过程块改为与 Running command（WorkBlockItem）同款朴素行样式：
+   去掉圆角/边框/背景卡片，标题行「图标 + 标题 + toggle」与命令块的
+   「序号 + 命令 + 状态」保持一致的视觉密度。 */
 .reasoning-block {
-  @apply w-full min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50/80;
+  @apply w-full min-w-0;
 }
 
 .reasoning-block-header {
-  @apply flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-100;
+  @apply flex w-full min-w-0 items-center gap-1.5 px-0 py-0.5 text-left cursor-pointer transition-colors hover:opacity-80;
 }
 
 .reasoning-block-icon {
-  @apply text-sm leading-none;
+  @apply shrink-0 text-xs leading-none;
 }
 
 .reasoning-block-title {
   /* round-23 字体规范：思考文字 #737373 */
-  @apply flex-1 text-xs font-semibold;
+  @apply flex-1 min-w-0 truncate text-xs font-medium;
   color: #737373;
 }
 
 .reasoning-block-toggle {
-  @apply text-xs text-zinc-400;
+  @apply shrink-0 text-[10px] leading-none text-zinc-400;
 }
 
 .reasoning-block-body {
-  @apply border-t border-zinc-200 px-3 py-2;
+  @apply flex flex-col gap-1 px-0 py-1.5;
 }
 
 .reasoning-block-summary {
   /* round-23 字体规范：思考文字 #737373 */
-  @apply mb-2 whitespace-pre-wrap text-xs;
+  @apply m-0 whitespace-pre-wrap text-xs leading-5;
   color: #737373;
 }
 

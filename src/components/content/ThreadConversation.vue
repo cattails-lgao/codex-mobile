@@ -96,6 +96,22 @@
                 </template>
               </template>
             </ProcessFold>
+
+            <!-- round-24：fold 内最后一条命令可能是轮末锚点，fileChange 块也在此渲染 -->
+            <FileChangeSummaryBlock
+              v-if="foldAnchoredFileChangeSummary(message)"
+              :summary="foldAnchoredFileChangeSummary(message)"
+              :expanded="isFileChangeSummaryExpanded(foldTailMessage(message))"
+              :cwd="props.cwd"
+              :actionable="isFileChangeActionable(foldAnchoredFileChangeSummary(message))"
+              :action-status="fileChangeActionStatus(foldAnchoredFileChangeSummary(message))"
+              :action-error-text="fileChangeActionErrorText(foldAnchoredFileChangeSummary(message))"
+              :next-action="fileChangeNextAction(foldAnchoredFileChangeSummary(message))"
+              :action-label="fileChangeActionLabel(foldAnchoredFileChangeSummary(message))"
+              @toggle="toggleFileChangeSummary(foldTailMessage(message))"
+              @open-diff="openDiffViewer(foldAnchoredFileChangeSummary(message), $event)"
+              @request-action="requestFileChangeAction(foldAnchoredFileChangeSummary(message), $event)"
+            />
           </div>
         </div>
       </li>
@@ -486,22 +502,6 @@
                 </a>
               </article>
 
-              <FileChangeSummaryBlock
-                v-if="readAnchoredFileChangeSummary(message)"
-                :summary="readAnchoredFileChangeSummary(message)"
-                :expanded="isFileChangeSummaryExpanded(message)"
-                inline
-                :cwd="props.cwd"
-                :actionable="isFileChangeActionable(readAnchoredFileChangeSummary(message))"
-                :action-status="fileChangeActionStatus(readAnchoredFileChangeSummary(message))"
-                :action-error-text="fileChangeActionErrorText(readAnchoredFileChangeSummary(message))"
-                :next-action="fileChangeNextAction(readAnchoredFileChangeSummary(message))"
-                :action-label="fileChangeActionLabel(readAnchoredFileChangeSummary(message))"
-                @toggle="toggleFileChangeSummary(message)"
-                @open-diff="openDiffViewer(readAnchoredFileChangeSummary(message), $event)"
-                @request-action="requestFileChangeAction(readAnchoredFileChangeSummary(message), $event)"
-              />
-
               <MessageToolbar
                 :role="message.role"
                 :show-edit="showEditMessageButton(message)"
@@ -513,6 +513,31 @@
                 @copy="message.role === 'user' ? copyUserMessage(message.id) : copyResponse(message.id)"
               />
             </article>
+          </div>
+        </div>
+
+        <!-- round-24：fileChange 汇总块展示在「当前会话轮结束后」的最后——
+             锚点已是该轮最后一条实质渲染消息（命令/工具/文本均可），这里在
+             li 级统一渲染独立块，避免嵌在回复卡片内。 -->
+        <div
+          v-if="readAnchoredFileChangeSummary(message)"
+          class="message-row"
+          data-role="system"
+        >
+          <div class="message-stack" data-role="system">
+            <FileChangeSummaryBlock
+              :summary="readAnchoredFileChangeSummary(message)"
+              :expanded="isFileChangeSummaryExpanded(message)"
+              :cwd="props.cwd"
+              :actionable="isFileChangeActionable(readAnchoredFileChangeSummary(message))"
+              :action-status="fileChangeActionStatus(readAnchoredFileChangeSummary(message))"
+              :action-error-text="fileChangeActionErrorText(readAnchoredFileChangeSummary(message))"
+              :next-action="fileChangeNextAction(readAnchoredFileChangeSummary(message))"
+              :action-label="fileChangeActionLabel(readAnchoredFileChangeSummary(message))"
+              @toggle="toggleFileChangeSummary(message)"
+              @open-diff="openDiffViewer(readAnchoredFileChangeSummary(message), $event)"
+              @request-action="requestFileChangeAction(readAnchoredFileChangeSummary(message), $event)"
+            />
           </div>
         </div>
       </li>
@@ -1169,6 +1194,16 @@ function foldMessagesFor(message: UiMessage): UiMessage[] {
   return foldByStartId.value.get(message.id)?.messages ?? []
 }
 
+// round-24：fold 的最后一条消息（轮末命令/工具）作为 fileChange 锚点的实际挂载点
+function foldTailMessage(message: UiMessage): UiMessage {
+  const messages = foldMessagesFor(message)
+  return messages[messages.length - 1] ?? message
+}
+
+function foldAnchoredFileChangeSummary(message: UiMessage): TurnFileChangeSummary | null {
+  return readAnchoredFileChangeSummary(foldTailMessage(message))
+}
+
 // 阶段 C 工具聚合：折叠成员序列先经 aggregateToolMessages 拆成「单条/聚合批」再渲染，
 // 连续只读工具合并为 ReadOnlyBatch 样式，连续同类 modify/delegate 合并为 ToolGroup 样式。
 function aggregatedFoldItemsFor(message: UiMessage): ToolRenderItem[] {
@@ -1410,13 +1445,29 @@ function showForkResponseButton(message: UiMessage): boolean {
 }
 
 const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChangeSummary>>(() => {
-  const assistantAnchorIdByTurnKey = new Map<string, string>()
+  const anchorIdByTurnKey = new Map<string, string>()
   const assistantSummaryByAnchorId = new Map<string, TurnFileChangeSummary>()
   const fileChangeMessagesByTurnKey = new Map<string, UiMessage[]>()
 
+  // round-24：fileChange 汇总块在「当前会话轮结束后展示在最后」——锚点从
+  // 「该轮最后一个 assistant 文本」改为「该轮最后一条实质渲染消息」（命令/
+  // 工具/assistant 文本均可），这样 fileChange 块总是落在轮末而不是嵌在
+  // 回复卡片中间。plan 被 filteredMessages 过滤、旧命令被分组/fold 隐藏、
+  // fileChange 自身与 reasoning 不作为锚点。
+  const isAnchorCandidate = (message: UiMessage): boolean =>
+    !isFileChangeMessage(message)
+    && !isReasoningMessage(message)
+    && !isPlanMessage(message)
+    && !hiddenGroupedCommandIds.value.has(message.id)
+    && !isFoldMember(message)
+
   for (const message of props.messages) {
+    const turnKey = typeof message.turnIndex === 'number' ? `turn:${message.turnIndex}` : `message:${message.id}`
+    if (isAnchorCandidate(message)) {
+      anchorIdByTurnKey.set(turnKey, message.id)
+    }
+
     if (isCopyableAssistantMessage(message) && typeof message.turnIndex === 'number') {
-      assistantAnchorIdByTurnKey.set(`turn:${message.turnIndex}`, message.id)
       if (Array.isArray(message.fileChanges) && message.fileChanges.length > 0) {
         assistantSummaryByAnchorId.set(message.id, {
           changes: aggregateFileChanges(message.fileChanges),
@@ -1428,7 +1479,6 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
     }
 
     if (!isFileChangeMessage(message)) continue
-    const turnKey = typeof message.turnIndex === 'number' ? `turn:${message.turnIndex}` : `message:${message.id}`
     const current = fileChangeMessagesByTurnKey.get(turnKey)
     if (current) current.push(message)
     else fileChangeMessagesByTurnKey.set(turnKey, [message])
@@ -1436,7 +1486,7 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
 
   const summaries: Record<string, TurnFileChangeSummary> = {}
   for (const [turnKey, messages] of fileChangeMessagesByTurnKey.entries()) {
-    const anchorId = assistantAnchorIdByTurnKey.get(turnKey)
+    const anchorId = anchorIdByTurnKey.get(turnKey)
     if (!anchorId) continue
     const assistantTurnId = assistantSummaryByAnchorId.get(anchorId)?.turnId ?? ''
     summaries[anchorId] = {
@@ -1457,14 +1507,20 @@ const anchoredFileChangeSummaryByAnchorId = computed<Record<string, TurnFileChan
 })
 
 const standaloneFileChangeSummaryByMessageId = computed<Record<string, TurnFileChangeSummary>>(() => {
-  const assistantAnchorIdByTurnKey = new Map<string, string>()
   const fileChangeMessagesByTurnKey = new Map<string, UiMessage[]>()
 
-  for (const message of props.messages) {
-    if (isCopyableAssistantMessage(message) && typeof message.turnIndex === 'number') {
-      assistantAnchorIdByTurnKey.set(`turn:${message.turnIndex}`, message.id)
+  // round-24：anchored 锚点已放宽到「轮末任意实质消息」，几乎所有轮次都能
+  // 锚定；standalone 仅兜底 anchored 覆盖不到的情况（轮内没有任何可锚定
+  // 消息）。因此跳过条件从「有 assistant 文本」改为「该轮 fileChange 消息
+  // 已被 anchored 聚合覆盖」。
+  const anchoredSourceIds = new Set<string>()
+  for (const summary of Object.values(anchoredFileChangeSummaryByAnchorId.value)) {
+    for (const sourceMessageId of summary.sourceMessageIds) {
+      anchoredSourceIds.add(sourceMessageId)
     }
+  }
 
+  for (const message of props.messages) {
     if (!isFileChangeMessage(message)) continue
     const turnKey = typeof message.turnIndex === 'number' ? `turn:${message.turnIndex}` : `message:${message.id}`
     const current = fileChangeMessagesByTurnKey.get(turnKey)
@@ -1474,7 +1530,7 @@ const standaloneFileChangeSummaryByMessageId = computed<Record<string, TurnFileC
 
   const summaries: Record<string, TurnFileChangeSummary> = {}
   for (const [turnKey, messages] of fileChangeMessagesByTurnKey.entries()) {
-    if (assistantAnchorIdByTurnKey.has(turnKey)) continue
+    if (messages.some((message) => anchoredSourceIds.has(message.id))) continue
     const visibleMessage = messages[messages.length - 1]
     if (!visibleMessage) continue
     summaries[visibleMessage.id] = {
