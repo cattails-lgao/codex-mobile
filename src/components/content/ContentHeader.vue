@@ -43,8 +43,4 @@ defineProps<{
 .content-leading.is-accent {
   @apply gap-2;
 }
-
-:global(:root.dark) .content-title.is-accent {
-  @apply text-zinc-100;
-}
 </style>
