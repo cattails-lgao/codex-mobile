@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 8711455（交接文档 macOS 回归记录 + 04f470b 测试修复，均已推送） |
+| 最近提交 | 1dd4815（Zen 代理 reasoning_content 往返修复，已推送；上版快照 8711455） |
 
 ---
 ## 文档结构
@@ -51,6 +51,7 @@
 | 第十七轮样式强化（命令块/折叠条去卡片化） | [rounds/round-22-style.md](rounds/round-22-style.md) |
 | 第十八轮交接需求 10 条（字体/操作条/overlay/plan popover/面板/思考时序与跨浏览器存档） | [rounds/round-23-feedback.md](rounds/round-23-feedback.md) |
 | 第十九轮交接需求 7 条（用户操作条统一/思考块去卡片/overlay 冗余/fileChange 轮末/思考时序刷新/标题截断/工具块去卡片） | [rounds/round-24-feedback.md](rounds/round-24-feedback.md) |
+| OpenCode Zen `reasoning_content` 往返修复（多工具调用 400） | [rounds/round-25-zen-reasoning-fix.md](rounds/round-25-zen-reasoning-fix.md) |
 
 ## 项目概况
 
