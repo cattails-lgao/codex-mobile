@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 1dd4815（Zen 代理 reasoning_content 往返修复，已推送；上版快照 8711455） |
+| 最近提交 | 8bf8728（round-27 反馈 12 条已推送） |
 
 ---
 ## 文档结构
@@ -26,6 +26,7 @@
 | Codex 功能补齐方案完成情况（P0/P1/P2） | [sections/parity-plan.md](sections/parity-plan.md) |
 | Reasonix 消息列表全量移植方案 | [sections/reasonix-plan.md](sections/reasonix-plan.md) |
 | macOS 侧跨平台回归 | [sections/macos-regression.md](sections/macos-regression.md) |
+| 客户端自动压缩（发送前预检 + 暂存补发）方案与评估 | [sections/auto-compact-plan.md](sections/auto-compact-plan.md) |
 
 ### 按轮次记录
 | 轮次 | 文件 |
