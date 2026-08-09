@@ -15,6 +15,7 @@ import type { AvailableModel, WorkspaceRootsState } from '../api/codexGateway'
 
 const gatewayMocks = vi.hoisted(() => ({
   archiveThread: vi.fn(),
+  compactThread: vi.fn(),
   forkThread: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAvailableCollaborationModes: vi.fn(),
@@ -1891,6 +1892,211 @@ describe('interruptSelectedThreadTurn removes the unsubmitted turn locally', () 
     // 有 agent 输出时不判定为「未提交 turn」：不回填、不移除消息
     expect(state.interruptedUnsubmittedMessage.value).toBeNull()
     expect(state.messages.value.some((message) => message.id === 'user-1')).toBe(true)
+  })
+})
+
+describe('client-side auto-compact pre-send stash & flush', () => {
+  const STASH_KEY = 'codex-web-local.stashed-messages.v1'
+
+  function installAutoCompactState() {
+    let notificationHandler: (notification: { method: string; params?: unknown }) => void = () => {}
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler
+      return vi.fn()
+    })
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadReasoningArchive.mockResolvedValue({})
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [{ id: 'user-1', role: 'user', text: 'hi', messageType: 'userMessage' }],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    gatewayMocks.resumeThread.mockResolvedValue({ model: '', modelProvider: '' })
+    gatewayMocks.startThreadTurn.mockResolvedValue('turn-1')
+    gatewayMocks.compactThread.mockResolvedValue(undefined)
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-auto-compact')
+    state.startPolling()
+
+    function notifyTokenUsage(remainingPercent: number): void {
+      const modelContextWindow = 1000
+      const usedTokens = Math.round(modelContextWindow * (1 - remainingPercent / 100))
+      notificationHandler({
+        method: 'thread/tokenUsage/updated',
+        params: {
+          threadId: 'thread-auto-compact',
+          tokenUsage: {
+            total: { totalTokens: usedTokens, inputTokens: usedTokens, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 },
+            last: { totalTokens: usedTokens, inputTokens: usedTokens, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 },
+            modelContextWindow,
+          },
+        },
+      })
+    }
+
+    return { state, notifyTokenUsage }
+  }
+
+  it('stashes the message and starts compaction when remaining context is at the threshold', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    notifyTokenUsage(10)
+    await state.sendMessageToSelectedThread('please summarize')
+
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(1)
+    expect(state.selectedThreadQueuedMessages.value[0]).toMatchObject({
+      text: 'please summarize',
+      awaitingCompaction: true,
+    })
+    expect(gatewayMocks.compactThread).toHaveBeenCalledWith('thread-auto-compact')
+    expect(gatewayMocks.startThreadTurn).not.toHaveBeenCalled()
+    const persisted = window.localStorage.getItem(STASH_KEY) ?? ''
+    expect(persisted).toContain('please summarize')
+  })
+
+  it('skips the pre-send check when auto-compact is disabled (threshold 0)', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    state.setAutoCompactThreshold(0)
+    notifyTokenUsage(10)
+    await state.sendMessageToSelectedThread('hello')
+
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
+    expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+  })
+
+  it('sends immediately when remaining context is above the threshold', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    notifyTokenUsage(50)
+    await state.sendMessageToSelectedThread('hello')
+
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
+    expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+  })
+
+  it('flushes the stashed message after compaction completes', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    notifyTokenUsage(10)
+    // 压缩轮询立即看到持久化的 compaction.done → 收口 → flush 补发
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [{ id: 'compaction-1', role: 'system', text: '', messageType: 'compaction.done' }],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    await state.sendMessageToSelectedThread('please summarize')
+
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(1)
+
+    await vi.waitFor(() => {
+      expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
+    })
+    await vi.waitFor(() => {
+      expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    })
+  })
+
+  it('resumes stashed messages after a refresh once usage syncs in above the threshold', async () => {
+    installTestWindow({
+      [STASH_KEY]: JSON.stringify({
+        'thread-auto-compact': [
+          { id: 'stash-1', text: 'pending message', imageUrls: [], skills: [], fileAttachments: [], collaborationMode: 'default' },
+        ],
+      }),
+    })
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(1)
+    expect(state.selectedThreadQueuedMessages.value[0]?.awaitingCompaction).toBe(true)
+
+    notifyTokenUsage(60)
+
+    await vi.waitFor(() => {
+      expect(gatewayMocks.startThreadTurn).toHaveBeenCalledWith(
+        'thread-auto-compact',
+        'pending message',
+        [],
+        undefined,
+        'medium',
+        undefined,
+        [],
+        'default',
+      )
+    })
+    await vi.waitFor(() => {
+      expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    })
+    expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+  })
+
+  it('re-compacts on refresh when usage is still at the threshold', async () => {
+    installTestWindow({
+      [STASH_KEY]: JSON.stringify({
+        'thread-auto-compact': [
+          { id: 'stash-1', text: 'pending message', imageUrls: [], skills: [], fileAttachments: [], collaborationMode: 'default' },
+        ],
+      }),
+    })
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    notifyTokenUsage(10)
+
+    await vi.waitFor(() => {
+      expect(gatewayMocks.compactThread).toHaveBeenCalledWith('thread-auto-compact')
+    })
+  })
+
+  it('removes a stashed message via removeQueuedMessage', async () => {
+    installTestWindow({
+      [STASH_KEY]: JSON.stringify({
+        'thread-auto-compact': [
+          { id: 'stash-1', text: 'first', imageUrls: [], skills: [], fileAttachments: [], collaborationMode: 'default' },
+          { id: 'stash-2', text: 'second', imageUrls: [], skills: [], fileAttachments: [], collaborationMode: 'default' },
+        ],
+      }),
+    })
+    const { state } = installAutoCompactState()
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(2)
+
+    state.removeQueuedMessage('stash-1')
+
+    expect(state.selectedThreadQueuedMessages.value.map((m) => m.id)).toEqual(['stash-2'])
+    const persisted = JSON.parse(window.localStorage.getItem(STASH_KEY) ?? '{}') as Record<string, Array<{ id: string }>>
+    expect(persisted['thread-auto-compact']).toHaveLength(1)
+  })
+
+  it('sends a stashed message immediately when steered', async () => {
+    installTestWindow({
+      [STASH_KEY]: JSON.stringify({
+        'thread-auto-compact': [
+          { id: 'stash-1', text: 'steer me', imageUrls: [], skills: [], fileAttachments: [], collaborationMode: 'default' },
+        ],
+      }),
+    })
+    const { state } = installAutoCompactState()
+
+    state.steerQueuedMessage('stash-1')
+
+    await vi.waitFor(() => {
+      expect(gatewayMocks.startThreadTurn).toHaveBeenCalledWith(
+        'thread-auto-compact',
+        'steer me',
+        [],
+        undefined,
+        'medium',
+        undefined,
+        [],
+        'default',
+      )
+    })
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
   })
 })
 

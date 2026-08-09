@@ -31,6 +31,7 @@
           d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
       <span class="queued-row-text">{{ getMessagePreview(msg) }}</span>
+      <span v-if="msg.awaitingCompaction" class="queued-row-badge">{{ t('Compacts context before send') }}</span>
       <div class="queued-row-actions">
         <button class="queued-row-edit" type="button" :title="t('Edit queued message')" @click="$emit('edit', msg.id)">{{ t('Edit') }}</button>
         <button class="queued-row-steer" type="button" :title="t('Send now without interrupting work')" @click="$emit('steer', msg.id)">{{ t('Steer') }}</button>
@@ -56,6 +57,7 @@ type QueuedMessageRow = {
   imageUrls?: string[]
   skills?: Array<{ name: string; path: string }>
   fileAttachments?: Array<{ label: string; path: string; fsPath: string }>
+  awaitingCompaction?: boolean
 }
 
 defineProps<{
@@ -155,6 +157,10 @@ function getMessagePreview(message: QueuedMessageRow): string {
 
 .queued-row-text {
   @apply min-w-0 flex-1 truncate text-zinc-700;
+}
+
+.queued-row-badge {
+  @apply shrink-0 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700;
 }
 
 .queued-row-actions {

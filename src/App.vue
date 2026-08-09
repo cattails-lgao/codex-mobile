@@ -306,6 +306,17 @@
                   @update:model-value="onDictationLanguageChange"
                 />
               </div>
+              <div class="sidebar-settings-row sidebar-settings-row--select" :title="t('Auto-compact at or below remaining context percentage. 0 disables auto-compaction and falls back to server-side compaction.')">
+                <span class="sidebar-settings-label">{{ t('Auto-compact before send') }}</span>
+                <ComposerDropdown
+                  class="sidebar-settings-auto-compact-dropdown"
+                  :model-value="String(autoCompactThreshold)"
+                  :options="autoCompactThresholdOptions"
+                  :placeholder="t('Off')"
+                  menu-align="end"
+                  @update:model-value="onAutoCompactThresholdChange"
+                />
+              </div>
               <a
                 v-if="hasVisibleFeedbackError"
                 class="sidebar-settings-row sidebar-settings-feedback-row"
@@ -1159,6 +1170,7 @@
                     :is-turn-in-progress="isSelectedThreadInProgress"
                     :is-stop-pending="isSelectedThreadInterruptPending"
                     :is-interrupting-turn="isInterruptingTurn"
+                    :is-compacting="isSelectedThreadCompacting"
                     :external-session-active="isSelectedThreadExternalActive"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
@@ -1746,6 +1758,8 @@ const {
   removeQueuedMessage,
   reorderQueuedMessage,
   steerQueuedMessage,
+  autoCompactThreshold,
+  setAutoCompactThreshold,
   setSelectedCollaborationMode,
   readModelIdForThread,
   setSelectedModelIdForThread,
@@ -2417,6 +2431,12 @@ const isTerminalKeyboardLayoutActive = computed(() => (
 ))
 const directoryCwd = computed(() => selectedThread.value?.cwd?.trim() ?? newThreadCwd.value.trim())
 const isSelectedThreadInProgress = computed(() => !isHomeRoute.value && selectedThread.value?.inProgress === true)
+
+// 发送前自动压缩：当前线程正在压缩时给 composer 提示（发送后消息会暂存补发）。
+const isSelectedThreadCompacting = computed(() => {
+  const threadId = selectedThreadId.value
+  return !!threadId && compactingThreadIds.value.has(threadId)
+})
 const isSelectedThreadExternalActive = computed(() => !isHomeRoute.value && selectedThread.value?.externalSession?.active === true)
 const isAccountSwitchBlocked = computed(() =>
   isSendingMessage.value ||
@@ -5124,6 +5144,19 @@ function onDictationLanguageChange(nextValue: string): void {
   dictationLanguage.value = value
   window.localStorage.setItem(DICTATION_LANGUAGE_KEY, value)
 }
+
+function onAutoCompactThresholdChange(nextValue: string): void {
+  setAutoCompactThreshold(Number(nextValue))
+}
+
+const autoCompactThresholdOptions: Array<{ value: string; label: string }> = [
+  { value: '0', label: t('Off') },
+  { value: '5', label: '5%' },
+  { value: '10', label: '10%' },
+  { value: '15', label: '15%' },
+  { value: '20', label: '20%' },
+  { value: '25', label: '25%' },
+]
 
 function loadDictationLanguagePref(): string {
   if (typeof window === 'undefined') return 'auto'

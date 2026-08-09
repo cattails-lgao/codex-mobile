@@ -254,8 +254,8 @@
           class="thread-composer-submit"
           :class="{ 'thread-composer-submit--queue': isTurnInProgress && activeInProgressMode === 'queue' }"
           type="button"
-          :aria-label="isTurnInProgress && activeInProgressMode === 'queue' ? t('Queue message') : t('Send message')"
-          :title="isTurnInProgress ? `${t('Send')} ${activeInProgressMode === 'queue' ? t('Queue') : t('Steer')}` : t('Send')"
+          :aria-label="isCompacting ? t('Compacting context — the message will send after compaction') : isTurnInProgress && activeInProgressMode === 'queue' ? t('Queue message') : t('Send message')"
+          :title="isCompacting ? t('Compacting context — the message will send after compaction') : isTurnInProgress ? `${t('Send')} ${activeInProgressMode === 'queue' ? t('Queue') : t('Steer')}` : t('Send')"
           :disabled="!canSubmit"
           @click="onSubmit(isTurnInProgress ? activeInProgressMode : 'steer')"
         >
@@ -595,6 +595,7 @@ const props = defineProps<{
   isTurnInProgress?: boolean
   isStopPending?: boolean
   isInterruptingTurn?: boolean
+  isCompacting?: boolean
   externalSessionActive?: boolean
   isUpdatingSpeedMode?: boolean
   disabled?: boolean

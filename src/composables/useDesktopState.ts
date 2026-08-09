@@ -105,6 +105,14 @@ const LIVE_REASONING_SNAPSHOT_STORAGE_KEY = 'codex-web-local.live-reasoning-snap
 const LIVE_REASONING_SNAPSHOT_MAX_CHARS = 8_000
 const LIVE_REASONING_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1_000
 const LIVE_REASONING_SNAPSHOT_SAVE_MS = 1_500
+// 客户端自动压缩（方案见 codex-mobile-handover/sections/auto-compact-plan.md）：
+// 发送前预检暂存的消息，localStorage 持久化，刷新后恢复「检查用量 → 压缩 → 补发」。
+// 与服务端 queue（thread queue state）语义不同：stash 由客户端「压缩完成后补发」
+// 驱动，不写入服务端队列，避免被服务端当作普通队列消息处理。
+const STASHED_MESSAGES_STORAGE_KEY = 'codex-web-local.stashed-messages.v1'
+// 发送前自动压缩阈值（剩余上下文百分比，0 = 关闭，退回服务端自动压缩）。
+const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-threshold.v1'
+const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY = 'codex-web-local.selected-model-by-context.v1'
@@ -1800,6 +1808,8 @@ export function useDesktopState() {
     skills: Array<{ name: string; path: string }>
     fileAttachments: FileAttachment[]
     collaborationMode: CollaborationModeKind
+    // 发送前自动压缩暂存的消息（awaitingCompaction=true），压缩完成后补发。
+    awaitingCompaction?: boolean
   }
   type PendingTurnRequest = {
     text: string
@@ -1812,6 +1822,11 @@ export function useDesktopState() {
   }
   const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
   const queueProcessingByThreadId = ref<Record<string, boolean>>({})
+  // 发送前自动压缩暂存的消息（与服务端 queue 分离，见 STASHED_MESSAGES_STORAGE_KEY 注释）。
+  const stashedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>(loadStashedMessagesMap())
+  const autoCompactThreshold = ref<number>(loadAutoCompactThreshold())
+  // 补发/手动发送暂存消息期间抑制再次预检（压缩刚完成或用户主动发送，避免重复压缩）。
+  let suppressAutoCompactStash = false
   let hasLoadedPersistedQueueState = false
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const availableModelIds = ref<string[]>([])
@@ -2282,6 +2297,20 @@ export function useDesktopState() {
       [normalizedThreadId]: usage,
     }
     saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
+    // 刷新恢复：线程上下文用量同步到达后，若该线程有暂存消息则继续
+    // 「检查用量 → 压缩（如需）→ 补发」流程（见方案 3.4 刷新恢复）。
+    const stashed = stashedMessagesByThreadId.value[normalizedThreadId]
+    if (stashed && stashed.length > 0 && autoCompactThreshold.value > 0) {
+      const shouldCompact = usage.remainingContextPercent !== null
+        && usage.remainingContextPercent <= autoCompactThreshold.value
+      if (shouldCompact) {
+        if (!compactingThreadIds.value.has(normalizedThreadId)) {
+          void compactThreadById(normalizedThreadId)
+        }
+      } else {
+        void flushStashedForThread(normalizedThreadId)
+      }
+    }
   }
 
   function setSelectedCollaborationMode(mode: CollaborationModeKind): void {
@@ -2844,6 +2873,8 @@ export function useDesktopState() {
       inProgressById.value = omitKey(inProgressById.value, threadId)
       clearCompletedTurnLiveState(threadId)
       clearInterruptPersistenceGate(threadId)
+      // 线程空闲后补发等待中的暂存消息（如压缩期间用户又发送的消息）。
+      void flushStashedForThread(threadId)
     }
     applyThreadFlags()
     if (!nextInProgress && !hasActiveInProgressThreads() && threadListNextCursor) {
@@ -5895,6 +5926,128 @@ export function useDesktopState() {
     })
   }
 
+  function loadStashedMessagesMap(): Record<string, QueuedMessage[]> {
+    if (typeof window === 'undefined') return {}
+
+    try {
+      const raw = window.localStorage.getItem(STASHED_MESSAGES_STORAGE_KEY)
+      if (!raw) return {}
+
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+      const normalizedMap: Record<string, QueuedMessage[]> = {}
+      for (const [threadId, messages] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!threadId || !Array.isArray(messages)) continue
+        const rows = messages.filter(
+          (message): message is QueuedMessage =>
+            !!message
+            && typeof message === 'object'
+            && typeof (message as QueuedMessage).id === 'string'
+            && typeof (message as QueuedMessage).text === 'string',
+        )
+        if (rows.length > 0) normalizedMap[threadId] = rows
+      }
+      return normalizedMap
+    } catch {
+      return {}
+    }
+  }
+
+  function saveStashedMessagesMap(): void {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(STASHED_MESSAGES_STORAGE_KEY, JSON.stringify(stashedMessagesByThreadId.value))
+  }
+
+  function loadAutoCompactThreshold(): number {
+    if (typeof window === 'undefined') return DEFAULT_AUTO_COMPACT_THRESHOLD
+
+    try {
+      const raw = window.localStorage.getItem(AUTO_COMPACT_THRESHOLD_STORAGE_KEY)
+      if (raw === null) return DEFAULT_AUTO_COMPACT_THRESHOLD
+      const value = Number(raw)
+      return Number.isFinite(value) && value >= 0 ? Math.round(value) : DEFAULT_AUTO_COMPACT_THRESHOLD
+    } catch {
+      return DEFAULT_AUTO_COMPACT_THRESHOLD
+    }
+  }
+
+  function setAutoCompactThreshold(value: number): void {
+    const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+    if (next === autoCompactThreshold.value) return
+    autoCompactThreshold.value = next
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(AUTO_COMPACT_THRESHOLD_STORAGE_KEY, String(next))
+  }
+
+  // 发送前预检：线程空闲且剩余上下文占比 ≤ 阈值时，把消息暂存并触发压缩；
+  // 压缩完成后由 compactThreadById 的收口回调补发。返回 true 表示已暂存处理。
+  async function maybeStashForAutoCompact(
+    threadId: string,
+    text: string,
+    imageUrls: string[],
+    skills: Array<{ name: string; path: string }>,
+    fileAttachments: FileAttachment[],
+    collaborationModeOverride?: CollaborationModeKind,
+  ): Promise<boolean> {
+    if (suppressAutoCompactStash) return false
+    if (autoCompactThreshold.value <= 0) return false
+    // turn 进行中不预检（上下文已定型，steer 消息直接进入当前 turn）。
+    if (inProgressById.value[threadId] === true) return false
+    const usage = threadTokenUsageByThreadId.value[threadId]
+    if (!usage || usage.remainingContextPercent === null) return false
+    if (usage.remainingContextPercent > autoCompactThreshold.value) return false
+
+    const queue = stashedMessagesByThreadId.value[threadId] ?? []
+    const id = `stash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const collaborationMode: CollaborationModeKind =
+      collaborationModeOverride === 'plan'
+        ? 'plan'
+        : collaborationModeOverride === 'default'
+          ? 'default'
+          : selectedCollaborationMode.value
+    stashedMessagesByThreadId.value = {
+      ...stashedMessagesByThreadId.value,
+      [threadId]: [...queue, { id, text, imageUrls, skills, fileAttachments, collaborationMode }],
+    }
+    saveStashedMessagesMap()
+    if (!compactingThreadIds.value.has(threadId)) {
+      void compactThreadById(threadId)
+    }
+    return true
+  }
+
+  // 压缩完成（或失败兜底）后补发该线程的暂存消息；线程忙时等待空闲再补发。
+  async function flushStashedForThread(threadId: string): Promise<void> {
+    const stashed = stashedMessagesByThreadId.value[threadId]
+    if (!stashed || stashed.length === 0) return
+    if (inProgressById.value[threadId] === true) return
+
+    const messages = [...stashed]
+    stashedMessagesByThreadId.value = omitKey(stashedMessagesByThreadId.value, threadId)
+    saveStashedMessagesMap()
+    suppressAutoCompactStash = true
+    try {
+      for (const msg of messages) {
+        try {
+          await sendMessageToSelectedThread(
+            msg.text,
+            msg.imageUrls,
+            msg.skills,
+            'steer',
+            msg.fileAttachments,
+            undefined,
+            msg.collaborationMode,
+          )
+        } catch {
+          // 单条失败不中断其余补发；错误已通过共享 error 状态展示。
+        }
+      }
+    } finally {
+      suppressAutoCompactStash = false
+    }
+  }
+
   async function sendMessageToSelectedThread(
     text: string,
     imageUrls: string[] = [],
@@ -5911,6 +6064,12 @@ export function useDesktopState() {
     if (!threadId || (!nextText && imageUrls.length === 0 && fileAttachments.length === 0)) return
 
     if (await maybeReplyToPendingUserInputRequest(threadId, nextText, imageUrls, skills, fileAttachments)) {
+      return
+    }
+
+    // 发送前自动压缩预检：线程空闲且上下文剩余占比 ≤ 阈值时暂存消息并触发压缩，
+    // 压缩完成后自动补发（见 maybeStashForAutoCompact / flushStashedForThread）。
+    if (await maybeStashForAutoCompact(threadId, nextText, imageUrls, skills, fileAttachments, collaborationModeOverride)) {
       return
     }
 
@@ -6441,6 +6600,7 @@ export function useDesktopState() {
             await loadMessages(normalized, { silent: true, force: true })
           }
           injectCompactionMessage(normalized, 'done')
+          void flushStashedForThread(normalized)
           break
         }
         pollCount += 1
@@ -6450,11 +6610,14 @@ export function useDesktopState() {
       if (compactingThreadIds.value.has(normalized)) {
         markThreadCompacting(normalized, false)
         injectCompactionMessage(normalized, 'done')
+        void flushStashedForThread(normalized)
       }
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to compact thread'
       markThreadCompacting(normalized, false)
       injectCompactionMessage(normalized, 'done')
+      // 压缩失败也补发暂存消息（退化为服务端兜底压缩，见方案 3.5）。
+      void flushStashedForThread(normalized)
     }
   }
 
@@ -6918,6 +7081,8 @@ export function useDesktopState() {
     persistedUserMessageByThreadId.value = {}
     queuedMessagesByThreadId.value = {}
     queueProcessingByThreadId.value = {}
+    stashedMessagesByThreadId.value = {}
+    saveStashedMessagesMap()
     persistQueueState()
     codexRateLimit.value = null
     threadTokenUsageByThreadId.value = {}
@@ -6926,12 +7091,25 @@ export function useDesktopState() {
   const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {
     const threadId = selectedThreadId.value
     if (!threadId) return []
-    return queuedMessagesByThreadId.value[threadId] ?? []
+    // 面板合并展示：暂存消息（等待压缩后补发）置前 + 服务端 queue 消息。
+    const queue = queuedMessagesByThreadId.value[threadId] ?? []
+    const stashed = stashedMessagesByThreadId.value[threadId] ?? []
+    const stashedRows = stashed.map((message) => ({ ...message, awaitingCompaction: true }))
+    return [...stashedRows, ...queue]
   })
 
   function removeQueuedMessage(messageId: string): void {
     const threadId = selectedThreadId.value
     if (!threadId) return
+    const stashed = stashedMessagesByThreadId.value[threadId]
+    if (stashed?.some((m) => m.id === messageId)) {
+      const next = stashed.filter((m) => m.id !== messageId)
+      stashedMessagesByThreadId.value = next.length > 0
+        ? { ...stashedMessagesByThreadId.value, [threadId]: next }
+        : omitKey(stashedMessagesByThreadId.value, threadId)
+      saveStashedMessagesMap()
+      return
+    }
     const queue = queuedMessagesByThreadId.value[threadId]
     if (!queue) return
     const next = queue.filter((m) => m.id !== messageId)
@@ -6946,6 +7124,9 @@ export function useDesktopState() {
     if (!threadId) return
     const queue = queuedMessagesByThreadId.value[threadId]
     if (!queue) return
+    // 暂存消息不参与排序（等待压缩后补发，顺序固定置前）。
+    const stashed = stashedMessagesByThreadId.value[threadId]
+    if (stashed?.some((m) => m.id === draggedId || m.id === targetId)) return
 
     const fromIndex = queue.findIndex((m) => m.id === draggedId)
     const toIndex = queue.findIndex((m) => m.id === targetId)
@@ -6964,6 +7145,24 @@ export function useDesktopState() {
   function steerQueuedMessage(messageId: string): void {
     const threadId = selectedThreadId.value
     if (!threadId) return
+    const stashed = stashedMessagesByThreadId.value[threadId]
+    const stashedMessage = stashed?.find((m) => m.id === messageId)
+    if (stashedMessage) {
+      // 用户主动立即发送暂存消息：跳过预检直接发送（不压缩）。
+      removeQueuedMessage(messageId)
+      setSelectedCollaborationMode(stashedMessage.collaborationMode)
+      suppressAutoCompactStash = true
+      void sendMessageToSelectedThread(
+        stashedMessage.text,
+        stashedMessage.imageUrls,
+        stashedMessage.skills,
+        'steer',
+        stashedMessage.fileAttachments,
+      ).finally(() => {
+        suppressAutoCompactStash = false
+      })
+      return
+    }
     const queue = queuedMessagesByThreadId.value[threadId]
     if (!queue) return
     const msg = queue.find((m) => m.id === messageId)
@@ -7043,6 +7242,8 @@ export function useDesktopState() {
     removeQueuedMessage,
     reorderQueuedMessage,
     steerQueuedMessage,
+    autoCompactThreshold,
+    setAutoCompactThreshold,
     setSelectedCollaborationMode,
     readModelIdForThread,
     setSelectedModelIdForThread,

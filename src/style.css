@@ -2900,3 +2900,36 @@
 :root.dark .automation-thread-panel .rename-thread-actions {
   @apply border-zinc-700 bg-zinc-800;
 }
+
+:root.dark .queued-messages-inner {
+  @apply border-zinc-700 bg-zinc-900/70;
+}
+
+:root.dark .queued-row-drag {
+  @apply text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:root.dark .queued-row-icon {
+  @apply text-zinc-500;
+}
+
+:root.dark .queued-row-text {
+  @apply text-zinc-300;
+}
+
+:root.dark .queued-row.is-drop-target {
+  @apply bg-zinc-800;
+}
+
+:root.dark .queued-row-edit,
+:root.dark .queued-row-steer {
+  @apply border-zinc-600 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:root.dark .queued-row-delete {
+  @apply text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200;
+}
+
+:root.dark .queued-row-badge {
+  @apply border-amber-800 bg-amber-950/50 text-amber-300;
+}
