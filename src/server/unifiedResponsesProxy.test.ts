@@ -122,6 +122,72 @@ describe('unified responses proxy reasoning_content translation', () => {
     ])
   })
 
+  it('keeps reasoning_content on consecutive tool calls without a fresh reasoning item', () => {
+    const messages = responsesInputToMessages([
+      {
+        type: 'reasoning',
+        id: 'rs_first',
+        summary: [],
+        content: [{ type: 'reasoning_text', text: 'thinking before first tool' }],
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_first',
+        name: 'exec_command',
+        arguments: '{"cmd":"pwd"}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_first',
+        output: 'first ok',
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_second',
+        name: 'exec_command',
+        arguments: '{"cmd":"ls"}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_second',
+        output: 'second ok',
+      },
+    ])
+
+    expect(messages).toEqual([
+      {
+        role: 'assistant',
+        content: '',
+        reasoning_content: 'thinking before first tool',
+        tool_calls: [{
+          id: 'call_first',
+          type: 'function',
+          function: { name: 'exec_command', arguments: '{"cmd":"pwd"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'call_first',
+        content: 'first ok',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        reasoning_content: 'thinking before first tool',
+        tool_calls: [{
+          id: 'call_second',
+          type: 'function',
+          function: { name: 'exec_command', arguments: '{"cmd":"ls"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'call_second',
+        content: 'second ok',
+      },
+    ])
+  })
+
   it('forces non-stream upstream requests when chat-formatted tool requests cannot be streamed', async () => {
     let upstreamRequest: Record<string, unknown> | null = null
     const upstream = createServer((req, res) => {

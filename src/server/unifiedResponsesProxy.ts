@@ -149,6 +149,7 @@ function extractTextParts(value: unknown): string {
 export function responsesInputToMessages(input: string | ResponsesApiInput[], instructions?: string): ChatMessage[] {
   const messages: ChatMessage[] = []
   let pendingReasoningContent = ''
+  let lastReasoningContent = ''
   if (instructions) {
     messages.push({ role: 'system', content: instructions })
   }
@@ -165,6 +166,7 @@ export function responsesInputToMessages(input: string | ResponsesApiInput[], in
       const summary = extractTextParts(item.summary)
       const text = content || summary
       if (text) {
+        lastReasoningContent = text
         const lastMessage = messages[messages.length - 1]
         if (lastMessage?.role === 'assistant') {
           lastMessage.reasoning_content = lastMessage.reasoning_content
@@ -216,7 +218,7 @@ export function responsesInputToMessages(input: string | ResponsesApiInput[], in
           name: item.name,
           arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
         },
-      }, pendingReasoningContent)
+      }, pendingReasoningContent || lastReasoningContent)
       pendingReasoningContent = ''
     }
   }
