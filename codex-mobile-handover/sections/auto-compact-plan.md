@@ -1,6 +1,6 @@
 # 客户端自动压缩（发送前预检 + 暂存补发）方案与评估
 
-> 状态：**方案已定稿，待实施**（2026-08-09 与用户评估确认：采用「暂存补发」交互）。
+> 状态：**已实施**（2026-08-09 落地。三项待决问题已确认：① 默认阈值 **10**；② 暂存消息与现有 Queue 面板**合并呈现**（暂存行置前 + 「发送前压缩上下文」徽标）；③ **允许关闭**（阈值 0 = 完全退回服务端行为），设置面板 General 组可修改（下拉 Off/5/10/15/20/25）。
 > 背景来源：round-27 问题 9 调研（自动压缩为 Codex app-server 服务端行为）后的延伸讨论。
 
 ## 1. 背景与动机
@@ -95,6 +95,17 @@ Codex app-server 的自动压缩是服务端行为：上下文 token 超过 `mod
 
 ## 6. 待决问题（实施前确认）
 
-1. 默认阈值 15% 是否合适（或改为 10%）？
-2. 暂存消息是否与现有 Queue 模式合并为一个面板呈现（推荐）？
-3. 是否允许关闭（阈值 0 = 完全退回服务端行为）？
+1. 默认阈值 15% 是否合适（或改为 10%）？ → **已确认：10%**（2026-08-09）
+2. 暂存消息是否与现有 Queue 模式合并为一个面板呈现（推荐）？ → **已确认：合并**，暂存行带徽标置前展示
+3. 是否允许关闭（阈值 0 = 完全退回服务端行为）？ → **已确认：允许**，设置面板 General 组下拉可改
+
+## 7. 实施记录（2026-08-09）
+
+- **useDesktopState.ts**：`stashedMessagesByThreadId`（localStorage `codex-web-local.stashed-messages.v1`，与服务端 queue 分离）、`autoCompactThreshold`（localStorage `codex-web-local.auto-compact-threshold.v1`，默认 10）；`maybeStashForAutoCompact` 发送前预检（线程空闲 + 用量 ≤ 阈值 → 暂存 + 触发压缩）；`flushStashedForThread` 压缩完成/失败收口后补发（线程忙时等待空闲，`setThreadInProgress(false)` 再触发）；`setThreadTokenUsage` 同步后按「检查用量 → 压缩（如需）→ 补发」恢复（刷新恢复）；`selectedThreadQueuedMessages` 合并暂存 + queue；`removeQueuedMessage`/`steerQueuedMessage` 感知暂存（steer 跳过预检立即发送）；`reorderQueuedMessage` 暂存不参与排序。
+- **App.vue**：设置面板 General 新增「发送前自动压缩」下拉（Off/5/10/15/20/25）；`isSelectedThreadCompacting` 传给 composer。
+- **ThreadComposer.vue**：新增 `isCompacting` prop，压缩中发送按钮 title/aria 提示「正在压缩上下文——消息将在压缩完成后发送」。
+- **QueuedMessages.vue + style.css**：暂存行「发送前压缩上下文」徽标（amber），暗色规则入全局 `style.css`。
+- **i18n**：新增 4 键（Auto-compact before send / Compacts context before send / 压缩中提示 / 阈值说明）+ Off=关闭。
+- **验证**：`vue-tsc --noEmit` 通过；`pnpm run build:frontend` 通过；全量单测 323/325（2 个既有 Windows 环境性失败：`codexAppServerBridge.archive.test.ts` symlink EPERM 与 free-mode 状态文件字节数漂移，与本次改动无关）；新增单测 8 例（暂存/阈值关闭/用量充足直发/压缩后补发/刷新恢复/恢复时再压缩/删除暂存/Steer 立即发送）。手动测试文档：`tests/chat-composer-rendering/client-side-auto-compact-pre-send-stash-resend.md`。
+- **性能审计**：发送路径新增 O(1) 的 usage 读取与阈值比较；仅阈值内发送时新增一次 localStorage 写入与压缩 RPC；压缩轮询复用既有 `compactThreadById`（上限 14×2s），无新增高频请求。
+
