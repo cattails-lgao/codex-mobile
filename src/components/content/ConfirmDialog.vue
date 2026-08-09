@@ -88,24 +88,4 @@ defineEmits<{
 .confirm-dialog-btn-confirm.is-danger {
   @apply border-rose-600 bg-rose-600 text-white hover:bg-rose-700;
 }
-
-:global(:root.dark) .confirm-dialog-panel {
-  @apply border-zinc-700 bg-zinc-900;
-}
-
-:global(:root.dark) .confirm-dialog-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .confirm-dialog-message {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .confirm-dialog-btn {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
-}
-
-:global(:root.dark) .confirm-dialog-btn-confirm {
-  @apply border-zinc-100 bg-zinc-100 text-zinc-900 hover:bg-zinc-200;
-}
 </style>

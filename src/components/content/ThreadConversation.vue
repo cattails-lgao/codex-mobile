@@ -47,8 +47,8 @@
       </li>
       <template v-else>
       <template v-for="message in [item.message]" :key="message.id">
+      <template v-if="isFoldStart(message)">
       <li
-        v-if="isFoldStart(message)"
         class="conversation-item conversation-item-fold"
         data-role="system"
         data-message-type="processFold"
@@ -96,10 +96,20 @@
                 </template>
               </template>
             </ProcessFold>
-
-            <!-- round-24：fold 内最后一条命令可能是轮末锚点，fileChange 块也在此渲染 -->
+          </div>
+        </div>
+      </li>
+      <!-- round-26：fileChange 汇总块改为「独立 li」渲染（轮末锚点折叠场景），
+           且仅在当前会话轮完成后显示 -->
+      <li
+        v-if="isFileChangeSummaryVisible(foldAnchoredFileChangeSummary(message))"
+        class="conversation-item conversation-item-file-change"
+        data-role="system"
+        data-message-type="fileChange"
+      >
+        <div class="message-row" data-role="system">
+          <div class="message-stack" data-role="system">
             <FileChangeSummaryBlock
-              v-if="foldAnchoredFileChangeSummary(message)"
               :summary="foldAnchoredFileChangeSummary(message)"
               :expanded="isFileChangeSummaryExpanded(foldTailMessage(message))"
               :cwd="props.cwd"
@@ -115,11 +125,14 @@
           </div>
         </div>
       </li>
-      <li
+      </template>
+      <template
         v-else-if="!isFoldMember(message)
           && !hiddenGroupedCommandIds.has(message.id)
           && !hiddenFileChangeMessageIds.has(message.id)
           && !(isWorkedMessage(message) && hiddenWorkedTurnIds.has(message.turnId ?? ''))"
+      >
+      <li
         :id="messageAnchorId(message)"
         class="conversation-item"
         :data-role="message.role"
@@ -162,7 +175,7 @@
           <div class="message-stack" :data-role="message.role">
             <article class="message-body" :data-role="message.role">
               <FileChangeSummaryBlock
-                v-if="readStandaloneFileChangeSummary(message)"
+                v-if="isFileChangeSummaryVisible(readStandaloneFileChangeSummary(message))"
                 :summary="readStandaloneFileChangeSummary(message)"
                 :expanded="isFileChangeSummaryExpanded(message)"
                 :cwd="props.cwd"
@@ -515,15 +528,16 @@
             </article>
           </div>
         </div>
-
-        <!-- round-24：fileChange 汇总块展示在「当前会话轮结束后」的最后——
-             锚点已是该轮最后一条实质渲染消息（命令/工具/文本均可），这里在
-             li 级统一渲染独立块，避免嵌在回复卡片内。 -->
-        <div
-          v-if="readAnchoredFileChangeSummary(message)"
-          class="message-row"
-          data-role="system"
-        >
+      </li>
+      <!-- round-26：fileChange 汇总块改为「独立 li」渲染（普通消息轮末锚点场景），
+           且仅在当前会话轮完成后显示 -->
+      <li
+        v-if="isFileChangeSummaryVisible(readAnchoredFileChangeSummary(message))"
+        class="conversation-item conversation-item-file-change"
+        data-role="system"
+        data-message-type="fileChange"
+      >
+        <div class="message-row" data-role="system">
           <div class="message-stack" data-role="system">
             <FileChangeSummaryBlock
               :summary="readAnchoredFileChangeSummary(message)"
@@ -541,6 +555,7 @@
           </div>
         </div>
       </li>
+      </template>
       </template>
       </template>
       </template>
@@ -922,6 +937,7 @@ const props = defineProps<{
   messages: UiMessage[]
   pendingRequests: UiServerRequest[]
   liveOverlay: UiLiveOverlay | null
+  liveTurnId?: string
   isLoading: boolean
   activeThreadId: string
   cwd: string
@@ -1567,6 +1583,16 @@ function readAnchoredFileChangeSummary(message: UiMessage): TurnFileChangeSummar
 
 function readStandaloneFileChangeSummary(message: UiMessage): TurnFileChangeSummary | null {
   return standaloneFileChangeSummaryByMessageId.value[message.id] ?? null
+}
+
+// round-26：fileChange 汇总块「当前会话轮完成后才显示」——该 summary 所属 turn
+// 仍在进行（turnId === 进行中 turn id）时不渲染，轮结束后（liveTurnId 清空）
+// 恢复显示；其他轮次不受当前轮进行中的影响。
+function isFileChangeSummaryVisible(summary: TurnFileChangeSummary | null): boolean {
+  if (!summary) return false
+  const liveTurnId = props.liveTurnId ?? ''
+  if (!liveTurnId) return true
+  return (summary.turnId ?? '') !== liveTurnId
 }
 
 function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
@@ -3144,18 +3170,6 @@ onBeforeUnmount(() => {
 .message-card[data-role='assistant'],
 .message-card[data-role='system'] {
   @apply px-0 py-0 bg-transparent border-none rounded-none;
-}
-
-:global(.dark) .message-file-chip {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-200;
-}
-
-:global(.dark) .message-skill-chip {
-  @apply border-emerald-800/70 bg-emerald-950/50 text-emerald-100;
-}
-
-:global(.dark) .message-skill-chip-prefix {
-  @apply text-emerald-300;
 }
 
 .conversation-item[data-message-type='worked'] .message-stack,

@@ -1092,6 +1092,7 @@
                   <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
+                    :live-turn-id="selectedActiveTurnId"
                     :pending-requests="selectedThreadServerRequests"
                     :has-more-persisted-above="hasMoreOlderMessages"
                     :is-loading-persisted-above="isLoadingOlderMessages"
@@ -1693,6 +1694,7 @@ const {
   selectedThreadTokenUsage,
   selectedThreadServerRequests,
   selectedLiveOverlay,
+  selectedActiveTurnId,
   codexQuota,
   selectedThreadId,
   availableCollaborationModes,
@@ -5662,14 +5664,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply h-4.5 w-4.5;
 }
 
-:global(:root.dark) .sidebar-skills-link-title {
-  @apply text-zinc-50;
-}
-
-:global(:root.dark) .sidebar-skills-link-subtitle {
-  @apply text-zinc-400;
-}
-
 .content-body {
   @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-x-hidden;
 }
@@ -5792,10 +5786,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[11px] leading-none text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700;
 }
 
-:global(:root.dark) .content-right-panel-tab-close {
-  @apply text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200;
-}
-
 .content-right-panel-tab-icon,
 .content-right-panel-menu-icon,
 .content-right-panel-close-icon,
@@ -5851,47 +5841,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 .right-panel-menu-leave-to {
   opacity: 0;
   transform: translateY(-4px);
-}
-
-:global(:root.dark) .content-right-panel {
-  @apply border-zinc-800 bg-zinc-900;
-}
-
-:global(:root.dark) .content-right-panel-resize-handle:hover::after,
-:global(:root.dark) .content-right-panel-resize-handle.is-dragging::after {
-  @apply bg-zinc-600;
-}
-
-:global(:root.dark) .content-right-panel-header {
-  @apply border-zinc-800 bg-zinc-950;
-}
-
-:global(:root.dark) .content-right-panel-tab {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
-:global(:root.dark) .content-right-panel-tab.is-active {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
-}
-
-:global(:root.dark) .content-right-panel-add {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
-:global(:root.dark) .content-right-panel-menu {
-  @apply border-zinc-700 bg-zinc-900;
-}
-
-:global(:root.dark) .content-right-panel-menu button {
-  @apply text-zinc-300 hover:bg-zinc-800;
-}
-
-:global(:root.dark) .content-right-panel-close {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
-:global(:root.dark) .content-header-right-panel-toggle {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
 @media (max-width: 767px) {
@@ -5994,38 +5943,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .new-thread-launch-card-button-primary {
   @apply border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-600;
-}
-
-:global(:root.dark) .new-thread-launch-card {
-  @apply border-emerald-900/80 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_38%),linear-gradient(135deg,_rgba(6,78,59,0.32),_rgba(24,24,27,0.96)_58%)] shadow-[0_24px_64px_-34px_rgba(16,185,129,0.35)];
-}
-
-:global(:root.dark) .new-thread-launch-card-eyebrow {
-  @apply text-emerald-300;
-}
-
-:global(:root.dark) .new-thread-launch-card-badge {
-  @apply bg-emerald-500 text-white;
-}
-
-:global(:root.dark) .new-thread-launch-card-title {
-  @apply text-zinc-50;
-}
-
-:global(:root.dark) .new-thread-launch-card-text {
-  @apply text-zinc-300;
-}
-
-:global(:root.dark) .new-thread-launch-card-pill {
-  @apply border-emerald-900 bg-zinc-900/70 text-emerald-300;
-}
-
-:global(:root.dark) .new-thread-launch-card-button {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800;
-}
-
-:global(:root.dark) .new-thread-launch-card-button-primary {
-  @apply border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500;
 }
 
 .new-thread-folder-action {
@@ -6269,14 +6186,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply flex h-10 flex-1 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
 }
 
-:global(:root.dark) .sidebar-settings-area {
-  @apply border-zinc-800 bg-zinc-950;
-}
-
-:global(:root.dark) .sidebar-settings-icon-button {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
 .sidebar-settings-icon {
   @apply w-6 h-6;
 }
@@ -6323,30 +6232,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .settings-group-content {
   @apply min-h-0 min-w-0 flex-1 overflow-y-auto;
-}
-
-:global(:root.dark) .settings-group-nav {
-  @apply border-zinc-800;
-}
-
-:global(:root.dark) .settings-group-nav-item {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
-:global(:root.dark) .settings-group-nav-item.is-active {
-  @apply bg-zinc-800 text-zinc-50;
-}
-
-:global(:root.dark) .settings-dialog-header {
-  @apply border-zinc-700;
-}
-
-:global(:root.dark) .settings-dialog-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .settings-dialog-close {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
 .sidebar-settings-row {
@@ -6649,39 +6534,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .codex-login-modal-submit {
   @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
-}
-
-:global(:root.dark) .codex-login-modal {
-  @apply border-zinc-700 bg-zinc-900;
-}
-
-:global(:root.dark) .codex-login-modal-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .codex-login-modal-close,
-:global(:root.dark) .codex-login-modal-cancel {
-  @apply border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700;
-}
-
-:global(:root.dark) .codex-login-modal-copy {
-  @apply text-zinc-300;
-}
-
-:global(:root.dark) .codex-login-modal-link {
-  @apply text-sky-300 hover:text-sky-200;
-}
-
-:global(:root.dark) .codex-login-modal-input {
-  @apply border-zinc-600 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-400;
-}
-
-:global(:root.dark) .codex-login-modal-error {
-  @apply bg-rose-950/40 text-rose-200;
-}
-
-:global(:root.dark) .codex-login-modal-submit {
-  @apply border-zinc-200 bg-zinc-100 text-zinc-900 hover:bg-white;
 }
 
 .sidebar-settings-account-list {

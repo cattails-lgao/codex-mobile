@@ -17,18 +17,9 @@
             </button>
             <p v-else class="live-overlay-label">{{ overlay?.activityLabel }}</p>
           </div>
-          <!-- round-24：Running command 时 details 只有命令文本，命令文本已显示在
-               消息列表的 WorkBlockItem 里，overlay 内重复展示多余，故隐藏。 -->
-          <p
-            v-if="overlay?.activityDetails && overlay.activityDetails.length > 0 && overlay.activityLabel !== 'Running command'"
-            class="live-overlay-details"
-          >
-            <span
-              v-for="detail in overlay.activityDetails"
-              :key="detail"
-              class="live-overlay-detail"
-            >{{ detail }}</span>
-          </p>
+          <!-- round-26：live-overlay-details 全部移除——活动标签 + spinner +
+              流式思考文本已足够表达当前状态；命令文本会显示在消息列表的
+              WorkBlockItem 里，overlay 内再展示详情 chips/命令都是冗余。 -->
           <p
             v-if="overlay?.reasoningText && isReasoningExpanded"
             class="live-overlay-reasoning"
@@ -116,14 +107,6 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
   @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
 }
 
-.live-overlay-details {
-  @apply m-0 flex min-w-0 flex-wrap items-center gap-1.5;
-}
-
-.live-overlay-detail {
-  @apply rounded-full bg-zinc-100 px-1.5 py-0.5 text-[11px] leading-none text-zinc-500;
-}
-
 .live-overlay-heading {
   @apply flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left transition hover:opacity-80;
 }
@@ -134,10 +117,11 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 
 .live-overlay-reasoning {
   /* round-23 字体规范：思考文字色 #737373 */
+  /* round-26：高度从 5 行调高到 12 行，避免长思考被压得过扁 */
   @apply m-0 text-sm leading-5 whitespace-pre-wrap break-words;
   color: #737373;
   display: block;
-  max-height: calc(1.25rem * 5);
+  max-height: calc(1.25rem * 12);
   overflow: auto;
   overflow-wrap: anywhere;
   scrollbar-width: none;

@@ -1863,6 +1863,23 @@ describe('message stream merge helpers', () => {
     expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'cmd1', 'r2', 'cmd2', 'r3', 'a1'])
   })
 
+  it('matches reasoning anchors against session-cmd-prefixed persisted command ids', () => {
+    // round-26：live 阶段 item/started 的 commandExecution id 是 `call_*`，持久化
+    // 后 app-server 加 `session-cmd-` 前缀；存档的锚点是 live id，若不兼容前缀
+    // 会找不到锚点 → 回退轮首 → 刷新后全部思考堆到每轮开头。
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('session-cmd-call_abc', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'call_abc' }),
+      persistedMessage('r2', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'session-cmd-call_abc' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'session-cmd-call_abc', 'r1', 'r2', 'a1'])
+  })
+
   it('falls back to turn placement when the anchor message is missing', () => {
     const persisted = [
       persistedMessage('u1', 'user', 0),

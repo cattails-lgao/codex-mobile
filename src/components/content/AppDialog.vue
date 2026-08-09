@@ -145,28 +145,4 @@ onBeforeUnmount(() => {
 .app-dialog-footer {
   @apply flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3;
 }
-
-:global(:root.dark) .app-dialog-panel {
-  @apply border border-zinc-700 bg-zinc-900;
-}
-
-:global(:root.dark) .app-dialog-header {
-  @apply border-zinc-700;
-}
-
-:global(:root.dark) .app-dialog-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .app-dialog-subtitle {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .app-dialog-close {
-  @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
-}
-
-:global(:root.dark) .app-dialog-footer {
-  @apply border-zinc-700;
-}
 </style>

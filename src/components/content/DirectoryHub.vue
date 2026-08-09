@@ -2468,74 +2468,10 @@ button.directory-card {
   @apply bg-sky-100 text-sky-700;
 }
 
-:global(:root.dark) .directory-title,
-:global(:root.dark) .directory-card-title,
-:global(:root.dark) .directory-modal-title,
-:global(:root.dark) .directory-mini-heading,
-:global(:root.dark) .directory-detail-heading {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .directory-subtitle,
-:global(:root.dark) .directory-card-meta,
-:global(:root.dark) .directory-card-description,
-:global(:root.dark) .directory-mini-list,
-:global(:root.dark) .directory-detail-description {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .skills-embedded-toggle,
-:global(:root.dark) .skills-embedded-title {
-  @apply text-zinc-300 hover:text-zinc-100;
-}
-
-:global(:root.dark) .mcp-skill-card {
-  @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
-}
-
-:global(.dark) .mcp-skill-card {
-  @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
-}
-
-:global(:root.dark) .mcp-skill-avatar-fallback {
-  @apply bg-zinc-700 text-zinc-300;
-}
-
-:global(.dark) .mcp-skill-avatar-fallback {
-  @apply bg-zinc-700 text-zinc-300;
-}
-
-:global(:root.dark) .mcp-skill-name {
-  @apply text-zinc-100;
-}
-
-:global(.dark) .mcp-skill-name {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .mcp-skill-owner {
-  @apply text-zinc-400;
-}
-
-:global(.dark) .mcp-skill-owner {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .mcp-skill-meta {
-  @apply text-zinc-300;
-}
-
-:global(.dark) .mcp-skill-meta {
-  @apply text-zinc-300;
-}
-
-:global(:root.dark) .mcp-skill-chevron {
-  @apply text-zinc-500;
-}
-
-:global(.dark) .mcp-skill-chevron {
-  @apply text-zinc-500;
-}
+/* round-26：以下 mcp-skill/skills-embedded 暗色覆盖原写在 scoped
+   :global(:root.dark)/:global(.dark) 中，本构建编译失效（编译成
+   :root.dark[data-v-xxx] / .dark[data-v-xxx]，永不匹配）。规则已迁移到
+   src/style.css；这里保留 prefers-color-scheme 兜底（仅系统暗色生效）。 */
 
 @media (prefers-color-scheme: dark) {
   .mcp-skill-card {

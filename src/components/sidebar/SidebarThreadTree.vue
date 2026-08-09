@@ -3232,39 +3232,6 @@ onBeforeUnmount(() => {
   @apply mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700;
 }
 
-:global(:root.dark) .recycle-bin-item {
-  @apply border-zinc-700 bg-zinc-800;
-}
-
-:global(:root.dark) .recycle-bin-item-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .recycle-bin-item-meta,
-:global(:root.dark) .recycle-bin-item-time {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .recycle-bin-button {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-700;
-}
-
-:global(:root.dark) .recycle-bin-button-primary {
-  @apply border-zinc-100 bg-zinc-100 text-zinc-900 hover:bg-zinc-200;
-}
-
-:global(:root.dark) .recycle-bin-button-danger {
-  @apply border-rose-800 text-rose-400 hover:bg-zinc-800;
-}
-
-:global(:root.dark) .recycle-bin-error {
-  @apply border-rose-800 bg-rose-950/40 text-rose-300;
-}
-
-:global(:root.dark) .organize-menu-separator {
-  @apply bg-zinc-700;
-}
-
 .thread-start-button {
   @apply h-5 w-5 rounded text-zinc-500 flex items-center justify-center transition hover:bg-zinc-200 hover:text-zinc-700;
 }
@@ -3619,10 +3586,6 @@ onBeforeUnmount(() => {
 
 .automation-thread-panel .rename-thread-actions {
   @apply sticky bottom-0 -mx-4 -mb-4 border-t border-zinc-200 bg-white px-4 py-3;
-}
-
-:global(:root.dark) .automation-thread-panel .rename-thread-actions {
-  @apply border-zinc-700 bg-zinc-800;
 }
 
 .automation-thread-field {

@@ -6,7 +6,8 @@
       :aria-expanded="expanded"
       @click="$emit('toggle')"
     >
-      <span class="reasoning-block-icon" aria-hidden="true">🧠</span>
+      <!-- round-26：思考块不再需要 icon（reasoning-block-icon 已移除），
+           标题 + toggle 与命令块的「命令 + 状态」保持同密度 -->
       <span class="reasoning-block-title">{{ t('Thinking process') }}</span>
       <span class="reasoning-block-toggle" aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span>
     </button>
@@ -56,10 +57,6 @@ const summaryText = computed(() => {
 
 .reasoning-block-header {
   @apply flex w-full min-w-0 items-center gap-1.5 px-0 py-0.5 text-left cursor-pointer transition-colors hover:opacity-80;
-}
-
-.reasoning-block-icon {
-  @apply shrink-0 text-xs leading-none;
 }
 
 .reasoning-block-title {

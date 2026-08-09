@@ -1520,6 +1520,27 @@ function pruneLiveMessageSortKeys(threadId: string): void {
   }
 }
 
+// 锚点 id 匹配：live 阶段 item/started 的 commandExecution item id 是
+// `call_*`，app-server 持久化到线程历史时会给会话内命令加 `session-cmd-` 前缀
+// （如 `session-cmd-call_*`）。思考存档记录的是 live id，刷新后按持久化 id
+// 找不到锚点会回退到「轮首」——表现为全部思考堆到每轮开头。这里兼容前缀与
+// 反前缀两种形态。
+function findReasoningAnchorIndex(messages: UiMessage[], anchorId: string): number {
+  const anchor = anchorId.trim()
+  if (!anchor) return -1
+  const exact = messages.findIndex((message) => message.id === anchor)
+  if (exact >= 0) return exact
+  const prefixed = `session-cmd-${anchor}`
+  const prefixedIndex = messages.findIndex((message) => message.id === prefixed)
+  if (prefixedIndex >= 0) return prefixedIndex
+  const PREFIX = 'session-cmd-'
+  if (anchor.startsWith(PREFIX)) {
+    const strippedIndex = messages.findIndex((message) => message.id === anchor.slice(PREFIX.length))
+    if (strippedIndex >= 0) return strippedIndex
+  }
+  return -1
+}
+
 // 把本地存档的思考（persistedReasoning）按轮次插回消息流：插入到该轮用户
 // 消息之后，形成“提问 -> 思考 -> 回复”的阅读顺序；旧存档没有 turnIndex 时
 // 回退到消息流末尾（与历史行为一致）。同一轮多条思考按存档顺序排列。
@@ -1533,7 +1554,7 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
   for (const reasoningMessage of [...reasoningMessages].reverse()) {
     const anchorId = reasoningMessage.reasoningAnchorMessageId?.trim() ?? ''
     if (anchorId) {
-      const anchorIndex = result.findIndex((message) => message.id === anchorId)
+      const anchorIndex = findReasoningAnchorIndex(result, anchorId)
       if (anchorIndex >= 0) {
         result.splice(anchorIndex + 1, 0, reasoningMessage)
         continue
@@ -1806,6 +1827,11 @@ export function useDesktopState() {
       rows.push(...pendingServerRequestsByThreadId.value[GLOBAL_SERVER_REQUEST_SCOPE])
     }
     return rows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso))
+  })
+  // round-26：当前选中线程的进行中 turn id（用于 fileChange 块「轮完成后才显示」）
+  const selectedActiveTurnId = computed(() => {
+    const threadId = selectedThreadId.value
+    return threadId ? (activeTurnIdByThreadId.value[threadId] ?? '') : ''
   })
   const selectedLiveOverlay = computed<UiLiveOverlay | null>(() => {
     const threadId = selectedThreadId.value
@@ -6751,6 +6777,7 @@ export function useDesktopState() {
     isSelectedThreadInterruptPending,
     selectedThreadServerRequests,
     selectedLiveOverlay,
+    selectedActiveTurnId,
     codexQuota,
     selectedThreadId,
     availableCollaborationModes,

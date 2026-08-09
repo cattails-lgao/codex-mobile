@@ -36,7 +36,9 @@
       @click="$emit('copy')"
     >
       <IconTablerCopy class="icon-svg message-copy-icon" />
-      <span class="message-copy-label">{{ copied ? 'Copied' : 'Copy' }}</span>
+      <!-- round-26：用户消息下复制按钮与回退按钮同为「仅图标」样式（此前回退无文字、
+           复制有 Copy 文字，宽度/观感不一致） -->
+      <span v-if="role !== 'user'" class="message-copy-label">{{ copied ? 'Copied' : 'Copy' }}</span>
     </button>
   </div>
 </template>

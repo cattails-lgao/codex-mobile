@@ -52,6 +52,7 @@
 | 第十八轮交接需求 10 条（字体/操作条/overlay/plan popover/面板/思考时序与跨浏览器存档） | [rounds/round-23-feedback.md](rounds/round-23-feedback.md) |
 | 第十九轮交接需求 7 条（用户操作条统一/思考块去卡片/overlay 冗余/fileChange 轮末/思考时序刷新/标题截断/工具块去卡片） | [rounds/round-24-feedback.md](rounds/round-24-feedback.md) |
 | OpenCode Zen `reasoning_content` 往返修复（多工具调用 400） | [rounds/round-25-zen-reasoning-fix.md](rounds/round-25-zen-reasoning-fix.md) |
+| 第二十轮反馈 7 条（overlay 冗余移除/思考时序锚点前缀/思考高度/思考图标/操作条统一/fileChange 独立 li/右侧面板暗色失效） | [rounds/round-26-feedback.md](rounds/round-26-feedback.md) |
 
 ## 项目概况
 
