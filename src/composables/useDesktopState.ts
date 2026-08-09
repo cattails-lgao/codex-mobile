@@ -1613,10 +1613,15 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
   const result = [...persisted]
   const unattached: UiMessage[] = []
   // round-27：按轮收集「无锚点思考」及其顺序（仅用于锚点缺失时的兜底分摊，
-  // 见下方 turnIndex 分支）。锚点思考不会进这个列表。
+  // 见下方 turnIndex 分支）。
+  // round-29：锚点「存在但匹配失败」的思考也一并收集——app-server 从会话
+  // jsonl 恢复线程历史时会改写消息 id（命令 fc_*→session-cmd-call_*、agent
+  // msg_*→item-N），live 存档的锚点刷新后全部失效；若不给它们分摊，就会
+  // 全部堆到用户消息之后（「思考块堆在模型回答开头」的一堵墙）。
   const anchorlessByTurn = new Map<number, UiMessage[]>()
   for (const reasoningMessage of reasoningMessages) {
-    if (reasoningMessage.reasoningAnchorMessageId?.trim()) continue
+    const anchorId = reasoningMessage.reasoningAnchorMessageId?.trim() ?? ''
+    if (anchorId && findReasoningAnchorIndex(result, anchorId) >= 0) continue
     const turnIndex = reasoningMessage.turnIndex
     if (typeof turnIndex !== 'number' || !Number.isFinite(turnIndex)) continue
     const list = anchorlessByTurn.get(turnIndex) ?? []
@@ -1657,11 +1662,13 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
       const type = result[index].messageType
       return type === 'commandExecution' || type === 'toolCall' || type === 'fileChange' || type === 'worked'
     })
-    if (!anchorId && hasWorkItems) {
+    if (hasWorkItems) {
       // round-27：旧存档/无锚点思考不再全部堆在用户消息之后（表现为
       // 「用户消息后、模型回答前」一堵思考墙），而是按存档顺序分摊到该轮
       // 各命令/agent 消息之后，恢复「思考与工具交错」的观感。第 k 条无锚点
       // 思考插到该轮第 k 条非用户消息之后，超出部分插到轮末。
+      // round-29：不再要求 !anchorId——锚点匹配失败的思考与无锚点一样分摊，
+      // 否则它们会堆在用户消息后（bridge 恢复改写消息 id 后锚点全部失效）。
       const anchorlessList = anchorlessByTurn.get(turnIndex) ?? []
       const position = anchorlessList.indexOf(reasoningMessage)
       const slot = position >= 0 ? position : 0

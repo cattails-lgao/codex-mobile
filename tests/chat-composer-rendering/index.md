@@ -61,3 +61,4 @@ Return to the [manual test index](../../tests.md).
 | [Round 24: unified user toolbar, plain reasoning/tool rows, fileChange at round end, reasoning chronology, thread title truncation](round24-message-toolbar-reasoning-filechange-title-truncate.md) |
 | [Client-side auto-compact: pre-send check + stash/resend](client-side-auto-compact-pre-send-stash-resend.md) |
 | [Round 28: plan panel executed state after refresh + IME composition Enter guard](round28-plan-panel-state-refresh-ime-composition.md) |
+| [Round 29: reasoning blocks interleave with work items after refresh](round29-reasoning-anchor-mismatch-distribution.md) |

@@ -2225,6 +2225,33 @@ describe('message stream merge helpers', () => {
     expect(merged.map((message) => message.id)).toEqual(['u1', 'session-cmd-call_abc', 'r1', 'r2', 'a1'])
   })
 
+  it('distributes stale anchored reasoning (bridge-rewritten ids) across work items (round-29)', () => {
+    // live 存档的思考锚点是通知 item id（fc_*/msg_*），app-server 从会话 jsonl
+    // 恢复线程历史时把消息 id 改写为 session-cmd-call_*/item-N，刷新后锚点全部
+    // 失效。此前这类思考（锚点非空但匹配失败）会堆在用户消息之后（「模型回答
+    // 开头」一堵思考墙）；修复后与无锚点思考一样按存档顺序分摊到工作项之间。
+    const persisted = [
+      persistedMessage('item-1', 'user', 0),
+      persistedMessage('session-cmd-call_01_abc', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('item-2', 'assistant', 0),
+      persistedMessage('session-cmd-call_02_def', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('item-3', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'msg_019fe769-ba53-7133' }),
+      persistedMessage('r2', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'fc_019fe769-ba4d-7da3' }),
+      persistedMessage('r3', 'system', 0, { messageType: 'reasoning', reasoningAnchorMessageId: 'msg_019fe769-ea80-7200' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual([
+      'item-1',
+      'session-cmd-call_01_abc', 'r1',
+      'item-2', 'r2',
+      'session-cmd-call_02_def', 'r3',
+      'item-3',
+    ])
+  })
+
   it('falls back to turn placement when the anchor message is missing', () => {
     const persisted = [
       persistedMessage('u1', 'user', 0),
