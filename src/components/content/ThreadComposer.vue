@@ -1802,6 +1802,10 @@ function onInputChange(): void {
 }
 
 function onInputKeydown(event: KeyboardEvent): void {
+  // 输入法组合期间（如 macOS 中文拼音选中候选词按 Enter 确认、或组合未完成时
+  // 按 Enter）keydown 会带 isComposing / keyCode 229，此时不应触发送出或
+  // 菜单快捷键——否则消息会在输入尚未完成时被提前发送。
+  if (event.isComposing || event.keyCode === 229) return
   if (isFileMentionOpen.value) {
     if (event.key === 'Escape') {
       event.preventDefault()

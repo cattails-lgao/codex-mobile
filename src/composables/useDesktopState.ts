@@ -4086,6 +4086,14 @@ export function useDesktopState() {
     }
   }
 
+  // 供 App.vue 在 plan 本地存档兜底路径解析计划轮序号：刷新后按 turnId 从当前
+  // 线程的轮次映射重新解析（live 存档中记录的 turnIndex 可能缺失或过期）。
+  function resolveThreadTurnIndex(threadId: string, turnId: string): number | undefined {
+    if (!threadId || !turnId) return undefined
+    const index = turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
+    return typeof index === 'number' ? index : undefined
+  }
+
   function rebindLiveFileChangeTurnIndices(threadId: string): void {
     const current = liveFileChangeMessagesByThreadId.value[threadId]
     if (!current || current.length === 0) return
@@ -7187,6 +7195,7 @@ export function useDesktopState() {
     selectedLiveOverlay,
     selectedActiveTurnId,
     lastPlanByThreadId,
+    resolveThreadTurnIndex,
     codexQuota,
     selectedThreadId,
     availableCollaborationModes,
