@@ -752,6 +752,39 @@ describe('live error overlay', () => {
     expect(state.selectedLiveOverlay.value).toBe(null)
   })
 
+  it('restores the live reasoning snapshot for an in-progress thread after refresh (round-27)', async () => {
+    // 问题 4/8：刷新后 live-overlay-reasoning 消失——服务端不回放 reasoning
+    // 增量，overlay 思考文本是页面内存态。修复后轮次进行中把思考尾部快照
+    // 写 localStorage，加载 in-progress 线程时恢复快照文本。
+    installTestWindow({
+      'codex-web-local.live-reasoning-snapshot.v1': JSON.stringify({
+        'thread-snapshot': { text: '正在分析重命名冲突策略…', ts: Date.now() },
+      }),
+    })
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: '继续',
+          messageType: 'userMessage',
+        },
+      ],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-snapshot')
+    await state.loadMessages('thread-snapshot')
+
+    expect(state.selectedLiveOverlay.value?.reasoningText).toContain('正在分析重命名冲突策略')
+  })
+
   it('maps commandExecution started to the Running command overlay label', async () => {
     // round-24：Running command 时 live-overlay-details 只含命令文本（命令文本
     // 已显示在消息列表的 WorkBlockItem 里），LiveOverlayItem 据此隐藏 details。
@@ -1411,7 +1444,8 @@ describe('P1-3 notification surface', () => {
     const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
     expect(stored).toBeTruthy()
     expect(stored).toContain('先确认环境，再规划步骤')
-    expect(stored).toContain('reasoning:local:thread-1:')
+    // round-27：按 itemId 的稳定 id（此前为 reasoning:local:*）
+    expect(stored).toContain('reasoning:item:thread-1:rs-1')
   })
 
   it('captures full reasoning items from item/started + item/completed and archives them', async () => {
@@ -1495,6 +1529,55 @@ describe('P1-3 notification surface', () => {
     expect(stored).toContain('思考B')
     // 思考A 锚定该轮首条（无前置工具时为空锚点回退轮首），思考B 锚定命令 cmd-1
     expect(stored).toContain('reasoningAnchorMessageId":"cmd-1"')
+  })
+
+  it('keeps the turn item timeline across mid-turn agent content clears (round-27)', async () => {
+    // 问题 12：agent 内容事件中途清理曾删除 turnItemSequenceByThreadId，
+    // 该轮后续思考项全部丢失锚点 → 刷新后思考堆到用户消息后、模型回答前。
+    // 修复后中途清理保留时间线，思考 B/C 的锚点依然指向各自之前的命令。
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({ method: 'turn/started', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-1', delta: '思考A' } })
+    sendNotification({
+      method: 'item/started',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'cmd-1',
+        item: { type: 'commandExecution', id: 'cmd-1', command: 'ls', status: 'in_progress' },
+      },
+    })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-2', delta: '思考B' } })
+    // 第一次 agent 内容事件：中途清理（保留时间线）
+    sendNotification({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '回答1' } })
+    await Promise.resolve()
+
+    // 清理后再来的命令与思考：时间线未被删除，思考C 应锚定 cmd-2
+    sendNotification({
+      method: 'item/started',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'cmd-2',
+        item: { type: 'commandExecution', id: 'cmd-2', command: 'cat', status: 'in_progress' },
+      },
+    })
+    sendNotification({ method: 'item/reasoning/textDelta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'rs-3', delta: '思考C' } })
+    sendNotification({ method: 'item/agentMessage/delta', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-2', delta: '回答2' } })
+    await Promise.resolve()
+
+    const stored = window.localStorage.getItem('codex-web-local.thread-reasoning.v1')
+    expect(stored).toBeTruthy()
+    expect(stored).toContain('思考B')
+    expect(stored).toContain('思考C')
+    expect(stored).toContain('reasoningAnchorMessageId":"cmd-1"')
+    // 关键断言：中途清理后思考C 仍锚定命令 cmd-2（旧代码此处锚点为空）
+    expect(stored).toContain('reasoningAnchorMessageId":"cmd-2"')
   })
 
   it('captures plan items from item/completed as live plan messages', async () => {
@@ -1861,6 +1944,23 @@ describe('message stream merge helpers', () => {
     ]
     const merged = mergePersistedReasoning(persisted, reasoning)
     expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'cmd1', 'r2', 'cmd2', 'r3', 'a1'])
+  })
+
+  it('distributes anchorless reasoning across work items of a turn (round-27)', () => {
+    // 问题 12：旧存档无锚点思考曾全部堆在用户消息之后（「用户消息后、模型回答前」
+    // 一堵思考墙）。修复后，含工作项的轮按存档顺序把无锚点思考分摊到各命令之后。
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('cmd1', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('cmd2', 'system', 0, { messageType: 'commandExecution' }),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const reasoning = [
+      persistedMessage('r1', 'system', 0, { messageType: 'reasoning' }),
+      persistedMessage('r2', 'system', 0, { messageType: 'reasoning' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'cmd1', 'r1', 'cmd2', 'r2', 'a1'])
   })
 
   it('matches reasoning anchors against session-cmd-prefixed persisted command ids', () => {

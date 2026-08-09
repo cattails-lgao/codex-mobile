@@ -213,44 +213,4 @@ watch(
 .rfp-empty.is-error {
   @apply text-red-600;
 }
-
-:global(:root.dark) .rfp-toolbar {
-  @apply border-zinc-800;
-}
-
-:global(:root.dark) .rfp-search {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-100 focus:border-zinc-500;
-}
-
-:global(:root.dark) .rfp-group-header {
-  @apply text-zinc-300 hover:bg-zinc-800;
-}
-
-:global(:root.dark) .rfp-group-chevron {
-  @apply text-zinc-500;
-}
-
-:global(:root.dark) .rfp-group-count {
-  @apply bg-zinc-800 text-zinc-400;
-}
-
-:global(:root.dark) .rfp-file:hover {
-  @apply bg-zinc-800;
-}
-
-:global(:root.dark) .rfp-file-label {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .rfp-file-sub {
-  @apply text-zinc-500;
-}
-
-:global(:root.dark) .rfp-empty {
-  @apply text-zinc-400;
-}
-
-:global(:root.dark) .rfp-empty.is-error {
-  @apply text-red-400;
-}
 </style>

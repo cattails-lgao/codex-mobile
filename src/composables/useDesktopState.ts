@@ -95,6 +95,16 @@ const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const THREAD_REASONING_STORAGE_KEY = 'codex-web-local.thread-reasoning.v1'
+// round-27：每个线程「最近一次 plan」的本地存档。plan 在部分 provider
+// （如 OpenCode Zen 代理）下只实时推送、服务端不持久化，刷新后输入框上方
+// 的计划面板会消失；本地存一份供面板兜底恢复。
+const THREAD_LAST_PLAN_STORAGE_KEY = 'codex-web-local.thread-last-plan.v1'
+// round-27：进行中思考文本的轻量快照（尾部截断），刷新后 live-overlay-reasoning
+// 不再空白/消失（服务端不回放 reasoning 增量，纯页面内存态会随刷新丢失）。
+const LIVE_REASONING_SNAPSHOT_STORAGE_KEY = 'codex-web-local.live-reasoning-snapshot.v1'
+const LIVE_REASONING_SNAPSHOT_MAX_CHARS = 8_000
+const LIVE_REASONING_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1_000
+const LIVE_REASONING_SNAPSHOT_SAVE_MS = 1_500
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
 const SELECTED_THREAD_STORAGE_KEY = 'codex-web-local.selected-thread-id.v1'
 const SELECTED_MODEL_BY_CONTEXT_STORAGE_KEY = 'codex-web-local.selected-model-by-context.v1'
@@ -221,6 +231,50 @@ function savePersistedReasoningMap(state: Record<string, UiMessage[]>): void {
     if (threadId && messages.length > 0) {
       void persistThreadReasoningArchive(threadId, messages)
     }
+  }
+}
+
+type LiveReasoningSnapshot = { text: string; ts: number }
+
+function loadLastPlanMap(): Record<string, UiMessage> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_LAST_PLAN_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return parsed as Record<string, UiMessage>
+  } catch {
+    return {}
+  }
+}
+
+function saveLastPlanMap(state: Record<string, UiMessage>): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(THREAD_LAST_PLAN_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+}
+
+function loadLiveReasoningSnapshotMap(): Record<string, LiveReasoningSnapshot> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(LIVE_REASONING_SNAPSHOT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: Record<string, LiveReasoningSnapshot> = {}
+    for (const [threadId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const row = value as { text?: unknown; ts?: unknown }
+      if (typeof row?.text === 'string' && row.text.trim() && typeof row.ts === 'number') {
+        result[threadId] = { text: row.text, ts: row.ts }
+      }
+    }
+    return result
+  } catch {
+    return {}
   }
 }
 
@@ -1550,6 +1604,17 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
   if (reasoningMessages.length === 0) return persisted
   const result = [...persisted]
   const unattached: UiMessage[] = []
+  // round-27：按轮收集「无锚点思考」及其顺序（仅用于锚点缺失时的兜底分摊，
+  // 见下方 turnIndex 分支）。锚点思考不会进这个列表。
+  const anchorlessByTurn = new Map<number, UiMessage[]>()
+  for (const reasoningMessage of reasoningMessages) {
+    if (reasoningMessage.reasoningAnchorMessageId?.trim()) continue
+    const turnIndex = reasoningMessage.turnIndex
+    if (typeof turnIndex !== 'number' || !Number.isFinite(turnIndex)) continue
+    const list = anchorlessByTurn.get(turnIndex) ?? []
+    list.push(reasoningMessage)
+    anchorlessByTurn.set(turnIndex, list)
+  }
   // 逆序插入，保证同一轮内多条思考按时间正序排列。
   for (const reasoningMessage of [...reasoningMessages].reverse()) {
     const anchorId = reasoningMessage.reasoningAnchorMessageId?.trim() ?? ''
@@ -1567,12 +1632,33 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
     }
     let lastUserIndex = -1
     let lastTurnMessageIndex = -1
+    // 轮内非思考消息索引（不含用户消息）：用于无锚点思考的顺序分摊
+    const otherIndices: number[] = []
     for (let index = 0; index < result.length; index += 1) {
       if (result[index].turnIndex !== turnIndex) continue
       lastTurnMessageIndex = index
-      if (result[index].role === 'user') lastUserIndex = index
+      if (result[index].role === 'user') {
+        lastUserIndex = index
+      } else if (result[index].messageType !== 'reasoning') {
+        otherIndices.push(index)
+      }
     }
-    if (lastUserIndex >= 0) {
+    // 只有该轮含工作项（命令/工具等）时才分摊：纯问答轮（提问 -> 思考 -> 回复）
+    // 保持思考插在用户消息之后；含工作项的轮把无锚点思考按顺序与工具交错。
+    const hasWorkItems = otherIndices.some((index) => {
+      const type = result[index].messageType
+      return type === 'commandExecution' || type === 'toolCall' || type === 'fileChange' || type === 'worked'
+    })
+    if (!anchorId && hasWorkItems) {
+      // round-27：旧存档/无锚点思考不再全部堆在用户消息之后（表现为
+      // 「用户消息后、模型回答前」一堵思考墙），而是按存档顺序分摊到该轮
+      // 各命令/agent 消息之后，恢复「思考与工具交错」的观感。第 k 条无锚点
+      // 思考插到该轮第 k 条非用户消息之后，超出部分插到轮末。
+      const anchorlessList = anchorlessByTurn.get(turnIndex) ?? []
+      const position = anchorlessList.indexOf(reasoningMessage)
+      const slot = position >= 0 ? position : 0
+      result.splice(otherIndices[Math.min(slot, otherIndices.length - 1)] + 1, 0, reasoningMessage)
+    } else if (lastUserIndex >= 0) {
       result.splice(lastUserIndex + 1, 0, reasoningMessage)
     } else if (lastTurnMessageIndex >= 0) {
       result.splice(lastTurnMessageIndex + 1, 0, reasoningMessage)
@@ -1627,6 +1713,8 @@ export function useDesktopState() {
   const selectedThreadId = ref(loadSelectedThreadId())
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const livePlanMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
+  // round-27：每线程最近一次 plan 的本地存档（刷新后输入框上方的计划面板兜底恢复）
+  const lastPlanByThreadId = ref<Record<string, UiMessage>>(loadLastPlanMap())
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const injectedSystemMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const persistedReasoningByThreadId = ref<Record<string, UiMessage[]>>(loadPersistedReasoningMap())
@@ -1646,6 +1734,63 @@ export function useDesktopState() {
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
+  // round-27：进行中思考文本的轻量快照（内存 + 节流写 localStorage）。
+  // 刷新后 overlay 的 live-overlay-reasoning 不再空白/消失——服务端不回放
+  // reasoning 增量，纯页面内存态会随刷新丢失；快照在轮次进行中持续更新、
+  // 轮次结束（clearLiveReasoningForThread 收口）时删除。
+  let liveReasoningSnapshotByThreadId: Record<string, LiveReasoningSnapshot> = loadLiveReasoningSnapshotMap()
+  let liveReasoningSnapshotDirty = false
+  let liveReasoningSnapshotTimer: ReturnType<typeof setTimeout> | null = null
+
+  function scheduleLiveReasoningSnapshotSave(): void {
+    if (liveReasoningSnapshotTimer !== null) return
+    liveReasoningSnapshotTimer = setTimeout(() => {
+      liveReasoningSnapshotTimer = null
+      if (liveReasoningSnapshotDirty) {
+        liveReasoningSnapshotDirty = false
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem(LIVE_REASONING_SNAPSHOT_STORAGE_KEY, JSON.stringify(liveReasoningSnapshotByThreadId))
+          } catch {
+            // Ignore localStorage failures (quota/private mode).
+          }
+        }
+      }
+      if (liveReasoningSnapshotDirty) scheduleLiveReasoningSnapshotSave()
+    }, LIVE_REASONING_SNAPSHOT_SAVE_MS)
+  }
+
+  function rememberLiveReasoningSnapshot(threadId: string, text: string): void {
+    if (!threadId) return
+    if (inProgressById.value[threadId] !== true) return
+    const capped = text.length > LIVE_REASONING_SNAPSHOT_MAX_CHARS
+      ? text.slice(-LIVE_REASONING_SNAPSHOT_MAX_CHARS)
+      : text
+    liveReasoningSnapshotByThreadId[threadId] = { text: capped, ts: Date.now() }
+    liveReasoningSnapshotDirty = true
+    scheduleLiveReasoningSnapshotSave()
+  }
+
+  function restoreLiveReasoningSnapshot(threadId: string): void {
+    if (!threadId) return
+    const current = liveReasoningTextByThreadId.value[threadId]?.trim()
+    if (current) return
+    const snapshot = liveReasoningSnapshotByThreadId[threadId]
+    if (!snapshot?.text) return
+    if (Date.now() - snapshot.ts > LIVE_REASONING_SNAPSHOT_MAX_AGE_MS) return
+    liveReasoningTextByThreadId.value = {
+      ...liveReasoningTextByThreadId.value,
+      [threadId]: snapshot.text,
+    }
+  }
+
+  function clearLiveReasoningSnapshot(threadId: string): void {
+    if (!threadId) return
+    if (!(threadId in liveReasoningSnapshotByThreadId)) return
+    delete liveReasoningSnapshotByThreadId[threadId]
+    liveReasoningSnapshotDirty = true
+    scheduleLiveReasoningSnapshotSave()
+  }
   const externalSessionByThreadId = ref<Record<string, UiExternalSession | null>>({})
   type FileAttachment = { label: string; path: string; fsPath: string }
   type QueuedMessage = {
@@ -1886,15 +2031,20 @@ export function useDesktopState() {
     const persistedReasoning = persistedReasoningByThreadId.value[threadId] ?? []
 
     // When a compaction is not in progress and a compaction.done row already
-    // exists in persisted messages (ContextCompaction item), drop any stale
-    // injected pending row so the spinner and the done label never show at the
-    // same time.
+    // exists in persisted messages (ContextCompaction item), drop stale injected
+    // rows — both pending AND done — so the spinner never shows next to a done
+    // row and the persisted row is never duplicated by the injected one.
+    // (round-27：此前只过滤 injected 的 pending，注入的 done 会与持久化的
+    // compaction.done 并存 → 消息列表出现两个「Context compacted」块，
+    // 刷新后 injected 被重置只剩持久化一条，表现为「压缩时两个、刷新后一个」。)
     const persistedHasCompactionDone = persisted.some(
       (message) => message.messageType === 'compaction.done',
     )
     const compactionStillActive = compactingThreadIds.value.has(threadId)
     const effectiveInjected = persistedHasCompactionDone && !compactionStillActive
-      ? injected.filter((message) => message.messageType !== 'compaction.pending')
+      ? injected.filter(
+          (message) => message.messageType !== 'compaction.pending' && message.messageType !== 'compaction.done',
+        )
       : injected
 
     const combined = mergeThreadMessageStreams(
@@ -2688,6 +2838,8 @@ export function useDesktopState() {
         ...inProgressById.value,
         [threadId]: true,
       }
+      // round-27：恢复上次的快照思考文本（刷新后 overlay 不空白）
+      restoreLiveReasoningSnapshot(threadId)
     } else {
       inProgressById.value = omitKey(inProgressById.value, threadId)
       clearCompletedTurnLiveState(threadId)
@@ -2947,6 +3099,19 @@ export function useDesktopState() {
     const previous = livePlanMessagesByThreadId.value[threadId] ?? []
     const next = upsertMessage(previous, nextMessage)
     setLivePlanMessagesForThread(threadId, next)
+    rememberLastPlan(threadId, nextMessage)
+  }
+
+  // round-27：记录该线程最近一次 plan（本地持久化）。部分 provider 下 plan
+  // 只实时推送、服务端不持久化，刷新后消息流里没有 plan 消息 → 输入框上方
+  // 计划面板消失；这里存一份供 composerPlanPanel 兜底恢复。
+  function rememberLastPlan(threadId: string, planMessage: UiMessage): void {
+    if (!threadId || !planMessage) return
+    lastPlanByThreadId.value = {
+      ...lastPlanByThreadId.value,
+      [threadId]: planMessage,
+    }
+    saveLastPlanMap(lastPlanByThreadId.value)
   }
 
   function upsertLiveAgentMessage(threadId: string, nextMessage: UiMessage): void {
@@ -2975,6 +3140,8 @@ export function useDesktopState() {
       ...liveReasoningTextByThreadId.value,
       [threadId]: normalized,
     }
+    // round-27：刷新后 overlay 思考文本恢复（快照节流写 localStorage）
+    rememberLiveReasoningSnapshot(threadId, normalized)
   }
 
   function appendLiveReasoningText(threadId: string, delta: string): void {
@@ -2989,24 +3156,39 @@ export function useDesktopState() {
     if (activeTurnId) activeReasoningTurnIdByThreadId.set(threadId, activeTurnId)
   }
 
-  function clearLiveReasoningForThread(threadId: string): void {
+  // round-27：keepSequence=true 时（agent 内容事件触发的中途清理）保留
+  // turnItemSequenceByThreadId 时间线——此前每次 agent 内容事件都删掉时间线，
+  // 后续思考项丢失锚点（reasoningAnchorMessageId 为空）→ mergePersistedReasoning
+  // 全部回退插到该轮用户消息之后 → 最后一轮思考堆在「用户消息后、模型回答前」。
+  // 时间线只在轮次真正结束时删除；存档按稳定 id 原地更新，中途清理不产生重复块。
+  function clearLiveReasoningForThread(threadId: string, keepSequence = false): void {
     if (!threadId) return
-    reasoningAppendedTextByItemId.clear()
     const current = liveReasoningTextByThreadId.value[threadId]
-    if (current === undefined) return
+    if (current === undefined) {
+      if (!keepSequence) {
+        turnItemSequenceByThreadId.delete(threadId)
+        reasoningAppendedTextByItemId.clear()
+      }
+      return
+    }
     const turnId = activeReasoningTurnIdByThreadId.get(threadId) ?? activeTurnIdByThreadId.value[threadId] ?? ''
     activeReasoningTurnIdByThreadId.delete(threadId)
     const turnIndex = turnId ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] : undefined
     // round-23：优先按 item 粒度按时序存档（思考项插回对应工具/命令之后），
-    // 拿不到 item 时间线时退回整段文本存档（旧行为）。
+    // 拿不到 item 时间线时退回整段文本存档（旧行为）。中途清理（keepSequence）
+    // 时不走整段兜底，避免同一轮多次存档产生重复块，等轮末再兜底一次。
     const reasoningItems = buildTurnReasoningItems(threadId)
     if (reasoningItems.length > 0) {
       rememberPersistedReasoningItems(threadId, reasoningItems, turnId || undefined, turnIndex)
-    } else {
+    } else if (!keepSequence) {
       rememberPersistedReasoning(threadId, current, turnId || undefined, turnIndex)
     }
     liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
-    turnItemSequenceByThreadId.delete(threadId)
+    if (!keepSequence) {
+      turnItemSequenceByThreadId.delete(threadId)
+      reasoningAppendedTextByItemId.clear()
+      clearLiveReasoningSnapshot(threadId)
+    }
   }
 
   // 把完整 thinking 文本存档为 reasoning 消息（本地持久化，刷新后仍展示）。
@@ -3037,9 +3219,12 @@ export function useDesktopState() {
 
   // round-23：按 item 粒度按时序存档思考（每条带 reasoningAnchorMessageId，
   // 合并时插到对应工具/命令之后，实现「提问 -> 思考 -> 工具 -> 思考 -> …」顺序）。
+  // round-27：改用按 itemId 的稳定 id（reasoning:item:*）。同一推理项在流式
+  // 过程中文本增长时原地更新而不是新增条目——此前按 text+turnId 去重，部分文本
+  // 先被归档、全量文本再插一条会形成重复思考块。
   function rememberPersistedReasoningItems(
     threadId: string,
-    items: Array<{ text: string; anchorMessageId: string }>,
+    items: Array<{ text: string; anchorMessageId: string; itemId: string }>,
     turnId?: string,
     turnIndex?: number,
   ): void {
@@ -3049,9 +3234,30 @@ export function useDesktopState() {
     for (const item of items) {
       const normalized = item.text.trim()
       if (!normalized) continue
-      if (next.some((message) => message.text === normalized && message.turnId === turnId)) continue
+      const stableId = `reasoning:item:${threadId}:${item.itemId}`
+      const existingIndex = next.findIndex((message) => message.id === stableId)
+      if (existingIndex >= 0) {
+        const existing = next[existingIndex]
+        const nextAnchor = item.anchorMessageId || existing.reasoningAnchorMessageId
+        const nextTurnIndex = typeof turnIndex === 'number' ? turnIndex : existing.turnIndex
+        if (existing.text === normalized && existing.turnIndex === nextTurnIndex && existing.reasoningAnchorMessageId === nextAnchor) {
+          continue
+        }
+        next[existingIndex] = {
+          ...existing,
+          text: normalized,
+          reasoning: { summary: [], content: [normalized] },
+          turnId: turnId || existing.turnId,
+          turnIndex: nextTurnIndex,
+          reasoningAnchorMessageId: nextAnchor,
+        }
+        continue
+      }
+      // 兼容旧存档：同文本已存在（reasoning:local:* 旧 id 或另一条推理）则跳过，
+      // 避免新旧两种存档格式在同一轮并存造成重复块。
+      if (next.some((message) => message.text === normalized)) continue
       next.push({
-        id: `reasoning:local:${threadId}:${Date.now()}:${next.length}`,
+        id: stableId,
         role: 'system',
         text: normalized,
         messageType: 'reasoning',
@@ -4018,14 +4224,15 @@ export function useDesktopState() {
 
   // 从本轮时间线构建「按真实顺序排列的思考项」，每项带时序锚点：
   // anchor = 该思考项之前最近一个工具/命令/agent 项的 id（插到它后面）。
-  function buildTurnReasoningItems(threadId: string): Array<{ text: string; anchorMessageId: string }> {
+  // round-27：返回项带 itemId，供存档用稳定 id 原地更新（流式文本增长去重）。
+  function buildTurnReasoningItems(threadId: string): Array<{ text: string; anchorMessageId: string; itemId: string }> {
     const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
-    const items: Array<{ text: string; anchorMessageId: string }> = []
+    const items: Array<{ text: string; anchorMessageId: string; itemId: string }> = []
     let lastOtherItemId = ''
     for (const entry of sequence) {
       if (entry.kind === 'reasoning') {
         const text = reasoningItemTextByItemId.get(entry.itemId)?.trim() ?? ''
-        if (text) items.push({ text, anchorMessageId: lastOtherItemId })
+        if (text) items.push({ text, anchorMessageId: lastOtherItemId, itemId: entry.itemId })
       } else {
         lastOtherItemId = entry.itemId
       }
@@ -4742,7 +4949,9 @@ export function useDesktopState() {
 
     if (isAgentContentEvent(notification)) {
       activeReasoningItemId = ''
-      clearLiveReasoningForThread(notificationThreadId)
+      // round-27：中途清理保留时间线（否则该轮后续思考锚点丢失，见
+      // clearLiveReasoningForThread 注释），序列与存档在 turn/completed 收口。
+      clearLiveReasoningForThread(notificationThreadId, true)
     }
 
     if (notification.method === 'turn/completed') {
@@ -6778,6 +6987,7 @@ export function useDesktopState() {
     selectedThreadServerRequests,
     selectedLiveOverlay,
     selectedActiveTurnId,
+    lastPlanByThreadId,
     codexQuota,
     selectedThreadId,
     availableCollaborationModes,

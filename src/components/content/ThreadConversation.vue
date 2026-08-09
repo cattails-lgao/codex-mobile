@@ -2908,11 +2908,17 @@ onBeforeUnmount(() => {
 .message-body {
   @apply flex flex-col min-w-0 max-w-full;
   width: fit-content;
+  /* round-27：把宽度上限从 .message-card 上移到 .message-body，卡片随 body 撑满，
+     修复「card 比 body 窄」（此前 body=fit-content 无上限、card 被 76ch 截断，
+     图片/长附件把 body 撑宽后卡片仍窄一截）。 */
+  max-width: min(var(--chat-card-max, 76ch), 100%);
 }
 
 .message-body[data-role='user'] {
   @apply ml-auto items-end;
   align-self: flex-end;
+  /* 用户气泡维持 560px 上限（76ch 上限对气泡过宽） */
+  max-width: min(560px, 100%);
 }
 
 .message-image-list {
@@ -2976,7 +2982,9 @@ onBeforeUnmount(() => {
 }
 
 .message-card {
-  @apply max-w-[min(var(--chat-card-max,76ch),100%)] px-0 py-0 bg-transparent border-none rounded-none;
+  /* round-27：宽度随 .message-body 撑满（上限已上移到 body） */
+  @apply px-0 py-0 bg-transparent border-none rounded-none;
+  width: 100%;
 }
 
 .message-text-flow {
@@ -3154,7 +3162,7 @@ onBeforeUnmount(() => {
 
 .message-card[data-role='user'] {
   @apply rounded-2xl bg-slate-200 px-4 py-3 max-w-[min(560px,100%)];
-  width: fit-content;
+  width: 100%;
   margin-left: auto;
   align-self: flex-end;
 }

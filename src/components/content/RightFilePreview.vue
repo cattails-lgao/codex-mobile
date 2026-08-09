@@ -133,28 +133,4 @@ watch(
 .right-file-preview-footer {
   @apply shrink-0 border-t border-zinc-200 px-3 py-1.5 text-center text-[11px] text-zinc-400;
 }
-
-:global(:root.dark) .right-file-preview-header {
-  @apply border-zinc-700 bg-zinc-950;
-}
-
-:global(:root.dark) .right-file-preview-title {
-  @apply text-zinc-100;
-}
-
-:global(:root.dark) .right-file-preview-path {
-  @apply text-zinc-500;
-}
-
-:global(:root.dark) .right-file-preview-open {
-  @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800;
-}
-
-:global(:root.dark) .right-file-preview-body {
-  @apply bg-zinc-950;
-}
-
-:global(:root.dark) .right-file-preview-footer {
-  @apply border-zinc-700 text-zinc-500;
-}
 </style>

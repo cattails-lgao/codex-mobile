@@ -100,8 +100,11 @@ const { t } = useUiLanguage()
   @apply inline-flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[11px] font-medium leading-none transition;
 }
 
+/* round-27：回退按钮与复制按钮颜色统一（此前回退为琥珀色、复制为中性灰，
+   同为图标按钮却色相不一致）。现在回退按钮与复制/分叉按钮同为中性灰，
+   语义通过图标形状区分。 */
 .message-rollback-button {
-  @apply text-amber-600/80 hover:bg-amber-50 hover:text-amber-700;
+  @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900;
 }
 
 .message-copy-button {
@@ -115,7 +118,8 @@ const { t } = useUiLanguage()
 .message-fork-icon,
 .message-copy-icon,
 .message-rollback-icon {
-  @apply text-sm;
+  /* round-27：图标 14px -> 16px（此前偏小，与 26px 按钮不协调） */
+  @apply text-base;
 }
 
 .message-fork-label,
