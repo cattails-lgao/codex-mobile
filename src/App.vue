@@ -1707,6 +1707,7 @@ const {
   selectedThreadServerRequests,
   selectedLiveOverlay,
   lastPlanByThreadId,
+  resolveThreadTurnIndex,
   selectedActiveTurnId,
   codexQuota,
   selectedThreadId,
@@ -2345,13 +2346,24 @@ const PLAN_WORK_MESSAGE_TYPES = new Set([
   'plan',
 ])
 const implementedPlanRequestId = ref<string | null>(null)
-// 计划是否已被后续轮次执行（有工作项）：用于把面板按钮置为「已完成」态。
+// 计划是否已被执行（同轮或后续轮次出现工作项）：用于把面板按钮置为「已完成」态。
+// 用 >= 而不是 >：同一轮内 plan 项之后紧跟的工作项（如「计划并执行」一轮完成）
+// 也应视为已实施；index 锚点保证同轮 plan 之前的工作项不会误判。
 function planHasLaterWork(messages: UiMessage[], message: UiMessage, index: number): boolean {
   const planTurnIndex = typeof message.turnIndex === 'number' ? message.turnIndex : -1
   if (planTurnIndex < 0) return false
   return messages.some((candidate, candidateIndex) => (
     candidateIndex > index
     && typeof candidate.turnIndex === 'number'
+    && candidate.turnIndex >= planTurnIndex
+    && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
+  ))
+}
+// plan 不在消息流中（部分 provider 不持久化 plan，仅本地存档兜底）时按轮次判断：
+// 严格晚于计划轮的轮次出现工作项即视为已实施（无 index 锚点，只用 > 避免误判）。
+function planHasWorkInLaterTurns(messages: UiMessage[], planTurnIndex: number): boolean {
+  return messages.some((candidate) => (
+    typeof candidate.turnIndex === 'number'
     && candidate.turnIndex > planTurnIndex
     && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
   ))
@@ -2387,13 +2399,18 @@ const composerPlanPanel = computed(() => {
   if (!localPlan) return null
   const localData = readPlanData(localPlan)
   if (!localData) return null
-  const localIndex = messages.findIndex((message) => message.id === localPlan.id)
+  // round-28：兜底路径此前 implemented 恒为 false → 计划已执行/执行中刷新后
+  // 按钮仍可点击（问题 1/2）。这里按计划轮序号判断后续轮次是否有工作项：
+  // 优先用 live 存档自带的 turnIndex，缺失时按 turnId 从当前轮次映射重新解析。
+  const localTurnIndex = typeof localPlan.turnIndex === 'number'
+    ? localPlan.turnIndex
+    : (localPlan.turnId ? (resolveThreadTurnIndex(selectedThreadId.value, localPlan.turnId) ?? -1) : -1)
   return {
     id: localPlan.id,
     streaming: false,
     explanation: localData.explanation,
     steps: localData.steps,
-    implemented: localIndex >= 0 ? planHasLaterWork(messages, localPlan, localIndex) : false,
+    implemented: localTurnIndex >= 0 ? planHasWorkInLaterTurns(messages, localTurnIndex) : false,
   }
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)

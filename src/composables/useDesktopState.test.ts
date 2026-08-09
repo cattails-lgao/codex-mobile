@@ -1763,6 +1763,45 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
   })
 })
 
+describe('resolveThreadTurnIndex resolves a plan turn index after refresh', () => {
+  function installPlanTurnState(threadId: string) {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'make a plan', messageType: 'userMessage', turnId: 'turn-plan', turnIndex: 0 },
+        { id: 'cmd-1', role: 'system', text: 'npm test', messageType: 'commandExecution', turnId: 'turn-impl', turnIndex: 1 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-plan': 0, 'turn-impl': 1 },
+      hasMoreOlder: false,
+    })
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('returns the turn index for known turn ids after loadMessages', async () => {
+    const state = installPlanTurnState('thread-plan')
+    await state.loadMessages('thread-plan')
+
+    expect(state.resolveThreadTurnIndex('thread-plan', 'turn-plan')).toBe(0)
+    expect(state.resolveThreadTurnIndex('thread-plan', 'turn-impl')).toBe(1)
+  })
+
+  it('returns undefined for unknown turn ids or unloaded threads', async () => {
+    const state = installPlanTurnState('thread-plan')
+    await state.loadMessages('thread-plan')
+
+    expect(state.resolveThreadTurnIndex('thread-plan', 'no-such-turn')).toBeUndefined()
+    expect(state.resolveThreadTurnIndex('thread-other', 'turn-plan')).toBeUndefined()
+  })
+})
+
 describe('interruptSelectedThreadTurn removes the unsubmitted turn locally', () => {
   function installInterruptState(threadId: string) {
     // 预置一条属于 turn-1 的 thinking 存档：中断后应随该 turn 一并移除
