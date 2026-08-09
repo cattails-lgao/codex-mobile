@@ -631,10 +631,6 @@
   @apply bg-black/70;
 }
 
-:root.dark .work-block-output-wrap.work-block-output-visible {
-  border-color: #3f3f46;
-}
-
 :root.dark .tool-call-server {
   @apply bg-zinc-700 text-zinc-300;
 }
@@ -1191,7 +1187,7 @@
 }
 
 :root.dark .message-rollback-button {
-  @apply text-amber-400/80 hover:bg-amber-400/10 hover:text-amber-300;
+  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
 :root.dark .message-inline-code {
@@ -2514,6 +2510,213 @@
 
 :root.dark .content-right-panel-close {
   @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+}
+
+/* round-27：右侧面板子面板暗色覆盖迁移（此前残留在组件 scoped 内，
+   `:global(:root.dark)` 在该构建下编译成 :root.dark[data-v-*] 永不匹配，
+   按仓库规则统一放全局样式表）。 */
+
+/* RightGitPanel */
+:root.dark .rgp-review {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-100 hover:bg-zinc-700;
+}
+
+:root.dark .rgp-state,
+:root.dark .rgp-section {
+  @apply border-zinc-700 bg-zinc-800;
+}
+
+:root.dark .rgp-state-label {
+  @apply text-zinc-400;
+}
+
+:root.dark .rgp-state-value,
+:root.dark .rgp-commit-detail-subject,
+:root.dark .rgp-branch-button,
+:root.dark .rgp-commit,
+:root.dark .rgp-file {
+  @apply text-zinc-200;
+}
+
+:root.dark .rgp-branch-button:hover,
+:root.dark .rgp-commit:hover,
+:root.dark .rgp-file:hover {
+  @apply bg-zinc-700;
+}
+
+:root.dark .rgp-branch-button.is-current,
+:root.dark .rgp-branch-button.is-selected,
+:root.dark .rgp-commit.is-current,
+:root.dark .rgp-commit.is-selected {
+  @apply bg-zinc-700 text-zinc-100;
+}
+
+:root.dark .rgp-branch-meta {
+  @apply bg-zinc-600 text-zinc-300;
+}
+
+:root.dark .rgp-ref {
+  @apply bg-zinc-600 text-zinc-200;
+}
+
+:root.dark .rgp-search {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100;
+}
+
+:root.dark .rgp-file-status {
+  @apply bg-zinc-600 text-zinc-300;
+}
+
+:root.dark .rgp-section-title,
+:root.dark .rgp-empty,
+:root.dark .rgp-file-previous-path {
+  @apply text-zinc-400;
+}
+
+:root.dark .rgp-status {
+  @apply bg-amber-950/50 text-amber-300;
+}
+
+:root.dark .rgp-status.is-error {
+  @apply bg-red-950/50 text-red-300;
+}
+
+:root.dark .rgp-feedback {
+  @apply border-red-900 bg-zinc-900 text-red-300 hover:bg-zinc-800;
+}
+
+:root.dark .rgp-toggle-row {
+  @apply text-zinc-400;
+}
+
+:root.dark .rgp-branch-checkout {
+  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100;
+}
+
+:root.dark .rgp-state-meta,
+:root.dark .rgp-commit-top {
+  @apply text-zinc-500;
+}
+
+:root.dark .rgp-reset-commit {
+  @apply border-zinc-600 bg-zinc-100 text-zinc-900 hover:bg-white disabled:border-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-500;
+}
+
+:root.dark .rgp-empty.is-error {
+  @apply text-red-400;
+}
+
+/* RightFilesPanel */
+:root.dark .rfp-toolbar {
+  @apply border-zinc-800;
+}
+
+:root.dark .rfp-search {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100 focus:border-zinc-500;
+}
+
+:root.dark .rfp-group-header {
+  @apply text-zinc-300 hover:bg-zinc-800;
+}
+
+:root.dark .rfp-group-chevron {
+  @apply text-zinc-500;
+}
+
+:root.dark .rfp-group-count {
+  @apply bg-zinc-800 text-zinc-400;
+}
+
+:root.dark .rfp-file:hover {
+  @apply bg-zinc-800;
+}
+
+:root.dark .rfp-file-label {
+  @apply text-zinc-100;
+}
+
+:root.dark .rfp-file-sub {
+  @apply text-zinc-500;
+}
+
+:root.dark .rfp-empty {
+  @apply text-zinc-400;
+}
+
+:root.dark .rfp-empty.is-error {
+  @apply text-red-400;
+}
+
+/* RightFilePreview */
+:root.dark .right-file-preview-header {
+  @apply border-zinc-700 bg-zinc-950;
+}
+
+:root.dark .right-file-preview-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .right-file-preview-path {
+  @apply text-zinc-500;
+}
+
+:root.dark .right-file-preview-open {
+  @apply border-zinc-700 text-zinc-400 hover:bg-zinc-800;
+}
+
+:root.dark .right-file-preview-body {
+  @apply bg-zinc-950;
+}
+
+:root.dark .right-file-preview-footer {
+  @apply border-zinc-700 text-zinc-500;
+}
+
+/* ApiMethodsPanel */
+:root.dark .api-panel-root {
+  @apply border-zinc-700 bg-zinc-900;
+}
+
+:root.dark .api-panel-header {
+  @apply border-zinc-800;
+}
+
+:root.dark .api-panel-title {
+  @apply text-zinc-100;
+}
+
+:root.dark .api-panel-count,
+:root.dark .api-panel-loading {
+  @apply text-zinc-400;
+}
+
+:root.dark .api-method-code {
+  @apply bg-zinc-800 text-zinc-300;
+}
+
+/* 既有迁移面板的残留缺口 */
+:root.dark .thread-pending-request-select-label {
+  @apply text-zinc-400;
+}
+
+:root.dark .skills-hub-toast-success {
+  @apply border-emerald-900/70 bg-emerald-950/50 text-emerald-300;
+}
+
+:root.dark .skills-hub-toast-error {
+  @apply border-rose-900/70 bg-rose-950/50 text-rose-300;
+}
+
+:root.dark .review-pane-branch-dropdown .composer-dropdown-trigger {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-200;
+}
+
+:root.dark .review-pane-banner {
+  @apply border-amber-900/70 bg-amber-950/40 text-amber-300;
+}
+
+:root.dark .review-pane-banner.is-error {
+  @apply border-rose-900/70 bg-rose-950/40 text-rose-300;
 }
 
 :root.dark .content-header-right-panel-toggle {

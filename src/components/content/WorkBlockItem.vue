@@ -200,14 +200,14 @@ const permissionHint = computed(() => {
      导致 break-words 永不触发、输出无限变宽 */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 0fr;
-  transition: grid-template-rows 300ms ease-out, border-color 300ms ease-out;
-  border: 1px solid transparent;
-  border-top: none;
+  /* round-27：去掉常驻 1px 边框（此前 border:1px solid transparent + border-top:none
+     在展开时显示左/右/底三边线，让整条 commandExecution 消息看起来有底部边框）。
+     输出区深色背景与消息背景的对比已足够区分，折叠时也不再占 1px 高度。 */
+  transition: grid-template-rows 300ms ease-out;
 }
 
 .work-block-output-wrap.work-block-output-visible {
   grid-template-rows: 1fr;
-  border-color: #e4e4e7;
 }
 
 .work-block-output-inner {

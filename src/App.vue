@@ -1514,7 +1514,7 @@ import {
   searchThreads,
   switchAccount,
 } from './api/codexGateway'
-import type { CollaborationModeKind, ReasoningEffort, SpeedMode, UiAccountEntry, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
+import type { CollaborationModeKind, ReasoningEffort, SpeedMode, UiAccountEntry, UiMessage, UiRateLimitWindow, UiServerRequest, UiServerRequestReply, UiThreadAutomation, UiThreadTokenUsage } from './types/codex'
 import type { ComposerDraftPayload, ThreadComposerExposed } from './components/content/ThreadComposer.vue'
 import type { GitCommitFileChange, GitCommitOption, LocalDirectoryEntry, TelegramStatus, WorktreeBranchOption } from './api/codexGateway'
 import { getFreeModeStatus, setFreeMode, setFreeModeCustomKey, setCustomProvider, getMethodCatalog, readRemoteControlStatus, setRemoteControlEnabled, startRemoteControlPairing, listRemoteControlClients, revokeRemoteControlClient, readApprovalPolicy, writeApprovalPolicy } from './api/codexGateway'
@@ -1694,6 +1694,7 @@ const {
   selectedThreadTokenUsage,
   selectedThreadServerRequests,
   selectedLiveOverlay,
+  lastPlanByThreadId,
   selectedActiveTurnId,
   codexQuota,
   selectedThreadId,
@@ -2330,6 +2331,17 @@ const PLAN_WORK_MESSAGE_TYPES = new Set([
   'plan',
 ])
 const implementedPlanRequestId = ref<string | null>(null)
+// 计划是否已被后续轮次执行（有工作项）：用于把面板按钮置为「已完成」态。
+function planHasLaterWork(messages: UiMessage[], message: UiMessage, index: number): boolean {
+  const planTurnIndex = typeof message.turnIndex === 'number' ? message.turnIndex : -1
+  if (planTurnIndex < 0) return false
+  return messages.some((candidate, candidateIndex) => (
+    candidateIndex > index
+    && typeof candidate.turnIndex === 'number'
+    && candidate.turnIndex > planTurnIndex
+    && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
+  ))
+}
 const composerPlanPanel = computed(() => {
   const messages = filteredMessages.value
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -2337,29 +2349,38 @@ const composerPlanPanel = computed(() => {
     if (message.messageType !== 'plan' && message.messageType !== 'plan.live') continue
     const data = readPlanData(message)
     if (!data) return null
-    const planTurnIndex = typeof message.turnIndex === 'number' ? message.turnIndex : -1
-    // A plan is "implemented" once a later turn has already acted on it (work
-    // items after the plan's turn), or the user already requested its
-    // implementation; either way the Implement button must not be re-clickable.
-    const hasLaterWork = planTurnIndex >= 0 && messages.some((candidate, candidateIndex) => (
-      candidateIndex > index
-      && typeof candidate.turnIndex === 'number'
-      && candidate.turnIndex > planTurnIndex
-      && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
-    ))
+    // 用户已在本会话点过 Implement → 面板隐藏（执行中）。
     const requested = implementedPlanRequestId.value !== null && message.id === implementedPlanRequestId.value
-    // 计划一旦已实施（用户点过 Implement，或后续轮次已经执行了工作项），
-    // 输入框上方的计划面板整体隐藏，不再残留“已完成”的计划。
-    if (hasLaterWork || requested) return null
+    if (requested) return null
+    const implemented = planHasLaterWork(messages, message, index)
+    // round-27：计划面板在计划实施后不再整体隐藏（此前 hasLaterWork 直接 return
+    // null → 刷新后「输入框上方的计划」消失），改为保留展示并把 Implement 按钮
+    // 置为已完成态（不可重复点击，与原先的设计目的一致）。
     return {
       id: message.id,
       streaming: message.messageType === 'plan.live',
       explanation: data.explanation,
       steps: data.steps,
-      implemented: false,
+      implemented,
     }
   }
-  return null
+  // round-27：消息流里没有 plan 消息时，用本地存档的最近一次 plan 兜底——
+  // 部分 provider 下 plan 只实时推送、服务端不持久化，刷新后消息流为空，
+  // 此前输入框上方的计划面板会消失；本地存档保证刷新后仍能恢复展示。
+  const localPlan = selectedThreadId.value
+    ? (lastPlanByThreadId.value[selectedThreadId.value] ?? null)
+    : null
+  if (!localPlan) return null
+  const localData = readPlanData(localPlan)
+  if (!localData) return null
+  const localIndex = messages.findIndex((message) => message.id === localPlan.id)
+  return {
+    id: localPlan.id,
+    streaming: false,
+    explanation: localData.explanation,
+    steps: localData.steps,
+    implemented: localIndex >= 0 ? planHasLaterWork(messages, localPlan, localIndex) : false,
+  }
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
 const composerThreadContextId = computed(() => (isHomeRoute.value ? '__new-thread__' : selectedThreadId.value))
