@@ -59,3 +59,4 @@ Return to the [manual test index](../../tests.md).
 | [Round 16: message visual consistency, thinking blocks, rollback button, and interrupt cleanup](round16-message-visual-and-interrupt-cleanup.md) |
 | [Round 23: message fonts, user toolbar, live overlay, plan popover, pending panel, stale request cleanup](round23-message-fonts-overlay-toolbar-plan-pending.md) |
 | [Round 24: unified user toolbar, plain reasoning/tool rows, fileChange at round end, reasoning chronology, thread title truncation](round24-message-toolbar-reasoning-filechange-title-truncate.md) |
+| [Client-side auto-compact: pre-send check + stash/resend](client-side-auto-compact-pre-send-stash-resend.md) |
