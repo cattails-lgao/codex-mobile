@@ -1,17 +1,17 @@
 {
-  "name": "codexapp",
-  "version": "0.1.87",
-  "description": "A lightweight web interface for Codex that runs on top of the Codex app-server, allowing remote access from any browser",
+  "name": "codex-mobile-re",
+  "version": "0.1.88",
+  "description": "Mobile-first web interface and gateway for Codex app-server (fork rebuild of codexapp)",
   "type": "module",
   "license": "MIT",
   "author": "Pavel Voronin, Igor Levochkin",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/friuns2/codexui.git"
+    "url": "git+https://github.com/cattails-lgao/codex-mobile.git"
   },
-  "homepage": "https://github.com/friuns2/codexui#readme",
+  "homepage": "https://github.com/cattails-lgao/codex-mobile#readme",
   "bugs": {
-    "url": "https://github.com/friuns2/codexui/issues"
+    "url": "https://github.com/cattails-lgao/codex-mobile/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -27,8 +27,7 @@
     "node": ">=18"
   },
   "bin": {
-    "codexapp": "dist-cli/index.js",
-    "codexui": "dist-cli/index.js"
+    "codex-mobile-re": "dist-cli/index.js"
   },
   "files": [
     "dist/",
