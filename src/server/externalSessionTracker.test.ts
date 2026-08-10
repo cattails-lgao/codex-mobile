@@ -212,6 +212,35 @@ describe("externalSessionTracker", () => {
         });
     });
 
+    it("collects subagent thread ids from session_meta thread_source", async () => {
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-hhh.jsonl",
+            [metaLine("thread-sub-2", "codex-tui", "subagent")],
+        );
+        // A TUI-spawned variant without an explicit originator must still be
+        // recognized through thread_source alone.
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-01-iii.jsonl",
+            [metaLine("thread-sub-3", "", "subagent")],
+        );
+        // A normal user session must not be collected.
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-02-jjj.jsonl",
+            [metaLine("thread-user-1", "codex-tui")],
+        );
+
+        const tracker = createTracker();
+        await tracker.tick();
+
+        expect(tracker.getSubagentThreadIds().sort()).toEqual([
+            "thread-sub-2",
+            "thread-sub-3",
+        ]);
+    });
+
     it("skips sessions under archived_sessions", async () => {
         const archived = join(
             sessionsDir,

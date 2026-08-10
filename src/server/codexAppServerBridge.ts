@@ -1841,6 +1841,23 @@ function mergeImportedThreadsIntoThreadListResult(result: unknown): unknown {
   }
 }
 
+/**
+ * Drop thread-list rows whose id is in `threadIdsToExclude` (e.g. subagent
+ * sessions, which the app-server materializes with an interactive source and
+ * therefore shows in `thread/list`). Returns the input unchanged when nothing
+ * is excluded.
+ */
+export function filterThreadListByIds(result: unknown, threadIdsToExclude: ReadonlySet<string>): unknown {
+  const record = asRecord(result)
+  const data = Array.isArray(record?.data) ? record.data : null
+  if (!record || !data || threadIdsToExclude.size === 0) return result
+  const filtered = data.filter((row) => {
+    const id = readNonEmptyString(asRecord(row)?.id)
+    return !(id.length > 0 && threadIdsToExclude.has(id))
+  })
+  return filtered.length === data.length ? result : { ...record, data: filtered }
+}
+
 async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
   const canonicalProjectRoot = await realpath(projectRoot)
   const codexHome = getCodexHomeDir()
@@ -7733,6 +7750,15 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     return changed ? { ...record, data } : result
   }
 
+  // Subagent sessions are materialized by the app-server with an interactive
+  // `source` (e.g. "cli"), so they surface in thread/list alongside user
+  // threads. Drop them from the user-facing list by matching the local
+  // session_meta `thread_source` marker (the RPC thread payload has no such
+  // field, so the sessions directory is the only reliable signal).
+  function filterSubagentThreadsFromThreadListResult(result: unknown): unknown {
+    return filterThreadListByIds(result, new Set(externalSessionTracker.getSubagentThreadIds()))
+  }
+
   function overlayExternalSessionOnThreadResult(result: unknown): unknown {
     const record = asRecord(result)
     const thread = asRecord(record?.thread)
@@ -8260,7 +8286,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const listMergedResult = body.method === 'thread/list'
           ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
           : errorMergedResult
-        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, listMergedResult)
+        const subagentFilteredResult = body.method === 'thread/list'
+          ? filterSubagentThreadsFromThreadListResult(listMergedResult)
+          : listMergedResult
+        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, subagentFilteredResult)
         const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
           ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
           : sanitizedResult
