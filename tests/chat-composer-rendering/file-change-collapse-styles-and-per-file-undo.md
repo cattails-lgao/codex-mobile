@@ -1,15 +1,17 @@
-# File-Change Summary Block: Collapse Styles Restored + Per-File Undo
+# File-Change Summary Block: Collapse Styles Restored + Per-File Undo + Lightweight Styling
 
-Two related fixes for the `data-message-type="fileChange"` block in the message list.
+Three related fixes for the `data-message-type="fileChange"` block in the message list.
 
 #### Background
 - **Collapse/styles broken:** after the round-15 component split, `FileChangeSummaryBlock` reused `cmd-row` / `cmd-chevron` / `cmd-group-wrap` / `cmd-group-visible` classes whose definitions stayed in `ThreadConversation.vue` scoped styles, so the child component never received them. The fold animation (`grid-template-rows: 0fr→1fr`) and row/chevron styling silently vanished, making the block look broken and non-collapsible.
 - **Undo granularity:** the turn-level Undo button reverted the whole turn's file changes; there was no way to revert a single file.
+- **Visual inconsistency:** the block still used the card-style `cmd-*` fold bar (border + background + rounded corners, dashed for group) and a card-style expanded list (`rounded-xl border bg-white/80`), while all other system blocks (work blocks, reasoning blocks, process folds) were de-carded in round-17 and use the round-23 typography (`#737373` text, no borders/backgrounds).
 
 #### Changes
-- `FileChangeSummaryBlock.vue` now carries its own `cmd-*` collapse styles; the now-unused `cmd-*` rules were removed from `ThreadConversation.vue`.
+- `FileChangeSummaryBlock.vue` now carries its own collapse styles; the now-unused `cmd-*` rules were removed from `ThreadConversation.vue`.
 - Backend `/codex-api/thread/rollback-files` accepts a new `filePaths` array (absolute paths matched against each change's path and movedToPath), scoping undo/redo to specific files while keeping the existing `patchIds` (apply_patch call id) and `scope` semantics.
 - Each file row in the summary block has a small undo button; it opens a confirm dialog naming the file, then calls `updateThreadFileChanges(..., filePaths)`.
+- Round-33 styling: the fold bar is now a borderless/backgroundless row (`px-0 py-0.5`, chevron `text-[10px]`, label `text-xs #737373`) matching work/reasoning/fold rows; the expanded list drops the card chrome and uses a left hairline indent; badges/deltas are tightened but keep their tone colors.
 
 #### Steps
 1. Open a thread whose turn changed multiple files (apply_patch touching 2+ files).
@@ -19,7 +21,7 @@ Two related fixes for the `data-message-type="fileChange"` block in the message 
 5. Use the block-level Undo button and verify all files of the turn revert.
 
 #### Expected Results
-- Step 2: the block renders with the normal row styling and the chevron rotates on expand/collapse.
+- Step 2: the block renders as a lightweight row consistent with work-block/reasoning rows (no border, no background, `#737373` label), and the chevron rotates on expand/collapse.
 - Step 3-4: only the chosen file is reverted; the other file keeps its edited content; the redo state applies to the same file scope.
 - Step 5: whole-turn undo still works as before.
 - Dark theme and mobile widths keep the undo icon visible and aligned.
