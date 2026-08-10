@@ -3723,10 +3723,17 @@ function applyV4aDiff(fileContent: string, diffText: string): string | null {
   return result.join('\n')
 }
 
+/** 归一化后判断 change 是否命中允许撤销的文件集合（patch 与文件双粒度）。 */
+export function pathSetMatchesChange(allowedFilePaths: Set<string>, filePath: string, movedToPath: string | null): boolean {
+  const candidates = movedToPath ? [filePath, movedToPath] : [filePath]
+  return candidates.some((candidate) => allowedFilePaths.has(candidate))
+}
+
 async function applyTurnFileChanges(
   cwd: string,
   turnInfos: Map<string, CollectedTurnFileInfo>,
   allowedPatchIds?: Set<string>,
+  allowedFilePaths?: Set<string>,
 ): Promise<{ applied: number; errors: string[]; appliedPatchIds: string[] }> {
   if (turnInfos.size === 0) return { applied: 0, errors: [], appliedPatchIds: [] }
 
@@ -3746,6 +3753,7 @@ async function applyTurnFileChanges(
       const movedToPath = change.movedToPath
         ? (isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath))
         : null
+      if (allowedFilePaths && !pathSetMatchesChange(allowedFilePaths, filePath, movedToPath)) continue
 
       try {
         if (change.operation === 'add') {
@@ -3806,10 +3814,11 @@ async function applyTurnFileChanges(
   return { applied, errors, appliedPatchIds }
 }
 
-async function revertTurnFileChanges(
+export async function revertTurnFileChanges(
   cwd: string,
   turnInfos: Map<string, CollectedTurnFileInfo>,
   allowedPatchIds?: Set<string>,
+  allowedFilePaths?: Set<string>,
 ): Promise<{ reverted: number; errors: string[]; revertedPatchIds: string[] }> {
   if (turnInfos.size === 0) return { reverted: 0, errors: [], revertedPatchIds: [] }
 
@@ -3853,6 +3862,7 @@ async function revertTurnFileChanges(
       const movedToPath = change.movedToPath
         ? (isAbsolute(change.movedToPath) ? change.movedToPath : join(cwd, change.movedToPath))
         : null
+      if (allowedFilePaths && !pathSetMatchesChange(allowedFilePaths, filePath, movedToPath)) continue
 
       try {
         if (change.operation === 'add') {
@@ -3956,7 +3966,7 @@ async function revertTurnFileChanges(
   return { reverted, errors, revertedPatchIds }
 }
 
-function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
   const turnIds = new Set<string>()
   for (const turn of turns) {
     const turnRecord = asRecord(turn)
@@ -3979,34 +3989,52 @@ function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string):
     if (!slots || slots.length === 0) return turn
 
     const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
-    // Idempotence: a turn that already went through session-log recovery
-    // carries session-recovered item ids.
-    if (existingItems.some((it) => typeof it.id === 'string' && it.id.startsWith('session-'))) return turn
+    // round-31：不再用 `session-` id 前缀做幂等判断——新版本 app-server 物化
+    // 线程历史时原生就带 `session-cmd-` 前缀（v0.146+），此前缀判断会让
+    // session-log 时序恢复对所有新线程失效（命令/回复顺序恢复不到）。交错
+    // 结果由 rollout slots 决定，对同一输入重复执行结果一致（确定性幂等）。
 
     const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
     const userMessages = existingItems.filter((it) => it.type === 'userMessage')
 
-    let agentIdx = 0
+    const agentSlotCount = slots.filter((slot) => slot.type === 'agentMessage').length
     const interleaved: Record<string, unknown>[] = [...userMessages]
     const recoveredIds = new Set<string>()
-    for (const slot of slots) {
-      if (slot.type === 'agentMessage') {
-        if (agentIdx < agentMessages.length) {
-          interleaved.push(agentMessages[agentIdx]!)
-          agentIdx++
+    if (agentMessages.length < agentSlotCount) {
+      // round-31：物化把轮内多段回复合并（agent 消息数少于 rollout 的回复段），
+      // 无法逐段交错。按 rollout 顺序把所有命令/文件变更排前，agent 回复追加到
+      // 轮末——rollout 中带文本的最终回复本就在轮末，避免「命令块跑到对话最后」。
+      for (const slot of slots) {
+        if (slot.type === 'commandExecution' && slot.command) {
+          interleaved.push(slot.command as unknown as Record<string, unknown>)
+          recoveredIds.add(slot.command.id)
+        } else if (slot.type === 'fileChange' && slot.fileChange) {
+          interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
+          recoveredIds.add(slot.fileChange.id)
         }
-      } else if (slot.type === 'commandExecution' && slot.command) {
-        interleaved.push(slot.command as unknown as Record<string, unknown>)
-        recoveredIds.add(slot.command.id)
-      } else if (slot.type === 'fileChange' && slot.fileChange) {
-        interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
-        recoveredIds.add(slot.fileChange.id)
       }
-    }
+      interleaved.push(...agentMessages)
+    } else {
+      let agentIdx = 0
+      for (const slot of slots) {
+        if (slot.type === 'agentMessage') {
+          if (agentIdx < agentMessages.length) {
+            interleaved.push(agentMessages[agentIdx]!)
+            agentIdx++
+          }
+        } else if (slot.type === 'commandExecution' && slot.command) {
+          interleaved.push(slot.command as unknown as Record<string, unknown>)
+          recoveredIds.add(slot.command.id)
+        } else if (slot.type === 'fileChange' && slot.fileChange) {
+          interleaved.push(slot.fileChange as unknown as Record<string, unknown>)
+          recoveredIds.add(slot.fileChange.id)
+        }
+      }
 
-    while (agentIdx < agentMessages.length) {
-      interleaved.push(agentMessages[agentIdx]!)
-      agentIdx++
+      while (agentIdx < agentMessages.length) {
+        interleaved.push(agentMessages[agentIdx]!)
+        agentIdx++
+      }
     }
 
     // Append whatever else the server persisted (reasoning, tool calls, plan,
@@ -8540,6 +8568,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           const patchIds = Array.isArray(body?.patchIds)
             ? new Set(body.patchIds.filter((value): value is string => typeof value === 'string' && value.length > 0))
             : undefined
+          const filePaths = Array.isArray(body?.filePaths)
+            ? new Set(body.filePaths
+                .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                .map((value) => (isAbsolute(value) ? value : join(cwd, value))))
+            : undefined
           if (!threadId || !turnId || !cwd) {
             setJson(res, 400, { error: 'Missing threadId, turnId, or cwd' })
             return
@@ -8590,12 +8623,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
 
           if (action === 'redo') {
-            const result = await applyTurnFileChanges(cwd, turnInfos, patchIds)
+            const result = await applyTurnFileChanges(cwd, turnInfos, patchIds, filePaths)
             setJson(res, 200, { ...result, changed: result.applied, message: `Reapplied ${result.applied} file change(s)` })
             return
           }
 
-          const result = await revertTurnFileChanges(cwd, turnInfos, patchIds)
+          const result = await revertTurnFileChanges(cwd, turnInfos, patchIds, filePaths)
           setJson(res, 200, { ...result, changed: result.reverted, message: `Reverted ${result.reverted} file change(s)` })
         } catch (error) {
           setJson(res, 500, { error: getErrorMessage(error, 'Failed to revert file changes') })

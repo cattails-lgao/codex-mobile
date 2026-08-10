@@ -60,6 +60,16 @@
                 {{ part.label }}
               </span>
             </span>
+            <button
+              v-if="actionable"
+              type="button"
+              class="file-change-file-undo-button"
+              :title="fileChangeFileUndoLabel(change)"
+              :aria-label="fileChangeFileUndoLabel(change)"
+              @click="$emit('request-file-action', change)"
+            >
+              <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
+            </button>
           </li>
         </ul>
         <div v-if="actionable" class="file-change-actions">
@@ -118,6 +128,7 @@ defineEmits<{
   toggle: []
   'open-diff': [change: UiFileChange]
   'request-action': [action: 'undo' | 'redo']
+  'request-file-action': [change: UiFileChange]
 }>()
 
 const { t } = useUiLanguage()
@@ -125,6 +136,7 @@ const { t } = useUiLanguage()
 const fileChangeOperationLabel = computed(() => (change: UiFileChange) => fileChangeOperationLabelCore(change, t))
 const fileChangeSummaryLabel = computed(() => (summary: TurnFileChangeSummary | null) => fileChangeSummaryLabelCore(summary, t))
 const displayFileChangePath = computed(() => (pathValue: string) => displayFileChangePathCore(pathValue, props.cwd))
+const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('Undo')} ${displayFileChangePathCore(change.path, props.cwd)}`)
 </script>
 
 <style scoped>
@@ -140,6 +152,48 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 
 .file-change-summary-row {
   @apply border-dashed;
+}
+
+/* round-31：修复独立组件拆分后 cmd-* 折叠样式丢失（此前定义在
+   ThreadConversation scoped 样式中，子组件内部无法命中） */
+.cmd-row {
+  @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+}
+
+.cmd-row.cmd-row-group {
+  @apply border-dashed border-zinc-300 bg-zinc-100/90 text-zinc-600;
+}
+
+.cmd-row.cmd-compact {
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.625rem;
+}
+
+.cmd-row.cmd-compact .cmd-chevron {
+  font-size: 9px;
+}
+
+.cmd-row.cmd-expanded {
+  @apply rounded-b-none;
+}
+
+.cmd-chevron {
+  @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
+}
+
+.cmd-chevron-open {
+  transform: rotate(90deg);
+}
+
+.cmd-group-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease-out;
+}
+
+.cmd-group-wrap.cmd-group-visible {
+  grid-template-rows: 1fr;
 }
 
 .file-change-summary-label {
@@ -216,6 +270,10 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 
 .file-change-action-error {
   @apply m-0 min-w-0 flex-1 text-xs text-rose-600;
+}
+
+.file-change-file-undo-button {
+  @apply ml-auto inline-flex items-center rounded-md border border-transparent bg-transparent p-1 text-zinc-400 transition hover:border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700;
 }
 
 .file-change-signed-count {

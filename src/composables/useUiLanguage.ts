@@ -796,6 +796,8 @@ const zhCN: Record<string, string> = {
   'Undo': '撤销',
   'Undo file changes?': '撤销文件变更？',
   'Undo the file changes from this turn? This modifies the working tree and Codex cannot revert it automatically.': '撤销本轮的文件变更？这会修改工作树，Codex 无法自动还原。',
+  'Undo the changes to {file}? This modifies the working tree and Codex cannot revert it automatically.': '撤销对 {file} 的变更？这会修改工作树，Codex 无法自动还原。',
+  'Redo the changes to {file}? This reapplies the edits to the working tree.': '重做对 {file} 的变更？这会重新应用对工作树的编辑。',
   'Undoing': '正在撤销',
   'Uninstall failed': '卸载失败',
   'Use a thread or project menu to add an automation.': '请通过线程或项目菜单添加自动化。',
