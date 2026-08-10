@@ -1,10 +1,16 @@
 import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BackendQueueProcessor,
   filterThreadListByIds,
+  mergeSessionCommandsIntoTurns,
   mergeSessionSkillInputsIntoTurns,
   parseAutomationToml,
+  pathSetMatchesChange,
+  revertTurnFileChanges,
   sanitizeThreadTurnsInlinePayloads,
   toAutomationApiRecord,
 } from './codexAppServerBridge'
@@ -448,5 +454,119 @@ describe('filterThreadListByIds', () => {
   it('leaves non-thread-list payloads untouched', () => {
     const result = { thread: { id: 'thread-user-1', turns: [] } }
     expect(filterThreadListByIds(result, new Set(['thread-user-1']))).toBe(result)
+  })
+})
+
+describe('pathSetMatchesChange', () => {
+  it('matches the file path, including a moved target path', () => {
+    expect(pathSetMatchesChange(new Set(['/proj/src/a.ts']), '/proj/src/a.ts', null)).toBe(true)
+    expect(pathSetMatchesChange(new Set(['/proj/src/a.ts']), '/proj/src/a.ts', '/proj/src/b.ts')).toBe(true)
+    expect(pathSetMatchesChange(new Set(['/proj/src/b.ts']), '/proj/src/a.ts', '/proj/src/b.ts')).toBe(true)
+  })
+
+  it('rejects paths outside the allowed set', () => {
+    expect(pathSetMatchesChange(new Set(['/proj/src/a.ts']), '/proj/src/c.ts', null)).toBe(false)
+    expect(pathSetMatchesChange(new Set(), '/proj/src/a.ts', null)).toBe(false)
+  })
+})
+
+describe('revertTurnFileChanges single-file scope', () => {
+  const applyPatchInput = [
+    '*** Begin Patch',
+    '*** Update File: a.txt',
+    '@@',
+    '-A1',
+    '+A2',
+    '*** Update File: b.txt',
+    '@@',
+    '-B1',
+    '+B2',
+    '*** End Patch',
+  ].join('\n')
+
+  function turnInfosWithOnePatch(): Map<string, { patchInputs: Array<{ callId: string; input: string }>; commandFilePaths: string[] }> {
+    return new Map([['turn-1', { patchInputs: [{ callId: 'call-1', input: applyPatchInput }], commandFilePaths: [] }]])
+  }
+
+  it('reverts only the requested file when filePaths is set', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'codexapp-file-undo-'))
+    try {
+      await writeFile(join(cwd, 'a.txt'), 'A2\n', 'utf8')
+      await writeFile(join(cwd, 'b.txt'), 'B2\n', 'utf8')
+
+      const result = await revertTurnFileChanges(cwd, turnInfosWithOnePatch(), undefined, new Set([join(cwd, 'a.txt')]))
+
+      expect(result.reverted).toBe(1)
+      expect(await readFile(join(cwd, 'a.txt'), 'utf8')).toBe('A1\n')
+      expect(await readFile(join(cwd, 'b.txt'), 'utf8')).toBe('B2\n')
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it('reverts all files when no filePaths filter is set', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'codexapp-file-undo-all-'))
+    try {
+      await writeFile(join(cwd, 'a.txt'), 'A2\n', 'utf8')
+      await writeFile(join(cwd, 'b.txt'), 'B2\n', 'utf8')
+
+      const result = await revertTurnFileChanges(cwd, turnInfosWithOnePatch())
+
+      expect(result.reverted).toBe(2)
+      expect(await readFile(join(cwd, 'a.txt'), 'utf8')).toBe('A1\n')
+      expect(await readFile(join(cwd, 'b.txt'), 'utf8')).toBe('B1\n')
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('mergeSessionCommandsIntoTurns ordering', () => {
+  // Simulates a turn as materialized by a modern app-server (v0.146+): the
+  // rollout had multiple assistant replies interleaved with commands, but the
+  // materialized turn collapsed them into one agentMessage placed after the
+  // first command, leaving the remaining commands at the end of the turn.
+  const materializedTurns = [
+    {
+      id: 'turn-1',
+      items: [
+        { id: 'item-1', type: 'userMessage' },
+        { id: 'session-cmd-call_1', type: 'commandExecution' },
+        { id: 'item-2', type: 'agentMessage' },
+        { id: 'session-cmd-call_2', type: 'commandExecution' },
+        { id: 'session-cmd-call_3', type: 'commandExecution' },
+      ],
+    },
+  ]
+
+  const sessionLog = [
+    JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', id: 'item-1' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_1', arguments: '{"cmd":"ls"}' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-1' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_2', arguments: '{"cmd":"cat"}' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-2' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_3', arguments: '{"cmd":"grep"}' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-3' } }),
+  ].join('\n')
+
+  it('puts the final agent reply at the end when materialization collapsed replies', () => {
+    const result = mergeSessionCommandsIntoTurns(materializedTurns, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
+    const items = result[0].items
+    expect(items[items.length - 1].type).toBe('agentMessage')
+    expect(items.map((it) => it.type)).toEqual([
+      'userMessage',
+      'commandExecution',
+      'commandExecution',
+      'commandExecution',
+      'agentMessage',
+    ])
+  })
+
+  it('is idempotent across repeated recovery passes', () => {
+    const once = mergeSessionCommandsIntoTurns(materializedTurns, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
+    const twice = mergeSessionCommandsIntoTurns(once, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
+    expect(twice[0].items.map((it) => it.type)).toEqual(once[0].items.map((it) => it.type))
+    expect(twice[0].items[twice[0].items.length - 1].type).toBe('agentMessage')
   })
 })

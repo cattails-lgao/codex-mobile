@@ -121,6 +121,7 @@
               @toggle="toggleFileChangeSummary(foldTailMessage(message))"
               @open-diff="openDiffViewer(foldAnchoredFileChangeSummary(message), $event)"
               @request-action="requestFileChangeAction(foldAnchoredFileChangeSummary(message), $event)"
+              @request-file-action="requestFileChangeFileAction(foldAnchoredFileChangeSummary(message), $event)"
             />
           </div>
         </div>
@@ -187,6 +188,7 @@
                 @toggle="toggleFileChangeSummary(message)"
                 @open-diff="openDiffViewer(readStandaloneFileChangeSummary(message), $event)"
                 @request-action="requestFileChangeAction(readStandaloneFileChangeSummary(message), $event)"
+                @request-file-action="requestFileChangeFileAction(readStandaloneFileChangeSummary(message), $event)"
               />
             </article>
           </div>
@@ -551,6 +553,7 @@
               @toggle="toggleFileChangeSummary(message)"
               @open-diff="openDiffViewer(readAnchoredFileChangeSummary(message), $event)"
               @request-action="requestFileChangeAction(readAnchoredFileChangeSummary(message), $event)"
+              @request-file-action="requestFileChangeFileAction(readAnchoredFileChangeSummary(message), $event)"
             />
           </div>
         </div>
@@ -652,6 +655,7 @@ import {
   aggregateFileChanges,
   buildDiffViewerLines,
   buildFileChangeCopyText as buildFileChangeCopyTextCore,
+  displayFileChangePath as displayFileChangePathCore,
   fileChangeKey,
   type DiffViewerLine,
   type TurnFileChangeSummary,
@@ -659,6 +663,10 @@ import {
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
+}
+
+function displayFileChangePath(pathValue: string): string {
+  return displayFileChangePathCore(pathValue, props.cwd)
 }
 
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
@@ -965,6 +973,8 @@ type PendingFileChangeConfirm = {
   kind: 'file-change'
   summary: TurnFileChangeSummary | null
   action: 'undo' | 'redo'
+  filePaths?: string[]
+  filePathLabel?: string
 }
 type PendingEditConfirm = {
   kind: 'edit-message'
@@ -982,6 +992,11 @@ const pendingConfirmMessage = computed(() => {
   if (!pending) return ''
   if (pending.kind === 'edit-message') {
     return t('This rolls the thread back to this turn so you can edit the message. Later replies will be removed.')
+  }
+  if (pending.filePathLabel) {
+    return pending.action === 'undo'
+      ? t('Undo the changes to {file}? This modifies the working tree and Codex cannot revert it automatically.', { file: pending.filePathLabel })
+      : t('Redo the changes to {file}? This reapplies the edits to the working tree.', { file: pending.filePathLabel })
   }
   return pending.action === 'undo'
     ? t('Undo the file changes from this turn? This modifies the working tree and Codex cannot revert it automatically.')
@@ -1625,7 +1640,11 @@ function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
   return fileChangeNextAction(summary) === 'redo' ? t('Redo') : t('Undo')
 }
 
-async function runFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): Promise<void> {
+async function runFileChangeAction(
+  summary: TurnFileChangeSummary | null,
+  action: 'undo' | 'redo',
+  filePaths?: string[],
+): Promise<void> {
   const key = fileChangeActionKey(summary)
   if (!summary || !key || !props.activeThreadId || !props.cwd) return
   const previousState = fileChangeActionStatus(summary)
@@ -1643,6 +1662,7 @@ async function runFileChangeAction(summary: TurnFileChangeSummary | null, action
       action,
       patchIds.length > 0 ? patchIds : undefined,
       'single_turn',
+      filePaths,
     )
   } catch (error) {
     fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
@@ -1766,6 +1786,17 @@ function requestFileChangeAction(summary: TurnFileChangeSummary | null, action: 
   pendingConfirm.value = { kind: 'file-change', summary, action }
 }
 
+function requestFileChangeFileAction(summary: TurnFileChangeSummary | null, change: UiFileChange): void {
+  if (!summary || !fileChangeActionKey(summary) || !change.path) return
+  pendingConfirm.value = {
+    kind: 'file-change',
+    summary,
+    action: 'undo',
+    filePaths: [change.path],
+    filePathLabel: displayFileChangePath(change.path),
+  }
+}
+
 function confirmPendingAction(): void {
   const pending = pendingConfirm.value
   pendingConfirm.value = null
@@ -1775,7 +1806,7 @@ function confirmPendingAction(): void {
     if (turnId) emit('rollback', { turnId })
     return
   }
-  void runFileChangeAction(pending.summary, pending.action)
+  void runFileChangeAction(pending.summary, pending.action, pending.filePaths)
 }
 
 function getInlineSegments(text: string): InlineSegment[] {
@@ -3214,110 +3245,6 @@ onBeforeUnmount(() => {
 
 .icon-svg {
   @apply w-5 h-5;
-}
-
-.cmd-row {
-  @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
-}
-
-.cmd-row.cmd-row-group {
-  @apply border-dashed border-zinc-300 bg-zinc-100/90 text-zinc-600;
-}
-
-.cmd-row.cmd-compact {
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  border-radius: 0.625rem;
-}
-
-.cmd-row.cmd-compact .cmd-chevron {
-  font-size: 9px;
-}
-
-.cmd-row.cmd-compact .cmd-label {
-  font-size: 0.75rem;
-}
-
-.cmd-row.cmd-compact .cmd-status {
-  max-width: 4.5rem;
-  font-size: 0.75rem;
-}
-
-.cmd-row.cmd-expanded {
-  @apply rounded-b-none;
-}
-
-.cmd-chevron {
-  @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
-}
-
-.cmd-chevron-open {
-  transform: rotate(90deg);
-}
-
-.cmd-label {
-  @apply flex-1 min-w-0 truncate text-xs font-mono text-zinc-700;
-}
-
-.cmd-group-label {
-  @apply flex-1 min-w-0 truncate text-xs font-medium text-zinc-600;
-}
-
-.cmd-status {
-  @apply max-w-24 truncate text-right text-[11px] font-medium flex-shrink-0;
-}
-
-.cmd-status-running .cmd-status {
-  @apply text-amber-600;
-}
-
-.cmd-status-ok .cmd-status {
-  @apply text-emerald-600;
-}
-
-.cmd-status-error .cmd-status {
-  @apply text-rose-600;
-}
-
-.cmd-output-wrap {
-  @apply rounded-b-lg bg-zinc-900;
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 300ms ease-out, border-color 300ms ease-out;
-  border: 1px solid transparent;
-  border-top: none;
-}
-
-.cmd-output-wrap.cmd-output-visible {
-  grid-template-rows: 1fr;
-  border-color: #e4e4e7;
-}
-
-.cmd-group-wrap {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 220ms ease-out;
-}
-
-.cmd-group-wrap.cmd-group-visible {
-  grid-template-rows: 1fr;
-}
-
-.cmd-group-inner {
-  @apply mb-1 flex min-h-0 flex-col gap-1 overflow-hidden pl-2;
-}
-
-.cmd-output-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
-.cmd-output {
-  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
-}
-
-.cmd-output.cmd-output-condensed {
-  max-height: 9rem;
 }
 
 @media (max-width: 767px) {
