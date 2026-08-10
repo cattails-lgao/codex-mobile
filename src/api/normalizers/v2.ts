@@ -740,7 +740,10 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
   // A thread accumulates one ContextCompaction item per compaction run. Keep
   // only the most recent one in the feed so repeated compactions do not stack
   // up rows of "Context compacted"; older summaries are superseded.
-  return collapseCompactionDoneMessages(messages)
+  // round-30：服务端把 contextCompaction 固定在 turn items 末尾，刷新后压缩块
+  // 会跑到对话最后（与压缩实际发生时点不符）。归一化后把它移到该轮第一条
+  // 用户消息之后——压缩是 turn 边界动作，语义上属于轮首，刷新前后位置一致。
+  return repositionCompactionAfterUserMessage(collapseCompactionDoneMessages(messages))
 }
 
 function collapseCompactionDoneMessages(messages: UiMessage[]): UiMessage[] {
@@ -755,6 +758,35 @@ function collapseCompactionDoneMessages(messages: UiMessage[]): UiMessage[] {
   return messages.filter((message, index) => (
     message.messageType !== 'compaction.done' || index === lastCompactionIndex
   ))
+}
+
+// round-30：把保留的 compaction.done 移到其所属轮次第一条用户消息之后。
+// 服务端把 ContextCompaction item 追加在 turn items 末尾，若直接按服务端顺序
+// 渲染，刷新后「Context compacted」会出现在整个对话的最后。压缩在 turn 边界
+// 发生，把它归位到该轮用户消息之后，刷新前（live 注入位置）与刷新后一致。
+function repositionCompactionAfterUserMessage(messages: UiMessage[]): UiMessage[] {
+  let compactionIndex = -1
+  for (let index = 0; index < messages.length; index += 1) {
+    if (messages[index]?.messageType === 'compaction.done') {
+      compactionIndex = index
+      break
+    }
+  }
+  if (compactionIndex < 0) return messages
+  const compaction = messages[compactionIndex]
+  const turnIndex = compaction.turnIndex
+  let userMessageIndex = -1
+  for (let index = 0; index < messages.length; index += 1) {
+    if (messages[index]?.turnIndex === turnIndex && messages[index]?.role === 'user') {
+      userMessageIndex = index
+      break
+    }
+  }
+  // 无同轮用户消息（异常数据）或压缩块已在用户消息之后 → 保持原顺序。
+  if (userMessageIndex < 0 || compactionIndex <= userMessageIndex) return messages
+  const next = messages.filter((_, index) => index !== compactionIndex)
+  next.splice(userMessageIndex + 1, 0, compaction)
+  return next
 }
 
 export function readThreadInProgressFromResponse(payload: ThreadReadResponse): boolean {

@@ -225,6 +225,29 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.map((message) => message.id)).toContain('agent-3')
   })
 
+  it('moves the trailing compaction.done row after the turn user message (round-30)', () => {
+    // 服务端把 contextCompaction 固定在 turn items 末尾，刷新后压缩块会跑到
+    // 对话最后；归位后应紧跟该轮用户消息之后（压缩是 turn 边界动作）。
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
+      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it' },
+      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
+      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass' },
+      { type: 'contextCompaction', id: 'compaction-1' },
+    ]))
+
+    expect(messages.map((message) => message.id)).toEqual(['user-1', 'compaction-1', 'agent-1', 'cmd-1', 'agent-2'])
+  })
+
+  it('keeps the compaction.done row in place when no user message exists in the turn (round-30)', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'agentMessage', id: 'agent-1', text: 'first reply' },
+      { type: 'contextCompaction', id: 'compaction-1' },
+    ]))
+
+    expect(messages.map((message) => message.id)).toEqual(['agent-1', 'compaction-1'])
+  })
+
   it('keeps work items in the persisted chronological order', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
       { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
