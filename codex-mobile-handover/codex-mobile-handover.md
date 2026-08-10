@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 35d3548（客户端自动压缩：发送前预检 + 暂存补发已提交，交接文档更新待提交） |
+| 最近提交 | 5736091（思考锚点失配分摊修复；本轮 round-30 修复待提交） |
 
 ---
 ## 文档结构
@@ -57,6 +57,7 @@
 | 第二十一轮反馈 12 条（plan 刷新持久化/右侧面板暗色迁移/message-card 宽度/思考快照恢复/按钮颜色图标/聊天块调研/输出边框/自动压缩调研/页面刷新调研/压缩双块/末轮思考时序） | [rounds/round-27-feedback.md](rounds/round-27-feedback.md) |
 | 第二十二轮反馈 4 条（plan 执行中刷新按钮可执行/计划完成按钮可点击/进行中触发自动压缩调研/中文输入法 Enter 提前发送） | [rounds/round-28-feedback.md](rounds/round-28-feedback.md) |
 | 第二十三轮反馈 1 条（刷新后思考块堆在模型回答开头——live 锚点 id 被 app-server 恢复改写导致失配，锚点失配按无锚点分摊修复） | [rounds/round-29-feedback.md](rounds/round-29-feedback.md) |
+| 第二十四轮反馈 3 条（计划面板 implemented 判定：刷新加载中按钮误可点 + 单轮长任务同轮工作项不识别；压缩块刷新后归位到轮首用户消息之后） | [rounds/round-30-feedback.md](rounds/round-30-feedback.md) |
 
 ## 项目概况
 

@@ -2360,16 +2360,23 @@ function planHasLaterWork(messages: UiMessage[], message: UiMessage, index: numb
   ))
 }
 // plan 不在消息流中（部分 provider 不持久化 plan，仅本地存档兜底）时按轮次判断：
-// 严格晚于计划轮的轮次出现工作项即视为已实施（无 index 锚点，只用 > 避免误判）。
+// 计划轮及之后（>=）的轮次出现工作项即视为已实施。无 index 锚点，但同一轮内
+// plan 先于工作项（模型先给计划再执行），用 >= 覆盖「计划并执行」的完整轮次
+// （round-30：此前用 > 导致单轮长任务——plan 与所有工作同轮——恒判未实施，
+// 计划面板执行按钮在对话完成后仍可点击）。
 function planHasWorkInLaterTurns(messages: UiMessage[], planTurnIndex: number): boolean {
   return messages.some((candidate) => (
     typeof candidate.turnIndex === 'number'
-    && candidate.turnIndex > planTurnIndex
+    && candidate.turnIndex >= planTurnIndex
     && PLAN_WORK_MESSAGE_TYPES.has(candidate.messageType ?? '')
   ))
 }
 const composerPlanPanel = computed(() => {
   const messages = filteredMessages.value
+  // round-30：刷新后消息异步加载完成前，turnIndex 映射尚未重建、消息流不完整，
+  // implemented 判定会短暂误判为 false → 执行按钮可点击（用户误触发重复 Implement）。
+  // 加载期间保守置为已实施（禁用按钮），加载完成后按真实消息重新判定。
+  const messagesLoading = isLoadingMessages.value
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
     if (message.messageType !== 'plan' && message.messageType !== 'plan.live') continue
@@ -2378,7 +2385,7 @@ const composerPlanPanel = computed(() => {
     // 用户已在本会话点过 Implement → 面板隐藏（执行中）。
     const requested = implementedPlanRequestId.value !== null && message.id === implementedPlanRequestId.value
     if (requested) return null
-    const implemented = planHasLaterWork(messages, message, index)
+    const implemented = messagesLoading ? true : planHasLaterWork(messages, message, index)
     // round-27：计划面板在计划实施后不再整体隐藏（此前 hasLaterWork 直接 return
     // null → 刷新后「输入框上方的计划」消失），改为保留展示并把 Implement 按钮
     // 置为已完成态（不可重复点击，与原先的设计目的一致）。
@@ -2407,10 +2414,13 @@ const composerPlanPanel = computed(() => {
     : (localPlan.turnId ? (resolveThreadTurnIndex(selectedThreadId.value, localPlan.turnId) ?? -1) : -1)
   return {
     id: localPlan.id,
-    streaming: false,
+    // round-30：兜底路径此前 streaming 恒为 false——执行中刷新后面板丢失
+    // 「执行中」状态（Updating 徽标/进度）。localPlan 是最后一次存档的 plan
+    // 消息，其 messageType 如实反映 plan.live（流式中）或 plan（已完成）。
+    streaming: localPlan.messageType === 'plan.live',
     explanation: localData.explanation,
     steps: localData.steps,
-    implemented: localTurnIndex >= 0 ? planHasWorkInLaterTurns(messages, localTurnIndex) : false,
+    implemented: messagesLoading ? true : (localTurnIndex >= 0 ? planHasWorkInLaterTurns(messages, localTurnIndex) : false),
   }
 })
 const liveOverlay = computed(() => selectedLiveOverlay.value)
