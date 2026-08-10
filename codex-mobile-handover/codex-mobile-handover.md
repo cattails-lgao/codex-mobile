@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.146.0（pnpm 全局）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 3ab96cc（工具链路径语义占位不写死；与 fc468ff 脱敏提交均已推送） |
+| 最近提交 | 85d65bc（chore: publish as codex-mobile-re (0.1.88)；已推送） |
 
 ---
 ## 文档结构
@@ -62,7 +62,7 @@
 
 ## 项目概况
 
-`codexapp` 是一个面向 Codex 的轻量级 Web 界面，运行在 Codex app-server 之上，可从任何浏览器远程访问。技术栈为 Vue 3 + Vite 6 + TypeScript，npm 包名 `codexapp`（`codexui` 为别名）。上游仓库为 friuns2/codexUI，本机 fork 自 `<用户名>/codex-mobile`。
+`codexapp` 是一个面向 Codex 的轻量级 Web 界面，运行在 Codex app-server 之上，可从任何浏览器远程访问。技术栈为 Vue 3 + Vite 6 + TypeScript，**npm 包名 `codex-mobile-re`**（2026-08-10 起以本 fork 名发布，`codexapp`/`codexui` 为上游包名无发布权限）。上游仓库为 friuns2/codexUI（上游 npm 包 `codexapp`/`codexui` 归 friuns 所有），本机 fork 自 `<用户名>/codex-mobile`。
 
 - 开发入口：`scripts/dev.cjs`，内部包装 Vite dev server
 - 关键桥接层：`src/server/codexAppServerBridge.ts`（Vite 中间件，代理 `/codex-api/*` 到 codex app-server）
@@ -132,4 +132,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-10（项目跨多机器/多平台运行：交接文档工具链位置一律语义占位不写死路径；`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc` 均已推送）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-10（以 `codex-mobile-re` 发包 v0.1.88 已发布 npm；`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc` 均已推送）· 内容已脱敏*
