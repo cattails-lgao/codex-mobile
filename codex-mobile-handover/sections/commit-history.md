@@ -25,4 +25,6 @@
 - **`1dd4815`**：Zen 代理 `reasoning_content` 往返修复——多轮连续工具调用时，第二条起无独立 reasoning item 的 function_call 生成的 assistant 消息缺失 `reasoning_content`，被 OpenCode Zen 新网关（Console，DeepSeek thinking 模式）以 400 拒绝；`unifiedResponsesProxy.ts` 新增 `lastReasoningContent` 回退（`pendingReasoningContent || lastReasoningContent`）保证每条带工具调用的 assistant 消息都带该字段，并新增单测锁定。作用：修复多工具调用会话中后段必现的 `reasoning_content must be passed back` 报错
 - **`e0b19a2`**：round-30 反馈修复（`api/normalizers/v2.ts` 将 turn 完成后存档的 last plan 归一化为 implemented 态；配套 `v2.test.ts`、`App.vue`、`useDesktopState.ts` 及测试文档更新）。作用：计划面板 implemented 判定与压缩块刷新归位（详见 `rounds/round-30-feedback.md`）
 - **`fc468ff`**：交接文档脱敏——本机绝对路径一律改语义占位（`<node 安装目录>`、`<pnpm 全局 bin 目录>`、`<Git 安装目录>` 等），项目跨机器/跨平台运行不写死路径；同步更新仓库版与通用版写作规范、交接注意事项、快照与落款。作用：交接文档换机可读可执行
+- **`3ab96cc`**：工具链路径进一步语义化——PATH 示例等改用 `<node 安装目录>`/`<pnpm 全局 bin 目录>` 占位并附定位命令（`Get-Command`/`pnpm bin`/`npm prefix -g`），「脱敏」升级为「脱敏与不写死路径」写入仓库版与通用版写作规范。作用：多机器/多平台运行不写死路径
+- **`85d65bc`**：以 `codex-mobile-re` 名义发包——`package.json` name/bin 改 `codex-mobile-re`（上游 `codexapp`/`codexui` 归 friuns 所有无发布权限）、repository/homepage 指向本 fork、CLI 命令名与提示文案同步、版本 `0.1.88`。作用：`codex-mobile-re@0.1.88` 已发布 npm 官方源（maintainer `lgao7779`），`npx codex-mobile-re` 可用
 
