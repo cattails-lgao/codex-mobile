@@ -3328,6 +3328,25 @@ export function useDesktopState() {
   function clearCompletedTurnLiveState(threadId: string): void {
     if (!threadId) return
     clearLivePlansForThread(threadId)
+    // round-31：对话完成后把本地存档的 plan 从 plan.live 修正为 plan——
+    // lastPlanByThreadId 只随 upsert 更新，最后一次 upsert 可能来自
+    // turn/plan/updated 或 item/plan/delta（都是 plan.live）。turn 完成即
+    // 线程空闲，plan 不再流式，若存档仍是 plan.live，输入框上方的计划面板
+    // 会一直显示「更新中」徽标（composerPlanPanel 兜底 streaming 跟随
+    // messageType）。这里修正为 plan 并清除 isStreaming 标记。
+    const archivedPlan = lastPlanByThreadId.value[threadId]
+    if (archivedPlan && archivedPlan.messageType === 'plan.live') {
+      const correctedPlan: UiMessage = {
+        ...archivedPlan,
+        messageType: 'plan',
+        plan: archivedPlan.plan ? { ...archivedPlan.plan, isStreaming: false } : archivedPlan.plan,
+      }
+      lastPlanByThreadId.value = {
+        ...lastPlanByThreadId.value,
+        [threadId]: correctedPlan,
+      }
+      saveLastPlanMap(lastPlanByThreadId.value)
+    }
     clearLiveReasoningForThread(threadId)
     pruneLiveMessageSortKeys(threadId)
     setTurnActivityForThread(threadId, null)

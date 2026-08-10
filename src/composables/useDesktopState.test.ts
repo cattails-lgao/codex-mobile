@@ -1587,7 +1587,6 @@ describe('P1-3 notification surface', () => {
     await state.refreshAll({ includeSelectedThreadMessages: false })
     state.startPolling()
     state.primeSelectedThread('thread-1')
-
     sendNotification({
       method: 'item/completed',
       params: {
@@ -1609,6 +1608,64 @@ describe('P1-3 notification surface', () => {
     expect(plan?.plan?.steps).toHaveLength(3)
     expect(plan?.plan?.steps[0]?.step).toBe('搭建目录')
     expect(plan?.turnId).toBe('turn-1')
+  })
+
+  it('normalizes the archived last plan to plan after a turn completes (round-31)', async () => {
+    // 对话完成后（线程空闲）应把本地存档的 plan.live 修正为 plan，
+    // 否则输入框上方的计划面板一直显示「更新中」（streaming 跟随 messageType）。
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    // turn/plan/updated 产生 plan.live 存档
+    sendNotification({
+      method: 'turn/plan/updated',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        explanation: '计划摘要',
+        plan: [
+          { step: '步骤一', status: 'completed' },
+          { step: '步骤二', status: 'in_progress' },
+        ],
+      },
+    })
+    await Promise.resolve()
+    expect(state.lastPlanByThreadId.value['thread-1']?.messageType).toBe('plan.live')
+    expect(state.lastPlanByThreadId.value['thread-1']?.plan?.isStreaming).toBe(true)
+
+    // 线程进入进行中状态（turn/started），这样 turn/completed 时
+    // setThreadInProgress(false) 才会真正触发 clearCompletedTurnLiveState
+    sendNotification({
+      method: 'turn/started',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        turn: { id: 'turn-1', status: 'in_progress' },
+      },
+    })
+    await Promise.resolve()
+
+    // turn 完成 → setThreadInProgress(false) → clearCompletedTurnLiveState → 存档修正为 plan
+    sendNotification({
+      method: 'turn/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        turn: { id: 'turn-1', status: 'completed' },
+      },
+    })
+    await Promise.resolve()
+
+    const archived = state.lastPlanByThreadId.value['thread-1']
+    expect(archived?.messageType).toBe('plan')
+    expect(archived?.plan?.isStreaming).toBe(false)
+    // localStorage 也应同步
+    const stored = window.localStorage.getItem('codex-web-local.thread-last-plan.v1')
+    expect(stored).toBeTruthy()
+    expect(stored).toContain('"messageType":"plan"')
   })
 
   it('bypasses recent-load reuse when force is set', async () => {
