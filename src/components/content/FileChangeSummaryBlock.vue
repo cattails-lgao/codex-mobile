@@ -2,11 +2,11 @@
   <section v-if="summary" class="file-change-summary-block" :class="{ 'file-change-summary-block-inline': inline }">
     <button
       type="button"
-      class="cmd-row cmd-row-group cmd-compact file-change-summary-row"
-      :class="{ 'cmd-expanded': expanded }"
+      class="file-change-summary-row"
+      :class="{ 'file-change-summary-row-expanded': expanded }"
       @click="$emit('toggle')"
     >
-      <span class="cmd-chevron" :class="{ 'cmd-chevron-open': expanded }">▶</span>
+      <span class="file-change-chevron" :class="{ 'file-change-chevron-open': expanded }">▶</span>
       <span class="file-change-summary-label">
         {{ fileChangeSummaryLabel(summary) }}
       </span>
@@ -21,7 +21,7 @@
         </span>
       </span>
     </button>
-    <div class="cmd-group-wrap" :class="{ 'cmd-group-visible': expanded }">
+    <div class="file-change-panel" :class="{ 'file-change-panel-visible': expanded }">
       <div class="file-change-panel-inner">
         <ul class="file-change-list">
           <li
@@ -143,81 +143,59 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 @reference "tailwindcss";
 
 .file-change-summary-block {
-  @apply mt-3 flex flex-col gap-0;
+  @apply flex w-full min-w-0 flex-col gap-0;
 }
 
-.file-change-summary-block-inline {
-  @apply mt-4;
-}
-
+/* round-33：fileChange 块视觉对齐（round-17 视觉降噪 + round-23 字体规范）——
+   与命令块/思考块/折叠条一致：无边框、无背景、无卡片，正文 #737373。此前
+   复用 cmd-*（ProcessFold 的卡片化折叠条样式）导致与消息流其他块风格不搭。 */
 .file-change-summary-row {
-  @apply border-dashed;
+  @apply flex w-full min-w-0 cursor-pointer items-center gap-1 px-0 py-0.5 text-left transition-colors hover:opacity-80;
 }
 
-/* round-31：修复独立组件拆分后 cmd-* 折叠样式丢失（此前定义在
-   ThreadConversation scoped 样式中，子组件内部无法命中） */
-.cmd-row {
-  @apply w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer transition text-left hover:bg-zinc-100;
+.file-change-chevron {
+  @apply shrink-0 text-[10px] leading-none text-zinc-400 transition-transform duration-150;
 }
 
-.cmd-row.cmd-row-group {
-  @apply border-dashed border-zinc-300 bg-zinc-100/90 text-zinc-600;
-}
-
-.cmd-row.cmd-compact {
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  border-radius: 0.625rem;
-}
-
-.cmd-row.cmd-compact .cmd-chevron {
-  font-size: 9px;
-}
-
-.cmd-row.cmd-expanded {
-  @apply rounded-b-none;
-}
-
-.cmd-chevron {
-  @apply text-[10px] text-zinc-400 transition-transform duration-150 flex-shrink-0;
-}
-
-.cmd-chevron-open {
+.file-change-chevron-open {
   transform: rotate(90deg);
 }
 
-.cmd-group-wrap {
+.file-change-summary-label {
+  /* round-23 字体规范：工具文字 #737373 */
+  @apply min-w-0 flex-1 truncate text-xs font-medium;
+  color: #737373;
+}
+
+.file-change-summary-status {
+  @apply inline-flex max-w-28 shrink-0 items-center justify-end gap-1.5 text-right text-[11px] font-semibold text-zinc-500;
+}
+
+.file-change-panel {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 220ms ease-out;
 }
 
-.cmd-group-wrap.cmd-group-visible {
+.file-change-panel-visible {
   grid-template-rows: 1fr;
 }
 
-.file-change-summary-label {
-  @apply flex-1 min-w-0 truncate text-xs font-medium text-zinc-700;
-}
-
-.file-change-summary-status {
-  @apply inline-flex max-w-28 items-center justify-end gap-1.5 text-right text-[11px] font-semibold text-zinc-500 flex-shrink-0;
-}
-
 .file-change-panel-inner {
-  @apply mb-1 min-h-0 overflow-hidden pl-2;
+  @apply min-h-0 overflow-hidden;
 }
 
+/* 展开列表：去卡片化，左竖线缩进锚定层次 */
 .file-change-list {
-  @apply m-0 flex list-none flex-col gap-0.5 rounded-xl border border-zinc-200 bg-white/80 p-1.5;
+  @apply m-0 flex list-none flex-col gap-0 border-l border-zinc-200/80 py-0.5 pl-2.5;
 }
 
 .file-change-item {
-  @apply flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-zinc-700;
+  @apply flex flex-wrap items-center gap-1.5 py-0.5 text-sm text-zinc-600;
 }
 
 .file-change-badge {
-  @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em];
+  @apply inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em];
 }
 
 .file-change-badge[data-operation='add'] {
@@ -236,12 +214,8 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
   @apply bg-amber-50 text-amber-700;
 }
 
-.file-change-path {
-  @apply min-w-0 break-all font-mono text-[13px];
-}
-
 .file-change-path-button {
-  @apply min-w-0 border-0 bg-transparent p-0 text-left font-mono text-[13px] text-[#0969da] hover:text-[#1f6feb] hover:underline underline-offset-2;
+  @apply min-w-0 border-0 bg-transparent p-0 text-left font-mono text-xs text-[#0969da] hover:text-[#1f6feb] hover:underline underline-offset-2;
 }
 
 .file-change-arrow {
@@ -249,11 +223,11 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-delta {
-  @apply ml-auto inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-600;
+  @apply ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
 }
 
 .file-change-actions {
-  @apply mt-2 flex flex-wrap items-center justify-end gap-2;
+  @apply mt-1 flex flex-wrap items-center justify-end gap-2;
 }
 
 .file-change-action-button {
