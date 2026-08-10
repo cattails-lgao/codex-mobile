@@ -1,6 +1,6 @@
 # Reasonix 消息列表全量移植方案
 
-> 依据 2026-08-07 对 `D:\DeepSeek-Reasonix-main-v2`（React + TS 桌面前端）消息列表架构的调研（`Transcript.tsx` + `transcriptGrouping.ts` + `useController.ts`）。ThreadConversation 拆分重构已为以下改造清障（改 `ThreadConversation.vue` 时不再有巨文件负担）。
+> 依据 2026-08-07 对 `<参考项目目录>\DeepSeek-Reasonix-main-v2`（React + TS 桌面前端）消息列表架构的调研（`Transcript.tsx` + `transcriptGrouping.ts` + `useController.ts`）。ThreadConversation 拆分重构已为以下改造清障（改 `ThreadConversation.vue` 时不再有巨文件负担）。
 
 > **2026-08-07 阶段 A 已完成**（commit `a5d5ef9`）：①流式思考截断——移植 `reasoningDisplay.ts`（`displayReasoningText`，默认保留末尾 12,000 字符 / 240 行，前缀 `...`）+ 单测 6 例，live overlay 思考流接入（流式截断）；持久化思考块按 Reasonix 语义不截断（非流式，避免隐藏完整思考）。②Process Fold 基础版——`conversationFolds.ts` 纯函数分组（按 turnId 合并连续 reasoning/commandExecution/toolCall，同轮 ≥2 条才折叠，单命令轮次保持平铺）+ `processFoldPreference.ts`（`codex-web-local.process-fold.v1` 偏好持久化 + CustomEvent）+ `ProcessFold.vue` 容器（运行中自动展开、完成自动收起、手动点击后不再被自动收放）；折叠条文案 `耗时 · N 个工具 · M 条思考 · K 个命令`（worked 摘要消息补 `durationMs` 供耗时，折叠轮次的 worked 行隐藏）；i18n 5 键。验证：`vue-tsc` 通过、构建通过、单测 262/264（新增 17，2 个既有 Windows 环境性失败无关）、Playwright（Edge channel）14/14（桌面浅色折叠渲染/标签/点击展开、暗色 expanded 偏好 10/10 body、H5 无溢出）+ 中文标签实测（「已处理 · 2 个命令」）；脚本 `output/playwright/r16-*.cjs`，截图 `r16-fold-{light,dark,h5,zh}.png`；手动测试文档 `tests/chat-composer-rendering/process-fold-phase-a-and-streaming-reasoning-truncation.md`。
 

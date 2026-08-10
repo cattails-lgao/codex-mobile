@@ -8,5 +8,5 @@
 4. **`#206` 定时器泄漏 + HTML 消毒**：新增 `src/utils/sanitizeHtml.ts`（DOMParser 白名单，去除 script/iframe 等危险标签与 `on*`/`javascript:` 属性）；`ThreadConversation.vue` 三个渲染函数、`SkillDetailModal.vue` readme 渲染包一层 sanitize；`DirectoryHub.vue`/`SkillsHub.vue` 加 `onBeforeUnmount` 清理 timer；PR 里未使用的 `SafeHtml.vue` 按 YAGNI 跳过。验证：vue-tsc + 手动渲染含恶意 HTML 的 markdown 消息
 5. **`#209` GPT-5.6 max/ultra 推理等级**：`types/codex.ts` 新增 `REASONING_EFFORTS` 目录 + `isReasoningEffort`；`codexGateway.ts` 新增 `getAvailableModels`（带模型级 `supportedReasoningEfforts`/`defaultReasoningEffort`），旧 `getAvailableModelIds` 改为包装；`useDesktopState.ts` 新增模型感知的推理等级钳制（切换不支持当前等级的模型时回退到默认等级）；`ThreadComposer.vue` Thinking 下拉按模型过滤选项；`App.vue` 绑定新 prop；两处测试文件 mock 改写 + 新增用例（共 3 个新测试）。验证：单测 3 文件 82/82 通过
 
-> **环境注意：** 本机 PATH 中无 `node.exe`（fnm 管理），直接运行 `pnpm` 会报「node 无法识别」。验证命令需先加入 node 目录：`$env:PATH = 'C:\Users\cattails\AppData\Roaming\fnm\node-versions\v24.18.1\installation;' + $env:PATH`。另外本会话添加了 `upstream` remote（`friuns2/codex-mobile`），直连 fetch 超时未成功，未影响使用。
+> **环境注意：** 本机 PATH 中无 `node.exe`（fnm 管理），直接运行 `pnpm` 会报「node 无法识别」。验证命令需先加入 node 目录：`$env:PATH = 'C:\Users\<用户名>\AppData\Roaming\fnm\node-versions\v24.18.1\installation;' + $env:PATH`。另外本会话添加了 `upstream` remote（`friuns2/codex-mobile`），直连 fetch 超时未成功，未影响使用。
 
