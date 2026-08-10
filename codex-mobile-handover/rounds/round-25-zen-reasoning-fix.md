@@ -38,6 +38,6 @@
 
 ## 环境注意
 
-- 本环境 git 不在 PATH（位于 `E:\Git\cmd\git.exe`）；GitHub 直连本次可用，代理端口 10808/10811/10812 均已失效（进程退出），按交接文档记录直连推送即可
+- 本环境 git 不在 PATH（位于 `<Git 安装目录>\cmd\git.exe`）；GitHub 直连本次可用，代理端口 10808/10811/10812 均已失效（进程退出），按交接文档记录直连推送即可
 - 抓包调试：`CODEXUI_PROXY_DEBUG=1` 启动 dev server 后，代理失败请求会输出完整 request/response 到 dev 终端（`[unified-responses-proxy]` 前缀）
 - 排查线索：失败请求的 payload 可从 dev 终端日志提取，比对 messages 数组中各 assistant 消息的 `reasoning_content` 字段即可定位丢字段的消息

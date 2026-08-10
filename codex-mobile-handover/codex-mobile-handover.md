@@ -62,7 +62,7 @@
 
 ## 项目概况
 
-`codexapp` 是一个面向 Codex 的轻量级 Web 界面，运行在 Codex app-server 之上，可从任何浏览器远程访问。技术栈为 Vue 3 + Vite 6 + TypeScript，npm 包名 `codexapp`（`codexui` 为别名）。上游仓库为 friuns2/codexUI，本机 fork 自 `cattails-lgao/codex-mobile`。
+`codexapp` 是一个面向 Codex 的轻量级 Web 界面，运行在 Codex app-server 之上，可从任何浏览器远程访问。技术栈为 Vue 3 + Vite 6 + TypeScript，npm 包名 `codexapp`（`codexui` 为别名）。上游仓库为 friuns2/codexUI，本机 fork 自 `<用户名>/codex-mobile`。
 
 - 开发入口：`scripts/dev.cjs`，内部包装 Vite dev server
 - 关键桥接层：`src/server/codexAppServerBridge.ts`（Vite 中间件，代理 `/codex-api/*` 到 codex app-server）
@@ -84,14 +84,14 @@ pnpm run dev --host 127.0.0.1 --port 4173
 
 ```powershell
 # PATH 必须含两段：fnm node 目录 + codex CLI 所在目录
-$env:PATH = 'C:\Users\cattails\AppData\Roaming\fnm\node-versions\v24.18.1\installation;C:\Users\cattails\AppData\Local\pnpm\bin;' + $env:PATH
+$env:PATH = 'C:\Users\<用户名>\AppData\Roaming\fnm\node-versions\v24.18.1\installation;C:\Users\<用户名>\AppData\Local\pnpm\bin;' + $env:PATH
 $env:CODEX_HOME='<项目目录>\.codex'
 pnpm run dev --host 127.0.0.1 --port 4173
 ```
 
 `CODEX_HOME` 必须指向沙箱允许写入的位置；项目内 `.codex/` 已被 `.gitignore` 忽略，不会污染 git。
 
-> **重要（2026-08-06 实测教训）**：`resolveCodexCommand()` 通过 PATH 里的 `codex.CMD` shim 定位 codex CLI。本机 codex-cli 0.146.0 由 pnpm 全局安装在 `C:\Users\cattails\AppData\Local\pnpm\bin`（shim `codex.CMD`），该目录不在默认 PATH 中。若只补 node 目录而漏掉 pnpm bin 目录，页面会报 `Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.`（`/codex-api/rpc` 502）。把 `AppData\Local\pnpm\bin` 前置进 PATH 后正常。
+> **重要（2026-08-06 实测教训）**：`resolveCodexCommand()` 通过 PATH 里的 `codex.CMD` shim 定位 codex CLI。本机 codex-cli 0.146.0 由 pnpm 全局安装在 `C:\Users\<用户名>\AppData\Local\pnpm\bin`（shim `codex.CMD`），该目录不在默认 PATH 中。若只补 node 目录而漏掉 pnpm bin 目录，页面会报 `Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.`（`/codex-api/rpc` 502）。把 `AppData\Local\pnpm\bin` 前置进 PATH 后正常。
 
 ### macOS（2026-08-07 实测）
 
@@ -119,7 +119,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧；2026-08-07 已完成 macOS 侧）**：Linux 侧已用本机 WSL2（Ubuntu）验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧验证见下方「macOS 侧跨平台回归（2026-08-07）」。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
 - **验收遗留**：plan/approval popover 键盘导航已补齐（见「遗留项补齐（2026-08-07）」）；ExecPlans 待后端 Codex 版本支持后自动变为可选；macOS 侧跨平台回归已完成（见「macOS 侧跨平台回归（2026-08-07）」）
-- **本轮测试遗留（非仓库文件）**：验证脚本在 `D:\code\codex-project\test\hello.txt` 创建了一个测试文件（不在仓库允许操作范围内，未能自动清理），如不需要可手动删除；测试期间创建的 5 个临时线程已通过 `thread/delete` 清理
+- **本轮测试遗留（非仓库文件）**：验证脚本在 `<外部测试目录>\hello.txt` 创建了一个测试文件（不在仓库允许操作范围内，未能自动清理），如不需要可手动删除；测试期间创建的 5 个临时线程已通过 `thread/delete` 清理
 
 ## 交接注意事项
 
