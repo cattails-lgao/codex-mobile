@@ -27,6 +27,7 @@
 | Reasonix 消息列表全量移植方案 | [sections/reasonix-plan.md](sections/reasonix-plan.md) |
 | macOS 侧跨平台回归 | [sections/macos-regression.md](sections/macos-regression.md) |
 | 客户端自动压缩（发送前预检 + 暂存补发）方案与评估 | [sections/auto-compact-plan.md](sections/auto-compact-plan.md) |
+| 交接文档写作规范（本文档的组织与写法约定） | [handover-writing-guide.md](handover-writing-guide.md) |
 
 ### 按轮次记录
 | 轮次 | 文件 |
