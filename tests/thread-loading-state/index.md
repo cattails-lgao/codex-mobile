@@ -36,4 +36,5 @@ Return to the [manual test index](../../tests.md).
 | [Missing thread route errors render in chat](missing-thread-route-errors-render-in-chat.md) |
 | [Non-thread startup selection priming](non-thread-startup-selection-priming.md) |
 | [External session (TUI) working state](external-session-tui-working-state.md) |
+| [Subagent threads are filtered from the sidebar](subagent-threads-filtered-from-sidebar.md) |
 | [Realtime notification sync and file-change undo refresh](realtime-notification-sync-and-file-change-undo-refresh.md) |

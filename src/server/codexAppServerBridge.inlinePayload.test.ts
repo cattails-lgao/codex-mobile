@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BackendQueueProcessor,
+  filterThreadListByIds,
   mergeSessionSkillInputsIntoTurns,
   parseAutomationToml,
   sanitizeThreadTurnsInlinePayloads,
@@ -415,5 +416,37 @@ describe('automation TOML handling', () => {
 
     expect(automation).toBeTruthy()
     expect(toAutomationApiRecord(automation as NonNullable<typeof automation>)).not.toHaveProperty('extraTomlLines')
+  })
+})
+
+describe('filterThreadListByIds', () => {
+  it('drops rows whose id is in the exclude set', () => {
+    const result = filterThreadListByIds(
+      {
+        data: [
+          { id: 'thread-user-1', preview: 'hello' },
+          { id: 'thread-sub-1', preview: 'subagent work' },
+          { id: 'thread-user-2', preview: 'world' },
+        ],
+        nextCursor: null,
+      },
+      new Set(['thread-sub-1']),
+    ) as { data: Array<{ id: string }>; nextCursor: null }
+
+    expect(result.data.map((row) => row.id)).toEqual(['thread-user-1', 'thread-user-2'])
+  })
+
+  it('returns the input unchanged when nothing is excluded', () => {
+    const result = {
+      data: [{ id: 'thread-user-1', preview: 'hello' }],
+      nextCursor: null,
+    }
+    expect(filterThreadListByIds(result, new Set(['thread-missing-1']))).toBe(result)
+    expect(filterThreadListByIds(result, new Set())).toBe(result)
+  })
+
+  it('leaves non-thread-list payloads untouched', () => {
+    const result = { thread: { id: 'thread-user-1', turns: [] } }
+    expect(filterThreadListByIds(result, new Set(['thread-user-1']))).toBe(result)
   })
 })

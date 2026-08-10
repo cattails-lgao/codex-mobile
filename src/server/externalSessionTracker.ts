@@ -234,6 +234,24 @@ export class ExternalSessionTracker {
         return active;
     }
 
+    /**
+     * Thread ids whose session_meta marks them as subagent sessions
+     * (`thread_source` starts with "subagent"). Subagent sessions are materialized
+     * by the app-server with an interactive `source` (e.g. "cli"), so they show up
+     * in `thread/list`; callers that want a user-facing thread list can exclude them.
+     */
+    getSubagentThreadIds(): string[] {
+        if (!this.enabled) return [];
+        const ids: string[] = [];
+        for (const session of this.sessionByThreadId.values()) {
+            const source = (session.threadSource ?? "").toLowerCase();
+            if (source.startsWith("subagent")) {
+                ids.push(session.sessionId);
+            }
+        }
+        return ids;
+    }
+
     /** Run one discovery + parse + transition pass. Exposed for tests. */
     async tick(): Promise<void> {
         if (!this.enabled || this.ticking || this.disposed) return;
@@ -422,11 +440,15 @@ export class ExternalSessionTracker {
             const payload = asRecord(record.payload);
             if (!payload) continue;
             const originator = readNonEmptyString(payload.originator);
-            if (!originator) continue;
-            session.originator = originator;
-            session.threadSource =
-                readNonEmptyString(payload.thread_source) || null;
-            session.external = this.externalOrigins.has(originator);
+            const threadSource = readNonEmptyString(payload.thread_source);
+            if (!originator && !threadSource) continue;
+            if (originator) {
+                session.originator = originator;
+                session.external = this.externalOrigins.has(originator);
+            }
+            if (threadSource) {
+                session.threadSource = threadSource;
+            }
             const sessionId =
                 readNonEmptyString(payload.session_id) ||
                 readNonEmptyString(payload.id);
