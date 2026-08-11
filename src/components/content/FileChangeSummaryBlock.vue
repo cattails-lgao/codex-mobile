@@ -29,6 +29,29 @@
             :key="`file-change:${summary.turnId}:${change.path}:${change.movedToPath || ''}`"
             class="file-change-item"
           >
+            <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)" :title="fileChangeOperationLabel(change)">
+              {{ fileChangeBadgeLabel(change) }}
+            </span>
+            <span class="file-change-path-group">
+              <button
+                type="button"
+                class="file-change-path-button"
+                :title="change.path"
+                @click="$emit('open-diff', change)"
+              >
+                {{ displayFileChangePath(change.path) }}
+              </button>
+              <span v-if="change.movedToPath" class="file-change-arrow">→</span>
+              <button
+                v-if="change.movedToPath"
+                type="button"
+                class="file-change-path-button"
+                :title="change.movedToPath"
+                @click="$emit('open-diff', change)"
+              >
+                {{ displayFileChangePath(change.movedToPath) }}
+              </button>
+            </span>
             <span v-if="change.addedLineCount > 0 || change.removedLineCount > 0" class="file-change-delta">
               <span
                 v-for="part in fileChangeDeltaParts(change)"
@@ -48,27 +71,6 @@
               @click="$emit('request-file-action', change)"
             >
               <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
-            </button>
-            <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)" :title="fileChangeOperationLabel(change)">
-              {{ fileChangeBadgeLabel(change) }}
-            </span>
-            <button
-              type="button"
-              class="file-change-path-button"
-              :title="change.path"
-              @click="$emit('open-diff', change)"
-            >
-              {{ displayFileChangePath(change.path) }}
-            </button>
-            <span v-if="change.movedToPath" class="file-change-arrow">→</span>
-            <button
-              v-if="change.movedToPath"
-              type="button"
-              class="file-change-path-button"
-              :title="change.movedToPath"
-              @click="$emit('open-diff', change)"
-            >
-              {{ displayFileChangePath(change.movedToPath) }}
             </button>
           </li>
         </ul>
@@ -191,7 +193,8 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-item {
-  @apply flex flex-wrap items-center gap-1.5 py-0.5 text-sm text-zinc-600;
+  /* round-35：行内不换行，路径过长省略；变更数字与撤销按钮靠右（ml-auto） */
+  @apply flex min-w-0 items-center gap-1.5 py-0.5 text-sm text-zinc-600;
 }
 
 .file-change-badge {
@@ -214,17 +217,21 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
   @apply bg-amber-50 text-amber-700;
 }
 
+.file-change-path-group {
+  @apply flex min-w-0 flex-1 items-center gap-1.5;
+}
+
 .file-change-path-button {
-  @apply min-w-0 border-0 bg-transparent p-0 text-left font-mono text-xs text-[#0969da] hover:text-[#1f6feb] hover:underline underline-offset-2;
+  @apply min-w-0 truncate border-0 bg-transparent p-0 text-left font-mono text-xs text-[#0969da] hover:text-[#1f6feb] hover:underline underline-offset-2;
 }
 
 .file-change-arrow {
-  @apply text-zinc-400;
+  @apply shrink-0 text-zinc-400;
 }
 
 .file-change-delta {
-  /* round-34：变更数字移到行首（与撤销按钮同在最左），去掉 ml-auto 右推 */
-  @apply inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
+  /* round-35：变更数字与撤销按钮靠右（ml-auto），行内最右端 */
+  @apply ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
 }
 
 .file-change-actions {
@@ -248,7 +255,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-file-undo-button {
-  /* round-34：撤销按钮移到行首（变更数字旁），去掉 ml-auto 右推 */
+  /* round-35：撤销按钮与变更数字一起靠右（delta 带 ml-auto 推到行尾），自身不再推右 */
   @apply inline-flex shrink-0 items-center rounded-md border border-transparent bg-transparent p-1 text-zinc-400 transition hover:border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700;
 }
 
