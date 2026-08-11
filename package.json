@@ -1,6 +1,6 @@
 {
   "name": "codex-mobile-re",
-  "version": "0.1.92",
+  "version": "0.1.93",
   "description": "Mobile-first web interface and gateway for Codex app-server (fork rebuild of codexapp)",
   "type": "module",
   "license": "MIT",
