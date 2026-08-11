@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 3268948（style: align file-change block with lightweight work/reasoning rows；round-32 发布反馈修复 b73079b、发包 v0.1.90 见 0ee3e18，均已推送） |
+| 最近提交 | 05eecc7（fix: process-fold ordering restored and file-change row layout moved left；round-34 修复已推送） |
 
 ---
 ## 文档结构
@@ -62,6 +62,7 @@
 | 第二十五轮：侧边栏过滤 subagent 会话（上游 v514 对比 + app-server 物化实测 + 桥接层 thread_source 过滤） | [rounds/round-31-subagent-filter.md](rounds/round-31-subagent-filter.md) |
 | 第二十六轮反馈 3 条（fileChange 折叠样式损坏；工具调用块跑到对话最后——session- 前缀幂等保护失效 + 物化合并回复；fileChange 撤销按单个文件） | [rounds/round-32-feedback.md](rounds/round-32-feedback.md) |
 | 第二十七轮反馈 1 条（fileChange 块样式与消息流其他块风格不一致——round-17 去卡片化后的残留）+ README fork 身份重写 + codex-cli 0.147.0 升级 | [rounds/round-33-feedback.md](rounds/round-33-feedback.md) |
+| 第二十八轮反馈 2 条（processFold 工具调用块全跑到对话前面——空文本 assistant 虚高 agent slot 数；fileChange 每行变更数字/撤销按钮移到最左边） | [rounds/round-34-feedback.md](rounds/round-34-feedback.md) |
 
 ## 项目概况
 
@@ -117,7 +118,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
-- **已推送**：`main` 与 `origin/main` 已同步至 `3268948`（第八轮 requirement-8 十四项需求 `a8f27fb` + 侧栏按钮图标化 `7bf5b1b` + 交接文档 round-8 更新 `9236fba` + 第九轮 4 条修复 `793315b` + 交接文档 round-9 更新 `5dd1d8e` + 第十轮 3 条修复 `3389de3` + 交接文档 round-10 更新 `1c9f857`/`2e469bf` + 第十一轮 7 个问题修复 `483c869` + 交接文档 round-11 更新 `2ff6052` + 交接文档待办需求补 commit 标注 `beeacce` + 需求 6/9 结论修正 `e4d79bf` + 交接文档转 markdown `c83d94b` + 第十二轮 3 条修复 `289665d` + 交接文档 round-12 更新（本条记录后提交）+ 第十三轮 8 项修复与文档 `7d81389`/`026c8a9` + 交接文档补齐提交记录 `c4f0a8c` + 第十四轮 8 项修复 `4508827` + 第十五轮拆分重构 `4ea05b8`/`055cfc6` + Reasonix 复用清单与工期修正 `5e35d17`/`4f2b028` + 阶段 A（流式思考截断 + Process Fold 基础版）`a5d5ef9` + 交接文档阶段 A 快照 `b4ed593` + 阶段 B（hot/warm/cold 三区）`0c0676d` + 阶段 C（JumpBar + 工具聚合 + partitionTurnItems）`da8cabd` + 遗留项补齐（composer popover 键盘导航 + 需求 9 中断消息回填提示）`e192351` + 命令输出超长行横向溢出修复 `d536428` + 第十六轮 9 条反馈修复 `3df56ee` + 第十七轮样式强化（命令块/折叠条去卡片化）`ae595a9` + 第二十五轮 subagent 会话过滤 `2995475` + 第二十六轮发布反馈修复（fileChange 折叠样式/工具调用时序/单文件撤销）`b73079b` + README fork 身份重写 `3b39570` + 第二十七轮 fileChange 块样式统一 `3268948`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）
+- **已推送**：`main` 与 `origin/main` 已同步至 `05eecc7`（round-34 修复 `05eecc7`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）。2026-08-11 round-34 推送直连成功（git 2.35.1，位于 `E:\Git`，不在默认 PATH，需前置进 PATH 或全路径调用）
 - **未跟踪文件**：工作区存在 `.codegraph/`、`codex-parity-plan/`、`documentation/app-server-schemas/typescript/`、`codex-config-summary.md`（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧；2026-08-07 已完成 macOS 侧）**：Linux 侧已用本机 WSL2（Ubuntu）验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧验证见下方「macOS 侧跨平台回归（2026-08-07）」。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
@@ -135,4 +136,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-11（以 `codex-mobile-re` 发包 v0.1.90 已发布 npm 与 GitHub Release；`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948` 均已推送）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-11（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`，均已推送）· 内容已脱敏*
