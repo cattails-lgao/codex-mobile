@@ -569,4 +569,47 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
     expect(twice[0].items.map((it) => it.type)).toEqual(once[0].items.map((it) => it.type))
     expect(twice[0].items[twice[0].items.length - 1].type).toBe('agentMessage')
   })
+
+  it('interleaves commands with text-bearing agent replies in rollout order', () => {
+    // round-34：模拟线上 rollout——模型在工具调用间隙发了很多「空文本」
+    // assistant 消息（content 只有空 output_text），物化后只保留 2 条有文本
+    // 回复。修复前空 assistant 也算 agent slot，agentSlotCount 虚高触发
+    // 「命令排前、回复轮末」，工具调用块全部堆到回复之前。
+    const materialized = [
+      {
+        id: 'turn-1',
+        items: [
+          { id: 'item-1', type: 'userMessage' },
+          { id: 'session-cmd-call_1', type: 'commandExecution' },
+          { id: 'session-cmd-call_2', type: 'commandExecution' },
+          { id: 'session-fc-call_3', type: 'fileChange' },
+          { id: 'session-cmd-call_4', type: 'commandExecution' },
+          { id: 'item-2', type: 'agentMessage' },
+          { id: 'item-3', type: 'agentMessage' },
+        ],
+      },
+    ]
+    const log = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', id: 'item-1' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_1', arguments: '{"cmd":"ls"}' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-empty-1', content: [{ type: 'output_text', text: '' }] } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_2', arguments: '{"cmd":"cat"}' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-1', content: [{ type: 'output_text', text: 'mid reply' }] } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'custom_tool_call', name: 'apply_patch', call_id: 'call_3', input: '*** Begin Patch\n*** Update File: a.txt\n@@\n-x\n+y', status: 'completed' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_4', arguments: '{"cmd":"grep"}' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-2', content: [{ type: 'output_text', text: 'final reply' }] } }),
+    ].join('\n')
+
+    const result = mergeSessionCommandsIntoTurns(materialized, log) as Array<{ items: Array<{ id: string; type: string }> }>
+    expect(result[0].items.map((it) => it.type)).toEqual([
+      'userMessage',
+      'commandExecution',
+      'commandExecution',
+      'agentMessage',
+      'fileChange',
+      'commandExecution',
+      'agentMessage',
+    ])
+  })
 })

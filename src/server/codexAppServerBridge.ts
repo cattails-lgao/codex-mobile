@@ -3420,7 +3420,18 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
     }
 
     if (payload.type === 'message' && payload.role === 'assistant') {
-      slots.push({ type: 'agentMessage' })
+      // 只把「有文本」的 assistant 回复记为 agent slot：模型在工具调用间隙
+      // 产生的空文本消息（content 只有空 output_text）在 app-server 物化时
+      // 会被合并/丢弃，若也计入 slot 数会让 agentSlotCount 虚高，导致
+      // mergeSessionCommandsIntoTurns 误判「物化合并了轮内回复」而走
+      // 「命令排前、回复追加轮末」分支——所有命令/工具块堆到回复之前
+      // （round-34：processFold 全跑到对话前面，线上 rollout 复现）。
+      const content = Array.isArray(payload.content) ? payload.content : []
+      const hasText = content.some((item) => {
+        const record = asRecord(item)
+        return typeof record?.text === 'string' && record.text.trim().length > 0
+      })
+      if (hasText) slots.push({ type: 'agentMessage' })
       continue
     }
 
