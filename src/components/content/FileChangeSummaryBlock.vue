@@ -29,6 +29,26 @@
             :key="`file-change:${summary.turnId}:${change.path}:${change.movedToPath || ''}`"
             class="file-change-item"
           >
+            <span v-if="change.addedLineCount > 0 || change.removedLineCount > 0" class="file-change-delta">
+              <span
+                v-for="part in fileChangeDeltaParts(change)"
+                :key="`change-delta:${summary.turnId}:${change.path}:${part.tone}:${part.label}`"
+                class="file-change-signed-count"
+                :data-tone="part.tone"
+              >
+                {{ part.label }}
+              </span>
+            </span>
+            <button
+              v-if="actionable"
+              type="button"
+              class="file-change-file-undo-button"
+              :title="fileChangeFileUndoLabel(change)"
+              :aria-label="fileChangeFileUndoLabel(change)"
+              @click="$emit('request-file-action', change)"
+            >
+              <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
+            </button>
             <span class="file-change-badge" :data-operation="fileChangeOperationTone(change)" :title="fileChangeOperationLabel(change)">
               {{ fileChangeBadgeLabel(change) }}
             </span>
@@ -49,26 +69,6 @@
               @click="$emit('open-diff', change)"
             >
               {{ displayFileChangePath(change.movedToPath) }}
-            </button>
-            <span v-if="change.addedLineCount > 0 || change.removedLineCount > 0" class="file-change-delta">
-              <span
-                v-for="part in fileChangeDeltaParts(change)"
-                :key="`change-delta:${summary.turnId}:${change.path}:${part.tone}:${part.label}`"
-                class="file-change-signed-count"
-                :data-tone="part.tone"
-              >
-                {{ part.label }}
-              </span>
-            </span>
-            <button
-              v-if="actionable"
-              type="button"
-              class="file-change-file-undo-button"
-              :title="fileChangeFileUndoLabel(change)"
-              :aria-label="fileChangeFileUndoLabel(change)"
-              @click="$emit('request-file-action', change)"
-            >
-              <IconTablerArrowBackUp class="icon-svg file-change-action-icon" />
             </button>
           </li>
         </ul>
@@ -223,7 +223,8 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-delta {
-  @apply ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
+  /* round-34：变更数字移到行首（与撤销按钮同在最左），去掉 ml-auto 右推 */
+  @apply inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
 }
 
 .file-change-actions {
@@ -247,7 +248,8 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-file-undo-button {
-  @apply ml-auto inline-flex items-center rounded-md border border-transparent bg-transparent p-1 text-zinc-400 transition hover:border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700;
+  /* round-34：撤销按钮移到行首（变更数字旁），去掉 ml-auto 右推 */
+  @apply inline-flex shrink-0 items-center rounded-md border border-transparent bg-transparent p-1 text-zinc-400 transition hover:border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700;
 }
 
 .file-change-signed-count {

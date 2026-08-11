@@ -64,3 +64,4 @@ Return to the [manual test index](../../tests.md).
 | [Round 28: plan panel executed state after refresh + IME composition Enter guard](round28-plan-panel-state-refresh-ime-composition.md) |
 | [Round 29: reasoning blocks interleave with work items after refresh](round29-reasoning-anchor-mismatch-distribution.md) |
 | [Round 30: plan panel implemented state after refresh/single-turn + compaction block placement](round30-plan-state-refresh-compaction-placement.md) |
+| [Round 34: process-fold ordering restored + file-change row layout moved left](round34-process-fold-order-and-file-change-layout.md) |
