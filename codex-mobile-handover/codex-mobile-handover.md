@@ -64,6 +64,7 @@
 | 第二十七轮反馈 1 条（fileChange 块样式与消息流其他块风格不一致——round-17 去卡片化后的残留）+ README fork 身份重写 + codex-cli 0.147.0 升级 | [rounds/round-33-feedback.md](rounds/round-33-feedback.md) |
 | 第二十八轮反馈 2 条（processFold 工具调用块全跑到对话前面——空文本 assistant 虚高 agent slot 数；fileChange 每行变更数字/撤销按钮移到最左边） | [rounds/round-34-feedback.md](rounds/round-34-feedback.md) |
 | 第二十九轮反馈 2 条（fileChange 每行变更数字/撤销按钮移到最右边——round-34 方向相反；文件名过长未省略需截断） | [rounds/round-35-feedback.md](rounds/round-35-feedback.md) |
+| 第三十轮反馈 1 条（回退成功后再次发送，被回退的消息复现——回退按钮残留上游「编辑」流程的输入框回填） | [rounds/round-36-feedback.md](rounds/round-36-feedback.md) |
 
 ## 项目概况
 

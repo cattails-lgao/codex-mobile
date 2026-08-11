@@ -4823,20 +4823,11 @@ function onSlashCommand(commandId: string): void {
   }
 }
 
+// round-36：回退是纯「回退到该轮」操作，不再把被回退的用户消息文本
+// 回填进输入框。上游 c8e51cc 的 appendTextToDraft 是「编辑」流程遗留，
+// 本 fork 的按钮已是回退语义（round-21），回填会导致用户再次发送时
+// 同一消息「复活」（用户反馈：回退成功后再次发送，之前回退的消息还在）。
 function onRollback(payload: { turnId: string }): void {
-  const targetTurnId = payload.turnId.trim()
-  if (targetTurnId.length > 0) {
-    const rollbackUserMessage = [...filteredMessages.value]
-      .reverse()
-      .find((message) => (
-        message.role === 'user'
-        && (message.turnId?.trim() ?? '') === targetTurnId
-        && message.text.trim().length > 0
-      ))
-    if (rollbackUserMessage?.text && threadComposerRef.value) {
-      threadComposerRef.value.appendTextToDraft(rollbackUserMessage.text)
-    }
-  }
   void rollbackSelectedThread(payload.turnId)
 }
 
