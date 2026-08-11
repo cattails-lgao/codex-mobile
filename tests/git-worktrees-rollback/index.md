@@ -20,7 +20,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Changed-files panel persists across refresh (assistant message level)](changed-files-panel-persists-across-refresh-assistant-message-level.md) |
 | [Feature: Rollback debug logs controlled by `.env`](rollback-debug-logs-controlled-by-env.md) |
 | [Feature: Auto-commit default is disabled for new preference state](auto-commit-default-is-disabled-for-new-preference-state.md) |
-| [Feature: Rollback appends rolled-back user text into composer input](rollback-appends-rolled-back-user-text-into-composer-input.md) |
+| [Feature: Rollback no longer fills composer input with rolled-back user text](rollback-no-longer-fills-composer-input.md) |
 | [Feature: New thread worktree creation supports searchable base-branch selector](new-thread-worktree-creation-supports-searchable-base-branch-selector.md) |
 | [Feature: Worktree branch selector sorts branches by last active commit](worktree-branch-selector-sorts-branches-by-last-active-commit.md) |
 | [Feature: New worktree base-branch dropdown aligns on same row to the right](new-worktree-base-branch-dropdown-aligns-on-same-row-to-the-right.md) |

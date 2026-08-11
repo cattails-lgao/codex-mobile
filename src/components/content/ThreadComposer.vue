@@ -639,7 +639,6 @@ export type SubmitPayload = {
 
 export type ThreadComposerExposed = {
   hydrateDraft: (payload: ComposerDraftPayload) => void
-  appendTextToDraft: (text: string) => void
   hasUnsavedDraft: () => boolean
 }
 
@@ -2070,18 +2069,6 @@ function hydrateDraft(payload: ComposerDraftPayload): void {
   })
 }
 
-function appendTextToDraft(text: string): void {
-  const nextText = text.trim()
-  if (!nextText) return
-  cancelDictation()
-  if (draft.value.trim().length > 0) {
-    draft.value = `${draft.value.trimEnd()}\n${nextText}`
-  } else {
-    draft.value = nextText
-  }
-  nextTick(() => inputRef.value?.focus())
-}
-
 function getMentionFileName(path: string): string {
   const idx = path.lastIndexOf('/')
   if (idx < 0) return path
@@ -2144,7 +2131,6 @@ onMounted(() => {
 
 defineExpose<ThreadComposerExposed>({
   hydrateDraft,
-  appendTextToDraft,
   hasUnsavedDraft: () => hasUnsavedDraft.value,
 })
 
