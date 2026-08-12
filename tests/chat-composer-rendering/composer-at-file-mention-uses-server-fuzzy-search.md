@@ -26,3 +26,25 @@ Composer `@` file mentions now prefer the official `fuzzyFileSearch` session met
 
 #### Rollback/Cleanup
 - None. The local search endpoint remains as the fallback path.
+
+### Round-38: @ suggestions exclude ignored/generated directories
+
+#### Feature/Change Name
+The fuzzy search session results are filtered before display: paths under ignored directories (`.git`, `node_modules`, `dist`, `build`, `out`, hidden dot-directories, `__pycache__`, `target`, `.venv`, …) are dropped from the `@` file mention list. The app-server session search does not exclude them, so without this filter typing `@re` in a git workspace could surface `.git/refs/heads` and similar VCS internals.
+
+#### Prerequisites/Setup
+- Dev server running (`pnpm run dev`)
+- A project thread whose workspace is a git repository (or contains a `node_modules`/`dist` folder)
+
+#### Steps
+1. In the project thread, type `@` and a fragment that also matches git internals (e.g. `@ref` when `.git/refs` exists).
+2. Confirm the suggestion popup lists only real workspace files/directories, with no `.git`, `node_modules`, `dist`, `build` entries.
+3. Type `@` with a fragment matching only an ignored path; confirm the popup shows "No matching files" instead of the ignored entries.
+4. Select a normal suggestion; confirm the attachment chip is added as before.
+
+#### Expected Results
+- VCS internals and dependency/generated folders never appear in the `@` list.
+- Behavior is identical in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
