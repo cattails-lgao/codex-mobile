@@ -22,6 +22,16 @@
 
 **验证：** `config/read` 返回 `model=deepseek-v4-flash, provider=custom, effort=low`（与 codex-cli 一致）；`provider-models` 返回 deepseek-v4-flash；UI 选 Codex 后模型按钮与下拉显示 deepseek-v4-flash；新线程发消息经 litellm 正常回复。
 
+## 补充修复（模型列表仍不对——缺 model_catalog_json + provider-backed 误判）
+
+用户反馈「之前端点选 codex 取的是哪里的？现在模型列表还是有问题」：round-42 只同步了 litellm provider 配置，**漏了 codex-cli 的模型目录 `model_catalog_json`**（`C:\Users\cattails\.codex\models.json`，定义 deepseek-v4-flash / deepseek-v4-pro）→ app-server 的 `model/list` 仍返回内置官方目录（gpt-5.5 等，需 OpenAI 登录用不了）。且前端把 config.toml 的 `model_provider="custom"`（litellm）误判为 provider-backed → 模型列表只用 `provider-models?provider=custom`（litellm /models 只有 flash），丢 catalog 的 pro 项。
+
+**修复：**
+- `.codex/config.toml` 补 `model_catalog_json = "C:\\Users\\cattails\\.codex\\models.json"` → `model/list` 返回 deepseek-v4-flash / deepseek-v4-pro（与 codex-cli 一致）。
+- `src/composables/useDesktopState.ts` `refreshModelPreferences`：`isProviderBacked` 判定从 `targetProviderId !== 'codex'` 改为 `!== 'codex' && !== 'custom'`（config.toml 的 litellm provider 不算 provider-backed，走 model/list 目录；UI 的"自定义端点"是 `custom-endpoint`，不受影响）。
+
+**验证：** `model/list` = deepseek-v4-flash, deepseek-v4-pro；UI 模型下拉显示两项。备注：litellm config.yaml 只配了 flash（deepseek-v4-pro 选了会报错，与 codex-cli 行为一致，需用户在 litellm 补配）。
+
 ## 备注（发现但未修）
 
 - **thread/delete / thread/archive 对 notLoaded/active 线程 502**：app-server 对活动/未加载线程执行 delete/archive 时触发 session shutdown 卡住（日志：`thread X was active; shutting down`），bridge 返回 502。测试线程（019ff628/019ff634/019ff670）因回退/429 后变 notLoaded 无法通过 RPC 删除，但不在 thread/list 显示，无用户可见影响。正常 idle 线程的归档（round-37 回收站）此前工作正常。低优先级，待后续确认 app-server 行为。

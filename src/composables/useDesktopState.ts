@@ -2512,7 +2512,11 @@ export function useDesktopState() {
       const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
       activeProviderId.value = normalizedProviderId
       const targetProviderId = readProviderIdForThread(selectedThreadId.value)
-      const isProviderBacked = targetProviderId !== 'codex'
+      // round-42：config.toml 的 model_provider = "custom"（litellm）表示选
+      // "Codex" 时走 codex-cli 的模型目录（model_catalog_json，deepseek-v4-flash/pro），
+      // 与 UI 的"自定义端点"（custom-endpoint）不同，不应按 provider-backed 处理，
+      // 否则模型列表只剩 litellm /models 暴露的模型而丢 model/list 目录项。
+      const isProviderBacked = targetProviderId !== 'codex' && targetProviderId !== 'custom'
       const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
       const models = await getAvailableModels({
         includeProviderModels: isProviderBacked || options?.includeProviderModels !== false,
