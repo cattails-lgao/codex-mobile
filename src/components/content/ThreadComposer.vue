@@ -646,6 +646,7 @@ export type SubmitPayload = {
 
 export type ThreadComposerExposed = {
   hydrateDraft: (payload: ComposerDraftPayload) => void
+  appendTextToDraft: (text: string) => void
   hasUnsavedDraft: () => boolean
 }
 
@@ -2148,6 +2149,18 @@ function hydrateDraft(payload: ComposerDraftPayload): void {
   })
 }
 
+function appendTextToDraft(text: string): void {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  draft.value = draft.value.trim()
+    ? `${draft.value.trim()}\n${trimmed}`
+    : trimmed
+  void nextTick(() => {
+    inputRef.value?.focus()
+    updateComposerOverflowState()
+  })
+}
+
 function getMentionFileName(path: string): string {
   const idx = path.lastIndexOf('/')
   if (idx < 0) return path
@@ -2210,6 +2223,7 @@ onMounted(() => {
 
 defineExpose<ThreadComposerExposed>({
   hydrateDraft,
+  appendTextToDraft,
   hasUnsavedDraft: () => hasUnsavedDraft.value,
 })
 
