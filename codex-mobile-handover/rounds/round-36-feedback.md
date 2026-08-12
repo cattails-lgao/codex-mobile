@@ -32,4 +32,4 @@
 - `src/components/content/ThreadComposer.vue`（删除死代码 `appendTextToDraft`）
 - `tests/git-worktrees-rollback/rollback-no-longer-fills-composer-input.md` + `tests/git-worktrees-rollback/index.md`
 - `codex-mobile-handover/rounds/round-36-feedback.md`（本文档）
-- 提交：待提交
+- 提交：`1970a85`（已提交，随 v0.1.94 推送）

@@ -27,4 +27,15 @@
 - **`fc468ff`**：交接文档脱敏——本机绝对路径一律改语义占位（`<node 安装目录>`、`<pnpm 全局 bin 目录>`、`<Git 安装目录>` 等），项目跨机器/跨平台运行不写死路径；同步更新仓库版与通用版写作规范、交接注意事项、快照与落款。作用：交接文档换机可读可执行
 - **`3ab96cc`**：工具链路径进一步语义化——PATH 示例等改用 `<node 安装目录>`/`<pnpm 全局 bin 目录>` 占位并附定位命令（`Get-Command`/`pnpm bin`/`npm prefix -g`），「脱敏」升级为「脱敏与不写死路径」写入仓库版与通用版写作规范。作用：多机器/多平台运行不写死路径
 - **`85d65bc`**：以 `codex-mobile-re` 名义发包——`package.json` name/bin 改 `codex-mobile-re`（上游 `codexapp`/`codexui` 归 friuns 所有无发布权限）、repository/homepage 指向本 fork、CLI 命令名与提示文案同步、版本 `0.1.88`。作用：`codex-mobile-re@0.1.88` 已发布 npm 官方源（maintainer `lgao7779`），`npx codex-mobile-re` 可用
+- **`5da850d`**：round-37 修复 1——回收站记录保留被删线程标题（删除时快照 `name`，回收站列表不再显示 `（无标题）`）。作用：回收站线程名丢失修复
+- **`48ad2a2`**：round-37 修复 2——右侧文件面板改为真实目录树（递归遍历 + 目录折叠 + 忽略规则），替代拍平文件列表。作用：文件面板树形结构
+- **`78a3e1a`**：round-37 修复 3——消息列表图片/视频行内预览（图片内联渲染、视频 `<video controls>` 播放器、`data:` 载荷外置为本地文件）。作用：收发图片/视频渲染确认可用
+- **`2de2559`**：round-37 交接文档与手动测试记录
+- **`e6dd743`**：round-38 修复——@ 文件提及建议排除 `.git`/`node_modules` 等忽略与生成目录（会话搜索+本地回退双路径过滤）。作用：@ 列表不再混入 VCS 内部文件
+- **`b62bf3e`**：round-38 交接文档与手动测试记录
+- **`f836697`**：round-39 修复 1——@ 文件搜索在 ripgrep 缺失时退回纯 Node 目录遍历（复用文件面板遍历器），`@main` 等查询不再整体失效。作用：@ 提及无 rg 兜底
+- **`6eba85c`**：round-39 修复 2——`mergePersistedReasoning` 丢弃「turnIndex 在消息流中不存在」的孤儿思考（回滚/删除轮次遗留的归档条目），不再追加到对话末尾。作用：思考过程不再堆在最后
+- **`aaddc8f`**：round-39 交接文档与手动测试记录
+- **`93a6763`**：round-40 修复——zen-proxy（`unifiedResponsesProxy.ts`）转换 Responses 载荷为 chat 格式时保留 `input_image` 为 `image_url` 多模态块，此前只提取文本导致模型收不到图片像素（回复「无法读取图片」）。作用：发送图片模型可理解
+- **`be2cf22`**：round-40 交接文档与手动测试记录
 
