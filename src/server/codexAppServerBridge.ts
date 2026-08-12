@@ -27,8 +27,11 @@ import {
   getFreeModels,
   refreshFreeModelsInBackground,
   FREE_MODE_STATE_FILE,
+  FREE_MODE_RUNTIME_PROVIDER_ID,
   OPENCODE_ZEN_DEFAULT_MODEL,
   OPENCODE_ZEN_PROVIDER_ID,
+  OPENCODE_ZEN_RUNTIME_PROVIDER_ID,
+  CUSTOM_RUNTIME_PROVIDER_ID,
   createDefaultOpenCodeZenFreeModeState,
   filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
@@ -2323,6 +2326,22 @@ export function normalizeCustomEndpointBaseUrl(input: string): string {
     }
   }
   return url.replace(/\/+$/u, '')
+}
+
+/** Fetch the model id list from a custom endpoint's `/models` (round-41). */
+async function fetchCustomEndpointModelIds(customBaseUrl: string, apiKey: string): Promise<string[]> {
+  try {
+    const modelsUrl = customBaseUrl.replace(/\/+$/, '') + '/models'
+    const headers: Record<string, string> = {}
+    if (apiKey && apiKey !== 'dummy') {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
+    const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
+    if (!resp.ok) return []
+    return normalizeProviderModelsData(await resp.json() as unknown)
+  } catch {
+    return []
+  }
 }
 
 async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
@@ -8810,6 +8829,38 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         try {
           const requestedProvider = url.searchParams.get('provider')?.trim() ?? ''
           if (requestedProvider) {
+            // The frontend normalizes provider ids to dash form (custom_endpoint
+            // -> custom-endpoint); match both spellings when resolving free-mode
+            // providers so the model picker gets the full list (round-41).
+            const normalizedRequestedProvider = requestedProvider.replace(/_/g, '-')
+            const fmState = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+            if (fmState?.enabled && normalizedRequestedProvider === CUSTOM_RUNTIME_PROVIDER_ID.replace(/_/g, '-') && fmState.provider === 'custom' && fmState.customBaseUrl) {
+              // The provider catalog resolves custom_endpoint against the local
+              // custom-proxy base URL, which has no /models route, so resolve the
+              // requested provider against the real endpoint when free-mode custom
+              // is active (round-41).
+              setJson(res, 200, {
+                data: await fetchCustomEndpointModelIds(fmState.customBaseUrl, fmState.apiKey ?? ''),
+                exclusive: true,
+                source: 'custom',
+              })
+              return
+            }
+            if (fmState?.enabled && normalizedRequestedProvider === OPENCODE_ZEN_RUNTIME_PROVIDER_ID.replace(/_/g, '-') && fmState.provider === 'opencode-zen') {
+              setJson(res, 200, {
+                data: filterOpenCodeZenModelsForAuthState(
+                  sortOpenCodeZenModelIds(await fetchOpenCodeZenModelIds(fmState.apiKey)),
+                  fmState.apiKey,
+                ),
+                exclusive: true,
+                source: 'opencode-zen',
+              })
+              return
+            }
+            if (fmState?.enabled && normalizedRequestedProvider === FREE_MODE_RUNTIME_PROVIDER_ID.replace(/_/g, '-') && fmState.provider === 'openrouter') {
+              setJson(res, 200, { data: await getFreeModels(), exclusive: true, source: 'openrouter' })
+              return
+            }
             setJson(res, 200, {
               ...(await readProviderModelIdsForProvider(appServer, requestedProvider)),
               exclusive: true,
@@ -8835,27 +8886,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               return
             }
             if (fmState.provider === 'custom' && fmState.customBaseUrl) {
-              try {
-                const modelsUrl = fmState.customBaseUrl.replace(/\/+$/, '') + '/models'
-                const headers: Record<string, string> = {}
-                if (fmState.apiKey && fmState.apiKey !== 'dummy') {
-                  headers['Authorization'] = `Bearer ${fmState.apiKey}`
-                }
-                const resp = await fetch(modelsUrl, { headers, signal: AbortSignal.timeout(8000) })
-                if (resp.ok) {
-                  const json = await resp.json() as unknown
-                  const ids = normalizeProviderModelsData(json)
-                  const currentModel = fmState.model?.trim() ?? ''
-                  const orderedIds = currentModel && ids.includes(currentModel)
-                    ? [currentModel, ...ids.filter((id) => id !== currentModel)]
-                    : ids
-                  setJson(res, 200, { data: orderedIds, exclusive: true, source: 'custom' })
-                  return
-                }
-              } catch {
-                // Custom endpoint model fetch failed — return empty list
-              }
-              setJson(res, 200, { data: [], exclusive: true, source: 'custom' })
+              const ids = await fetchCustomEndpointModelIds(fmState.customBaseUrl, fmState.apiKey ?? '')
+              const currentModel = fmState.model?.trim() ?? ''
+              const orderedIds = currentModel && ids.includes(currentModel)
+                ? [currentModel, ...ids.filter((id) => id !== currentModel)]
+                : ids
+              setJson(res, 200, { data: orderedIds, exclusive: true, source: 'custom' })
               return
             }
             const freeModels = await getFreeModels()

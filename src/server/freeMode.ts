@@ -93,7 +93,7 @@ export function getFreeKeyCount(): number {
 
 export const FREE_MODE_PROVIDER_ID = 'openrouter-free'
 export const FREE_MODE_BASE_URL = 'https://openrouter.ai/api/v1'
-const FREE_MODE_RUNTIME_PROVIDER_ID = 'openrouter_free'
+export const FREE_MODE_RUNTIME_PROVIDER_ID = 'openrouter_free'
 
 const FALLBACK_FREE_MODELS = [
   'openrouter/free',
@@ -154,6 +154,7 @@ export const CUSTOM_PROVIDER_ID = 'custom-endpoint'
 export const OPENCODE_ZEN_PROVIDER_ID = 'opencode-zen'
 const CUSTOM_RUNTIME_PROVIDER_ID = 'custom_endpoint'
 const OPENCODE_ZEN_RUNTIME_PROVIDER_ID = 'opencode_zen'
+export { CUSTOM_RUNTIME_PROVIDER_ID, OPENCODE_ZEN_RUNTIME_PROVIDER_ID }
 export const OPENCODE_ZEN_BASE_URL = 'https://opencode.ai/zen/v1'
 export const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
 

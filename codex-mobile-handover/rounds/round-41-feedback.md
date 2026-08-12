@@ -14,6 +14,14 @@
 - `src/App.vue`：`saveCustomEndpoint` 保存后检查 `status.currentModel`，自定义端点为空时显示提示「无法从自定义端点获取模型，请检查 URL 后重试」（i18n 键已加中英文）。
 - 单测：`normalizeCustomEndpointBaseUrl` 4 例（完整 chat/completions 路径、responses 路径+尾斜杠、已是 base、空白/尾斜杠修剪）。
 
+## 补充修复（模型列表只显示一个）
+
+用户反馈「选择的自定义端点怎么只有 minimax-m3」：`provider-models?provider=custom_endpoint` 走 provider catalog 路径，其 base_url 是本地 custom-proxy（无 `/models` 路由）→ 拉取失败返回空 → 前端 `requireProviderModels` 只回退追加配置的 `model`（minimax-m3）一项。
+
+- `src/server/codexAppServerBridge.ts`：`provider-models?provider=...` 时先按 free-mode 状态解析——custom 端点（`custom-endpoint`/`custom_endpoint`）用真实 `customBaseUrl` 拉 `/models`；opencode-zen / openrouter 同理。前端将 provider id 归一化为连字符（`custom_endpoint`→`custom-endpoint`），匹配时两种拼写都接受。
+- 抽公共函数 `fetchCustomEndpointModelIds(customBaseUrl, apiKey)`，供 provider 分支与无 provider 分支复用。
+- `src/server/freeMode.ts`：导出 `FREE_MODE_RUNTIME_PROVIDER_ID`、`CUSTOM_RUNTIME_PROVIDER_ID`、`OPENCODE_ZEN_RUNTIME_PROVIDER_ID`。
+
 ## 验证
 
 - `vue-tsc --noEmit` 通过；`pnpm run test:unit`：349 通过 + 2 环境性失败（POSIX 权限断言，Windows 基线已知失败）。新增 4 例 normalize 测试。
