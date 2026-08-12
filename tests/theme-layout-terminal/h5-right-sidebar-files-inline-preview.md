@@ -40,3 +40,23 @@ Round-7 work: the right-side panel now slides in correctly on H5 viewports (Tail
 
 #### Rollback/Cleanup
 - None required.
+
+## Feature: Files tab renders a real directory tree (round-37)
+
+#### Prerequisites
+- A thread whose workspace contains nested folders (e.g. `src/components/*.vue`, `docs/guide/*.md`) plus root-level files
+
+#### Steps
+1. Open the Files tab in the right panel.
+2. Confirm folders render as expandable rows with chevron + folder icons, and files indent under their parent folder by depth.
+3. Click a folder row to collapse it; confirm its children disappear and the chevron flips to `▸`.
+4. Click again to expand.
+5. Type a search term in the filter box; confirm matching files stay visible with all ancestor folders auto-expanded.
+
+#### Expected Results
+- The panel is a real tree (previously it flattened every file under its top-level folder, showing only a two-level "group → flat file list").
+- Files sort with directories first, then by name; clicking a file still opens the preview tab.
+- Collapse state resets when the thread/cwd changes.
+
+#### Rollback/Cleanup
+- None required.

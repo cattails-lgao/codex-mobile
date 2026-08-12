@@ -42,3 +42,20 @@ Round-7 work: right-click context menus in the sidebar no longer disappear when 
 
 #### Rollback/Cleanup
 - Recycle-bin records live in `localStorage` key `codex-web-local.recycle-bin.v1`; clearing it empties the bin. Server-side threads are archived via `thread/archive` and restored via `thread/unarchive`.
+
+## Feature: Recycle bin records keep the deleted thread title (round-37)
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`, at least one thread with a real title in the sidebar
+
+#### Steps
+1. Right-click a titled thread (e.g. a chat whose first message became its name) → "Delete thread" → confirm.
+2. Open the recycle bin (sidebar recycle-bin button or organize menu → "Recycle bin").
+3. Confirm the row shows the thread's actual title (not `(untitled)`) and its project name.
+
+#### Expected Results
+- The recycle-bin record stores the title read before the thread is marked optimistically archived; previously the title was captured after the archive mark, so the lookup returned `null` and fell back to `(untitled)` with an empty path.
+- Restore still works and the title/path round-trip back to the sidebar.
+
+#### Rollback/Cleanup
+- Recycle-bin records live in `localStorage` key `codex-web-local.recycle-bin.v1`; clearing it empties the bin.
