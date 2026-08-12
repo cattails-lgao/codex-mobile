@@ -6,7 +6,7 @@ type ResponsesApiInput = {
   id?: string
   type: string
   role?: string
-  content?: string | Array<{ type?: string; text?: string }>
+  content?: string | Array<{ type?: string; text?: string; image_url?: string }>
   summary?: Array<{ type?: string; text?: string }>
   text?: string
   name?: string
@@ -28,9 +28,13 @@ type ResponsesApiRequest = {
   [key: string]: unknown
 }
 
+type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 type ChatMessage = {
   role: string
-  content?: string
+  content?: string | ChatContentPart[]
   reasoning_content?: string
   tool_call_id?: string
   tool_calls?: Array<{
@@ -92,7 +96,7 @@ function appendAssistantText(messages: ChatMessage[], text: string, reasoningCon
 
   const lastMessage = messages[messages.length - 1]
   if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.tool_calls)) {
-    lastMessage.content = lastMessage.content
+    lastMessage.content = typeof lastMessage.content === 'string' && lastMessage.content
       ? `${lastMessage.content}\n${trimmedText}`
       : trimmedText
     if (trimmedReasoningContent) {
@@ -183,15 +187,37 @@ export function responsesInputToMessages(input: string | ResponsesApiInput[], in
 
     if (item.type === 'message' && item.role) {
       const content = item.content
+      const role = item.role === 'developer' ? 'system' : item.role
+      if (Array.isArray(content)) {
+        // 多模态消息：input_text -> text，input_image -> image_url。此前只提取
+        // part.text，input_image 的 image_url 被丢弃，模型只看到文本占位符而
+        // 无法理解图片内容（round-40）。
+        const parts: ChatContentPart[] = []
+        let hasImage = false
+        for (const part of content) {
+          if (part?.type === 'input_image' && typeof part.image_url === 'string' && part.image_url.length > 0) {
+            parts.push({ type: 'image_url', image_url: { url: part.image_url } })
+            hasImage = true
+          } else if (typeof part?.text === 'string') {
+            parts.push({ type: 'text', text: part.text })
+          }
+        }
+        if (hasImage) {
+          messages.push({ role, content: parts })
+          continue
+        }
+        const text = parts.map((part) => (part.type === 'text' ? part.text : '')).join('\n')
+        if (role === 'assistant') {
+          appendAssistantText(messages, text, pendingReasoningContent)
+          pendingReasoningContent = ''
+        } else {
+          messages.push({ role, content: text })
+        }
+        continue
+      }
       const text = typeof content === 'string'
         ? content
-        : Array.isArray(content)
-          ? content
-              .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-              .filter((part) => part.length > 0)
-              .join('\n')
-          : (typeof item.text === 'string' ? item.text : '')
-      const role = item.role === 'developer' ? 'system' : item.role
+        : (typeof item.text === 'string' ? item.text : '')
       if (role === 'assistant') {
         appendAssistantText(messages, text, pendingReasoningContent)
         pendingReasoningContent = ''
@@ -297,7 +323,7 @@ export function chatCompletionToResponsesFormat(chatResponse: Record<string, unk
       }
     }
 
-    if (message.content) {
+    if (typeof message.content === 'string' && message.content) {
       output.push({
         type: 'message',
         role: 'assistant',
