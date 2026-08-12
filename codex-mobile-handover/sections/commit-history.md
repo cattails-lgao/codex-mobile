@@ -38,4 +38,9 @@
 - **`aaddc8f`**：round-39 交接文档与手动测试记录
 - **`93a6763`**：round-40 修复——zen-proxy（`unifiedResponsesProxy.ts`）转换 Responses 载荷为 chat 格式时保留 `input_image` 为 `image_url` 多模态块，此前只提取文本导致模型收不到图片像素（回复「无法读取图片」）。作用：发送图片模型可理解
 - **`be2cf22`**：round-40 交接文档与手动测试记录
+- **`e1dccb9`**：round-41 修复——自定义端点 URL 归一化（保存时剥离误填的 `/chat/completions`、`/responses` 路径段得到 base URL），此前路径重复导致 `/models` 与运行时请求 404、模型解析为空、保存无提示。作用：自定义端点粘贴完整端点也能用（详见 `rounds/round-41-feedback.md`）
+- **`a33395e`**：round-41 补充——`provider-models?provider=<provider>` 在 free-mode 自定义端点/zen/openrouter 激活时直接用真实端点拉 `/models`（provider catalog 的本地代理无 `/models` 路由返回空），模型下拉不再只剩当前模型一项
+- **`548983e`**：round-42 修复 1——回退后消息回填输入框（恢复 `appendTextToDraft` + `onRollback` 回填，round-36 曾移除）；同步 litellm provider 配置到本机 CODEX_HOME 的 `config.toml`，选 Codex 与 codex-cli 同用 deepseek-v4-flash。作用：回退可编辑重发、codex 模型对齐 codex-cli
+- **`6378b34`**：round-42 修复 2——补齐 `model_catalog_json`（指向 codex-cli 的 models.json）使 `model/list` 返回 deepseek-v4-flash/pro；前端 `isProviderBacked` 判定把 config.toml 的 `custom`（litellm）排除，模型下拉完整显示目录模型
+- **`0f02698`**：round-42 交接文档补充（models.json 加入 medium 强度档的实测与修改记录，`models.json` 为用户机器文件非仓库）
 
