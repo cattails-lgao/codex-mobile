@@ -18,6 +18,7 @@ import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
 import { createExternalSessionTracker } from './externalSessionTracker.js'
+import { listWorkspaceFiles } from './localBrowseUi.js'
 import {
   getRandomFreeKey,
   getFreeKeyCount,
@@ -9677,7 +9678,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         try {
-          const files = await listFilesWithRipgrep(cwd)
+          let files: string[]
+          try {
+            files = await listFilesWithRipgrep(cwd)
+          } catch {
+            // rg 不可用（精简安装未带 ripgrep）时退回纯 Node 目录遍历，
+            // 保证 @ 文件提及不因缺少 rg 而整体失效。路径转成相对路径，
+            // 与 rg 输出的路径格式保持一致。
+            const rows = await listWorkspaceFiles(cwd, { maxEntries: 4000 })
+            files = rows.filter((row) => !row.isDirectory).map((row) => row.relativePath)
+          }
           const scored = files
             .map((path) => ({ path, score: scoreFileCandidate(path, query) }))
             .filter((row) => query.length === 0 || row.score < 10)
