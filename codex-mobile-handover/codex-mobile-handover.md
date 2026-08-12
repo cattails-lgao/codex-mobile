@@ -65,6 +65,7 @@
 | 第二十八轮反馈 2 条（processFold 工具调用块全跑到对话前面——空文本 assistant 虚高 agent slot 数；fileChange 每行变更数字/撤销按钮移到最左边） | [rounds/round-34-feedback.md](rounds/round-34-feedback.md) |
 | 第二十九轮反馈 2 条（fileChange 每行变更数字/撤销按钮移到最右边——round-34 方向相反；文件名过长未省略需截断） | [rounds/round-35-feedback.md](rounds/round-35-feedback.md) |
 | 第三十轮反馈 1 条（回退成功后再次发送，被回退的消息复现——回退按钮残留上游「编辑」流程的输入框回填） | [rounds/round-36-feedback.md](rounds/round-36-feedback.md) |
+| 第三十一轮 3 项（回收站线程名丢失、文件面板树形结构、消息列表图片/视频预览） | [rounds/round-37-feedback.md](rounds/round-37-feedback.md) |
 
 ## 项目概况
 
@@ -138,4 +139,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-11（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`，均已在 main；round-35 及以前已推送）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-12（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览，待提交），均已在 main；round-35 及以前已推送）· 内容已脱敏*
