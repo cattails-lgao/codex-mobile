@@ -2321,7 +2321,10 @@ describe('message stream merge helpers', () => {
     expect(merged.map((message) => message.id)).toEqual(['u1', 'r1', 'a1'])
   })
 
-  it('appends reasoning without a matching turn to the end', () => {
+  it('appends reasoning without a turn index, drops orphaned-turn reasoning (round-39)', () => {
+    // round-39：轮次已被回滚/删除的思考（turnIndex 在消息流中不存在）不再
+    // 追加到末尾——否则会显示成「思考过程堆在对话最后」。仅完全无轮次信息
+    // 的旧存档仍兜底追加。
     const persisted = [
       persistedMessage('u1', 'user', 0),
       persistedMessage('a1', 'assistant', 0),
@@ -2331,7 +2334,31 @@ describe('message stream merge helpers', () => {
       persistedMessage('rOtherTurn', 'system', 5, { messageType: 'reasoning' }),
     ]
     const merged = mergePersistedReasoning(persisted, reasoning)
-    expect(merged.map((message) => message.id)).toEqual(['u1', 'a1', 'rNoTurn', 'rOtherTurn'])
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'a1', 'rNoTurn'])
+  })
+
+  it('replaces orphaned reasoning when its turn becomes available again (round-39)', () => {
+    // 分页加载补齐旧轮后，原本被丢弃的思考（turnIndex 原先不存在）应能按
+    // 正常位置插入，而不是永久消失。
+    const reasoning = [
+      persistedMessage('rOld', 'system', 1, { messageType: 'reasoning' }),
+    ]
+    const before = mergePersistedReasoning(
+      [persistedMessage('u1', 'user', 0), persistedMessage('a1', 'assistant', 0)],
+      reasoning,
+    )
+    expect(before.map((message) => message.id)).toEqual(['u1', 'a1'])
+
+    const after = mergePersistedReasoning(
+      [
+        persistedMessage('u1', 'user', 0),
+        persistedMessage('a1', 'assistant', 0),
+        persistedMessage('u2', 'user', 1),
+        persistedMessage('a2', 'assistant', 1),
+      ],
+      reasoning,
+    )
+    expect(after.map((message) => message.id)).toEqual(['u1', 'a1', 'u2', 'rOld', 'a2'])
   })
 
   it('interleaves live messages by first-seen arrival order', () => {
