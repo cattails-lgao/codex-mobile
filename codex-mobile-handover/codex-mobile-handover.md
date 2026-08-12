@@ -68,6 +68,7 @@
 | 第三十一轮 3 项（回收站线程名丢失、文件面板树形结构、消息列表图片/视频预览） | [rounds/round-37-feedback.md](rounds/round-37-feedback.md) |
 | 第三十二轮 3 项（@ 文件提及混入 .git 内部文件、收发图片/视频渲染确认可用） | [rounds/round-38-feedback.md](rounds/round-38-feedback.md) |
 | 第三十三轮 3 项（新线程发图排查=提供方限流、@main 无 rg 兜底修复、孤儿思考块堆末尾修复） | [rounds/round-39-feedback.md](rounds/round-39-feedback.md) |
+| 第三十四轮 1 项（发送图片模型无法理解——zen-proxy 丢弃 input_image 修复） | [rounds/round-40-feedback.md](rounds/round-40-feedback.md) |
 
 ## 项目概况
 
@@ -141,4 +142,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-12（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃，待提交），均已在 main；round-35 及以前已推送）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-12（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片，待提交），均已在 main；round-35 及以前已推送）· 内容已脱敏*

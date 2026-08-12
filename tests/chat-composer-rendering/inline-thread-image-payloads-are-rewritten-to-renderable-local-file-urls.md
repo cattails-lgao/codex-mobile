@@ -37,3 +37,22 @@
 
 #### Rollback/Cleanup
 - The test video can be removed from the workspace after the check.
+
+## Feature: Attached images reach the model through the zen proxy (round-40)
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`
+- A project thread, an image file (`.jpg`/`.png`)
+
+#### Steps
+1. Attach the image in the composer, type a question such as "图片里有什么？" and send it.
+2. Wait for the turn; confirm the model answers based on the image content instead of replying "图片内容无法直接读取" / "无法读取图片".
+3. If the provider is rate-limited (429), the request is still correctly built: the app-server log shows the request body contains `{"type":"input_image","image_url":"data:image/..."}`.
+4. Optional: check `src/server/unifiedResponsesProxy.ts` — `responsesInputToMessages` maps `input_image` parts to chat `image_url` content parts (the round-40 fix; before it, `image_url` was dropped and the model only saw the text placeholder).
+
+#### Expected Results
+- The zen proxy keeps the image as a multimodal `image_url` part in the upstream chat-completions payload.
+- Model responses can reference the actual image pixels.
+
+#### Rollback/Cleanup
+- Roll back the test turn afterwards (回退此消息).
