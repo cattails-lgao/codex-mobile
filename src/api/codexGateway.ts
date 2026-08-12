@@ -331,6 +331,26 @@ export async function stopFuzzyFileSearchSession(sessionId: string): Promise<voi
   await callRpc('fuzzyFileSearch/sessionStop', { sessionId }).catch(() => undefined)
 }
 
+const IGNORED_FILE_SEARCH_DIRS = new Set([
+  'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
+  'coverage', '__pycache__', '.cache', '.turbo', 'target', '.venv',
+  'venv', '.idea', '.vscode', 'output',
+])
+
+/**
+ * Returns true when a candidate file path contains an ignored directory
+ * segment (hidden dirs, VCS internals, dependency/generated folders).
+ * The app-server fuzzy file search session does not exclude these, so the
+ * @ file mention list would otherwise surface e.g. `.git/refs/heads`.
+ */
+export function isIgnoredFileSearchPath(value: string): boolean {
+  const normalized = value.replace(/\\/g, '/')
+  return normalized
+    .split('/')
+    .filter(Boolean)
+    .some((segment) => segment.startsWith('.') || IGNORED_FILE_SEARCH_DIRS.has(segment))
+}
+
 export function normalizeFuzzyFileSearchResults(payload: unknown): ComposerFileSuggestion[] {
   const record = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? (payload as Record<string, unknown>)
@@ -342,7 +362,7 @@ export function normalizeFuzzyFileSearchResults(payload: unknown): ComposerFileS
     const row = item as Record<string, unknown>
     const rawPath = row.path
     const value = typeof rawPath === 'string' ? rawPath.trim() : ''
-    if (!value) continue
+    if (!value || isIgnoredFileSearchPath(value)) continue
     suggestions.push({ path: value })
   }
   return suggestions
@@ -3717,7 +3737,7 @@ export async function searchComposerFiles(cwd: string, query: string, limit = 20
     const row = item as Record<string, unknown>
     const rawPath = row.path
     const value = typeof rawPath === 'string' ? rawPath.trim() : ''
-    if (!value) continue
+    if (!value || isIgnoredFileSearchPath(value)) continue
     suggestions.push({ path: value })
   }
   return suggestions
