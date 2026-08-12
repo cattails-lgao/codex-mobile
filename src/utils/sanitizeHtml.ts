@@ -9,6 +9,7 @@ const ALLOWED_TAGS = new Set([
   'hr', 'i', 'img', 'li', 'mark', 'ol', 'p', 'pre', 's', 'small', 'span',
   'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead',
   'tr', 'ul', 'dl', 'dt', 'dd', 'blockquote', 'details', 'summary',
+  'video',
 ])
 
 const DENIED_TAGS = new Set([

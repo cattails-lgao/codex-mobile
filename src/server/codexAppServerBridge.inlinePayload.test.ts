@@ -179,6 +179,39 @@ describe('thread inline media sanitization', () => {
     expect(existsSync(gifPath)).toBe(true)
   })
 
+  it('externalizes inline video data URLs to local files with video extensions', async () => {
+    const videoDataUrl = 'data:video/webm;base64,GkXfow=='
+    const result = await sanitizeThreadTurnsInlinePayloads('thread/read', {
+      thread: {
+        turns: [
+          {
+            id: 'turn-1',
+            items: [
+              {
+                id: 'user-1',
+                type: 'userMessage',
+                content: [{ type: 'image', url: videoDataUrl }],
+              },
+            ],
+          },
+        ],
+      },
+    }) as {
+      thread: {
+        turns: Array<{
+          items: Array<Record<string, unknown>>
+        }>
+      }
+    }
+
+    const content = result.thread.turns[0].items[0].content as Array<Record<string, unknown>>
+    const url = content[0].url as string
+    expect(url).toMatch(/^\/codex-local-image\?path=/)
+    const localPath = localImagePathFromProxyUrl(url)
+    expect(localPath.endsWith('.webm')).toBe(true)
+    expect(existsSync(localPath)).toBe(true)
+  })
+
   it('externalizes nested replacement history image URLs', async () => {
     const result = await sanitizeThreadTurnsInlinePayloads('thread/read', {
       thread: {

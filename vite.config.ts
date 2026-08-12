@@ -19,6 +19,14 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
+  ".ogv": "video/ogg",
+  ".mpeg": "video/mpeg",
+  ".avi": "video/x-msvideo",
 };
 
 function normalizeLocalImagePath(rawPath: string): string {

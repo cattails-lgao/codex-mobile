@@ -91,7 +91,14 @@
 
       <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
         <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
-          <img class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
+          <video
+            v-if="isVideoMediaUrl(image.url)"
+            class="thread-composer-attachment-image"
+            :src="image.url"
+            controls
+            preload="metadata"
+          />
+          <img v-else class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
           <button
             class="thread-composer-attachment-remove"
             type="button"
@@ -1446,7 +1453,12 @@ function triggerFolderPicker(): void {
 }
 
 function removeImage(id: string): void {
-  selectedImages.value = selectedImages.value.filter((image) => image.id !== id)
+  const image = selectedImages.value.find((item) => item.id === id)
+  if (image && isVideoMediaUrl(image.url)) {
+    const localPath = extractPathFromMediaUrl(image.url)
+    if (localPath) removeFileAttachment(localPath)
+  }
+  selectedImages.value = selectedImages.value.filter((item) => item.id !== id)
 }
 
 function removeSkill(path: string): void {
@@ -1493,6 +1505,39 @@ function addFileAttachment(filePath: string, customLabel?: string): void {
 function isImageFile(file: File): boolean {
   if (file.type.startsWith('image/')) return true
   return /\.(png|jpe?g|gif|webp)$/i.test(file.name)
+}
+
+const VIDEO_MEDIA_EXTENSIONS = /\.(mp4|m4v|webm|mov|mkv|ogv|ogg|mpeg|avi)$/iu
+
+function isVideoFile(file: File): boolean {
+  if (file.type.startsWith('video/')) return true
+  return VIDEO_MEDIA_EXTENSIONS.test(file.name)
+}
+
+function isVideoMediaUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith('data:video/')) return true
+  try {
+    const url = new URL(trimmed, window.location.href)
+    if (VIDEO_MEDIA_EXTENSIONS.test(url.pathname)) return true
+    if (url.pathname === '/codex-local-image') {
+      return VIDEO_MEDIA_EXTENSIONS.test(url.searchParams.get('path') ?? '')
+    }
+    return false
+  } catch {
+    return VIDEO_MEDIA_EXTENSIONS.test(trimmed)
+  }
+}
+
+function extractPathFromMediaUrl(value: string): string {
+  try {
+    const parsed = new URL(value, window.location.href)
+    if (parsed.pathname !== '/codex-local-image') return ''
+    return decodeURIComponent(parsed.searchParams.get('path') ?? '').replace(/\\/g, '/')
+  } catch {
+    return ''
+  }
 }
 
 function normalizeSelectedFiles(files: FileList | File[] | null | undefined): File[] {
@@ -1628,6 +1673,38 @@ async function attachUploadedFile(file: File, sessionToken: number): Promise<voi
   }
 }
 
+async function attachVideoFile(file: File, sessionToken: number): Promise<void> {
+  if (!beginAttachmentWork(sessionToken)) return
+  try {
+    const normalizedFile = ensureFileName(file)
+    const serverPath = await uploadFile(normalizedFile)
+    if (sessionToken !== attachmentSessionToken) return
+    if (!serverPath) {
+      recordAttachmentBatchResult('failure')
+      return
+    }
+    const normalizedPath = serverPath.replace(/\\/g, '/')
+    selectedImages.value = [
+      ...selectedImages.value,
+      {
+        id: createAttachmentId(),
+        name: normalizedFile.name,
+        url: `/codex-local-image?path=${encodeURIComponent(normalizedPath)}`,
+      },
+    ]
+    // 视频同时作为文件附件交给模型（模型无法接收视频作为 input_image，
+    // 但可以通过附件路径读取/引用该文件）。
+    addFileAttachment(normalizedPath)
+    recordAttachmentBatchResult('success')
+  } catch {
+    if (sessionToken === attachmentSessionToken) {
+      recordAttachmentBatchResult('failure')
+    }
+  } finally {
+    finishAttachmentWork(sessionToken)
+  }
+}
+
 function attachIncomingFiles(files: FileList | File[] | null | undefined): void {
   const normalizedFiles = normalizeSelectedFiles(files)
   if (normalizedFiles.length === 0) return
@@ -1638,6 +1715,8 @@ function attachIncomingFiles(files: FileList | File[] | null | undefined): void 
   for (const file of normalizedFiles) {
     if (isImageFile(file)) {
       void attachImageFile(file, sessionToken)
+    } else if (isVideoFile(file)) {
+      void attachVideoFile(file, sessionToken)
     } else {
       void attachUploadedFile(file, sessionToken)
     }
@@ -2362,8 +2441,16 @@ watch(
   @apply relative h-14 w-14 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50;
 }
 
+.thread-composer-attachment:has(video) {
+  @apply h-20 w-28;
+}
+
 .thread-composer-attachment-image {
   @apply h-full w-full object-cover;
+}
+
+.thread-composer-attachment:has(video) .thread-composer-attachment-image {
+  @apply object-contain;
 }
 
 .thread-composer-attachment-remove {
