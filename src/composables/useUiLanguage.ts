@@ -508,6 +508,7 @@ const zhCN: Record<string, string> = {
   'Compacting context — the message will send after compaction': '正在压缩上下文——消息将在压缩完成后发送',
   'Auto-compact at or below remaining context percentage. 0 disables auto-compaction and falls back to server-side compaction.': '当剩余上下文占比等于或低于该百分比时，发送前先自动压缩上下文。0 表示关闭，退回服务端自动压缩。',
   'Custom endpoint': '自定义端点',
+  'Failed to resolve model from custom endpoint; check the URL and try again': '无法从自定义端点获取模型，请检查 URL 后重试',
   'Off': '关闭',
   'Dismiss': '忽略',
   'Download': '下载',

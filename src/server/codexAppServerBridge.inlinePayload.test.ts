@@ -8,6 +8,7 @@ import {
   filterThreadListByIds,
   mergeSessionCommandsIntoTurns,
   mergeSessionSkillInputsIntoTurns,
+  normalizeCustomEndpointBaseUrl,
   parseAutomationToml,
   pathSetMatchesChange,
   revertTurnFileChanges,
@@ -17,6 +18,29 @@ import {
 
 const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const pngDataUrl = `data:image/png;base64,${pngBase64}`
+
+describe('normalizeCustomEndpointBaseUrl', () => {
+  it('strips a full /chat/completions path down to the base URL (round-41)', () => {
+    expect(normalizeCustomEndpointBaseUrl('https://opencode.ai/zen/go/v1/chat/completions'))
+      .toBe('https://opencode.ai/zen/go/v1')
+  })
+
+  it('strips a full /responses path down to the base URL', () => {
+    expect(normalizeCustomEndpointBaseUrl('https://api.example.com/v1/responses/'))
+      .toBe('https://api.example.com/v1')
+  })
+
+  it('leaves an already-base URL untouched', () => {
+    expect(normalizeCustomEndpointBaseUrl('https://api.example.com/v1'))
+      .toBe('https://api.example.com/v1')
+  })
+
+  it('trims trailing slashes and whitespace', () => {
+    expect(normalizeCustomEndpointBaseUrl('  https://api.example.com/v1/  '))
+      .toBe('https://api.example.com/v1')
+  })
+})
+
 const gifBase64 = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const jpegBase64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2w=='
 const webpBase64 = 'UklGRiIAAABXRUJQVlA4IC4AAAAwAQCdASoBAAEAAQAcJaQAA3AA/vuUAAA='
