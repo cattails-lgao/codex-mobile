@@ -1678,7 +1678,11 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
     } else if (lastTurnMessageIndex >= 0) {
       result.splice(lastTurnMessageIndex + 1, 0, reasoningMessage)
     } else {
-      unattached.push(reasoningMessage)
+      // round-39：turnIndex 在消息流中不存在（该轮已被回滚/删除，如回滚后
+      // 存档未清理的思考）——直接丢弃，不再追加到末尾。此前这类孤儿思考会
+      // 渲染成「思考过程堆在对话最后」；分页加载补齐旧轮后 turnIndex 会重新
+      // 出现，思考届时按正常位置插入。
+      continue
     }
   }
   // 主循环是逆序迭代（保证同轮多条思考正序），unattached 因此被反序收集，这里还原。
