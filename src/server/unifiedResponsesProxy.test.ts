@@ -82,6 +82,46 @@ describe('unified responses proxy reasoning_content translation', () => {
     ])
   })
 
+  it('keeps input_image parts as chat image_url content (round-40)', () => {
+    // 此前 content 数组只提取 part.text，input_image 的 image_url 被丢弃，
+    // 模型只看到文本占位符而无法理解图片内容。修复后转为多模态 image_url。
+    const messages = responsesInputToMessages([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'What is in this image?' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' },
+        ],
+      },
+    ])
+
+    expect(messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'What is in this image?' },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' } },
+        ],
+      },
+    ])
+  })
+
+  it('flattens text-only content arrays back to plain strings', () => {
+    const messages = responsesInputToMessages([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'line one' },
+          { type: 'input_text', text: 'line two' },
+        ],
+      },
+    ])
+
+    expect(messages).toEqual([{ role: 'user', content: 'line one\nline two' }])
+  })
+
   it('passes reasoning_content back on assistant tool-call messages', () => {
     const messages = responsesInputToMessages([
       {
