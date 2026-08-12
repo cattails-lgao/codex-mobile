@@ -1949,13 +1949,15 @@ function onInlineDeleteClick(threadId: string): void {
 }
 
 function deleteThreadById(threadId: string): void {
+  // 必须在写入乐观归档集合之前读取线程：threadById 会跳过已归档线程，
+  // 先标记再读取会拿到 null，导致回收站记录丢失标题与路径（round-37 修复）。
+  const thread = threadById.value.get(threadId) ?? null
   if (!optimisticallyArchivedThreadIdSet.value.has(threadId)) {
     optimisticallyArchivedThreadIds.value = [threadId, ...optimisticallyArchivedThreadIds.value]
   }
   inlineDeleteConfirmThreadId.value = ''
   closeThreadMenu()
 
-  const thread = threadById.value.get(threadId) ?? null
   recordArchivedThread({
     id: threadId,
     title: thread?.title?.trim() || '(untitled)',
