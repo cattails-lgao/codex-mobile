@@ -70,6 +70,7 @@
 | 第三十三轮 3 项（新线程发图排查=提供方限流、@main 无 rg 兜底修复、孤儿思考块堆末尾修复） | [rounds/round-39-feedback.md](rounds/round-39-feedback.md) |
 | 第三十四轮 1 项（发送图片模型无法理解——zen-proxy 丢弃 input_image 修复） | [rounds/round-40-feedback.md](rounds/round-40-feedback.md) |
 | 第三十五轮 1 项（自定义端点"没用"——URL 路径重复 + model 空修复） | [rounds/round-41-feedback.md](rounds/round-41-feedback.md) |
+| 第三十六轮 2 项（回退后消息回填输入框、选 codex 用 codex-cli 同款 litellm 模型） | [rounds/round-42-feedback.md](rounds/round-42-feedback.md) |
 
 ## 项目概况
 
