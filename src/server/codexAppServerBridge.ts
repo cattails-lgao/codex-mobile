@@ -574,6 +574,12 @@ function inferImageMimeTypeFromBytes(bytes: Uint8Array): string | null {
   ) {
     return 'image/gif'
   }
+  if (bytes.length >= 8 && String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) === 'ftyp') {
+    return 'video/mp4'
+  }
+  if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+    return 'video/webm'
+  }
   return null
 }
 
@@ -591,7 +597,7 @@ function normalizeBase64ImageDataUrl(value: string, mimeType: string): string | 
   const trimmed = value.trim()
   if (!trimmed) return null
   if (isInlineDataUrl(trimmed)) {
-    return /^data:image\//iu.test(trimmed) ? trimmed : null
+    return /^data:(image|video)\//iu.test(trimmed) ? trimmed : null
   }
   const compact = trimmed.replace(/\s+/gu, '')
   const inferredMimeType = inferImageMimeTypeFromBase64(compact)
@@ -611,6 +617,13 @@ function extensionFromMimeType(mimeType: string): string {
   if (normalized === 'image/gif') return '.gif'
   if (normalized === 'image/svg+xml') return '.svg'
   if (normalized === 'application/pdf') return '.pdf'
+  if (normalized === 'video/mp4') return '.mp4'
+  if (normalized === 'video/webm') return '.webm'
+  if (normalized === 'video/quicktime') return '.mov'
+  if (normalized === 'video/x-matroska') return '.mkv'
+  if (normalized === 'video/ogg') return '.ogv'
+  if (normalized === 'video/mpeg') return '.mpeg'
+  if (normalized === 'video/x-msvideo') return '.avi'
   return ''
 }
 
@@ -7456,6 +7469,9 @@ export class BackendQueueProcessor {
       if (!normalizedUrl) continue
       const localImagePath = extractLocalImagePathFromUrl(normalizedUrl)
       if (localImagePath) {
+        // 视频路径已作为文件附件下发（attachVideoFile 双写），模型无法接收
+        // 视频作为 input_image，跳过本地图片输入以免 turn 失败。
+        if (/\.(mp4|m4v|webm|mov|mkv|ogv|ogg|mpeg|avi)$/iu.test(localImagePath)) continue
         input.push({ type: 'localImage', path: localImagePath })
       } else {
         input.push({ type: 'image', url: normalizedUrl, image_url: normalizedUrl })

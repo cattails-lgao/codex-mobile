@@ -205,7 +205,16 @@
               >
                 <li v-for="imageUrl in message.images" :key="imageUrl" class="message-image-item">
                   <button class="message-image-button" type="button" @click="openImageModal(imageUrl)">
+                    <video
+                      v-if="isVideoMediaUrl(imageUrl)"
+                      class="message-image-preview message-video-preview"
+                      :class="{ 'message-generated-image-preview': message.messageType === 'imageView' }"
+                      :src="imageUrl"
+                      controls
+                      preload="metadata"
+                    />
                     <img
+                      v-else
                       class="message-image-preview"
                       :class="{ 'message-generated-image-preview': message.messageType === 'imageView' }"
                       :src="imageUrl"
@@ -497,7 +506,15 @@
                       type="button"
                       @click="openImageModal(block.url)"
                     >
+                      <video
+                        v-if="isVideoMediaUrl(block.url)"
+                        class="message-image-preview message-video-preview message-markdown-image"
+                        :src="block.url"
+                        controls
+                        preload="metadata"
+                      />
                       <img
+                        v-else
                         class="message-image-preview message-markdown-image"
                         :src="block.url"
                         :alt="block.alt || 'Embedded message image'"
@@ -588,7 +605,14 @@
         <button class="image-modal-close" type="button" :aria-label="t('Close image preview')" @click="closeImageModal">
           <IconTablerX class="icon-svg" />
         </button>
-        <img class="image-modal-image" :src="modalImageUrl" :alt="t('Expanded message image')" />
+        <video
+          v-if="modalIsVideo"
+          class="image-modal-image"
+          :src="modalImageUrl"
+          controls
+          autoplay
+        />
+        <img v-else class="image-modal-image" :src="modalImageUrl" :alt="t('Expanded message image')" />
       </div>
     </div>
 
@@ -964,6 +988,7 @@ const emit = defineEmits<{
 const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
+const modalIsVideo = ref(false)
 const copiedResponseAnchorId = ref('')
 const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
 const fileChangeActionError = ref<Record<string, string>>({})
@@ -2049,6 +2074,9 @@ function renderMessageBlockAsHtml(block: MessageBlock): string {
   if (block.kind === 'thematicBreak') {
     return '<hr class="message-divider">'
   }
+  if (isVideoMediaUrl(block.url)) {
+    return `<video class="message-image-preview message-video-preview message-markdown-image" src="${escapeHtml(block.url)}" controls preload="metadata"></video>`
+  }
   return `<img class="message-image-preview message-markdown-image" src="${escapeHtml(block.url)}" alt="${escapeHtml(block.alt || 'Embedded message image')}" loading="lazy">`
 }
 
@@ -2740,10 +2768,30 @@ function onMarkdownImageError(messageId: string, blockIndex: number): void {
 
 function openImageModal(imageUrl: string): void {
   modalImageUrl.value = imageUrl
+  modalIsVideo.value = isVideoMediaUrl(imageUrl)
 }
 
 function closeImageModal(): void {
   modalImageUrl.value = ''
+  modalIsVideo.value = false
+}
+
+const VIDEO_MEDIA_EXTENSIONS = /\.(mp4|m4v|webm|mov|mkv|ogv|ogg|mpeg|avi)$/iu
+
+function isVideoMediaUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith('data:video/')) return true
+  try {
+    const url = new URL(trimmed, window.location.href)
+    if (VIDEO_MEDIA_EXTENSIONS.test(url.pathname)) return true
+    if (url.pathname === '/codex-local-image') {
+      return VIDEO_MEDIA_EXTENSIONS.test(url.searchParams.get('path') ?? '')
+    }
+    return false
+  } catch {
+    return VIDEO_MEDIA_EXTENSIONS.test(trimmed)
+  }
 }
 
 onBeforeUnmount(() => {
@@ -2974,6 +3022,14 @@ onBeforeUnmount(() => {
 
 .message-image-preview {
   @apply block w-16 h-16 object-cover;
+}
+
+.message-video-preview {
+  @apply object-contain;
+}
+
+.message-video-preview.message-generated-image-preview {
+  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)];
 }
 
 .message-generated-image-preview {
