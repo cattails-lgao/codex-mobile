@@ -48,3 +48,25 @@ The fuzzy search session results are filtered before display: paths under ignore
 
 #### Rollback/Cleanup
 - None.
+
+### Round-39: @ search fallback works without ripgrep
+
+#### Feature/Change Name
+The local `/codex-api/composer-file-search` fallback no longer requires `ripgrep` on the machine. When `rg` is unavailable (minimal installs), it degrades to a pure-Node directory walker (the same one used by the Files panel), so `@` mentions keep working. Before this, the fallback threw "ripgrep (rg) is not available" and `@` results depended entirely on the app-server session search (e.g. `@main` could not find `src/main.ts`).
+
+#### Prerequisites/Setup
+- Dev server running (`pnpm run dev`)
+- A workspace containing `src/main.ts` (or any file whose base name matches the query)
+- No `rg` on PATH (or run with `CODEXUI_RG_COMMAND` unset)
+
+#### Steps
+1. In a project thread, type `@main`.
+2. Confirm `src/main.ts` appears in the suggestion popup.
+3. Type `@` with an empty query; confirm workspace files still list (no `.git`/`node_modules` entries).
+
+#### Expected Results
+- `@` mentions return the same relative paths as the ripgrep path (scoring identical via `scoreFileCandidate`).
+- Behavior is identical in light and dark themes.
+
+#### Rollback/Cleanup
+- None.
