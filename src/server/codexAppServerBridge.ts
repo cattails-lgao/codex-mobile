@@ -2303,6 +2303,28 @@ async function fetchCustomEndpointDefaultModel(baseUrl: string, apiKey: string):
   }
 }
 
+const CUSTOM_ENDPOINT_PATH_SUFFIXES = ['/chat/completions', '/responses'] as const
+
+/**
+ * Normalize a user-supplied custom endpoint URL to its base form. Users often
+ * paste the full endpoint (`https://host/v1/chat/completions`); the proxy later
+ * appends `/chat/completions` or `/responses` itself, so keeping the suffix
+ * would produce a doubled path (404) and break `/models` discovery (round-41).
+ */
+export function normalizeCustomEndpointBaseUrl(input: string): string {
+  let url = input.trim()
+  if (!url) return ''
+  url = url.replace(/\/+$/u, '')
+  const lowered = url.toLowerCase()
+  for (const suffix of CUSTOM_ENDPOINT_PATH_SUFFIXES) {
+    if (lowered.endsWith(suffix)) {
+      url = url.slice(0, url.length - suffix.length)
+      break
+    }
+  }
+  return url.replace(/\/+$/u, '')
+}
+
 async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
   const headers: Record<string, string> = {}
   if (apiKey && apiKey !== 'dummy') {
@@ -8102,7 +8124,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         if (req.method === 'POST' && url.pathname === '/codex-api/free-mode/custom-provider') {
           try {
             const body = await readJsonBody(req) as Record<string, unknown> | null
-            const baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim() : ''
+            const rawBaseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim() : ''
+            const baseUrl = normalizeCustomEndpointBaseUrl(rawBaseUrl)
             const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
             const wireApi = body?.wireApi === 'chat' ? 'chat' as const : 'responses' as const
             const providerType = body?.provider === 'opencode-zen'

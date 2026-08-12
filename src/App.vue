@@ -5029,6 +5029,10 @@ async function saveCustomEndpoint(): Promise<void> {
       wireApi: customEndpointWireApi.value,
     })
     freeModeEnabled.value = true
+    const status = await getFreeModeStatus()
+    if (status.provider === 'custom' && !status.currentModel) {
+      providerError.value = t('Failed to resolve model from custom endpoint; check the URL and try again')
+    }
     await refreshAll({ includeSelectedThreadMessages: false, providerChanged: true, awaitAncillaryRefreshes: true })
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : 'Failed to save custom endpoint'
