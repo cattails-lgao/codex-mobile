@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 93a6763（fix: zen proxy keeps input_image as chat image_url so models see attached images；round-37~40 已提交，随 v0.1.94 推送） |
+| 最近提交 | 93a6763（fix: zen proxy keeps input_image as chat image_url so models see attached images；round-37~41 已提交，round-41 待推送） |
 
 ---
 ## 文档结构
@@ -69,6 +69,7 @@
 | 第三十二轮 3 项（@ 文件提及混入 .git 内部文件、收发图片/视频渲染确认可用） | [rounds/round-38-feedback.md](rounds/round-38-feedback.md) |
 | 第三十三轮 3 项（新线程发图排查=提供方限流、@main 无 rg 兜底修复、孤儿思考块堆末尾修复） | [rounds/round-39-feedback.md](rounds/round-39-feedback.md) |
 | 第三十四轮 1 项（发送图片模型无法理解——zen-proxy 丢弃 input_image 修复） | [rounds/round-40-feedback.md](rounds/round-40-feedback.md) |
+| 第三十五轮 1 项（自定义端点"没用"——URL 路径重复 + model 空修复） | [rounds/round-41-feedback.md](rounds/round-41-feedback.md) |
 
 ## 项目概况
 
@@ -142,4 +143,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-12（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94，均已在 main；round-35 及以前已推送）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-12（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化，待提交），均已在 main；round-35 及以前已推送）· 内容已脱敏*
