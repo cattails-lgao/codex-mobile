@@ -11,32 +11,35 @@
 
     <div v-if="isLoading" class="rfp-empty">{{ t('Loading files...') }}</div>
     <div v-else-if="loadError" class="rfp-empty is-error">{{ loadError }}</div>
-    <div v-else-if="groups.length === 0" class="rfp-empty">{{ t('No files in workspace.') }}</div>
+    <div v-else-if="visibleRows.length === 0" class="rfp-empty">{{ t('No files in workspace.') }}</div>
     <div v-else class="rfp-groups">
-      <div v-for="group in groups" :key="group.name" class="rfp-group">
+      <div
+        v-for="row in visibleRows"
+        :key="row.node.relativePath"
+        class="rfp-row"
+        :style="{ paddingLeft: `${row.depth * 12 + 6}px` }"
+      >
         <button
-          class="rfp-group-header"
+          v-if="row.node.kind === 'dir'"
+          class="rfp-dir"
           type="button"
-          :aria-expanded="isGroupOpen(group.name)"
-          @click="toggleGroup(group.name)"
+          :aria-expanded="isDirOpen(row.node.relativePath)"
+          @click="toggleDir(row.node.relativePath)"
         >
-          <span class="rfp-group-chevron" aria-hidden="true">{{ isGroupOpen(group.name) ? '▾' : '▸' }}</span>
-          <span class="rfp-group-name">{{ group.name }}</span>
-          <span class="rfp-group-count">{{ group.files.length }}</span>
+          <span class="rfp-dir-chevron" aria-hidden="true">{{ isDirOpen(row.node.relativePath) ? '▾' : '▸' }}</span>
+          <span class="rfp-dir-icon" aria-hidden="true">{{ isDirOpen(row.node.relativePath) ? '📂' : '📁' }}</span>
+          <span class="rfp-dir-name">{{ row.node.name }}</span>
         </button>
-        <div v-if="isGroupOpen(group.name)" class="rfp-group-body">
-          <button
-            v-for="file in group.files"
-            :key="file.path"
-            class="rfp-file"
-            type="button"
-            :title="file.relativePath"
-            @click="openFile(file)"
-          >
-            <span class="rfp-file-label">{{ file.label }}</span>
-            <span class="rfp-file-sub">{{ file.sub }}</span>
-          </button>
-        </div>
+        <button
+          v-else
+          class="rfp-file"
+          type="button"
+          :title="row.node.relativePath"
+          @click="openFile(row.node)"
+        >
+          <span class="rfp-file-icon" aria-hidden="true">📄</span>
+          <span class="rfp-file-label">{{ row.node.name }}</span>
+        </button>
       </div>
     </div>
   </div>
@@ -61,61 +64,105 @@ const entries = ref<WorkspaceFileEntry[]>([])
 const isLoading = ref(false)
 const loadError = ref('')
 const filterQuery = ref('')
-const collapsedGroups = ref<Set<string>>(new Set())
+const collapsedDirs = ref<Set<string>>(new Set())
 
-type FileRow = { path: string; relativePath: string; label: string; sub: string }
-type FileGroup = { name: string; files: FileRow[] }
+type FileTreeNode = {
+  name: string
+  path: string
+  relativePath: string
+  kind: 'dir' | 'file'
+  children: FileTreeNode[]
+}
 
-const groups = computed<FileGroup[]>(() => {
-  const query = filterQuery.value.trim().toLowerCase()
-  const rows = query
-    ? entries.value.filter((entry) => entry.relativePath.toLowerCase().includes(query))
-    : entries.value
-  const byGroup = new Map<string, FileGroup>()
-  const rootFiles: FileRow[] = []
-  for (const entry of rows) {
-    if (entry.isDirectory) continue
-    const slash = entry.relativePath.indexOf('/')
-    const groupName = slash < 0 ? '' : entry.relativePath.slice(0, slash)
-    const rest = slash < 0 ? entry.relativePath : entry.relativePath.slice(slash + 1)
-    const row: FileRow = {
-      path: entry.path,
-      relativePath: entry.relativePath,
-      label: rest.slice(rest.lastIndexOf('/') + 1),
-      sub: rest,
-    }
-    if (groupName) {
-      let group = byGroup.get(groupName)
-      if (!group) {
-        group = { name: groupName, files: [] }
-        byGroup.set(groupName, group)
+function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
+  return nodes.sort((first, second) => {
+    if (first.kind !== second.kind) return first.kind === 'dir' ? -1 : 1
+    return first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
+
+function buildTree(source: WorkspaceFileEntry[]): FileTreeNode[] {
+  const roots: FileTreeNode[] = []
+  const byRelativePath = new Map<string, FileTreeNode>()
+
+  function ensureDir(segments: string[]): FileTreeNode {
+    let current = ''
+    let parent = roots
+    for (const segment of segments) {
+      current = current ? `${current}/${segment}` : segment
+      let node = byRelativePath.get(current)
+      if (!node) {
+        node = { name: segment, path: '', relativePath: current, kind: 'dir', children: [] }
+        byRelativePath.set(current, node)
+        parent.push(node)
       }
-      group.files.push(row)
-    } else {
-      rootFiles.push(row)
+      parent = node.children
+    }
+    return byRelativePath.get(current) as FileTreeNode
+  }
+
+  for (const entry of source) {
+    const parts = entry.relativePath.split('/').filter(Boolean)
+    if (parts.length === 0) continue
+    if (entry.isDirectory) {
+      const dir = ensureDir(parts)
+      dir.path = entry.path
+      continue
+    }
+    const fileName = parts[parts.length - 1]
+    const dirSegments = parts.slice(0, -1)
+    const parent = dirSegments.length > 0 ? ensureDir(dirSegments).children : roots
+    parent.push({ name: fileName, path: entry.path, relativePath: entry.relativePath, kind: 'file', children: [] })
+  }
+
+  sortTreeNodes(roots)
+  for (const node of byRelativePath.values()) sortTreeNodes(node.children)
+  return roots
+}
+
+const tree = computed<FileTreeNode[]>(() => buildTree(entries.value))
+
+const visibleRows = computed<Array<{ node: FileTreeNode; depth: number }>>(() => {
+  const query = filterQuery.value.trim().toLowerCase()
+  const rows: Array<{ node: FileTreeNode; depth: number }> = []
+
+  function isNodeMatching(node: FileTreeNode): boolean {
+    if (!query) return true
+    if (node.relativePath.toLowerCase().includes(query)) return true
+    return node.children.some(isNodeMatching)
+  }
+
+  function walk(nodes: FileTreeNode[], depth: number): void {
+    for (const node of nodes) {
+      if (query && !isNodeMatching(node)) continue
+      rows.push({ node, depth })
+      if (node.kind === 'file') continue
+      const expanded = query ? true : !collapsedDirs.value.has(node.relativePath)
+      if (expanded) walk(node.children, depth + 1)
     }
   }
-  const ordered = [...byGroup.values()].sort((a, b) => a.name.localeCompare(b.name))
-  if (rootFiles.length > 0) ordered.unshift({ name: '(root)', files: rootFiles })
-  return ordered
+
+  walk(tree.value, 0)
+  return rows
 })
 
-function isGroupOpen(name: string): boolean {
-  return !collapsedGroups.value.has(name)
+function isDirOpen(relativePath: string): boolean {
+  if (filterQuery.value.trim()) return true
+  return !collapsedDirs.value.has(relativePath)
 }
 
-function toggleGroup(name: string): void {
-  const next = new Set(collapsedGroups.value)
-  if (next.has(name)) {
-    next.delete(name)
+function toggleDir(relativePath: string): void {
+  const next = new Set(collapsedDirs.value)
+  if (next.has(relativePath)) {
+    next.delete(relativePath)
   } else {
-    next.add(name)
+    next.add(relativePath)
   }
-  collapsedGroups.value = next
+  collapsedDirs.value = next
 }
 
-function openFile(file: FileRow): void {
-  emit('open-preview', { path: file.path, label: file.label })
+function openFile(node: FileTreeNode): void {
+  emit('open-preview', { path: node.path, label: node.name })
 }
 
 async function loadFiles(): Promise<void> {
@@ -144,7 +191,7 @@ onMounted(() => {
 watch(
   () => props.cwd,
   () => {
-    collapsedGroups.value = new Set()
+    collapsedDirs.value = new Set()
     filterQuery.value = ''
     void loadFiles()
   },
@@ -170,40 +217,36 @@ watch(
   @apply min-h-0 flex-1 overflow-y-auto p-1.5;
 }
 
-.rfp-group {
-  @apply mb-1;
+.rfp-row {
+  @apply mb-px;
 }
 
-.rfp-group-header {
-  @apply flex w-full items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
+.rfp-dir {
+  @apply flex w-full items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
 }
 
-.rfp-group-chevron {
+.rfp-dir-chevron {
   @apply w-3 shrink-0 text-zinc-400;
 }
 
-.rfp-group-name {
+.rfp-dir-icon {
+  @apply shrink-0 text-[11px] leading-none;
+}
+
+.rfp-dir-name {
   @apply min-w-0 truncate;
 }
 
-.rfp-group-count {
-  @apply ml-auto shrink-0 rounded-full bg-zinc-100 px-1.5 text-[10px] leading-4 text-zinc-500;
-}
-
-.rfp-group-body {
-  @apply mt-0.5 flex flex-col gap-px pl-3.5;
-}
-
 .rfp-file {
-  @apply flex min-w-0 flex-col rounded-md border-0 bg-transparent px-1.5 py-1 text-left transition hover:bg-zinc-100;
+  @apply flex min-w-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left transition hover:bg-zinc-100;
+}
+
+.rfp-file-icon {
+  @apply shrink-0 text-[11px] leading-none text-zinc-400;
 }
 
 .rfp-file-label {
   @apply truncate text-xs font-medium text-zinc-800;
-}
-
-.rfp-file-sub {
-  @apply truncate font-mono text-[10px] leading-4 text-zinc-400;
 }
 
 .rfp-empty {
