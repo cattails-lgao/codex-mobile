@@ -439,6 +439,25 @@ describe('fuzzyFileSearch session methods', () => {
     ])
   })
 
+  it('drops files under ignored directories from suggestions (round-38)', () => {
+    const suggestions = normalizeFuzzyFileSearchResults({
+      sessionId: 'sess-1',
+      query: 're',
+      files: [
+        { root: '/root/a', path: '/root/a/src/main.ts', matchType: 'File', fileName: 'main.ts' },
+        { root: '/root/a', path: '/root/a/.git/refs/heads', matchType: 'Directory', fileName: 'heads' },
+        { root: '/root/a', path: '/root/a/node_modules/pkg/index.js', matchType: 'File', fileName: 'index.js' },
+        { root: '/root/a', path: 'D:\\code\\proj\\dist\\out.js', matchType: 'File', fileName: 'out.js' },
+        { root: '/root/a', path: '/root/a/docs/guide.md', matchType: 'File', fileName: 'guide.md' },
+      ],
+    })
+
+    expect(suggestions).toEqual([
+      { path: '/root/a/src/main.ts' },
+      { path: '/root/a/docs/guide.md' },
+    ])
+  })
+
   it('ignores malformed files in the payload', () => {
     const suggestions = normalizeFuzzyFileSearchResults({
       sessionId: 'sess-1',
