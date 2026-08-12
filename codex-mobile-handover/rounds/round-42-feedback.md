@@ -32,6 +32,14 @@
 
 **验证：** `model/list` = deepseek-v4-flash, deepseek-v4-pro；UI 模型下拉显示两项。备注：litellm config.yaml 只配了 flash（deepseek-v4-pro 选了会报错，与 codex-cli 行为一致，需用户在 litellm 补配）。
 
+## 补充修复（模型强度无中等档——models.json 定义补 medium）
+
+用户反馈「模型强度怎么没有中等」：deepseek 模型在 `C:\Users\cattails\.codex\models.json` 的 `supported_reasoning_levels` 只有 low/high/max（无 medium）→ app 与 codex-cli 的强度下拉均无中等（app 忠实显示模型目录，非 app bug）。
+
+**实测确认**：向 litellm（4460）发 `reasoning: {effort: "medium"}` 请求，返回 200 且推理正常 → opencode 端点接受 medium 档。
+
+**修改**：`C:\Users\cattails\.codex\models.json`（用户机器文件，非 git 仓库，备份 `.bak-round42`）为 deepseek-v4-flash/pro 的 `supported_reasoning_levels` 加入 `medium`（位于 low 之后；default_reasoning_level 保持 high）。`model/list` 返回 efforts=[low,medium,high,max]；UI 强度下拉显示 Low/Medium/High/Max。
+
 ## 备注（发现但未修）
 
 - **thread/delete / thread/archive 对 notLoaded/active 线程 502**：app-server 对活动/未加载线程执行 delete/archive 时触发 session shutdown 卡住（日志：`thread X was active; shutting down`），bridge 返回 502。测试线程（019ff628/019ff634/019ff670）因回退/429 后变 notLoaded 无法通过 RPC 删除，但不在 thread/list 显示，无用户可见影响。正常 idle 线程的归档（round-37 回收站）此前工作正常。低优先级，待后续确认 app-server 行为。
