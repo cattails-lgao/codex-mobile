@@ -72,6 +72,7 @@
 | 第三十五轮 1 项（自定义端点"没用"——URL 路径重复 + model 空修复） | [rounds/round-41-feedback.md](rounds/round-41-feedback.md) |
 | 第三十六轮 2 项（回退后消息回填输入框、选 codex 用 codex-cli 同款 litellm 模型） | [rounds/round-42-feedback.md](rounds/round-42-feedback.md) |
 | 第三十七轮 2 项（侧边栏泄漏子 agent 线程——subagent rollout 用自身 id 键控；模型强度下拉收敛到 Low/Medium/High） | [rounds/round-43-feedback.md](rounds/round-43-feedback.md) |
+| 第三十八轮 1 项（WebUI 预览后 TUI 无法恢复线程——writer 锁已知限制，纯诊断+文档化，无代码改动） | [rounds/round-44-feedback.md](rounds/round-44-feedback.md) |
 
 ## 项目概况
 
@@ -133,6 +134,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 - **未跟踪文件**：工作区存在 `.codegraph/`、`codex-parity-plan/`、`documentation/app-server-schemas/typescript/`、`codex-config-summary.md`（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧；2026-08-07 已完成 macOS 侧）**：Linux 侧已用本机 WSL2（Ubuntu）验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧验证见下方「macOS 侧跨平台回归（2026-08-07）」。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
+- **已知限制（round-44，非代码改动）**：WebUI 对某线程发消息后会由 WebUI 的 app-server 进程持有该线程的 writer 锁（OS 文件锁，`CODEX_HOME/thread-writer-locks/<threadId>.lock`），直到 WebUI 重启；随后在 TUI 打开同一线程会报 `thread/resume ... already has an active writer (code -32600)`。纯只读预览（`thread/read`）不抢锁、安全；`ExternalSessionTracker` 只读查看也不抢锁。该 codex 版本无释放 writer 的 RPC。详见 [rounds/round-44-feedback.md](rounds/round-44-feedback.md)
 - **验收遗留**：plan/approval popover 键盘导航已补齐（见「遗留项补齐（2026-08-07）」）；ExecPlans 待后端 Codex 版本支持后自动变为可选；macOS 侧跨平台回归已完成（见「macOS 侧跨平台回归（2026-08-07）」）
 - **本轮测试遗留（非仓库文件）**：验证脚本在 `<外部测试目录>\hello.txt` 创建了一个测试文件（不在仓库允许操作范围内，未能自动清理），如不需要可手动删除；测试期间创建的 5 个临时线程已通过 `thread/delete` 清理
 
@@ -147,4 +149,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程 `ff6df2b` + 模型强度下拉收敛 Low/Medium/High `5aaa458`）、版本 0.1.96（`64fa15d`），均已推送并打 tag/建 GitHub release `v0.1.96`、`codex-mobile-re@0.1.96` 已发布 npm（latest）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程 `ff6df2b` + 模型强度下拉收敛 Low/Medium/High `5aaa458`）、版本 0.1.96（`64fa15d`），均已推送并打 tag/建 GitHub release `v0.1.96`、`codex-mobile-re@0.1.96` 已发布 npm（latest）；第三十八轮 round-44（WebUI 预览后 TUI writer 锁已知限制，纯诊断+文档化，无代码改动、无版本变更）· 内容已脱敏*
