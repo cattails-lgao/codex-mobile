@@ -809,14 +809,9 @@ const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
 let lastActiveThreadId = ''
 
 const reasoningOptionCatalog: Array<{ value: ReasoningEffort; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
-  { value: 'max', label: 'Max' },
-  { value: 'ultra', label: 'Ultra' },
 ]
 const reasoningOptions = computed(() => {
   const supportedEfforts = props.modelReasoningEfforts?.[props.selectedModel]
