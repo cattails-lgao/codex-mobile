@@ -18,6 +18,11 @@ Subagent sessions are materialized by the app-server with an interactive `source
 - Direct access still works: `thread/read` on a subagent thread id (e.g. from a deep link or search index) is unaffected.
 - Subagent detection tolerates sessions whose `session_meta` has no `originator` (matched via `thread_source` alone).
 
+#### Subagent use `session_id` == parent thread id (own `id` is the filtered id)
+- In subagent rollouts, `session_meta.payload.session_id` holds the **parent** thread id and `payload.id` holds the subagent's **own** thread id — the one the app-server materializes in `thread/list` (the TUI's own `rollout-*` files use both fields equal). The tracker keys subagent threads by `payload.id`; the sidebar filter therefore removes the subagent's own row and never the parent's.
+- Expected: after spawning a subagent (e.g. a TUI/CLI multi-agent prompt), the sidebar keeps the parent thread row and hides the subagent row; the parent's `thread/read` still opens normally. A TUI subagent's "working" overlay attaches to the subagent's own row.
+- This scenario is covered by unit tests in `externalSessionTracker.test.ts` (`id` differs from `session_id`; parent + subagent sharing one parent id are both kept).
+
 #### Rollback/Cleanup
-- There is no feature flag; to restore previous behavior, remove the subagent rows from `thread/list` handling in `codexAppServerBridge.ts` (`filterSubagentThreadsFromThreadListResult`).
+- There is no feature flag; to restore previous behavior, revert the subagent keying in `externalSessionTracker.ts` (`updateSessionMeta` ignores `session_id` for subagent rollouts) and the `thread/list` filtering in `codexAppServerBridge.ts` (`filterThreadListByIds`).
 - No app-server state is mutated; deleting the subagent rollout files removes them from the tracker index on the next poll.

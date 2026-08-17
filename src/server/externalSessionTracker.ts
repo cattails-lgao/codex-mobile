@@ -449,9 +449,16 @@ export class ExternalSessionTracker {
             if (threadSource) {
                 session.threadSource = threadSource;
             }
-            const sessionId =
-                readNonEmptyString(payload.session_id) ||
-                readNonEmptyString(payload.id);
+            // Subagent rollouts put the parent thread id in `session_id`; their
+            // own thread id (the one `thread/list` materializes) is `id`.
+            const isSubagent = threadSource
+                .toLowerCase()
+                .startsWith("subagent");
+            const sessionId = isSubagent
+                ? readNonEmptyString(payload.id) ||
+                  readNonEmptyString(payload.session_id)
+                : readNonEmptyString(payload.session_id) ||
+                  readNonEmptyString(payload.id);
             if (sessionId) {
                 session.sessionId = sessionId;
             }

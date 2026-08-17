@@ -43,4 +43,5 @@
 - **`548983e`**：round-42 修复 1——回退后消息回填输入框（恢复 `appendTextToDraft` + `onRollback` 回填，round-36 曾移除）；同步 litellm provider 配置到本机 CODEX_HOME 的 `config.toml`，选 Codex 与 codex-cli 同用 deepseek-v4-flash。作用：回退可编辑重发、codex 模型对齐 codex-cli
 - **`6378b34`**：round-42 修复 2——补齐 `model_catalog_json`（指向 codex-cli 的 models.json）使 `model/list` 返回 deepseek-v4-flash/pro；前端 `isProviderBacked` 判定把 config.toml 的 `custom`（litellm）排除，模型下拉完整显示目录模型
 - **`0f02698`**：round-42 交接文档补充（models.json 加入 medium 强度档的实测与修改记录，`models.json` 为用户机器文件非仓库）
+- **round-43**：侧边栏泄漏子 agent 线程——`externalSessionTracker.updateSessionMeta` 对 subagent rollout 改用自身 `id` 键控（`session_id` 是父线程 id），使 `getSubagentThreadIds` 过滤正确的子线程 id、`externalSession` 叠加挂到子线程行、`filterThreadListByIds` 不再误删父行（详见 `rounds/round-43-feedback.md`）
 

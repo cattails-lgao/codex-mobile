@@ -11,6 +11,7 @@ function metaLine(
     sessionId: string,
     originator: string,
     threadSource?: string,
+    ownId?: string,
 ): string {
     const extra = threadSource ? `,"thread_source":"${threadSource}"` : "";
     return JSON.stringify({
@@ -18,7 +19,7 @@ function metaLine(
         type: "session_meta",
         payload: {
             session_id: sessionId,
-            id: sessionId,
+            id: ownId ?? sessionId,
             originator,
             ...(extra ? { thread_source: threadSource } : {}),
         },
@@ -239,6 +240,72 @@ describe("externalSessionTracker", () => {
             "thread-sub-2",
             "thread-sub-3",
         ]);
+    });
+
+    it("keys subagent sessions by own id when session_id is the parent thread id", async () => {
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-saa.jsonl",
+            [
+                metaLine(
+                    "thread-parent-1",
+                    "codex-tui",
+                    "subagent",
+                    "thread-child-1",
+                ),
+                taskStarted("turn-child"),
+            ],
+        );
+        const tracker = createTracker();
+        await tracker.tick();
+
+        // The id `thread/list` materializes for the subagent is its own `id`,
+        // so the sidebar filter must exclude that id and the working overlay
+        // must attach to it rather than to the parent thread.
+        expect(tracker.getSubagentThreadIds()).toEqual(["thread-child-1"]);
+        expect(tracker.getExternalSession("thread-child-1")).toMatchObject({
+            origin: "codex-tui",
+            active: true,
+        });
+        expect(tracker.getExternalSession("thread-parent-1")).toBeNull();
+        expect(tracker.getActiveThreadIds()).toContain("thread-child-1");
+    });
+
+    it("keeps parent and subagent sessions indexed under their own thread ids", async () => {
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-paa.jsonl",
+            [metaLine("thread-parent-2", "codex-tui")],
+        );
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-sab.jsonl",
+            [
+                metaLine(
+                    "thread-parent-2",
+                    "codex-tui",
+                    "subagent",
+                    "thread-child-2",
+                ),
+                taskStarted("turn-child"),
+            ],
+        );
+        const tracker = createTracker();
+        await tracker.tick();
+
+        // Both rollout files resolve to the same parent `session_id`; with the
+        // subagent keyed by its own id, one file no longer clobbers the index
+        // entry of the other.
+        expect(tracker.getSubagentThreadIds()).toEqual(["thread-child-2"]);
+        expect(tracker.getExternalSession("thread-parent-2")).toMatchObject({
+            origin: "codex-tui",
+            active: false,
+        });
+        expect(tracker.getExternalSession("thread-child-2")).toMatchObject({
+            origin: "codex-tui",
+            active: true,
+        });
+        expect(tracker.getActiveThreadIds()).toEqual(["thread-child-2"]);
     });
 
     it("skips sessions under archived_sessions", async () => {
