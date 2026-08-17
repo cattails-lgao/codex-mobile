@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | round-43 修复（侧边栏泄漏子 agent 线程——`externalSessionTracker` subagent 用自身 id 键控，待提交），上轮 6378b34（round-41/42 修复：自定义端点 URL 归一化与模型列表、回退回填、codex 模型对齐 codex-cli；随 v0.1.95 发布） |
+| 最近提交 | round-43 修复 `ff6df2b`/`5aaa458`（侧边栏泄漏子 agent 线程——`externalSessionTracker` subagent 用自身 id 键控；模型强度下拉收敛到 Low/Medium/High，待推送），上轮 6378b34（round-41/42 修复：自定义端点 URL 归一化与模型列表、回退回填、codex 模型对齐 codex-cli；随 v0.1.95 发布） |
 
 ---
 ## 文档结构
@@ -71,7 +71,7 @@
 | 第三十四轮 1 项（发送图片模型无法理解——zen-proxy 丢弃 input_image 修复） | [rounds/round-40-feedback.md](rounds/round-40-feedback.md) |
 | 第三十五轮 1 项（自定义端点"没用"——URL 路径重复 + model 空修复） | [rounds/round-41-feedback.md](rounds/round-41-feedback.md) |
 | 第三十六轮 2 项（回退后消息回填输入框、选 codex 用 codex-cli 同款 litellm 模型） | [rounds/round-42-feedback.md](rounds/round-42-feedback.md) |
-| 第三十七轮 1 项（侧边栏泄漏子 agent 线程——subagent rollout 用自身 id 键控） | [rounds/round-43-feedback.md](rounds/round-43-feedback.md) |
+| 第三十七轮 2 项（侧边栏泄漏子 agent 线程——subagent rollout 用自身 id 键控；模型强度下拉收敛到 Low/Medium/High） | [rounds/round-43-feedback.md](rounds/round-43-feedback.md) |
 
 ## 项目概况
 
@@ -128,7 +128,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 ## 未完成事项
 
 - **已推送**：`main` 与 `origin/main` 已同步至 `dc58033`（round-41 修复 `e1dccb9`/`a33395e` + round-42 修复 `548983e`/`6378b34` + 文档，随 v0.1.95 发布，tag `v0.1.95`；GitHub release `v0.1.95` 已创建于 `cattails-lgao/codex-mobile`，npm 发包由用户手动执行 `npm publish`）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）。2026-08-11 round-34/35 推送直连成功（git 2.35.1，位于 `E:\Git`，不在默认 PATH，需前置进 PATH 或全路径调用）。gh release 需 `--repo cattails-lgao/codex-mobile` 指定本 fork（默认会命中 upstream remote）；npm 401 需重新登录（token 已失效），prepublishOnly 会执行 `pnpm run build`，发包前把 `<pnpm 全局 bin 目录>` 加入 PATH
-- **待提交**：round-43 修复（侧边栏泄漏子 agent 线程——`externalSessionTracker` `updateSessionMeta` 对 subagent 用自身 `id` 键控，否则过滤的是父线程 id、子线程永远泄漏、父线程可能被误删）已改动完成待 commit；commit 后按上面「推送方式」推送到 `origin/main`（未随 v0.1.95，需后续发版带上）
+- **待推送**：round-43 修复（`ff6df2b` 侧边栏泄漏子 agent 线程——subagent 用自身 `id` 键控；`5aaa458` 模型强度下拉收敛到 Low/Medium/High）已 commit，尚未 push；按上面「推送方式」推送到 `origin/main`（未随 v0.1.95，需后续发版带上）
 - **未跟踪文件**：工作区存在 `.codegraph/`、`codex-parity-plan/`、`documentation/app-server-schemas/typescript/`、`codex-config-summary.md`（研究草稿）等未跟踪内容，与本任务无关，确认归属后再决定是否纳入版本控制
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧；2026-08-07 已完成 macOS 侧）**：Linux 侧已用本机 WSL2（Ubuntu）验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧验证见下方「macOS 侧跨平台回归（2026-08-07）」。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
@@ -146,4 +146,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程——subagent 用自身 id 键控，待提交）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程 `ff6df2b` + 模型强度下拉收敛 Low/Medium/High `5aaa458`，待推送）· 内容已脱敏*

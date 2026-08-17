@@ -49,3 +49,23 @@ if (sessionId) session.sessionId = sessionId;
 - `src/server/externalSessionTracker.test.ts`（+2 单测，`metaLine` 支持 `ownId`）
 - `tests/thread-loading-state/subagent-threads-filtered-from-sidebar.md`（补 `session_id`=父 id 场景 + 修正 rollback 函数名）
 - 本交接文档 + 索引 / commit-history 更新
+
+---
+
+## 补充修复（模型强度下拉档位收敛到 Low/Medium/High）
+
+**背景：** 前端「模型强度」下拉把档位表硬编码成 `none/minimal/low/medium/high/xhigh/max/ultra` 八项；当模型未声明支持档位时回退显示全部八项。org.opencode / OpenCode Zen 的 provider-only 模型都不带 `supportedReasoningEfforts`，于是 Ultra 等项全冒出来。
+
+**修复（源码，即上游「固定下拉数组」所在处）：** `src/components/content/ThreadComposer.vue` 的 `reasoningOptionCatalog` 由 8 项收敛为 `Low` / `Medium` / `High` 三档（`reasoningOptions` 的过滤与回退逻辑不变：模型声明了档位则取声明与目录交集，未声明则回退到现在的三档）。provider-only 模型不再冒出 Ultra/Max/Minimal/None/Extra high。
+
+**验证：** `vue-tsc --noEmit` 类型检查通过 + `vite build` 成功（248 模块）；产物 `dist/assets/index-CwlfGiwT.js`（对应既有 `index-BItdblN0.js` 的新哈希）中下拉目录已为三档 `{value:"low"},{value:"medium"},{value:"high"}`；`useDesktopState.test.ts` 的 13 个 reasoning 相关用例全过（组合层 `availableModelReasoningEfforts` 逻辑未动，仅 UI 目录收敛）。
+
+**需注意的副作用→已按用户明确要求：** 此修改对**所有**模型都生效——不只 provider-only 的「回退」场景，连声明了 `xhigh/max/ultra` 的模型（如 GPT-5.6 Sol/Terra 的 Max/Ultra、Luna 的 Max）下拉里也不再生效显示。用户原话即「把固定下拉数组只保留 Low/Medium/High 三档」，属整体收敛，故按此落地；`tests/providers-models/gpt-5-6-max-and-ultra-thinking-levels.md` 已同步改为新行为。若后续只想「收紧回退、保留模型声明档位」，需改为仅改 `reasoningOptions` 的回退分支（`supportedEfforts === undefined` 时返回三档）、保留完整 `reasoningOptionCatalog`。
+
+**性能审计：** 纯前端静态目录收敛，仅减少下拉可选项，无新增请求/阻塞/fanout/缓存风险；未做运行时 profile（不触及网络/渲染/启动关键路径）。
+
+## 涉及文件与提交（补充）
+
+- `src/components/content/ThreadComposer.vue`（`reasoningOptionCatalog` 8→3 档）
+- `tests/providers-models/gpt-5-6-max-and-ultra-thinking-levels.md`（同步为新行为）
+- commit `5aaa458`
