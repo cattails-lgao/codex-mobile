@@ -38,4 +38,5 @@ Return to the [manual test index](../../tests.md).
 | [External session (TUI) working state](external-session-tui-working-state.md) |
 | [Subagent threads are filtered from the sidebar](subagent-threads-filtered-from-sidebar.md) |
 | [Tool-call blocks no longer run to the end of the conversation](tool-call-blocks-end-of-conversation.md) |
+| [Reasoning stays with its response in thread read](reasoning-stays-with-its-response-in-thread-read.md) |
 | [Realtime notification sync and file-change undo refresh](realtime-notification-sync-and-file-change-undo-refresh.md) |
