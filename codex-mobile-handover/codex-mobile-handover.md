@@ -11,7 +11,7 @@
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | round-43 release 随 v0.1.96（`ff6df2b` 侧边栏泄漏子 agent 线程——`externalSessionTracker` subagent 用自身 id 键控；`5aaa458` 模型强度下拉收敛到 Low/Medium/High；`64fa15d` 版本 0.1.96），GitHub release `v0.1.96` 已创建，`codex-mobile-re@0.1.96` 已发布到 npm（latest） |
+| 最近提交 | round-43 release 随 v0.1.96（`ff6df2b` 侧边栏泄漏子 agent 线程——`externalSessionTracker` subagent 用自身 id 键控；`5aaa458` 模型强度下拉收敛到 Low/Medium/High；`64fa15d` 版本 0.1.96），GitHub release `v0.1.96` 已创建，`codex-mobile-re@0.1.96` 已发布到 npm（latest）；主分支另有未发布提交：round-44 `ad55eef`（文档：WebUI 查看 TUI 会话的 writer-lock 已知限制）与 round-45 `7fa6ec4`（修复 thread/read 时序恢复把 reasoning 挤到轮末） |
 
 ---
 ## 文档结构
@@ -73,6 +73,7 @@
 | 第三十六轮 2 项（回退后消息回填输入框、选 codex 用 codex-cli 同款 litellm 模型） | [rounds/round-42-feedback.md](rounds/round-42-feedback.md) |
 | 第三十七轮 2 项（侧边栏泄漏子 agent 线程——subagent rollout 用自身 id 键控；模型强度下拉收敛到 Low/Medium/High） | [rounds/round-43-feedback.md](rounds/round-43-feedback.md) |
 | 第三十八轮 1 项（WebUI 预览后 TUI 无法恢复线程——writer 锁已知限制，纯诊断+文档化，无代码改动） | [rounds/round-44-feedback.md](rounds/round-44-feedback.md) |
+| 第三十九轮 1 项（最后一轮思考跑到模型回答最后——thread/read 时序恢复把 reasoning 挤到轮末，改为紧贴其消息） | [rounds/round-45-feedback.md](rounds/round-45-feedback.md) |
 
 ## 项目概况
 
@@ -149,4 +150,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程 `ff6df2b` + 模型强度下拉收敛 Low/Medium/High `5aaa458`）、版本 0.1.96（`64fa15d`），均已推送并打 tag/建 GitHub release `v0.1.96`、`codex-mobile-re@0.1.96` 已发布 npm（latest）；第三十八轮 round-44（WebUI 预览后 TUI writer 锁已知限制，纯诊断+文档化，无代码改动、无版本变更）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-18（`round-28/29/30` 修复 `e0b19a2`、脱敏 `fc468ff`、语义占位 `3ab96cc`、发包改名 `85d65bc`、第二十五轮 subagent 过滤 `2995475`、第二十六轮发布反馈修复 `b73079b`、README 重写 `3b39570`、第二十七轮 fileChange 样式统一 `3268948`、round-33 交接文档 `f88d068`、版本 0.1.91 `118d85f`、第二十八轮 processFold 时序与 fileChange 布局 `05eecc7`、版本 0.1.92 `c619377`、第二十九轮 fileChange 行右对齐与长路径省略 `17a92a0`、第三十轮回退输入框回填修复 `1970a85`、第三十一轮 round-37 三项修复（回收站标题/文件树/视频预览 `5da850d`/`48ad2a2`/`78a3e1a`/`2de2559`）、第三十二轮 round-38 @ 过滤 `e6dd743`/`b62bf3e`、第三十三轮 round-39（@ 无 rg 兜底 + 孤儿思考丢弃 `f836697`/`6eba85c`/`aaddc8f`）、第三十四轮 round-40（zen-proxy 保留图片 `93a6763`/`be2cf22`）、版本 0.1.94、第三十五轮 round-41（自定义端点 URL 归一化与模型列表 `e1dccb9`/`a33395e`）、第三十六轮 round-42（回退回填 + codex 模型对齐 codex-cli `548983e`/`6378b34`）、版本 0.1.95，均已在 main；round-35 及以前已推送）、第三十七轮 round-43（侧边栏泄漏子 agent 线程 `ff6df2b` + 模型强度下拉收敛 Low/Medium/High `5aaa458`）、版本 0.1.96（`64fa15d`），均已推送并打 tag/建 GitHub release `v0.1.96`、`codex-mobile-re@0.1.96` 已发布 npm（latest）；第三十八轮 round-44（WebUI 预览后 TUI writer 锁已知限制，纯诊断+文档化，无代码改动、无版本变更）；第三十九轮 round-45（thread/read 时序恢复把最后一轮 reasoning 挤到模型回答最后，改为紧贴其消息 `7fa6ec4`，含回归单测与 manual test，未发布、未推送）· 内容已脱敏*
