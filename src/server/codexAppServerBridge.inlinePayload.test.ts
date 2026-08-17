@@ -669,4 +669,42 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
       'agentMessage',
     ])
   })
+
+  it('keeps each reasoning item glued to the agent message that follows it', () => {
+    // round-45：线上 rollout 最后轮——reasoning 与 agentMessage 在原始
+    // items 里交错（每条思考紧贴其回复），但恢复逻辑里 reasoning 不是 slot，
+    // 修复前全部被「追加收尾」挤到轮末，思考跑到模型回答之后。
+    const materialized = [
+      {
+        id: 'turn-1',
+        items: [
+          { id: 'item-1', type: 'userMessage' },
+          { id: 'rs-1', type: 'reasoning' },
+          { id: 'item-2', type: 'agentMessage' },
+          { id: 'session-cmd-call_1', type: 'commandExecution' },
+          { id: 'rs-2', type: 'reasoning' },
+          { id: 'item-3', type: 'agentMessage' },
+        ],
+      },
+    ]
+    const log = [
+      JSON.stringify({ type: 'turn_context', payload: { turn_id: 'turn-1' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', id: 'item-1' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'reasoning', id: 'rs-1' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-1', content: [{ type: 'output_text', text: 'reply 1' }] } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'call_1', arguments: '{"cmd":"ls"}' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'reasoning', id: 'rs-2' } }),
+      JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-2', content: [{ type: 'output_text', text: 'reply 2' }] } }),
+    ].join('\n')
+
+    const result = mergeSessionCommandsIntoTurns(materialized, log) as Array<{ items: Array<{ id: string; type: string }> }>
+    expect(result[0].items.map((it) => it.type)).toEqual([
+      'userMessage',
+      'reasoning',
+      'agentMessage',
+      'commandExecution',
+      'reasoning',
+      'agentMessage',
+    ])
+  })
 })

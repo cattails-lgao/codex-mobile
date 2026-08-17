@@ -4063,6 +4063,30 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
     const agentMessages = existingItems.filter((it) => it.type === 'agentMessage')
     const userMessages = existingItems.filter((it) => it.type === 'userMessage')
 
+    // The app-server already interleaves each reasoning item immediately before
+    // the agentMessage it belongs to. The timeline recovery below reorders
+    // commands/messages from the session log, and reasoning is not a slot kind,
+    // so without pairing it would fall into the trailing "append everything
+    // else" bucket and render after the final answer instead of beside its own
+    // turn segment. Glue each reasoning to the message that followed it in the
+    // raw items and re-emit them together.
+    const reasoningsByMessageId = new Map<string, Record<string, unknown>[]>()
+    let pendingReasonings: Record<string, unknown>[] = []
+    for (const item of existingItems) {
+      if (item.type === 'reasoning') {
+        pendingReasonings.push(item)
+      } else if (item.type === 'agentMessage') {
+        if (pendingReasonings.length > 0) {
+          reasoningsByMessageId.set(String(item.id ?? ''), pendingReasonings)
+        }
+        pendingReasonings = []
+      }
+    }
+    const emitAgentMessage = (msg: Record<string, unknown>): void => {
+      const leading = reasoningsByMessageId.get(String(msg.id ?? '')) ?? []
+      interleaved.push(...leading, msg)
+    }
+
     const agentSlotCount = slots.filter((slot) => slot.type === 'agentMessage').length
     const interleaved: Record<string, unknown>[] = [...userMessages]
     const recoveredIds = new Set<string>()
@@ -4079,13 +4103,13 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
           recoveredIds.add(slot.fileChange.id)
         }
       }
-      interleaved.push(...agentMessages)
+      for (const msg of agentMessages) emitAgentMessage(msg)
     } else {
       let agentIdx = 0
       for (const slot of slots) {
         if (slot.type === 'agentMessage') {
           if (agentIdx < agentMessages.length) {
-            interleaved.push(agentMessages[agentIdx]!)
+            emitAgentMessage(agentMessages[agentIdx]!)
             agentIdx++
           }
         } else if (slot.type === 'commandExecution' && slot.command) {
@@ -4098,7 +4122,7 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
       }
 
       while (agentIdx < agentMessages.length) {
-        interleaved.push(agentMessages[agentIdx]!)
+        emitAgentMessage(agentMessages[agentIdx]!)
         agentIdx++
       }
     }
@@ -4108,9 +4132,10 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
     // session log recovered this turn's commands/file changes, drop the
     // commandExecution/fileChange rows the bridge captured from live
     // notifications (they were appended at the end and would otherwise stack).
+    // Reasoning is excluded here: it is emitted with its own message above.
     const hasRecoveredWorkItems = recoveredIds.size > 0
     for (const item of existingItems) {
-      if (item.type === 'userMessage' || item.type === 'agentMessage') continue
+      if (item.type === 'userMessage' || item.type === 'agentMessage' || item.type === 'reasoning') continue
       if (recoveredIds.has(String(item.id ?? ''))) continue
       if (hasRecoveredWorkItems && (item.type === 'commandExecution' || item.type === 'fileChange')) continue
       interleaved.push(item)
