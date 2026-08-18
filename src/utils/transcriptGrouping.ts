@@ -73,11 +73,9 @@ export function buildTurnRenderGroups(messages: UiMessage[]): TurnRenderGroup[] 
   }
 
   for (const group of groups) {
-    for (let index = group.items.length - 1; index >= 0; index -= 1) {
-      const item = group.items[index]
-      if (!isFinalAssistantItem(item.message)) continue
-      item.kind = 'final-assistant'
-      break
+    const lastContentItem = [...group.items].reverse().find((item) => item.kind !== 'file-change')
+    if (lastContentItem && isFinalAssistantItem(lastContentItem.message)) {
+      lastContentItem.kind = 'final-assistant'
     }
   }
 

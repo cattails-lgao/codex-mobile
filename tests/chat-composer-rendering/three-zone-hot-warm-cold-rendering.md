@@ -62,19 +62,20 @@ pnpm run build               # vite build + tsup 通过
 - 三区 computed 依赖链：`props.messages → filteredMessages → turnGroups → warmPaginationResult → renderItems`。live token 增量（`agentMessage.live` 等）只改变消息文本，不改变 warm 区轮次的摘要字段 → 组件 props 值不变 → Vue 不重渲染 warm/cold 子树（props 引用比较 + 值相等跳过）
 - warm 区轮次永远不是流式轮（流式只发生在最新 hot 轮），与 Reasonix `WarmZone` 注释语义一致
 
-### 2.7 Hot 区开发记录层级
+### 2.7 Hot 区真实轮次结构
 
 1. 准备一个最近 30 轮内包含 `reasoning → assistant 文本 → command/tool → assistant 最终回答` 的线程，且该轮同时有 Plan 和完成的 file change。
-2. 打开线程并从该用户请求开始向下检查渲染顺序。
+2. 打开线程并从该用户请求开始向下检查一个 `.conversation-turn` 容器。
 3. 展开 Thinking、命令和工具批次，分别检查最终回答、Plan 与文件变更。
 4. 点击最终回答的 Copy/Fork，点击用户消息的 Edit，再打开文件变更的 Diff/Undo 确认框。
 5. 在回复流式进行时滚到历史位置，等待新的过程记录和最终文本出现。
 
 Expected results:
-- Hot 区严格保持事件原始顺序；Thinking 不被推到最终回答或轮次末尾。
-- 最终 assistant 回答与此前过程记录保持同一文档流，但有清晰的上方留白；过程记录使用低密度左侧缩进，工具批次不显示独立卡片外框。
+- 每个 Hot turn 都是独立的真实 DOM 容器，结构为 `.conversation-turn-request`、可选 `.conversation-turn-process`、可选 `.conversation-turn-final`；不是同级消息上叠加 CSS 边框。
+- 用户请求只在 request 区出现；Thinking、命令、工具、Plan、非终局 assistant 文本与文件变更都在 process 区。过程区有“本轮过程”标题和左侧轨道。
+- 只有轮次末尾的稳定 assistant 文本进入 final 区；若后续仍有过程记录，较早的 assistant 文本保留在 process 区，不会被重排。
+- 文件变更同一轮只出现一次，位于 process 区末尾；Copy/Fork/Edit/Diff/Undo 均继续作用于原始消息或 turn。
 - Plan 显示为只读过程记录，步骤状态正确；Composer 的 Plan 面板仍可操作。
-- 同一轮文件变更只出现一次，且仍在既有轮末锚点；Copy/Fork/Edit/Diff/Undo 均作用于原始消息或 turn。
 - 流式输出时不新增网络请求、不会将阅读历史的滚动位置拉到底部；跳到最新后仍自动跟随。
 
 ## 回滚

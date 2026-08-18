@@ -15,8 +15,9 @@ When the bridge recovers a turn's chronological item order from the session log 
 - Step 3: in the final turn's `items`, every `reasoning` item directly precedes the `agentMessage` it belongs to (e.g. `reasoning, agentMessage, commandExecution, reasoning, agentMessage`), and **none** appear at the tail of the turn.
 - Step 4: each "Thinking process" toggle renders **immediately before** its corresponding assistant message; the final assistant reply has no thinking block after it. No thinking block is stranded at the bottom of the conversation.
 - The reasoning spread across multiple sub-turns stays with its own message, even when command blocks are interleaved around them.
-- In the Hot zone, the final assistant response has visual separation from preceding process records, but its position remains after the last real process item. The UI does not collect reasoning at the turn tail.
-- A Plan record, when present, remains a read-only chronological process item and does not replace the Composer plan panel.
+- In the Hot zone, each user turn renders a real request/process/final container. Reasoning stays in that turn's process section immediately before the assistant text it accompanies; it is never collected at the turn tail.
+- The final assistant response only appears in the final section when it is the turn's last stable assistant text. Earlier assistant text stays in process if later command/tool/Plan records follow it.
+- A Plan record remains a read-only process item and does not replace the Composer plan panel. Completed file changes render once at the end of the same process section, before any final response.
 
 #### Rollback/Cleanup
 - No feature flag; to restore previous behavior, revert `mergeSessionCommandsIntoTurns` in `src/server/codexAppServerBridge.ts` (drop the `reasoningsByMessageId` pairing and the `reasoning` skip in the trailing append loop).
