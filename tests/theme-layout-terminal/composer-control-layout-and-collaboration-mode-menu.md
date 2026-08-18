@@ -63,6 +63,7 @@ Return to the [section index](index.md).
 - Approval policy popover is a three-way radio that saves on click.
 - The three menus are mutually exclusive and dismiss on outside click.
 - Light and dark themes both render the menus legibly.
+- Model trigger width is content-sized (`w-fit`): a short model name (e.g. `gpt-5`) leaves no fixed blank block, while a long name caps at 160px desktop / 128px H5 and ellipsizes; the H5 control row stays `flex-nowrap` with no horizontal overflow (`.thread-composer-controls` shows no `scrollWidth > clientWidth`).
 
 #### Rollback/Cleanup
 - Reset collaboration mode and approval policy by re-selecting the previous values in the two popovers.

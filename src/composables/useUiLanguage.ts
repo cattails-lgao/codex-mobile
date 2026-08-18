@@ -8,6 +8,7 @@ const zhCN: Record<string, string> = {
   'English': 'English',
   'Simplified Chinese': '简体中文',
   'Commands': '命令',
+  'Command': '命令',
   'Local': '本地',
   'Compact the current thread context': '压缩当前线程上下文',
   'Open the code review pane': '打开代码审查面板',

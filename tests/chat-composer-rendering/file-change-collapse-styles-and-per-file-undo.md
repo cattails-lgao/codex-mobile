@@ -19,11 +19,14 @@ Three related fixes for the `data-message-type="fileChange"` block in the messag
 3. Click the icon on one file and confirm.
 4. Re-open the diff/working tree and check the other file is untouched.
 5. Use the block-level Undo button and verify all files of the turn revert.
+6. Click a file path in the file-change block to open the diff viewer (`.diff-viewer-backdrop`).
 
 #### Expected Results
 - Step 2: the block renders as a lightweight row consistent with work-block/reasoning rows (no border, no background, `#737373` label), and the chevron rotates on expand/collapse.
 - Step 3-4: only the chosen file is reverted; the other file keeps its edited content; the redo state applies to the same file scope.
 - Step 5: whole-turn undo still works as before.
+- Step 6 desktop: the diff viewer overlays the whole page (teleported to `body` at the shared modal layer `z-[1200]`), sits above `.content-header`, and closes via the toolbar X or by clicking the backdrop.
+- Step 6 H5 (375px): the full-screen diff covers the header, the toolbar X is tappable and closes the viewer; the mobile file-list sheet still opens from the files-count button and closes via its own backdrop.
 - Dark theme and mobile widths keep the undo icon visible and aligned.
 
 #### Rollback/Cleanup

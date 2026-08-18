@@ -16,7 +16,7 @@
       @click="$emit('toggle')"
     >
       <span class="work-step-dot" :title="`${t('Step')} ${String(stepIndex + 1)}`">{{ stepIndex + 1 }}</span>
-      <code class="work-block-command">{{ command.commandExecution?.command || '(command)' }}</code>
+      <code class="work-block-command">{{ t('Command') }}</code>
       <span class="work-block-status">
         <span v-if="command.commandExecution?.status === 'inProgress'" class="work-block-spinner" aria-hidden="true" />
         <span v-else-if="command.commandExecution?.status === 'completed' && command.commandExecution?.exitCode === 0" class="work-block-status-icon" aria-hidden="true">✓</span>
@@ -29,6 +29,7 @@
       :class="{ 'work-block-output-visible': expanded }"
     >
       <div class="work-block-output-inner">
+        <pre class="work-block-output-command" v-text="command.commandExecution?.command || '(command)'"></pre>
         <pre
           class="work-block-output"
           :class="{ 'cmd-output-condensed': outputCondensed }"
@@ -116,8 +117,8 @@ const permissionHint = computed(() => {
 }
 
 /* 命令块视觉降噪（round-16 反馈「命令执行块太显眼」+ round-17 反馈「不需要圆形
-   边框和背景色」）：去掉圆角/边框/背景，改为「序号 + 命令文本 + 状态」的朴素行，
-   颜色浅。输出区保持深色代码块。 */
+   边框和背景色」）：去掉圆角/边框/背景，改为「序号 + "命令"标签 + 状态」的朴素行，
+   颜色浅。输出区保持深色代码块，具体命令与结果都在展开后的输出区里。 */
 .work-block {
   @apply w-full min-w-0;
 }
@@ -218,6 +219,11 @@ const permissionHint = computed(() => {
 
 .work-block-output {
   @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+}
+
+/* 展开区第一行：具体命令（与结果放一起），下边一条暗色分隔线 */
+.work-block-output-command {
+  @apply m-0 px-3 pt-2 pb-1.5 text-xs font-mono whitespace-pre-wrap break-words border-b border-zinc-700/60 text-sky-300/90;
 }
 
 .work-block-output.cmd-output-condensed {
