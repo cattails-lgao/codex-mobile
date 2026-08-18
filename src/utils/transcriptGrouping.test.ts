@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTurnGroups,
+  buildTurnRenderGroups,
   compactQuestionText,
   createWarmLayerState,
   messagesForTurnsFrom,
@@ -83,6 +84,57 @@ describe('buildTurnGroups', () => {
 
   it('returns an empty list when there are no messages', () => {
     expect(buildTurnGroups([])).toHaveLength(0)
+  })
+})
+
+describe('buildTurnRenderGroups', () => {
+  it('keeps interleaved content in original order and marks only the final assistant response', () => {
+    const messages = [
+      msg('u1', 'user', undefined, { text: 'q' }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'progress update' }),
+      msg('r1', 'assistant', 'reasoning', { reasoning: { summary: [], content: [] } }),
+      msg('c1', 'system', 'commandExecution', { commandExecution: { status: 'completed' } }),
+      msg('a2', 'assistant', 'agentMessage', { text: 'final answer' }),
+    ]
+
+    const group = buildTurnRenderGroups(messages)[0]
+    expect(group?.items.map((item) => `${item.message.id}:${item.kind}`)).toEqual([
+      'u1:user',
+      'a1:assistant',
+      'r1:reasoning',
+      'c1:process',
+      'a2:final-assistant',
+    ])
+  })
+
+  it('retains plan and file change records in their chronological position', () => {
+    const messages = [
+      msg('u1', 'user', undefined, { text: 'q' }),
+      msg('p1', 'assistant', 'plan', { text: '- [ ] do it' }),
+      msg('f1', 'system', 'fileChange', { fileChanges: [{ path: 'a.ts' }] }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'done' }),
+    ]
+
+    const group = buildTurnRenderGroups(messages)[0]
+    expect(group?.items.map((item) => `${item.message.id}:${item.kind}`)).toEqual([
+      'u1:user',
+      'p1:plan',
+      'f1:file-change',
+      'a1:final-assistant',
+    ])
+  })
+
+  it('starts a fresh display group at each user message', () => {
+    const groups = buildTurnRenderGroups([
+      msg('u1', 'user', undefined, { text: 'first' }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'answer' }),
+      msg('u2', 'user', undefined, { text: 'second' }),
+    ])
+
+    expect(groups.map((group) => group.items.map((item) => item.message.id))).toEqual([
+      ['u1', 'a1'],
+      ['u2'],
+    ])
   })
 })
 

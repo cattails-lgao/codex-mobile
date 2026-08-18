@@ -136,6 +136,11 @@
       <li
         :id="messageAnchorId(message)"
         class="conversation-item"
+        :class="{
+          'conversation-item-process': item.presentation === 'process',
+          'conversation-item-final': item.presentation === 'final-assistant',
+          'conversation-item-plan': item.presentation === 'plan',
+        }"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -194,7 +199,21 @@
           </div>
         </div>
 
-        <div v-else class="message-row" :data-role="message.role" :data-message-type="message.messageType || ''">
+        <div v-else-if="item.presentation === 'plan'" class="message-row" data-role="system" data-message-type="plan">
+          <div class="message-stack" data-role="system">
+            <article class="thread-plan-record">
+              <div class="thread-plan-record-header">{{ t('Plan') }}</div>
+              <p v-if="readPlanData(message)?.explanation" class="thread-plan-record-explanation">{{ readPlanData(message)?.explanation }}</p>
+              <ol v-if="readPlanData(message)?.steps.length" class="thread-plan-record-steps">
+                <li v-for="(step, stepIndex) in readPlanData(message)?.steps" :key="`${message.id}-plan-${stepIndex}`" :data-status="step.status">
+                  <span class="thread-plan-record-marker" aria-hidden="true">{{ planStepCopyMarker(step.status) }}</span>
+                  <span>{{ step.step }}</span>
+                </li>
+              </ol>
+            </article>
+          </div>
+        </div>
+        <div v-else class="message-row" :class="{ 'message-row-final': item.presentation === 'final-assistant' }" :data-role="message.role" :data-message-type="message.messageType || ''">
           <div class="message-stack" :data-role="message.role">
             <article class="message-body" :data-role="message.role">
               <ul
@@ -715,6 +734,7 @@ import {
 } from '../../utils/conversationFolds'
 import {
   buildTurnGroups,
+  buildTurnRenderGroups,
   compactQuestionText,
   createWarmLayerState,
   messagesForTurnsFrom,
@@ -1108,7 +1128,7 @@ const expandedWarmTurns = computed(() => activeWarmLayer.value.expandedWarmTurns
 
 type WarmRenderItem =
   | { kind: 'warm-card'; key: string; turn: number; userText: string; assistantPreview: string; toolCount: number; expanded: boolean }
-  | { kind: 'message'; key: string; message: UiMessage }
+  | { kind: 'message'; key: string; message: UiMessage; presentation?: 'process' | 'final-assistant' | 'plan' }
 
 // 三区交错渲染序列：warm 折叠轮次出卡片，展开轮次出「头部 + 该轮消息」，之后接 hot 区消息。
 const renderItems = computed<WarmRenderItem[]>(() => {
@@ -1132,8 +1152,18 @@ const renderItems = computed<WarmRenderItem[]>(() => {
       items.push({ kind: 'warm-card', key: `warm-${g}`, turn: g, userText, assistantPreview, toolCount, expanded: false })
     }
   }
-  for (const message of messagesForTurnsFrom(messages, groups, warmEndTurn.value)) {
-    items.push({ kind: 'message', key: message.id, message })
+  const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
+  const firstHotMessage = hotMessages[0]
+  if (!firstHotMessage) return items
+  const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
+  const hotSourceMessages = hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages
+  for (const group of buildTurnRenderGroups(hotSourceMessages)) {
+    for (const item of group.items) {
+      const presentation = item.kind === 'final-assistant' || item.kind === 'plan' || item.kind === 'process'
+        ? item.kind
+        : undefined
+      items.push({ kind: 'message', key: item.message.id, message: item.message, presentation })
+    }
   }
   return items
 })
@@ -2846,8 +2876,60 @@ onBeforeUnmount(() => {
   @apply m-0 w-full min-w-0 flex;
 }
 
-.conversation-item-request {
-  @apply justify-center;
+.conversation-item-process {
+  @apply py-0.5;
+}
+
+.conversation-item-final {
+  @apply pt-2;
+}
+
+.message-row-final .message-text-flow {
+  @apply gap-2.5;
+}
+
+.thread-plan-record {
+  @apply w-full max-w-[min(var(--chat-card-max,76ch),100%)] border-l-2 border-zinc-300 py-1 pl-3 text-xs leading-5 text-zinc-600;
+}
+
+.thread-plan-record-header {
+  @apply font-medium text-zinc-700;
+}
+
+.thread-plan-record-explanation {
+  @apply m-0 mt-1 whitespace-pre-wrap break-words;
+}
+
+.thread-plan-record-steps {
+  @apply m-0 mt-1.5 flex list-none flex-col gap-1 p-0;
+}
+
+.thread-plan-record-steps li {
+  @apply flex items-start gap-1.5 break-words;
+}
+
+.thread-plan-record-marker {
+  @apply shrink-0 font-mono text-[11px] text-zinc-400;
+}
+
+.thread-plan-record-steps li[data-status='completed'] .thread-plan-record-marker {
+  @apply text-emerald-600;
+}
+
+.thread-plan-record-steps li[data-status='inProgress'] .thread-plan-record-marker {
+  @apply text-amber-600;
+}
+
+:root.dark .thread-plan-record {
+  @apply border-zinc-700 text-zinc-400;
+}
+
+:root.dark .thread-plan-record-header {
+  @apply text-zinc-200;
+}
+
+:root.dark .thread-plan-record-marker {
+  @apply text-zinc-500;
 }
 
 .conversation-item-overlay {

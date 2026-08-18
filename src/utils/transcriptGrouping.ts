@@ -12,6 +12,78 @@ export interface TurnGroup {
   endIdx: number
 }
 
+export type TurnRenderItemKind =
+  | 'user'
+  | 'reasoning'
+  | 'process'
+  | 'assistant'
+  | 'final-assistant'
+  | 'plan'
+  | 'file-change'
+
+export type TurnRenderItem = {
+  message: UiMessage
+  kind: TurnRenderItemKind
+}
+
+export type TurnRenderGroup = {
+  key: string
+  items: TurnRenderItem[]
+}
+
+function renderItemKind(message: UiMessage): TurnRenderItemKind {
+  if (message.role === 'user') return 'user'
+  if (message.messageType === 'reasoning') return 'reasoning'
+  if (message.messageType === 'plan' || message.messageType === 'plan.live') return 'plan'
+  if (message.messageType === 'fileChange') return 'file-change'
+  if (message.messageType === 'commandExecution' || message.messageType === 'toolCall' || message.messageType === 'worked') {
+    return 'process'
+  }
+  return 'assistant'
+}
+
+function isFinalAssistantItem(message: UiMessage): boolean {
+  return message.role === 'assistant'
+    && message.messageType !== 'reasoning'
+    && message.messageType !== 'commandExecution'
+    && message.messageType !== 'toolCall'
+    && message.messageType !== 'worked'
+    && message.messageType !== 'plan'
+    && message.messageType !== 'plan.live'
+    && message.messageType !== 'fileChange'
+    && !message.messageType?.endsWith('.live')
+    && message.text.trim().length > 0
+}
+
+/**
+ * Build the Hot-zone display model one user turn at a time without changing the
+ * underlying message order. The final assistant answer is marked for emphasis,
+ * while earlier assistant text and process records retain their exact position.
+ */
+export function buildTurnRenderGroups(messages: UiMessage[]): TurnRenderGroup[] {
+  const groups: TurnRenderGroup[] = []
+  let current: TurnRenderGroup | null = null
+
+  for (const message of messages) {
+    if (message.role === 'user' || !current) {
+      current = { key: `turn-${message.id}`, items: [] }
+      groups.push(current)
+    }
+    current.items.push({ message, kind: renderItemKind(message) })
+  }
+
+  for (const group of groups) {
+    for (let index = group.items.length - 1; index >= 0; index -= 1) {
+      const item = group.items[index]
+      if (!isFinalAssistantItem(item.message)) continue
+      item.kind = 'final-assistant'
+      break
+    }
+  }
+
+  return groups
+}
+
 export type WarmLayerState = {
   sessionKey: string
   expandedWarmTurns: ReadonlySet<number>
