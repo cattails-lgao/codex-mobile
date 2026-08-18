@@ -58,7 +58,7 @@ defineEmits<{
 @reference "tailwindcss";
 
 .confirm-dialog-overlay {
-  @apply fixed inset-0 z-[1200] flex items-center justify-center bg-black/40 p-4;
+  @apply fixed inset-0 z-[var(--z-modal-top)] flex items-center justify-center bg-black/40 p-4;
 }
 
 .confirm-dialog-panel {

@@ -32,12 +32,14 @@ Return to the [section index](index.md).
 1. Scroll to the composer. Confirm the input textarea fills the left side and the submit (arrow-up) button is vertically aligned at the right edge of the input box, not in a row below it.
 2. While a turn is running (or a draft is queued), confirm the stop button replaces the submit button in the same right-edge position.
 3. Confirm there is no microphone button and no realtime-voice button anywhere in the composer, and no voice bubble above the input.
-4. On a 375px-wide viewport, confirm the input + submit still fit without horizontal overflow.
+4. On a 375px-wide viewport, set a long model name and a visible context-usage state, then confirm the input + submit still fit and the control row can be deliberately scrolled horizontally without clipping the submit action.
+5. At exactly 768px wide, confirm the desktop layout keeps the composer controls visible, with neither sidebar nor right panel covering the control row.
 
 #### Expected Results
 - The submit/stop control is attached to the right of the input box, aligned to the input bottom.
 - No voice/dictation controls or voice bubbles are present.
-- Responsive widths (375px, 768px) show the input row and control row without clipping.
+- Responsive widths (375px, exactly 768px) show the input row and control row without clipping.
+- The 375px control row may scroll within its own surface for a worst-case control combination; the page itself has no horizontal overflow.
 
 #### Rollback/Cleanup
 - None.
@@ -63,7 +65,7 @@ Return to the [section index](index.md).
 - Approval policy popover is a three-way radio that saves on click.
 - The three menus are mutually exclusive and dismiss on outside click.
 - Light and dark themes both render the menus legibly.
-- Model trigger width is content-sized (`w-fit`): a short model name (e.g. `gpt-5`) leaves no fixed blank block, while a long name caps at 160px desktop / 128px H5 and ellipsizes; the H5 control row stays `flex-nowrap` with no horizontal overflow (`.thread-composer-controls` shows no `scrollWidth > clientWidth`).
+- Model trigger width is content-sized (`w-fit`): a short model name (e.g. `gpt-5`) leaves no fixed blank block, while a long name caps at 160px desktop / 128px H5 and ellipsizes. On H5 the control row stays `flex-nowrap`; a worst-case combination can scroll inside `.thread-composer-controls`, but the page has no horizontal overflow.
 
 #### Rollback/Cleanup
 - Reset collaboration mode and approval policy by re-selecting the previous values in the two popovers.

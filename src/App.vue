@@ -1146,6 +1146,7 @@
                     :request-count="selectedThreadServerRequests.length"
                     :has-queue-above="selectedThreadQueuedMessages.length > 0"
                     :panel-width="composerShellWidthPx"
+                    :visual-viewport-height="isVirtualKeyboardOpen ? visualViewportHeight : 0"
                     :panel-error="selectedPendingReplyError"
                     @respond-server-request="onRespondServerRequest"
                   />
@@ -5796,7 +5797,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .composer-with-queue {
-  @apply w-full shrink-0 px-2 sm:px-6 flex flex-col gap-2;
+  @apply w-full shrink-0 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 flex flex-col gap-2;
 }
 
 .composer-runtime-error {
@@ -5833,7 +5834,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-resize-handle {
-  @apply absolute -left-1.5 top-0 bottom-0 z-[1100] w-3 cursor-col-resize;
+  @apply absolute -left-1.5 top-0 bottom-0 z-[var(--z-drawer)] w-3 cursor-col-resize;
 }
 
 .content-right-panel-resize-handle::after {
@@ -5894,7 +5895,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-menu {
-  @apply absolute right-0 top-8 z-[1100] flex w-40 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute right-0 top-8 z-[var(--z-context-menu)] flex w-40 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .content-right-panel-menu button {
@@ -5933,7 +5934,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 @media (max-width: 767px) {
   .content-right-panel {
-    @apply fixed right-0 top-0 bottom-0 z-[1100] w-[min(85vw,20rem)] translate-x-full shadow-2xl transition-transform duration-200;
+    @apply fixed right-0 top-0 bottom-0 z-[var(--z-drawer)] w-[min(85vw,20rem)] translate-x-full shadow-2xl transition-transform duration-200;
   }
 
   .content-right-panel.is-mobile-open {
@@ -6283,7 +6284,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .settings-dialog-backdrop {
-  @apply fixed inset-0 z-[1150] flex items-center justify-center bg-black/40 p-3 sm:p-6;
+  @apply fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/40 p-3 sm:p-6;
 }
 
 .settings-dialog-header {

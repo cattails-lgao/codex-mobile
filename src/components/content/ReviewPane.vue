@@ -929,7 +929,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .review-pane {
-  @apply fixed inset-3 z-[1200] flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl;
+  @apply fixed inset-3 z-[var(--z-modal)] flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl;
 }
 
 .review-pane.is-mobile {

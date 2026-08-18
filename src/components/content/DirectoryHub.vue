@@ -2468,36 +2468,7 @@ button.directory-card {
   @apply bg-sky-100 text-sky-700;
 }
 
-/* round-26：以下 mcp-skill/skills-embedded 暗色覆盖原写在 scoped
-   :global(:root.dark)/:global(.dark) 中，本构建编译失效（编译成
-   :root.dark[data-v-xxx] / .dark[data-v-xxx]，永不匹配）。规则已迁移到
-   src/style.css；这里保留 prefers-color-scheme 兜底（仅系统暗色生效）。 */
-
-@media (prefers-color-scheme: dark) {
-  .mcp-skill-card {
-    @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
-  }
-
-  .mcp-skill-avatar-fallback {
-    @apply bg-zinc-700 text-zinc-300;
-  }
-
-  .mcp-skill-name {
-    @apply text-zinc-100;
-  }
-
-  .mcp-skill-owner {
-    @apply text-zinc-400;
-  }
-
-  .mcp-skill-meta {
-    @apply text-zinc-300;
-  }
-
-  .mcp-skill-chevron {
-    @apply text-zinc-500;
-  }
-}
+/* Application theme state lives on :root; scoped targets remain safe here. */
 
 :global(:root.dark) .directory-tabs,
 :global(:root.dark) .directory-search,
@@ -2532,7 +2503,8 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-row,
 :global(:root.dark) .directory-marketplace-source,
 :global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove {
+:global(:root.dark) .directory-marketplace-remove,
+:global(:root.dark) .directory-marketplace-add-button {
   @apply border-zinc-700;
 }
 
@@ -2548,7 +2520,8 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-row,
 :global(:root.dark) .directory-marketplace-source,
 :global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove {
+:global(:root.dark) .directory-marketplace-remove,
+:global(:root.dark) .directory-marketplace-add-button {
   @apply bg-zinc-800;
 }
 
@@ -2562,7 +2535,8 @@ button.directory-card {
 }
 
 :global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove {
+:global(:root.dark) .directory-marketplace-remove,
+:global(:root.dark) .directory-marketplace-add-button {
   @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
 }
 

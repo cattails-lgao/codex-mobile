@@ -175,7 +175,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 .diff-viewer-backdrop {
   /* 与 AppDialog/ConfirmDialog 一致：Teleport 到 body 后用共享弹层层级，
      高于 content-header（z-[250]），修复 H5 全屏 diff 被顶栏遮挡、关闭按钮点不到 */
-  @apply fixed inset-0 z-[1200] bg-black/45 p-3 sm:p-6 flex items-center justify-center;
+  @apply fixed inset-0 z-[var(--z-modal)] bg-black/45 p-3 sm:p-6 flex items-center justify-center;
 }
 
 .diff-viewer-shell {
@@ -388,6 +388,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 
   .diff-viewer-shell {
     @apply h-[100dvh] w-screen rounded-none border-0 shadow-none;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .diff-viewer-main {
@@ -396,6 +397,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 
   .diff-viewer-toolbar {
     @apply sticky top-0 z-10 bg-white px-3 py-3;
+    padding-top: max(0.75rem, env(safe-area-inset-top));
   }
 
   .diff-viewer-title {
