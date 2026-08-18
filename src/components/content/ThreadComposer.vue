@@ -2802,7 +2802,8 @@ watch(
 }
 
 .thread-composer-model-control {
-  @apply w-40 min-w-0;
+  /* 宽度随模型名自适应（短名不留空白块），上限沿用 round-14 的 160px/128px 档 */
+  @apply w-fit max-w-40 min-w-0;
 }
 
 .thread-composer-model-control :deep(.composer-dropdown-trigger) {
@@ -2851,7 +2852,7 @@ watch(
   }
 
   .thread-composer-model-control {
-    @apply w-32;
+    @apply max-w-32;
   }
 
   .thread-composer-control :deep(.composer-dropdown-trigger--pill) {

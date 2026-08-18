@@ -11,14 +11,16 @@ Feature work for requirement 6: message rendering restructured to the trae-work 
 #### Steps
 1. Open the thread with command history.
 2. Confirm each command renders as a `.work-block` row with a leading `.work-step-dot` showing a continuous step number (1, 2, 3, …).
-3. Confirm the command text appears next to the step dot and a status label on the right shows `✓ Done` for successful commands, `✗ Failed` for failed ones, and `Running` with a spinner for an in-progress command.
-4. Click the block header (not a separate chevron) and confirm the command output expands below inside the same block; click again to collapse.
+3. Confirm the header shows a stable localized `Command` label (命令 in Simplified Chinese) next to the step dot, with the status label on the right showing `✓ Done` for successful commands, `✗ Failed` for failed ones, and `Running` with a spinner for an in-progress command; the concrete shell command no longer appears in the header.
+4. Click the block header (not a separate chevron) and confirm the output expands below inside the same block; the first line of the expanded panel is the exact command (`.work-block-output-command`, sky text with a divider), followed by the command output; click again to collapse.
 5. Confirm the previous `cmd-step-index` badge and `worked-separator` expander no longer appear for command rows.
 
 #### Expected Results
 - Commands are visually distinct work steps with continuous numbering, matching the trae-work work-process style.
+- Collapsed rows read `sequence + Command + status`; the concrete command is only visible in the expanded output panel, above the result.
 - The whole block header toggles output; no intermediate group-expand interaction remains.
-- Dark theme keeps the step dot, status colors, and output panel readable.
+- Long commands wrap inside the expanded panel without horizontal page overflow.
+- Dark theme keeps the step dot, status colors, command line, and output panel readable.
 
 #### Rollback/Cleanup
 - None; no state is persisted.

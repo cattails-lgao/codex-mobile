@@ -1,5 +1,6 @@
 <template>
-  <div v-if="change" class="diff-viewer-backdrop" @click="$emit('close')">
+  <Teleport to="body">
+    <div v-if="change" class="diff-viewer-backdrop" @click="$emit('close')">
     <div class="diff-viewer-shell" @click.stop>
       <aside v-if="!isMobile" class="diff-viewer-sidebar">
         <div class="diff-viewer-sidebar-header">
@@ -113,8 +114,9 @@
           </div>
         </div>
       </Transition>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -171,7 +173,9 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 @reference "tailwindcss";
 
 .diff-viewer-backdrop {
-  @apply fixed inset-0 z-50 bg-black/45 p-3 sm:p-6 flex items-center justify-center;
+  /* 与 AppDialog/ConfirmDialog 一致：Teleport 到 body 后用共享弹层层级，
+     高于 content-header（z-[250]），修复 H5 全屏 diff 被顶栏遮挡、关闭按钮点不到 */
+  @apply fixed inset-0 z-[1200] bg-black/45 p-3 sm:p-6 flex items-center justify-center;
 }
 
 .diff-viewer-shell {
