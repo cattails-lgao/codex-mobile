@@ -25,28 +25,60 @@
           {{ t('Load earlier ({n} turns)', { n: coldTurnCount }) }}
         </button>
       </li>
-      <template v-for="item in renderItems" :key="item.key">
-      <li
-        v-if="item.kind === 'warm-card'"
-        :id="questionAnchorId(item.turn)"
-        class="conversation-item conversation-item-warm-card"
-        data-role="system"
-        data-message-type="warmTurn"
+      <ThreadTurn
+        v-for="turn in renderTurns"
+        :key="turn.key"
+        :turn-key="turn.key"
+        :warm="turn.warm"
+        :warm-items="turn.warmItems"
+        :request="turn.request"
+        :process-items="turn.processItems"
+        :final-item="turn.finalItem"
+        :file-change-anchor-ids="turn.fileChangeAnchorIds"
       >
-        <div class="message-row" data-role="system">
-          <div class="message-stack" data-role="system">
-            <WarmTurnCard
-              :user-text="item.userText"
-              :assistant-preview="item.assistantPreview"
-              :tool-count="item.toolCount"
-              :expanded="item.expanded"
-              @toggle="toggleWarmTurn(item.turn)"
-            />
+        <template #warm-card="{ warm }">
+          <li
+            :id="questionAnchorId(warm.turn)"
+            class="conversation-item conversation-item-warm-card"
+            data-role="system"
+            data-message-type="warmTurn"
+          >
+            <div class="message-row" data-role="system">
+              <div class="message-stack" data-role="system">
+                <WarmTurnCard
+                  :user-text="warm.userText"
+                  :assistant-preview="warm.assistantPreview"
+                  :tool-count="warm.toolCount"
+                  :expanded="warm.expanded"
+                  @toggle="toggleWarmTurn(warm.turn)"
+                />
+              </div>
+            </div>
+          </li>
+        </template>
+        <template #file-change="{ anchorMessageId }">
+          <div class="message-row" data-role="system" data-message-type="fileChange">
+            <div class="message-stack" data-role="system">
+              <FileChangeSummaryBlock
+                v-if="isFileChangeSummaryVisible(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                :summary="readAnchoredFileChangeSummaryById(anchorMessageId)"
+                :expanded="isFileChangeSummaryExpandedById(anchorMessageId)"
+                :cwd="props.cwd"
+                :actionable="isFileChangeActionable(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                :action-status="fileChangeActionStatus(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                :action-error-text="fileChangeActionErrorText(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                :next-action="fileChangeNextAction(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                :action-label="fileChangeActionLabel(readAnchoredFileChangeSummaryById(anchorMessageId))"
+                @toggle="toggleFileChangeSummaryById(anchorMessageId)"
+                @open-diff="openDiffViewer(readAnchoredFileChangeSummaryById(anchorMessageId), $event)"
+                @request-action="requestFileChangeAction(readAnchoredFileChangeSummaryById(anchorMessageId), $event)"
+                @request-file-action="requestFileChangeFileAction(readAnchoredFileChangeSummaryById(anchorMessageId), $event)"
+              />
+            </div>
           </div>
-        </div>
-      </li>
-      <template v-else>
-      <template v-for="message in [item.message]" :key="message.id">
+        </template>
+        <template #default="{ item, section }">
+        <template v-for="message in [item.message]" :key="message.id">
       <template v-if="isFoldStart(message)">
       <li
         class="conversation-item conversation-item-fold"
@@ -99,33 +131,6 @@
           </div>
         </div>
       </li>
-      <!-- round-26：fileChange 汇总块改为「独立 li」渲染（轮末锚点折叠场景），
-           且仅在当前会话轮完成后显示 -->
-      <li
-        v-if="isFileChangeSummaryVisible(foldAnchoredFileChangeSummary(message))"
-        class="conversation-item conversation-item-file-change"
-        data-role="system"
-        data-message-type="fileChange"
-      >
-        <div class="message-row" data-role="system">
-          <div class="message-stack" data-role="system">
-            <FileChangeSummaryBlock
-              :summary="foldAnchoredFileChangeSummary(message)"
-              :expanded="isFileChangeSummaryExpanded(foldTailMessage(message))"
-              :cwd="props.cwd"
-              :actionable="isFileChangeActionable(foldAnchoredFileChangeSummary(message))"
-              :action-status="fileChangeActionStatus(foldAnchoredFileChangeSummary(message))"
-              :action-error-text="fileChangeActionErrorText(foldAnchoredFileChangeSummary(message))"
-              :next-action="fileChangeNextAction(foldAnchoredFileChangeSummary(message))"
-              :action-label="fileChangeActionLabel(foldAnchoredFileChangeSummary(message))"
-              @toggle="toggleFileChangeSummary(foldTailMessage(message))"
-              @open-diff="openDiffViewer(foldAnchoredFileChangeSummary(message), $event)"
-              @request-action="requestFileChangeAction(foldAnchoredFileChangeSummary(message), $event)"
-              @request-file-action="requestFileChangeFileAction(foldAnchoredFileChangeSummary(message), $event)"
-            />
-          </div>
-        </div>
-      </li>
       </template>
       <template
         v-else-if="!isFoldMember(message)
@@ -137,14 +142,11 @@
         :id="messageAnchorId(message)"
         class="conversation-item"
         :class="{
-          'conversation-item-process': item.presentation === 'process',
-          'conversation-item-final': item.presentation === 'final-assistant',
+          'conversation-item-request': section === 'request',
+          'conversation-item-process': section === 'process' || item.presentation === 'process',
+          'conversation-item-final': section === 'final' || item.presentation === 'final-assistant',
           'conversation-item-plan': item.presentation === 'plan',
-          'conversation-item-turn-start': item.turnStart,
-          'conversation-item-turn-end': item.turnEnd,
-          'is-first-turn': item.firstTurn,
         }"
-        :data-turn-key="item.turnKey"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -571,37 +573,10 @@
           </div>
         </div>
       </li>
-      <!-- round-26：fileChange 汇总块改为「独立 li」渲染（普通消息轮末锚点场景），
-           且仅在当前会话轮完成后显示 -->
-      <li
-        v-if="isFileChangeSummaryVisible(readAnchoredFileChangeSummary(message))"
-        class="conversation-item conversation-item-file-change"
-        data-role="system"
-        data-message-type="fileChange"
-      >
-        <div class="message-row" data-role="system">
-          <div class="message-stack" data-role="system">
-            <FileChangeSummaryBlock
-              :summary="readAnchoredFileChangeSummary(message)"
-              :expanded="isFileChangeSummaryExpanded(message)"
-              :cwd="props.cwd"
-              :actionable="isFileChangeActionable(readAnchoredFileChangeSummary(message))"
-              :action-status="fileChangeActionStatus(readAnchoredFileChangeSummary(message))"
-              :action-error-text="fileChangeActionErrorText(readAnchoredFileChangeSummary(message))"
-              :next-action="fileChangeNextAction(readAnchoredFileChangeSummary(message))"
-              :action-label="fileChangeActionLabel(readAnchoredFileChangeSummary(message))"
-              @toggle="toggleFileChangeSummary(message)"
-              @open-diff="openDiffViewer(readAnchoredFileChangeSummary(message), $event)"
-              @request-action="requestFileChangeAction(readAnchoredFileChangeSummary(message), $event)"
-              @request-file-action="requestFileChangeFileAction(readAnchoredFileChangeSummary(message), $event)"
-            />
-          </div>
-        </div>
-      </li>
       </template>
       </template>
       </template>
-      </template>
+      </ThreadTurn>
       <LiveOverlayItem v-if="liveOverlay" :overlay="liveOverlay" :feedback-mailto="feedbackMailto" />
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
@@ -729,6 +704,10 @@ import QuestionJumpBar, { type QuestionAnchor } from './QuestionJumpBar.vue'
 import ReasoningBlock from './ReasoningBlock.vue'
 import ToolBatchBlock from './ToolBatchBlock.vue'
 import ToolCallRow from './ToolCallRow.vue'
+import ThreadTurn, {
+  type ConversationTurnItem,
+  type WarmTurnRenderData,
+} from './ThreadTurn.vue'
 import WarmTurnCard from './WarmTurnCard.vue'
 import WorkBlockItem from './WorkBlockItem.vue'
 import {
@@ -1130,64 +1109,71 @@ const coldTurnCount = computed(() => warmPaginationResult.value.coldTurnCount)
 const hasColdTurns = computed(() => coldTurnCount.value > 0)
 const expandedWarmTurns = computed(() => activeWarmLayer.value.expandedWarmTurns)
 
-type WarmRenderItem =
-  | { kind: 'warm-card'; key: string; turn: number; userText: string; assistantPreview: string; toolCount: number; expanded: boolean }
-  | {
-      kind: 'message'
-      key: string
-      message: UiMessage
-      presentation?: 'process' | 'final-assistant' | 'plan'
-      turnKey?: string
-      turnStart?: boolean
-      turnEnd?: boolean
-      firstTurn?: boolean
-    }
+type RenderMessageItem = ConversationTurnItem
 
-// 三区交错渲染序列：warm 折叠轮次出卡片，展开轮次出「头部 + 该轮消息」，之后接 hot 区消息。
-const renderItems = computed<WarmRenderItem[]>(() => {
+type ConversationRenderTurn = {
+  key: string
+  warm?: WarmTurnRenderData
+  warmItems: RenderMessageItem[]
+  request?: RenderMessageItem
+  processItems: RenderMessageItem[]
+  fileChangeAnchorIds: string[]
+  finalItem?: RenderMessageItem
+}
+
+// Warm 继续使用既有扁平展开，Hot 改为真正的 request / process / final turn 容器。
+const renderTurns = computed<ConversationRenderTurn[]>(() => {
   const messages = filteredMessages.value
   const groups = turnGroups.value
-  const items: WarmRenderItem[] = []
+  const turns: ConversationRenderTurn[] = []
   const expanded = expandedWarmTurns.value
-  for (let g = warmStartTurn.value; g < warmEndTurn.value; g += 1) {
-    const group = groups[g]
+
+  for (let turn = warmStartTurn.value; turn < warmEndTurn.value; turn += 1) {
+    const group = groups[turn]
     if (!group) continue
-    const userText = warmUserPreview(group.userItem.text)
-    const assistantPreview = group.assistantPreview
-    const toolCount = group.toolCount
-    if (expanded.has(g)) {
-      items.push({ kind: 'warm-card', key: `warm-head-${g}`, turn: g, userText, assistantPreview, toolCount, expanded: true })
-      for (let i = group.startIdx; i < group.endIdx; i += 1) {
-        const message = messages[i]
-        if (message) items.push({ kind: 'message', key: message.id, message })
-      }
-    } else {
-      items.push({ kind: 'warm-card', key: `warm-${g}`, turn: g, userText, assistantPreview, toolCount, expanded: false })
+    const warm: WarmTurnRenderData = {
+      turn,
+      userText: warmUserPreview(group.userItem.text),
+      assistantPreview: group.assistantPreview,
+      toolCount: group.toolCount,
+      expanded: expanded.has(turn),
     }
+    const warmItems = expanded.has(turn)
+      ? messages.slice(group.startIdx, group.endIdx).map((message) => ({ message }))
+      : []
+    turns.push({ key: `warm-${turn}`, warm, warmItems, processItems: [], fileChangeAnchorIds: [] })
   }
+
   const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
   const firstHotMessage = hotMessages[0]
-  if (!firstHotMessage) return items
+  if (!firstHotMessage) return turns
   const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
   const hotSourceMessages = hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages
-  for (const [groupIndex, group] of buildTurnRenderGroups(hotSourceMessages).entries()) {
-    group.items.forEach((item, itemIndex) => {
-      const presentation = item.kind === 'final-assistant' || item.kind === 'plan' || item.kind === 'process'
-        ? item.kind
-        : undefined
-      items.push({
-        kind: 'message',
-        key: item.message.id,
+
+  for (const group of buildTurnRenderGroups(hotSourceMessages)) {
+    const request = group.items.find((item) => item.kind === 'user')
+    const finalItem = group.items.find((item) => item.kind === 'final-assistant')
+    const processItems = group.items
+      .filter((item) => item !== request && item !== finalItem)
+      .map((item) => ({
         message: item.message,
-        presentation,
-        turnKey: group.key,
-        turnStart: itemIndex === 0,
-        turnEnd: itemIndex === group.items.length - 1,
-        firstTurn: groupIndex === 0 && itemIndex === 0,
-      })
+        presentation: item.kind === 'plan' ? 'plan' as const : 'process' as const,
+      }))
+
+    const fileChangeAnchorIds = group.items
+      .map((item) => item.message.id)
+      .filter((messageId) => Boolean(readAnchoredFileChangeSummaryById(messageId)))
+
+    turns.push({
+      key: group.key,
+      warmItems: [],
+      request: request ? { message: request.message } : undefined,
+      processItems,
+      fileChangeAnchorIds,
+      finalItem: finalItem ? { message: finalItem.message, presentation: 'final-assistant' } : undefined,
     })
   }
-  return items
+  return turns
 })
 
 function nextColdPage(): void {
@@ -1258,14 +1244,25 @@ function jumpToQuestion(turn: number): void {
   })
 }
 
-// Process Fold：只在「渲染出的消息序列」（warm 展开轮次 + hot 区）上计算，折叠成员必在序列内。
-const processFolds = computed(() => {
+// Process Fold 只在实际可见的 Warm 展开消息与 Hot 消息中计算；不依赖 turn 容器，避免与文件变更摘要形成响应式循环。
+const renderedMessagesForFolds = computed(() => {
+  const messages = filteredMessages.value
+  const groups = turnGroups.value
   const rendered: UiMessage[] = []
-  for (const item of renderItems.value) {
-    if (item.kind === 'message') rendered.push(item.message)
+  for (let turn = warmStartTurn.value; turn < warmEndTurn.value; turn += 1) {
+    if (!expandedWarmTurns.value.has(turn)) continue
+    const group = groups[turn]
+    if (group) rendered.push(...messages.slice(group.startIdx, group.endIdx))
   }
-  return buildProcessFolds(rendered)
+  const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
+  const firstHotMessage = hotMessages[0]
+  if (!firstHotMessage) return rendered
+  const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
+  rendered.push(...(hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages))
+  return rendered
 })
+
+const processFolds = computed(() => buildProcessFolds(renderedMessagesForFolds.value))
 
 const foldByStartId = computed(() => {
   const map = new Map<string, ProcessFoldItem>()
@@ -1669,8 +1666,21 @@ const hiddenFileChangeMessageIds = computed(() => {
   return next
 })
 
+function readAnchoredFileChangeSummaryById(messageId: string): TurnFileChangeSummary | null {
+  return anchoredFileChangeSummaryByAnchorId.value[messageId] ?? null
+}
+
+function isFileChangeSummaryExpandedById(messageId: string): boolean {
+  return expandedFileChangeSummaryIds.value.has(messageId)
+}
+
+function toggleFileChangeSummaryById(messageId: string): void {
+  const message = props.messages.find((candidate) => candidate.id === messageId)
+  if (message) toggleFileChangeSummary(message)
+}
+
 function readAnchoredFileChangeSummary(message: UiMessage): TurnFileChangeSummary | null {
-  return anchoredFileChangeSummaryByAnchorId.value[message.id] ?? null
+  return readAnchoredFileChangeSummaryById(message.id)
 }
 
 function readStandaloneFileChangeSummary(message: UiMessage): TurnFileChangeSummary | null {
@@ -2898,25 +2908,13 @@ onBeforeUnmount(() => {
   @apply m-0 w-full min-w-0 flex;
 }
 
-.conversation-item-turn-start {
-  @apply mt-3 border-t border-zinc-200 pt-4;
-}
-
-.conversation-item-turn-start.is-first-turn {
-  @apply mt-0 border-t-0 pt-0;
-}
-
-.conversation-item-turn-end {
-  @apply mb-3;
-}
-
 .conversation-item-process {
   @apply py-0.5;
 }
 
 .conversation-item-process .message-row,
 .conversation-item-plan .message-row {
-  @apply border-l-2 border-zinc-200 pl-3;
+  @apply border-l-0 pl-0;
 }
 
 .conversation-item-process .message-row {
@@ -2931,21 +2929,17 @@ onBeforeUnmount(() => {
   @apply gap-2.5;
 }
 
-.conversation-item-turn-start[data-role='user'] .message-card[data-role='user'] {
+.conversation-item-request .message-card[data-role='user'] {
   @apply rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3 shadow-none;
 }
 
-:root.dark .conversation-item-turn-start {
-  @apply border-zinc-800;
+:root.dark .conversation-item-request .message-card[data-role='user'] {
+  @apply border-zinc-700 bg-zinc-800;
 }
 
 :root.dark .conversation-item-process .message-row,
 :root.dark .conversation-item-plan .message-row {
   @apply border-zinc-700;
-}
-
-:root.dark .conversation-item-turn-start[data-role='user'] .message-card[data-role='user'] {
-  @apply border-zinc-700 bg-zinc-800;
 }
 
 .thread-plan-record {

@@ -124,6 +124,36 @@ describe('buildTurnRenderGroups', () => {
     ])
   })
 
+  it('keeps an earlier assistant message in process when later records follow it', () => {
+    const messages = [
+      msg('u1', 'user', undefined, { text: 'q' }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'intermediate answer' }),
+      msg('c1', 'system', 'commandExecution', { commandExecution: { status: 'completed' } }),
+    ]
+
+    const group = buildTurnRenderGroups(messages)[0]
+    expect(group?.items.map((item) => `${item.message.id}:${item.kind}`)).toEqual([
+      'u1:user',
+      'a1:assistant',
+      'c1:process',
+    ])
+  })
+
+  it('allows a trailing file change after the final assistant response', () => {
+    const messages = [
+      msg('u1', 'user', undefined, { text: 'q' }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'done' }),
+      msg('f1', 'system', 'fileChange', { fileChanges: [{ path: 'a.ts' }] }),
+    ]
+
+    const group = buildTurnRenderGroups(messages)[0]
+    expect(group?.items.map((item) => `${item.message.id}:${item.kind}`)).toEqual([
+      'u1:user',
+      'a1:final-assistant',
+      'f1:file-change',
+    ])
+  })
+
   it('starts a fresh display group at each user message', () => {
     const groups = buildTurnRenderGroups([
       msg('u1', 'user', undefined, { text: 'first' }),

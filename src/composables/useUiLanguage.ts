@@ -88,6 +88,7 @@ const zhCN: Record<string, string> = {
   'Integrations': '集成',
   'Usage & about': '用量与关于',
   'Thinking process': '思考过程',
+  'Turn process': '本轮过程',
   'Working…': '执行中…',
   'Processed': '已处理',
   '{n} tools': '{n} 个工具',
