@@ -140,7 +140,11 @@
           'conversation-item-process': item.presentation === 'process',
           'conversation-item-final': item.presentation === 'final-assistant',
           'conversation-item-plan': item.presentation === 'plan',
+          'conversation-item-turn-start': item.turnStart,
+          'conversation-item-turn-end': item.turnEnd,
+          'is-first-turn': item.firstTurn,
         }"
+        :data-turn-key="item.turnKey"
         :data-role="message.role"
         :data-message-type="message.messageType || ''"
       >
@@ -1128,7 +1132,16 @@ const expandedWarmTurns = computed(() => activeWarmLayer.value.expandedWarmTurns
 
 type WarmRenderItem =
   | { kind: 'warm-card'; key: string; turn: number; userText: string; assistantPreview: string; toolCount: number; expanded: boolean }
-  | { kind: 'message'; key: string; message: UiMessage; presentation?: 'process' | 'final-assistant' | 'plan' }
+  | {
+      kind: 'message'
+      key: string
+      message: UiMessage
+      presentation?: 'process' | 'final-assistant' | 'plan'
+      turnKey?: string
+      turnStart?: boolean
+      turnEnd?: boolean
+      firstTurn?: boolean
+    }
 
 // 三区交错渲染序列：warm 折叠轮次出卡片，展开轮次出「头部 + 该轮消息」，之后接 hot 区消息。
 const renderItems = computed<WarmRenderItem[]>(() => {
@@ -1157,13 +1170,22 @@ const renderItems = computed<WarmRenderItem[]>(() => {
   if (!firstHotMessage) return items
   const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
   const hotSourceMessages = hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages
-  for (const group of buildTurnRenderGroups(hotSourceMessages)) {
-    for (const item of group.items) {
+  for (const [groupIndex, group] of buildTurnRenderGroups(hotSourceMessages).entries()) {
+    group.items.forEach((item, itemIndex) => {
       const presentation = item.kind === 'final-assistant' || item.kind === 'plan' || item.kind === 'process'
         ? item.kind
         : undefined
-      items.push({ kind: 'message', key: item.message.id, message: item.message, presentation })
-    }
+      items.push({
+        kind: 'message',
+        key: item.message.id,
+        message: item.message,
+        presentation,
+        turnKey: group.key,
+        turnStart: itemIndex === 0,
+        turnEnd: itemIndex === group.items.length - 1,
+        firstTurn: groupIndex === 0 && itemIndex === 0,
+      })
+    })
   }
   return items
 })
@@ -2876,8 +2898,29 @@ onBeforeUnmount(() => {
   @apply m-0 w-full min-w-0 flex;
 }
 
+.conversation-item-turn-start {
+  @apply mt-3 border-t border-zinc-200 pt-4;
+}
+
+.conversation-item-turn-start.is-first-turn {
+  @apply mt-0 border-t-0 pt-0;
+}
+
+.conversation-item-turn-end {
+  @apply mb-3;
+}
+
 .conversation-item-process {
   @apply py-0.5;
+}
+
+.conversation-item-process .message-row,
+.conversation-item-plan .message-row {
+  @apply border-l-2 border-zinc-200 pl-3;
+}
+
+.conversation-item-process .message-row {
+  @apply opacity-90;
 }
 
 .conversation-item-final {
@@ -2886,6 +2929,23 @@ onBeforeUnmount(() => {
 
 .message-row-final .message-text-flow {
   @apply gap-2.5;
+}
+
+.conversation-item-turn-start[data-role='user'] .message-card[data-role='user'] {
+  @apply rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3 shadow-none;
+}
+
+:root.dark .conversation-item-turn-start {
+  @apply border-zinc-800;
+}
+
+:root.dark .conversation-item-process .message-row,
+:root.dark .conversation-item-plan .message-row {
+  @apply border-zinc-700;
+}
+
+:root.dark .conversation-item-turn-start[data-role='user'] .message-card[data-role='user'] {
+  @apply border-zinc-700 bg-zinc-800;
 }
 
 .thread-plan-record {
