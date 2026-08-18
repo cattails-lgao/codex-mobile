@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
 @reference "tailwindcss";
 
 .file-link-context-menu {
-  @apply fixed z-[1100] flex min-w-36 flex-col gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl;
+  @apply fixed z-[var(--z-context-menu)] flex min-w-36 flex-col gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl;
 }
 
 .file-link-context-menu-item {

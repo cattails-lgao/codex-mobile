@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
+:root {
+  --z-content: 100;
+  --z-header: 250;
+  --z-popover: 400;
+  --z-drawer-backdrop: 1000;
+  --z-drawer: 1010;
+  --z-context-menu: 1100;
+  --z-modal: 1200;
+  --z-modal-top: 1300;
+}
+
 :root.dark {
   color-scheme: dark;
 }

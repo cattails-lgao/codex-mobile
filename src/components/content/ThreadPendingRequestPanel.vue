@@ -1,5 +1,6 @@
 <template>
-  <section v-if="request" class="thread-pending-request" :style="panelStyle">
+  <Teleport to="body">
+    <section v-if="request" class="thread-pending-request" :style="panelStyle">
     <article
       class="thread-pending-request-shell"
       :class="{ 'thread-pending-request-shell--no-top-radius': hasQueueAbove }"
@@ -232,8 +233,9 @@
           </button>
         </section>
       </template>
-    </article>
-  </section>
+      </article>
+    </section>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -280,6 +282,8 @@ const props = defineProps<{
   hasQueueAbove?: boolean
   /** 输入框 shell 的实测宽度（px）；大于 0 时覆盖默认固定宽度，保证面板与输入框同宽。 */
   panelWidth?: number
+  /** 键盘打开时的真实可视视口高度（px）；面板 Teleport 到 body 后不能再从 content-root 继承变量。 */
+  visualViewportHeight?: number
   /** round-23：回复服务端请求失败的可见错误文本（服务端已解决/网络异常时展示）。 */
   panelError?: string
 }>()
@@ -290,7 +294,13 @@ const emit = defineEmits<{
 
 const panelStyle = computed(() => {
   const width = typeof props.panelWidth === 'number' && props.panelWidth > 0 ? props.panelWidth : 0
-  return width > 0 ? { width: `${width}px` } : {}
+  const viewportHeight = typeof props.visualViewportHeight === 'number' && props.visualViewportHeight > 0
+    ? `${props.visualViewportHeight}px`
+    : '100dvh'
+  return {
+    ...(width > 0 ? { width: `${width}px` } : {}),
+    '--visual-viewport-height': viewportHeight,
+  }
 })
 
 const selectedApprovalDecision = ref<ApprovalDecision>('accept')
@@ -1006,14 +1016,13 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
   margin-left: auto;
   margin-right: auto;
   bottom: max(1rem, env(safe-area-inset-bottom));
-  /* round-23：高于右侧面板的 resize 手柄（z-1100），避免手柄条叠在面板上
-     挡住发送/跳过按钮导致点不到 */
-  z-index: 1200;
+  z-index: var(--z-modal);
   width: min(calc(100vw - 1rem), 30rem);
 }
 
 .thread-pending-request-shell {
-  @apply w-full max-h-[min(60vh,28rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-zinc-800 shadow-xl;
+  max-height: min(60dvh, calc(var(--visual-viewport-height, 100dvh) - max(1rem, env(safe-area-inset-bottom)) - 1rem), 28rem);
+  @apply w-full overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-zinc-800 shadow-xl;
 }
 
 .thread-pending-request-shell--no-top-radius {
@@ -1048,7 +1057,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-preview-code {
-  @apply block truncate whitespace-nowrap font-mono;
+  @apply block whitespace-pre-wrap break-all font-mono;
 }
 
 .thread-pending-request-approval,
@@ -1061,7 +1070,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-option {
-  @apply flex h-10 w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 text-left transition hover:border-zinc-400 hover:bg-zinc-50;
+  @apply flex min-h-10 w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-left transition hover:border-zinc-400 hover:bg-zinc-50;
 }
 
 .thread-pending-request-option.is-selected {
@@ -1074,7 +1083,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-option-label {
-  @apply min-w-0 truncate text-sm leading-none text-zinc-800;
+  @apply min-w-0 whitespace-normal break-words text-sm leading-snug text-zinc-800;
 }
 
 .thread-pending-request-inline-input {
@@ -1187,6 +1196,8 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
     @apply rounded-[1.25rem] px-3 py-3;
   }
 
+  .thread-pending-request-actions,
+  .thread-pending-request-footer,
   .thread-pending-request-footer--approval {
     @apply flex-wrap;
   }

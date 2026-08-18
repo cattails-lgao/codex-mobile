@@ -2848,7 +2848,12 @@ watch(
 
 @media (max-width: 767px) {
   .thread-composer-controls {
-    @apply flex-nowrap;
+    @apply flex-nowrap overflow-x-auto overscroll-x-contain;
+    scrollbar-width: none;
+  }
+
+  .thread-composer-controls::-webkit-scrollbar {
+    display: none;
   }
 
   .thread-composer-model-control {

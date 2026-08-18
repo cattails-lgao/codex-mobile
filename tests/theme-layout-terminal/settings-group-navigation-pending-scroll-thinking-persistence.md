@@ -24,18 +24,22 @@
 
 **回滚**：无（纯 UI 布局，设置状态不变）。
 
-## 2. Awaiting response 面板超出屏幕
+### 2. Awaiting response panel uses the visible viewport
 
-**期望**：模型通过 `request_user_input` 提问时，composer 上方的等待面板内容多时不超出视口，可滚动查看。
+**Prerequisites**: a mobile viewport (375×812), a thread that can trigger `request_user_input` or an approval request, and a device/browser where the software keyboard can be opened.
 
-**操作**：
+**Expected**: the panel is Teleported to `body`, stays above the right-panel controls, and uses `max-height: min(60dvh, visual viewport height minus safe-area spacing, 28rem)`. Long previews and option labels wrap within the panel; its footer can wrap at narrow widths.
 
-1. 在长任务类线程中触发模型提问（多个问题 + 下拉/输入）
-2. 断言面板高度不超过视口（`max-h-[min(70vh,36rem)]`），内容溢出时出现滚动条
-3. 小视口（375×812）重复验证，确认不超出屏幕
+**Actions**:
 
-**验证**：面板 `.thread-pending-request-shell` 计算样式含 `max-height` 与 `overflow-y: auto`。
+1. Trigger a model question with multiple fields or an approval request with a long command preview.
+2. Open the text field to show the software keyboard, then scroll the panel and confirm its Send/Skip controls remain reachable and clickable.
+3. Close the keyboard, repeat in Light and Dark themes, and confirm the panel returns to the bottom safe area without clipping.
+4. At 375×812, use a long option label and long preview. Confirm text is readable instead of silently ellipsized, the panel itself scrolls when needed, and the document has no horizontal overflow.
 
+**Verification**: `.thread-pending-request` is a body-level Teleport; `.thread-pending-request-shell` has `overflow-y: auto` and a computed max height no larger than the visible viewport.
+
+**Rollback**: none; dismiss or answer the server request.
 ## 3. thinking 内容在消息列表展示
 
 **背景**：app-server 不把 reasoning 持久化到 thread/read（仅流式通知），此前 thinking 只在进行中显示、刷新即失。现前端在 turn 完成/agent 内容开始时把 live thinking 存档到 localStorage（`codex-web-local.thread-reasoning.v1`），消息列表以可折叠的 Thinking process 块展示，刷新后仍在。
