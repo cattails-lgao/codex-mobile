@@ -43,11 +43,11 @@ const title = computed(() => props.messages.map((message) => message.toolCall?.t
 @reference "tailwindcss";
 
 .tool-batch-block {
-  @apply w-full min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50/60;
+  @apply w-full min-w-0 border-l-2 border-zinc-200 pl-2;
 }
 
 .tool-batch-head {
-  @apply flex w-full min-h-[30px] items-center gap-1.5 px-2.5 py-1 text-left transition hover:bg-zinc-100;
+  @apply flex w-full min-h-[30px] items-center gap-1.5 px-0 py-1 text-left transition hover:text-zinc-900;
 }
 
 .tool-batch-toggle {
@@ -67,6 +67,6 @@ const title = computed(() => props.messages.map((message) => message.toolCall?.t
 }
 
 .tool-batch-body {
-  @apply flex flex-col gap-1.5 border-t border-zinc-200 px-2 py-2;
+  @apply flex flex-col gap-1.5 border-l border-zinc-200 pl-2 py-1.5;
 }
 </style>
