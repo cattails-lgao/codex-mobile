@@ -29,213 +29,67 @@
 
     <div v-if="toast" class="directory-toast" :class="{ 'is-error': toast.type === 'error' }">{{ toast.text }}</div>
 
-    <section v-if="activeTab === 'plugins'" class="directory-section">
-      <div class="directory-toolbar">
-        <input
-          v-model="pluginSearchQuery"
-          class="directory-search"
-          type="search"
-          placeholder="Search plugins..."
-          aria-label="Search plugins"
-        />
-        <div class="directory-sort-group" role="group" aria-label="Sort plugins">
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': pluginSortMode === 'popular' }"
-            type="button"
-            @click="pluginSortMode = 'popular'"
-          >
-            Popular
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': pluginSortMode === 'name' }"
-            type="button"
-            @click="pluginSortMode = 'name'"
-          >
-            {{ t('A-Z') }}
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': pluginSortMode === 'date' }"
-            type="button"
-            @click="pluginSortMode = 'date'"
-          >
-            Date
-          </button>
-        </div>
-      </div>
-      <div v-if="supportsMarketplace" class="directory-marketplace">
-        <div class="directory-marketplace-header">
-          <span class="directory-marketplace-title">Marketplaces</span>
-          <button
-            class="directory-marketplace-upgrade"
-            type="button"
-            :disabled="isMarketplaceActionInFlight"
-            @click="upgradeAllMarketplaces"
-          >
-            {{ marketplaceActionName === 'upgrade' ? 'Upgrading...' : 'Upgrade all' }}
-          </button>
-        </div>
-        <div v-if="marketplaces.length === 0" class="directory-marketplace-empty">No marketplaces configured.</div>
-        <div v-else class="directory-marketplace-list">
-          <div v-for="marketplace in marketplaces" :key="marketplace.name" class="directory-marketplace-row">
-            <span class="directory-marketplace-name">{{ marketplace.displayName }}</span>
-            <code v-if="marketplace.path" class="directory-marketplace-path">{{ marketplace.path }}</code>
-            <button
-              class="directory-marketplace-remove"
-              type="button"
-              :disabled="isMarketplaceActionInFlight"
-              @click="removeMarketplace(marketplace.name)"
-            >
-              {{ marketplaceActionName === `remove:${marketplace.name}` ? t('Removing...') : t('Remove') }}
-            </button>
-          </div>
-        </div>
-        <div class="directory-marketplace-add">
-          <input
-            v-model="marketplaceSourceUrl"
-            class="directory-marketplace-source"
-            type="url"
-            placeholder="Git URL to add a marketplace"
-            aria-label="Marketplace Git URL"
-            @keydown.enter="addMarketplace"
-          />
-          <button
-            class="directory-marketplace-add-button"
-            type="button"
-            :disabled="isMarketplaceActionInFlight || !marketplaceSourceUrl.trim()"
-            @click="addMarketplace"
-          >
-            {{ marketplaceActionName === 'add' ? 'Adding...' : 'Add' }}
-          </button>
-        </div>
-      </div>
-      <div v-if="!supportsPlugins" class="directory-empty">
-        Plugin APIs unavailable in this Codex CLI. Update Codex CLI to use plugin catalog features.
-      </div>
-      <div v-else-if="pluginError" class="directory-error">{{ pluginError }}</div>
-      <div v-else-if="isLoadingPlugins" class="directory-loading">Loading plugins...</div>
-      <div v-else-if="visiblePlugins.length === 0" class="directory-empty">No plugins found.</div>
-      <div v-else class="directory-grid">
-        <button
-          v-for="plugin in visiblePlugins"
-          :key="plugin.id"
-          class="directory-card"
-          :class="{ 'is-disabled': plugin.installed && !plugin.enabled }"
-          type="button"
-          @click="openPluginDetail(plugin)"
-        >
-          <div class="directory-card-top">
-            <img
-              v-if="pluginIconSrc(plugin)"
-              class="directory-card-icon"
-              :src="pluginIconSrc(plugin)"
-              :alt="plugin.displayName"
-              loading="lazy"
-            />
-            <div v-else class="directory-card-fallback" :style="fallbackStyle(plugin)">
-              {{ plugin.displayName.charAt(0) }}
-            </div>
-            <div class="directory-card-main">
-              <div class="directory-card-title-row">
-                <span class="directory-card-title">{{ plugin.displayName }}</span>
-                <span v-if="plugin.installed && !plugin.enabled" class="directory-badge is-muted">{{ t('Disabled') }}</span>
-                <span v-else-if="plugin.installed" class="directory-badge">{{ t('Installed') }}</span>
-              </div>
-              <span class="directory-card-meta">{{ plugin.developerName || plugin.marketplaceDisplayName || plugin.marketplaceName || t('Plugin') }}</span>
-            </div>
-          </div>
-          <p v-if="plugin.description" class="directory-card-description">{{ plugin.description }}</p>
-          <div class="directory-chip-row">
-            <span v-if="plugin.category" class="directory-chip">{{ plugin.category }}</span>
-            <span v-for="capability in plugin.capabilities.slice(0, 2)" :key="capability" class="directory-chip">{{ capability }}</span>
-          </div>
-        </button>
-      </div>
-    </section>
+    <DirectoryPluginsTab
+      v-if="activeTab === 'plugins'"
+      :plugins="visiblePlugins"
+      :search-query="pluginSearchQuery"
+      :sort-mode="pluginSortMode"
+      :supports-plugins="supportsPlugins"
+      :supports-marketplace="supportsMarketplace"
+      :error="pluginError"
+      :is-loading="isLoadingPlugins"
+      :marketplaces="marketplaces"
+      :marketplace-source-url="marketplaceSourceUrl"
+      :marketplace-action-name="marketplaceActionName"
+      :is-marketplace-action-in-flight="isMarketplaceActionInFlight"
+      :plugin-icon-src="pluginIconSrc"
+      :fallback-style="fallbackStyle"
+      :open-plugin-detail="openPluginDetail"
+      :add-marketplace="addMarketplace"
+      :remove-marketplace="removeMarketplace"
+      :upgrade-all-marketplaces="upgradeAllMarketplaces"
+      :disabled-label="t('Disabled')"
+      :installed-label="t('Installed')"
+      :plugin-label="t('Plugin')"
+      :upgrade-all-label="t('Upgrade all')"
+      :upgrading-label="t('Upgrading...')"
+      :removing-label="t('Removing...')"
+      :remove-label="t('Remove')"
+      :adding-label="t('Adding...')"
+      :add-label="t('Add')"
+      @update:search-query="pluginSearchQuery = $event"
+      @update:sort-mode="pluginSortMode = $event"
+      @update:marketplace-source-url="marketplaceSourceUrl = $event"
+    />
 
-    <section v-else-if="activeTab === 'apps'" class="directory-section">
-      <div class="directory-toolbar">
-        <input
-          v-model="appSearchQuery"
-          class="directory-search"
-          type="search"
-          placeholder="Search apps..."
-          aria-label="Search apps"
-        />
-        <div class="directory-sort-group" role="group" aria-label="Sort apps">
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': appSortMode === 'popular' }"
-            type="button"
-            @click="appSortMode = 'popular'"
-          >
-            Popular
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': appSortMode === 'name' }"
-            type="button"
-            @click="appSortMode = 'name'"
-          >
-            {{ t('A-Z') }}
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': appSortMode === 'date' }"
-            type="button"
-            @click="appSortMode = 'date'"
-          >
-            Date
-          </button>
-        </div>
-      </div>
-      <div v-if="!supportsApps" class="directory-empty">
-        Apps APIs unavailable in this Codex CLI. Update Codex CLI to manage apps.
-      </div>
-      <div v-else-if="appError" class="directory-error">{{ appError }}</div>
-      <div v-else-if="isLoadingApps" class="directory-loading">Loading apps...</div>
-      <div v-else-if="visibleApps.length === 0" class="directory-empty">No apps found.</div>
-      <div v-else class="directory-grid">
-        <article v-for="app in visibleApps" :key="app.id" class="directory-card">
-          <div class="directory-card-top">
-            <img v-if="appLogoSrc(app)" class="directory-card-icon" :src="appLogoSrc(app)" :alt="app.name" loading="lazy" />
-            <div v-else class="directory-card-fallback">{{ app.name.charAt(0) }}</div>
-            <div class="directory-card-main">
-              <div class="directory-card-title-row">
-                <span class="directory-card-title">{{ app.name }}</span>
-                <span v-if="!app.isEnabled" class="directory-badge is-muted">{{ t('Disabled') }}</span>
-                <span v-else-if="app.isAccessible" class="directory-badge">{{ t('Connected') }}</span>
-              </div>
-              <span class="directory-card-meta">{{ appMetaLabel(app) }}</span>
-            </div>
-          </div>
-          <p v-if="app.description" class="directory-card-description">{{ app.description }}</p>
-          <div class="directory-chip-row">
-            <span v-if="app.category" class="directory-chip">{{ app.category }}</span>
-            <span v-for="name in app.pluginDisplayNames.slice(0, 2)" :key="name" class="directory-chip">{{ name }}</span>
-          </div>
-          <div class="directory-card-actions">
-            <button class="directory-action" type="button" :disabled="appActionId === app.id" @click="toggleApp(app)">
-              {{ app.isEnabled ? 'Disable' : 'Enable' }}
-            </button>
-            <button v-if="app.installUrl" class="directory-action-link" type="button" @click="openExternalUrl(app.installUrl)">
-              {{ app.isAccessible ? 'Manage' : 'Login' }}
-            </button>
-            <button
-              v-if="app.isAccessible && app.isEnabled"
-              class="directory-action"
-              type="button"
-              :disabled="isTryActionInFlight"
-              @click="tryApp(app)"
-            >
-              {{ props.tryInFlightKey === appTryKey(app) ? 'Starting...' : 'Try it!' }}
-            </button>
-          </div>
-        </article>
-      </div>
-    </section>
+    <DirectoryAppsTab
+      v-else-if="activeTab === 'apps'"
+      :apps="visibleApps"
+      :search-query="appSearchQuery"
+      :sort-mode="appSortMode"
+      :supports-apps="supportsApps"
+      :error="appError"
+      :is-loading="isLoadingApps"
+      :action-id="appActionId"
+      :try-in-flight-key="props.tryInFlightKey"
+      :is-try-action-in-flight="isTryActionInFlight"
+      :app-logo-src="appLogoSrc"
+      :app-meta-label="appMetaLabel"
+      :app-try-key="appTryKey"
+      :toggle-app="toggleApp"
+      :open-external-url="openExternalUrl"
+      :try-app="tryApp"
+      :disabled-label="t('Disabled')"
+      :connected-label="t('Connected')"
+      :enable-label="t('Enable')"
+      :disable-label="t('Disable')"
+      :manage-label="t('Manage')"
+      :login-label="t('Login')"
+      :try-label="t('Try it!')"
+      :starting-label="t('Starting...')"
+      @update:search-query="appSearchQuery = $event"
+      @update:sort-mode="appSortMode = $event"
+    />
 
     <section v-else-if="activeTab === 'composio'" class="directory-section">
       <div class="directory-toolbar">
@@ -774,6 +628,8 @@ import {
   type UiPluginShareSummary,
 } from '../../api/codexGateway'
 import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
+import DirectoryAppsTab from './DirectoryAppsTab.vue'
+import DirectoryPluginsTab from './DirectoryPluginsTab.vue'
 import DirectorySkillsTab from './DirectorySkillsTab.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
@@ -1944,7 +1800,7 @@ onMounted(async () => {
 })
 </script>
 
-<style scoped>
+<style>
 @reference "tailwindcss";
 
 .directory-hub {
