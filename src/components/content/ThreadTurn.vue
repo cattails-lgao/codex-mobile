@@ -11,9 +11,22 @@
       </ol>
     </section>
 
-    <section v-if="processItems.length > 0 || fileChangeAnchorIds.length > 0" class="conversation-turn-process" aria-label="Turn process">
-      <div class="conversation-turn-process-heading">{{ t('Turn process') }}</div>
-      <ol class="conversation-turn-items conversation-turn-process-items">
+    <section v-if="processItemCount > 0" class="conversation-turn-process" aria-label="Turn process">
+      <button
+        v-if="canToggleProcess"
+        class="conversation-turn-process-heading conversation-turn-process-toggle"
+        type="button"
+        :aria-expanded="isProcessExpanded"
+        :aria-label="isProcessExpanded ? t('Collapse turn process') : t('Expand turn process')"
+        @click="isProcessExpanded = !isProcessExpanded"
+      >
+        <IconTablerChevronDown v-if="isProcessExpanded" class="conversation-turn-process-toggle-icon" />
+        <IconTablerChevronRight v-else class="conversation-turn-process-toggle-icon" />
+        <span>{{ t('Turn process') }}</span>
+        <span class="conversation-turn-process-count">{{ t('{n} process items', { n: processItemCount }) }}</span>
+      </button>
+      <div v-else class="conversation-turn-process-heading">{{ t('Turn process') }}</div>
+      <ol v-if="isProcessExpanded" class="conversation-turn-items conversation-turn-process-items">
         <slot v-for="item in processItems" :key="item.message.id" :item="item" section="process" />
         <li v-for="anchorMessageId in fileChangeAnchorIds" :key="`file-change-${anchorMessageId}`" class="conversation-turn-row conversation-turn-file-change">
           <slot name="file-change" :anchor-message-id="anchorMessageId" />
@@ -30,8 +43,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import type { UiMessage } from '../../types/codex'
+import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
+import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 
 export type ConversationTurnItem = {
   message: UiMessage
@@ -46,7 +62,7 @@ export type WarmTurnRenderData = {
   expanded: boolean
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   turnKey: string
   request?: ConversationTurnItem
   processItems?: ConversationTurnItem[]
@@ -61,6 +77,13 @@ withDefaults(defineProps<{
 })
 
 const { t } = useUiLanguage()
+const isProcessExpanded = ref(true)
+const processItemCount = computed(() => props.processItems.length + props.fileChangeAnchorIds.length)
+const canToggleProcess = computed(() => Boolean(props.finalItem))
+
+watch(processItemCount, (nextCount, previousCount) => {
+  if (nextCount > previousCount) isProcessExpanded.value = true
+})
 </script>
 
 <style scoped>
@@ -89,6 +112,18 @@ const { t } = useUiLanguage()
   @apply text-xs font-medium tracking-normal text-zinc-600;
 }
 
+.conversation-turn-process-toggle {
+  @apply inline-flex w-fit items-center gap-1 border-0 bg-transparent p-0 text-left cursor-pointer hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2;
+}
+
+.conversation-turn-process-toggle-icon {
+  @apply size-3 shrink-0;
+}
+
+.conversation-turn-process-count {
+  @apply text-[11px] font-normal text-zinc-500;
+}
+
 .conversation-turn-process-items {
   @apply gap-1.5;
 }
@@ -111,5 +146,13 @@ const { t } = useUiLanguage()
 
 :global(:root.dark) .conversation-turn-process-heading {
   @apply text-zinc-400;
+}
+
+:global(:root.dark) .conversation-turn-process-toggle {
+  @apply hover:text-zinc-100 focus-visible:ring-zinc-500 focus-visible:ring-offset-zinc-950;
+}
+
+:global(:root.dark) .conversation-turn-process-count {
+  @apply text-zinc-500;
 }
 </style>
