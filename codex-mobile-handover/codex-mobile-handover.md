@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-47 过程区视觉层级调整与折叠交互已发布 v0.1.99） |
+| Git 分支 | main（宽屏过程区边距修复准备发布 v0.1.100） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
@@ -131,7 +131,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
-- **round-47 过程区视觉层级与折叠交互已完成并发布（v0.1.99）**：过程标题为 12px，过程 assistant 正文为 13px，final 区保持 14px 主阅读层级。含最终 assistant 回答的过程区默认展开，标题显示过程项数量并可点击收起；收起不隐藏用户请求或最终回答。执行中、尚未有最终回答的 turn 始终展开；同一已挂载 turn 新增过程项或文件变更时由数组长度监听自动展开，刷新后默认展开，折叠状态不持久化。`pnpm exec vitest run src/utils/transcriptGrouping.test.ts` 33/33 通过，`pnpm run build` 通过（既有主 chunk 大小警告）；浅色/深色 × 375x812/768x1024 四组 Playwright 检查确认折叠、展开、ARIA 状态、最终回答可见性、刷新默认展开与无横向溢出。性能审计：新增每个已渲染 turn 的局部布尔状态和条件列表渲染，未新增请求、消息分组、缓存或存储 I/O；运行时 profile 仍未获取，因为缺少 Playwright Chromium。**宽屏修复**：当 viewport 大于 1280px 时，过程区原先占满 turn 宽度而内部消息行居中，导致左侧轨道与内容之间出现大段空白；已在 `.conversation-turn-process` 增加与消息行一致的 `max-width` 和 `margin-inline: auto` 约束，使轨道在 720px 聊天列内对齐。修复后浏览器实测宽屏过程区为 720px，左侧轨道与 request/final 区对齐；`round48-process-collapse-check.cjs` 在浅色/深色 × 375x812/768x1024 四组均通过。**发布状态**：改动已推送至 `origin/main`（`16542d5`/`1424b02`），版本号 `0.1.99`，npm 已发布并成为 `latest`，tag `v0.1.99` 与 GitHub release 均已创建。
+- **round-47 过程区视觉层级与折叠交互已完成，宽屏边距修复已推送，准备发布 v0.1.100**：过程标题为 12px，过程 assistant 正文为 13px，final 区保持 14px 主阅读层级。含最终 assistant 回答的过程区默认展开，标题显示过程项数量并可点击收起；收起不隐藏用户请求或最终回答。执行中、尚未有最终回答的 turn 始终展开；同一已挂载 turn 新增过程项或文件变更时由数组长度监听自动展开，刷新后默认展开，折叠状态不持久化。`pnpm exec vitest run src/utils/transcriptGrouping.test.ts` 33/33 通过，`pnpm run build` 通过（既有主 chunk 大小警告）；浅色/深色 × 375x812/768x1024 四组 Playwright 检查确认折叠、展开、ARIA 状态、最终回答可见性、刷新默认展开与无横向溢出。性能审计：新增每个已渲染 turn 的局部布尔状态和条件列表渲染，未新增请求、消息分组、缓存或存储 I/O；运行时 profile 仍未获取，因为缺少 Playwright Chromium。**宽屏修复**：当 viewport 大于 1280px 时，过程区原先占满 turn 宽度而内部消息行居中，导致左侧轨道与内容之间出现大段空白；已在 `.conversation-turn-process` 增加与消息行一致的 `max-width` 和 `margin-inline: auto` 约束，使轨道在 720px 聊天列内对齐。修复后浏览器实测宽屏过程区为 720px，左侧轨道与 request/final 区对齐；`round48-process-collapse-check.cjs` 在浅色/深色 × 375x812/768x1024 四组均通过。**发布状态**：代码修复已推送至 `origin/main`（`f38e87e`），`package.json` 版本号已升至 `0.1.100`，GitHub tag/release 待创建，npm 待用户发布。
 - **npm 发包已完成（v0.1.99）**：`codex-mobile-re@0.1.99` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-19，`npm view codex-mobile-re@0.1.99` 确认 version 0.1.99 / dist-tags.latest 0.1.99）。GitHub release `v0.1.99` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.99；git tag `v0.1.99` → `e45505e`。
 - **已推送**：`main` 与 `origin/main` 已同步至 `1e85cf4`（round-41/42 修复 `e1dccb9`/`a33395e`/`548983e`/`6378b34` 随 v0.1.95 发布，tag `v0.1.95`；round-43 修复 `ff6df2b`/`5aaa458` + 版本 `64fa15d` 随 v0.1.96 发布，tag `v0.1.96`；round-44 文档 `ad55eef` + round-45 修复 `7fa6ec4` + 版本 `b2074f3` 随 v0.1.97 发布，tag `v0.1.97`；round-46 fix `24a23dc` + 版本/文档 `47f3326` + 状态更正 `1e85cf4` 随 v0.1.98 发布，tag `v0.1.98`，`origin/main` 已同步）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）。2026-08-18 晚用户启用的代理是 **Clash，监听 `127.0.0.1:7890`**（非 10808/10811/10812）：先用 `netstat -ano | grep LISTENING` 找到实际监听端口，再 `git -c http.proxy=socks5h://127.0.0.1:7890 -c https.proxy=socks5h://127.0.0.1:7890 push`、gh 用 `HTTPS_PROXY=http://127.0.0.1:7890`。2026-08-11 round-34/35 推送直连成功（git 2.35.1，位于 `E:\Git`，不在默认 PATH，需前置进 PATH 或全路径调用）。gh release 需 `--repo cattails-lgao/codex-mobile` 指定本 fork（默认会命中 upstream remote）；npm 401 需重新登录（token 已失效），prepublishOnly 会执行 `pnpm run build`，发包前把 `<pnpm 全局 bin 目录>` 加入 PATH
 - **npm 发包已完成（v0.1.98）**：`codex-mobile-re@0.1.98` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-18，`npm view codex-mobile-re@0.1.98` 确认 version 0.1.98 / dist-tags.latest 0.1.98）。GitHub release `v0.1.98` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.98。
@@ -155,4 +155,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-19（round-47 Hot 区真实 request/process/final 消息结构、过程区正文层级与默认展开/点击收起交互已完成并发布 v0.1.99）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-19（round-47 宽屏过程区边距修复准备发布 v0.1.100）· 内容已脱敏*
