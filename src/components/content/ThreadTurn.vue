@@ -105,7 +105,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 
 
 .conversation-turn-process {
-  @apply flex w-full flex-col gap-1.5 border-l-2 border-zinc-200 pl-3;
+  @apply flex w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto flex-col gap-1.5 border-l-2 border-zinc-200 pl-3;
 }
 
 .conversation-turn-process-heading {
