@@ -1,4 +1,4 @@
-# Thread Context-Menu Persistence and Thread Recycle Bin
+# Thread Context-Menu Persistence, Reusable Thread Rows, and Thread Recycle Bin
 
 Round-7 work: right-click context menus in the sidebar no longer disappear when the mouse moves off the row (hover-opened menus still close on leave), and deleted threads can be restored from a recycle bin.
 
@@ -20,6 +20,25 @@ Round-7 work: right-click context menus in the sidebar no longer disappear when 
 
 #### Rollback/Cleanup
 - None required.
+
+## Feature: Shared sidebar thread row across all list sections
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`, with at least one pinned thread, project thread, and projectless chat when available
+
+#### Steps
+1. Expand Pinned, Projects, and Chats in the sidebar; switch the Projects organizer between project and chronological views.
+2. Select a thread in each visible list and verify its active state, timestamp, title truncation, worktree marker, automation badge, and pending-request indicator when applicable.
+3. Hover each row and use its ellipsis trigger; right-click a row and move the pointer away from it.
+4. Trigger inline delete confirmation on one row, then click elsewhere to cancel it without deleting the thread.
+
+#### Expected Results
+- Pinned, project, chronological, and chat lists render the same row behavior and visual states through the shared row component.
+- Hover menus close on row leave, while right-click menus remain open until dismissed; the fixed menu remains anchored to its trigger.
+- Selection, badges, inline delete confirmation, and status indicators remain correct in light and dark themes.
+
+#### Rollback/Cleanup
+- Dismiss any open menu and cancel inline deletion. Restore any thread if deletion was confirmed during testing.
 
 ## Feature: Thread recycle bin with restore
 
