@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（本地含 round-47 未推送提交） |
+| Git 分支 | main（round-47 过程区视觉层级调整） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | `cad0caf`：Hot 区改为真实 request/process/final turn 容器；过程正文的字号/对比度层级调整待做，详见 round-47 |
+| 最近提交 | `cad0caf`：Hot 区改为真实 request/process/final turn 容器；过程区视觉层级调整已完成，详见 round-47 |
 
 ---
 ## 文档结构
@@ -75,7 +75,7 @@
 | 第三十八轮 1 项（WebUI 预览后 TUI 无法恢复线程——writer 锁已知限制，纯诊断+文档化，无代码改动） | [rounds/round-44-feedback.md](rounds/round-44-feedback.md) |
 | 第三十九轮 1 项（最后一轮思考跑到模型回答最后——thread/read 时序恢复把 reasoning 挤到轮末，改为紧贴其消息） | [rounds/round-45-feedback.md](rounds/round-45-feedback.md) |
 | 第四十轮 4 项 H5/UI 打磨（diff 弹窗 Teleport 到 body + z-[1200] 修复被顶栏遮挡/无法关闭、模型按钮 w-fit+max-w、命令块 header 改「序号+命令+状态」并移命令入展开输出区） | [rounds/round-46-feedback.md](rounds/round-46-feedback.md) |
-| 第四十一轮 Hot 区消息按 turn 结构重构（真实 request/process/final 容器；过程正文视觉层级待调整） | [rounds/round-47-refactor.md](rounds/round-47-refactor.md) |
+| 第四十一轮 Hot 区消息按 turn 结构重构（真实 request/process/final 容器与过程视觉层级） | [rounds/round-47-refactor.md](rounds/round-47-refactor.md) |
 
 ## 项目概况
 
@@ -131,7 +131,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
-- **round-47 待做（消息过程区视觉层级）**：Hot 区已经由真实 `request/process/final` DOM 容器组织（`cad0caf`，本地未推送），但用户反馈“本轮过程”标题小于过程内容，过程中的中间 assistant 正文又与最终回答过于接近。下一轮仅调整过程标题与过程正文的字号、颜色和行高：标题提高到约 12px，过程正文低于最终回答；不改 turn 结构、消息 ID、折叠、文件变更锚点或操作回调。浅色、深色、375x812、768x1024 需重新验证。性能 profile 未跑通，因为本机缺少 Playwright Chromium；安装命令为 `pnpm exec playwright install`，安装后用 `PROFILE_BASE_URL=http://127.0.0.1:4173 PROFILE_ROUTE='#/thread/<thread-id>' PROFILE_WAIT_MS=7000 pnpm run profile:browser` 复测。
+- **round-47 过程区视觉层级已完成**：过程标题从 11px 提升到 12px 并取消全大写；仅 process 区中的中间 assistant 正文降为 13px、降低对比度，final 区保持 14px 主阅读层级。Thinking、命令、工具、Plan、文件变更、turn 结构、消息 ID、折叠与操作回调均未改动。`pnpm exec vitest run src/utils/transcriptGrouping.test.ts` 33/33 通过，`pnpm run build` 通过（既有主 chunk 大小警告）；浅色/深色 × 375x812/768x1024 四组检查均确认标题 12px、过程正文 13px、最终正文 14px，且无横向溢出。性能审计：仅增加受父级选择器约束的 CSS 规则，未新增请求、响应式状态、DOM 数量或分组计算；运行时 profile 仍未获取，因为缺少 Playwright Chromium。
 - **已推送**：`main` 与 `origin/main` 已同步至 `1e85cf4`（round-41/42 修复 `e1dccb9`/`a33395e`/`548983e`/`6378b34` 随 v0.1.95 发布，tag `v0.1.95`；round-43 修复 `ff6df2b`/`5aaa458` + 版本 `64fa15d` 随 v0.1.96 发布，tag `v0.1.96`；round-44 文档 `ad55eef` + round-45 修复 `7fa6ec4` + 版本 `b2074f3` 随 v0.1.97 发布，tag `v0.1.97`；round-46 fix `24a23dc` + 版本/文档 `47f3326` + 状态更正 `1e85cf4` 随 v0.1.98 发布，tag `v0.1.98`，`origin/main` 已同步）。推送方式：优先直连 GitHub（偶发成功）；直连失败时临时经本机代理 `git -c http.proxy=socks5h://127.0.0.1:10808 -c https.proxy=socks5h://127.0.0.1:10808 push`，未改全局 git 配置。注意：代理端口（10808/10811/10812）以 xray/v2rayN 进程是否存活为准，退出后端口即失效，直连即可（2026-08-06 晚实测代理全关、直连重试 3 次后成功）。2026-08-18 晚用户启用的代理是 **Clash，监听 `127.0.0.1:7890`**（非 10808/10811/10812）：先用 `netstat -ano | grep LISTENING` 找到实际监听端口，再 `git -c http.proxy=socks5h://127.0.0.1:7890 -c https.proxy=socks5h://127.0.0.1:7890 push`、gh 用 `HTTPS_PROXY=http://127.0.0.1:7890`。2026-08-11 round-34/35 推送直连成功（git 2.35.1，位于 `E:\Git`，不在默认 PATH，需前置进 PATH 或全路径调用）。gh release 需 `--repo cattails-lgao/codex-mobile` 指定本 fork（默认会命中 upstream remote）；npm 401 需重新登录（token 已失效），prepublishOnly 会执行 `pnpm run build`，发包前把 `<pnpm 全局 bin 目录>` 加入 PATH
 - **npm 发包已完成（v0.1.98）**：`codex-mobile-re@0.1.98` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-18，`npm view codex-mobile-re@0.1.98` 确认 version 0.1.98 / dist-tags.latest 0.1.98）。GitHub release `v0.1.98` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.98。
 - **npm 发包已完成（v0.1.96）**：`codex-mobile-re@0.1.96` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-18）；`npx codex-mobile-re@0.1.96 --help` 验证可加载、完整 CLI 用法正常。GitHub release `v0.1.96` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.96；git tag `v0.1.96` → `64fa15d`（release 首次创建时曾误指向旧提交，已强制改指到正确提交）
@@ -154,4 +154,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-19（round-47 Hot 区真实 request/process/final 消息结构 `cad0caf` 已本地提交，过程区正文层级调整待做）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-19（round-47 Hot 区真实 request/process/final 消息结构 `cad0caf`；过程区正文层级调整已完成）· 内容已脱敏*

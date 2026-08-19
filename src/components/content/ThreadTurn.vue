@@ -86,7 +86,7 @@ const { t } = useUiLanguage()
 }
 
 .conversation-turn-process-heading {
-  @apply text-[11px] font-medium uppercase tracking-normal text-zinc-500;
+  @apply text-xs font-medium tracking-normal text-zinc-600;
 }
 
 .conversation-turn-process-items {

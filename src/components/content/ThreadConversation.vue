@@ -2921,6 +2921,17 @@ onBeforeUnmount(() => {
   @apply opacity-90;
 }
 
+.conversation-item-process[data-role='assistant'] .message-text,
+.conversation-item-process[data-role='assistant'] .message-list,
+.conversation-item-process[data-role='assistant'] .message-list-item-text,
+.conversation-item-process[data-role='assistant'] .message-blockquote {
+  @apply text-[13px] leading-6 text-zinc-600;
+}
+
+.conversation-item-process[data-role='assistant'] .message-heading {
+  @apply text-[15px] text-zinc-700;
+}
+
 .conversation-item-final {
   @apply pt-2;
 }
