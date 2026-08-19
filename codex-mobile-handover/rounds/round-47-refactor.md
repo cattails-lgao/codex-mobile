@@ -53,17 +53,20 @@ Assistant 最终回答
 - ProcessFold 仍对当前可见的 Warm 展开内容与 Hot 内容计算，输入规模维持既有可见消息规模。
 - 未获得运行时 profile，原因是缺少 Playwright Chromium；代码路径审计未发现同步 I/O、unbounded fanout 或大 payload 新增。
 
-## 待做：过程区视觉层级调整
+## 过程区视觉层级调整
 
-**现状：** 用户反馈“本轮过程”标题比内容文字更小，过程区中的中间 assistant 正文颜色和字号又太接近最终回答。当前结构已正确，但正文层级尚未体现“过程低于最终回答”。
+**完成内容：** “本轮过程”标题由 11px 调整为 12px，并取消全大写；仅 process 区中带 `assistant` 角色的普通正文、列表、引用和标题调整为较 final 区低一级的字号与对比度。浅色下正文为 13px / zinc-600、标题为 15px / zinc-700；深色下正文为 zinc-400、标题为 zinc-300。final 区继续采用既有 14px 主正文与更高对比度。
 
-**下一步建议：**
+**保持不变：** Thinking、命令、工具、Plan、文件变更保持各自既有紧凑样式；request/process/final DOM、消息 ID、折叠语义、文件变更锚点和操作回调均未改动。
 
-1. 把“本轮过程”标题由当前 11px 提到 12px，保留中等对比度，中文界面不使用全大写式视觉。
-2. 对 process 区中的中间 assistant 正文单独使用较小字号和更低对比度；Thinking、命令、工具与 Plan 继续沿用各自的紧凑组件样式。
-3. final 区保持当前主要阅读字号和对比度，成为明确的阅读落点。
-4. 在浅色、深色、375x812、768x1024 重新验证文字层级、长命令和长文件链接，确保没有横向溢出或浅色表面泄漏。
-5. 不改变 request/process/final DOM、消息 ID、折叠语义或文件变更锚点。
+**验证：**
+
+- `pnpm exec vitest run src/utils/transcriptGrouping.test.ts`：33/33 通过。
+- `pnpm run build`：通过；主包约 595 kB 的 chunk warning 为既有警告。
+- 所选真实线程确认存在 `User request`、`Turn process`、`Assistant final response` 三段结构。
+- Playwright mock turn 在浅色/深色 × 375x812/768x1024 四组中均通过：标题计算字号 12px、过程 assistant 正文 13px、最终正文 14px，`documentElement.scrollWidth - innerWidth` 为 0。截图位于 `output/playwright/round47-process-*.png`。
+
+**性能审计：** 本次仅增加受 `.conversation-item-process[data-role='assistant']` 限定的 CSS 规则，未新增 API 请求、响应式状态、DOM 节点、消息分组计算、缓存键或缓存失效路径。未得到浏览器性能 profile，原因仍是本机缺少 Playwright Chromium；代码路径未增加同步 I/O、无界扇出或大 payload。
 
 ## 涉及文件与提交
 

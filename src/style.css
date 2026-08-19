@@ -1146,6 +1146,21 @@
   @apply text-zinc-400;
 }
 
+:root.dark .conversation-turn-process-heading {
+  @apply text-zinc-300;
+}
+
+:root.dark .conversation-item-process[data-role='assistant'] .message-text,
+:root.dark .conversation-item-process[data-role='assistant'] .message-list,
+:root.dark .conversation-item-process[data-role='assistant'] .message-list-item-text,
+:root.dark .conversation-item-process[data-role='assistant'] .message-blockquote {
+  @apply text-zinc-400;
+}
+
+:root.dark .conversation-item-process[data-role='assistant'] .message-heading {
+  @apply text-zinc-300;
+}
+
 :root.dark .message-bold-text {
   @apply text-zinc-100;
 }
