@@ -68,6 +68,20 @@ Assistant 最终回答
 
 **性能审计：** 本次仅增加受 `.conversation-item-process[data-role='assistant']` 限定的 CSS 规则，未新增 API 请求、响应式状态、DOM 节点、消息分组计算、缓存键或缓存失效路径。未得到浏览器性能 profile，原因仍是本机缺少 Playwright Chromium；代码路径未增加同步 I/O、无界扇出或大 payload。
 
+## 过程区折叠交互
+
+**完成内容：** 含最终 assistant 回答的过程区默认展开，标题改为带箭头和过程项数量的可访问按钮。点击后仅隐藏当前 turn 的过程项，用户请求和最终回答持续可见；`aria-expanded` 同步为 `false` 或 `true`。执行中、尚未有最终 assistant 回答的 turn 保持展开，标题不作为折叠控件。
+
+**流式规则：** 同一已挂载 turn 的过程项或文件变更数量增加时，过程区自动重新展开，避免新进展被隐藏。折叠状态只存在于组件局部，刷新后恢复默认展开，不写入存档或 localStorage。
+
+**验证：**
+
+- `pnpm exec vitest run src/utils/transcriptGrouping.test.ts`：33/33 通过。
+- `pnpm run build`：通过；主包约 595 kB 的 chunk warning 为既有警告。
+- `scripts/round48-process-collapse-check.cjs` 在浅色/深色 × 375x812/768x1024 四组中均通过：完成 turn 默认展开、收起后 final 可见、再次展开、执行中 turn 无折叠控件、刷新后默认展开，且无横向溢出。过程项增加时自动展开由 `processItemCount` 的组件监听实现，并列入手动流式回归。截图位于 `output/playwright/round48-process-collapse-*.png`。
+
+**性能审计：** 每个已渲染的 `ThreadTurn` 仅新增一个局部布尔状态和基于既有数组长度的 computed 计数；未新增请求、轮询、响应式全局状态、消息分组、缓存或存储 I/O。由于缺少 Playwright Chromium，未取得 runtime profile；代码路径未增加同步 I/O、无界扇出或大 payload。
+
 ## 涉及文件与提交
 
 - `src/components/content/ThreadConversation.vue`
