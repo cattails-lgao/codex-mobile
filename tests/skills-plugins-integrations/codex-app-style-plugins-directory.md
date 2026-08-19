@@ -1,4 +1,4 @@
-### Codex.app-style Plugins Directory
+### Codex.app-style Plugins Directory and Phase Two Skills Tab Extraction
 
 #### Feature/Change Name
 The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Composio, and a Skills tab where an `MCPs(count)` section appears just before `Installed skills (count)`.
@@ -45,6 +45,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 34. Verify the `Installed skills (count)` section below MCPs still supports the existing Skills Hub behavior
 35. Verify both light and dark themes render Composio cards and status/detail actions with readable contrast
 36. In dark mode, verify MCP cards use the same dark card surface styling as Installed skills cards (not a light/white card)
+37. Reload the page and switch between `Plugins`, `Apps`, `Composio`, and `Skills`; verify the Skills tab still owns only its display surface while MCP loading, refresh, expansion, and SkillsHub actions continue to work without duplicate requests or page errors
 
 #### Expected Results
 - The directory tabs render without a full-page error
@@ -69,6 +70,7 @@ The `#/skills` route shows a full Skills & Apps directory with Plugins, Apps, Co
 - The Skills tab presents MCPs in the same section style as Installed skills, just above Installed skills, instead of using a separate top-level MCP tab
 - `Date` uses the app-server/catalog order as the available freshness proxy because app/plugin/MCP APIs do not expose created or published timestamps
 - Popular views show only the top 100 when no search is active; search results can show all matches
+- The Skills tab is rendered by its extracted component while DirectoryHub continues to own API calls, state, refresh actions, MCP expansion state, and detail dialogs
 
 #### Rollback/Cleanup
 - Re-enable any app or plugin disabled during testing

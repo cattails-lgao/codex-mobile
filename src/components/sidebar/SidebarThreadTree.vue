@@ -16,79 +16,31 @@
       </SidebarMenuRow>
 
       <ul v-if="isPinnedSectionExpanded" class="thread-list">
-        <li
+        <SidebarThreadRow
           v-for="thread in pinnedThreads"
           :key="thread.id"
-          class="thread-row-item"
-          :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-        >
-          <SidebarMenuRow
-            class="thread-row"
-            :data-active="thread.id === selectedThreadId"
-            :data-pinned="isPinned(thread.id)"
-            :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-            :force-right-hover="isThreadMenuOpen(thread.id)"
-            @click="onSelect(thread.id)"
-            @mouseleave="onThreadRowLeave(thread.id, $event)"
-            @contextmenu="onThreadRowContextMenu($event, thread.id)"
-          >
-            <template #left>
-              <span class="thread-left-stack">
-                <span v-if="shouldShowThreadIndicator(thread)" class="thread-status-indicator" :data-state="getThreadState(thread)" />
-                <button
-                  class="thread-delete-button"
-                  type="button"
-                  :data-confirming="isInlineDeleteConfirming(thread.id)"
-                  :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
-                  @click.stop="onInlineDeleteClick(thread.id)"
-                >
-                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
-                  <IconTablerTrash v-else class="thread-icon" />
-                </button>
-              </span>
-            </template>
-            <button class="thread-main-button" type="button" @click.stop="onSelect(thread.id)">
-              <span class="thread-row-title-wrap">
-                <span class="thread-row-title-line">
-                  <span class="thread-row-title">{{ thread.title }}</span>
-                  <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" :title="t('Worktree thread')" />
-                  <span
-                    v-if="threadHasAutomation(thread.id)"
-                    class="thread-row-automation-chip"
-                    :title="threadAutomationTooltip(thread.id)"
-                  >
-                    <IconTablerBolt class="thread-row-automation-icon" />
-                    <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
-                      {{ threadAutomationCount(thread.id) }}
-                    </span>
-                  </span>
-                  <span
-                    v-if="thread.pendingRequestState"
-                    class="thread-row-request-chip"
-                    :data-state="thread.pendingRequestState"
-                  >
-                    {{ threadRequestLabel(thread) }}
-                  </span>
-                </span>
-              </span>
-            </button>
-            <template #right>
-              <span class="thread-row-time">{{ formatRelativeThread(thread) }}</span>
-            </template>
-            <template #right-hover>
-              <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
-                <button
-                  class="thread-menu-trigger"
-                  type="button"
-                  title="thread_menu"
-                  @click.stop="toggleThreadMenu(thread.id)"
-                >
-                  <IconTablerDots class="thread-icon" />
-                </button>
-              </div>
-            </template>
-          </SidebarMenuRow>
-        </li>
+          :thread="thread"
+          :selected="thread.id === selectedThreadId"
+          :pinned="isPinned(thread.id)"
+          :menu-open="isThreadMenuOpen(thread.id)"
+          :show-status-indicator="shouldShowThreadIndicator(thread)"
+          :thread-state="getThreadState(thread)"
+          :inline-delete-confirming="isInlineDeleteConfirming(thread.id)"
+          :automation-count="threadAutomationCount(thread.id)"
+          :automation-tooltip="threadAutomationTooltip(thread.id)"
+          :request-label="threadRequestLabel(thread)"
+          :relative-time="formatRelativeThread(thread)"
+          :delete-label="t('Delete thread')"
+          :confirm-delete-label="t('Confirm delete')"
+          :confirm-label="t('Confirm')"
+          :worktree-label="t('Worktree thread')"
+          :set-menu-wrap-ref="(element) => setThreadMenuWrapRef(thread.id, element)"
+          @select="onSelect(thread.id)"
+          @inline-delete="onInlineDeleteClick(thread.id)"
+          @menu-toggle="toggleThreadMenu(thread.id)"
+          @row-leave="onThreadRowLeave(thread.id, $event)"
+          @row-contextmenu="onThreadRowContextMenu($event, thread.id)"
+        />
       </ul>
     </section>
 
@@ -184,83 +136,31 @@
       <p v-else-if="isLoading && groups.length === 0" class="thread-tree-loading">{{ t('Loading threads...') }}</p>
 
       <ul v-else-if="isChronologicalView" class="thread-list thread-list-global">
-      <li
+      <SidebarThreadRow
         v-for="thread in globalThreads"
         :key="thread.id"
-        class="thread-row-item"
-        :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-      >
-        <SidebarMenuRow
-          class="thread-row"
-          :data-active="thread.id === selectedThreadId"
-          :data-pinned="isPinned(thread.id)"
-          :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-          :force-right-hover="isThreadMenuOpen(thread.id)"
-          @click="onSelect(thread.id)"
-          @mouseleave="onThreadRowLeave(thread.id, $event)"
-          @contextmenu="onThreadRowContextMenu($event, thread.id)"
-        >
-          <template #left>
-            <span class="thread-left-stack">
-              <span
-                v-if="shouldShowThreadIndicator(thread)"
-                class="thread-status-indicator"
-                :data-state="getThreadState(thread)"
-              />
-              <button
-                class="thread-delete-button"
-                type="button"
-                :data-confirming="isInlineDeleteConfirming(thread.id)"
-                :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
-                @click.stop="onInlineDeleteClick(thread.id)"
-              >
-                <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
-                <IconTablerTrash v-else class="thread-icon" />
-              </button>
-            </span>
-          </template>
-          <button class="thread-main-button" type="button" @click.stop="onSelect(thread.id)">
-            <span class="thread-row-title-wrap">
-              <span class="thread-row-title-line">
-                <span class="thread-row-title">{{ thread.title }}</span>
-                <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" :title="t('Worktree thread')" />
-                <span
-                  v-if="threadHasAutomation(thread.id)"
-                  class="thread-row-automation-chip"
-                  :title="threadAutomationTooltip(thread.id)"
-                >
-                  <IconTablerBolt class="thread-row-automation-icon" />
-                  <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
-                    {{ threadAutomationCount(thread.id) }}
-                  </span>
-                </span>
-                <span
-                  v-if="thread.pendingRequestState"
-                  class="thread-row-request-chip"
-                  :data-state="thread.pendingRequestState"
-                >
-                  {{ threadRequestLabel(thread) }}
-                </span>
-              </span>
-            </span>
-          </button>
-          <template #right>
-            <span class="thread-row-time">{{ formatRelativeThread(thread) }}</span>
-          </template>
-          <template #right-hover>
-            <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
-              <button
-                class="thread-menu-trigger"
-                type="button"
-                title="thread_menu"
-                @click.stop="toggleThreadMenu(thread.id)"
-              >
-                <IconTablerDots class="thread-icon" />
-              </button>
-            </div>
-          </template>
-        </SidebarMenuRow>
-      </li>
+        :thread="thread"
+        :selected="thread.id === selectedThreadId"
+        :pinned="isPinned(thread.id)"
+        :menu-open="isThreadMenuOpen(thread.id)"
+        :show-status-indicator="shouldShowThreadIndicator(thread)"
+        :thread-state="getThreadState(thread)"
+        :inline-delete-confirming="isInlineDeleteConfirming(thread.id)"
+        :automation-count="threadAutomationCount(thread.id)"
+        :automation-tooltip="threadAutomationTooltip(thread.id)"
+        :request-label="threadRequestLabel(thread)"
+        :relative-time="formatRelativeThread(thread)"
+        :delete-label="t('Delete thread')"
+        :confirm-delete-label="t('Confirm delete')"
+        :confirm-label="t('Confirm')"
+        :worktree-label="t('Worktree thread')"
+        :set-menu-wrap-ref="(element) => setThreadMenuWrapRef(thread.id, element)"
+        @select="onSelect(thread.id)"
+        @inline-delete="onInlineDeleteClick(thread.id)"
+        @menu-toggle="toggleThreadMenu(thread.id)"
+        @row-leave="onThreadRowLeave(thread.id, $event)"
+        @row-contextmenu="onThreadRowContextMenu($event, thread.id)"
+      />
     </ul>
 
     <div v-else ref="groupsContainerRef" class="thread-tree-groups" :style="groupsContainerStyle">
@@ -389,83 +289,31 @@
           </SidebarMenuRow>
 
           <ul v-if="hasThreads(group)" class="thread-list">
-            <li
+            <SidebarThreadRow
               v-for="thread in visibleThreads(group)"
               :key="thread.id"
-              class="thread-row-item"
-              :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-            >
-              <SidebarMenuRow
-                class="thread-row"
-                :data-active="thread.id === selectedThreadId"
-                :data-pinned="isPinned(thread.id)"
-                :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-                :force-right-hover="isThreadMenuOpen(thread.id)"
-                @click="onSelect(thread.id)"
-                @mouseleave="onThreadRowLeave(thread.id, $event)"
-                @contextmenu="onThreadRowContextMenu($event, thread.id)"
-              >
-                <template #left>
-                  <span class="thread-left-stack">
-                    <span
-                      v-if="shouldShowThreadIndicator(thread)"
-                      class="thread-status-indicator"
-                      :data-state="getThreadState(thread)"
-                    />
-                    <button
-                      class="thread-delete-button"
-                      type="button"
-                      :data-confirming="isInlineDeleteConfirming(thread.id)"
-                      :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
-                      @click.stop="onInlineDeleteClick(thread.id)"
-                    >
-                      <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
-                      <IconTablerTrash v-else class="thread-icon" />
-                    </button>
-                  </span>
-                </template>
-                <button class="thread-main-button" type="button" @click.stop="onSelect(thread.id)">
-                  <span class="thread-row-title-wrap">
-                    <span class="thread-row-title-line">
-                      <span class="thread-row-title">{{ thread.title }}</span>
-                      <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" :title="t('Worktree thread')" />
-                      <span
-                        v-if="threadHasAutomation(thread.id)"
-                        class="thread-row-automation-chip"
-                        :title="threadAutomationTooltip(thread.id)"
-                      >
-                        <IconTablerBolt class="thread-row-automation-icon" />
-                        <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
-                          {{ threadAutomationCount(thread.id) }}
-                        </span>
-                      </span>
-                      <span
-                        v-if="thread.pendingRequestState"
-                        class="thread-row-request-chip"
-                        :data-state="thread.pendingRequestState"
-                      >
-                        {{ threadRequestLabel(thread) }}
-                      </span>
-                    </span>
-                  </span>
-                </button>
-                <template #right>
-                  <span class="thread-row-time">{{ formatRelativeThread(thread) }}</span>
-                </template>
-                <template #right-hover>
-                  <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
-                    <button
-                      class="thread-menu-trigger"
-                      type="button"
-                      title="thread_menu"
-                      @click.stop="toggleThreadMenu(thread.id)"
-                    >
-                      <IconTablerDots class="thread-icon" />
-                    </button>
-                  </div>
-                </template>
-              </SidebarMenuRow>
-            </li>
+              :thread="thread"
+              :selected="thread.id === selectedThreadId"
+              :pinned="isPinned(thread.id)"
+              :menu-open="isThreadMenuOpen(thread.id)"
+              :show-status-indicator="shouldShowThreadIndicator(thread)"
+              :thread-state="getThreadState(thread)"
+              :inline-delete-confirming="isInlineDeleteConfirming(thread.id)"
+              :automation-count="threadAutomationCount(thread.id)"
+              :automation-tooltip="threadAutomationTooltip(thread.id)"
+              :request-label="threadRequestLabel(thread)"
+              :relative-time="formatRelativeThread(thread)"
+              :delete-label="t('Delete thread')"
+              :confirm-delete-label="t('Confirm delete')"
+              :confirm-label="t('Confirm')"
+              :worktree-label="t('Worktree thread')"
+              :set-menu-wrap-ref="(element) => setThreadMenuWrapRef(thread.id, element)"
+              @select="onSelect(thread.id)"
+              @inline-delete="onInlineDeleteClick(thread.id)"
+              @menu-toggle="toggleThreadMenu(thread.id)"
+              @row-leave="onThreadRowLeave(thread.id, $event)"
+              @row-contextmenu="onThreadRowContextMenu($event, thread.id)"
+            />
           </ul>
 
           <SidebarMenuRow v-else as="p" class="project-empty-row">
@@ -518,83 +366,31 @@
 
       <p v-if="isChatsSectionExpanded && chatThreads.length === 0" class="thread-tree-no-results">{{ t('No chats') }}</p>
       <ul v-else-if="isChatsSectionExpanded" class="thread-list thread-list-global">
-        <li
+        <SidebarThreadRow
           v-for="thread in visibleChatThreads"
           :key="thread.id"
-          class="thread-row-item"
-          :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-        >
-          <SidebarMenuRow
-            class="thread-row"
-            :data-active="thread.id === selectedThreadId"
-            :data-pinned="isPinned(thread.id)"
-            :data-menu-open="isThreadMenuOpen(thread.id) ? 'true' : 'false'"
-            :force-right-hover="isThreadMenuOpen(thread.id)"
-            @click="onSelect(thread.id)"
-            @mouseleave="onThreadRowLeave(thread.id, $event)"
-            @contextmenu="onThreadRowContextMenu($event, thread.id)"
-          >
-            <template #left>
-              <span class="thread-left-stack">
-                <span
-                  v-if="shouldShowThreadIndicator(thread)"
-                  class="thread-status-indicator"
-                  :data-state="getThreadState(thread)"
-                />
-                <button
-                  class="thread-delete-button"
-                  type="button"
-                  :data-confirming="isInlineDeleteConfirming(thread.id)"
-                  :title="isInlineDeleteConfirming(thread.id) ? t('Confirm delete') : t('Delete thread')"
-                  @click.stop="onInlineDeleteClick(thread.id)"
-                >
-                  <span v-if="isInlineDeleteConfirming(thread.id)" class="thread-delete-confirm-label">{{ t('Confirm') }}</span>
-                  <IconTablerTrash v-else class="thread-icon" />
-                </button>
-              </span>
-            </template>
-            <button class="thread-main-button" type="button" @click.stop="onSelect(thread.id)">
-              <span class="thread-row-title-wrap">
-                <span class="thread-row-title-line">
-                  <span class="thread-row-title">{{ thread.title }}</span>
-                  <IconTablerGitFork v-if="thread.hasWorktree" class="thread-row-worktree-icon" :title="t('Worktree thread')" />
-                  <span
-                    v-if="threadHasAutomation(thread.id)"
-                    class="thread-row-automation-chip"
-                    :title="threadAutomationTooltip(thread.id)"
-                  >
-                    <IconTablerBolt class="thread-row-automation-icon" />
-                    <span v-if="threadAutomationCount(thread.id) > 1" class="thread-row-automation-count">
-                      {{ threadAutomationCount(thread.id) }}
-                    </span>
-                  </span>
-                  <span
-                    v-if="thread.pendingRequestState"
-                    class="thread-row-request-chip"
-                    :data-state="thread.pendingRequestState"
-                  >
-                    {{ threadRequestLabel(thread) }}
-                  </span>
-                </span>
-              </span>
-            </button>
-            <template #right>
-              <span class="thread-row-time">{{ formatRelativeThread(thread) }}</span>
-            </template>
-            <template #right-hover>
-              <div :ref="(el) => setThreadMenuWrapRef(thread.id, el)" class="thread-menu-wrap">
-                <button
-                  class="thread-menu-trigger"
-                  type="button"
-                  title="thread_menu"
-                  @click.stop="toggleThreadMenu(thread.id)"
-                >
-                  <IconTablerDots class="thread-icon" />
-                </button>
-              </div>
-            </template>
-          </SidebarMenuRow>
-        </li>
+          :thread="thread"
+          :selected="thread.id === selectedThreadId"
+          :pinned="isPinned(thread.id)"
+          :menu-open="isThreadMenuOpen(thread.id)"
+          :show-status-indicator="shouldShowThreadIndicator(thread)"
+          :thread-state="getThreadState(thread)"
+          :inline-delete-confirming="isInlineDeleteConfirming(thread.id)"
+          :automation-count="threadAutomationCount(thread.id)"
+          :automation-tooltip="threadAutomationTooltip(thread.id)"
+          :request-label="threadRequestLabel(thread)"
+          :relative-time="formatRelativeThread(thread)"
+          :delete-label="t('Delete thread')"
+          :confirm-delete-label="t('Confirm delete')"
+          :confirm-label="t('Confirm')"
+          :worktree-label="t('Worktree thread')"
+          :set-menu-wrap-ref="(element) => setThreadMenuWrapRef(thread.id, element)"
+          @select="onSelect(thread.id)"
+          @inline-delete="onInlineDeleteClick(thread.id)"
+          @menu-toggle="toggleThreadMenu(thread.id)"
+          @row-leave="onThreadRowLeave(thread.id, $event)"
+          @row-contextmenu="onThreadRowContextMenu($event, thread.id)"
+        />
       </ul>
 
       <SidebarMenuRow v-if="isChatsSectionExpanded && hasHiddenChatThreads" class="thread-show-more-row">
@@ -926,9 +722,7 @@ import IconTablerDots from '../icons/IconTablerDots.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerFolderOpen from '../icons/IconTablerFolderOpen.vue'
-import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
-import IconTablerTrash from '../icons/IconTablerTrash.vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useThreadRecycleBin } from '../../composables/useThreadRecycleBin'
@@ -936,6 +730,7 @@ import { getPathLeafName, getPathParent, isAbsoluteLikePath, isProjectlessChatPa
 import ComposerDropdown from '../content/ComposerDropdown.vue'
 import AppDialog from '../content/AppDialog.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
+import SidebarThreadRow from './SidebarThreadRow.vue'
 import { reconcilePinnedThreadIds } from './pinnedThreadUtils'
 
 const props = defineProps<{
@@ -3352,86 +3147,6 @@ onBeforeUnmount(() => {
   @apply mt-0.5;
 }
 
-.thread-row-item {
-  @apply m-0;
-}
-
-.thread-row-item[data-menu-open='true'] {
-  @apply relative z-40;
-}
-
-.thread-row {
-  @apply hover:bg-zinc-200;
-}
-
-.thread-row[data-menu-open='true'] {
-  @apply relative z-30;
-}
-
-.thread-left-stack {
-  @apply relative w-4 h-4 flex items-center justify-center;
-}
-
-.thread-delete-button {
-  @apply absolute left-0 top-1/2 -translate-y-1/2 h-4 min-w-4 rounded text-zinc-500 opacity-0 pointer-events-none transition flex items-center justify-center;
-}
-
-.thread-delete-button[data-confirming='true'] {
-  @apply z-10 h-5 min-w-16 px-1.5 bg-rose-600 text-white opacity-100 pointer-events-auto shadow-sm;
-}
-
-.thread-delete-confirm-label {
-  @apply text-[11px] font-medium leading-none;
-}
-
-.thread-main-button {
-  @apply min-w-0 w-full text-left rounded px-0 py-0 flex items-center min-h-5;
-}
-
-.thread-row-title-wrap {
-  @apply min-w-0 inline-flex w-full items-center;
-}
-
-.thread-row-title-line {
-  @apply min-w-0 inline-flex w-full items-center gap-1.5;
-}
-
-.thread-row-title {
-  @apply min-w-0 block flex-1 text-sm leading-5 font-normal text-zinc-800 truncate whitespace-nowrap;
-}
-
-.thread-row-worktree-icon {
-  @apply w-3 h-3 text-zinc-500 shrink-0;
-}
-
-.thread-row-request-chip {
-  @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
-}
-
-.thread-row-request-chip[data-state='approval'] {
-  @apply border-emerald-500/20 bg-emerald-500/15 text-emerald-700;
-}
-
-.thread-row-request-chip[data-state='response'] {
-  @apply border-sky-200 bg-sky-50 text-sky-700;
-}
-
-.thread-status-indicator {
-  @apply w-2.5 h-2.5 rounded-full;
-}
-
-.thread-row-time {
-  @apply block text-sm font-normal text-zinc-500;
-}
-
-.thread-menu-wrap {
-  @apply relative;
-}
-
-.thread-menu-trigger {
-  @apply h-4 w-4 rounded p-0 text-xs text-zinc-600 flex items-center justify-center;
-}
-
 .thread-menu-panel {
   @apply absolute right-0 top-full mt-1 z-20 min-w-36 rounded-md border border-zinc-200 bg-white p-1 shadow-md flex flex-col gap-0.5;
 }
@@ -3492,51 +3207,6 @@ onBeforeUnmount(() => {
 
 .project-header-row:hover .project-icon-chevron {
   @apply flex opacity-100;
-}
-
-.thread-row[data-active='true'] {
-  @apply bg-zinc-200;
-}
-
-.thread-row:hover .thread-delete-button,
-.thread-row:focus-within .thread-delete-button,
-.thread-delete-button[data-confirming='true'] {
-  @apply opacity-100 pointer-events-auto;
-}
-
-.thread-status-indicator[data-state='unread'] {
-  width: 6.6667px;
-  height: 6.6667px;
-  @apply bg-blue-600;
-}
-
-.thread-status-indicator[data-state='working'] {
-  @apply border-2 border-zinc-500 border-t-transparent bg-transparent animate-spin;
-}
-
-.thread-status-indicator[data-state='external'] {
-  @apply bg-amber-500;
-}
-
-.thread-status-indicator[data-state='awaiting-approval'] {
-  @apply bg-emerald-500;
-}
-
-.thread-status-indicator[data-state='awaiting-response'] {
-  @apply bg-sky-500;
-}
-
-.thread-row:hover .thread-status-indicator[data-state='unread'],
-.thread-row:hover .thread-status-indicator[data-state='working'],
-.thread-row:hover .thread-status-indicator[data-state='external'],
-.thread-row:hover .thread-status-indicator[data-state='awaiting-approval'],
-.thread-row:hover .thread-status-indicator[data-state='awaiting-response'],
-.thread-row:focus-within .thread-status-indicator[data-state='unread'],
-.thread-row:focus-within .thread-status-indicator[data-state='working'],
-.thread-row:focus-within .thread-status-indicator[data-state='external'],
-.thread-row:focus-within .thread-status-indicator[data-state='awaiting-approval'],
-.thread-row:focus-within .thread-status-indicator[data-state='awaiting-response'] {
-  @apply opacity-0;
 }
 
 .rename-thread-overlay {
