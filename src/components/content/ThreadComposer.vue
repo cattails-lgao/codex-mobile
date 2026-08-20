@@ -325,29 +325,16 @@
           </Transition>
         </ComposerPopover>
 
-        <ComposerDropdown
-          class="thread-composer-control thread-composer-model-control"
-          :model-value="selectedModel"
-          :options="modelOptions"
-          :selected-prefix-icon="showFastModeModelIcon ? IconTablerBolt : null"
-          :placeholder="t('Model')"
-          open-direction="up"
-          variant="pill"
-          :disabled="isComposerConfigDisabled || models.length === 0"
-          enable-search
-          :search-placeholder="t('Search models...')"
-          @update:model-value="onModelSelect"
-        />
-
-        <ComposerDropdown
-          class="thread-composer-control thread-composer-thinking-control"
-          :model-value="selectedReasoningEffort"
-          :options="reasoningOptions"
-          :placeholder="t('Thinking')"
-          open-direction="up"
-          variant="pill"
-          :disabled="isComposerConfigDisabled || reasoningOptions.length === 0"
-          @update:model-value="onReasoningEffortSelect"
+        <ThreadComposerModelControls
+          :models="models"
+          :selected-model="selectedModel"
+          :model-reasoning-efforts="modelReasoningEfforts"
+          :selected-reasoning-effort="selectedReasoningEffort"
+          :selected-speed-mode="selectedSpeedMode"
+          :disabled="disabled"
+          :active-thread-id="activeThreadId"
+          @update:selected-model="onModelSelect"
+          @update:selected-reasoning-effort="onReasoningEffortSelect"
         />
 
         <button
@@ -423,17 +410,16 @@ import {
   type ComposerFileSuggestion,
 } from '../../api/codexGateway'
 import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
-import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import IconTablerMaximize from '../icons/IconTablerMaximize.vue'
 import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
-import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerPopover from './ComposerPopover.vue'
 import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import ThreadComposerPlanPanel, { type ComposerPlanPanelData } from './ThreadComposerPlanPanel.vue'
 import ThreadComposerAttachments from './ThreadComposerAttachments.vue'
+import ThreadComposerModelControls from './ThreadComposerModelControls.vue'
 import {
   buildSkillSlashCommands,
   matchSlashCommands,
@@ -622,24 +608,6 @@ const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.
 const DRAFT_STORAGE_PREFIX = 'codex-web-local.thread-draft.v1.'
 let lastActiveThreadId = ''
 
-const reasoningOptionCatalog: Array<{ value: ReasoningEffort; label: string }> = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-]
-const reasoningOptions = computed(() => {
-  const supportedEfforts = props.modelReasoningEfforts?.[props.selectedModel]
-  if (supportedEfforts === undefined) return reasoningOptionCatalog
-  const supportedSet = new Set(supportedEfforts)
-  return reasoningOptionCatalog.filter((option) => supportedSet.has(option.value))
-})
-function formatModelLabel(modelId: string): string {
-  return modelId.trim().replace(/^gpt/i, 'GPT')
-}
-
-const modelOptions = computed(() =>
-  props.models.map((modelId) => ({ value: modelId, label: formatModelLabel(modelId) })),
-)
 const collaborationModeChoices = computed<Array<{
   value: CollaborationModeKind
   labelKey: string
@@ -696,10 +664,6 @@ const standaloneFileAttachments = computed(() => {
 })
 const isInteractionDisabled = computed(() => props.disabled || !props.activeThreadId || props.externalSessionActive === true)
 const isComposerConfigDisabled = computed(() => props.disabled || !props.activeThreadId)
-const isFastModeSupported = computed(() => /^gpt-5\.(?:4|5)(?:$|-)/.test(props.selectedModel.trim()))
-const showFastModeModelIcon = computed(() =>
-  props.selectedSpeedMode === 'fast' && isFastModeSupported.value,
-)
 const inProgressMode = computed<'steer' | 'queue'>(() =>
   props.inProgressSubmitMode === 'steer' ? 'steer' : 'queue',
 )
@@ -2381,27 +2345,6 @@ watch(
   transform: translate(-50%, 0);
 }
 
-.thread-composer-control {
-  @apply shrink-1 min-w-0;
-}
-
-.thread-composer-control :deep(.composer-dropdown-value) {
-  @apply truncate;
-}
-
-.thread-composer-model-control {
-  /* 宽度随模型名自适应（短名不留空白块），上限沿用 round-14 的 160px/128px 档 */
-  @apply w-fit max-w-40 min-w-0;
-}
-
-.thread-composer-model-control :deep(.composer-dropdown-trigger) {
-  @apply w-full;
-}
-
-.thread-composer-thinking-control :deep(.composer-dropdown-options) {
-  @apply max-h-64;
-}
-
 .thread-composer-actions {
   @apply ml-auto flex min-w-0 items-center gap-2;
 }
@@ -2442,18 +2385,6 @@ watch(
 
   .thread-composer-controls::-webkit-scrollbar {
     display: none;
-  }
-
-  .thread-composer-model-control {
-    @apply max-w-32;
-  }
-
-  .thread-composer-control :deep(.composer-dropdown-trigger--pill) {
-    @apply h-7 px-2 text-[11px];
-  }
-
-  .thread-composer-control :deep(.composer-dropdown-chevron) {
-    @apply h-3 w-3;
   }
 
   .thread-composer-context-usage-inline {
