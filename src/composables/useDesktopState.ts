@@ -5423,12 +5423,12 @@ export function useDesktopState() {
       ])
       loadedThreadListRootsState = rootsState
       const groups = page.groups
-      loadedThreadListGroups = hasLoadedThreads.value
-        ? mergeThreadGroupPages(loadedThreadListGroups, groups)
-        : groups
-      threadListNextCursor = hasLoadedThreads.value && !hasLoadedAllThreadPages
-        ? threadListNextCursor
-        : page.nextCursor
+      // The server response is authoritative: replace the list on every load
+      // rather than union-merging it with the previous snapshot, so threads the
+      // server no longer returns (e.g. subagent sessions filtered out since the
+      // last load) disappear from the sidebar instead of lingering.
+      loadedThreadListGroups = groups
+      threadListNextCursor = page.nextCursor
       hasLoadedAllThreadPages = page.nextCursor === null
       isThreadListFullyLoaded.value = hasLoadedAllThreadPages
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)

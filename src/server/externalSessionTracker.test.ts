@@ -308,6 +308,20 @@ describe("externalSessionTracker", () => {
         expect(tracker.getActiveThreadIds()).toEqual(["thread-child-2"]);
     });
 
+    it("deduplicates overlapping ticks and every caller observes fresh subagent state", async () => {
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-zzz.jsonl",
+            [metaLine("thread-sub-9", "codex-tui", "subagent")],
+        );
+        const tracker = createTracker();
+        // Overlapping ticks must not deadlock, and a caller that awaits while a
+        // scan is already in flight (e.g. the thread/list filter) must see the
+        // subagent session regardless of which scan actually ran.
+        await Promise.all([tracker.tick(), tracker.tick(), tracker.tick()]);
+        expect(tracker.getSubagentThreadIds()).toEqual(["thread-sub-9"]);
+    });
+
     it("skips sessions under archived_sessions", async () => {
         const archived = join(
             sessionsDir,
