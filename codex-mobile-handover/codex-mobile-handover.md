@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（前端大文件组件化四阶段已全部提交，见 [round-49](rounds/round-49-componentization.md)） |
+| Git 分支 | main（round-50 侧边栏子 agent 会话重新出现修复已提交 `b86c220`，见 [round-50](rounds/round-50-subagent-race.md)） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | `75f5439`/`f2a8276`：refactor: extract composer attach menu / message inline content（本轮组件化四阶段末批；完整清单见 [round-49](rounds/round-49-componentization.md)） |
+| 最近提交 | `b86c220`：fix: prevent subagent threads reappearing in the sidebar（round-50；完整清单见 [round-50](rounds/round-50-subagent-race.md)） |
 
 ---
 ## 文档结构
@@ -78,6 +78,7 @@
 | 第四十一轮 Hot 区消息按 turn 结构重构（真实 request/process/final 容器与过程视觉层级） | [rounds/round-47-refactor.md](rounds/round-47-refactor.md) |
 | 第四十二轮 前端大文件组件化（侧栏线程行复用 + Directory Hub 标签页拆分，方案见 `docs/componentization-plan.md`） | [rounds/round-48-componentization.md](rounds/round-48-componentization.md) |
 | 第四十九轮 前端大文件组件化系列完成（Sidebar 线程行 / Directory Tab / App 设置账号面板 / Composer+Conversation 展示层，含验证与手测文档） | [rounds/round-49-componentization.md](rounds/round-49-componentization.md) |
+| 第五十轮 侧边栏重新出现子 agent 会话（tracker 竞态 + 前端并集合并残留修复） | [rounds/round-50-subagent-race.md](rounds/round-50-subagent-race.md) |
 
 ## 项目概况
 
@@ -158,4 +159,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-20（round-49 前端大文件组件化四阶段完成并提交）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-20（round-50 侧边栏子 agent 会话重新出现修复；round-49 前端大文件组件化四阶段完成）· 内容已脱敏*
