@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（前端大文件组件化进行中，Apps/Plugins 标签改动待提交） |
+| Git 分支 | main（前端大文件组件化四阶段已全部提交，见 [round-49](rounds/round-49-componentization.md)） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | `4fa26ba`：refactor: extract sidebar and skills views（本轮组件化首批，Apps/Plugins 标签改动待提交） |
+| 最近提交 | `75f5439`/`f2a8276`：refactor: extract composer attach menu / message inline content（本轮组件化四阶段末批；完整清单见 [round-49](rounds/round-49-componentization.md)） |
 
 ---
 ## 文档结构
@@ -77,6 +77,7 @@
 | 第四十轮 4 项 H5/UI 打磨（diff 弹窗 Teleport 到 body + z-[1200] 修复被顶栏遮挡/无法关闭、模型按钮 w-fit+max-w、命令块 header 改「序号+命令+状态」并移命令入展开输出区） | [rounds/round-46-feedback.md](rounds/round-46-feedback.md) |
 | 第四十一轮 Hot 区消息按 turn 结构重构（真实 request/process/final 容器与过程视觉层级） | [rounds/round-47-refactor.md](rounds/round-47-refactor.md) |
 | 第四十二轮 前端大文件组件化（侧栏线程行复用 + Directory Hub 标签页拆分，方案见 `docs/componentization-plan.md`） | [rounds/round-48-componentization.md](rounds/round-48-componentization.md) |
+| 第四十九轮 前端大文件组件化系列完成（Sidebar 线程行 / Directory Tab / App 设置账号面板 / Composer+Conversation 展示层，含验证与手测文档） | [rounds/round-49-componentization.md](rounds/round-49-componentization.md) |
 
 ## 项目概况
 
@@ -157,4 +158,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-19（round-48 前端大文件组件化进行中，Apps/Plugins 标签改动待提交）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-20（round-49 前端大文件组件化四阶段完成并提交）· 内容已脱敏*
