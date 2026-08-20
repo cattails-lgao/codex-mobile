@@ -91,181 +91,53 @@
       @update:sort-mode="appSortMode = $event"
     />
 
-    <section v-else-if="activeTab === 'composio'" class="directory-section">
-      <div class="directory-toolbar">
-        <input
-          v-model="composioSearchQuery"
-          class="directory-search"
-          type="search"
-          placeholder="Search Composio connectors..."
-          aria-label="Search Composio connectors"
-        />
-        <div class="directory-sort-group" role="group" aria-label="Sort Composio connectors">
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': composioSortMode === 'popular' }"
-            type="button"
-            @click="composioSortMode = 'popular'"
-          >
-            Popular
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': composioSortMode === 'name' }"
-            type="button"
-            @click="composioSortMode = 'name'"
-          >
-            {{ t('A-Z') }}
-          </button>
-          <button
-            class="directory-sort-button"
-            :class="{ 'is-active': composioSortMode === 'date' }"
-            type="button"
-            @click="composioSortMode = 'date'"
-          >
-            Date
-          </button>
-        </div>
-      </div>
-      <div v-if="composioError" class="directory-error">{{ composioError }}</div>
-      <div v-else-if="isLoadingComposio" class="directory-loading">Loading Composio connectors...</div>
-      <div v-else-if="!composioStatus?.available" class="directory-empty">
-        <div class="directory-empty-copy">
-          <p class="directory-empty-text">Composio CLI is not installed in this environment.</p>
-          <div class="directory-card-actions">
-            <button class="directory-action primary" type="button" :disabled="isInstallingComposio" @click="installComposioCli">
-              {{ isInstallingComposio ? 'Installing...' : 'Install Composio' }}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div v-else-if="!composioStatus.authenticated" class="composio-preview">
-        <article class="composio-preview-hero">
-          <div class="composio-preview-copy">
-            <div class="directory-card-fallback composio-fallback">C</div>
-            <div>
-              <p class="composio-preview-kicker">Connector catalog preview</p>
-              <h3 class="composio-preview-title">Connect everyday apps like Gmail, Calendar, Reddit, YouTube, and Drive.</h3>
-              <p class="composio-preview-text">
-                Composio is installed locally. Login to browse the live catalog, connect your accounts, and try simple actions from this machine.
-              </p>
-            </div>
-          </div>
-          <div class="composio-preview-actions">
-            <button class="directory-action primary" type="button" :disabled="isStartingComposioLogin" @click="startComposioCliLogin">
-              {{ isStartingComposioLogin ? 'Opening...' : 'Login to Composio' }}
-            </button>
-            <button class="directory-action-link" type="button" @click="openExternalUrl(composioStatus.webUrl || 'https://dashboard.composio.dev/')">
-              Open dashboard
-            </button>
-          </div>
-        </article>
-        <div class="composio-preview-grid">
-          <article v-for="connector in visibleComposioPreviewConnectors" :key="connector.slug" class="directory-card composio-preview-card">
-            <div class="directory-card-top">
-              <div class="directory-card-fallback composio-fallback">{{ connector.initial }}</div>
-              <div class="directory-card-main">
-                <div class="directory-card-title-row">
-                  <span class="directory-card-title">{{ connector.name }}</span>
-                  <span class="directory-badge is-muted">Preview</span>
-                </div>
-                <span class="directory-card-meta">{{ connector.meta }}</span>
-              </div>
-            </div>
-            <p class="directory-card-description">{{ connector.description }}</p>
-            <div class="directory-chip-row">
-              <span v-for="chip in connector.chips" :key="chip" class="directory-chip">{{ chip }}</span>
-            </div>
-          </article>
-        </div>
-      </div>
-      <div v-else class="directory-section composio-section">
-        <article class="directory-card directory-card-wide composio-status-card">
-          <div class="directory-card-top">
-            <div class="directory-card-fallback composio-fallback">C</div>
-            <div class="directory-card-main">
-              <div class="directory-card-title-row">
-                <span class="directory-card-title">{{ t('Composio workspace') }}</span>
-                <span class="directory-badge">{{ t('Connected') }}</span>
-              </div>
-              <span class="directory-card-meta">{{ composioStatus.email || composioStatus.defaultOrgName || t('Authenticated') }}</span>
-            </div>
-          </div>
-          <p class="directory-card-description">
-            {{ composioWorkspaceSummary }}
-          </p>
-            <div class="directory-chip-row">
-              <span v-if="composioStatus.defaultOrgName" class="directory-chip">{{ composioStatus.defaultOrgName }}</span>
-              <span v-if="composioStatus.cliVersion" class="directory-chip">CLI {{ composioStatus.cliVersion }}</span>
-              <span v-if="composioConnectors.length" class="directory-chip">
-                Showing {{ composioConnectors.length }}{{ composioTotal ? ` / ${composioTotal}` : '' }} connectors
-              </span>
-            </div>
-          <div class="directory-card-actions">
-            <button class="directory-action-link" type="button" @click="openExternalUrl(composioStatus.webUrl)">
-              Open dashboard
-            </button>
-          </div>
-        </article>
-
-        <div v-if="visibleComposioConnectors.length === 0" class="directory-empty">No Composio connectors found.</div>
-        <div v-else class="directory-grid">
-          <article v-for="connector in visibleComposioConnectors" :key="connector.slug" class="directory-card">
-            <div class="directory-card-top">
-              <img v-if="connector.logoUrl" class="directory-card-icon" :src="connector.logoUrl" :alt="connector.name" loading="lazy" />
-              <div v-else class="directory-card-fallback composio-fallback">{{ connector.name.charAt(0) }}</div>
-              <div class="directory-card-main">
-                <div class="directory-card-title-row">
-                  <span class="directory-card-title">{{ connector.name }}</span>
-                  <span v-if="connector.activeCount > 0" class="directory-badge">{{ t('Connected') }}</span>
-                  <span v-else-if="connector.isNoAuth" class="directory-badge">{{ t('No auth') }}</span>
-                </div>
-                <span class="directory-card-meta">{{ composioMetaLabel(connector) }}</span>
-              </div>
-            </div>
-            <p v-if="connector.description" class="directory-card-description">{{ connector.description }}</p>
-            <div class="directory-chip-row">
-              <span class="directory-chip">{{ connector.toolsCount }} tools</span>
-              <span v-if="connector.triggersCount > 0" class="directory-chip">{{ connector.triggersCount }} triggers</span>
-              <span v-if="connector.authModes.length > 0" class="directory-chip">{{ connector.authModes.join(', ') }}</span>
-            </div>
-            <div class="directory-card-actions">
-              <button class="directory-action" type="button" @click="openComposioDetail(connector.slug)">
-                Details
-              </button>
-              <button
-                v-if="composioPrimaryActionLabel(connector)"
-                class="directory-action-link"
-                type="button"
-                :disabled="composioActionSlug === connector.slug"
-                @click="runComposioPrimaryAction(connector)"
-              >
-                {{ composioActionSlug === connector.slug ? 'Opening...' : composioPrimaryActionLabel(connector) }}
-              </button>
-              <button
-                v-if="canTryComposio(connector)"
-                class="directory-action primary"
-                type="button"
-                :disabled="isTryActionInFlight"
-                @click="tryComposio(connector)"
-              >
-                {{ props.tryInFlightKey === composioTryKey(connector.slug) ? 'Starting...' : 'Try it!' }}
-              </button>
-            </div>
-          </article>
-        </div>
-        <div v-if="hasMoreComposioConnectors" class="directory-section-actions">
-          <button
-            class="directory-action"
-            type="button"
-            :disabled="isLoadingComposio"
-            @click="loadMoreComposio"
-          >
-            {{ isLoadingComposio ? 'Loading...' : 'Load more' }}
-          </button>
-        </div>
-      </div>
-    </section>
+    <DirectoryComposioTab
+      v-else-if="activeTab === 'composio'"
+      :composio-status="composioStatus"
+      :search-query="composioSearchQuery"
+      :sort-mode="composioSortMode"
+      :error="composioError"
+      :is-loading-composio="isLoadingComposio"
+      :is-installing-composio="isInstallingComposio"
+      :is-starting-composio-login="isStartingComposioLogin"
+      :visible-composio-connectors="visibleComposioConnectors"
+      :visible-composio-preview-connectors="visibleComposioPreviewConnectors"
+      :workspace-summary="composioWorkspaceSummary"
+      :connector-count="composioConnectors.length"
+      :total="composioTotal"
+      :has-more-composio-connectors="hasMoreComposioConnectors"
+      :action-slug="composioActionSlug"
+      :is-try-action-in-flight="isTryActionInFlight"
+      :try-in-flight-key="props.tryInFlightKey"
+      :composio-meta-label="composioMetaLabel"
+      :composio-primary-action-label="composioPrimaryActionLabel"
+      :can-try-composio="canTryComposio"
+      :composio-try-key="composioTryKey"
+      :open-composio-detail="openComposioDetail"
+      :run-composio-primary-action="runComposioPrimaryAction"
+      :try-composio="tryComposio"
+      :install-composio-cli="installComposioCli"
+      :start-composio-cli-login="startComposioCliLogin"
+      :load-more-composio="loadMoreComposio"
+      :open-external-url="openExternalUrl"
+      :workspace-label="t('Composio workspace')"
+      :connected-label="t('Connected')"
+      :authenticated-label="t('Authenticated')"
+      :no-auth-label="t('No auth')"
+      :preview-label="t('Preview')"
+      :open-dashboard-label="t('Open dashboard')"
+      :details-label="t('Details')"
+      :install-label="t('Install Composio')"
+      :installing-label="t('Installing...')"
+      :login-label="t('Login to Composio')"
+      :opening-label="t('Opening...')"
+      :starting-label="t('Starting...')"
+      :try-label="t('Try it!')"
+      :load-more-label="t('Load more')"
+      :loading-label="t('Loading...')"
+      @update:search-query="composioSearchQuery = $event"
+      @update:sort-mode="composioSortMode = $event"
+    />
 
     <DirectorySkillsTab
       v-else-if="activeTab === 'skills'"
@@ -629,6 +501,7 @@ import {
 } from '../../api/codexGateway'
 import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
 import DirectoryAppsTab from './DirectoryAppsTab.vue'
+import DirectoryComposioTab from './DirectoryComposioTab.vue'
 import DirectoryPluginsTab from './DirectoryPluginsTab.vue'
 import DirectorySkillsTab from './DirectorySkillsTab.vue'
 
