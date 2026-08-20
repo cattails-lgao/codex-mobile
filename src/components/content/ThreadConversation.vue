@@ -300,33 +300,7 @@
                 >
                   <template v-for="(block, blockIndex) in getMessageBlocks(message)" :key="`block-${blockIndex}`">
                     <p v-if="block.kind === 'paragraph'" class="message-text">
-                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`seg-${blockIndex}-${segmentIndex}`">
-                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <a
-                          v-else-if="segment.kind === 'file'"
-                          class="message-file-link"
-                          :href="toBrowseUrl(segment.path)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.path"
-                        >
-                          {{ segment.displayPath }}
-                        </a>
-                        <a
-                          v-else-if="segment.kind === 'url'"
-                          class="message-file-link"
-                          :href="segment.href"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.href"
-                        >
-                          {{ segment.value }}
-                        </a>
-                        <code v-else class="message-inline-code">{{ segment.value }}</code>
-                      </template>
+                      <MessageInlineContent :segments="getInlineSegments(block.value)" :to-browse-url="toBrowseUrl" />
                     </p>
                     <component
                       :is="headingTag(block.level)"
@@ -334,62 +308,10 @@
                       class="message-heading"
                       :class="headingClass(block.level)"
                     >
-                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`heading-seg-${blockIndex}-${segmentIndex}`">
-                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <a
-                          v-else-if="segment.kind === 'file'"
-                          class="message-file-link"
-                          :href="toBrowseUrl(segment.path)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.path"
-                        >
-                          {{ segment.displayPath }}
-                        </a>
-                        <a
-                          v-else-if="segment.kind === 'url'"
-                          class="message-file-link"
-                          :href="segment.href"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.href"
-                        >
-                          {{ segment.value }}
-                        </a>
-                        <code v-else class="message-inline-code">{{ segment.value }}</code>
-                      </template>
+                      <MessageInlineContent :segments="getInlineSegments(block.value)" :to-browse-url="toBrowseUrl" />
                     </component>
                     <blockquote v-else-if="block.kind === 'blockquote'" class="message-blockquote">
-                      <template v-for="(segment, segmentIndex) in getInlineSegments(block.value)" :key="`quote-seg-${blockIndex}-${segmentIndex}`">
-                        <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                        <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                        <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                        <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                        <a
-                          v-else-if="segment.kind === 'file'"
-                          class="message-file-link"
-                          :href="toBrowseUrl(segment.path)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.path"
-                        >
-                          {{ segment.displayPath }}
-                        </a>
-                        <a
-                          v-else-if="segment.kind === 'url'"
-                          class="message-file-link"
-                          :href="segment.href"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          :title="segment.href"
-                        >
-                          {{ segment.value }}
-                        </a>
-                        <code v-else class="message-inline-code">{{ segment.value }}</code>
-                      </template>
+                      <MessageInlineContent :segments="getInlineSegments(block.value)" :to-browse-url="toBrowseUrl" />
                     </blockquote>
                     <ul v-else-if="block.kind === 'unorderedList'" class="message-list message-list-unordered">
                       <li v-for="(item, itemIndex) in block.items" :key="`ul-${blockIndex}-${itemIndex}`" class="message-list-item">
@@ -400,33 +322,7 @@
                       <li v-for="(item, itemIndex) in block.items" :key="`task-${blockIndex}-${itemIndex}`" class="message-task-item">
                         <span class="message-task-checkbox" :data-checked="item.checked">{{ item.checked ? '☑' : '☐' }}</span>
                         <div class="message-list-item-text">
-                          <template v-for="(segment, segmentIndex) in getInlineSegments(item.text)" :key="`task-seg-${blockIndex}-${itemIndex}-${segmentIndex}`">
-                            <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                            <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                            <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                            <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                            <a
-                              v-else-if="segment.kind === 'file'"
-                              class="message-file-link"
-                              :href="toBrowseUrl(segment.path)"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.path"
-                            >
-                              {{ segment.displayPath }}
-                            </a>
-                            <a
-                              v-else-if="segment.kind === 'url'"
-                              class="message-file-link"
-                              :href="segment.href"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              :title="segment.href"
-                            >
-                              {{ segment.value }}
-                            </a>
-                            <code v-else class="message-inline-code">{{ segment.value }}</code>
-                          </template>
+                          <MessageInlineContent :segments="getInlineSegments(item.text)" :to-browse-url="toBrowseUrl" />
                         </div>
                       </li>
                     </ul>
@@ -449,33 +345,7 @@
                               class="message-table-head-cell"
                               :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
                             >
-                              <template v-for="(segment, segmentIndex) in getInlineSegments(cell)" :key="`th-seg-${blockIndex}-${cellIndex}-${segmentIndex}`">
-                                <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                                <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                                <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                                <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                                <a
-                                  v-else-if="segment.kind === 'file'"
-                                  class="message-file-link"
-                                  :href="toBrowseUrl(segment.path)"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  :title="segment.path"
-                                >
-                                  {{ segment.displayPath }}
-                                </a>
-                                <a
-                                  v-else-if="segment.kind === 'url'"
-                                  class="message-file-link"
-                                  :href="segment.href"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  :title="segment.href"
-                                >
-                                  {{ segment.value }}
-                                </a>
-                                <code v-else class="message-inline-code">{{ segment.value }}</code>
-                              </template>
+                              <MessageInlineContent :segments="getInlineSegments(cell)" :to-browse-url="toBrowseUrl" />
                             </th>
                           </tr>
                         </thead>
@@ -487,33 +357,7 @@
                               class="message-table-cell"
                               :style="{ textAlign: block.alignments[cellIndex] ?? 'left' }"
                             >
-                              <template v-for="(segment, segmentIndex) in getInlineSegments(cell)" :key="`td-seg-${blockIndex}-${rowIndex}-${cellIndex}-${segmentIndex}`">
-                                <span v-if="segment.kind === 'text'">{{ segment.value }}</span>
-                                <strong v-else-if="segment.kind === 'bold'" class="message-bold-text">{{ segment.value }}</strong>
-                                <em v-else-if="segment.kind === 'italic'" class="message-italic-text">{{ segment.value }}</em>
-                                <s v-else-if="segment.kind === 'strikethrough'" class="message-strikethrough-text">{{ segment.value }}</s>
-                                <a
-                                  v-else-if="segment.kind === 'file'"
-                                  class="message-file-link"
-                                  :href="toBrowseUrl(segment.path)"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  :title="segment.path"
-                                >
-                                  {{ segment.displayPath }}
-                                </a>
-                                <a
-                                  v-else-if="segment.kind === 'url'"
-                                  class="message-file-link"
-                                  :href="segment.href"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  :title="segment.href"
-                                >
-                                  {{ segment.value }}
-                                </a>
-                                <code v-else class="message-inline-code">{{ segment.value }}</code>
-                              </template>
+                              <MessageInlineContent :segments="getInlineSegments(cell)" :to-browse-url="toBrowseUrl" />
                             </td>
                           </tr>
                         </tbody>
@@ -698,6 +542,7 @@ import DiffViewer from './DiffViewer.vue'
 import FileChangeSummaryBlock from './FileChangeSummaryBlock.vue'
 import FileLinkContextMenu from './FileLinkContextMenu.vue'
 import LiveOverlayItem from './LiveOverlayItem.vue'
+import MessageInlineContent from './MessageInlineContent.vue'
 import MessageToolbar from './MessageToolbar.vue'
 import ProcessFold from './ProcessFold.vue'
 import QuestionJumpBar, { type QuestionAnchor } from './QuestionJumpBar.vue'
