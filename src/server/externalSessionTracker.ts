@@ -165,6 +165,7 @@ export class ExternalSessionTracker {
     private readonly listeners = new Set<ExternalSessionListener>();
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
     private ticking = false;
+    private tickingPromise: Promise<void> | null = null;
     private disposed = false;
 
     constructor(options: ExternalSessionTrackerOptions = {}) {
@@ -254,12 +255,24 @@ export class ExternalSessionTracker {
 
     /** Run one discovery + parse + transition pass. Exposed for tests. */
     async tick(): Promise<void> {
-        if (!this.enabled || this.ticking || this.disposed) return;
+        if (!this.enabled || this.disposed) return;
+        if (this.ticking && this.tickingPromise) {
+            // A scan is already running; wait for it so callers observe the
+            // freshest index instead of racing past a stale snapshot.
+            await this.tickingPromise;
+            return;
+        }
         this.ticking = true;
+        let resolveTick: () => void = () => {};
+        this.tickingPromise = new Promise<void>((resolve) => {
+            resolveTick = resolve;
+        });
         try {
             await this.scanAndUpdate();
         } finally {
             this.ticking = false;
+            this.tickingPromise = null;
+            resolveTick();
         }
     }
 

@@ -7877,7 +7877,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   // threads. Drop them from the user-facing list by matching the local
   // session_meta `thread_source` marker (the RPC thread payload has no such
   // field, so the sessions directory is the only reliable signal).
-  function filterSubagentThreadsFromThreadListResult(result: unknown): unknown {
+  async function filterSubagentThreadsFromThreadListResult(result: unknown): Promise<unknown> {
+    // Force a fresh tracker scan before filtering. A subagent session created
+    // moments ago appears in thread/list immediately but is only known to the
+    // tracker once its poll discovers it; awaiting a tick closes that race so
+    // the just-created subagent thread is dropped from the response.
+    await externalSessionTracker.tick()
     return filterThreadListByIds(result, new Set(externalSessionTracker.getSubagentThreadIds()))
   }
 
@@ -8410,7 +8415,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
           : errorMergedResult
         const subagentFilteredResult = body.method === 'thread/list'
-          ? filterSubagentThreadsFromThreadListResult(listMergedResult)
+          ? await filterSubagentThreadsFromThreadListResult(listMergedResult)
           : listMergedResult
         const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, subagentFilteredResult)
         const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
