@@ -39,6 +39,21 @@
 - 全量单测：本次为机械迁移，未新增单测；相关行为由既有 `tests/thread-loading-state/`、`tests/projects-sidebar-new-chat/`、`tests/skills-plugins-integrations/` 手测文档覆盖
 - 新增文件清单（含手测文档）见上文各阶段
 
+## 真实数据完整验证（浏览器实机）
+
+在提交后以真实 app-server 数据（dev `4173` 端口、RPC 正常）逐项实机核对所有抽取组件：
+
+| 组件 | 验证结果 |
+|---|---|
+| SidebarThreadRow / SidebarThreadTree | 真实线程渲染正常：`添加 MCP 服务器配置 18h`、`Use $imagegen to mak 105d`，相对时间/项目分组/钉住分区正常 |
+| DirectoryHub 四 Tab | 插件（真实 Marketplaces + `B Browser` 已安装卡片）/ 应用（空状态）/ Composio（真实「Install Composio」空状态）/ 技能（GitHub 同步状态 + MCPs 列表）均可切换渲染 |
+| ThreadComposer（输入 / attach trigger / model 控件） | 输入框、附件触发器、`GPT-5.6-terra`/`Medium` 控件均在；附件菜单点击展开显示「引导/排队」模式按钮 |
+| MessageInlineContent | 线程消息正文内联 markdown 正常（链接 `config.toml`、代码 `codegraph` 等） |
+| SettingsAccountsPanel | 设置弹窗账户区正常（计数值、重新加载、折叠 ▸/▾、登录按钮、空状态文案）；展开/收起交互正常 |
+
+- 控制台全程无 JS 报错；唯一告警为手动导航到未注册 hash 路由触发的一次性 vue-router `pathMatch` 提示，与组件化无关。
+- dev 服务与 app-server RPC 均健康（HTTP 200）。
+
 ## 未完成 / 说明
 
 - `messages view` 的 Process-fold 算法优化为独立性能任务，非本组件化系列范围。
