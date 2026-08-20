@@ -13,83 +13,17 @@
       @implement-plan="$emit('implement-plan')"
     />
 
-      <div v-if="selectedImages.length > 0" class="thread-composer-attachments">
-        <div v-for="image in selectedImages" :key="image.id" class="thread-composer-attachment">
-          <video
-            v-if="isVideoMediaUrl(image.url)"
-            class="thread-composer-attachment-image"
-            :src="image.url"
-            controls
-            preload="metadata"
-          />
-          <img v-else class="thread-composer-attachment-image" :src="image.url" :alt="image.name || 'Selected image'" />
-          <button
-            class="thread-composer-attachment-remove"
-            type="button"
-            :aria-label="`Remove ${image.name || 'image'}`"
-            :disabled="isInteractionDisabled"
-            @click="removeImage(image.id)"
-          >
-            x
-          </button>
-        </div>
-      </div>
-
-      <div v-if="folderUploadGroups.length > 0" class="thread-composer-folder-chips">
-        <span v-for="group in folderUploadGroups" :key="group.id" class="thread-composer-folder-chip">
-          <IconTablerFolder class="thread-composer-folder-chip-icon" />
-          <span class="thread-composer-folder-chip-name" :title="group.name">{{ group.name }}</span>
-          <span class="thread-composer-folder-chip-meta">
-            <template v-if="group.isUploading">
-              {{ getFolderUploadPercent(group) }}% uploading ({{ group.processed }}/{{ group.total }})
-            </template>
-            <template v-else>
-              {{ group.filePaths.length }} file{{ group.filePaths.length === 1 ? '' : 's' }}
-            </template>
-          </span>
-          <button
-            class="thread-composer-folder-chip-remove"
-            type="button"
-            :aria-label="`Remove folder ${group.name}`"
-            :disabled="isInteractionDisabled"
-            @click="removeFolderAttachment(group.id)"
-          >×</button>
-        </span>
-      </div>
-
-      <div v-if="standaloneFileAttachments.length > 0" class="thread-composer-file-chips">
-        <span v-for="att in standaloneFileAttachments" :key="att.fsPath" class="thread-composer-file-chip">
-          <IconTablerFilePencil class="thread-composer-file-chip-icon" />
-          <span class="thread-composer-file-chip-name" :title="att.fsPath">{{ att.label }}</span>
-          <button
-            class="thread-composer-file-chip-remove"
-            type="button"
-            :aria-label="`Remove ${att.label}`"
-            :disabled="isInteractionDisabled"
-            @click="removeFileAttachment(att.fsPath)"
-          >×</button>
-        </span>
-      </div>
-
-      <div v-if="selectedSkills.length > 0" class="thread-composer-skill-chips">
-        <span v-for="skill in selectedSkills" :key="skill.path" class="thread-composer-skill-chip">
-          <button
-            class="thread-composer-skill-chip-name"
-            type="button"
-            :title="skillMarkdownPath(skill.path)"
-            :aria-label="`Open ${skill.displayName || skill.name} SKILL.md`"
-            @click="openSkillMarkdown(skill)"
-          >
-            {{ skill.displayName || skill.name }}
-          </button>
-          <button
-            class="thread-composer-skill-chip-remove"
-            type="button"
-            :aria-label="`Remove skill ${skill.displayName || skill.name}`"
-            @click="removeSkill(skill.path)"
-          >×</button>
-        </span>
-      </div>
+      <ThreadComposerAttachments
+      :selected-images="selectedImages"
+      :folder-upload-groups="folderUploadGroups"
+      :standalone-file-attachments="standaloneFileAttachments"
+      :selected-skills="selectedSkills"
+      :is-interaction-disabled="isInteractionDisabled"
+      @remove-image="removeImage"
+      @remove-folder="removeFolderAttachment"
+      @remove-file="removeFileAttachment"
+      @remove-skill="removeSkill"
+    />
 
       <div class="thread-composer-main">
       <div class="thread-composer-input-row">
@@ -492,7 +426,6 @@ import IconTablerArrowUp from '../icons/IconTablerArrowUp.vue'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
-import IconTablerFolder from '../icons/IconTablerFolder.vue'
 import IconTablerMaximize from '../icons/IconTablerMaximize.vue'
 import IconTablerMinimize from '../icons/IconTablerMinimize.vue'
 import IconTablerPlayerStopFilled from '../icons/IconTablerPlayerStopFilled.vue'
@@ -500,6 +433,7 @@ import ComposerDropdown from './ComposerDropdown.vue'
 import ComposerPopover from './ComposerPopover.vue'
 import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import ThreadComposerPlanPanel, { type ComposerPlanPanelData } from './ThreadComposerPlanPanel.vue'
+import ThreadComposerAttachments from './ThreadComposerAttachments.vue'
 import {
   buildSkillSlashCommands,
   matchSlashCommands,
@@ -1341,18 +1275,6 @@ function removeSkill(path: string): void {
   selectedSkills.value = selectedSkills.value.filter((s) => s.path !== path)
 }
 
-function skillMarkdownPath(path: string): string {
-  const trimmed = path.trim()
-  if (!trimmed) return ''
-  return trimmed.endsWith('/SKILL.md') ? trimmed : `${trimmed.replace(/\/+$/, '')}/SKILL.md`
-}
-
-function openSkillMarkdown(skill: SkillItem): void {
-  const markdownPath = skillMarkdownPath(skill.path)
-  if (!markdownPath || typeof window === 'undefined') return
-  window.open(`/codex-local-browse${encodeURI(markdownPath)}`, '_blank', 'noopener,noreferrer')
-}
-
 function removeFileAttachment(fsPath: string): void {
   fileAttachments.value = fileAttachments.value.filter((a) => a.fsPath !== fsPath)
 }
@@ -1363,11 +1285,6 @@ function removeFolderAttachment(groupId: string): void {
   const toRemove = new Set(group.filePaths)
   fileAttachments.value = fileAttachments.value.filter((a) => !toRemove.has(a.fsPath))
   folderUploadGroups.value = folderUploadGroups.value.filter((item) => item.id !== groupId)
-}
-
-function getFolderUploadPercent(group: FolderUploadGroup): number {
-  if (group.total <= 0) return 0
-  return Math.round((group.processed / group.total) * 100)
 }
 
 function addFileAttachment(filePath: string, customLabel?: string): void {
@@ -2195,90 +2112,6 @@ watch(
 
 .thread-composer-shell--no-top-radius {
   @apply rounded-t-none border-t-0;
-}
-
-.thread-composer-attachments {
-  @apply mb-2 flex flex-wrap gap-2;
-}
-
-.thread-composer-attachment {
-  @apply relative h-14 w-14 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50;
-}
-
-.thread-composer-attachment:has(video) {
-  @apply h-20 w-28;
-}
-
-.thread-composer-attachment-image {
-  @apply h-full w-full object-cover;
-}
-
-.thread-composer-attachment:has(video) .thread-composer-attachment-image {
-  @apply object-contain;
-}
-
-.thread-composer-attachment-remove {
-  @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-white;
-}
-
-.thread-composer-file-chips {
-  @apply mb-2 flex flex-wrap gap-1.5;
-}
-
-.thread-composer-folder-chips {
-  @apply mb-2 flex flex-wrap gap-1.5;
-}
-
-.thread-composer-folder-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800;
-}
-
-.thread-composer-folder-chip-icon {
-  @apply h-3.5 w-3.5 text-amber-600 shrink-0;
-}
-
-.thread-composer-folder-chip-name {
-  @apply truncate max-w-40 font-medium;
-}
-
-.thread-composer-folder-chip-meta {
-  @apply text-amber-700/90;
-}
-
-.thread-composer-folder-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-amber-600 transition hover:bg-amber-200 hover:text-amber-800 text-xs leading-none p-0;
-}
-
-.thread-composer-file-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
-}
-
-.thread-composer-file-chip-icon {
-  @apply h-3.5 w-3.5 text-zinc-400 shrink-0;
-}
-
-.thread-composer-file-chip-name {
-  @apply truncate max-w-40 font-mono;
-}
-
-.thread-composer-file-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 text-xs leading-none p-0;
-}
-
-.thread-composer-skill-chips {
-  @apply mb-2 flex flex-wrap gap-1.5;
-}
-
-.thread-composer-skill-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700;
-}
-
-.thread-composer-skill-chip-name {
-  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500;
-}
-
-.thread-composer-skill-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
 }
 
 .thread-composer-rate-limit {
