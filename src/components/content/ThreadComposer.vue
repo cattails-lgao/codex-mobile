@@ -133,113 +133,28 @@
         class="thread-composer-controls"
         :class="{ 'thread-composer-controls--recording': isDictationRecording }"
       >
-        <ComposerPopover
+        <ThreadComposerAttachMenu
           :open="isAttachMenuOpen"
-          align="start"
-          width="lg"
-          :aria-label="t('Add photos & files')"
+          :is-mobile="isMobile"
+          :is-interaction-disabled="isInteractionDisabled"
+          :is-composer-config-disabled="isComposerConfigDisabled"
+          :is-approval-policy-saving="isApprovalPolicySaving"
+          :approval-policy="approvalPolicy"
+          :approval-policy-error="approvalPolicyError"
+          :approval-policy-notice="approvalPolicyNotice"
+          :selected-collaboration-mode="selectedCollaborationMode"
+          :collaboration-mode-choices="collaborationModeChoices"
+          :approval-policy-choices="approvalPolicyChoices"
+          :active-in-progress-mode="activeInProgressMode"
           @update:open="isAttachMenuOpen = $event"
-        >
-          <template #trigger>
-            <button
-              class="thread-composer-attach-trigger"
-              type="button"
-              :aria-label="t('Add photos & files')"
-              :disabled="isInteractionDisabled"
-              @click="toggleAttachMenu"
-            >
-              +
-            </button>
-          </template>
-          <button
-            class="thread-composer-attach-item"
-            type="button"
-            :disabled="isInteractionDisabled"
-            @click="triggerPhotoLibrary"
-          >
-            {{ t('Add photos & files') }}
-          </button>
-          <button
-            class="thread-composer-attach-item"
-            type="button"
-            :disabled="isInteractionDisabled"
-            @click="triggerFolderPicker"
-          >
-            {{ t('Add folder') }}
-          </button>
-          <button
-            class="thread-composer-attach-item"
-            type="button"
-            :disabled="isInteractionDisabled"
-            @click="triggerCameraCapture"
-          >
-            {{ t('Take photo') }}
-          </button>
-          <div class="thread-composer-attach-separator" />
-          <div class="thread-composer-attach-mode">
-            <span class="thread-composer-attach-mode-label">{{ t('In-progress send') }}</span>
-            <div class="thread-composer-attach-mode-buttons">
-              <button
-                class="thread-composer-attach-mode-button"
-                :class="{ 'is-active': activeInProgressMode === 'steer' }"
-                type="button"
-                :disabled="isInteractionDisabled"
-                @click="setActiveInProgressMode('steer')"
-              >
-                {{ t('Steer') }}
-              </button>
-              <button
-                class="thread-composer-attach-mode-button"
-                :class="{ 'is-active': activeInProgressMode === 'queue' }"
-                type="button"
-                :disabled="isInteractionDisabled"
-                @click="setActiveInProgressMode('queue')"
-              >
-                {{ t('Queue') }}
-              </button>
-            </div>
-          </div>
-          <template v-if="isMobile">
-            <div class="thread-composer-attach-separator" />
-            <div class="thread-composer-attach-mode">
-              <span class="thread-composer-attach-mode-label">{{ t('Plan mode') }}</span>
-              <div class="thread-composer-attach-mode-buttons">
-                <button
-                  v-for="choice in collaborationModeChoices"
-                  :key="`mobile-plan-${choice.value}`"
-                  class="thread-composer-attach-mode-button"
-                  :class="{ 'is-active': selectedCollaborationMode === choice.value }"
-                  type="button"
-                  :disabled="choice.disabled || isComposerConfigDisabled"
-                  @click="onMobileCollaborationModeSelect(choice.value)"
-                >
-                  {{ t(choice.labelKey) }}
-                </button>
-              </div>
-            </div>
-            <div class="thread-composer-attach-separator" />
-            <div class="thread-composer-attach-mode">
-              <span class="thread-composer-attach-mode-label">{{ t('Approval policy') }}</span>
-              <div class="thread-composer-attach-mode-buttons">
-                <button
-                  v-for="choice in approvalPolicyChoices"
-                  :key="`mobile-approval-${choice.value}`"
-                  class="thread-composer-attach-mode-button"
-                  :class="{ 'is-active': approvalPolicy === choice.value }"
-                  type="button"
-                  :disabled="isApprovalPolicySaving"
-                  @click="onApprovalPolicySelect(choice.value)"
-                >
-                  {{ t(choice.label) }}
-                </button>
-              </div>
-            </div>
-            <p v-if="approvalPolicyError" class="thread-composer-menu-error" role="alert">{{ approvalPolicyError }}</p>
-            <Transition name="approval-tip">
-              <span v-if="approvalPolicyNotice" class="thread-composer-approval-tip" role="status">{{ approvalPolicyNotice }}</span>
-            </Transition>
-          </template>
-        </ComposerPopover>
+          @toggle="toggleAttachMenu"
+          @set-active-mode="setActiveInProgressMode"
+          @select-photo="triggerPhotoLibrary"
+          @select-folder="triggerFolderPicker"
+          @capture-camera="triggerCameraCapture"
+          @select-collaboration-mode="onMobileCollaborationModeSelect"
+          @select-approval-policy="onApprovalPolicySelect"
+        />
 
         <ComposerPopover
           v-if="!isMobile"
@@ -420,6 +335,7 @@ import ComposerSlashMenu from './ComposerSlashMenu.vue'
 import ThreadComposerPlanPanel, { type ComposerPlanPanelData } from './ThreadComposerPlanPanel.vue'
 import ThreadComposerAttachments from './ThreadComposerAttachments.vue'
 import ThreadComposerModelControls from './ThreadComposerModelControls.vue'
+import ThreadComposerAttachMenu from './ThreadComposerAttachMenu.vue'
 import {
   buildSkillSlashCommands,
   matchSlashCommands,
@@ -2242,38 +2158,6 @@ watch(
 
 .thread-composer-controls--recording {
   @apply gap-1 sm:gap-2;
-}
-
-.thread-composer-attach-trigger {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border-0 bg-transparent pb-px text-xl leading-tight text-zinc-700 transition hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-attach-item {
-  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-attach-separator {
-  @apply my-1 h-px bg-zinc-100;
-}
-
-.thread-composer-attach-mode {
-  @apply px-3 py-2 flex flex-wrap items-center justify-between gap-2;
-}
-
-.thread-composer-attach-mode-label {
-  @apply text-sm text-zinc-800;
-}
-
-.thread-composer-attach-mode-buttons {
-  @apply inline-flex items-center rounded-full border border-zinc-200 bg-white p-0.5;
-}
-
-.thread-composer-attach-mode-button {
-  @apply rounded-full border-0 bg-transparent px-2 py-1 text-xs text-zinc-600 transition hover:text-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-400;
-}
-
-.thread-composer-attach-mode-button.is-active {
-  @apply bg-zinc-900 text-white hover:text-white;
 }
 
 .thread-composer-plan-trigger,
