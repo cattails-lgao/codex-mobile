@@ -4381,11 +4381,16 @@ export function useDesktopState() {
       const id = readString(item.id)
       const text = readString(item.text)
       if (!id || !text) return null
+      // round-40：item/completed 表示 agentMessage 已完成，不再是流式状态。
+      // 与 readPlanItemNotification 对 plan 的约定一致（item/completed →
+      // 非 .live 类型）。否则完成的最终回复保持 agentMessage.live，
+      // isFinalAssistantItem 会因消息类型以 .live 结尾而拒绝把它标记为
+      // final-assistant，最终助手文本被吞进过程块、缺失 data-role=assistant 块。
       return {
         id,
         role: 'assistant',
         text,
-        messageType: 'agentMessage.live',
+        messageType: 'agentMessage',
       }
     }
 

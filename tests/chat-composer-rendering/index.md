@@ -67,3 +67,4 @@ Return to the [manual test index](../../tests.md).
 | [Round 34: process-fold ordering restored + file-change row layout moved left](round34-process-fold-order-and-file-change-layout.md) |
 | [Round 35: file-change row delta/undo right-aligned + long-path ellipsis](round35-file-change-row-right-align-and-long-path-ellipsis.md) |
 | [Componentization round-49: Composer + Conversation display-layer extraction](componentization-round-49-composer-conversation.md) |
+| [Round 40: completed agent message renders as final assistant block](round40-completed-agent-message-final-assistant.md) |
