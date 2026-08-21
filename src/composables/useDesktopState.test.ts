@@ -1610,6 +1610,39 @@ describe('P1-3 notification surface', () => {
     expect(plan?.turnId).toBe('turn-1')
   })
 
+  it('finalizes a completed agentMessage as non-live so the final answer is not folded into the process block (round-40)', async () => {
+    // round-40：item/completed 的 agentMessage 不能再保持 agentMessage.live，
+    // 否则 isFinalAssistantItem 因类型以 .live 结尾拒绝标记 final-assistant，
+    // 最终助手文本会被渲染进程块、缺失 data-role=assistant 块。此处应修正为 agentMessage。
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '回答正文' },
+    })
+    await Promise.resolve()
+    // 流式期间保持 live
+    expect(state.messages.value.find((m) => m.id === 'agent-1')?.messageType).toBe('agentMessage.live')
+
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'agent-1',
+        item: { type: 'agentMessage', id: 'agent-1', text: '回答正文' },
+      },
+    })
+    await Promise.resolve()
+    const agent = state.messages.value.find((m) => m.id === 'agent-1')
+    expect(agent).toBeTruthy()
+    expect(agent?.messageType).toBe('agentMessage')
+  })
+
   it('normalizes the archived last plan to plan after a turn completes (round-31)', async () => {
     // 对话完成后（线程空闲）应把本地存档的 plan.live 修正为 plan，
     // 否则输入框上方的计划面板一直显示「更新中」（streaming 跟随 messageType）。
