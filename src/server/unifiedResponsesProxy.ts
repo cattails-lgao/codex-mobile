@@ -252,27 +252,61 @@ export function responsesInputToMessages(input: string | ResponsesApiInput[], in
   return messages
 }
 
-function responsesToolsToChatTools(tools: unknown): ChatCompletionsRequest['tools'] {
-  if (!Array.isArray(tools)) return undefined
-  const mapped = tools
-    .map((tool) => {
-      if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return null
-      const row = tool as Record<string, unknown>
-      if (row.type !== 'function') return null
-      const name = typeof row.name === 'string' ? row.name : ''
-      if (!name) return null
+/**
+ * Expand Responses tools into chat `function` tools. Namespace tools (e.g.
+ * `multi_agent_v1`) carry nested sub-tools that would otherwise be silently
+ * dropped when rewriting to the chat format. Each sub-tool becomes an
+ * independent chat function named `<namespace>.<subName>`, and a per-request
+ * `qualifiedName -> namespace` map is returned so the reverse translation can
+ * restore the `namespace` field. The map is request-scoped only — no global
+ * fixed tool table, so future namespaces work too.
+ */
+function responsesToolsToChatTools(tools: unknown): {
+  tools?: ChatCompletionsRequest['tools']
+  namespaceMap: Map<string, string>
+} {
+  const namespaceMap = new Map<string, string>()
+  if (!Array.isArray(tools)) return { namespaceMap }
+  const mapped: NonNullable<ChatCompletionsRequest['tools']> = []
+  for (const tool of tools) {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)) continue
+    const row = tool as Record<string, unknown>
+    const namespaceName = typeof row.name === 'string' ? row.name : ''
+    if (row.type === 'function') {
+      if (!namespaceName) continue
       const description = typeof row.description === 'string' ? row.description : undefined
-      return {
+      mapped.push({
         type: 'function' as const,
         function: {
-          name,
+          name: namespaceName,
           ...(description ? { description } : {}),
           ...(row.parameters !== undefined ? { parameters: row.parameters } : {}),
         },
+      })
+      continue
+    }
+    if (row.type === 'namespace' && namespaceName && Array.isArray(row.tools)) {
+      for (const sub of row.tools) {
+        if (!sub || typeof sub !== 'object' || Array.isArray(sub)) continue
+        const subRow = sub as Record<string, unknown>
+        if (subRow.type !== 'function') continue
+        const subName = typeof subRow.name === 'string' ? subRow.name : ''
+        if (!subName) continue
+        const qualifiedName = `${namespaceName}.${subName}`
+        const description = typeof subRow.description === 'string' ? subRow.description : undefined
+        mapped.push({
+          type: 'function' as const,
+          function: {
+            name: qualifiedName,
+            ...(description ? { description } : {}),
+            ...(subRow.parameters !== undefined ? { parameters: subRow.parameters } : {}),
+          },
+        })
+        namespaceMap.set(qualifiedName, namespaceName)
       }
-    })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row))
-  return mapped.length > 0 ? mapped : undefined
+    }
+  }
+  return { tools: mapped.length > 0 ? mapped : undefined, namespaceMap }
 }
 
 function responsesToolChoiceToChatToolChoice(toolChoice: unknown): ChatCompletionsRequest['tool_choice'] {
@@ -289,7 +323,11 @@ function responsesToolChoiceToChatToolChoice(toolChoice: unknown): ChatCompletio
   return { type: 'function', function: { name } }
 }
 
-export function chatCompletionToResponsesFormat(chatResponse: Record<string, unknown>, model: string): Record<string, unknown> {
+export function chatCompletionToResponsesFormat(
+  chatResponse: Record<string, unknown>,
+  model: string,
+  namespaceMap?: Map<string, string>,
+): Record<string, unknown> {
   const choices = (chatResponse.choices ?? []) as Array<{
     message?: {
       content?: string
@@ -311,15 +349,22 @@ export function chatCompletionToResponsesFormat(chatResponse: Record<string, unk
       for (const toolCall of message.tool_calls) {
         if (!toolCall || toolCall.type !== 'function') continue
         const callId = typeof toolCall.id === 'string' && toolCall.id ? toolCall.id : `call_${Date.now()}`
-        const name = typeof toolCall.function?.name === 'string' ? toolCall.function.name : ''
-        if (!name) continue
-        output.push({
+        const qualifiedName = typeof toolCall.function?.name === 'string' ? toolCall.function.name : ''
+        if (!qualifiedName) continue
+        const namespace = namespaceMap?.get(qualifiedName)
+        // Namespace sub-tools were expanded to `<namespace>.<subName>` chat names;
+        // restore the plain sub-tool name and carry the namespace so Codex routes
+        // correctly instead of hitting `unsupported call`.
+        const name = namespace ? qualifiedName.slice(namespace.length + 1) : qualifiedName
+        const item: Record<string, unknown> = {
           type: 'function_call',
           name,
           call_id: callId,
           arguments: typeof toolCall.function?.arguments === 'string' ? toolCall.function.arguments : '{}',
           status: 'completed',
-        })
+        }
+        if (namespace) item.namespace = namespace
+        output.push(item)
       }
     }
 
@@ -524,6 +569,10 @@ export function handleUnifiedResponsesProxyRequest(
       let payload = ''
       let upstreamUrl: URL
 
+      // Per-request `qualifiedName -> namespace` map captured during tool
+      // translation; used to restore `namespace` field on the response.
+      const requestNamespaceMap = new Map<string, string>()
+
       if (useChatPayload) {
         const chatReq: ChatCompletionsRequest = {
           model: parsedBody.model,
@@ -533,9 +582,12 @@ export function handleUnifiedResponsesProxyRequest(
         if (parsedBody.temperature != null) chatReq.temperature = parsedBody.temperature
         if (parsedBody.top_p != null) chatReq.top_p = parsedBody.top_p
         if (parsedBody.max_output_tokens != null) chatReq.max_tokens = parsedBody.max_output_tokens
-        const chatTools = responsesToolsToChatTools(parsedBody.tools)
+        const chatToolsResult = responsesToolsToChatTools(parsedBody.tools)
         const chatToolChoice = responsesToolChoiceToChatToolChoice(parsedBody.tool_choice)
-        if (chatTools) chatReq.tools = chatTools
+        if (chatToolsResult.tools) chatReq.tools = chatToolsResult.tools
+        for (const [qualifiedName, namespaceName] of chatToolsResult.namespaceMap) {
+          requestNamespaceMap.set(qualifiedName, namespaceName)
+        }
         if (chatToolChoice) chatReq.tool_choice = chatToolChoice
         payload = JSON.stringify(chatReq)
         upstreamUrl = new URL(options.chatCompletionsEndpoint)
@@ -604,7 +656,7 @@ export function handleUnifiedResponsesProxyRequest(
               res.end(JSON.stringify(upstreamPayload))
               return
             }
-            const translated = chatCompletionToResponsesFormat(upstreamPayload, parsedBody.model)
+            const translated = chatCompletionToResponsesFormat(upstreamPayload, parsedBody.model, requestNamespaceMap)
             if (isStreaming) {
               sendSyntheticStreamingCompletion(res, translated)
             } else {
