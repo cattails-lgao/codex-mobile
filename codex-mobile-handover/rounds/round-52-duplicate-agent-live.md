@@ -94,4 +94,4 @@
 ## 本轮提交
 
 - live 文本去重（源 `upsertLiveAgentMessage` + 最终汇合 `dedupeAssistantAgentMessageText`）+ 补充修复（`buildTurnRenderGroups` `liveOverlayActive` 双守卫防中间消息误提升 final）+ 单测 + 文档；真机 DOM 直证验证通过。
-- **发布**：版本 `0.1.103`，GitHub release `v0.1.103`（tag → 提交）；npm 发包由用户执行（`codex-mobile-re@0.1.103`）。
+- **发布进行中**：版本 `0.1.103`，代码与 git tag `v0.1.103` 已提交并推送到 `origin`（tag → 版本/文档提交 `d9f5972`），`pnpm run build` 通过（web + CLI 均成功）。**GitHub release `v0.1.103` 与 npm 发包均由用户手动执行**：本机无 `gh` CLI、无 `GITHUB_TOKEN`，无法自动创建 release。
