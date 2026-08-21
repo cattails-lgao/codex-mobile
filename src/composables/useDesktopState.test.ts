@@ -1643,6 +1643,42 @@ describe('P1-3 notification surface', () => {
     expect(agent?.messageType).toBe('agentMessage')
   })
 
+  it('deduplicates live agent messages with identical text but different ids (round-52)', async () => {
+    // round-52：同一段助手文本可能以两个不同 id 进入 live——delta 通道用
+    // params.itemId，completed 通道用 item.id（两者不同）。mergeLiveMessages
+    // 只按 id 去重，需在 live 写入源头按规范化文本去重，只保留最新一条。
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '回答正文' },
+    })
+    await Promise.resolve()
+    // 流式期间只有一条
+    expect(state.messages.value.filter((m) => m.role === 'assistant' && m.text === '回答正文')).toHaveLength(1)
+
+    // completed 用不同 id 携带同一文本（如父/子代理各持不同 item id）
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'agent-2',
+        item: { type: 'agentMessage', id: 'agent-2', text: '回答正文' },
+      },
+    })
+    await Promise.resolve()
+    const matches = state.messages.value.filter((m) => m.role === 'assistant' && m.text === '回答正文')
+    expect(matches).toHaveLength(1)
+    // 保留 completed 的新 id（非 live agentMessage，最终答案不进过程块）
+    expect(matches[0].id).toBe('agent-2')
+    expect(matches[0].messageType).toBe('agentMessage')
+  })
+
   it('normalizes the archived last plan to plan after a turn completes (round-31)', async () => {
     // 对话完成后（线程空闲）应把本地存档的 plan.live 修正为 plan，
     // 否则输入框上方的计划面板一直显示「更新中」（streaming 跟随 messageType）。

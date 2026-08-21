@@ -1,6 +1,6 @@
-# Round-52：多 agent 对话进行中重复 agentMessage 块 + message-toolbar 闪现（纯诊断，待修复）
+# Round-52：多 agent 对话进行中重复 agentMessage 块 + message-toolbar 闪现（已修复）
 
-> **背景：** 真机多 agent（主子孙）对话过程中，消息流出现两个现象：① 同一轮过程中出现重复的 `data-message-type="agentMessage"` 块；② 进行中这些块上出现 `class="message-toolbar"`。当会话结束或刷新后，重复块与 toolbar 消失。本轮按两份最新 rollout 完成根因定位，暂未改动代码（见「待办」）。
+> **背景：** 真机多 agent（主子孙）对话过程中，消息流出现两个现象：① 同一轮过程中出现重复的 `data-message-type="agentMessage"` 块；② 进行中这些块上出现 `class="message-toolbar"`。当会话结束或刷新后，重复块与 toolbar 消失。本轮先按两份最新 rollout 完成根因定位，随后实施 live 文本级去重并补单测（见「修复实施」）。
 
 ## 现象与时机
 
@@ -38,22 +38,32 @@
   - `readAgentMessageCompleted`（round-51 改为非 live；是 toolbar 闪现的触发点）
 - `src/components/content/ThreadConversation.vue`（`MessageToolbar` 渲染于普通消息分支）
 
-## 建议修复方向（最小改动，未实施）
+## 建议修复方向（最小改动）
 
 给 `mergeLiveMessages`（或 live agent 组内）复用 `removeRedundantLiveAgentMessages` 同款 `normalizeMessageText`，对同一线程/turn 内规范化后相等且非空的助手文本只保留一条——与现有轮末/刷新去重语义一致，不影响真正连续的多段助手回复（文本不同）。
 
+## 修复实施（round-52）
+
+- **改动**：`upsertLiveAgentMessage`（live 实时写入源头，[useDesktopState.ts](src/composables/useDesktopState.ts)）在 upsert 后增加 live 文本级去重——新消息为 assistant 且规范化文本非空时，移除 live 组内规范化文本相同的其它 id 消息，只保留最新一条。delta 通道（`params.itemId`）与 completed 通道（`item.id`）同文本不同 id 的副本即被消除；同 id 仍由 `upsertMessage` 替换。与轮末/刷新 `removeRedundantLiveAgentMessages` 同用 `normalizeMessageText`，去重语义一致。
+- **为什么放在 `upsertLiveAgentMessage` 而非 `mergeLiveMessages`**：`mergeLiveMessages` 是通用纯函数（接收 livePlan/liveCommands/liveFileChanges/liveAgent 四组），在组内做文本去重需按消息特征筛选 assistant，范围更大、易误伤 plan/command；源头去重 diff 最小且精准。轮末 `removeRedundantLiveAgentMessages` 仍是持久化路径兜底。
+- **单测**：`useDesktopState.test.ts` 新增 round-52 用例——delta 与 completed 同文本不同 id → live 中只保留 completed 一条（非 live `agentMessage`，id 为新 id）。`pnpm exec vitest run src/composables/useDesktopState.test.ts` 82/82 通过。
+- **类型/编译**：`pnpm exec vue-tsc --noEmit` 通过；4173 Vite 热更新编译 useDesktopState.ts 无错误。
+- **真机核对（受限）**：4173 页面加载正常、无 console 错误、app-server RPC 通道健康（`initialize` 正常响应）。发起测试对话时 provider `deepseek-v4-flash-free` 返回 `server_error`（提供方限流，同 round-39 现象），无法完成多 agent 进行中重复块/ toolbar 的真机复现核对；该项留待可用模型下由用户真机确认。
+
 ## 待办
 
-- [ ] 实施上述 live 文本去重
-- [ ] 补单测（对齐 round-40 风格：delta 与 completed 同文本不同 id → live 中只保留一条）
-- [ ] `vue-tsc --noEmit` + 单测通过
-- [ ] 4173 起服真机核对：进行中重复块与 toolbar 消失，结束/刷新行为不变
+- [x] 实施上述 live 文本去重
+- [x] 补单测（对齐 round-40 风格：delta 与 completed 同文本不同 id → live 中只保留一条）
+- [x] `vue-tsc --noEmit` + 单测通过
+- [ ] 4173 起服真机核对：进行中重复块与 toolbar 消失，结束/刷新行为不变（受 provider 限流暂未能复现，见上）
 
-## 涉及文件（本轮仅文档）
+## 涉及文件（本轮代码 + 文档）
 
+- `src/composables/useDesktopState.ts`（`upsertLiveAgentMessage` live 文本级去重）
+- `src/composables/useDesktopState.test.ts`（round-52 去重用例）
 - `codex-mobile-handover/rounds/round-52-duplicate-agent-live.md`（本文件）
 - `codex-mobile-handover/codex-mobile-handover.md`（索引快照）
 
 ## 本轮提交
 
-- 文档记录（本提交为新 round-52 条目，未触碰代码，无版本号/发布）
+- 修复 + 单测 + 文档（无版本号/发布；真机核对受 provider 限流暂缓）

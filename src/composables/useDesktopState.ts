@@ -3162,7 +3162,21 @@ export function useDesktopState() {
 
   function upsertLiveAgentMessage(threadId: string, nextMessage: UiMessage): void {
     const previous = liveAgentMessagesByThreadId.value[threadId] ?? []
-    const next = upsertMessage(previous, nextMessage)
+    let next = upsertMessage(previous, nextMessage)
+    // round-52：live 文本级去重。同一段助手文本可能以两个不同 id 进入 live
+    // （delta 通道用 params.itemId、completed 通道用 item.id），mergeLiveMessages
+    // 只按 id 去重无法消除 → 进行中重复 agentMessage 块 + 副本挂 toolbar。
+    // 与轮末/刷新的 removeRedundantLiveAgentMessages 同用 normalizeMessageText，
+    // 保留最新一条（同 id 由 upsertMessage 替换、同文本不同 id 在此移除）。
+    const normalizedText = normalizeMessageText(nextMessage.text)
+    if (nextMessage.role === 'assistant' && normalizedText.length > 0) {
+      const deduped = next.filter(
+        (message) => message.id === nextMessage.id || normalizeMessageText(message.text) !== normalizedText,
+      )
+      if (deduped.length !== next.length) {
+        next = deduped
+      }
+    }
     setLiveAgentMessagesForThread(threadId, next)
   }
 
