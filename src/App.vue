@@ -5869,7 +5869,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   }
 
   .content-right-panel-backdrop {
-    @apply fixed inset-0 z-[1050] bg-black/40;
+    @apply fixed inset-0 z-[var(--z-drawer-backdrop)] bg-black/40;
   }
 }
 
