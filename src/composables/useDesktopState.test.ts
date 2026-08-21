@@ -1679,6 +1679,48 @@ describe('P1-3 notification surface', () => {
     expect(matches[0].messageType).toBe('agentMessage')
   })
 
+  it('deduplicates cross-source assistant agentMessage with identical text (round-52)', async () => {
+    // round-52 最终汇合兜底：同一段助手文本可能以不同 id 同时存在于 persisted
+    // （服务端 item.id）与 live（delta params.itemId）。upsertLiveAgentMessage 只
+    // 堵 live map 内部，mergeLiveMessages 只按 id 去重 → 跨源同文本不同 id 会在
+    // 最终渲染 messages 里出现两条（进行中 process 区重复块）。最终汇合的
+    // dedupeAssistantAgentMessageText 应只保留最新一条。
+    const sendNotification = captureNotificationHandler()
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: '帮我做件事', messageType: 'userMessage' },
+        { id: 'persisted-agent', role: 'assistant', text: '共同的回复文本', messageType: 'agentMessage' },
+      ],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+    await state.loadMessages('thread-1')
+
+    // live 收到同文本不同 id 的 agentMessage（completed 通道 item.id 与 persisted 不同）
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'live-agent',
+        item: { type: 'agentMessage', id: 'live-agent', text: '共同的回复文本' },
+      },
+    })
+    await Promise.resolve()
+    const matches = state.messages.value.filter((m) => m.role === 'assistant' && m.text === '共同的回复文本')
+    expect(matches).toHaveLength(1)
+    // 保留最新一条（live 新写入的 id）
+    expect(matches[0].id).toBe('live-agent')
+  })
+
   it('normalizes the archived last plan to plan after a turn completes (round-31)', async () => {
     // 对话完成后（线程空闲）应把本地存档的 plan.live 修正为 plan，
     // 否则输入框上方的计划面板一直显示「更新中」（streaming 跟随 messageType）。

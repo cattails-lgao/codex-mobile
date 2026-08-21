@@ -404,6 +404,7 @@
               </article>
 
               <MessageToolbar
+                v-if="section !== 'process'"
                 :role="message.role"
                 :show-edit="showEditMessageButton(message)"
                 :show-fork="showForkResponseButton(message)"
@@ -995,7 +996,7 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
   const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
   const hotSourceMessages = hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages
 
-  for (const group of buildTurnRenderGroups(hotSourceMessages)) {
+  for (const group of buildTurnRenderGroups(hotSourceMessages, { liveOverlayActive: props.liveOverlay !== null })) {
     const request = group.items.find((item) => item.kind === 'user')
     const finalItem = group.items.find((item) => item.kind === 'final-assistant')
     const processItems = group.items
