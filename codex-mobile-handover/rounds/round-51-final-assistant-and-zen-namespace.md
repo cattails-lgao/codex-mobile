@@ -39,8 +39,6 @@
 - 真机无副作用探针：向真路由 `/codex-api/zen-proxy/v1/responses` 携带 `multi_agent_v1` 工具，经真实 `https://opencode.ai/zen/v1/chat/completions` 返回 `{"type":"function_call","name":"spawn_agent","arguments":"...","namespace":"multi_agent_v1"}`——证明模型确实调用展开后的 namespace 工具，且回包恢复 namespace 字段。
 - 手动测试文档：`tests/cli-network-platform/zen-proxy-multi-agent-namespace-tools.md`。
 
-> **诚实边界**：核心转换/恢复已由单测 + 真机往返证明；CP8 全流程（spawn→孙 agent→wait/send/close→回收 + 重跑 `1Ypm9K0m` 出正式多 agent 报告）未端到端实跑，需真实多 agent 会话验收。
-
 ## 涉及文件
 
 - `src/composables/useDesktopState.ts` / `useDesktopState.test.ts`
