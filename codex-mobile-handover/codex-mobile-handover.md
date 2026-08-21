@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-52 多 agent 进行中重复 agentMessage 块 live 文本级去重修复，最新提交待本轮提交） |
+| Git 分支 | main（round-52 多 agent 进行中重复 agentMessage 块 live 文本级去重修复 + 补充修复（live 中间消息误提升 final），v0.1.103 已提交并推送） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 本轮 round-52 修复（`upsertLiveAgentMessage` live 文本级去重 + 单测）待提交；上一提交 `f38d074`：drop out-of-scope CP8 boundary note from round-51。round-52 完整记录见 [round-52](rounds/round-52-duplicate-agent-live.md) |
+| 最近提交 | 本轮 round-52 完善（补充修复 `buildTurnRenderGroups` `liveOverlayActive` 双守卫防中间消息误提升 final；版本 bump `0.1.103`）已提交推送并打 tag；上一提交 `612460b`：fix dedupe live agent messages（round-52 源级 + merge 级去重）。round-52 完整记录见 [round-52](rounds/round-52-duplicate-agent-live.md) |
 
 ---
 ## 文档结构
@@ -80,7 +80,7 @@
 | 第四十九轮 前端大文件组件化系列完成（Sidebar 线程行 / Directory Tab / App 设置账号面板 / Composer+Conversation 展示层，含验证与手测文档） | [rounds/round-49-componentization.md](rounds/round-49-componentization.md) |
 | 第五十轮 侧边栏重新出现子 agent 会话（tracker 竞态 + 前端并集合并残留修复） | [rounds/round-50-subagent-race.md](rounds/round-50-subagent-race.md) |
 | 第五十一轮 最新一轮缺失 assistant 块 + Zen Proxy 多 agent namespace 工具丢失（agent 消息完成态 + namespace 展开/还原） | [rounds/round-51-final-assistant-and-zen-namespace.md](rounds/round-51-final-assistant-and-zen-namespace.md) |
-| 第五十二轮 多 agent 进行中重复 agentMessage 块 + message-toolbar 闪现（live 文本级去重修复，`upsertLiveAgentMessage` 复用 `normalizeMessageText`） | [rounds/round-52-duplicate-agent-live.md](rounds/round-52-duplicate-agent-live.md) |
+| 第五十二轮 多 agent 进行中重复 agentMessage 块 + message-toolbar 闪现（live 文本级去重修复，`upsertLiveAgentMessage` 复用 `normalizeMessageText`；含补充修复：`buildTurnRenderGroups` 增 `liveOverlayActive` 双守卫，防止 live 流式中已完成中间消息被误提升为 final） | [rounds/round-52-duplicate-agent-live.md](rounds/round-52-duplicate-agent-live.md) |
 
 ## 项目概况
 
@@ -136,6 +136,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **round-52 发布（v0.1.103）**：`codex-mobile-re@0.1.103`——live 多 agent 去重（源 `upsertLiveAgentMessage` + 最终汇合 `dedupeAssistantAgentMessageText`）+ 补充修复（`buildTurnRenderGroups` `liveOverlayActive` 双守卫，防止 live 流式中已完成中间消息被误提升为 final 拉出过程区）；真机 DOM 直证验证通过（线程 01a024d1 流式中中间消息保持 `conversation-item-process`、结束后真正最终正常落成 `conversation-item-final`）；全量 370/370 单测 + `vue-tsc --noEmit` 通过。**GitHub release `v0.1.103`**（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.103）已创建；**npm 发包由用户执行**（`npm view codex-mobile-re@0.1.103` 确认后回填 latest）。git tag `v0.1.103` → 版本/文档提交。
 - **前端大文件组件化进行中（round-48）**：方案见 `docs/componentization-plan.md`。已完成并提交首批（`4fa26ba`：侧栏线程行复用 + Skills 标签）；Apps、Plugins 标签已抽取为独立组件但**尚未提交**（工作区有未提交改动）。剩余：Composio 标签抽取（第二期）、`App.vue` 设置/账号面板（第三期）、`ThreadComposer.vue`/`ThreadConversation.vue` 展示层（第四期）。`useDesktopState.ts`、`codexGateway.ts`、`codexAppServerBridge.ts` 明确排除在组件化之外，需按领域模块化。
 - **round-47 过程区视觉层级与折叠交互、宽屏边距修复已完成并发布（v0.1.100）**：过程标题为 12px，过程 assistant 正文为 13px，final 区保持 14px 主阅读层级。含最终 assistant 回答的过程区默认展开，标题显示过程项数量并可点击收起；收起不隐藏用户请求或最终回答。执行中、尚未有最终回答的 turn 始终展开；同一已挂载 turn 新增过程项或文件变更时由数组长度监听自动展开，刷新后默认展开，折叠状态不持久化。`pnpm exec vitest run src/utils/transcriptGrouping.test.ts` 33/33 通过，`pnpm run build` 通过（既有主 chunk 大小警告）；浅色/深色 × 375x812/768x1024 四组 Playwright 检查确认折叠、展开、ARIA 状态、最终回答可见性、刷新默认展开与无横向溢出。性能审计：新增每个已渲染 turn 的局部布尔状态和条件列表渲染，未新增请求、消息分组、缓存或存储 I/O；运行时 profile 仍未获取，因为缺少 Playwright Chromium。**宽屏修复**：当 viewport 大于 1280px 时，过程区原先占满 turn 宽度而内部消息行居中，导致左侧轨道与内容之间出现大段空白；已在 `.conversation-turn-process` 增加与消息行一致的 `max-width` 和 `margin-inline: auto` 约束，使轨道在 720px 聊天列内对齐。修复后浏览器实测宽屏过程区为 720px，左侧轨道与 request/final 区对齐；`round48-process-collapse-check.cjs` 在浅色/深色 × 375x812/768x1024 四组均通过。**发布状态**：代码已推送至 `origin/main`（`fbeb6d8`），版本号 `0.1.100`，npm 已发布并成为 `latest`，GitHub tag `v0.1.100` 与 GitHub release 均已创建。
 - **npm 发包已完成（v0.1.99）**：`codex-mobile-re@0.1.99` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-19，`npm view codex-mobile-re@0.1.99` 确认 version 0.1.99 / dist-tags.latest 0.1.99）。GitHub release `v0.1.99` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.99；git tag `v0.1.99` → `e45505e`。
