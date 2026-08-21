@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-51 最终 assistant 块 + zen-proxy namespace 工具修复，最新提交 `4437047`，见 [round-51](rounds/round-51-final-assistant-and-zen-namespace.md)） |
+| Git 分支 | main（round-51 最终 assistant 块 + zen-proxy namespace 工具修复；round-52 多 agent 进行中重复 agentMessage 诊断，最新提交 `f38d074`） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | `4437047`：bump version to 0.1.102（round-51；完整清单见 [round-51](rounds/round-51-final-assistant-and-zen-namespace.md)） |
+| 最近提交 | `f38d074`：drop out-of-scope CP8 boundary note from round-51（round-51；完整清单见 [round-51](rounds/round-51-final-assistant-and-zen-namespace.md)）。round-52 为本轮文档：多 agent 进行中重复 agentMessage 纯诊断，见 [round-52](rounds/round-52-duplicate-agent-live.md) |
 
 ---
 ## 文档结构
@@ -80,6 +80,7 @@
 | 第四十九轮 前端大文件组件化系列完成（Sidebar 线程行 / Directory Tab / App 设置账号面板 / Composer+Conversation 展示层，含验证与手测文档） | [rounds/round-49-componentization.md](rounds/round-49-componentization.md) |
 | 第五十轮 侧边栏重新出现子 agent 会话（tracker 竞态 + 前端并集合并残留修复） | [rounds/round-50-subagent-race.md](rounds/round-50-subagent-race.md) |
 | 第五十一轮 最新一轮缺失 assistant 块 + Zen Proxy 多 agent namespace 工具丢失（agent 消息完成态 + namespace 展开/还原） | [rounds/round-51-final-assistant-and-zen-namespace.md](rounds/round-51-final-assistant-and-zen-namespace.md) |
+| 第五十二轮 多 agent 进行中重复 agentMessage 块 + message-toolbar 闪现（纯诊断：live 缺文本级去重；待修复） | [rounds/round-52-duplicate-agent-live.md](rounds/round-52-duplicate-agent-live.md) |
 
 ## 项目概况
 
@@ -160,4 +161,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-20（round-50 侧边栏子 agent 会话重新出现修复；round-49 前端大文件组件化四阶段完成）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-21（round-52 多 agent 进行中重复 agentMessage 纯诊断；round-51 最终 assistant 块 + zen-proxy namespace 工具修复）· 内容已脱敏*
