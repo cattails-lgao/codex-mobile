@@ -7883,7 +7883,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     // tracker once its poll discovers it; awaiting a tick closes that race so
     // the just-created subagent thread is dropped from the response.
     await externalSessionTracker.tick()
-    return filterThreadListByIds(result, new Set(externalSessionTracker.getSubagentThreadIds()))
+    return filterThreadListByIds(result, new Set(externalSessionTracker.getUserFacingSubagentThreadIds()))
   }
 
   function overlayExternalSessionOnThreadResult(result: unknown): unknown {

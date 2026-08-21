@@ -52,6 +52,8 @@ type TrackedSession = {
     sessionId: string;
     originator: string;
     threadSource: string | null;
+    /** Parent thread id when the session declares one (subagent rollouts). */
+    parentThreadId: string | null;
     /** True when originator matches the configured external origins. */
     external: boolean;
     /** Turn ids with `task_started` that have not been closed yet. */
@@ -236,10 +238,49 @@ export class ExternalSessionTracker {
     }
 
     /**
+     * Thread ids marked as subagent sessions (`thread_source` starts with
+     * "subagent"), plus exec-origin sessions that are the recorded parent of a
+     * subagent. The latter are the first layer of a nested multi-agent run: the
+     * codex exec subprocess spawns them as plain user sessions (`thread_source`
+     * "user", no parent link), so they only differ from a top-level user thread
+     * by being referenced as `parent_thread_id` by a marked subagent. Returning
+     * them alongside subagents lets callers drop the whole two-layer subagent
+     * tree from a user-facing thread list without touching real user threads.
+     */
+    getUserFacingSubagentThreadIds(): string[] {
+        if (!this.enabled) return [];
+        const parentIds = new Set<string>();
+        for (const session of this.sessionByThreadId.values()) {
+            if (!this.isSubagent(session)) continue;
+            if (session.parentThreadId) parentIds.add(session.parentThreadId);
+        }
+        const ids: string[] = [];
+        for (const session of this.sessionByThreadId.values()) {
+            if (this.isSubagent(session)) {
+                ids.push(session.sessionId);
+                continue;
+            }
+            // First-layer worker: exec-origin, recorded as the parent of a
+            // subagent, and not itself a user-facing top-level thread.
+            if (
+                session.originator.toLowerCase() === "codex_exec" &&
+                parentIds.has(session.sessionId)
+            ) {
+                ids.push(session.sessionId);
+            }
+        }
+        return ids;
+    }
+
+    private isSubagent(session: TrackedSession): boolean {
+        return (session.threadSource ?? "").toLowerCase().startsWith("subagent");
+    }
+
+    /**
      * Thread ids whose session_meta marks them as subagent sessions
-     * (`thread_source` starts with "subagent"). Subagent sessions are materialized
-     * by the app-server with an interactive `source` (e.g. "cli"), so they show up
-     * in `thread/list`; callers that want a user-facing thread list can exclude them.
+     * (`thread_source` starts with "subagent"). Kept for existing callers;
+     * prefer `getUserFacingSubagentThreadIds()` which also drops first-layer
+     * exec workers that a two-layer run spawns.
      */
     getSubagentThreadIds(): string[] {
         if (!this.enabled) return [];
@@ -462,6 +503,10 @@ export class ExternalSessionTracker {
             if (threadSource) {
                 session.threadSource = threadSource;
             }
+            const parentThreadId = readNonEmptyString(payload.parent_thread_id);
+            if (parentThreadId) {
+                session.parentThreadId = parentThreadId;
+            }
             // Subagent rollouts put the parent thread id in `session_id`; their
             // own thread id (the one `thread/list` materializes) is `id`.
             const isSubagent = threadSource
@@ -580,6 +625,7 @@ export class ExternalSessionTracker {
             sessionId: "",
             originator: "",
             threadSource: null,
+            parentThreadId: null,
             external: false,
             openTurnIds: new Set<string>(),
             readOffset: 0,

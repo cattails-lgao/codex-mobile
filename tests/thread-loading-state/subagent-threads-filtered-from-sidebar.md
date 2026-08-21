@@ -28,6 +28,12 @@ Subagent sessions are materialized by the app-server with an interactive `source
 - Expected: after spawning a subagent (e.g. a TUI/CLI multi-agent prompt), the sidebar keeps the parent thread row and hides the subagent row; the parent's `thread/read` still opens normally. A TUI subagent's "working" overlay attaches to the subagent's own row.
 - This scenario is covered by unit tests in `externalSessionTracker.test.ts` (`id` differs from `session_id`; parent + subagent sharing one parent id are both kept).
 
+#### Two-layer run: first-layer exec worker is hidden too (`codex-exec` parent of a subagent)
+- In a nested run `main -> worker(agent_type: worker) -> grandchild`, the first-layer worker is spawned by the codex engine as a plain user session: its `session_meta` has `thread_source="user"`, `parent_thread_id` omitted, `originator="codex_exec"`. That file is otherwise indistinguishable from a top-level user thread. The only structured signal is the grandchild's `session_meta.thread_source="subagent"` whose `parent_thread_id` points back to the worker.
+- The bridge filter now also drops threads that are `originator=codex_exec` and are referenced as a subagent's `parent_thread_id`, so the worker no longer appears in the sidebar while the main user thread does.
+- Expected: in a two-layer agent run, neither the worker nor the grandchild appear in the sidebar; the main user thread still appears and opens normally. A real user thread (e.g. `originator="Codex Desktop"`/`codex-tui`) that directly spawned a marked subagent is NOT treated as a worker and stays visible.
+- This scenario is covered by `externalSessionTracker.test.ts` ("collects first-layer exec workers that are the parent of a subagent").
+
 #### Rollback/Cleanup
-- There is no feature flag; to restore previous behavior, revert the subagent keying in `externalSessionTracker.ts` (`updateSessionMeta` ignores `session_id` for subagent rollouts) and the `thread/list` filtering in `codexAppServerBridge.ts` (`filterThreadListByIds`).
+- There is no feature flag; to restore previous behavior, revert the subagent keying in `externalSessionTracker.ts` (`updateSessionMeta` ignores `session_id` for subagent rollouts), the first-layer worker detection in `getUserFacingSubagentThreadIds`, and the `thread/list` filtering in `codexAppServerBridge.ts` (`filterThreadListByIds` + `getUserFacingSubagentThreadIds`).
 - No app-server state is mutated; deleting the subagent rollout files removes them from the tracker index on the next poll.
