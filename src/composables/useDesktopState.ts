@@ -916,6 +916,48 @@ function hasEquivalentUserMessage(target: UiMessage, messages: UiMessage[]): boo
   })
 }
 
+// round-52：最终汇合后、按 turn（以 user 消息为界）对 assistant agentMessage
+// 做文本级去重——同 turn 内规范化文本相等的助手消息只保留最后一条。与
+// buildTurnRenderGroups 的 turn 分组语义一致，避免误删跨 turn 的相同助手文本；
+// 与 upsertLiveAgentMessage / removeRedundantLiveAgentMessages 同用
+// normalizeMessageText，去重语义统一。只作用 agentMessage（含 .live），不动
+// plan / command / file-change / reasoning。
+function dedupeAssistantAgentMessageText(messages: UiMessage[]): UiMessage[] {
+  const result: UiMessage[] = []
+  let turnAssistantTexts = new Map<string, number>()
+  for (const message of messages) {
+    const isAssistantAgentMessage =
+      message.role === 'assistant' && typeof message.messageType === 'string'
+      && (message.messageType === 'agentMessage' || message.messageType === 'agentMessage.live')
+    if (!isAssistantAgentMessage) {
+      if (message.role === 'user') {
+        turnAssistantTexts = new Map()
+      }
+      result.push(message)
+      continue
+    }
+    const normalized = normalizeMessageText(message.text)
+    if (normalized.length === 0) {
+      result.push(message)
+      continue
+    }
+    const duplicateIndex = turnAssistantTexts.get(normalized)
+    if (typeof duplicateIndex === 'number') {
+      // 同 turn 已有同文本助手消息 → 移除旧的那条，保留最新
+      result.splice(duplicateIndex, 1)
+      for (const [key, index] of turnAssistantTexts) {
+        if (index > duplicateIndex) turnAssistantTexts.set(key, index - 1)
+      }
+      turnAssistantTexts.set(normalized, result.length)
+      result.push(message)
+    } else {
+      turnAssistantTexts.set(normalized, result.length)
+      result.push(message)
+    }
+  }
+  return result
+}
+
 function removeRedundantLiveAgentMessages(previous: UiMessage[], incoming: UiMessage[]): UiMessage[] {
   const incomingMessageIds = new Set(incoming.map((message) => message.id))
   const incomingAssistantTexts = new Set(
@@ -1723,7 +1765,14 @@ function mergeThreadMessageStreams(
   // 命令/工具（turn 刚结束时无需等刷新即可按真实顺序交错展示）。
   const liveMessages = mergeLiveMessages(threadId, liveGroups, persisted)
   const combined = [...persisted, ...liveMessages]
-  return [...mergePersistedReasoning(combined, persistedReasoning), ...injected]
+  // round-52：最终汇合的统一去重关口。upsertLiveAgentMessage 只堵 live map
+  // 内部；同一段助手文本可能以不同 id 同时存在于 persisted（item.id）与 live
+  // （params.itemId），mergeLiveMessages 只按 id 去重 → 跨源同文本不同 id 仍会
+  // 双份渲染（进行中 process 区重复块）。此处对 assistant agentMessage 按规范化
+  // 文本去重、保留最新一条，覆盖所有来源与轮中 refresh 场景；与轮末/刷新的
+  // removeRedundantLiveAgentMessages 同用 normalizeMessageText，语义一致。
+  const dedupedCombined = dedupeAssistantAgentMessageText(combined)
+  return [...mergePersistedReasoning(dedupedCombined, persistedReasoning), ...injected]
 }
 
 export function useDesktopState() {

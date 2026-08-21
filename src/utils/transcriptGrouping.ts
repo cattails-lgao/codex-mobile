@@ -60,7 +60,10 @@ function isFinalAssistantItem(message: UiMessage): boolean {
  * underlying message order. The final assistant answer is marked for emphasis,
  * while earlier assistant text and process records retain their exact position.
  */
-export function buildTurnRenderGroups(messages: UiMessage[]): TurnRenderGroup[] {
+export function buildTurnRenderGroups(
+  messages: UiMessage[],
+  options?: { liveOverlayActive?: boolean },
+): TurnRenderGroup[] {
   const groups: TurnRenderGroup[] = []
   let current: TurnRenderGroup | null = null
 
@@ -72,10 +75,25 @@ export function buildTurnRenderGroups(messages: UiMessage[]): TurnRenderGroup[] 
     current.items.push({ message, kind: renderItemKind(message) })
   }
 
-  for (const group of groups) {
+  const lastGroupIndex = groups.length - 1
+  for (let index = 0; index < groups.length; index += 1) {
+    const group = groups[index]
+    // 活跃轮最终回答尚未落定：live overlay 仍在生成该轮最终内容（真实最终还没进入 messages），
+    // 此时该轮末尾只可能是已完成的中间消息，提升为 final 会被拉出过程区、显示成"本轮过程外的最终答案"。
+    const isUnsettledLiveTurn = options?.liveOverlayActive === true && index === lastGroupIndex
+    if (isUnsettledLiveTurn) continue
+
     const lastContentItem = [...group.items].reverse().find((item) => item.kind !== 'file-change')
     if (lastContentItem && isFinalAssistantItem(lastContentItem.message)) {
-      lastContentItem.kind = 'final-assistant'
+      const streamingInTurn = group.items.some(
+        (item) => typeof item.message.messageType === 'string' && item.message.messageType.endsWith('.live'),
+      )
+      // 本轮仍属于活跃/流式（本组内有 .live，或整轮尚未落定仍由 live overlay 生成）时，末尾这条
+      // 已完成的 agentMessage 只可能是流式过程中的中间消息（例如多代理场景下子代理先于主代理汇总
+      // 完成），不应被提升为 final 拉出过程区。真正的最终回复待其进入 messages 后再提升。
+      if (!streamingInTurn) {
+        lastContentItem.kind = 'final-assistant'
+      }
     }
   }
 
