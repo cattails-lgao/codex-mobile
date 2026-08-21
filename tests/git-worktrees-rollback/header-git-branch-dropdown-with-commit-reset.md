@@ -44,6 +44,8 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 31. Narrow the Review pane file list and confirm changed-file rows do not inherit folder-depth indentation, long names truncate on one line instead of wrapping vertically, and the `+`/`-` counts remain visible.
 32. At a mobile viewport around 375px wide, open the Review pane, scroll the diff content vertically, and confirm the `X` close button remains visible and tappable in the top-right corner.
 33. Switch to dark theme and repeat steps 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, and 32.
+34. Add an untracked (or newly staged) file with several hundred added lines in `<thread-cwd>` so its diff comfortably overflows the pane, click `Review Worktree Changes`, and at a desktop viewport confirm the file appears in the Review pane list, select it, scroll the diff to the very bottom, and confirm the final diff row is fully visible with no bottom clipping.
+35. At a mobile viewport around 375px wide, open the Review pane, select the same long file from the mobile file sheet, scroll the diff to the bottom, and confirm the last diff row is visible and the pane header `X` stays tappable.
 
 #### Preserved Prior Coverage
 1. Click `Review Worktree Changes` and confirm the review pane opens; click it again and confirm the pane toggles.
@@ -94,6 +96,8 @@ Thread header Git dropdown replaces the simple review action with a commits/bran
 - The selected branch HEAD commit is marked `current` in the commit list.
 - The mobile Review pane keeps its close button visible above the app chrome in both light theme and dark theme.
 - The mobile Review pane diff area scrolls vertically without moving or hiding the pane header.
+- Long files roll to the true bottom: a several-hundred-line diff stays height-constrained, and the final diff row scrolls fully into view with no bottom clipping on desktop and mobile.
+- On mobile, selecting a long file from the file sheet and scrolling to the bottom keeps the close button visible and tappable.
 - The Review pane overlay, toolbar, file list, file sheet, and diff surfaces use dark backgrounds and borders in dark theme instead of showing light surfaces.
 - On mobile, branches, commits, and selected-commit file details stack vertically in that order and stay inside the viewport in both light theme and dark theme.
 - Loading and error messages remain visible in the dropdown without using browser alerts.

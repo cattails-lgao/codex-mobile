@@ -1,5 +1,8 @@
 <template>
-  <section class="review-pane" :class="{ 'is-mobile': isMobile }" @pointerdown.stop @click.stop>
+  <Teleport to="body">
+    <Transition name="review-pane-modal">
+      <div class="review-pane-backdrop" :class="{ 'is-mobile': isMobile }" @click="closeReviewPane">
+        <section class="review-pane" :class="{ 'is-mobile': isMobile }" @pointerdown.stop @click.stop>
     <header class="review-pane-header">
       <div class="review-pane-heading">
         <p class="review-pane-eyebrow">{{ t('Review') }}</p>
@@ -328,6 +331,9 @@
       </div>
     </Transition>
   </section>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -360,7 +366,7 @@ const props = defineProps<{
   commitSha?: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
 }>()
 
@@ -776,6 +782,10 @@ async function reloadAll(): Promise<void> {
   await loadSnapshot()
 }
 
+function closeReviewPane(): void {
+  emit('close')
+}
+
 function selectFile(fileId: string): void {
   expandFileAncestors(fileId)
   selectedFileId.value = fileId
@@ -928,12 +938,44 @@ onBeforeUnmount(() => {
 <style scoped>
 @reference "tailwindcss";
 
+.review-pane-backdrop {
+  @apply fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50 p-4;
+  backdrop-filter: blur(2px);
+}
+
+.review-pane-backdrop.is-mobile {
+  @apply items-end p-0;
+}
+
 .review-pane {
-  @apply fixed inset-3 z-[var(--z-modal)] flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl;
+  @apply flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl;
+  height: min(88dvh, 100%);
+  width: min(72rem, 100%);
 }
 
 .review-pane.is-mobile {
-  @apply inset-0 rounded-none border-0;
+  @apply w-full max-w-none rounded-t-3xl rounded-b-none border-0;
+  height: 90dvh;
+}
+
+.review-pane-modal-enter-active,
+.review-pane-modal-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.review-pane-modal-enter-active .review-pane,
+.review-pane-modal-leave-active .review-pane {
+  transition: transform 200ms ease;
+}
+
+.review-pane-modal-enter-from,
+.review-pane-modal-leave-to {
+  opacity: 0;
+}
+
+.review-pane-modal-enter-from .review-pane,
+.review-pane-modal-leave-to .review-pane {
+  transform: translateY(14px) scale(0.98);
 }
 
 .review-pane-header {
@@ -1063,7 +1105,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-main {
-  @apply grid h-full min-h-0 grid-cols-[var(--review-file-list-width,18rem)_0.5rem_minmax(0,1fr)];
+  @apply grid h-full min-h-0 overflow-hidden grid-cols-[var(--review-file-list-width,18rem)_0.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)];
 }
 
 .review-pane-file-list {
