@@ -374,4 +374,128 @@ describe('unified responses proxy reasoning_content translation', () => {
       await close(proxy)
     }
   })
+
+  it('restores a namespace field on namespace sub-tool function calls', () => {
+    const namespaceMap = new Map<string, string>([
+      ['multi_agent_v1.spawn_agent', 'multi_agent_v1'],
+      ['multi_agent_v1.close_agent', 'multi_agent_v1'],
+    ])
+
+    const response = chatCompletionToResponsesFormat({
+      id: 'chatcmpl-test',
+      created: 123,
+      choices: [{
+        message: {
+          role: 'assistant',
+          tool_calls: [
+            { id: 'call_a', type: 'function', function: { name: 'multi_agent_v1.spawn_agent', arguments: '{}' } },
+            { id: 'call_b', type: 'function', function: { name: 'exec_command', arguments: '{}' } },
+          ],
+        },
+      }],
+    }, 'big-pickle', namespaceMap)
+
+    expect(response.output).toEqual([
+      {
+        type: 'function_call',
+        name: 'spawn_agent',
+        namespace: 'multi_agent_v1',
+        call_id: 'call_a',
+        arguments: '{}',
+        status: 'completed',
+      },
+      {
+        type: 'function_call',
+        name: 'exec_command',
+        call_id: 'call_b',
+        arguments: '{}',
+        status: 'completed',
+      },
+    ])
+  })
+
+  it('expands namespace tools and round-trips the namespace through the proxy', async () => {
+    let upstreamRequest: Record<string, unknown> | null = null
+    const upstream = createServer((req, res) => {
+      const chunks: Buffer[] = []
+      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      req.on('end', () => {
+        upstreamRequest = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test',
+          created: 123,
+          choices: [{
+            message: {
+              role: 'assistant',
+              tool_calls: [
+                { id: 'call_a', type: 'function', function: { name: 'multi_agent_v1.spawn_agent', arguments: '{"prompt":"go"}' } },
+              ],
+            },
+          }],
+        }))
+      })
+    })
+    const upstreamPort = await listen(upstream)
+
+    const proxy = createServer((req, res) => {
+      handleUnifiedResponsesProxyRequest(req, res, {
+        bearerToken: '',
+        requireBearerToken: false,
+        wireApi: 'responses',
+        responsesEndpoint: `http://127.0.0.1:${upstreamPort}/v1/responses`,
+        chatCompletionsEndpoint: `http://127.0.0.1:${upstreamPort}/v1/chat/completions`,
+        missingKeyMessage: 'missing',
+        allowToolFallbackToResponses: false,
+        responsesPayloadFormat: 'chat',
+      })
+    })
+    const proxyPort = await listen(proxy)
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/v1/responses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'big-pickle',
+          input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'spawn an agent' }] }],
+          tools: [{
+            type: 'namespace',
+            name: 'multi_agent_v1',
+            description: 'multi-agent lifecycle',
+            tools: [
+              { type: 'function', name: 'spawn_agent', description: 'create a sub agent', parameters: { type: 'object' } },
+              { type: 'function', name: 'close_agent', description: 'close a sub agent', parameters: { type: 'object' } },
+            ],
+          }],
+        }),
+      })
+
+      expect(response.status).toBe(200)
+
+      const upstreamTools = (upstreamRequest as Record<string, unknown> | null)?.tools as Array<{
+        type: string
+        function?: { name?: string }
+      }> | undefined
+      expect(upstreamTools).toEqual([
+        { type: 'function', function: { name: 'multi_agent_v1.spawn_agent', description: 'create a sub agent', parameters: { type: 'object' } } },
+        { type: 'function', function: { name: 'multi_agent_v1.close_agent', description: 'close a sub agent', parameters: { type: 'object' } } },
+      ])
+
+      const body = await response.json() as { output?: Array<Record<string, unknown>> }
+      expect(body.output).toEqual([
+        {
+          type: 'function_call',
+          name: 'spawn_agent',
+          namespace: 'multi_agent_v1',
+          call_id: 'call_a',
+          arguments: '{"prompt":"go"}',
+          status: 'completed',
+        },
+      ])
+    } finally {
+      await close(proxy)
+      await close(upstream)
+    }
+  })
 })
