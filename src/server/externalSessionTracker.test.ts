@@ -12,8 +12,10 @@ function metaLine(
     originator: string,
     threadSource?: string,
     ownId?: string,
+    parentThreadId?: string,
 ): string {
     const extra = threadSource ? `,"thread_source":"${threadSource}"` : "";
+    const parent = parentThreadId ? `,"parent_thread_id":"${parentThreadId}"` : "";
     return JSON.stringify({
         timestamp: "2026-08-02T00:00:00.000Z",
         type: "session_meta",
@@ -22,6 +24,7 @@ function metaLine(
             id: ownId ?? sessionId,
             originator,
             ...(extra ? { thread_source: threadSource } : {}),
+            ...(parent ? { parent_thread_id: parentThreadId } : {}),
         },
     });
 }
@@ -240,6 +243,74 @@ describe("externalSessionTracker", () => {
             "thread-sub-2",
             "thread-sub-3",
         ]);
+    });
+
+    it("collects first-layer exec workers that are the parent of a subagent", async () => {
+        // Two-layer multi-agent tree: main -> worker(codex_exec) -> grandchild.
+        // The worker is written by codex as a plain user session (thread_source
+        // "user", no parent link), so it is only distinguishable from a real
+        // user thread by being referenced as a subagent's parent_thread_id and
+        // by its exec origin.
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-00-t1.jsonl",
+            [metaLine("thread-main-1", "Codex Desktop")],
+        );
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-01-t2.jsonl",
+            [metaLine("thread-worker-1", "codex_exec")],
+        );
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-02-t3.jsonl",
+            [
+                metaLine(
+                    "thread-worker-1",
+                    "codex_exec",
+                    "subagent",
+                    "thread-grand-1",
+                    "thread-worker-1",
+                ),
+            ],
+        );
+        // Control: a real user thread (non-exec origin) that directly spawned a
+        // marked subagent must NOT be treated as a leaked worker.
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-03-t4.jsonl",
+            [metaLine("thread-cparent-1", "Codex Desktop")],
+        );
+        await writeSession(
+            sessionsDir,
+            "rollout-2026-08-02T00-00-04-t5.jsonl",
+            [
+                metaLine(
+                    "thread-cparent-1",
+                    "Codex Desktop",
+                    "subagent",
+                    "thread-csub-1",
+                    "thread-cparent-1",
+                ),
+            ],
+        );
+
+        const tracker = createTracker();
+        await tracker.tick();
+
+        // The grandchild and the control subagent (thread_source=subagent) plus
+        // the first-layer exec worker are excluded; the real user threads remain.
+        expect(tracker.getUserFacingSubagentThreadIds().sort()).toEqual([
+            "thread-csub-1",
+            "thread-grand-1",
+            "thread-worker-1",
+        ]);
+        expect(tracker.getUserFacingSubagentThreadIds()).not.toContain(
+            "thread-main-1",
+        );
+        expect(tracker.getUserFacingSubagentThreadIds()).not.toContain(
+            "thread-cparent-1",
+        );
     });
 
     it("keys subagent sessions by own id when session_id is the parent thread id", async () => {
