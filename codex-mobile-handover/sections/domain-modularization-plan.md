@@ -141,6 +141,11 @@
   - `e22eae4`：server 请求写入侧迁出，新建 `PendingRequestWriteDeps { pendingServerRequestsByThreadId, pendingReplyErrorByRequestId, applyThreadFlags }`，迁出 `upsertPendingServerRequest`/`removePendingServerRequestById`/`replacePendingServerRequests`/`readPendingReplyErrorForRequest`；新增 `useDesktopStateRequests.test.ts`（pending-request 写操作单测）。
   - 新增 `useDesktopStateLiveWrites.test.ts`（live 命令/文件变更写入单测）。
   - 验证：`vue-tsc --noEmit` 通过、全量 380 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 5038 行。剩余写入侧（live plan/agent/reasoning 写入、turnIndex 维护、liveReasoning 文本写入）仍留闭包，视需求再评估。
+- 2026-08-23：**useDesktopState() 主函数第四批扩展（注入式写入侧：live plan/agent）**。扩展 `useDesktopStateLiveWrites.ts` 至 178 行，`LiveWriteDeps` 扩为 5 个 ref（新增 `liveAgentMessagesByThreadId`/`livePlanMessagesByThreadId`/`lastPlanByThreadId`）。
+  - 迁出：`setLiveAgentMessagesForThread`、`clearLiveAgentMessagesForThread`、`setLivePlanMessagesForThread`、`upsertLivePlanMessage`、`rememberLastPlan`（含 `saveLastPlanMap` 持久化调用）、`upsertLiveAgentMessage`（含 round-52 文本级去重）、`upsertLiveFileChangeMessage`。仅依赖注入 ref + 纯工具（`upsertMessage`/`omitKey`/`areMessageArraysEqual`/`normalizeMessageText`）+ 持久化函数 `saveLastPlanMap`，零闭包回环。
+  - 主 Shell：新增 8 个函数对应的 `xxxImpl(liveWriteDeps, …)` 薄包装，对外签名不变。
+  - 测试：`useDesktopStateLiveWrites.test.ts` 扩至 8 个用例（plan 追加并记忆、agent 文本级去重、saveLastPlanMap 持久化 spy）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 383 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 5010 行。live 消息写入侧已基本迁出；剩余闭包写入侧（liveReasoning 文本写入/snapshot、turnIndex 维护、agent 内容事件相关）留待评估。
 
 ## 收尾验证口径（每批）
 
