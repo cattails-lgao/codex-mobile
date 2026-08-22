@@ -4,7 +4,7 @@
 // command runners, and paths here as later slices (git/models/session/zip) land.
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 
 export function getCodexHomeDir(): string {
   const codexHome = process.env.CODEX_HOME?.trim()
@@ -31,6 +31,12 @@ export function readNumber(value: unknown): number {
 
 export function quoteShellTokenIfNeeded(value: string): string {
   return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+export function isSameOrDescendantPath(candidate: string, root: string): boolean {
+  if (candidate === root) return true
+  const rootWithSeparator = root.endsWith(sep) ? root : `${root}${sep}`
+  return candidate.startsWith(rootWithSeparator)
 }
 
 export function getErrorMessage(payload: unknown, fallback: string): string {
