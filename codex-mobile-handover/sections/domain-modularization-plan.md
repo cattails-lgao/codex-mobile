@@ -121,6 +121,15 @@
   - 依赖策略：路由 handler 仅依赖 `bridge/git.ts`（`assertLocalGitBranch`/`readGitHeaderState`/`checkoutGitBranchWithWorktreeRecovery` 等）与 `bridge/core.ts`（`runCommandCapture`/`getErrorMessage`/`asRecord` 等）及 Node 内建；主文件壳上的 4 个共享助手（`setJson`/`readJsonBody`/`persistWorkspaceRoot`/`rollbackCreatedWorktree`）通过 `deps` 参数注入，避免 `routes.ts` 反向 import 主文件造成循环依赖。
   - 主 Shell：新增 `import { handleGitWorktreeHttpRequest } from './bridge/routes.js'`，将原内联块替换为单行派发 `if (await handleGitWorktreeHttpRequest(req, res, url, { setJson, readJsonBody, persistWorkspaceRoot, rollbackCreatedWorktree })) return`，其余零改动。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族（thread/git-reset-* / 文件 / composio / 自动化等）仍留驻 shell，逐族视闭包依赖再切。
+- 2026-08-22：**useDesktopState() 主函数首批（闭包内 normalizer 纯函数簇）完成**。删除闭包内 17 个纯 normalizer（notification/snapshot 归一化），新建 `useDesktopStateNormalizers.ts`（224 行）。
+  - 迁出：`normalizePlanStepStatus`/`buildPlanMessageText`/`asRecord`/`readString`/`readNumber`/`getRateLimitSnapshotKey`/`normalizeRateLimitWindow`/`normalizeRateLimitSnapshot`/`normalizeRateLimitSnapshotsPayload`/`normalizeTokenUsageBreakdown`/`normalizeThreadTokenUsage`/`readThreadTokenUsageUpdate`/`extractThreadIdFromNotification`/`readTurnErrorMessage`/`readNotificationErrorState` 等。均为不捕获 ref 的纯函数；主函数内删除本地定义并 `import` 复用。
+  - 说明：闭包内 `normalizeThreadTokenUsage` 与 `useDesktopStateUtils.ts` 中已导出的存储值归一化变体刻意不同，故单独落文件而不并入 utils；文件从 `useDesktopStateUtils` import `clamp` 及 `Turn*` 类型不改语义。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过。
+- 2026-08-22：**useDesktopState() 主函数第二批（纯 notification 消息读取器簇）完成**。删除闭包内 17 个纯读取器/助手，新建 `useDesktopStateReaders.ts`（380 行）。
+  - 迁出：`readTurnActivity`/`readTurnStartedInfo`/`readTurnCompletedInfo`/`liveReasoningMessageId`/`readReasoningStartedItemId`/`readReasoningDelta`/`readReasoningSectionBreakMessageId`/`readReasoningCompletedId`/`readReasoningItemText`/`readReasoningItemNotification`/`readAgentMessageStartedId`/`readAgentMessageDelta`/`readAgentMessageCompleted`/`toLocalImageUrl`/`toImageGenerationUrl`/`readCompletedImageView`/`readCommandOutputDelta`。只依赖 `notification` 参数 + 纯 normalizer/utils（`asRecord`/`readString`/`extractThreadIdFromNotification`/`parseIsoTimestamp`）。
+  - 边界：`readCommandExecutionStarted`/`readCommandExecutionCompleted`/`readPlanItemNotification`/`readCompletedFileChange` 因读取 `turnIndexByTurnIdByThreadId.value` 共享 ref，**留驻闭包**不迁移（避免跨模块传响应式状态）。
+  - 主 Shell：为各纯读取器补 `import`，删除本地定义，清理未用导入（`toLocalImageUrl`/`toImageGenerationUrl`/`readReasoningItemText` 仅被迁出者使用则不再 import）。净删闭包约 597 行。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。闭包仍剩 `readCommandExecution*`/`readPlanItemNotification`/`readCompletedFileChange` 及写入侧（upsert/append/set）等闭包状态函数留待后续评估。
 
 ## 收尾验证口径（每批）
 
