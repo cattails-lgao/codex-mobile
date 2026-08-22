@@ -2,9 +2,8 @@
 // The routers are thin; the heavy AppServerProcess facade and the
 // externalSessionTracker instance stay owned by the shell and are injected via
 // ThreadRouteDeps through narrow structural interfaces so this slice never
-// imports back into the bridge shell. The /codex-api/events SSE handler (which
-// depends on the shell's middleware.subscribeNotifications self-reference)
-// remains in the shell pending a subscription-source extraction.
+// imports back into the bridge shell. The /codex-api/events SSE handler moved
+// to bridge/eventsRoutes.ts (injects the shell's subscribeNotifications).
 import { isAbsolute } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'

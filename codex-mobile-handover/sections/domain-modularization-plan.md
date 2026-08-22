@@ -192,6 +192,10 @@
   - 注入点（deps）：`{ setJson, readJsonBody, appServer.rpc 窄 facade, getThreadSearchIndex 闭包 }`。`getThreadSearchIndex`（buildThreadSearchIndex 延迟构建索引闭包）与 thread-search 的官方 RPC 优先 + 本地索引回退逻辑绑定 shell 状态，注入而非随迁。
   - 主 Shell：删除内联 9 个 handler 及 title/pins/reasoning/first-launch/session-index 缓存 helper（约 300 行），接入 `handleThreadPreferencesHttpRequest`；`readMergedThreadTitleCache` 复用点（project zip 导出 1196、导入 1339）改由本模块 import，随附 3 个 title-cache helper 一并 `export` 供 shell 复用。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族仅 `events` SSE（依赖 `middleware.subscribeNotifications` 自引用）留驻。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 Q 批（`events` SSE 路由）完成**。新建 `bridge/eventsRoutes.ts`，以 `handleEventsHttpRequest(req, res, deps)` 承载 `/codex-api/events` SSE handler。
+  - 该 handler 是纯 pass-through：只消费注入的 `subscribeNotifications`（shell 聚合 appServer/terminalManager/externalSessionTracker 通知）+ `ServerResponse` 生命周期，故 deps 仅 `{ subscribeNotifications }` 单一窄结构类型，零其他闭包捕获。
+  - 主 Shell：删除内联 SSE handler（状态头写入/订阅/keepAlive 15s ping/close 清理），接入 `handleEventsHttpRequest`（注入 `middleware.subscribeNotifications.bind(middleware)`）；`middleware.subscribeNotifications` 聚合实现含 `externalSessionTracker` 订阅触发 `appServer.invalidateLiveStateCache`，保持留驻 shell。threadRoutes.ts 头部注释同步移除「events 留驻」说明。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。至此核心派发全部路由族迁移完成，`codexAppServerBridge.ts` 主文件仅剩派发接线与共享状态闭包。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
@@ -219,6 +223,8 @@
 5. **rpc 族**（最高，最后）——除 `appServer`+`externalSessionTracker` 外，依赖闭包指标状态 `requestBodyBytes`/`rpcMethod` + 跨领域 thread 结果合并 pipeline（`mergeSessionSkillInputs`/`mergeSessionCommands`/`filterSubagentThreads`/`overlayExternalSession`…）。
 
 **thread-terminal 族**（4627-4738）：依赖 `terminalManager`+`appServer`，耦合同 thread 读族，需另评估。
+
+> 更新（Q 批后）：上表为 K 批时的规划盘点。截至 Q 批，**核心派发全部路由族已迁移完成**——`events/SSE` 以其订阅源 `middleware.subscribeNotifications` 作为唯一注入点迁入 `bridge/eventsRoutes.ts`（该聚合实现自身依赖 appServer/terminalManager/externalSessionTracker 闭包，留驻 shell）。`requestBodyBytes`/`rpcMethod` 指标状态与 rpc HTTP 壳、workspace-roots 闭包、`thread-terminal` 族仍留驻 shell，均非独立 HTTP 路由族或属派发接线本身。
 
 ## 收尾验证口径（每批）
 
