@@ -157,3 +157,7 @@ export async function runCommandWithOutput(command: string, args: string[], opti
     })
   })
 }
+
+export const STREAM_EVENT_BUFFER_LIMIT = 400
+
+export const THREAD_RESPONSE_TURN_LIMIT = 10

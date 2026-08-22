@@ -53,6 +53,8 @@ import {
   runCommand,
   runCommandCapture,
   runCommandCaptureRaw,
+  STREAM_EVENT_BUFFER_LIMIT,
+  THREAD_RESPONSE_TURN_LIMIT,
 } from './bridge/core.js'
 import {
   allocatePermanentWorktreeBranchName,
@@ -75,6 +77,7 @@ import { handleChatgptUpstreamHttpRequest } from './bridge/chatgptUpstreamRoutes
 import { handleFreeModeHttpRequest } from './bridge/freeModeRoutes.js'
 import { handleAutomationsHttpRequest } from './bridge/automationsRoutes.js'
 import { handleProjectHttpRequest } from './bridge/projectRoutes.js'
+import { handleThreadHttpRequest, mergeStreamTurnErrorsIntoThreadResult } from './bridge/threadRoutes.js'
 // 自动化领域切片（A 批）公共导出保持原样：仅 parseAutomationToml 与
 // toAutomationApiRecord 此前是公共导出，供消费者（含测试）继续从本模块导入。
 export { parseAutomationToml, toAutomationApiRecord } from './bridge/automations.js'
@@ -210,7 +213,6 @@ type ThreadSearchIndex = {
   docsById: Map<string, ThreadSearchDocument>
 }
 
-const THREAD_RESPONSE_TURN_LIMIT = 10
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
 const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
@@ -713,78 +715,6 @@ export function isThreadMaterializationPendingError(error: unknown): boolean {
 export function isThreadNotFoundError(error: unknown): boolean {
   const message = getErrorMessage(error, '').toLowerCase()
   return message.includes('thread not found') || message.includes('no rollout found for thread id')
-}
-
-function readStreamTurnId(params: Record<string, unknown>): string {
-  const directTurnId = readNonEmptyString(params.turnId) || readNonEmptyString(params.turn_id)
-  if (directTurnId) return directTurnId
-  const turn = asRecord(params.turn)
-  return readNonEmptyString(turn?.id)
-}
-
-function readStreamTurnErrorMessage(frame: StreamEventFrame): { turnId: string; message: string } | null {
-  const params = asRecord(frame.params)
-  if (!params) return null
-  const turnId = readStreamTurnId(params)
-  if (!turnId) return null
-
-  if (frame.method === 'turn/completed') {
-    const turn = asRecord(params.turn)
-    if (turn?.status !== 'failed') return null
-    const message = getErrorMessage(turn.error, '')
-    return message ? { turnId, message } : null
-  }
-
-  if (frame.method === 'error' && params.willRetry !== true) {
-    const message = getErrorMessage(params.error, '') || readNonEmptyString(params.message)
-    return message ? { turnId, message } : null
-  }
-
-  return null
-}
-
-function mergeStreamTurnErrorsIntoThreadResult(appServer: AppServerProcess, result: unknown): unknown {
-  const record = asRecord(result)
-  const thread = asRecord(record?.thread)
-  const threadId = readNonEmptyString(thread?.id)
-  const turns = Array.isArray(thread?.turns) ? thread.turns : null
-  if (!record || !thread || !threadId || !turns || turns.length === 0) return result
-
-  const errorsByTurnId = new Map<string, string>()
-  for (const frame of appServer.getStreamEvents(threadId, STREAM_EVENT_BUFFER_LIMIT)) {
-    const error = readStreamTurnErrorMessage(frame)
-    if (error) errorsByTurnId.set(error.turnId, error.message)
-  }
-  if (errorsByTurnId.size === 0) return result
-
-  let changed = false
-  const mergedTurns = turns.map((turn) => {
-    const turnRecord = asRecord(turn)
-    const turnId = readNonEmptyString(turnRecord?.id)
-    const message = turnId ? errorsByTurnId.get(turnId) : ''
-    if (!turnRecord || !turnId || !message) return turn
-    const existingErrorMessage = getErrorMessage(turnRecord.error, '')
-    if (turnRecord.status === 'failed' && existingErrorMessage) return turn
-    changed = true
-    return {
-      ...turnRecord,
-      status: 'failed',
-      error: {
-        message,
-        codexErrorInfo: null,
-        additionalDetails: null,
-      },
-    }
-  })
-
-  if (!changed) return result
-  return {
-    ...record,
-    thread: {
-      ...thread,
-      turns: mergedTurns,
-    },
-  }
 }
 
 const warnedCodexAuthReadFailures = new Set<string>()
@@ -3040,8 +2970,6 @@ function handleFileUpload(req: IncomingMessage, res: ServerResponse): void {
   })
 }
 
-const STREAM_EVENT_BUFFER_LIMIT = 400
-
 type StreamEventFrame = {
   method: string
   params: unknown
@@ -4534,218 +4462,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-turn-page') {
-        try {
-          const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-          const beforeTurnId = url.searchParams.get('beforeTurnId')?.trim() ?? ''
-          const limitRaw = url.searchParams.get('limit')?.trim() ?? String(THREAD_RESPONSE_TURN_LIMIT)
-          const limit = Math.max(1, Math.min(50, Number.parseInt(limitRaw, 10) || THREAD_RESPONSE_TURN_LIMIT))
-          if (!threadId) {
-            setJson(res, 400, { error: 'Missing threadId' })
-            return
-          }
-
-          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.readThreadForTurnPage(threadId))
-          const record = asRecord(threadReadResult)
-          const thread = asRecord(record?.thread)
-          if (!record || !thread) {
-            setJson(res, 502, { error: 'thread/read returned an invalid thread response' })
-            return
-          }
-
-          const turns = Array.isArray(thread.turns) ? thread.turns : []
-          const beforeIndex = beforeTurnId
-            ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
-            : turns.length
-          if (beforeTurnId && beforeIndex < 0) {
-            setJson(res, 200, {
-              result: {
-                ...record,
-                thread: {
-                  ...thread,
-                  turns: [],
-                },
-              },
-              startTurnIndex: 0,
-              hasMoreOlder: false,
-            })
-            return
-          }
-
-          const endIndex = beforeIndex
-          const startIndex = Math.max(0, endIndex - limit)
-          const pageTurns = turns.slice(startIndex, endIndex)
-          const pagedResult = {
-            ...record,
-            thread: {
-              ...thread,
-              turns: pageTurns,
-            },
-          }
-          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
-          const skillMerged = await mergeSessionSkillInputsIntoThreadResult(sanitized)
-          const result = await mergeSessionCommandsIntoThreadResult(skillMerged)
-
-          setJson(res, 200, {
-            result,
-            startTurnIndex: startIndex,
-            hasMoreOlder: startIndex > 0,
-          })
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load earlier thread messages') })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-file-change-fallback') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-
-        const threadReadResult = await appServer.rpc('thread/read', {
-          threadId,
-          includeTurns: true,
-        })
-        const threadReadRecord = asRecord(threadReadResult)
-        const threadRecord = asRecord(threadReadRecord?.thread)
-        const sessionPath = readNonEmptyString(threadRecord?.path)
-        if (!sessionPath || !isAbsolute(sessionPath)) {
-          setJson(res, 200, { data: [] })
-          return
-        }
-
-        try {
-          const sessionLogRaw = await readFile(sessionPath, 'utf8')
-          setJson(res, 200, { data: buildSessionFileChangeFallback(threadReadResult, sessionLogRaw) })
-        } catch {
-          setJson(res, 200, { data: [] })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-stream-events') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        const limitRaw = url.searchParams.get('limit')?.trim() ?? '80'
-        const limit = Math.max(1, Math.min(400, Number.parseInt(limitRaw, 10) || 80))
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-        const events = appServer.getStreamEvents(threadId, limit)
-        setJson(res, 200, { events })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-live-state') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-
-        try {
-          const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.rpc('thread/read', {
-            threadId,
-            includeTurns: true,
-          }))
-          const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
-          appServer.storeThreadReadSnapshot(threadId, sanitized)
-
-          const record = asRecord(sanitized)
-          const thread = asRecord(record?.thread)
-          const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
-
-          const sessionPath = readNonEmptyString(thread?.path)
-          let sessionSize = 0
-          if (sessionPath && isAbsolute(sessionPath)) {
-            try {
-              const s = await stat(sessionPath)
-              sessionSize = s.size
-            } catch { /* missing */ }
-          }
-
-          const externalSession = externalSessionTracker.getExternalSession(threadId)
-          const cached = appServer.getCachedLiveState(threadId, rawTurns.length, sessionSize)
-          if (cached) {
-            setJson(res, 200, externalSession ? { ...cached, externalSession } : cached)
-            return
-          }
-
-          let turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
-
-          if (sessionPath && isAbsolute(sessionPath) && sessionSize > 0) {
-            try {
-              const sessionLogRaw = await readFile(sessionPath, 'utf8')
-              turns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
-            } catch {
-              // Session log not available — continue without command recovery
-            }
-          }
-
-          const lastTurn = turns.length > 0 ? asRecord(turns[turns.length - 1]) : null
-          const isInProgress = lastTurn?.status === 'inProgress' || externalSession?.active === true
-
-          const responseData = {
-            threadId,
-            conversationState: {
-              turns,
-            },
-            ownerClientId: null,
-            liveStateError: null,
-            isInProgress,
-            ...(externalSession ? { externalSession } : {}),
-          }
-
-          if (!isInProgress) {
-            appServer.cacheLiveState(threadId, responseData, rawTurns.length, sessionSize)
-          }
-
-          setJson(res, 200, responseData)
-        } catch (error) {
-          if (isThreadMaterializationPendingError(error)) {
-            setJson(res, 200, {
-              threadId,
-              conversationState: { turns: [] },
-              ownerClientId: null,
-              liveStateError: null,
-              isInProgress: true,
-            })
-            return
-          }
-
-          const snapshot = appServer.getLastThreadReadSnapshot(threadId)
-          if (snapshot) {
-            const record = asRecord(snapshot)
-            const thread = asRecord(record?.thread)
-            const rawTurns = Array.isArray(thread?.turns) ? thread.turns : []
-            const turns = appServer.mergeItemsIntoTurns(threadId, rawTurns)
-            setJson(res, 200, {
-              threadId,
-              conversationState: { turns },
-              ownerClientId: null,
-              liveStateError: {
-                kind: 'readFailed',
-                message: getErrorMessage(error, 'thread/read failed'),
-              },
-              isInProgress: false,
-            })
-          } else {
-            setJson(res, 200, {
-              threadId,
-              conversationState: null,
-              ownerClientId: null,
-              liveStateError: {
-                kind: 'readFailed',
-                message: getErrorMessage(error, 'thread/read failed'),
-              },
-              isInProgress: false,
-            })
-          }
-        }
-        return
-      }
+      // Thread read / SSE route family (non-SSE), 迁入 bridge/threadRoutes.ts.
+      if (await handleThreadHttpRequest(req, res, url, {
+        setJson,
+        appServer,
+        externalSessionTracker,
+        sanitizeThreadTurnsInlinePayloads,
+        isThreadMaterializationPendingError,
+      })) return
 
       if (req.method === 'POST' && url.pathname === '/codex-api/thread/rollback-files') {
         try {
