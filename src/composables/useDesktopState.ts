@@ -4559,7 +4559,7 @@ export function useDesktopState() {
     turnErrorByThreadId.value = {}
     activeTurnIdByThreadId.value = {}
     activeReasoningTurnIdByThreadId.clear()
-    reasoningItemTextByItemId.clear()
+    clearReasoningItemTextCacheImpl(reasoningTimelineDeps)
     turnItemSequenceByThreadId.clear()
     resetLiveMessageSortKeys()
     interruptBlockedUntilPersistedByThreadId.value = {}
