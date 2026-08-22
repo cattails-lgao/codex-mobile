@@ -2,11 +2,11 @@ import {
   fetchRpcMethodCatalog,
   fetchRpcNotificationCatalog,
   fetchPendingServerRequests,
-  rpcCall,
   respondServerRequest,
   subscribeRpcNotifications,
   type RpcNotification,
 } from './codexRpcClient'
+import { callRpc, getErrorMessageFromPayload } from './gateway/core'
 import type {
   CollaborationModeListResponse,
   ConfigReadResponse,
@@ -303,71 +303,6 @@ export type StoredQueuedMessage = {
 
 export type ThreadQueueState = Record<string, StoredQueuedMessage[]>
 
-export type ComposerFileSuggestion = {
-  path: string
-}
-
-export type FuzzyFileSearchSession = {
-  sessionId: string
-  query: string
-  files: ComposerFileSuggestion[]
-}
-
-export async function startFuzzyFileSearchSession(roots: string[], sessionId: string): Promise<void> {
-  await callRpc('fuzzyFileSearch/sessionStart', {
-    sessionId,
-    roots,
-  })
-}
-
-export async function updateFuzzyFileSearchSession(sessionId: string, query: string): Promise<void> {
-  await callRpc('fuzzyFileSearch/sessionUpdate', {
-    sessionId,
-    query,
-  })
-}
-
-export async function stopFuzzyFileSearchSession(sessionId: string): Promise<void> {
-  await callRpc('fuzzyFileSearch/sessionStop', { sessionId }).catch(() => undefined)
-}
-
-const IGNORED_FILE_SEARCH_DIRS = new Set([
-  'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
-  'coverage', '__pycache__', '.cache', '.turbo', 'target', '.venv',
-  'venv', '.idea', '.vscode', 'output',
-])
-
-/**
- * Returns true when a candidate file path contains an ignored directory
- * segment (hidden dirs, VCS internals, dependency/generated folders).
- * The app-server fuzzy file search session does not exclude these, so the
- * @ file mention list would otherwise surface e.g. `.git/refs/heads`.
- */
-export function isIgnoredFileSearchPath(value: string): boolean {
-  const normalized = value.replace(/\\/g, '/')
-  return normalized
-    .split('/')
-    .filter(Boolean)
-    .some((segment) => segment.startsWith('.') || IGNORED_FILE_SEARCH_DIRS.has(segment))
-}
-
-export function normalizeFuzzyFileSearchResults(payload: unknown): ComposerFileSuggestion[] {
-  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? (payload as Record<string, unknown>)
-    : {}
-  const files = Array.isArray(record.files) ? record.files : []
-  const suggestions: ComposerFileSuggestion[] = []
-  for (const item of files) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
-    const row = item as Record<string, unknown>
-    const rawPath = row.path
-    const value = typeof rawPath === 'string' ? rawPath.trim() : ''
-    if (!value || isIgnoredFileSearchPath(value)) continue
-    suggestions.push({ path: value })
-  }
-  return suggestions
-}
-
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
   { value: 'plan', label: 'Plan' },
@@ -420,11 +355,6 @@ export type GitRepositoryStatus = {
 }
 
 
-
-export type ThreadSearchResult = {
-  threadIds: string[]
-  indexedThreadCount: number
-}
 
 export type TelegramStatus = {
   configured: boolean
@@ -622,14 +552,6 @@ export function pickCodexRateLimitSnapshot(payload: unknown): UiRateLimitSnapsho
   if (codexBucket) return codexBucket
 
   return normalizeRateLimitSnapshot(record.rateLimits ?? record.rate_limits)
-}
-
-async function callRpc<T>(method: string, params?: unknown): Promise<T> {
-  try {
-    return await rpcCall<T>(method, params)
-  } catch (error) {
-    throw normalizeCodexApiError(error, `RPC ${method} failed`, method)
-  }
 }
 
 function normalizeFallbackFileChange(value: unknown): UiFileChange | null {
@@ -3709,56 +3631,6 @@ export async function getProjectRootSuggestion(basePath: string): Promise<{ name
   }
 }
 
-export async function searchComposerFiles(cwd: string, query: string, limit = 20): Promise<ComposerFileSuggestion[]> {
-  const trimmedCwd = cwd.trim()
-  if (!trimmedCwd) return []
-  const response = await fetch('/codex-api/composer-file-search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cwd: trimmedCwd,
-      query: query.trim(),
-      limit,
-    }),
-  })
-  const payload = (await response.json()) as unknown
-  if (!response.ok) {
-    const message = getErrorMessageFromPayload(payload, 'Failed to search files')
-    throw new Error(message)
-  }
-  const record =
-    payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : {}
-  const data = Array.isArray(record.data) ? record.data : []
-  const suggestions: ComposerFileSuggestion[] = []
-  for (const item of data) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
-    const row = item as Record<string, unknown>
-    const rawPath = row.path
-    const value = typeof rawPath === 'string' ? rawPath.trim() : ''
-    if (!value || isIgnoredFileSearchPath(value)) continue
-    suggestions.push({ path: value })
-  }
-  return suggestions
-}
-
-export async function searchThreads(
-  query: string,
-  limit = 200,
-): Promise<ThreadSearchResult> {
-  const response = await fetch('/codex-api/thread-search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, limit }),
-  })
-  const payload = (await response.json()) as { data?: ThreadSearchResult; error?: string }
-  if (!response.ok) {
-    throw new Error(payload.error || 'Failed to search threads')
-  }
-  return payload.data ?? { threadIds: [], indexedThreadCount: 0 }
-}
-
 export type RealtimeVoices = {
   v1: string[]
   v2: string[]
@@ -3878,18 +3750,6 @@ export async function getTelegramStatus(): Promise<TelegramStatus> {
     allowAllUsers: data.allowAllUsers === true,
     lastError: typeof data.lastError === 'string' ? data.lastError : '',
   }
-}
-
-function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
-  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? (payload as Record<string, unknown>)
-    : {}
-  const message = record.message
-  if (typeof message === 'string' && message.trim().length > 0) {
-    return message
-  }
-  const error = record.error
-  return typeof error === 'string' && error.trim().length > 0 ? error : fallback
 }
 
 export type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
@@ -4163,3 +4023,7 @@ export async function uploadFile(file: File): Promise<string | null> {
     clearTimeout(timeoutId)
   }
 }
+
+// Domain-modularized slices (see gateway/). Re-exported here so existing
+// consumers importing from './codexGateway' keep working unchanged.
+export * from './gateway/search'
