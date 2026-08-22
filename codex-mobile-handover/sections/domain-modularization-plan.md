@@ -165,6 +165,9 @@
   - 每个 handler 均为「try-调用 composio.ts 纯函数-兜底 setJson」样板转发；`connector-logo` 及其 `fetchConnectorLogo`/`parseConnectorLogoUrl`/`readCodexAuth` 属独立 auth/logo 族（与 transcribe 共用读 auth），留驻 shell 待后续批。
   - 主 Shell：删本地 6 块定义，接线 `if (await handleComposioHttpRequest(req, res, url, { setJson, readJsonBody })) return`；移除 7 个本地 composio import（`installComposioCli`/`listComposioConnectors`/`parseComposioLimit`/`readComposioConnectorDetail`/`readComposioStatus`/`startComposioLink`/`startComposioLogin`）。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族（thread 读/SSE、free-mode、文件/project、automations、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。附注：无独立 `git-reset-*` URL 路由族——reset-history 逻辑已在 H 批并入 routes.ts（`git-reset-history` 仅为 ref 前缀），reset 操作走 `/codex-api/rpc` 核心派发（最高耦合，最后切）。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 J 批（auth/logo 族）完成**。新建 `bridge/chatgptUpstreamRoutes.ts`，迁出 `transcribe` + `connector-logo` 两个 handler 及其 8 个辅助函数（`readCodexAuth`/`proxyTranscribe`/`httpPost`/`curlImpersonatePost`/`curlImpersonateAvailable`/`parseConnectorLogoUrl`/`fetchConnectorLogo`），沿用注入模式（注入 `setJson`/`readBody(即 readRawBody)`/`getCodexAuthPath`）。`CodexAuthTokens` 用局部结构类型，不导出类型，零闭包依赖。
+  - 主 Shell：删本地 2 块定义与全部 8 个辅助函数，接线 `if (await handleChatgptUpstreamHttpRequest(req, res, url, { setJson, readBody: readRawBody, getCodexAuthPath })) return`；移除已无用的 `request as httpRequest`/`request as httpsRequest` 专用 import（`spawn`/`readRawBody`/`getCodexAuthPath` 仍为主文件所需，保留）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。auth/logo 族迁移完成。核心派发剩余路由族（thread 读/SSE、free-mode、文件/project、automations、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。
 
 ## 收尾验证口径（每批）
 
