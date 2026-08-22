@@ -3,8 +3,10 @@
 // UiServerRequest) into a classified method / field set without touching any
 // reactive ref. The write-side (upsertPendingServerRequest / applyThreadFlags
 // / pendingReplyErrorForRequest) stays in the closure.
+import type { Ref } from 'vue'
 import type { UiServerRequest } from '../types/codex'
 import { asRecord, readString } from './useDesktopStateNormalizers'
+import { omitKey } from './useDesktopStateUtils'
 
 export const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 
@@ -184,4 +186,80 @@ export function readToolRequestUserInputQuestionIds(request: UiServerRequest): s
   }
 
   return questionIds
+}
+
+// ---- Injected write-side: server/request state ----
+
+// The pending-request mutation hooks are ref-bound in useDesktopState()'s
+// closure; injecting them as a deps object (rather than importing back the
+// closure) keeps this module cycle-free. applyThreadFlags stays a closure
+// callback since it touches many other refs via that same closure.
+export interface PendingRequestWriteDeps {
+  pendingServerRequestsByThreadId: Ref<Record<string, UiServerRequest[]>>
+  pendingReplyErrorByRequestId: Ref<Record<string, string>>
+  applyThreadFlags: () => void
+}
+
+export function upsertPendingServerRequest(
+  deps: PendingRequestWriteDeps,
+  request: UiServerRequest,
+): void {
+  const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
+  const current = deps.pendingServerRequestsByThreadId.value[threadId] ?? []
+  const index = current.findIndex((row) => row.id === request.id)
+  const nextRows = [...current]
+  if (index >= 0) {
+    nextRows.splice(index, 1, request)
+  } else {
+    nextRows.push(request)
+  }
+
+  deps.pendingServerRequestsByThreadId.value = {
+    ...deps.pendingServerRequestsByThreadId.value,
+    [threadId]: nextRows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso)),
+  }
+  deps.applyThreadFlags()
+}
+
+export function removePendingServerRequestById(deps: PendingRequestWriteDeps, requestId: number): void {
+  const next: Record<string, UiServerRequest[]> = {}
+  for (const [threadId, requests] of Object.entries(deps.pendingServerRequestsByThreadId.value)) {
+    const filtered = requests.filter((request) => request.id !== requestId)
+    if (filtered.length > 0) {
+      next[threadId] = filtered
+    }
+  }
+  deps.pendingServerRequestsByThreadId.value = next
+  if (deps.pendingReplyErrorByRequestId.value[String(requestId)]) {
+    deps.pendingReplyErrorByRequestId.value = omitKey(deps.pendingReplyErrorByRequestId.value, String(requestId))
+  }
+  deps.applyThreadFlags()
+}
+
+// round-23：读取某个待办请求的可见回复错误（供审批/询问面板展示）。
+export function readPendingReplyErrorForRequest(deps: PendingRequestWriteDeps, requestId: number): string {
+  return deps.pendingReplyErrorByRequestId.value[String(requestId)] ?? ''
+}
+
+export function replacePendingServerRequests(deps: PendingRequestWriteDeps, requests: UiServerRequest[]): void {
+  const next: Record<string, UiServerRequest[]> = {}
+  const liveIds = new Set<number>()
+  for (const request of requests) {
+    const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
+    const current = next[threadId] ?? []
+    current.push(request)
+    next[threadId] = current
+    liveIds.add(request.id)
+  }
+
+  for (const rows of Object.values(next)) {
+    rows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso))
+  }
+
+  deps.pendingServerRequestsByThreadId.value = next
+  const nextErrors: Record<string, string> = {}
+  for (const [requestId, message] of Object.entries(deps.pendingReplyErrorByRequestId.value)) {
+    if (liveIds.has(Number(requestId))) nextErrors[requestId] = message
+  }
+  deps.pendingReplyErrorByRequestId.value = nextErrors
 }
