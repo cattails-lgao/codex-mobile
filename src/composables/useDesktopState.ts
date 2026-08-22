@@ -201,7 +201,12 @@ import {
   GLOBAL_SERVER_REQUEST_SCOPE,
   isApprovalRequestMethod,
   normalizeServerRequest,
+  readPendingReplyErrorForRequest,
   readToolRequestUserInputQuestionIds,
+  removePendingServerRequestById as removePendingServerRequestByIdImpl,
+  replacePendingServerRequests as replacePendingServerRequestsImpl,
+  upsertPendingServerRequest as upsertPendingServerRequestImpl,
+  type PendingRequestWriteDeps,
 } from './useDesktopStateRequests'
 import {
   LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
@@ -2005,65 +2010,27 @@ export function useDesktopState() {
     }
   }
 
-  function upsertPendingServerRequest(request: UiServerRequest): void {
-    const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
-    const current = pendingServerRequestsByThreadId.value[threadId] ?? []
-    const index = current.findIndex((row) => row.id === request.id)
-    const nextRows = [...current]
-    if (index >= 0) {
-      nextRows.splice(index, 1, request)
-    } else {
-      nextRows.push(request)
-    }
+  const pendingRequestWriteDeps: PendingRequestWriteDeps = {
+    pendingServerRequestsByThreadId,
+    pendingReplyErrorByRequestId,
+    applyThreadFlags,
+  }
 
-    pendingServerRequestsByThreadId.value = {
-      ...pendingServerRequestsByThreadId.value,
-      [threadId]: nextRows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso)),
-    }
-    applyThreadFlags()
+  function upsertPendingServerRequest(request: UiServerRequest): void {
+    upsertPendingServerRequestImpl(pendingRequestWriteDeps, request)
   }
 
   function removePendingServerRequestById(requestId: number): void {
-    const next: Record<string, UiServerRequest[]> = {}
-    for (const [threadId, requests] of Object.entries(pendingServerRequestsByThreadId.value)) {
-      const filtered = requests.filter((request) => request.id !== requestId)
-      if (filtered.length > 0) {
-        next[threadId] = filtered
-      }
-    }
-    pendingServerRequestsByThreadId.value = next
-    if (pendingReplyErrorByRequestId.value[String(requestId)]) {
-      pendingReplyErrorByRequestId.value = omitKey(pendingReplyErrorByRequestId.value, String(requestId))
-    }
-    applyThreadFlags()
+    removePendingServerRequestByIdImpl(pendingRequestWriteDeps, requestId)
   }
 
   // round-23：读取某个待办请求的可见回复错误（供审批/询问面板展示）。
   function pendingReplyErrorForRequest(requestId: number): string {
-    return pendingReplyErrorByRequestId.value[String(requestId)] ?? ''
+    return readPendingReplyErrorForRequest(pendingRequestWriteDeps, requestId)
   }
 
   function replacePendingServerRequests(requests: UiServerRequest[]): void {
-    const next: Record<string, UiServerRequest[]> = {}
-    const liveIds = new Set<number>()
-    for (const request of requests) {
-      const threadId = request.threadId || GLOBAL_SERVER_REQUEST_SCOPE
-      const current = next[threadId] ?? []
-      current.push(request)
-      next[threadId] = current
-      liveIds.add(request.id)
-    }
-
-    for (const rows of Object.values(next)) {
-      rows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso))
-    }
-
-    pendingServerRequestsByThreadId.value = next
-    const nextErrors: Record<string, string> = {}
-    for (const [requestId, message] of Object.entries(pendingReplyErrorByRequestId.value)) {
-      if (liveIds.has(Number(requestId))) nextErrors[requestId] = message
-    }
-    pendingReplyErrorByRequestId.value = nextErrors
+    replacePendingServerRequestsImpl(pendingRequestWriteDeps, requests)
   }
 
   function handleServerRequestNotification(notification: RpcNotification): boolean {
