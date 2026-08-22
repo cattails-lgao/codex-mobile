@@ -38,6 +38,17 @@ export function getCodexGlobalStatePath(): string {
   return join(getCodexHomeDir(), '.codex-global-state.json')
 }
 
+export function normalizeStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const next: Record<string, string> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof key === 'string' && key.length > 0 && typeof item === 'string') {
+      next[key] = item
+    }
+  }
+  return next
+}
+
 export function readBoolean(value: unknown): boolean {
   return value === true
 }
