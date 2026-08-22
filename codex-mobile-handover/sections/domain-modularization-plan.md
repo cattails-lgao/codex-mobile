@@ -91,6 +91,11 @@
   - 新建 `src/server/bridge/automations.ts`：平移自动化 TOML 全套（原 5210–5680）：`getCodexAutomationsDir`/TOML 读写辅助/`ThreadAutomationRecord`/`ThreadAutomationStatus` 类型/`parseAutomationToml`/`serializeAutomationToml`/`toAutomationApiRecord|Map|Data`/heartbeat 与 cron 自动化的 list/read/write/delete 共 20+ 函数；依赖 `getCodexHomeDir`（core）与 `isAbsoluteLikePath`（pathUtils），纯机械迁移、零行为改动。
   - 主 Shell：删除该块，`import` 供 middleware（9756–10056 区域）复用 + `export { parseAutomationToml, toAutomationApiRecord }` 保持原公共导出面（测试仍从 `./codexAppServerBridge` 导入）；`buildHeartbeatQueuedMessage` 的 `ThreadAutomationRecord` 类型改 import。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 B（`bridge/git.ts`）/C（`bridge/composio.ts`）/D（zip）/E（session）/F（models）按上表继续。
+- 2026-08-22：**codexAppServerBridge.ts B 批（git 切片）完成**。原 9746 行降至 9332 行（-414）；按净增计：git 集群 317 行迁入 `bridge/git.ts`，命令执行器 136 行并入 `bridge/core.ts`，主文件删除对应本地定义。
+  - `bridge/core.ts` 扩容命令执行器与共享错误/类型工具：`runCommand`（带 timeout）/`runCommandCapture`/`runCommandCaptureRaw`/`runCommandWithOutput` 与 `getCodexHomeDir`/`asRecord`/`getErrorMessage` 一并入驻（主文件对应本地定义删除后全部 import），后续 composio/zip/session/models 切片复用。
+  - 新建 `bridge/git.ts`：平移原 4443–4850 段 git 工具集群（worktree/分支/回滚/untracked 保留）：`isMissingHeadError`/`isNotGitRepositoryError`/`ensureRepoHasInitialCommit`/`normalizeBranchRefName`/`toHeaderGitResetHistoryRef`/`HEADER_GIT_RESET_HISTORY_REF_LIMIT`/`assertLocalGitBranch`/`splitGitPathList`/`preserveUntrackedFilesForGitTarget`/`withPreservedUntrackedFilesForGitTarget`/`rollbackPreservedUntrackedFiles`/`checkoutGitBranchWithWorktreeRecovery`/`pruneHeaderGitResetHistoryRefs`/`readGitHeaderState`/`parsePorcelainChangedFiles`/`assertNoTrackedGitChanges`/`allocatePermanentWorktreeBranchName` 等；依赖 `core` 命令执行器与 `getErrorMessage`，纯机械迁移、零行为改动。
+  - 主 Shell：删除散落 `asRecord`（原 569–573）/`getErrorMessage`（原 969–988）/git 集群+命令执行器（原 4443–4850）三块，`import` 补齐 4 个复用点（`normalizeBranchRefName`/`assertLocalGitBranch`/`splitGitPathList`/`HEADER_GIT_RESET_HISTORY_REF_LIMIT`）供 middleware（8276–8637 区域）复用，对外公共导出面不变。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 C（`bridge/composio.ts`）/D（zip）/E（session）/F（models）按上表继续。
 
 ## 收尾验证口径（每批）
 
