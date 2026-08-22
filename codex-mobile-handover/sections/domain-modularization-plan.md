@@ -96,6 +96,11 @@
   - 新建 `bridge/git.ts`：平移原 4443–4850 段 git 工具集群（worktree/分支/回滚/untracked 保留）：`isMissingHeadError`/`isNotGitRepositoryError`/`ensureRepoHasInitialCommit`/`normalizeBranchRefName`/`toHeaderGitResetHistoryRef`/`HEADER_GIT_RESET_HISTORY_REF_LIMIT`/`assertLocalGitBranch`/`splitGitPathList`/`preserveUntrackedFilesForGitTarget`/`withPreservedUntrackedFilesForGitTarget`/`rollbackPreservedUntrackedFiles`/`checkoutGitBranchWithWorktreeRecovery`/`pruneHeaderGitResetHistoryRefs`/`readGitHeaderState`/`parsePorcelainChangedFiles`/`assertNoTrackedGitChanges`/`allocatePermanentWorktreeBranchName` 等；依赖 `core` 命令执行器与 `getErrorMessage`，纯机械迁移、零行为改动。
   - 主 Shell：删除散落 `asRecord`（原 569–573）/`getErrorMessage`（原 969–988）/git 集群+命令执行器（原 4443–4850）三块，`import` 补齐 4 个复用点（`normalizeBranchRefName`/`assertLocalGitBranch`/`splitGitPathList`/`HEADER_GIT_RESET_HISTORY_REF_LIMIT`）供 middleware（8276–8637 区域）复用，对外公共导出面不变。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 C（`bridge/composio.ts`）/D（zip）/E（session）/F（models）按上表继续。
+- 2026-08-22：**codexAppServerBridge.ts C 批（composio 切片）完成**。原 9332 行降至 8843 行（-489）。
+  - `bridge/core.ts` 再扩容共享类型读取辅助：`readNonEmptyString`/`readBoolean`/`readNumber`/`quoteShellTokenIfNeeded` 入驻（composio 与主文件共用，避免 composio↔main 循环依赖；主文件对应本地定义删除后 import）。
+  - 新建 `bridge/composio.ts`（493 行）：平移 composio CLI 探测/whoami/toolkits 列表/连接/登录/安装集群：`buildComposioInvocation`/`probeComposioInvocation`/`resolveComposioInvocation`/`parseComposioJson`/`runComposioJson`/`readComposioUserData`/`normalizeComposio*`/`readComposioConnectionsBySlug`/`readComposioStatus`/`listComposioConnectors`/`parseComposioCursor|Limit`/`readComposioConnectorDetail`/`startComposioLink|Login`/`installComposioCli` 及全部 composio 领域类型 + `COMPOSIO_USER_DATA_PATH`/`COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX`/`ComposioCliInvocation`；依赖 core 辅助与 `getSpawnInvocation`，纯机械迁移、零行为改动（环境变量 `CODEXUI_COMPOSIO_COMMAND` 保持不变）。
+  - 主 Shell：删除 composio 类型块（原 184–274）、`COMPOSIO_USER_DATA_PATH`（原 292）、`readNonEmptyString`（原 2573）与 `quoteShellTokenIfNeeded`/`readBoolean`/`readNumber`/`ComposioCliInvocation`/composio 集群（原 2681–3083）五块，`import` 7 个复用点供 middleware（7885–7943 区域）复用（`readBoolean`/`readNumber` 仅 composio 内部使用，主文件不引）；`fetchConnectorLogo` 为独立函数留在主文件。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 D（zip）/E（session）/F（models）按上表继续。
 
 ## 收尾验证口径（每批）
 

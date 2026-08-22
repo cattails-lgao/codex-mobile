@@ -17,6 +17,22 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+export function readNonEmptyString(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : ''
+}
+
+export function readBoolean(value: unknown): boolean {
+  return value === true
+}
+
+export function readNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+export function quoteShellTokenIfNeeded(value: string): string {
+  return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`
+}
+
 export function getErrorMessage(payload: unknown, fallback: string): string {
   if (payload instanceof Error && payload.message.trim().length > 0) {
     return payload.message
