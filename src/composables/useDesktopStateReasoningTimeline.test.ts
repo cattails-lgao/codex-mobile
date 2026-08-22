@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 import type { UiMessage } from '../types/codex'
 import {
+  accumulateReasoningTextDelta,
   appendReasoningItemProgress,
   buildTurnReasoningItems,
   clearLiveReasoningForThread,
@@ -76,6 +77,16 @@ describe('useDesktopStateReasoningTimeline progress', () => {
     appendReasoningItemProgress(deps, 't1', 'r1', 'second')
     expect(deps.liveReasoningTextByThreadId.value.t1).toBe('first\n\nsecond')
     expect(deps.reasoningItemTextByItemId.get('r1')).toBe('second')
+  })
+
+  it('accumulateReasoningTextDelta appends deltas and skips a repeated suffix', () => {
+    const deps = makeDeps()
+    accumulateReasoningTextDelta(deps, 'r1', 'part one ')
+    accumulateReasoningTextDelta(deps, 'r1', 'part two')
+    expect(deps.reasoningItemTextByItemId.get('r1')).toBe('part one part two')
+    // 重发同一前缀增量（服务端重放）不膨胀文本
+    accumulateReasoningTextDelta(deps, 'r1', 'part two')
+    expect(deps.reasoningItemTextByItemId.get('r1')).toBe('part one part two')
   })
 })
 

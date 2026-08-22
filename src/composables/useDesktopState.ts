@@ -237,8 +237,10 @@ import {
   type LiveReasoningWriteDeps,
 } from './useDesktopStateReasoningWrites'
 import {
+  accumulateReasoningTextDelta as accumulateReasoningTextDeltaImpl,
   appendReasoningItemProgress as appendReasoningItemProgressImpl,
   clearLiveReasoningForThread as clearLiveReasoningForThreadImpl,
+  clearReasoningItemTextCache as clearReasoningItemTextCacheImpl,
   recordActiveReasoningTurn as recordActiveReasoningTurnImpl,
   recordTurnItemOrder as recordTurnItemOrderImpl,
   type ReasoningTimelineDeps,
@@ -2412,12 +2414,7 @@ export function useDesktopState() {
       // 让 buildTurnReasoningItems 在轮末能生成带 anchor 的思考存档。
       // （增量通道不伴随 item/started 全量项，此前该 map 无文本 → 回退
       // 整段存档 → 刷新后思考全部插到轮首。）
-      if (liveReasoningDelta.itemId && liveReasoningDelta.delta) {
-        const previousItemText = reasoningItemTextByItemId.get(liveReasoningDelta.itemId) ?? ''
-        if (!previousItemText.endsWith(liveReasoningDelta.delta)) {
-          reasoningItemTextByItemId.set(liveReasoningDelta.itemId, `${previousItemText}${liveReasoningDelta.delta}`)
-        }
-      }
+      accumulateReasoningTextDeltaImpl(reasoningTimelineDeps, liveReasoningDelta.itemId, liveReasoningDelta.delta)
     }
 
     const reasoningItem = readReasoningItemNotification(notification)
@@ -2480,7 +2477,7 @@ export function useDesktopState() {
       shouldAutoScrollOnNextAgentEvent = false
       clearLiveReasoningForThread(notificationThreadId)
       // round-23：清理本轮推理项文本缓存，避免跨轮残留。
-      reasoningItemTextByItemId.clear()
+      clearReasoningItemTextCacheImpl(reasoningTimelineDeps)
       if (liveCommandsByThreadId.value[notificationThreadId]) {
         liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, notificationThreadId)
       }

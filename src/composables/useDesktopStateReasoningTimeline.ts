@@ -241,3 +241,19 @@ export function buildTurnReasoningItems(
   }
   return items
 }
+
+// round-24：item/reasoning/textDelta 增量通道（不伴随 item/started 全量项）。
+// 把增量累积到 reasoningItemTextByItemId，让 buildTurnReasoningItems 在轮末能
+// 生成带 anchor 的思考存档；此前该 map 无文本 → 回退整段存档 → 刷新后思考
+// 全部插到轮首。前缀重复（服务端重发同一段）时跳过，避免文本膨胀。
+export function accumulateReasoningTextDelta(deps: ReasoningTimelineDeps, itemId: string, delta: string): void {
+  if (!itemId || !delta) return
+  const previousItemText = deps.reasoningItemTextByItemId.get(itemId) ?? ''
+  if (previousItemText.endsWith(delta)) return
+  deps.reasoningItemTextByItemId.set(itemId, `${previousItemText}${delta}`)
+}
+
+// 轮次结束（turn/completed）时清空本轮推理项文本缓存，避免跨轮残留。
+export function clearReasoningItemTextCache(deps: ReasoningTimelineDeps): void {
+  deps.reasoningItemTextByItemId.clear()
+}
