@@ -161,6 +161,10 @@
   - 新增 `useDesktopStateReasoningTimeline.test.ts`（6 个用例：时序锚点、到达顺序、增量追加、item 存档、整段兜底、去重）。
   - 验证：`vue-tsc --noEmit` 通过、全量 394 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 4755 行。reasoning 文本写入/存档簇已迁出完成。
   - 后续（applyRealtimeUpdates 残留补充）：扩展本模块新增 `accumulateReasoningTextDelta`（textDelta 前缀去重累积）与 `clearReasoningItemTextCache`，替换 `applyRealtimeUpdates` 中 `reasoningItemTextByItemId` 的两处直接写/清空；用例增至 7 个，全量 395 单测、vue-tsc、web+CLI 构建均通过。`applyRealtimeUpdates` 残余只读 `reasoningItemTextByItemId`（resetAllState 直接 clear）保留在闭包。后续将 resetAllState 的一处 direct clear 也并入 `clearReasoningItemTextCache`，该 Map 的闭包内直接写已全部清零。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 I 批（composio HTTP 路由族）完成**。新建 `bridge/composioRoutes.ts`，迁出 composio 6 个路由 handler（status/connectors/connector/link/login/install），沿用 H 批 `handleGitWorktreeHttpRequest` 注入模式（仅注入 `setJson`/`readJsonBody`），零闭包依赖。
+  - 每个 handler 均为「try-调用 composio.ts 纯函数-兜底 setJson」样板转发；`connector-logo` 及其 `fetchConnectorLogo`/`parseConnectorLogoUrl`/`readCodexAuth` 属独立 auth/logo 族（与 transcribe 共用读 auth），留驻 shell 待后续批。
+  - 主 Shell：删本地 6 块定义，接线 `if (await handleComposioHttpRequest(req, res, url, { setJson, readJsonBody })) return`；移除 7 个本地 composio import（`installComposioCli`/`listComposioConnectors`/`parseComposioLimit`/`readComposioConnectorDetail`/`readComposioStatus`/`startComposioLink`/`startComposioLogin`）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族（thread 读/SSE、free-mode、文件/project、automations、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。附注：无独立 `git-reset-*` URL 路由族——reset-history 逻辑已在 H 批并入 routes.ts（`git-reset-history` 仅为 ref 前缀），reset 操作走 `/codex-api/rpc` 核心派发（最高耦合，最后切）。
 
 ## 收尾验证口径（每批）
 
