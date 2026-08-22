@@ -54,7 +54,6 @@ import {
   runCommandCapture,
   runCommandCaptureRaw,
   STREAM_EVENT_BUFFER_LIMIT,
-  THREAD_RESPONSE_TURN_LIMIT,
 } from './bridge/core.js'
 import {
   allocatePermanentWorktreeBranchName,
@@ -77,7 +76,13 @@ import { handleChatgptUpstreamHttpRequest } from './bridge/chatgptUpstreamRoutes
 import { handleFreeModeHttpRequest } from './bridge/freeModeRoutes.js'
 import { handleAutomationsHttpRequest } from './bridge/automationsRoutes.js'
 import { handleProjectHttpRequest } from './bridge/projectRoutes.js'
-import { handleThreadHttpRequest, mergeStreamTurnErrorsIntoThreadResult } from './bridge/threadRoutes.js'
+import { handleThreadHttpRequest } from './bridge/threadRoutes.js'
+import { runRpcResponsePipeline } from './bridge/rpcPipeline.js'
+import {
+  handleTelegramHttpRequest,
+  readTelegramBridgeConfig,
+  writeTelegramBridgeConfig,
+} from './bridge/telegramRoutes.js'
 // 自动化领域切片（A 批）公共导出保持原样：仅 parseAutomationToml 与
 // toAutomationApiRecord 此前是公共导出，供消费者（含测试）继续从本模块导入。
 export { parseAutomationToml, toAutomationApiRecord } from './bridge/automations.js'
@@ -96,9 +101,7 @@ import {
   applyTurnFileChanges,
   buildSessionFileChangeFallback,
   collectFileChangesForTurns,
-  mergeSessionCommandsIntoThreadResult,
   mergeSessionCommandsIntoTurns,
-  mergeSessionSkillInputsIntoThreadResult,
   revertTurnFileChanges,
 } from './bridge/session.js'
 // 会话领域切片（E 批）公共导出保持原样：mergeSessionSkillInputsIntoTurns /
@@ -215,7 +218,6 @@ type ThreadSearchIndex = {
 
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
-const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 const API_PERF_LOGGING_ENV_KEY = 'CODEXUI_API_PERF_LOGGING'
 const API_PERF_MS_THRESHOLD_ENV_KEY = 'CODEXUI_API_PERF_MS_THRESHOLD'
@@ -674,25 +676,6 @@ export async function sanitizeThreadTurnsInlinePayloads(method: string, result: 
     thread: {
       ...thread,
       turns: nextTurns,
-    },
-  }
-}
-
-function trimThreadTurnsInRpcResult(method: string, result: unknown): unknown {
-  if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
-
-  const record = asRecord(result)
-  const thread = asRecord(record?.thread)
-  const turns = Array.isArray(thread?.turns) ? thread.turns : null
-  if (!record || !thread || !turns || turns.length <= THREAD_RESPONSE_TURN_LIMIT) return result
-  const startTurnIndex = Math.max(0, turns.length - THREAD_RESPONSE_TURN_LIMIT)
-
-  return {
-    ...record,
-    threadTurnStartIndex: startTurnIndex,
-    thread: {
-      ...thread,
-      turns: turns.slice(startTurnIndex),
     },
   }
 }
@@ -2075,10 +2058,6 @@ function getCodexGlobalStatePath(): string {
   return join(getCodexHomeDir(), '.codex-global-state.json')
 }
 
-function getTelegramBridgeConfigPath(): string {
-  return join(getCodexHomeDir(), 'telegram-bridge.json')
-}
-
 function getCodexSessionIndexPath(): string {
   return join(getCodexHomeDir(), 'session_index.jsonl')
 }
@@ -2116,12 +2095,6 @@ type SessionIndexThreadTitleCacheState = {
 let sessionIndexThreadTitleCacheState: SessionIndexThreadTitleCacheState = {
   fileSignature: null,
   cache: EMPTY_THREAD_TITLE_CACHE,
-}
-
-type TelegramBridgeConfigState = {
-  botToken: string
-  chatIds: number[]
-  allowedUserIds: Array<number | '*'>
 }
 
 function normalizeThreadTitleCache(value: unknown): ThreadTitleCache {
@@ -2823,55 +2796,6 @@ async function rollbackCreatedWorktree(
   if (branchName) {
     await runCommand('git', ['branch', '-D', branchName], { cwd: gitRoot }).catch(() => undefined)
   }
-}
-
-function normalizeTelegramBridgeConfig(value: unknown): TelegramBridgeConfigState {
-  const record = asRecord(value)
-  if (!record) return { botToken: '', chatIds: [], allowedUserIds: [] }
-  const botToken = typeof record.botToken === 'string' ? record.botToken.trim() : ''
-  const rawChatIds = Array.isArray(record.chatIds) ? record.chatIds : []
-  const chatIds = Array.from(new Set(rawChatIds
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-    .map((value) => Math.trunc(value)))).slice(0, 50)
-  const rawAllowedUserIds = Array.isArray(record.allowedUserIds) ? record.allowedUserIds : []
-  const allowAllUsers = rawAllowedUserIds.some((value) => typeof value === 'string' && value.trim() === '*')
-  const normalizedAllowedUserIds = Array.from(new Set(rawAllowedUserIds
-    .map((value) => {
-      if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
-      if (typeof value === 'string') {
-        const normalized = value.trim().replace(/^(telegram|tg):/i, '').trim()
-        if (/^-?\d+$/.test(normalized)) {
-          return Number.parseInt(normalized, 10)
-        }
-      }
-      return Number.NaN
-    })
-    .filter((value) => Number.isFinite(value)))).slice(0, 100)
-  const allowedUserIds: Array<number | '*'> = allowAllUsers
-    ? ['*' as const, ...normalizedAllowedUserIds]
-    : normalizedAllowedUserIds
-  return { botToken, chatIds, allowedUserIds }
-}
-
-async function readTelegramBridgeConfig(): Promise<TelegramBridgeConfigState> {
-  const telegramConfigPath = getTelegramBridgeConfigPath()
-  try {
-    const raw = await readFile(telegramConfigPath, 'utf8')
-    const payload = asRecord(JSON.parse(raw)) ?? {}
-    return normalizeTelegramBridgeConfig(payload)
-  } catch {
-    return { botToken: '', chatIds: [], allowedUserIds: [] }
-  }
-}
-
-async function writeTelegramBridgeConfig(nextState: TelegramBridgeConfigState): Promise<void> {
-  const normalized = normalizeTelegramBridgeConfig(nextState)
-  const telegramConfigPath = getTelegramBridgeConfigPath()
-  await writeFile(telegramConfigPath, JSON.stringify({
-    botToken: normalized.botToken,
-    chatIds: normalized.chatIds,
-    allowedUserIds: normalized.allowedUserIds,
-  }), 'utf8')
 }
 
 let telegramBridgeConfigMutation: Promise<void> = Promise.resolve()
@@ -4091,51 +4015,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     })
     .catch(() => {})
 
-  function readExternalSessionForThread(threadId: string) {
-    if (!threadId) return null
-    return externalSessionTracker.getExternalSession(threadId)
-  }
-
-  function overlayExternalSessionOnThreadList(result: unknown): unknown {
-    const record = asRecord(result)
-    if (!record || !Array.isArray(record.data)) return result
-    let changed = false
-    const data = record.data.map((row) => {
-      const rowRecord = asRecord(row)
-      if (!rowRecord) return row
-      const threadId = readNonEmptyString(rowRecord.id)
-      const externalSession = readExternalSessionForThread(threadId)
-      if (!externalSession) return row
-      changed = true
-      return { ...rowRecord, externalSession }
-    })
-    return changed ? { ...record, data } : result
-  }
-
-  // Subagent sessions are materialized by the app-server with an interactive
-  // `source` (e.g. "cli"), so they surface in thread/list alongside user
-  // threads. Drop them from the user-facing list by matching the local
-  // session_meta `thread_source` marker (the RPC thread payload has no such
-  // field, so the sessions directory is the only reliable signal).
-  async function filterSubagentThreadsFromThreadListResult(result: unknown): Promise<unknown> {
-    // Force a fresh tracker scan before filtering. A subagent session created
-    // moments ago appears in thread/list immediately but is only known to the
-    // tracker once its poll discovers it; awaiting a tick closes that race so
-    // the just-created subagent thread is dropped from the response.
-    await externalSessionTracker.tick()
-    return filterThreadListByIds(result, new Set(externalSessionTracker.getUserFacingSubagentThreadIds()))
-  }
-
-  function overlayExternalSessionOnThreadResult(result: unknown): unknown {
-    const record = asRecord(result)
-    const thread = asRecord(record?.thread)
-    if (!record || !thread) return result
-    const threadId = readNonEmptyString(thread.id)
-    const externalSession = readExternalSessionForThread(threadId)
-    if (!externalSession) return result
-    return { ...record, thread: { ...thread, externalSession } }
-  }
-
   const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const requestStartNs = process.hrtime.bigint()
     const rawUrl = req.url ?? ''
@@ -4425,40 +4304,18 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           }
 		          throw error
 		        }
-        const trimmedResult = trimThreadTurnsInRpcResult(body.method, rpcResult)
-        const errorMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
-          ? mergeStreamTurnErrorsIntoThreadResult(appServer, trimmedResult)
-          : trimmedResult
-        const listMergedResult = body.method === 'thread/list'
-          ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
-          : errorMergedResult
-        const subagentFilteredResult = body.method === 'thread/list'
-          ? await filterSubagentThreadsFromThreadListResult(listMergedResult)
-          : listMergedResult
-        const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(body.method, subagentFilteredResult)
-        const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(body.method)
-          ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
-          : sanitizedResult
-        const result = THREAD_METHODS_WITH_TURNS.has(body.method)
-          ? await mergeSessionCommandsIntoThreadResult(skillMergedResult)
-          : skillMergedResult
+        const pipelineResult = await runRpcResponsePipeline({
+          appServer,
+          externalSessionTracker: {
+            getExternalSession: (threadId) => externalSessionTracker.getExternalSession(threadId),
+            tick: () => externalSessionTracker.tick(),
+            getUserFacingSubagentThreadIds: () => new Set(externalSessionTracker.getUserFacingSubagentThreadIds()),
+          },
+          sanitizeThreadTurnsInlinePayloads,
+          mergeImportedThreadsIntoThreadListResult,
+        }, body.method, rpcResult)
 
-	        if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(body.method)) {
-	          const rpcRecord = asRecord(result)
-	          const rpcThread = asRecord(rpcRecord?.thread)
-	          const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
-          if (rpcThreadId) {
-            appServer.storeThreadReadSnapshot(rpcThreadId, result)
-          }
-        }
-
-        const externalOverlaidResult = body.method === 'thread/list'
-          ? overlayExternalSessionOnThreadList(result)
-          : THREAD_METHODS_WITH_TURNS.has(body.method)
-            ? overlayExternalSessionOnThreadResult(result)
-            : result
-
-        setJson(res, 200, { result: externalOverlaidResult })
+        setJson(res, 200, { result: pipelineResult })
         return
       }
 
@@ -4846,51 +4703,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'POST' && url.pathname === '/codex-api/telegram/configure-bot') {
-        const payload = asRecord(await readJsonBody(req))
-        const botToken = typeof payload?.botToken === 'string' ? payload.botToken.trim() : ''
-        const rawAllowedUserIds = Array.isArray(payload?.allowedUserIds) ? payload.allowedUserIds : []
-        if (!botToken) {
-          setJson(res, 400, { error: 'Missing botToken' })
-          return
-        }
-        const config = normalizeTelegramBridgeConfig({
-          botToken,
-          allowedUserIds: rawAllowedUserIds,
-        })
-        if (config.allowedUserIds.length === 0) {
-          setJson(res, 400, { error: 'At least one allowed Telegram user ID is required' })
-          return
-        }
-
-        telegramBridge.configureToken(config.botToken)
-        telegramBridge.configureAllowedUserIds(config.allowedUserIds)
-        telegramBridge.start()
-        const existingConfig = await readTelegramBridgeConfig()
-        await writeTelegramBridgeConfig({
-          botToken: config.botToken,
-          chatIds: existingConfig.chatIds,
-          allowedUserIds: config.allowedUserIds,
-        })
-        setJson(res, 200, { ok: true })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/telegram/config') {
-        const config = await readTelegramBridgeConfig()
-        setJson(res, 200, {
-          data: {
-            botToken: config.botToken,
-            allowedUserIds: config.allowedUserIds,
-          },
-        })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/telegram/status') {
-        setJson(res, 200, { data: telegramBridge.getStatus() })
-        return
-      }
+      // Telegram bridge route family, 迁入 bridge/telegramRoutes.ts.
+      if (await handleTelegramHttpRequest(req, res, url, {
+        setJson,
+        readJsonBody,
+        telegramBridge,
+      })) return
 
       if (req.method === 'GET' && url.pathname === '/codex-api/approval-policy') {
         setJson(res, 200, { data: { policy: await resolveEffectiveApprovalPolicy() } })

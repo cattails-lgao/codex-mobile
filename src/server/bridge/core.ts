@@ -161,3 +161,8 @@ export async function runCommandWithOutput(command: string, args: string[], opti
 export const STREAM_EVENT_BUFFER_LIMIT = 400
 
 export const THREAD_RESPONSE_TURN_LIMIT = 10
+
+// RPC/thread result post-pipeline method classifiers (shared by the shell rpc
+// dispatcher and the extracted rpcPipeline slice).
+export const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
+export const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
