@@ -118,7 +118,6 @@ import {
   normalizeMessageText,
   normalizeProviderContextId,
   normalizeStoredModelId,
-  normalizeThreadTokenUsage,
   omitKey,
   omitKeys,
   omitStringKeyedRecordKey,
@@ -165,6 +164,39 @@ import {
   type TurnActivityState,
   type TurnSummaryState,
 } from './useDesktopStateUtils'
+import {
+  asRecord,
+  buildPlanMessageText,
+  extractThreadIdFromNotification,
+  getRateLimitSnapshotKey,
+  normalizePlanStepStatus,
+  normalizeRateLimitSnapshot,
+  normalizeRateLimitSnapshotsPayload,
+  normalizeRateLimitWindow,
+  normalizeThreadTokenUsage,
+  normalizeTokenUsageBreakdown,
+  readNotificationErrorState,
+  readNumber,
+  readString,
+  readThreadTokenUsageUpdate,
+  readTurnErrorMessage,
+} from './useDesktopStateNormalizers'
+import {
+  liveReasoningMessageId,
+  readAgentMessageCompleted,
+  readAgentMessageDelta,
+  readAgentMessageStartedId,
+  readCommandOutputDelta,
+  readCompletedImageView,
+  readReasoningCompletedId,
+  readReasoningDelta,
+  readReasoningItemNotification,
+  readReasoningSectionBreakMessageId,
+  readReasoningStartedItemId,
+  readTurnActivity,
+  readTurnCompletedInfo,
+  readTurnStartedInfo,
+} from './useDesktopStateReaders'
 import {
   LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
   loadLastPlanMap,
@@ -1910,24 +1942,6 @@ export function useDesktopState() {
     clearPendingTurnRequest(threadId)
   }
 
-  function normalizePlanStepStatus(value: unknown): UiPlanStep['status'] {
-    if (value === 'completed') return 'completed'
-    if (value === 'inProgress' || value === 'in_progress') return 'inProgress'
-    return 'pending'
-  }
-
-  function buildPlanMessageText(plan: UiPlanData): string {
-    const lines: string[] = []
-    if (plan.explanation?.trim()) {
-      lines.push(plan.explanation.trim())
-    }
-    for (const step of plan.steps) {
-      const marker = step.status === 'completed' ? 'x' : step.status === 'inProgress' ? '~' : ' '
-      lines.push(`- [${marker}] ${step.step}`)
-    }
-    return lines.join('\n').trim()
-  }
-
   function readPlanUpdate(notification: RpcNotification): { threadId: string; message: UiMessage } | null {
     if (notification.method !== 'turn/plan/updated') return null
     const params = asRecord(notification.params)
@@ -1993,199 +2007,6 @@ export function useDesktopState() {
         turnId: turnId || undefined,
         turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       },
-    }
-  }
-
-  function asRecord(value: unknown): Record<string, unknown> | null {
-    return value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : null
-  }
-
-  function readString(value: unknown): string {
-    return typeof value === 'string' ? value : ''
-  }
-
-  function readNumber(value: unknown): number | null {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
-  }
-
-  function getRateLimitSnapshotKey(snapshot: UiRateLimitSnapshot): string {
-    return snapshot.limitId?.trim() || snapshot.limitName?.trim() || '__default__'
-  }
-
-  function normalizeRateLimitWindow(value: unknown): UiRateLimitSnapshot['primary'] {
-    const record = asRecord(value)
-    if (!record) return null
-
-    const windowValue = readNumber(record.windowDurationMins)
-    return {
-      usedPercent: clamp(readNumber(record.usedPercent) ?? 0, 0, 100),
-      windowDurationMins: windowValue,
-      windowMinutes: windowValue,
-      resetsAt: readNumber(record.resetsAt),
-    }
-  }
-
-  function normalizeRateLimitSnapshot(value: unknown): UiRateLimitSnapshot | null {
-    const record = asRecord(value)
-    if (!record) return null
-
-    const credits = asRecord(record.credits)
-    return {
-      limitId: readString(record.limitId) || null,
-      limitName: readString(record.limitName) || null,
-      primary: normalizeRateLimitWindow(record.primary),
-      secondary: normalizeRateLimitWindow(record.secondary),
-      credits: credits
-        ? {
-            hasCredits: credits.hasCredits === true,
-            unlimited: credits.unlimited === true,
-            balance: readString(credits.balance) || null,
-          }
-        : null,
-      planType: readString(record.planType) || null,
-    }
-  }
-
-  function normalizeRateLimitSnapshotsPayload(value: unknown): UiRateLimitSnapshot[] {
-    const record = asRecord(value)
-    if (!record) return []
-
-    const next: UiRateLimitSnapshot[] = []
-    const seen = new Set<string>()
-    const pushSnapshot = (snapshot: UiRateLimitSnapshot | null): void => {
-      if (!snapshot) return
-      const key = getRateLimitSnapshotKey(snapshot)
-      if (seen.has(key)) return
-      seen.add(key)
-      next.push(snapshot)
-    }
-
-    pushSnapshot(normalizeRateLimitSnapshot(record.rateLimits))
-
-    const byLimitId = asRecord(record.rateLimitsByLimitId)
-    if (byLimitId) {
-      for (const snapshot of Object.values(byLimitId)) {
-        pushSnapshot(normalizeRateLimitSnapshot(snapshot))
-      }
-    }
-
-    return next
-  }
-
-  function normalizeTokenUsageBreakdown(value: unknown): UiTokenUsageBreakdown | null {
-    const record = asRecord(value)
-    if (!record) return null
-
-    const totalTokens = readNumber(record.totalTokens ?? record.total_tokens)
-    const inputTokens = readNumber(record.inputTokens ?? record.input_tokens)
-    const cachedInputTokens = readNumber(record.cachedInputTokens ?? record.cached_input_tokens)
-    const outputTokens = readNumber(record.outputTokens ?? record.output_tokens)
-    const reasoningOutputTokens = readNumber(record.reasoningOutputTokens ?? record.reasoning_output_tokens)
-    if (
-      totalTokens === null ||
-      inputTokens === null ||
-      cachedInputTokens === null ||
-      outputTokens === null ||
-      reasoningOutputTokens === null
-    ) {
-      return null
-    }
-
-    return {
-      totalTokens,
-      inputTokens,
-      cachedInputTokens,
-      outputTokens,
-      reasoningOutputTokens,
-    }
-  }
-
-  function normalizeThreadTokenUsage(value: unknown): UiThreadTokenUsage | null {
-    const record = asRecord(value)
-    if (!record) return null
-
-    const total = normalizeTokenUsageBreakdown(record.total)
-    const last = normalizeTokenUsageBreakdown(record.last)
-    if (!total || !last) return null
-
-    const modelContextWindow = readNumber(record.modelContextWindow ?? record.model_context_window)
-    const currentContextTokens = last.totalTokens
-    const remainingContextTokens = typeof modelContextWindow === 'number'
-      ? Math.max(modelContextWindow - currentContextTokens, 0)
-      : null
-    const remainingContextPercent = typeof modelContextWindow === 'number' && modelContextWindow > 0
-      ? clamp(Math.round((remainingContextTokens ?? 0) / modelContextWindow * 100), 0, 100)
-      : null
-
-    return {
-      total,
-      last,
-      modelContextWindow,
-      currentContextTokens,
-      remainingContextTokens,
-      remainingContextPercent,
-    }
-  }
-
-  function readThreadTokenUsageUpdate(notification: RpcNotification): { threadId: string; usage: UiThreadTokenUsage } | null {
-    if (notification.method !== 'thread/tokenUsage/updated') return null
-    const params = asRecord(notification.params)
-    const threadId = extractThreadIdFromNotification(notification)
-    const usage = normalizeThreadTokenUsage(params?.tokenUsage ?? params?.token_usage)
-    if (!threadId || !usage) return null
-    return { threadId, usage }
-  }
-
-  function extractThreadIdFromNotification(notification: RpcNotification): string {
-    const params = asRecord(notification.params)
-    if (!params) return ''
-
-    const directThreadId = readString(params.threadId)
-    if (directThreadId) return directThreadId
-    const snakeThreadId = readString(params.thread_id)
-    if (snakeThreadId) return snakeThreadId
-
-    const conversationId = readString(params.conversationId)
-    if (conversationId) return conversationId
-    const snakeConversationId = readString(params.conversation_id)
-    if (snakeConversationId) return snakeConversationId
-
-    const thread = asRecord(params.thread)
-    const nestedThreadId = readString(thread?.id)
-    if (nestedThreadId) return nestedThreadId
-
-    const turn = asRecord(params.turn)
-    const turnThreadId = readString(turn?.threadId)
-    if (turnThreadId) return turnThreadId
-    const turnSnakeThreadId = readString(turn?.thread_id)
-    if (turnSnakeThreadId) return turnSnakeThreadId
-
-    return ''
-  }
-
-  function readTurnErrorMessage(notification: RpcNotification): string {
-    if (notification.method !== 'turn/completed') return ''
-    const params = asRecord(notification.params)
-    const turn = asRecord(params?.turn)
-    if (!turn || turn.status !== 'failed') return ''
-    const errorPayload = asRecord(turn.error)
-    return readString(errorPayload?.message)
-  }
-
-  function readNotificationErrorState(notification: RpcNotification): { message: string; transient: boolean } | null {
-    if (notification.method !== 'error') return null
-    const params = asRecord(notification.params)
-    const message = (
-      readString(params?.message) ||
-      readString(asRecord(params?.error)?.message)
-    )
-    if (!message) return null
-
-    return {
-      message,
-      transient: params?.willRetry === true,
     }
   }
 
@@ -2442,183 +2263,6 @@ export function useDesktopState() {
     return value.replace(/\s+/gu, ' ').trim()
   }
 
-  function readTurnActivity(notification: RpcNotification): { threadId: string; activity: TurnActivityState } | null {
-    const threadId = extractThreadIdFromNotification(notification)
-    if (!threadId) return null
-
-    if (notification.method === 'turn/started') {
-      return {
-        threadId,
-        activity: {
-          label: 'Thinking',
-          details: [],
-        },
-      }
-    }
-
-    if (notification.method === 'item/started') {
-      const params = asRecord(notification.params)
-      const item = asRecord(params?.item)
-      const itemType = readString(item?.type).toLowerCase()
-      if (itemType === 'reasoning') {
-        return {
-          threadId,
-          activity: {
-            label: 'Thinking',
-            details: [],
-          },
-        }
-      }
-      if (itemType === 'agentmessage') {
-        return {
-          threadId,
-          activity: {
-            label: 'Writing response',
-            details: [],
-          },
-        }
-      }
-      if (itemType === 'commandexecution') {
-        const cmd = readString(item?.command)
-        return {
-          threadId,
-          activity: {
-            label: 'Running command',
-            details: cmd ? [cmd] : [],
-          },
-        }
-      }
-      if (itemType === 'filechange') {
-        const changes = Array.isArray(item?.changes) ? item.changes : []
-        const firstChange = changes[0] as Record<string, unknown> | undefined
-        const path = readString(firstChange?.path)
-        return {
-          threadId,
-          activity: {
-            label: 'Applying changes',
-            details: path ? [path] : [],
-          },
-        }
-      }
-    }
-
-    if (notification.method === 'item/commandExecution/outputDelta') {
-      return {
-        threadId,
-        activity: {
-          label: 'Running command',
-          details: [],
-        },
-      }
-    }
-
-    if (notification.method === 'item/fileChange/outputDelta') {
-      return {
-        threadId,
-        activity: {
-          label: 'Applying changes',
-          details: [],
-        },
-      }
-    }
-
-    if (
-      notification.method === 'item/reasoning/summaryTextDelta' ||
-      notification.method === 'item/reasoning/summaryPartAdded' ||
-      notification.method === 'item/reasoning/textDelta'
-    ) {
-      return {
-        threadId,
-        activity: {
-          label: 'Thinking',
-          details: [],
-        },
-      }
-    }
-
-    if (notification.method === 'item/agentMessage/delta') {
-      return {
-        threadId,
-        activity: {
-          label: 'Writing response',
-          details: [],
-        },
-      }
-    }
-
-    return null
-  }
-
-  function readTurnStartedInfo(notification: RpcNotification): TurnStartedInfo | null {
-    if (notification.method !== 'turn/started') {
-      return null
-    }
-
-    const params = asRecord(notification.params)
-    if (!params) return null
-    const threadId = extractThreadIdFromNotification(notification)
-    if (!threadId) return null
-
-    const turnPayload = asRecord(params.turn)
-    const turnId =
-      readString(turnPayload?.id) ||
-      readString(params.turnId) ||
-      `${threadId}:unknown`
-    if (!turnId) return null
-
-    const startedAtMs =
-      parseIsoTimestamp(readString(turnPayload?.startedAt)) ??
-      parseIsoTimestamp(readString(params.startedAt)) ??
-      parseIsoTimestamp(notification.atIso) ??
-      Date.now()
-
-    return {
-      threadId,
-      turnId,
-      startedAtMs,
-    }
-  }
-
-  function readTurnCompletedInfo(notification: RpcNotification): TurnCompletedInfo | null {
-    if (notification.method !== 'turn/completed') {
-      return null
-    }
-
-    const params = asRecord(notification.params)
-    if (!params) return null
-    const threadId = extractThreadIdFromNotification(notification)
-    if (!threadId) return null
-
-    const turnPayload = asRecord(params.turn)
-    const turnId =
-      readString(turnPayload?.id) ||
-      readString(params.turnId) ||
-      `${threadId}:unknown`
-    if (!turnId) return null
-
-    const completedAtMs =
-      parseIsoTimestamp(readString(turnPayload?.completedAt)) ??
-      parseIsoTimestamp(readString(params.completedAt)) ??
-      parseIsoTimestamp(notification.atIso) ??
-      Date.now()
-
-    const startedAtMs =
-      parseIsoTimestamp(readString(turnPayload?.startedAt)) ??
-      parseIsoTimestamp(readString(params.startedAt)) ??
-      undefined
-
-    return {
-      threadId,
-      turnId,
-      completedAtMs,
-      startedAtMs,
-    }
-  }
-
-  function liveReasoningMessageId(reasoningItemId: string): string {
-    return `${reasoningItemId}:live-reasoning`
-  }
-
   function inferNextTurnIndex(threadId: string): number {
     const persisted = persistedMessagesByThreadId.value[threadId] ?? []
     let maxTurnIndex = -1
@@ -2689,98 +2333,6 @@ export function useDesktopState() {
       ...liveFileChangeMessagesByThreadId.value,
       [threadId]: next,
     }
-  }
-
-  function readReasoningStartedItemId(notification: RpcNotification): string {
-    const params = asRecord(notification.params)
-    if (!params) return ''
-
-    if (notification.method === 'item/started') {
-      const item = asRecord(params.item)
-      if (!item || item.type !== 'reasoning') return ''
-      return readString(item.id)
-    }
-
-    return ''
-  }
-
-  function readReasoningDelta(notification: RpcNotification): { messageId: string; itemId: string; delta: string } | null {
-    const params = asRecord(notification.params)
-    if (!params) return null
-
-    // Канонический источник дельт для UI — уже нормализованный item/*.
-    if (notification.method === 'item/reasoning/summaryTextDelta') {
-      const itemId = readString(params.itemId)
-      const delta = readString(params.delta)
-      if (!itemId || !delta) return null
-      return { messageId: liveReasoningMessageId(itemId), itemId, delta }
-    }
-
-    // codex also emits the full reasoning-chain stream as item/reasoning/textDelta
-    // (alongside the summary stream). Without handling it, reasoning text the
-    // model streams via this channel is dropped and the UI shows only the
-    // summary, making long thinking phases look like a stall.
-    if (notification.method === 'item/reasoning/textDelta') {
-      const itemId = readString(params.itemId)
-      const delta = readString(params.delta)
-      if (!itemId || !delta) return null
-      return { messageId: liveReasoningMessageId(itemId), itemId, delta }
-    }
-
-    return null
-  }
-
-  function readReasoningSectionBreakMessageId(notification: RpcNotification): string {
-    const params = asRecord(notification.params)
-    if (!params) return ''
-
-    // Канонический source для section break — item/*
-    if (notification.method === 'item/reasoning/summaryPartAdded') {
-      const itemId = readString(params.itemId)
-      if (!itemId) return ''
-      return liveReasoningMessageId(itemId)
-    }
-
-    return ''
-  }
-
-  function readReasoningCompletedId(notification: RpcNotification): string {
-    const params = asRecord(notification.params)
-    if (!params) return ''
-
-    if (notification.method === 'item/completed') {
-      const item = asRecord(params.item)
-      if (!item || item.type !== 'reasoning') return ''
-      return liveReasoningMessageId(readString(item.id))
-    }
-
-    return ''
-  }
-
-  function readReasoningItemText(item: Record<string, unknown>): string {
-    const parts: string[] = []
-    for (const key of ['content', 'summary']) {
-      const rows = Array.isArray(item[key]) ? item[key] : []
-      for (const row of rows) {
-        const text = typeof row === 'string' ? row : asRecord(row)?.text
-        if (typeof text === 'string' && text.trim()) parts.push(text)
-      }
-    }
-    return parts.join('\n').trim()
-  }
-
-  // Full reasoning items arrive via item/started + item/completed (this
-  // app-server does not stream item/reasoning/*TextDelta), carrying the
-  // reasoning content inline; without handling them the live overlay shows an
-  // empty "Thinking" for the whole thinking phase.
-  function readReasoningItemNotification(notification: RpcNotification): { itemId: string; text: string } | null {
-    if (notification.method !== 'item/started' && notification.method !== 'item/completed') return null
-    const params = asRecord(notification.params)
-    const item = asRecord(params?.item)
-    if (!item || readString(item.type).toLowerCase() !== 'reasoning') return null
-    const itemId = readString(item.id)
-    if (!itemId) return null
-    return { itemId, text: readReasoningItemText(item) }
   }
 
   function appendReasoningItemProgress(threadId: string, itemId: string, text: string): void {
@@ -2883,112 +2435,6 @@ export function useDesktopState() {
     }
   }
 
-  function readAgentMessageStartedId(notification: RpcNotification): string {
-    const params = asRecord(notification.params)
-    if (!params) return ''
-
-    if (notification.method === 'item/started') {
-      const item = asRecord(params.item)
-      if (!item || item.type !== 'agentMessage') return ''
-      return readString(item.id)
-    }
-
-    return ''
-  }
-
-  function readAgentMessageDelta(notification: RpcNotification): { messageId: string; delta: string } | null {
-    const params = asRecord(notification.params)
-    if (!params) return null
-
-    // Канонический live-канал агентского текста.
-    if (notification.method === 'item/agentMessage/delta') {
-      const messageId = readString(params.itemId)
-      const delta = readString(params.delta)
-      if (!messageId || !delta) return null
-      return { messageId, delta }
-    }
-
-    return null
-  }
-
-  function readAgentMessageCompleted(notification: RpcNotification): UiMessage | null {
-    const params = asRecord(notification.params)
-    if (!params) return null
-
-    if (notification.method === 'item/completed') {
-      const item = asRecord(params.item)
-      if (!item || item.type !== 'agentMessage') return null
-      const id = readString(item.id)
-      const text = readString(item.text)
-      if (!id || !text) return null
-      // round-40：item/completed 表示 agentMessage 已完成，不再是流式状态。
-      // 与 readPlanItemNotification 对 plan 的约定一致（item/completed →
-      // 非 .live 类型）。否则完成的最终回复保持 agentMessage.live，
-      // isFinalAssistantItem 会因消息类型以 .live 结尾而拒绝把它标记为
-      // final-assistant，最终助手文本被吞进过程块、缺失 data-role=assistant 块。
-      return {
-        id,
-        role: 'assistant',
-        text,
-        messageType: 'agentMessage',
-      }
-    }
-
-    return null
-  }
-
-  function toLocalImageUrl(path: string): string {
-    return `/codex-local-image?path=${encodeURIComponent(path)}`
-  }
-
-  function toImageGenerationUrl(value: string): string {
-    const trimmed = value.trim()
-    if (!trimmed) return ''
-    if (
-      trimmed.startsWith('data:') ||
-      trimmed.startsWith('http://') ||
-      trimmed.startsWith('https://') ||
-      trimmed.startsWith('/codex-local-image?')
-    ) {
-      return trimmed
-    }
-    const compact = trimmed.replace(/\s+/gu, '')
-    if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(compact)) return ''
-    return `data:image/png;base64,${compact}`
-  }
-
-  function readCompletedImageView(notification: RpcNotification): UiMessage | null {
-    if (notification.method !== 'item/completed') return null
-    const params = asRecord(notification.params)
-    const item = asRecord(params?.item)
-    if (!item) return null
-    const id = readString(item.id)
-    if (!id) return null
-    if (item.type === 'imageView') {
-      const path = readString(item.path)
-      if (!path) return null
-      return {
-        id,
-        role: 'assistant',
-        text: '',
-        images: [toLocalImageUrl(path)],
-        messageType: 'imageView',
-      }
-    }
-    if (item.type !== 'imageGeneration' && item.type !== 'image_generation') return null
-    const result = readString(item.result)
-    const imageUrl = result ? toImageGenerationUrl(result) : ''
-    if (!imageUrl) return null
-    return {
-      id,
-      role: 'assistant',
-      text: '',
-      images: [imageUrl],
-      messageType: 'imageView',
-
-    }
-  }
-
   function readCommandExecutionStarted(notification: RpcNotification): UiMessage | null {
     if (notification.method !== 'item/started') return null
     const params = asRecord(notification.params)
@@ -3012,16 +2458,6 @@ export function useDesktopState() {
       turnId: turnId || undefined,
       turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     }
-  }
-
-  function readCommandOutputDelta(notification: RpcNotification): { itemId: string; delta: string } | null {
-    if (notification.method !== 'item/commandExecution/outputDelta') return null
-    const params = asRecord(notification.params)
-    if (!params) return null
-    const itemId = readString(params.itemId)
-    const delta = readString(params.delta)
-    if (!itemId || !delta) return null
-    return { itemId, delta }
   }
 
   function readCommandExecutionCompleted(notification: RpcNotification): UiMessage | null {
@@ -5849,3 +5285,4 @@ export function useDesktopState() {
     primeSelectedThread,
   }
 }
+
