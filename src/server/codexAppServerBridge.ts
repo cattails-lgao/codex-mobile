@@ -79,15 +79,7 @@ import {
   toHeaderGitResetHistoryRef,
   withPreservedUntrackedFilesForGitTarget,
 } from './bridge/git.js'
-import {
-  installComposioCli,
-  listComposioConnectors,
-  parseComposioLimit,
-  readComposioConnectorDetail,
-  readComposioStatus,
-  startComposioLink,
-  startComposioLogin,
-} from './bridge/composio.js'
+import { handleComposioHttpRequest } from './bridge/composioRoutes.js'
 import {
   deleteThreadHeartbeatAutomation,
   deleteProjectCronAutomation,
@@ -5525,65 +5517,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/composio/status') {
-        try {
-          setJson(res, 200, await readComposioStatus())
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to read Composio status') })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/composio/connectors') {
-        try {
-          const query = url.searchParams.get('query') ?? ''
-          const cursor = url.searchParams.get('cursor')?.trim() ?? null
-          const limit = parseComposioLimit(url.searchParams.get('limit'))
-          setJson(res, 200, await listComposioConnectors(query, cursor, limit))
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to list Composio connectors') })
-        }
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/composio/connector') {
-        try {
-          const slug = url.searchParams.get('slug') ?? ''
-          setJson(res, 200, await readComposioConnectorDetail(slug))
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to load Composio connector') })
-        }
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/composio/link') {
-        try {
-          const payload = asRecord(await readJsonBody(req))
-          const slug = readNonEmptyString(payload?.slug)
-          setJson(res, 200, await startComposioLink(slug))
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to start Composio login') })
-        }
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/composio/login') {
-        try {
-          setJson(res, 200, await startComposioLogin())
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to start Composio CLI login') })
-        }
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/composio/install') {
-        try {
-          setJson(res, 200, await installComposioCli())
-        } catch (error) {
-          setJson(res, 500, { error: getErrorMessage(error, 'Failed to install Composio CLI') })
-        }
-        return
-      }
+      // Composio HTTP route family (status/connectors/connector/link/login/install), 迁入 bridge/composioRoutes.ts.
+      if (await handleComposioHttpRequest(req, res, url, { setJson, readJsonBody })) return
 
       if (req.method === 'GET' && url.pathname === '/codex-api/connector-logo') {
         const src = url.searchParams.get('src')?.trim() ?? ''
