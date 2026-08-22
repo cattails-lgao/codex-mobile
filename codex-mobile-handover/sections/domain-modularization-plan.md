@@ -182,6 +182,10 @@
   - 随迁 membrane：`mergeStreamTurnErrorsIntoThreadResult` + `readStreamTurnId`/`readStreamTurnErrorMessage`（原仅 rpc/turn-page/live-state 用），签名改收窄 `ThreadReadAppServerFacade`；rpc handler 从新模块 import 复用。`STREAM_EVENT_BUFFER_LIMIT`（被 AppServerProcess.getStreamEvents 复用）与 `THREAD_RESPONSE_TURN_LIMIT`（被 trimThreadTurnsInRpcResult 复用）迁入 `bridge/core.ts` 跨切片共享。
   - 主 Shell：删 4 块 handler（原 4464-4675），接线单行派发；`rollback-files` 与 `/codex-api/events` SSE（依赖 `middleware.subscribeNotifications` 自引用）留驻 shell。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。thread 读/SSE 非 SSE 族迁移完成；`events` SSE 留驻待订阅源抽取评估。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 O 批（telegram 族 + rpc 后处理管线）完成**。telegram 族整体迁入新建 `bridge/telegramRoutes.ts`（3 个 handler + config helper），仅注入 `{ setJson, readJsonBody, telegramBridge }`（窄 4 方法结构类型），零 appServer/externalSession 闭包。
+  - rpc 族按「抽管线，HTTP 壳留驻」处理：新建 `bridge/rpcPipeline.ts`，以 `runRpcResponsePipeline(deps, method, rpcResult)` 承载 8 步 thread/session 后处理链（trim/mergeStream/mergeImported/filterSubagent/sanitize/mergeSkill/mergeCommands/overlayExternal）。`THREAD_METHODS_WITH_TURNS`/`THREAD_METHODS_WITH_THREAD_SNAPSHOT` 迁入 `bridge/core.ts` 共享。
+  - 主 Shell：rpc handler 内联链（原 trim→snapshotStore→overlay）替换为单次 `runRpcResponsePipeline` 调用；触发（`callRpcWithArchiveRecovery`）、错误守卫（`hasUsableCodexAuth`/`isUnauthenticatedRateLimitError`/`isEmptyThreadReadError`/`isThreadMaterializationPendingError`）、早退短路口、指标闭包 `requestBodyBytes`/`rpcMethod` 全部保留 shell。删除本地 `trimThreadTurnsInRpcResult`/`overlayExternalSessionOnThreadList`/`filterSubagentThreadsFromThreadListResult`/`overlayExternalSessionOnThreadResult`/`readExternalSessionForThread` 及失效 import；`filterThreadListByIds`/`THREAD_METHODS_WITH_TURNS` 因测试或 sanitize 复用保留。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。telegram/rpc 族完成，核心派发剩余路由族（仅 `events` SSE 留驻待评估）。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
@@ -310,3 +314,34 @@
 - 新建 `bridge/threadRoutes.ts`，`handleThreadHttpRequest(req, res, url, deps)`，命中返回 `true`。
 - 主 Shell：删 4 块 handler（原 4537-4748），接线 `if (await handleThreadHttpRequest(req, res, url, { setJson, appServer, externalSessionTracker })) return`；`events` SSE 与 rpc handler 留驻（rpc 改用 import 的 merge helper、`STREAM_EVENT_BUFFER_LIMIT` 改用 core import）。
 - 验证：`vue-tsc --noEmit`、全量单测、`pnpm run build`（web+CLI）通过后收尾。
+
+## telegram 与 rpc 族方案（O 批）
+
+> 状态：已完成实施，验证通过（见上方批次日志 O 批）。telegram 族整体迁出；rpc 族按「抽后处理管线（`bridge/rpcPipeline.ts`）+ HTTP 壳留驻」策略处理。
+
+### telegram 族
+
+**族边界（3 个 handler）**：`configure-bot` POST、`config` GET、`status` GET。
+
+**逐 handler 闭包依赖核对结论**——零 `appServer`/`externalSessionTracker` 闭包。唯一共享 shell 实例为 `telegramBridge`，且 3 个 handler 只用到其中 4 个方法（`configureToken`/`configureAllowedUserIds`/`start`/`getStatus`），定义为窄结构类型注入；`configure-bot` 用到的 `readTelegramBridgeConfig`/`writeTelegramBridgeConfig`（Config 落盘）与块内 `normalizeTelegramBridgeConfig` 为模块 helper，随迁。
+
+**注入点决策**：deps = `{ setJson, readJsonBody, telegramBridge }`。`setJson`/`readJsonBody` 沿用各批通用注入；`telegramBridge` 仅暴露上述 4 方法（程序内部还会注入 `appServer`、`readRawBody`、`notifySubscribers`、刷新策略等复杂状态，**不随迁**，整实例归属 shell）。核心 import：`asRecord`/`getCodexHomeDir`；Node：`join`/`readFile`/`writeFile`。
+
+**实施要点**：新建 `bridge/telegramRoutes.ts` 的 `handleTelegramHttpRequest(req, res, url, deps)`，命中返回 `true`；主 Shell 删除本地 3 块定义与 3 个 config helper，接线 `if (await handleTelegramHttpRequest(req, res, url, { setJson, readJsonBody, telegramBridge })) return`（随迁 `readTelegramBridgeConfig`/`writeTelegramBridgeConfig`，供 status/config 直读）。
+
+### rpc 族
+
+**族边界（1 个 handler）**：`/codex-api/rpc` POST。
+
+**逐 handler 闭包依赖核对结论**——整个 `createCodexBridgeMiddleware` 中耦合最重的单 handler，闭包按归属分四类：
+
+1. **RPC 触发与错误守卫（留驻 shell）**：`callRpcWithArchiveRecovery`（1589）、`hasUsableCodexAuth`（747，account/rateLimits/read 守卫）、`isUnauthenticatedRateLimitError`（705）+`isEmptyThreadReadError`（710，thread/read 空结果走 `appServer.getLastThreadReadSnapshot` 快照兜底）+`isThreadMaterializationPendingError`（715）；此外 `generate-thread-title`/`account/rateLimits/read` 早退短路口（4329-4337）也在 shell。这些分支织在“调用→合成兜底响应”的请求级逻辑里，整体搬移动线大且收益低，留驻。
+2. **可变指标状态（留驻 shell，无法搬）**：闭包 `requestBodyBytes`（4095）/`rpcMethod`（4099），在 rpc 块 4320/4322 写入、metrics 层 4116/4121 读取，绑定请求作用域与 HTTP 适配。
+3. **后处理管线（抽至 `bridge/rpcPipeline.ts`）**：8 步 thread/session 结果后处理链。纯 helper 随迁——`trimThreadTurnsInRpcResult`（用 `THREAD_RESPONSE_TURN_LIMIT`）、`overlayExternalSessionOnThreadList`/`overlayExternalSessionOnThreadResult`、`filterThreadListByIds`/`filterSubagentThreadsFromThreadListResult`（依赖 tracker.tick 闭合 subagent 竞态）。随迁函数零 shell 闭包，仅收窄依赖注入。
+4. **跨切片纯函数 import（不迁）**：`mergeStreamTurnErrorsIntoThreadResult`（threadRoutes，已随 N 批迁入）、`mergeSessionSkillInputsIntoThreadResult`/`mergeSessionCommandsIntoThreadResult`（session.ts）、`THREAD_METHODS_WITH_TURNS`/`THREAD_METHODS_WITH_THREAD_SNAPSHOT`/`THREAD_RESPONSE_TURN_LIMIT`（core.ts）。
+
+**rpc 方向决策**：**不整体迁出 rpc HTTP handler**，仅抽取其后处理管线。原因：`requestBodyBytes`/`rpcMethod` 是 shell 指标层与请求作用域的状态，`callRpcWithArchiveRecovery`/各错误守卫是调用→兜底响应的请求级逻辑，二者都与 shell 强绑定；真正可脱壳的是 8 步纯后处理链。故以 `bridge/rpcPipeline.ts` 的 `runRpcResponsePipeline(deps, method, rpcResult)` 承载该链。
+
+**注入点决策**：`RpcPipelineDeps = { appServer(ThreadReadAppServerFacade，仅 storeThreadReadSnapshot), externalSessionTracker(getExternalSession/tick/getUserFacingSubagentThreadIds), sanitizeThreadTurnsInlinePayloads(shell 纯 helper，供 rpc 与 threadRoutes 共用), mergeImportedThreadsIntoThreadListResult(shell 会话索引缓存) }`。后两者读 shell 状态故注入不随迁。
+
+**实施要点**：主文件 rpc 块中，将现内联后处理链（4374-4407：trim → mergeStream → mergeImported → filterSubagent → sanitize → mergeSkill → mergeCommands → snapshotStore → overlayExternal）替换为对 `runRpcResponsePipeline` 的调用并 `setJson` 200 返回；`rpcResult` 调用、错误守卫、`generate-thread-title`/`account/rateLimits/read` 早退、指标写入全部保留原样。
