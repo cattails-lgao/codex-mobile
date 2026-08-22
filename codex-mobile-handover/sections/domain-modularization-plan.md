@@ -130,6 +130,11 @@
   - 边界：`readCommandExecutionStarted`/`readCommandExecutionCompleted`/`readPlanItemNotification`/`readCompletedFileChange` 因读取 `turnIndexByTurnIdByThreadId.value` 共享 ref，**留驻闭包**不迁移（避免跨模块传响应式状态）。
   - 主 Shell：为各纯读取器补 `import`，删除本地定义，清理未用导入（`toLocalImageUrl`/`toImageGenerationUrl`/`readReasoningItemText` 仅被迁出者使用则不再 import）。净删闭包约 597 行。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。闭包仍剩 `readCommandExecution*`/`readPlanItemNotification`/`readCompletedFileChange` 及写入侧（upsert/append/set）等闭包状态函数留待后续评估。
+- 2026-08-22：**useDesktopState() 主函数第三批（server 请求解析/分类簇）完成**。删除闭包内 11 个纯请求解析/分类函数，新建 `useDesktopStateRequests.ts`（186 行）。
+  - 迁出：`GLOBAL_SERVER_REQUEST_SCOPE` 常量、`normalizeServerRequest`、`normalizePendingServerRequestMethod`、6×`looksLike*`（exec/patch/toolUserInput/toolCall/mcpServerElicitation/permissions）、`readToolRequestUserInputQuestionIds`、`isApprovalRequestMethod`。仅依赖 `params`/`method` 参数 + 纯 normalizer（`asRecord`/`readString`），不碰 ref。
+  - 主 Shell：删除本地 `const GLOBAL_SERVER_REQUEST_SCOPE` 与对应函数定义，改为 `import` 复用（仅 import 闭包仍直接调用的 4 个符号：`GLOBAL_SERVER_REQUEST_SCOPE`/`isApprovalRequestMethod`/`normalizeServerRequest`/`readToolRequestUserInputQuestionIds`）。净删闭包约 179 行（5115 行）。
+  - 边界：写入侧 `upsertPendingServerRequest`/`removePendingServerRequestById`/`replacePendingServerRequests`/`applyThreadFlags` 及 `pendingReplyErrorForRequest` 留在闭包。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。闭包写入侧（live 消息 upsert/append、turnIndex 维护、server 请求状态写入）均为 ref 写操作，后续视需求评估是否注入式重构。
 
 ## 收尾验证口径（每批）
 
