@@ -135,6 +135,12 @@
   - 主 Shell：删除本地 `const GLOBAL_SERVER_REQUEST_SCOPE` 与对应函数定义，改为 `import` 复用（仅 import 闭包仍直接调用的 4 个符号：`GLOBAL_SERVER_REQUEST_SCOPE`/`isApprovalRequestMethod`/`normalizeServerRequest`/`readToolRequestUserInputQuestionIds`）。净删闭包约 179 行（5115 行）。
   - 边界：写入侧 `upsertPendingServerRequest`/`removePendingServerRequestById`/`replacePendingServerRequests`/`applyThreadFlags` 及 `pendingReplyErrorForRequest` 留在闭包。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。闭包写入侧（live 消息 upsert/append、turnIndex 维护、server 请求状态写入）均为 ref 写操作，后续视需求评估是否注入式重构。
+- 2026-08-22：**useDesktopState() 主函数第四批（注入式写入侧：live 消息）完成**。`e22eae4` 迁出 pending-request 写入侧，本次新建 `useDesktopStateLiveWrites.ts`（100 行），迁出 live 消息 ref 写入簇。
+  - 迁出（注入式）：定义 `LiveWriteDeps { liveCommandsByThreadId, liveFileChangeMessagesByThreadId }` 两个 ref 注入。函数：`setLiveFileChangeMessagesForThread`、`upsertLiveCommand`、`removeLiveCommandsPersistedIn`、`removeLiveFileChangesPersistedIn`、`upsertLiveFileChangePatch`、`upsertTurnDiff`。仅依赖注入 ref + 纯工具（`upsertMessage`/`omitKey`/`areMessageArraysEqual`），零闭包回环。
+  - 主 Shell：新增 `liveWriteDeps` 对象注入两个 ref，本地函数退化为一行薄包装（`xxxImpl(liveWriteDeps, …)`），对外签名不变。
+  - `e22eae4`：server 请求写入侧迁出，新建 `PendingRequestWriteDeps { pendingServerRequestsByThreadId, pendingReplyErrorByRequestId, applyThreadFlags }`，迁出 `upsertPendingServerRequest`/`removePendingServerRequestById`/`replacePendingServerRequests`/`readPendingReplyErrorForRequest`；新增 `useDesktopStateRequests.test.ts`（pending-request 写操作单测）。
+  - 新增 `useDesktopStateLiveWrites.test.ts`（live 命令/文件变更写入单测）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 380 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 5038 行。剩余写入侧（live plan/agent/reasoning 写入、turnIndex 维护、liveReasoning 文本写入）仍留闭包，视需求再评估。
 
 ## 收尾验证口径（每批）
 

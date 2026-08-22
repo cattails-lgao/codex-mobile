@@ -20,7 +20,7 @@ function makeDeps(): { deps: PendingRequestWriteDeps; applyThreadFlags: ReturnTy
 }
 
 function req(id: number, receivedAtIso: string, threadId = 't1'): UiServerRequest {
-  return { id, method: 'item/commandExecution/requestApproval', threadId, receivedAtIso, params: null }
+  return { id, method: 'item/commandExecution/requestApproval', threadId, receivedAtIso, params: null, turnId: '', itemId: '' }
 }
 
 describe('useDesktopStateRequests pending-request writes', () => {
