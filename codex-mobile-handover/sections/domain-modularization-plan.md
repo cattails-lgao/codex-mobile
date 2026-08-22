@@ -177,6 +177,11 @@
   - 主 Shell：原 5792 行降至 5268 行（-524）；新增 `import { handleProjectHttpRequest }`，区块替换为单行派发；新增 `export { buildProjectlessFolderName }` 透出（`codexAppServerBridge.archive.test.ts` 依赖，保持公共导出面）。
   - 说明：`workspace-roots-state` GET/PUT **留驻 shell**（未随迁）——其读写闭包绑定 shell 内 workspace-roots 状态，与 M 批计划所列 14 个 handler 有出入，实际迁出 12 个。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。文件/project 族迁移完成。核心派发剩余路由族（thread 读/SSE、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 N 批（thread 读/SSE 非 SSE 部分）完成**。新建 `bridge/threadRoutes.ts`，迁出 4 个 handler（`handleThreadHttpRequest`）：`thread-turn-page` GET、`thread-file-change-fallback` GET、`thread-stream-events` GET、`thread-live-state` GET。
+  - 注入：`{ setJson, appServer, externalSessionTracker, sanitizeThreadTurnsInlinePayloads, isThreadMaterializationPendingError }`。`appServer` 用窄接口 `ThreadReadAppServerFacade`（8 个只读/缓存方法：rpc/readThreadForTurnPage/getStreamEvents/storeThreadReadSnapshot/getLastThreadReadSnapshot/getCachedLiveState/cacheLiveState/mergeItemsIntoTurns），不导出 `AppServerProcess` 全量；`externalSessionTracker` 仅注入 `getExternalSession`；后两者为 shell 内纯 helper 供 rpc handler 共用，注入避免 threadRoutes→shell 循环（rpc handler 保留原样）。
+  - 随迁 membrane：`mergeStreamTurnErrorsIntoThreadResult` + `readStreamTurnId`/`readStreamTurnErrorMessage`（原仅 rpc/turn-page/live-state 用），签名改收窄 `ThreadReadAppServerFacade`；rpc handler 从新模块 import 复用。`STREAM_EVENT_BUFFER_LIMIT`（被 AppServerProcess.getStreamEvents 复用）与 `THREAD_RESPONSE_TURN_LIMIT`（被 trimThreadTurnsInRpcResult 复用）迁入 `bridge/core.ts` 跨切片共享。
+  - 主 Shell：删 4 块 handler（原 4464-4675），接线单行派发；`rollback-files` 与 `/codex-api/events` SSE（依赖 `middleware.subscribeNotifications` 自引用）留驻 shell。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。thread 读/SSE 非 SSE 族迁移完成；`events` SSE 留驻待订阅源抽取评估。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
@@ -273,3 +278,35 @@
 ### 实施要点
 - 已实施：新建 `bridge/projectRoutes.ts`，`handleProjectHttpRequest`，实际 deps = `{ setJson, readJsonBody, readRawBody, persistWorkspaceRoot, collectProjectChatZipEntries, importProjectZip }`。
 - 实际迁出 12 个 handler；`workspace-roots-state` GET/PUT 留驻 shell（其闭包绑定 shell 内 workspace-roots 状态，未随迁）。
+
+## thread 读/SSE 族迁移方案（N 批）
+
+> 状态：已完成实施，验证通过（见上方批次日志 N 批）。仅迁 4 个非 SSE handler；`/codex-api/events` SSE handler（依赖 `middleware.subscribeNotifications` 自引用）留驻 shell 待评估。
+
+### 族边界
+迁出 4 个 handler（零 `readJsonBody` 依赖，仅 `setJson`）：
+- `/codex-api/thread-turn-page` GET、`/codex-api/thread-file-change-fallback` GET
+- `/codex-api/thread-stream-events` GET、`/codex-api/thread-live-state` GET
+
+`thread/rollback-files`(4750，文件回溯写)、`server-requests/pending|respond`、`thread-search|titles|pins|reasoning`、`thread-queue-state`、`events`(SSE，5189) 不归本批。
+
+### 闭包锚点与注入
+- **`appServer`（`AppServerProcess` 大类，3064 起，共用不得搬）**：thread 读/SSE 仅用 8 个只读/缓存方法——`rpc`/`readThreadForTurnPage`/`getStreamEvents`/`storeThreadReadSnapshot`/`getLastThreadReadSnapshot`/`getCachedLiveState`/`cacheLiveState`/`mergeItemsIntoTurns`。→ 定义为窄接口 `ThreadReadAppServerFacade`（局部结构类型，不导出 `AppServerProcess` 全量），注入。
+- **`externalSessionTracker`（`createExternalSessionTracker()`，4137）**：仅 `getExternalSession`(live-state 用)，注入窄签名。
+- **`setJson`**：通行。
+- deps = `{ setJson, appServer, externalSessionTracker }`。
+
+### 随迁（membrane）
+- `mergeStreamTurnErrorsIntoThreadResult` + `readStreamTurnId`/`readStreamTurnErrorMessage`（718/725/746，仅被 turn-page/live-state 与 rpc handler 用）随迁。依赖 `getStreamEvents` 故签名改收窄接口 `ThreadReadAppServerFacade`；rpc handler(4502) 改从新模块 import。
+- `STREAM_EVENT_BUFFER_LIMIT` 被 AppServerProcess.getStreamEvents(3273) 复用，**搬入 `bridge/core.ts` 共享**（跨切片常量），主文件与新模块共用。
+
+### 模块级 helper（import）
+- 主文件：`sanitizeThreadTurnsInlinePayloads`(615)/`isThreadMaterializationPendingError`(708)（rpc handler 亦用，留驻，import）。
+- session.ts：`mergeSessionSkillInputsIntoThreadResult`/`mergeSessionCommandsIntoThreadResult`/`mergeSessionCommandsIntoTurns`。
+- core.ts：`asRecord`/`readNonEmptyString`/`getErrorMessage`/`STREAM_EVENT_BUFFER_LIMIT`。
+- Node：`isAbsolute`/`join`/`stat`/`readFile`。
+
+### 实施要点
+- 新建 `bridge/threadRoutes.ts`，`handleThreadHttpRequest(req, res, url, deps)`，命中返回 `true`。
+- 主 Shell：删 4 块 handler（原 4537-4748），接线 `if (await handleThreadHttpRequest(req, res, url, { setJson, appServer, externalSessionTracker })) return`；`events` SSE 与 rpc handler 留驻（rpc 改用 import 的 merge helper、`STREAM_EVENT_BUFFER_LIMIT` 改用 core import）。
+- 验证：`vue-tsc --noEmit`、全量单测、`pnpm run build`（web+CLI）通过后收尾。
