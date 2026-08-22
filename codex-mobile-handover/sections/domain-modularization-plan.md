@@ -172,6 +172,11 @@
   - 耦合较前两批高：非零闭包。模型/常量 helper 直接 import（`freeMode.js`：`FREE_MODE_DEFAULT_MODEL`/`getFreeModels`/`getFreeKeyCount`/`getCachedFreeModels`/`refreshFreeModelsInBackground`/`OPENCODE_ZEN_PROVIDER_ID`/`shouldMarkOpenRouterKeyAsCustom`/`filterOpenCodeZenModelsForAuthState`/`FreeModeState`；`models.js`：`sortOpenCodeZenModelIds`/`fetchOpenCodeZenModelIds`/`fetchCustomEndpointDefaultModel`/`normalizeCustomEndpointBaseUrl`；`core.js`：`getCodexHomeDir`/`getErrorMessage`）。运行时依赖注入：`setJson`/`readJsonBody`/`appServer`（`dispose()` 触发 provider 重启）/`next`（前缀命中但无子路由时放行）+ Shell 所有 auth 状态 helper `writeFreeModeStateFile`/`ensureDefaultFreeModeStateForMissingAuthSync`/`hasUsableCodexAuthSync`（后者在 shell 被 9 处复用，留驻）。
   - 主 Shell：删本地 232 行块（原 4609–4840），接线 `if (await handleFreeModeHttpRequest(req, res, url, { setJson, readJsonBody, appServer, next, writeFreeModeStateFile, ensureDefaultFreeModeStateForMissingAuthSync, hasUsableCodexAuthSync })) return`；移除 6 个不再使用的 freeMode.js import（`getRandomFreeKey`/`getFreeKeyCount`/`getCachedFreeModels`/`refreshFreeModelsInBackground`/`OPENCODE_ZEN_PROVIDER_ID`/`shouldMarkOpenRouterKeyAsCustom`）。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。free-mode 族迁移完成。核心派发剩余路由族（thread 读/SSE、文件/project、automations、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 M 批（文件/project 路由族）完成**。新建 `bridge/projectRoutes.ts`，迁出 12 个 handler（`handleProjectHttpRequest`）：`home-directory` GET、`project-zip` GET/HEAD、`project-import` POST、`project-root` POST、`local-directory` POST、`github-clone` POST、`projectless-thread-cwd` POST、`project-root-suggestion` GET、`composer-file-search` POST、`prompts` GET/POST/DELETE，及随迁 helper（`createProjectlessThreadDirectory`/`cloneGithubRepositoryIntoBase`/`listFilesWithRipgrep`/`scoreFileCandidate`/`listComposerPrompts`/`createComposerPromptFile`/`removeComposerPromptFile`/`buildProjectlessFolderName` 等）。
+  - 注入模式沿用 git/worktree：deps = `{ setJson, readJsonBody, readRawBody, persistWorkspaceRoot, collectProjectChatZipEntries, importProjectZip }`。`collectProjectChatZipEntries`/`importProjectZip` 依赖 shell 内 session/thread 状态（D 批留待项），故随依赖注入而非随迁。
+  - 主 Shell：原 5792 行降至 5268 行（-524）；新增 `import { handleProjectHttpRequest }`，区块替换为单行派发；新增 `export { buildProjectlessFolderName }` 透出（`codexAppServerBridge.archive.test.ts` 依赖，保持公共导出面）。
+  - 说明：`workspace-roots-state` GET/PUT **留驻 shell**（未随迁）——其读写闭包绑定 shell 内 workspace-roots 状态，与 M 批计划所列 14 个 handler 有出入，实际迁出 12 个。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。文件/project 族迁移完成。核心派发剩余路由族（thread 读/SSE、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
@@ -235,3 +240,36 @@
 - 主 Shell：删 8 个 CRUD 块 + run 块（原 5595-5800 区间，剔除 thread-search/titles/pins/reasoning/first-launch），接线 `if (await handleAutomationsHttpRequest(req, res, url, { setJson, readJsonBody, appendThreadQueuedMessage, scheduleThreadQueueDrain })) return`；清理随迁后不再使用的 import。
 - `thread-search`（依赖闭包 `getThreadSearchIndex`/`appServer.rpc`）留驻，归入 thread 族。
 - 验证：`vue-tsc --noEmit`、全量单测、`pnpm run build`（web+CLI）通过后收尾。
+
+## 文件/project 族迁移方案（M 批）
+
+> 状态：已完成实施，验证通过（见上方批次日志 M 批）。
+
+### 族边界
+主 Shell `5200-5492` 区间 + prompts 子族（`5494-5529`），共 **14 个 handler**。`thread-queue-state`（依赖 `backendQueueProcessor`）**不归本族**，归 queue 族。
+
+- `/codex-api/home-directory` GET、`/codex-api/workspace-roots-state` GET/PUT
+- `/codex-api/project-zip` GET/HEAD、`/codex-api/project-import` POST、`/codex-api/project-root` POST
+- `/codex-api/local-directory` POST、`/codex-api/github-clone` POST、`/codex-api/projectless-thread-cwd` POST
+- `/codex-api/project-root-suggestion` GET、`/codex-api/composer-file-search` POST
+- `/codex-api/prompts` GET/POST/DELETE
+
+### 逐 handler 闭包依赖核对结论
+**该族零 Shell 实例闭包**（较此前「低」级进一步下调）。全部依赖仅两类：
+
+1. **模块级 helper（`column 0` 的 `async function`，无实例捕获，可直接随迁）**
+   - `readWorkspaceRootsState`/`updateWorkspaceRootsState`/`prependUniqueString`/`normalizeStringArray`/`normalizeStringRecord`
+   - `collectProjectChatZipEntries`/`importProjectZip`/`createProjectlessThreadDirectory`/`cloneGithubRepositoryIntoBase`/`listFilesWithRipgrep`/`scoreFileCandidate`
+   - `listComposerPrompts`/`createComposerPromptFile`/`removeComposerPromptFile`/`readRawBody`/`readJsonBody`/`setJson`
+2. **纯 import**：`node:path`/`node:fs`/`node:os`、`listWorkspaceFiles`(localBrowseUi)、project-zip 四件套（`resolveAllowedProjectZipCwd`/`setProjectZipHeaders`/`streamProjectZip`/`toProjectZipFileName`）
+
+### 注入点决策
+为避免新 bridge 模块反向 import 主文件，参照 git/worktree 模式注入下列共享函数（它们留驻主文件且被多处复用，不整组搬移）：
+
+- `setJson`、`readJsonBody`：通行。
+- `readRawBody`：仅 project-import 使用（主文件 5091 亦作 `readBody` 复用）。
+- `persistWorkspaceRoot`：project-root 与 `cloneGithubRepositoryIntoBase`（随迁）均调用；主文件 1437/1557/5221（git 族已注入）多处复用。
+
+### 实施要点
+- 已实施：新建 `bridge/projectRoutes.ts`，`handleProjectHttpRequest`，实际 deps = `{ setJson, readJsonBody, readRawBody, persistWorkspaceRoot, collectProjectChatZipEntries, importProjectZip }`。
+- 实际迁出 12 个 handler；`workspace-roots-state` GET/PUT 留驻 shell（其闭包绑定 shell 内 workspace-roots 状态，未随迁）。
