@@ -10,6 +10,7 @@ package-lock.json
 pnpm-lock.yaml
 .codex/
 .codegraph/
+codex-parity-plan/
 .trae-html-share-packages/
 .env.local
 
