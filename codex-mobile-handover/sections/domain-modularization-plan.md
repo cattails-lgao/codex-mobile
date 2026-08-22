@@ -79,6 +79,7 @@
 
 - 2026-08-22：完成三个文件领域梳理并出本方案（见「领域梳理结论」）。
 - 2026-08-22：**codexGateway 试点（search 领域）完成**。新建 `src/api/gateway/core.ts`（`callRpc` + `getErrorMessageFromPayload` 共享底层）与 `src/api/gateway/search.ts`（fuzzy 搜索会话/composer 文件搜索/线程搜索 + `ComposerFileSuggestion`/`FuzzyFileSearchSession`/`ThreadSearchResult`/`isIgnoredFileSearchPath`/`normalizeFuzzyFileSearchResults`）。`codexGateway.ts` 从 core 导入共享底层、末尾 `export * from './gateway/search'` 透传，调用方零改动。`vue-tsc`、全量 370 个单测、`pnpm run build`（web+CLI）均通过。
+- 2026-08-22：**codexGateway 全部领域迁移完成**。codexGateway.ts 薄壳化为纯 re-export（13 行），11 个领域按本表落地：`search.ts`/`automations.ts`/`terminal.ts`/`threads.ts`/`models.ts`/`directory.ts`/`accounts.ts`/`git.ts`/`files.ts`/`develop.ts`/`misc.ts`，共约 150 个导出方法平移到领域文件，调用方零改动（消费者仍从 `./codexGateway` import）。共享底层统一：`callRpc`/`readJsonResponse` 等入 `core.ts`；`cachedWorkspaceRootsState` 缓存收敛为 git.ts 单实例并发 `invalidateWorkspaceRootsCache` 供 files 复用；`pickCodexRateLimitSnapshot` 归 misc.ts 供 accounts 复用。验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余两项（useDesktopState A/B 批、codexAppServerBridge A 批起）按上表继续。
 
 ## 收尾验证口径（每批）
 

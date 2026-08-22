@@ -26,3 +26,35 @@ export function getErrorMessageFromPayload(payload: unknown, fallback: string): 
   const error = record.error
   return typeof error === 'string' && error.trim().length > 0 ? error : fallback
 }
+
+export function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+export function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+export function readNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+export function readBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
+}
+
+export function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
+}
+
+export async function readJsonResponse(response: Response): Promise<unknown> {
+  const raw = await response.text()
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    throw new Error(`Expected JSON response from ${response.url || 'request'}`)
+  }
+}
