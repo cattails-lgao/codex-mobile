@@ -160,7 +160,7 @@
   - 迁出：`recordActiveReasoningTurn`、`clearLiveReasoningForThread`、`rememberPersistedReasoning`、`rememberPersistedReasoningItems`、`appendReasoningItemProgress`、`recordTurnItemOrder`、`buildTurnReasoningItems`；后四者仅内部使用、直接删除本地定义，前三者保留一行薄包装。
   - 新增 `useDesktopStateReasoningTimeline.test.ts`（6 个用例：时序锚点、到达顺序、增量追加、item 存档、整段兜底、去重）。
   - 验证：`vue-tsc --noEmit` 通过、全量 394 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 4755 行。reasoning 文本写入/存档簇已迁出完成。
-  - 后续（applyRealtimeUpdates 残留补充）：扩展本模块新增 `accumulateReasoningTextDelta`（textDelta 前缀去重累积）与 `clearReasoningItemTextCache`，替换 `applyRealtimeUpdates` 中 `reasoningItemTextByItemId` 的两处直接写/清空；用例增至 7 个，全量 395 单测、vue-tsc、web+CLI 构建均通过。`applyRealtimeUpdates` 残余只读 `reasoningItemTextByItemId`（resetAllState 直接 clear）保留在闭包。
+  - 后续（applyRealtimeUpdates 残留补充）：扩展本模块新增 `accumulateReasoningTextDelta`（textDelta 前缀去重累积）与 `clearReasoningItemTextCache`，替换 `applyRealtimeUpdates` 中 `reasoningItemTextByItemId` 的两处直接写/清空；用例增至 7 个，全量 395 单测、vue-tsc、web+CLI 构建均通过。`applyRealtimeUpdates` 残余只读 `reasoningItemTextByItemId`（resetAllState 直接 clear）保留在闭包。后续将 resetAllState 的一处 direct clear 也并入 `clearReasoningItemTextCache`，该 Map 的闭包内直接写已全部清零。
 
 ## 收尾验证口径（每批）
 
