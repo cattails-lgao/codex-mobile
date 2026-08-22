@@ -1,11 +1,14 @@
 import { ref } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { UiFileChange, UiMessage } from '../types/codex'
 import {
+  rememberLastPlan,
   removeLiveCommandsPersistedIn,
   removeLiveFileChangesPersistedIn,
+  upsertLiveAgentMessage,
   upsertLiveCommand,
   upsertLiveFileChangePatch,
+  upsertLivePlanMessage,
   upsertTurnDiff,
   type LiveWriteDeps,
 } from './useDesktopStateLiveWrites'
@@ -22,6 +25,9 @@ function makeDeps(): LiveWriteDeps {
   return {
     liveCommandsByThreadId: ref<Record<string, UiMessage[]>>({}),
     liveFileChangeMessagesByThreadId: ref<Record<string, UiMessage[]>>({}),
+    liveAgentMessagesByThreadId: ref<Record<string, UiMessage[]>>({}),
+    livePlanMessagesByThreadId: ref<Record<string, UiMessage[]>>({}),
+    lastPlanByThreadId: ref<Record<string, UiMessage>>({}),
   }
 }
 
@@ -78,5 +84,31 @@ describe('useDesktopStateLiveWrites file changes', () => {
     ])
     const remaining = deps.liveFileChangeMessagesByThreadId.value.t1.map((m) => m.id)
     expect(remaining).toEqual(['liveB'])
+  })
+})
+
+describe('useDesktopStateLiveWrites plan + agent', () => {
+  it('upsertLivePlanMessage appends plan and remembers last plan', () => {
+    const deps = makeDeps()
+    const plan = msg('plan1')
+    upsertLivePlanMessage(deps, 't1', plan)
+    expect(deps.livePlanMessagesByThreadId.value.t1.map((m) => m.id)).toEqual(['plan1'])
+    expect(deps.lastPlanByThreadId.value.t1).toEqual(plan)
+  })
+
+  it('upsertLiveAgentMessage dedupes assistant text across ids', () => {
+    const deps = makeDeps()
+    upsertLiveAgentMessage(deps, 't1', msg('a1', { role: 'assistant', text: 'hello' }))
+    upsertLiveAgentMessage(deps, 't1', msg('a2', { role: 'assistant', text: 'hello' }))
+    expect(deps.liveAgentMessagesByThreadId.value.t1.map((m) => m.id)).toEqual(['a2'])
+  })
+
+  it('rememberLastPlan writes and persists through saveLastPlanMap', async () => {
+    const deps = makeDeps()
+    const spy = vi.spyOn(await import('./useDesktopStatePersistence'), 'saveLastPlanMap')
+    rememberLastPlan(deps, 't1', msg('plan1'))
+    expect(deps.lastPlanByThreadId.value.t1.id).toBe('plan1')
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
   })
 })

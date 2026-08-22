@@ -209,11 +209,18 @@ import {
   type PendingRequestWriteDeps,
 } from './useDesktopStateRequests'
 import {
+  clearLiveAgentMessagesForThread as clearLiveAgentMessagesForThreadImpl,
+  rememberLastPlan as rememberLastPlanImpl,
   removeLiveCommandsPersistedIn as removeLiveCommandsPersistedInImpl,
   removeLiveFileChangesPersistedIn as removeLiveFileChangesPersistedInImpl,
+  setLiveAgentMessagesForThread as setLiveAgentMessagesForThreadImpl,
   setLiveFileChangeMessagesForThread as setLiveFileChangeMessagesForThreadImpl,
+  setLivePlanMessagesForThread as setLivePlanMessagesForThreadImpl,
+  upsertLiveAgentMessage as upsertLiveAgentMessageImpl,
   upsertLiveCommand as upsertLiveCommandImpl,
+  upsertLiveFileChangeMessage as upsertLiveFileChangeMessageImpl,
   upsertLiveFileChangePatch as upsertLiveFileChangePatchImpl,
+  upsertLivePlanMessage as upsertLivePlanMessageImpl,
   upsertTurnDiff as upsertTurnDiffImpl,
   type LiveWriteDeps,
 } from './useDesktopStateLiveWrites'
@@ -1676,18 +1683,11 @@ export function useDesktopState() {
   }
 
   function setLiveAgentMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
-    const previous = liveAgentMessagesByThreadId.value[threadId] ?? []
-    if (areMessageArraysEqual(previous, nextMessages)) return
-    liveAgentMessagesByThreadId.value = {
-      ...liveAgentMessagesByThreadId.value,
-      [threadId]: nextMessages,
-    }
+    setLiveAgentMessagesForThreadImpl(liveWriteDeps, threadId, nextMessages)
   }
 
   function clearLiveAgentMessagesForThread(threadId: string): void {
-    if (!threadId) return
-    if (!(threadId in liveAgentMessagesByThreadId.value)) return
-    liveAgentMessagesByThreadId.value = omitKey(liveAgentMessagesByThreadId.value, threadId)
+    clearLiveAgentMessagesForThreadImpl(liveWriteDeps, threadId)
   }
 
   function setLiveFileChangeMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
@@ -1695,57 +1695,26 @@ export function useDesktopState() {
   }
 
   function setLivePlanMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
-    const previous = livePlanMessagesByThreadId.value[threadId] ?? []
-    if (areMessageArraysEqual(previous, nextMessages)) return
-    livePlanMessagesByThreadId.value = {
-      ...livePlanMessagesByThreadId.value,
-      [threadId]: nextMessages,
-    }
+    setLivePlanMessagesForThreadImpl(liveWriteDeps, threadId, nextMessages)
   }
 
   function upsertLivePlanMessage(threadId: string, nextMessage: UiMessage): void {
-    const previous = livePlanMessagesByThreadId.value[threadId] ?? []
-    const next = upsertMessage(previous, nextMessage)
-    setLivePlanMessagesForThread(threadId, next)
-    rememberLastPlan(threadId, nextMessage)
+    upsertLivePlanMessageImpl(liveWriteDeps, threadId, nextMessage)
   }
 
   // round-27：记录该线程最近一次 plan（本地持久化）。部分 provider 下 plan
   // 只实时推送、服务端不持久化，刷新后消息流里没有 plan 消息 → 输入框上方
   // 计划面板消失；这里存一份供 composerPlanPanel 兜底恢复。
   function rememberLastPlan(threadId: string, planMessage: UiMessage): void {
-    if (!threadId || !planMessage) return
-    lastPlanByThreadId.value = {
-      ...lastPlanByThreadId.value,
-      [threadId]: planMessage,
-    }
-    saveLastPlanMap(lastPlanByThreadId.value)
+    rememberLastPlanImpl(liveWriteDeps, threadId, planMessage)
   }
 
   function upsertLiveAgentMessage(threadId: string, nextMessage: UiMessage): void {
-    const previous = liveAgentMessagesByThreadId.value[threadId] ?? []
-    let next = upsertMessage(previous, nextMessage)
-    // round-52：live 文本级去重。同一段助手文本可能以两个不同 id 进入 live
-    // （delta 通道用 params.itemId、completed 通道用 item.id），mergeLiveMessages
-    // 只按 id 去重无法消除 → 进行中重复 agentMessage 块 + 副本挂 toolbar。
-    // 与轮末/刷新的 removeRedundantLiveAgentMessages 同用 normalizeMessageText，
-    // 保留最新一条（同 id 由 upsertMessage 替换、同文本不同 id 在此移除）。
-    const normalizedText = normalizeMessageText(nextMessage.text)
-    if (nextMessage.role === 'assistant' && normalizedText.length > 0) {
-      const deduped = next.filter(
-        (message) => message.id === nextMessage.id || normalizeMessageText(message.text) !== normalizedText,
-      )
-      if (deduped.length !== next.length) {
-        next = deduped
-      }
-    }
-    setLiveAgentMessagesForThread(threadId, next)
+    upsertLiveAgentMessageImpl(liveWriteDeps, threadId, nextMessage)
   }
 
   function upsertLiveFileChangeMessage(threadId: string, nextMessage: UiMessage): void {
-    const previous = liveFileChangeMessagesByThreadId.value[threadId] ?? []
-    const next = upsertMessage(previous, nextMessage)
-    setLiveFileChangeMessagesForThread(threadId, next)
+    upsertLiveFileChangeMessageImpl(liveWriteDeps, threadId, nextMessage)
   }
 
   function setLiveReasoningText(threadId: string, text: string): void {
@@ -2023,6 +1992,9 @@ export function useDesktopState() {
   const liveWriteDeps: LiveWriteDeps = {
     liveCommandsByThreadId,
     liveFileChangeMessagesByThreadId,
+    liveAgentMessagesByThreadId,
+    livePlanMessagesByThreadId,
+    lastPlanByThreadId,
   }
 
   function upsertPendingServerRequest(request: UiServerRequest): void {

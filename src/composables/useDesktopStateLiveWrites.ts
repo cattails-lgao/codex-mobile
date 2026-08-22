@@ -7,11 +7,89 @@
 // it is used by the other functions in this cluster.
 import type { Ref } from 'vue'
 import type { UiFileChange, UiMessage } from '../types/codex'
-import { areMessageArraysEqual, omitKey, upsertMessage } from './useDesktopStateUtils'
+import { saveLastPlanMap } from './useDesktopStatePersistence'
+import { areMessageArraysEqual, normalizeMessageText, omitKey, upsertMessage } from './useDesktopStateUtils'
 
 export interface LiveWriteDeps {
   liveCommandsByThreadId: Ref<Record<string, UiMessage[]>>
   liveFileChangeMessagesByThreadId: Ref<Record<string, UiMessage[]>>
+  liveAgentMessagesByThreadId: Ref<Record<string, UiMessage[]>>
+  livePlanMessagesByThreadId: Ref<Record<string, UiMessage[]>>
+  lastPlanByThreadId: Ref<Record<string, UiMessage>>
+}
+
+export function setLiveAgentMessagesForThread(
+  deps: LiveWriteDeps,
+  threadId: string,
+  nextMessages: UiMessage[],
+): void {
+  const previous = deps.liveAgentMessagesByThreadId.value[threadId] ?? []
+  if (areMessageArraysEqual(previous, nextMessages)) return
+  deps.liveAgentMessagesByThreadId.value = {
+    ...deps.liveAgentMessagesByThreadId.value,
+    [threadId]: nextMessages,
+  }
+}
+
+export function clearLiveAgentMessagesForThread(deps: LiveWriteDeps, threadId: string): void {
+  if (!threadId) return
+  if (!(threadId in deps.liveAgentMessagesByThreadId.value)) return
+  deps.liveAgentMessagesByThreadId.value = omitKey(deps.liveAgentMessagesByThreadId.value, threadId)
+}
+
+export function setLivePlanMessagesForThread(
+  deps: LiveWriteDeps,
+  threadId: string,
+  nextMessages: UiMessage[],
+): void {
+  const previous = deps.livePlanMessagesByThreadId.value[threadId] ?? []
+  if (areMessageArraysEqual(previous, nextMessages)) return
+  deps.livePlanMessagesByThreadId.value = {
+    ...deps.livePlanMessagesByThreadId.value,
+    [threadId]: nextMessages,
+  }
+}
+
+export function rememberLastPlan(deps: LiveWriteDeps, threadId: string, planMessage: UiMessage): void {
+  if (!threadId || !planMessage) return
+  deps.lastPlanByThreadId.value = {
+    ...deps.lastPlanByThreadId.value,
+    [threadId]: planMessage,
+  }
+  saveLastPlanMap(deps.lastPlanByThreadId.value)
+}
+
+export function upsertLivePlanMessage(deps: LiveWriteDeps, threadId: string, nextMessage: UiMessage): void {
+  const previous = deps.livePlanMessagesByThreadId.value[threadId] ?? []
+  const next = upsertMessage(previous, nextMessage)
+  setLivePlanMessagesForThread(deps, threadId, next)
+  rememberLastPlan(deps, threadId, nextMessage)
+}
+
+export function upsertLiveFileChangeMessage(deps: LiveWriteDeps, threadId: string, nextMessage: UiMessage): void {
+  const previous = deps.liveFileChangeMessagesByThreadId.value[threadId] ?? []
+  const next = upsertMessage(previous, nextMessage)
+  setLiveFileChangeMessagesForThread(deps, threadId, next)
+}
+
+export function upsertLiveAgentMessage(deps: LiveWriteDeps, threadId: string, nextMessage: UiMessage): void {
+  const previous = deps.liveAgentMessagesByThreadId.value[threadId] ?? []
+  let next = upsertMessage(previous, nextMessage)
+  // Live text-level dedupe: the same assistant text can enter live under two
+  // different ids (delta channel uses params.itemId, completed channel uses
+  // item.id), and upsertMessage only dedupes by id. Remove same-text duplicates
+  // while keeping the latest (removed at turn-end / refresh by the persisted
+  // message paths too). Shared normalizeMessageText preserves the newest.
+  const normalizedText = normalizeMessageText(nextMessage.text)
+  if (nextMessage.role === 'assistant' && normalizedText.length > 0) {
+    const deduped = next.filter(
+      (message) => message.id === nextMessage.id || normalizeMessageText(message.text) !== normalizedText,
+    )
+    if (deduped.length !== next.length) {
+      next = deduped
+    }
+  }
+  setLiveAgentMessagesForThread(deps, threadId, next)
 }
 
 export function setLiveFileChangeMessagesForThread(
