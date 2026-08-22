@@ -21,6 +21,23 @@ export function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value : ''
 }
 
+// Shared across the thread-prefs/search slice and the bridge-shell routes that
+// still live in codexAppServerBridge (thread-queue-state, workspace-roots-state).
+export function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const normalized: string[] = []
+  for (const item of value) {
+    if (typeof item === 'string' && item.length > 0 && !normalized.includes(item)) {
+      normalized.push(item)
+    }
+  }
+  return normalized
+}
+
+export function getCodexGlobalStatePath(): string {
+  return join(getCodexHomeDir(), '.codex-global-state.json')
+}
+
 export function readBoolean(value: unknown): boolean {
   return value === true
 }
