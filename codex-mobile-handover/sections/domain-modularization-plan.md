@@ -186,6 +186,12 @@
   - rpc 族按「抽管线，HTTP 壳留驻」处理：新建 `bridge/rpcPipeline.ts`，以 `runRpcResponsePipeline(deps, method, rpcResult)` 承载 8 步 thread/session 后处理链（trim/mergeStream/mergeImported/filterSubagent/sanitize/mergeSkill/mergeCommands/overlayExternal）。`THREAD_METHODS_WITH_TURNS`/`THREAD_METHODS_WITH_THREAD_SNAPSHOT` 迁入 `bridge/core.ts` 共享。
   - 主 Shell：rpc handler 内联链（原 trim→snapshotStore→overlay）替换为单次 `runRpcResponsePipeline` 调用；触发（`callRpcWithArchiveRecovery`）、错误守卫（`hasUsableCodexAuth`/`isUnauthenticatedRateLimitError`/`isEmptyThreadReadError`/`isThreadMaterializationPendingError`）、早退短路口、指标闭包 `requestBodyBytes`/`rpcMethod` 全部保留 shell。删除本地 `trimThreadTurnsInRpcResult`/`overlayExternalSessionOnThreadList`/`filterSubagentThreadsFromThreadListResult`/`overlayExternalSessionOnThreadResult`/`readExternalSessionForThread` 及失效 import；`filterThreadListByIds`/`THREAD_METHODS_WITH_TURNS` 因测试或 sanitize 复用保留。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。telegram/rpc 族完成，核心派发剩余路由族（仅 `events` SSE 留驻待评估）。
+- 2026-08-23：**codexAppServerBridge.ts 核心派发 P 批（thread 搜索/状态/偏好族）完成**。新建 `bridge/threadPreferencesRoutes.ts`，以 `handleThreadPreferencesHttpRequest(req, res, url, deps)` 承载 9 个 handler：`thread-titles` GET/PUT、`thread-pins` GET/PUT、`thread-reasoning` GET/PUT、`preferences/first-launch-plugins-card` GET/PUT、`thread-search` POST。
+  - 迁移随附 helper：title/pins/reasoning/first-launch 的跨浏览器持久化缓存（读/写/归一化/合并）、session_index 标题解析（含 `getSessionIndexFileSignature` 缓存）与降级搜索本地索引读取（`isExactPhraseMatch`）。
+  - 共享 helper 迁入 `bridge/core.ts`：`normalizeStringArray`、`getCodexGlobalStatePath`（两函数原为主文件+本族共用定义，去重后归 core）。
+  - 注入点（deps）：`{ setJson, readJsonBody, appServer.rpc 窄 facade, getThreadSearchIndex 闭包 }`。`getThreadSearchIndex`（buildThreadSearchIndex 延迟构建索引闭包）与 thread-search 的官方 RPC 优先 + 本地索引回退逻辑绑定 shell 状态，注入而非随迁。
+  - 主 Shell：删除内联 9 个 handler 及 title/pins/reasoning/first-launch/session-index 缓存 helper（约 300 行），接入 `handleThreadPreferencesHttpRequest`；`readMergedThreadTitleCache` 复用点（project zip 导出 1196、导入 1339）改由本模块 import，随附 3 个 title-cache helper 一并 `export` 供 shell 复用。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族仅 `events` SSE（依赖 `middleware.subscribeNotifications` 自引用）留驻。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
