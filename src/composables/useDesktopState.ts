@@ -233,9 +233,18 @@ import {
   type TurnIndexDeps,
 } from './useDesktopStateTurnIndex'
 import {
-  LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
+  createLiveReasoningTextWrites,
+  type LiveReasoningWriteDeps,
+} from './useDesktopStateReasoningWrites'
+import {
+  appendReasoningItemProgress as appendReasoningItemProgressImpl,
+  clearLiveReasoningForThread as clearLiveReasoningForThreadImpl,
+  recordActiveReasoningTurn as recordActiveReasoningTurnImpl,
+  recordTurnItemOrder as recordTurnItemOrderImpl,
+  type ReasoningTimelineDeps,
+} from './useDesktopStateReasoningTimeline'
+import {
   loadLastPlanMap,
-  loadLiveReasoningSnapshotMap,
   loadPersistedReasoningMap,
   loadProjectDisplayNames,
   loadProjectOrder,
@@ -257,14 +266,10 @@ import {
   saveThreadTerminalOpenMap,
   saveThreadTokenUsageMap,
   saveUnreadCutoffIso,
-  type LiveReasoningSnapshot,
 } from './useDesktopStatePersistence'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
-const LIVE_REASONING_SNAPSHOT_MAX_CHARS = 8_000
-const LIVE_REASONING_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1_000
-const LIVE_REASONING_SNAPSHOT_SAVE_MS = 1_500
 const STASHED_MESSAGES_STORAGE_KEY = 'codex-web-local.stashed-messages.v1'
 const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-threshold.v1'
 const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
@@ -351,63 +356,11 @@ export function useDesktopState() {
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
-  // round-27：进行中思考文本的轻量快照（内存 + 节流写 localStorage）。
-  // 刷新后 overlay 的 live-overlay-reasoning 不再空白/消失——服务端不回放
-  // reasoning 增量，纯页面内存态会随刷新丢失；快照在轮次进行中持续更新、
-  // 轮次结束（clearLiveReasoningForThread 收口）时删除。
-  let liveReasoningSnapshotByThreadId: Record<string, LiveReasoningSnapshot> = loadLiveReasoningSnapshotMap()
-  let liveReasoningSnapshotDirty = false
-  let liveReasoningSnapshotTimer: ReturnType<typeof setTimeout> | null = null
-
-  function scheduleLiveReasoningSnapshotSave(): void {
-    if (liveReasoningSnapshotTimer !== null) return
-    liveReasoningSnapshotTimer = setTimeout(() => {
-      liveReasoningSnapshotTimer = null
-      if (liveReasoningSnapshotDirty) {
-        liveReasoningSnapshotDirty = false
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem(LIVE_REASONING_SNAPSHOT_STORAGE_KEY, JSON.stringify(liveReasoningSnapshotByThreadId))
-          } catch {
-            // Ignore localStorage failures (quota/private mode).
-          }
-        }
-      }
-      if (liveReasoningSnapshotDirty) scheduleLiveReasoningSnapshotSave()
-    }, LIVE_REASONING_SNAPSHOT_SAVE_MS)
+  const reasoningWriteDeps: LiveReasoningWriteDeps = {
+    liveReasoningTextByThreadId,
+    inProgressById,
   }
-
-  function rememberLiveReasoningSnapshot(threadId: string, text: string): void {
-    if (!threadId) return
-    if (inProgressById.value[threadId] !== true) return
-    const capped = text.length > LIVE_REASONING_SNAPSHOT_MAX_CHARS
-      ? text.slice(-LIVE_REASONING_SNAPSHOT_MAX_CHARS)
-      : text
-    liveReasoningSnapshotByThreadId[threadId] = { text: capped, ts: Date.now() }
-    liveReasoningSnapshotDirty = true
-    scheduleLiveReasoningSnapshotSave()
-  }
-
-  function restoreLiveReasoningSnapshot(threadId: string): void {
-    if (!threadId) return
-    const current = liveReasoningTextByThreadId.value[threadId]?.trim()
-    if (current) return
-    const snapshot = liveReasoningSnapshotByThreadId[threadId]
-    if (!snapshot?.text) return
-    if (Date.now() - snapshot.ts > LIVE_REASONING_SNAPSHOT_MAX_AGE_MS) return
-    liveReasoningTextByThreadId.value = {
-      ...liveReasoningTextByThreadId.value,
-      [threadId]: snapshot.text,
-    }
-  }
-
-  function clearLiveReasoningSnapshot(threadId: string): void {
-    if (!threadId) return
-    if (!(threadId in liveReasoningSnapshotByThreadId)) return
-    delete liveReasoningSnapshotByThreadId[threadId]
-    liveReasoningSnapshotDirty = true
-    scheduleLiveReasoningSnapshotSave()
-  }
+  const reasoningWrites = createLiveReasoningTextWrites(reasoningWriteDeps)
   const externalSessionByThreadId = ref<Record<string, UiExternalSession | null>>({})
   type FileAttachment = { label: string; path: string; fsPath: string }
   type QueuedMessage = {
@@ -474,6 +427,19 @@ export function useDesktopState() {
   const pendingReplyErrorByRequestId = ref<Record<string, string>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
+  const reasoningTimelineDeps: ReasoningTimelineDeps = {
+    liveReasoningTextByThreadId,
+    persistedReasoningByThreadId,
+    turnIndexByTurnIdByThreadId,
+    activeTurnIdByThreadId,
+    activeReasoningTurnIdByThreadId,
+    reasoningItemTextByItemId,
+    reasoningAppendedTextByItemId,
+    turnItemSequenceByThreadId,
+    appendLiveReasoningText: (threadId: string, delta: string) => reasoningWrites.appendLiveReasoningText(threadId, delta),
+    clearLiveReasoningSnapshot: (threadId: string) => reasoningWrites.clearLiveReasoningSnapshot(threadId),
+    savePersistedReasoningMap,
+  }
   const interruptBlockedUntilPersistedByThreadId = ref<Record<string, boolean>>({})
   const threadListedByServerById = ref<Record<string, boolean>>({})
   const persistedUserMessageByThreadId = ref<Record<string, boolean>>({})
@@ -1726,152 +1692,23 @@ export function useDesktopState() {
   }
 
   function setLiveReasoningText(threadId: string, text: string): void {
-    if (!threadId) return
-    const normalized = text.trim()
-    const previous = liveReasoningTextByThreadId.value[threadId] ?? ''
-    if (normalized.length === 0) {
-      if (!previous) return
-      liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
-      return
-    }
-    if (previous === normalized) return
-    liveReasoningTextByThreadId.value = {
-      ...liveReasoningTextByThreadId.value,
-      [threadId]: normalized,
-    }
-    // round-27：刷新后 overlay 思考文本恢复（快照节流写 localStorage）
-    rememberLiveReasoningSnapshot(threadId, normalized)
+    reasoningWrites.setLiveReasoningText(threadId, text)
   }
 
   function appendLiveReasoningText(threadId: string, delta: string): void {
-    if (!threadId) return
-    const previous = liveReasoningTextByThreadId.value[threadId] ?? ''
-    setLiveReasoningText(threadId, `${previous}${delta}`)
+    reasoningWrites.appendLiveReasoningText(threadId, delta)
+  }
+
+  function restoreLiveReasoningSnapshot(threadId: string): void {
+    reasoningWrites.restoreLiveReasoningSnapshot(threadId)
   }
 
   function recordActiveReasoningTurn(threadId: string): void {
-    if (!threadId) return
-    const activeTurnId = activeTurnIdByThreadId.value[threadId] ?? ''
-    if (activeTurnId) activeReasoningTurnIdByThreadId.set(threadId, activeTurnId)
+    recordActiveReasoningTurnImpl(reasoningTimelineDeps, threadId)
   }
 
-  // round-27：keepSequence=true 时（agent 内容事件触发的中途清理）保留
-  // turnItemSequenceByThreadId 时间线——此前每次 agent 内容事件都删掉时间线，
-  // 后续思考项丢失锚点（reasoningAnchorMessageId 为空）→ mergePersistedReasoning
-  // 全部回退插到该轮用户消息之后 → 最后一轮思考堆在「用户消息后、模型回答前」。
-  // 时间线只在轮次真正结束时删除；存档按稳定 id 原地更新，中途清理不产生重复块。
   function clearLiveReasoningForThread(threadId: string, keepSequence = false): void {
-    if (!threadId) return
-    const current = liveReasoningTextByThreadId.value[threadId]
-    if (current === undefined) {
-      if (!keepSequence) {
-        turnItemSequenceByThreadId.delete(threadId)
-        reasoningAppendedTextByItemId.clear()
-      }
-      return
-    }
-    const turnId = activeReasoningTurnIdByThreadId.get(threadId) ?? activeTurnIdByThreadId.value[threadId] ?? ''
-    activeReasoningTurnIdByThreadId.delete(threadId)
-    const turnIndex = turnId ? turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] : undefined
-    // round-23：优先按 item 粒度按时序存档（思考项插回对应工具/命令之后），
-    // 拿不到 item 时间线时退回整段文本存档（旧行为）。中途清理（keepSequence）
-    // 时不走整段兜底，避免同一轮多次存档产生重复块，等轮末再兜底一次。
-    const reasoningItems = buildTurnReasoningItems(threadId)
-    if (reasoningItems.length > 0) {
-      rememberPersistedReasoningItems(threadId, reasoningItems, turnId || undefined, turnIndex)
-    } else if (!keepSequence) {
-      rememberPersistedReasoning(threadId, current, turnId || undefined, turnIndex)
-    }
-    liveReasoningTextByThreadId.value = omitKey(liveReasoningTextByThreadId.value, threadId)
-    if (!keepSequence) {
-      turnItemSequenceByThreadId.delete(threadId)
-      reasoningAppendedTextByItemId.clear()
-      clearLiveReasoningSnapshot(threadId)
-    }
-  }
-
-  // 把完整 thinking 文本存档为 reasoning 消息（本地持久化，刷新后仍展示）。
-  function rememberPersistedReasoning(threadId: string, text: string, turnId?: string, turnIndex?: number): void {
-    if (!threadId) return
-    const normalized = text.trim()
-    if (!normalized) return
-    const previous = persistedReasoningByThreadId.value[threadId] ?? []
-    if (previous.some((message) => message.text === normalized)) return
-    const nextMessage: UiMessage = {
-      id: `reasoning:local:${threadId}:${Date.now()}`,
-      role: 'system',
-      text: normalized,
-      messageType: 'reasoning',
-      reasoning: { summary: [], content: [normalized] },
-      turnId: turnId || undefined,
-      turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
-    }
-    // ponytail: 每线程最多保留 20 条，防止 localStorage 无限增长；如需更多
-    // 历史可改为按容量或按天裁剪。
-    const next = [...previous, nextMessage].slice(-20)
-    persistedReasoningByThreadId.value = {
-      ...persistedReasoningByThreadId.value,
-      [threadId]: next,
-    }
-    savePersistedReasoningMap(persistedReasoningByThreadId.value)
-  }
-
-  // round-23：按 item 粒度按时序存档思考（每条带 reasoningAnchorMessageId，
-  // 合并时插到对应工具/命令之后，实现「提问 -> 思考 -> 工具 -> 思考 -> …」顺序）。
-  // round-27：改用按 itemId 的稳定 id（reasoning:item:*）。同一推理项在流式
-  // 过程中文本增长时原地更新而不是新增条目——此前按 text+turnId 去重，部分文本
-  // 先被归档、全量文本再插一条会形成重复思考块。
-  function rememberPersistedReasoningItems(
-    threadId: string,
-    items: Array<{ text: string; anchorMessageId: string; itemId: string }>,
-    turnId?: string,
-    turnIndex?: number,
-  ): void {
-    if (!threadId || items.length === 0) return
-    const previous = persistedReasoningByThreadId.value[threadId] ?? []
-    const next = [...previous]
-    for (const item of items) {
-      const normalized = item.text.trim()
-      if (!normalized) continue
-      const stableId = `reasoning:item:${threadId}:${item.itemId}`
-      const existingIndex = next.findIndex((message) => message.id === stableId)
-      if (existingIndex >= 0) {
-        const existing = next[existingIndex]
-        const nextAnchor = item.anchorMessageId || existing.reasoningAnchorMessageId
-        const nextTurnIndex = typeof turnIndex === 'number' ? turnIndex : existing.turnIndex
-        if (existing.text === normalized && existing.turnIndex === nextTurnIndex && existing.reasoningAnchorMessageId === nextAnchor) {
-          continue
-        }
-        next[existingIndex] = {
-          ...existing,
-          text: normalized,
-          reasoning: { summary: [], content: [normalized] },
-          turnId: turnId || existing.turnId,
-          turnIndex: nextTurnIndex,
-          reasoningAnchorMessageId: nextAnchor,
-        }
-        continue
-      }
-      // 兼容旧存档：同文本已存在（reasoning:local:* 旧 id 或另一条推理）则跳过，
-      // 避免新旧两种存档格式在同一轮并存造成重复块。
-      if (next.some((message) => message.text === normalized)) continue
-      next.push({
-        id: stableId,
-        role: 'system',
-        text: normalized,
-        messageType: 'reasoning',
-        reasoning: { summary: [], content: [normalized] },
-        turnId: turnId || undefined,
-        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
-        reasoningAnchorMessageId: item.anchorMessageId || undefined,
-      })
-    }
-    const pruned = next.slice(-20)
-    persistedReasoningByThreadId.value = {
-      ...persistedReasoningByThreadId.value,
-      [threadId]: pruned,
-    }
-    savePersistedReasoningMap(persistedReasoningByThreadId.value)
+    clearLiveReasoningForThreadImpl(reasoningTimelineDeps, threadId, keepSequence)
   }
 
   function clearLivePlansForThread(threadId: string): void {
@@ -2075,24 +1912,7 @@ export function useDesktopState() {
   }
 
   function appendReasoningItemProgress(threadId: string, itemId: string, text: string): void {
-    if (!threadId || !text) return
-    // round-23：记录每个推理项的完整文本，供轮次结束后按 item 粒度按时序存档。
-    if (text.trim()) reasoningItemTextByItemId.set(itemId, text.trim())
-    const current = liveReasoningTextByThreadId.value[threadId] ?? ''
-    const previous = reasoningAppendedTextByItemId.get(itemId) ?? ''
-    if (current.endsWith(text) || (previous && text === previous)) {
-      reasoningAppendedTextByItemId.set(itemId, text)
-      return
-    }
-    if (previous && text.startsWith(previous)) {
-      const delta = text.slice(previous.length)
-      if (delta) appendLiveReasoningText(threadId, delta)
-      reasoningAppendedTextByItemId.set(itemId, text)
-      return
-    }
-    const separator = current.length > 0 && !current.endsWith('\n') ? '\n\n' : ''
-    appendLiveReasoningText(threadId, `${separator}${text}`)
-    reasoningAppendedTextByItemId.set(itemId, text)
+    appendReasoningItemProgressImpl(reasoningTimelineDeps, threadId, itemId, text)
   }
 
   // round-23：记录 item/started|item/completed 的到达顺序（推理项与工具项），
@@ -2102,46 +1922,7 @@ export function useDesktopState() {
   // 拿不到 reasoning 项 → 回退整段存档（无 reasoningAnchorMessageId）→ 刷新后
   // 全部思考按 turnIndex 插到轮首。这里把增量通道的 itemId 也按 reasoning 记录。
   function recordTurnItemOrder(notification: RpcNotification): void {
-    const params = asRecord(notification.params)
-    if (!params) return
-
-    const isItemLifecycle = notification.method === 'item/started' || notification.method === 'item/completed'
-    const isReasoningDelta =
-      notification.method === 'item/reasoning/textDelta' ||
-      notification.method === 'item/reasoning/summaryTextDelta'
-    if (!isItemLifecycle && !isReasoningDelta) return
-
-    const item = asRecord(params.item)
-    const itemId = isReasoningDelta ? readString(params.itemId) : readString(item?.id)
-    if (!itemId) return
-    const threadId = extractThreadIdFromNotification(notification)
-    if (!threadId) return
-    const kind = isReasoningDelta
-      ? 'reasoning'
-      : readString(item?.type).toLowerCase() === 'reasoning'
-        ? 'reasoning'
-        : 'other'
-    const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
-    if (sequence.some((entry) => entry.itemId === itemId)) return
-    turnItemSequenceByThreadId.set(threadId, [...sequence, { itemId, kind }])
-  }
-
-  // 从本轮时间线构建「按真实顺序排列的思考项」，每项带时序锚点：
-  // anchor = 该思考项之前最近一个工具/命令/agent 项的 id（插到它后面）。
-  // round-27：返回项带 itemId，供存档用稳定 id 原地更新（流式文本增长去重）。
-  function buildTurnReasoningItems(threadId: string): Array<{ text: string; anchorMessageId: string; itemId: string }> {
-    const sequence = turnItemSequenceByThreadId.get(threadId) ?? []
-    const items: Array<{ text: string; anchorMessageId: string; itemId: string }> = []
-    let lastOtherItemId = ''
-    for (const entry of sequence) {
-      if (entry.kind === 'reasoning') {
-        const text = reasoningItemTextByItemId.get(entry.itemId)?.trim() ?? ''
-        if (text) items.push({ text, anchorMessageId: lastOtherItemId, itemId: entry.itemId })
-      } else {
-        lastOtherItemId = entry.itemId
-      }
-    }
-    return items
+    recordTurnItemOrderImpl(reasoningTimelineDeps, notification)
   }
 
   // Plan items also arrive as full item/started + item/completed payloads

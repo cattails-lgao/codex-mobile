@@ -151,6 +151,15 @@
   - 主 Shell：新增 `turnIndexDeps` 对象注入三个 ref，本地函数退化为一行薄包装（`xxxImpl(turnIndexDeps, …)`），对外签名不变。
   - 新增 `useDesktopStateTurnIndex.test.ts`（5 个用例：inferNext、set+非法入参、replace、resolve、rebind）。
   - 验证：`vue-tsc --noEmit` 通过、全量 388 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 4960 行。剩余闭包写入侧（liveReasoning 文本写入/snapshot、agent 内容事件相关）留待评估。
+- 2026-08-23：**useDesktopState() 主函数第四批扩展（注入式写入侧：liveReasoning 文本快照）**。新建 `useDesktopStateReasoningWrites.ts`，定义 `LiveReasoningWriteDeps { liveReasoningTextByThreadId, inProgressById }`。
+  - 该簇含实例级可变状态（快照映射 + 脏标志 + 节流定时器），采用工厂函数 `createLiveReasoningTextWrites` 封装，避免模块级状态污染。
+  - 迁出：`setLiveReasoningText`、`appendLiveReasoningText`、`restoreLiveReasoningSnapshot`、`clearLiveReasoningSnapshot`（round-27 刷新后 overlay 思考文本恢复，节流写 localStorage）。
+  - 主 Shell 保留 ref 所有权，新增 `reasoningWrites` 工厂实例，本地函数退化为薄包装。主函数降至约 4974 行。
+- 2026-08-23：**useDesktopState() 主函数第四批扩展（注入式写入侧：reasoning 时间线存档）**。新建 `useDesktopStateReasoningTimeline.ts`，定义 `ReasoningTimelineDeps`（4 个 ref + 4 个 Map + 2 个回调 + `savePersistedReasoningMap`）。
+  - 闭包保留 4 个 Map（`reasoningItemTextByItemId`/`reasoningAppendedTextByItemId`/`turnItemSequenceByThreadId`/`activeReasoningTurnIdByThreadId`）的所有权（实时通知处理器与 resetAllState 仍直接读写），注入 ref/Map 到纯函数集合，零回环。
+  - 迁出：`recordActiveReasoningTurn`、`clearLiveReasoningForThread`、`rememberPersistedReasoning`、`rememberPersistedReasoningItems`、`appendReasoningItemProgress`、`recordTurnItemOrder`、`buildTurnReasoningItems`；后四者仅内部使用、直接删除本地定义，前三者保留一行薄包装。
+  - 新增 `useDesktopStateReasoningTimeline.test.ts`（6 个用例：时序锚点、到达顺序、增量追加、item 存档、整段兜底、去重）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 394 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 4755 行。reasoning 文本写入/存档簇已迁出完成。
 
 ## 收尾验证口径（每批）
 
