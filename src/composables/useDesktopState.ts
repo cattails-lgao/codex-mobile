@@ -209,6 +209,15 @@ import {
   type PendingRequestWriteDeps,
 } from './useDesktopStateRequests'
 import {
+  removeLiveCommandsPersistedIn as removeLiveCommandsPersistedInImpl,
+  removeLiveFileChangesPersistedIn as removeLiveFileChangesPersistedInImpl,
+  setLiveFileChangeMessagesForThread as setLiveFileChangeMessagesForThreadImpl,
+  upsertLiveCommand as upsertLiveCommandImpl,
+  upsertLiveFileChangePatch as upsertLiveFileChangePatchImpl,
+  upsertTurnDiff as upsertTurnDiffImpl,
+  type LiveWriteDeps,
+} from './useDesktopStateLiveWrites'
+import {
   LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
   loadLastPlanMap,
   loadLiveReasoningSnapshotMap,
@@ -1682,12 +1691,7 @@ export function useDesktopState() {
   }
 
   function setLiveFileChangeMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
-    const previous = liveFileChangeMessagesByThreadId.value[threadId] ?? []
-    if (areMessageArraysEqual(previous, nextMessages)) return
-    liveFileChangeMessagesByThreadId.value = {
-      ...liveFileChangeMessagesByThreadId.value,
-      [threadId]: nextMessages,
-    }
+    setLiveFileChangeMessagesForThreadImpl(liveWriteDeps, threadId, nextMessages)
   }
 
   function setLivePlanMessagesForThread(threadId: string, nextMessages: UiMessage[]): void {
@@ -2016,6 +2020,11 @@ export function useDesktopState() {
     applyThreadFlags,
   }
 
+  const liveWriteDeps: LiveWriteDeps = {
+    liveCommandsByThreadId,
+    liveFileChangeMessagesByThreadId,
+  }
+
   function upsertPendingServerRequest(request: UiServerRequest): void {
     upsertPendingServerRequestImpl(pendingRequestWriteDeps, request)
   }
@@ -2314,50 +2323,15 @@ export function useDesktopState() {
   }
 
   function upsertLiveCommand(threadId: string, msg: UiMessage): void {
-    const previous = liveCommandsByThreadId.value[threadId] ?? []
-    const next = upsertMessage(previous, msg)
-    if (next === previous) return
-    liveCommandsByThreadId.value = { ...liveCommandsByThreadId.value, [threadId]: next }
+    upsertLiveCommandImpl(liveWriteDeps, threadId, msg)
   }
 
   function removeLiveCommandsPersistedIn(threadId: string, persistedMessages: UiMessage[]): void {
-    const current = liveCommandsByThreadId.value[threadId]
-    if (!current || current.length === 0) return
-    const persistedIds = new Set(persistedMessages.map((m) => m.id))
-    const next = current.filter((m) => !persistedIds.has(m.id))
-    if (next.length === current.length) return
-    if (next.length === 0) {
-      liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
-    } else {
-      liveCommandsByThreadId.value = { ...liveCommandsByThreadId.value, [threadId]: next }
-    }
+    removeLiveCommandsPersistedInImpl(liveWriteDeps, threadId, persistedMessages)
   }
 
   function removeLiveFileChangesPersistedIn(threadId: string, persistedMessages: UiMessage[]): void {
-    const current = liveFileChangeMessagesByThreadId.value[threadId]
-    if (!current || current.length === 0) return
-    const persistedIds = new Set(persistedMessages.map((message) => message.id))
-    const persistedTurnIds = new Set(
-      persistedMessages
-        .filter((message) => message.messageType === 'fileChange' && typeof message.turnId === 'string' && message.turnId.length > 0)
-        .map((message) => message.turnId as string),
-    )
-    const persistedTurnIndices = new Set(
-      persistedMessages
-        .filter((message) => message.messageType === 'fileChange' && typeof message.turnIndex === 'number')
-        .map((message) => message.turnIndex as number),
-    )
-    const next = current.filter((message) => (
-      !persistedIds.has(message.id)
-      && !(message.turnId && persistedTurnIds.has(message.turnId))
-      && !(typeof message.turnIndex === 'number' && persistedTurnIndices.has(message.turnIndex))
-    ))
-    if (next.length === current.length) return
-    if (next.length === 0) {
-      liveFileChangeMessagesByThreadId.value = omitKey(liveFileChangeMessagesByThreadId.value, threadId)
-    } else {
-      liveFileChangeMessagesByThreadId.value = { ...liveFileChangeMessagesByThreadId.value, [threadId]: next }
-    }
+    removeLiveFileChangesPersistedInImpl(liveWriteDeps, threadId, persistedMessages)
   }
 
   function isAgentContentEvent(notification: RpcNotification): boolean {
@@ -2397,29 +2371,11 @@ export function useDesktopState() {
   }
 
   function upsertLiveFileChangePatch(threadId: string, itemId: string, changes: UiFileChange[]): void {
-    if (!threadId || !itemId) return
-    const messages = liveFileChangeMessagesByThreadId.value[threadId]
-    if (!messages) return
-    const index = messages.findIndex((message) => message.id === itemId || message.turnId === itemId)
-    if (index < 0) return
-    const next = [...messages]
-    next[index] = { ...next[index], fileChanges: changes }
-    setLiveFileChangeMessagesForThread(threadId, next)
+    upsertLiveFileChangePatchImpl(liveWriteDeps, threadId, itemId, changes)
   }
 
   function upsertTurnDiff(threadId: string, turnId: string, diff: string): void {
-    if (!threadId || !turnId) return
-    const messages = liveFileChangeMessagesByThreadId.value[threadId]
-    if (!messages) return
-    const index = messages.findIndex((message) => message.turnId === turnId)
-    if (index < 0) return
-    const next = [...messages]
-    const target = next[index]
-    next[index] = {
-      ...target,
-      fileChanges: (target.fileChanges ?? []).map((change) => ({ ...change, diff })),
-    }
-    setLiveFileChangeMessagesForThread(threadId, next)
+    upsertTurnDiffImpl(liveWriteDeps, threadId, turnId, diff)
   }
 
   function applyRealtimeUpdates(notification: RpcNotification): void {
