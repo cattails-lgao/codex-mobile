@@ -173,9 +173,65 @@
   - 主 Shell：删本地 232 行块（原 4609–4840），接线 `if (await handleFreeModeHttpRequest(req, res, url, { setJson, readJsonBody, appServer, next, writeFreeModeStateFile, ensureDefaultFreeModeStateForMissingAuthSync, hasUsableCodexAuthSync })) return`；移除 6 个不再使用的 freeMode.js import（`getRandomFreeKey`/`getFreeKeyCount`/`getCachedFreeModels`/`refreshFreeModelsInBackground`/`OPENCODE_ZEN_PROVIDER_ID`/`shouldMarkOpenRouterKeyAsCustom`）。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。free-mode 族迁移完成。核心派发剩余路由族（thread 读/SSE、文件/project、automations、telegram、rpc 等）仍留驻 shell，逐族视闭包依赖再切。
 
+## 剩余路由族迁移风险总览（截至 K 批后）
+
+> 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
+
+**核心闭包耦合锚点**（Shell 实例/可变状态，迁移需注入或解耦）：
+
+| 锚点 | 类型 | 被引用的族 |
+| --- | --- | --- |
+| `appServer` | 实例（thread/rpc facade，10+ 接口） | thread 读/SSE、rpc、thread-search |
+| `externalSessionTracker` | 实例 | thread live-state、rpc overlay |
+| `backendQueueProcessor` | 实例 | automations（run） |
+| `telegramBridge` | 实例 | telegram |
+| `appendThreadQueuedMessage` | 闭包函数 | automations（run） |
+| `persistWorkspaceRoot` | 闭包函数 | 文件/project |
+| `middleware`（自引用 `subscribeNotifications`） | 闭包对象 | events/SSE |
+| `requestBodyBytes`/`rpcMethod` | 可变指标状态 | rpc |
+
+**各族风险分级（从易到难）与建议顺序**：
+
+1. **文件/project 族**（低）——依赖多为模块 helper（`streamProjectZip`/`importProjectZip`/`collectProjectChatZipEntries`/`cloneGithubRepositoryIntoBase`），唯一注入点 `persistWorkspaceRoot`+`readRawBody`。
+2. **telegram + approval-policy 族**（低-中）——注入 `telegramBridge` 实例；`write/read/normalizeTelegramBridgeConfig`、`resolveEffectiveApprovalPolicy` 等为模块 helper。
+3. **automations 族**（中）——8 个 CRUD 零闭包，仅 run 依赖 `appendThreadQueuedMessage`+`backendQueueProcessor`（方案见下节 L 批）。
+4. **thread 读/SSE 族**（高）——重度依赖 `appServer`+`externalSessionTracker`；`events` SSE handler 依赖 `middleware.subscribeNotifications`（自引用），需把订阅源抽离才能解耦。
+5. **rpc 族**（最高，最后）——除 `appServer`+`externalSessionTracker` 外，依赖闭包指标状态 `requestBodyBytes`/`rpcMethod` + 跨领域 thread 结果合并 pipeline（`mergeSessionSkillInputs`/`mergeSessionCommands`/`filterSubagentThreads`/`overlayExternalSession`…）。
+
+**thread-terminal 族**（4627-4738）：依赖 `terminalManager`+`appServer`，耦合同 thread 读族，需另评估。
+
 ## 收尾验证口径（每批）
 
 - `pnpm exec vue-tsc --noEmit`：通过。
 - `pnpm run build`（web + CLI）：通过。
 - 全量单测：通过；涉及被拆逻辑的既有测试文件无回归。
 - 改动应纯机械迁移，不改变任何网络调用、状态同步或用户可见行为。
+
+## automations 族迁移方案（L 批，已完成）
+
+> 状态：已完成实施，验证通过。
+
+### 族边界
+真正的自动化 handler 共 **9 个**（CRUD 8 个 + run 1 个）。`thread-search`/`thread-titles`/`thread-pins`/`thread-reasoning`/`first-launch-plugins-card` 属 thread 搜索/状态/偏好域，**不归自动化**，单列到后续 thread 族。
+
+### 逐 handler 闭包依赖核对结论
+**零闭包 handler（8 个，可直接迁）**——依赖全部来自 `bridge/automations.ts`（已导出 `listThreadHeartbeatAutomations`/`listProjectCronAutomations`/`readThreadHeartbeatAutomation(s)`/`readProjectCronAutomation(s)`/`writeThreadHeartbeatAutomation`/`writeProjectCronAutomation`/`deleteThreadHeartbeatAutomation`/`deleteProjectCronAutomation`/`toAutomationApiMap`/`toAutomationApiData`/`toAutomationApiRecord`）+ `setJson`/`readJsonBody`，project PUT 额外用 `isAbsoluteLikePath`：
+
+- thread-automations GET / project-automations GET
+- thread-automation GET / project-automation GET
+- thread-automation PUT / project-automation PUT
+- thread-automation DELETE / project-automation DELETE
+
+**闭包依赖 handler（1 个，thread-automation/run POST @5759）**——依赖链：
+`readThreadHeartbeatAutomation`（automations.ts）→ `buildHeartbeatQueuedMessage` → `appendThreadQueuedMessage` → `backendQueueProcessor.scheduleThreadQueueDrain(threadId, 0)`。
+
+### run handler 注入点决策
+- **`appendThreadQueuedMessage`（2792）唯一调用点即 run handler**，但它薄薄一层包着共享队列事务子系统 `withThreadQueueStateUpdate`→`threadQueueMutationChain`/`readThreadQueueState`/`writeThreadQueueStateUnlocked`——该子系统同时被 `BackendQueueProcessor`（4035/4054/4072）与 `thread-queue-state` GET/PUT（5247/5292）复用，**不能搬走**。→ `appendThreadQueuedMessage` **整体作为 deps 注入**。
+- **`buildHeartbeatQueuedMessage`（2840）+ `escapeHeartbeatXmlText`（2833）** automations 专属，**随迁**到新模块（`randomBytes`+`ThreadAutomationRecord` 可直接 import）。
+- **`backendQueueProcessor.scheduleThreadQueueDrain`** 注入 `backendQueueProcessor` 实例（结构化类型仅暴露该方法）。
+
+### 实施要点
+- 新建 `bridge/automationsRoutes.ts`，`handleAutomationsHttpRequest`，deps = `{ setJson, readJsonBody, appendThreadQueuedMessage, scheduleThreadQueueDrain }`；`StoredQueuedMessage` 用局部结构类型，不导出类型。
+- 主 Shell：删 8 个 CRUD 块 + run 块（原 5595-5800 区间，剔除 thread-search/titles/pins/reasoning/first-launch），接线 `if (await handleAutomationsHttpRequest(req, res, url, { setJson, readJsonBody, appendThreadQueuedMessage, scheduleThreadQueueDrain })) return`；清理随迁后不再使用的 import。
+- `thread-search`（依赖闭包 `getThreadSearchIndex`/`appServer.rpc`）留驻，归入 thread 族。
+- 验证：`vue-tsc --noEmit`、全量单测、`pnpm run build`（web+CLI）通过后收尾。

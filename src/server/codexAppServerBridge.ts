@@ -43,7 +43,6 @@ import {
   resolveRipgrepCommand,
 } from '../commandResolution.js'
 import { isReasoningEffort, type CollaborationModeKind, type ReasoningEffort } from '../types/codex.js'
-import { isAbsoluteLikePath } from '../pathUtils.js'
 import {
   asRecord,
   getCodexHomeDir,
@@ -74,22 +73,7 @@ import {
 import { handleComposioHttpRequest } from './bridge/composioRoutes.js'
 import { handleChatgptUpstreamHttpRequest } from './bridge/chatgptUpstreamRoutes.js'
 import { handleFreeModeHttpRequest } from './bridge/freeModeRoutes.js'
-import {
-  deleteThreadHeartbeatAutomation,
-  deleteProjectCronAutomation,
-  listProjectCronAutomations,
-  listThreadHeartbeatAutomations,
-  readProjectCronAutomation,
-  readProjectCronAutomations,
-  readThreadHeartbeatAutomation,
-  readThreadHeartbeatAutomations,
-  toAutomationApiData,
-  toAutomationApiMap,
-  toAutomationApiRecord,
-  writeProjectCronAutomation,
-  writeThreadHeartbeatAutomation,
-  type ThreadAutomationRecord,
-} from './bridge/automations.js'
+import { handleAutomationsHttpRequest } from './bridge/automationsRoutes.js'
 // 自动化领域切片（A 批）公共导出保持原样：仅 parseAutomationToml 与
 // toAutomationApiRecord 此前是公共导出，供消费者（含测试）继续从本模块导入。
 export { parseAutomationToml, toAutomationApiRecord } from './bridge/automations.js'
@@ -2830,30 +2814,6 @@ function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fi
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
 }
 
-function escapeHeartbeatXmlText(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-}
-
-function buildHeartbeatQueuedMessage(automation: ThreadAutomationRecord): StoredQueuedMessage {
-  return {
-    id: `automation-${automation.id}-${Date.now()}-${randomBytes(3).toString('hex')}`,
-    text: `<heartbeat>
-<automation_id>${escapeHeartbeatXmlText(automation.id)}</automation_id>
-<current_time_iso>${new Date().toISOString()}</current_time_iso>
-<instructions>
-${escapeHeartbeatXmlText(automation.prompt)}
-</instructions>
-</heartbeat>`,
-    imageUrls: [],
-    skills: [],
-    fileAttachments: [],
-    collaborationMode: 'default',
-  }
-}
-
 function fileNameFromPath(pathValue: string): string {
   const normalized = pathValue.replace(/\\/g, '/')
   const segments = normalized.split('/').filter(Boolean)
@@ -5592,45 +5552,13 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-automations') {
-        const automationsByThreadId = await listThreadHeartbeatAutomations()
-        setJson(res, 200, { data: toAutomationApiMap(automationsByThreadId) })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/project-automations') {
-        const automationsByProjectName = await listProjectCronAutomations()
-        setJson(res, 200, { data: toAutomationApiMap(automationsByProjectName) })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/thread-automation') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-        const automation = automationId
-          ? await readThreadHeartbeatAutomation(threadId, automationId)
-          : await readThreadHeartbeatAutomations(threadId)
-        setJson(res, 200, { data: toAutomationApiData(automation) })
-        return
-      }
-
-      if (req.method === 'GET' && url.pathname === '/codex-api/project-automation') {
-        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
-        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
-        if (!projectName) {
-          setJson(res, 400, { error: 'Missing projectName' })
-          return
-        }
-        const automation = automationId
-          ? await readProjectCronAutomation(projectName, automationId)
-          : await readProjectCronAutomations(projectName)
-        setJson(res, 200, { data: toAutomationApiData(automation) })
-        return
-      }
+      // Heartbeat / cron automation HTTP route family, 迁入 bridge/automationsRoutes.ts.
+      if (await handleAutomationsHttpRequest(req, res, url, {
+        setJson,
+        readJsonBody,
+        appendThreadQueuedMessage,
+        scheduleThreadQueueDrain: backendQueueProcessor.scheduleThreadQueueDrain.bind(backendQueueProcessor),
+      })) return
 
       if (req.method === 'POST' && url.pathname === '/codex-api/thread-search') {
         const payload = asRecord(await readJsonBody(req))
@@ -5715,87 +5643,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         const dismissed = payload?.dismissed === true
         await writeFirstLaunchPluginsCardDismissed(dismissed)
         setJson(res, 200, { ok: true })
-        return
-      }
-
-      if (req.method === 'PUT' && url.pathname === '/codex-api/thread-automation') {
-        const payload = asRecord(await readJsonBody(req))
-        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
-        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
-        const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
-        const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
-        const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
-        const status = payload?.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE'
-        if (!threadId || !name || !prompt || !rrule) {
-          setJson(res, 400, { error: 'threadId, name, prompt, and rrule are required' })
-          return
-        }
-        const automation = await writeThreadHeartbeatAutomation({ threadId, id, name, prompt, rrule, status })
-        setJson(res, 200, { data: toAutomationApiRecord(automation) })
-        return
-      }
-
-      if (req.method === 'PUT' && url.pathname === '/codex-api/project-automation') {
-        const payload = asRecord(await readJsonBody(req))
-        const projectName = typeof payload?.projectName === 'string' ? payload.projectName.trim() : ''
-        const id = typeof payload?.id === 'string' ? payload.id.trim() : ''
-        const name = typeof payload?.name === 'string' ? payload.name.trim() : ''
-        const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
-        const rrule = typeof payload?.rrule === 'string' ? payload.rrule.trim() : ''
-        const status = payload?.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE'
-        if (!projectName || !name || !prompt || !rrule) {
-          setJson(res, 400, { error: 'projectName, name, prompt, and rrule are required' })
-          return
-        }
-        if (!isAbsoluteLikePath(projectName)) {
-          setJson(res, 400, { error: 'Project automation cwd must be an absolute path' })
-          return
-        }
-        const automation = await writeProjectCronAutomation({ projectName, id, name, prompt, rrule, status })
-        setJson(res, 200, { data: toAutomationApiRecord(automation) })
-        return
-      }
-
-      if (req.method === 'POST' && url.pathname === '/codex-api/thread-automation/run') {
-        const payload = asRecord(await readJsonBody(req))
-        const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
-        const automationId = typeof payload?.automationId === 'string' ? payload.automationId.trim() : ''
-        if (!threadId || !automationId) {
-          setJson(res, 400, { error: 'threadId and automationId are required' })
-          return
-        }
-        const automation = await readThreadHeartbeatAutomation(threadId, automationId)
-        if (!automation) {
-          setJson(res, 404, { error: 'Automation not found for thread' })
-          return
-        }
-        await appendThreadQueuedMessage(threadId, buildHeartbeatQueuedMessage(automation))
-        backendQueueProcessor.scheduleThreadQueueDrain(threadId, 0)
-        setJson(res, 200, { data: { queued: true } })
-        return
-      }
-
-      if (req.method === 'DELETE' && url.pathname === '/codex-api/thread-automation') {
-        const threadId = url.searchParams.get('threadId')?.trim() ?? ''
-        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
-        if (!threadId) {
-          setJson(res, 400, { error: 'Missing threadId' })
-          return
-        }
-        const removed = await deleteThreadHeartbeatAutomation(threadId, automationId)
-        setJson(res, 200, { data: { removed } })
-        return
-      }
-
-      if (req.method === 'DELETE' && url.pathname === '/codex-api/project-automation') {
-        const projectName = url.searchParams.get('projectName')?.trim() ?? ''
-        const automationId = url.searchParams.get('automationId')?.trim() ?? ''
-        if (!projectName) {
-          setJson(res, 400, { error: 'Missing projectName' })
-          return
-        }
-        const removed = await deleteProjectCronAutomation(projectName, automationId)
-        setJson(res, 200, { data: { removed } })
         return
       }
 
