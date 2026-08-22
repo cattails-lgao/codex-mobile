@@ -196,6 +196,11 @@
   - 该 handler 是纯 pass-through：只消费注入的 `subscribeNotifications`（shell 聚合 appServer/terminalManager/externalSessionTracker 通知）+ `ServerResponse` 生命周期，故 deps 仅 `{ subscribeNotifications }` 单一窄结构类型，零其他闭包捕获。
   - 主 Shell：删除内联 SSE handler（状态头写入/订阅/keepAlive 15s ping/close 清理），接入 `handleEventsHttpRequest`（注入 `middleware.subscribeNotifications.bind(middleware)`）；`middleware.subscribeNotifications` 聚合实现含 `externalSessionTracker` 订阅触发 `appServer.invalidateLiveStateCache`，保持留驻 shell。threadRoutes.ts 头部注释同步移除「events 留驻」说明。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。至此核心派发全部路由族迁移完成，`codexAppServerBridge.ts` 主文件仅剩派发接线与共享状态闭包。
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 R 批（workspace-roots 簇）完成**。新建 `bridge/workspaceRoots.ts`，承载 `.codex-global-state.json` 中 workspace-root 相关键（electron-saved-workspace-roots / workspace-root-labels / active-roots / project-order）的规范化与读写：
+  - 平移 `canonicalizeWorkspaceRootsState` / `ForRead` / `canonicalizeThreadListResponseForRead`、`readWorkspaceRootsState`、`writeWorkspaceRootsState`、`updateWorkspaceRootsState`、`persistWorkspaceRoot`、`rollbackCreatedWorktree` 及私有 `normalizeRemoteProjects`、`PathRealpathResolver`、模块级串行锁 `workspaceRootsMutation`。
+  - 共享 helper 迁入 `bridge/core.ts`：`normalizeStringRecord`（原主文件+本簇共用，去重归 core）。
+  - 主 Shell：删除 `WorkspaceRootsState` 类型与整个 workspace-roots 簇（约 206 行），保留派发处经 import 复用；公共导出（测试从主模块导入的 `canonicalizeThreadListResponseForRead` / `canonicalizeWorkspaceRootsStateForRead` / `writeWorkspaceRootsState` 及 `WorkspaceRootsState` 类型）用 `export type`/`export { } from` 从新模块 re-export 保持契约。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
