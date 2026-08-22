@@ -86,6 +86,11 @@
   - `useDesktopState.ts` 保留主函数 `useDesktopState()` 与未迁移常量（新增恢复 round 定时/防抖常量：`EVENT_SYNC_DEBOUNCE_MS`/`BACKGROUND_THREAD_PAGINATION_DELAY_MS`/`RATE_LIMIT_REFRESH_DEBOUNCE_MS`/`TURN_START_FOLLOW_UP_SYNC_DELAY_MS`/`RECENT_THREAD_*_LOAD_REUSE_MS` 等），文件头顶部 `export *` 两新文件保持对外 API 不变 + 显式 import 供主函数复用，消费者零改动（仍从 `./useDesktopState` import）。
   - 边界处理：可变模块级 live sortKey（`liveMessageSortKeyByComposite`/`liveMessageSortCounter`）留在 utils 内私有，主函数原先直接 `.clear()`/`= 0`/按活跃线程裁剪的三处读写收敛为该局受控函数 `resetLiveMessageSortKeys`/`pruneLiveMessageSortKeysByActiveThreads`，规避 ESM 导入绑定的只读限制。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过（含 useDesktopState 83 个）、`pnpm run build`（web+CLI）通过。剩余 `codexAppServerBridge.ts` A 批起按上表继续。
+- 2026-08-22：**codexAppServerBridge.ts A 批（automations 自动化切片）完成**。原 10203 行降至 9746 行（-477）。
+  - 新建 `src/server/bridge/core.ts`：收纳跨切片共享路径 `getCodexHomeDir`（25 处调用点主文件改为 import，解除桥文件↔切片循环依赖；后续 git/models/session/zip 切片复用）。
+  - 新建 `src/server/bridge/automations.ts`：平移自动化 TOML 全套（原 5210–5680）：`getCodexAutomationsDir`/TOML 读写辅助/`ThreadAutomationRecord`/`ThreadAutomationStatus` 类型/`parseAutomationToml`/`serializeAutomationToml`/`toAutomationApiRecord|Map|Data`/heartbeat 与 cron 自动化的 list/read/write/delete 共 20+ 函数；依赖 `getCodexHomeDir`（core）与 `isAbsoluteLikePath`（pathUtils），纯机械迁移、零行为改动。
+  - 主 Shell：删除该块，`import` 供 middleware（9756–10056 区域）复用 + `export { parseAutomationToml, toAutomationApiRecord }` 保持原公共导出面（测试仍从 `./codexAppServerBridge` 导入）；`buildHeartbeatQueuedMessage` 的 `ThreadAutomationRecord` 类型改 import。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 B（`bridge/git.ts`）/C（`bridge/composio.ts`）/D（zip）/E（session）/F（models）按上表继续。
 
 ## 收尾验证口径（每批）
 
