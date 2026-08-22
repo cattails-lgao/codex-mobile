@@ -198,6 +198,12 @@ import {
   readTurnStartedInfo,
 } from './useDesktopStateReaders'
 import {
+  GLOBAL_SERVER_REQUEST_SCOPE,
+  isApprovalRequestMethod,
+  normalizeServerRequest,
+  readToolRequestUserInputQuestionIds,
+} from './useDesktopStateRequests'
+import {
   LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
   loadLastPlanMap,
   loadLiveReasoningSnapshotMap,
@@ -234,7 +240,6 @@ const STASHED_MESSAGES_STORAGE_KEY = 'codex-web-local.stashed-messages.v1'
 const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-threshold.v1'
 const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
 const REASONING_EFFORT_OPTIONS: readonly ReasoningEffort[] = REASONING_EFFORTS
-const GLOBAL_SERVER_REQUEST_SCOPE = '__global__'
 const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
 const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
 const CODEX_CLI_MISSING_MESSAGE = 'Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'
@@ -1241,16 +1246,6 @@ export function useDesktopState() {
       : []
   }
 
-  function isApprovalRequestMethod(method: string): boolean {
-    return (
-      method === 'item/commandExecution/requestApproval' ||
-      method === 'item/fileChange/requestApproval' ||
-      method === 'item/permissions/requestApproval' ||
-      method === 'execCommandApproval' ||
-      method === 'applyPatchApproval'
-    )
-  }
-
   function readPendingRequestState(requests: UiServerRequest[]): UiPendingRequestState | null {
     if (requests.some((request) => isApprovalRequestMethod(request.method))) {
       return 'approval'
@@ -2008,174 +2003,6 @@ export function useDesktopState() {
         turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       },
     }
-  }
-
-  function normalizeServerRequest(params: unknown): UiServerRequest | null {
-    const row = asRecord(params)
-    if (!row) return null
-
-    const id = row.id
-    const rawMethod = readString(row.method)
-    const requestParams = row.params
-    if (typeof id !== 'number' || !Number.isInteger(id) || !rawMethod) {
-      return null
-    }
-
-    const requestParamRecord = asRecord(requestParams)
-    const method = normalizePendingServerRequestMethod(rawMethod, requestParamRecord)
-    const threadId = (
-      readString(requestParamRecord?.threadId) ||
-      readString(requestParamRecord?.thread_id) ||
-      readString(requestParamRecord?.conversationId) ||
-      readString(requestParamRecord?.conversation_id) ||
-      GLOBAL_SERVER_REQUEST_SCOPE
-    )
-    const turnId = readString(requestParamRecord?.turnId) || readString(requestParamRecord?.turn_id)
-    const itemId = (
-      readString(requestParamRecord?.itemId) ||
-      readString(requestParamRecord?.item_id) ||
-      readString(requestParamRecord?.callId) ||
-      readString(requestParamRecord?.call_id)
-    )
-    const receivedAtIso = readString(row.receivedAtIso) || new Date().toISOString()
-
-    return {
-      id,
-      method,
-      threadId,
-      turnId,
-      itemId,
-      receivedAtIso,
-      params: requestParams ?? null,
-    }
-  }
-
-  function normalizePendingServerRequestMethod(
-    method: string,
-    params: Record<string, unknown> | null,
-  ): string {
-    const normalized = method.trim()
-    if (!normalized) return normalized
-
-    if (
-      normalized === 'item/commandExecution/requestApproval' ||
-      normalized === 'execCommandApproval' ||
-      normalized === 'exec_approval_request' ||
-      looksLikeExecApprovalRequest(params)
-    ) {
-      return 'item/commandExecution/requestApproval'
-    }
-
-    if (
-      normalized === 'item/fileChange/requestApproval' ||
-      normalized === 'applyPatchApproval' ||
-      normalized === 'apply_patch_approval_request' ||
-      looksLikePatchApprovalRequest(params)
-    ) {
-      return 'item/fileChange/requestApproval'
-    }
-
-    if (
-      normalized === 'item/tool/requestUserInput' ||
-      normalized === 'request_user_input' ||
-      looksLikeToolUserInputRequest(params)
-    ) {
-      return 'item/tool/requestUserInput'
-    }
-
-    if (
-      normalized === 'mcpServer/elicitation/request' ||
-      normalized === 'elicitation_request' ||
-      looksLikeMcpServerElicitationRequest(params)
-    ) {
-      return 'mcpServer/elicitation/request'
-    }
-
-    if (normalized === 'item/permissions/requestApproval' || looksLikePermissionsApprovalRequest(params)) {
-      return 'item/permissions/requestApproval'
-    }
-
-    if (
-      normalized === 'item/tool/call' ||
-      normalized === 'dynamic_tool_call_request' ||
-      looksLikeToolCallRequest(params)
-    ) {
-      return 'item/tool/call'
-    }
-
-    return normalized
-  }
-
-  function looksLikeExecApprovalRequest(params: Record<string, unknown> | null): boolean {
-    if (!params) return false
-    const command = params.command
-    if (Array.isArray(command) && command.some((part) => typeof part === 'string' && part.trim().length > 0)) {
-      return true
-    }
-    if (typeof command === 'string' && command.trim().length > 0) {
-      return true
-    }
-    return Array.isArray(params.commandActions)
-  }
-
-  function looksLikePatchApprovalRequest(params: Record<string, unknown> | null): boolean {
-    if (!params) return false
-    if (typeof params.grantRoot === 'string' && params.grantRoot.trim().length > 0) return true
-    if (typeof params.grant_root === 'string' && params.grant_root.trim().length > 0) return true
-    if (asRecord(params.fileChanges)) return true
-    return asRecord(params.changes) !== null
-  }
-
-  function looksLikeToolUserInputRequest(params: Record<string, unknown> | null): boolean {
-    return Boolean(params && Array.isArray(params.questions))
-  }
-
-  function looksLikeToolCallRequest(params: Record<string, unknown> | null): boolean {
-    if (!params) return false
-    return (
-      typeof params.toolName === 'string' ||
-      typeof params.tool_name === 'string' ||
-      typeof params.name === 'string' ||
-      Array.isArray(params.arguments)
-    )
-  }
-
-  function looksLikeMcpServerElicitationRequest(params: Record<string, unknown> | null): boolean {
-    if (!params) return false
-    const mode = readString(params.mode)
-    return (
-      typeof params.serverName === 'string' &&
-      typeof params.threadId === 'string' &&
-      typeof params.message === 'string' &&
-      (mode === 'form' || mode === 'url')
-    )
-  }
-
-  function looksLikePermissionsApprovalRequest(params: Record<string, unknown> | null): boolean {
-    if (!params) return false
-    return (
-      typeof params.threadId === 'string' &&
-      typeof params.turnId === 'string' &&
-      typeof params.itemId === 'string' &&
-      asRecord(params.permissions) !== null
-    )
-  }
-
-  function readToolRequestUserInputQuestionIds(request: UiServerRequest): string[] {
-    if (request.method !== 'item/tool/requestUserInput') return []
-    const params = asRecord(request.params)
-    const questions = Array.isArray(params?.questions) ? params.questions : []
-    const questionIds: string[] = []
-
-    for (const row of questions) {
-      const question = asRecord(row)
-      const id = readString(question?.id).trim()
-      if (id) {
-        questionIds.push(id)
-      }
-    }
-
-    return questionIds
   }
 
   function upsertPendingServerRequest(request: UiServerRequest): void {
