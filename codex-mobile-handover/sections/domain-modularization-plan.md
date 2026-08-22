@@ -114,6 +114,13 @@
   - 新建 `bridge/models.ts`（163 行）：平移 provider 模型发现纯工具集群——`ProviderModelsResponse` 类型、`PROVIDER_MODELS_FETCH_TIMEOUT_MS`、`logProviderModelDiscoveryWarning`/`isTimeoutError`、`normalizeHeaderValue`/`normalizeQueryParams`/`buildProviderModelsUrl`/`normalizeProviderModelsData`/`fetchCustomEndpointDefaultModel`/`CUSTOM_ENDPOINT_PATH_SUFFIXES`/`normalizeCustomEndpointBaseUrl`/`fetchCustomEndpointModelIds`/`fetchOpenCodeZenModelIds`/`sortOpenCodeZenModelIds`；依赖 `core.ts` 的 `asRecord`/`getErrorMessage`/`readNonEmptyString` 与 `freeMode.js` 的 `OPENCODE_ZEN_DEFAULT_MODEL`，纯机械迁移、零行为改动。
   - 主 Shell：删除三块本地定义（类型/常量 235–242、日志/超时辅助 1475–1482、发现工具 1603–1736 原行号），`import` 11 个复用点供 middleware 与保留的 `readProviderBackedModelIds`/`readProviderModelIdsForProvider`（其依赖主文件本地 `ensureDefaultFreeModeStateForMissingAuthSync`，随计划留驻主文件）复用；`export { normalizeCustomEndpointBaseUrl, normalizeProviderModelsData }` 保持原公共导出面（各有单测从 `./codexAppServerBridge` 导入）。`normalizeProviderModelsData` 亦内部使用需加入本地 import（仅 re-export 不产生绑定）。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。A–F 六批全部完成，剩余 `useDesktopState()` 主函数与 bridge 核心派发视情况再评估。
+- 2026-08-22：**codexAppServerBridge.ts G 批（terminal 快速命令集群）完成**。原 7105 行降至 6974 行，再经 H 批后降至 6416 行。
+  - 新建 `bridge/terminal.ts`：平移 terminal 快速命令集群——`TerminalQuickCommand` 类型、`listTerminalQuickCommands`/`addPackageJsonCommands`/`addMakefileCommands`/`addRootScriptCommands`/`addScriptsDirectoryCommands`/`resolvePackageManager` 等；依赖 `core.ts` 助手，纯机械迁移。
+- 2026-08-22：**codexAppServerBridge.ts H 批（git/worktree 路由族迁出核心派发）完成**。原 6974 行降至 6416 行（-558）。
+  - 新建 `bridge/routes.ts`（629 行）：将 `createCodexBridgeMiddleware` 巨型内联 HTTP 派发中的 9 个状态无关路由 handler 平移为 `handleGitWorktreeHttpRequest(req, res, url, deps)`——`worktree/create`、`worktree/create-permanent`、`worktree/branches`、`git/branches`、`git/repository-status`、`git/checkout`、`git/branch-commits`、`git/commit-files`、`git/reset-to-commit`。命中路由返回 `true`，否则返回 `false`。
+  - 依赖策略：路由 handler 仅依赖 `bridge/git.ts`（`assertLocalGitBranch`/`readGitHeaderState`/`checkoutGitBranchWithWorktreeRecovery` 等）与 `bridge/core.ts`（`runCommandCapture`/`getErrorMessage`/`asRecord` 等）及 Node 内建；主文件壳上的 4 个共享助手（`setJson`/`readJsonBody`/`persistWorkspaceRoot`/`rollbackCreatedWorktree`）通过 `deps` 参数注入，避免 `routes.ts` 反向 import 主文件造成循环依赖。
+  - 主 Shell：新增 `import { handleGitWorktreeHttpRequest } from './bridge/routes.js'`，将原内联块替换为单行派发 `if (await handleGitWorktreeHttpRequest(req, res, url, { setJson, readJsonBody, persistWorkspaceRoot, rollbackCreatedWorktree })) return`，其余零改动。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。核心派发剩余路由族（thread/git-reset-* / 文件 / composio / 自动化等）仍留驻 shell，逐族视闭包依赖再切。
 
 ## 收尾验证口径（每批）
 
