@@ -225,6 +225,14 @@ import {
   type LiveWriteDeps,
 } from './useDesktopStateLiveWrites'
 import {
+  inferNextTurnIndex as inferNextTurnIndexImpl,
+  rebindLiveFileChangeTurnIndices as rebindLiveFileChangeTurnIndicesImpl,
+  replaceTurnIndexLookupForThread as replaceTurnIndexLookupForThreadImpl,
+  resolveThreadTurnIndex as resolveThreadTurnIndexImpl,
+  setTurnIndexForThread as setTurnIndexForThreadImpl,
+  type TurnIndexDeps,
+} from './useDesktopStateTurnIndex'
+import {
   LIVE_REASONING_SNAPSHOT_STORAGE_KEY,
   loadLastPlanMap,
   loadLiveReasoningSnapshotMap,
@@ -1997,6 +2005,12 @@ export function useDesktopState() {
     lastPlanByThreadId,
   }
 
+  const turnIndexDeps: TurnIndexDeps = {
+    turnIndexByTurnIdByThreadId,
+    persistedMessagesByThreadId,
+    liveFileChangeMessagesByThreadId,
+  }
+
   function upsertPendingServerRequest(request: UiServerRequest): void {
     upsertPendingServerRequestImpl(pendingRequestWriteDeps, request)
   }
@@ -2039,75 +2053,25 @@ export function useDesktopState() {
   }
 
   function inferNextTurnIndex(threadId: string): number {
-    const persisted = persistedMessagesByThreadId.value[threadId] ?? []
-    let maxTurnIndex = -1
-    for (const message of persisted) {
-      if (typeof message.turnIndex === 'number' && Number.isFinite(message.turnIndex)) {
-        maxTurnIndex = Math.max(maxTurnIndex, message.turnIndex)
-      }
-    }
-    return maxTurnIndex + 1
+    return inferNextTurnIndexImpl(turnIndexDeps, threadId)
   }
 
   function setTurnIndexForThread(threadId: string, turnId: string, turnIndex: number): void {
-    if (!threadId || !turnId || !Number.isInteger(turnIndex) || turnIndex < 0) return
-    const previous = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
-    if (previous[turnId] === turnIndex) return
-    turnIndexByTurnIdByThreadId.value = {
-      ...turnIndexByTurnIdByThreadId.value,
-      [threadId]: {
-        ...previous,
-        [turnId]: turnIndex,
-      },
-    }
+    setTurnIndexForThreadImpl(turnIndexDeps, threadId, turnId, turnIndex)
   }
 
   function replaceTurnIndexLookupForThread(threadId: string, nextLookup: Record<string, number>): void {
-    const previous = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
-    const previousEntries = Object.entries(previous)
-    const nextEntries = Object.entries(nextLookup)
-    if (
-      previousEntries.length === nextEntries.length
-      && previousEntries.every(([turnId, turnIndex]) => nextLookup[turnId] === turnIndex)
-    ) {
-      return
-    }
-
-    turnIndexByTurnIdByThreadId.value = {
-      ...turnIndexByTurnIdByThreadId.value,
-      [threadId]: { ...nextLookup },
-    }
+    replaceTurnIndexLookupForThreadImpl(turnIndexDeps, threadId, nextLookup)
   }
 
   // 供 App.vue 在 plan 本地存档兜底路径解析计划轮序号：刷新后按 turnId 从当前
   // 线程的轮次映射重新解析（live 存档中记录的 turnIndex 可能缺失或过期）。
   function resolveThreadTurnIndex(threadId: string, turnId: string): number | undefined {
-    if (!threadId || !turnId) return undefined
-    const index = turnIndexByTurnIdByThreadId.value[threadId]?.[turnId]
-    return typeof index === 'number' ? index : undefined
+    return resolveThreadTurnIndexImpl(turnIndexDeps, threadId, turnId)
   }
 
   function rebindLiveFileChangeTurnIndices(threadId: string): void {
-    const current = liveFileChangeMessagesByThreadId.value[threadId]
-    if (!current || current.length === 0) return
-
-    const turnIndexByTurnId = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
-    let changed = false
-    const next = current.map((message) => {
-      if (typeof message.turnIndex === 'number' || !message.turnId) {
-        return message
-      }
-      const turnIndex = turnIndexByTurnId[message.turnId]
-      if (typeof turnIndex !== 'number') return message
-      changed = true
-      return { ...message, turnIndex }
-    })
-
-    if (!changed) return
-    liveFileChangeMessagesByThreadId.value = {
-      ...liveFileChangeMessagesByThreadId.value,
-      [threadId]: next,
-    }
+    rebindLiveFileChangeTurnIndicesImpl(turnIndexDeps, threadId)
   }
 
   function appendReasoningItemProgress(threadId: string, itemId: string, text: string): void {

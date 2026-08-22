@@ -146,6 +146,11 @@
   - 主 Shell：新增 8 个函数对应的 `xxxImpl(liveWriteDeps, …)` 薄包装，对外签名不变。
   - 测试：`useDesktopStateLiveWrites.test.ts` 扩至 8 个用例（plan 追加并记忆、agent 文本级去重、saveLastPlanMap 持久化 spy）。
   - 验证：`vue-tsc --noEmit` 通过、全量 383 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 5010 行。live 消息写入侧已基本迁出；剩余闭包写入侧（liveReasoning 文本写入/snapshot、turnIndex 维护、agent 内容事件相关）留待评估。
+- 2026-08-23：**useDesktopState() 主函数第四批扩展（注入式写入侧：turnIndex 维护）**。新建 `useDesktopStateTurnIndex.ts`，定义 `TurnIndexDeps { turnIndexByTurnIdByThreadId, persistedMessagesByThreadId, liveFileChangeMessagesByThreadId }`。
+  - 迁出：`inferNextTurnIndex`、`setTurnIndexForThread`、`replaceTurnIndexLookupForThread`、`resolveThreadTurnIndex`、`rebindLiveFileChangeTurnIndices`。仅依赖注入 ref，零闭包回环。
+  - 主 Shell：新增 `turnIndexDeps` 对象注入三个 ref，本地函数退化为一行薄包装（`xxxImpl(turnIndexDeps, …)`），对外签名不变。
+  - 新增 `useDesktopStateTurnIndex.test.ts`（5 个用例：inferNext、set+非法入参、replace、resolve、rebind）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 388 个单测通过、`pnpm run build`（web+CLI）通过。主函数降至 4960 行。剩余闭包写入侧（liveReasoning 文本写入/snapshot、agent 内容事件相关）留待评估。
 
 ## 收尾验证口径（每批）
 
