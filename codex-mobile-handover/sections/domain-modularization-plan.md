@@ -77,7 +77,8 @@
 
 ## 实施记录
 
-- 2026-08-22：完成三个文件领域梳理并出本方案（见「领域梳理结论」）；尚未开始代码拆分。
+- 2026-08-22：完成三个文件领域梳理并出本方案（见「领域梳理结论」）。
+- 2026-08-22：**codexGateway 试点（search 领域）完成**。新建 `src/api/gateway/core.ts`（`callRpc` + `getErrorMessageFromPayload` 共享底层）与 `src/api/gateway/search.ts`（fuzzy 搜索会话/composer 文件搜索/线程搜索 + `ComposerFileSuggestion`/`FuzzyFileSearchSession`/`ThreadSearchResult`/`isIgnoredFileSearchPath`/`normalizeFuzzyFileSearchResults`）。`codexGateway.ts` 从 core 导入共享底层、末尾 `export * from './gateway/search'` 透传，调用方零改动。`vue-tsc`、全量 370 个单测、`pnpm run build`（web+CLI）均通过。
 
 ## 收尾验证口径（每批）
 
