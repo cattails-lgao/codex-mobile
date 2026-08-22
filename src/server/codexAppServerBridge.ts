@@ -92,6 +92,7 @@ import {
   updateThreadTitleCache,
   writeThreadTitleCache,
 } from './bridge/threadPreferencesRoutes.js'
+import { handleEventsHttpRequest } from './bridge/eventsRoutes.js'
 // 自动化领域切片（A 批）公共导出保持原样：仅 parseAutomationToml 与
 // toAutomationApiRecord 此前是公共导出，供消费者（含测试）继续从本模块导入。
 export { parseAutomationToml, toAutomationApiRecord } from './bridge/automations.js'
@@ -4290,35 +4291,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         return
       }
 
-      if (req.method === 'GET' && url.pathname === '/codex-api/events') {
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-        res.setHeader('Cache-Control', 'no-cache, no-transform')
-        res.setHeader('Connection', 'keep-alive')
-        res.setHeader('X-Accel-Buffering', 'no')
-
-        const unsubscribe = middleware.subscribeNotifications((notification: { method: string; params: unknown; atIso: string }) => {
-          if (res.writableEnded || res.destroyed) return
-          res.write(`data: ${JSON.stringify(notification)}\n\n`)
-        })
-
-        res.write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`)
-        const keepAlive = setInterval(() => {
-          res.write(': ping\n\n')
-        }, 15000)
-
-        const close = () => {
-          clearInterval(keepAlive)
-          unsubscribe()
-          if (!res.writableEnded) {
-            res.end()
-          }
-        }
-
-        req.on('close', close)
-        req.on('aborted', close)
-        return
-      }
+      // /codex-api/events SSE route, 迁入 bridge/eventsRoutes.ts.
+      if (await handleEventsHttpRequest(req, res, {
+        subscribeNotifications: middleware.subscribeNotifications.bind(middleware),
+      })) return
 
       next()
     } catch (error) {
