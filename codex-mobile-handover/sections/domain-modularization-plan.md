@@ -101,6 +101,11 @@
   - 新建 `bridge/composio.ts`（493 行）：平移 composio CLI 探测/whoami/toolkits 列表/连接/登录/安装集群：`buildComposioInvocation`/`probeComposioInvocation`/`resolveComposioInvocation`/`parseComposioJson`/`runComposioJson`/`readComposioUserData`/`normalizeComposio*`/`readComposioConnectionsBySlug`/`readComposioStatus`/`listComposioConnectors`/`parseComposioCursor|Limit`/`readComposioConnectorDetail`/`startComposioLink|Login`/`installComposioCli` 及全部 composio 领域类型 + `COMPOSIO_USER_DATA_PATH`/`COMPOSIO_CONNECTORS_PAGE_LIMIT_MAX`/`ComposioCliInvocation`；依赖 core 辅助与 `getSpawnInvocation`，纯机械迁移、零行为改动（环境变量 `CODEXUI_COMPOSIO_COMMAND` 保持不变）。
   - 主 Shell：删除 composio 类型块（原 184–274）、`COMPOSIO_USER_DATA_PATH`（原 292）、`readNonEmptyString`（原 2573）与 `quoteShellTokenIfNeeded`/`readBoolean`/`readNumber`/`ComposioCliInvocation`/composio 集群（原 2681–3083）五块，`import` 7 个复用点供 middleware（7885–7943 区域）复用（`readBoolean`/`readNumber` 仅 composio 内部使用，主文件不引）；`fetchConnectorLogo` 为独立函数留在主文件。
   - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 D（zip）/E（session）/F（models）按上表继续。
+- 2026-08-22：**codexAppServerBridge.ts D 批（zip 切片）完成**。原 8843 行降至 8442 行（-401）；按净增计：zip 打包/解析核心 415 行迁入 `bridge/zip.ts`，`isSameOrDescendantPath` 已并入 `bridge/core.ts` 供复用。
+  - `bridge/core.ts` 新增 `isSameOrDescendantPath`（原主文件 1378–1382 本地定义删除，改为 import 供主文件 1850/2025 与 zip 模块共用）。
+  - 新建 `bridge/zip.ts`（415 行）：平移项目 ZIP 导出流 + 底层 parse 的原生 ZIP（store 风格）实现：`PROJECT_ZIP_SKIPPED_NAMES` 忽略名单、`ZipCentralDirectoryEntry`/`ProjectZipVirtualEntry`/`ParsedProjectZipEntry` 类型、`ZIP_CRC_TABLE`/`updateZipCrc32`/`toDosDateTime`/`buildZipLocalHeader|DataDescriptor|CentralHeader|EndOfCentralDirectory`/`writeZipChunk`/`createProjectZipIgnoreMatcher`/`walkProjectZipEntries`/`writeProjectZipEntry`/`streamProjectZip`/`toProjectZipFileName`/`setProjectZipHeaders`/`resolveAllowedProjectZipCwd`/`normalizeImportedZipPath`/`readZipUInt16|32`/`parseStoredProjectZip`；依赖 core 命令执行器与 `isSameOrDescendantPath`，纯机械迁移、零行为改动。
+  - 主 Shell：删除 zip 导出流集群（原 1019–1078、1098–1391）与 zip 解析集群（原 1880–1934）三块，`import` 6 个复用点供 middleware（下载 export 8205/8219/8225 与 `importProjectZip` 内 1937 调用）复用；`isSameOrDescendantPath` 改从 core import。会话编排 `collectProjectChatZipEntries`/`importProjectZip` 依赖 session/thread 状态，按计划留待 E 批。
+  - 验证：`vue-tsc --noEmit` 通过、全量 370 个单测通过、`pnpm run build`（web+CLI）通过。剩余批 E（session）/F（models）按上表继续。
 
 ## 收尾验证口径（每批）
 
