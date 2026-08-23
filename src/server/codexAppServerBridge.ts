@@ -9,7 +9,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
-import { buildAppServerArgs, parseApprovalPolicy, type CodexApprovalPolicy } from './appServerRuntimeConfig.js'
+import { buildAppServerArgs, parseApprovalPolicy } from './appServerRuntimeConfig.js'
 import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
@@ -128,6 +128,10 @@ export { parseAutomationToml, toAutomationApiRecord } from './bridge/automations
 // M 批 file/project 切片：buildProjectlessFolderName 原为本模块公共导出，供
 // codexAppServerBridge.archive.test.ts 使用，随迁后从 bridge/projectRoutes.js 透出。
 export { buildProjectlessFolderName } from './bridge/projectRoutes.js'
+import {
+  resolveEffectiveApprovalPolicy,
+  writeApprovalPolicyToConfigFile,
+} from './bridge/approvalPolicy.js'
 import {
   parseStoredProjectZip,
   resolveAllowedProjectZipCwd,
@@ -1637,66 +1641,6 @@ export async function callRpcWithArchiveRecovery(
     })
     return appServer.rpc(method, params ?? null)
   }
-}
-
-function getCodexConfigPath(): string {
-  return join(getCodexHomeDir(), 'config.toml')
-}
-
-const APPROVAL_POLICY_KEY = 'approval_policy'
-
-async function resolveEffectiveApprovalPolicy(): Promise<CodexApprovalPolicy> {
-  // The runtime env var is authoritative (it is what the app-server is
-  // actually launched with), then the config file, then the default.
-  const envPolicy = parseApprovalPolicy(process.env.CODEXUI_APPROVAL_POLICY ?? '')
-  if (envPolicy) return envPolicy
-  const filePolicy = readApprovalPolicyFromConfigFile()
-  return filePolicy ?? 'never'
-}
-
-function readApprovalPolicyFromConfigFile(): CodexApprovalPolicy | null {
-  try {
-    if (!existsSync(getCodexConfigPath())) return null
-    const raw = readFileSync(getCodexConfigPath(), 'utf8')
-    const lines = raw.split(/\r?\n/u)
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('[')) continue
-      const match = /^approval_policy\s*=\s*"([^"]+)"/u.exec(trimmed)
-      if (!match) continue
-      const policy = parseApprovalPolicy(match[1] ?? '')
-      if (policy) return policy
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-const APPROVAL_POLICY_ASSIGNMENT = /^approval_policy\s*=/u
-
-async function writeApprovalPolicyToConfigFile(policy: CodexApprovalPolicy): Promise<void> {
-  const configPath = getCodexConfigPath()
-  await mkdir(dirname(configPath), { recursive: true })
-  const policyLine = `approval_policy = "${policy}"`
-  if (!existsSync(configPath)) {
-    await writeFile(configPath, `${policyLine}\n`, 'utf8')
-    return
-  }
-  const raw = await readFile(configPath, 'utf8')
-  // Drop every existing approval_policy assignment regardless of whitespace
-  // around "=" (the previous writer only matched `approval_policy=` with no
-  // spaces, so repeated saves appended duplicate keys and broke the TOML file).
-  const kept = raw.split(/\r?\n/u).filter((line) => !APPROVAL_POLICY_ASSIGNMENT.test(line.trim()))
-  // The key must stay top-level: any bare key written after a [table] header
-  // would land inside that table, so put it at the very top of the file.
-  const body = kept
-    .join('\n')
-    .replace(/^\n+/, '')
-    .replace(/\n{3,}/gu, '\n\n')
-    .trimEnd()
-  const nextContent = body.length > 0 ? `${policyLine}\n\n${body}\n` : `${policyLine}\n`
-  await writeFile(configPath, nextContent, 'utf8')
 }
 
 function getSkillsInstallDir(): string {

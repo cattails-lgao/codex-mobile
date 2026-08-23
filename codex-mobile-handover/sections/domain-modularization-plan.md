@@ -206,6 +206,11 @@
   - 类型 `StoredQueuedMessage` / `ThreadQueueState` / `BackendQueuedTurn` 迁移并以 `export type` 从新模块 re-export 保持契约（automationsRoutes 用自身结构镜像 `QueuedMessage`，不受影响）。
   - 主 Shell：删除 `THREAD_QUEUE_STATE_KEY` 常量、3 个类型定义与 7 个函数（含既有 7 个队列函数但**保留** `ResolvedCollaborationModeSettings`，它仍被 shell 内 `resolveCollaborationModeSettings` 使用），约 130 行；`BackendQueueProcessor` 与 `/codex-api/thread-queue-state` 路由改经 import 复用；`getCodexGlobalStatePath` 在 shell 内已无更多用途，从 core import 移除。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 T 批（approval-policy 簇）完成**。新建 `bridge/approvalPolicy.ts`，承载 Codex `approval_policy` 的解析与 `config.toml` 读写：
+  - 平移 `resolveEffectiveApprovalPolicy` / `readApprovalPolicyFromConfigFile` / `writeApprovalPolicyToConfigFile` 与私有 `getCodexConfigPath`、`APPROVAL_POLICY_ASSIGNMENT`。
+  - 依赖方：`getCodexHomeDir`（core）+ `parseApprovalPolicy` / `CodexApprovalPolicy`（appServerRuntimeConfig）+ node fs/path，零 shell 闭包。
+  - 顺带删除死代码常量 `APPROVAL_POLICY_KEY`（无引用）；shell 内 `/codex-api/approval-policy` GET/POST 路由改经 import 复用；`CodexApprovalPolicy` 类型在 shell 已无直接用途，从 appServerRuntimeConfig import 移除（保留 `buildAppServerArgs` / `parseApprovalPolicy`）。注意：编辑期间一度误删 `parseAutomationToml`/`toAutomationApiRecord` re-export 与 M 批注释，已在同次修改内恢复。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
