@@ -281,6 +281,11 @@
   - 主 Shell：删除本地两函数与类型/常量定义；闭包 `getThreadSearchIndex`（含缓存）经 import 复用 `buildThreadSearchIndex` 与类型 `ThreadSearchIndex`。其余 `ThreadSearchDocument` / `THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT` 为 `bridge/threadSearch.ts` 内部导出，主 Shell 无需透出（迁移前即模块私有，无外部/测试消费者）。`extractThreadMessageText` 主文件 re-export（archive.test.ts 依赖）保留。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AF 批（project ZIP 编排簇）完成**。新建 `bridge/projectZip.ts`，平移 `collectProjectChatZipEntries` / `importProjectZip` 两个项目会话导出/导入工作流函数。
+  - 依赖全为模块级纯函数：core（`getCodexHomeDir` / `isSameOrDescendantPath` / `readNonEmptyString` / `asRecord`）、importedSessions（`walkFiles` / `readSessionMetaCwd` / `readSessionMetaId` / `readImportedSessionRecord` / `rewriteImportedSession` / `registerImportedSessionsInStateDb` / `readStateDbThreadExportMetadata` + 类型）、threadPreferencesRoutes（标题缓存读写）、workspaceRoots（`persistWorkspaceRoot`）、zip（`parseStoredProjectZip` / `ProjectZipVirtualEntry`）+ node:fs / node:path / node:crypto；零 shell 实例闭包。
+  - 主 Shell：删除本地两函数定义；projectRoutes deps 处经 import 复用 `collectProjectChatZipEntries` / `importProjectZip`。同步清理主文件不再使用的 import：importedSessions 的会话解析/改写 helper、threadPreferencesRoutes 的标题缓存 helper、zip.js 全部成员；`node:fs/promises` 的 `realpath`/`utimes` 与 `node:fs` 的 `existsSync` 随迁出而移除。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
