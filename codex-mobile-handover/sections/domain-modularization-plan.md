@@ -254,6 +254,12 @@
   - 零 shell 实例闭包；移除 Shell 内该簇本地定义（含随迁未用的 `callRpcWithRateLimitDecodeRecovery` import）。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive.test.ts 对 recovery 链路的依赖）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AB 批（provider model-ids 高层读取簇）完成**。并入 F 批已有 `bridge/models.ts`，补齐 provider 模型发现域：
+  - 平移：`readProviderBackedModelIds` / `readProviderModelIdsForProvider` 两个入口函数。这俩仅依赖模块级 import（core 的 `asRecord`/`readNonEmptyString`/`getErrorMessage`/`getCodexHomeDir`、models 同域工具、freeMode 的 `getFreeModels`/`filterOpenCodeZenModelsForAuthState`/`FREE_MODE_STATE_FILE`、codexAuthState 的 `ensureDefaultFreeModeStateForMissingAuthSync`）与 `appServer` 参数，零 shell 实例闭包。
+  - 注入型 facade：新增 `export type RpcExecutor = { rpc(method, params): Promise<unknown> }` 结构类型，替代 shell 的 `AppServerProcess`，与 AA 批保持一致；主 Shell 两个调用点（`/provider/models` 派发与读写 provider 路由）传 `appServer` 满足该结构。
+  - 清理主 Shell：删除本地两函数，并将 `bridge/models.js` import 收窄为仍被 middleware 使用的成员（`fetchCustomEndpointModelIds`/`fetchOpenCodeZenModelIds`/`sortOpenCodeZenModelIds`/`normalizeCustomEndpointBaseUrl`/`normalizeProviderModelsData` + 新增两入口），移除随迁无用的 6 个辅助 import。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 codexAppServerBridge.providerModels.test.ts 对 normalizeProviderModelsData 的依赖）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
