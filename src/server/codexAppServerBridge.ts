@@ -122,8 +122,8 @@ import {
 } from './bridge/httpHelpers.js'
 // AE 批 thread-search 索引构建簇：loadAllThreadsForSearch / buildThreadSearchIndex
 // 及其 ThreadSearchDocument / ThreadSearchIndex 类型与 THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT
-// 常量迁入 bridge/threadSearch.ts；主 Shell 闭包 getThreadSearchIndex 经 import 复用，
-// 类型/常量透出以维持契约。
+// 常量迁入 bridge/threadSearch.ts；主 Shell 闭包 getThreadSearchIndex 经 import 复用
+// buildThreadSearchIndex 与 ThreadSearchIndex 类型。其余类型/常量仅供新模块内部使用。
 import {
   buildThreadSearchIndex,
   type ThreadSearchIndex,
