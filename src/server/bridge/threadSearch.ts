@@ -2,8 +2,9 @@
 // Purely funcitonal helpers that assemble the search index by paging thread/list and
 // batch-reading top-N threads for full text. They rely only on the injected rpc facade,
 // core.asRecord, and extractThreadMessageText (threadArchiveRecovery). The shell keeps
-// the cached getThreadSearchIndex closure and consumes ThreadSearchIndex / the
-// THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT constant from here.
+// the cached getThreadSearchIndex closure and consumes buildThreadSearchIndex +
+// the ThreadSearchIndex type from here; THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT is used
+// only within this module.
 import { asRecord } from './core.js'
 import { extractThreadMessageText } from './threadArchiveRecovery.js'
 import type { RpcExecutor } from './models.js'
