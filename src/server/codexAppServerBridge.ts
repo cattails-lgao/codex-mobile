@@ -120,6 +120,14 @@ import {
   readRawBody,
   setJson,
 } from './bridge/httpHelpers.js'
+// AE 批 thread-search 索引构建簇：loadAllThreadsForSearch / buildThreadSearchIndex
+// 及其 ThreadSearchDocument / ThreadSearchIndex 类型与 THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT
+// 常量迁入 bridge/threadSearch.ts；主 Shell 闭包 getThreadSearchIndex 经 import 复用，
+// 类型/常量透出以维持契约。
+import {
+  buildThreadSearchIndex,
+  type ThreadSearchIndex,
+} from './bridge/threadSearch.js'
 // AC 批 queued-turn 构建辅助簇：协作模式 reasoning-effort 归一化与附件/prompt
 // 文本构建纯函数迁入 bridge/turnFactory.ts；BackendQueueProcessor 实例方法经
 // import 复用，类型透出以维持契约。
@@ -312,20 +320,7 @@ type PendingServerRequest = {
   receivedAtIso: string
 }
 
-type ThreadSearchDocument = {
-  id: string
-  title: string
-  preview: string
-  messageText: string
-  searchableText: string
-}
-
-type ThreadSearchIndex = {
-  docsById: Map<string, ThreadSearchDocument>
-}
-
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
-const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 
 async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
   const canonicalProjectRoot = await realpath(projectRoot)
@@ -1543,82 +1538,6 @@ function getSharedBridgeState(): SharedBridgeState {
   }
   globalScope[SHARED_BRIDGE_KEY] = created
   return created
-}
-
-async function loadAllThreadsForSearch(appServer: AppServerProcess): Promise<ThreadSearchDocument[]> {
-  const threads: Array<{ id: string; title: string; preview: string }> = []
-  let cursor: string | null = null
-
-  do {
-    const response = asRecord(await appServer.rpc('thread/list', {
-      archived: false,
-      limit: 100,
-      sortKey: 'updated_at',
-      modelProviders: [],
-      cursor,
-    }))
-    const data = Array.isArray(response?.data) ? response.data : []
-    for (const row of data) {
-      const record = asRecord(row)
-      const id = typeof record?.id === 'string' ? record.id : ''
-      if (!id) continue
-      const title = typeof record?.name === 'string' && record.name.trim().length > 0
-        ? record.name.trim()
-        : (typeof record?.preview === 'string' && record.preview.trim().length > 0 ? record.preview.trim() : 'Untitled thread')
-      const preview = typeof record?.preview === 'string' ? record.preview : ''
-      threads.push({ id, title, preview })
-    }
-    cursor = typeof response?.nextCursor === 'string' && response.nextCursor.length > 0 ? response.nextCursor : null
-  } while (cursor)
-
-  const docs: ThreadSearchDocument[] = threads.map((thread) => {
-    const searchableText = [thread.title, thread.preview].filter(Boolean).join('\n')
-    return {
-      id: thread.id,
-      title: thread.title,
-      preview: thread.preview,
-      messageText: '',
-      searchableText,
-    } satisfies ThreadSearchDocument
-  })
-
-  const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
-  const fullTextThreads = threads.slice(0, THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT)
-  const concurrency = 4
-  for (let offset = 0; offset < fullTextThreads.length; offset += concurrency) {
-    const batch = fullTextThreads.slice(offset, offset + concurrency)
-    const loaded = await Promise.all(batch.map(async (thread) => {
-      try {
-        const readResponse = await appServer.rpc('thread/read', {
-          threadId: thread.id,
-          includeTurns: true,
-        })
-        const messageText = extractThreadMessageText(readResponse)
-        const searchableText = [thread.title, thread.preview, messageText].filter(Boolean).join('\n')
-        return [thread.id, {
-          id: thread.id,
-          title: thread.title,
-          preview: thread.preview,
-          messageText,
-          searchableText,
-        } satisfies ThreadSearchDocument] as const
-      } catch {
-        return null
-      }
-    }))
-    for (const row of loaded) {
-      if (!row) continue
-      docsById.set(row[0], row[1])
-    }
-  }
-
-  return Array.from(docsById.values())
-}
-
-async function buildThreadSearchIndex(appServer: AppServerProcess): Promise<ThreadSearchIndex> {
-  const docs = await loadAllThreadsForSearch(appServer)
-  const docsById = new Map<string, ThreadSearchDocument>(docs.map((doc) => [doc.id, doc]))
-  return { docsById }
 }
 
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {

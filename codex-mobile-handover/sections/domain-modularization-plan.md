@@ -276,6 +276,11 @@
   - accountRoutes.ts：`setJson` + `readJsonBody` 均重复 → 删除本地两函数，import `setJson`；`readJsonBody` 改为薄封装 `asRecord(await readHttpJsonBody(req))` 保持原 `Record<string, unknown> | null` 签名，避免改动 1239/1323/1415 三处 `payload?.xxx` 调用点。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AE 批（thread-search 索引构建簇）完成**。新建 `bridge/threadSearch.ts`，平移 `loadAllThreadsForSearch` / `buildThreadSearchIndex`，及随迁的 `ThreadSearchDocument` / `ThreadSearchIndex` 类型与 `THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT` 常量。
+  - 依赖为模块级：core 的 `asRecord`、threadArchiveRecovery 的 `extractThreadMessageText`、注入的 `RpcExecutor` facade（同 AA/AB 批，替代 `AppServerProcess`）；零 shell 实例闭包。
+  - 主 Shell：删除本地两函数与类型/常量定义；闭包 `getThreadSearchIndex`（含缓存）经 import 复用 `buildThreadSearchIndex`、类型 `ThreadSearchIndex` 从 threadSearch 透出。`extractThreadMessageText` 主文件 re-export（archive.test.ts 依赖）保留。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
