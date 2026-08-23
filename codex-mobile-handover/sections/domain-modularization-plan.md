@@ -223,6 +223,12 @@
   - 依赖方：`getCodexHomeDir`/`asRecord`/`readNonEmptyString`（core）+ `freeMode.js` 辅助，零 shell 实例闭包；移除 Shell 内该簇全部本地定义。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 authRefresh/archive）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 W 批（imported-session / state-db 簇）完成**。新建 `bridge/importedSessions.ts`，承载导入 session 记录解析改写与 sqlite `threads` 状态库读写：
+  - 平移：`walkFiles` / `readSessionMetaCwd` / `readSessionMetaId` / `getCurrentImportedSessionModelDefaults` / `rewriteImportedSession` / `readImportedSessionRecord` / `sqlString` / `ensureImportedThreadsStateDbTable` / `buildImportedSessionStateDbValues` / `registerImportedSessionsInStateDb` / `listImportedThreadsFromStateDb` / `readStateDbThreadExportMetadata` / `mergeImportedThreadsIntoThreadListResult` / `filterThreadListByIds`，并随迁 `ImportedSessionRecord` / `ExportedThreadMetadata` 类型与 `sqliteStateDbPath` helper；sqlite 调用仍 `spawnSync('sqlite3', ...)` 保持不变。
+  - Shell 保留较重的 `collectProjectChatZipEntries` / `importProjectZip`（依赖 thread-title 缓存与 zip 模块、注入 `persistWorkspaceRoot` 等闭包），仅从此模块导入被随迁 helper；对 rpcPipeline.freeModeRoutes 依赖的 `mergeImportedThreadsIntoThreadListResult` / `filterThreadListByIds` 做 re-export 维持公共契约。
+  - 依赖方：`asRecord`/`getCodexHomeDir`/`readNonEmptyString`（core）+ `codexAuthState.ts`（free-mode 状态）+ `freeMode.js` 常量，零 shell 实例闭包；移除 Shell 中已无用途的 `spawnSync`/`readdir`/`FREE_MODE_DEFAULT_MODEL`/`OPENCODE_ZEN_DEFAULT_MODEL` import。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 inlinePayload 对 `filterThreadListByIds` 的依赖）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
