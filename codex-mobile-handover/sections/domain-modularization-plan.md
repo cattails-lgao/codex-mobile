@@ -201,6 +201,11 @@
   - 共享 helper 迁入 `bridge/core.ts`：`normalizeStringRecord`（原主文件+本簇共用，去重归 core）。
   - 主 Shell：删除 `WorkspaceRootsState` 类型与整个 workspace-roots 簇（约 206 行），保留派发处经 import 复用；公共导出（测试从主模块导入的 `canonicalizeThreadListResponseForRead` / `canonicalizeWorkspaceRootsStateForRead` / `writeWorkspaceRootsState` 及 `WorkspaceRootsState` 类型）用 `export type`/`export { } from` 从新模块 re-export 保持契约。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 S 批（thread-queue-state 簇）完成**。新建 `bridge/threadQueueState.ts`，承载 `.codex-global-state.json` 中 `thread-queue-state` 键的规范化与读写：
+  - 平移 `normalizeStoredQueuedMessage` / `normalizeThreadQueueState`、`readThreadQueueState`、`writeThreadQueueStateUnlocked`、`withThreadQueueStateUpdate`、`writeThreadQueueState`、`appendThreadQueuedMessage` 及私有 `ThreadQueueStateUpdate`、模块级串行锁 `threadQueueMutationChain`、常量 `THREAD_QUEUE_STATE_KEY`。
+  - 类型 `StoredQueuedMessage` / `ThreadQueueState` / `BackendQueuedTurn` 迁移并以 `export type` 从新模块 re-export 保持契约（automationsRoutes 用自身结构镜像 `QueuedMessage`，不受影响）。
+  - 主 Shell：删除 `THREAD_QUEUE_STATE_KEY` 常量、3 个类型定义与 7 个函数（含既有 7 个队列函数但**保留** `ResolvedCollaborationModeSettings`，它仍被 shell 内 `resolveCollaborationModeSettings` 使用），约 130 行；`BackendQueueProcessor` 与 `/codex-api/thread-queue-state` 路由改经 import 复用；`getCodexGlobalStatePath` 在 shell 内已无更多用途，从 core import 移除。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
