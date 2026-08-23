@@ -229,6 +229,12 @@
   - 依赖方：`asRecord`/`getCodexHomeDir`/`readNonEmptyString`（core）+ `codexAuthState.ts`（free-mode 状态）+ `freeMode.js` 常量，零 shell 实例闭包；移除 Shell 中已无用途的 `spawnSync`/`readdir`/`FREE_MODE_DEFAULT_MODEL`/`OPENCODE_ZEN_DEFAULT_MODEL` import。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 inlinePayload 对 `filterThreadListByIds` 的依赖）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 X 批（API 性能日志配置簇）完成**。新建 `bridge/apiPerfLogging.ts`，承载 `CODEXUI_API_PERF_*` 环境旋钮的模块加载期解析与 chunk 尺寸辅助：
+  - 平移：`readEnvValueFromFile` / `parseBooleanEnvFlag` / `parseNumberEnvFlag` / `resolveApiPerfLoggingEnabled` / `resolveNumericEnvConfig` 及常量 `API_PERF_*_ENV_KEY` / `DEFAULT_API_PERF_*` / `MB_DIVISOR`，并随迁加载期常量 `API_PERF_LOGGING_ENABLED` / `API_PERF_MS_THRESHOLD` / `API_PERF_BODY_MB_THRESHOLD` / `getChunkByteLength`。
+  - Shell 仅 import 回被响应性能记账使用的 `API_PERF_LOGGING_ENABLED` / `API_PERF_MS_THRESHOLD` / `API_PERF_BODY_MB_THRESHOLD` / `MB_DIVISOR` / `getChunkByteLength`；`THREAD_TURN_PAGE_READ_CACHE_TTL_MS` / `THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT`（thread 搜索缓存配置）留在 Shell。
+  - 唯一依赖 `node:fs` 的 `readFileSync`，零 shell 实例闭包；移除 Shell 内该簇本地定义。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
