@@ -211,6 +211,11 @@
   - 依赖方：`getCodexHomeDir`（core）+ `parseApprovalPolicy` / `CodexApprovalPolicy`（appServerRuntimeConfig）+ node fs/path，零 shell 闭包。
   - 顺带删除死代码常量 `APPROVAL_POLICY_KEY`（无引用）；shell 内 `/codex-api/approval-policy` GET/POST 路由改经 import 复用；`CodexApprovalPolicy` 类型在 shell 已无直接用途，从 appServerRuntimeConfig import 移除（保留 `buildAppServerArgs` / `parseApprovalPolicy`）。注意：编辑期间一度误删 `parseAutomationToml`/`toAutomationApiRecord` re-export 与 M 批注释，已在同次修改内恢复。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 U 批（内联 data-url 净化簇）完成**。新建 `bridge/inlineImages.ts`，承载 thread 负载内联 data-url 扫描与落盘净化管线：
+  - 平移整条净化链路：`isInlineDataUrl` / `inferImageMimeTypeFromBytes` / `inferImageMimeTypeFromBase64` / `normalizeBase64ImageDataUrl` / `extensionFromMimeType` / `asNonEmptyString` / `toAttachmentLinkTarget` / `persistInlineDataUrlToLocalFile` / `toLocalImageProxyUrl` / `INLINE_IMAGE_FIELD_NAMES` / `sanitizeInlineImageString` / `sanitizeInlineUserContentBlock` / `sanitizeInlinePayloadDeep` / `sanitizeThreadTurnsInlinePayloads`，并随迁仅被该簇使用的 `THREAD_METHODS_WITH_TURNS`。
+  - 暴露 `sanitizeThreadTurnsInlinePayloads`（rpcPipeline/threadRoutes 注入，inlinePayload.test.ts 依赖），Shell 内 import + re-export 保持契约；`getChunkByteLength` 因被 Shell 内 API 性能日志复用**保留**在 Shell。
+  - 依赖方：`asRecord`（core）+ node crypto/fs/os/path，零 shell 闭包；移除 Shell 中已无用途的 `createHash` import 与 `THREAD_METHODS_WITH_TURNS` 常量。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 inlinePayload）通过、`pnpm run build`（web+CLI）通过。
 
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
