@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { resolvePythonCommand, resolveSkillInstallerScriptPath } from '../commandResolution.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
+import { setJson } from './bridge/httpHelpers.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -38,12 +39,6 @@ function getErrorMessage(payload: unknown, fallback: string): string {
     return nestedError.message
   }
   return fallback
-}
-
-function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
 }
 
 function getCodexHomeDir(): string {

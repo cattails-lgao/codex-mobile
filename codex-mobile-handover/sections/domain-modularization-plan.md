@@ -271,6 +271,11 @@
   - 主 Shell：删除本地 5 项定义，经 import 复用同名函数；`readJsonBody` / `readRawBody` / `setJson` / `handleFileUpload` 引用继续注入到各路由 deps（threadPreferencesRoutes、skillsRoutes、review 等）。`node:fs/promises` / `node:os` / `node:http` 等导入因主文件其余逻辑（project ZIP、local-schema 打包、middleware 型面）仍在使用而保留。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**跨路由 setJson / readJsonBody 副本去重完成**（AD 批收尾）。此前 reviewGit.ts / skillsRoutes.ts / accountRoutes.ts 各自维护 `setJson`（JSON 响应写入）与 accountRoutes 维护 `readJsonBody` 的本地副本身份实现，与 AD 批新增的 `bridge/httpHelpers.ts` 重复。本次评估共 3 处本地副本：
+  - reviewGit.ts / skillsRoutes.ts：仅 `setJson` 重复 → 删除本地函数，改 `import { setJson } from './bridge/httpHelpers.js'`。
+  - accountRoutes.ts：`setJson` + `readJsonBody` 均重复 → 删除本地两函数，import `setJson`；`readJsonBody` 改为薄封装 `asRecord(await readHttpJsonBody(req))` 保持原 `Record<string, unknown> | null` 签名，避免改动 1239/1323/1415 三处 `payload?.xxx` 调用点。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
