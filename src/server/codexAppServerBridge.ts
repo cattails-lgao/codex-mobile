@@ -136,6 +136,28 @@ import { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
 // 内联 data-url 净化切片（U 批）：sanitizeThreadTurnsInlinePayloads 原为本
 // 模块公共导出（codexAppServerBridge.inlinePayload.test.ts 依赖），保持透出。
 export { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
+// codex auth.json + free-mode 状态切片（V 批）：auth 刷新/可用性探测与
+// free-mode 状态规范化迁至 codexAuthState.ts；被 freeModeRoutes 透传依赖
+// 的函数（getCodexAuthPath 等）在此导入并保持 Shell 面可见。
+import {
+  ensureDefaultFreeModeStateForMissingAuthSync,
+  getCodexAuthPath,
+  hasUsableCodexAuthSyncPublicForBridge as hasUsableCodexAuthSync,
+  refreshChatgptAuthTokensForExternalAuth,
+  writeFreeModeStateFile,
+  type CodexAuth,
+  type ChatgptAuthTokensRefreshParams,
+  type ChatgptAuthTokensRefreshResponse,
+} from './bridge/codexAuthState.js'
+// 保持透出：archive/authRefresh 测试及 freeModeRoutes 依赖这些公共导出。
+export {
+  ensureDefaultFreeModeStateForMissingAuthSync,
+  refreshChatgptAuthTokensForExternalAuth,
+  writeFreeModeStateFile,
+  type CodexAuth,
+  type ChatgptAuthTokensRefreshParams,
+  type ChatgptAuthTokensRefreshResponse,
+} from './bridge/codexAuthState.js'
 import {
   parseStoredProjectZip,
   resolveAllowedProjectZipCwd,
@@ -225,17 +247,6 @@ type PendingServerRequest = {
   method: string
   params: unknown
   receivedAtIso: string
-}
-
-type ChatgptAuthTokensRefreshParams = {
-  reason?: string
-  previousAccountId?: string | null
-}
-
-type ChatgptAuthTokensRefreshResponse = {
-  accessToken: string
-  chatgptAccountId: string
-  chatgptPlanType: string | null
 }
 
 type ThreadSearchDocument = {
@@ -1273,321 +1284,6 @@ export async function callRpcWithArchiveRecovery(
 
 function getSkillsInstallDir(): string {
   return join(getCodexHomeDir(), 'skills')
-}
-
-function getCodexAuthPath(): string {
-  return join(getCodexHomeDir(), 'auth.json')
-}
-
-type CodexAuth = {
-  auth_mode?: string
-  last_refresh?: number
-  tokens?: {
-    access_token?: string
-    refresh_token?: string
-    id_token?: string
-    account_id?: string
-  }
-}
-
-const CODEX_CHATGPT_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
-const DEFAULT_CODEX_REFRESH_TOKEN_URL = 'https://auth.openai.com/oauth/token'
-
-function decodeBase64UrlJson(value: string): Record<string, unknown> | null {
-  try {
-    const padded = `${value}${'='.repeat((4 - (value.length % 4)) % 4)}`
-    const decoded = Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
-    const parsed = JSON.parse(decoded) as unknown
-    return asRecord(parsed)
-  } catch {
-    return null
-  }
-}
-
-function decodeJwtPayload(token: string | undefined): Record<string, unknown> | null {
-  if (!token) return null
-  const parts = token.split('.')
-  if (parts.length < 2) return null
-  return decodeBase64UrlJson(parts[1] ?? '')
-}
-
-function extractChatgptTokenMetadata(accessToken: string | undefined): {
-  chatgptAccountId: string | null
-  chatgptPlanType: string | null
-} {
-  const payload = decodeJwtPayload(accessToken)
-  const auth = asRecord(payload?.['https://api.openai.com/auth'])
-  return {
-    chatgptAccountId: readNonEmptyString(auth?.chatgpt_account_id) || null,
-    chatgptPlanType: readNonEmptyString(auth?.chatgpt_plan_type) || null,
-  }
-}
-
-function readTokenErrorMessage(payload: unknown, fallback: string): string {
-  const record = asRecord(payload)
-  const message = readNonEmptyString(record?.message)
-  if (message) return message
-  const error = record?.error
-  if (typeof error === 'string' && error.trim().length > 0) return error.trim()
-  const nestedError = asRecord(error)
-  return readNonEmptyString(nestedError?.message)
-    || readNonEmptyString(nestedError?.error_description)
-    || readNonEmptyString(record?.error_description)
-    || fallback
-}
-
-function readTokenResponseString(payload: Record<string, unknown> | null, ...keys: string[]): string | null {
-  if (!payload) return null
-  for (const key of keys) {
-    const value = readNonEmptyString(payload[key])
-    if (value) return value
-  }
-  return null
-}
-
-export async function refreshChatgptAuthTokensForExternalAuth(
-  params: ChatgptAuthTokensRefreshParams = {},
-): Promise<ChatgptAuthTokensRefreshResponse> {
-  const authPath = getCodexAuthPath()
-  const raw = await readFile(authPath, 'utf8')
-  const auth = JSON.parse(raw) as CodexAuth
-  const currentRefreshToken = auth.tokens?.refresh_token?.trim() ?? ''
-  if (!currentRefreshToken) {
-    throw new Error('No ChatGPT refresh token is available. Please sign in again.')
-  }
-
-  const refreshUrl = process.env.CODEX_REFRESH_TOKEN_URL_OVERRIDE?.trim() || DEFAULT_CODEX_REFRESH_TOKEN_URL
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: currentRefreshToken,
-    client_id: CODEX_CHATGPT_CLIENT_ID,
-  })
-
-  const response = await fetch(refreshUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: body.toString(),
-    signal: AbortSignal.timeout(25_000),
-  })
-
-  const text = await response.text()
-  let payload: Record<string, unknown> | null = null
-  try {
-    payload = asRecord(JSON.parse(text))
-  } catch {
-    payload = null
-  }
-
-  if (!response.ok) {
-    throw new Error(readTokenErrorMessage(payload, `ChatGPT token refresh failed with HTTP ${String(response.status)}`))
-  }
-
-  const accessToken = readTokenResponseString(payload, 'access_token', 'accessToken')
-  if (!accessToken) {
-    throw new Error('ChatGPT token refresh response did not include an access token.')
-  }
-
-  const nextRefreshToken = readTokenResponseString(payload, 'refresh_token', 'refreshToken') ?? currentRefreshToken
-  const nextIdToken = readTokenResponseString(payload, 'id_token', 'idToken') ?? auth.tokens?.id_token
-  const metadata = extractChatgptTokenMetadata(accessToken)
-  const chatgptAccountId =
-    metadata.chatgptAccountId
-    || readTokenResponseString(payload, 'chatgpt_account_id', 'chatgptAccountId')
-    || readNonEmptyString(params.previousAccountId)
-    || readNonEmptyString(auth.tokens?.account_id)
-  if (!chatgptAccountId) {
-    throw new Error('ChatGPT token refresh response did not include account metadata.')
-  }
-
-  const nextAuth: CodexAuth = {
-    ...auth,
-    auth_mode: auth.auth_mode || 'chatgpt',
-    last_refresh: Date.now(),
-    tokens: {
-      ...auth.tokens,
-      access_token: accessToken,
-      refresh_token: nextRefreshToken,
-      account_id: chatgptAccountId,
-      ...(nextIdToken ? { id_token: nextIdToken } : {}),
-    },
-  }
-  await writeFile(authPath, JSON.stringify(nextAuth, null, 2), { encoding: 'utf8', mode: 0o600 })
-
-  return {
-    accessToken,
-    chatgptAccountId,
-    chatgptPlanType: metadata.chatgptPlanType,
-  }
-}
-
-function hasUsableCodexAuthSync(): boolean {
-  try {
-    const raw = readFileSync(getCodexAuthPath(), 'utf8')
-    const auth = JSON.parse(raw) as CodexAuth
-    return Boolean(auth.tokens?.access_token?.trim())
-  } catch {
-    return false
-  }
-}
-
-function readFreeModeStateSync(statePath: string): FreeModeState | null {
-  try {
-    return JSON.parse(readFileSync(statePath, 'utf8')) as FreeModeState
-  } catch {
-    return null
-  }
-}
-
-type TomlScanState = {
-  inMultilineBasicString: boolean
-  inMultilineLiteralString: boolean
-}
-
-function stripTomlComment(line: string, state: TomlScanState): string {
-  let content = ''
-  let inSingleQuote = false
-  let inDoubleQuote = false
-  let escaped = false
-  for (let i = 0; i < line.length; i++) {
-    if (state.inMultilineBasicString) {
-      const end = line.indexOf('"""', i)
-      if (end === -1) return content
-      state.inMultilineBasicString = false
-      i = end + 2
-      continue
-    }
-    if (state.inMultilineLiteralString) {
-      const end = line.indexOf("'''", i)
-      if (end === -1) return content
-      state.inMultilineLiteralString = false
-      i = end + 2
-      continue
-    }
-    const ch = line[i]
-    if (inDoubleQuote && escaped) {
-      escaped = false
-      content += ch
-      continue
-    }
-    if (inDoubleQuote && ch === '\\') {
-      escaped = true
-      content += ch
-      continue
-    }
-    if (!inSingleQuote && !inDoubleQuote && line.startsWith('"""', i)) {
-      state.inMultilineBasicString = true
-      i += 2
-      continue
-    }
-    if (!inSingleQuote && !inDoubleQuote && line.startsWith("'''", i)) {
-      state.inMultilineLiteralString = true
-      i += 2
-      continue
-    }
-    if (!inDoubleQuote && ch === "'") {
-      inSingleQuote = !inSingleQuote
-      content += ch
-      continue
-    }
-    if (!inSingleQuote && ch === '"') {
-      inDoubleQuote = !inDoubleQuote
-      content += ch
-      continue
-    }
-    if (!inSingleQuote && !inDoubleQuote && ch === '#') {
-      return content
-    }
-    content += ch
-  }
-  return content
-}
-
-function isModelProviderAssignment(content: string): boolean {
-  return /^(?:model_provider|"model_provider"|'model_provider')\s*=/.test(content)
-}
-
-let explicitCodexModelProviderConfigCache: {
-  path: string
-  mtimeMs: number | null
-  size: number | null
-  value: boolean
-} | null = null
-
-function hasExplicitCodexModelProviderConfigSync(): boolean {
-  const configPath = join(getCodexHomeDir(), 'config.toml')
-  let info: ReturnType<typeof statSync> | null = null
-  try {
-    info = statSync(configPath)
-  } catch {
-    explicitCodexModelProviderConfigCache = {
-      path: configPath,
-      mtimeMs: null,
-      size: null,
-      value: false,
-    }
-    return false
-  }
-  if (
-    explicitCodexModelProviderConfigCache?.path === configPath
-    && explicitCodexModelProviderConfigCache.mtimeMs === info.mtimeMs
-    && explicitCodexModelProviderConfigCache.size === info.size
-  ) {
-    return explicitCodexModelProviderConfigCache.value
-  }
-
-  let value = false
-  try {
-    const raw = readFileSync(configPath, 'utf8')
-    let inTopLevelTable = true
-    const scanState: TomlScanState = {
-      inMultilineBasicString: false,
-      inMultilineLiteralString: false,
-    }
-    for (const line of raw.split(/\r?\n/)) {
-      const content = stripTomlComment(line, scanState).trim()
-      if (!content) continue
-      if (/^\[\[?[^\]]+\]?\]$/.test(content)) {
-        inTopLevelTable = false
-        continue
-      }
-      if (!inTopLevelTable) continue
-      if (isModelProviderAssignment(content)) {
-        value = true
-        break
-      }
-    }
-  } catch {
-    value = false
-  }
-  explicitCodexModelProviderConfigCache = {
-    path: configPath,
-    mtimeMs: info.mtimeMs,
-    size: info.size,
-    value,
-  }
-  return value
-}
-
-export async function writeFreeModeStateFile(statePath: string, state: FreeModeState): Promise<void> {
-  await mkdir(dirname(statePath), { recursive: true })
-  await writeFile(statePath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 })
-}
-
-export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string): FreeModeState | null {
-  const current = readFreeModeStateSync(statePath)
-  const hasUsableCodexAuth = hasUsableCodexAuthSync()
-  if (shouldSuppressCommunityFreeModeForCodexAuth(current, hasUsableCodexAuth)) {
-    return null
-  }
-  const shouldCreateDefault = shouldCreateDefaultFreeModeStateForMissingAuth(current, hasUsableCodexAuth)
-  const hasExplicitModelProviderConfig = shouldCreateDefault && hasExplicitCodexModelProviderConfigSync()
-  if (hasExplicitModelProviderConfig || !shouldCreateDefault) {
-    return current
-  }
-
-  return createDefaultOpenCodeZenFreeModeState()
 }
 
 function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {

@@ -217,6 +217,12 @@
   - 依赖方：`asRecord`（core）+ node crypto/fs/os/path，零 shell 闭包；移除 Shell 中已无用途的 `createHash` import 与 `THREAD_METHODS_WITH_TURNS` 常量。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 inlinePayload）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 V 批（codex auth.json / free-mode 状态簇）完成**。新建 `bridge/codexAuthState.ts`，承载 ChatGPT auth 刷新与 free-mode 状态规范化：
+  - 平移：`getCodexAuthPath` / `refreshChatgptAuthTokensForExternalAuth` / `hasUsableCodexAuthSync` / `readFreeModeStateSync` / `writeFreeModeStateFile` / `ensureDefaultFreeModeStateForMissingAuthSync` 及 TOML 探测链路 `stripTomlComment` / `isModelProviderAssignment` / `hasExplicitCodexModelProviderConfigSync`（含 `explicitCodexModelProviderConfigCache` 缓存），并随迁仅被本簇使用的 JWT 解码 helper 与 `CODEX_CHATGPT_CLIENT_ID` / `DEFAULT_CODEX_REFRESH_TOKEN_URL` 常量、`ChatgptAuthTokensRefreshParams`/`ChatgptAuthTokensRefreshResponse` 类型。
+  - `CodexAuth` 类型提升为 `export` 供 Shell 内 `hasUsableCodexAuth` 复用；Shell 经 `hasUsableCodexAuthSyncPublicForBridge as hasUsableCodexAuthSync` 别名接入，并对 archive/authRefresh 测试与 freeModeRoutes 依赖的 `ensureDefaultFreeModeStateForMissingAuthSync`/`writeFreeModeStateFile`/`refreshChatgptAuthTokensForExternalAuth`/`CodexAuth`/类型做 re-export 保持契约；`getCodexAuthPath`/`hasUsableCodexAuthSync` 继续透传给 chatgptUpstreamRoutes/freeModeRoutes 注入。
+  - 依赖方：`getCodexHomeDir`/`asRecord`/`readNonEmptyString`（core）+ `freeMode.js` 辅助，零 shell 实例闭包；移除 Shell 内该簇全部本地定义。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 authRefresh/archive）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
