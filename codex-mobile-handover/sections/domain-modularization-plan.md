@@ -286,6 +286,10 @@
   - 主 Shell：删除本地两函数定义；projectRoutes deps 处经 import 复用 `collectProjectChatZipEntries` / `importProjectZip`。同步清理主文件不再使用的 import：importedSessions 的会话解析/改写 helper、threadPreferencesRoutes 的标题缓存 helper、zip.js 全部成员；`node:fs/promises` 的 `realpath`/`utimes` 与 `node:fs` 的 `existsSync` 随迁出而移除。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**useDesktopState() 主函数收官决定（不再继续切分）**。本轮为主函数拆分目标做收官评估，结论：**就此收官、不再切分**。
+  - 现状：主文件 7375 → 4752 行，纯工具/持久化/读取/请求/写入侧 7 个分片已拆出并各有单测（`useDesktopStateUtils`/`Persistence`/`Readers`/`Requests`/`LiveWrites`/`TurnIndex`/`ReasoningWrites`/`ReasoningTimeline`）。计划 C 批本标「高（保守，最后做）」，可安全注入式拆出的写入侧已全部按第四批模式迁出。
+  - 不复切理由：① 模块级可平移纯函数已清空，残余闭包辅助（`extractLocalImagePathFromUrl`/`setSelectedModelIdForThread`/`ensureReasoningEffortSupportedForModel` 等）全部捕获共享 ref，属状态中枢本体，无法独立成纯模块；② 该区为 round-50/51/52 反复踩坑处（live 去重、overlay 双守卫、中间消息误提升 final），跨模块传 ref 进一步切碎回归风险高、无用户可见价值；③ 主函数作为应用最内聚的状态中枢，复核为合理，不应为行数再切。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
