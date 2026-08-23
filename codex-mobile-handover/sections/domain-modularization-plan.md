@@ -241,6 +241,12 @@
   - 零 shell 实例闭包；移除 Shell 内该簇本地定义。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive 对 `hasUsableCodexAuth` 的依赖）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 Z 批（thread 域错误分类簇）完成**。新建 `bridge/threadErrors.ts`，承载 4 个纯字符串匹配判错误分类谓词：
+  - 平移：`isUnauthenticatedRateLimitError` / `isEmptyThreadReadError` / `isThreadMaterializationPendingError` / `isThreadNotFoundError`，仅依赖 core 的 `getErrorMessage`。
+  - Shell 同时 import 本地绑定（内部 rateLimit/thread 错误分流与 threadRoutes 注入用）并 re-export 全部 4 个（archive.test.ts 依赖），保持契约。
+  - 零 shell 实例闭包；移除 Shell 内该簇本地定义。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive 对这 4 个错误分类函数的依赖）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

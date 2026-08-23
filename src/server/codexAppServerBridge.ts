@@ -182,6 +182,21 @@ import {
   MB_DIVISOR,
   getChunkByteLength,
 } from './bridge/apiPerfLogging.js'
+// thread 域错误分类谓词（Z 批）：4 个纯字符串匹配判错误分类函数迁至
+// threadErrors.ts；Shell 内注入 threadRoutes 的 isThreadMaterializationPendingError
+// 与 archive.test.ts 依赖的 re-export 保持一致。
+import {
+  isEmptyThreadReadError,
+  isThreadMaterializationPendingError,
+  isThreadNotFoundError,
+  isUnauthenticatedRateLimitError,
+} from './bridge/threadErrors.js'
+export {
+  isEmptyThreadReadError,
+  isThreadMaterializationPendingError,
+  isThreadNotFoundError,
+  isUnauthenticatedRateLimitError,
+} from './bridge/threadErrors.js'
 import {
   parseStoredProjectZip,
   resolveAllowedProjectZipCwd,
@@ -287,26 +302,6 @@ type ThreadSearchIndex = {
 
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
-
-export function isUnauthenticatedRateLimitError(error: unknown): boolean {
-  const message = getErrorMessage(error, '').toLowerCase()
-  return message.includes('authentication required') && message.includes('rate limits')
-}
-
-export function isEmptyThreadReadError(error: unknown): boolean {
-  const message = getErrorMessage(error, '').toLowerCase()
-  return message.includes('failed to read thread') && message.includes('rollout') && message.includes('is empty')
-}
-
-export function isThreadMaterializationPendingError(error: unknown): boolean {
-  const message = getErrorMessage(error, '').toLowerCase()
-  return message.includes('not materialized yet') && message.includes('includeturns is unavailable before first user message')
-}
-
-export function isThreadNotFoundError(error: unknown): boolean {
-  const message = getErrorMessage(error, '').toLowerCase()
-  return message.includes('thread not found') || message.includes('no rollout found for thread id')
-}
 
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode
