@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-52 多 agent 进行中重复 agentMessage 块 live 文本级去重修复 + 补充修复（live 中间消息误提升 final），v0.1.103 已提交并推送） |
+| Git 分支 | main（最新：`codex-mobile-re@0.1.103` 已发布（round-52 多 agent live 去重 + 补充修复）；其下热点领域模块化推进至完成态——`codexAppServerBridge.ts` A~AF 批全部迁出，主文件 10203 → 2053 行） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | 本轮 round-52 完善（补充修复 `buildTurnRenderGroups` `liveOverlayActive` 双守卫防中间消息误提升 final；版本 bump `0.1.103`）已提交推送并打 tag；上一提交 `612460b`：fix dedupe live agent messages（round-52 源级 + merge 级去重）。**v0.1.103 已发布**（GitHub release + npm latest）。round-52 完整记录见 [round-52](rounds/round-52-duplicate-agent-live.md) |
+| 最近提交 | **领域模块化完成态**：`codexAppServerBridge.ts` A~AF 批全部迁出至 `bridge/`（A~Q 纯工具 + HTTP 路由族、R~AF 模块级辅助簇），主文件 10203 → 2053 行；`useDesktopState()` 主函数多数写入侧已注入式拆出。最近提交 `cabe0c5`：docs 更新未完成事项（A~AF 完成）。上一版本 round-52 完善（`buildTurnRenderGroups` `liveOverlayActive` 双守卫；版本 bump `0.1.103`）已提交推送并打 tag。**v0.1.103 已发布**（GitHub release + npm latest）。round-52 完整记录见 [round-52](rounds/round-52-duplicate-agent-live.md) |
 
 ---
 ## 文档结构
