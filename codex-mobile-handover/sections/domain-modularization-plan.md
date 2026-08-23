@@ -266,6 +266,11 @@
   - 主 Shell：删除本地 8 项定义，经 import 复用；`ResolvedCollaborationModeSettings` 类型透出给 `resolveCollaborationModeSettings` 返回类型。移除随迁不再使用的 `isReasoningEffort`/`ReasoningEffort` import（`CollaborationModeKind` 保留）。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AD 批（HTTP body/响应/文件上传簇）完成**。新建 `bridge/httpHelpers.ts`，平移 5 个纯模块级函数：`setJson`（JSON 响应写入）、`readJsonBody` / `readRawBody`（请求体解析）、`bufferIndexOf`（Buffer 子序列查找）、`handleFileUpload`（multipart 内存文件上传落地到临时目录）。
+  - 依赖全为模块级：`node:http` 类型、`node:path` / `node:os` / `node:fs/promises`、core 的 `getErrorMessage`；零 shell 实例闭包。
+  - 主 Shell：删除本地 5 项定义，经 import 复用同名函数；`readJsonBody` / `readRawBody` / `setJson` / `handleFileUpload` 引用继续注入到各路由 deps（threadPreferencesRoutes、skillsRoutes、review 等）。`node:fs/promises` / `node:os` / `node:http` 等导入因主文件其余逻辑（project ZIP、local-schema 打包、middleware 型面）仍在使用而保留。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
