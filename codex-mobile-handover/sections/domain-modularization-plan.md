@@ -260,6 +260,12 @@
   - 清理主 Shell：删除本地两函数，并将 `bridge/models.js` import 收窄为仍被 middleware 使用的成员（`fetchCustomEndpointModelIds`/`fetchOpenCodeZenModelIds`/`sortOpenCodeZenModelIds`/`normalizeCustomEndpointBaseUrl`/`normalizeProviderModelsData` + 新增两入口），移除随迁无用的 6 个辅助 import。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 codexAppServerBridge.providerModels.test.ts 对 normalizeProviderModelsData 的依赖）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AC 批（queued-turn 构建辅助簇）完成**。新建 `bridge/turnFactory.ts`，承载 BackendQueueProcessor 组装 queued-turn 参数时的纯辅助函数：
+  - 平移 8 项：`normalizeReasoningEffort` / `normalizeCollaborationModeReasoningEffort` / `ResolvedCollaborationModeSettings`（协作模式 reasoning-effort 归一化）、`extractLocalImagePathFromUrl` / `buildTextWithAttachments` / `fileNameFromPath`（附件/prompt 文本构建）、`extractThreadIdFromNotificationParams` / `isTurnCompletedNotification`（通知 thread-id 提取与类型判断）。
+  - 依赖全部为模块级：core 的 `asRecord`、`types/codex.js` 的 `isReasoningEffort`/`ReasoningEffort`、threadQueueState 的 `StoredQueuedMessage`（类型），零 shell 实例闭包。
+  - 主 Shell：删除本地 8 项定义，经 import 复用；`ResolvedCollaborationModeSettings` 类型透出给 `resolveCollaborationModeSettings` 返回类型。移除随迁不再使用的 `isReasoningEffort`/`ReasoningEffort` import（`CollaborationModeKind` 保留）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
