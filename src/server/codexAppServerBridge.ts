@@ -110,6 +110,16 @@ import {
 // S 批 thread-queue-state 切片：BackendQueueProcessor 与 thread-queue 路由
 // 消费 readThreadQueueState / withThreadQueueStateUpdate 等，类型继续透出。
 export type { BackendQueuedTurn, StoredQueuedMessage, ThreadQueueState } from './bridge/threadQueueState.js'
+// AD 批 HTTP body/响应/文件上传辅助簇：setJson / readJsonBody / readRawBody /
+// bufferIndexOf / handleFileUpload 迁入 bridge/httpHelpers.ts；主 Shell import 复用
+// 同名函数，并把 readJsonBody / readRawBody / setJson / handleFileUpload 引用注入路由 deps。
+import {
+  bufferIndexOf,
+  handleFileUpload,
+  readJsonBody,
+  readRawBody,
+  setJson,
+} from './bridge/httpHelpers.js'
 // AC 批 queued-turn 构建辅助簇：协作模式 reasoning-effort 归一化与附件/prompt
 // 文本构建纯函数迁入 bridge/turnFactory.ts；BackendQueueProcessor 实例方法经
 // import 复用，类型透出以维持契约。
@@ -317,13 +327,6 @@ type ThreadSearchIndex = {
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 const THREAD_SEARCH_FULL_TEXT_THREAD_LIMIT = 100
 
-function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-
 async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
   const canonicalProjectRoot = await realpath(projectRoot)
   const codexHome = getCodexHomeDir()
@@ -526,84 +529,6 @@ function rememberTelegramChatId(chatId: number): Promise<void> {
     await writeTelegramBridgeConfig(next)
   })
   return telegramBridgeConfigMutation
-}
-
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const raw = await readRawBody(req)
-  if (raw.length === 0) return null
-  const text = raw.toString('utf8').trim()
-  if (text.length === 0) return null
-  return JSON.parse(text) as unknown
-}
-
-async function readRawBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Uint8Array[] = []
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
-  }
-  return Buffer.concat(chunks)
-}
-
-function bufferIndexOf(buf: Buffer, needle: Buffer, start = 0): number {
-  for (let i = start; i <= buf.length - needle.length; i++) {
-    let match = true
-    for (let j = 0; j < needle.length; j++) {
-      if (buf[i + j] !== needle[j]) { match = false; break }
-    }
-    if (match) return i
-  }
-  return -1
-}
-
-function handleFileUpload(req: IncomingMessage, res: ServerResponse): void {
-  const chunks: Buffer[] = []
-  req.on('data', (chunk: Buffer) => chunks.push(chunk))
-  req.on('end', async () => {
-    try {
-      const body = Buffer.concat(chunks)
-      const contentType = req.headers['content-type'] ?? ''
-      const boundaryMatch = contentType.match(/boundary=(.+)/i)
-      if (!boundaryMatch) { setJson(res, 400, { error: 'Missing multipart boundary' }); return }
-      const boundary = boundaryMatch[1]
-      const boundaryBuf = Buffer.from(`--${boundary}`)
-      const parts: Buffer[] = []
-      let searchStart = 0
-      while (searchStart < body.length) {
-        const idx = body.indexOf(boundaryBuf, searchStart)
-        if (idx < 0) break
-        if (searchStart > 0) parts.push(body.subarray(searchStart, idx))
-        searchStart = idx + boundaryBuf.length
-        if (body[searchStart] === 0x0d && body[searchStart + 1] === 0x0a) searchStart += 2
-      }
-      let fileName = 'uploaded-file'
-      let fileData: Buffer | null = null
-      const headerSep = Buffer.from('\r\n\r\n')
-      for (const part of parts) {
-        const headerEnd = bufferIndexOf(part, headerSep)
-        if (headerEnd < 0) continue
-        const headers = part.subarray(0, headerEnd).toString('utf8')
-        const fnMatch = headers.match(/filename="([^"]+)"/i)
-        if (!fnMatch) continue
-        fileName = fnMatch[1].replace(/[/\\]/g, '_')
-        let end = part.length
-        if (end >= 2 && part[end - 2] === 0x0d && part[end - 1] === 0x0a) end -= 2
-        fileData = part.subarray(headerEnd + 4, end)
-        break
-      }
-      if (!fileData) { setJson(res, 400, { error: 'No file in request' }); return }
-      const uploadDir = join(tmpdir(), 'codex-web-uploads')
-      await mkdir(uploadDir, { recursive: true })
-      const destDir = await mkdtemp(join(uploadDir, 'f-'))
-      const destPath = join(destDir, fileName)
-      await writeFile(destPath, fileData)
-      setJson(res, 200, { path: destPath })
-    } catch (err) {
-      setJson(res, 500, { error: getErrorMessage(err, 'Upload failed') })
-    }
-  })
-  req.on('error', (err: Error) => {
-    setJson(res, 500, { error: getErrorMessage(err, 'Upload stream error') })
-  })
 }
 
 type StreamEventFrame = {
