@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildAppServerArgs } from './appServerRuntimeConfig.js'
 import { callRpcWithRateLimitDecodeRecovery } from './rateLimitDecodeRecovery.js'
+import { readJsonBody as readHttpJsonBody, setJson } from './bridge/httpHelpers.js'
 
 type AppServerLike = {
   rpc(method: string, params: unknown): Promise<unknown>
@@ -128,21 +129,8 @@ function normalizeAccountUnavailableReason(value: unknown): AccountUnavailableRe
   return value === 'payment_required' ? value : null
 }
 
-function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | null> {
-  const rawBody = await new Promise<string>((resolve, reject) => {
-    let body = ''
-    req.setEncoding('utf8')
-    req.on('data', (chunk: string) => { body += chunk })
-    req.on('end', () => resolve(body))
-    req.on('error', reject)
-  })
-  return asRecord(rawBody.length > 0 ? JSON.parse(rawBody) : {})
+  return asRecord(await readHttpJsonBody(req))
 }
 
 function getErrorMessage(payload: unknown, fallback: string): string {

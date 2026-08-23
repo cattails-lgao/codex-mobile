@@ -4,6 +4,7 @@ import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
+import { setJson } from './bridge/httpHelpers.js'
 
 type ReviewScope = 'workspace' | 'baseBranch' | 'commit'
 type ReviewWorkspaceView = 'unstaged' | 'staged'
@@ -117,12 +118,6 @@ function getErrorMessage(payload: unknown, fallback: string): string {
   if (nestedMessage) return nestedMessage
 
   return fallback
-}
-
-function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
 }
 
 async function runCommandResult(
