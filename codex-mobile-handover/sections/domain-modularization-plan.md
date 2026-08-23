@@ -235,6 +235,12 @@
   - 唯一依赖 `node:fs` 的 `readFileSync`，零 shell 实例闭包；移除 Shell 内该簇本地定义。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 Y 批（auth 读取辅助簇）完成**。把 auth.json 读取与告警辅助并入 V 批的 `bridge/codexAuthState.ts`，补齐 auth 域：
+  - 平移：`warnedCodexAuthReadFailures` / `getErrorCode` / `getCodexAuthReadErrorMessage` / `warnCodexAuthReadFailure` / `hasUsableCodexAuth`，复用模块内已有 `getCodexAuthPath`/`CodexAuth`/`readFile`。
+  - Shell 同时 import 本地绑定（内部 rateLimits 校验用）并 re-export `hasUsableCodexAuth`（archive.test.ts 依赖），其余私有 helper 不对外。
+  - 零 shell 实例闭包；移除 Shell 内该簇本地定义。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive 对 `hasUsableCodexAuth` 的依赖）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

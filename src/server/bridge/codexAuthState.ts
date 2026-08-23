@@ -344,3 +344,39 @@ export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string):
 export function hasUsableCodexAuthSyncPublicForBridge(): boolean {
   return hasUsableCodexAuthSync()
 }
+
+const warnedCodexAuthReadFailures = new Set<string>()
+
+function getErrorCode(error: unknown): string | null {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : null
+}
+
+function getCodexAuthReadErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : String(error)
+}
+
+function warnCodexAuthReadFailure(authPath: string, error: unknown): void {
+  const message = getCodexAuthReadErrorMessage(error)
+  const warningKey = `${authPath}:${message}`
+  if (warnedCodexAuthReadFailures.has(warningKey)) return
+  warnedCodexAuthReadFailures.add(warningKey)
+  console.warn('[codex-auth] Unable to read Codex auth state', { path: authPath, error: message })
+}
+
+export async function hasUsableCodexAuth(): Promise<boolean> {
+  const authPath = getCodexAuthPath()
+  try {
+    const raw = await readFile(authPath, 'utf8')
+    const auth = JSON.parse(raw) as CodexAuth
+    return Boolean(auth.tokens?.access_token?.trim() || auth.tokens?.refresh_token?.trim())
+  } catch (error) {
+    if (getErrorCode(error) !== 'ENOENT') {
+      warnCodexAuthReadFailure(authPath, error)
+    }
+    return false
+  }
+}

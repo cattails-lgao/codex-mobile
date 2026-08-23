@@ -140,6 +140,7 @@ export { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
 import {
   ensureDefaultFreeModeStateForMissingAuthSync,
   getCodexAuthPath,
+  hasUsableCodexAuth,
   hasUsableCodexAuthSyncPublicForBridge as hasUsableCodexAuthSync,
   refreshChatgptAuthTokensForExternalAuth,
   writeFreeModeStateFile,
@@ -150,6 +151,7 @@ import {
 // 保持透出：archive/authRefresh 测试及 freeModeRoutes 依赖这些公共导出。
 export {
   ensureDefaultFreeModeStateForMissingAuthSync,
+  hasUsableCodexAuth,
   refreshChatgptAuthTokensForExternalAuth,
   writeFreeModeStateFile,
   type CodexAuth,
@@ -304,42 +306,6 @@ export function isThreadMaterializationPendingError(error: unknown): boolean {
 export function isThreadNotFoundError(error: unknown): boolean {
   const message = getErrorMessage(error, '').toLowerCase()
   return message.includes('thread not found') || message.includes('no rollout found for thread id')
-}
-
-const warnedCodexAuthReadFailures = new Set<string>()
-
-function getErrorCode(error: unknown): string | null {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code?: unknown }).code ?? '')
-    : null
-}
-
-function getCodexAuthReadErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : String(error)
-}
-
-function warnCodexAuthReadFailure(authPath: string, error: unknown): void {
-  const message = getCodexAuthReadErrorMessage(error)
-  const warningKey = `${authPath}:${message}`
-  if (warnedCodexAuthReadFailures.has(warningKey)) return
-  warnedCodexAuthReadFailures.add(warningKey)
-  console.warn('[codex-auth] Unable to read Codex auth state', { path: authPath, error: message })
-}
-
-export async function hasUsableCodexAuth(): Promise<boolean> {
-  const authPath = getCodexAuthPath()
-  try {
-    const raw = await readFile(authPath, 'utf8')
-    const auth = JSON.parse(raw) as CodexAuth
-    return Boolean(auth.tokens?.access_token?.trim() || auth.tokens?.refresh_token?.trim())
-  } catch (error) {
-    if (getErrorCode(error) !== 'ENOENT') {
-      warnCodexAuthReadFailure(authPath, error)
-    }
-    return false
-  }
 }
 
 function setJson(res: ServerResponse, statusCode: number, payload: unknown): void {
