@@ -247,6 +247,13 @@
   - 零 shell 实例闭包；移除 Shell 内该簇本地定义。
   - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive 对这 4 个错误分类函数的依赖）通过、`pnpm run build`（web+CLI）通过。
 
+- 2026-08-23：**codexAppServerBridge.ts 模块级辅助迁移 AA 批（thread archive-recovery 簇）完成**。新建 `bridge/threadArchiveRecovery.ts`，承载 thread 归档失败恢复与消息文本抽取：
+  - 平移：`callRpcWithArchiveRecovery` / `extractThreadMessageText`（thread-search 索引用）/ `readThreadArchiveFallbackName` / `isArchivedThreadReadResult`。
+  - 依赖全部为既迁模块或 core：`callRpcWithRateLimitDecodeRecovery`（rateLimitDecodeRecovery）/ `canonicalizeThreadListResponseForRead`（workspaceRoots，R 批）/ `isThreadNotFoundError`（threadErrors，Z 批）+ core 的 `asRecord`/`readNonEmptyString`/`getErrorMessage`。
+  - 注入型 `RpcExecutor` 结构类型（`{ rpc(method, params) }`）随簇迁入并导出；主 Shell 本地 `RpcExecutor` 类型删除，调用点经 import 复用。
+  - 零 shell 实例闭包；移除 Shell 内该簇本地定义（含随迁未用的 `callRpcWithRateLimitDecodeRecovery` import）。
+  - 验证：`vue-tsc --noEmit` 通过、全量 395 个单测（含 archive.test.ts 对 recovery 链路的依赖）通过、`pnpm run build`（web+CLI）通过。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
