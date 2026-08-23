@@ -39,7 +39,7 @@ import {
   resolveCodexCommand,
   resolveRipgrepCommand,
 } from '../commandResolution.js'
-import { isReasoningEffort, type CollaborationModeKind, type ReasoningEffort } from '../types/codex.js'
+import { type CollaborationModeKind } from '../types/codex.js'
 import {
   asRecord,
   getCodexHomeDir,
@@ -110,6 +110,19 @@ import {
 // S 批 thread-queue-state 切片：BackendQueueProcessor 与 thread-queue 路由
 // 消费 readThreadQueueState / withThreadQueueStateUpdate 等，类型继续透出。
 export type { BackendQueuedTurn, StoredQueuedMessage, ThreadQueueState } from './bridge/threadQueueState.js'
+// AC 批 queued-turn 构建辅助簇：协作模式 reasoning-effort 归一化与附件/prompt
+// 文本构建纯函数迁入 bridge/turnFactory.ts；BackendQueueProcessor 实例方法经
+// import 复用，类型透出以维持契约。
+import {
+  buildTextWithAttachments,
+  extractLocalImagePathFromUrl,
+  extractThreadIdFromNotificationParams,
+  fileNameFromPath,
+  isTurnCompletedNotification,
+  normalizeCollaborationModeReasoningEffort,
+  normalizeReasoningEffort,
+  type ResolvedCollaborationModeSettings,
+} from './bridge/turnFactory.js'
 // R 批 workspace-roots 切片：canonicalizeThreadListResponseForRead、
 // canonicalizeWorkspaceRootsStateForRead 与 writeWorkspaceRootsState 原为本
 // 模块公共导出，供测试继续从本模块导入。
@@ -495,71 +508,6 @@ function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
     ? remoteAddress.slice('::ffff:'.length)
     : remoteAddress
   return normalized === '127.0.0.1' || normalized === '::1'
-}
-
-type ResolvedCollaborationModeSettings = {
-  model: string
-  reasoningEffort: ReasoningEffort | null
-}
-
-function normalizeReasoningEffort(value: unknown): ReasoningEffort | '' {
-  return isReasoningEffort(value) ? value : ''
-}
-
-function normalizeCollaborationModeReasoningEffort(value: ReasoningEffort | '' | null | undefined): ReasoningEffort | null {
-  return value && value.length > 0 ? value : null
-}
-
-function extractLocalImagePathFromUrl(value: string): string | null {
-  if (!value) return null
-  try {
-    const parsed = new URL(value, 'http://localhost')
-    if (parsed.pathname !== '/codex-local-image') return null
-    const path = parsed.searchParams.get('path')?.trim() ?? ''
-    return path.length > 0 ? path : null
-  } catch {
-    return null
-  }
-}
-
-function buildTextWithAttachments(prompt: string, files: StoredQueuedMessage['fileAttachments']): string {
-  if (files.length === 0) return prompt
-  let prefix = '# Files mentioned by the user:\n'
-  for (const f of files) {
-    prefix += `\n## ${f.label}: ${f.path}\n`
-  }
-  return `${prefix}\n## My request for Codex:\n\n${prompt}\n`
-}
-
-function fileNameFromPath(pathValue: string): string {
-  const normalized = pathValue.replace(/\\/g, '/')
-  const segments = normalized.split('/').filter(Boolean)
-  return segments.at(-1) ?? normalized
-}
-
-function extractThreadIdFromNotificationParams(params: unknown): string {
-  const record = asRecord(params)
-  if (!record) return ''
-  const threadId =
-    (typeof record.threadId === 'string' ? record.threadId : '') ||
-    (typeof record.thread_id === 'string' ? record.thread_id : '') ||
-    (typeof record.conversationId === 'string' ? record.conversationId : '') ||
-    (typeof record.conversation_id === 'string' ? record.conversation_id : '')
-  if (threadId) return threadId
-  const thread = asRecord(record.thread)
-  if (thread && typeof thread.id === 'string') return thread.id
-  const turn = asRecord(record.turn)
-  if (turn) {
-    const turnThreadId =
-      (typeof turn.threadId === 'string' ? turn.threadId : '') ||
-      (typeof turn.thread_id === 'string' ? turn.thread_id : '')
-    if (turnThreadId) return turnThreadId
-  }
-  return ''
-}
-
-function isTurnCompletedNotification(notification: { method: string; params: unknown }): boolean {
-  return notification.method === 'turn/completed'
 }
 
 let telegramBridgeConfigMutation: Promise<void> = Promise.resolve()
