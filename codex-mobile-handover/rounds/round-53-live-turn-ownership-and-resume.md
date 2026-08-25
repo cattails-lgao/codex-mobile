@@ -1,6 +1,6 @@
 # Round-53：live agent 轮次归属保留 + 后台标签恢复卡顿优化（已修复）
 
-> **范围：** 记录已完成的两项代码修复及其回归验证入口。本轮只补交接/手测文档，不修改运行时代码或发布版本。
+> **范围：** 记录已完成的两项代码修复及其回归验证入口。该轮随 `v0.1.104` 发布：GitHub Release 由维护者创建，npm publish 由用户执行。
 
 ## 修复一：保留 live agent 的 turn 所有权（`2f9643b`）
 
@@ -49,6 +49,12 @@
 - `tests/thread-loading-state/index.md` — 手测索引
 - `codex-mobile-handover/codex-mobile-handover.md` — 交接总入口与当前快照
 - `codex-mobile-handover/sections/commit-history.md` — 提交历史
+
+## 发布
+
+- 版本：`codex-mobile-re@0.1.104`。
+- GitHub Release：随版本标签 `v0.1.104` 创建，说明涵盖 live agent 轮次归属与后台标签恢复响应性优化。
+- npm publish：由用户从已推送的 `main` 执行；发布前 `prepublishOnly` 会重新运行完整构建。
 
 ## 交接注意事项
 
