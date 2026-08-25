@@ -40,3 +40,4 @@ Return to the [manual test index](../../tests.md).
 | [Tool-call blocks no longer run to the end of the conversation](tool-call-blocks-end-of-conversation.md) |
 | [Reasoning stays with its response in thread read](reasoning-stays-with-its-response-in-thread-read.md) |
 | [Realtime notification sync and file-change undo refresh](realtime-notification-sync-and-file-change-undo-refresh.md) |
+| [Live agent turn ownership and resume responsiveness](live-agent-turn-ownership-and-resume-responsiveness.md) |
