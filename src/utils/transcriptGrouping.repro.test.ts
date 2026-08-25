@@ -42,14 +42,14 @@ describe('repro: live 窗口 已完成的中间消息不该被误判为 final', 
     expect(items.find((i) => i.message.id === 'curie-done')?.kind).toBe('assistant')
   })
 
-  it('live overlay 仅抑制活跃（最末）轮，已落定的历史轮 final 不受影响', () => {
+  it('按 liveTurnId 仅抑制活跃轮，历史 final 不会被 live t1 抑制', () => {
     const messages = [
-      msg('u1', 'user', undefined, { text: 'first' }),
-      msg('prev-done', 'assistant', 'agentMessage', { text: '上一轮最终汇总' }),
-      msg('u2', 'user', undefined, { text: 'second' }),
-      msg('curie-done', 'assistant', 'agentMessage', { text: '已创建子代理 Curie，等待它完成任务...' }),
+      msg('u1', 'user', undefined, { text: 'first', turnId: 't0', turnIndex: 0 }),
+      msg('prev-done', 'assistant', 'agentMessage', { text: '上一轮最终汇总', turnId: 't0', turnIndex: 0 }),
+      msg('u2', 'user', undefined, { text: 'second', turnId: 't1', turnIndex: 1 }),
+      msg('curie-done', 'assistant', 'agentMessage', { text: '已创建子代理 Curie，等待它完成任务...', turnId: 't1', turnIndex: 1 }),
     ]
-    const groups = buildTurnRenderGroups(messages, { liveOverlayActive: true })
+    const groups = buildTurnRenderGroups(messages, { liveOverlayActive: true, liveTurnId: 't1' })
     expect(groups[0]?.items.find((i) => i.message.id === 'prev-done')?.kind).toBe('final-assistant')
     expect(groups[1]?.items.some((i) => i.kind === 'final-assistant')).toBe(false)
     expect(groups[1]?.items.find((i) => i.message.id === 'curie-done')?.kind).toBe('assistant')
