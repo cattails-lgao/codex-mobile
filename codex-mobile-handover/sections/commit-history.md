@@ -46,7 +46,8 @@
 - **`2f9643b`**：round-53 修复 1——live agent delta/completed 从通知读取并保留 `turnId`，解析已知 `turnIndex` 后在 `mergeThreadMessageStreams` 插回所属持久化轮次；`buildTurnRenderGroups` 接收实际 `liveTurnId`，仅活跃轮抑制 final 提升。作用：上一轮迟到 agent 消息不会混入新轮，历史已完成最终回答不被新轮 live 错误压制。
 - **`e74ab73`**：round-53 修复 2——`thread/list` 过滤改读 external-session tracker 最近完成扫描的缓存，不在 RPC 内等待 `tick()`；后台/移动端恢复不再等待 skills、限额、协作模式等附属刷新。作用：切回后台标签时线程列表和当前会话优先恢复，移除递归扫描与附属元数据造成的阻塞。
 - **round-53 docs**（`716394f`）：新增交接记录与合并手测项，更新交接总入口、快照、提交历史和线程加载/状态手测索引。
-- **v0.1.104 发布准备**：收录 `2f9643b` 与 `e74ab73`，版本从 `0.1.103` 升至 `0.1.104`；GitHub Release 由维护者创建，npm publish 由用户执行。
+- **v0.1.104 发布**（`e514016`）：收录 `2f9643b` 与 `e74ab73`，版本从 `0.1.103` 升至 `0.1.104`；GitHub Release 与 npm publish 均已完成。
+- **round-54（当前未提交）**：本机 Codex CLI `0.149.1` 生成的 app-server JSON schema 已完整镜像到 `documentation/app-server-schemas/json/`；`useDesktopState.test.ts` 增加技能失效、线程状态、自动审批审查和模型改路由四组通知兼容回归，89/89 通过；前端类型检查和生产构建通过。运行时代码无需改动，详见 `rounds/round-54-codex-0.149.1-protocol-compatibility.md`。
 - **round-50**（随 **v0.1.101** 发布，tag/gh release `v0.1.101`）：侧边栏重新出现子 agent 会话——两因叠加修复（`b86c220`）：(1) 服务端竞态，tracker 3s 轮询窗口内 `thread/list` 已返回新子 agent 而过滤未生效，`filterSubagentThreadsFromThreadListResult` 过滤前 `await externalSessionTracker.tick()` 强制同步最新扫描，`tick()` 改为并发安全（已有扫描时等待而非跳过）；(2) 前端并集合并残留，`useDesktopState.loadThreads` 用 `mergeThreadGroupPages` 并集合并导致已过滤行残留，改为服务端响应为权威基线直接替换列表并重置分页游标；新增并发 tick 回归单测并更新手测文档（详见 `rounds/round-50-subagent-race.md`，npm publish 由用户执行）
 - **round-43**（随 **v0.1.96** 发布，tag/gh release `v0.1.96`）：侧边栏泄漏子 agent 线程——`externalSessionTracker.updateSessionMeta` 对 subagent rollout 改用自身 `id` 键控（`session_id` 是父线程 id），使 `getSubagentThreadIds` 过滤正确的子线程 id、`externalSession` 叠加挂到子线程行、`filterThreadListByIds` 不再误删父行（`ff6df2b`）；模型强度下拉档位收敛到 Low/Medium/High（`reasoningOptionCatalog` 8→3，provider-only 模型不再冒出 Ultra 等项，`5aaa458`）；版本 0.1.96（`64fa15d`）（详见 `rounds/round-43-feedback.md`）
 
