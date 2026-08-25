@@ -1675,7 +1675,6 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           appServer,
           externalSessionTracker: {
             getExternalSession: (threadId) => externalSessionTracker.getExternalSession(threadId),
-            tick: () => externalSessionTracker.tick(),
             getUserFacingSubagentThreadIds: () => new Set(externalSessionTracker.getUserFacingSubagentThreadIds()),
           },
           sanitizeThreadTurnsInlinePayloads,

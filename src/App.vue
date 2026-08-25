@@ -3897,7 +3897,6 @@ async function syncAfterMobileResume(): Promise<void> {
   try {
     await refreshAll({
       includeSelectedThreadMessages: true,
-      awaitAncillaryRefreshes: true,
     })
     await syncThreadSelectionWithRoute()
   } finally {
