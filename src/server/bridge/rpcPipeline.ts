@@ -14,7 +14,6 @@ export type RpcPipelineDeps = {
   appServer: ThreadReadAppServerFacade
   externalSessionTracker: {
     getExternalSession(threadId: string): ExternalSessionInfo | null
-    tick(): Promise<void>
     getUserFacingSubagentThreadIds(): ReadonlySet<string>
   }
   sanitizeThreadTurnsInlinePayloads: (method: string, result: unknown) => Promise<unknown>
@@ -82,16 +81,13 @@ function filterThreadListByIds(result: unknown, threadIdsToExclude: ReadonlySet<
   return filtered.length === data.length ? result : { ...record, data: filtered }
 }
 
-async function filterSubagentThreadsFromThreadListResult(
+function filterSubagentThreadsFromThreadListResult(
   tracker: RpcPipelineDeps['externalSessionTracker'],
   result: unknown,
-): Promise<unknown> {
-  // Force a fresh tracker scan before filtering. A subagent session created
-  // moments ago appears in thread/list immediately but is only known to the
-  // tracker once its poll discovers it; awaiting a tick closes that race so
-  // the just-created subagent thread is dropped from the response.
-  await tracker.tick()
-  return filterThreadListByIds(result, new Set(tracker.getUserFacingSubagentThreadIds()))
+): unknown {
+  // The tracker owns periodic discovery. thread/list reads its last completed
+  // snapshot so a recursive session scan cannot stall the RPC response.
+  return filterThreadListByIds(result, tracker.getUserFacingSubagentThreadIds())
 }
 
 function overlayExternalSessionOnThreadResult(
@@ -118,7 +114,7 @@ export async function runRpcResponsePipeline(deps: RpcPipelineDeps, method: stri
     ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
     : errorMergedResult
   const subagentFilteredResult = method === 'thread/list'
-    ? await filterSubagentThreadsFromThreadListResult(externalSessionTracker, listMergedResult)
+    ? filterSubagentThreadsFromThreadListResult(externalSessionTracker, listMergedResult)
     : listMergedResult
   const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(method, subagentFilteredResult)
   const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(method)
