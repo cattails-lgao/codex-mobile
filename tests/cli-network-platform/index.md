@@ -27,4 +27,5 @@ Return to the [manual test index](../../tests.md).
 | [Feature: CLI auto-stars friuns2/codexui on startup (best-effort)](cli-auto-stars-friuns2-codexui-on-startup-best-effort.md)                                               |
 | [Startup welcome log uses repository GitHub URL](startup-welcome-log-uses-repository-github-url.md)                                                                        |
 | [Home route no longer crashes on dev startup](home-route-no-longer-crashes-on-dev-startup.md)                                                                              |
-| [Zen proxy expands multi-agent namespace tools](zen-proxy-multi-agent-namespace-tools.md)                                                                                  |
+| [Vite root route and events SSE routing](vite-root-route-and-events-sse-routing.md)                                                                                        |
+| [Zen proxy expands multi-agent namespace tools](zen-proxy-multi-agent-namespace-tools.md)                                                                                |

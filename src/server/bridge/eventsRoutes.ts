@@ -18,7 +18,8 @@ export async function handleEventsHttpRequest(
   res: ServerResponse,
   deps: EventsHttpRouteDeps,
 ): Promise<boolean> {
-  if (req.method === 'GET') {
+  const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+  if (req.method === 'GET' && pathname === '/codex-api/events') {
     const { subscribeNotifications } = deps
 
     res.statusCode = 200
