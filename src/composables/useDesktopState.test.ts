@@ -1368,7 +1368,7 @@ describe('P1-3 notification surface', () => {
     stopListening()
   })
 
-  it('refreshes installed skills on skills/changed', async () => {
+  it('refreshes skills exactly once with force after a 0.149.1 skills/changed invalidation', async () => {
     const sendNotification = captureNotificationHandler()
     const state = useDesktopState()
     await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
@@ -1379,7 +1379,52 @@ describe('P1-3 notification surface', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(gatewayMocks.getSkillsList.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect(gatewayMocks.getSkillsList.mock.calls).toHaveLength(callsBefore + 1)
+    expect(gatewayMocks.getSkillsList.mock.calls.at(-1)).toEqual([undefined])
+  })
+
+  it('queues one selected-thread refresh for a 0.149.1 thread/status/changed notification', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    gatewayMocks.getThreadDetail.mockResolvedValue({ thread: { id: 'thread-1', turns: [] } })
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.primeSelectedThread('thread-1')
+    state.startPolling()
+    const callsBefore = gatewayMocks.getThreadGroupsPage.mock.calls.length
+
+    sendNotification({ method: 'thread/status/changed', params: { threadId: 'thread-1', status: { type: 'active', activeFlags: [] } } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBeGreaterThan(callsBefore)
+  })
+
+  it('does not surface errors or duplicate messages for 0.149.1 auto-review notifications', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    const listCallsBefore = gatewayMocks.getThreadGroupsPage.mock.calls.length
+
+    sendNotification({ method: 'item/autoApprovalReview/started', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'review-1' } })
+    sendNotification({ method: 'item/autoApprovalReview/completed', params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'review-1' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBe(listCallsBefore)
+    expect(state.messages.value).toEqual([])
+  })
+
+  it('ignores 0.149.1 model reroutes without creating duplicate messages', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+
+    sendNotification({ method: 'model/rerouted', params: { threadId: 'thread-1', turnId: 'turn-1', fromModel: 'a', toModel: 'b', reason: 'fallback' } })
+    await Promise.resolve()
+
+    expect(state.messages.value).toEqual([])
   })
 
   it('refreshes the thread list on thread lifecycle notifications', async () => {

@@ -1,37 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "definitions": {
-    "ConfigEdit": {
-      "properties": {
-        "keyPath": {
-          "type": "string"
-        },
-        "mergeStrategy": {
-          "$ref": "#/definitions/MergeStrategy"
-        },
-        "value": true
-      },
-      "required": [
-        "keyPath",
-        "mergeStrategy",
-        "value"
-      ],
-      "type": "object"
-    },
-    "MergeStrategy": {
-      "enum": [
-        "replace",
-        "upsert"
-      ],
-      "type": "string"
-    }
-  },
+  "title": "ConfigBatchWriteParams",
+  "type": "object",
+  "required": [
+    "edits"
+  ],
   "properties": {
     "edits": {
+      "type": "array",
       "items": {
         "$ref": "#/definitions/ConfigEdit"
-      },
-      "type": "array"
+      }
     },
     "expectedVersion": {
       "type": [
@@ -45,11 +24,36 @@
         "string",
         "null"
       ]
+    },
+    "reloadUserConfig": {
+      "description": "When true, hot-reload updated runtime settings into loaded threads after writing. Session-static model, reasoning-effort, Plan-mode reasoning-effort, service-tier, and personality defaults are not reloaded.",
+      "type": "boolean"
     }
   },
-  "required": [
-    "edits"
-  ],
-  "title": "ConfigBatchWriteParams",
-  "type": "object"
+  "definitions": {
+    "ConfigEdit": {
+      "type": "object",
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "properties": {
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/definitions/MergeStrategy"
+        },
+        "value": true
+      }
+    },
+    "MergeStrategy": {
+      "type": "string",
+      "enum": [
+        "replace",
+        "upsert"
+      ]
+    }
+  }
 }

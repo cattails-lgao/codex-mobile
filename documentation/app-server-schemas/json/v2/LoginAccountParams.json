@@ -1,44 +1,84 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LoginAccountParams",
   "oneOf": [
     {
+      "type": "object",
+      "required": [
+        "apiKey",
+        "type"
+      ],
       "properties": {
         "apiKey": {
           "type": "string"
         },
         "type": {
+          "type": "string",
           "enum": [
             "apiKey"
           ],
-          "title": "ApiKeyv2::LoginAccountParamsType",
-          "type": "string"
+          "title": "ApiKeyv2::LoginAccountParamsType"
         }
       },
-      "required": [
-        "apiKey",
-        "type"
-      ],
-      "title": "ApiKeyv2::LoginAccountParams",
-      "type": "object"
+      "title": "ApiKeyv2::LoginAccountParams"
     },
     {
+      "type": "object",
+      "required": [
+        "type"
+      ],
       "properties": {
+        "appBrand": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LoginAppBrand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "codexStreamlinedLogin": {
+          "type": "boolean"
+        },
         "type": {
+          "type": "string",
           "enum": [
             "chatgpt"
           ],
-          "title": "Chatgptv2::LoginAccountParamsType",
-          "type": "string"
+          "title": "Chatgptv2::LoginAccountParamsType"
+        },
+        "useHostedLoginSuccessPage": {
+          "type": "boolean"
         }
       },
+      "title": "Chatgptv2::LoginAccountParams"
+    },
+    {
+      "type": "object",
       "required": [
         "type"
       ],
-      "title": "Chatgptv2::LoginAccountParams",
-      "type": "object"
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "chatgptDeviceCode"
+          ],
+          "title": "ChatgptDeviceCodev2::LoginAccountParamsType"
+        }
+      },
+      "title": "ChatgptDeviceCodev2::LoginAccountParams"
     },
     {
       "description": "[UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE. The access token must contain the same scopes that Codex-managed ChatGPT auth tokens have.",
+      "type": "object",
+      "required": [
+        "accessToken",
+        "chatgptAccountId",
+        "type"
+      ],
       "properties": {
         "accessToken": {
           "description": "Access token (JWT) supplied by the client. This token is used for backend API requests and email extraction.",
@@ -56,21 +96,48 @@
           ]
         },
         "type": {
+          "type": "string",
           "enum": [
             "chatgptAuthTokens"
           ],
-          "title": "ChatgptAuthTokensv2::LoginAccountParamsType",
-          "type": "string"
+          "title": "ChatgptAuthTokensv2::LoginAccountParamsType"
         }
       },
+      "title": "ChatgptAuthTokensv2::LoginAccountParams"
+    },
+    {
+      "description": "[UNSTABLE] Managed Amazon Bedrock login is experimental.",
+      "type": "object",
       "required": [
-        "accessToken",
-        "chatgptAccountId",
+        "apiKey",
+        "region",
         "type"
       ],
-      "title": "ChatgptAuthTokensv2::LoginAccountParams",
-      "type": "object"
+      "properties": {
+        "apiKey": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "amazonBedrock"
+          ],
+          "title": "AmazonBedrockv2::LoginAccountParamsType"
+        }
+      },
+      "title": "AmazonBedrockv2::LoginAccountParams"
     }
   ],
-  "title": "LoginAccountParams"
+  "definitions": {
+    "LoginAppBrand": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "chatgpt"
+      ]
+    }
+  }
 }

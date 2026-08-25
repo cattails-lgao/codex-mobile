@@ -1,8 +1,22 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FeedbackUploadParams",
+  "type": "object",
+  "required": [
+    "classification"
+  ],
   "properties": {
     "classification": {
       "type": "string"
+    },
+    "extraLogFiles": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
     },
     "includeLogs": {
       "type": "boolean"
@@ -13,17 +27,20 @@
         "null"
       ]
     },
+    "tags": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "threadId": {
       "type": [
         "string",
         "null"
       ]
     }
-  },
-  "required": [
-    "classification",
-    "includeLogs"
-  ],
-  "title": "FeedbackUploadParams",
-  "type": "object"
+  }
 }

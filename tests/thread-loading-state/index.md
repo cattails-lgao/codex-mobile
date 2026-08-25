@@ -41,3 +41,4 @@ Return to the [manual test index](../../tests.md).
 | [Reasoning stays with its response in thread read](reasoning-stays-with-its-response-in-thread-read.md) |
 | [Realtime notification sync and file-change undo refresh](realtime-notification-sync-and-file-change-undo-refresh.md) |
 | [Live agent turn ownership and resume responsiveness](live-agent-turn-ownership-and-resume-responsiveness.md) |
+| [Codex 0.149.1 notification compatibility](codex-0.149.1-notification-compatibility.md) |

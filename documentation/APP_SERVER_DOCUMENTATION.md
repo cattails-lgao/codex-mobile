@@ -2,6 +2,8 @@
 
 Документ основан на исходниках [openai/codex](https://github.com/openai/codex) (app-server protocol).
 
+JSON snapshots were generated from local Codex CLI `0.149.1`. The method tables below are historical reference material and may lag behind the generated JSON schema.
+
 ## Локальная материализация схем
 
 Все схемы выгружены из upstream codegen (включая experimental) в:
