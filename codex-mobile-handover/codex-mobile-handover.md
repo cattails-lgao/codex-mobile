@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（最新：`codex-mobile-re@0.1.103` 已发布（round-52 多 agent live 去重 + 补充修复）；其下热点领域模块化推进至完成态——`codexAppServerBridge.ts` A~AF 批全部迁出，主文件 10203 → 2053 行） |
+| Git 分支 | main（最新：round-53 已完成 live agent turn 所有权保留与后台恢复卡顿优化；版本仍为已发布的 `codex-mobile-re@0.1.103`。其下热点领域模块化已完成——`codexAppServerBridge.ts` A~AF 批全部迁出，主文件 10203 → 2053 行） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 运行中 · HTTP 200 |
 | App-server | 正常响应 RPC |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.147.0（pnpm 全局，round-33 自 0.146.0 升级）；macOS：Node v26.3.1 · codex-cli 0.147.0（npm 全局，见「macOS 侧环境」） |
-| 最近提交 | **领域模块化完成态（A~AF 全完成）**：`codexAppServerBridge.ts` 全部路由族与模块级辅助簇迁出至 `bridge/`（主文件 10203 → 2053 行）；`useDesktopState()` 主函数收官（不再切分）；`codexGateway` 薄壳化。四层审核通过（vue-tsc / 395 单测 / build / 路由行为抽查）。最近提交：docs 收官三连（`cabe0c5` 未完成事项刷新、`2d6ea6c` useDesktopState 收官记录、本轮 2026-08-23 交接快照）。应用版本 `0.1.103`（round-52 live 去重 + `liveOverlayActive` 双守卫）已发布，本轮无代码版本发布。round-52 完整记录见 [round-52](rounds/round-52-duplicate-agent-live.md) |
+| 最近提交 | **round-53 已完成**：`2f9643b` 保留 live agent 的 `turnId`/`turnIndex` 并按实际 `liveTurnId` 分组，上一轮迟到消息不再混入新轮；`e74ab73` 让 `thread/list` 使用 tracker 最近完成扫描的缓存、前台恢复不等待附属元数据，避免后台标签切回卡顿。本轮文档同步记录上述修复；应用版本仍为 `0.1.103`（round-52 已发布），无版本发布。详见 [round-53](rounds/round-53-live-turn-ownership-and-resume.md) |
 
 ---
 ## 文档结构
@@ -82,6 +82,7 @@
 | 第五十轮 侧边栏重新出现子 agent 会话（tracker 竞态 + 前端并集合并残留修复） | [rounds/round-50-subagent-race.md](rounds/round-50-subagent-race.md) |
 | 第五十一轮 最新一轮缺失 assistant 块 + Zen Proxy 多 agent namespace 工具丢失（agent 消息完成态 + namespace 展开/还原） | [rounds/round-51-final-assistant-and-zen-namespace.md](rounds/round-51-final-assistant-and-zen-namespace.md) |
 | 第五十二轮 多 agent 进行中重复 agentMessage 块 + message-toolbar 闪现（live 文本级去重修复，`upsertLiveAgentMessage` 复用 `normalizeMessageText`；含补充修复：`buildTurnRenderGroups` 增 `liveOverlayActive` 双守卫，防止 live 流式中已完成中间消息被误提升为 final） | [rounds/round-52-duplicate-agent-live.md](rounds/round-52-duplicate-agent-live.md) |
+| 第五十三轮 live agent turn 所有权 + 后台标签恢复卡顿（上一轮迟到 agent 消息按 `turnId` 归位；`thread/list` 使用 tracker 缓存且前台恢复不等待附属元数据） | [rounds/round-53-live-turn-ownership-and-resume.md](rounds/round-53-live-turn-ownership-and-resume.md) |
 
 ## 项目概况
 
@@ -137,7 +138,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
-- **交接快照（2026-08-23 热点领域模块化收官）**：三个最大 `.ts` 的领域模块化整体完成——`codexGateway.ts` 12 行薄壳 + 11 领域文件（`gateway/`）；`useDesktopState.ts` 主函数收官（7 分片拆出，残余闭包辅助全捕获共享 ref 且处 round-50/51/52 高危区，经评估**不再切分**，主文件 4752 行）；`codexAppServerBridge.ts` A~AF 批全部迁出至 `bridge/`（主文件 10203 → 2053 行）。完成**四层审核**：`vue-tsc --noEmit` 无错、全量 395 单测通过、`pnpm run build`（web + CLI）成功、dev 行为级路由抽查无 404（`thread-titles` 返回真实 JSON、`connector-logo` 返回 handler 二进制级 `400 Missing src` 等，覆盖 A~AF 各批）。**4173 端口清理**：停掉 8/8 起的旧裸 `vite` 实例（PID 36342，早于全部模块化提交、跑旧代码），改经 `pnpm run dev --host 127.0.0.1 --port 4173`（dev.cjs 包装）重启为当前 `main`。应用版本保持 **`0.1.103`**（本轮仅 docs + 审核 + 端口清理，无代码发布）。领域模块化批次逐批记录见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。
+- **交接快照（2026-08-25 round-53）**：已完成两项后续修复。`2f9643b` 为 live delta/completed agent 消息保留通知 `turnId`、解析对应 `turnIndex`，在消息流中插回所属持久化轮次；`ThreadConversation` 传递实际 `liveTurnId`，故只有活跃轮抑制 final 提升，上一轮迟到消息不会混入新轮。`e74ab73` 切除恢复关键路径的两类阻塞：`thread/list` 直接使用 external-session tracker 最近完成扫描的缓存（后台轮询更新，不在 RPC 内等待递归扫描），移动端/后台标签恢复不再等待 skills、限额、协作模式等附属元数据。性能审计为代码路径级：移除一项 RPC 同步扫描及一次恢复等待，未新增请求、轮询、缓存体积或无界扇出；本轮未重采 profile。版本保持 **`0.1.103`**，无发布。详见 [round-53](rounds/round-53-live-turn-ownership-and-resume.md) 与 [合并手测项](../tests/thread-loading-state/live-agent-turn-ownership-and-resume-responsiveness.md)。
 - **热点领域模块化进行中（round-48/49 组件化后置项）**：三个最大 `.ts` 逻辑文件（`src/server/codexAppServerBridge.ts` ~10203 行、`src/composables/useDesktopState.ts` ~7375 行、`src/api/codexGateway.ts` ~4165 行）被组件化方案明确排除、按「另行领域模块化」推迟后无续期任务。已完成领域梳理并出方案：见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。实施顺序：codexGateway（薄壳+领域文件，试点）→ useDesktopState A/B（纯函数+持久化层）→ codexAppServerBridge A 批（automations/git/composio 等纯工具）→ 主函数/核心派发保守收尾。**`codexGateway.ts` 领域拆分已全部完成**（薄壳化 re-export，11 个领域文件：search/automations/terminal/threads/models/directory/accounts/git/files/develop/misc；vue-tsc + 全量 370 单测 + build 均通过）。**`useDesktopState.ts` A/B 批已完成**（A 批量 `useDesktopStateUtils.ts` 纯工具 ~100 函数、B 批量 `useDesktopStatePersistence.ts` localStorage 21 函数，主文件头顶 `export *` 保持 API 不变）。**`codexAppServerBridge.ts` 领域模块化已全部完成（A~AF 批，主文件 10203 → 2053 行）**：A/D/E/F 纯工具切片（automations/git/composio/zip/session/models）、G~Q 批迁出核心派发的全部 HTTP 路由族（terminal/git-worktree/composio-routes/free-mode/project/thread-read/telegram+rpcPipeline/thread-preferences/events-SSE）、R~AF 批迁出余下模块级辅助簇（workspaceRoots/threadQueueState/approvalPolicy/inlineImages/codexAuthState/importedSessions/apiPerfLogging/threadErrors/threadArchiveRecovery/provider-model-ids/turnFactory/httpHelpers/threadSearch/projectZip 等）；批量全过 `vue-tsc` + 全量 395 单测 + `pnpm run build`，详见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。**仅 `useDesktopState()` 主函数与 bridge 核心派发接线本身留驻**（非独立可切纯辅助）。
 - **round-52 发布已完成（v0.1.103）**：`codex-mobile-re@0.1.103`——live 多 agent 去重（源 `upsertLiveAgentMessage` + 最终汇合 `dedupeAssistantAgentMessageText`）+ 补充修复（`buildTurnRenderGroups` `liveOverlayActive` 双守卫，防止 live 流式中已完成中间消息被误提升为 final 拉出过程区）；真机 DOM 直证验证通过（线程 01a024d1 流式中中间消息保持 `conversation-item-process`、结束后真正最终正常落成 `conversation-item-final`）；全量单测 + `vue-tsc --noEmit` 通过，`pnpm run build` 通过（web + CLI 均成功）。git tag `v0.1.103` → 版本/文档提交 `d9f5972`。**GitHub release `v0.1.103`** 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.103（2026-08-22 创建，非草稿/非预发布，指向 main，使用 `gh release create`；本机已装 gh v2.98）；**npm 发包已完成**：`npm view codex-mobile-re@0.1.103` 确认 version 0.1.103 / dist-tags.latest 0.1.103。
 - **前端大文件组件化已完成（round-48/49 四期）**：方案见 `docs/componentization-plan.md`。四期已全部落地并提交推送——一期侧栏线程行复用（`4fa26ba`：`SidebarThreadRow.vue` + Skills 标签）；二期 Directory Hub 标签拆分（`e28db82`：Apps/Plugins 标签；`d8e4d72`：Composio 标签）；三期 `App.vue` 设置/账号面板（`aa1839b`：`SettingsAccountsPanel.vue` 等）；四期 `ThreadComposer.vue`/`ThreadConversation.vue` 展示层（详见 [round-49](rounds/round-49-componentization.md)）。`useDesktopState.ts`、`codexGateway.ts`、`codexAppServerBridge.ts` 明确排除在组件化之外，按领域模块化处理（已全部完成）。
@@ -165,4 +166,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-22（round-52 多 agent 进行中重复 agentMessage 块 live 文本级去重修复；round-51 最终 assistant 块 + zen-proxy namespace 工具修复；新增热点领域模块化方案）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-25（round-53 live agent turn 所有权保留 + 后台标签恢复卡顿优化；round-52 多 agent live 文本级去重修复）· 内容已脱敏*

@@ -43,6 +43,9 @@
 - **`548983e`**：round-42 修复 1——回退后消息回填输入框（恢复 `appendTextToDraft` + `onRollback` 回填，round-36 曾移除）；同步 litellm provider 配置到本机 CODEX_HOME 的 `config.toml`，选 Codex 与 codex-cli 同用 deepseek-v4-flash。作用：回退可编辑重发、codex 模型对齐 codex-cli
 - **`6378b34`**：round-42 修复 2——补齐 `model_catalog_json`（指向 codex-cli 的 models.json）使 `model/list` 返回 deepseek-v4-flash/pro；前端 `isProviderBacked` 判定把 config.toml 的 `custom`（litellm）排除，模型下拉完整显示目录模型
 - **`0f02698`**：round-42 交接文档补充（models.json 加入 medium 强度档的实测与修改记录，`models.json` 为用户机器文件非仓库）
+- **`2f9643b`**：round-53 修复 1——live agent delta/completed 从通知读取并保留 `turnId`，解析已知 `turnIndex` 后在 `mergeThreadMessageStreams` 插回所属持久化轮次；`buildTurnRenderGroups` 接收实际 `liveTurnId`，仅活跃轮抑制 final 提升。作用：上一轮迟到 agent 消息不会混入新轮，历史已完成最终回答不被新轮 live 错误压制。
+- **`e74ab73`**：round-53 修复 2——`thread/list` 过滤改读 external-session tracker 最近完成扫描的缓存，不在 RPC 内等待 `tick()`；后台/移动端恢复不再等待 skills、限额、协作模式等附属刷新。作用：切回后台标签时线程列表和当前会话优先恢复，移除递归扫描与附属元数据造成的阻塞。
+- **round-53 docs**（本轮文档提交）：新增交接记录与合并手测项，更新交接总入口、快照、提交历史和线程加载/状态手测索引；不修改版本或发布状态。
 - **round-50**（随 **v0.1.101** 发布，tag/gh release `v0.1.101`）：侧边栏重新出现子 agent 会话——两因叠加修复（`b86c220`）：(1) 服务端竞态，tracker 3s 轮询窗口内 `thread/list` 已返回新子 agent 而过滤未生效，`filterSubagentThreadsFromThreadListResult` 过滤前 `await externalSessionTracker.tick()` 强制同步最新扫描，`tick()` 改为并发安全（已有扫描时等待而非跳过）；(2) 前端并集合并残留，`useDesktopState.loadThreads` 用 `mergeThreadGroupPages` 并集合并导致已过滤行残留，改为服务端响应为权威基线直接替换列表并重置分页游标；新增并发 tick 回归单测并更新手测文档（详见 `rounds/round-50-subagent-race.md`，npm publish 由用户执行）
 - **round-43**（随 **v0.1.96** 发布，tag/gh release `v0.1.96`）：侧边栏泄漏子 agent 线程——`externalSessionTracker.updateSessionMeta` 对 subagent rollout 改用自身 `id` 键控（`session_id` 是父线程 id），使 `getSubagentThreadIds` 过滤正确的子线程 id、`externalSession` 叠加挂到子线程行、`filterThreadListByIds` 不再误删父行（`ff6df2b`）；模型强度下拉档位收敛到 Low/Medium/High（`reasoningOptionCatalog` 8→3，provider-only 模型不再冒出 Ultra 等项，`5aaa458`）；版本 0.1.96（`64fa15d`）（详见 `rounds/round-43-feedback.md`）
 
