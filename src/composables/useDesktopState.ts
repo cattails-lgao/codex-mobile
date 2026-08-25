@@ -2382,17 +2382,29 @@ export function useDesktopState() {
       const existing = (liveAgentMessagesByThreadId.value[notificationThreadId] ?? [])
         .find((message) => message.id === liveAgentMessageDelta.messageId)
       const nextText = `${existing?.text ?? ''}${liveAgentMessageDelta.delta}`
+      const turnId = liveAgentMessageDelta.turnId ?? existing?.turnId
+      const turnIndex = turnId
+        ? turnIndexByTurnIdByThreadId.value[notificationThreadId]?.[turnId]
+        : existing?.turnIndex
       upsertLiveAgentMessage(notificationThreadId, {
         id: liveAgentMessageDelta.messageId,
         role: 'assistant',
         text: nextText,
         messageType: 'agentMessage.live',
+        turnId,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
       })
     }
 
     const completedAgentMessage = readAgentMessageCompleted(notification)
     if (completedAgentMessage) {
-      upsertLiveAgentMessage(notificationThreadId, completedAgentMessage)
+      const turnIndex = completedAgentMessage.turnId
+        ? turnIndexByTurnIdByThreadId.value[notificationThreadId]?.[completedAgentMessage.turnId]
+        : undefined
+      upsertLiveAgentMessage(notificationThreadId, {
+        ...completedAgentMessage,
+        turnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+      })
     }
 
     const completedImageView = readCompletedImageView(notification)

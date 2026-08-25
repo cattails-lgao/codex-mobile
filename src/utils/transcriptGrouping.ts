@@ -62,7 +62,7 @@ function isFinalAssistantItem(message: UiMessage): boolean {
  */
 export function buildTurnRenderGroups(
   messages: UiMessage[],
-  options?: { liveOverlayActive?: boolean },
+  options?: { liveOverlayActive?: boolean; liveTurnId?: string },
 ): TurnRenderGroup[] {
   const groups: TurnRenderGroup[] = []
   let current: TurnRenderGroup | null = null
@@ -80,7 +80,10 @@ export function buildTurnRenderGroups(
     const group = groups[index]
     // 活跃轮最终回答尚未落定：live overlay 仍在生成该轮最终内容（真实最终还没进入 messages），
     // 此时该轮末尾只可能是已完成的中间消息，提升为 final 会被拉出过程区、显示成"本轮过程外的最终答案"。
-    const isUnsettledLiveTurn = options?.liveOverlayActive === true && index === lastGroupIndex
+    // 有稳定 turnId 时按它精确定位活跃轮；旧调用方未提供时才回退为最后一轮。
+    const groupTurnId = group.items.find((item) => item.message.turnId?.trim())?.message.turnId?.trim()
+    const isUnsettledLiveTurn = options?.liveOverlayActive === true
+      && (options.liveTurnId ? groupTurnId === options.liveTurnId : index === lastGroupIndex)
     if (isUnsettledLiveTurn) continue
 
     const lastContentItem = [...group.items].reverse().find((item) => item.kind !== 'file-change')

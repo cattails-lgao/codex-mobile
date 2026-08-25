@@ -283,7 +283,7 @@ export function readAgentMessageStartedId(notification: RpcNotification): string
   return ''
 }
 
-export function readAgentMessageDelta(notification: RpcNotification): { messageId: string; delta: string } | null {
+export function readAgentMessageDelta(notification: RpcNotification): { messageId: string; delta: string; turnId?: string } | null {
   const params = asRecord(notification.params)
   if (!params) return null
 
@@ -291,7 +291,8 @@ export function readAgentMessageDelta(notification: RpcNotification): { messageI
     const messageId = readString(params.itemId)
     const delta = readString(params.delta)
     if (!messageId || !delta) return null
-    return { messageId, delta }
+    const turnId = readString(params.turnId) || readString(params.turn_id)
+    return { messageId, delta, turnId: turnId || undefined }
   }
 
   return null
@@ -307,11 +308,13 @@ export function readAgentMessageCompleted(notification: RpcNotification): UiMess
     const id = readString(item.id)
     const text = readString(item.text)
     if (!id || !text) return null
+    const turnId = readString(params.turnId) || readString(params.turn_id)
     return {
       id,
       role: 'assistant',
       text,
       messageType: 'agentMessage',
+      turnId: turnId || undefined,
     }
   }
 

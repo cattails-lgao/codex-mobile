@@ -6,6 +6,7 @@ import {
   findAdjacentThreadId,
   mergeLiveMessages,
   mergePersistedReasoning,
+  mergeThreadMessageStreams,
   removeThreadFromGroups,
   isThreadUnreadByLastRead,
   useDesktopState,
@@ -1643,6 +1644,33 @@ describe('P1-3 notification surface', () => {
     expect(agent?.messageType).toBe('agentMessage')
   })
 
+  it('keeps notification turn metadata on live agent delta and completion messages', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+
+    sendNotification({ method: 'turn/started', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+    sendNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId: 'thread-1', turnId: 'turn-1', itemId: 'agent-1', delta: '流式正文' },
+    })
+    await Promise.resolve()
+    expect(state.messages.value.find((m) => m.id === 'agent-1')).toMatchObject({ turnId: 'turn-1', turnIndex: 0 })
+
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        item: { type: 'agentMessage', id: 'agent-1', text: '完成正文' },
+      },
+    })
+    await Promise.resolve()
+    expect(state.messages.value.find((m) => m.id === 'agent-1')).toMatchObject({ turnId: 'turn-1', turnIndex: 0 })
+  })
+
   it('deduplicates live agent messages with identical text but different ids (round-52)', async () => {
     // round-52：同一段助手文本可能以两个不同 id 进入 live——delta 通道用
     // params.itemId，completed 通道用 item.id（两者不同）。mergeLiveMessages
@@ -2484,6 +2512,27 @@ describe('message stream merge helpers', () => {
     mergeLiveMessages('thread-x', [[], [], [], [liveAgent[0]]], [])
     const merged = mergeLiveMessages('thread-x', [[], liveCommands, [], liveAgent], [])
     expect(merged.map((message) => message.id)).toEqual(['agent1', 'cmd2', 'agent3'])
+  })
+
+  it('inserts live messages with a known turn index before the next user turn', () => {
+    const persisted = [
+      persistedMessage('u1', 'user', 0, { turnId: 't0' }),
+      persistedMessage('u2', 'user', 1, { turnId: 't1' }),
+    ]
+    const live = [persistedMessage('a1', 'assistant', 0, { messageType: 'agentMessage.live', turnId: 't0' })]
+
+    const merged = mergeThreadMessageStreams('thread-turn-insert', persisted, [], [live], [])
+
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'a1', 'u2'])
+  })
+
+  it('appends live messages with an unknown turn index', () => {
+    const persisted = [persistedMessage('u1', 'user', 0)]
+    const live = [persistedMessage('a1', 'assistant', 9, { messageType: 'agentMessage.live' })]
+
+    const merged = mergeThreadMessageStreams('thread-unknown-turn', persisted, [], [live], [])
+
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'a1'])
   })
 
   it('drops live messages whose id already exists in persisted', () => {

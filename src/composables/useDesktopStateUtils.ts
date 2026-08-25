@@ -1318,7 +1318,40 @@ export function mergeThreadMessageStreams(
   // 这样思考的时序锚点既能命中持久化命令/工具，也能命中仍在 live 中的
   // 命令/工具（turn 刚结束时无需等刷新即可按真实顺序交错展示）。
   const liveMessages = mergeLiveMessages(threadId, liveGroups, persisted)
-  const combined = [...persisted, ...liveMessages]
+  // 将已知轮次的 live 消息在下一条 user 消息前插回其持久化轮次。两次线性
+  // 扫描避免对每条 live 消息 findIndex/splice；未能关联到持久化 user 轮次的消息
+  // 保持原有的末尾追加语义。
+  const insertAtByTurnIndex = new Map<number, number>()
+  let previousTurnIndex: number | undefined
+  for (let index = 0; index < persisted.length; index += 1) {
+    const message = persisted[index]
+    if (message.role !== 'user' || !Number.isInteger(message.turnIndex) || message.turnIndex! < 0) continue
+    if (previousTurnIndex !== undefined) insertAtByTurnIndex.set(previousTurnIndex, index)
+    previousTurnIndex = message.turnIndex
+  }
+  if (previousTurnIndex !== undefined) insertAtByTurnIndex.set(previousTurnIndex, persisted.length)
+
+  const liveByInsertIndex = new Map<number, UiMessage[]>()
+  const unattachedLive: UiMessage[] = []
+  for (const message of liveMessages) {
+    const turnIndex = message.turnIndex
+    const insertIndex = Number.isInteger(turnIndex) && turnIndex! >= 0
+      ? insertAtByTurnIndex.get(turnIndex!)
+      : undefined
+    if (insertIndex === undefined) {
+      unattachedLive.push(message)
+      continue
+    }
+    const messagesAtInsertIndex = liveByInsertIndex.get(insertIndex)
+    if (messagesAtInsertIndex) messagesAtInsertIndex.push(message)
+    else liveByInsertIndex.set(insertIndex, [message])
+  }
+  const combined: UiMessage[] = []
+  for (let index = 0; index <= persisted.length; index += 1) {
+    combined.push(...(liveByInsertIndex.get(index) ?? []))
+    if (index < persisted.length) combined.push(persisted[index])
+  }
+  combined.push(...unattachedLive)
   // round-52：最终汇合的统一去重关口。upsertLiveAgentMessage 只堵 live map
   // 内部；同一段助手文本可能以不同 id 同时存在于 persisted（item.id）与 live
   // （params.itemId），mergeLiveMessages 只按 id 去重 → 跨源同文本不同 id 仍会
