@@ -1462,6 +1462,7 @@ import type { ApprovalPolicy } from './api/codexGateway'
 import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGateway'
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
+import { shouldSyncAfterForeground } from './utils/foregroundResume'
 import { readPlanData } from './utils/plan'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -2113,7 +2114,6 @@ const DICTATION_AUTO_SEND_KEY = 'codex-web-local.dictation-auto-send.v1'
 const DICTATION_LANGUAGE_KEY = 'codex-web-local.dictation-language.v1'
 
 const CHAT_WIDTH_KEY = 'codex-web-local.chat-width.v1'
-const MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS = 400
 const sendWithEnter = ref(loadBoolPref(SEND_WITH_ENTER_KEY, true))
 const inProgressSendMode = ref<'steer' | 'queue'>(loadInProgressSendModePref())
 const darkMode = ref<'system' | 'light' | 'dark'>(loadDarkModePref())
@@ -2209,9 +2209,9 @@ const telegramStatus = ref<TelegramStatus>({
   allowAllUsers: false,
   lastError: '',
 })
-const mobileHiddenAtMs = ref<number | null>(null)
-const mobileResumeReloadTriggered = ref(false)
-const mobileResumeSyncInProgress = ref(false)
+const foregroundHiddenAtMs = ref<number | null>(null)
+const foregroundSyncTriggered = ref(false)
+const foregroundSyncInProgress = ref(false)
 const visualViewportHeight = ref(typeof window !== 'undefined' ? window.visualViewport?.height ?? window.innerHeight : 0)
 const visualViewportOffsetTop = ref(typeof window !== 'undefined' ? window.visualViewport?.offsetTop ?? 0 : 0)
 const layoutViewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
@@ -3851,20 +3851,19 @@ function onOpenRecycleBin(): void {
 
 function onDocumentVisibilityChange(): void {
   if (typeof document === 'undefined') return
-  if (!isMobile.value) return
 
   if (document.visibilityState === 'hidden') {
-    mobileHiddenAtMs.value = Date.now()
-    mobileResumeReloadTriggered.value = false
+    foregroundHiddenAtMs.value = Date.now()
+    foregroundSyncTriggered.value = false
     return
   }
 
-  maybeSyncAfterMobileResume()
+  maybeSyncAfterForeground()
 }
 
 function onWindowPageShow(event: PageTransitionEvent): void {
   if (!event.persisted) return
-  maybeSyncAfterMobileResume()
+  maybeSyncAfterForeground()
 }
 
 function onWindowFocus(): void {
@@ -3872,27 +3871,26 @@ function onWindowFocus(): void {
     void loadWorkspaceRootOptionsState()
     void refreshDefaultProjectName()
   }
-  maybeSyncAfterMobileResume()
+  maybeSyncAfterForeground()
 }
 
-function maybeSyncAfterMobileResume(): void {
+function maybeSyncAfterForeground(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
-  if (!isMobile.value) return
-  if (document.visibilityState !== 'visible') return
-  if (mobileResumeReloadTriggered.value) return
-  if (mobileHiddenAtMs.value === null) return
+  if (!shouldSyncAfterForeground(
+    document.visibilityState,
+    foregroundHiddenAtMs.value,
+    foregroundSyncTriggered.value,
+    Date.now(),
+  )) return
 
-  const hiddenForMs = Date.now() - mobileHiddenAtMs.value
-  if (hiddenForMs < MOBILE_RESUME_RELOAD_MIN_HIDDEN_MS) return
-
-  mobileResumeReloadTriggered.value = true
-  mobileHiddenAtMs.value = null
-  void syncAfterMobileResume()
+  foregroundSyncTriggered.value = true
+  foregroundHiddenAtMs.value = null
+  void syncAfterForeground()
 }
 
-async function syncAfterMobileResume(): Promise<void> {
-  if (mobileResumeSyncInProgress.value) return
-  mobileResumeSyncInProgress.value = true
+async function syncAfterForeground(): Promise<void> {
+  if (foregroundSyncInProgress.value) return
+  foregroundSyncInProgress.value = true
 
   try {
     await refreshAll({
@@ -3900,7 +3898,7 @@ async function syncAfterMobileResume(): Promise<void> {
     })
     await syncThreadSelectionWithRoute()
   } finally {
-    mobileResumeSyncInProgress.value = false
+    foregroundSyncInProgress.value = false
   }
 }
 
