@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（`v0.1.106` 已发布；round-57/58 修复最终总结在过程收尾和完成态竞态下的归属） |
+| Git 分支 | main（工作区含 round-60 桌面前后台恢复同步修复，尚未提交） |
 | Dev 端口 | 4173 |
-| Dev 状态 | 已启动并经人工刷新确认页面正常；不操作 5173 |
+| Dev 状态 | 未在本轮重启或验证；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `dc9986f`：记录 v0.1.106 GitHub Release；npm 包已发布并成为 `latest` |
+| 最近提交 | `1bfa866`：确认 `v0.1.106` npm publish；round-60 实现、单测与交接文档待提交（手测待做） |
 
 ---
 ## 文档结构
@@ -89,6 +89,7 @@
 | 第五十七轮 过程收尾记录遮蔽最终总结 | [rounds/round-57-final-summary-after-process.md](rounds/round-57-final-summary-after-process.md) |
 | 第五十八轮 完成后最终总结回落到过程区 | [rounds/round-58-completed-live-summary.md](rounds/round-58-completed-live-summary.md) |
 | 第五十九轮 v0.1.106 发布（最终总结归属修复） | [rounds/round-59-v0.1.106-release.md](rounds/round-59-v0.1.106-release.md) |
+| 第六十轮 桌面前后台恢复同步修复 | [rounds/round-60-desktop-foreground-resume-sync.md](rounds/round-60-desktop-foreground-resume-sync.md) |
 
 ## 项目概况
 
@@ -144,6 +145,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **round-60 桌面前后台恢复同步待手测与提交（2026-08-26）**：工作区已将恢复同步从移动端扩展至桌面和移动端，并以 400 ms 后台阈值与单次触发标记合并 `visibilitychange`、持久化 `pageshow`、`focus` 信号。新增 `foregroundResume` 单测 **91/91 通过**，`vue-tsc --noEmit` 与生产构建均通过。当前无浏览器标签，桌面/移动端浏览器手动验证待执行；完成后提交 `src/App.vue`、`src/utils/foregroundResume.ts`、对应单测/手测及交接文档。详见 [round-60](rounds/round-60-desktop-foreground-resume-sync.md)。
 - **v0.1.106 发布（2026-08-26 round-59）**：收录 round-57（过程收尾记录不再遮蔽最终总结）和 round-58（`turn/completed` 先到、最终消息暂留 `.live` 时总结不再回落到过程区）。版本升至 **`0.1.106`**；GitHub Release 与 npm publish 均已完成，`codex-mobile-re@0.1.106` 为 `latest`。针对性回归 127/127、`vue-tsc --noEmit` 和生产构建均通过。详见 [round-59](rounds/round-59-v0.1.106-release.md)。
 - **热点领域模块化进行中（round-48/49 组件化后置项）**：三个最大 `.ts` 逻辑文件（`src/server/codexAppServerBridge.ts` ~10203 行、`src/composables/useDesktopState.ts` ~7375 行、`src/api/codexGateway.ts` ~4165 行）被组件化方案明确排除、按「另行领域模块化」推迟后无续期任务。已完成领域梳理并出方案：见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。实施顺序：codexGateway（薄壳+领域文件，试点）→ useDesktopState A/B（纯函数+持久化层）→ codexAppServerBridge A 批（automations/git/composio 等纯工具）→ 主函数/核心派发保守收尾。**`codexGateway.ts` 领域拆分已全部完成**（薄壳化 re-export，11 个领域文件：search/automations/terminal/threads/models/directory/accounts/git/files/develop/misc；vue-tsc + 全量 370 单测 + build 均通过）。**`useDesktopState.ts` A/B 批已完成**（A 批量 `useDesktopStateUtils.ts` 纯工具 ~100 函数、B 批量 `useDesktopStatePersistence.ts` localStorage 21 函数，主文件头顶 `export *` 保持 API 不变）。**`codexAppServerBridge.ts` 领域模块化已全部完成（A~AF 批，主文件 10203 → 2053 行）**：A/D/E/F 纯工具切片（automations/git/composio/zip/session/models）、G~Q 批迁出核心派发的全部 HTTP 路由族（terminal/git-worktree/composio-routes/free-mode/project/thread-read/telegram+rpcPipeline/thread-preferences/events-SSE）、R~AF 批迁出余下模块级辅助簇（workspaceRoots/threadQueueState/approvalPolicy/inlineImages/codexAuthState/importedSessions/apiPerfLogging/threadErrors/threadArchiveRecovery/provider-model-ids/turnFactory/httpHelpers/threadSearch/projectZip 等）；批量全过 `vue-tsc` + 全量 395 单测 + `pnpm run build`，详见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。**仅 `useDesktopState()` 主函数与 bridge 核心派发接线本身留驻**（非独立可切纯辅助）。
 - **round-52 发布已完成（v0.1.103）**：`codex-mobile-re@0.1.103`——live 多 agent 去重（源 `upsertLiveAgentMessage` + 最终汇合 `dedupeAssistantAgentMessageText`）+ 补充修复（`buildTurnRenderGroups` `liveOverlayActive` 双守卫，防止 live 流式中已完成中间消息被误提升为 final 拉出过程区）；真机 DOM 直证验证通过（线程 01a024d1 流式中中间消息保持 `conversation-item-process`、结束后真正最终正常落成 `conversation-item-final`）；全量单测 + `vue-tsc --noEmit` 通过，`pnpm run build` 通过（web + CLI 均成功）。git tag `v0.1.103` → 版本/文档提交 `d9f5972`。**GitHub release `v0.1.103`** 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.103（2026-08-22 创建，非草稿/非预发布，指向 main，使用 `gh release create`；本机已装 gh v2.98）；**npm 发包已完成**：`npm view codex-mobile-re@0.1.103` 确认 version 0.1.103 / dist-tags.latest 0.1.103。
@@ -172,4 +174,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-26（round-57/58 最终总结归属修复与 v0.1.106 发布）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-26（round-60：91/91、vue-tsc、build 已通过；桌面/移动端手测与提交待做）· 内容已脱敏*
