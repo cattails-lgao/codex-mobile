@@ -27,5 +27,5 @@
 ## 发布责任
 
 - GitHub Release 已创建：[v0.1.106](https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.106)。
-- npm publish 由用户执行；发布前已确认 `codex-mobile-re@0.1.106` 尚未占用。
+- npm publish 已由用户完成；`codex-mobile-re@0.1.106` 已确认发布并成为 `latest`。
 - `.zcode/` 保持未跟踪，不纳入提交。
