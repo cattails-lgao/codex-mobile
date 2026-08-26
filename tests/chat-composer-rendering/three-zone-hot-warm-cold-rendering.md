@@ -73,12 +73,22 @@ pnpm run build               # vite build + tsup 通过
 Expected results:
 - 每个 Hot turn 都是独立的真实 DOM 容器，结构为 `.conversation-turn-request`、可选 `.conversation-turn-process`、可选 `.conversation-turn-final`；不是同级消息上叠加 CSS 边框。
 - 用户请求只在 request 区出现；Thinking、命令、工具、Plan、非终局 assistant 文本与文件变更都在 process 区。过程区有“本轮过程”标题和左侧轨道。
-- 只有轮次末尾的稳定 assistant 文本进入 final 区；若后续仍有过程记录，较早的 assistant 文本保留在 process 区，不会被重排。
+- 最后一个稳定 assistant 文本进入 final 区；其后的命令、文件变更和耗时等过程收尾记录保持在 process 区，不会遮蔽最终总结或改变原始消息顺序。
 - 文件变更同一轮只出现一次，位于 process 区末尾；Copy/Fork/Edit/Diff/Undo 均继续作用于原始消息或 turn。
 - Plan 显示为只读过程记录，步骤状态正确；Composer 的 Plan 面板仍可操作。
 - 流式输出时不新增网络请求、不会将阅读历史的滚动位置拉到底部；跳到最新后仍自动跟随。
 
-### 2.8 Hot 区过程视觉层级
+### 2.8 过程收尾后的最终总结
+
+1. 打开一个已完成的 Hot turn，其顺序为：用户请求 → 助手最终总结 → 文件变更、命令记录或 “Worked for” 耗时记录。
+2. 确认助手最终总结仍显示在 `.conversation-turn-final` 中；后续的文件变更、命令和耗时记录仍属于 `.conversation-turn-process`。
+3. 收起过程区后，确认最终总结保持可见；展开后，确认收尾记录仍可见且只出现一次。
+
+Expected results:
+- 过程收尾记录不会遮蔽同一轮此前已稳定的助手最终总结。
+- 不改变消息的原始顺序、文件变更位置或 “Worked for” 的显示。
+
+### 2.9 Hot 区过程视觉层级
 
 1. 准备一个包含中间 assistant 正文和最终 assistant 回答的 Hot turn，并在浅色主题打开该线程。
 2. 确认“本轮过程”标题为 12px 的正常大小文字；过程中的中间 assistant 正文为 13px、较低对比度，最终回答仍保持主要正文大小与对比度。
@@ -90,7 +100,7 @@ Expected results:
 - Thinking、命令、工具、Plan、文件变更与最终回答的既有样式和交互不变。
 - 两种主题和两个视口均无横向溢出、文本遮挡或浅色表面泄漏。
 
-### 2.9 Hot 区过程折叠
+### 2.10 Hot 区过程折叠
 
 1. 打开一个包含过程记录和最终 assistant 回答的 Hot turn。
 2. 确认过程区默认展开，标题显示“本轮过程”、向下箭头和过程项数量。

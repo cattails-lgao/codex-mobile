@@ -86,8 +86,9 @@ export function buildTurnRenderGroups(
       && (options.liveTurnId ? groupTurnId === options.liveTurnId : index === lastGroupIndex)
     if (isUnsettledLiveTurn) continue
 
-    const lastContentItem = [...group.items].reverse().find((item) => item.kind !== 'file-change')
-    if (lastContentItem && isFinalAssistantItem(lastContentItem.message)) {
+    // 命令、文件变更和“Worked for”是过程收尾记录，不能遮蔽此前真正的助手总结。
+    const lastAssistantItem = [...group.items].reverse().find((item) => isFinalAssistantItem(item.message))
+    if (lastAssistantItem) {
       const streamingInTurn = group.items.some(
         (item) => typeof item.message.messageType === 'string' && item.message.messageType.endsWith('.live'),
       )
@@ -95,7 +96,7 @@ export function buildTurnRenderGroups(
       // 已完成的 agentMessage 只可能是流式过程中的中间消息（例如多代理场景下子代理先于主代理汇总
       // 完成），不应被提升为 final 拉出过程区。真正的最终回复待其进入 messages 后再提升。
       if (!streamingInTurn) {
-        lastContentItem.kind = 'final-assistant'
+        lastAssistantItem.kind = 'final-assistant'
       }
     }
   }
