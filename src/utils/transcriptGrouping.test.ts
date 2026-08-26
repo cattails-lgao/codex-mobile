@@ -124,26 +124,27 @@ describe('buildTurnRenderGroups', () => {
     ])
   })
 
-  it('keeps an earlier assistant message in process when later records follow it', () => {
+  it('keeps the final assistant summary when a command record arrives after it', () => {
     const messages = [
       msg('u1', 'user', undefined, { text: 'q' }),
-      msg('a1', 'assistant', 'agentMessage', { text: 'intermediate answer' }),
+      msg('a1', 'assistant', 'agentMessage', { text: 'final answer' }),
       msg('c1', 'system', 'commandExecution', { commandExecution: { status: 'completed' } }),
     ]
 
     const group = buildTurnRenderGroups(messages)[0]
     expect(group?.items.map((item) => `${item.message.id}:${item.kind}`)).toEqual([
       'u1:user',
-      'a1:assistant',
+      'a1:final-assistant',
       'c1:process',
     ])
   })
 
-  it('allows a trailing file change after the final assistant response', () => {
+  it('keeps the final assistant summary outside process records that arrive after it', () => {
     const messages = [
       msg('u1', 'user', undefined, { text: 'q' }),
       msg('a1', 'assistant', 'agentMessage', { text: 'done' }),
       msg('f1', 'system', 'fileChange', { fileChanges: [{ path: 'a.ts' }] }),
+      msg('worked-1', 'system', 'worked', { text: 'Worked for 2s' }),
     ]
 
     const group = buildTurnRenderGroups(messages)[0]
@@ -151,6 +152,7 @@ describe('buildTurnRenderGroups', () => {
       'u1:user',
       'a1:final-assistant',
       'f1:file-change',
+      'worked-1:process',
     ])
   })
 
