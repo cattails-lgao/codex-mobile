@@ -87,6 +87,7 @@
 | 第五十五轮 Vite 根路径被 SSE 中间件阻断（精确事件路由 + 非 API 请求提前放行） | [rounds/round-55-vite-sse-root-route.md](rounds/round-55-vite-sse-root-route.md) |
 | 第五十六轮 v0.1.105 发布（服务观察验证 + 版本发布） | [rounds/round-56-v0.1.105-release.md](rounds/round-56-v0.1.105-release.md) |
 | 第五十七轮 过程收尾记录遮蔽最终总结 | [rounds/round-57-final-summary-after-process.md](rounds/round-57-final-summary-after-process.md) |
+| 第五十八轮 完成后最终总结回落到过程区 | [rounds/round-58-completed-live-summary.md](rounds/round-58-completed-live-summary.md) |
 
 ## 项目概况
 

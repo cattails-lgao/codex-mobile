@@ -42,7 +42,7 @@ function renderItemKind(message: UiMessage): TurnRenderItemKind {
   return 'assistant'
 }
 
-function isFinalAssistantItem(message: UiMessage): boolean {
+function isFinalAssistantItem(message: UiMessage, allowCompletedLive = false): boolean {
   return message.role === 'assistant'
     && message.messageType !== 'reasoning'
     && message.messageType !== 'commandExecution'
@@ -51,7 +51,7 @@ function isFinalAssistantItem(message: UiMessage): boolean {
     && message.messageType !== 'plan'
     && message.messageType !== 'plan.live'
     && message.messageType !== 'fileChange'
-    && !message.messageType?.endsWith('.live')
+    && (allowCompletedLive || !message.messageType?.endsWith('.live'))
     && message.text.trim().length > 0
 }
 
@@ -87,9 +87,14 @@ export function buildTurnRenderGroups(
     if (isUnsettledLiveTurn) continue
 
     // 命令、文件变更和“Worked for”是过程收尾记录，不能遮蔽此前真正的助手总结。
-    const lastAssistantItem = [...group.items].reverse().find((item) => isFinalAssistantItem(item.message))
+    const lastAssistantItem = [...group.items].reverse().find((item) =>
+      isFinalAssistantItem(item.message, options?.liveOverlayActive === false),
+    )
     if (lastAssistantItem) {
-      const streamingInTurn = group.items.some(
+      // 调用方显式传入 false 表示 turn/completed 已到达：app-server 偶尔会让最后一条
+      // agentMessage 暂时保留 .live，不能因此把已经展示的最终总结又塞回过程区。
+      // 未传入状态的纯函数调用仍按消息类型保守地认为 .live 尚在流式。
+      const streamingInTurn = options?.liveOverlayActive !== false && group.items.some(
         (item) => typeof item.message.messageType === 'string' && item.message.messageType.endsWith('.live'),
       )
       // 本轮仍属于活跃/流式（本组内有 .live，或整轮尚未落定仍由 live overlay 生成）时，末尾这条

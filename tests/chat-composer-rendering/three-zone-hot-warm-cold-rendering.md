@@ -87,6 +87,7 @@ Expected results:
 Expected results:
 - 过程收尾记录不会遮蔽同一轮此前已稳定的助手最终总结。
 - 不改变消息的原始顺序、文件变更位置或 “Worked for” 的显示。
+- `turn/completed` 到达而服务端详情尚未把最终 `agentMessage.live` 改为完成态时，最终总结不得短暂显示后又回落到过程区。
 
 ### 2.9 Hot 区过程视觉层级
 
