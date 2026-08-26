@@ -52,7 +52,7 @@
 - **v0.1.105 发布**（`709665b`）：收录 `ee5df5a`（round-54）、`00a500a`（round-55）、`709665b`（round-56 版本发布与服务观察）。版本从 `0.1.104` 升至 `0.1.105`；GitHub Release 已完成，npm publish 由用户执行。
 - **round-57**（`c442425`）：最终助手文本后出现命令、文件变更或 `Worked for` 等过程收尾记录时，反向定位最后一条稳定助手消息，不再让过程项遮蔽最终总结。
 - **round-58**（`0e0d0e6`）：`turn/completed` 清除 overlay 而最终 `agentMessage.live` 尚未完成态回填时，已完成轮允许该文本作为最终总结；活跃轮仍抑制中间消息提升，避免多 Agent 误判。
-- **v0.1.106 发布**（`c588bdb`）：收录 `c442425` 与 `0e0d0e6`，版本从 `0.1.105` 升至 `0.1.106`；GitHub Release 已创建，npm publish 由用户执行。
+- **v0.1.106 发布**（`c588bdb`、`dc9986f`）：收录 `c442425` 与 `0e0d0e6`，版本从 `0.1.105` 升至 `0.1.106`；GitHub Release 已创建，`codex-mobile-re@0.1.106` 已发布并成为 npm `latest`。
 - **round-50**（随 **v0.1.101** 发布，tag/gh release `v0.1.101`）：侧边栏重新出现子 agent 会话——两因叠加修复（`b86c220`）：(1) 服务端竞态，tracker 3s 轮询窗口内 `thread/list` 已返回新子 agent 而过滤未生效，`filterSubagentThreadsFromThreadListResult` 过滤前 `await externalSessionTracker.tick()` 强制同步最新扫描，`tick()` 改为并发安全（已有扫描时等待而非跳过）；(2) 前端并集合并残留，`useDesktopState.loadThreads` 用 `mergeThreadGroupPages` 并集合并导致已过滤行残留，改为服务端响应为权威基线直接替换列表并重置分页游标；新增并发 tick 回归单测并更新手测文档（详见 `rounds/round-50-subagent-race.md`，npm publish 由用户执行）
 - **round-43**（随 **v0.1.96** 发布，tag/gh release `v0.1.96`）：侧边栏泄漏子 agent 线程——`externalSessionTracker.updateSessionMeta` 对 subagent rollout 改用自身 `id` 键控（`session_id` 是父线程 id），使 `getSubagentThreadIds` 过滤正确的子线程 id、`externalSession` 叠加挂到子线程行、`filterThreadListByIds` 不再误删父行（`ff6df2b`）；模型强度下拉档位收敛到 Low/Medium/High（`reasoningOptionCatalog` 8→3，provider-only 模型不再冒出 Ultra 等项，`5aaa458`）；版本 0.1.96（`64fa15d`）（详见 `rounds/round-43-feedback.md`）
 
