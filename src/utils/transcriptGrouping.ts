@@ -80,10 +80,12 @@ export function buildTurnRenderGroups(
     const group = groups[index]
     // 活跃轮最终回答尚未落定：live overlay 仍在生成该轮最终内容（真实最终还没进入 messages），
     // 此时该轮末尾只可能是已完成的中间消息，提升为 final 会被拉出过程区、显示成"本轮过程外的最终答案"。
-    // 有稳定 turnId 时按它精确定位活跃轮；旧调用方未提供时才回退为最后一轮。
+    // 显式传入 liveTurnId（即使其尚未返回）时，不能猜测最后一轮；新消息发出后的
+    // 短暂窗口里最后一轮仍可能是上一轮的已完成 final。旧调用方未传此字段时才回退最后一轮。
     const groupTurnId = group.items.find((item) => item.message.turnId?.trim())?.message.turnId?.trim()
+    const hasLiveTurnId = options !== undefined && 'liveTurnId' in options
     const isUnsettledLiveTurn = options?.liveOverlayActive === true
-      && (options.liveTurnId ? groupTurnId === options.liveTurnId : index === lastGroupIndex)
+      && (hasLiveTurnId ? groupTurnId === options?.liveTurnId : index === lastGroupIndex)
     if (isUnsettledLiveTurn) continue
 
     // 命令、文件变更和“Worked for”是过程收尾记录，不能遮蔽此前真正的助手总结。

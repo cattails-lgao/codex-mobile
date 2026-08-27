@@ -53,6 +53,16 @@ describe('repro: live 窗口 已完成的中间消息不该被误判为 final', 
     expect(items.find((item) => item.message.id === 'worked-1')?.kind).toBe('process')
   })
 
+  it('liveTurnId 尚未返回时，不会把上一轮 final 当作活跃轮抑制', () => {
+    const messages = [
+      msg('u1', 'user', undefined, { text: 'first', turnId: 't0', turnIndex: 0 }),
+      msg('prev-done', 'assistant', 'agentMessage', { text: '上一轮最终汇总', turnId: 't0', turnIndex: 0 }),
+    ]
+    const items = buildTurnRenderGroups(messages, { liveOverlayActive: true, liveTurnId: undefined })[0].items
+
+    expect(items.find((item) => item.message.id === 'prev-done')?.kind).toBe('final-assistant')
+  })
+
   it('按 liveTurnId 仅抑制活跃轮，历史 final 不会被 live t1 抑制', () => {
     const messages = [
       msg('u1', 'user', undefined, { text: 'first', turnId: 't0', turnIndex: 0 }),

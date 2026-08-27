@@ -27,4 +27,26 @@ describe('runRpcResponsePipeline', () => {
 
     expect(getUserFacingSubagentThreadIds).toHaveBeenCalledTimes(1)
   })
+
+  it('uses tracker state updated while asynchronous list processing is in flight', async () => {
+    let subagentIds = new Set<string>()
+    let releaseSanitizer: (() => void) | undefined
+    const deps = createDeps([])
+    deps.externalSessionTracker.getUserFacingSubagentThreadIds = () => subagentIds
+    deps.sanitizeThreadTurnsInlinePayloads = async (_method, result) => new Promise((resolve) => {
+      releaseSanitizer = () => resolve(result)
+    })
+
+    const pipeline = runRpcResponsePipeline(deps, 'thread/list', {
+      data: [{ id: 'user-thread' }, { id: 'subagent-thread' }],
+    })
+    await vi.waitFor(() => expect(releaseSanitizer).toBeTypeOf('function'))
+
+    // Simulate the background tracker completing its scan while the pipeline
+    // awaits asynchronous post-processing.
+    subagentIds = new Set(['subagent-thread'])
+    releaseSanitizer?.()
+
+    await expect(pipeline).resolves.toEqual({ data: [{ id: 'user-thread' }] })
+  })
 })
