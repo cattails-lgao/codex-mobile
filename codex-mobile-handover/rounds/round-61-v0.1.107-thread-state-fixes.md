@@ -1,6 +1,6 @@
 # Round-61：v0.1.107 线程状态修复（2026-08-27）
 
-> **范围：** 仓库版本已升至 `0.1.107`，两项线程状态修复已提交为 `fdbedb8` 并推送至 `origin/main`；tag `v0.1.107` 与 GitHub Release `v0.1.107` 均已创建。npm publish 因 npm 官方源返回 401 未完成，需重新登录后重试。本次仅更新交接文档，不执行提交或发布操作。
+> **范围：** 仓库版本已升至 `0.1.107`，两项线程状态修复已提交为 `fdbedb8` 并推送至 `origin/main`；tag `v0.1.107` 与 GitHub Release `v0.1.107` 均已创建。`codex-mobile-re@0.1.107` 已发布至 npm 官方源并成为 `latest`。本次仅更新交接文档，不执行提交操作。
 
 ## 修复一：异步列表处理后的子代理线程过滤
 
@@ -56,10 +56,10 @@
 
 - `fdbedb8`（`fix: keep subagent threads and final summaries stable`）已推送至 `origin/main`。
 - git tag `v0.1.107` 与 GitHub Release `v0.1.107` 已创建。
-- npm publish 未完成：npm 官方源返回 401；重新登录 npm 后再发布 `codex-mobile-re@0.1.107`。
+- `codex-mobile-re@0.1.107` 已发布至 npm 官方源并成为 `latest`。
 
 ## 交接注意事项
 
 - 不要把子代理过滤重新提前到异步 RPC 后处理之前；这会恢复 tracker 扫描完成期间读取旧快照的竞态。
 - `liveTurnId: undefined` 与未传 `liveTurnId` 的语义不同：前者表示活跃 turn 尚未知，不能猜测最后一轮；后者保留旧调用方的最后一轮回退。
-- 不要重复创建 tag 或 GitHub Release；仅在重新登录 npm 官方源后重试 v0.1.107 的 npm publish。
+- v0.1.107 的 tag、GitHub Release 与 npm 发布均已完成，无需重复执行发布操作。
