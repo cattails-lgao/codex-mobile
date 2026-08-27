@@ -10,14 +10,15 @@ Two regressions are covered together: delayed live agent content must remain in 
 #### Steps
 1. Load persisted messages containing two turns, `u1` and later `u2`.
 2. Deliver a live or completed agent message whose notification `turnId` belongs to `u1`, after `u2` is already present; then make `u2` the active live turn.
-3. Inspect the rendered turn structure and final assistant blocks.
-4. Open a populated thread in a mobile-sized viewport, put the browser tab in the background beyond the resume-refresh threshold, then return to it.
-5. In Network, inspect the resume-triggered `thread/list` request and the selected thread's requests. Keep the tracker/session source populated if subagent filtering can run.
-6. Confirm the sidebar and selected conversation become usable, then observe ancillary metadata such as skills, rate limits, and collaboration modes finish independently.
+3. Send a new message after `u1` has a completed final; while the live overlay has appeared but `liveTurnId` is still `undefined`, inspect the final assistant block for `u1`.
+4. Inspect the rendered turn structure and final assistant blocks.
+5. Open a populated thread in a mobile-sized viewport, put the browser tab in the background beyond the resume-refresh threshold, then return to it.
+6. In Network, inspect the resume-triggered `thread/list` request and the selected thread's requests. Keep the tracker/session source populated if subagent filtering can run.
+7. Confirm the sidebar and selected conversation become usable, then observe ancillary metadata such as skills, rate limits, and collaboration modes finish independently.
 
 #### Expected Results
 - The prior-turn agent message stays between `u1` and `u2`; it is never appended into the newer turn.
-- A supplied `turnId` resolves to the saved turn index for both delta and completed agent messages. Only the actual `liveTurnId` suppresses final-answer promotion; a historical completed answer can remain a dedicated final assistant block while another turn is live.
+- A supplied `turnId` resolves to the saved turn index for both delta and completed agent messages. Only the actual `liveTurnId` suppresses final-answer promotion; when a new live overlay exists but `liveTurnId` has not returned yet, the previous completed answer remains a dedicated final assistant block without flashing into the process area.
 - On foreground resume, `thread/list` filters using the external-session tracker's last completed cache snapshot and does not wait for a recursive tracker scan.
 - The visible selected thread/list refresh completes without awaiting ancillary metadata. Ancillary requests still settle afterward, and no duplicate selected-thread message load is introduced.
 - Targeted checks pass: `pnpm exec vitest run src/composables/useDesktopState.test.ts src/utils/transcriptGrouping.repro.test.ts src/server/bridge/rpcPipeline.test.ts` and `pnpm exec vue-tsc --noEmit`.

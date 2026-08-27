@@ -20,6 +20,7 @@ Subagent sessions are materialized by the app-server with an interactive `source
 
 #### Filtering uses the tracker cache and survives refresh
 - The bridge applies the `thread/list` filter from the tracker's most recently completed scan. It never awaits `externalSessionTracker.tick()` on the RPC path; the tracker continues its background 3 s poll, so a newly written subagent can remain visible until the next poll completes.
+- The pipeline reads that cache only after its asynchronous list processing completes. If a tracker scan completes during that processing, the response uses the updated exclusion set rather than retaining the earlier stale snapshot.
 - The sidebar thread list treats each `thread/list` response as authoritative on refresh: `useDesktopState.ts` replaces `loadedThreadListGroups` instead of union-merging it with the previous snapshot. A subagent thread that was visible before discovery disappears on the next list refresh after the tracker updates its cache.
 - Expected: with the web UI already open, spawn a subagent session while observing the sidebar; within one tracker poll cycle and a subsequent thread-list refresh, the subagent row disappears and no row lingers after a page reload. The list request itself must not wait for a recursive session scan.
 

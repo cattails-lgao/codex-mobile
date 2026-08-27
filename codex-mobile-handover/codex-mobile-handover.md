@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-60 两次提交已完成，待推送；工作区仅 `.zcode/` 未跟踪） |
+| Git 分支 | main（round-61 改动未提交；另有 `.zcode/` 未跟踪） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 未在本轮重启或验证；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `cbc1846`：记录 round-60 交接；代码提交 `01ab0b4` 与文档提交 `cbc1846` 均已完成、待推送（手测待做） |
+| 最近提交 | `3bd6fc5`：更新 round-60 推送状态；round-61 的版本、代码、手测与交接改动均未提交，生产构建与合并定向 Vitest 58/58 已通过，浏览器手测未做；用户已要求后续提交、推送、npm publish 与 GitHub Release |
 
 ---
 ## 文档结构
@@ -90,6 +90,7 @@
 | 第五十八轮 完成后最终总结回落到过程区 | [rounds/round-58-completed-live-summary.md](rounds/round-58-completed-live-summary.md) |
 | 第五十九轮 v0.1.106 发布（最终总结归属修复） | [rounds/round-59-v0.1.106-release.md](rounds/round-59-v0.1.106-release.md) |
 | 第六十轮 桌面前后台恢复同步修复 | [rounds/round-60-desktop-foreground-resume-sync.md](rounds/round-60-desktop-foreground-resume-sync.md) |
+| 第六十一轮 v0.1.107 线程状态修复（异步子代理过滤快照、未知 liveTurnId 的历史最终总结） | [rounds/round-61-v0.1.107-thread-state-fixes.md](rounds/round-61-v0.1.107-thread-state-fixes.md) |
 
 ## 项目概况
 
@@ -145,6 +146,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **round-61 v0.1.107 线程状态修复（2026-08-27，待提交、待发布）**：版本已升至 **`0.1.107`**。修复 `thread/list` 在异步后处理期间 tracker 扫描完成却仍使用旧子代理排除快照的问题；修复新 live overlay 出现但 `liveTurnId` 尚未知时，上一轮最终总结被误判为活跃轮过程项的问题。两项均已补最小 Vitest 回归用例，并更新线程加载/状态手测说明；生产构建 `pnpm run build` 已通过，合并定向 Vitest（`rpcPipeline.test.ts`、`externalSessionTracker.test.ts`、`transcriptGrouping.test.ts`、`transcriptGrouping.repro.test.ts`）**58/58** 通过；浏览器手测未做。用户已要求后续提交、推送、npm publish 与 GitHub Release。详见 [round-61](rounds/round-61-v0.1.107-thread-state-fixes.md)。
 - **round-60 桌面前后台恢复同步待手测（2026-08-27）**：恢复同步已从移动端扩展至桌面和移动端，并以 400 ms 后台阈值与单次触发标记合并 `visibilitychange`、持久化 `pageshow`、`focus` 信号。新增 `foregroundResume` 单测 **91/91 通过**，`vue-tsc --noEmit` 与生产构建均通过。代码提交 `01ab0b4` 与交接文档提交 `cbc1846` 均已完成、待推送；当前无浏览器标签，桌面/移动端浏览器手动验证仍待执行。详见 [round-60](rounds/round-60-desktop-foreground-resume-sync.md)。
 - **v0.1.106 发布（2026-08-26 round-59）**：收录 round-57（过程收尾记录不再遮蔽最终总结）和 round-58（`turn/completed` 先到、最终消息暂留 `.live` 时总结不再回落到过程区）。版本升至 **`0.1.106`**；GitHub Release 与 npm publish 均已完成，`codex-mobile-re@0.1.106` 为 `latest`。针对性回归 127/127、`vue-tsc --noEmit` 和生产构建均通过。详见 [round-59](rounds/round-59-v0.1.106-release.md)。
 - **热点领域模块化进行中（round-48/49 组件化后置项）**：三个最大 `.ts` 逻辑文件（`src/server/codexAppServerBridge.ts` ~10203 行、`src/composables/useDesktopState.ts` ~7375 行、`src/api/codexGateway.ts` ~4165 行）被组件化方案明确排除、按「另行领域模块化」推迟后无续期任务。已完成领域梳理并出方案：见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。实施顺序：codexGateway（薄壳+领域文件，试点）→ useDesktopState A/B（纯函数+持久化层）→ codexAppServerBridge A 批（automations/git/composio 等纯工具）→ 主函数/核心派发保守收尾。**`codexGateway.ts` 领域拆分已全部完成**（薄壳化 re-export，11 个领域文件：search/automations/terminal/threads/models/directory/accounts/git/files/develop/misc；vue-tsc + 全量 370 单测 + build 均通过）。**`useDesktopState.ts` A/B 批已完成**（A 批量 `useDesktopStateUtils.ts` 纯工具 ~100 函数、B 批量 `useDesktopStatePersistence.ts` localStorage 21 函数，主文件头顶 `export *` 保持 API 不变）。**`codexAppServerBridge.ts` 领域模块化已全部完成（A~AF 批，主文件 10203 → 2053 行）**：A/D/E/F 纯工具切片（automations/git/composio/zip/session/models）、G~Q 批迁出核心派发的全部 HTTP 路由族（terminal/git-worktree/composio-routes/free-mode/project/thread-read/telegram+rpcPipeline/thread-preferences/events-SSE）、R~AF 批迁出余下模块级辅助簇（workspaceRoots/threadQueueState/approvalPolicy/inlineImages/codexAuthState/importedSessions/apiPerfLogging/threadErrors/threadArchiveRecovery/provider-model-ids/turnFactory/httpHelpers/threadSearch/projectZip 等）；批量全过 `vue-tsc` + 全量 395 单测 + `pnpm run build`，详见 [sections/domain-modularization-plan.md](sections/domain-modularization-plan.md)。**仅 `useDesktopState()` 主函数与 bridge 核心派发接线本身留驻**（非独立可切纯辅助）。
@@ -174,4 +176,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-27（round-60：`01ab0b4`/`cbc1846` 已完成、待推送；91/91、vue-tsc、build 已通过；桌面/移动端手测待做）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-27（round-61：版本 `0.1.107` 与两项线程状态修复待提交、待发布；已补回归与手测说明，生产构建通过、合并定向 Vitest 58/58 通过，浏览器手测未做）· 内容已脱敏*

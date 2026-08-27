@@ -85,8 +85,9 @@ function filterSubagentThreadsFromThreadListResult(
   tracker: RpcPipelineDeps['externalSessionTracker'],
   result: unknown,
 ): unknown {
-  // The tracker owns periodic discovery. thread/list reads its last completed
-  // snapshot so a recursive session scan cannot stall the RPC response.
+  // Read the tracker after all asynchronous post-processing: an in-flight
+  // background scan can otherwise finish while this RPC awaits and leave a
+  // stale exclusion snapshot in the response.
   return filterThreadListByIds(result, tracker.getUserFacingSubagentThreadIds())
 }
 
@@ -113,29 +114,29 @@ export async function runRpcResponsePipeline(deps: RpcPipelineDeps, method: stri
   const listMergedResult = method === 'thread/list'
     ? mergeImportedThreadsIntoThreadListResult(errorMergedResult)
     : errorMergedResult
-  const subagentFilteredResult = method === 'thread/list'
-    ? filterSubagentThreadsFromThreadListResult(externalSessionTracker, listMergedResult)
-    : listMergedResult
-  const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(method, subagentFilteredResult)
+  const sanitizedResult = await sanitizeThreadTurnsInlinePayloads(method, listMergedResult)
   const skillMergedResult = THREAD_METHODS_WITH_TURNS.has(method)
     ? await mergeSessionSkillInputsIntoThreadResult(sanitizedResult)
     : sanitizedResult
   const mergedResult = THREAD_METHODS_WITH_TURNS.has(method)
     ? await mergeSessionCommandsIntoThreadResult(skillMergedResult)
     : skillMergedResult
+  const subagentFilteredResult = method === 'thread/list'
+    ? filterSubagentThreadsFromThreadListResult(externalSessionTracker, mergedResult)
+    : mergedResult
 
   if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(method)) {
-    const rpcRecord = asRecord(mergedResult)
+    const rpcRecord = asRecord(subagentFilteredResult)
     const rpcThread = asRecord(rpcRecord?.thread)
     const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
-    if (rpcThreadId) appServer.storeThreadReadSnapshot(rpcThreadId, mergedResult)
+    if (rpcThreadId) appServer.storeThreadReadSnapshot(rpcThreadId, subagentFilteredResult)
   }
 
   return method === 'thread/list'
-    ? overlayExternalSessionOnThreadList(externalSessionTracker, mergedResult)
+    ? overlayExternalSessionOnThreadList(externalSessionTracker, subagentFilteredResult)
     : THREAD_METHODS_WITH_TURNS.has(method)
-      ? overlayExternalSessionOnThreadResult(externalSessionTracker, mergedResult)
-      : mergedResult
+      ? overlayExternalSessionOnThreadResult(externalSessionTracker, subagentFilteredResult)
+      : subagentFilteredResult
 }
 
 export function getRpcPipelineErrorMessage(error: unknown, fallback: string): string {

@@ -36,10 +36,10 @@ Return to the [manual test index](../../tests.md).
 | [Missing thread route errors render in chat](missing-thread-route-errors-render-in-chat.md) |
 | [Non-thread startup selection priming](non-thread-startup-selection-priming.md) |
 | [External session (TUI) working state](external-session-tui-working-state.md) |
-| [Subagent threads are filtered from the sidebar](subagent-threads-filtered-from-sidebar.md) |
+| [Subagent threads are filtered from the sidebar](subagent-threads-filtered-from-sidebar.md) — includes asynchronous tracker-cache refresh regression |
 | [Tool-call blocks no longer run to the end of the conversation](tool-call-blocks-end-of-conversation.md) |
 | [Reasoning stays with its response in thread read](reasoning-stays-with-its-response-in-thread-read.md) |
 | [Realtime notification sync and file-change undo refresh](realtime-notification-sync-and-file-change-undo-refresh.md) |
-| [Live agent turn ownership and resume responsiveness](live-agent-turn-ownership-and-resume-responsiveness.md) |
+| [Live agent turn ownership and resume responsiveness](live-agent-turn-ownership-and-resume-responsiveness.md) — includes unknown `liveTurnId` final-summary regression |
 | [Codex 0.149.1 notification compatibility](codex-0.149.1-notification-compatibility.md) |
 | [Foreground resume sync on desktop and mobile](foreground-resume-sync-on-desktop-and-mobile.md) |
