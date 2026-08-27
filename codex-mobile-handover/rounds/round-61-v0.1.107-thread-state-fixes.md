@@ -1,6 +1,6 @@
 # Round-61：v0.1.107 线程状态修复（2026-08-27）
 
-> **范围：** 将仓库版本升至 `0.1.107`，记录两项当前工作区内的线程状态修复及其已有验证。用户已要求后续提交、推送、npm publish 与 GitHub Release；本次仅修正文档，不执行提交或发布操作。
+> **范围：** 仓库版本已升至 `0.1.107`，两项线程状态修复已提交为 `fdbedb8` 并推送至 `origin/main`；tag `v0.1.107` 与 GitHub Release `v0.1.107` 均已创建。npm publish 因 npm 官方源返回 401 未完成，需重新登录后重试。本次仅更新交接文档，不执行提交或发布操作。
 
 ## 修复一：异步列表处理后的子代理线程过滤
 
@@ -52,8 +52,14 @@
 - `codex-mobile-handover/sections/commit-history.md`
 - `codex-mobile-handover/rounds/round-61-v0.1.107-thread-state-fixes.md`
 
+## 发布状态
+
+- `fdbedb8`（`fix: keep subagent threads and final summaries stable`）已推送至 `origin/main`。
+- git tag `v0.1.107` 与 GitHub Release `v0.1.107` 已创建。
+- npm publish 未完成：npm 官方源返回 401；重新登录 npm 后再发布 `codex-mobile-re@0.1.107`。
+
 ## 交接注意事项
 
 - 不要把子代理过滤重新提前到异步 RPC 后处理之前；这会恢复 tracker 扫描完成期间读取旧快照的竞态。
 - `liveTurnId: undefined` 与未传 `liveTurnId` 的语义不同：前者表示活跃 turn 尚未知，不能猜测最后一轮；后者保留旧调用方的最后一轮回退。
-- 用户已要求后续提交、推送、打 tag、npm publish 与 GitHub Release；生产构建与合并定向 Vitest 已通过，浏览器手测未执行。
+- 不要重复创建 tag 或 GitHub Release；仅在重新登录 npm 官方源后重试 v0.1.107 的 npm publish。
