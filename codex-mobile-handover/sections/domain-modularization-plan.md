@@ -326,6 +326,11 @@
   - 性能审计：仍是一个改名 timer；项目操作的 workspace-roots 请求数量和先后顺序不变，没有新增 watcher、后台任务、fanout 或缓存。生产构建主 JS `550.74 kB`（上一静态领域批 `549.99 kB`）。
   - 全量单测 414/416 通过；两个失败仍为未改动 Bridge 测试在 Windows 下的 symlink `EPERM` 与 POSIX `0600`/Windows `0666` 差异。
 
+- 2026-08-28：**useDesktopState Skills / Hooks catalogs 领域迁出**。新建 `src/composables/useDesktopCatalogs.ts`，统一持有 installed skills、Hooks 列表/loading、两个 in-flight Promise、Skills cwd/2 秒成功缓存与两个 refresh action；`useDesktopState()` 仅注入当前选中线程 cwd，公开 refs/actions 与通知、启动、线程切换调用点保持不变。
+  - 新增 `useDesktopCatalogs.test.ts`，覆盖同 cwd 短期复用、cwd 变化重载、projectless 全局请求、force 绕过缓存、Hooks 并发复用和失败保留旧列表/loading 恢复；连同 `useDesktopState.test.ts` 共 93 个定向测试通过。
+  - 性能审计：每个 state 实例仍各只有一个 Skills/Hooks refresh Promise；未新增 watcher、timer、请求、阻塞工作、无界 fanout 或缓存失效路径。生产构建主 JS `550.93 kB`、gzip `171.05 kB`，静态领域边界不承担 code-splitting 目标，既有 `>500 kB` 警告保留。
+  - `useDesktopState.ts` 由 4,186 行降至 4,125 行；全量单测 418/420 通过，两个失败仍为未改动 Bridge 测试在 Windows 下的 symlink `EPERM` 与 POSIX `0600`/Windows `0666` 差异。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
