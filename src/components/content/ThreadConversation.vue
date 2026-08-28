@@ -1,5 +1,5 @@
 <template>
-  <section class="conversation-root" @contextmenu.capture="onConversationContextMenu">
+  <section class="conversation-root" @contextmenu.capture="handleConversationContextMenu">
     <p v-if="isLoading" class="conversation-loading">{{ t('Loading messages...') }}</p>
 
     <p
@@ -510,6 +510,8 @@ import { createFileChangeSummaries } from './useFileChangeSummaries'
 import { createReplyCopyFork } from './useReplyCopyFork'
 import { createCommandExecutionDisplay } from './useCommandExecutionDisplay'
 import { createFileChangeActionMachine } from './useFileChangeActionMachine'
+import { createFileLinkContextMenu } from './useFileLinkContextMenu'
+import { createMessageImageDisplay } from './useMessageImageDisplay'
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
@@ -598,11 +600,18 @@ const {
   getWorkBlockCommands,
   pruneCommandIdSets,
 } = commandExecutionDisplay
-const isFileLinkContextMenuVisible = ref(false)
-const fileLinkContextMenuX = ref(0)
-const fileLinkContextMenuY = ref(0)
-const fileLinkContextBrowseUrl = ref('')
-const fileLinkContextEditUrl = ref('')
+const fileLinkContextMenu = createFileLinkContextMenu({
+  toEditUrlFromBrowseHref,
+})
+const {
+  isFileLinkContextMenuVisible,
+  fileLinkContextMenuX,
+  fileLinkContextMenuY,
+  fileLinkContextBrowseUrl,
+  fileLinkContextEditUrl,
+  handleConversationContextMenu,
+  closeFileLinkContextMenu,
+} = fileLinkContextMenu
 const { isMobile } = useMobile()
 const fileChangeSummaries = createFileChangeSummaries({
   getMessages: () => props.messages,
@@ -743,8 +752,16 @@ const emit = defineEmits<{
 
 const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
-const modalImageUrl = ref('')
-const modalIsVideo = ref(false)
+const messageImageDisplay = createMessageImageDisplay({ isVideo: isVideoMediaUrl })
+const {
+  modalImageUrl,
+  modalIsVideo,
+  markdownImageFailureVersion,
+  isMarkdownImageFailed,
+  onMarkdownImageError,
+  openImageModal,
+  closeImageModal,
+} = messageImageDisplay
 const fileChangeActionMachine = createFileChangeActionMachine({
   getActiveThreadId: () => props.activeThreadId,
   getCwd: () => props.cwd,
@@ -806,7 +823,6 @@ let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
 let conversationScrollPromise: Promise<void> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
-const markdownImageFailureVersion = ref(0)
 
 // hot/warm/cold 三区（阶段 B）：hot 区 = 最后 HOT_TURNS 轮全量渲染；其前轮次进 warm
 // （折叠摘要卡，单轮展开）与 cold（前端分页，Load earlier 按钮逐页展示）。
@@ -1166,31 +1182,6 @@ function confirmPendingAction(): void {
     return
   }
   void runFileChangeAction(pending.summary, pending.action, pending.filePaths)
-}
-
-function onConversationContextMenu(event: MouseEvent): void {
-  const target = event.target
-  if (!(target instanceof Element)) return
-
-  const anchor = target.closest('a.message-file-link')
-  if (!(anchor instanceof HTMLAnchorElement)) return
-
-  const href = (anchor.getAttribute('href') ?? '').trim()
-  if (!href || href === '#') return
-
-  event.preventDefault()
-  event.stopPropagation()
-
-  fileLinkContextBrowseUrl.value = href
-  fileLinkContextEditUrl.value = toEditUrlFromBrowseHref(href)
-  fileLinkContextMenuX.value = event.clientX
-  fileLinkContextMenuY.value = event.clientY
-  isFileLinkContextMenuVisible.value = true
-}
-
-function closeFileLinkContextMenu(): void {
-  if (!isFileLinkContextMenuVisible.value) return
-  isFileLinkContextMenuVisible.value = false
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1808,33 +1799,6 @@ function onConversationScroll(): void {
       void loadMoreAbove()
     }
   }
-}
-
-const failedMarkdownImages = ref(new Set<string>())
-
-function markdownImageKey(messageId: string, blockIndex: number): string {
-  return `${messageId}:${blockIndex}`
-}
-
-function isMarkdownImageFailed(messageId: string, blockIndex: number): boolean {
-  return failedMarkdownImages.value.has(markdownImageKey(messageId, blockIndex))
-}
-
-function onMarkdownImageError(messageId: string, blockIndex: number): void {
-  const next = new Set(failedMarkdownImages.value)
-  next.add(markdownImageKey(messageId, blockIndex))
-  failedMarkdownImages.value = next
-  markdownImageFailureVersion.value += 1
-}
-
-function openImageModal(imageUrl: string): void {
-  modalImageUrl.value = imageUrl
-  modalIsVideo.value = isVideoMediaUrl(imageUrl)
-}
-
-function closeImageModal(): void {
-  modalImageUrl.value = ''
-  modalIsVideo.value = false
 }
 
 const VIDEO_MEDIA_EXTENSIONS = /\.(mp4|m4v|webm|mov|mkv|ogv|ogg|mpeg|avi)$/iu

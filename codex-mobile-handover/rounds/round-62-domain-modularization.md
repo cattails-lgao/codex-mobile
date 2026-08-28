@@ -126,7 +126,16 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 - 组件删除约 200 行内联状态机逻辑（本次还顺带清掉了此前遗留的重复声明：`runFileChangeAction` 与 `fileChangeActionKey/status/…` 各声明两遍、遮蔽了 hook 解构）。接入后 `activeThreadId` watcher 里对三个 ref 的直接重置改写为 `resetFileChangeActions()`；共享确认对话框的 `pendingConfirm` 编排与 emit 仍保留组件（机器只在该对话框 resolve 后运行）。
 - 单元回归：`useFileChangeActionMachine.test.ts`（11 例：action key 与毕竟否可操作、默认 idle + null 兜底、undo 捕获 reverted patch-ids、redo 回传缓存 patch-ids、in-flight pending 标签、服务端 errors 部分 undo 保持可 redo、changed<=0 有/无 message 两种分支、抛错状态回滚、无 summary/thread/cwd 保护、全量 reset），`vue-tsc --noEmit` 与 11/11 定向测试通过，`vite build` 通过（main chunk 547.81 kB）。迁移说明见 `tests/chat-composer-rendering/componentization-round-65-conversation-file-change-undo-redo.md`。
 
-本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示 / 文件变更 undo-redo 状态机」五个纯读或窄依赖簇外的深状态簇（文件链接菜单、图片面板、生命周期、消息窗口化、回合塑形）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
+### ThreadConversation 文件链接菜单 + 图片展示状态极窄簇试点结果（2026-08-28）
+
+延续 hook 化路径，本轮把上轮标注的两簇「极窄簇」一并实施（各一个独立 commit，两个 hook）：
+
+- **`useFileLinkContextMenu.ts`（新增，~70 行）**：`createFileLinkContextMenu(deps)` 工厂，自持 `isFileLinkContextMenuVisible` / `fileLinkContextMenuX` / `fileLinkContextMenuY` / `fileLinkContextBrowseUrl` / `fileLinkContextEditUrl`，方法 `handleConversationContextMenu`（`@contextmenu.capture` 的打开逻辑：命中 `a.message-file-link` → preventDefault/stopPropagation → 填 browse/edit url + 坐标 + 置可见）与 `closeFileLinkContextMenu`。对外依赖 1 个窄注入（`toEditUrlFromBrowseHref`）。**guard 细节：** 原代码用 `instanceof Element` / `instanceof HTMLAnchorElement` 判定，因 Vitest node 环境无 DOM globals，改为鸭子类型的 `closest`/`getAttribute` 可选链判定——`a.message-file-link` 选择器已保证是 `<a>`，浏览器行为不变，也顺带消除了全局缺失时抛错的风险。
+- **`useMessageImageDisplay.ts`（新增，~70 行）**：`createMessageImageDisplay(deps)` 工厂，自持 `modalImageUrl` / `modalIsVideo` / `markdownImageFailureVersion` / `failedMarkdownImages`，方法 `openImageModal` / `closeImageModal` 与 `markdownImageKey` / `isMarkdownImageFailed` / `onMarkdownImageError`。对外依赖 1 个窄注入（`isVideo`）；模板直用的 `isVideoMediaUrl` + `VIDEO_MEDIA_EXTENSIONS` 纯函数因模板/`v-memo` 广泛共用而保留组件作单源并注入回传，避免新增规范化的副本。
+- 组件删除约 70 行内联逻辑（文件链接菜单 5 ref + 2 函数；图片展示 4 ref + 5 函数 + 迁移后的纯函数样板）；模板 `@contextmenu.capture` 改绑 `handleConversationContextMenu`，`activeThreadId` watcher 的 `modalImageUrl.value=''` 写入 hook 自持 ref。
+- 单元回归：`useFileLinkContextMenu.test.ts`（5 例：默认关闭、打开并填充 url/坐标、非链接忽略、空/`#` href 忽略、关闭幂等）与 `useMessageImageDisplay.test.ts`（4 例：默认态、弹窗打开 + 经注入谓词判定视频、关闭清 flag、按 `messageId:blockIndex` 的失败图片去重 + 版本自增），`vue-tsc --noEmit`、7 个 ThreadConversation hook 测试（49 例）全绿、`vite build` 通过（main chunk 547.81 kB）。迁移说明见 `tests/chat-composer-rendering/componentization-round-66-conversation-file-link-menu-and-image-display.md`。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示 / 文件变更 undo-redo 状态机 / 文件链接菜单 / 图片展示」七个簇外的深状态簇（生命周期、消息窗口化、回合塑形）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 
