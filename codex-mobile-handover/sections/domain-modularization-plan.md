@@ -538,6 +538,4 @@
 - 风险：`ThreadConversation` 曾 round-19 重构，**不进入本轮**；`App.vue`/`ThreadComposer` 编排面最广（await 交叠），hook 边界最糊；`SidebarThreadTree` 语义最内聚、爆炸半径最小，是唯一适合做探针的候选。
 - **建议**：先拿 `SidebarThreadTree` 做试点（抽 2~3 个本地 hook），用 `vue-tsc` + 定向测试 + `vite build` 验证边界干不干净；**边界干净才推广到 App.vue/ThreadComposer，否则判定"第二轮组件化不划算"并记录收尾**，与 useDesktopState 同样的口径。
 
-### 下一步
-
-建一条待办：**只读评估 `SidebarThreadTree` 的三簇边界（过滤 / 键盘导航 / 右键菜单），产出试点的先期评估报告**，据此决定是否动手实现试点（抽 2~3 个本地 hook）。本轮暂不动手的对象：`App.vue` / `ThreadComposer`（await 交叠最深的编排块）、`ThreadConversation`（round-19 高风险 UI）。
+> **下一步见 [round-62-domain-modularization.md](../rounds/round-62-domain-modularization.md)「新一轮 · 巨型 `.vue` 第二轮组件化（待办）」段**：只读评估 `SidebarThreadTree` 三簇边界并产出先期评估报告，据此决定是否动手试点。本段仅作评估结论留痕，不再重复待办。
