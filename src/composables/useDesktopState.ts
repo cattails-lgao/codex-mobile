@@ -15,9 +15,7 @@ import {
   rollbackThread,
   getWorkspaceRootsState,
   setWorkspaceRootsState,
-  getThreadTitleCache,
   persistThreadTitle,
-  generateThreadTitle,
   getThreadReasoningArchive,
   persistThreadReasoningArchive,
   resumeThread,
@@ -117,7 +115,6 @@ import {
   hasOptimisticUserMessages,
   isProjectlessGroup,
   mergeProjectOrder,
-  OPTIMISTIC_THREAD_TITLE_MAX,
   pruneLiveMessageSortKeysByActiveThreads,
   resetLiveMessageSortKeys,
   toProjectNameFromWorkspaceRoot,
@@ -239,6 +236,7 @@ import {
 } from './useDesktopQueueState'
 import { createDesktopThreadListLoading } from './useDesktopThreadListLoading'
 import { createDesktopMessageHistoryLoading } from './useDesktopMessageHistoryLoading'
+import { createDesktopThreadTitleCache } from './useDesktopThreadTitleCache'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -438,6 +436,16 @@ export function useDesktopState() {
     pruneMessageHistoryState,
   } = messageHistoryLoading
 
+  const threadTitleCache = createDesktopThreadTitleCache({
+    applyThreadFlags,
+  })
+  const {
+    threadTitleById,
+    applyCachedTitlesToGroups,
+    loadThreadTitleCacheIfNeeded,
+    requestThreadTitleGeneration,
+  } = threadTitleCache
+
   const reasoningTimelineDeps: ReasoningTimelineDeps = {
     liveReasoningTextByThreadId,
     persistedReasoningByThreadId,
@@ -471,7 +479,6 @@ export function useDesktopState() {
   } = createDesktopRateLimits()
   const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
-  const threadTitleById = ref<Record<string, string>>({})
 
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
@@ -847,29 +854,6 @@ export function useDesktopState() {
       void syncFromNotifications()
     }, TURN_START_FOLLOW_UP_SYNC_DELAY_MS)
     delayedTurnSyncTimerByThreadId.set(threadId, timerId)
-  }
-
-  function applyCachedTitlesToGroups(groups: UiProjectGroup[]): UiProjectGroup[] {
-    const titles = threadTitleById.value
-    // round-24：无论缓存命中与否，展示层统一把线程名收口到 20 字以内——
-    // app-server thread/list 返回的 title/preview 可能是第一轮用户消息全文，
-    // 仅依赖 thread/name/updated 通知截断覆盖不到（无缓存/刷新后仍超长）。
-    if (Object.keys(titles).length === 0) {
-      return groups.map((group) => ({
-        projectName: group.projectName,
-        threads: group.threads.map((thread) => ({ ...thread, title: toOptimisticThreadTitle(thread.title) })),
-      }))
-    }
-    return groups.map((group) => ({
-      projectName: group.projectName,
-      threads: group.threads.map((thread) => {
-        const cached = titles[thread.id]
-        return {
-          ...thread,
-          title: toOptimisticThreadTitle(cached ?? thread.title),
-        }
-      }),
-    }))
   }
 
   function getThreadPendingRequests(threadId: string): UiServerRequest[] {
@@ -2221,72 +2205,11 @@ export function useDesktopState() {
     }
   }
 
-  async function loadThreadTitleCacheIfNeeded(options: { force?: boolean } = {}): Promise<void> {
-    if (options.force !== true && Object.keys(threadTitleById.value).length > 0) return
-    try {
-      const cache = await getThreadTitleCache()
-      if (Object.keys(cache.titles).length > 0) {
-        // round-24：缓存里可能存着 app-server 推送的未截断标题（第一轮用户
-        // 消息全文），加载时统一收口到 20 字，避免侧栏/标题展示超长。
-        const normalizedTitles: Record<string, string> = {}
-        for (const [threadId, title] of Object.entries(cache.titles)) {
-          normalizedTitles[threadId] = toOptimisticThreadTitle(title)
-        }
-        threadTitleById.value = normalizedTitles
-      }
-    } catch {
-      // Title cache is optional; keep UI functional.
-    }
-  }
-
   async function loadWorkspaceRootsStateForThreadList(): Promise<WorkspaceRootsState | null> {
     try {
       return await getWorkspaceRootsState()
     } catch {
       return null
-    }
-  }
-
-  function resolveFallbackThreadTitle(prompt: string, imageUrls: string[], fileAttachments: FileAttachment[]): string {
-    const trimmed = prompt.trim()
-    if (trimmed) return toOptimisticThreadTitle(trimmed)
-
-    const firstAttachmentLabel = fileAttachments
-      .map((attachment) => attachment.label.trim())
-      .find((label) => label.length > 0)
-    if (firstAttachmentLabel) return toOptimisticThreadTitle(firstAttachmentLabel)
-
-    if (imageUrls.length > 0) return toOptimisticThreadTitle('[Image]')
-    return 'Untitled thread'
-  }
-
-  async function requestThreadTitleGeneration(
-    threadId: string,
-    prompt: string,
-    cwd: string | null,
-    imageUrls: string[] = [],
-    fileAttachments: FileAttachment[] = [],
-  ): Promise<void> {
-    if (threadTitleById.value[threadId]) return
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      const fallbackTitle = resolveFallbackThreadTitle(prompt, imageUrls, fileAttachments)
-      threadTitleById.value = { ...threadTitleById.value, [threadId]: fallbackTitle }
-      applyThreadFlags()
-      void persistThreadTitle(threadId, fallbackTitle)
-      return
-    }
-    const truncated = trimmed.length > 300 ? trimmed.slice(0, 300) : trimmed
-    try {
-      const title = await generateThreadTitle(truncated, cwd)
-      if (!title || threadTitleById.value[threadId]) return
-      // round-23：总结结果收口到 20 字以内再重命名
-      const normalizedTitle = title.length > OPTIMISTIC_THREAD_TITLE_MAX ? title.slice(0, OPTIMISTIC_THREAD_TITLE_MAX) : title
-      threadTitleById.value = { ...threadTitleById.value, [threadId]: normalizedTitle }
-      applyThreadFlags()
-      void persistThreadTitle(threadId, normalizedTitle)
-    } catch {
-      // Title generation is best-effort.
     }
   }
 
