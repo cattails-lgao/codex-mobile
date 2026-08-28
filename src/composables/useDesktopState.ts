@@ -5,7 +5,6 @@ import {
   forkThread,
   renameThread,
   getPendingServerRequests,
-  getSkillsList,
   getThreadDetail,
   getOlderThreadMessages,
   getBackgroundThreadListLimit,
@@ -31,11 +30,8 @@ import {
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
-  listHooks,
   type RpcNotification,
-  type SkillInfo,
   type ThreadQueueState,
-  type UiHooksListEntry,
   type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { CodexApiError } from '../api/codexErrors'
@@ -240,6 +236,7 @@ import {
 import { createDesktopCollaborationPreferences } from './useDesktopCollaborationPreferences'
 import { createDesktopRateLimits } from './useDesktopRateLimits'
 import { createDesktopProjectOrganization } from './useDesktopProjectOrganization'
+import { createDesktopCatalogs } from './useDesktopCatalogs'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -251,7 +248,6 @@ const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
-const RECENT_SKILLS_LOAD_REUSE_MS = 2000
 
 // Official app-server notifications with no UI consumer in codex-mobile.
 // Each gets an explicit no-op branch (with debug log) so a future unknown
@@ -459,10 +455,6 @@ export function useDesktopState() {
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
   const threadTitleById = ref<Record<string, string>>({})
 
-  const installedSkills = ref<SkillInfo[]>([])
-  const hooksList = ref<UiHooksListEntry[]>([])
-  const isHooksLoading = ref(false)
-
   const isLoadingThreads = ref(false)
   const isLoadingMessages = ref(false)
   const isThreadListFullyLoaded = ref(false)
@@ -511,13 +503,7 @@ export function useDesktopState() {
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
-  let refreshSkillsPromise: Promise<void> | null = null
-  let refreshHooksPromise: Promise<void> | null = null
   let lastThreadListLoadAt = 0
-  let hasLoadedSkills = false
-  let hasLoadedHooks = false
-  let lastSkillsLoadAt = 0
-  let lastSkillsLoadKey = ''
   let pendingThreadsRefresh = false
   let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -540,6 +526,15 @@ export function useDesktopState() {
   const selectedThread = computed(() =>
     allThreads.value.find((thread) => thread.id === selectedThreadId.value) ?? null,
   )
+  const {
+    hooksList,
+    installedSkills,
+    isHooksLoading,
+    refreshHooks,
+    refreshSkills,
+  } = createDesktopCatalogs({
+    getSelectedCwd: () => selectedThread.value?.cwd ?? '',
+  })
   const selectedThreadTerminalOpen = computed(() => {
     const threadId = selectedThreadId.value
     return Boolean(threadId && terminalOpenByThreadId.value[threadId] === true)
@@ -2692,62 +2687,6 @@ export function useDesktopState() {
     if (loadedMessagesByThreadId.value[threadId] === true) return
     if (options.silent === true && turnErrorByThreadId.value[threadId]?.transient) return
     await loadMessages(threadId, options)
-  }
-
-  async function refreshSkills(options: { force?: boolean } = {}): Promise<void> {
-    const selectedCwd = selectedThread.value?.cwd?.trim() ?? ''
-    const skillsLoadKey = selectedCwd || '__global__'
-    if (refreshSkillsPromise) {
-      await refreshSkillsPromise
-      return
-    }
-    if (
-      options.force !== true &&
-      hasLoadedSkills &&
-      lastSkillsLoadKey === skillsLoadKey &&
-      Date.now() - lastSkillsLoadAt < RECENT_SKILLS_LOAD_REUSE_MS
-    ) {
-      return
-    }
-
-    refreshSkillsPromise = (async () => {
-      try {
-        installedSkills.value = await getSkillsList(selectedCwd ? [selectedCwd] : undefined)
-        hasLoadedSkills = true
-        lastSkillsLoadAt = Date.now()
-        lastSkillsLoadKey = skillsLoadKey
-      } catch {
-        // keep previous skills on failure
-      } finally {
-        refreshSkillsPromise = null
-      }
-    })()
-
-    await refreshSkillsPromise
-  }
-
-  async function refreshHooks(options: { force?: boolean } = {}): Promise<void> {
-    if (refreshHooksPromise) {
-      await refreshHooksPromise
-      return
-    }
-    if (options.force !== true && hasLoadedHooks) {
-      return
-    }
-    isHooksLoading.value = true
-    refreshHooksPromise = (async () => {
-      try {
-        hooksList.value = await listHooks()
-        hasLoadedHooks = true
-      } catch {
-        // keep previous hooks on failure
-      } finally {
-        isHooksLoading.value = false
-        refreshHooksPromise = null
-      }
-    })()
-
-    await refreshHooksPromise
   }
 
   async function refreshAncillaryState(
