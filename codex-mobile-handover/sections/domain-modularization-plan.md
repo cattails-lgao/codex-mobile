@@ -290,6 +290,11 @@
   - 现状：主文件 7375 → 4752 行，纯工具/持久化/读取/请求/写入侧 7 个分片已拆出并各有单测（`useDesktopStateUtils`/`Persistence`/`Readers`/`Requests`/`LiveWrites`/`TurnIndex`/`ReasoningWrites`/`ReasoningTimeline`）。计划 C 批本标「高（保守，最后做）」，可安全注入式拆出的写入侧已全部按第四批模式迁出。
   - 不复切理由：① 模块级可平移纯函数已清空，残余闭包辅助（`extractLocalImagePathFromUrl`/`setSelectedModelIdForThread`/`ensureReasoningEffortSupportedForModel` 等）全部捕获共享 ref，属状态中枢本体，无法独立成纯模块；② 该区为 round-50/51/52 反复踩坑处（live 去重、overlay 双守卫、中间消息误提升 final），跨模块传 ref 进一步切碎回归风险高、无用户可见价值；③ 主函数作为应用最内聚的状态中枢，复核为合理，不应为行数再切。
 
+- 2026-08-28：**useDesktopState() 主函数领域拆分重新开启，model/provider/reasoning preferences 完成**。用户在新一轮领域计划中明确要求继续拆分；本批只迁移边界完整且已有回归覆盖的模型偏好领域，不触碰 live turn/message 时序。
+  - 新建 `useDesktopModelPreferences.ts`，由领域工厂持有模型列表、provider 上下文、线程模型映射、reasoning effort、speed mode 与 Codex CLI 缺失状态；迁出模型读取/选择、provider 兼容、fallback、模型元数据刷新、High 手动覆盖与 speed mode 更新。
+  - `useDesktopState()` 只注入 `selectedThreadId` 与共享错误 ref，并继续透出原有 refs/actions；线程选择通过 `syncSelectedThreadModel` 协调，线程裁剪通过 `pruneThreadModelState` 收口，公共返回契约和 localStorage 键保持不变。
+  - 性能不变量：没有新增请求、watcher、定时器、缓存或动态 fanout；`refreshModelPreferences` 的 `getCurrentModelConfig` + `getAvailableModels` 请求序列保持原样。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
