@@ -409,6 +409,7 @@ export function useDesktopState() {
   )
   const selectedModelId = ref(readSelectedModel(selectedModelIdByContext.value, selectedThreadId.value))
   const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
+  let hasSelectedReasoningEffortOverride = false
   const selectedSpeedMode = ref<SpeedMode>('standard')
   const activeProviderId = ref('')
   const codexCliMissingError = ref('')
@@ -1022,6 +1023,7 @@ export function useDesktopState() {
     if (effort && !readSupportedReasoningEffortsForModel(selectedModelId.value).includes(effort)) {
       return
     }
+    hasSelectedReasoningEffortOverride = true
     selectedReasoningEffort.value = effort
   }
 
@@ -1144,7 +1146,7 @@ export function useDesktopState() {
 
       selectedReasoningEffort.value = pickReasoningEffortForModel(
         selectedModelId.value,
-        currentConfig.reasoningEffort,
+        hasSelectedReasoningEffortOverride ? selectedReasoningEffort.value : currentConfig.reasoningEffort,
       )
       selectedSpeedMode.value = currentConfig.speedMode
     } catch (unknownError) {
