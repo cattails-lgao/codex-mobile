@@ -3,7 +3,6 @@ import {
 
   archiveThread,
   forkThread,
-  getAvailableCollaborationModes,
   getAccountRateLimits,
   renameThread,
   getPendingServerRequests,
@@ -44,7 +43,6 @@ import { CodexApiError } from '../api/codexErrors'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
 import type {
   CollaborationModeKind,
-  CollaborationModeOption,
   CommandExecutionData,
   UiPendingRequestState,
   ReasoningEffort,
@@ -147,12 +145,6 @@ import {
 } from './useDesktopStateUtils'
 import {
   NEW_THREAD_COLLABORATION_MODE_CONTEXT,
-  isNewThreadContextId,
-  normalizeCollaborationMode,
-  pruneThreadContextStateMap,
-  readSelectedCollaborationMode,
-  toThreadContextId,
-  writeSelectedCollaborationModeForContext,
 } from './useDesktopStateContext'
 import {
   asRecord,
@@ -241,7 +233,6 @@ import {
   loadProjectDisplayNames,
   loadProjectOrder,
   loadReadStateMap,
-  loadSelectedCollaborationModeMap,
   loadSelectedThreadId,
   loadThreadTerminalOpenMap,
   loadThreadTokenUsageMap,
@@ -251,7 +242,6 @@ import {
   saveProjectDisplayNames,
   saveProjectOrder,
   saveReadStateMap,
-  saveSelectedCollaborationModeMap,
   saveSelectedThreadId,
   saveThreadTerminalOpenMap,
   saveThreadTokenUsageMap,
@@ -262,6 +252,7 @@ import {
   MODEL_FALLBACK_ID,
   createDesktopModelPreferences,
 } from './useDesktopModelPreferences'
+import { createDesktopCollaborationPreferences } from './useDesktopCollaborationPreferences'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -406,16 +397,15 @@ export function useDesktopState() {
     syncSelectedThreadModel,
     updateSelectedSpeedMode,
   } = createDesktopModelPreferences({ selectedThreadId, error })
-  const availableCollaborationModes = ref<CollaborationModeOption[]>([
-    { value: 'default', label: 'Default' },
-    { value: 'plan', label: 'Plan' },
-  ])
-  const selectedCollaborationModeByContext = ref<Record<string, CollaborationModeKind>>(
-    loadSelectedCollaborationModeMap(),
-  )
-  const selectedCollaborationMode = ref<CollaborationModeKind>(
-    readSelectedCollaborationMode(selectedCollaborationModeByContext.value, selectedThreadId.value),
-  )
+  const {
+    availableCollaborationModes,
+    selectedCollaborationMode,
+    pruneThreadCollaborationState,
+    refreshCollaborationModes,
+    setSelectedCollaborationMode,
+    setSelectedCollaborationModeForThread,
+    syncSelectedThreadCollaborationMode,
+  } = createDesktopCollaborationPreferences(selectedThreadId)
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const unreadCutoffIso = ref(loadUnreadCutoffIso())
   const projectOrder = ref<string[]>(loadProjectOrder())
@@ -682,10 +672,7 @@ export function useDesktopState() {
       saveSelectedThreadId(nextThreadId)
     }
     syncSelectedThreadModel(nextThreadId)
-    selectedCollaborationMode.value = readSelectedCollaborationMode(
-      selectedCollaborationModeByContext.value,
-      nextThreadId,
-    )
+    syncSelectedThreadCollaborationMode(nextThreadId)
     activeReasoningItemId = ''
     shouldAutoScrollOnNextAgentEvent = false
   }
@@ -723,33 +710,6 @@ export function useDesktopState() {
         void flushStashedForThread(normalizedThreadId)
       }
     }
-  }
-
-  function setSelectedCollaborationMode(mode: CollaborationModeKind): void {
-    const nextMode: CollaborationModeKind = mode === 'plan' ? 'plan' : 'default'
-    const contextId = toThreadContextId(selectedThreadId.value)
-    const currentMode = readSelectedCollaborationMode(selectedCollaborationModeByContext.value, selectedThreadId.value)
-    if (currentMode === nextMode && selectedCollaborationMode.value === nextMode) return
-    selectedCollaborationMode.value = nextMode
-    selectedCollaborationModeByContext.value = writeSelectedCollaborationModeForContext(
-      selectedCollaborationModeByContext.value,
-      contextId,
-      nextMode,
-    )
-    saveSelectedCollaborationModeMap(selectedCollaborationModeByContext.value)
-  }
-
-  function setSelectedCollaborationModeForThread(threadId: string, mode: CollaborationModeKind): void {
-    const nextMode = mode === 'plan' ? 'plan' : 'default'
-    selectedCollaborationModeByContext.value = writeSelectedCollaborationModeForContext(
-      selectedCollaborationModeByContext.value,
-      threadId,
-      nextMode,
-    )
-    if (threadId.trim() === selectedThreadId.value) {
-      selectedCollaborationMode.value = nextMode
-    }
-    saveSelectedCollaborationModeMap(selectedCollaborationModeByContext.value)
   }
 
   function setCodexRateLimit(nextSnapshot: UiRateLimitSnapshot | null): void {
@@ -841,18 +801,6 @@ export function useDesktopState() {
       setTurnActivityForThread(threadId, null)
     } finally {
       fallbackRetryInFlightThreadIds.delete(threadId)
-    }
-  }
-
-  async function refreshCollaborationModes(): Promise<void> {
-    try {
-      const modes = await getAvailableCollaborationModes()
-      availableCollaborationModes.value = modes
-      if (!modes.some((mode) => mode.value === selectedCollaborationMode.value)) {
-        setSelectedCollaborationMode('default')
-      }
-    } catch {
-      // Keep the last known collaboration mode choices on transient failures.
     }
   }
 
@@ -1025,18 +973,7 @@ export function useDesktopState() {
       activeThreadIds.add(currentThreadId)
     }
     pruneThreadModelState(activeThreadIds)
-    const nextSelectedCollaborationModeMap = pruneThreadContextStateMap(
-      selectedCollaborationModeByContext.value,
-      activeThreadIds,
-    )
-    if (nextSelectedCollaborationModeMap !== selectedCollaborationModeByContext.value) {
-      selectedCollaborationModeByContext.value = nextSelectedCollaborationModeMap
-      selectedCollaborationMode.value = readSelectedCollaborationMode(
-        nextSelectedCollaborationModeMap,
-        selectedThreadId.value,
-      )
-      saveSelectedCollaborationModeMap(nextSelectedCollaborationModeMap)
-    }
+    pruneThreadCollaborationState(activeThreadIds)
     const nextReadState = pruneThreadStateMap(readStateByThreadId.value, activeThreadIds)
     if (nextReadState !== readStateByThreadId.value) {
       readStateByThreadId.value = nextReadState
