@@ -39,12 +39,17 @@
         <slot :item="finalItem" section="final" />
       </ol>
     </section>
+
+    <p v-if="durationMs != null && durationMs > 0" class="conversation-turn-time">
+      {{ formatTurnDuration(durationMs) }}
+    </p>
   </li>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useUiLanguage } from '../../composables/useUiLanguage'
+import { formatTurnDuration } from '../../composables/useDesktopStateUtils'
 import type { UiMessage } from '../../types/codex'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
@@ -68,6 +73,7 @@ const props = withDefaults(defineProps<{
   processItems?: ConversationTurnItem[]
   finalItem?: ConversationTurnItem
   fileChangeAnchorIds?: string[]
+  durationMs?: number
   warm?: WarmTurnRenderData
   warmItems?: ConversationTurnItem[]
 }>(), {
@@ -132,6 +138,10 @@ watch(processItemCount, (nextCount, previousCount) => {
   @apply w-full pt-1;
 }
 
+.conversation-turn-time {
+  @apply m-0 self-start pl-0.5 text-[11px] leading-tight text-zinc-400;
+}
+
 .conversation-turn-row {
   @apply m-0 w-full;
 }
@@ -153,6 +163,10 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 :global(:root.dark) .conversation-turn-process-count {
+  @apply text-zinc-500;
+}
+
+:global(:root.dark) .conversation-turn-time {
   @apply text-zinc-500;
 }
 </style>

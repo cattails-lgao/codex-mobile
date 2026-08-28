@@ -35,6 +35,7 @@
         :process-items="turn.processItems"
         :final-item="turn.finalItem"
         :file-change-anchor-ids="turn.fileChangeAnchorIds"
+        :duration-ms="turnDurationMs(turn)"
       >
         <template #warm-card="{ warm }">
           <li
@@ -566,6 +567,7 @@ import {
   type ToolRenderItem,
 } from '../../utils/toolAggregation'
 import { formatTurnDuration } from '../../composables/useDesktopState'
+import { sumTurnDurations } from '../../utils/turnDurations'
 import { createMarkdownRendering } from './useMarkdownRendering'
 
 const props = defineProps<{
@@ -923,6 +925,16 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
   }
   return turns
 })
+
+const turnDurations = computed<Record<string, number>>(() => sumTurnDurations(props.messages))
+
+function turnDurationMs(turn: {
+  request?: { message: UiMessage }
+  finalItem?: { message: UiMessage }
+}): number | undefined {
+  const turnId = turn.request?.message.turnId ?? turn.finalItem?.message.turnId
+  return turnId ? turnDurations.value[turnId] : undefined
+}
 
 function nextColdPage(): void {
   warmLayerState.value = warmLayerWithNextColdPage(warmLayerState.value, props.activeThreadId)
