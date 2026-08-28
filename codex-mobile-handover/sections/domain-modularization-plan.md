@@ -315,6 +315,11 @@
   - 性能审计：设置打开 watcher、账号/Hooks/Remote Control 请求入口与调用顺序未变；新增 computed 仅在组件渲染所需依赖变化时组装固定大小 props，不含 I/O、fanout 或缓存失效。主 chunk 仍有 `>500 kB` 警告；剩余主体属于首屏线程树、composer 与状态中枢，不以首屏额外请求换取仅数字层面的消警告。
   - 4173 实页验证：异步首次打开正常，General / Models / Integrations / Usage 四组切换成功；浅色背景 `rgb(255, 255, 255)`，深色表面与文字颜色正确，最后恢复 System 主题并关闭对话框。
 
+- 2026-08-28：**useDesktopState rate-limit 领域迁出**。新建 `src/composables/useDesktopRateLimits.ts`，统一持有 Codex quota、账号快照、并发刷新复用、500 ms notification 防抖与 timer 清理；`useDesktopState.ts` 删除对应局部 refs/timer/promise/函数并复用同名 controller API。
+  - 行为不变：临时请求失败继续保留最后快照；连续 notification 仍合并为一次请求；`stopPolling()` 仍取消待执行刷新并只清空当前 Codex quota，不改变账号快照保留语义。
+  - 新增 `useDesktopRateLimits.test.ts`，覆盖 in-flight 请求复用、失败保留、防抖和 stop 清理；连同既有状态/上下文共 92 个定向测试通过。
+  - 性能审计：每个 `useDesktopState()` 实例仍只有一个 refresh promise 和一个 timer；没有新增 watcher、请求、fanout 或缓存失效路径。生产构建主 JS `549.99 kB`（拆分前 `549.71 kB`，静态模块边界不承担 code-splitting 目标）。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

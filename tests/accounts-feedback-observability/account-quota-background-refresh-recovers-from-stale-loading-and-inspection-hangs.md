@@ -21,3 +21,25 @@
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: Desktop rate-limit refresh controller preserves request behavior
+
+#### Prerequisites
+- Start the app from this repository (`pnpm run dev`).
+- Use an account that exposes Codex rate-limit data.
+- Open browser network inspection if request-count verification is needed.
+
+#### Steps
+1. Reload the app and open Settings > Usage & about; record the displayed quota snapshot.
+2. Complete a turn that emits one or more rate-limit update notifications.
+3. Confirm the quota refreshes after the notification burst and does not briefly reset to an empty state.
+4. Temporarily make the rate-limit endpoint unavailable, trigger another refresh, and restore it.
+5. Navigate away or stop the app while a debounced refresh is pending.
+
+#### Expected Results
+- Concurrent callers share one in-flight quota request, and rapid notifications collapse into one request after the 500 ms debounce window.
+- A transient request failure preserves the last known quota snapshot.
+- Stopping polling cancels pending debounced work; no later duplicate request is emitted.
+
+#### Rollback/Cleanup
+- Restore the rate-limit endpoint if it was temporarily made unavailable.

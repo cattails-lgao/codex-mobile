@@ -3,7 +3,6 @@ import {
 
   archiveThread,
   forkThread,
-  getAccountRateLimits,
   renameThread,
   getPendingServerRequests,
   getSkillsList,
@@ -52,7 +51,6 @@ import type {
   UiPlanData,
   UiPlanStep,
   UiProjectGroup,
-  UiRateLimitSnapshot,
   UiServerRequest,
   UiServerRequestReply,
   UiThreadTokenUsage,
@@ -150,11 +148,7 @@ import {
   asRecord,
   buildPlanMessageText,
   extractThreadIdFromNotification,
-  getRateLimitSnapshotKey,
   normalizePlanStepStatus,
-  normalizeRateLimitSnapshot,
-  normalizeRateLimitSnapshotsPayload,
-  normalizeRateLimitWindow,
   normalizeThreadTokenUsage,
   normalizeTokenUsageBreakdown,
   readNotificationErrorState,
@@ -253,6 +247,7 @@ import {
   createDesktopModelPreferences,
 } from './useDesktopModelPreferences'
 import { createDesktopCollaborationPreferences } from './useDesktopCollaborationPreferences'
+import { createDesktopRateLimits } from './useDesktopRateLimits'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -261,7 +256,6 @@ const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-thresho
 const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
-const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
@@ -446,13 +440,19 @@ export function useDesktopState() {
   const interruptedUnsubmittedByThreadId = ref<Record<string, InterruptRecoverPayload>>({})
   const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
-  const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
+  const {
+    accountRateLimitSnapshots,
+    codexQuota,
+    refreshRateLimits,
+    scheduleRateLimitRefresh,
+    setCodexRateLimit,
+    stopRateLimitRefresh,
+  } = createDesktopRateLimits()
   const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
   const threadTitleById = ref<Record<string, string>>({})
 
   const installedSkills = ref<SkillInfo[]>([])
-  const accountRateLimitSnapshots = ref<UiRateLimitSnapshot[]>([])
   const hooksList = ref<UiHooksListEntry[]>([])
   const isHooksLoading = ref(false)
 
@@ -501,7 +501,6 @@ export function useDesktopState() {
   }
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
-  let rateLimitRefreshTimer: number | null = null
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
   let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
@@ -512,7 +511,6 @@ export function useDesktopState() {
   let hasLoadedHooks = false
   let lastSkillsLoadAt = 0
   let lastSkillsLoadKey = ''
-  let rateLimitRefreshPromise: Promise<void> | null = null
   let pendingThreadsRefresh = false
   let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
@@ -593,7 +591,6 @@ export function useDesktopState() {
       errorText,
     }
   })
-  const codexQuota = computed<UiRateLimitSnapshot | null>(() => codexRateLimit.value)
   const selectedThreadTokenUsage = computed<UiThreadTokenUsage | null>(() => {
     const threadId = selectedThreadId.value
     if (!threadId) return null
@@ -712,10 +709,6 @@ export function useDesktopState() {
     }
   }
 
-  function setCodexRateLimit(nextSnapshot: UiRateLimitSnapshot | null): void {
-    codexRateLimit.value = nextSnapshot
-  }
-
   function setPendingTurnRequest(threadId: string, request: PendingTurnRequest): void {
     pendingTurnRequestByThreadId.value = {
       ...pendingTurnRequestByThreadId.value,
@@ -802,43 +795,6 @@ export function useDesktopState() {
     } finally {
       fallbackRetryInFlightThreadIds.delete(threadId)
     }
-  }
-
-  async function refreshRateLimits(): Promise<void> {
-    if (rateLimitRefreshPromise) {
-      await rateLimitRefreshPromise
-      return
-    }
-
-    rateLimitRefreshPromise = (async () => {
-      try {
-        const snapshot = await getAccountRateLimits()
-        setCodexRateLimit(snapshot)
-        accountRateLimitSnapshots.value = snapshot ? [snapshot] : []
-      } catch {
-        // Keep the last known rate-limit state if the endpoint is temporarily unavailable.
-      } finally {
-        rateLimitRefreshPromise = null
-      }
-    })()
-
-    await rateLimitRefreshPromise
-  }
-
-  function scheduleRateLimitRefresh(): void {
-    if (typeof window === 'undefined') {
-      void refreshRateLimits()
-      return
-    }
-
-    if (rateLimitRefreshTimer !== null) {
-      window.clearTimeout(rateLimitRefreshTimer)
-    }
-
-    rateLimitRefreshTimer = window.setTimeout(() => {
-      rateLimitRefreshTimer = null
-      void refreshRateLimits()
-    }, RATE_LIMIT_REFRESH_DEBOUNCE_MS)
   }
 
   function clearDelayedTurnSync(threadId: string): void {
@@ -4172,10 +4128,7 @@ export function useDesktopState() {
       window.clearTimeout(eventSyncTimer)
       eventSyncTimer = null
     }
-    if (rateLimitRefreshTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(rateLimitRefreshTimer)
-      rateLimitRefreshTimer = null
-    }
+    stopRateLimitRefresh()
     if (threadListBackgroundTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(threadListBackgroundTimer)
       threadListBackgroundTimer = null
@@ -4212,7 +4165,7 @@ export function useDesktopState() {
     stashedMessagesByThreadId.value = {}
     saveStashedMessagesMap()
     persistQueueState()
-    codexRateLimit.value = null
+    setCodexRateLimit(null)
     threadTokenUsageByThreadId.value = {}
   }
 
