@@ -118,7 +118,15 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 - 组件删除约 110 行内联命令展示逻辑；消息 watcher 里对两个 id 集的直接剪枝改写为 `pruneCommandIdSets(commandIds)`，同 watcher 里的 `pruneFileChangeSummaryIds()` 与 `scheduleConversationScroll()`（归属其它簇）保留组件内。
 - 单元回归：`useCommandExecutionDisplay.test.ts`（8 例：active command 追踪、连续命令聚合隐藏、work-block 列表、auto-expand + toggle 循环、live 压缩/condense、inProgress condense、id 集剪枝、active 变化时 auto-collapse 复位），`vue-tsc --noEmit`、8/8 定向测试与全量 461 例（仅 2 例既有 Windows 差异）通过，`vite build` 通过。迁移说明见 `tests/chat-composer-rendering/componentization-round-64-conversation-command-execution-display.md`。
 
-本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示」四个纯读簇外的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
+### ThreadConversation 文件变更 action（undo/redo）状态机试点结果（2026-08-28）
+
+延续 hook 化路径，本轮抽取 `ThreadConversation` 的**文件变更 undo/redo 状态机**簇（上一轮 `useFileChangeSummaries` 明确保留在组件、且曾标记为「适合独立成簇」的异步 action 簇，见上文 round-62 迁移说明）：
+
+- **`useFileChangeActionMachine.ts`（新增，~154 行）**：`createFileChangeActionMachine(deps)` 工厂，自持 `fileChangeActionState` / `fileChangeActionError` / `fileChangeRedoPatchIds` 三类按 `threadId:turnId` 键控的状态，完整实现 `runFileChangeAction` 的五态（idle/undoing/redoing/undone/redone）流转并与上一轮纯函数实现逐字一致：undo 成功捕获 `revertedPatchIds` 供 redo 复用、redo 把缓存 patch-ids 回传服务端、errors>0 时部分 undo 仍保持 undone(可 redo)、changed<=0 时保留 previousState 并透出服务端 message 或 t() 兜底、异常回滚到 previousState 并记 error，成功路径末尾 `onFileChangesChanged()` 触发重读以同步多客户端/刷新一致性。对外依赖仅 5 个窄注入（`getActiveThreadId` / `getCwd` / `onFileChangesChanged` / `updateThreadFileChanges` / `t`）。
+- 组件删除约 200 行内联状态机逻辑（本次还顺带清掉了此前遗留的重复声明：`runFileChangeAction` 与 `fileChangeActionKey/status/…` 各声明两遍、遮蔽了 hook 解构）。接入后 `activeThreadId` watcher 里对三个 ref 的直接重置改写为 `resetFileChangeActions()`；共享确认对话框的 `pendingConfirm` 编排与 emit 仍保留组件（机器只在该对话框 resolve 后运行）。
+- 单元回归：`useFileChangeActionMachine.test.ts`（11 例：action key 与毕竟否可操作、默认 idle + null 兜底、undo 捕获 reverted patch-ids、redo 回传缓存 patch-ids、in-flight pending 标签、服务端 errors 部分 undo 保持可 redo、changed<=0 有/无 message 两种分支、抛错状态回滚、无 summary/thread/cwd 保护、全量 reset），`vue-tsc --noEmit` 与 11/11 定向测试通过，`vite build` 通过（main chunk 547.81 kB）。迁移说明见 `tests/chat-composer-rendering/componentization-round-65-conversation-file-change-undo-redo.md`。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示 / 文件变更 undo-redo 状态机」五个纯读或窄依赖簇外的深状态簇（文件链接菜单、图片面板、生命周期、消息窗口化、回合塑形）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 
