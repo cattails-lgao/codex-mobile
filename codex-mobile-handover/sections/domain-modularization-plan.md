@@ -537,3 +537,7 @@
 - 这些文件的"大"在主 `<script setup>` 的**编排逻辑**，模板已被 round-48/49 抽得很干净（3 根 + `DesktopLayout` + 31 子组件），**再抽叶组件收益有限**；真正的杠杆是**把 script setup 的局部状态+处理簇抽成本地 composable/hook**（如 `useThreadTreeFiltering`/`useThreadTreeKeyboardNav`/`useTreeContextMenu`），属 **hook 化**而非 `.vue` 拆分，且管理的是每实例局部 UI 状态（价值低于已收官的共享缓存/请求所有权领域化）。
 - 风险：`ThreadConversation` 曾 round-19 重构，**不进入本轮**；`App.vue`/`ThreadComposer` 编排面最广（await 交叠），hook 边界最糊；`SidebarThreadTree` 语义最内聚、爆炸半径最小，是唯一适合做探针的候选。
 - **建议**：先拿 `SidebarThreadTree` 做试点（抽 2~3 个本地 hook），用 `vue-tsc` + 定向测试 + `vite build` 验证边界干不干净；**边界干净才推广到 App.vue/ThreadComposer，否则判定"第二轮组件化不划算"并记录收尾**，与 useDesktopState 同样的口径。
+
+### 下一步
+
+建一条待办：**只读评估 `SidebarThreadTree` 的三簇边界（过滤 / 键盘导航 / 右键菜单），产出试点的先期评估报告**，据此决定是否动手实现试点（抽 2~3 个本地 hook）。本轮暂不动手的对象：`App.vue` / `ThreadComposer`（await 交叠最深的编排块）、`ThreadConversation`（round-19 高风险 UI）。
