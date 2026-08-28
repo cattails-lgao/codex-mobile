@@ -965,6 +965,7 @@ import IconTablerFilePencil from './components/icons/IconTablerFilePencil.vue'
 import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import { useUiLanguage } from './composables/useUiLanguage'
+import { createSidebarUi } from './useSidebarUi'
 import { useFeedbackDiagnostics } from './composables/useFeedbackDiagnostics'
 import {
   checkoutGitBranch,
@@ -1025,8 +1026,6 @@ const ThreadPendingRequestPanel = defineAsyncComponent(() => import('./component
 const QueuedMessages = defineAsyncComponent(() => import('./components/content/QueuedMessages.vue'))
 const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
-const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
-const ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY = 'codex-web-local.accounts-section-collapsed.v1'
 const worktreeName = import.meta.env.VITE_WORKTREE_NAME ?? 'unknown'
 const appVersion = import.meta.env.VITE_APP_VERSION ?? 'unknown'
 
@@ -1404,20 +1403,28 @@ const worktreeInitStatus = ref<{ phase: 'idle' | 'running' | 'error'; title: str
   title: '',
   message: '',
 })
-const isSidebarCollapsed = ref(loadSidebarCollapsed())
-const sidebarSearchQuery = ref('')
-const isSidebarSearchVisible = ref(false)
-const sidebarScrollableRef = ref<HTMLElement | null>(null)
-const sidebarSearchInputRef = ref<HTMLInputElement | null>(null)
+const sidebarUi = createSidebarUi()
+const {
+  isSidebarCollapsed,
+  isAccountsSectionCollapsed,
+  sidebarSearchQuery,
+  isSidebarSearchVisible,
+  sidebarScrollableRef,
+  sidebarSearchInputRef,
+  setSidebarCollapsed,
+  toggleSidebarSearch,
+  clearSidebarSearch,
+  onSidebarScroll,
+  onSidebarSearchKeydown,
+  restoreSidebarScrollPosition,
+  toggleAccountsSectionCollapsed,
+} = sidebarUi
 const settingsAreaRef = ref<HTMLElement | null>(null)
 const settingsDialogRef = ref<{ containsTarget: (target: Node) => boolean } | null>(null)
 const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
 let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
-let sidebarScrollTop = 0
-let sidebarScrollRestoreRequestId = 0
-let isRestoringSidebarScroll = false
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
 let threadCommitFilesRequestId = 0
@@ -1443,7 +1450,6 @@ function onToggleSettings(): void {
   if (Date.now() - settingsCloseAtMs < SETTINGS_TRIGGER_IGNORE_MS) return
   isSettingsOpen.value = true
 }
-const isAccountsSectionCollapsed = ref(loadAccountsSectionCollapsed())
 const isReviewPaneOpen = ref(false)
 
 const methodsLoaded = ref(false)
@@ -2436,78 +2442,6 @@ async function saveTelegramConfig(): Promise<void> {
   }
 }
 
-function toggleSidebarSearch(): void {
-  isSidebarSearchVisible.value = !isSidebarSearchVisible.value
-  if (isSidebarSearchVisible.value) {
-    nextTick(() => sidebarSearchInputRef.value?.focus())
-  } else {
-    sidebarSearchQuery.value = ''
-  }
-}
-
-function clearSidebarSearch(): void {
-  sidebarSearchQuery.value = ''
-  sidebarSearchInputRef.value?.focus()
-}
-
-function getSidebarScrollableElement(): HTMLElement | null {
-  if (sidebarScrollableRef.value) return sidebarScrollableRef.value
-  if (typeof document === 'undefined') return null
-  return document.querySelector<HTMLElement>('.mobile-drawer .sidebar-scrollable, .sidebar-scrollable')
-}
-
-function onSidebarScroll(event?: Event): void {
-  if (isSidebarCollapsed.value) return
-  if (isRestoringSidebarScroll) return
-  const target = event?.currentTarget
-  const container = target instanceof HTMLElement ? target : getSidebarScrollableElement()
-  sidebarScrollTop = container?.scrollTop ?? sidebarScrollTop
-}
-
-function restoreSidebarScrollPosition(): void {
-  const requestId = ++sidebarScrollRestoreRequestId
-  const targetScrollTop = sidebarScrollTop
-  const maxRestoreAttempts = 90
-  isRestoringSidebarScroll = true
-  const finishRestore = () => {
-    if (requestId === sidebarScrollRestoreRequestId) {
-      sidebarScrollTop = targetScrollTop
-      isRestoringSidebarScroll = false
-    }
-  }
-  const restore = (attempt: number) => {
-    if (requestId !== sidebarScrollRestoreRequestId) return
-    if (isSidebarCollapsed.value) {
-      finishRestore()
-      return
-    }
-
-    const container = getSidebarScrollableElement()
-    if (container) {
-      container.scrollTop = targetScrollTop
-      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || attempt >= maxRestoreAttempts) {
-        finishRestore()
-        return
-      }
-    }
-
-    if (attempt >= maxRestoreAttempts || typeof window === 'undefined') {
-      finishRestore()
-      return
-    }
-    window.requestAnimationFrame(() => restore(attempt + 1))
-  }
-
-  void nextTick(() => restore(0))
-}
-
-function onSidebarSearchKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    isSidebarSearchVisible.value = false
-    sidebarSearchQuery.value = ''
-  }
-}
-
 function onSelectThread(threadId: string): void {
   if (!threadId) return
   if (route.name === 'thread' && routeThreadId.value === threadId) return
@@ -3171,21 +3105,6 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
     await selectThread(forkedThreadId)
   }
   if (isMobile.value) setSidebarCollapsed(true)
-}
-
-function setSidebarCollapsed(nextValue: boolean): void {
-  if (isSidebarCollapsed.value === nextValue) return
-  if (nextValue) {
-    const currentScrollTop = getSidebarScrollableElement()?.scrollTop
-    if (typeof currentScrollTop === 'number' && (currentScrollTop > 0 || sidebarScrollTop === 0)) {
-      sidebarScrollTop = currentScrollTop
-    }
-  }
-  isSidebarCollapsed.value = nextValue
-  saveSidebarCollapsed(nextValue)
-  if (!nextValue) {
-    restoreSidebarScrollPosition()
-  }
 }
 
 function onWindowKeyDown(event: KeyboardEvent): void {
@@ -4720,32 +4639,6 @@ function applyDarkMode(): void {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     root.classList.toggle('dark', prefersDark)
   }
-}
-
-function loadSidebarCollapsed(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
-}
-
-function saveSidebarCollapsed(value: boolean): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value ? '1' : '0')
-}
-
-function loadAccountsSectionCollapsed(): boolean {
-  if (typeof window === 'undefined') return true
-  const value = window.localStorage.getItem(ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY)
-  if (value === null) return true
-  return value === '1'
-}
-
-function toggleAccountsSectionCollapsed(): void {
-  isAccountsSectionCollapsed.value = !isAccountsSectionCollapsed.value
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(
-    ACCOUNTS_SECTION_COLLAPSED_STORAGE_KEY,
-    isAccountsSectionCollapsed.value ? '1' : '0',
-  )
 }
 
 const settingsDialogProps = computed(() => ({

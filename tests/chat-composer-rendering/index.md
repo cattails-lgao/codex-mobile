@@ -56,6 +56,7 @@ Return to the [manual test index](../../tests.md).
 | [Componentization round-64: conversation command execution display hook](componentization-round-64-conversation-command-execution-display.md) |
 | [Componentization round-65: conversation file-change undo/redo hook](componentization-round-65-conversation-file-change-undo-redo.md) |
 | [Componentization round-66: file-link context menu + image display hooks](componentization-round-66-conversation-file-link-menu-and-image-display.md) |
+| [Componentization round-67: App.vue sidebar UI hook](componentization-round-67-app-sidebar-ui.md) |
 | [Process Fold phase A and streaming reasoning truncation](process-fold-phase-a-and-streaming-reasoning-truncation.md) |
 | [Three-zone hot/warm/cold rendering (phase B)](three-zone-hot-warm-cold-rendering.md) |
 | [Phase C: question-nav JumpBar, tool aggregation, partitionTurnItems split](phase-c-jumpbar-tool-aggregation.md) |

@@ -147,6 +147,17 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 
 收益侧：`ThreadConversation` 脚本内联逻辑经七轮试点累计净减约 650+ 行，7 个工厂 hook（`useMarkdownRendering` / `useFileChangeSummaries` / `useReplyCopyFork` / `useCommandExecutionDisplay` / `useFileChangeActionMachine` / `useFileLinkContextMenu` / `useMessageImageDisplay`）各带定向单测（合计 ~62 例），`vue-tsc` / `vite build` / main chunk 547.81 kB 均稳定。剩余三簇抽离的风险（主耦合核心行为漂移、滚动时序竞态、live-turn/realtime 破坏）远高于降行数的收益，符合 lazy-senior「不为降行数搬高风险代码」原则，故收束。后续若需推进，可选方向为：评审 `App.vue` / `ThreadComposer`（await 交叠最深）是否有内聚窄依赖簇可拆，或对阶段 C 问题导航 JumpBar 做一次带明确边界的中等耦合抽取（需跨簇 write warmLayerState / `conversationListRef` / `autoFollowOutput`）。
 
+### App.vue 侧边栏极窄簇试点结果（2026-08-28）
+
+ThreadConversation 收束后转向 `App.vue`（6023 行）评审，首抽其最干净的**侧边栏 UI 状态簇**：
+
+- **`useSidebarUi.ts`（新增，~150 行）**：`createSidebarUi()` **零注入依赖工厂**——该簇本就用 `typeof window/document === 'undefined'` 做过环境守卫，天然可独立。自持 `isSidebarCollapsed`（localStorage 持久化）/ `isAccountsSectionCollapsed`（持久化）/ `sidebarSearchQuery` / `isSidebarSearchVisible` / `sidebarScrollableRef` / `sidebarSearchInputRef` 及私有 `sidebarScrollTop` + `sidebarScrollRestoreRequestId` + `isRestoringSidebarScroll`；方法 `setSidebarCollapsed`（收起时记录滚动、展开时恢复）/ `toggleSidebarSearch` / `clearSidebarSearch` / `onSidebarScroll` / `restoreSidebarScrollPosition`（带 requestId 守卫的有界 rAF 轮询）/ `onSidebarSearchKeydown`(Escape) / `toggleAccountsSectionCollapsed`。
+- **guard 细节：** `onSidebarScroll` 原 `target instanceof HTMLElement` 在 Vitest node 环境（`HTMLElement` 未定义）会抛 `instanceof undefined`，改为「`typeof HTMLElement !== 'undefined' && target instanceof HTMLElement`」的存在性守卫——真实浏览器 currentTarget 恒为 HTMLElement，行为不变，与 round-66 文件链接菜单 guard 同理。
+- 组件删除约 130 行内联逻辑（6 ref + 2 私有 let + 11 函数 + 2 存储键常量），模板/其余代码引用的名字全部由解构接入，`settingsDialogProps` 里的 `isAccountsSectionCollapsed` 直连 hook 自持 ref，`setSidebarCollapsed` 仍是全局唯一写入口由 hook 暴露。
+- 单元回归：`useSidebarUi.test.ts`（9 例：无 window 服务器安全默认、localStorage 双偏好加载、setSidebarCollapsed + 持久化 + 幂等、滚动记录 + 展开恢复、搜索开关/清空、Escape 关闭/非 Escape 忽略、账户区折叠 + 持久化），`vue-tsc --noEmit`、9/9 定向测试通过、`vite build` 通过（main chunk 548.6 kB）。迁移说明见 `tests/chat-composer-rendering/componentization-round-67-app-sidebar-ui.md`。
+
+App.vue 剩余候选：右侧面板簇（tab + file previews + 宽度持久化 + resize，对 `canShowRightPanel`/面板开合耦合略宽）、设置对话框 ghost-click 守卫（极自持小簇）、听写偏好（纯 prefs 零依赖）、账户列表/配额（较大含 async）、项目导入 overlay。可按同标准后续评估。
+
 ## 交接注意事项
 
 - 不要为了继续降行数直接搬运闭包函数；先确认领域拥有的 refs、请求缓存和唯一写入口，再用窄依赖接线。
