@@ -27,3 +27,23 @@
 #### Rollback/Cleanup
 - Remove imported snapshots from `~/.codex/accounts/` and corresponding rows in `~/.codex/accounts.json` if needed.
 - Delete localStorage key `codex-web-local.accounts-section-collapsed.v1` to reset UI preference.
+
+## Feature: Settings dialog loads as one asynchronous surface
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`.
+- Sidebar expanded so the Settings button is visible.
+
+#### Steps
+1. Reload the app, open Settings, and confirm the dialog appears after its async chunk loads.
+2. Switch through General settings, Models & providers, Integrations, and Usage & about.
+3. Confirm Accounts, provider controls, Hooks/Remote control, and usage/build information render in their respective groups.
+4. Repeat in light and dark themes, then restore the original theme and close Settings.
+
+#### Expected Results
+- The first open does not leave a persistent blank dialog or duplicate settings-related API requests.
+- All four groups retain their existing values and actions; closing and reopening retains the selected group for the current app session.
+- Light and dark surfaces and text remain readable.
+
+#### Rollback/Cleanup
+- Restore the original theme and close Settings.

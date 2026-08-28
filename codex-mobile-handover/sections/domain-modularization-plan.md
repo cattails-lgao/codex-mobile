@@ -310,6 +310,11 @@
   - 首轮四个表面构建后，主 JS chunk `610.71 → 591.02 kB`（gzip `186.58 → 181.10 kB`）；加入审批/队列边界后最终降至 `567.87 kB`（gzip `175.00 kB`）。主 CSS 最终为 `427.56 kB`（gzip `43.44 kB`）。相对本轮对齐基线 `609.25 kB`，主 JS 减少 `41.38 kB`；仍保留 `>500 kB` 构建警告，下一批继续提取完整 Settings 对话框。
   - 4173 实页验证：深色下 Settings Accounts、Git、Files、文本预览均渲染；浅色下 Settings 对话框与右侧面板表面颜色正确，测试后恢复 System 主题。
 
+- 2026-08-28：**完整 Settings 对话框迁出并异步加载**。新建 `src/components/settings/SettingsDialog.vue`，迁入四个设置分组的完整模板与专属样式；`App.vue` 保留 API/controller 状态，通过响应式 props 映射和原回调接线。
+  - Settings 形成独立 `33.73 kB` JS（gzip `8.28 kB`）与 `61.10 kB` CSS（gzip `5.63 kB`）chunk；主 JS `567.87 → 549.71 kB`（gzip `175.00 → 170.57 kB`），主 CSS `427.56 → 385.24 kB`（gzip `43.44 → 40.81 kB`）。
+  - 性能审计：设置打开 watcher、账号/Hooks/Remote Control 请求入口与调用顺序未变；新增 computed 仅在组件渲染所需依赖变化时组装固定大小 props，不含 I/O、fanout 或缓存失效。主 chunk 仍有 `>500 kB` 警告；剩余主体属于首屏线程树、composer 与状态中枢，不以首屏额外请求换取仅数字层面的消警告。
+  - 4173 实页验证：异步首次打开正常，General / Models / Integrations / Usage 四组切换成功；浅色背景 `rgb(255, 255, 255)`，深色表面与文字颜色正确，最后恢复 System 主题并关闭对话框。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
