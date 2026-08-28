@@ -30,3 +30,25 @@
 - Tap `Done` to leave move mode.
 - Reset the sidebar Organize menu to the preferred project sort mode.
 - Remove any temporary chats or workspace roots created for verification.
+
+### Feature: Project organization controller preserves rename, removal, and order
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`.
+- At least two visible workspace-root projects, each with a thread.
+
+#### Steps
+1. Rename one project and confirm its sidebar label updates immediately; wait at least 500 ms, reload, and confirm the label persists.
+2. Move the second project above the first and reload; confirm the order persists.
+3. Pin a project to the top and confirm its threads remain attached to the same project row.
+4. Remove the currently selected project and confirm the first remaining thread becomes selected.
+5. Reload and confirm the removed workspace root and its label/order entries do not reappear.
+
+#### Expected Results
+- Rename, reorder, pin, and removal behave exactly as before the controller extraction.
+- Renaming emits at most one workspace-roots update after the 500 ms debounce window.
+- Removing a project prunes its thread-scoped state, preserves remaining groups, and writes the same workspace-root order/active fallback.
+- No duplicate thread-list or workspace-roots requests are introduced.
+
+#### Rollback/Cleanup
+- Restore any temporary project names and ordering, and re-add removed test roots if needed.

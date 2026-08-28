@@ -320,6 +320,12 @@
   - 新增 `useDesktopRateLimits.test.ts`，覆盖 in-flight 请求复用、失败保留、防抖和 stop 清理；连同既有状态/上下文共 92 个定向测试通过。
   - 性能审计：每个 `useDesktopState()` 实例仍只有一个 refresh promise 和一个 timer；没有新增 watcher、请求、fanout 或缓存失效路径。生产构建主 JS `549.99 kB`（拆分前 `549.71 kB`，静态模块边界不承担 code-splitting 目标）。
 
+- 2026-08-28：**useDesktopState 项目组织领域迁出**。新建 `src/composables/useDesktopProjectOrganization.ts`，持有项目显示名与顺序，并迁出 rename/remove/reorder/pin、500 ms 改名防抖及 workspace-roots 持久化。
+  - `useDesktopState()` 只注入 source/rendered groups、当前线程，以及刷新 flags、线程状态裁剪和重新选中回调；项目模块不依赖消息、turn 或 realtime 内部状态。线程创建、workspace-roots hydrate 和线程列表应用改为调用领域 setter，不再直接写项目偏好持久化。
+  - 新增 `useDesktopProjectOrganization.test.ts`，覆盖改名的本地立即写入与全局防抖持久化、移除项目后的 roots/线程裁剪/选中回退、重排和置顶；连同既有状态/上下文共 93 个定向测试通过。
+  - 性能审计：仍是一个改名 timer；项目操作的 workspace-roots 请求数量和先后顺序不变，没有新增 watcher、后台任务、fanout 或缓存。生产构建主 JS `550.74 kB`（上一静态领域批 `549.99 kB`）。
+  - 全量单测 414/416 通过；两个失败仍为未改动 Bridge 测试在 Windows 下的 symlink `EPERM` 与 POSIX `0600`/Windows `0666` 差异。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

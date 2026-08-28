@@ -82,7 +82,6 @@ import {
   areTurnSummariesEqual,
   areUiFileChangesEqual,
   buildTurnSummaryMessage,
-  buildWorkspaceRootsProjectOrderState,
   dedupeAssistantAgentMessageText,
   delay,
   filterGroupsByWorkspaceRoots,
@@ -104,7 +103,6 @@ import {
   mergeThreadMessageStreams,
   normalizeMessageText,
   omitKey,
-  omitKeys,
   orderGroupsByProjectOrder,
   orderGroupsByWorkspaceProjectOrder,
   parseIsoTimestamp,
@@ -120,18 +118,15 @@ import {
   addWorkspaceRootPlaceholderGroups,
   clamp,
   collectDuplicateProjectLeafNames,
-  collectWorkspaceRootPathsForProjectRemoval,
   disambiguateProjectGroupsByCwd,
   getRemoteProjectDisplayName,
   getWorkspaceProjectOrderNames,
   getWorkspaceProjectOrderPaths,
   hasOptimisticUserMessages,
   isProjectlessGroup,
-  matchesWorkspaceRootProject,
   mergeProjectOrder,
   OPTIMISTIC_THREAD_TITLE_MAX,
   pruneLiveMessageSortKeysByActiveThreads,
-  reorderStringArray,
   resetLiveMessageSortKeys,
   toProjectNameFromWorkspaceRoot,
   type TurnCompletedInfo,
@@ -224,8 +219,6 @@ import {
 import {
   loadLastPlanMap,
   loadPersistedReasoningMap,
-  loadProjectDisplayNames,
-  loadProjectOrder,
   loadReadStateMap,
   loadSelectedThreadId,
   loadThreadTerminalOpenMap,
@@ -233,8 +226,6 @@ import {
   loadUnreadCutoffIso,
   saveLastPlanMap,
   savePersistedReasoningMap,
-  saveProjectDisplayNames,
-  saveProjectOrder,
   saveReadStateMap,
   saveSelectedThreadId,
   saveThreadTerminalOpenMap,
@@ -248,6 +239,7 @@ import {
 } from './useDesktopModelPreferences'
 import { createDesktopCollaborationPreferences } from './useDesktopCollaborationPreferences'
 import { createDesktopRateLimits } from './useDesktopRateLimits'
+import { createDesktopProjectOrganization } from './useDesktopProjectOrganization'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -402,8 +394,23 @@ export function useDesktopState() {
   } = createDesktopCollaborationPreferences(selectedThreadId)
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const unreadCutoffIso = ref(loadUnreadCutoffIso())
-  const projectOrder = ref<string[]>(loadProjectOrder())
-  const projectDisplayNameById = ref<Record<string, string>>(loadProjectDisplayNames())
+  const {
+    projectDisplayNameById,
+    projectOrder,
+    pinProjectToTop,
+    removeProject,
+    renameProject,
+    reorderProject,
+    setProjectDisplayNames,
+    setProjectOrder,
+  } = createDesktopProjectOrganization({
+    sourceGroups,
+    projectGroups,
+    selectedThreadId,
+    applyThreadFlags,
+    pruneThreadScopedState,
+    setSelectedThreadId,
+  })
   const loadedVersionByThreadId = ref<Record<string, string>>({})
   const loadedMessagesByThreadId = ref<Record<string, boolean>>({})
   const hasMoreOlderMessagesByThreadId = ref<Record<string, boolean>>({})
@@ -916,8 +923,7 @@ export function useDesktopState() {
 
     const nextProjectOrder = mergeProjectOrder(projectOrder.value, sourceGroups.value)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
-      projectOrder.value = nextProjectOrder
-      saveProjectOrder(projectOrder.value)
+      setProjectOrder(nextProjectOrder)
     }
     applyThreadFlags()
   }
@@ -2149,7 +2155,7 @@ export function useDesktopState() {
           ? mergeProjectOrder(hydratedOrder, groups)
           : mergeProjectOrder(projectOrder.value, groups)
         if (!areStringArraysEqual(projectOrder.value, mergedOrder)) {
-          projectOrder.value = mergedOrder
+          setProjectOrder(mergedOrder, { persist: false })
         }
       }
 
@@ -2182,7 +2188,7 @@ export function useDesktopState() {
           changed = true
         }
         if (changed) {
-          projectDisplayNameById.value = nextLabels
+          setProjectDisplayNames(nextLabels, { persist: false })
         }
       }
     } catch {
@@ -2291,10 +2297,7 @@ export function useDesktopState() {
       )
       : mergeProjectOrder(projectOrder.value, visibleGroups)
     if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
-      projectOrder.value = nextProjectOrder
-      if (!hasWorkspaceRootsState) {
-        saveProjectOrder(projectOrder.value)
-      }
+      setProjectOrder(nextProjectOrder, { persist: !hasWorkspaceRootsState })
     }
 
     const orderedGroups = orderGroupsByProjectOrder(visibleGroups, projectOrder.value)
@@ -3706,170 +3709,6 @@ export function useDesktopState() {
     }
   }
 
-  let renameProjectTimer: ReturnType<typeof setTimeout> | null = null
-
-  async function persistProjectLabelToGlobalState(projectName: string, displayName: string): Promise<void> {
-    try {
-      const rootsState = await getWorkspaceRootsState()
-      const nextLabels = { ...rootsState.labels }
-      let changed = false
-      for (const rootPath of rootsState.order) {
-        if (!matchesWorkspaceRootProject(rootPath, projectName)) continue
-        const trimmed = displayName.trim()
-        if (trimmed.length === 0) {
-          if (nextLabels[rootPath] !== undefined) {
-            delete nextLabels[rootPath]
-            changed = true
-          }
-        } else if (nextLabels[rootPath] !== trimmed) {
-          nextLabels[rootPath] = trimmed
-          changed = true
-        }
-      }
-      if (changed) {
-        await setWorkspaceRootsState({
-          order: rootsState.order,
-          labels: nextLabels,
-          active: rootsState.active,
-          projectOrder: rootsState.projectOrder,
-        })
-      }
-    } catch {
-      // Keep localStorage-only rename when global state is unavailable.
-    }
-  }
-
-  function renameProject(projectName: string, displayName: string): void {
-    if (projectName.length === 0) return
-
-    const currentValue = projectDisplayNameById.value[projectName] ?? ''
-    if (currentValue === displayName) return
-
-    projectDisplayNameById.value = {
-      ...projectDisplayNameById.value,
-      [projectName]: displayName,
-    }
-    saveProjectDisplayNames(projectDisplayNameById.value)
-
-    if (renameProjectTimer !== null) clearTimeout(renameProjectTimer)
-    renameProjectTimer = setTimeout(() => {
-      renameProjectTimer = null
-      void persistProjectLabelToGlobalState(projectName, displayName)
-    }, 500)
-  }
-
-  async function removeProject(projectName: string): Promise<void> {
-    if (projectName.length === 0) return
-
-    const nextProjectOrder = projectOrder.value.filter((name) => name !== projectName)
-    if (!areStringArraysEqual(projectOrder.value, nextProjectOrder)) {
-      projectOrder.value = nextProjectOrder
-      saveProjectOrder(projectOrder.value)
-    }
-
-    sourceGroups.value = sourceGroups.value.filter((group) => group.projectName !== projectName)
-
-    if (projectDisplayNameById.value[projectName] !== undefined) {
-      const nextDisplayNames = { ...projectDisplayNameById.value }
-      delete nextDisplayNames[projectName]
-      projectDisplayNameById.value = nextDisplayNames
-      saveProjectDisplayNames(nextDisplayNames)
-    }
-
-    applyThreadFlags()
-
-    const flatThreads = flattenThreads(projectGroups.value)
-    pruneThreadScopedState(flatThreads)
-
-    const currentExists = flatThreads.some((thread) => thread.id === selectedThreadId.value)
-    if (!currentExists) {
-      setSelectedThreadId(flatThreads[0]?.id ?? '')
-    }
-
-    const removedRootPaths = new Set<string>()
-    try {
-      const rootsState = await getWorkspaceRootsState()
-      collectWorkspaceRootPathsForProjectRemoval(rootsState, projectName).forEach((rootPath) => {
-        removedRootPaths.add(rootPath)
-      })
-    } catch {
-      // Keep local-only removal when global state is unavailable.
-    }
-
-    if (removedRootPaths.size > 0) {
-      try {
-        const rootsState = await getWorkspaceRootsState()
-        const nextOrder = rootsState.order.filter((rootPath) => !removedRootPaths.has(rootPath))
-        const nextActive = rootsState.active.filter((rootPath) => !removedRootPaths.has(rootPath))
-        const fallbackActive = nextActive.length === 0 && nextOrder.length > 0
-          ? [nextOrder[0]]
-          : nextActive
-        await setWorkspaceRootsState({
-          order: nextOrder,
-          labels: omitKeys(rootsState.labels, removedRootPaths),
-          active: fallbackActive,
-          projectOrder: rootsState.projectOrder.filter((item) => item !== projectName && !removedRootPaths.has(item)),
-        })
-        return
-      } catch {
-        // Fall back to order-only persistence if direct removal fails.
-      }
-    }
-
-    await persistProjectOrderToWorkspaceRoots()
-  }
-
-  function reorderProject(projectName: string, toIndex: number): void {
-    if (projectName.length === 0) return
-    if (sourceGroups.value.length === 0) return
-
-    const visibleOrder = sourceGroups.value.map((group) => group.projectName)
-    const fromIndex = visibleOrder.indexOf(projectName)
-    if (fromIndex === -1) return
-
-    const clampedToIndex = Math.max(0, Math.min(toIndex, visibleOrder.length - 1))
-    const reorderedVisibleOrder = reorderStringArray(visibleOrder, fromIndex, clampedToIndex)
-    if (reorderedVisibleOrder === visibleOrder) return
-
-    const normalizedProjectOrder = mergeProjectOrder(reorderedVisibleOrder, sourceGroups.value)
-    projectOrder.value = normalizedProjectOrder
-    saveProjectOrder(projectOrder.value)
-
-    const orderedGroups = orderGroupsByProjectOrder(sourceGroups.value, projectOrder.value)
-    sourceGroups.value = mergeThreadGroups(sourceGroups.value, orderedGroups)
-    applyThreadFlags()
-    void persistProjectOrderToWorkspaceRoots()
-  }
-
-  function pinProjectToTop(projectName: string): void {
-    const normalizedName = projectName.trim()
-    if (!normalizedName) return
-    const nextOrder = [normalizedName, ...projectOrder.value.filter((name) => name !== normalizedName)]
-    if (areStringArraysEqual(projectOrder.value, nextOrder)) return
-    projectOrder.value = nextOrder
-    saveProjectOrder(projectOrder.value)
-
-    const orderedGroups = orderGroupsByProjectOrder(sourceGroups.value, projectOrder.value)
-    sourceGroups.value = mergeThreadGroups(sourceGroups.value, orderedGroups)
-    applyThreadFlags()
-    void persistProjectOrderToWorkspaceRoots()
-  }
-
-  async function persistProjectOrderToWorkspaceRoots(): Promise<void> {
-    try {
-      const rootsState = await getWorkspaceRootsState()
-      const nextState = buildWorkspaceRootsProjectOrderState(rootsState, projectOrder.value, sourceGroups.value)
-
-      await setWorkspaceRootsState({
-        order: nextState.order,
-        labels: rootsState.labels,
-        active: nextState.active,
-        projectOrder: nextState.projectOrder,
-      })
-    } catch {
-      // Keep local project order when global state persistence is unavailable.
-    }
-  }
 
   async function syncThreadStatus(): Promise<void> {
     if (isPolling.value) return
