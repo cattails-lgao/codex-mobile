@@ -508,6 +508,7 @@ import {
 } from '../../utils/conversationFileChanges'
 import { createFileChangeSummaries } from './useFileChangeSummaries'
 import { createReplyCopyFork } from './useReplyCopyFork'
+import { createCommandExecutionDisplay } from './useCommandExecutionDisplay'
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
@@ -582,8 +583,20 @@ const {
   clearRenderCaches,
 } = markdownRendering
 
-const expandedCommandIds = ref<Set<string>>(new Set())
-const collapsedAutoCommandIds = ref<Set<string>>(new Set())
+const commandExecutionDisplay = createCommandExecutionDisplay({
+  getMessages: () => props.messages,
+  getLiveOverlay: () => props.liveOverlay,
+  isCommandMessage,
+})
+const {
+  hiddenGroupedCommandIds,
+  isCommandExpanded,
+  isCommandCompact,
+  isCommandOutputCondensed,
+  toggleCommandExpand,
+  getWorkBlockCommands,
+  pruneCommandIdSets,
+} = commandExecutionDisplay
 const isFileLinkContextMenuVisible = ref(false)
 const fileLinkContextMenuX = ref(0)
 const fileLinkContextMenuY = ref(0)
@@ -705,118 +718,6 @@ function isCopyableAssistantMessage(message: UiMessage): boolean {
     && !isCommandMessage(message)
     && message.messageType !== 'worked'
     && !(message.messageType ?? '').endsWith('.live')
-}
-
-const activeCommandMessageId = computed(() => {
-  for (let index = props.messages.length - 1; index >= 0; index -= 1) {
-    const message = props.messages[index]
-    if (message.messageType === 'commandExecution' && message.commandExecution?.status === 'inProgress') {
-      return message.id
-    }
-  }
-  return ''
-})
-
-const hasLiveAssistantText = computed(() =>
-  props.messages.some((message) =>
-    message.role === 'assistant' &&
-    message.messageType === 'agentMessage.live' &&
-    message.text.trim().length > 0,
-  ),
-)
-
-const isLiveTurnRuntime = computed(() =>
-  Boolean(props.liveOverlay) || activeCommandMessageId.value.length > 0 || hasLiveAssistantText.value,
-)
-
-const groupedCommandsByLatestId = computed<Record<string, UiMessage[]>>(() => {
-  const next: Record<string, UiMessage[]> = {}
-  for (let index = 0; index < props.messages.length;) {
-    const message = props.messages[index]
-    if (!isCommandMessage(message)) {
-      index += 1
-      continue
-    }
-
-    const block: UiMessage[] = []
-    while (index < props.messages.length && isCommandMessage(props.messages[index])) {
-      block.push(props.messages[index])
-      index += 1
-    }
-
-    if (block.length <= 1) continue
-    const latest = block[block.length - 1]
-    next[latest.id] = block.slice(0, -1)
-  }
-  return next
-})
-
-const hiddenGroupedCommandIds = computed(() => {
-  const next = new Set<string>()
-  for (const commands of Object.values(groupedCommandsByLatestId.value)) {
-    for (const command of commands) {
-      next.add(command.id)
-    }
-  }
-  return next
-})
-
-function isCommandAutoExpanded(message: UiMessage): boolean {
-  return !hasLiveAssistantText.value && message.id === activeCommandMessageId.value
-}
-
-function isCommandExpanded(message: UiMessage): boolean {
-  if (!isCommandMessage(message)) return false
-  return expandedCommandIds.value.has(message.id)
-    || (!collapsedAutoCommandIds.value.has(message.id) && isCommandAutoExpanded(message))
-}
-
-function isCommandCompact(message: UiMessage): boolean {
-  return isCommandMessage(message) && isLiveTurnRuntime.value
-}
-
-function isCommandOutputCondensed(message: UiMessage): boolean {
-  return isCommandMessage(message) && (isLiveTurnRuntime.value || message.commandExecution?.status === 'inProgress')
-}
-
-function toggleCommandExpand(message: UiMessage): void {
-  if (!isCommandMessage(message)) return
-
-  const nextExpanded = new Set(expandedCommandIds.value)
-  const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
-  const isAutoExpanded = isCommandAutoExpanded(message)
-  const isManuallyExpanded = nextExpanded.has(message.id)
-
-  if (isManuallyExpanded) {
-    nextExpanded.delete(message.id)
-    if (isAutoExpanded) nextCollapsedAuto.add(message.id)
-  } else if (isAutoExpanded && !nextCollapsedAuto.has(message.id)) {
-    nextCollapsedAuto.add(message.id)
-  } else {
-    nextExpanded.add(message.id)
-    nextCollapsedAuto.delete(message.id)
-  }
-
-  expandedCommandIds.value = nextExpanded
-  collapsedAutoCommandIds.value = nextCollapsedAuto
-}
-
-function getGroupedCommandsForLatest(message: UiMessage): UiMessage[] {
-  return groupedCommandsByLatestId.value[message.id] ?? []
-}
-
-function getWorkBlockCommands(message: UiMessage): UiMessage[] {
-  if (!isCommandMessage(message)) return []
-  return [...getGroupedCommandsForLatest(message), message]
-}
-
-function pruneCommandIdSet(source: Set<string>, validIds: Set<string>): Set<string> {
-  if (source.size === 0) return source
-  const next = new Set<string>()
-  for (const id of source) {
-    if (validIds.has(id)) next.add(id)
-  }
-  return next.size === source.size ? source : next
 }
 
 const props = defineProps<{
@@ -1923,8 +1824,7 @@ watch(
         .filter((message) => message.messageType === 'commandExecution' && message.commandExecution)
         .map((message) => message.id),
     )
-    expandedCommandIds.value = pruneCommandIdSet(expandedCommandIds.value, commandIds)
-    collapsedAutoCommandIds.value = pruneCommandIdSet(collapsedAutoCommandIds.value, commandIds)
+    pruneCommandIdSets(commandIds)
     pruneFileChangeSummaryIds()
 
     await scheduleConversationScroll()
@@ -1938,17 +1838,6 @@ watch(
     void ensureHighlightJsLoaded()
   },
   { immediate: true },
-)
-
-watch(
-  activeCommandMessageId,
-  (nextId, prevId) => {
-    if (!prevId || prevId === nextId) return
-    if (!collapsedAutoCommandIds.value.has(prevId)) return
-    const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
-    nextCollapsedAuto.delete(prevId)
-    collapsedAutoCommandIds.value = nextCollapsedAuto
-  },
 )
 
 watch(

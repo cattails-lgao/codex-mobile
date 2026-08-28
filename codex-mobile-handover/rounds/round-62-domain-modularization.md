@@ -104,7 +104,21 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 
 此轮与渲染管道试点共同验证了「纯 computed/读簇」的 hook 化路径：内聚、自持状态、对外依赖窄、无深度时序的簇（`activeDiffViewerSummary` 等私有态 + 计算）可安全抽离，异步/写编排（文件变更 action 状态、回合塑形、生命周期）留在组件。`ThreadConversation` 剩余深 UI（文件链接菜单、图片面板、生命周期、消息窗口化）与文件变更 action 簇仍保持不动。
 
-本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽两个纯 read 簇外（渲染管道、文件变更摘要/diff viewer）的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
+### ThreadConversation 回复复制/fork 试点结果（2026-08-28）
+
+延续 hook 化路径，本轮抽取 `ThreadConversation` 的**回复复制 / fork 辅助**簇：
+
+- **`useReplyCopyFork.ts`（新增，~219 行）**：`createReplyCopyFork(deps)` 工厂，自持 `copiedResponseAnchorId`（含 1.8s 复位计时器），计算 `copyableResponseContentByAnchorId` / `forkableTurnIndexByAnchorId`，方法 `copyUserMessage` / `copyResponse` / `showCopyResponseButton` / `showForkResponseButton` / `isCopyableUserMessage`。对外依赖 6 个窄注入（`getMessages` / `isCopyableAssistantMessage` / `isPlanMessage` / `planStepCopyMarker` / `buildFileChangeCopyText` / `getAnchoredFileChangeSummaries`）。
+- 组件删除约 60 行内联复制/fork 逻辑（`buildPlanCopyText` / `buildCopyableMessageContent`、两个 computed、复制状态与计时器、复制方法），`copyResponse`/`showForkResponseButton` 改由 hook 解构接入；保留 `forkResponse` 的 emit 写编排在组件。
+- 单元回归：`useReplyCopyFork.test.ts`（10 例：按轮聚合锚定、空内容剪枝、metadata 文件变更拼接、fork 索引映射、可见性谓词、复制成功 + 计时器复位、剪贴板不可用失败路径），`vue-tsc --noEmit` 与 10/10 定向测试通过。迁移说明见 `tests/chat-composer-rendering/componentization-round-63-conversation-reply-copy-fork.md`。
+
+### ThreadConversation 命令执行展示试点结果（2026-08-28）
+
+- **`useCommandExecutionDisplay.ts`（新增，~210 行）**：`createCommandExecutionDisplay(deps)` 工厂，自持 `expandedCommandIds` / `collapsedAutoCommandIds`，计算 `activeCommandMessageId` / `hasLiveAssistantText` / `isLiveTurnRuntime` / `groupedCommandsByLatestId` / `hiddenGroupedCommandIds`，谓词 `isCommandExpanded` / `isCommandCompact` / `isCommandOutputCondensed`、`toggleCommandExpand`、`pruneCommandIdSets`，并把 `activeCommandMessageId` 变化时的 auto-collapse 复位 watcher 一并收入。对外依赖仅 3 个窄注入（`getMessages` / `getLiveOverlay` / `isCommandMessage`）。
+- 组件删除约 110 行内联命令展示逻辑；消息 watcher 里对两个 id 集的直接剪枝改写为 `pruneCommandIdSets(commandIds)`，同 watcher 里的 `pruneFileChangeSummaryIds()` 与 `scheduleConversationScroll()`（归属其它簇）保留组件内。
+- 单元回归：`useCommandExecutionDisplay.test.ts`（8 例：active command 追踪、连续命令聚合隐藏、work-block 列表、auto-expand + toggle 循环、live 压缩/condense、inProgress condense、id 集剪枝、active 变化时 auto-collapse 复位），`vue-tsc --noEmit`、8/8 定向测试与全量 461 例（仅 2 例既有 Windows 差异）通过，`vite build` 通过。迁移说明见 `tests/chat-composer-rendering/componentization-round-64-conversation-command-execution-display.md`。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示」四个纯读簇外的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 

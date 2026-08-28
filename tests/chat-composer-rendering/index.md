@@ -53,6 +53,7 @@ Return to the [manual test index](../../tests.md).
 | [Plan popover layout, reasoning turn placement, thinking font, live interleave](plan-popover-layout-reasoning-turn-thinking-toggle.md) |
 | [ThreadConversation split refactor (3 utils + 8 child components)](thread-conversation-split-refactor.md) |
 | [Componentization round-63: conversation reply copy/fork hook](componentization-round-63-conversation-reply-copy-fork.md) |
+| [Componentization round-64: conversation command execution display hook](componentization-round-64-conversation-command-execution-display.md) |
 | [Process Fold phase A and streaming reasoning truncation](process-fold-phase-a-and-streaming-reasoning-truncation.md) |
 | [Three-zone hot/warm/cold rendering (phase B)](three-zone-hot-warm-cold-rendering.md) |
 | [Phase C: question-nav JumpBar, tool aggregation, partitionTurnItems split](phase-c-jumpbar-tool-aggregation.md) |
