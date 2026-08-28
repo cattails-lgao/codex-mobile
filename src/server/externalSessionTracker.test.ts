@@ -393,6 +393,27 @@ describe("externalSessionTracker", () => {
         expect(tracker.getSubagentThreadIds()).toEqual(["thread-sub-9"]);
     });
 
+    it("runs a follow-up scan when a thread-list request overlaps an active scan", async () => {
+        const tracker = createTracker();
+        let resolveFirstScan: () => void = () => {};
+        const firstScan = new Promise<void>((resolve) => {
+            resolveFirstScan = resolve;
+        });
+        let scanCount = 0;
+        (tracker as unknown as { scanAndUpdate: () => Promise<void> }).scanAndUpdate = async () => {
+            scanCount += 1;
+            if (scanCount === 1) await firstScan;
+        };
+
+        const initialTick = tracker.tick();
+        await Promise.resolve();
+        const overlappingTick = tracker.tick();
+        resolveFirstScan();
+        await Promise.all([initialTick, overlappingTick]);
+
+        expect(scanCount).toBe(2);
+    });
+
     it("skips sessions under archived_sessions", async () => {
         const archived = join(
             sessionsDir,

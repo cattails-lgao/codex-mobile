@@ -23,5 +23,8 @@ probe.txt
 tmp/
 documentation/app-server-schemas/typescript/**/*.js
 
+# 本地交接文档（问题.md）不进版本库
+docs/问题.md
+
 # macOS
 .DS_Store

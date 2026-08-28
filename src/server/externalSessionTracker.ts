@@ -168,6 +168,7 @@ export class ExternalSessionTracker {
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
     private ticking = false;
     private tickingPromise: Promise<void> | null = null;
+    private followUpScanRequested = false;
     private disposed = false;
 
     constructor(options: ExternalSessionTrackerOptions = {}) {
@@ -298,8 +299,9 @@ export class ExternalSessionTracker {
     async tick(): Promise<void> {
         if (!this.enabled || this.disposed) return;
         if (this.ticking && this.tickingPromise) {
-            // A scan is already running; wait for it so callers observe the
-            // freshest index instead of racing past a stale snapshot.
+            // A rollout can land after the active scan enumerated the directory.
+            // Finish with one additional scan so this caller sees that session.
+            this.followUpScanRequested = true;
             await this.tickingPromise;
             return;
         }
@@ -309,8 +311,14 @@ export class ExternalSessionTracker {
             resolveTick = resolve;
         });
         try {
+            this.followUpScanRequested = false;
             await this.scanAndUpdate();
+            if (this.followUpScanRequested && !this.disposed) {
+                this.followUpScanRequested = false;
+                await this.scanAndUpdate();
+            }
         } finally {
+            this.followUpScanRequested = false;
             this.ticking = false;
             this.tickingPromise = null;
             resolveTick();

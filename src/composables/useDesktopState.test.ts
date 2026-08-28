@@ -1007,6 +1007,11 @@ describe('provider model selection', () => {
         supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
         defaultReasoningEffort: 'medium',
       },
+      {
+        id: 'gpt-5.4-mini',
+        supportedReasoningEfforts: ['low', 'medium'],
+        defaultReasoningEffort: 'medium',
+      },
     ])
 
     const state = useDesktopState()
@@ -1016,7 +1021,14 @@ describe('provider model selection', () => {
     expect(state.selectedReasoningEffort.value).toBe('ultra')
     expect(state.availableModelReasoningEfforts.value['gpt-5.5']).toEqual(['low', 'medium', 'high', 'xhigh'])
 
+    state.setSelectedReasoningEffort('high')
+    await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
+    expect(state.selectedReasoningEffort.value).toBe('high')
+
     state.setSelectedModelIdForThread('__new-thread__', 'gpt-5.5')
+    expect(state.selectedReasoningEffort.value).toBe('high')
+
+    state.setSelectedModelIdForThread('__new-thread__', 'gpt-5.4-mini')
     expect(state.selectedReasoningEffort.value).toBe('medium')
 
     state.setSelectedReasoningEffort('ultra')
