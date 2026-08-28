@@ -93,7 +93,18 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 
 边界结论：渲染管道是「纯函数式」簇，与队内先例（`useMarkdownRendering` deps 仅 2 个）一致是**最干净的候选**；`ThreadConversation` 剩余的深 UI 状态（文件链接菜单、图片面板、生命周期、消息窗口化）仍保持不动。
 
-本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除渲染管道外的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
+### ThreadConversation 文件变更摘要 + diff viewer 试点结果（2026-08-28）
+
+延续渲染管道试点，本轮抽取同组件的**文件变更摘要 + diff viewer**簇（候选8/9 的前半，纯 read 部分）：
+
+- **`useFileChangeSummaries.ts`（新增，~400 行）**：`createFileChangeSummaries(deps)` 工厂，自持 `expandedFileChangeSummaryIds`/`activeDiffViewerSummary`/`activeDiffViewerChangeKey`/`isDiffViewerFileListOpen` 状态，以及三组摘要 computed（`anchoredFileChangeSummaryByAnchorId` / `standaloneFileChangeSummaryByMessageId` / `hiddenFileChangeMessageIds`）与三个 diff viewer computed（`diffViewerChanges` / `activeDiffViewerChange` / `activeDiffViewerLines`），外加 toggle/open/close/select 读写方法、`isFileChangeSummaryVisible` 与 watcher 用的 `pruneFileChangeSummaryIds()`。对外依赖为 9 个窄注入（`getMessages` / `getLiveTurnId` / `isFileChangeMessage` / `isCopyableAssistantMessage` / `isReasoningMessage` / `isPlanMessage` / `isFoldMember` / `getHiddenGroupedCommandIds` / `isMobile`）+ 既有纯工具函数；谓词因模板/回合塑形/复制簇广泛共用而保留组件作单源，经窄注入回传。
+- 组件删除约 212 行内联逻辑（含 4 个状态 ref、3 组摘要/diff computed、11 个读写/读函数，及 watcher 里对 `expandedFileChangeSummaryIds` 的直接剪枝改写为 `pruneFileChangeSummaryIds()`），`ThreadConversation.vue` 从提取渲染管道后的状态再瘦约 212 行。
+- **边界保留：** 异步的**文件变更 action 状态**（`fileChangeActionState`/`fileChangeActionError`/`fileChangeRedoPatchIds`/`pendingConfirm` + `runFileChangeAction` 的 idle/undoing/redoing 流转）按评估结论留在组件，未拖入本 hook。
+- 单元回归：`useFileChangeSummaries.test.ts`（6 例：anchored 按轮末实质消息聚合、standalone 兜底、hidden 源消息集、toggle 展开状态、live-turn 可见性 gate、diff viewer 开关），`vue-tsc --noEmit` 与 6/6 定向测试通过。迁移说明见 `tests/chat-composer-rendering/componentization-round-62-file-change-summaries-and-diff-viewer.md`（45 节）。
+
+此轮与渲染管道试点共同验证了「纯 computed/读簇」的 hook 化路径：内聚、自持状态、对外依赖窄、无深度时序的簇（`activeDiffViewerSummary` 等私有态 + 计算）可安全抽离，异步/写编排（文件变更 action 状态、回合塑形、生命周期）留在组件。`ThreadConversation` 剩余深 UI（文件链接菜单、图片面板、生命周期、消息窗口化）与文件变更 action 簇仍保持不动。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽两个纯 read 簇外（渲染管道、文件变更摘要/diff viewer）的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 
