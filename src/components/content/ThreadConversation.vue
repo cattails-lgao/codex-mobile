@@ -568,6 +568,19 @@ import {
 import { formatTurnDuration } from '../../composables/useDesktopState'
 import { createMarkdownRendering } from './useMarkdownRendering'
 
+const props = defineProps<{
+  messages: UiMessage[]
+  pendingRequests: UiServerRequest[]
+  liveOverlay: UiLiveOverlay | null
+  liveTurnId?: string
+  isLoading: boolean
+  activeThreadId: string
+  cwd: string
+  hasMorePersistedAbove?: boolean
+  isLoadingPersistedAbove?: boolean
+  loadEarlierMessages?: (threadId: string) => Promise<void>
+}>()
+
 const markdownRendering = createMarkdownRendering({
   getCwd: () => props.cwd,
   isVideoMediaUrl,
@@ -729,19 +742,6 @@ function isCopyableAssistantMessage(message: UiMessage): boolean {
     && message.messageType !== 'worked'
     && !(message.messageType ?? '').endsWith('.live')
 }
-
-const props = defineProps<{
-  messages: UiMessage[]
-  pendingRequests: UiServerRequest[]
-  liveOverlay: UiLiveOverlay | null
-  liveTurnId?: string
-  isLoading: boolean
-  activeThreadId: string
-  cwd: string
-  hasMorePersistedAbove?: boolean
-  isLoadingPersistedAbove?: boolean
-  loadEarlierMessages?: (threadId: string) => Promise<void>
-}>()
 
 const emit = defineEmits<{
   forkThread: [payload: { threadId: string; turnIndex: number }]
