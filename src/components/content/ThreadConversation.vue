@@ -499,7 +499,6 @@ import { updateThreadFileChanges } from '../../api/codexGateway'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import { copyTextToClipboard, copyTextWithSelectionFallback } from '../../utils/clipboard'
 import { readPlanData } from '../../utils/plan'
 import { headingClass, headingTag } from '../../utils/conversationPaths'
 import {
@@ -508,6 +507,7 @@ import {
   type TurnFileChangeSummary,
 } from '../../utils/conversationFileChanges'
 import { createFileChangeSummaries } from './useFileChangeSummaries'
+import { createReplyCopyFork } from './useReplyCopyFork'
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
@@ -623,6 +623,23 @@ const {
   isFileChangeSummaryVisible,
   pruneFileChangeSummaryIds,
 } = fileChangeSummaries
+const replyCopyFork = createReplyCopyFork({
+  getMessages: () => props.messages,
+  isCopyableAssistantMessage,
+  isPlanMessage,
+  planStepCopyMarker,
+  buildFileChangeCopyText,
+  getAnchoredFileChangeSummaries: () => anchoredFileChangeSummaryByAnchorId.value,
+})
+const {
+  copiedResponseAnchorId,
+  forkableTurnIndexByAnchorId,
+  showCopyResponseButton,
+  isCopyableUserMessage,
+  copyUserMessage,
+  showForkResponseButton,
+  copyResponse,
+} = replyCopyFork
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
 const { t } = useUiLanguage()
 const feedbackMailto = feedbackMailtoBase()
@@ -826,7 +843,6 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const modalIsVideo = ref(false)
-const copiedResponseAnchorId = ref('')
 const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
 const fileChangeActionError = ref<Record<string, string>>({})
 const fileChangeRedoPatchIds = ref<Record<string, string[]>>({})
@@ -872,7 +888,6 @@ const BOTTOM_THRESHOLD_PX = 16
 let conversationScrollFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
-let copiedMessageResetTimer: ReturnType<typeof setTimeout> | null = null
 let conversationScrollPromise: Promise<void> | null = null
 const trackedPendingImages = new WeakSet<HTMLImageElement>()
 const markdownImageFailureVersion = ref(0)
@@ -1178,161 +1193,6 @@ function planStepCopyMarker(status: UiPlanStep['status']): string {
   }
 }
 
-function buildPlanCopyText(message: UiMessage): string {
-  const planData = readPlanData(message)
-  if (!planData) return ''
-
-  const sections: string[] = []
-  if (planData.explanation?.trim()) {
-    sections.push(planData.explanation.trim())
-  }
-
-  if (planData.steps.length > 0) {
-    sections.push(planData.steps.map((step) => `- ${planStepCopyMarker(step.status)} ${step.step}`.trim()).join('\n'))
-  }
-
-  return sections.join('\n\n').trim()
-}
-
-function buildCopyableMessageContent(message: UiMessage): string {
-  const sections: string[] = []
-  const rawTextContent = message.text.trim() || buildPlanCopyText(message)
-  const textContent = isPlanMessage(message) && rawTextContent
-    ? `Plan\n${rawTextContent}`
-    : rawTextContent
-  if (textContent) {
-    sections.push(textContent)
-  }
-
-  const attachmentLines = (message.fileAttachments ?? [])
-    .map((attachment) => attachment.path.trim())
-    .filter((pathValue) => pathValue.length > 0)
-  if (attachmentLines.length > 0) {
-    sections.push(`Files:\n${attachmentLines.join('\n')}`)
-  }
-
-  const imageLines = (message.images ?? [])
-    .map((imageUrl) => imageUrl.trim())
-    .filter((imageUrl) => imageUrl.length > 0)
-  if (imageLines.length > 0) {
-    sections.push(`Images:\n${imageLines.join('\n')}`)
-  }
-
-  return sections.join('\n\n').trim()
-}
-
-const copyableResponseContentByAnchorId = computed<Record<string, string>>(() => {
-  const groupedResponses = new Map<string, { anchorMessageId: string; parts: string[] }>()
-
-  for (const message of props.messages) {
-    if (!isCopyableAssistantMessage(message)) continue
-
-    const content = buildCopyableMessageContent(message)
-    if (!content) continue
-
-    const responseKey = typeof message.turnIndex === 'number'
-      ? `turn:${message.turnIndex}`
-      : `message:${message.id}`
-    const existing = groupedResponses.get(responseKey)
-    if (existing) {
-      existing.anchorMessageId = message.id
-      existing.parts.push(content)
-      continue
-    }
-
-    groupedResponses.set(responseKey, {
-      anchorMessageId: message.id,
-      parts: [content],
-    })
-  }
-
-  const next: Record<string, string> = {}
-  for (const response of groupedResponses.values()) {
-    const content = response.parts.join('\n\n').trim()
-    if (!content) continue
-    next[response.anchorMessageId] = content
-  }
-
-  for (const [anchorMessageId, summary] of Object.entries(anchoredFileChangeSummaryByAnchorId.value)) {
-    if (summary.source !== 'metadata') continue
-    const fileChangeCopy = buildFileChangeCopyText(summary)
-    if (!fileChangeCopy) continue
-    const existing = next[anchorMessageId]?.trim()
-    next[anchorMessageId] = existing ? `${existing}\n\n${fileChangeCopy}` : fileChangeCopy
-  }
-  return next
-})
-
-const forkableTurnIndexByAnchorId = computed<Record<string, number>>(() => {
-  const groupedTurns = new Map<string, { anchorMessageId: string; turnIndex: number }>()
-
-  for (const message of props.messages) {
-    if (!isCopyableAssistantMessage(message) || typeof message.turnIndex !== 'number') continue
-
-    const responseKey = `turn:${message.turnIndex}`
-    const existing = groupedTurns.get(responseKey)
-    if (existing) {
-      existing.anchorMessageId = message.id
-      existing.turnIndex = message.turnIndex
-      continue
-    }
-
-    groupedTurns.set(responseKey, {
-      anchorMessageId: message.id,
-      turnIndex: message.turnIndex,
-    })
-  }
-
-  const next: Record<string, number> = {}
-  for (const groupedTurn of groupedTurns.values()) {
-    next[groupedTurn.anchorMessageId] = groupedTurn.turnIndex
-  }
-  return next
-})
-
-function showCopyResponseButton(message: UiMessage): boolean {
-  return typeof copyableResponseContentByAnchorId.value[message.id] === 'string'
-}
-
-// round-23：用户消息下新增复制按钮，复制用户消息内容（文字 + 附件 + 图片）
-function isCopyableUserMessage(message: UiMessage): boolean {
-  return message.role === 'user' && buildCopyableMessageContent(message).length > 0
-}
-
-async function copyUserMessage(messageId: string): Promise<void> {
-  const message = props.messages.find((candidate) => candidate.id === messageId)
-  if (!message) return
-  const content = buildCopyableMessageContent(message)
-  if (!content) return
-
-  let copied = false
-  try {
-    await copyTextToClipboard(content)
-    copied = true
-  } catch {
-    copied = false
-  }
-  if (!copied) {
-    copied = copyTextWithSelectionFallback(content)
-  }
-  if (!copied) return
-
-  copiedResponseAnchorId.value = messageId
-  if (copiedMessageResetTimer) {
-    clearTimeout(copiedMessageResetTimer)
-  }
-  copiedMessageResetTimer = setTimeout(() => {
-    if (copiedResponseAnchorId.value === messageId) {
-      copiedResponseAnchorId.value = ''
-    }
-    copiedMessageResetTimer = null
-  }, 1800)
-}
-
-function showForkResponseButton(message: UiMessage): boolean {
-  return typeof forkableTurnIndexByAnchorId.value[message.id] === 'number'
-}
-
 function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
   return summary?.turnId && props.activeThreadId ? `thread:${props.activeThreadId}:turn:${summary.turnId}` : ''
 }
@@ -1432,36 +1292,6 @@ async function runFileChangeAction(
   // Re-read the thread's file-change state so the UI reflects the disk state
   // (covers multi-client sync and refresh consistency).
   emit('fileChangesChanged', props.activeThreadId)
-}
-
-async function copyResponse(anchorMessageId: string): Promise<void> {
-  const content = copyableResponseContentByAnchorId.value[anchorMessageId] ?? ''
-  if (!content) return
-
-  let copied = false
-  try {
-    await copyTextToClipboard(content)
-    copied = true
-  } catch {
-    copied = false
-  }
-
-  if (!copied) {
-    copied = copyTextWithSelectionFallback(content)
-  }
-
-  if (!copied) return
-
-  copiedResponseAnchorId.value = anchorMessageId
-  if (copiedMessageResetTimer) {
-    clearTimeout(copiedMessageResetTimer)
-  }
-  copiedMessageResetTimer = setTimeout(() => {
-    if (copiedResponseAnchorId.value === anchorMessageId) {
-      copiedResponseAnchorId.value = ''
-    }
-    copiedMessageResetTimer = null
-  }, 1800)
 }
 
 function forkResponse(anchorMessageId: string): void {
@@ -2232,10 +2062,6 @@ onBeforeUnmount(() => {
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
     bottomLockFrame = 0
-  }
-  if (copiedMessageResetTimer) {
-    clearTimeout(copiedMessageResetTimer)
-    copiedMessageResetTimer = null
   }
 })
 </script>
