@@ -10,9 +10,9 @@ import {
   createStringKeyedRecord,
   normalizeCollaborationMode,
   normalizeStoredModelId,
-  normalizeThreadTokenUsage,
   NEW_THREAD_COLLABORATION_MODE_CONTEXT,
-} from './useDesktopStateUtils'
+} from './useDesktopStateContext'
+import { normalizeThreadTokenUsage } from './useDesktopStateUtils'
 
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'

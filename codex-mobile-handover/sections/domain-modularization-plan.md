@@ -295,6 +295,11 @@
   - `useDesktopState()` 只注入 `selectedThreadId` 与共享错误 ref，并继续透出原有 refs/actions；线程选择通过 `syncSelectedThreadModel` 协调，线程裁剪通过 `pruneThreadModelState` 收口，公共返回契约和 localStorage 键保持不变。
   - 性能不变量：没有新增请求、watcher、定时器、缓存或动态 fanout；`refreshModelPreferences` 的 `getCurrentModelConfig` + `getAvailableModels` 请求序列保持原样。
 
+- 2026-08-28：**useDesktopStateUtils 上下文领域切片完成**。新建 `useDesktopStateContext.ts`，迁出无原型 record 操作、线程/provider context key、模型与协作模式规范化/读取/写入、线程上下文裁剪。
+  - `useDesktopStateUtils.ts` 保留 `export *` 兼容入口；`useDesktopModelPreferences`、`useDesktopStatePersistence` 与 `useDesktopState` 改为直接依赖上下文领域，内部不再经 1300+ 行工具门面耦合。
+  - 新增 `useDesktopStateContext.test.ts`，覆盖 provider id 规范化、全局/provider/活跃线程 context 保留、陈旧线程裁剪与模型 fallback 读取。
+  - 纯函数机械迁移，不新增 I/O、请求、响应式状态或缓存。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

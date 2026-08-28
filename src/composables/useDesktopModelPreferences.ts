@@ -8,19 +8,21 @@ import {
 import { REASONING_EFFORTS } from '../types/codex'
 import type { CollaborationModeKind, ReasoningEffort, SpeedMode } from '../types/codex'
 import {
-  areStringArraysEqual,
   cloneStringKeyedRecord,
-  isCodexCliMissingError,
   NEW_THREAD_COLLABORATION_MODE_CONTEXT,
   normalizeProviderContextId,
   normalizeStoredModelId,
-  omitKey,
   omitStringKeyedRecordKey,
   pruneThreadContextStateMap,
-  pruneThreadStateMap,
   readSelectedModel,
   toProviderModelContextId,
   toThreadContextId,
+} from './useDesktopStateContext'
+import {
+  areStringArraysEqual,
+  isCodexCliMissingError,
+  omitKey,
+  pruneThreadStateMap,
 } from './useDesktopStateUtils'
 import {
   loadSelectedModelMap,
