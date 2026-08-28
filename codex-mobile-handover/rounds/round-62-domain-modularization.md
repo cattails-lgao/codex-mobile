@@ -72,7 +72,18 @@
 
 useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一轮视图组件化，测量与结论记录在 [domain-modularization-plan.md](../sections/domain-modularization-plan.md#巨型-vue-第二轮组件化评估)。要点：`App.vue`/`SidebarThreadTree`/`ThreadConversation` 的"大"在 `<script setup>` 编排逻辑（`App.vue` script 4,271 行 / 102 局部 ref / 124 await），模板已被 round-48/49 抽干净，再抽叶组件收益有限；剩余杠杆是**hook 化**而非 `.vue` 拆分。
 
-**下一步（第一个待办）：只读评估 `SidebarThreadTree` 的三簇边界（过滤 / 键盘导航 / 右键菜单），产出试点的先期评估报告**，据此决定是否动手实现试点（抽 2~3 个本地 hook）。本轮暂不动手的对象：`App.vue` / `ThreadComposer`（await 交叠最深的编排块）、`ThreadConversation`（round-19 高风险 UI）。
+**下一步（已完成 · SidebarThreadTree 试点）**：先只读评估 `SidebarThreadTree` 的真实簇边界，结论已修正原「过滤 / 键盘导航 / 右键菜单」三簇假设——**键盘导航并非独立簇（仅 `onProjectHeaderKeyDown` 单函数），过滤即树形塑造是 `filteredGroups` 主耦合核心不拆**。真正内聚、可做 hook 的两个目标实现完成：
+
+### SidebarThreadTree 第二轮组件化试点结果（2026-08-28）
+
+两个 hook 均已实现并接回 `SidebarThreadTree.vue`（`vue-tsc` 通过、`vite build` 通过、sidebar 定向测试 8/8）：
+
+- **`useProjectDragAndDrop.ts`（新增，~380 行）**：`createProjectDragAndDrop(deps)` 工厂，自持 `pending/activeProjectDrag`、指针采样与 rAF、分组测量缓存（`measuredHeightByProject`、`ResizeObserver`、元素/名称 WeakMap 映射）、`suppressNextProjectToggleId`，以及布局 computeds（`layoutProjectOrder`/`layoutTopByProject`/`groupsContainerStyle`）与 `projectGroupStyle`/`isDraggingProject`。**边界判断：**该项目分组测量 + 拖拽布局 + 掉落定位是一体的「项目组布局引擎」（所有分组本就 `position:absolute` 由 `layoutTopByProject` 摆放），并非纯动作层，故测量基础设施一并归入 hook；对外依赖收窄为 7 个窄注入（`getGroups`/`getFilteredGroups`/`isSearchActive`/`isCollapsed`/`getElevatedProjectName`/`onReorderProject`/`closeProjectMenu`）。纯掉落投影数学抽成**可导出纯函数** `projectProjectedDropIndex` 并配 6 例定向单测（`useProjectDragAndDrop.test.ts`），作为可运行回归检查。组件侧的 toggle 抑制消费走 `takeToggleSuppression`、groups 变化剪枝走 `pruneProjectGroups`、卸载走 `dispose`。
+- **`useAutomationDialog.ts`（继续完成，~645 行）**：`createAutomationDialog(deps)` 工厂，自持自动化表单/draft/调度状态、thread/project 自动化缓存、编辑器/创建器/删除/运行编排；新增 `removeAutomationsForThread` 供组件 `archiveThread` 复用（含 API 删除 + 本地缓存移除），旧内联自动化函数块（约 287 行）从组件删除，改由解构接入。
+
+边界干净性：组件脚本因此显著瘦身，拖拽/自动化逻辑不再存活于巨型 `<script setup>`；两者均以「窄依赖注入 + 写侧编排保留在组件（reorder 事件、archive 编排等）」接线，未改动任何行为。**结论：巨型 `.vue` 第二轮组件化的 hook 化路径可行**，可推广到其它候选，但应优先选择内聚、自持状态、对外依赖窄的簇（如本例），而非贴壳搬 ref。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 
