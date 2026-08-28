@@ -966,6 +966,7 @@ import { useDesktopState } from './composables/useDesktopState'
 import { useMobile } from './composables/useMobile'
 import { useUiLanguage } from './composables/useUiLanguage'
 import { createSidebarUi } from './useSidebarUi'
+import { createRightPanel } from './useRightPanel'
 import { useFeedbackDiagnostics } from './composables/useFeedbackDiagnostics'
 import {
   checkoutGitBranch,
@@ -1317,62 +1318,36 @@ function updateComposerShellWidth(): void {
 }
 const threadConversationRef = ref<{ jumpToLatest: () => void } | null>(null)
 const threadTerminalPanelRef = ref<ThreadTerminalPanelExposed | null>(null)
-const isTerminalInputFocused = ref(false)
-const isTerminalKeyboardFocusFallbackActive = ref(false)
 const isThreadTerminalAvailable = ref(true)
-type RightPanelTab = 'git' | 'files' | 'terminal' | 'preview'
-type FilePreviewTab = { key: string; path: string; label: string }
-const activeRightPanelTab = ref<RightPanelTab>('git')
-const filePreviewTabs = ref<FilePreviewTab[]>([])
-const activeFilePreviewTabKey = ref('')
-const activeFilePreviewTab = computed<FilePreviewTab | null>(() =>
-  filePreviewTabs.value.find((tab) => tab.key === activeFilePreviewTabKey.value) ?? null,
-)
-const isRightPanelMenuOpen = ref(false)
-const isMobileRightPanelOpen = ref(false)
-const isRightPanelCollapsed = ref(false)
-const RIGHT_PANEL_WIDTH_KEY = 'codex-web-local.right-panel-width.v1'
-const MIN_RIGHT_PANEL_WIDTH = 260
-const MAX_RIGHT_PANEL_WIDTH = 640
-const DEFAULT_RIGHT_PANEL_WIDTH = 320
-const rightPanelWidth = ref(loadRightPanelWidth())
-
-function clampRightPanelWidth(value: number): number {
-  return Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, value))
-}
-
-function loadRightPanelWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH
-  const raw = window.localStorage.getItem(RIGHT_PANEL_WIDTH_KEY)
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed)) return DEFAULT_RIGHT_PANEL_WIDTH
-  return clampRightPanelWidth(parsed)
-}
-
-function saveRightPanelWidth(value: number): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, String(value))
-}
-
-function onRightResizeHandleMouseDown(event: MouseEvent): void {
-  event.preventDefault()
-  const startX = event.clientX
-  const startWidth = rightPanelWidth.value
-
-  const onMouseMove = (moveEvent: MouseEvent) => {
-    const delta = startX - moveEvent.clientX
-    rightPanelWidth.value = clampRightPanelWidth(startWidth + delta)
-  }
-
-  const onMouseUp = () => {
-    saveRightPanelWidth(rightPanelWidth.value)
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-  }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
-}
+const rightPanel = createRightPanel({
+  isMobile: () => isMobile.value,
+  canShowRightPanel: () => canShowRightPanel.value,
+  isVirtualKeyboardOpen: () => isVirtualKeyboardOpen.value,
+})
+const {
+  activeRightPanelTab,
+  filePreviewTabs,
+  activeFilePreviewTabKey,
+  activeFilePreviewTab,
+  isRightPanelMenuOpen,
+  isMobileRightPanelOpen,
+  isRightPanelCollapsed,
+  rightPanelWidth,
+  isTerminalInputFocused,
+  isTerminalKeyboardFocusFallbackActive,
+  onRightResizeHandleMouseDown,
+  toggleRightPanelTerminal,
+  selectRightPanelTab,
+  onOpenFilePreview,
+  selectFilePreviewTab,
+  closeFilePreviewTab,
+  onCloseRightPanel,
+  onToggleRightPanelToggle,
+  onHideRightPanelTerminal,
+  onTerminalFocusChange,
+  resetTerminalKeyboardFocusState,
+  clearTerminalKeyboardFocusFallbackTimer,
+} = rightPanel
 const editingQueuedMessageState = ref<{ threadId: string; queueIndex: number } | null>(null)
 const isRouteSyncInProgress = ref(false)
 const directoryTryInFlightKey = ref('')
@@ -1424,7 +1399,6 @@ const settingsDialogRef = ref<{ containsTarget: (target: Node) => boolean } | nu
 const settingsButtonRef = ref<HTMLElement | null>(null)
 const serverMatchedThreadIds = ref<string[] | null>(null)
 let threadSearchTimer: ReturnType<typeof setTimeout> | null = null
-let terminalKeyboardFocusFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let threadBranchesRequestId = 0
 let threadBranchCommitsRequestId = 0
 let threadCommitFilesRequestId = 0
@@ -3134,130 +3108,6 @@ function onWindowKeyDown(event: KeyboardEvent): void {
     event.preventDefault()
     toggleRightPanelTerminal()
   }
-}
-
-function toggleRightPanelTerminal(): void {
-  if (!canShowRightPanel.value) return
-  if (isMobile.value && !isMobileRightPanelOpen.value) {
-    isMobileRightPanelOpen.value = true
-  }
-  if (!isMobile.value) {
-    isRightPanelCollapsed.value = false
-  }
-  activeRightPanelTab.value = activeRightPanelTab.value === 'terminal' ? 'git' : 'terminal'
-  if (activeRightPanelTab.value !== 'terminal') {
-    resetTerminalKeyboardFocusState()
-  }
-}
-
-function selectRightPanelTab(tab: RightPanelTab): void {
-  activeRightPanelTab.value = tab
-  isRightPanelMenuOpen.value = false
-  if (!isMobile.value) {
-    isRightPanelCollapsed.value = false
-  }
-  if (isMobile.value) {
-    isMobileRightPanelOpen.value = true
-  }
-  if (tab !== 'terminal') {
-    resetTerminalKeyboardFocusState()
-  }
-}
-
-function onOpenFilePreview(payload: { path: string; label: string }): void {
-  const existing = filePreviewTabs.value.find((tab) => tab.path === payload.path)
-  if (existing) {
-    activeFilePreviewTabKey.value = existing.key
-  } else {
-    const tab: FilePreviewTab = {
-      key: `preview-${Date.now()}`,
-      path: payload.path,
-      label: payload.label,
-    }
-    filePreviewTabs.value = [...filePreviewTabs.value, tab]
-    activeFilePreviewTabKey.value = tab.key
-  }
-  selectRightPanelTab('preview')
-}
-
-function selectFilePreviewTab(key: string): void {
-  if (!filePreviewTabs.value.some((tab) => tab.key === key)) return
-  activeFilePreviewTabKey.value = key
-  selectRightPanelTab('preview')
-}
-
-function closeFilePreviewTab(key: string): void {
-  const index = filePreviewTabs.value.findIndex((tab) => tab.key === key)
-  if (index < 0) return
-  const next = filePreviewTabs.value.filter((tab) => tab.key !== key)
-  filePreviewTabs.value = next
-  if (activeFilePreviewTabKey.value !== key) return
-  if (next.length === 0) {
-    activeFilePreviewTabKey.value = ''
-    activeRightPanelTab.value = 'files'
-    return
-  }
-  const fallback = next[Math.min(index, next.length - 1)]
-  activeFilePreviewTabKey.value = fallback.key
-}
-
-function onCloseRightPanel(): void {
-  if (isMobile.value) {
-    isMobileRightPanelOpen.value = false
-    return
-  }
-  isRightPanelCollapsed.value = true
-  isRightPanelMenuOpen.value = false
-  resetTerminalKeyboardFocusState()
-}
-
-function onToggleRightPanelToggle(): void {
-  if (isMobile.value) {
-    isMobileRightPanelOpen.value = !isMobileRightPanelOpen.value
-    return
-  }
-  isRightPanelCollapsed.value = !isRightPanelCollapsed.value
-  if (isRightPanelCollapsed.value) {
-    isRightPanelMenuOpen.value = false
-    resetTerminalKeyboardFocusState()
-  }
-}
-
-function onHideRightPanelTerminal(): void {
-  activeRightPanelTab.value = 'git'
-  if (isMobile.value) {
-    isMobileRightPanelOpen.value = false
-  }
-  resetTerminalKeyboardFocusState()
-}
-
-function onTerminalFocusChange(focused: boolean): void {
-  isTerminalInputFocused.value = focused
-  if (!focused) {
-    isTerminalKeyboardFocusFallbackActive.value = false
-    clearTerminalKeyboardFocusFallbackTimer()
-    return
-  }
-  isTerminalKeyboardFocusFallbackActive.value = true
-  clearTerminalKeyboardFocusFallbackTimer()
-  terminalKeyboardFocusFallbackTimer = setTimeout(() => {
-    terminalKeyboardFocusFallbackTimer = null
-    if (!isVirtualKeyboardOpen.value) {
-      isTerminalKeyboardFocusFallbackActive.value = false
-    }
-  }, 1500)
-}
-
-function resetTerminalKeyboardFocusState(): void {
-  isTerminalInputFocused.value = false
-  isTerminalKeyboardFocusFallbackActive.value = false
-  clearTerminalKeyboardFocusFallbackTimer()
-}
-
-function clearTerminalKeyboardFocusFallbackTimer(): void {
-  if (!terminalKeyboardFocusFallbackTimer) return
-  clearTimeout(terminalKeyboardFocusFallbackTimer)
-  terminalKeyboardFocusFallbackTimer = null
 }
 
 async function refreshThreadTerminalStatus(): Promise<void> {

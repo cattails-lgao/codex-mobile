@@ -156,7 +156,18 @@ ThreadConversation 收束后转向 `App.vue`（6023 行）评审，首抽其最�
 - 组件删除约 130 行内联逻辑（6 ref + 2 私有 let + 11 函数 + 2 存储键常量），模板/其余代码引用的名字全部由解构接入，`settingsDialogProps` 里的 `isAccountsSectionCollapsed` 直连 hook 自持 ref，`setSidebarCollapsed` 仍是全局唯一写入口由 hook 暴露。
 - 单元回归：`useSidebarUi.test.ts`（9 例：无 window 服务器安全默认、localStorage 双偏好加载、setSidebarCollapsed + 持久化 + 幂等、滚动记录 + 展开恢复、搜索开关/清空、Escape 关闭/非 Escape 忽略、账户区折叠 + 持久化），`vue-tsc --noEmit`、9/9 定向测试通过、`vite build` 通过（main chunk 548.6 kB）。迁移说明见 `tests/chat-composer-rendering/componentization-round-67-app-sidebar-ui.md`。
 
-App.vue 剩余候选：右侧面板簇（tab + file previews + 宽度持久化 + resize，对 `canShowRightPanel`/面板开合耦合略宽）、设置对话框 ghost-click 守卫（极自持小簇）、听写偏好（纯 prefs 零依赖）、账户列表/配额（较大含 async）、项目导入 overlay。可按同标准后续评估。
+App.vue 剩余候选：设置对话框 ghost-click 守卫（极自持小簇）、听写偏好（纯 prefs 零依赖）、账户列表/配额（较大含 async）、项目导入 overlay。可按同标准后续评估。
+
+### App.vue 右侧面板簇试点结果（2026-08-28）
+
+继续 `App.vue` 评审，抽取上轮标注的右侧面板簇（中等耦合：3 只读注入 + 2 共享 ref）：
+
+- **`useRightPanel.ts`（新增，~245 行）**：`createRightPanel(deps)` 工厂，注入三个只读 getter（`isMobile` / `canShowRightPanel` / `isVirtualKeyboardOpen`），自持 `activeRightPanelTab` / `filePreviewTabs` + `activeFilePreviewTabKey` + `activeFilePreviewTab` / `isRightPanelMenuOpen` / `isMobileRightPanelOpen` / `isRightPanelCollapsed` / `rightPanelWidth`（localStorage `codex-web-local.right-panel-width.v1` 持久化 + 260–640 clamp）/ 终端键盘焦点对 `isTerminalInputFocused` + `isTerminalKeyboardFocusFallbackActive` + 私有 `terminalKeyboardFocusFallbackTimer`；方法 `onRightResizeHandleMouseDown` / `toggleRightPanelTerminal` / `selectRightPanelTab` / `onOpenFilePreview` / `selectFilePreviewTab` / `closeFilePreviewTab` / `onCloseRightPanel` / `onToggleRightPanelToggle` / `onHideRightPanelTerminal` / `onTerminalFocusChange`（虚拟键盘感知 1500 ms fallback）/ `resetTerminalKeyboardFocusState` / `clearTerminalKeyboardFocusFallbackTimer`。
+- 组件删除约 66 行内联状态 + 约 66 行方法定义（含 4 个宽度常量、`clamp/load/saveRightPanelWidth`、`onRightResizeHandleMouseDown`、11 个面板/预览方法、终端焦点 3 函数），改由解构接入；模板/键盘 handler 引用的名字全部经解构同名接入，行为不变。
+- **共享 ref 暴露：** `activeRightPanelTab`、`isTerminalInputFocused`、`isTerminalKeyboardFocusFallbackActive` 与 `resetTerminalKeyboardFocusState`、`clearTerminalKeyboardFocusFallbackTimer` 由 hook 暴露，供必须在组件保留的编排读写——`isRightPanelTerminalActive` / `isTerminalKeyboardLayoutActive` 两 computed、`watch(isVirtualKeyboardOpen)` 复位、`onDocumentPointerDown`（全局 click-outside + settings-wise 混合守卫）、`refreshThreadTerminalStatus`、卸载清理。三依赖以 `isMobile.value` / `canShowRightPanel.value` / `isVirtualKeyboardOpen.value` 的**懒 getter** 注入，hook 于 `isThreadTerminalAvailable` 之后创建、先于两 computed，因钩子方法均在运行时才调 getter，无 TDZ 风险。
+- 单元回归：`useRightPanel.test.ts`（16 例：默认态、宽度加载 + clamp、tab 切换桌面/移动/非 terminal 复位、terminal 切换 + 面板隐藏 no-op、preview 打开/去重/关闭兜底/未知 key、桌面/移动关闭 + 切换、hide-terminal、`onTerminalFocusChange` 虚拟键盘+false 复位、reset-state、resize + 释放持久化），`vue-tsc --noEmit`、16/16 + `useSidebarUi` 9/9 + `useDesktopState` 89/89 通过、`vite build` 通过（main chunk 549.95 kB，稳定）。迁移说明见 `tests/chat-composer-rendering/componentization-round-68-app-right-panel.md`。
+
+App.vue 剩余候选：设置对话框 ghost-click 守卫（极自持小簇）、听写偏好（纯 prefs 零依赖）、账户列表/配额（较大含 async）、项目导入 overlay。
 
 ## 交接注意事项
 
