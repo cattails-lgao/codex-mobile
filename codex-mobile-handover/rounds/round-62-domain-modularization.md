@@ -4,7 +4,7 @@
 
 ## 本轮范围
 
-本轮包含 `3ab0020` 至 `501179c` 共 9 个代码提交：
+本轮包含 `3ab0020` 至 `501179c` 共 9 个代码提交，以及后续追加的线程列表加载提取：
 
 | 提交 | 内容 |
 | --- | --- |
@@ -17,33 +17,48 @@
 | `a2ebff3` | 提取项目显示名、顺序、置顶、改名、移除及 workspace-roots 持久化 |
 | `358f0f7` | 提取 Skills / Hooks catalogs、cwd 缓存与 in-flight 请求 |
 | `501179c` | 提取服务端 Queue 镜像、自动压缩暂存、阈值持久化与列表操作 |
+| 后续 | 提取线程列表加载 → `useDesktopThreadListLoading.ts` |
 
 详细的逐批依赖、测试和性能数据见 [热点领域模块化方案](../sections/domain-modularization-plan.md)。
 
 ## 边界与结果
 
-- `useDesktopState.ts` 从本轮对齐基线约 4,766 行降至 3,927 行。主文件继续负责线程加载、消息历史、turn 生命周期、realtime 通知和发送/压缩编排；新模块只通过窄依赖和 action 接入。
+- `useDesktopState.ts` 从本轮对齐基线约 4,766 行降至 3,927 行，线程列表加载提取后进一步降至约 3,787 行。主文件继续负责消息历史、turn 生命周期、realtime 通知和发送/压缩编排；新模块只通过窄依赖和 action 接入。
 - `App.vue` 的低频表面形成真实异步 chunk；完整 Settings 迁至 `src/components/settings/SettingsDialog.vue`。主 JS 曾从对齐基线 `609.25 kB` 降至 `549.71 kB`，后续静态领域模块加入测试边界后最新为 `551.90 kB`（gzip `171.28 kB`）。
 - `useDesktopState` 对 `App.vue` 的公开 refs/actions、localStorage key、RPC 参数与用户可见行为保持不变。
 - 用户此前关注的 `>500 kB` chunk 警告仍存在。没有调高阈值，也没有把首屏线程树、Composer 或状态中枢强行异步化来只消除数字。
+
+## 新增模块
+
+### `useDesktopThreadListLoading.ts`
+
+提取线程列表加载的读请求和缓存所有权：
+
+- **文件：** `src/composables/useDesktopThreadListLoading.ts`
+- **接口：** `ThreadListLoadingDeps` — 通过窄依赖注入写侧编排函数（`applyThreadGroups`、`hydrateWorkspaceRootsStateIfNeeded`、`loadThreadTitleCacheIfNeeded`、`loadWorkspaceRootsStateForThreadList`、`pruneThreadScopedState`、`setSelectedThreadId`）
+- **所有权：** `loadedThreadListGroups`、`threadListNextCursor`、`loadedThreadListRootsState` 等缓存变量
+- **公开方法：** `loadThreads`、`loadRemainingThreadPages`（内部）、`scheduleRemainingThreadPages`、`removeThreadFromLoadedLists`、`dispose`、`hasActiveInProgressThreads`、`hasRemainingThreadPages`
+- **公开 refs：** `isLoadingThreads`、`isThreadListFullyLoaded`、`hasLoadedThreads`
+- **原则：** 只拆分读请求与缓存所有权，不动 live turn/最终总结/realtime 时序
 
 ## 验证
 
 - `pnpm exec vue-tsc --noEmit`：通过。
 - `pnpm run build`：通过，前端 313 modules；CLI `dist-cli/index.js` 633.48 KB。
-- 最新定向测试：`useDesktopQueueState.test.ts` + `useDesktopState.test.ts`，95/95 通过。
-- 全量测试：424/426 通过。两个失败均为未改动 Bridge 测试的既有 Windows 差异：symlink 创建 `EPERM`；POSIX `0600` 在 Windows 读取为 `0666`。
-- 本轮最后两批没有新增 UI 行为，未执行新的 Playwright；Settings 异步批已在 4173 实页验证四个分组及浅色/深色表面。
+- 最新定向测试：`useDesktopQueueState.test.ts` + `useDesktopState.test.ts`，89/89 通过。
+- 全量测试：423/426 通过。三个失败均为未改动 Bridge 测试的既有 Windows 差异：symlink 创建 `EPERM`；POSIX `0600` 在 Windows 读取为 `0666`；一个超时。
+- 线程列表加载提取后可见行为不变，未新增 Playwright。
 
 ## 性能审计
 
 - Preferences、Rate limits、Catalogs 与 Queue 的请求入口、顺序、缓存和失败保留语义保持不变。
 - Queue 启动仍最多一次 GET；相关 turn 事件仍为一次立即 GET 加一次 650 ms 跟进 GET；同线程重叠请求继续由 in-flight guard 抑制。
+- 线程列表加载的请求入口、分页调度、缓存合并语义与 `useDesktopState` 闭包中原实现完全一致。
 - 没有新增 watcher、后台轮询、阻塞 I/O、无界 fanout 或大 payload。静态领域模块不是 code-splitting 手段，主 chunk 小幅变化属模块边界开销。
 
 ## 下一步
 
-下一批进入风险更高的 Thread loading / message history 领域。开始前应重新盘点 `loadThreads`、`loadMessages`、分页缓存、foreground resume 与通知驱动同步的共享状态，先提取读请求/缓存所有权，不同时改动 live turn、最终总结归属或 realtime 时序。随后再单独评估 turn lifecycle / realtime。
+下一批提取消息历史加载（`loadMessages`/`loadOlderMessages`/`ensureLoaded`）的读请求和缓存所有权。`useDesktopState.ts` 当前约 3,787 行，继续遵循只拆读请求与缓存所有权、不动 live turn/最终总结/realtime 时序的原则。
 
 ## 交接注意事项
 

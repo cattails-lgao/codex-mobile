@@ -13,7 +13,6 @@ import {
   replyToServerRequest,
   revertThreadFileChanges,
   rollbackThread,
-  getThreadGroupsPage,
   getWorkspaceRootsState,
   setWorkspaceRootsState,
   getThreadTitleCache,
@@ -238,14 +237,13 @@ import {
   createDesktopQueueState,
   type FileAttachment,
 } from './useDesktopQueueState'
+import { createDesktopThreadListLoading } from './useDesktopThreadListLoading'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
 const EVENT_SYNC_DEBOUNCE_MS = 220
-const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
-const RECENT_THREAD_LIST_LOAD_REUSE_MS = 2000
 
 // Official app-server notifications with no UI consumer in codex-mobile.
 // Each gets an explicit no-op branch (with debug log) so a future unknown
@@ -436,9 +434,7 @@ export function useDesktopState() {
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
   const threadTitleById = ref<Record<string, string>>({})
 
-  const isLoadingThreads = ref(false)
   const isLoadingMessages = ref(false)
-  const isThreadListFullyLoaded = ref(false)
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
   const isRollingBack = ref(false)
@@ -448,7 +444,6 @@ export function useDesktopState() {
   let fuzzyFileSearchSessionId = ''
 
   const isPolling = ref(false)
-  const hasLoadedThreads = ref(false)
 
   function extractLocalImagePathFromUrl(value: string): string {
     try {
@@ -482,26 +477,29 @@ export function useDesktopState() {
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
-  let loadThreadsPromise: Promise<void> | null = null
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
-  let lastThreadListLoadAt = 0
   let pendingThreadsRefresh = false
   let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
-  let threadListNextCursor: string | null = null
-  let threadListBackgroundTimer: number | null = null
-  let isLoadingRemainingThreadPages = false
-  let hasLoadedAllThreadPages = false
-  let loadedThreadListGroups: UiProjectGroup[] = []
-  let loadedThreadListRootsState: WorkspaceRootsState | null = null
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
   const pendingTurnStartsById = new Map<string, TurnStartedInfo>()
   const fallbackRetryInFlightThreadIds = new Set<string>()
 
+  const threadListLoading = createDesktopThreadListLoading({
+    selectedThreadId,
+    projectGroups,
+    inProgressById,
+    applyThreadGroups,
+    hydrateWorkspaceRootsStateIfNeeded,
+    loadThreadTitleCacheIfNeeded,
+    loadWorkspaceRootsStateForThreadList,
+    pruneThreadScopedState,
+    setSelectedThreadId,
+  })
 
   const allThreads = computed(() => flattenThreads(projectGroups.value))
   const selectedThread = computed(() =>
@@ -1023,8 +1021,12 @@ export function useDesktopState() {
       void flushStashedForThread(threadId)
     }
     applyThreadFlags()
-    if (!nextInProgress && !hasActiveInProgressThreads() && threadListNextCursor) {
-      scheduleRemainingThreadPages()
+    if (
+      !nextInProgress &&
+      !threadListLoading.hasActiveInProgressThreads() &&
+      threadListLoading.hasRemainingThreadPages()
+    ) {
+      threadListLoading.scheduleRemainingThreadPages()
     }
   }
 
@@ -2311,149 +2313,10 @@ export function useDesktopState() {
   }
 
   function removeArchivedThreadFromLoadedLists(threadId: string): void {
-    loadedThreadListGroups = removeThreadFromGroups(loadedThreadListGroups, threadId)
+    threadListLoading.removeThreadFromLoadedLists(threadId)
     sourceGroups.value = removeThreadFromGroups(sourceGroups.value, threadId)
     inProgressById.value = omitKey(inProgressById.value, threadId)
     applyThreadFlags()
-  }
-
-  function mergeThreadGroupPages(previous: UiProjectGroup[], incoming: UiProjectGroup[]): UiProjectGroup[] {
-    if (previous.length === 0) return incoming
-    if (incoming.length === 0) return previous
-
-    const threadById = new Map<string, UiThread>()
-    for (const thread of flattenThreads(previous)) {
-      threadById.set(thread.id, thread)
-    }
-    for (const thread of flattenThreads(incoming)) {
-      threadById.set(thread.id, thread)
-    }
-    const groupsByProject = new Map<string, UiThread[]>()
-    for (const thread of threadById.values()) {
-      const existing = groupsByProject.get(thread.projectName)
-      if (existing) existing.push(thread)
-      else groupsByProject.set(thread.projectName, [thread])
-    }
-
-    return Array.from(groupsByProject.entries())
-      .map(([projectName, threads]) => ({
-        projectName,
-        threads: threads.sort(
-          (first, second) => new Date(second.updatedAtIso).getTime() - new Date(first.updatedAtIso).getTime(),
-        ),
-      }))
-      .sort((first, second) => {
-        const firstUpdated = new Date(first.threads[0]?.updatedAtIso ?? 0).getTime()
-        const secondUpdated = new Date(second.threads[0]?.updatedAtIso ?? 0).getTime()
-        return secondUpdated - firstUpdated
-      })
-  }
-
-  function hasActiveInProgressThreads(): boolean {
-    return Object.values(inProgressById.value).some((value) => value === true)
-  }
-
-  function scheduleRemainingThreadPages(rootsState: WorkspaceRootsState | null = loadedThreadListRootsState): void {
-    if (!threadListNextCursor || isLoadingRemainingThreadPages || hasActiveInProgressThreads()) return
-
-    loadedThreadListRootsState = rootsState
-
-    if (typeof window === 'undefined') {
-      void loadRemainingThreadPages(rootsState)
-      return
-    }
-
-    if (threadListBackgroundTimer !== null) {
-      window.clearTimeout(threadListBackgroundTimer)
-    }
-
-    threadListBackgroundTimer = window.setTimeout(() => {
-      threadListBackgroundTimer = null
-      if (!threadListNextCursor || hasActiveInProgressThreads()) return
-      void loadRemainingThreadPages(loadedThreadListRootsState)
-    }, BACKGROUND_THREAD_PAGINATION_DELAY_MS)
-  }
-
-  async function loadRemainingThreadPages(rootsState: WorkspaceRootsState | null): Promise<void> {
-    if (isLoadingRemainingThreadPages || !threadListNextCursor || hasActiveInProgressThreads()) return
-    isLoadingRemainingThreadPages = true
-
-    try {
-      const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
-      threadListNextCursor = page.nextCursor
-      hasLoadedAllThreadPages = page.nextCursor === null
-      isThreadListFullyLoaded.value = hasLoadedAllThreadPages
-      loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
-      applyThreadGroups(loadedThreadListGroups, rootsState)
-    } catch {
-      // Keep the first page usable; a later refresh can retry remaining pages.
-    } finally {
-      isLoadingRemainingThreadPages = false
-      if (threadListNextCursor && !hasActiveInProgressThreads()) {
-        scheduleRemainingThreadPages(rootsState)
-      }
-    }
-  }
-
-  async function loadThreads(options: { force?: boolean } = {}) {
-    if (loadThreadsPromise) {
-      await loadThreadsPromise
-      return
-    }
-    if (
-      options.force !== true &&
-      hasLoadedThreads.value &&
-      Date.now() - lastThreadListLoadAt < RECENT_THREAD_LIST_LOAD_REUSE_MS
-    ) {
-      return
-    }
-
-    loadThreadsPromise = (async () => {
-    if (!hasLoadedThreads.value) {
-      isLoadingThreads.value = true
-    }
-
-    try {
-      const [page, rootsState] = await Promise.all([
-        getThreadGroupsPage(),
-        loadWorkspaceRootsStateForThreadList(),
-        loadThreadTitleCacheIfNeeded({ force: options.force === true }),
-      ])
-      loadedThreadListRootsState = rootsState
-      const groups = page.groups
-      // The server response is authoritative: replace the list on every load
-      // rather than union-merging it with the previous snapshot, so threads the
-      // server no longer returns (e.g. subagent sessions filtered out since the
-      // last load) disappear from the sidebar instead of lingering.
-      loadedThreadListGroups = groups
-      threadListNextCursor = page.nextCursor
-      hasLoadedAllThreadPages = page.nextCursor === null
-      isThreadListFullyLoaded.value = hasLoadedAllThreadPages
-      await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
-
-      applyThreadGroups(loadedThreadListGroups, rootsState)
-      hasLoadedThreads.value = true
-      lastThreadListLoadAt = Date.now()
-      if (!hasLoadedAllThreadPages) {
-        scheduleRemainingThreadPages(rootsState)
-      }
-
-      const flatThreads = flattenThreads(projectGroups.value)
-      pruneThreadScopedState(flatThreads)
-
-      const currentExists = flatThreads.some((thread) => thread.id === selectedThreadId.value)
-
-      if (!currentExists && !selectedThreadId.value) {
-        setSelectedThreadId(flatThreads[0]?.id ?? '')
-      }
-    } finally {
-      isLoadingThreads.value = false
-    }
-    })().finally(() => {
-      loadThreadsPromise = null
-    })
-
-    await loadThreadsPromise
   }
 
   async function loadMessages(threadId: string, options: { silent?: boolean; force?: boolean } = {}) {
@@ -2685,7 +2548,7 @@ export function useDesktopState() {
 
     try {
       await loadPersistedQueueStateIfNeeded()
-      await loadThreads({ force: options.forceThreadRefresh === true })
+      await threadListLoading.loadThreads({ force: options.forceThreadRefresh === true })
       if (includeSelectedThreadMessages) {
         try {
           await loadMessages(selectedThreadId.value)
@@ -2749,7 +2612,7 @@ export function useDesktopState() {
     try {
       await archiveThread(threadId)
       removeArchivedThreadFromLoadedLists(threadId)
-      await loadThreads()
+      await threadListLoading.loadThreads()
 
       if (wasSelectedThread && nextSelectedThreadId && selectedThreadId.value === nextSelectedThreadId) {
         await ensureThreadMessagesLoaded(nextSelectedThreadId, { silent: true })
@@ -2795,7 +2658,7 @@ export function useDesktopState() {
         [nextThreadId]: true,
       }
       setSelectedThreadId(nextThreadId)
-      await loadThreads()
+      await threadListLoading.loadThreads()
       await loadMessages(nextThreadId)
       return nextThreadId
     } catch (unknownError) {
@@ -2872,7 +2735,7 @@ export function useDesktopState() {
 
       await renameThreadById(forkedThreadId, forkedThreadTitle)
       setSelectedThreadId(forkedThreadId)
-      void loadThreads().catch(() => {})
+      void threadListLoading.loadThreads().catch(() => {})
       return forkedThreadId
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
@@ -3517,7 +3380,7 @@ export function useDesktopState() {
     isPolling.value = true
 
     try {
-      await loadThreads()
+      await threadListLoading.loadThreads()
 
       if (!selectedThreadId.value) return
 
@@ -3559,7 +3422,7 @@ export function useDesktopState() {
 
     try {
       if (shouldRefreshThreads) {
-        await loadThreads({ force: shouldForceThreadRefresh })
+        await threadListLoading.loadThreads({ force: shouldForceThreadRefresh })
       }
 
       const activeThreadId = selectedThreadId.value
@@ -3604,7 +3467,7 @@ export function useDesktopState() {
 
   async function recoverBridgeState(): Promise<void> {
     await loadPendingServerRequestsFromBridge()
-    pendingThreadsRefresh = !hasLoadedThreads.value
+    pendingThreadsRefresh = !threadListLoading.hasLoadedThreads.value
     if (
       selectedThreadId.value &&
       loadedMessagesByThreadId.value[selectedThreadId.value] !== true
@@ -3770,10 +3633,7 @@ export function useDesktopState() {
       eventSyncTimer = null
     }
     stopRateLimitRefresh()
-    if (threadListBackgroundTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(threadListBackgroundTimer)
-      threadListBackgroundTimer = null
-    }
+    threadListLoading.dispose()
     if (typeof window !== 'undefined') {
       for (const timerId of delayedTurnSyncTimerByThreadId.values()) {
         window.clearTimeout(timerId)
@@ -3863,8 +3723,8 @@ export function useDesktopState() {
     accountRateLimitSnapshots,
     messages,
     hasMoreOlderMessages,
-    isLoadingThreads,
-    isThreadListFullyLoaded,
+    isLoadingThreads: threadListLoading.isLoadingThreads,
+    isThreadListFullyLoaded: threadListLoading.isThreadListFullyLoaded,
     isLoadingMessages,
     isLoadingOlderMessages,
     isSendingMessage,
