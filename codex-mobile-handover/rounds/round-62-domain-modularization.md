@@ -56,9 +56,17 @@
 - 线程列表加载的请求入口、分页调度、缓存合并语义与 `useDesktopState` 闭包中原实现完全一致。
 - 没有新增 watcher、后台轮询、阻塞 I/O、无界 fanout 或大 payload。静态领域模块不是 code-splitting 手段，主 chunk 小幅变化属模块边界开销。
 
-## 下一步
+## 下一步 · 收官评估（2026-08-28）
 
-此后续三批已另批完成：**消息历史加载**（`loadMessages`/`loadOlderMessages`/`ensureThreadMessagesLoaded` → `useDesktopMessageHistoryLoading.ts`）、**线程标题缓存**（`threadTitleById` + 标题加载/生成/归一化 → `useDesktopThreadTitleCache.ts`）与**待办服务端请求**（`pendingServerRequestsByThreadId`/`pendingReplyErrorByRequestId` + 读侧 computed/读助手/读请求/作用域化 prune → `useDesktopPendingServerRequests.ts`）的读请求与缓存所有权均已按「窄依赖注入 + 写侧编排保留在主闭包」模式抽出。`useDesktopState.ts` 因此自 3,787 行降至约 3,483 行。剩余候选按「只拆读请求与缓存所有权、不动 live turn/最终总结/realtime 时序」原则评估（如 read-state/unread、reasoning archive）；turn lifecycle / realtime 仍另批评估。
+此后续三批已另批完成：**消息历史加载**（`loadMessages`/`loadOlderMessages`/`ensureThreadMessagesLoaded` → `useDesktopMessageHistoryLoading.ts`）、**线程标题缓存**（`threadTitleById` + 标题加载/生成/归一化 → `useDesktopThreadTitleCache.ts`）与**待办服务端请求**（`pendingServerRequestsByThreadId`/`pendingReplyErrorByRequestId` + 读侧 computed/读助手/读请求/作用域化 prune → `useDesktopPendingServerRequests.ts`）的读请求与缓存所有权均已按「窄依赖注入 + 写侧编排保留在主闭包」模式抽出。`useDesktopState.ts` 因此自约 3,787 行降至约 3,483 行。
+
+对本轮剩余三个候选依「只拆读请求与缓存所有权、不动 live turn/最终总结/realtime 时序」逐项评估后，**结论为全部不建议拆分，领域模块化系列正式收官**：
+
+- **read-state/unread**：unread 的真正读取是内联在必须留在主闭包的 `applyThreadFlags` 合并写和弦（865–869），非独立函数；能搬走的仅 3 个 ref 声明 + 2 条内联 prune + 一个剪枝 helper，约 15–20 行，核心读拆不出；`markThreadAsRead`/`markThreadUnreadByEvent` 因读写 `sourceGroups`/`selectedThreadId`/`saveReadStateMap` 并调 `applyThreadFlags` 属写编排留主，且 `markThreadUnreadByEvent` 由 turn/completed 回调调用。属「贴壳搬 ref」，是明确的反模式，收益≈0、中风险。
+- **reasoning archive**：`persistedReasoningByThreadId`/`liveReasoningTextByThreadId` 缓存已深度接进独立的 `useDesktopStateReasoningWrites`/`useDesktopStateReasoningTimeline`，再拆只剩边际收益，且踩 live turn 高风险线。
+- **turn lifecycle / realtime**：核心 `applyRealtimeUpdates` 是约 410 行（1655–2066）的中枢写引擎，实测直接读写 ≥12 个共享闭包 ref、调用 ≥34 个本地写编排函数——抽走需约 46 成员的 deps 对象（即把整个闭包拎着走）并重构状态所有权+重排时序，改动面以千行计、无既有 SSE 交叠时序的回归保护。纯通知解析层（`useDesktopStateNormalizers`/`useDesktopStateReaders`）和 clean 的读请求+缓存候选均已抽完；残留 `readPlan*`/`readCommandExecution*` 返回前即写 live ref，本质是写编排。应作为**有意的整体边界保留**，不继续拆。
+
+收官口径：本轮起 `useDesktopState.ts` 退化为单一协调器（消息历史、turn 生命周期、realtime 分发、发送/压缩编排、跨域 flags 合并），各领域只读增量因子路由回主闭包由 `applyThreadFlags` 合并；后续若需改造，应转向「新增领域文件 + 显式 deps 汇流点」的演进，而非继续拆写引擎。
 
 ## 交接注意事项
 
