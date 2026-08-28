@@ -36,3 +36,13 @@ Refactor of `App.vue` (no user-visible behavior change). The self-contained righ
 - No behavior change; guards against extracting the App.vue right-panel UI-state cluster.
 - Rollback: covered by `useRightPanel.test.ts` (16 cases: default desktop state, width load + clamp from localStorage, tab select (desktop + mobile + non-terminal reset), terminal toggle (+ no-op when panel hidden), preview open/dedupe/close-fallback/unknown-key, desktop/mobile close + toggle, hide-terminal, `onTerminalFocusChange` virtual-keyboard + false-reset, reset state, resize + persist on release) plus `vue-tsc` and the production build; revert `App.vue`'s `createRightPanel()` wiring if any surface above misbehaves.
 - Cleanup: no state mutated on disk; the right-panel width preference is app-owned and reversible from the UI.
+
+## Playwright 移动端回归（375×812，2026-08-28）
+
+移动端抽屉行为已用 Playwright CJS 在 375×812 视口下回归（`scripts/verify-mobile-375.cjs`）。浏览器选择策略：优先以系统已安装浏览器启动（先探测 Edge → Chrome 常见安装路径），找不到任何系统浏览器时才回退 Playwright 自带 chromium——无需强制下载浏览器二进制。
+
+- **进入会话后的抽屉可用性**：打开移动端 "Open side panel" 抽屉按钮 → 抽屉以 overlay 出现（按钮 aria-label 切换为 "Close side panel"）；Git / 文件 / Terminal tab 均切换成功。
+- **关闭**：点击抽屉内部 "Close panel" 按钮 → `.content-right-panel.is-mobile-open` class 移除、抽屉关闭（截图确认右侧回归单面板全宽）。
+- **断言口径**：移动端面板容器常驻 DOM、以 `.is-mobile-open` class 表征开合（由 `isMobileRightPanelOpen` 驱动）；因此 Playwright 判断开合应检查该 class 是否移除，而非 `isVisible()`（transform 移出视口的元素 `isVisible()` 仍为 true，会误报）。
+- **错误**：全程无 console / page error。
+- 截图：`output/playwright/mobile-375-before-drawer.png`、`mobile-375-drawer-open.png`、`mobile-375-drawer-closed.png`。
