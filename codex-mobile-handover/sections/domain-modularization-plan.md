@@ -305,6 +305,11 @@
   - 既有 `useDesktopState.test.ts` collaboration selection 用例覆盖 legacy storage、按线程切换和默认模式恢复；90 个状态/上下文定向测试通过。
   - 请求语义不变：仍只在 ancillary refresh 中调用一次 `getAvailableCollaborationModes`，没有新增 watcher、定时器或存储写入。
 
+- 2026-08-28：**低频完整 UI 表面新增真实异步边界**。`SettingsAccountsPanel`、`RightGitPanel`、`RightFilesPanel`、`RightFilePreview`、`ThreadPendingRequestPanel`、`QueuedMessages` 从 `App.vue` 静态 import 改为 `defineAsyncComponent`。
+  - 父层 refs、事件和 API controller 保持不变；组件仅在设置打开、右栏打开/切换、审批出现或队列非空时下载，没有新增 API 请求、watcher 或缓存失效路径。
+  - 首轮四个表面构建后，主 JS chunk `610.71 → 591.02 kB`（gzip `186.58 → 181.10 kB`）；加入审批/队列边界后最终降至 `567.87 kB`（gzip `175.00 kB`）。主 CSS 最终为 `427.56 kB`（gzip `43.44 kB`）。相对本轮对齐基线 `609.25 kB`，主 JS 减少 `41.38 kB`；仍保留 `>500 kB` 构建警告，下一批继续提取完整 Settings 对话框。
+  - 4173 实页验证：深色下 Settings Accounts、Git、Files、文本预览均渲染；浅色下 Settings 对话框与右侧面板表面颜色正确，测试后恢复 System 主题。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。

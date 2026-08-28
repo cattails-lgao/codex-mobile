@@ -15,12 +15,14 @@
 6. Click the chevron toggle in Accounts header to expand.
 7. Confirm account list/error/empty state renders correctly after expanding.
 8. Reload the page and confirm collapsed/expanded state persists.
+9. After a fresh reload, open Settings and confirm the asynchronously loaded Accounts header and count appear without leaving a persistent blank section; repeat in light and dark themes.
 
 #### Expected Results
 - Script imports up to 10 valid (token-exchange-successful) accounts and skips invalid tokens.
 - `accounts.json` and per-account snapshot `auth.json` files are created with secure file modes.
 - Accounts panel in settings is collapsed by default when no saved preference exists.
 - User can expand/collapse Accounts via header toggle, and the state persists in localStorage.
+- Loading the Accounts component on first Settings open does not duplicate account refresh requests or change collapse state.
 
 #### Rollback/Cleanup
 - Remove imported snapshots from `~/.codex/accounts/` and corresponding rows in `~/.codex/accounts.json` if needed.

@@ -60,3 +60,21 @@ Round-7 work: the right-side panel now slides in correctly on H5 viewports (Tail
 
 #### Rollback/Cleanup
 - None required.
+
+## Feature: Right panel surfaces load asynchronously
+
+#### Prerequisites
+- Dev server at `127.0.0.1:4173`
+- A thread with a workspace and at least one previewable text file
+
+#### Steps
+1. Reload the app with the right panel closed, then open the panel and confirm the Git tab renders after its async component loads.
+2. Switch to Files and confirm the directory tree renders; open a text file and confirm its preview tab renders.
+3. Repeat in dark theme and light theme.
+
+#### Expected Results
+- Git, Files, and file preview surfaces appear without an error, blank persistent panel, duplicate request, or lost selected thread.
+- The async boundary does not alter tab selection, file filtering, preview content, or light/dark surface colors.
+
+#### Rollback/Cleanup
+- Restore the original theme and close any preview tab opened for the check.
