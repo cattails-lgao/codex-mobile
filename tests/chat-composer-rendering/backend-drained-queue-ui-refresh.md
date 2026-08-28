@@ -8,6 +8,7 @@ The queue panel refreshes when the backend starts and drains persisted queued me
 2. Open a `TestChat` thread
 3. Queue at least three short messages while a turn is running
 4. Light theme and dark theme both available from the appearance switcher
+5. Browser DevTools Network tab open and filtered to `thread-queue-state`
 
 #### Steps
 1. In light theme, confirm queued rows are visible above the composer
@@ -16,10 +17,12 @@ The queue panel refreshes when the backend starts and drains persisted queued me
 4. Confirm the queue panel disappears when the final queued message is submitted
 5. Refresh the thread after all queued turns complete
 6. Switch to dark theme and repeat the visibility check after queue drain
+7. For one isolated `turn/started` or `turn/completed` event, confirm queue state is read immediately and once more about 650 ms later; overlapping refreshes for that thread do not create a second in-flight request
 
 #### Expected Results
 - Queued messages execute in order after the active turn completes
 - The queue panel reflects backend queue state after `turn/started` and `turn/completed`
+- Each event keeps the existing immediate plus 650 ms follow-up refresh, with same-thread overlapping requests suppressed
 - No already-executed queued rows remain visible after the queue is empty
 - Queue row text, actions, and composer spacing remain readable in both light theme and dark theme
 

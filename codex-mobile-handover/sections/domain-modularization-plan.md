@@ -331,6 +331,11 @@
   - 性能审计：每个 state 实例仍各只有一个 Skills/Hooks refresh Promise；未新增 watcher、timer、请求、阻塞工作、无界 fanout 或缓存失效路径。生产构建主 JS `550.93 kB`、gzip `171.05 kB`，静态领域边界不承担 code-splitting 目标，既有 `>500 kB` 警告保留。
   - `useDesktopState.ts` 由 4,186 行降至 4,125 行；全量单测 418/420 通过，两个失败仍为未改动 Bridge 测试在 Windows 下的 symlink `EPERM` 与 POSIX `0600`/Windows `0666` 差异。
 
+- 2026-08-28：**useDesktopState Queue / Auto-compact 状态领域迁出**。新建 `src/composables/useDesktopQueueState.ts`，统一持有服务端 queue 镜像、同线程刷新 guard、自动压缩暂存、阈值 localStorage、选中线程合并列表，以及加载/刷新/入队/排序/删除/裁剪/清空操作；发送、steer、compact 与补发时序继续留在主 controller，只经窄 action 读写队列。
+  - 新增 `useDesktopQueueState.test.ts` 6 个用例，覆盖暂存/阈值恢复、后端队列一次加载、失败保留旧值、同线程 in-flight 抑制、650 ms 跟进刷新、插入/排序/删除/清空持久化和 UI-only 标记过滤；连同 `useDesktopState.test.ts` 共 95 个定向测试通过。
+  - 性能审计：启动仍最多一次 queue GET；每个相关 turn 事件仍保持一次立即 GET + 一次 650 ms 跟进 GET，同线程重叠请求仍被 guard 抑制；queue PUT/localStorage 写入点、payload 归一化、缓存失效和请求 fanout 均未增加，也未新增 watcher 或阻塞工作。生产构建主 JS `551.90 kB`、gzip `171.28 kB`（上一批 `550.93/171.05 kB`），既有 `>500 kB` 警告保留。
+  - `useDesktopState.ts` 由 4,125 行降至 3,927 行；全量单测 424/426 通过，两个失败仍为未改动 Bridge 测试在 Windows 下的 symlink `EPERM` 与 POSIX `0600`/Windows `0666` 差异。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
