@@ -65,7 +65,7 @@ describe('useReplyCopyFork', () => {
   })
 
   it('skips non-metadata file-change summaries', () => {
-    const summary = { ...metadataSummary('t1'), source: 'standalone' as const }
+    const summary = { ...metadataSummary('t1'), source: 'assistant' as const }
     const fork = depsFor([assistant('a1', 0)], { a1: summary })
 
     expect(fork.copyableResponseContentByAnchorId.value.a1).toBe('reply a1')
