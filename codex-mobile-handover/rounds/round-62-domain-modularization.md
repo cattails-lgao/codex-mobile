@@ -68,6 +68,12 @@
 
 收官口径：本轮起 `useDesktopState.ts` 退化为单一协调器（消息历史、turn 生命周期、realtime 分发、发送/压缩编排、跨域 flags 合并），各领域只读增量因子路由回主闭包由 `applyThreadFlags` 合并；后续若需改造，应转向「新增领域文件 + 显式 deps 汇流点」的演进，而非继续拆写引擎。
 
+### 新一轮 · 巨型 `.vue` 第二轮组件化（待办）
+
+useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一轮视图组件化，测量与结论记录在 [domain-modularization-plan.md](../sections/domain-modularization-plan.md#巨型-vue-第二轮组件化评估)。要点：`App.vue`/`SidebarThreadTree`/`ThreadConversation` 的"大"在 `<script setup>` 编排逻辑（`App.vue` script 4,271 行 / 102 局部 ref / 124 await），模板已被 round-48/49 抽干净，再抽叶组件收益有限；剩余杠杆是**hook 化**而非 `.vue` 拆分。
+
+**下一步（第一个待办）：只读评估 `SidebarThreadTree` 的三簇边界（过滤 / 键盘导航 / 右键菜单），产出试点的先期评估报告**，据此决定是否动手实现试点（抽 2~3 个本地 hook）。本轮暂不动手的对象：`App.vue` / `ThreadComposer`（await 交叠最深的编排块）、`ThreadConversation`（round-19 高风险 UI）。
+
 ## 交接注意事项
 
 - 不要为了继续降行数直接搬运闭包函数；先确认领域拥有的 refs、请求缓存和唯一写入口，再用窄依赖接线。
