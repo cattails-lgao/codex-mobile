@@ -58,7 +58,7 @@
 
 ## 下一步
 
-此后的两批已另批完成：**消息历史加载**（`loadMessages`/`loadOlderMessages`/`ensureThreadMessagesLoaded` → `useDesktopMessageHistoryLoading.ts`）与**线程标题缓存**（`threadTitleById` + 标题加载/生成/归一化 → `useDesktopThreadTitleCache.ts`）的读请求与缓存所有权均已按「窄依赖注入 + 写侧编排保留在主闭包」模式抽出。`useDesktopState.ts` 因此自 3,787 行降至约 3,555 行。剩余候选按「只拆读请求与缓存所有权、不动 live turn/最终总结/realtime 时序」原则评估（如 read-state/unread、reasoning archive、pending server requests）；turn lifecycle / realtime 仍另批评估。
+此后续三批已另批完成：**消息历史加载**（`loadMessages`/`loadOlderMessages`/`ensureThreadMessagesLoaded` → `useDesktopMessageHistoryLoading.ts`）、**线程标题缓存**（`threadTitleById` + 标题加载/生成/归一化 → `useDesktopThreadTitleCache.ts`）与**待办服务端请求**（`pendingServerRequestsByThreadId`/`pendingReplyErrorByRequestId` + 读侧 computed/读助手/读请求/作用域化 prune → `useDesktopPendingServerRequests.ts`）的读请求与缓存所有权均已按「窄依赖注入 + 写侧编排保留在主闭包」模式抽出。`useDesktopState.ts` 因此自 3,787 行降至约 3,483 行。剩余候选按「只拆读请求与缓存所有权、不动 live turn/最终总结/realtime 时序」原则评估（如 read-state/unread、reasoning archive）；turn lifecycle / realtime 仍另批评估。
 
 ## 交接注意事项
 

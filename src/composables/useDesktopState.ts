@@ -4,7 +4,6 @@ import {
   archiveThread,
   forkThread,
   renameThread,
-  getPendingServerRequests,
   getThreadDetail,
   getOlderThreadMessages,
   getBackgroundThreadListLimit,
@@ -158,15 +157,8 @@ import {
   readTurnStartedInfo,
 } from './useDesktopStateReaders'
 import {
-  GLOBAL_SERVER_REQUEST_SCOPE,
-  isApprovalRequestMethod,
   normalizeServerRequest,
-  readPendingReplyErrorForRequest,
   readToolRequestUserInputQuestionIds,
-  removePendingServerRequestById as removePendingServerRequestByIdImpl,
-  replacePendingServerRequests as replacePendingServerRequestsImpl,
-  upsertPendingServerRequest as upsertPendingServerRequestImpl,
-  type PendingRequestWriteDeps,
 } from './useDesktopStateRequests'
 import {
   clearLiveAgentMessagesForThread as clearLiveAgentMessagesForThreadImpl,
@@ -237,6 +229,7 @@ import {
 import { createDesktopThreadListLoading } from './useDesktopThreadListLoading'
 import { createDesktopMessageHistoryLoading } from './useDesktopMessageHistoryLoading'
 import { createDesktopThreadTitleCache } from './useDesktopThreadTitleCache'
+import { createDesktopPendingServerRequests } from './useDesktopPendingServerRequests'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
@@ -388,9 +381,6 @@ export function useDesktopState() {
   const turnIndexByTurnIdByThreadId = ref<Record<string, Record<string, number>>>({})
   const turnSummaryByThreadId = ref<Record<string, TurnSummaryState>>({})
   const turnActivityByThreadId = ref<Record<string, TurnActivityState>>({})
-  // round-23：审批/询问面板回复失败时展示的可见错误（按 requestId），
-  // 让「点了没反应」不再无声发生。
-  const pendingReplyErrorByRequestId = ref<Record<string, string>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
 
@@ -446,6 +436,25 @@ export function useDesktopState() {
     requestThreadTitleGeneration,
   } = threadTitleCache
 
+  const pendingServerRequests = createDesktopPendingServerRequests({
+    applyThreadFlags,
+    getSelectedThreadId: () => selectedThreadId.value,
+  })
+  const {
+    getThreadPendingRequests,
+    loadPendingServerRequestsFromBridge,
+    pendingReplyErrorByRequestId,
+    pendingReplyErrorForRequest,
+    pendingRequestStillExistsOnServer,
+    pendingServerRequestsByThreadId,
+    prunePendingServerRequestsByActiveThreads,
+    readPendingRequestState,
+    removePendingServerRequestById,
+    replacePendingServerRequests,
+    selectedThreadServerRequests,
+    upsertPendingServerRequest,
+  } = pendingServerRequests
+
   const reasoningTimelineDeps: ReasoningTimelineDeps = {
     liveReasoningTextByThreadId,
     persistedReasoningByThreadId,
@@ -467,7 +476,6 @@ export function useDesktopState() {
   // 把该 turn（含用户消息）从线程历史整体移除（事务式回滚）。检测到该场景后把未
   // 提交的用户消息载荷存于此，供 UI 回填输入框并提示，避免用户以为消息丢失。
   const interruptedUnsubmittedByThreadId = ref<Record<string, InterruptRecoverPayload>>({})
-  const pendingServerRequestsByThreadId = ref<Record<string, UiServerRequest[]>>({})
   const pendingTurnRequestByThreadId = ref<Record<string, PendingTurnRequest>>({})
   const {
     accountRateLimitSnapshots,
@@ -581,17 +589,6 @@ export function useDesktopState() {
     const threadId = selectedThreadId.value
     if (!threadId) return false
     return interruptBlockedUntilPersistedByThreadId.value[threadId] === true
-  })
-  const selectedThreadServerRequests = computed<UiServerRequest[]>(() => {
-    const rows: UiServerRequest[] = []
-    const selected = selectedThreadId.value
-    if (selected && Array.isArray(pendingServerRequestsByThreadId.value[selected])) {
-      rows.push(...pendingServerRequestsByThreadId.value[selected])
-    }
-    if (Array.isArray(pendingServerRequestsByThreadId.value[GLOBAL_SERVER_REQUEST_SCOPE])) {
-      rows.push(...pendingServerRequestsByThreadId.value[GLOBAL_SERVER_REQUEST_SCOPE])
-    }
-    return rows.sort((first, second) => first.receivedAtIso.localeCompare(second.receivedAtIso))
   })
   // round-26：当前选中线程的进行中 turn id（用于 fileChange 块「轮完成后才显示」）
   const selectedActiveTurnId = computed(() => {
@@ -856,20 +853,6 @@ export function useDesktopState() {
     delayedTurnSyncTimerByThreadId.set(threadId, timerId)
   }
 
-  function getThreadPendingRequests(threadId: string): UiServerRequest[] {
-    if (!threadId) return []
-    return Array.isArray(pendingServerRequestsByThreadId.value[threadId])
-      ? pendingServerRequestsByThreadId.value[threadId]
-      : []
-  }
-
-  function readPendingRequestState(requests: UiServerRequest[]): UiPendingRequestState | null {
-    if (requests.some((request) => isApprovalRequestMethod(request.method))) {
-      return 'approval'
-    }
-    return requests.length > 0 ? 'response' : null
-  }
-
   function applyThreadFlags(): void {
     const withTitles = applyCachedTitlesToGroups(sourceGroups.value)
     const flaggedGroups: UiProjectGroup[] = withTitles.map((group) => ({
@@ -979,13 +962,7 @@ export function useDesktopState() {
     threadTokenUsageByThreadId.value = pruneThreadStateMap(threadTokenUsageByThreadId.value, activeThreadIds)
     eventUnreadByThreadId.value = pruneThreadStateMap(eventUnreadByThreadId.value, activeThreadIds)
     inProgressById.value = pruneThreadStateMap(inProgressById.value, activeThreadIds)
-    const nextPending: Record<string, UiServerRequest[]> = {}
-    for (const [threadId, requests] of Object.entries(pendingServerRequestsByThreadId.value)) {
-      if (threadId === GLOBAL_SERVER_REQUEST_SCOPE || activeThreadIds.has(threadId)) {
-        nextPending[threadId] = requests
-      }
-    }
-    pendingServerRequestsByThreadId.value = nextPending
+    prunePendingServerRequestsByActiveThreads(activeThreadIds)
   }
 
   function markThreadAsRead(threadId: string): void {
@@ -1431,12 +1408,6 @@ export function useDesktopState() {
     }
   }
 
-  const pendingRequestWriteDeps: PendingRequestWriteDeps = {
-    pendingServerRequestsByThreadId,
-    pendingReplyErrorByRequestId,
-    applyThreadFlags,
-  }
-
   const liveWriteDeps: LiveWriteDeps = {
     liveCommandsByThreadId,
     liveFileChangeMessagesByThreadId,
@@ -1449,23 +1420,6 @@ export function useDesktopState() {
     turnIndexByTurnIdByThreadId,
     persistedMessagesByThreadId,
     liveFileChangeMessagesByThreadId,
-  }
-
-  function upsertPendingServerRequest(request: UiServerRequest): void {
-    upsertPendingServerRequestImpl(pendingRequestWriteDeps, request)
-  }
-
-  function removePendingServerRequestById(requestId: number): void {
-    removePendingServerRequestByIdImpl(pendingRequestWriteDeps, requestId)
-  }
-
-  // round-23：读取某个待办请求的可见回复错误（供审批/询问面板展示）。
-  function pendingReplyErrorForRequest(requestId: number): string {
-    return readPendingReplyErrorForRequest(pendingRequestWriteDeps, requestId)
-  }
-
-  function replacePendingServerRequests(requests: UiServerRequest[]): void {
-    replacePendingServerRequestsImpl(pendingRequestWriteDeps, requests)
   }
 
   function handleServerRequestNotification(notification: RpcNotification): boolean {
@@ -3296,18 +3250,6 @@ export function useDesktopState() {
     })
   }
 
-  async function loadPendingServerRequestsFromBridge(): Promise<void> {
-    try {
-      const rows = await getPendingServerRequests()
-      const normalizedRequests = rows
-        .map((row) => normalizeServerRequest(row))
-        .filter((request): request is UiServerRequest => request !== null)
-      replacePendingServerRequests(normalizedRequests)
-    } catch {
-      // Keep UI usable when pending request endpoint is temporarily unavailable.
-    }
-  }
-
   // round-23：启动时从桥接层恢复跨浏览器思考存档（app-server 不持久化
   // reasoning）。桥接层有该线程的存档时以它为准（覆盖本浏览器 localStorage，
   // 保证换浏览器后一致）；没有时保留本地存档兜底。
@@ -3370,20 +3312,6 @@ export function useDesktopState() {
         [String(reply.id)]: message,
       }
       return false
-    }
-  }
-
-  async function pendingRequestStillExistsOnServer(requestId: number): Promise<boolean> {
-    try {
-      const rows = await getPendingServerRequests()
-      for (const row of rows) {
-        const record = asRecord(row)
-        if (record?.id === requestId) return true
-      }
-      return false
-    } catch {
-      // 对账接口不可用时保守处理：视为仍存在，保留面板并展示错误。
-      return true
     }
   }
 
