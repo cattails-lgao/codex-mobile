@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+﻿import { computed, ref } from 'vue'
 import {
 
   archiveThread,
@@ -238,12 +238,12 @@ import {
   type FileAttachment,
 } from './useDesktopQueueState'
 import { createDesktopThreadListLoading } from './useDesktopThreadListLoading'
+import { createDesktopMessageHistoryLoading } from './useDesktopMessageHistoryLoading'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
-const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 
 // Official app-server notifications with no UI consumer in codex-mobile.
 // Each gets an explicit no-op branch (with debug log) so a future unknown
@@ -386,10 +386,6 @@ export function useDesktopState() {
     pruneThreadScopedState,
     setSelectedThreadId,
   })
-  const loadedVersionByThreadId = ref<Record<string, string>>({})
-  const loadedMessagesByThreadId = ref<Record<string, boolean>>({})
-  const hasMoreOlderMessagesByThreadId = ref<Record<string, boolean>>({})
-  const loadingOlderMessagesByThreadId = ref<Record<string, boolean>>({})
   const resumedThreadById = ref<Record<string, boolean>>({})
   const turnIndexByTurnIdByThreadId = ref<Record<string, Record<string, number>>>({})
   const turnSummaryByThreadId = ref<Record<string, TurnSummaryState>>({})
@@ -399,6 +395,49 @@ export function useDesktopState() {
   const pendingReplyErrorByRequestId = ref<Record<string, string>>({})
   const turnErrorByThreadId = ref<Record<string, TurnErrorState>>({})
   const activeTurnIdByThreadId = ref<Record<string, string>>({})
+
+  const messageHistoryLoading = createDesktopMessageHistoryLoading({
+    selectedThreadId,
+    error,
+    persistedMessagesByThreadId,
+    liveAgentMessagesByThreadId,
+    inProgressById,
+    externalSessionByThreadId,
+    resumedThreadById,
+    turnIndexByTurnIdByThreadId,
+    turnErrorByThreadId,
+    activeTurnIdByThreadId,
+    markThreadAsRead,
+    markThreadMessagesPersisted,
+    replaceTurnIndexLookupForThread,
+    rebindLiveFileChangeTurnIndices,
+    setPersistedMessagesForThread,
+    setLiveAgentMessagesForThread,
+    clearLiveAgentMessagesForThread,
+    removeLiveCommandsPersistedIn,
+    removeLiveFileChangesPersistedIn,
+    setThreadInProgress,
+    setThreadModelProviderId,
+    setThreadModelId,
+    resolveThreadModelForProvider,
+    clearTransientTurnErrorForThread,
+    clearCompletedTurnLiveState,
+    setTurnErrorForThread,
+    getFirstPersistedTurnId,
+    currentThreadVersion,
+  })
+  const {
+    ensureThreadMessagesLoaded,
+    hasMoreOlderMessagesByThreadId,
+    isLoadingMessages,
+    loadMessages,
+    loadOlderMessages,
+    loadedMessagesByThreadId,
+    loadedVersionByThreadId,
+    loadingOlderMessagesByThreadId,
+    pruneMessageHistoryState,
+  } = messageHistoryLoading
+
   const reasoningTimelineDeps: ReasoningTimelineDeps = {
     liveReasoningTextByThreadId,
     persistedReasoningByThreadId,
@@ -434,7 +473,6 @@ export function useDesktopState() {
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
   const threadTitleById = ref<Record<string, string>>({})
 
-  const isLoadingMessages = ref(false)
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
   const isRollingBack = ref(false)
@@ -477,12 +515,9 @@ export function useDesktopState() {
   let stopNotificationStream: (() => void) | null = null
   let eventSyncTimer: number | null = null
   const delayedTurnSyncTimerByThreadId = new Map<string, number>()
-  const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   let pendingThreadsRefresh = false
   let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
-  const lastMessageLoadAtByThreadId = new Map<string, number>()
-  const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
@@ -932,8 +967,7 @@ export function useDesktopState() {
       readStateByThreadId.value = nextReadState
       saveReadStateMap(nextReadState)
     }
-    loadedMessagesByThreadId.value = pruneThreadStateMap(loadedMessagesByThreadId.value, activeThreadIds)
-    loadedVersionByThreadId.value = pruneThreadStateMap(loadedVersionByThreadId.value, activeThreadIds)
+    pruneMessageHistoryState(activeThreadIds)
     resumedThreadById.value = pruneThreadStateMap(resumedThreadById.value, activeThreadIds)
     turnIndexByTurnIdByThreadId.value = pruneThreadStateMap(turnIndexByTurnIdByThreadId.value, activeThreadIds)
     persistedMessagesByThreadId.value = pruneThreadStateMap(persistedMessagesByThreadId.value, activeThreadIds)
@@ -2319,195 +2353,6 @@ export function useDesktopState() {
     applyThreadFlags()
   }
 
-  async function loadMessages(threadId: string, options: { silent?: boolean; force?: boolean } = {}) {
-    if (!threadId) {
-      return
-    }
-    const recentLoadFailure =
-      Date.now() - (lastMessageLoadFailureAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
-    if (turnErrorByThreadId.value[threadId]?.transient && (options.silent === true || recentLoadFailure)) {
-      return
-    }
-
-    const existingLoad = loadMessagePromiseByThreadId.get(threadId)
-    if (existingLoad && options.force !== true) {
-      await existingLoad
-      return
-    }
-
-    const alreadyLoaded = loadedMessagesByThreadId.value[threadId] === true
-    const shouldShowLoading = options.silent !== true && !alreadyLoaded
-    if (shouldShowLoading) {
-      isLoadingMessages.value = true
-    }
-
-    const loadPromise = (async () => {
-      try {
-      const version = currentThreadVersion(threadId)
-      const loadedVersion = loadedVersionByThreadId.value[threadId] ?? ''
-      const loadedRecently =
-        Date.now() - (lastMessageLoadAtByThreadId.get(threadId) ?? 0) < RECENT_THREAD_MESSAGE_LOAD_REUSE_MS
-      const canReuseLoadedMessages =
-        options.force === true
-          ? false
-          : alreadyLoaded &&
-          (
-            loadedRecently ||
-            (
-              (version.length === 0 || loadedVersion === version) &&
-              inProgressById.value[threadId] !== true
-            )
-          )
-
-      if (canReuseLoadedMessages) {
-        markThreadAsRead(threadId)
-        return
-      }
-
-      const needsResume = resumedThreadById.value[threadId] !== true
-      const resumedThread = needsResume ? await resumeThread(threadId) : null
-      const detail = resumedThread ?? await getThreadDetail(threadId)
-
-      if (detail.modelProvider) {
-        setThreadModelProviderId(threadId, detail.modelProvider)
-      }
-      if (detail.model) {
-        setThreadModelId(threadId, resolveThreadModelForProvider(threadId, detail.model, detail.modelProvider))
-      }
-      if (resumedThread) {
-        resumedThreadById.value = {
-          ...resumedThreadById.value,
-          [threadId]: true,
-        }
-      }
-
-      const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = detail
-      hasMoreOlderMessagesByThreadId.value = {
-        ...hasMoreOlderMessagesByThreadId.value,
-        [threadId]: detail.hasMoreOlder === true,
-      }
-      markThreadMessagesPersisted(threadId, nextMessages)
-      replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
-      rebindLiveFileChangeTurnIndices(threadId)
-      const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
-      const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
-        preserveMissing: options.silent === true || hasOptimisticUserMessages(previousPersisted),
-      })
-      setPersistedMessagesForThread(threadId, mergedMessages)
-
-      const previousLiveAgent = liveAgentMessagesByThreadId.value[threadId] ?? []
-      if (inProgress) {
-        const nextLiveAgent = removeRedundantLiveAgentMessages(previousLiveAgent, nextMessages)
-        setLiveAgentMessagesForThread(threadId, nextLiveAgent)
-      } else {
-        clearLiveAgentMessagesForThread(threadId)
-      }
-      removeLiveCommandsPersistedIn(threadId, nextMessages)
-      removeLiveFileChangesPersistedIn(threadId, nextMessages)
-
-      loadedMessagesByThreadId.value = {
-        ...loadedMessagesByThreadId.value,
-        [threadId]: true,
-      }
-      lastMessageLoadAtByThreadId.set(threadId, Date.now())
-      lastMessageLoadFailureAtByThreadId.delete(threadId)
-
-      if (version) {
-        loadedVersionByThreadId.value = {
-          ...loadedVersionByThreadId.value,
-          [threadId]: version,
-        }
-      }
-      setThreadInProgress(threadId, inProgress)
-      if (detail.externalSession) {
-        externalSessionByThreadId.value = {
-          ...externalSessionByThreadId.value,
-          [threadId]: detail.externalSession,
-        }
-      }
-      clearTransientTurnErrorForThread(threadId)
-      if (activeTurnId) {
-        activeTurnIdByThreadId.value = {
-          ...activeTurnIdByThreadId.value,
-          [threadId]: activeTurnId,
-        }
-      } else if (activeTurnIdByThreadId.value[threadId]) {
-        activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, threadId)
-      }
-      if (!inProgress) {
-        clearCompletedTurnLiveState(threadId)
-      }
-      markThreadAsRead(threadId)
-      } catch (unknownError) {
-        const message = unknownError instanceof Error ? unknownError.message : 'Unknown application error'
-        if (selectedThreadId.value === threadId) {
-          setTurnErrorForThread(threadId, message, { transient: true })
-        }
-        lastMessageLoadFailureAtByThreadId.set(threadId, Date.now())
-        throw unknownError
-      } finally {
-      if (shouldShowLoading) {
-        isLoadingMessages.value = false
-      }
-      }
-    })().finally(() => {
-      loadMessagePromiseByThreadId.delete(threadId)
-    })
-
-    loadMessagePromiseByThreadId.set(threadId, loadPromise)
-    await loadPromise
-  }
-
-  async function loadOlderMessages(threadId: string = selectedThreadId.value): Promise<void> {
-    if (!threadId) return
-    if (loadingOlderMessagesByThreadId.value[threadId] === true) return
-    if (hasMoreOlderMessagesByThreadId.value[threadId] !== true) return
-
-    const beforeTurnId = getFirstPersistedTurnId(threadId)
-    if (!beforeTurnId) {
-      hasMoreOlderMessagesByThreadId.value = {
-        ...hasMoreOlderMessagesByThreadId.value,
-        [threadId]: false,
-      }
-      return
-    }
-
-    loadingOlderMessagesByThreadId.value = {
-      ...loadingOlderMessagesByThreadId.value,
-      [threadId]: true,
-    }
-
-    try {
-      const page = await getOlderThreadMessages(threadId, beforeTurnId)
-      const previousPersisted = persistedMessagesByThreadId.value[threadId] ?? []
-      const mergedMessages = mergeMessages(page.messages, previousPersisted, { preserveMissing: true })
-      setPersistedMessagesForThread(threadId, mergedMessages)
-      replaceTurnIndexLookupForThread(threadId, {
-        ...(turnIndexByTurnIdByThreadId.value[threadId] ?? {}),
-        ...page.turnIndexByTurnId,
-      })
-      rebindLiveFileChangeTurnIndices(threadId)
-      hasMoreOlderMessagesByThreadId.value = {
-        ...hasMoreOlderMessagesByThreadId.value,
-        [threadId]: page.hasMoreOlder,
-      }
-    } catch (loadError) {
-      error.value = loadError instanceof Error ? loadError.message : 'Failed to load earlier messages'
-      throw loadError
-    } finally {
-      loadingOlderMessagesByThreadId.value = {
-        ...loadingOlderMessagesByThreadId.value,
-        [threadId]: false,
-      }
-    }
-  }
-
-  async function ensureThreadMessagesLoaded(threadId: string, options: { silent?: boolean } = {}): Promise<void> {
-    if (!threadId) return
-    if (loadedMessagesByThreadId.value[threadId] === true) return
-    if (options.silent === true && turnErrorByThreadId.value[threadId]?.transient) return
-    await loadMessages(threadId, options)
-  }
 
   async function refreshAncillaryState(
     options: { providerChanged?: boolean; includeProviderModels?: boolean } = {},
