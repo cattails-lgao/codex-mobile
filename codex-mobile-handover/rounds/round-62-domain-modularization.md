@@ -83,7 +83,17 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 
 边界干净性：组件脚本因此显著瘦身，拖拽/自动化逻辑不再存活于巨型 `<script setup>`；两者均以「窄依赖注入 + 写侧编排保留在组件（reorder 事件、archive 编排等）」接线，未改动任何行为。**结论：巨型 `.vue` 第二轮组件化的 hook 化路径可行**，可推广到其它候选，但应优先选择内聚、自持状态、对外依赖窄的簇（如本例），而非贴壳搬 ref。
 
-本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
+### ThreadConversation 渲染管道试点结果（2026-08-28）
+
+`ThreadConversation` 的 `<script setup>`（约 2,400 行）此前被划为「round-19 高风险 UI」不拆——但逐簇盘点后发现：**Markdown/代码块渲染管道是一簇内聚、自持、窄依赖、无深度时序的纯渲染簇**，与高风险 UI 状态（文件链接上下文菜单、图片面板、生命周期）解耦，可安全抽出而不踩 round-19 红线。本轮实现：
+
+- **`useMarkdownRendering.ts`（新增，~355 行）**：`createMarkdownRendering({ getCwd, isVideoMediaUrl })` 工厂，自持三段 LRU 缓存（`messageBlockCache` / `inlineSegmentCache` / `markdownHtmlCache` / `highlightHtmlCache`，各设上限与伪 LRU 命中提升）、highlight.js 延迟加载（`ensureHighlightJsLoaded`，动态 import，加载成功后 `highlightCacheVersion` 递增并清空 HTML 缓存）、块/内联/列表/表格/代码块 HTML 渲染（`renderMessageBlockAsHtml` / `renderListItemContentAsHtml` / `renderMarkdownBlocksAsHtml`）、浏览/编辑 URL 换算（`toBrowseUrl` / `toEditUrlFromBrowseHref`）、`clearRenderCaches`。对外依赖仅 2 个窄注入（`getCwd` / `isVideoMediaUrl`）+ 既有纯工具函数。
+- 组件删除约 326 行内联渲染——缓存声明、`GET` 失效逻辑、highlight.js 加载、`sanitizeHtml` 调用及各 `render*`/解析 helper，改由 `createMarkdownRendering` 解构接入；保留文件链接上下文菜单、图片面板、生命周期等非渲染 UI。
+- 单元回归：`useMarkdownRendering.test.ts`（5 例：内联加粗渲染、块缓存命中、按 text/cwd 的缓存键、未加载高亮时原始代码转义、清缓存后仍渲染），`vue-tsc --noEmit` 与 5/5 定向测试通过。迁移说明见 `tests/chat-composer-rendering/componentization-round-62-conversation-markdown-rendering.md`（44 节）。
+
+边界结论：渲染管道是「纯函数式」簇，与队内先例（`useMarkdownRendering` deps 仅 2 个）一致是**最干净的候选**；`ThreadConversation` 剩余的深 UI 状态（文件链接菜单、图片面板、生命周期、消息窗口化）仍保持不动。
+
+本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除渲染管道外的深状态簇、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
 ## 交接注意事项
 
