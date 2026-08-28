@@ -1395,16 +1395,10 @@ import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
-import ThreadPendingRequestPanel from './components/content/ThreadPendingRequestPanel.vue'
-import QueuedMessages from './components/content/QueuedMessages.vue'
 import RateLimitStatus from './components/content/RateLimitStatus.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
-import SettingsAccountsPanel from './components/settings/SettingsAccountsPanel.vue'
-import RightGitPanel from './components/content/RightGitPanel.vue'
-import RightFilesPanel from './components/content/RightFilesPanel.vue'
-import RightFilePreview from './components/content/RightFilePreview.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
@@ -1470,6 +1464,12 @@ const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/cont
 const ReviewPane = defineAsyncComponent(() => import('./components/content/ReviewPane.vue'))
 const DirectoryHub = defineAsyncComponent(() => import('./components/content/DirectoryHub.vue'))
 const AutomationsPanel = defineAsyncComponent(() => import('./components/content/AutomationsPanel.vue'))
+const SettingsAccountsPanel = defineAsyncComponent(() => import('./components/settings/SettingsAccountsPanel.vue'))
+const RightGitPanel = defineAsyncComponent(() => import('./components/content/RightGitPanel.vue'))
+const RightFilesPanel = defineAsyncComponent(() => import('./components/content/RightFilesPanel.vue'))
+const RightFilePreview = defineAsyncComponent(() => import('./components/content/RightFilePreview.vue'))
+const ThreadPendingRequestPanel = defineAsyncComponent(() => import('./components/content/ThreadPendingRequestPanel.vue'))
+const QueuedMessages = defineAsyncComponent(() => import('./components/content/QueuedMessages.vue'))
 const { t, uiLanguage, uiLanguageOptions, setUiLanguage } = useUiLanguage()
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'codex-web-local.sidebar-collapsed.v1'
