@@ -704,18 +704,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import {
-  deleteThreadAutomation,
   deleteProjectAutomation,
-  getProjectAutomationMap,
   getPinnedThreadState,
   getThreadAutomationMap,
   getThreadSummary,
   persistPinnedThreadIds,
-  runThreadAutomationNow,
-  upsertProjectAutomation,
-  upsertThreadAutomation,
 } from '../../api/codexGateway'
-import type { UiProjectGroup, UiThread, UiThreadAutomation, UiThreadAutomationStatus } from '../../types/codex'
+import type { UiProjectGroup, UiThread } from '../../types/codex'
 import IconTablerChevronDown from '../icons/IconTablerChevronDown.vue'
 import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 import IconTablerDots from '../icons/IconTablerDots.vue'
@@ -732,6 +727,8 @@ import AppDialog from '../content/AppDialog.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
 import SidebarThreadRow from './SidebarThreadRow.vue'
 import { reconcilePinnedThreadIds } from './pinnedThreadUtils'
+import { createAutomationDialog } from './useAutomationDialog'
+import { createProjectDragAndDrop } from './useProjectDragAndDrop'
 
 const props = defineProps<{
   groups: UiProjectGroup[]
@@ -803,50 +800,9 @@ async function onRestoreArchivedThread(threadId: string): Promise<void> {
   }
 }
 
-type PendingProjectDrag = {
-  projectName: string
-  fromIndex: number
-  startClientX: number
-  startClientY: number
-  pointerOffsetY: number
-  groupLeft: number
-  groupWidth: number
-  groupHeight: number
-  groupOuterHeight: number
-}
-
-type ActiveProjectDrag = {
-  projectName: string
-  fromIndex: number
-  pointerOffsetY: number
-  groupLeft: number
-  groupWidth: number
-  groupHeight: number
-  groupOuterHeight: number
-  ghostTop: number
-  dropTargetIndexFull: number | null
-}
-
-type DragPointerSample = {
-  clientX: number
-  clientY: number
-}
-
 type MenuDirection = 'up' | 'down'
 type ChatSortMode = 'created' | 'updated'
-type AutomationScheduleMode = 'daily' | 'interval' | 'advanced'
-type AutomationIntervalUnit = 'minutes' | 'hours' | 'days'
-type AutomationTargetMode = 'thread' | 'project'
 
-type AutomationScheduleDraft = {
-  mode: AutomationScheduleMode
-  dailyTime: string
-  interval: number
-  intervalUnit: AutomationIntervalUnit
-}
-
-const DRAG_START_THRESHOLD_PX = 4
-const PROJECT_GROUP_EXPANDED_GAP_PX = 6
 const SECTION_EXPANSION_STORAGE_KEY = 'codex-web-local.sidebar-section-expansion.v1'
 const CHATS_FIRST_STORAGE_KEY = 'codex-web-local.sidebar-chats-first.v1'
 const CHAT_SORT_MODE_STORAGE_KEY = 'codex-web-local.sidebar-chat-sort-mode.v1'
@@ -878,133 +834,99 @@ const renameThreadInputRef = ref<HTMLInputElement | null>(null)
 const deleteThreadDialogVisible = ref(false)
 const deleteThreadDialogThreadId = ref('')
 const deleteThreadTitle = ref('')
-const automationByThreadId = ref<Record<string, UiThreadAutomation[]>>({})
-const automationByProjectName = ref<Record<string, UiThreadAutomation[]>>({})
-const automationDialogVisible = ref(false)
-const automationDialogScope = ref<'thread' | 'project'>('thread')
-const automationDialogThreadId = ref('')
-const automationDialogProjectName = ref('')
-const automationDialogAutomationId = ref('')
-const automationDialogMode = ref<'create' | 'edit'>('create')
-const automationTargetPickerVisible = ref(false)
-const automationTargetMode = ref<AutomationTargetMode>('thread')
-const automationTargetValue = ref('')
-const automationDialogError = ref('')
-const automationDialogNotice = ref('')
-const projectAutomationActionError = ref('')
-const isSavingAutomation = ref(false)
-const isRunningAutomation = ref(false)
-const automationDraft = ref<{
-  name: string
-  prompt: string
-  rrule: string
-  status: UiThreadAutomationStatus
-}>({
-  name: '',
-  prompt: '',
-  rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-  status: 'ACTIVE',
+const automation = createAutomationDialog({
+  getGroups: () => props.groups,
+  t,
+  getProjectDisplayName,
+  getProjectAutomationKey,
+  closeThreadMenu,
+  closeProjectMenu,
+  onAutomationsChanged: () => emit('automations-changed'),
 })
-const automationScheduleDraft = ref<AutomationScheduleDraft>({
-  mode: 'daily',
-  dailyTime: '09:00',
-  interval: 1,
-  intervalUnit: 'hours',
+const {
+  automationByThreadId,
+  automationByProjectName,
+  automationDialogVisible,
+  automationDialogScope,
+  automationDialogThreadId,
+  automationDialogProjectName,
+  automationDialogAutomationId,
+  automationDialogMode,
+  automationTargetPickerVisible,
+  automationTargetMode,
+  automationTargetValue,
+  automationDialogError,
+  automationDialogNotice,
+  projectAutomationActionError,
+  isSavingAutomation,
+  isRunningAutomation,
+  automationDraft,
+  automationScheduleDraft,
+  automationDialogAutomations,
+  automationSchedulePreview,
+  automationDialogSubtitle,
+  automationThreadTargetOptions,
+  automationProjectTargetOptions,
+  automationTargetDropdownOptions,
+  automationIntervalUnitOptions,
+  automationStatusOptions,
+  threadAutomationCount,
+  threadHasAutomation,
+  projectAutomationCount,
+  projectHasAutomation,
+  threadAutomationTooltip,
+  projectAutomationTooltip,
+  syncAutomationRruleFromScheduleDraft,
+  onAutomationIntervalUnitChange,
+  onAutomationStatusChange,
+  syncAutomationScheduleDraftFromRrule,
+  setAutomationScheduleMode,
+  openAutomationDialog,
+  openProjectAutomationDialog,
+  openAutomationEditorFromPanel,
+  openAutomationCreatorFromPanel,
+  setAutomationTargetMode,
+  startNewAutomationDraft,
+  selectAutomationForEditing,
+  closeAutomationDialog,
+  omitAutomationProject,
+  reloadProjectAutomations,
+  removeAutomationsForThread,
+  submitAutomationDialog,
+  onDeleteAutomationFromDialog,
+  onRunAutomationFromDialog,
+} = automation
+const projectDragAndDrop = createProjectDragAndDrop({
+  getGroups: () => props.groups,
+  getFilteredGroups: () => filteredGroups.value,
+  isSearchActive: () => isSearchActive.value,
+  isCollapsed,
+  getElevatedProjectName: () => {
+    if (openProjectMenuId.value) return openProjectMenuId.value
+    if (openThreadMenuId.value) return threadProjectNameById.value.get(openThreadMenuId.value) ?? ''
+    return ''
+  },
+  onReorderProject: (projectName, toIndex) => emit('reorder-project', { projectName, toIndex }),
+  closeProjectMenu,
 })
-const automationDialogAutomations = computed(() => {
-  if (automationDialogScope.value === 'project') {
-    const projectName = automationDialogProjectName.value
-    return projectName ? (automationByProjectName.value[projectName] ?? []) : []
-  }
-  const threadId = automationDialogThreadId.value
-  return threadId ? (automationByThreadId.value[threadId] ?? []) : []
-})
-const automationSchedulePreview = computed(() => describeAutomationSchedule(automationDraft.value.rrule))
-const automationDialogSubtitle = computed(() => {
-  if (automationTargetPickerVisible.value && automationDialogMode.value === 'create') {
-    if (automationTargetMode.value === 'thread') return t('This creates a heartbeat automation attached to the selected chat.')
-    return t('This creates a project automation attached to the selected project folder.')
-  }
-  return automationDialogScope.value === 'project'
-    ? t('This creates project automations attached to the selected project folder.')
-    : t('This creates heartbeat automations attached to the selected thread.')
-})
-const automationThreadTargetOptions = computed(() => {
-  const rows: Array<{ value: string; label: string; searchText: string }> = []
-  for (const group of props.groups) {
-    for (const thread of group.threads) {
-      const title = thread.title?.trim() || thread.id
-      const project = getProjectDisplayName(group.projectName)
-      rows.push({
-        value: thread.id,
-        label: `${title} · ${project}`,
-        searchText: `${title} ${project} ${thread.id}`.toLowerCase(),
-      })
-    }
-  }
-  return rows
-})
-const automationProjectTargetOptions = computed(() => {
-  const rows: Array<{ value: string; label: string; searchText: string }> = []
-  for (const group of props.groups) {
-    const cwd = getProjectAutomationKey(group.projectName)
-    if (!cwd) continue
-    const label = getProjectDisplayName(group.projectName)
-    rows.push({
-      value: cwd,
-      label,
-      searchText: `${label} ${cwd}`.toLowerCase(),
-    })
-  }
-  return rows
-})
-const automationTargetDropdownOptions = computed(() => {
-  const source = automationTargetMode.value === 'project'
-    ? automationProjectTargetOptions.value
-    : automationThreadTargetOptions.value
-  return source.map((option) => ({ value: option.value, label: option.label }))
-})
-const automationIntervalUnitOptions = [
-  { value: 'minutes', label: t('minutes') },
-  { value: 'hours', label: t('hours') },
-  { value: 'days', label: t('days') },
-]
-const automationStatusOptions = computed(() => [
-  { value: 'ACTIVE', label: t('Active') },
-  { value: 'PAUSED', label: t('Paused') },
-])
-watch(automationTargetDropdownOptions, (options) => {
-  if (!automationTargetPickerVisible.value) return
-  if (options.some((option) => option.value === automationTargetValue.value)) return
-  automationTargetValue.value = options[0]?.value ?? ''
-})
-const groupsContainerRef = ref<HTMLElement | null>(null)
-const pendingProjectDrag = ref<PendingProjectDrag | null>(null)
-const activeProjectDrag = ref<ActiveProjectDrag | null>(null)
-let pendingDragPointerSample: DragPointerSample | null = null
-let dragPointerRafId: number | null = null
-const suppressNextProjectToggleId = ref('')
-const measuredHeightByProject = ref<Record<string, number>>({})
-const projectGroupElementByName = new Map<string, HTMLElement>()
+const {
+  groupsContainerRef,
+  groupsContainerStyle,
+  setProjectGroupRef,
+  isDraggingProject,
+  projectGroupStyle,
+  onProjectHandleMouseDown,
+  takeToggleSuppression,
+  pruneProjectGroups,
+  dispose: disposeProjectDragAndDrop,
+} = projectDragAndDrop
 const projectMenuWrapElementByName = new Map<string, HTMLElement>()
 const threadMenuWrapElementById = new Map<string, HTMLElement>()
-const projectNameByElement = new WeakMap<HTMLElement, string>()
 const organizeMenuWrapRef = ref<HTMLElement | null>(null)
 const openThreadMenuPanelRef = ref<HTMLElement | null>(null)
 const isOrganizeMenuOpen = ref(false)
 const THREAD_VIEW_MODE_STORAGE_KEY = 'codex-web-local.thread-view-mode.v1'
 const threadViewMode = ref<'project' | 'chronological'>(loadThreadViewMode())
-const projectGroupResizeObserver =
-  typeof window !== 'undefined'
-    ? new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const element = entry.target as HTMLElement
-          const projectName = projectNameByElement.get(element)
-          if (!projectName) continue
-          updateMeasuredProjectHeight(projectName, element)
-        }
-      })
-    : null
 const COLLAPSED_STORAGE_KEY = 'codex-web-local.collapsed-projects.v1'
 
 function loadCollapsedState(): Record<string, boolean> {
@@ -1322,58 +1244,6 @@ function toggleChatsSection(): void {
   isChatsSectionExpanded.value = !isChatsSectionExpanded.value
 }
 
-const projectedDropProjectIndex = computed<number | null>(() => {
-  const drag = activeProjectDrag.value
-  if (!drag || drag.dropTargetIndexFull === null || props.groups.length === 0) return null
-
-  const boundedDropIndex = Math.max(0, Math.min(drag.dropTargetIndexFull, props.groups.length))
-  const projectedIndex = boundedDropIndex > drag.fromIndex ? boundedDropIndex - 1 : boundedDropIndex
-  const boundedProjectedIndex = Math.max(0, Math.min(projectedIndex, props.groups.length - 1))
-  return boundedProjectedIndex === drag.fromIndex ? null : boundedProjectedIndex
-})
-
-const layoutProjectOrder = computed<string[]>(() => {
-  const sourceGroups = isSearchActive.value ? filteredGroups.value : props.groups
-  const names = sourceGroups.map((group) => group.projectName)
-  const drag = activeProjectDrag.value
-  const projectedIndex = projectedDropProjectIndex.value
-
-  if (!drag || projectedIndex === null) {
-    return names
-  }
-
-  const next = [...names]
-  const [movedProject] = next.splice(drag.fromIndex, 1)
-  if (!movedProject) {
-    return names
-  }
-  next.splice(projectedIndex, 0, movedProject)
-  return next
-})
-
-const layoutTopByProject = computed<Record<string, number>>(() => {
-  const topByProject: Record<string, number> = {}
-  let currentTop = 0
-
-  for (const projectName of layoutProjectOrder.value) {
-    topByProject[projectName] = currentTop
-    currentTop += getProjectOuterHeight(projectName)
-  }
-
-  return topByProject
-})
-
-const groupsContainerStyle = computed<Record<string, string>>(() => {
-  let totalHeight = 0
-  for (const projectName of layoutProjectOrder.value) {
-    totalHeight += getProjectOuterHeight(projectName)
-  }
-
-  return {
-    height: `${Math.max(0, totalHeight)}px`,
-  }
-})
-
 function formatRelative(timestamp: number): string {
   if (Number.isNaN(timestamp)) return 'n/a'
 
@@ -1430,168 +1300,6 @@ function onTogglePinFromMenu(threadId: string): void {
 function onSelect(threadId: string): void {
   inlineDeleteConfirmThreadId.value = ''
   emit('select', threadId)
-}
-
-function threadHasAutomation(threadId: string): boolean {
-  return threadAutomationCount(threadId) > 0
-}
-
-function threadAutomationCount(threadId: string): number {
-  return automationByThreadId.value[threadId]?.length ?? 0
-}
-
-function projectHasAutomation(projectName: string): boolean {
-  return projectAutomationCount(projectName) > 0
-}
-
-function projectAutomationCount(projectName: string): number {
-  const key = getProjectAutomationKey(projectName)
-  return key ? (automationByProjectName.value[key]?.length ?? 0) : 0
-}
-
-function automationTooltip(automations: UiThreadAutomation[]): string {
-  if (automations.length === 0) return ''
-  if (automations.length > 1) {
-    const activeCount = automations.filter((automation) => automation.status === 'ACTIVE').length
-    return `${automations.length} ${t('automations')} • ${activeCount} ${t('active')}`
-  }
-  const [automation] = automations
-  const nextRunLabel = automation.status === 'PAUSED'
-    ? '-'
-    : automation.nextRunAtMs
-      ? new Date(automation.nextRunAtMs).toLocaleString()
-       : t('Not scheduled')
-  return `${automation.name} • ${t('Next run')}: ${nextRunLabel}`
-}
-
-function threadAutomationTooltip(threadId: string): string {
-  return automationTooltip(automationByThreadId.value[threadId] ?? [])
-}
-
-function projectAutomationTooltip(projectName: string): string {
-  const key = getProjectAutomationKey(projectName)
-  return automationTooltip(key ? (automationByProjectName.value[key] ?? []) : [])
-}
-
-function padRruleNumber(value: number): string {
-  return String(Math.max(0, value)).padStart(2, '0')
-}
-
-function parsePositiveInteger(value: unknown, fallback: number): number {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.floor(parsed))
-}
-
-function buildDailyRrule(time: string): string {
-  const [rawHour, rawMinute] = time.split(':')
-  const hour = Math.min(23, Math.max(0, Number(rawHour) || 0))
-  const minute = Math.min(59, Math.max(0, Number(rawMinute) || 0))
-  return `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`
-}
-
-function buildIntervalRrule(interval: number, unit: AutomationIntervalUnit): string {
-  const normalizedInterval = parsePositiveInteger(interval, 1)
-  if (unit === 'minutes') return `FREQ=MINUTELY;INTERVAL=${normalizedInterval}`
-  if (unit === 'hours') return `FREQ=HOURLY;INTERVAL=${normalizedInterval}`
-  return `FREQ=DAILY;INTERVAL=${normalizedInterval}`
-}
-
-function parseRruleParts(rrule: string): Record<string, string> {
-  return Object.fromEntries(
-    rrule
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const [key, ...rest] = part.split('=')
-        return [key.toUpperCase(), rest.join('=').trim()]
-      })
-      .filter(([key, value]) => key && value),
-  )
-}
-
-function createScheduleDraftFromRrule(rrule: string): AutomationScheduleDraft {
-  const parts = parseRruleParts(rrule)
-  const frequency = parts.FREQ?.toUpperCase()
-  const interval = parsePositiveInteger(parts.INTERVAL, 1)
-  if (frequency === 'DAILY' && parts.BYHOUR !== undefined && parts.BYMINUTE !== undefined && interval === 1) {
-    const hour = Math.min(23, Math.max(0, Number(parts.BYHOUR) || 0))
-    const minute = Math.min(59, Math.max(0, Number(parts.BYMINUTE) || 0))
-    return {
-      mode: 'daily',
-      dailyTime: `${padRruleNumber(hour)}:${padRruleNumber(minute)}`,
-      interval: 1,
-      intervalUnit: 'hours',
-    }
-  }
-  if (frequency === 'MINUTELY' || frequency === 'HOURLY' || (frequency === 'DAILY' && parts.INTERVAL !== undefined)) {
-    return {
-      mode: 'interval',
-      dailyTime: '09:00',
-      interval,
-      intervalUnit: frequency === 'MINUTELY' ? 'minutes' : frequency === 'HOURLY' ? 'hours' : 'days',
-    }
-  }
-  return {
-    mode: 'advanced',
-    dailyTime: '09:00',
-    interval: 1,
-    intervalUnit: 'hours',
-  }
-}
-
-function describeAutomationSchedule(rrule: string): string {
-  const parts = parseRruleParts(rrule)
-  const frequency = parts.FREQ?.toUpperCase()
-  const interval = parsePositiveInteger(parts.INTERVAL, 1)
-  if (frequency === 'DAILY' && parts.BYHOUR !== undefined && parts.BYMINUTE !== undefined && interval === 1) {
-    const hour = Math.min(23, Math.max(0, Number(parts.BYHOUR) || 0))
-    const minute = Math.min(59, Math.max(0, Number(parts.BYMINUTE) || 0))
-    return `${t('RRULE')}: ${rrule} · ${t('runs daily at')} ${padRruleNumber(hour)}:${padRruleNumber(minute)}`
-  }
-  if (frequency === 'MINUTELY') return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('minute(s)')}`
-  if (frequency === 'HOURLY') return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('hour(s)')}`
-  if (frequency === 'DAILY' && parts.INTERVAL !== undefined) return `${t('RRULE')}: ${rrule} · ${t('runs every')} ${interval} ${t('day(s)')}`
-  return rrule ? `${t('RRULE')}: ${rrule}` : t('RRULE is required.')
-}
-
-function syncAutomationRruleFromScheduleDraft(): void {
-  const draft = automationScheduleDraft.value
-  if (draft.mode === 'daily') {
-    automationDraft.value.rrule = buildDailyRrule(draft.dailyTime)
-  } else if (draft.mode === 'interval') {
-    automationDraft.value.rrule = buildIntervalRrule(draft.interval, draft.intervalUnit)
-  }
-}
-
-function onAutomationIntervalUnitChange(value: string): void {
-  if (value !== 'minutes' && value !== 'hours' && value !== 'days') return
-  automationScheduleDraft.value = {
-    ...automationScheduleDraft.value,
-    intervalUnit: value,
-  }
-  syncAutomationRruleFromScheduleDraft()
-}
-
-function onAutomationStatusChange(value: string): void {
-  if (value !== 'ACTIVE' && value !== 'PAUSED') return
-  automationDraft.value = {
-    ...automationDraft.value,
-    status: value,
-  }
-}
-
-function syncAutomationScheduleDraftFromRrule(): void {
-  automationScheduleDraft.value = createScheduleDraftFromRrule(automationDraft.value.rrule)
-}
-
-function setAutomationScheduleMode(mode: AutomationScheduleMode): void {
-  automationScheduleDraft.value = {
-    ...automationScheduleDraft.value,
-    mode,
-  }
-  syncAutomationRruleFromScheduleDraft()
 }
 
 function onCopyThreadChat(threadId: string): void {
@@ -1764,296 +1472,7 @@ function deleteThreadById(threadId: string): void {
   emit('archive', threadId)
 
   if (threadHasAutomation(threadId)) {
-    void deleteThreadAutomation(threadId).catch(() => undefined)
-    automationByThreadId.value = omitAutomationThread(automationByThreadId.value, threadId)
-  }
-}
-
-function openAutomationDialog(threadId: string): void {
-  automationDialogScope.value = 'thread'
-  automationDialogThreadId.value = threadId
-  automationDialogProjectName.value = ''
-  automationTargetPickerVisible.value = false
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  const existing = automationByThreadId.value[threadId]?.[0]
-  if (existing) {
-    selectAutomationForEditing(existing.id)
-  } else {
-    startNewAutomationDraft()
-  }
-  automationDialogVisible.value = true
-  closeThreadMenu()
-}
-
-function openProjectAutomationDialog(projectName: string): void {
-  const projectCwd = getProjectAutomationKey(projectName)
-  if (!projectCwd) {
-    automationDialogScope.value = 'project'
-    automationDialogThreadId.value = ''
-    automationDialogProjectName.value = ''
-    automationTargetPickerVisible.value = false
-    automationDialogError.value = t('Project automation requires a resolved absolute project path.')
-    automationDialogNotice.value = ''
-    automationDialogVisible.value = true
-    closeProjectMenu()
-    return
-  }
-  automationDialogScope.value = 'project'
-  automationDialogThreadId.value = ''
-  automationDialogProjectName.value = projectCwd
-  automationTargetPickerVisible.value = false
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  const existing = automationByProjectName.value[projectCwd]?.[0]
-  if (existing) {
-    selectAutomationForEditing(existing.id)
-  } else {
-    startNewAutomationDraft()
-  }
-  automationDialogVisible.value = true
-  closeProjectMenu()
-}
-
-function openAutomationEditorFromPanel(payload: {
-  scope: 'thread' | 'project'
-  target: string
-  automation: UiThreadAutomation
-}): void {
-  automationDialogScope.value = payload.scope
-  automationDialogThreadId.value = payload.scope === 'thread' ? payload.target : ''
-  automationDialogProjectName.value = payload.scope === 'project' ? payload.target : ''
-  automationTargetPickerVisible.value = false
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  if (payload.scope === 'project') {
-    automationByProjectName.value = updateAutomationForProject(automationByProjectName.value, payload.target, payload.automation)
-  } else {
-    automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, payload.target, payload.automation)
-  }
-  selectAutomationForEditing(payload.automation.id)
-  automationDialogVisible.value = true
-  closeProjectMenu()
-  closeThreadMenu()
-}
-
-function openAutomationCreatorFromPanel(): void {
-  automationTargetPickerVisible.value = true
-  automationTargetMode.value = 'thread'
-  automationTargetValue.value = automationThreadTargetOptions.value[0]?.value ?? ''
-  automationDialogScope.value = 'thread'
-  automationDialogThreadId.value = ''
-  automationDialogProjectName.value = ''
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  startNewAutomationDraft()
-  automationDialogVisible.value = true
-  closeProjectMenu()
-  closeThreadMenu()
-}
-
-function setAutomationTargetMode(mode: AutomationTargetMode): void {
-  automationTargetMode.value = mode
-  automationTargetValue.value = ''
-  automationDialogScope.value = mode === 'project' ? 'project' : 'thread'
-  automationTargetValue.value = automationTargetDropdownOptions.value[0]?.value ?? ''
-}
-
-function startNewAutomationDraft(): void {
-  automationDialogAutomationId.value = ''
-  automationDialogMode.value = 'create'
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  automationDraft.value = {
-    name: automationDialogScope.value === 'project' ? 'Project automation' : 'Thread automation',
-    prompt: '',
-    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-    status: 'ACTIVE',
-  }
-  automationScheduleDraft.value = createScheduleDraftFromRrule(automationDraft.value.rrule)
-}
-
-function selectAutomationForEditing(automationId: string): void {
-  const existing = automationDialogAutomations.value.find((automation) => automation.id === automationId)
-  if (!existing) return
-  automationDialogAutomationId.value = existing.id
-  automationDialogMode.value = 'edit'
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  automationDraft.value = {
-    name: existing.name,
-    prompt: existing.prompt,
-    rrule: existing.rrule,
-    status: existing.status,
-  }
-  automationScheduleDraft.value = createScheduleDraftFromRrule(existing.rrule)
-}
-
-function closeAutomationDialog(): void {
-  automationDialogVisible.value = false
-  automationDialogScope.value = 'thread'
-  automationDialogThreadId.value = ''
-  automationDialogProjectName.value = ''
-  automationDialogAutomationId.value = ''
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  isSavingAutomation.value = false
-  isRunningAutomation.value = false
-}
-
-function omitAutomationThread(state: Record<string, UiThreadAutomation[]>, threadId: string): Record<string, UiThreadAutomation[]> {
-  return Object.fromEntries(Object.entries(state).filter(([id]) => id !== threadId))
-}
-
-function updateAutomationForThread(
-  state: Record<string, UiThreadAutomation[]>,
-  threadId: string,
-  saved: UiThreadAutomation,
-): Record<string, UiThreadAutomation[]> {
-  const existing = state[threadId] ?? []
-  const index = existing.findIndex((automation) => automation.id === saved.id)
-  const next = [...existing]
-  if (index >= 0) {
-    next.splice(index, 1, saved)
-  } else {
-    next.push(saved)
-  }
-  return { ...state, [threadId]: next }
-}
-
-function removeAutomationForThread(
-  state: Record<string, UiThreadAutomation[]>,
-  threadId: string,
-  automationId: string,
-): Record<string, UiThreadAutomation[]> {
-  const next = (state[threadId] ?? []).filter((automation) => automation.id !== automationId)
-  return next.length > 0 ? { ...state, [threadId]: next } : omitAutomationThread(state, threadId)
-}
-
-function omitAutomationProject(state: Record<string, UiThreadAutomation[]>, projectName: string): Record<string, UiThreadAutomation[]> {
-  return Object.fromEntries(Object.entries(state).filter(([name]) => name !== projectName))
-}
-
-function updateAutomationForProject(
-  state: Record<string, UiThreadAutomation[]>,
-  projectName: string,
-  saved: UiThreadAutomation,
-): Record<string, UiThreadAutomation[]> {
-  const existing = state[projectName] ?? []
-  const index = existing.findIndex((automation) => automation.id === saved.id)
-  const next = [...existing]
-  if (index >= 0) {
-    next.splice(index, 1, saved)
-  } else {
-    next.push(saved)
-  }
-  return { ...state, [projectName]: next }
-}
-
-async function reloadProjectAutomations(): Promise<void> {
-  automationByProjectName.value = await getProjectAutomationMap()
-}
-
-async function submitAutomationDialog(): Promise<void> {
-  let threadId = automationDialogThreadId.value
-  let projectName = automationDialogProjectName.value
-  isSavingAutomation.value = true
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  try {
-    syncAutomationRruleFromScheduleDraft()
-    if (automationTargetPickerVisible.value && automationDialogMode.value === 'create') {
-      if (automationTargetMode.value === 'thread') {
-        threadId = automationTargetValue.value
-        projectName = ''
-        automationDialogScope.value = 'thread'
-        automationDialogThreadId.value = threadId
-        automationDialogProjectName.value = ''
-      } else {
-        projectName = automationTargetValue.value
-        threadId = ''
-        automationDialogScope.value = 'project'
-        automationDialogThreadId.value = ''
-        automationDialogProjectName.value = projectName
-      }
-    }
-    if (automationDialogScope.value === 'thread' && !threadId) {
-      throw new Error(t('Select a chat target for this automation'))
-    }
-    if (automationDialogScope.value === 'project' && !projectName) {
-      throw new Error(t('Select a project target for this automation'))
-    }
-    const input = {
-      id: automationDialogAutomationId.value || undefined,
-      name: automationDraft.value.name,
-      prompt: automationDraft.value.prompt,
-      rrule: automationDraft.value.rrule,
-      status: automationDraft.value.status,
-    }
-    const saved = automationDialogScope.value === 'project'
-      ? await upsertProjectAutomation({ ...input, projectName })
-      : await upsertThreadAutomation({ ...input, threadId })
-    if (automationDialogScope.value === 'project') {
-      await reloadProjectAutomations()
-    } else {
-      automationByThreadId.value = updateAutomationForThread(automationByThreadId.value, threadId, saved)
-    }
-    emit('automations-changed')
-    selectAutomationForEditing(saved.id)
-    automationDialogNotice.value = t('Automation saved.')
-    isSavingAutomation.value = false
-  } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : t('Failed to save automation')
-    isSavingAutomation.value = false
-  }
-}
-
-async function onDeleteAutomationFromDialog(): Promise<void> {
-  const threadId = automationDialogThreadId.value
-  const projectName = automationDialogProjectName.value
-  const automationId = automationDialogAutomationId.value
-  if (!automationId) return
-  if (automationDialogScope.value === 'thread' && !threadId) return
-  if (automationDialogScope.value === 'project' && !projectName) return
-  isSavingAutomation.value = true
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  try {
-    if (automationDialogScope.value === 'project') {
-      await deleteProjectAutomation(projectName, automationId)
-      await reloadProjectAutomations()
-    } else {
-      await deleteThreadAutomation(threadId, automationId)
-      automationByThreadId.value = removeAutomationForThread(automationByThreadId.value, threadId, automationId)
-    }
-    const nextAutomation = automationDialogAutomations.value[0]
-    if (nextAutomation) {
-      selectAutomationForEditing(nextAutomation.id)
-    } else {
-      startNewAutomationDraft()
-    }
-    emit('automations-changed')
-    isSavingAutomation.value = false
-  } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : t('Failed to remove automation')
-    isSavingAutomation.value = false
-  }
-}
-
-async function onRunAutomationFromDialog(): Promise<void> {
-  const threadId = automationDialogThreadId.value
-  const automationId = automationDialogAutomationId.value
-  if (!threadId || !automationId) return
-  isRunningAutomation.value = true
-  automationDialogError.value = ''
-  automationDialogNotice.value = ''
-  try {
-    await runThreadAutomationNow(threadId, automationId)
-    automationDialogNotice.value = t('Automation run queued.')
-  } catch (error) {
-    automationDialogError.value = error instanceof Error ? error.message : t('Failed to run automation')
-  } finally {
-    isRunningAutomation.value = false
+    void removeAutomationsForThread(threadId)
   }
 }
 
@@ -2280,24 +1699,12 @@ function toggleChatsListExpansion(): void {
 }
 
 function toggleProjectCollapse(projectName: string): void {
-  if (suppressNextProjectToggleId.value === projectName) {
-    suppressNextProjectToggleId.value = ''
-    return
-  }
+  if (takeToggleSuppression(projectName)) return
 
   collapsedProjects.value = {
     ...collapsedProjects.value,
     [projectName]: !isCollapsed(projectName),
   }
-}
-
-function getProjectOuterHeight(projectName: string): number {
-  const measuredHeight = measuredHeightByProject.value[projectName] ?? 0
-  const drag = activeProjectDrag.value
-  const dragHeight = drag?.projectName === projectName ? drag.groupHeight : null
-  const baseHeight = dragHeight ?? measuredHeight
-  const gap = isCollapsed(projectName) ? 0 : PROJECT_GROUP_EXPANDED_GAP_PX
-  return Math.max(0, baseHeight + gap)
 }
 
 function setProjectMenuWrapRef(projectName: string, element: Element | ComponentPublicInstance | null): void {
@@ -2522,276 +1929,6 @@ function unbindProjectMenuDismissListeners(): void {
   window.removeEventListener('blur', onWindowBlurForProjectMenu)
 }
 
-function updateMeasuredProjectHeight(projectName: string, element: HTMLElement): void {
-  const nextHeight = element.getBoundingClientRect().height
-  if (!Number.isFinite(nextHeight) || nextHeight <= 0) return
-
-  const previousHeight = measuredHeightByProject.value[projectName]
-  if (previousHeight !== undefined && Math.abs(previousHeight - nextHeight) < 0.5) {
-    return
-  }
-
-  measuredHeightByProject.value = {
-    ...measuredHeightByProject.value,
-    [projectName]: nextHeight,
-  }
-}
-
-function setProjectGroupRef(projectName: string, element: Element | ComponentPublicInstance | null): void {
-  const previousElement = projectGroupElementByName.get(projectName)
-  if (previousElement && previousElement !== element && projectGroupResizeObserver) {
-    projectGroupResizeObserver.unobserve(previousElement)
-  }
-
-  const htmlElement =
-    element instanceof HTMLElement
-      ? element
-      : element && '$el' in element && element.$el instanceof HTMLElement
-        ? element.$el
-        : null
-
-  if (htmlElement) {
-    projectGroupElementByName.set(projectName, htmlElement)
-    projectNameByElement.set(htmlElement, projectName)
-    updateMeasuredProjectHeight(projectName, htmlElement)
-    projectGroupResizeObserver?.observe(htmlElement)
-    return
-  }
-
-  if (previousElement) {
-    projectGroupResizeObserver?.unobserve(previousElement)
-  }
-
-  projectGroupElementByName.delete(projectName)
-}
-
-function onProjectHandleMouseDown(event: MouseEvent, projectName: string): void {
-  if (event.button !== 0) return
-  if (isSearchActive.value) return
-  if (pendingProjectDrag.value || activeProjectDrag.value) return
-
-  const fromIndex = props.groups.findIndex((group) => group.projectName === projectName)
-  const projectGroupElement = projectGroupElementByName.get(projectName)
-  if (fromIndex < 0 || !projectGroupElement) return
-
-  const groupRect = projectGroupElement.getBoundingClientRect()
-  const groupGap = isCollapsed(projectName) ? 0 : PROJECT_GROUP_EXPANDED_GAP_PX
-  pendingProjectDrag.value = {
-    projectName,
-    fromIndex,
-    startClientX: event.clientX,
-    startClientY: event.clientY,
-    pointerOffsetY: event.clientY - groupRect.top,
-    groupLeft: groupRect.left,
-    groupWidth: groupRect.width,
-    groupHeight: groupRect.height,
-    groupOuterHeight: groupRect.height + groupGap,
-  }
-
-  event.preventDefault()
-  bindProjectDragListeners()
-}
-
-function bindProjectDragListeners(): void {
-  window.addEventListener('mousemove', onProjectDragMouseMove)
-  window.addEventListener('mouseup', onProjectDragMouseUp)
-  window.addEventListener('keydown', onProjectDragKeyDown)
-}
-
-function unbindProjectDragListeners(): void {
-  window.removeEventListener('mousemove', onProjectDragMouseMove)
-  window.removeEventListener('mouseup', onProjectDragMouseUp)
-  window.removeEventListener('keydown', onProjectDragKeyDown)
-}
-
-function onProjectDragMouseMove(event: MouseEvent): void {
-  pendingDragPointerSample = {
-    clientX: event.clientX,
-    clientY: event.clientY,
-  }
-  scheduleProjectDragPointerFrame()
-}
-
-function onProjectDragMouseUp(event: MouseEvent): void {
-  processProjectDragPointerSample({
-    clientX: event.clientX,
-    clientY: event.clientY,
-  })
-
-  const drag = activeProjectDrag.value
-  if (drag && projectedDropProjectIndex.value !== null) {
-    const currentProjectIndex = props.groups.findIndex((group) => group.projectName === drag.projectName)
-    if (currentProjectIndex >= 0) {
-      const toIndex = projectedDropProjectIndex.value
-      if (toIndex !== currentProjectIndex) {
-        emit('reorder-project', {
-          projectName: drag.projectName,
-          toIndex,
-        })
-      }
-    }
-  }
-
-  resetProjectDragState({ preserveToggleSuppression: Boolean(drag) })
-}
-
-function onProjectDragKeyDown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  if (!pendingProjectDrag.value && !activeProjectDrag.value) return
-
-  event.preventDefault()
-  resetProjectDragState()
-}
-
-function resetProjectDragState(options: { preserveToggleSuppression?: boolean } = {}): void {
-  if (dragPointerRafId !== null) {
-    window.cancelAnimationFrame(dragPointerRafId)
-    dragPointerRafId = null
-  }
-  pendingDragPointerSample = null
-  pendingProjectDrag.value = null
-  activeProjectDrag.value = null
-  if (!options.preserveToggleSuppression) {
-    suppressNextProjectToggleId.value = ''
-  }
-  unbindProjectDragListeners()
-}
-
-function scheduleProjectDragPointerFrame(): void {
-  if (dragPointerRafId !== null) return
-
-  dragPointerRafId = window.requestAnimationFrame(() => {
-    dragPointerRafId = null
-    if (!pendingDragPointerSample) return
-
-    const sample = pendingDragPointerSample
-    pendingDragPointerSample = null
-    processProjectDragPointerSample(sample)
-  })
-}
-
-function processProjectDragPointerSample(sample: DragPointerSample): void {
-  const pending = pendingProjectDrag.value
-  if (!activeProjectDrag.value && pending) {
-    const deltaX = sample.clientX - pending.startClientX
-    const deltaY = sample.clientY - pending.startClientY
-    const distance = Math.hypot(deltaX, deltaY)
-    if (distance < DRAG_START_THRESHOLD_PX) {
-      return
-    }
-
-    closeProjectMenu()
-    suppressNextProjectToggleId.value = pending.projectName
-    activeProjectDrag.value = {
-      projectName: pending.projectName,
-      fromIndex: pending.fromIndex,
-      pointerOffsetY: pending.pointerOffsetY,
-      groupLeft: pending.groupLeft,
-      groupWidth: pending.groupWidth,
-      groupHeight: pending.groupHeight,
-      groupOuterHeight: pending.groupOuterHeight,
-      ghostTop: sample.clientY - pending.pointerOffsetY,
-      dropTargetIndexFull: null,
-    }
-  }
-
-  if (!activeProjectDrag.value) return
-  updateProjectDropTarget(sample)
-}
-
-function updateProjectDropTarget(sample: DragPointerSample): void {
-  const drag = activeProjectDrag.value
-  if (!drag) return
-
-  drag.ghostTop = sample.clientY - drag.pointerOffsetY
-  if (!isPointerInProjectDropZone(sample)) {
-    drag.dropTargetIndexFull = null
-    return
-  }
-
-  const cursorY = sample.clientY
-  const groupsContainer = groupsContainerRef.value
-  if (!groupsContainer) {
-    drag.dropTargetIndexFull = null
-    return
-  }
-
-  const containerRect = groupsContainer.getBoundingClientRect()
-  const projectIndexByName = new Map(props.groups.map((group, index) => [group.projectName, index]))
-  const nonDraggedProjectNames = props.groups
-    .map((group) => group.projectName)
-    .filter((projectName) => projectName !== drag.projectName)
-
-  let accumulatedTop = 0
-  let nextDropTarget = props.groups.length
-
-  for (const projectName of nonDraggedProjectNames) {
-    const originalIndex = projectIndexByName.get(projectName)
-    if (originalIndex === undefined) continue
-
-    const groupOuterHeight = getProjectOuterHeight(projectName)
-    const groupMiddleY = containerRect.top + accumulatedTop + groupOuterHeight / 2
-    if (cursorY < groupMiddleY) {
-      nextDropTarget = originalIndex
-      break
-    }
-
-    accumulatedTop += groupOuterHeight
-  }
-
-  drag.dropTargetIndexFull = nextDropTarget
-}
-
-function isPointerInProjectDropZone(sample: DragPointerSample): boolean {
-  const groupsContainer = groupsContainerRef.value
-  if (!groupsContainer) return false
-
-  const bounds = groupsContainer.getBoundingClientRect()
-  const xInBounds = sample.clientX >= bounds.left && sample.clientX <= bounds.right
-  const yInBounds = sample.clientY >= bounds.top - 32 && sample.clientY <= bounds.bottom + 32
-  return xInBounds && yInBounds
-}
-
-function isDraggingProject(projectName: string): boolean {
-  return activeProjectDrag.value?.projectName === projectName
-}
-
-function projectGroupStyle(projectName: string): Record<string, string> | undefined {
-  const drag = activeProjectDrag.value
-  const targetTop = layoutTopByProject.value[projectName] ?? 0
-  const openThreadMenuProjectName = openThreadMenuId.value
-    ? (threadProjectNameById.value.get(openThreadMenuId.value) ?? '')
-    : ''
-  const shouldElevateForMenu =
-    openProjectMenuId.value === projectName || openThreadMenuProjectName === projectName
-
-  if (!drag || drag.projectName !== projectName) {
-    return {
-      position: 'absolute',
-      top: '0',
-      left: '0',
-      right: '0',
-      zIndex: shouldElevateForMenu ? '40' : '1',
-      transform: `translate3d(0, ${targetTop}px, 0)`,
-      willChange: 'transform',
-      transition: 'transform 180ms ease',
-    }
-  }
-
-  return {
-    position: 'fixed',
-    top: '0',
-    left: `${drag.groupLeft}px`,
-    width: `${drag.groupWidth}px`,
-    height: `${drag.groupHeight}px`,
-    zIndex: '50',
-    pointerEvents: 'none',
-    transform: `translate3d(0, ${drag.ghostTop}px, 0)`,
-    willChange: 'transform',
-    transition: 'transform 0ms linear',
-  }
-}
-
 function projectThreads(group: UiProjectGroup): UiThread[] {
   return unpinnedThreadsByProjectName.value.get(group.projectName) ?? []
 }
@@ -2833,19 +1970,7 @@ function getThreadState(thread: UiThread): 'external' | 'awaiting-approval' | 'a
 watch(
   () => props.groups.map((group) => group.projectName),
   (projectNames) => {
-    const dragProjectName = activeProjectDrag.value?.projectName ?? pendingProjectDrag.value?.projectName ?? ''
-    if (dragProjectName && !props.groups.some((group) => group.projectName === dragProjectName)) {
-      resetProjectDragState()
-    }
-
-    const projectNameSet = new Set(projectNames)
-    const nextMeasuredHeights = Object.fromEntries(
-      Object.entries(measuredHeightByProject.value).filter(([projectName]) => projectNameSet.has(projectName)),
-    ) as Record<string, number>
-
-    if (Object.keys(nextMeasuredHeights).length !== Object.keys(measuredHeightByProject.value).length) {
-      measuredHeightByProject.value = nextMeasuredHeights
-    }
+    pruneProjectGroups(projectNames)
   },
 )
 
@@ -2891,14 +2016,10 @@ watch(openThreadMenuId, (threadId) => {
 })
 
 onBeforeUnmount(() => {
-  for (const element of projectGroupElementByName.values()) {
-    projectGroupResizeObserver?.unobserve(element)
-  }
-  projectGroupElementByName.clear()
   projectMenuWrapElementByName.clear()
   unbindThreadMenuPositionListeners()
   unbindProjectMenuDismissListeners()
-  resetProjectDragState()
+  disposeProjectDragAndDrop()
 })
 </script>
 

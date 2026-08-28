@@ -27,3 +27,4 @@ Return to the [manual test index](../../tests.md).
 | [Toolbar new thread keeps active project](toolbar-new-thread-keeps-active-project.md) |
 | [Thread context-menu persistence and thread recycle bin](thread-context-menu-and-recycle-bin.md) |
 | [Componentization round-49: Sidebar thread row + Directory Hub tabs](componentization-round-49-sidebar-thread-row-and-directory-tabs.md) |
+| [Componentization round-62: Sidebar thread tree drag + automation hooks](componentization-round-62-sidebar-thread-tree-hooks.md) |
