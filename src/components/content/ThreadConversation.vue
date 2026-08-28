@@ -509,6 +509,7 @@ import {
 import { createFileChangeSummaries } from './useFileChangeSummaries'
 import { createReplyCopyFork } from './useReplyCopyFork'
 import { createCommandExecutionDisplay } from './useCommandExecutionDisplay'
+import { createFileChangeActionMachine } from './useFileChangeActionMachine'
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
@@ -744,9 +745,23 @@ const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
 const modalImageUrl = ref('')
 const modalIsVideo = ref(false)
-const fileChangeActionState = ref<Record<string, 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone'>>({})
-const fileChangeActionError = ref<Record<string, string>>({})
-const fileChangeRedoPatchIds = ref<Record<string, string[]>>({})
+const fileChangeActionMachine = createFileChangeActionMachine({
+  getActiveThreadId: () => props.activeThreadId,
+  getCwd: () => props.cwd,
+  onFileChangesChanged: () => emit('fileChangesChanged', props.activeThreadId),
+  updateThreadFileChanges,
+  t,
+})
+const {
+  fileChangeActionKey,
+  isFileChangeActionable,
+  fileChangeActionStatus,
+  fileChangeActionErrorText,
+  fileChangeNextAction,
+  fileChangeActionLabel,
+  runFileChangeAction,
+  resetFileChangeActions,
+} = fileChangeActionMachine
 
 type PendingFileChangeConfirm = {
   kind: 'file-change'
@@ -1094,106 +1109,6 @@ function planStepCopyMarker(status: UiPlanStep['status']): string {
   }
 }
 
-function fileChangeActionKey(summary: TurnFileChangeSummary | null): string {
-  return summary?.turnId && props.activeThreadId ? `thread:${props.activeThreadId}:turn:${summary.turnId}` : ''
-}
-
-function isFileChangeActionable(summary: TurnFileChangeSummary | null): boolean {
-  return fileChangeActionKey(summary).length > 0
-}
-
-function fileChangeActionStatus(summary: TurnFileChangeSummary | null): 'idle' | 'undoing' | 'redoing' | 'undone' | 'redone' {
-  const key = fileChangeActionKey(summary)
-  return key ? fileChangeActionState.value[key] ?? 'idle' : 'idle'
-}
-
-function fileChangeActionErrorText(summary: TurnFileChangeSummary | null): string {
-  const key = fileChangeActionKey(summary)
-  return key ? fileChangeActionError.value[key] ?? '' : ''
-}
-
-function fileChangeNextAction(summary: TurnFileChangeSummary | null): 'undo' | 'redo' {
-  const status = fileChangeActionStatus(summary)
-  return status === 'undone' || status === 'redoing' ? 'redo' : 'undo'
-}
-
-function fileChangeActionLabel(summary: TurnFileChangeSummary | null): string {
-  const status = fileChangeActionStatus(summary)
-  if (status === 'undoing') return t('Undoing')
-  if (status === 'redoing') return t('Redoing')
-  return fileChangeNextAction(summary) === 'redo' ? t('Redo') : t('Undo')
-}
-
-async function runFileChangeAction(
-  summary: TurnFileChangeSummary | null,
-  action: 'undo' | 'redo',
-  filePaths?: string[],
-): Promise<void> {
-  const key = fileChangeActionKey(summary)
-  if (!summary || !key || !props.activeThreadId || !props.cwd) return
-  const previousState = fileChangeActionStatus(summary)
-  const pendingState = action === 'undo' ? 'undoing' : 'redoing'
-  fileChangeActionState.value = { ...fileChangeActionState.value, [key]: pendingState }
-  fileChangeActionError.value = { ...fileChangeActionError.value, [key]: '' }
-
-  let result: Awaited<ReturnType<typeof updateThreadFileChanges>>
-  try {
-    const patchIds = fileChangeRedoPatchIds.value[key] ?? []
-    result = await updateThreadFileChanges(
-      props.activeThreadId,
-      summary.turnId,
-      props.cwd,
-      action,
-      patchIds.length > 0 ? patchIds : undefined,
-      'single_turn',
-      filePaths,
-    )
-  } catch (error) {
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
-    fileChangeActionError.value = {
-      ...fileChangeActionError.value,
-      [key]: error instanceof Error ? error.message : t('Failed to update file changes.'),
-    }
-    return
-  }
-
-  if (result.errors.length > 0) {
-    if (action === 'undo') {
-      fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
-      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
-    } else {
-      if ((result.appliedPatchIds ?? []).length > 0) {
-        fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
-      }
-      fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
-    }
-    fileChangeActionError.value = { ...fileChangeActionError.value, [key]: result.errors.join('; ') }
-    return
-  }
-
-  if ((result.changed ?? 0) <= 0) {
-    // Nothing was actually reverted/reapplied (e.g. another client already ran
-    // this action). Keep the previous state and surface the server message
-    // instead of assuming a local undone/redone that the disk does not reflect.
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: previousState }
-    fileChangeActionError.value = {
-      ...fileChangeActionError.value,
-      [key]: result.message || (action === 'undo' ? t('No file changes to undo.') : t('No file changes to redo.')),
-    }
-    return
-  }
-
-  if (action === 'undo') {
-    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.revertedPatchIds ?? [] }
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'undone' }
-  } else {
-    fileChangeRedoPatchIds.value = { ...fileChangeRedoPatchIds.value, [key]: result.appliedPatchIds ?? [] }
-    fileChangeActionState.value = { ...fileChangeActionState.value, [key]: 'redone' }
-  }
-  // Re-read the thread's file-change state so the UI reflects the disk state
-  // (covers multi-client sync and refresh consistency).
-  emit('fileChangesChanged', props.activeThreadId)
-}
 
 function forkResponse(anchorMessageId: string): void {
   const turnIndex = forkableTurnIndexByAnchorId.value[anchorMessageId]
@@ -1875,9 +1790,7 @@ watch(
     autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
-    fileChangeActionState.value = {}
-    fileChangeActionError.value = {}
-    fileChangeRedoPatchIds.value = {}
+    resetFileChangeActions()
     warmLayerState.value = createWarmLayerState(props.activeThreadId)
     await scheduleConversationScroll()
   },
