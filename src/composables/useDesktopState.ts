@@ -6,8 +6,6 @@ import {
   getAvailableCollaborationModes,
   getAccountRateLimits,
   renameThread,
-  getAvailableModels,
-  getCurrentModelConfig,
   getPendingServerRequests,
   getSkillsList,
   getThreadDetail,
@@ -21,7 +19,6 @@ import {
   getThreadGroupsPage,
   getThreadQueueState,
   getWorkspaceRootsState,
-  setCodexSpeedMode,
   setThreadQueueState,
   setWorkspaceRootsState,
   getThreadTitleCache,
@@ -38,7 +35,6 @@ import {
   startThreadTurn,
   listHooks,
   type RpcNotification,
-  type AvailableModel,
   type SkillInfo,
   type ThreadQueueState,
   type UiHooksListEntry,
@@ -46,14 +42,12 @@ import {
 } from '../api/codexGateway'
 import { CodexApiError } from '../api/codexErrors'
 import { normalizeFileChangeStatus, toUiFileChanges } from '../api/normalizers/v2'
-import { REASONING_EFFORTS } from '../types/codex'
 import type {
   CollaborationModeKind,
   CollaborationModeOption,
   CommandExecutionData,
   UiPendingRequestState,
   ReasoningEffort,
-  SpeedMode,
   UiFileChange,
   UiLiveOverlay,
   UiMessage,
@@ -93,7 +87,6 @@ import {
   areUiFileChangesEqual,
   buildTurnSummaryMessage,
   buildWorkspaceRootsProjectOrderState,
-  cloneStringKeyedRecord,
   dedupeAssistantAgentMessageText,
   delay,
   filterGroupsByWorkspaceRoots,
@@ -116,11 +109,8 @@ import {
   mergeThreadMessageStreams,
   normalizeCollaborationMode,
   normalizeMessageText,
-  normalizeProviderContextId,
-  normalizeStoredModelId,
   omitKey,
   omitKeys,
-  omitStringKeyedRecordKey,
   orderGroupsByProjectOrder,
   orderGroupsByWorkspaceProjectOrder,
   parseIsoTimestamp,
@@ -128,7 +118,6 @@ import {
   pruneThreadContextStateMap,
   pruneThreadStateMap,
   readSelectedCollaborationMode,
-  readSelectedModel,
   removePersistedLiveMessages,
   removeRedundantLiveAgentMessages,
   removeThreadFromGroups,
@@ -156,7 +145,6 @@ import {
   reorderStringArray,
   resetLiveMessageSortKeys,
   toProjectNameFromWorkspaceRoot,
-  toProviderModelContextId,
   type TurnCompletedInfo,
   type TurnErrorState,
   type TurnStartedInfo,
@@ -252,7 +240,6 @@ import {
   loadProjectOrder,
   loadReadStateMap,
   loadSelectedCollaborationModeMap,
-  loadSelectedModelMap,
   loadSelectedThreadId,
   loadThreadTerminalOpenMap,
   loadThreadTokenUsageMap,
@@ -263,22 +250,22 @@ import {
   saveProjectOrder,
   saveReadStateMap,
   saveSelectedCollaborationModeMap,
-  saveSelectedModelMap,
   saveSelectedThreadId,
   saveThreadTerminalOpenMap,
   saveThreadTokenUsageMap,
   saveUnreadCutoffIso,
 } from './useDesktopStatePersistence'
+import {
+  CODEX_CLI_MISSING_MESSAGE,
+  MODEL_FALLBACK_ID,
+  createDesktopModelPreferences,
+} from './useDesktopModelPreferences'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
 const STASHED_MESSAGES_STORAGE_KEY = 'codex-web-local.stashed-messages.v1'
 const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-threshold.v1'
 const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
-const REASONING_EFFORT_OPTIONS: readonly ReasoningEffort[] = REASONING_EFFORTS
-const MODEL_FALLBACK_ID = 'gpt-5.4-mini'
-const OPENCODE_ZEN_DEFAULT_MODEL = 'big-pickle'
-const CODEX_CLI_MISSING_MESSAGE = 'Codex CLI not found. Install @openai/codex or set CODEXUI_CODEX_COMMAND.'
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const RATE_LIMIT_REFRESH_DEBOUNCE_MS = 500
@@ -335,6 +322,7 @@ export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
   const selectedThreadId = ref(loadSelectedThreadId())
+  const error = ref('')
   const persistedMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const livePlanMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   // round-27：每线程最近一次 plan 的本地存档（刷新后输入框上方的计划面板兜底恢复）
@@ -393,9 +381,29 @@ export function useDesktopState() {
   let suppressAutoCompactStash = false
   let hasLoadedPersistedQueueState = false
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
-  const availableModelIds = ref<string[]>([])
-  const availableModelReasoningEfforts = ref<Record<string, ReasoningEffort[]>>({})
-  const availableModelDefaultReasoningEfforts = ref<Record<string, ReasoningEffort>>({})
+  const {
+    activeProviderId,
+    availableModelIds,
+    availableModelReasoningEfforts,
+    codexCliMissingError,
+    isUpdatingSpeedMode,
+    selectedModelId,
+    selectedReasoningEffort,
+    selectedSpeedMode,
+    applyFallbackModelSelection,
+    buildPendingTurnDetails,
+    pruneThreadModelState,
+    readModelIdForThread,
+    refreshModelPreferences,
+    resolveThreadModelForProvider,
+    setSelectedModelId,
+    setSelectedModelIdForThread,
+    setSelectedReasoningEffort,
+    setThreadModelId,
+    setThreadModelProviderId,
+    syncSelectedThreadModel,
+    updateSelectedSpeedMode,
+  } = createDesktopModelPreferences({ selectedThreadId, error })
   const availableCollaborationModes = ref<CollaborationModeOption[]>([
     { value: 'default', label: 'Default' },
     { value: 'plan', label: 'Plan' },
@@ -403,16 +411,9 @@ export function useDesktopState() {
   const selectedCollaborationModeByContext = ref<Record<string, CollaborationModeKind>>(
     loadSelectedCollaborationModeMap(),
   )
-  const selectedModelIdByContext = ref<Record<string, string>>(loadSelectedModelMap())
   const selectedCollaborationMode = ref<CollaborationModeKind>(
     readSelectedCollaborationMode(selectedCollaborationModeByContext.value, selectedThreadId.value),
   )
-  const selectedModelId = ref(readSelectedModel(selectedModelIdByContext.value, selectedThreadId.value))
-  const selectedReasoningEffort = ref<ReasoningEffort | ''>('medium')
-  let hasSelectedReasoningEffortOverride = false
-  const selectedSpeedMode = ref<SpeedMode>('standard')
-  const activeProviderId = ref('')
-  const codexCliMissingError = ref('')
   const readStateByThreadId = ref<Record<string, string>>(loadReadStateMap())
   const unreadCutoffIso = ref(loadUnreadCutoffIso())
   const projectOrder = ref<string[]>(loadProjectOrder())
@@ -456,8 +457,6 @@ export function useDesktopState() {
   const codexRateLimit = ref<UiRateLimitSnapshot | null>(null)
   const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
-  const threadModelProviderByThreadId = ref<Record<string, string>>({})
-
   const threadTitleById = ref<Record<string, string>>({})
 
   const installedSkills = ref<SkillInfo[]>([])
@@ -470,14 +469,12 @@ export function useDesktopState() {
   const isThreadListFullyLoaded = ref(false)
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
-  const isUpdatingSpeedMode = ref(false)
   const isRollingBack = ref(false)
   const compactingThreadIds = ref(new Set<string>())
   const COMPACT_STATE_TIMEOUT_MS = 60_000
   const fuzzyFileSearchResults = ref<Array<{ path: string }>>([])
   let fuzzyFileSearchSessionId = ''
 
-  const error = ref('')
   const isPolling = ref(false)
   const hasLoadedThreads = ref(false)
 
@@ -676,184 +673,19 @@ export function useDesktopState() {
     return ''
   }
 
-  function readModelIdForThread(threadId: string): string {
-    const contextId = toThreadContextId(threadId)
-    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) {
-      const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
-      const providerContextId = toProviderModelContextId(normalizedProviderId)
-      const providerModelId = providerContextId
-        ? normalizeStoredModelId(selectedModelIdByContext.value[providerContextId])
-        : ''
-      if (providerModelId) return providerModelId
-    }
-    return readSelectedModel(selectedModelIdByContext.value, threadId).trim()
-  }
-
-  function readProviderIdForThread(threadId: string): string {
-    const normalizedThreadId = threadId.trim()
-    if (!normalizedThreadId) return normalizeProviderContextId(activeProviderId.value)
-    return normalizeProviderContextId(threadModelProviderByThreadId.value[normalizedThreadId] ?? activeProviderId.value)
-  }
-
-  function readSupportedReasoningEffortsForModel(modelId: string): readonly ReasoningEffort[] {
-    return availableModelReasoningEfforts.value[modelId.trim()] ?? REASONING_EFFORT_OPTIONS
-  }
-
-  function pickReasoningEffortForModel(
-    modelId: string,
-    preferredEffort: ReasoningEffort | '' = selectedReasoningEffort.value,
-  ): ReasoningEffort | '' {
-    const normalizedModelId = modelId.trim()
-    const supportedEfforts = readSupportedReasoningEffortsForModel(normalizedModelId)
-    if (preferredEffort && supportedEfforts.includes(preferredEffort)) return preferredEffort
-    if (supportedEfforts.includes('medium')) return 'medium'
-    const defaultEffort = availableModelDefaultReasoningEfforts.value[normalizedModelId]
-    if (defaultEffort && supportedEfforts.includes(defaultEffort)) return defaultEffort
-    return supportedEfforts[0] ?? ''
-  }
-
-  function ensureReasoningEffortSupportedForModel(modelId: string): void {
-    selectedReasoningEffort.value = pickReasoningEffortForModel(modelId)
-  }
-
-  function setAvailableModelMetadata(models: AvailableModel[]): void {
-    const reasoningEfforts: Record<string, ReasoningEffort[]> = {}
-    const defaultReasoningEfforts: Record<string, ReasoningEffort> = {}
-    for (const model of models) {
-      if (model.supportedReasoningEfforts !== null) {
-        reasoningEfforts[model.id] = [...model.supportedReasoningEfforts]
-      }
-      if (model.defaultReasoningEffort) {
-        defaultReasoningEfforts[model.id] = model.defaultReasoningEffort
-      }
-    }
-    availableModelReasoningEfforts.value = reasoningEfforts
-    availableModelDefaultReasoningEfforts.value = defaultReasoningEfforts
-  }
-
-  function ensureAvailableModelIds(...modelIds: string[]): void {
-    const nextModelIds = [...availableModelIds.value]
-    for (const modelId of modelIds) {
-      const normalizedModelId = modelId.trim()
-      if (normalizedModelId && !nextModelIds.includes(normalizedModelId)) {
-        nextModelIds.push(normalizedModelId)
-      }
-    }
-    if (!areStringArraysEqual(availableModelIds.value, nextModelIds)) {
-      availableModelIds.value = nextModelIds
-    }
-  }
-
-  function readProviderCompatibleSelectedModel(modelId: string): string {
-    const normalizedModelId = modelId.trim()
-    if (availableModelIds.value.length === 0) return normalizedModelId
-    if (normalizedModelId && availableModelIds.value.includes(normalizedModelId)) return normalizedModelId
-    return availableModelIds.value[0] ?? ''
-  }
-
   function setSelectedThreadId(nextThreadId: string, options: { persist?: boolean } = {}): void {
     if (selectedThreadId.value === nextThreadId) return
     selectedThreadId.value = nextThreadId
     if (options.persist !== false) {
       saveSelectedThreadId(nextThreadId)
     }
-    selectedModelId.value = readProviderCompatibleSelectedModel(readModelIdForThread(nextThreadId))
-    ensureReasoningEffortSupportedForModel(selectedModelId.value)
+    syncSelectedThreadModel(nextThreadId)
     selectedCollaborationMode.value = readSelectedCollaborationMode(
       selectedCollaborationModeByContext.value,
       nextThreadId,
     )
     activeReasoningItemId = ''
     shouldAutoScrollOnNextAgentEvent = false
-  }
-
-  function setSelectedModelIdForThread(threadId: string, modelId: string): void {
-    const normalizedModelId = modelId.trim()
-    const contextId = toThreadContextId(threadId)
-    const normalizedProviderId = normalizeProviderContextId(activeProviderId.value)
-    const providerContextId =
-      contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT
-        ? toProviderModelContextId(normalizedProviderId)
-        : ''
-    const selectedContextId = providerContextId || contextId
-    if (normalizedModelId) {
-      const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-      nextModelMap[selectedContextId] = normalizedModelId
-      if (providerContextId) {
-        delete nextModelMap[contextId]
-      }
-      selectedModelIdByContext.value = nextModelMap
-    } else {
-      let nextModelMap = omitStringKeyedRecordKey(selectedModelIdByContext.value, selectedContextId)
-      if (providerContextId) {
-        nextModelMap = omitStringKeyedRecordKey(nextModelMap, contextId)
-      }
-      selectedModelIdByContext.value = nextModelMap
-    }
-    if (contextId === toThreadContextId(selectedThreadId.value)) {
-      selectedModelId.value = readModelIdForThread(selectedThreadId.value)
-      ensureAvailableModelIds(selectedModelId.value)
-      ensureReasoningEffortSupportedForModel(selectedModelId.value)
-    } else {
-      ensureAvailableModelIds(normalizedModelId)
-    }
-    saveSelectedModelMap(selectedModelIdByContext.value)
-  }
-
-  function setSelectedModelId(modelId: string): void {
-    setSelectedModelIdForThread(selectedThreadId.value, modelId)
-  }
-
-  function setThreadModelId(threadId: string, modelId: string): void {
-    const normalizedThreadId = threadId.trim()
-    if (!normalizedThreadId) return
-
-    const normalizedModelId = modelId.trim()
-    if (normalizedModelId) {
-      const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-      nextModelMap[normalizedThreadId] = normalizedModelId
-      selectedModelIdByContext.value = nextModelMap
-    } else {
-      selectedModelIdByContext.value = omitStringKeyedRecordKey(selectedModelIdByContext.value, normalizedThreadId)
-    }
-    ensureAvailableModelIds(normalizedModelId)
-    if (selectedThreadId.value === normalizedThreadId) {
-      selectedModelId.value = readModelIdForThread(selectedThreadId.value)
-      ensureReasoningEffortSupportedForModel(selectedModelId.value)
-    }
-    saveSelectedModelMap(selectedModelIdByContext.value)
-  }
-
-  function setThreadModelProviderId(threadId: string, providerId: string): void {
-    const normalizedThreadId = threadId.trim()
-    if (!normalizedThreadId) return
-
-    const normalizedProviderId = normalizeProviderContextId(providerId)
-    if (normalizedProviderId) {
-      threadModelProviderByThreadId.value = {
-        ...threadModelProviderByThreadId.value,
-        [normalizedThreadId]: normalizedProviderId,
-      }
-    } else if (threadModelProviderByThreadId.value[normalizedThreadId]) {
-      threadModelProviderByThreadId.value = omitKey(threadModelProviderByThreadId.value, normalizedThreadId)
-    }
-  }
-
-  function resolveThreadModelForProvider(threadId: string, modelId: string, providerId: string): string {
-    const normalizedModelId = modelId.trim()
-    const normalizedProviderId = normalizeProviderContextId(providerId)
-    if (normalizedProviderId !== 'opencode-zen') {
-      return normalizedModelId
-    }
-
-    const previousThreadModel = readModelIdForThread(threadId).trim()
-    if (previousThreadModel && !/^gpt-/i.test(previousThreadModel)) {
-      return previousThreadModel
-    }
-    if (normalizedModelId && !/^gpt-/i.test(normalizedModelId)) {
-      return normalizedModelId
-    }
-    return OPENCODE_ZEN_DEFAULT_MODEL
   }
 
   function setThreadTokenUsage(threadId: string, usage: UiThreadTokenUsage | null): void {
@@ -920,15 +752,6 @@ export function useDesktopState() {
 
   function setCodexRateLimit(nextSnapshot: UiRateLimitSnapshot | null): void {
     codexRateLimit.value = nextSnapshot
-  }
-
-  async function applyFallbackModelSelection(threadId: string = selectedThreadId.value): Promise<void> {
-    if (threadId.trim()) {
-      setThreadModelId(threadId, MODEL_FALLBACK_ID)
-    } else {
-      setSelectedModelId(MODEL_FALLBACK_ID)
-    }
-    ensureAvailableModelIds(MODEL_FALLBACK_ID)
   }
 
   function setPendingTurnRequest(threadId: string, request: PendingTurnRequest): void {
@@ -1019,35 +842,6 @@ export function useDesktopState() {
     }
   }
 
-  function setSelectedReasoningEffort(effort: ReasoningEffort | ''): void {
-    if (effort && !readSupportedReasoningEffortsForModel(selectedModelId.value).includes(effort)) {
-      return
-    }
-    hasSelectedReasoningEffortOverride = true
-    selectedReasoningEffort.value = effort
-  }
-
-  async function updateSelectedSpeedMode(mode: SpeedMode): Promise<void> {
-    const nextMode: SpeedMode = mode === 'fast' ? 'fast' : 'standard'
-    if (isUpdatingSpeedMode.value || selectedSpeedMode.value === nextMode) {
-      return
-    }
-
-    const previousMode = selectedSpeedMode.value
-    selectedSpeedMode.value = nextMode
-    isUpdatingSpeedMode.value = true
-    error.value = ''
-
-    try {
-      await setCodexSpeedMode(nextMode)
-    } catch (unknownError) {
-      selectedSpeedMode.value = previousMode
-      error.value = unknownError instanceof Error ? unknownError.message : 'Failed to update Fast mode'
-    } finally {
-      isUpdatingSpeedMode.value = false
-    }
-  }
-
   async function refreshCollaborationModes(): Promise<void> {
     try {
       const modes = await getAvailableCollaborationModes()
@@ -1057,105 +851,6 @@ export function useDesktopState() {
       }
     } catch {
       // Keep the last known collaboration mode choices on transient failures.
-    }
-  }
-
-  function buildPendingTurnDetails(
-    modelId: string,
-    effort: ReasoningEffort | '',
-    collaborationMode: CollaborationModeKind = selectedCollaborationMode.value,
-  ): string[] {
-    const modelLabel = modelId.trim() || 'default'
-    const effortLabel = effort || 'default'
-    const modeLabel = collaborationMode === 'plan' ? 'Plan' : 'Default'
-    const speedLabel = selectedSpeedMode.value === 'fast' ? 'Fast' : 'Standard'
-    return [`Mode: ${modeLabel}`, `Model: ${modelLabel}`, `Thinking: ${effortLabel}`, `Speed: ${speedLabel}`]
-  }
-
-  async function refreshModelPreferences(options?: { providerChanged?: boolean; includeProviderModels?: boolean }): Promise<void> {
-    codexCliMissingError.value = ''
-    try {
-      const currentConfig = await getCurrentModelConfig()
-      const normalizedConfiguredModelId = currentConfig.model.trim()
-      const normalizedProviderId = normalizeProviderContextId(currentConfig.providerId)
-      activeProviderId.value = normalizedProviderId
-      const targetProviderId = readProviderIdForThread(selectedThreadId.value)
-      // round-42：config.toml 的 model_provider = "custom"（litellm）表示选
-      // "Codex" 时走 codex-cli 的模型目录（model_catalog_json，deepseek-v4-flash/pro），
-      // 与 UI 的"自定义端点"（custom-endpoint）不同，不应按 provider-backed 处理，
-      // 否则模型列表只剩 litellm /models 暴露的模型而丢 model/list 目录项。
-      const isProviderBacked = targetProviderId !== 'codex' && targetProviderId !== 'custom'
-      const normalizedSelectedModelId = readModelIdForThread(selectedThreadId.value)
-      const models = await getAvailableModels({
-        includeProviderModels: isProviderBacked || options?.includeProviderModels !== false,
-        requireProviderModels: isProviderBacked,
-        providerId: isProviderBacked ? targetProviderId : undefined,
-      })
-      const modelIds = models.map((model) => model.id)
-      setAvailableModelMetadata(models)
-      const providerModelContextId = toProviderModelContextId(targetProviderId)
-      const providerScopedModelId = providerModelContextId
-        ? normalizeStoredModelId(selectedModelIdByContext.value[providerModelContextId])
-        : ''
-      const nextModelIds = [...modelIds]
-      if (
-        !options?.providerChanged
-        && isProviderBacked
-        && targetProviderId === normalizedProviderId
-        && normalizedConfiguredModelId
-        && !nextModelIds.includes(normalizedConfiguredModelId)
-      ) {
-        nextModelIds.push(normalizedConfiguredModelId)
-      }
-      availableModelIds.value = nextModelIds
-
-      const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
-      if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
-        if (options?.providerChanged && nextModelIds.length > 0) {
-          if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
-            setSelectedModelId(providerScopedModelId)
-          } else if (targetProviderId === normalizedProviderId && normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
-            setSelectedModelId(normalizedConfiguredModelId)
-          } else {
-            setSelectedModelId(nextModelIds[0])
-          }
-        } else if (targetProviderId === normalizedProviderId && normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
-          setSelectedModelId(currentConfig.model)
-        } else if (nextModelIds.length > 0) {
-          setSelectedModelId(nextModelIds[0])
-        } else {
-          setSelectedModelId('')
-        }
-      } else if (selectedModelId.value.trim() !== normalizedSelectedModelId) {
-        setSelectedModelId(normalizedSelectedModelId)
-      }
-      if (providerModelContextId && selectedModelId.value.trim().length > 0) {
-        const nextModelMap = cloneStringKeyedRecord(selectedModelIdByContext.value)
-        nextModelMap[providerModelContextId] = selectedModelId.value.trim()
-        const activeProviderModelContextId = toProviderModelContextId(normalizedProviderId)
-        if (
-          activeProviderModelContextId
-          && activeProviderModelContextId !== providerModelContextId
-          && normalizedConfiguredModelId
-        ) {
-          nextModelMap[activeProviderModelContextId] = normalizedConfiguredModelId
-        }
-        selectedModelIdByContext.value = nextModelMap
-        saveSelectedModelMap(selectedModelIdByContext.value)
-      }
-
-      selectedReasoningEffort.value = pickReasoningEffortForModel(
-        selectedModelId.value,
-        hasSelectedReasoningEffortOverride ? selectedReasoningEffort.value : currentConfig.reasoningEffort,
-      )
-      selectedSpeedMode.value = currentConfig.speedMode
-    } catch (unknownError) {
-      if (isCodexCliMissingError(unknownError)) {
-        codexCliMissingError.value = CODEX_CLI_MISSING_MESSAGE
-      } else {
-        codexCliMissingError.value = ''
-      }
-      // Keep chat UI usable even if model metadata is temporarily unavailable.
     }
   }
 
@@ -1327,12 +1022,7 @@ export function useDesktopState() {
     if (currentThreadId) {
       activeThreadIds.add(currentThreadId)
     }
-    const nextSelectedModelMap = pruneThreadContextStateMap(selectedModelIdByContext.value, activeThreadIds)
-    if (nextSelectedModelMap !== selectedModelIdByContext.value) {
-      selectedModelIdByContext.value = nextSelectedModelMap
-      selectedModelId.value = readProviderCompatibleSelectedModel(readModelIdForThread(selectedThreadId.value))
-      saveSelectedModelMap(nextSelectedModelMap)
-    }
+    pruneThreadModelState(activeThreadIds)
     const nextSelectedCollaborationModeMap = pruneThreadContextStateMap(
       selectedCollaborationModeByContext.value,
       activeThreadIds,
@@ -1375,7 +1065,6 @@ export function useDesktopState() {
     )
     threadListedByServerById.value = pruneThreadStateMap(threadListedByServerById.value, activeThreadIds)
     persistedUserMessageByThreadId.value = pruneThreadStateMap(persistedUserMessageByThreadId.value, activeThreadIds)
-    threadModelProviderByThreadId.value = pruneThreadStateMap(threadModelProviderByThreadId.value, activeThreadIds)
     const nextQueuedMessages = pruneThreadStateMap(queuedMessagesByThreadId.value, activeThreadIds)
     if (nextQueuedMessages !== queuedMessagesByThreadId.value) {
       queuedMessagesByThreadId.value = nextQueuedMessages
