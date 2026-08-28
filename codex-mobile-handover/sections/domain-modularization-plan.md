@@ -513,3 +513,27 @@
   - 新建 `src/composables/useDesktopPendingServerRequests.ts`：自有缓存 ref `pendingServerRequestsByThreadId`/`pendingReplyErrorByRequestId`，读侧 computed `selectedThreadServerRequests`、读助手 `getThreadPendingRequests`/`readPendingRequestState`/`pendingReplyErrorForRequest`、后台读请求 `loadPendingServerRequestsFromBridge`/`pendingRequestStillExistsOnServer` 与作用域化 `prunePendingServerRequestsByActiveThreads`；每步写 `upsert/remove/replace` 单跳委托既有 `useDesktopStateRequests` 的 Impl（经自建 `PendingRequestWriteDeps`），`applyThreadFlags` 与 `getSelectedThreadId` 经窄依赖注入（`PendingServerRequestsDeps`），`getPendingServerRequests`/`normalizeServerRequest`/`asRecord`/`GLOBAL_SERVER_REQUEST_SCOPE` 直接 import，循环依赖保持为零。
   - 主文件：删除两个缓存 ref、`pendingRequestWriteDeps`/三个写 wrapper/`pendingReplyErrorForRequest`、读助手 `getThreadPendingRequests`/`readPendingRequestState`、computed `selectedThreadServerRequests`、读请求 `loadPendingServerRequestsFromBridge`/`pendingRequestStillExistsOnServer`，改为 `createDesktopPendingServerRequests({ applyThreadFlags, getSelectedThreadId })` 后解构同名绑定；组合 prune 块收敛为 `prunePendingServerRequestsByActiveThreads(activeThreadIds)`；`handleServerRequestNotification`/`respondToPendingServerRequest`/单 user-input 发送快路径等写侧编排留在主闭包，`respondToPendingServerRequest` 直接改写返回的 `pendingReplyErrorByRequestId` ref。清理随迁后不再使用的 import（`getPendingServerRequests`、`GLOBAL_SERVER_REQUEST_SCOPE`/`isApprovalRequestMethod`/`readPendingReplyErrorForRequest`/三个 Impl 别名/`PendingRequestWriteDeps`）。下游调用点零改动。
   - 验证：`vue-tsc --noEmit` 通过、`useDesktopState.test.ts` 89 个单测通过、全量单测 424/426（唯一 2 个失败同在既有 `codexAppServerBridge.archive.test.ts` 的 Windows 文件系统差异：POSIX `0600` 读为 `0666`，本次未改动该文件）、`vite build` 前端构建通过。
+
+### 归属说明
+
+- 本轮起的批量之一「**线程列表加载**（`loadThreads`/`loadRemainingThreadPages`/`scheduleRemainingThreadPages` → `useDesktopThreadListLoading.ts`）」与「**useDesktopState 主函数收官决定**（不再继续拆读请求，turn lifecycle 保留为整体写引擎）」记录在 [round-62-domain-modularization.md](../rounds/round-62-domain-modularization.md) 的「下一步·收官评估」段，未在此重复。
+- 下一条 `.vue` 评估属于前端视图轨道的跟进（round-48/49 组件化的二次评估），因与主文件收敛口径同源，附记于此。
+
+## 巨型 `.vue` 第二轮组件化评估（2026-08-28）
+
+在结束 useDesktopState 领域化后，盘点前端大文件，判断是否值得再来一轮视图组件化。
+
+**测量（SFC 三块行数）**：
+
+| 文件 | 模板 | script | 顶部根 | 子组件 import |
+| --- | --- | --- | --- | --- |
+| `App.vue` 6023 | 944 | **4,271** | 3（`DesktopLayout` 已抽） | 31 |
+| `SidebarThreadTree.vue` 3388 | 702 | **2,200** | 1 | 17 |
+| `ThreadConversation.vue` 3301 | 494 | **2,230** | 2（+`ConfirmDialog`） | 25 |
+
+`App.vue` 局部：`useDesktopState()` 解构始 @1253，其后约 3,960 行本地编排；**102 个 `ref()` 局部状态、124 处 `await`**。
+
+**结论**：
+- 这些文件的"大"在主 `<script setup>` 的**编排逻辑**，模板已被 round-48/49 抽得很干净（3 根 + `DesktopLayout` + 31 子组件），**再抽叶组件收益有限**；真正的杠杆是**把 script setup 的局部状态+处理簇抽成本地 composable/hook**（如 `useThreadTreeFiltering`/`useThreadTreeKeyboardNav`/`useTreeContextMenu`），属 **hook 化**而非 `.vue` 拆分，且管理的是每实例局部 UI 状态（价值低于已收官的共享缓存/请求所有权领域化）。
+- 风险：`ThreadConversation` 曾 round-19 重构，**不进入本轮**；`App.vue`/`ThreadComposer` 编排面最广（await 交叠），hook 边界最糊；`SidebarThreadTree` 语义最内聚、爆炸半径最小，是唯一适合做探针的候选。
+- **建议**：先拿 `SidebarThreadTree` 做试点（抽 2~3 个本地 hook），用 `vue-tsc` + 定向测试 + `vite build` 验证边界干不干净；**边界干净才推广到 App.vue/ThreadComposer，否则判定"第二轮组件化不划算"并记录收尾**，与 useDesktopState 同样的口径。
