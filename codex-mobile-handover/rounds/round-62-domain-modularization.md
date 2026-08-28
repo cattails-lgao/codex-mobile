@@ -137,6 +137,16 @@ useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一�
 
 本轮暂不动手：`App.vue` / `ThreadComposer`（await 交叠最深）、`ThreadConversation`（round-19 高风险 UI）中除已抽「渲染管道 / 文件变更摘要与 diff viewer / 回复复制 fork / 命令执行展示 / 文件变更 undo-redo 状态机 / 文件链接菜单 / 图片展示」七个簇外的深状态簇（生命周期、消息窗口化、回合塑形）、`SidebarThreadTree` 的树形塑造簇（主耦合核心）。
 
+### ThreadConversation 深状态簇评审收束（2026-08-28）
+
+完成七个内聚簇的抽取后，对 `ThreadConversation` 剩余三个深状态簇做了最终评审，**结论：本轮组件化到此收束，不再抽取**。逐簇判定（均落在 round-19 高风险 / live-turn / realtime / 时序路径，硬约束禁止改其行为；过程中未产出代码提交，仅记录结论）：
+
+- **回合塑形（`renderTurns` 主耦合核心）**：该 ~55 行核心 computed 直连 `props.messages` / `props.liveOverlay` / `props.liveTurnId`，并耦合其它簇（`readAnchoredFileChangeSummaryById`），把 hot/warm 两区与 request/process/final 容器切分。凡可拆的纯计算（`buildTurnGroups` / `warmPagination` / `buildTurnRenderGroups` / `warmLayer*` 等）早已抽到 utils，留在组件里的是**把所有逻辑粘起来的编排壳**——同 `SidebarThreadTree` 的 `filteredGroups`，拆分即触发高风险。
+- **消息窗口化 + 滚动/底部锁**：`conversationListRef` / `autoFollowOutput` / `bottomLockFramesLeft`（rAF 链）/ `conversationScrollFrame`+`conversationScrollPromise`（nextTick+双 rAF promise）/ `trackedPendingImages`+图片 settle 监听 / `loadMoreAbove`（含线程切换竞态 guard）/ `jumpToLatest`（`defineExpose` 给父组件）。深度时序 + 线程切换竞态 + DOM/`document` 操作，且是**所有簇的 watcher 都调用的编排脊柱**（每个 watcher 结尾都 `scheduleConversationScroll()`）。抽出去即「贴壳搬 ref」。
+- **生命周期 / watch 编排**：`activeThreadId` 大 watcher + 5 个 `props` watcher + `onBeforeUnmount` + 滚动调度。结构性胶水，强抽违反复用准则。
+
+收益侧：`ThreadConversation` 脚本内联逻辑经七轮试点累计净减约 650+ 行，7 个工厂 hook（`useMarkdownRendering` / `useFileChangeSummaries` / `useReplyCopyFork` / `useCommandExecutionDisplay` / `useFileChangeActionMachine` / `useFileLinkContextMenu` / `useMessageImageDisplay`）各带定向单测（合计 ~62 例），`vue-tsc` / `vite build` / main chunk 547.81 kB 均稳定。剩余三簇抽离的风险（主耦合核心行为漂移、滚动时序竞态、live-turn/realtime 破坏）远高于降行数的收益，符合 lazy-senior「不为降行数搬高风险代码」原则，故收束。后续若需推进，可选方向为：评审 `App.vue` / `ThreadComposer`（await 交叠最深）是否有内聚窄依赖簇可拆，或对阶段 C 问题导航 JumpBar 做一次带明确边界的中等耦合抽取（需跨簇 write warmLayerState / `conversationListRef` / `autoFollowOutput`）。
+
 ## 交接注意事项
 
 - 不要为了继续降行数直接搬运闭包函数；先确认领域拥有的 refs、请求缓存和唯一写入口，再用窄依赖接线。
