@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-62 领域模块化代码截至 `501179c`，此后消息历史/线程标题缓存/待办服务端请求三批已另批合入；与 `origin/main` 同步） |
+| Git 分支 | main（round-62 领域模块化代码截至 `501179c`，此后消息历史/线程标题缓存/待办服务端请求三批已另批合入；再续 `7941553` SidebarThreadTree 拖拽+自动化 dialog hook 化；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 未重启 dev server；各领域拆分批次以类型检查、Vitest 与生产构建验证；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-62：`3ab0020` 至 `501179c` 共 9 个领域拆分提交，覆盖模型/上下文/协作模式、Settings 异步边界、限额、项目组织、Catalogs 与 Queue 状态；其后按「读请求+缓存所有权」另批完成消息历史（`useDesktopMessageHistoryLoading.ts`）、线程标题缓存（`useDesktopThreadTitleCache.ts`）、待办服务端请求（`useDesktopPendingServerRequests.ts`）；`useDesktopState.ts` 约 4,766 → 3,483 行。最新定向测试 89/89、全量 424/426（两个既有 Windows 差异）、完整构建通过 |
+| 最近提交 | round-62：`3ab0020` 至 `501179c` 共 9 个领域拆分提交，覆盖模型/上下文/协作模式、Settings 异步边界、限额、项目组织、Catalogs 与 Queue 状态；其后按「读请求+缓存所有权」另批完成消息历史（`useDesktopMessageHistoryLoading.ts`）、线程标题缓存（`useDesktopThreadTitleCache.ts`）、待办服务端请求（`useDesktopPendingServerRequests.ts`）；`useDesktopState.ts` 约 4,766 → 3,483 行。最新 `7941553` 完成 SidebarThreadTree 第二轮组件化试点：抽出 `useProjectDragAndDrop.ts`（项目组拖拽布局引擎 + 纯函数 `projectProjectedDropIndex` 单测）与 `useAutomationDialog.ts`（自动化 dialog 全套状态/编排，新增 `removeAutomationsForThread`），组件脚本净减约 880 行。最新定向测试 sidebar 8/8、`vue-tsc` 通过、完整构建通过（主 chunk 560.97 kB） |
 
 ---
 ## 文档结构
