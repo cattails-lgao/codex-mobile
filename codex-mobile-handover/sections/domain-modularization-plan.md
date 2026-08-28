@@ -300,6 +300,11 @@
   - 新增 `useDesktopStateContext.test.ts`，覆盖 provider id 规范化、全局/provider/活跃线程 context 保留、陈旧线程裁剪与模型 fallback 读取。
   - 纯函数机械迁移，不新增 I/O、请求、响应式状态或缓存。
 
+- 2026-08-28：**collaboration preferences 领域完成**。新建 `useDesktopCollaborationPreferences.ts`，持有可用协作模式、按线程 context 持久化的选中模式，以及刷新/选择/裁剪动作。
+  - `useDesktopState()` 在线程切换时只调用 `syncSelectedThreadCollaborationMode`，线程列表裁剪时只调用 `pruneThreadCollaborationState`；不再直接读写 collaboration context map。
+  - 既有 `useDesktopState.test.ts` collaboration selection 用例覆盖 legacy storage、按线程切换和默认模式恢复；90 个状态/上下文定向测试通过。
+  - 请求语义不变：仍只在 ancillary refresh 中调用一次 `getAvailableCollaborationModes`，没有新增 watcher、定时器或存储写入。
+
 ## 剩余路由族迁移风险总览（截至 K 批后）
 
 > 依据逐 handler 闭包锚点盘点的全局评估，用于指导后续切分顺序。
