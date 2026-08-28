@@ -14,9 +14,7 @@ import {
   revertThreadFileChanges,
   rollbackThread,
   getThreadGroupsPage,
-  getThreadQueueState,
   getWorkspaceRootsState,
-  setThreadQueueState,
   setWorkspaceRootsState,
   getThreadTitleCache,
   persistThreadTitle,
@@ -31,7 +29,6 @@ import {
   subscribeCodexNotifications,
   startThreadTurn,
   type RpcNotification,
-  type ThreadQueueState,
   type WorkspaceRootsState,
 } from '../api/codexGateway'
 import { CodexApiError } from '../api/codexErrors'
@@ -237,12 +234,13 @@ import { createDesktopCollaborationPreferences } from './useDesktopCollaboration
 import { createDesktopRateLimits } from './useDesktopRateLimits'
 import { createDesktopProjectOrganization } from './useDesktopProjectOrganization'
 import { createDesktopCatalogs } from './useDesktopCatalogs'
+import {
+  createDesktopQueueState,
+  type FileAttachment,
+} from './useDesktopQueueState'
 
 type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
-const STASHED_MESSAGES_STORAGE_KEY = 'codex-web-local.stashed-messages.v1'
-const AUTO_COMPACT_THRESHOLD_STORAGE_KEY = 'codex-web-local.auto-compact-threshold.v1'
-const DEFAULT_AUTO_COMPACT_THRESHOLD = 10
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const BACKGROUND_THREAD_PAGINATION_DELAY_MS = 10_000
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
@@ -327,17 +325,6 @@ export function useDesktopState() {
   }
   const reasoningWrites = createLiveReasoningTextWrites(reasoningWriteDeps)
   const externalSessionByThreadId = ref<Record<string, UiExternalSession | null>>({})
-  type FileAttachment = { label: string; path: string; fsPath: string }
-  type QueuedMessage = {
-    id: string
-    text: string
-    imageUrls: string[]
-    skills: Array<{ name: string; path: string }>
-    fileAttachments: FileAttachment[]
-    collaborationMode: CollaborationModeKind
-    // 发送前自动压缩暂存的消息（awaitingCompaction=true），压缩完成后补发。
-    awaitingCompaction?: boolean
-  }
   type PendingTurnRequest = {
     text: string
     imageUrls: string[]
@@ -347,14 +334,8 @@ export function useDesktopState() {
     collaborationMode: CollaborationModeKind
     fallbackRetried: boolean
   }
-  const queuedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>({})
-  const queueProcessingByThreadId = ref<Record<string, boolean>>({})
-  // 发送前自动压缩暂存的消息（与服务端 queue 分离，见 STASHED_MESSAGES_STORAGE_KEY 注释）。
-  const stashedMessagesByThreadId = ref<Record<string, QueuedMessage[]>>(loadStashedMessagesMap())
-  const autoCompactThreshold = ref<number>(loadAutoCompactThreshold())
   // 补发/手动发送暂存消息期间抑制再次预检（压缩刚完成或用户主动发送，避免重复压缩）。
   let suppressAutoCompactStash = false
-  let hasLoadedPersistedQueueState = false
   const eventUnreadByThreadId = ref<Record<string, boolean>>({})
   const {
     activeProviderId,
@@ -527,6 +508,23 @@ export function useDesktopState() {
     allThreads.value.find((thread) => thread.id === selectedThreadId.value) ?? null,
   )
   const {
+    appendStashedMessage,
+    autoCompactThreshold,
+    clearQueueState,
+    enqueueQueuedMessage,
+    findQueuedMessage,
+    findStashedMessage,
+    getStashedMessages,
+    loadPersistedQueueStateIfNeeded,
+    pruneQueueState,
+    removeQueuedMessage,
+    reorderQueuedMessage,
+    scheduleQueueStateRefresh,
+    selectedThreadQueuedMessages,
+    setAutoCompactThreshold,
+    takeStashedMessages,
+  } = createDesktopQueueState(selectedThreadId)
+  const {
     hooksList,
     installedSkills,
     isHooksLoading,
@@ -697,7 +695,7 @@ export function useDesktopState() {
     saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
     // 刷新恢复：线程上下文用量同步到达后，若该线程有暂存消息则继续
     // 「检查用量 → 压缩（如需）→ 补发」流程（见方案 3.4 刷新恢复）。
-    const stashed = stashedMessagesByThreadId.value[normalizedThreadId]
+    const stashed = getStashedMessages(normalizedThreadId)
     if (stashed && stashed.length > 0 && autoCompactThreshold.value > 0) {
       const shouldCompact = usage.remainingContextPercent !== null
         && usage.remainingContextPercent <= autoCompactThreshold.value
@@ -961,11 +959,7 @@ export function useDesktopState() {
     )
     threadListedByServerById.value = pruneThreadStateMap(threadListedByServerById.value, activeThreadIds)
     persistedUserMessageByThreadId.value = pruneThreadStateMap(persistedUserMessageByThreadId.value, activeThreadIds)
-    const nextQueuedMessages = pruneThreadStateMap(queuedMessagesByThreadId.value, activeThreadIds)
-    if (nextQueuedMessages !== queuedMessagesByThreadId.value) {
-      queuedMessagesByThreadId.value = nextQueuedMessages
-      persistQueueState()
-    }
+    pruneQueueState(activeThreadIds)
     threadTokenUsageByThreadId.value = pruneThreadStateMap(threadTokenUsageByThreadId.value, activeThreadIds)
     eventUnreadByThreadId.value = pruneThreadStateMap(eventUnreadByThreadId.value, activeThreadIds)
     inProgressById.value = pruneThreadStateMap(inProgressById.value, activeThreadIds)
@@ -2316,43 +2310,6 @@ export function useDesktopState() {
     applyThreadFlags()
   }
 
-  function normalizeQueueStateForPersistence(state: Record<string, QueuedMessage[]>): ThreadQueueState {
-    const next: ThreadQueueState = {}
-    for (const [threadId, queue] of Object.entries(state)) {
-      const normalizedThreadId = threadId.trim()
-      if (!normalizedThreadId || queue.length === 0) continue
-      next[normalizedThreadId] = queue.map((message) => ({
-        id: message.id,
-        text: message.text,
-        imageUrls: [...message.imageUrls],
-        skills: message.skills.map((skill) => ({ name: skill.name, path: skill.path })),
-        fileAttachments: message.fileAttachments.map((attachment) => ({
-          label: attachment.label,
-          path: attachment.path,
-          fsPath: attachment.fsPath,
-        })),
-        collaborationMode: message.collaborationMode,
-      }))
-    }
-    return next
-  }
-
-  function persistQueueState(): void {
-    void setThreadQueueState(normalizeQueueStateForPersistence(queuedMessagesByThreadId.value)).catch(() => {
-      // Queue persistence is best-effort; keep the current in-memory queue usable.
-    })
-  }
-
-  async function loadPersistedQueueStateIfNeeded(): Promise<void> {
-    if (hasLoadedPersistedQueueState) return
-    hasLoadedPersistedQueueState = true
-    try {
-      queuedMessagesByThreadId.value = await getThreadQueueState()
-    } catch {
-      // Backend queue state is optional during startup.
-    }
-  }
-
   function removeArchivedThreadFromLoadedLists(threadId: string): void {
     loadedThreadListGroups = removeThreadFromGroups(loadedThreadListGroups, threadId)
     sourceGroups.value = removeThreadFromGroups(sourceGroups.value, threadId)
@@ -2953,60 +2910,6 @@ export function useDesktopState() {
     })
   }
 
-  function loadStashedMessagesMap(): Record<string, QueuedMessage[]> {
-    if (typeof window === 'undefined') return {}
-
-    try {
-      const raw = window.localStorage.getItem(STASHED_MESSAGES_STORAGE_KEY)
-      if (!raw) return {}
-
-      const parsed = JSON.parse(raw) as unknown
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-
-      const normalizedMap: Record<string, QueuedMessage[]> = {}
-      for (const [threadId, messages] of Object.entries(parsed as Record<string, unknown>)) {
-        if (!threadId || !Array.isArray(messages)) continue
-        const rows = messages.filter(
-          (message): message is QueuedMessage =>
-            !!message
-            && typeof message === 'object'
-            && typeof (message as QueuedMessage).id === 'string'
-            && typeof (message as QueuedMessage).text === 'string',
-        )
-        if (rows.length > 0) normalizedMap[threadId] = rows
-      }
-      return normalizedMap
-    } catch {
-      return {}
-    }
-  }
-
-  function saveStashedMessagesMap(): void {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(STASHED_MESSAGES_STORAGE_KEY, JSON.stringify(stashedMessagesByThreadId.value))
-  }
-
-  function loadAutoCompactThreshold(): number {
-    if (typeof window === 'undefined') return DEFAULT_AUTO_COMPACT_THRESHOLD
-
-    try {
-      const raw = window.localStorage.getItem(AUTO_COMPACT_THRESHOLD_STORAGE_KEY)
-      if (raw === null) return DEFAULT_AUTO_COMPACT_THRESHOLD
-      const value = Number(raw)
-      return Number.isFinite(value) && value >= 0 ? Math.round(value) : DEFAULT_AUTO_COMPACT_THRESHOLD
-    } catch {
-      return DEFAULT_AUTO_COMPACT_THRESHOLD
-    }
-  }
-
-  function setAutoCompactThreshold(value: number): void {
-    const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
-    if (next === autoCompactThreshold.value) return
-    autoCompactThreshold.value = next
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(AUTO_COMPACT_THRESHOLD_STORAGE_KEY, String(next))
-  }
-
   // 发送前预检：线程空闲且剩余上下文占比 ≤ 阈值时，把消息暂存并触发压缩；
   // 压缩完成后由 compactThreadById 的收口回调补发。返回 true 表示已暂存处理。
   async function maybeStashForAutoCompact(
@@ -3025,7 +2928,6 @@ export function useDesktopState() {
     if (!usage || usage.remainingContextPercent === null) return false
     if (usage.remainingContextPercent > autoCompactThreshold.value) return false
 
-    const queue = stashedMessagesByThreadId.value[threadId] ?? []
     const id = `stash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const collaborationMode: CollaborationModeKind =
       collaborationModeOverride === 'plan'
@@ -3033,11 +2935,7 @@ export function useDesktopState() {
         : collaborationModeOverride === 'default'
           ? 'default'
           : selectedCollaborationMode.value
-    stashedMessagesByThreadId.value = {
-      ...stashedMessagesByThreadId.value,
-      [threadId]: [...queue, { id, text, imageUrls, skills, fileAttachments, collaborationMode }],
-    }
-    saveStashedMessagesMap()
+    appendStashedMessage(threadId, { id, text, imageUrls, skills, fileAttachments, collaborationMode })
     if (!compactingThreadIds.value.has(threadId)) {
       void compactThreadById(threadId)
     }
@@ -3046,13 +2944,11 @@ export function useDesktopState() {
 
   // 压缩完成（或失败兜底）后补发该线程的暂存消息；线程忙时等待空闲再补发。
   async function flushStashedForThread(threadId: string): Promise<void> {
-    const stashed = stashedMessagesByThreadId.value[threadId]
+    const stashed = getStashedMessages(threadId)
     if (!stashed || stashed.length === 0) return
     if (inProgressById.value[threadId] === true) return
 
-    const messages = [...stashed]
-    stashedMessagesByThreadId.value = omitKey(stashedMessagesByThreadId.value, threadId)
-    saveStashedMessagesMap()
+    const messages = takeStashedMessages(threadId)
     suppressAutoCompactStash = true
     try {
       for (const msg of messages) {
@@ -3103,13 +2999,8 @@ export function useDesktopState() {
     const isInProgress = inProgressById.value[threadId] === true
 
     if (isInProgress && mode === 'queue') {
-      const queue = queuedMessagesByThreadId.value[threadId] ?? []
       const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const nextQueue = [...queue]
-      const insertIndex = typeof queueInsertIndex === 'number'
-        ? Math.max(0, Math.min(queueInsertIndex, nextQueue.length))
-        : nextQueue.length
-      nextQueue.splice(insertIndex, 0, {
+      enqueueQueuedMessage(threadId, {
         id,
         text: nextText,
         imageUrls,
@@ -3120,12 +3011,7 @@ export function useDesktopState() {
           : collaborationModeOverride === 'default'
             ? 'default'
             : selectedCollaborationMode.value,
-      })
-      queuedMessagesByThreadId.value = {
-        ...queuedMessagesByThreadId.value,
-        [threadId]: nextQueue,
-      }
-      persistQueueState()
+      }, queueInsertIndex)
       return
     }
 
@@ -3388,29 +3274,6 @@ export function useDesktopState() {
     } catch (unknownError) {
       throw unknownError
     }
-  }
-
-  async function processQueuedMessages(threadId: string): Promise<void> {
-    if (queueProcessingByThreadId.value[threadId] === true) return
-    queueProcessingByThreadId.value = {
-      ...queueProcessingByThreadId.value,
-      [threadId]: true,
-    }
-    try {
-      queuedMessagesByThreadId.value = await getThreadQueueState()
-    } catch {
-      // Backend queue state is optional during transient bridge failures.
-    } finally {
-      queueProcessingByThreadId.value = omitKey(queueProcessingByThreadId.value, threadId)
-    }
-  }
-
-  function scheduleQueueStateRefresh(threadId: string): void {
-    void processQueuedMessages(threadId)
-    if (typeof window === 'undefined') return
-    window.setTimeout(() => {
-      void processQueuedMessages(threadId)
-    }, 650)
   }
 
   async function interruptSelectedThreadTurn(): Promise<void> {
@@ -3938,74 +3801,15 @@ export function useDesktopState() {
     interruptBlockedUntilPersistedByThreadId.value = {}
     threadListedByServerById.value = {}
     persistedUserMessageByThreadId.value = {}
-    queuedMessagesByThreadId.value = {}
-    queueProcessingByThreadId.value = {}
-    stashedMessagesByThreadId.value = {}
-    saveStashedMessagesMap()
-    persistQueueState()
+    clearQueueState()
     setCodexRateLimit(null)
     threadTokenUsageByThreadId.value = {}
-  }
-
-  const selectedThreadQueuedMessages = computed<QueuedMessage[]>(() => {
-    const threadId = selectedThreadId.value
-    if (!threadId) return []
-    // 面板合并展示：暂存消息（等待压缩后补发）置前 + 服务端 queue 消息。
-    const queue = queuedMessagesByThreadId.value[threadId] ?? []
-    const stashed = stashedMessagesByThreadId.value[threadId] ?? []
-    const stashedRows = stashed.map((message) => ({ ...message, awaitingCompaction: true }))
-    return [...stashedRows, ...queue]
-  })
-
-  function removeQueuedMessage(messageId: string): void {
-    const threadId = selectedThreadId.value
-    if (!threadId) return
-    const stashed = stashedMessagesByThreadId.value[threadId]
-    if (stashed?.some((m) => m.id === messageId)) {
-      const next = stashed.filter((m) => m.id !== messageId)
-      stashedMessagesByThreadId.value = next.length > 0
-        ? { ...stashedMessagesByThreadId.value, [threadId]: next }
-        : omitKey(stashedMessagesByThreadId.value, threadId)
-      saveStashedMessagesMap()
-      return
-    }
-    const queue = queuedMessagesByThreadId.value[threadId]
-    if (!queue) return
-    const next = queue.filter((m) => m.id !== messageId)
-    queuedMessagesByThreadId.value = next.length > 0
-      ? { ...queuedMessagesByThreadId.value, [threadId]: next }
-      : omitKey(queuedMessagesByThreadId.value, threadId)
-    persistQueueState()
-  }
-
-  function reorderQueuedMessage(draggedId: string, targetId: string): void {
-    const threadId = selectedThreadId.value
-    if (!threadId) return
-    const queue = queuedMessagesByThreadId.value[threadId]
-    if (!queue) return
-    // 暂存消息不参与排序（等待压缩后补发，顺序固定置前）。
-    const stashed = stashedMessagesByThreadId.value[threadId]
-    if (stashed?.some((m) => m.id === draggedId || m.id === targetId)) return
-
-    const fromIndex = queue.findIndex((m) => m.id === draggedId)
-    const toIndex = queue.findIndex((m) => m.id === targetId)
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
-
-    const next = [...queue]
-    const [moved] = next.splice(fromIndex, 1)
-    next.splice(toIndex, 0, moved)
-    queuedMessagesByThreadId.value = {
-      ...queuedMessagesByThreadId.value,
-      [threadId]: next,
-    }
-    persistQueueState()
   }
 
   function steerQueuedMessage(messageId: string): void {
     const threadId = selectedThreadId.value
     if (!threadId) return
-    const stashed = stashedMessagesByThreadId.value[threadId]
-    const stashedMessage = stashed?.find((m) => m.id === messageId)
+    const stashedMessage = findStashedMessage(threadId, messageId)
     if (stashedMessage) {
       // 用户主动立即发送暂存消息：跳过预检直接发送（不压缩）。
       removeQueuedMessage(messageId)
@@ -4022,9 +3826,7 @@ export function useDesktopState() {
       })
       return
     }
-    const queue = queuedMessagesByThreadId.value[threadId]
-    if (!queue) return
-    const msg = queue.find((m) => m.id === messageId)
+    const msg = findQueuedMessage(threadId, messageId)
     if (!msg) return
     removeQueuedMessage(messageId)
     setSelectedCollaborationMode(msg.collaborationMode)
