@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-62 领域模块化代码截至 `501179c`，此后消息历史/线程标题缓存/待办服务端请求三批已另批合入；再续 `7941553` SidebarThreadTree 拖拽+自动化 dialog hook 化；与 `origin/main` 同步） |
+| Git 分支 | main（round-62 领域模块化代码截至 `501179c`，此后消息历史/线程标题缓存/待办服务端请求三批已另批合入；再续 `7941553` SidebarThreadTree 拖拽+自动化 dialog hook 化；ThreadConversation hook 系列抽取至 `d3b3eb5`；与 `origin/main` 同步至 `4e9fe75`） |
 | Dev 端口 | 4173 |
 | Dev 状态 | 未重启 dev server；各领域拆分批次以类型检查、Vitest 与生产构建验证；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-62：`3ab0020` 至 `501179c` 共 9 个领域拆分提交，覆盖模型/上下文/协作模式、Settings 异步边界、限额、项目组织、Catalogs 与 Queue 状态；其后按「读请求+缓存所有权」另批完成消息历史（`useDesktopMessageHistoryLoading.ts`）、线程标题缓存（`useDesktopThreadTitleCache.ts`）、待办服务端请求（`useDesktopPendingServerRequests.ts`）；`useDesktopState.ts` 约 4,766 → 3,483 行。最新 `7941553` 完成 SidebarThreadTree 第二轮组件化试点：抽出 `useProjectDragAndDrop.ts`（项目组拖拽布局引擎 + 纯函数 `projectProjectedDropIndex` 单测）与 `useAutomationDialog.ts`（自动化 dialog 全套状态/编排，新增 `removeAutomationsForThread`），组件脚本净减约 880 行。最新定向测试 sidebar 8/8、`vue-tsc` 通过、完整构建通过（主 chunk 560.97 kB） |
+| 最近提交 | round-62：`3ab0020` 至 `501179c` 共 9 个领域拆分提交，覆盖模型/上下文/协作模式、Settings 异步边界、限额、项目组织、Catalogs 与 Queue 状态；其后按「读请求+缓存所有权」另批完成消息历史（`useDesktopMessageHistoryLoading.ts`）、线程标题缓存（`useDesktopThreadTitleCache.ts`）、待办服务端请求（`useDesktopPendingServerRequests.ts`）；`useDesktopState.ts` 约 4,766 → 3,483 行。`7941553` 完成 SidebarThreadTree 第二轮组件化试点（`useProjectDragAndDrop.ts` + `useAutomationDialog.ts`，组件脚本净减约 880 行）。`7941553` 之后至 `4e9fe75`：ThreadConversation 完成 markdown 渲染/文件变更摘要/diff 查看器/回复复制 fork/命令执行显示/fileChange 撤销重做/file 链接菜单+图片显示共 8 个 hook 抽取（`f6cd11f`…`61307d9`）；App.vue 抽出 `useSidebarUi.ts`（`872a1a5`）与 `useRightPanel.ts`（`5baeb8c`）；`1edd0cd` 修复 props 在 hook 之后声明导致的 TDZ 崩溃；`d3b3eb5` 新增每轮耗时显示（`sumTurnDurations` 按 turnId 聚合 worked 消息 `durationMs`）；`db1db6d` 增加 375px 移动端右侧面板抽屉 Playwright 回归（`scripts/verify-mobile-375.cjs`）；`4e9fe75` 版本 bump 至 0.1.108。审查结论（2026-08-29）：全量 hook 抽取与原实现逐行对照无行为漂移；`vue-tsc` 与 Vitest 507/509 通过（2 个失败为 `codexAppServerBridge.archive.test.ts` 的 Windows 文件 mode/符号链接环境性旧问题，与本轮无关）；`useReplyCopyFork` 复制复位计时器补回卸载清理。最新定向测试 sidebar 8/8、`vue-tsc` 通过 |
 
 ---
 ## 文档结构
