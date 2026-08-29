@@ -4,7 +4,7 @@
 // useDesktopStateUtils.ts；本文件只依赖 A 批的纯函数与 codexGateway，不触碰
 // 响应式 ref，避免闭包共享 ref 造成的循环依赖。
 import type { UiMessage, UiThreadTokenUsage, CollaborationModeKind } from '../types/codex'
-import { persistThreadReasoningArchive } from '../api/codexGateway'
+import { persistThreadReasoningArchive, persistThreadTurnDuration } from '../api/codexGateway'
 import { toProjectName } from '../pathUtils.js'
 import {
   createStringKeyedRecord,
@@ -18,6 +18,7 @@ const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'
 const THREAD_TOKEN_USAGE_STORAGE_KEY = 'codex-web-local.thread-token-usage.v1'
 const THREAD_REASONING_STORAGE_KEY = 'codex-web-local.thread-reasoning.v1'
+const THREAD_TURN_DURATIONS_STORAGE_KEY = 'codex-web-local.thread-turn-durations.v1'
 const THREAD_LAST_PLAN_STORAGE_KEY = 'codex-web-local.thread-last-plan.v1'
 export const LIVE_REASONING_SNAPSHOT_STORAGE_KEY = 'codex-web-local.live-reasoning-snapshot.v1'
 const THREAD_TERMINAL_OPEN_STORAGE_KEY = 'codex-web-local.thread-terminal-open.v1'
@@ -75,6 +76,55 @@ export function savePersistedReasoningMap(state: Record<string, UiMessage[]>): v
   for (const [threadId, messages] of Object.entries(state)) {
     if (threadId && messages.length > 0) {
       void persistThreadReasoningArchive(threadId, messages)
+    }
+  }
+}
+
+// round-65：轮耗时存档。app-server 不把 turn 完成耗时持久化到 thread/read
+// （仅流式通知），前端把每轮耗时存到 localStorage（刷新本浏览器即恢复），
+// 并镜像到桥接层 sidecar（换浏览器/刷新后也能从同一台服务端恢复）。
+export type ThreadTurnDurationMap = Record<string, Record<string, number>>
+
+export function loadPersistedTurnDurationMap(): ThreadTurnDurationMap {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_TURN_DURATIONS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: ThreadTurnDurationMap = {}
+    for (const [threadId, turns] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!threadId || !turns || typeof turns !== 'object' || Array.isArray(turns)) continue
+      const perTurn: Record<string, number> = {}
+      for (const [turnId, durationMs] of Object.entries(turns as Record<string, unknown>)) {
+        if (!turnId || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) continue
+        perTurn[turnId] = Math.round(durationMs)
+      }
+      if (Object.keys(perTurn).length > 0) result[threadId] = perTurn
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function savePersistedTurnDurationMap(state: ThreadTurnDurationMap): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (Object.keys(state).length === 0) {
+      window.localStorage.removeItem(THREAD_TURN_DURATIONS_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(THREAD_TURN_DURATIONS_STORAGE_KEY, JSON.stringify(state))
+    }
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+  // round-65：镜像到桥接层，刷新/换浏览器后仍能从同一台服务端恢复轮耗时。
+  for (const [threadId, turns] of Object.entries(state)) {
+    if (!threadId) continue
+    for (const [turnId, durationMs] of Object.entries(turns)) {
+      if (!turnId || typeof durationMs !== 'number' || durationMs <= 0) continue
+      void persistThreadTurnDuration(threadId, turnId, durationMs)
     }
   }
 }

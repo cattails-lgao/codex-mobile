@@ -22,8 +22,10 @@ type ReadJsonBody = (req: IncomingMessage) => Promise<unknown>
 
 const MAX_THREAD_TITLES = 500
 const MAX_REASONING_MESSAGES_PER_THREAD = 20
+const MAX_TURN_DURATIONS_PER_THREAD = 200
 const PINNED_THREAD_IDS_KEY = 'pinned-thread-ids'
 const THREAD_REASONING_KEY = 'thread-reasoning'
+const THREAD_TURN_DURATIONS_KEY = 'thread-turn-durations'
 const FIRST_LAUNCH_PLUGINS_CARD_DISMISSED_KEY = 'first-launch-plugins-card-dismissed'
 
 type ThreadTitleCache = { titles: Record<string, string>; order: string[] }
@@ -242,6 +244,87 @@ async function mergeThreadReasoningArchive(threadId: string, messages: unknown[]
   await writeThreadReasoningArchive(archive)
 }
 
+// round-65：跨浏览器共享的轮耗时存档。app-server 不把 turn 完成耗时持久化到
+// thread/read（只有流式通知，见 useDesktopState 的 turn/completed 处理），
+// 前端把每轮耗时镜像一份到桥接层的全局状态文件（与 thread-titles/reasoning
+// 同源），刷新/换浏览器后仍能从同一台服务端恢复「本轮过程」标题旁的耗时徽标。
+type ThreadTurnDurations = Record<string, Record<string, number>>
+
+function normalizeThreadTurnDurations(value: unknown): ThreadTurnDurations {
+  const record = asRecord(value)
+  if (!record) return {}
+  const next: ThreadTurnDurations = {}
+  for (const [threadId, turns] of Object.entries(record)) {
+    if (!threadId) continue
+    const turnRecord = asRecord(turns)
+    if (!turnRecord) continue
+    const perTurn: Record<string, number> = {}
+    for (const [turnId, durationMs] of Object.entries(turnRecord)) {
+      if (!turnId || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) continue
+      perTurn[turnId] = Math.round(durationMs)
+    }
+    const keys = Object.keys(perTurn)
+    if (keys.length > 0) {
+      next[threadId] = keys.length > MAX_TURN_DURATIONS_PER_THREAD
+        ? Object.fromEntries(keys.slice(-MAX_TURN_DURATIONS_PER_THREAD).map((k) => [k, perTurn[k]!]))
+        : perTurn
+    }
+  }
+  return next
+}
+
+async function readThreadTurnDurations(): Promise<ThreadTurnDurations> {
+  const statePath = getCodexGlobalStatePath()
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    const payload = asRecord(JSON.parse(raw)) ?? {}
+    return normalizeThreadTurnDurations(payload[THREAD_TURN_DURATIONS_KEY])
+  } catch {
+    return {}
+  }
+}
+
+async function writeThreadTurnDurations(next: ThreadTurnDurations): Promise<void> {
+  const statePath = getCodexGlobalStatePath()
+  let payload: Record<string, unknown> = {}
+  try {
+    const raw = await readFile(statePath, 'utf8')
+    payload = asRecord(JSON.parse(raw)) ?? {}
+  } catch {
+    payload = {}
+  }
+  const normalized = normalizeThreadTurnDurations(next)
+  if (Object.keys(normalized).length > 0) {
+    payload[THREAD_TURN_DURATIONS_KEY] = normalized
+  } else {
+    delete payload[THREAD_TURN_DURATIONS_KEY]
+  }
+  await writeFile(statePath, JSON.stringify(payload), 'utf8')
+}
+
+async function mergeThreadTurnDuration(threadId: string, turnId: string, durationMs: number): Promise<void> {
+  const store = await readThreadTurnDurations()
+  const perTurn = { ...(store[threadId] ?? {}) }
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    perTurn[turnId] = Math.round(durationMs)
+    const keys = Object.keys(perTurn)
+    if (keys.length > MAX_TURN_DURATIONS_PER_THREAD) {
+      for (const stale of keys.slice(0, keys.length - MAX_TURN_DURATIONS_PER_THREAD)) {
+        delete perTurn[stale]
+      }
+    }
+    store[threadId] = perTurn
+  } else {
+    delete perTurn[turnId]
+    if (Object.keys(perTurn).length > 0) {
+      store[threadId] = perTurn
+    } else {
+      delete store[threadId]
+    }
+  }
+  await writeThreadTurnDurations(store)
+}
+
 async function readFirstLaunchPluginsCardDismissed(): Promise<boolean> {
   const statePath = getCodexGlobalStatePath()
   try {
@@ -432,6 +515,26 @@ export async function handleThreadPreferencesHttpRequest(
     }
     const messages = Array.isArray(payload?.messages) ? payload.messages : []
     await mergeThreadReasoningArchive(threadId, messages)
+    setJson(res, 200, { ok: true })
+    return true
+  }
+
+  if (req.method === 'GET' && url.pathname === '/codex-api/thread-turn-durations') {
+    const durations = await readThreadTurnDurations()
+    setJson(res, 200, { data: durations })
+    return true
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/codex-api/thread-turn-durations') {
+    const payload = asRecord(await readJsonBody(req))
+    const threadId = typeof payload?.threadId === 'string' ? payload.threadId.trim() : ''
+    const turnId = typeof payload?.turnId === 'string' ? payload.turnId.trim() : ''
+    if (!threadId || !turnId) {
+      setJson(res, 400, { error: 'Missing threadId or turnId' })
+      return true
+    }
+    const durationMs = typeof payload?.durationMs === 'number' ? payload.durationMs : 0
+    await mergeThreadTurnDuration(threadId, turnId, durationMs)
     setJson(res, 200, { ok: true })
     return true
   }

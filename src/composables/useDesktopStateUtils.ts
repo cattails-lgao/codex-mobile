@@ -547,6 +547,33 @@ export function insertTurnSummaryMessage(messages: UiMessage[], summary: TurnSum
   return next
 }
 
+/**
+ * round-65：把服务端/本地持久化的各轮耗时（threadId 已限定）合入消息流。
+ * 仅当该 turn 尚无 worked 消息时才补一条（live turn 摘要已插入时跳过，避免重复）。
+ * 返回的消息只用于按 turnId 聚合耗时（sumTurnDurations），不会作为过程行渲染。
+ */
+export function insertPersistedTurnDurations(
+  messages: UiMessage[],
+  turnDurations: Record<string, number> | undefined,
+): UiMessage[] {
+  if (!turnDurations) return messages
+  const existingTurnIds = new Set<string>()
+  for (const message of messages) {
+    if (message.messageType === WORKED_MESSAGE_TYPE && message.turnId) {
+      existingTurnIds.add(message.turnId)
+    }
+  }
+  const extra: UiMessage[] = []
+  for (const [turnId, durationMs] of Object.entries(turnDurations)) {
+    if (!turnId || existingTurnIds.has(turnId)) continue
+    if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) continue
+    extra.push(buildTurnSummaryMessage({ turnId, durationMs: Math.round(durationMs) }))
+    existingTurnIds.add(turnId)
+  }
+  if (extra.length === 0) return messages
+  return [...messages, ...extra]
+}
+
 export function omitKey<TValue>(record: Record<string, TValue>, key: string): Record<string, TValue> {
   if (!(key in record)) return record
   const next = { ...record }
