@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import type { UiMessage, UiPlanStep } from '../../types/codex'
 import type { TurnFileChangeSummary } from '../../utils/conversationFileChanges'
 import { readPlanData } from '../../utils/plan'
@@ -158,6 +158,16 @@ export function createReplyCopyFork(deps: ReplyCopyForkDeps) {
       }
       copiedMessageResetTimer = null
     }, 1800)
+  }
+
+  // 直接在 hook 内清理复位计时器；单测在组件外调用工厂函数，需守卫无实例场景。
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      if (copiedMessageResetTimer) {
+        clearTimeout(copiedMessageResetTimer)
+        copiedMessageResetTimer = null
+      }
+    })
   }
 
   async function copyUserMessage(messageId: string): Promise<void> {
