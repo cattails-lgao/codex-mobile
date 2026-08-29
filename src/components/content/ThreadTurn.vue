@@ -23,9 +23,13 @@
         <IconTablerChevronDown v-if="isProcessExpanded" class="conversation-turn-process-toggle-icon" />
         <IconTablerChevronRight v-else class="conversation-turn-process-toggle-icon" />
         <span>{{ t('Turn process') }}</span>
+        <span v-if="durationMs != null && durationMs > 0" class="conversation-turn-time">{{ formatTurnDuration(durationMs) }}</span>
         <span class="conversation-turn-process-count">{{ t('{n} process items', { n: processItemCount }) }}</span>
       </button>
-      <div v-else class="conversation-turn-process-heading">{{ t('Turn process') }}</div>
+      <div v-else class="conversation-turn-process-heading">
+        {{ t('Turn process') }}
+        <span v-if="durationMs != null && durationMs > 0" class="conversation-turn-time">{{ formatTurnDuration(durationMs) }}</span>
+      </div>
       <ol v-if="isProcessExpanded" class="conversation-turn-items conversation-turn-process-items">
         <slot v-for="item in processItems" :key="item.message.id" :item="item" section="process" />
         <li v-for="anchorMessageId in fileChangeAnchorIds" :key="`file-change-${anchorMessageId}`" class="conversation-turn-row conversation-turn-file-change">
@@ -39,10 +43,6 @@
         <slot :item="finalItem" section="final" />
       </ol>
     </section>
-
-    <p v-if="durationMs != null && durationMs > 0" class="conversation-turn-time">
-      {{ formatTurnDuration(durationMs) }}
-    </p>
   </li>
 </template>
 
@@ -139,7 +139,11 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 .conversation-turn-time {
-  @apply m-0 self-start pl-0.5 text-[11px] leading-tight text-zinc-400;
+  @apply inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-500 tabular-nums whitespace-nowrap;
+}
+
+:global(:root.dark) .conversation-turn-time {
+  @apply bg-zinc-800 text-zinc-400;
 }
 
 .conversation-turn-row {
@@ -166,7 +170,4 @@ watch(processItemCount, (nextCount, previousCount) => {
   @apply text-zinc-500;
 }
 
-:global(:root.dark) .conversation-turn-time {
-  @apply text-zinc-500;
-}
 </style>

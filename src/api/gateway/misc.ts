@@ -398,6 +398,33 @@ export async function persistThreadReasoningArchive(threadId: string, messages: 
   }
 }
 
+export type ThreadTurnDurationMap = Record<string, Record<string, number>>
+
+// round-65：跨浏览器共享的轮耗时存档。app-server 不持久化 turn 完成耗时，
+// 前端把每轮耗时镜像到桥接层（thread-turn-durations），刷新/换浏览器后仍能恢复。
+export async function getThreadTurnDurationArchive(): Promise<ThreadTurnDurationMap> {
+  try {
+    const response = await fetch('/codex-api/thread-turn-durations')
+    if (!response.ok) return {}
+    const envelope = (await response.json()) as { data?: ThreadTurnDurationMap }
+    return envelope.data ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export async function persistThreadTurnDuration(threadId: string, turnId: string, durationMs: number): Promise<void> {
+  try {
+    await fetch('/codex-api/thread-turn-durations', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId, turnId, durationMs }),
+    })
+  } catch {
+    // Best-effort persist
+  }
+}
+
 export async function getPinnedThreadState(): Promise<ThreadPinnedState> {
   try {
     const response = await fetch('/codex-api/thread-pins')

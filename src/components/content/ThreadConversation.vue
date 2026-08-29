@@ -903,8 +903,14 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
   })) {
     const request = group.items.find((item) => item.kind === 'user')
     const finalItem = group.items.find((item) => item.kind === 'final-assistant')
+    // round-65：worked（“Worked for X”）消息只用于按 turnId 聚合耗时徽标，
+    // 不再作为过程区底部行渲染（耗时已显示在「本轮过程」标题旁）。
     const processItems = group.items
-      .filter((item) => item !== request && item !== finalItem)
+      .filter(
+        (item) => item !== request
+          && item !== finalItem
+          && item.message.messageType !== 'worked',
+      )
       .map((item) => ({
         message: item.message,
         presentation: item.kind === 'plan' ? 'plan' as const : 'process' as const,

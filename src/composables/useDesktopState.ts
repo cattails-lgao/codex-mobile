@@ -1,4 +1,4 @@
-﻿import { computed, ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
 
   archiveThread,
@@ -17,6 +17,7 @@ import {
   persistThreadTitle,
   getThreadReasoningArchive,
   persistThreadReasoningArchive,
+  getThreadTurnDurationArchive,
   resumeThread,
   compactThread,
   normalizeFuzzyFileSearchResults,
@@ -78,6 +79,7 @@ import {
   findReasoningAnchorIndex,
   flattenThreads,
   formatTurnDuration,
+  insertPersistedTurnDurations,
   insertTurnSummaryMessage,
   isCodexCliMissingError,
   isOptimisticUserMessage,
@@ -200,6 +202,7 @@ import {
 import {
   loadLastPlanMap,
   loadPersistedReasoningMap,
+  loadPersistedTurnDurationMap,
   loadReadStateMap,
   loadSelectedThreadId,
   loadThreadTerminalOpenMap,
@@ -207,6 +210,7 @@ import {
   loadUnreadCutoffIso,
   saveLastPlanMap,
   savePersistedReasoningMap,
+  savePersistedTurnDurationMap,
   saveReadStateMap,
   saveSelectedThreadId,
   saveThreadTerminalOpenMap,
@@ -292,6 +296,9 @@ export function useDesktopState() {
   const liveAgentMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const injectedSystemMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const persistedReasoningByThreadId = ref<Record<string, UiMessage[]>>(loadPersistedReasoningMap())
+  // round-65：每线程各轮耗时存档（threadId → turnId → durationMs），刷新/换浏览器后
+  // 仍能恢复「本轮过程」标题旁的耗时徽标（服务端 sidecar + localStorage 镜像）。
+  const persistedTurnDurationsByThreadId = ref<Record<string, Record<string, number>>>(loadPersistedTurnDurationMap())
   const liveReasoningTextByThreadId = ref<Record<string, string>>({})
   // 本 app-server（v0.146+）不推送 item/reasoning/textDelta 增量通道，reasoning
   // 内容只随 item/started + item/completed 全量 item 到达；这里按 itemId 记录已
@@ -672,8 +679,9 @@ export function useDesktopState() {
     )
 
     const summary = turnSummaryByThreadId.value[threadId]
-    if (!summary) return combined
-    return insertTurnSummaryMessage(combined, summary)
+    const withSummary = summary ? insertTurnSummaryMessage(combined, summary) : combined
+    // round-65：合入持久化的各轮耗时（live turn 摘要已插入时跳过，避免重复）。
+    return insertPersistedTurnDurations(withSummary, persistedTurnDurationsByThreadId.value[threadId])
   })
   // 需求 9：当前线程「中断后服务端移除未提交 turn」时待回填的用户消息载荷
   const interruptedUnsubmittedMessage = computed<InterruptRecoverPayload | null>(() => {
@@ -995,6 +1003,29 @@ export function useDesktopState() {
         turnSummaryByThreadId.value = omitKey(turnSummaryByThreadId.value, threadId)
       }
     }
+  }
+
+  // round-65：轮耗时持久化。app-server 不持久化 turn 完成耗时（仅流式通知），
+  // 这里把每轮耗时记入本地存档并镜像到服务端 sidecar，刷新/换浏览器后仍能恢复
+  // 「本轮过程」标题旁的耗时徽标。
+  function rememberTurnDuration(threadId: string, turnId: string, durationMs: number): void {
+    if (!threadId || !turnId) return
+    const perThread = { ...(persistedTurnDurationsByThreadId.value[threadId] ?? {}) }
+    const normalized = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0
+    if (normalized <= 0) {
+      delete perThread[turnId]
+    } else {
+      perThread[turnId] = normalized
+    }
+    if (Object.keys(perThread).length === 0) {
+      persistedTurnDurationsByThreadId.value = omitKey(persistedTurnDurationsByThreadId.value, threadId)
+    } else {
+      persistedTurnDurationsByThreadId.value = {
+        ...persistedTurnDurationsByThreadId.value,
+        [threadId]: perThread,
+      }
+    }
+    savePersistedTurnDurationMap(persistedTurnDurationsByThreadId.value)
   }
 
   function setThreadInProgress(threadId: string, nextInProgress: boolean): void {
@@ -1855,6 +1886,7 @@ export function useDesktopState() {
         turnId: completedTurn.turnId,
         durationMs,
       })
+      rememberTurnDuration(completedTurn.threadId, completedTurn.turnId, durationMs)
       if (activeTurnIdByThreadId.value[completedTurn.threadId]) {
         activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, completedTurn.threadId)
       }
@@ -3235,6 +3267,7 @@ export function useDesktopState() {
     if (stopNotificationStream) return
     void loadPendingServerRequestsFromBridge()
     void loadThreadReasoningArchiveIfNeeded()
+    void loadThreadTurnDurationsIfNeeded()
     stopNotificationStream = subscribeCodexNotifications((notification) => {
       if (notification.method === 'ready') {
         clearAllTransientTurnErrors()
@@ -3279,6 +3312,39 @@ export function useDesktopState() {
       if (changed) {
         persistedReasoningByThreadId.value = next
         savePersistedReasoningMap(next)
+      }
+    } catch {
+      // Best-effort restore; localStorage remains the fallback.
+    }
+  }
+
+  // round-65：启动时从桥接层恢复跨浏览器轮耗时存档。服务端 sidecar 有该线程
+  // 的耗时数据时以它为准（覆盖本浏览器 localStorage，保证换浏览器后一致）。
+  async function loadThreadTurnDurationsIfNeeded(): Promise<void> {
+    try {
+      const archive = await getThreadTurnDurationArchive()
+      const entries = Object.entries(archive)
+      if (entries.length === 0) return
+      const next = { ...persistedTurnDurationsByThreadId.value }
+      let changed = false
+      for (const [threadId, turns] of entries) {
+        if (!threadId || !turns || typeof turns !== 'object' || Array.isArray(turns)) continue
+        const perTurn: Record<string, number> = {}
+        for (const [turnId, durationMs] of Object.entries(turns as Record<string, unknown>)) {
+          if (!turnId || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) continue
+          perTurn[turnId] = Math.round(durationMs)
+        }
+        if (Object.keys(perTurn).length === 0) continue
+        const merged = { ...(next[threadId] ?? {}), ...perTurn }
+        const mergedKeys = Object.keys(merged)
+        next[threadId] = mergedKeys.length > 200
+          ? Object.fromEntries(mergedKeys.slice(-200).map((k) => [k, merged[k]!]))
+          : merged
+        changed = true
+      }
+      if (changed) {
+        persistedTurnDurationsByThreadId.value = next
+        savePersistedTurnDurationMap(next)
       }
     } catch {
       // Best-effort restore; localStorage remains the fallback.
@@ -3343,6 +3409,7 @@ export function useDesktopState() {
     liveAgentMessagesByThreadId.value = {}
     liveReasoningTextByThreadId.value = {}
     persistedReasoningByThreadId.value = {}
+    persistedTurnDurationsByThreadId.value = {}
     liveCommandsByThreadId.value = {}
     liveFileChangeMessagesByThreadId.value = {}
     turnIndexByTurnIdByThreadId.value = {}
