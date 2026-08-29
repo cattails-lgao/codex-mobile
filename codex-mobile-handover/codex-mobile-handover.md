@@ -8,10 +8,10 @@
 |---|---|
 | Git 分支 | main（round-64 已并入 v0.1.109：回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | 未重启 dev server；round-64 以类型检查、生产构建与移动端 Browser Use 实测验证、发布闭环（git tag/GitHub Release；npm 由用户 publish）；不操作 5173 |
+| Dev 状态 | 未重启 dev server；round-64 以类型检查、生产构建与移动端 Browser Use 实测验证，发布链路（git tag/GitHub Release/npm `0.1.109`）闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `71e7cd8`（round-64）回收站固定高度（`recycle-bin-content` `h-64 overflow-y-auto`）、思考强度无显式选择默认 `medium`、`ComposerPopover` 面板改 viewport `fixed` 定位修复 H5「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 裁剪不可见；同步更新推理默认断言与 H5 手工用例；版本 bump 至 0.1.109。上一轮 round-63（v0.1.108）hook 化已完整发布 |
+| 最近提交 | `71e7cd8`（round-64）回收站固定高度（`recycle-bin-content` `h-64 overflow-y-auto`）、思考强度无显式选择默认 `medium`、`ComposerPopover` 面板改 viewport `fixed` 定位修复 H5「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 裁剪不可见；同步更新推理默认断言与 H5 手工用例；版本 bump 至 0.1.109。round-64 发布链路（tag/GitHub Release/npm `0.1.109`）已全部闭环 |
 
 ---
 ## 文档结构
@@ -149,7 +149,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
-- **v0.1.109 发布（2026-08-29，round-64）**：版本 `0.1.109`（提交 `71e7cd8`）。收录今天三处改动：①回收站弹窗固定高度（`recycle-bin-content` 容器 `h-64 overflow-y-auto`）；②思考强度无显式选择时默认 `medium`（`useDesktopModelPreferences.ts`）；③`ComposerPopover` 面板改 viewport `fixed` 定位，修复 H5 下「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 滚容器裁剪不可见。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、移动端 Browser Use 实测三项全部 PASS（菜单可弹出、回收站固定高度、推理强度 Medium）。git tag `v0.1.109` 与 GitHub Release 由维护者创建；**npm publish 由用户执行**（发布后确认 `codex-mobile-re@0.1.109` 为 `latest`）。详见 [round-64](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md)。
+- **v0.1.109 发布（2026-08-29，round-64，已全部闭环）**：版本 `0.1.109`（提交 `71e7cd8`）。收录今天三处改动：①回收站弹窗固定高度（`recycle-bin-content` 容器 `h-64 overflow-y-auto`）；②思考强度无显式选择时默认 `medium`（`useDesktopModelPreferences.ts`）；③`ComposerPopover` 面板改 viewport `fixed` 定位，修复 H5 下「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 滚容器裁剪不可见。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、移动端 Browser Use 实测三项全部 PASS（菜单可弹出、回收站固定高度、推理强度 Medium）。git tag `v0.1.109` 与 GitHub Release 由维护者创建；`codex-mobile-re@0.1.109` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.109`），发布链路全部闭环。详见 [round-64](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md)。
 - **v0.1.108 发布（2026-08-29，已全部完成）**：版本 `0.1.108`（`4e9fe75` bump）。收录每轮耗时显示（`d3b3eb5`）、props TDZ 白屏修复（`1edd0cd`）、8 个 ThreadConversation hook 抽取与 App.vue `useSidebarUi`/`useRightPanel` 抽取、`useReplyCopyFork` 复位计时器卸载清理补回（`dff3944`）。hook 抽取逐行对照无行为漂移；`vue-tsc` 通过、Vitest 507/509（2 个失败为 `codexAppServerBridge.archive.test.ts` 的 Windows 文件 mode/符号链接环境性旧问题）。main 已同步至 `e943856`（`dc839b6`/`004299d`/`e943856` 为发布与交接文档提交）；tag `v0.1.108`、GitHub Release 与 `codex-mobile-re@0.1.108`（npm `latest`）全部闭环，见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.108。详见 [round-63](rounds/round-63-v0.1.108-hooks-and-release.md)。
 - **round-61 v0.1.107 线程状态修复（2026-08-27，已发布）**：版本已升至 **`0.1.107`**。修复 `thread/list` 在异步后处理期间 tracker 扫描完成却仍使用旧子代理排除快照的问题；修复新 live overlay 出现但 `liveTurnId` 尚未知时，上一轮最终总结被误判为活跃轮过程项的问题。两项均已补最小 Vitest 回归用例，并更新线程加载/状态手测说明；生产构建 `pnpm run build` 已通过，合并定向 Vitest（`rpcPipeline.test.ts`、`externalSessionTracker.test.ts`、`transcriptGrouping.test.ts`、`transcriptGrouping.repro.test.ts`）**58/58** 通过；浏览器手测未做。修复提交 `fdbedb8` 已推送，tag 与 GitHub Release `v0.1.107` 已创建；`codex-mobile-re@0.1.107` 已发布至 npm 官方源并成为 `latest`。详见 [round-61](rounds/round-61-v0.1.107-thread-state-fixes.md)。
 - **round-60 桌面前后台恢复同步待手测（2026-08-27）**：恢复同步已从移动端扩展至桌面和移动端，并以 400 ms 后台阈值与单次触发标记合并 `visibilitychange`、持久化 `pageshow`、`focus` 信号。新增 `foregroundResume` 单测 **91/91 通过**，`vue-tsc --noEmit` 与生产构建均通过。代码提交 `01ab0b4` 与交接文档提交 `cbc1846` 均已推送；桌面/移动端浏览器手动验证仍待执行。详见 [round-60](rounds/round-60-desktop-foreground-resume-sync.md)。
@@ -181,4 +181,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-29（round-64：v0.1.109 发布——回收站固定高度、思考强度默认 medium、ComposerPopover H5 附加菜单可见性修复；vue-tsc/构建通过、移动端 Browser Use 三项 PASS；git tag/GitHub Release 完成，npm 由用户 publish）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-29（round-64：v0.1.109 发布——回收站固定高度、思考强度默认 medium、ComposerPopover H5 附加菜单可见性修复；vue-tsc/构建通过、移动端 Browser Use 三项 PASS；tag/GitHub Release/npm `0.1.109` 全部闭环）· 内容已脱敏*

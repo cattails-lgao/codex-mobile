@@ -24,7 +24,7 @@
 
 - 版本 bump → 提交 `71e7cd8` 已推送至 `origin/main`；tag `v0.1.109` 指向该提交。
 - GitHub Release `v0.1.109`：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.109
-- `codex-mobile-re@0.1.109`：npm publish 由用户执行，发布后在 npm 官方源确认成为 `latest`。
+- `codex-mobile-re@0.1.109`：已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.109`）。发布链路全部闭环。
 
 ## 交接注意事项
 
