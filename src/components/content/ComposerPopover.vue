@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="composer-popover-anchor" :class="{ 'is-align-end': align === 'end', 'is-align-center': align === 'center' }">
+  <div ref="rootRef" class="composer-popover-anchor">
     <slot name="trigger" :toggle="toggle" :is-open="isOpen" />
     <Transition name="composer-popover">
       <div
@@ -7,6 +7,7 @@
         ref="panelRef"
         class="composer-popover-panel"
         :class="[widthClass, panelClass]"
+        :style="panelStyle"
         role="menu"
         tabindex="-1"
         :aria-label="ariaLabel"
@@ -19,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps<{
   open: boolean
@@ -38,18 +39,90 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const panelStyle = ref<Record<string, string>>({})
+let isLayoutListenerAttached = false
 
 const isOpen = computed(() => props.open)
 const widthClass = computed(() => (
   props.width === 'lg' ? 'composer-popover-panel--lg' : 'composer-popover-panel--md'
 ))
 
+const GAP = 8
+const VIEWPORT_PADDING = 8
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(min, value), max)
+}
+
+// 面板用 viewport 定位 fixed（区别于绝对定位），避免被 .thread-composer-controls
+// 在移动端的 overflow-x-auto 滚容器裁剪；思路与 ComposerDropdown#updateMenuPosition 一致。
+function updatePanelPosition(): void {
+  if (!isOpen.value) return
+  const root = rootRef.value
+  if (!root || typeof window === 'undefined') return
+  const rect = root.getBoundingClientRect()
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const maxWidth = Math.max(0, viewportWidth - VIEWPORT_PADDING * 2)
+  const width = Math.min(panelRef.value?.offsetWidth ?? 288, maxWidth)
+  const height = panelRef.value?.offsetHeight ?? 0
+
+  let left: number
+  if (props.align === 'end') {
+    left = rect.right - width
+  } else if (props.align === 'center') {
+    left = rect.left + (rect.width - width) / 2
+  } else {
+    left = rect.left
+  }
+  left = clamp(left, VIEWPORT_PADDING, Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING))
+  let top = rect.top - height - GAP
+  top = clamp(top, VIEWPORT_PADDING, Math.max(VIEWPORT_PADDING, viewportHeight - height - VIEWPORT_PADDING))
+
+  panelStyle.value = {
+    position: 'fixed',
+    left: `${left}px`,
+    right: 'auto',
+    top: `${top}px`,
+    bottom: 'auto',
+    width: `${width}px`,
+  }
+}
+
+function addLayoutListeners(): void {
+  if (isLayoutListenerAttached || typeof window === 'undefined') return
+  window.addEventListener('resize', updatePanelPosition)
+  window.addEventListener('scroll', updatePanelPosition, true)
+  window.addEventListener('orientationchange', updatePanelPosition)
+  isLayoutListenerAttached = true
+}
+
+function removeLayoutListeners(): void {
+  if (!isLayoutListenerAttached || typeof window === 'undefined') return
+  window.removeEventListener('resize', updatePanelPosition)
+  window.removeEventListener('scroll', updatePanelPosition, true)
+  window.removeEventListener('orientationchange', updatePanelPosition)
+  isLayoutListenerAttached = false
+}
+
 // 打开时把焦点移入面板（tabindex=-1）：方向键 keydown 才能落在 panel 上被捕获，
 // 同时不干扰输入框（焦点在 panel 内时方向键不再移动光标）。
-watch(isOpen, async (open) => {
-  if (!open) return
-  await nextTick()
-  panelRef.value?.focus()
+watch(isOpen, (open) => {
+  if (!open) {
+    removeLayoutListeners()
+    panelStyle.value = {}
+    return
+  }
+  addLayoutListeners()
+  nextTick(() => {
+    panelRef.value?.focus()
+    updatePanelPosition()
+    window.requestAnimationFrame(updatePanelPosition)
+  })
+})
+
+onBeforeUnmount(() => {
+  removeLayoutListeners()
 })
 
 function toggle(): void {
@@ -101,7 +174,7 @@ defineExpose({ root: rootRef })
 }
 
 .composer-popover-panel {
-  @apply absolute bottom-11 left-0 z-20 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply z-20 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
 }
 
 .composer-popover-panel--md {
@@ -110,14 +183,6 @@ defineExpose({ root: rootRef })
 
 .composer-popover-panel--lg {
   @apply w-72;
-}
-
-.composer-popover-anchor.is-align-end .composer-popover-panel {
-  @apply left-auto right-0;
-}
-
-.composer-popover-anchor.is-align-center .composer-popover-panel {
-  @apply left-1/2 right-auto -translate-x-1/2;
 }
 
 .composer-popover-panel button:focus-visible {
