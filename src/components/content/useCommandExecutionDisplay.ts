@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import type { UiLiveOverlay, UiMessage } from '../../types/codex'
 
 export interface CommandExecutionDisplayDeps {
@@ -11,7 +11,6 @@ export function createCommandExecutionDisplay(deps: CommandExecutionDisplayDeps)
   const { getMessages, getLiveOverlay, isCommandMessage } = deps
 
   const expandedCommandIds = ref<Set<string>>(new Set())
-  const collapsedAutoCommandIds = ref<Set<string>>(new Set())
 
   const activeCommandMessageId = computed(() => {
     const messages = getMessages()
@@ -69,14 +68,10 @@ export function createCommandExecutionDisplay(deps: CommandExecutionDisplayDeps)
     return next
   })
 
-  function isCommandAutoExpanded(message: UiMessage): boolean {
-    return !hasLiveAssistantText.value && message.id === activeCommandMessageId.value
-  }
-
+  // 命令块不自动展开：新命令到达时若自动展开，随后旁白文本/状态变化会立刻收起，
+  // 造成「先弹出黑色输出块再缩回」的列表闪烁。保持收起，点击才展开。
   function isCommandExpanded(message: UiMessage): boolean {
-    if (!isCommandMessage(message)) return false
-    return expandedCommandIds.value.has(message.id)
-      || (!collapsedAutoCommandIds.value.has(message.id) && isCommandAutoExpanded(message))
+    return isCommandMessage(message) && expandedCommandIds.value.has(message.id)
   }
 
   function isCommandCompact(message: UiMessage): boolean {
@@ -91,22 +86,12 @@ export function createCommandExecutionDisplay(deps: CommandExecutionDisplayDeps)
     if (!isCommandMessage(message)) return
 
     const nextExpanded = new Set(expandedCommandIds.value)
-    const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
-    const isAutoExpanded = isCommandAutoExpanded(message)
-    const isManuallyExpanded = nextExpanded.has(message.id)
-
-    if (isManuallyExpanded) {
+    if (nextExpanded.has(message.id)) {
       nextExpanded.delete(message.id)
-      if (isAutoExpanded) nextCollapsedAuto.add(message.id)
-    } else if (isAutoExpanded && !nextCollapsedAuto.has(message.id)) {
-      nextCollapsedAuto.add(message.id)
     } else {
       nextExpanded.add(message.id)
-      nextCollapsedAuto.delete(message.id)
     }
-
     expandedCommandIds.value = nextExpanded
-    collapsedAutoCommandIds.value = nextCollapsedAuto
   }
 
   function getGroupedCommandsForLatest(message: UiMessage): UiMessage[] {
@@ -129,26 +114,15 @@ export function createCommandExecutionDisplay(deps: CommandExecutionDisplayDeps)
 
   function pruneCommandIdSets(validIds: Set<string>): void {
     expandedCommandIds.value = prune(expandedCommandIds.value, validIds)
-    collapsedAutoCommandIds.value = prune(collapsedAutoCommandIds.value, validIds)
   }
-
-  watch(activeCommandMessageId, (nextId, prevId) => {
-    if (!prevId || prevId === nextId) return
-    if (!collapsedAutoCommandIds.value.has(prevId)) return
-    const nextCollapsedAuto = new Set(collapsedAutoCommandIds.value)
-    nextCollapsedAuto.delete(prevId)
-    collapsedAutoCommandIds.value = nextCollapsedAuto
-  })
 
   return {
     expandedCommandIds,
-    collapsedAutoCommandIds,
     activeCommandMessageId,
     hasLiveAssistantText,
     isLiveTurnRuntime,
     groupedCommandsByLatestId,
     hiddenGroupedCommandIds,
-    isCommandAutoExpanded,
     isCommandExpanded,
     isCommandCompact,
     isCommandOutputCondensed,

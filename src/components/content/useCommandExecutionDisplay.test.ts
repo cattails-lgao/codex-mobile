@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { nextTick, reactive } from 'vue'
 import type { UiMessage } from '../../types/codex'
 import { createCommandExecutionDisplay, type CommandExecutionDisplayDeps } from './useCommandExecutionDisplay'
 
@@ -41,16 +40,16 @@ describe('useCommandExecutionDisplay', () => {
     expect(fork.getWorkBlockCommands(liveAssistant('a1'))).toEqual([])
   })
 
-  it('auto-expands the active command until manually collapsed', () => {
+  it('does not auto-expand the active command; toggling expands then collapses', () => {
     const fork = depsFor([command('c1', 'inProgress')])
 
-    expect(fork.isCommandExpanded(command('c1'))).toBe(true)
-
-    fork.toggleCommandExpand(command('c1'))
     expect(fork.isCommandExpanded(command('c1'))).toBe(false)
 
     fork.toggleCommandExpand(command('c1'))
     expect(fork.isCommandExpanded(command('c1'))).toBe(true)
+
+    fork.toggleCommandExpand(command('c1'))
+    expect(fork.isCommandExpanded(command('c1'))).toBe(false)
   })
 
   it('compresses command rows and condenses output during a live turn', () => {
@@ -68,26 +67,12 @@ describe('useCommandExecutionDisplay', () => {
     expect(fork.isCommandOutputCondensed(command('c1'))).toBe(true)
   })
 
-  it('prunes stale ids from both expansion sets while keeping valid ones', () => {
+  it('prunes stale ids from the expansion set while keeping valid ones', () => {
     const fork = depsFor([])
     fork.expandedCommandIds.value = new Set(['a', 'b'])
-    fork.collapsedAutoCommandIds.value = new Set(['a', 'c'])
 
     fork.pruneCommandIdSets(new Set(['a', 'c']))
 
     expect([...fork.expandedCommandIds.value]).toEqual(['a'])
-    expect([...fork.collapsedAutoCommandIds.value].sort()).toEqual(['a', 'c'])
-  })
-
-  it('resets auto-collapse when the active command id changes', async () => {
-    const messages = reactive<UiMessage[]>([command('c1', 'inProgress')])
-    const fork = depsFor(messages)
-    fork.toggleCommandExpand(command('c1'))
-    expect(fork.isCommandExpanded(command('c1'))).toBe(false)
-
-    messages[0] = command('c1', 'completed')
-    messages.push(command('c2', 'inProgress'))
-    await nextTick()
-    expect(fork.collapsedAutoCommandIds.value.has('c1')).toBe(false)
   })
 })
