@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-63 hook 化已并入 v0.1.108；ThreadConversation 八个 hook + App.vue 两个 hook 抽取，另有每轮耗时显示、props TDZ 修复、375px 移动端回归；与 `origin/main` 同步至 `e943856`） |
+| Git 分支 | main（round-64 已并入 v0.1.109：回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | 未重启 dev server；round-63 hook 抽取与 v0.1.108 以类型检查、Vitest 507/509 与生产构建验证、发布闭环（git tag/GitHub Release/npm）；不操作 5173 |
+| Dev 状态 | 未重启 dev server；round-64 以类型检查、生产构建与移动端 Browser Use 实测验证、发布闭环（git tag/GitHub Release；npm 由用户 publish）；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-62：`3ab0020` 至 `501179c` 共 9 个领域拆分提交，覆盖模型/上下文/协作模式、Settings 异步边界、限额、项目组织、Catalogs 与 Queue 状态；其后按「读请求+缓存所有权」另批完成消息历史（`useDesktopMessageHistoryLoading.ts`）、线程标题缓存（`useDesktopThreadTitleCache.ts`）、待办服务端请求（`useDesktopPendingServerRequests.ts`）；`useDesktopState.ts` 约 4,766 → 3,483 行。`7941553` 完成 SidebarThreadTree 第二轮组件化试点（`useProjectDragAndDrop.ts` + `useAutomationDialog.ts`，组件脚本净减约 880 行）。`7941553` 之后至 `4e9fe75`：ThreadConversation 完成 markdown 渲染/文件变更摘要/diff 查看器/回复复制 fork/命令执行显示/fileChange 撤销重做/file 链接菜单+图片显示共 8 个 hook 抽取（`f6cd11f`…`61307d9`）；App.vue 抽出 `useSidebarUi.ts`（`872a1a5`）与 `useRightPanel.ts`（`5baeb8c`）；`1edd0cd` 修复 props 在 hook 之后声明导致的 TDZ 崩溃；`d3b3eb5` 新增每轮耗时显示（`sumTurnDurations` 按 turnId 聚合 worked 消息 `durationMs`）；`db1db6d` 增加 375px 移动端右侧面板抽屉 Playwright 回归（`scripts/verify-mobile-375.cjs`）；`4e9fe75` 版本 bump 至 0.1.108。审查结论（2026-08-29）：全量 hook 抽取与原实现逐行对照无行为漂移；`vue-tsc` 与 Vitest 507/509 通过（2 个失败为 `codexAppServerBridge.archive.test.ts` 的 Windows 文件 mode/符号链接环境性旧问题，与本轮无关）；`useReplyCopyFork` 复制复位计时器补回卸载清理。最新定向测试 sidebar 8/8、`vue-tsc` 通过 |
+| 最近提交 | `71e7cd8`（round-64）回收站固定高度（`recycle-bin-content` `h-64 overflow-y-auto`）、思考强度无显式选择默认 `medium`、`ComposerPopover` 面板改 viewport `fixed` 定位修复 H5「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 裁剪不可见；同步更新推理默认断言与 H5 手工用例；版本 bump 至 0.1.109。上一轮 round-63（v0.1.108）hook 化已完整发布 |
 
 ---
 ## 文档结构
@@ -93,6 +93,7 @@
 | 第六十一轮 v0.1.107 线程状态修复（异步子代理过滤快照、未知 liveTurnId 的历史最终总结） | [rounds/round-61-v0.1.107-thread-state-fixes.md](rounds/round-61-v0.1.107-thread-state-fixes.md) |
 | 第六十二轮 前端领域模块化续期（Preferences、Settings、Rate limits、Projects、Catalogs、Queue） | [rounds/round-62-domain-modularization.md](rounds/round-62-domain-modularization.md) |
 | 第六十三轮 ThreadConversation / App.vue hook 化与 v0.1.108 发布（8 个 ThreadConversation hook + `useSidebarUi`/`useRightPanel` + 每轮耗时 + props TDZ + 375px 回归） | [rounds/round-63-v0.1.108-hooks-and-release.md](rounds/round-63-v0.1.108-hooks-and-release.md) |
+| 第六十四轮 v0.1.109 发布（回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复） | [rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md) |
 
 ## 项目概况
 
@@ -148,6 +149,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **v0.1.109 发布（2026-08-29，round-64）**：版本 `0.1.109`（提交 `71e7cd8`）。收录今天三处改动：①回收站弹窗固定高度（`recycle-bin-content` 容器 `h-64 overflow-y-auto`）；②思考强度无显式选择时默认 `medium`（`useDesktopModelPreferences.ts`）；③`ComposerPopover` 面板改 viewport `fixed` 定位，修复 H5 下「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 滚容器裁剪不可见。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、移动端 Browser Use 实测三项全部 PASS（菜单可弹出、回收站固定高度、推理强度 Medium）。git tag `v0.1.109` 与 GitHub Release 由维护者创建；**npm publish 由用户执行**（发布后确认 `codex-mobile-re@0.1.109` 为 `latest`）。详见 [round-64](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md)。
 - **v0.1.108 发布（2026-08-29，已全部完成）**：版本 `0.1.108`（`4e9fe75` bump）。收录每轮耗时显示（`d3b3eb5`）、props TDZ 白屏修复（`1edd0cd`）、8 个 ThreadConversation hook 抽取与 App.vue `useSidebarUi`/`useRightPanel` 抽取、`useReplyCopyFork` 复位计时器卸载清理补回（`dff3944`）。hook 抽取逐行对照无行为漂移；`vue-tsc` 通过、Vitest 507/509（2 个失败为 `codexAppServerBridge.archive.test.ts` 的 Windows 文件 mode/符号链接环境性旧问题）。main 已同步至 `e943856`（`dc839b6`/`004299d`/`e943856` 为发布与交接文档提交）；tag `v0.1.108`、GitHub Release 与 `codex-mobile-re@0.1.108`（npm `latest`）全部闭环，见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.108。详见 [round-63](rounds/round-63-v0.1.108-hooks-and-release.md)。
 - **round-61 v0.1.107 线程状态修复（2026-08-27，已发布）**：版本已升至 **`0.1.107`**。修复 `thread/list` 在异步后处理期间 tracker 扫描完成却仍使用旧子代理排除快照的问题；修复新 live overlay 出现但 `liveTurnId` 尚未知时，上一轮最终总结被误判为活跃轮过程项的问题。两项均已补最小 Vitest 回归用例，并更新线程加载/状态手测说明；生产构建 `pnpm run build` 已通过，合并定向 Vitest（`rpcPipeline.test.ts`、`externalSessionTracker.test.ts`、`transcriptGrouping.test.ts`、`transcriptGrouping.repro.test.ts`）**58/58** 通过；浏览器手测未做。修复提交 `fdbedb8` 已推送，tag 与 GitHub Release `v0.1.107` 已创建；`codex-mobile-re@0.1.107` 已发布至 npm 官方源并成为 `latest`。详见 [round-61](rounds/round-61-v0.1.107-thread-state-fixes.md)。
 - **round-60 桌面前后台恢复同步待手测（2026-08-27）**：恢复同步已从移动端扩展至桌面和移动端，并以 400 ms 后台阈值与单次触发标记合并 `visibilitychange`、持久化 `pageshow`、`focus` 信号。新增 `foregroundResume` 单测 **91/91 通过**，`vue-tsc --noEmit` 与生产构建均通过。代码提交 `01ab0b4` 与交接文档提交 `cbc1846` 均已推送；桌面/移动端浏览器手动验证仍待执行。详见 [round-60](rounds/round-60-desktop-foreground-resume-sync.md)。
@@ -161,7 +163,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 - **npm 发包已完成（v0.1.98）**：`codex-mobile-re@0.1.98` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-18，`npm view codex-mobile-re@0.1.98` 确认 version 0.1.98 / dist-tags.latest 0.1.98）。GitHub release `v0.1.98` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.98。
 - **npm 发包已完成（v0.1.96）**：`codex-mobile-re@0.1.96` 已由用户发布到 npm 官方源并成为 `latest`（2026-08-18）；`npx codex-mobile-re@0.1.96 --help` 验证可加载、完整 CLI 用法正常。GitHub release `v0.1.96` 见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.96；git tag `v0.1.96` → `64fa15d`（release 首次创建时曾误指向旧提交，已强制改指到正确提交）
 - **遗留记录**：2026-08-18 round-43 会话中，fnm 管理的 Node v24.18.1 `node.exe` 曾从安装目录消失（目录被清空），已手动重新下载同版本 zip 解压回 `installation/` 恢复；若再次遇到 node 找不到，先 `ls <fnm node-versions>/v24.18.1/installation/` 确认二进制是否在
-- **工作区状态**：round-63 交接后 `main` 与 `origin/main` 对齐（`e943856`），`git status --short` 为空；本轮没有遗留未跟踪文件
+- **工作区状态**：round-64 交接后 `main` 与 `origin/main` 同步（待推送 `71e7cd8` 及交接文档提交）；`git status --short` 含待推送的发布/文档改动
 - **依赖安装历史**：若换机重新 `pnpm install`，观察 `allowBuilds` 是否完整覆盖构建需求；如出现新的「Ignored build scripts」警告，按同名格式补充到 `pnpm-workspace.yaml`
 - **跨平台回归（2026-08-06 已完成 Linux 侧；2026-08-07 已完成 macOS 侧）**：Linux 侧已用本机 WSL2（Ubuntu）验证——`vue-tsc --noEmit` 无类型错误、`vite build` 成功（4.58s）、`tsup` CLI 构建成功、单测 20 文件 229 用例全部通过（Windows 侧基线为 227 通过 + 2 环境性失败，Linux 下无此环境性失败，全部通过）。macOS 侧验证见下方「macOS 侧跨平台回归（2026-08-07）」。WSL 环境配置：fnm 1.39.0（`~/.local/share/fnm`）+ Node v22.23.2 + pnpm 11.18.0；注意 WSL 内无 fnm 时需先装（本机 Windows fnm 仅含 Windows 版 Node，无法在 WSL 复用），验证目录 `~/codex-linux-check`（从 Windows 侧 rsync 源码，排除 node_modules/dist/output/.git 等）；WSL 内无法直连 fnm.vercel.app（超时），Node 二进制由 Windows 侧下载后经 `/mnt/c` 共享解压，fnm 1.39.0 二进制同理
 - **已知限制（round-44，非代码改动）**：WebUI 对某线程发消息后会由 WebUI 的 app-server 进程持有该线程的 writer 锁（OS 文件锁，`CODEX_HOME/thread-writer-locks/<threadId>.lock`），直到 WebUI 重启；随后在 TUI 打开同一线程会报 `thread/resume ... already has an active writer (code -32600)`。纯只读预览（`thread/read`）不抢锁、安全；`ExternalSessionTracker` 只读查看也不抢锁。该 codex 版本无释放 writer 的 RPC。详见 [rounds/round-44-feedback.md](rounds/round-44-feedback.md)
@@ -179,4 +181,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-29（round-63：ThreadConversation/App.vue hook 化与 v0.1.108 发布闭环；hook 抽取逐行对照无行为漂移、Vitest 507/509；tag/GitHub Release/npm 全部完成）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-29（round-64：v0.1.109 发布——回收站固定高度、思考强度默认 medium、ComposerPopover H5 附加菜单可见性修复；vue-tsc/构建通过、移动端 Browser Use 三项 PASS；git tag/GitHub Release 完成，npm 由用户 publish）· 内容已脱敏*
