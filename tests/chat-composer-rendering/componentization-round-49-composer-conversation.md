@@ -53,6 +53,17 @@ node node_modules/vite/bin/vite.js build                              # 通过�
 1. 打开 Composer「+」菜单：额外出现 Plan mode 与 Approval policy 两个分区，选择状态高亮 `is-active`；审批出错/提示文本（`.thread-composer-menu-error` / `.thread-composer-approval-tip`）按原逻辑展示
 2. 页面无横向溢出
 
+#### 4a. H5/移动端附加菜单可见性回归（ComposerPopover · viewport-fixed）
+
+- 变更：`ComposerPopover.vue` 面板由 `absolute` 相对定位改为 viewport `fixed` 定位（思路同 `ComposerDropdown#updateMenuPosition`），避免被移动端 `.thread-composer-controls` 的 `overflow-x-auto` 滚容器裁剪导致菜单打开后不可见
+- 前置：dev server 运行中，375×812 视口
+- 步骤 / 预期：
+  1. 点击「+」→ 附加菜单浮层在按钮上方完整显示，含 Add photos & files / Add folder / Take photo / 进行中发送 / Plan mode / Approval policy
+  2. 点击输入框旁模型 / 推理 pill 下拉 → 各自菜单可见且不被裁剪（原有行为不回归）
+  3. 下拉/菜单打开时滚动页面或旋转屏幕 → 浮层跟随触发项位置（fixed 定位，resize/scroll/orientationchange 重算）
+  4. Esc 关闭菜单；点菜单外空白关闭
+- 行为边界：桌面端（>767px）Plan 模式 / 审批策略 popover 仍只做向上弹出，位置跟随触发项，无裁剪
+
 ### 5. 深色主题
 
 1. `localStorage['codex-web-local.dark-mode.v1']='dark'` 后刷新

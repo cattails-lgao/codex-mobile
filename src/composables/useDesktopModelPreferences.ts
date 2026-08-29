@@ -338,7 +338,7 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
 
       selectedReasoningEffort.value = pickReasoningEffortForModel(
         selectedModelId.value,
-        hasSelectedReasoningEffortOverride ? selectedReasoningEffort.value : currentConfig.reasoningEffort,
+        hasSelectedReasoningEffortOverride ? selectedReasoningEffort.value : ('medium' as const),
       )
       selectedSpeedMode.value = currentConfig.speedMode
     } catch (unknownError) {

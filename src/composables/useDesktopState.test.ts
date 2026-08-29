@@ -984,7 +984,7 @@ describe('provider model selection', () => {
     })
   })
 
-  it('uses model-specific reasoning levels and clamps incompatible selections to the model default', async () => {
+  it('uses model-specific reasoning levels and defaults to medium without an explicit selection', async () => {
     installTestWindow()
     gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
     gatewayMocks.getAvailableCollaborationModes.mockResolvedValue([{ value: 'default', label: 'Default' }])
@@ -1018,7 +1018,7 @@ describe('provider model selection', () => {
     await state.refreshAll({ includeSelectedThreadMessages: false, awaitAncillaryRefreshes: true })
 
     expect(state.selectedModelId.value).toBe('gpt-5.6-sol')
-    expect(state.selectedReasoningEffort.value).toBe('ultra')
+    expect(state.selectedReasoningEffort.value).toBe('medium')
     expect(state.availableModelReasoningEfforts.value['gpt-5.5']).toEqual(['low', 'medium', 'high', 'xhigh'])
 
     state.setSelectedReasoningEffort('high')

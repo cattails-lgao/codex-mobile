@@ -489,34 +489,36 @@
       size="md"
       @close="isRecycleBinOpen = false"
     >
-      <div v-if="recycleBinRecords.length === 0" class="recycle-bin-empty">{{ t('Recycle bin is empty.') }}</div>
-      <ul v-else class="recycle-bin-list">
-        <li v-for="record in recycleBinRecords" :key="record.id" class="recycle-bin-item">
-          <div class="recycle-bin-item-copy">
-            <span class="recycle-bin-item-title">{{ record.title }}</span>
-            <span v-if="record.projectName" class="recycle-bin-item-meta">{{ record.projectName }}</span>
-            <span class="recycle-bin-item-time">{{ formatArchivedAt(record.archivedAtIso) }}</span>
-          </div>
-          <div class="recycle-bin-item-actions">
-            <button
-              class="recycle-bin-button recycle-bin-button-primary"
-              type="button"
-              :disabled="restoringThreadId === record.id"
-              @click="onRestoreArchivedThread(record.id)"
-            >
-              {{ restoringThreadId === record.id ? t('Restoring…') : t('Restore') }}
-            </button>
-            <button
-              class="recycle-bin-button recycle-bin-button-danger"
-              type="button"
-              @click="removeArchivedRecord(record.id)"
-            >
-              {{ t('Delete permanently') }}
-            </button>
-          </div>
-        </li>
-      </ul>
-      <p v-if="recycleBinError" class="recycle-bin-error" role="alert">{{ recycleBinError }}</p>
+      <div class="recycle-bin-content">
+        <div v-if="recycleBinRecords.length === 0" class="recycle-bin-empty">{{ t('Recycle bin is empty.') }}</div>
+        <ul v-else class="recycle-bin-list">
+          <li v-for="record in recycleBinRecords" :key="record.id" class="recycle-bin-item">
+            <div class="recycle-bin-item-copy">
+              <span class="recycle-bin-item-title">{{ record.title }}</span>
+              <span v-if="record.projectName" class="recycle-bin-item-meta">{{ record.projectName }}</span>
+              <span class="recycle-bin-item-time">{{ formatArchivedAt(record.archivedAtIso) }}</span>
+            </div>
+            <div class="recycle-bin-item-actions">
+              <button
+                class="recycle-bin-button recycle-bin-button-primary"
+                type="button"
+                :disabled="restoringThreadId === record.id"
+                @click="onRestoreArchivedThread(record.id)"
+              >
+                {{ restoringThreadId === record.id ? t('Restoring…') : t('Restore') }}
+              </button>
+              <button
+                class="recycle-bin-button recycle-bin-button-danger"
+                type="button"
+                @click="removeArchivedRecord(record.id)"
+              >
+                {{ t('Delete permanently') }}
+              </button>
+            </div>
+          </li>
+        </ul>
+        <p v-if="recycleBinError" class="recycle-bin-error" role="alert">{{ recycleBinError }}</p>
+      </div>
     </AppDialog>
 
     <Teleport to="body">
@@ -2100,6 +2102,10 @@ onBeforeUnmount(() => {
 
 .organize-menu-item[data-active='true'] {
   @apply bg-zinc-100 text-zinc-900;
+}
+
+.recycle-bin-content {
+  @apply h-64 overflow-y-auto;
 }
 
 .recycle-bin-empty {
