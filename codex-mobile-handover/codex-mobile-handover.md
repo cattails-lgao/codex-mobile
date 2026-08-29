@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-64 已并入 v0.1.109：回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复；与 `origin/main` 同步） |
+| Git 分支 | main（round-65 已并入 v0.1.110：每轮耗时胶囊徽标 + 服务端 sidecar 持久化、命令块不再自动展开闪烁；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | 未重启 dev server；round-64 以类型检查、生产构建与移动端 Browser Use 实测验证，发布链路（git tag/GitHub Release/npm `0.1.109`）闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-65 以类型检查、生产构建与定向 Vitest 验证，发布链路（git tag/GitHub Release/npm `0.1.110`）闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `71e7cd8`（round-64）回收站固定高度（`recycle-bin-content` `h-64 overflow-y-auto`）、思考强度无显式选择默认 `medium`、`ComposerPopover` 面板改 viewport `fixed` 定位修复 H5「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 裁剪不可见；同步更新推理默认断言与 H5 手工用例；版本 bump 至 0.1.109。round-64 发布链路（tag/GitHub Release/npm `0.1.109`）已全部闭环 |
+| 最近提交 | `f519842`（round-65）①每轮耗时从对话底部改为「本轮过程」标题旁胶囊徽标，并新增服务端 sidecar 持久化（`/codex-api/thread-turn-durations` 读写 + localStorage 镜像），刷新/换浏览器不再丢失；②命令块不再自动展开，消除新命令到达时「先弹黑色块再缩回」的列表闪烁；版本 bump 至 0.1.110。round-65 发布链路（tag/GitHub Release/npm `0.1.110`）已全部闭环 |
 
 ---
 ## 文档结构
@@ -94,6 +94,7 @@
 | 第六十二轮 前端领域模块化续期（Preferences、Settings、Rate limits、Projects、Catalogs、Queue） | [rounds/round-62-domain-modularization.md](rounds/round-62-domain-modularization.md) |
 | 第六十三轮 ThreadConversation / App.vue hook 化与 v0.1.108 发布（8 个 ThreadConversation hook + `useSidebarUi`/`useRightPanel` + 每轮耗时 + props TDZ + 375px 回归） | [rounds/round-63-v0.1.108-hooks-and-release.md](rounds/round-63-v0.1.108-hooks-and-release.md) |
 | 第六十四轮 v0.1.109 发布（回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复） | [rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md) |
+| 第六十五轮 v0.1.110 发布（每轮耗时胶囊徽标 + 服务端 sidecar 持久化、命令块闪烁修复） | [rounds/round-65-v0.1.110-turn-duration-persist-command-flash.md](rounds/round-65-v0.1.110-turn-duration-persist-command-flash.md) |
 
 ## 项目概况
 
@@ -181,4 +182,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-08-29（round-64：v0.1.109 发布——回收站固定高度、思考强度默认 medium、ComposerPopover H5 附加菜单可见性修复；vue-tsc/构建通过、移动端 Browser Use 三项 PASS；tag/GitHub Release/npm `0.1.109` 全部闭环）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-08-30（round-65：v0.1.110 发布——每轮耗时胶囊徽标 + 服务端 sidecar 持久化、命令块闪烁修复；vue-tsc/构建/定向 Vitest 通过；tag/GitHub Release/npm `0.1.110` 全部闭环）· 内容已脱敏*
