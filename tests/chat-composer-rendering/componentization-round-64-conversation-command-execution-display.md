@@ -16,14 +16,14 @@ Refactor of `ThreadConversation.vue` (no user-visible behavior change): the comm
 2. While an agent turn is running (live overlay or in-progress command), verify command rows render compact and output is condensed (truncated with a show-more affordance).
 3. When the turn ends, rows return to the expanded/normal output behavior.
 
-### Auto-expand of the active command
-4. During an active command, its row shows expanded output by default (the running command). Click its toggle once → it collapses (auto-collapse recorded). Click again while still active → it re-expands.
-5. When the active command id changes to another command, confirm the previously collapsed command's auto-collapse resets (returns to default expanded state on its own).
+### No auto-expand of commands (no message-list flash)
+4. During an active command, its row stays collapsed by default (compact header with status). Click its toggle once → it expands to show live/aggregated output. Click again → it collapses. New commands never auto-expand, so the message list no longer flashes a dark output block that immediately collapses.
+5. When the active command id changes to another command, confirm the previous command stays collapsed and the new command also stays collapsed by default.
 
 ### Work-block command list
 6. For a last-command message in a block, verify the work block lists the grouped earlier commands plus the latest, in order.
 
 ## Verification / Cleanup Notes
 
-- No behavior change; this guards against extracting the command-display surface.
-- Rollback: covered by `useCommandExecutionDisplay.test.ts` (8 cases: active-command tracking, grouping/hiding consecutive commands, work-block list building, auto-expand + toggle cycle, live compaction/condensing, in-progress condensing, id-set pruning, auto-collapse reset on active-change) plus `vue-tsc` and production build; revert `ThreadConversation.vue`'s `createCommandExecutionDisplay` wiring if any surface above misbehaves.
+- Behavior change: removed auto-expand of the active command to stop the expand-then-collapse message-list flash; manual toggle still expands/collapses any command.
+- Rollback: covered by `useCommandExecutionDisplay.test.ts` (7 cases: active-command tracking, grouping/hiding consecutive commands, work-block list building, toggle expand/collapse, live compaction/condensing, in-progress condensing, id-set pruning) plus `vue-tsc` and production build; revert `ThreadConversation.vue`'s `createCommandExecutionDisplay` wiring if any surface above misbehaves.
