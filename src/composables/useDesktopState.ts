@@ -3017,11 +3017,17 @@ export function useDesktopState() {
 
       const persisted = persistedMessagesByThreadId.value[threadId] ?? []
       const matchedMessage = persisted.find((message) => message.turnId === turnId)
-      const turnIndex = typeof matchedMessage?.turnIndex === 'number' ? matchedMessage.turnIndex : -1
+      // 持久化消息可能缺 turnIndex（如通知增量通道写入的存档），回退到轮次映射兜底，
+      // 避免 matchedMessage 存在但 turnIndex 缺失时静默 return 导致「点了确认没反应」。
+      const turnIndex = typeof matchedMessage?.turnIndex === 'number'
+        ? matchedMessage.turnIndex
+        : (turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] ?? -1)
       if (turnIndex < 0) return
       const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
       if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
-      const numTurns = maxTurnIndex - turnIndex + 1
+      // 回退到目标轮：保留该轮（含其用户消息），仅移除其后的轮次。
+      // 此前 +1 会把目标轮一并删掉，回退到首轮时整条线程被清空。
+      const numTurns = maxTurnIndex - turnIndex
       if (numTurns < 1) return
 
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''

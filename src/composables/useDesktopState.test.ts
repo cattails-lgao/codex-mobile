@@ -2002,7 +2002,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).toHaveBeenCalledWith('thread-rollback', 'turn-2')
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 2)
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 1)
   })
 
   it('skips the interrupt and rolls back directly when the thread is idle', async () => {
@@ -2012,7 +2012,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 2)
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 1)
   })
 })
 
