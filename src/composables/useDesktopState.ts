@@ -2634,6 +2634,7 @@ export function useDesktopState() {
 
     if (isInProgress) {
       shouldAutoScrollOnNextAgentEvent = true
+      appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
       void startTurnForThread(
         threadId,
         nextText,
@@ -2652,6 +2653,7 @@ export function useDesktopState() {
     error.value = ''
     shouldAutoScrollOnNextAgentEvent = true
     setTurnSummaryForThread(threadId, null)
+    appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
     setTurnActivityForThread(
       threadId,
       {

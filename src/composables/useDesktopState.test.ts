@@ -2016,6 +2016,67 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
   })
 })
 
+describe('sendMessageToSelectedThread shows the user message immediately', () => {
+  function installSendState(threadId: string) {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadReasoningArchive.mockResolvedValue({})
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'hi',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: '',
+      modelProvider: '',
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'hi',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.startThreadTurn.mockResolvedValue('turn-2')
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('appends an optimistic user message before the server turn starts', async () => {
+    const state = installSendState('thread-send')
+    await state.loadMessages('thread-send')
+
+    await state.sendMessageToSelectedThread('hello')
+
+    expect(state.messages.value.some((message) => (
+      message.role === 'user' &&
+      message.text === 'hello' &&
+      message.messageType === 'userMessage.optimistic'
+    ))).toBe(true)
+  })
+})
+
 describe('resolveThreadTurnIndex resolves a plan turn index after refresh', () => {
   function installPlanTurnState(threadId: string) {
     installTestWindow()

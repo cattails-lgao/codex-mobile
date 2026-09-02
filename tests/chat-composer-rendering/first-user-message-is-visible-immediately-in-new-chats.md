@@ -1,7 +1,7 @@
 ### First user message is visible immediately in new chats
 
 #### Feature/Change Name
-New-thread sends render the submitted user message immediately, even when the backend thread read lags behind the assistant response.
+New-thread sends render the submitted user message immediately, even when the backend thread read lags behind the assistant response. The same optimistic row also applies to follow-up sends in existing threads (idle and in-progress), so the user message always appears before the `Thinking` loading row.
 
 #### Prerequisites/Setup
 1. Create a fresh isolated `CODEX_HOME`.
@@ -17,6 +17,8 @@ New-thread sends render the submitted user message immediately, even when the ba
 6. Confirm the conversation pane immediately shows the user row `hi`, then wait for the assistant response.
 7. Select `GPT-5.4-mini` in a post-auth new chat, send `hi`, and confirm the user row appears before the assistant response finishes.
 8. Repeat in dark theme and confirm the user row remains visible before and after the assistant response.
+9. In an existing thread with history, send a follow-up message while the thread is idle and confirm the user row appears immediately, before the `Thinking` row.
+10. While a turn is in progress, send another follow-up message and confirm the user row appears immediately, before the `Thinking` row.
 
 #### Expected Results
 - The submitted first user message appears in the conversation pane immediately after send.
@@ -24,6 +26,7 @@ New-thread sends render the submitted user message immediately, even when the ba
 - When the backend later returns the real user item, the optimistic row is replaced without a duplicate.
 - Completion events refresh the selected thread even when it was already marked loaded by an optimistic first message.
 - Delayed GPT-5.4-mini replies appear automatically when the completion notification arrives; no manual refresh is required.
+- Follow-up sends in existing threads (idle or in-progress) also show the user row immediately, ahead of the `Thinking` row, and the optimistic row is replaced by the real user item without a duplicate.
 - Light and dark theme message rows remain readable.
 
 #### Rollback/Cleanup
