@@ -671,6 +671,19 @@ export function collectFileChangesForTurns(
       }
     }
 
+    // CLI 0.149.1+ 把 apply_patch 记录为 function_call（arguments.command 携带 patch 内容），
+    // 旧版才是 custom_tool_call.input；两种格式都收集，保证回退能取到变更记录。
+    if (payload.type === 'function_call' && payload.name === 'apply_patch') {
+      try {
+        const args = JSON.parse(payload.arguments as string) as Record<string, unknown>
+        const input = typeof args.command === 'string' ? args.command : ''
+        const callId = readNonEmptyString(payload.call_id)
+        if (input && callId) {
+          info.patchInputs.push({ callId, input })
+        }
+      } catch { /* empty */ }
+    }
+
     if (payload.type === 'function_call' && payload.name === 'exec_command') {
       let cmd = ''
       try {
