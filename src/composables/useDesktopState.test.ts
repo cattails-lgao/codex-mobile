@@ -2014,6 +2014,38 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 1)
   })
+
+  it('removes the last turn when rolling back the final user message instead of no-oping', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'only message',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.rollbackThread.mockResolvedValue([])
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-last')
+    await state.loadMessages('thread-rollback-last')
+
+    await state.rollbackSelectedThread('turn-1')
+
+    // 目标轮即最后一轮：此前 numTurns=0 静默 return，现在应移除该轮本身。
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-last', 1)
+  })
 })
 
 describe('sendMessageToSelectedThread shows the user message immediately', () => {

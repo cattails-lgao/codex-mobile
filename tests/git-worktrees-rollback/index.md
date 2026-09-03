@@ -28,6 +28,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Rollback undoes apply_patch file changes](rollback-undoes-apply-patch-file-changes.md) |
 | [Fix: Codex.app "New Worktree" Button Missing After Account Switch (CDP Injection)](codex-app-new-worktree-button-missing-after-account-switch-cdp-injection.md) |
 | [User message edit action replaces rollback button](user-message-edit-action-replaces-rollback-button.md) |
+| [Fix: Rolling back the last user message removes that turn instead of no-oping](rollback-last-message-removes-final-turn.md) |
 | [Thread menu copy path action](thread-menu-copy-path-action.md) |
 | [Thread menu copy chat action](thread-menu-copy-chat-action.md) |
 | [Project menu permanent worktree action](project-menu-permanent-worktree-action.md) |

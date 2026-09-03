@@ -3029,8 +3029,9 @@ export function useDesktopState() {
       if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
       // 回退到目标轮：保留该轮（含其用户消息），仅移除其后的轮次。
       // 此前 +1 会把目标轮一并删掉，回退到首轮时整条线程被清空。
-      const numTurns = maxTurnIndex - turnIndex
-      if (numTurns < 1) return
+      // 目标轮即最后一轮时 maxTurnIndex - turnIndex 为 0，此时应移除该轮本身
+      // （用户回退最后一条消息期望撤销它），而不是静默无操作。
+      const numTurns = Math.max(1, maxTurnIndex - turnIndex)
 
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
       if (threadCwd) {
