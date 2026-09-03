@@ -24,7 +24,7 @@
 
 - 版本 bump → 提交已推送至 `origin/main`；tag `v0.1.113` 指向该提交。
 - GitHub Release `v0.1.113`：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.113
-- `codex-mobile-re@0.1.113`：待用户 publish 至 npm 官方源。
+- `codex-mobile-re@0.1.113`：已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.113`），发布链路全部闭环。
 
 ## 交接注意事项
 
