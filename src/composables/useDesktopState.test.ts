@@ -2002,7 +2002,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).toHaveBeenCalledWith('thread-rollback', 'turn-2')
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 1)
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 2)
   })
 
   it('skips the interrupt and rolls back directly when the thread is idle', async () => {
@@ -2012,7 +2012,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 1)
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 2)
   })
 
   it('removes the last turn when rolling back the final user message instead of no-oping', async () => {
@@ -2045,6 +2045,36 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
 
     // 目标轮即最后一轮：此前 numTurns=0 静默 return，现在应移除该轮本身。
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-last', 1)
+  })
+
+  it('removes the target turn and everything after it when rolling back a middle turn', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+        { id: 'agent-1', role: 'assistant', text: 'reply-1', messageType: 'agentMessage', turnId: 'turn-1', turnIndex: 0 },
+        { id: 'user-2', role: 'user', text: 'second', messageType: 'userMessage', turnId: 'turn-2', turnIndex: 1 },
+        { id: 'agent-2', role: 'assistant', text: 'reply-2', messageType: 'agentMessage', turnId: 'turn-2', turnIndex: 1 },
+        { id: 'user-3', role: 'user', text: 'third', messageType: 'userMessage', turnId: 'turn-3', turnIndex: 2 },
+        { id: 'agent-3', role: 'assistant', text: 'reply-3', messageType: 'agentMessage', turnId: 'turn-3', turnIndex: 2 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1, 'turn-3': 2 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.rollbackThread.mockResolvedValue([])
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-middle')
+    await state.loadMessages('thread-rollback-middle')
+
+    await state.rollbackSelectedThread('turn-2')
+
+    // 回退中间轮：目标轮（turn-2）及其后的 turn-3 都应被移除。
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-middle', 2)
   })
 })
 
