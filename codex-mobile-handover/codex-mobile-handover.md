@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-66 已并入 v0.1.111：回退保留目标轮次 + 解析 function_call apply_patch + 现有线程乐观 UI；与 `origin/main` 同步） |
+| Git 分支 | main（round-67 已并入 v0.1.112：线程切换性能优化 + 回退最后一条消息修复；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-66 以类型检查、生产构建与定向 Vitest 验证，发布链路（git tag/GitHub Release/npm `0.1.111`）闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-67 以类型检查、定向 Vitest 与浏览器实测验证，发布链路（git tag/GitHub Release/npm `0.1.112`）闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `aca350e`（round-66）①回退不再静默失效且保留目标轮次（`turnIndex` 兜底 + `numTurns` 修正）；②服务端解析 CLI 0.149.1+ 的 `function_call` 格式 apply_patch，回退文件变更可用；③现有线程（空闲/进行中）发送消息立即显示乐观用户行，不再先 Thinking；版本 bump 至 0.1.111。round-66 发布链路（tag/GitHub Release/npm `0.1.111`）已全部闭环 |
+| 最近提交 | `b53ee3f`（round-67）①线程切换卡顿优化——`/codex-api/provider-models` 30s TTL 缓存 + 切换期间保留旧消息列表避免加载闪烁；②回退最后一条消息不再静默无操作——`numTurns` 下限为 1，移除该轮本身；版本 bump 至 0.1.112。round-67 发布链路（tag/GitHub Release/npm `0.1.112`）已全部闭环 |
 
 ---
 ## 文档结构
@@ -96,6 +96,7 @@
 | 第六十四轮 v0.1.109 发布（回收站固定高度 + 思考强度默认 medium + ComposerPopover H5 附加菜单可见性修复） | [rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md) |
 | 第六十五轮 v0.1.110 发布（每轮耗时胶囊徽标 + 服务端 sidecar 持久化、命令块闪烁修复） | [rounds/round-65-v0.1.110-turn-duration-persist-command-flash.md](rounds/round-65-v0.1.110-turn-duration-persist-command-flash.md) |
 | 第六十六轮 v0.1.111 发布（回退保留目标轮次 + 解析 function_call apply_patch + 现有线程乐观 UI） | [rounds/round-66-v0.1.111-rollback-optimistic-ui.md](rounds/round-66-v0.1.111-rollback-optimistic-ui.md) |
+| 第六十七轮 v0.1.112 发布（线程切换性能优化 + 回退最后一条消息修复） | [rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md](rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md) |
 
 ## 项目概况
 
@@ -151,6 +152,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **v0.1.112 发布（2026-09-03，round-67，已全部闭环）**：版本 `0.1.112`（提交 `b53ee3f`，发布提交 `5947bda` 之后新增 `9b15b8c` + `b53ee3f`）。收录两处改动：①线程切换卡顿优化——`models.ts` 为 `/codex-api/provider-models` 增加 30s TTL 缓存（`fetchProviderModelIds`），切换线程不再重复请求（此前每次 340~3600ms）；`App.vue` 用 `lastStableFilteredMessages` 保留上一次稳定消息列表，加载期间显示旧内容避免闪烁；`useDesktopMessageHistoryLoading.ts` 引用计数管理并发加载的 `isLoadingMessages`；②回退最后一条消息修复——`rollbackSelectedThread` 目标轮即最后一轮时 `numTurns` 为 0 此前静默无操作，改为 `Math.max(1, maxTurnIndex - turnIndex)` 移除该轮本身。`vue-tsc` 通过、`useDesktopState.test.ts` 91/91 通过、浏览器实测回退最后一条消息生效。git tag `v0.1.112` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.112 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.112` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.112`），发布链路全部闭环。详见 [round-67](rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md)。
 - **v0.1.111 发布（2026-09-02，round-66，已全部闭环）**：版本 `0.1.111`（提交 `aca350e`，发布提交 `5947bda`）。收录三处改动：①回退不再静默失效且保留目标轮次——`rollbackSelectedThread` 的 `turnIndex` 缺失时从 `turnIndexByTurnIdByThreadId` 兜底，`numTurns` 从 `maxTurnIndex - turnIndex + 1` 修正为 `maxTurnIndex - turnIndex`（此前回退 1 轮会连目标轮一并删除）；②服务端 `collectFileChangesForTurns` 解析 CLI 0.149.1+ 的 `function_call` 格式 apply_patch（patch 在 `arguments.command`），与旧版 `custom_tool_call.input` 双格式兼容，回退文件变更不再报「No turns to revert」；③现有线程（空闲/进行中）发送消息立即显示乐观用户行，不再先 `Thinking` 再等用户消息。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、`useDesktopState.test.ts` 90/90 通过，浏览器实测三种发送路径乐观 UI 均生效。git tag `v0.1.111` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.111 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.111` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.111`），发布链路全部闭环。详见 [round-66](rounds/round-66-v0.1.111-rollback-optimistic-ui.md)。
 - **v0.1.109 发布（2026-08-29，round-64，已全部闭环）**：版本 `0.1.109`（提交 `71e7cd8`）。收录今天三处改动：①回收站弹窗固定高度（`recycle-bin-content` 容器 `h-64 overflow-y-auto`）；②思考强度无显式选择时默认 `medium`（`useDesktopModelPreferences.ts`）；③`ComposerPopover` 面板改 viewport `fixed` 定位，修复 H5 下「+」附加菜单被 `.thread-composer-controls` 的 `overflow-x-auto` 滚容器裁剪不可见。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、移动端 Browser Use 实测三项全部 PASS（菜单可弹出、回收站固定高度、推理强度 Medium）。git tag `v0.1.109` 与 GitHub Release 由维护者创建；`codex-mobile-re@0.1.109` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.109`），发布链路全部闭环。详见 [round-64](rounds/round-64-v0.1.109-recycle-bin-thinking-h5.md)。
 - **v0.1.108 发布（2026-08-29，已全部完成）**：版本 `0.1.108`（`4e9fe75` bump）。收录每轮耗时显示（`d3b3eb5`）、props TDZ 白屏修复（`1edd0cd`）、8 个 ThreadConversation hook 抽取与 App.vue `useSidebarUi`/`useRightPanel` 抽取、`useReplyCopyFork` 复位计时器卸载清理补回（`dff3944`）。hook 抽取逐行对照无行为漂移；`vue-tsc` 通过、Vitest 507/509（2 个失败为 `codexAppServerBridge.archive.test.ts` 的 Windows 文件 mode/符号链接环境性旧问题）。main 已同步至 `e943856`（`dc839b6`/`004299d`/`e943856` 为发布与交接文档提交）；tag `v0.1.108`、GitHub Release 与 `codex-mobile-re@0.1.108`（npm `latest`）全部闭环，见 https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.108。详见 [round-63](rounds/round-63-v0.1.108-hooks-and-release.md)。
@@ -184,4 +186,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-09-02（round-66：v0.1.111 发布——回退保留目标轮次 + 解析 function_call apply_patch + 现有线程乐观 UI；vue-tsc/构建/定向 Vitest 通过；tag/GitHub Release/npm `0.1.111` 全部闭环）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-09-03（round-67：v0.1.112 发布——线程切换性能优化 + 回退最后一条消息修复；vue-tsc/定向 Vitest/浏览器实测通过；tag/GitHub Release/npm `0.1.112` 全部闭环）· 内容已脱敏*
