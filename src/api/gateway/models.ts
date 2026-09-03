@@ -31,6 +31,12 @@ export type AvailableModel = {
 }
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
+const PROVIDER_MODELS_CACHE_TTL_MS = 30_000
+const providerModelsCache = new Map<string, { fetchedAt: number; result: { ids: string[], exclusive: boolean } | null }>()
+
+export function clearProviderModelsCache(): void {
+  providerModelsCache.clear()
+}
 
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
@@ -126,8 +132,14 @@ export async function setCustomProvider(
 }
 
 async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string[], exclusive: boolean } | null> {
+  const normalizedProviderId = providerId?.trim() ?? ''
+  const cacheKey = normalizedProviderId
+  const cached = providerModelsCache.get(cacheKey)
+  if (cached && Date.now() - cached.fetchedAt < PROVIDER_MODELS_CACHE_TTL_MS) {
+    return cached.result
+  }
+  let result: { ids: string[], exclusive: boolean } | null = null
   try {
-    const normalizedProviderId = providerId?.trim() ?? ''
     const url = normalizedProviderId
       ? `/codex-api/provider-models?provider=${encodeURIComponent(normalizedProviderId)}`
       : '/codex-api/provider-models'
@@ -142,7 +154,7 @@ async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string
     }
 
     if (response.ok && Array.isArray(providerPayload?.data)) {
-      return {
+      result = {
         ids: providerPayload.data
           .map((candidate) => typeof candidate === 'string' ? candidate.trim() : '')
           .filter((candidate, index, candidates): candidate is string =>
@@ -153,7 +165,8 @@ async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string
   } catch {
     // Keep Codex usable when the provider-models endpoint is unavailable.
   }
-  return null
+  providerModelsCache.set(cacheKey, { fetchedAt: Date.now(), result })
+  return result
 }
 
 function normalizeAvailableModel(value: unknown): AvailableModel | null {
