@@ -579,7 +579,7 @@
 
               <template v-else>
                 <div class="content-thread">
-                  <ThreadConversation ref="threadConversationRef" :messages="filteredMessages" :is-loading="isLoadingMessages"
+                  <ThreadConversation ref="threadConversationRef" :messages="displayFilteredMessages" :is-loading="isLoadingMessages"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
                     :live-turn-id="selectedActiveTurnId"
@@ -1773,6 +1773,24 @@ const filteredMessages = computed(() =>
     return true
   }),
 )
+// 线程切换时保留上一个稳定渲染的消息列表：新线程消息加载完成前不闪
+// 「Loading messages...」/「No messages」空态，直接由旧内容过渡到新内容。
+const lastStableFilteredMessages = ref<UiMessage[]>([])
+watch(
+  () => [filteredMessages.value, isLoadingMessages.value] as const,
+  ([nextMessages, loading]) => {
+    if (!loading) {
+      lastStableFilteredMessages.value = nextMessages
+    }
+  },
+  { immediate: true },
+)
+const displayFilteredMessages = computed(() => {
+  if (isLoadingMessages.value && lastStableFilteredMessages.value.length > 0) {
+    return lastStableFilteredMessages.value
+  }
+  return filteredMessages.value
+})
 const latestUserTurnId = computed(() => {
   for (let index = messages.value.length - 1; index >= 0; index -= 1) {
     const message = messages.value[index]

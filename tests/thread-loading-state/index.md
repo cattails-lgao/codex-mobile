@@ -19,6 +19,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Pinned threads persist across reload and prune removed threads](pinned-threads-persist-across-reload-and-prune-removed-threads.md) |
 | [Feature: Keep manual chat scroll position during streaming](keep-manual-chat-scroll-position-during-streaming.md) |
 | [Feature: Rapid thread switching during active load](rapid-thread-switching-during-active-load.md) |
+| [Feature: Thread switch avoids loading flash and provider-models refetch](thread-switch-loading-flash-and-provider-models-cache.md) |
 | [Feature: Thread auto-scrolls to latest message after load](thread-auto-scrolls-to-latest-message-after-load.md) |
 | [Feature: Assistant streaming does not force-scroll when user is reading history](assistant-streaming-does-not-force-scroll-when-user-is-reading-history.md) |
 | [Feature: While reading older messages, stream growth keeps viewport pinned](while-reading-older-messages-stream-growth-keeps-viewport-pinned.md) |

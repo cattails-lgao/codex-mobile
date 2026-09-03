@@ -67,6 +67,7 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
+  let loadingIndicatorCount = 0
 
   async function loadMessages(threadId: string, options: { silent?: boolean; force?: boolean } = {}) {
     if (!threadId) {
@@ -87,6 +88,7 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
     const alreadyLoaded = loadedMessagesByThreadId.value[threadId] === true
     const shouldShowLoading = options.silent !== true && !alreadyLoaded
     if (shouldShowLoading) {
+      loadingIndicatorCount += 1
       isLoadingMessages.value = true
     }
 
@@ -196,7 +198,10 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
         throw unknownError
       } finally {
       if (shouldShowLoading) {
-        isLoadingMessages.value = false
+        loadingIndicatorCount = Math.max(0, loadingIndicatorCount - 1)
+        if (loadingIndicatorCount === 0) {
+          isLoadingMessages.value = false
+        }
       }
       }
     })().finally(() => {

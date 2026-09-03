@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addDirectoryMarketplace, checkoutPluginShare, compactThread, deletePluginShare, getAvailableModelIds, getAvailableModels, getCurrentModelConfig, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, listRemoteControlClients, normalizeFuzzyFileSearchResults, readRemoteControlStatus, removeDirectoryMarketplace, resumeThread, revokeRemoteControlClient, savePluginShare, setRemoteControlEnabled, startFuzzyFileSearchSession, startRemoteControlPairing, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
+import { addDirectoryMarketplace, checkoutPluginShare, clearProviderModelsCache, compactThread, deletePluginShare, getAvailableModelIds, getAvailableModels, getCurrentModelConfig, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, listRemoteControlClients, normalizeFuzzyFileSearchResults, readRemoteControlStatus, removeDirectoryMarketplace, resumeThread, revokeRemoteControlClient, savePluginShare, setRemoteControlEnabled, startFuzzyFileSearchSession, startRemoteControlPairing, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -133,6 +133,7 @@ describe('listDirectoryComposioConnectors', () => {
 describe('getAvailableModelIds', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    clearProviderModelsCache()
   })
 
   it('uses provider models without waiting for model/list when provider models are required', async () => {
@@ -262,6 +263,27 @@ describe('getAvailableModelIds', () => {
         defaultReasoningEffort: 'low',
       },
     ])
+  })
+
+  it('reuses cached provider models within the TTL window instead of re-fetching', async () => {
+    const requests: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requests.push(String(input))
+      if (String(input) === '/codex-api/provider-models') {
+        return new Response(JSON.stringify({
+          data: ['big-pickle', 'deepseek-v4-flash-free'],
+          exclusive: true,
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`unexpected request ${String(input)}`)
+    }))
+
+    await getAvailableModelIds({ includeProviderModels: true, requireProviderModels: true })
+    await getAvailableModelIds({ includeProviderModels: true, requireProviderModels: true })
+    expect(requests).toEqual(['/codex-api/provider-models'])
   })
 })
 

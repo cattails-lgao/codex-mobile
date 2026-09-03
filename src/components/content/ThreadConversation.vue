@@ -1,6 +1,9 @@
 <template>
   <section class="conversation-root" @contextmenu.capture="handleConversationContextMenu">
-    <p v-if="isLoading" class="conversation-loading">{{ t('Loading messages...') }}</p>
+    <div v-if="isLoading && messages.length > 0" class="conversation-switching-bar" role="status">
+      {{ t('Loading messages...') }}
+    </div>
+    <p v-if="isLoading && messages.length === 0" class="conversation-loading">{{ t('Loading messages...') }}</p>
 
     <p
       v-else-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay"
@@ -1859,6 +1862,11 @@ onBeforeUnmount(() => {
 
 .conversation-loading {
   @apply m-0 px-6 text-sm text-slate-500;
+}
+
+.conversation-switching-bar {
+  @apply pointer-events-none absolute top-0 left-0 right-0 z-10 px-3 py-1 text-center text-xs text-slate-500
+         bg-slate-100/85 dark:bg-slate-800/85 backdrop-blur-sm;
 }
 
 .conversation-empty {
