@@ -1,6 +1,6 @@
 # Round-69：v0.1.114 发布（回退不存在静默 no-op，真实 app-server rollback 语义确认）
 
-> **范围：** 收录一处回退健壮性修复——`rollbackSelectedThread` 中目标轮 turnIndex 无法解析时不再静默 return（曾导致「点了回退没反应、最后一条消息还在」，且不报错），改为钳制到最新一轮再回退并留下 `console.warn`。随 v0.1.114 一起发布。GitHub Release 与 git tag 由维护者（agent）创建，`npm publish` 由用户执行。`vue-tsc` 通过、`useDesktopState.test.ts` 93/93 通过。
+> **范围：** 收录一处回退健壮性修复——`rollbackSelectedThread` 中目标轮 turnIndex 无法解析时不再静默 return（曾导致「点了回退没反应、最后一条消息还在」，且不报错），改为钳制到最新一轮再回退并留下 `console.warn`。随 v0.1.114 一起发布。GitHub Release 与 git tag 由维护者（agent）创建，`npm publish` 由用户执行。发布链路已全部闭环。`vue-tsc` 通过、`useDesktopState.test.ts` 93/93 通过。
 
 ## 背景与根因（关键）
 
@@ -27,7 +27,7 @@
 - 定向 Vitest：`useDesktopState.test.ts` 93/93 通过（含新增「目标轮 turnIndex 无法解析时钳制到最新轮调用 `rollbackThread`」用例，断言 `rollbackThread` 以 `numTurns = 1` 调用——此前会静默不调用）。
 - `vue-tsc --noEmit`：通过。
 
-## Release / Publish
+## Release / Publish（已闭环）
 
 - 维护者（agent）：git tag `v0.1.114` + GitHub Release `v0.1.114`。
-- 用户：`npm publish` 发布 `codex-mobile-re@0.1.114` 至 npm 官方源。
+- 用户：`npm publish` 发布 `codex-mobile-re@0.1.114` 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.114`），发布链路闭环。
