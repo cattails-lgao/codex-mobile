@@ -40,6 +40,16 @@ export function isRunningProcessMessage(message: UiMessage): boolean {
   return type.endsWith('.live')
 }
 
+// 折叠若所有成员都被上层逻辑隐藏（如 turn 无关的命令分组把本轮命令收进下一轮
+// command 块、或工具被文件变更摘要取代），渲染出来只会是一个空壳 header——
+// 为空折叠弃渲染，其成员内容已在别处展示，不再留空块。
+export function isProcessFoldEmpty(
+  fold: ProcessFoldItem,
+  isHidden: (message: UiMessage) => boolean,
+): boolean {
+  return fold.messages.every((message) => isHidden(message))
+}
+
 // 把窗口内消息流拆成「消息行 + 折叠行」需要的折叠组。只折叠同轮（非空 turnId
 // 相同）且连续的折叠类型消息；跨轮次的命令/工具/思考各自独立，不会被误并。
 export function buildProcessFolds(messages: UiMessage[]): ProcessFoldItem[] {

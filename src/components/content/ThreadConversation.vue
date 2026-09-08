@@ -83,7 +83,7 @@
         </template>
         <template #default="{ item, section }">
         <template v-for="message in [item.message]" :key="message.id">
-      <template v-if="isFoldStart(message)">
+      <template v-if="isFoldStart(message) && !emptyFoldStartIds.has(message.id)">
       <li
         class="conversation-item conversation-item-fold"
         data-role="system"
@@ -548,6 +548,7 @@ import WorkBlockItem from './WorkBlockItem.vue'
 import {
   buildProcessFoldLabel,
   buildProcessFolds,
+  isProcessFoldEmpty,
   type ProcessFoldItem,
 } from '../../utils/conversationFolds'
 import {
@@ -1046,6 +1047,22 @@ const foldMemberIds = computed(() => {
   const set = new Set<string>()
   for (const fold of processFolds.value) {
     for (const message of fold.messages) set.add(message.id)
+  }
+  return set
+})
+
+// round-70：whj@2026-09-08 反馈「本轮过程中会出现空的 processFold 块」。根因：
+// buildProcessFolds 按「同轮次连续命令/工具」成组，而命令分组（groupedCommandsByLatestId）
+// 不区分轮次——当相邻两轮末尾/开头各有命令时，下一轮的 command 成为跨轮命令块的最新命令，
+// 本轮折叠的全部命令都被 hiddenGroupedCommandIds 隐藏，折叠成员无一可见 → 渲染出空壳
+// processFold。此处把「所有成员均被隐藏」的折叠记为空折叠，模板跳过其 <li> 渲染；其成员
+// 内容已在跨轮命令块或文件变更摘要中展示，丢弃空容器不丢数据。
+const emptyFoldStartIds = computed(() => {
+  const set = new Set<string>()
+  const isHidden = (message: UiMessage): boolean =>
+    hiddenGroupedCommandIds.value.has(message.id) || hiddenFileChangeMessageIds.value.has(message.id)
+  for (const fold of processFolds.value) {
+    if (isProcessFoldEmpty(fold, isHidden)) set.add(fold.messages[0]?.id ?? '')
   }
   return set
 })
