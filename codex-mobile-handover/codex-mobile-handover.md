@@ -8,7 +8,7 @@
 |---|---|
 | Git 分支 | main（round-70 已并入 v0.1.115：修复空 processFold 块；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-70 以定向 Vitest 与 `vue-tsc` 验证，发布链路（git tag/GitHub Release/npm `0.1.115`）由维护者+用户闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-70 以定向 Vitest 与 `vue-tsc` 验证，发布链路（git tag/GitHub Release/npm `0.1.115`）已全部闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
 | 最近提交 | `f2233bb`（round-70）修复「本轮过程中出现空的 processFold 块」——折叠分组按同轮次成组、命令分组不区分轮次，相邻两轮末尾/开头各带命令时本轮折叠成员全被隐藏 → 空壳折叠头；新增 `isProcessFoldEmpty` + `emptyFoldStartIds` 跳过空折叠渲染（成员内容已在跨轮命令块/文件变更摘要展示，不丢数据）。版本 bump 至 0.1.115 |
@@ -192,4 +192,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-09-08（round-69：v0.1.114 发布——回退不存在静默 no-op；vue-tsc/定向 Vitest 通过；tag/GitHub Release/npm `0.1.114` 全部闭环）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-09-08（round-70：v0.1.115 发布——修复空的 processFold 块；vue-tsc/定向 Vitest 通过；tag/GitHub Release/npm `0.1.115` 全部闭环）· 内容已脱敏*
