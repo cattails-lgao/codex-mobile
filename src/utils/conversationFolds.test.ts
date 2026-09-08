@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildProcessFolds, buildProcessFoldLabel, MIN_PROCESS_FOLD_ITEMS } from './conversationFolds'
+import {
+  buildProcessFolds,
+  buildProcessFoldLabel,
+  isProcessFoldEmpty,
+  MIN_PROCESS_FOLD_ITEMS,
+} from './conversationFolds'
 import type { UiMessage } from '../types/codex'
 
 function msg(id: string, messageType: string, turnId: string | undefined, extra: Record<string, unknown> = {}): UiMessage {
@@ -180,5 +185,39 @@ describe('buildProcessFoldLabel', () => {
     ])[0]!
     expect(fold.commandCount).toBe(3)
     expect(buildProcessFoldLabel(fold, { t, formatDuration })).toBe('Processed · 3 commands')
+  })
+})
+
+describe('isProcessFoldEmpty', () => {
+  // round-70：相邻两轮末尾/开头各有命令时，turn 无关的命令分组把本轮命令收进下一轮
+  // command 块，本轮折叠的所有命令都被 hiddenGroupedCommandIds 隐藏 → 空折叠，弃渲染。
+  it('marks a fold empty when every member is hidden', () => {
+    const messages = [
+      msg('u1', 'user', 't1', { role: 'user' }),
+      msg('c1', 'commandExecution', 't1', { commandExecution: { command: 'a', status: 'completed' } }),
+      msg('c2', 'commandExecution', 't1', { commandExecution: { command: 'b', status: 'completed' } }),
+      msg('a1', 'agentMessage', 't1', { role: 'assistant', text: 'round N done' }),
+      msg('u2', 'user', 't2', { role: 'user' }),
+      msg('c3', 'commandExecution', 't2', { commandExecution: { command: 'c', status: 'completed' } }),
+      msg('a2', 'agentMessage', 't2', { role: 'assistant', text: 'round N+1 done' }),
+    ]
+    const turns = buildProcessFolds(messages)
+    const roundNTurn = turns.find((f) => f.turnId === 't1')!
+    // 跨轮命令分组（turn 无关）以 c3 为最新命令，c1/c2 全被 hiddenGroupedCommandIds 隐藏
+    const hidden = new Set(['c1', 'c2'])
+    expect(isProcessFoldEmpty(roundNTurn, (m) => hidden.has(m.id))).toBe(true)
+  })
+
+  it('is not empty when at least one member stays visible', () => {
+    const messages = [
+      msg('u1', 'user', 't1', { role: 'user' }),
+      msg('c1', 'commandExecution', 't1', { commandExecution: { command: 'a', status: 'completed' } }),
+      msg('tc1', 'toolCall', 't1', { toolCall: { server: 's', tool: 'read', status: 'completed' } }),
+      msg('a1', 'agentMessage', 't1', { role: 'assistant', text: 'done' }),
+    ]
+    const fold = buildProcessFolds(messages)[0]!
+    // 只命令被分组隐藏，工具调用仍可见
+    const hidden = new Set(['c1'])
+    expect(isProcessFoldEmpty(fold, (m) => hidden.has(m.id))).toBe(false)
   })
 })

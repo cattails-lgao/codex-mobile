@@ -6,9 +6,9 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-69 已并入 v0.1.114：回退不存在静默 no-op；与 `origin/main` 同步） |
+| Git 分支 | main（round-70：修复空 processFold 块；待版本 bump/发布；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-69 以类型检查与定向 Vitest 验证，发布链路（git tag/GitHub Release/npm `0.1.114`）已全部闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-70 以定向 Vitest 与 `vue-tsc` 验证，尚未 bump 版本（v0.1.115 待发布）；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
 | 最近提交 | `63417f3`（round-69）回退健壮性修复——`rollbackSelectedThread` 目标轮 turnIndex 无法解析时不再静默 return（曾导致「点了回退没反应、最后一条消息还在」），改为钳制到最新一轮再回退并 `console.warn`；真实 app-server `thread/rollback numTurns` 语义已验证（28 轮 rollback 1 → 27 轮，正确删除末尾 userMessage）；版本 bump 至 0.1.114。round-69 发布链路闭环：tag/GitHub Release 由维护者创建，npm `0.1.114` 已由用户 publish 并成为 `latest` |
@@ -99,6 +99,7 @@
 | 第六十七轮 v0.1.112 发布（线程切换性能优化 + 回退最后一条消息修复） | [rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md](rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md) |
 | 第六十八轮 v0.1.113 发布（回退移除目标轮及其后所有轮次） | [rounds/round-68-v0.1.113-rollback-target-turn.md](rounds/round-68-v0.1.113-rollback-target-turn.md) |
 | 第六十九轮 v0.1.114 发布（回退不存在静默 no-op，真实 app-server rollback 语义确认） | [rounds/round-69-v0.1.114-rollback-no-silent-nop.md](rounds/round-69-v0.1.114-rollback-no-silent-nop.md) |
+| 第七十轮（修复空的 processFold 块，待版本 bump） | [rounds/round-70-fix-empty-processfold-block.md](rounds/round-70-fix-empty-processfold-block.md) |
 
 ## 项目概况
 
