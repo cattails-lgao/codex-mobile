@@ -29,7 +29,7 @@
 
 ## Release / Publish（已闭环）
 
-- 版本 `0.1.115`，修复提交 `f2233bb`，版本/文档提交随后。
-- 维护者（agent）：git tag `v0.1.115` + GitHub Release `v0.1.115`。
-- 用户：`npm publish` 发布 `codex-mobile-re@0.1.115` 至 npm 官方源并成为 `latest`。
+- 版本 `0.1.115`，修复提交 `f2233bb`，版本/文档提交 `a89901f`。
+- 维护者（agent）：git tag `v0.1.115` + GitHub Release `v0.1.115`（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.115）。
+- 用户：`npm publish` 发布 `codex-mobile-re@0.1.115` 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.115`）。
 - 发布链路已全部闭环。
