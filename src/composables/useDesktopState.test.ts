@@ -2076,6 +2076,34 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     // 回退中间轮：目标轮（turn-2）及其后的 turn-3 都应被移除。
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-middle', 2)
   })
+
+  it('clamps to the newest turn instead of silently no-oping when the target turnIndex is unresolved', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+        // turn-2 存在但缺 turnIndex（如通知增量通道写入），且映射表也未登记 → 旧代码 turnIndex<0 静默 return。
+        { id: 'user-2', role: 'user', text: 'second', messageType: 'userMessage', turnId: 'turn-2' },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.rollbackThread.mockResolvedValue([])
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-unresolved')
+    await state.loadMessages('thread-rollback-unresolved')
+
+    await state.rollbackSelectedThread('turn-2')
+
+    // 目标轮无法解析时应钳制到最新轮回退（numTurns=1），而不是静默放弃导致
+    // 「点了回退没反应、最后一条消息还在」。
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-unresolved', 1)
+  })
 })
 
 describe('sendMessageToSelectedThread shows the user message immediately', () => {
