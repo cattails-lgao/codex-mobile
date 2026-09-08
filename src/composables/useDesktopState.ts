@@ -3019,14 +3019,21 @@ export function useDesktopState() {
 
       const persisted = persistedMessagesByThreadId.value[threadId] ?? []
       const matchedMessage = persisted.find((message) => message.turnId === turnId)
-      // 持久化消息可能缺 turnIndex（如通知增量通道写入的存档），回退到轮次映射兜底，
-      // 避免 matchedMessage 存在但 turnIndex 缺失时静默 return 导致「点了确认没反应」。
-      const turnIndex = typeof matchedMessage?.turnIndex === 'number'
+      // 最新持久化轮次即回退水印：优先用目标轮自身的 turnIndex，取不到再走
+      // 增量轮次映射兜底（通知增量通道写入的存档可能缺 turnIndex）。
+      const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
+      if (maxTurnIndex < 0) return
+      let turnIndex = typeof matchedMessage?.turnIndex === 'number'
         ? matchedMessage.turnIndex
         : (turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] ?? -1)
-      if (turnIndex < 0) return
-      const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
-      if (maxTurnIndex < 0 || turnIndex > maxTurnIndex) return
+      // 修正：此前 turnIndex < 0 或无解析到持久化范围时静默 return，导致回退
+      // 请求根本没发出——界面无反应、最后一条消息一直还在（而服务端 numTurns
+      // rollback 语义本身是对的）。这里改为钳制到最新一轮再回退，保证「回退
+      // 最后一轮」必定删除该轮，并始终留下一条可观测的警告而非静默无操作。
+      if (turnIndex < 0 || turnIndex > maxTurnIndex) {
+        console.warn(`[rollback] turn ${turnId} not resolvable (index=${turnIndex}), clamping to newest turn`)
+        turnIndex = maxTurnIndex
+      }
       // 回退到目标轮：移除该轮（含其用户消息）及其后的所有轮次。
       // 用户回退某条消息期望撤销它本身（文本回填输入框后重发），而非保留
       // 目标轮只删后续；目标轮即最后一轮时 maxTurnIndex - turnIndex 为 0，
