@@ -70,3 +70,7 @@
 
 - **round-70 / v0.1.115（`f2233bb`）**：版本从 `0.1.114` 升至 `0.1.115`；修复「本轮过程中出现空的 `processFold` 块、无内容」。根因：折叠分组按「同轮次连续命令/工具」成组（`buildProcessFolds`），命令分组按「连续命令、不区分轮次」分组（`groupedCommandsByLatestId`）；相邻两轮末尾/开头各带命令时，下一轮命令成为跨轮命令块最新命令，本轮折叠全部命令被 `hiddenGroupedCommandIds` 隐藏 → 空壳折叠头。修复：`conversationFolds.ts` 新增 `isProcessFoldEmpty`，`ThreadConversation.vue` 新增 `emptyFoldStartIds` 并于模板跳过空折叠 `<li>` 渲染（成员内容已在跨轮命令块/文件变更摘要展示，不丢数据）。`conversationFolds.test.ts` 15/15、`vue-tsc --noEmit` 通过。git tag `v0.1.115` 与 GitHub Release 由维护者创建，`codex-mobile-re@0.1.115` 已由用户 publish 至 npm 官方源并成为 `latest`，发布链路闭环。详见 `rounds/round-70-fix-empty-processfold-block.md`。
 
+## round-71（v0.1.116 发布，已闭环）
+
+- **round-71 / v0.1.116（`79622df`）**：版本从 `0.1.115` 升至 `0.1.116`；修复「本轮过程中空的 `agentMessage`/通用正文过程行、无内容」。根因：推演消息（`agentMessage` 等）出现在本轮过程区，当 `text` 为空、又无图片/文件附件/技能时落入 `ThreadConversation.vue` 通用正文分支——`message-card`（`v-if="message.text.length > 0"`）被跳过、附件/技能也为空 → 渲染出完全空的 `<li class="conversation-item conversation-item-process" data-message-type="agentMessage">`（round-70 守卫只覆盖全隐藏折叠）。修复：新增纯函数 `src/utils/messageContent.ts`（`hasMessageBodyContent` + `shouldOmitEmptyGenericMessage`），普通 `<li>` 分支（`v-else-if`）追加 `&& !shouldOmitEmptyGenericMessage(message)`——仅在命中通用正文分支且无任何可渲染内容时省略，不触碰 command/toolCall/fileChange/compaction/plan 专用分支。`messageContent.test.ts` 5/5、`conversationFolds.test.ts` 15/15、`vue-tsc --noEmit` 通过。git tag `v0.1.116` 与 GitHub Release 由维护者创建，`codex-mobile-re@0.1.116` 待用户 publish 至 npm 官方源。详见 `rounds/round-71-fix-empty-process-row.md`。
+
