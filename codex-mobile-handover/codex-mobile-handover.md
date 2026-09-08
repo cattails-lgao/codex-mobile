@@ -8,10 +8,10 @@
 |---|---|
 | Git 分支 | main（round-69 已并入 v0.1.114：回退不存在静默 no-op；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-69 以类型检查与定向 Vitest 验证，发布链路（git tag/GitHub Release/npm `0.1.114`）闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-69 以类型检查与定向 Vitest 验证，发布链路（git tag/GitHub Release/npm `0.1.114`）已全部闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | `63417f3`（round-69）回退健壮性修复——`rollbackSelectedThread` 目标轮 turnIndex 无法解析时不再静默 return（曾导致「点了回退没反应、最后一条消息还在」），改为钳制到最新一轮再回退并 `console.warn`；真实 app-server `thread/rollback numTurns` 语义已验证（28 轮 rollback 1 → 27 轮，正确删除末尾 userMessage）；版本 bump 至 0.1.114。round-69 发布链路（tag/GitHub Release）由维护者创建，npm `0.1.114` 待用户 publish |
+| 最近提交 | `63417f3`（round-69）回退健壮性修复——`rollbackSelectedThread` 目标轮 turnIndex 无法解析时不再静默 return（曾导致「点了回退没反应、最后一条消息还在」），改为钳制到最新一轮再回退并 `console.warn`；真实 app-server `thread/rollback numTurns` 语义已验证（28 轮 rollback 1 → 27 轮，正确删除末尾 userMessage）；版本 bump 至 0.1.114。round-69 发布链路闭环：tag/GitHub Release 由维护者创建，npm `0.1.114` 已由用户 publish 并成为 `latest` |
 
 ---
 ## 文档结构
@@ -154,6 +154,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **v0.1.114 发布（2026-09-08，round-69，已全部闭环）**：版本 `0.1.114`（提交 `63417f3`，版本/文档提交 `8d563ca`）。收录一处回退健壮性修复——`rollbackSelectedThread` 目标轮 turnIndex 无法解析（如通知增量通道刚写入、缺 `turnIndex` 且映射表也未登记）时不再静默 `return`（曾导致「点了回退没反应、最后一条消息还在」，且不报错），改为钳制到最新一轮再回退并 `console.warn` 留痕；对真实 codex `0.149.1` app-server `thread/rollback numTurns` 语义做端到端验证（`thread/fork` 副本 28 轮 rollback 1 → 27 轮，正确删除末尾 userMessage，schema `ThreadRollbackParams.json` 亦写明 `numTurns >= 1`）。`vue-tsc --noEmit` 通过、`useDesktopState.test.ts` 93/93 通过（含新增「turnIndex 未解析时钳制到最新轮调用 `rollbackThread`」用例）。git tag `v0.1.114` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.114 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.114` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.114`），发布链路全部闭环。详见 [round-69](rounds/round-69-v0.1.114-rollback-no-silent-nop.md)。
 - **v0.1.113 发布（2026-09-04，round-68，已全部闭环）**：版本 `0.1.113`（提交 `e1be9d9`，版本/文档提交随后）。收录一处回退语义修复——`rollbackSelectedThread` 的 `numTurns` 从 `Math.max(1, maxTurnIndex - turnIndex)` 改为 `maxTurnIndex - turnIndex + 1`：回退目标轮移除该轮（含其用户消息）及其后的所有轮次，而非只删后续、保留目标轮（此前「确认回退后消息列表没有更新，回退那条消息还在列表」）；目标轮即最后一轮时 `+1` 后仍为 1，删除该轮而非静默无操作。`vue-tsc` 通过、`useDesktopState.test.ts` 92/92 通过、浏览器实测回退首/中/末消息均生效。git tag `v0.1.113` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.113 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.113` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.113`），发布链路全部闭环。详见 [round-68](rounds/round-68-v0.1.113-rollback-target-turn.md)。
 - **v0.1.112 发布（2026-09-03，round-67，已全部闭环）**：版本 `0.1.112`（提交 `b53ee3f`，发布提交 `5947bda` 之后新增 `9b15b8c` + `b53ee3f`）。收录两处改动：①线程切换卡顿优化——`models.ts` 为 `/codex-api/provider-models` 增加 30s TTL 缓存（`fetchProviderModelIds`），切换线程不再重复请求（此前每次 340~3600ms）；`App.vue` 用 `lastStableFilteredMessages` 保留上一次稳定消息列表，加载期间显示旧内容避免闪烁；`useDesktopMessageHistoryLoading.ts` 引用计数管理并发加载的 `isLoadingMessages`；②回退最后一条消息修复——`rollbackSelectedThread` 目标轮即最后一轮时 `numTurns` 为 0 此前静默无操作，改为 `Math.max(1, maxTurnIndex - turnIndex)` 移除该轮本身。`vue-tsc` 通过、`useDesktopState.test.ts` 91/91 通过、浏览器实测回退最后一条消息生效。git tag `v0.1.112` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.112 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.112` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.112`），发布链路全部闭环。详见 [round-67](rounds/round-67-v0.1.112-thread-switch-perf-rollback-last.md)。
 - **v0.1.111 发布（2026-09-02，round-66，已全部闭环）**：版本 `0.1.111`（提交 `aca350e`，发布提交 `5947bda`）。收录三处改动：①回退不再静默失效且保留目标轮次——`rollbackSelectedThread` 的 `turnIndex` 缺失时从 `turnIndexByTurnIdByThreadId` 兜底，`numTurns` 从 `maxTurnIndex - turnIndex + 1` 修正为 `maxTurnIndex - turnIndex`（此前回退 1 轮会连目标轮一并删除）；②服务端 `collectFileChangesForTurns` 解析 CLI 0.149.1+ 的 `function_call` 格式 apply_patch（patch 在 `arguments.command`），与旧版 `custom_tool_call.input` 双格式兼容，回退文件变更不再报「No turns to revert」；③现有线程（空闲/进行中）发送消息立即显示乐观用户行，不再先 `Thinking` 再等用户消息。`vue-tsc` 通过、`pnpm run build` 通过（web + CLI）、`useDesktopState.test.ts` 90/90 通过，浏览器实测三种发送路径乐观 UI 均生效。git tag `v0.1.111` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.111 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.111` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.111`），发布链路全部闭环。详见 [round-66](rounds/round-66-v0.1.111-rollback-optimistic-ui.md)。
@@ -189,4 +190,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-09-04（round-68：v0.1.113 发布——回退移除目标轮及其后所有轮次；vue-tsc/定向 Vitest/浏览器实测通过；tag/GitHub Release/npm `0.1.113` 全部闭环）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-09-08（round-69：v0.1.114 发布——回退不存在静默 no-op；vue-tsc/定向 Vitest 通过；tag/GitHub Release/npm `0.1.114` 全部闭环）· 内容已脱敏*
