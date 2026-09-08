@@ -140,7 +140,8 @@
         v-else-if="!isFoldMember(message)
           && !hiddenGroupedCommandIds.has(message.id)
           && !hiddenFileChangeMessageIds.has(message.id)
-          && !(isWorkedMessage(message) && hiddenWorkedTurnIds.has(message.turnId ?? ''))"
+          && !(isWorkedMessage(message) && hiddenWorkedTurnIds.has(message.turnId ?? ''))
+          && !shouldOmitEmptyGenericMessage(message)"
       >
       <li
         :id="messageAnchorId(message)"
@@ -551,6 +552,7 @@ import {
   isProcessFoldEmpty,
   type ProcessFoldItem,
 } from '../../utils/conversationFolds'
+import { shouldOmitEmptyGenericMessage as shouldOmitEmptyGenericBodyMessage } from '../../utils/messageContent'
 import {
   buildTurnGroups,
   buildTurnRenderGroups,
@@ -740,6 +742,23 @@ function isFileChangeMessage(message: UiMessage): boolean {
     && message.fileChangeStatus === 'completed'
     && Array.isArray(message.fileChanges)
     && message.fileChanges.length > 0
+}
+
+// round-70：推演消息（agentMessage 等）若文本为空、又无图片/附件/技能，会落到通用
+// 正文分支渲染出一个完全空的 <li>。这里仅在走通用正文分支（非 command/toolCall/
+// fileChange/compaction/plan）时调用 shouldOmitEmptyGenericMessage：无任何内容 → 省略空行。
+function shouldOmitEmptyGenericMessage(message: UiMessage): boolean {
+  if (
+    isCommandMessage(message)
+    || isToolCallMessage(message)
+    || isFileChangeMessage(message)
+    || isCompactionPendingMessage(message)
+    || isCompactionDoneMessage(message)
+    || message.messageType === 'plan'
+  ) {
+    return false
+  }
+  return shouldOmitEmptyGenericBodyMessage(message)
 }
 
 function isCopyableAssistantMessage(message: UiMessage): boolean {
