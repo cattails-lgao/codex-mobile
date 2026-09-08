@@ -1,4 +1,4 @@
-# Round-70：修复「本轮过程中出现空的 processFold 块」
+# Round-70：v0.1.115 发布（修复「本轮过程中出现空的 processFold 块」）
 
 ## 背景
 
@@ -26,3 +26,10 @@
 
 - 定向 Vitest `src/utils/conversationFolds.test.ts`：15/15 通过（新增 `isProcessFoldEmpty`：全隐藏 → true；至少一条可见 → false）。
 - `vue-tsc --noEmit`：通过。
+
+## Release / Publish（已闭环）
+
+- 版本 `0.1.115`，修复提交 `f2233bb`，版本/文档提交随后。
+- 维护者（agent）：git tag `v0.1.115` + GitHub Release `v0.1.115`。
+- 用户：`npm publish` 发布 `codex-mobile-re@0.1.115` 至 npm 官方源并成为 `latest`。
+- 发布链路已全部闭环。
