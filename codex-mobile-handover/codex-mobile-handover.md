@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-71：修复空 agentMessage/通用正文过程行，v0.1.116 已发布；与 `origin/main` 同步） |
+| Git 分支 | main（round-72：修复线程模型切换被 resume 旧模型覆盖，v0.1.117 发布中；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-71 以定向 Vitest 与 `vue-tsc` 验证，发布链路（git tag/GitHub Release/npm `0.1.116`）已全部闭环；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-72 以定向 Vitest 与 `vue-tsc` 验证；tag/GitHub Release 已建，npm `0.1.117` 待 publish；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-71 修复「空的 agentMessage/通用正文过程行」——推演消息（agentMessage 等）文本为空又无图片/附件/技能时落入通用正文分支渲染出空 `<li>`；新增纯函数 `hasMessageBodyContent`/`shouldOmitEmptyGenericMessage`（`src/utils/messageContent.ts`），普通 `<li>` 分支追加 `&& !shouldOmitEmptyGenericMessage(message)` 省略空行。版本 bump 至 0.1.116 |
+| 最近提交 | round-72 修复「线程模型切换不生效」——UI 切到新模型后，`startTurnForThread` 首个 turn 前 resume 线程时无条件把服务端持久化的旧 model 写回覆盖 UI 选择（旧模型已下线→请求带旧 ID→LiteLLM 400）。新增 `hasThreadModelSelection`（`useDesktopModelPreferences.ts`），resume 覆盖前加门控：线程有显式 UI 选择时不覆盖。版本 bump 至 0.1.117 |
 
 ---
 ## 文档结构
@@ -101,6 +101,7 @@
 | 第六十九轮 v0.1.114 发布（回退不存在静默 no-op，真实 app-server rollback 语义确认） | [rounds/round-69-v0.1.114-rollback-no-silent-nop.md](rounds/round-69-v0.1.114-rollback-no-silent-nop.md) |
 | 第七十轮 v0.1.115 发布（修复空的 processFold 块） | [rounds/round-70-fix-empty-processfold-block.md](rounds/round-70-fix-empty-processfold-block.md) |
 | 第七十一轮 v0.1.116 发布（修复空的 agentMessage/通用正文过程行） | [rounds/round-71-fix-empty-process-row.md](rounds/round-71-fix-empty-process-row.md) |
+| 第七十二轮 v0.1.117 发布（修复线程模型切换被 resume 旧模型覆盖） | [rounds/round-72-fix-thread-model-switch-on-resume.md](rounds/round-72-fix-thread-model-switch-on-resume.md) |
 
 ## 项目概况
 
@@ -156,6 +157,7 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ## 未完成事项
 
+- **v0.1.117 发布（2026-09-10，round-72，进行中）**：版本 `0.1.117`（修复/测试/文档随行）。收录一处线程模型切换失效修复——`startTurnForThread` 对「本会话尚未 resume 过的线程」发首个 turn 前 `resumeThread` 会**无条件**把服务端线程持久化的 model 写回覆盖 UI 选择：用户在 UI 把线程从已下线/删除的旧模型（如 `deepseek-v4.1-flash-expires-on-0910`）切到可用新模型后，首个请求仍带旧模型 ID → LiteLLM 400。修复：新增 `hasThreadModelSelection(threadId)`（[useDesktopModelPreferences.ts](file:///d:/code/codex-mobile/src/composables/useDesktopModelPreferences.ts)），在 [useDesktopState.ts `startTurnForThread`](file:///d:/code/codex-mobile/src/composables/useDesktopState.ts#L2829-L2845) resume 覆盖前加门控——线程已有显式 UI 选择时不覆盖；无显式选择仍用服务器 model 初始化（无回归）。`useDesktopModelPreferences.test.ts` 4/4、`useDesktopState.test.ts` 93 通过、`vue-tsc --noEmit` 通过。手测见 `tests/providers-models/thread-model-switch-persists-on-resume.md`。git tag `v0.1.117` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.117 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.117` 待用户 publish 至 npm 官方源。详见 [round-72](rounds/round-72-fix-thread-model-switch-on-resume.md)。
 - **v0.1.116 发布（2026-09-08，round-71，已全部闭环）**：版本 `0.1.116`（修复 `79622df`，版本/文档提交 `a87f5d8`）。收录一处空过程行修复——推演消息（`agentMessage` 等）出现在本轮过程区，当其 `text` 为空、又无图片/文件附件/技能时，落入 [ThreadConversation.vue](file:///d:/code/codex-mobile/src/components/content/ThreadConversation.vue) 的通用正文分支：`message-card`（`v-if="message.text.length > 0"`）被跳过、附件/技能也为空 → 渲染出完全空的 `<li class="conversation-item conversation-item-process" data-message-type="agentMessage">`。新增纯函数 `src/utils/messageContent.ts`（`hasMessageBodyContent` + `shouldOmitEmptyGenericMessage`），普通 `<li>` 分支（`v-else-if`）追加 `&& !shouldOmitEmptyGenericMessage(message)`——仅在命中通用正文分支且无任何可渲染内容时省略，不触碰 command/toolCall/fileChange/compaction/plan 专用分支。空 `processFold`（全隐藏折叠）自 v0.1.115 已修复；若在 v0.1.115+ 仍见空折叠，为旧构建方会如此。`vue-tsc --noEmit` 通过、`messageContent.test.ts` 5/5、`conversationFolds.test.ts` 15/15 通过。git tag `v0.1.116` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.116 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.116` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.116`），发布链路全部闭环。详见 [round-71](rounds/round-71-fix-empty-process-row.md)。
 - **v0.1.115 发布（2026-09-08，round-70，已全部闭环）**：版本 `0.1.115`（修复提交 `f2233bb`，版本/文档提交随行）。收录一处空 `processFold` 块修复——折叠分组 `buildProcessFolds` 按「同轮次连续命令/工具」成组，而命令分组 `groupedCommandsByLatestId` 按「连续命令·不区分轮次」分组；当相邻两轮末尾/开头各带命令时，下一轮命令成为跨轮命令块的最新命令，本轮折叠全部命令被 `hiddenGroupedCommandIds` 隐藏 → 渲染出只有折叠头、无任何成员的空 `processFold` 块。新增纯函数 `isProcessFoldEmpty` + `emptyFoldStartIds`，模板跳过空折叠 `<li>` 渲染（成员内容已在跨轮命令块/文件变更摘要展示，不丢数据）。`vue-tsc --noEmit` 通过、`useDesktopState`/`conversationFolds` 定向测试通过（`conversationFolds.test.ts` 15/15，新增 `isProcessFoldEmpty` 两条用例）。git tag `v0.1.115` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.115 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.115` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.115`），发布链路全部闭环。详见 [round-70](rounds/round-70-fix-empty-processfold-block.md)。
 - **v0.1.114 发布（2026-09-08，round-69，已全部闭环）**：版本 `0.1.114`（提交 `63417f3`，版本/文档提交 `8d563ca`）。收录一处回退健壮性修复——`rollbackSelectedThread` 目标轮 turnIndex 无法解析（如通知增量通道刚写入、缺 `turnIndex` 且映射表也未登记）时不再静默 `return`（曾导致「点了回退没反应、最后一条消息还在」，且不报错），改为钳制到最新一轮再回退并 `console.warn` 留痕；对真实 codex `0.149.1` app-server `thread/rollback numTurns` 语义做端到端验证（`thread/fork` 副本 28 轮 rollback 1 → 27 轮，正确删除末尾 userMessage，schema `ThreadRollbackParams.json` 亦写明 `numTurns >= 1`）。`vue-tsc --noEmit` 通过、`useDesktopState.test.ts` 93/93 通过（含新增「turnIndex 未解析时钳制到最新轮调用 `rollbackThread`」用例）。git tag `v0.1.114` 与 GitHub Release 已由维护者创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.114 ，非草稿/非预发布，已标记 Latest）；`codex-mobile-re@0.1.114` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.114`），发布链路全部闭环。详见 [round-69](rounds/round-69-v0.1.114-rollback-no-silent-nop.md)。
@@ -194,4 +196,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-09-08（round-71：v0.1.116 发布——修复空的 agentMessage/通用正文过程行；vue-tsc/定向 Vitest 通过；tag/GitHub Release/npm `0.1.116` 全部闭环）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-09-10（round-72：v0.1.117 发布——修复线程模型切换被 resume 旧模型覆盖；定向 Vitest/`vue-tsc` 通过；tag/GitHub Release 已建，待 npm `0.1.117` publish）· 内容已脱敏*
