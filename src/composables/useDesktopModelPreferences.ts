@@ -73,6 +73,17 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
     return normalizeProviderContextId(threadModelProviderByThreadId.value[normalizedThreadId] ?? activeProviderId.value)
   }
 
+  // 该线程是否存在「显式」的模型选择（写入线程自身上下文键），而非复用
+  // 新线程兜底选择。用于：首个 turn 前的 resume 若用户已在此线程上显式选过
+  // 模型，则让 UI 选择生效，不再用服务端线程持久化的 model 覆盖。
+  function hasThreadModelSelection(threadId: string): boolean {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId) return false
+    const contextId = toThreadContextId(normalizedThreadId)
+    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) return false
+    return readSelectedModel(selectedModelIdByContext.value, normalizedThreadId).trim().length > 0
+  }
+
   function readSupportedReasoningEffortsForModel(modelId: string): readonly ReasoningEffort[] {
     return availableModelReasoningEfforts.value[modelId.trim()] ?? REASONING_EFFORT_OPTIONS
   }
@@ -372,6 +383,7 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
     selectedSpeedMode,
     applyFallbackModelSelection,
     buildPendingTurnDetails,
+    hasThreadModelSelection,
     pruneThreadModelState,
     readModelIdForThread,
     refreshModelPreferences,

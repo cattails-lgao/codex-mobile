@@ -344,6 +344,7 @@ export function useDesktopState() {
     selectedSpeedMode,
     applyFallbackModelSelection,
     buildPendingTurnDetails,
+    hasThreadModelSelection,
     pruneThreadModelState,
     readModelIdForThread,
     refreshModelPreferences,
@@ -2826,8 +2827,12 @@ export function useDesktopState() {
 
     try {
       if (resumedThreadById.value[threadId] !== true) {
+        const existingThreadModel = hasThreadModelSelection(threadId)
         const resumedThread = await resumeThread(threadId)
-        if (resumedThread.model) {
+        // round-72：用户在 UI 已为该线程显式选过模型时，不再用服务端线程
+        // 持久化的 model 覆盖（旧模型被删除/下线时，resume 返回的仍是旧 ID，
+        // 直接拿去发请求会 400）；无显式选择时才用 resume 的 model 初始化。
+        if (resumedThread.model && !existingThreadModel) {
           setThreadModelId(threadId, resolveThreadModelForProvider(threadId, resumedThread.model, resumedThread.modelProvider))
         }
         if (resumedThread.modelProvider) {
