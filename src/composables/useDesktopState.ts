@@ -12,6 +12,7 @@ import {
   replyToServerRequest,
   revertThreadFileChanges,
   rollbackThread,
+  revertThread,
   getWorkspaceRootsState,
   setWorkspaceRootsState,
   persistThreadTitle,
@@ -287,6 +288,33 @@ const KNOWN_IGNORED_NOTIFICATION_METHODS = new Set<string>([
   'windowsSandbox/setupCompleted',
 ])
 
+// round-74：把模型切换分割栏按锚点插回到「切换发生时那条真实消息」之后，而不是固定在列表末尾，
+// 使分割栏停留在切换发生处；锚点丢失时回退追加到末尾（持久化消息被合并/去重去除后仍有一条可展示）。
+export function insertModelSwitchMarkers(realMessages: UiMessage[], markers: UiMessage[]): UiMessage[] {
+  if (markers.length === 0) return realMessages
+  const realIdSet = new Set(realMessages.map((message) => message.id))
+  const attachedByAnchor = new Map<string, UiMessage[]>()
+  const unanchored: UiMessage[] = []
+  for (const marker of markers) {
+    const anchor = marker.modelSwitchInsertAfterId
+    if (anchor && realIdSet.has(anchor)) {
+      const list = attachedByAnchor.get(anchor) ?? []
+      list.push(marker)
+      attachedByAnchor.set(anchor, list)
+    } else {
+      unanchored.push(marker)
+    }
+  }
+  const result: UiMessage[] = []
+  for (const message of realMessages) {
+    result.push(message)
+    const attached = attachedByAnchor.get(message.id)
+    if (attached && attached.length > 0) result.push(...attached)
+  }
+  if (unanchored.length > 0) result.push(...unanchored)
+  return result
+}
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -499,6 +527,8 @@ export function useDesktopState() {
   const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
   const modelSwitchMarkersByThreadId = ref<Record<string, UiMessage[]>>(loadModelSwitchMarkerMap())
+  // round-74：记录每个线程最近一次模型切换时的持久化消息条数，用于判断自此以来是否有新轮次。
+  const lastModelSwitchPersistedCountByThreadId = ref<Record<string, number>>({})
 
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
@@ -687,10 +717,11 @@ export function useDesktopState() {
     const withSummary = summary ? insertTurnSummaryMessage(combined, summary) : combined
     // round-65：合入持久化的各轮耗时（live turn 摘要已插入时跳过，避免重复）。
     const withDurations = insertPersistedTurnDurations(withSummary, persistedTurnDurationsByThreadId.value[threadId])
-    // round-73：本地「模型切换」分割栏追加在消息列表末尾（不进入过程区/结论区，
-    // 渲染侧在 filteredMessages 提前剔除，见 ThreadConversation.vue）。
+    // round-73/74：本地「模型切换」分割栏按锚点插回到切换发生处的真实消息之后（而非固定在列表末尾），
+    // 使其停留在切换位置，后续新轮次会排在其后。渲染侧在 filteredMessages 剔除、由 renderTurns
+    // 在两轮之间作为独立分割条渲染（见 ThreadConversation.vue）。
     const modelSwitchMarkers = modelSwitchMarkersByThreadId.value[threadId] ?? []
-    return modelSwitchMarkers.length > 0 ? [...withDurations, ...modelSwitchMarkers] : withDurations
+    return insertModelSwitchMarkers(withDurations, modelSwitchMarkers)
   })
   // 需求 9：当前线程「中断后服务端移除未提交 turn」时待回填的用户消息载荷
   const interruptedUnsubmittedMessage = computed<InterruptRecoverPayload | null>(() => {
@@ -770,8 +801,10 @@ export function useDesktopState() {
     }
   }
 
-  // round-73：往线程消息列表追加一条本地「模型切换」分割栏（持久化到 localStorage，
-  // 不写入服务器）。渲染侧视其为独立分割条，不参与过程区/结论区。
+  // round-73/74：向线程注入一条本地「模型切换」分割栏（持久化到 localStorage，不写入服务器）。
+  // - 若自上次切换以来没有新消息/新轮次，且已有分割栏 → 改写最后一条（from/to）而非新增，避免在同一位置重复堆积；
+  // - 否则追加一条，并记录锚点 = 切换发生时最后一条真实消息 id，使其在消息流中停留在切换发生处。
+  // 渲染侧视其为独立分割条，不参与过程区/结论区。
   function injectModelSwitchDivision(threadId: string, from: string, to: string): void {
     const normalizedThreadId = threadId.trim()
     const fromTrim = from.trim()
@@ -780,18 +813,41 @@ export function useDesktopState() {
     if (fromTrim === toTrim) return
 
     const previous = modelSwitchMarkersByThreadId.value[normalizedThreadId] ?? []
-    const marker: UiMessage = {
-      id: `model-switch:${normalizedThreadId}:${Date.now()}:${previous.length}`,
-      role: 'system',
-      text: '',
-      messageType: MODEL_SWITCH_MESSAGE_TYPE,
-      modelSwitchFrom: fromTrim || undefined,
-      modelSwitchTo: toTrim,
+    const persisted = persistedMessagesByThreadId.value[normalizedThreadId] ?? []
+    const persistedCount = persisted.length
+    const recordedCount = lastModelSwitchPersistedCountByThreadId.value[normalizedThreadId]
+    const noNewTurnSinceLastSwitch = previous.length > 0
+      && recordedCount !== undefined && recordedCount === persistedCount
+
+    let next: UiMessage[]
+    if (noNewTurnSinceLastSwitch) {
+      const last = previous[previous.length - 1]
+      next = [...previous.slice(0, -1), {
+        ...last,
+        modelSwitchFrom: fromTrim || undefined,
+        modelSwitchTo: toTrim,
+      }]
+    } else {
+      const anchorId = persisted[persisted.length - 1]?.id
+      const marker: UiMessage = {
+        id: `model-switch:${normalizedThreadId}:${Date.now()}:${previous.length}`,
+        role: 'system',
+        text: '',
+        messageType: MODEL_SWITCH_MESSAGE_TYPE,
+        modelSwitchFrom: fromTrim || undefined,
+        modelSwitchTo: toTrim,
+        ...(anchorId ? { modelSwitchInsertAfterId: anchorId } : {}),
+      }
+      next = [...previous, marker].slice(-MAX_MODEL_SWITCH_MARKERS_PER_THREAD)
     }
-    const next = [...previous, marker].slice(-MAX_MODEL_SWITCH_MARKERS_PER_THREAD)
+
     modelSwitchMarkersByThreadId.value = {
       ...modelSwitchMarkersByThreadId.value,
       [normalizedThreadId]: next,
+    }
+    lastModelSwitchPersistedCountByThreadId.value = {
+      ...lastModelSwitchPersistedCountByThreadId.value,
+      [normalizedThreadId]: persistedCount,
     }
     saveModelSwitchMarkerMap(modelSwitchMarkersByThreadId.value)
   }
@@ -3056,6 +3112,25 @@ export function useDesktopState() {
     }
   }
 
+  // round-73：legacy 历史用 `thread/rollback`（按轮数），paginated 历史不支持该方法，
+  // 服务端整体拒绝（`paginated threads do not support thread/rollback`）。在此按错误
+  // 特征降级到 `thread/revert {threadId, beforeTurnId}`，与 round-73 文档结论一致。
+  async function rollbackThreadWithRevertFallback(
+    threadId: string,
+    numTurns: number,
+    beforeTurnId: string,
+  ): Promise<UiMessage[]> {
+    try {
+      return await rollbackThread(threadId, numTurns)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (beforeTurnId && /not support thread\/rollback/.test(message)) {
+        return await revertThread(threadId, beforeTurnId)
+      }
+      throw error
+    }
+  }
+
   async function rollbackSelectedThread(turnId: string): Promise<void> {
     const threadId = selectedThreadId.value
     if (!threadId) return
@@ -3094,11 +3169,31 @@ export function useDesktopState() {
       // +1 后仍为 1，删除该轮而不是静默无操作。
       const numTurns = maxTurnIndex - turnIndex + 1
 
+      // round-73：除 legacy 的 numTurns 外，预计算 paginated 历史（thread/revert）所需的
+      // beforeTurnId = 要移除的首个轮次 id。目标轮无法直接定位（钳制到最新一轮）时，
+      // 退而求其次用最新持久化消息的 turnId 作为撤销点。
+      let beforeTurnId = matchedMessage?.turnId?.trim() ?? ''
+      if (!beforeTurnId) {
+        const newest = persisted.reduce<UiMessage | null>((acc, m) => {
+          const mIndex = typeof m.turnIndex === 'number' ? m.turnIndex : -1
+          const accIndex = acc !== null && typeof acc.turnIndex === 'number' ? acc.turnIndex : -1
+          return mIndex >= 0 && mIndex > accIndex ? m : acc
+        }, null)
+        beforeTurnId = newest?.turnId?.trim() ?? ''
+      }
+
+      // round-73：先回滚对话、成功后再回退文件。若仍按旧序先退文件，paginated 线程
+      // 回滚会抛错导致「文件已退、对话未退」的静默不一致；降级路径同样在对话成功后执行。
+      const nextMessages = await rollbackThreadWithRevertFallback(threadId, numTurns, beforeTurnId)
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
       if (threadCwd) {
-        await revertThreadFileChanges(threadId, turnId, threadCwd)
+        // round-73：文件回退的失败语义是 return { errors: [...] } 而非 throw，此前返回值
+        // 被丢弃会形成「对话退了、文件没退」的静默不一致。这里显式检查并作为 warning 上报。
+        const fileRevert = await revertThreadFileChanges(threadId, turnId, threadCwd)
+        if (fileRevert.errors.length > 0) {
+          console.warn(`[rollback] file revert for ${threadId} left errors: ${fileRevert.errors.join('; ')}`)
+        }
       }
-      const nextMessages = await rollbackThread(threadId, numTurns)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])
       clearLiveReasoningForThread(threadId)
