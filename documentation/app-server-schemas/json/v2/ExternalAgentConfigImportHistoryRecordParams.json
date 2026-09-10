@@ -1,32 +1,69 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ExternalAgentConfigImportHistoryRecordParams",
-  "type": "object",
-  "required": [
-    "itemTypeResults",
-    "providerId"
-  ],
-  "properties": {
-    "itemTypeResults": {
-      "description": "Completed results grouped by imported item type.",
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/ExternalAgentConfigImportTypeResult"
-      }
-    },
-    "providerId": {
-      "description": "Opaque provider identifier for the externally completed import.",
-      "type": "string"
-    }
-  },
   "definitions": {
-    "ExternalAgentConfigImportItemTypeFailure": {
-      "type": "object",
+    "ExternalAgentConfigImportHistoryRecordSuccessParams": {
+      "properties": {
+        "cwd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemType": {
+          "$ref": "#/definitions/ExternalAgentConfigMigrationItemType"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "default": null,
+          "description": "Original title for an imported session, when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "required": [
-        "failureStage",
-        "itemType",
-        "message"
+        "itemType"
       ],
+      "type": "object"
+    },
+    "ExternalAgentConfigImportHistoryRecordTypeResultParams": {
+      "properties": {
+        "failures": {
+          "items": {
+            "$ref": "#/definitions/ExternalAgentConfigImportItemTypeFailure"
+          },
+          "type": "array"
+        },
+        "itemType": {
+          "$ref": "#/definitions/ExternalAgentConfigMigrationItemType"
+        },
+        "successes": {
+          "items": {
+            "$ref": "#/definitions/ExternalAgentConfigImportHistoryRecordSuccessParams"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "failures",
+        "itemType",
+        "successes"
+      ],
+      "type": "object"
+    },
+    "ExternalAgentConfigImportItemTypeFailure": {
       "properties": {
         "cwd": {
           "type": [
@@ -61,64 +98,15 @@
             "null"
           ]
         }
-      }
-    },
-    "ExternalAgentConfigImportItemTypeSuccess": {
-      "type": "object",
+      },
       "required": [
-        "itemType"
-      ],
-      "properties": {
-        "cwd": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "itemType": {
-          "$ref": "#/definitions/ExternalAgentConfigMigrationItemType"
-        },
-        "source": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "target": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
-    "ExternalAgentConfigImportTypeResult": {
-      "type": "object",
-      "required": [
-        "failures",
+        "failureStage",
         "itemType",
-        "successes"
+        "message"
       ],
-      "properties": {
-        "failures": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ExternalAgentConfigImportItemTypeFailure"
-          }
-        },
-        "itemType": {
-          "$ref": "#/definitions/ExternalAgentConfigMigrationItemType"
-        },
-        "successes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ExternalAgentConfigImportItemTypeSuccess"
-          }
-        }
-      }
+      "type": "object"
     },
     "ExternalAgentConfigMigrationItemType": {
-      "type": "string",
       "enum": [
         "AGENTS_MD",
         "CONFIG",
@@ -130,7 +118,27 @@
         "COMMANDS",
         "MEMORY",
         "SESSIONS"
-      ]
+      ],
+      "type": "string"
     }
-  }
+  },
+  "properties": {
+    "itemTypeResults": {
+      "description": "Completed results grouped by imported item type.",
+      "items": {
+        "$ref": "#/definitions/ExternalAgentConfigImportHistoryRecordTypeResultParams"
+      },
+      "type": "array"
+    },
+    "providerId": {
+      "description": "Opaque provider identifier for the externally completed import.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "itemTypeResults",
+    "providerId"
+  ],
+  "title": "ExternalAgentConfigImportHistoryRecordParams",
+  "type": "object"
 }

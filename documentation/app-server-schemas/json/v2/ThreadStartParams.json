@@ -1,126 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ThreadStartParams",
-  "type": "object",
-  "properties": {
-    "threadSource": {
-      "description": "Optional client-supplied analytics source classification for this thread.",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/ThreadSource"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "approvalPolicy": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/AskForApproval"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "approvalsReviewer": {
-      "description": "Override where approval requests are routed for review on this thread and subsequent turns.",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/ApprovalsReviewer"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "baseInstructions": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "config": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "additionalProperties": true
-    },
-    "cwd": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "developerInstructions": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "sandbox": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/SandboxMode"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "sessionStartSource": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/ThreadStartSource"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "ephemeral": {
-      "type": [
-        "boolean",
-        "null"
-      ]
-    },
-    "personality": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Personality"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "serviceName": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "model": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "modelProvider": {
-      "type": [
-        "string",
-        "null"
-      ]
-    }
-  },
   "definitions": {
     "AbsolutePathBuf": {
       "description": "A path that is guaranteed to be absolute and normalized (though it is not guaranteed to be canonicalized or exist on the filesystem).\n\nIMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using [AbsolutePathBufGuard::new]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.",
@@ -128,36 +7,27 @@
     },
     "ApprovalsReviewer": {
       "description": "Configures who approval requests are routed to for review. Examples include sandbox escapes, blocked network access, MCP approval prompts, and ARC escalations. Defaults to `user`. `auto_review` uses a carefully prompted subagent to gather relevant context and apply a risk-based decision framework before approving or denying the request. The legacy value `guardian_subagent` is accepted for compatibility.",
-      "type": "string",
       "enum": [
         "user",
         "auto_review",
         "guardian_subagent"
-      ]
+      ],
+      "type": "string"
     },
     "AskForApproval": {
       "oneOf": [
         {
-          "type": "string",
           "enum": [
             "untrusted",
             "on-request",
             "never"
-          ]
+          ],
+          "type": "string"
         },
         {
-          "type": "object",
-          "required": [
-            "granular"
-          ],
+          "additionalProperties": false,
           "properties": {
             "granular": {
-              "type": "object",
-              "required": [
-                "mcp_elicitations",
-                "rules",
-                "sandbox_approval"
-              ],
               "properties": {
                 "mcp_elicitations": {
                   "type": "boolean"
@@ -176,11 +46,20 @@
                   "default": false,
                   "type": "boolean"
                 }
-              }
+              },
+              "required": [
+                "mcp_elicitations",
+                "rules",
+                "sandbox_approval"
+              ],
+              "type": "object"
             }
           },
-          "additionalProperties": false,
-          "title": "GranularAskForApproval"
+          "required": [
+            "granular"
+          ],
+          "title": "GranularAskForApproval",
+          "type": "object"
         }
       ]
     },
@@ -189,12 +68,6 @@
       "oneOf": [
         {
           "description": "A path owned by an execution environment.",
-          "type": "object",
-          "required": [
-            "environmentId",
-            "path",
-            "type"
-          ],
           "properties": {
             "environmentId": {
               "type": "string"
@@ -204,27 +77,26 @@
               "type": "string"
             },
             "type": {
-              "type": "string",
               "enum": [
                 "environment"
               ],
-              "title": "EnvironmentCapabilityRootLocationType"
+              "title": "EnvironmentCapabilityRootLocationType",
+              "type": "string"
             }
           },
-          "title": "EnvironmentCapabilityRootLocation"
+          "required": [
+            "environmentId",
+            "path",
+            "type"
+          ],
+          "title": "EnvironmentCapabilityRootLocation",
+          "type": "object"
         }
       ]
     },
     "DynamicToolNamespaceTool": {
       "oneOf": [
         {
-          "type": "object",
-          "required": [
-            "description",
-            "inputSchema",
-            "name",
-            "type"
-          ],
           "properties": {
             "deferLoading": {
               "type": "boolean"
@@ -237,27 +109,27 @@
               "type": "string"
             },
             "type": {
-              "type": "string",
               "enum": [
                 "function"
               ],
-              "title": "FunctionDynamicToolNamespaceToolType"
+              "title": "FunctionDynamicToolNamespaceToolType",
+              "type": "string"
             }
           },
-          "title": "FunctionDynamicToolNamespaceTool"
+          "required": [
+            "description",
+            "inputSchema",
+            "name",
+            "type"
+          ],
+          "title": "FunctionDynamicToolNamespaceTool",
+          "type": "object"
         }
       ]
     },
     "DynamicToolSpec": {
       "oneOf": [
         {
-          "type": "object",
-          "required": [
-            "description",
-            "inputSchema",
-            "name",
-            "type"
-          ],
           "properties": {
             "deferLoading": {
               "type": "boolean"
@@ -270,23 +142,23 @@
               "type": "string"
             },
             "type": {
-              "type": "string",
               "enum": [
                 "function"
               ],
-              "title": "FunctionDynamicToolSpecType"
+              "title": "FunctionDynamicToolSpecType",
+              "type": "string"
             }
           },
-          "title": "FunctionDynamicToolSpec"
-        },
-        {
-          "type": "object",
           "required": [
             "description",
+            "inputSchema",
             "name",
-            "tools",
             "type"
           ],
+          "title": "FunctionDynamicToolSpec",
+          "type": "object"
+        },
+        {
           "properties": {
             "description": {
               "type": "string"
@@ -295,20 +167,27 @@
               "type": "string"
             },
             "tools": {
-              "type": "array",
               "items": {
                 "$ref": "#/definitions/DynamicToolNamespaceTool"
-              }
+              },
+              "type": "array"
             },
             "type": {
-              "type": "string",
               "enum": [
                 "namespace"
               ],
-              "title": "NamespaceDynamicToolSpecType"
+              "title": "NamespaceDynamicToolSpecType",
+              "type": "string"
             }
           },
-          "title": "NamespaceDynamicToolSpec"
+          "required": [
+            "description",
+            "name",
+            "tools",
+            "type"
+          ],
+          "title": "NamespaceDynamicToolSpec",
+          "type": "object"
         }
       ]
     },
@@ -319,88 +198,83 @@
       "description": "Controls the effective multi-agent delegation instructions for a turn. `custom` means the configured mode hint defines the policy instead of a built-in policy.",
       "oneOf": [
         {
-          "type": "string",
           "enum": [
             "explicitRequestOnly",
             "proactive"
-          ]
+          ],
+          "type": "string"
         },
         {
-          "type": "object",
-          "required": [
-            "custom"
-          ],
+          "additionalProperties": false,
           "properties": {
             "custom": {
               "type": "string"
             }
           },
-          "additionalProperties": false,
-          "title": "CustomMultiAgentMode"
+          "required": [
+            "custom"
+          ],
+          "title": "CustomMultiAgentMode",
+          "type": "object"
         }
       ]
     },
     "Personality": {
-      "type": "string",
       "enum": [
         "none",
         "friendly",
         "pragmatic"
-      ]
+      ],
+      "type": "string"
     },
     "SandboxMode": {
-      "type": "string",
       "enum": [
         "read-only",
         "workspace-write",
         "danger-full-access"
-      ]
+      ],
+      "type": "string"
     },
     "SelectedCapabilityRoot": {
       "description": "A user-selected root that can expose one or more runtime capabilities.",
-      "type": "object",
-      "required": [
-        "id",
-        "location"
-      ],
       "properties": {
         "id": {
           "description": "Stable identifier supplied by the capability selection platform.",
           "type": "string"
         },
         "location": {
-          "description": "Where the selected root can be resolved.",
           "allOf": [
             {
               "$ref": "#/definitions/CapabilityRootLocation"
             }
-          ]
+          ],
+          "description": "Where the selected root can be resolved."
         }
-      }
+      },
+      "required": [
+        "id",
+        "location"
+      ],
+      "type": "object"
     },
     "ThreadHistoryMode": {
-      "type": "string",
       "enum": [
         "legacy",
         "paginated"
-      ]
+      ],
+      "type": "string"
     },
     "ThreadSource": {
       "type": "string"
     },
     "ThreadStartSource": {
-      "type": "string",
       "enum": [
         "startup",
         "clear"
-      ]
+      ],
+      "type": "string"
     },
     "TurnEnvironmentParams": {
-      "type": "object",
-      "required": [
-        "cwd",
-        "environmentId"
-      ],
       "properties": {
         "cwd": {
           "$ref": "#/definitions/LegacyAppPathString"
@@ -410,15 +284,232 @@
         },
         "runtimeWorkspaceRoots": {
           "description": "Environment-native runtime workspace roots. Omitted defaults to `cwd`.",
+          "items": {
+            "$ref": "#/definitions/LegacyAppPathString"
+          },
           "type": [
             "array",
             "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/LegacyAppPathString"
-          }
+          ]
         }
-      }
+      },
+      "required": [
+        "cwd",
+        "environmentId"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "properties": {
+    "allowProviderModelFallback": {
+      "description": "Allow a provider with an authoritative static model catalog to replace an unavailable requested model with its default.",
+      "type": "boolean"
+    },
+    "approvalPolicy": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AskForApproval"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "approvalsReviewer": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ApprovalsReviewer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Override where approval requests are routed for review on this thread and subsequent turns."
+    },
+    "baseInstructions": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "config": {
+      "additionalProperties": true,
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "cwd": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "developerInstructions": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dynamicTools": {
+      "default": null,
+      "items": {
+        "$ref": "#/definitions/DynamicToolSpec"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "environments": {
+      "description": "Optional sticky environments for this thread.\n\nOmitted selects the default environment when environment access is enabled. Empty disables environment access for turns that do not provide a turn override. Non-empty selects the first environment as the current turn environment.",
+      "items": {
+        "$ref": "#/definitions/TurnEnvironmentParams"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "ephemeral": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "experimentalRawEvents": {
+      "description": "If true, opt into emitting raw Responses API items on the event stream. This is for internal use only (e.g. Codex Cloud).",
+      "type": "boolean"
+    },
+    "historyMode": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadHistoryMode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Persisted thread history contract to use for this new thread."
+    },
+    "mockExperimentalField": {
+      "description": "Test-only experimental field used to validate experimental gating and schema filtering behavior in a stable way.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modelProvider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "multiAgentMode": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MultiAgentMode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "@deprecated Ignored. Use Ultra reasoning effort for proactive multi-agent behavior."
+    },
+    "permissions": {
+      "description": "Named profile id for this thread. Cannot be combined with `sandbox`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "personality": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Personality"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "projectId": {
+      "description": "Optional project identity for this new thread. Durable threads persist the assignment; ephemeral threads expose it only in live responses.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "runtimeWorkspaceRoots": {
+      "description": "Replace the thread's runtime workspace roots. Paths must be absolute.",
+      "items": {
+        "$ref": "#/definitions/AbsolutePathBuf"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "sandbox": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SandboxMode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selectedCapabilityRoots": {
+      "description": "Capability roots selected for this thread by the hosting platform.",
+      "items": {
+        "$ref": "#/definitions/SelectedCapabilityRoot"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "serviceName": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sessionStartSource": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadStartSource"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "threadSource": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThreadSource"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional client-supplied analytics source classification for this thread."
+    }
+  },
+  "title": "ThreadStartParams",
+  "type": "object"
 }
