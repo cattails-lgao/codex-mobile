@@ -1237,6 +1237,8 @@ const {
   setSelectedCollaborationMode,
   readModelIdForThread,
   setSelectedModelIdForThread,
+  injectModelSwitchDivision,
+  invalidateThreadContextWindow,
 
   setSelectedReasoningEffort,
   updateSelectedSpeedMode,
@@ -4001,7 +4003,14 @@ function onReorderQueuedMessage(payload: { draggedId: string; targetId: string }
 }
 
 function onSelectModel(modelId: string): void {
-  setSelectedModelIdForThread(composerThreadContextId.value, modelId)
+  const threadId = composerThreadContextId.value
+  const previous = readModelIdForThread(threadId)
+  setSelectedModelIdForThread(threadId, modelId)
+  // round-73：模型真正变化时，注入「模型切换」分割栏消息并失效旧模型的上下文窗口。
+  if (previous && previous !== modelId) {
+    injectModelSwitchDivision(threadId, previous, modelId)
+    invalidateThreadContextWindow(threadId)
+  }
 }
 
 function onSelectReasoningEffort(effort: ReasoningEffort | ''): void {

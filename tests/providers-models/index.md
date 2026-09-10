@@ -10,6 +10,7 @@ Return to the [manual test index](../../tests.md).
 | --- |
 | [Feature: Per-thread model selection](per-thread-model-selection.md) |
 | [Thread model switch persists and wins on first resume](thread-model-switch-persists-on-resume.md) |
+| [Model switch resets context window and appends a local divider](model-switch-resets-context-and-appends-divider.md) |
 | [Free Mode (OpenRouter)](free-mode-openrouter.md) |
 | [Feature: Codex.app Thread Provider Filter Patch (fix-codex-thread-filter.sh)](codex-app-thread-provider-filter-patch-fix-codex-thread-filter-sh.md) |
 | [Feature: Provider dropdown in settings (replaces free mode toggle)](provider-dropdown-in-settings-replaces-free-mode-toggle.md) |

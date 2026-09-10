@@ -13,6 +13,7 @@ import {
   NEW_THREAD_COLLABORATION_MODE_CONTEXT,
 } from './useDesktopStateContext'
 import { normalizeThreadTokenUsage } from './useDesktopStateUtils'
+import { isModelSwitchMessage, MAX_MODEL_SWITCH_MARKERS_PER_THREAD } from '../utils/modelSwitchMessages'
 
 const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1'
 const UNREAD_CUTOFF_STORAGE_KEY = 'codex-web-local.thread-unread-cutoff.v1'
@@ -303,6 +304,44 @@ export function loadThreadTokenUsageMap(): Record<string, UiThreadTokenUsage> {
 export function saveThreadTokenUsageMap(state: Record<string, UiThreadTokenUsage>): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(THREAD_TOKEN_USAGE_STORAGE_KEY, JSON.stringify(state))
+}
+
+const THREAD_MODEL_SWITCH_MARKERS_STORAGE_KEY = 'codex-web-local.thread-model-switch-markers.v1'
+
+// round-73：本地持久化的「模型切换」分割栏消息。用户切模型时往线程消息列表追加一条
+// `messageType === 'modelSwitch'` 的系统消息，仅存在本机 localStorage，不写入服务器。
+export function loadModelSwitchMarkerMap(): Record<string, UiMessage[]> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_MODEL_SWITCH_MARKERS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: Record<string, UiMessage[]> = {}
+    for (const [threadId, rows] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!threadId || !Array.isArray(rows)) continue
+      const markers = (rows as unknown[])
+        .filter((row): row is UiMessage => Boolean(row) && typeof row === 'object' && isModelSwitchMessage(row as UiMessage))
+        .slice(0, MAX_MODEL_SWITCH_MARKERS_PER_THREAD)
+      if (markers.length > 0) result[threadId] = markers
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function saveModelSwitchMarkerMap(state: Record<string, UiMessage[]>): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (Object.keys(state).length === 0) {
+      window.localStorage.removeItem(THREAD_MODEL_SWITCH_MARKERS_STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(THREAD_MODEL_SWITCH_MARKERS_STORAGE_KEY, JSON.stringify(state))
+    }
+  } catch {
+    // Keep in-memory markers working even if localStorage writes fail.
+  }
 }
 
 export function loadThreadTerminalOpenMap(): Record<string, boolean> {
