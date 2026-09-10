@@ -44,3 +44,4 @@ Return to the [manual test index](../../tests.md).
 | [Live agent turn ownership and resume responsiveness](live-agent-turn-ownership-and-resume-responsiveness.md) — includes unknown `liveTurnId` final-summary regression |
 | [Codex 0.149.1 notification compatibility](codex-0.149.1-notification-compatibility.md) |
 | [Foreground resume sync on desktop and mobile](foreground-resume-sync-on-desktop-and-mobile.md) |
+| [Rollback works on both legacy and paginated threads](rollback-works-on-legacy-and-paginated-threads.md) |

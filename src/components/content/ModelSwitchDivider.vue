@@ -17,23 +17,34 @@ defineProps<{
 
 <style scoped>
 .model-switch-divider {
-  @apply flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #71717a;
 }
 
 .model-switch-track {
-  @apply flex-1 h-px bg-slate-300/80;
+  flex: 1;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.5);
 }
 
 .model-switch-label {
-  @apply whitespace-nowrap overflow-hidden text-ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   opacity: 0.92;
 }
 
 :global(:root.dark) .model-switch-divider {
-  @apply text-zinc-500;
+  color: #71717a;
 }
 
 :global(:root.dark) .model-switch-track {
-  @apply bg-zinc-700/80;
+  background: rgba(63, 63, 70, 0.55);
 }
 </style>

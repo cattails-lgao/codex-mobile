@@ -28,18 +28,26 @@
           {{ t('Load earlier ({n} turns)', { n: coldTurnCount }) }}
         </button>
       </li>
-      <ThreadTurn
-        v-for="turn in renderTurns"
-        :key="turn.key"
-        :turn-key="turn.key"
-        :warm="turn.warm"
-        :warm-items="turn.warmItems"
-        :request="turn.request"
-        :process-items="turn.processItems"
-        :final-item="turn.finalItem"
-        :file-change-anchor-ids="turn.fileChangeAnchorIds"
-        :duration-ms="turnDurationMs(turn)"
-      >
+      <template v-for="turn in renderTurns" :key="turn.key">
+        <li
+          v-for="divider in turn.leadingDividers ?? []"
+          :key="`${turn.key}-leading-${(divider.to ?? '')}-${(divider.from ?? '')}`"
+          class="conversation-item conversation-item-model-switch"
+          data-role="system"
+          data-message-type="modelSwitch"
+        >
+          <ModelSwitchDivider :from="divider.from" :to="divider.to" />
+        </li>
+        <ThreadTurn
+          :turn-key="turn.key"
+          :warm="turn.warm"
+          :warm-items="turn.warmItems"
+          :request="turn.request"
+          :process-items="turn.processItems"
+          :final-item="turn.finalItem"
+          :file-change-anchor-ids="turn.fileChangeAnchorIds"
+          :duration-ms="turnDurationMs(turn)"
+        >
         <template #warm-card="{ warm }">
           <li
             :id="questionAnchorId(warm.turn)"
@@ -427,16 +435,17 @@
       </template>
       </template>
       </ThreadTurn>
+        <li
+          v-for="divider in turn.dividers ?? []"
+          :key="`${turn.key}-divider-${(divider.to ?? '')}-${(divider.from ?? '')}`"
+          class="conversation-item conversation-item-model-switch"
+          data-role="system"
+          data-message-type="modelSwitch"
+        >
+          <ModelSwitchDivider :from="divider.from" :to="divider.to" />
+        </li>
+      </template>
       <LiveOverlayItem v-if="liveOverlay" :overlay="liveOverlay" :feedback-mailto="feedbackMailto" />
-      <li
-        v-for="marker in modelSwitchMessages"
-        :key="marker.id"
-        class="conversation-item conversation-item-model-switch"
-        data-role="system"
-        data-message-type="modelSwitch"
-      >
-        <ModelSwitchDivider :from="marker.modelSwitchFrom" :to="marker.modelSwitchTo" />
-      </li>
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
 
@@ -726,8 +735,6 @@ function isModelSwitchMessage(message: UiMessage): boolean {
   return message.messageType === 'modelSwitch'
 }
 
-const modelSwitchMessages = computed(() => props.messages.filter(isModelSwitchMessage))
-
 function isReasoningMessage(message: UiMessage): boolean {
   return message.messageType === 'reasoning' && Boolean(message.reasoning)
 }
@@ -907,6 +914,10 @@ type ConversationRenderTurn = {
   processItems: RenderMessageItem[]
   fileChangeAnchorIds: string[]
   finalItem?: RenderMessageItem
+  /** round-74：跟随在本轮（切换发生时那轮真实消息）之后渲染的模型切换分割栏。 */
+  dividers?: { from?: string; to?: string }[] | undefined
+  /** round-74：本轮之前渲染的模型切换分割栏（切换发生在无消息处 / 锚点未命中）。 */
+  leadingDividers?: { from?: string; to?: string }[] | undefined
 }
 
 // Warm 继续使用既有扁平展开，Hot 改为真正的 request / process / final turn 容器。
@@ -915,6 +926,36 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
   const groups = turnGroups.value
   const turns: ConversationRenderTurn[] = []
   const expanded = expandedWarmTurns.value
+
+  // round-74：模型切换分割栏按「切换发生处那条真实消息 id」锚定到包含它的轮次之后渲染。
+  // 一个锚点可携带多条分割栏（多次切换落在同一位置）；锚点消息是本轮任意一条真实消息
+  // （含 final assistant）即可，而不要求是轮末最后一项——持久化的 worked/耗时消息会被
+  // 追加在同轮末尾，导致旧「仅匹配轮末 id」逻辑把分割栏误吞。
+  const anchorToDividers = new Map<string, { from?: string; to?: string }[]>()
+  const unanchoredDividers: { from?: string; to?: string }[] = []
+  for (const marker of props.messages) {
+    if (!isModelSwitchMessage(marker)) continue
+    const data = { from: marker.modelSwitchFrom, to: marker.modelSwitchTo }
+    if (marker.modelSwitchInsertAfterId) {
+      const list = anchorToDividers.get(marker.modelSwitchInsertAfterId) ?? []
+      list.push(data)
+      anchorToDividers.set(marker.modelSwitchInsertAfterId, list)
+    } else {
+      unanchoredDividers.push(data)
+    }
+  }
+  // 取出落在本轮消息集合内的锚定分割栏（顺序保持，取后从 map 移除避免重复挂载）。
+  function takeGroupDividers(items: { message: UiMessage }[]): { from?: string; to?: string }[] {
+    const attached: { from?: string; to?: string }[] = []
+    for (const item of items) {
+      const list = anchorToDividers.get(item.message.id)
+      if (list && list.length > 0) {
+        attached.push(...list)
+        anchorToDividers.delete(item.message.id)
+      }
+    }
+    return attached
+  }
 
   for (let turn = warmStartTurn.value; turn < warmEndTurn.value; turn += 1) {
     const group = groups[turn]
@@ -929,14 +970,26 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
     const warmItems = expanded.has(turn)
       ? messages.slice(group.startIdx, group.endIdx).map((message) => ({ message }))
       : []
-    turns.push({ key: `warm-${turn}`, warm, warmItems, processItems: [], fileChangeAnchorIds: [] })
+    const warmDividers = takeGroupDividers(
+      messages.slice(group.startIdx, Math.min(group.endIdx, messages.length)).map((message) => ({ message })),
+    )
+    turns.push({
+      key: `warm-${turn}`,
+      warm,
+      warmItems,
+      processItems: [],
+      fileChangeAnchorIds: [],
+      ...(warmDividers.length > 0 ? { dividers: warmDividers } : {}),
+    })
   }
 
   const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
   const firstHotMessage = hotMessages[0]
   if (!firstHotMessage) return turns
-  const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
-  const hotSourceMessages = hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages
+  // round-74：用「已剔除 plan/modelSwitch」的 filtered 消息切片，避免尾部 modelSwitch 分割栏
+  // （role=system）混入 hot 区、在 buildTurnRenderGroups 里被并入上一轮次组（Bug B）。
+  const hotStartIndex = messages.findIndex((message) => message.id === firstHotMessage.id)
+  const hotSourceMessages = hotStartIndex >= 0 ? messages.slice(hotStartIndex) : hotMessages
 
   for (const group of buildTurnRenderGroups(hotSourceMessages, {
     liveOverlayActive: props.liveOverlay !== null,
@@ -961,6 +1014,10 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
       .map((item) => item.message.id)
       .filter((messageId) => Boolean(readAnchoredFileChangeSummaryById(messageId)))
 
+    // round-74：切换发生在本轮任意一条真实消息之后 → 在该轮后挂分割栏（锚点消息
+    // 即本轮成员即可，不必是轮末最后一项，容忍边界处追加的 worked/耗时消息）。
+    const groupDividers = takeGroupDividers(group.items)
+
     turns.push({
       key: group.key,
       warmItems: [],
@@ -968,7 +1025,22 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
       processItems,
       fileChangeAnchorIds,
       finalItem: finalItem ? { message: finalItem.message, presentation: 'final-assistant' } : undefined,
+      ...(groupDividers.length > 0 ? { dividers: groupDividers } : {}),
     })
+  }
+
+  // round-74：无锚点或锚点在 warm/cold 区未命中的分割栏（切换发生在无消息处），
+  // 统一挂在首条轮次之前；多条按顺序堆叠展示，避免被吞。
+  const leadingDividers = [...unanchoredDividers, ...anchorToDividers.values()].flat()
+  if (leadingDividers.length > 0) {
+    if (turns.length > 0) {
+      turns[0] = {
+        ...turns[0],
+        leadingDividers: [...(turns[0].leadingDividers ?? []), ...leadingDividers],
+      }
+    } else {
+      turns.push({ key: 'leading-divider', warmItems: [], processItems: [], fileChangeAnchorIds: [], leadingDividers })
+    }
   }
   return turns
 })
@@ -1064,8 +1136,8 @@ const renderedMessagesForFolds = computed(() => {
   const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
   const firstHotMessage = hotMessages[0]
   if (!firstHotMessage) return rendered
-  const hotStartIndex = props.messages.findIndex((message) => message.id === firstHotMessage.id)
-  rendered.push(...(hotStartIndex >= 0 ? props.messages.slice(hotStartIndex) : hotMessages))
+  const hotStartIndex = messages.findIndex((message) => message.id === firstHotMessage.id)
+  rendered.push(...(hotStartIndex >= 0 ? messages.slice(hotStartIndex) : hotMessages))
   return rendered
 })
 

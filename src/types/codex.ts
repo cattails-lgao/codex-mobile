@@ -239,6 +239,8 @@ export type UiMessage = {
   /** round-73：模型切换分割栏消息的旧/新模型，仅 `messageType === 'modelSwitch'` 时使用。 */
   modelSwitchFrom?: string
   modelSwitchTo?: string
+  /** round-74：分割栏应插回到切换发生时那条真实消息（id）之后，使其停留在消息流中的正确位置。 */
+  modelSwitchInsertAfterId?: string
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData

@@ -40,6 +40,7 @@ const gatewayMocks = vi.hoisted(() => ({
   resumeThread: vi.fn(),
   revertThreadFileChanges: vi.fn(),
   rollbackThread: vi.fn(),
+  revertThread: vi.fn(),
   setCodexSpeedMode: vi.fn(),
   setThreadQueueState: vi.fn(),
   setWorkspaceRootsState: vi.fn(),
@@ -2103,6 +2104,62 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     // 目标轮无法解析时应钳制到最新轮回退（numTurns=1），而不是静默放弃导致
     // 「点了回退没反应、最后一条消息还在」。
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-unresolved', 1)
+  })
+
+  it('falls back to thread/revert when paginated history rejects thread/rollback (round-73)', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+        { id: 'user-2', role: 'user', text: 'second', messageType: 'userMessage', turnId: 'turn-2', turnIndex: 1 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1 },
+      hasMoreOlder: false,
+    })
+    // paginated 历史：thread/rollback 被服务端整体拒绝。
+    gatewayMocks.rollbackThread.mockRejectedValue(new Error('paginated threads do not support thread/rollback'))
+    const revertedMessages = [{ id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 }]
+    gatewayMocks.revertThread.mockResolvedValue(revertedMessages)
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-paginated')
+    await state.loadMessages('thread-rollback-paginated')
+
+    await state.rollbackSelectedThread('turn-2')
+
+    // legacy 回退失败 → 改用 thread/revert 按目标轮 id 回退，并落地回退后的消息。
+    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-paginated', 1)
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-paginated', 'turn-2')
+    expect(state.messages.value.map((m) => m.id)).toEqual(['user-1'])
+  })
+
+  it('does not fall back to thread/revert when the rollback error is unrelated', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.rollbackThread.mockRejectedValue(new Error('some other failure'))
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-unrelated')
+    await state.loadMessages('thread-rollback-unrelated')
+
+    await state.rollbackSelectedThread('turn-1')
+
+    expect(gatewayMocks.revertThread).not.toHaveBeenCalled()
+    expect(state.error.value.length).toBeGreaterThan(0)
   })
 })
 

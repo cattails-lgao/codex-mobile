@@ -579,6 +579,15 @@ export async function rollbackThread(threadId: string, numTurns: number): Promis
   return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
 }
 
+// round-73：codex app-server 自 0.148 起 paginated 历史不再支持 `thread/rollback`
+//（回退被整体拒绝：`paginated threads do not support thread/rollback`），必须改用
+// `thread/revert {threadId, beforeTurnId}`。`beforeTurnId` 为要移除的首个轮次 id：
+// 服务端会丢弃该轮及其后所有轮次，保留其之前的对话前缀。
+export async function revertThread(threadId: string, beforeTurnId: string): Promise<UiMessage[]> {
+  const payload = await callRpc<ThreadReadResponse>('thread/revert', { threadId, beforeTurnId })
+  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
+}
+
 export async function startThread(cwd?: string, model?: string): Promise<StartedThread> {
   try {
     const params: Record<string, unknown> = {}
