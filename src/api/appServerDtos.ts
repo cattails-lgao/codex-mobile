@@ -4,6 +4,8 @@ export type { ThreadLoadedListResponse } from '../../documentation/app-server-sc
 export type { ThreadStartResponse } from '../../documentation/app-server-schemas/typescript/v2/ThreadStartResponse'
 export type { ThreadResumeResponse } from '../../documentation/app-server-schemas/typescript/v2/ThreadResumeResponse'
 export type { ThreadForkResponse } from '../../documentation/app-server-schemas/typescript/v2/ThreadForkResponse'
+export type { ThreadRevertResponse } from '../../documentation/app-server-schemas/typescript/v2/ThreadRevertResponse'
+export type { ThreadTurnsListResponse } from '../../documentation/app-server-schemas/typescript/v2/ThreadTurnsListResponse'
 export type { Thread } from '../../documentation/app-server-schemas/typescript/v2/Thread'
 export type { ThreadItem } from '../../documentation/app-server-schemas/typescript/v2/ThreadItem'
 export type { Turn } from '../../documentation/app-server-schemas/typescript/v2/Turn'

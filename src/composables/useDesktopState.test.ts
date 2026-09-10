@@ -55,13 +55,14 @@ vi.mock('../api/codexGateway', () => ({
   pickCodexRateLimitSnapshot: vi.fn(() => null),
 }))
 
-function thread(id: string, cwd: string, options: { hasWorktree?: boolean } = {}) {
+function thread(id: string, cwd: string, options: { hasWorktree?: boolean; historyMode?: 'legacy' | 'paginated' } = {}) {
   return {
     id,
     title: id,
     projectName: cwd ? cwd.split('/').at(-1) || cwd : 'Projectless',
     cwd,
     hasWorktree: options.hasWorktree ?? false,
+    historyMode: options.historyMode,
     createdAtIso: '2026-04-28T00:00:00.000Z',
     updatedAtIso: '2026-04-28T00:00:00.000Z',
     preview: '',
@@ -2106,11 +2107,16 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-unresolved', 1)
   })
 
-  it('falls back to thread/revert when paginated history rejects thread/rollback (round-73)', async () => {
+  it('uses thread/revert directly for paginated history without an exploratory 502 (round-74)', async () => {
     installTestWindow()
     gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
     gatewayMocks.getPendingServerRequests.mockResolvedValue([])
-    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    // paginated 线程由 historyMode='paginated' 标识；回退据此一次直达 thread/revert，
+    // 不应再先打一次注定失败的 thread/rollback（否则 nginx 每次成对 502 60 + 200）。
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'Project', threads: [thread('thread-rollback-paginated', '/tmp/project', { historyMode: 'paginated' })] }],
+      nextCursor: null,
+    })
     gatewayMocks.getThreadDetail.mockResolvedValue({
       messages: [
         { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
@@ -2121,19 +2127,21 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
       turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1 },
       hasMoreOlder: false,
     })
-    // paginated 历史：thread/rollback 被服务端整体拒绝。
-    gatewayMocks.rollbackThread.mockRejectedValue(new Error('paginated threads do not support thread/rollback'))
     const revertedMessages = [{ id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 }]
     gatewayMocks.revertThread.mockResolvedValue(revertedMessages)
+    // real thread 带 cwd，回滚后走文件回退分支；需让文件回退返回无错误，否则 setPersisted 不执行。
+    gatewayMocks.revertThreadFileChanges.mockResolvedValue({ errors: [] })
     const state = useDesktopState()
     state.primeSelectedThread('thread-rollback-paginated')
+    // 让线程列表填充 projectGroups，使 selectedThread 能解析到 historyMode='paginated'。
+    await state.refreshAll({ includeSelectedThreadMessages: false })
     await state.loadMessages('thread-rollback-paginated')
 
     await state.rollbackSelectedThread('turn-2')
 
-    // legacy 回退失败 → 改用 thread/revert 按目标轮 id 回退，并落地回退后的消息。
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-paginated', 1)
+    // paginated：直达 thread/revert，且不调用 thread/rollback（无探路请求）。
     expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-paginated', 'turn-2')
+    expect(gatewayMocks.rollbackThread).not.toHaveBeenCalled()
     expect(state.messages.value.map((m) => m.id)).toEqual(['user-1'])
   })
 
