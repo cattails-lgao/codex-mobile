@@ -1,28 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AppsInstalledResponse",
-  "description": "The installed connectors in one committed runtime snapshot.",
-  "type": "object",
-  "required": [
-    "apps"
-  ],
-  "properties": {
-    "apps": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/InstalledApp"
-      }
-    }
-  },
   "definitions": {
     "InstalledApp": {
       "description": "Installed connector runtime state.",
-      "type": "object",
-      "required": [
-        "callable",
-        "enabled",
-        "id"
-      ],
       "properties": {
         "callable": {
           "description": "Whether the connector is enabled and has a non-synthetic, model-visible tool allowed by effective MCP and app/tool policy in the committed runtime snapshot.",
@@ -42,7 +22,27 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "callable",
+        "enabled",
+        "id"
+      ],
+      "type": "object"
     }
-  }
+  },
+  "description": "The installed connectors in one committed runtime snapshot.",
+  "properties": {
+    "apps": {
+      "items": {
+        "$ref": "#/definitions/InstalledApp"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "apps"
+  ],
+  "title": "AppsInstalledResponse",
+  "type": "object"
 }
