@@ -6,19 +6,41 @@ function threadReadResponseWithContent(content: ThreadReadResponse['thread']['tu
   return {
     thread: {
       id: 'thread-1',
+      extra: null,
+      sessionId: 'session-1',
+      forkedFromId: null,
+      parentThreadId: null,
       preview: 'Use a skill',
+      ephemeral: false,
+      section: null,
+      sectionEnteredAt: null,
+      projectId: null,
+      historyMode: 'paginated',
       modelProvider: 'openai',
+      model: null,
+      reasoningEffort: null,
       createdAt: 1,
       updatedAt: 2,
+      recencyAt: null,
+      status: { type: 'idle' },
       path: null,
       cwd: '/tmp/project',
       cliVersion: 'test',
       source: 'appServer',
+      canAcceptDirectInput: null,
+      threadSource: null,
+      agentNickname: null,
+      agentRole: null,
       gitInfo: null,
+      name: null,
       turns: [{
         id: 'turn-1',
         status: 'completed',
+        itemsView: 'full',
         error: null,
+        startedAt: null,
+        completedAt: null,
+        durationMs: null,
         items: content,
       }],
     },
@@ -29,6 +51,7 @@ describe('normalizeThreadMessagesV2', () => {
   it('preserves selected skill inputs on the rendered user message', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
       type: 'userMessage',
+      clientId: null,
       id: 'user-1',
       content: [
         { type: 'text', text: 'Use the browser skill', text_elements: [] },
@@ -48,6 +71,7 @@ describe('normalizeThreadMessagesV2', () => {
   it('renders skill-only user messages instead of dropping them as raw blocks', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
       type: 'userMessage',
+      clientId: null,
       id: 'user-2',
       content: [
         { type: 'skill', name: 'composio-cli', path: '/Users/igor/.codex/skills/composio-cli/SKILL.md' },
@@ -67,6 +91,7 @@ describe('normalizeThreadMessagesV2', () => {
   it('decodes escaped heartbeat instructions without exposing raw XML', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
       type: 'userMessage',
+      clientId: null,
       id: 'automation-user-1',
       content: [{
         type: 'text',
@@ -94,6 +119,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
   it('applies a base turn index for paged thread slices', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
       type: 'userMessage',
+      clientId: null,
       id: 'user-3',
       content: [{ type: 'text', text: 'Paged message', text_elements: [] }],
     }]), 12)
@@ -109,6 +135,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
   it('renders failed turn errors as chat system messages', () => {
     const response = threadReadResponseWithContent([{
       type: 'userMessage',
+      clientId: null,
       id: 'user-4',
       content: [{ type: 'text', text: 'hi', text_elements: [] }],
     }])
@@ -117,6 +144,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
       message: 'unexpected status 401 Unauthorized: Missing bearer or basic authentication in header',
       codexErrorInfo: null,
       additionalDetails: null,
+      misalignment: null,
     }
 
     const messages = normalizeThreadMessagesV2(response)
@@ -138,21 +166,31 @@ Reply with &lt;/instructions&gt; and A &amp; B
       {
         id: '',
         status: 'failed',
+        itemsView: 'full',
         error: {
           message: 'first failed turn',
           codexErrorInfo: null,
           additionalDetails: null,
+          misalignment: null,
         },
+        startedAt: null,
+        completedAt: null,
+        durationMs: null,
         items: [],
       },
       {
         id: '   ',
         status: 'failed',
+        itemsView: 'full',
         error: {
           message: 'second failed turn',
           codexErrorInfo: null,
           additionalDetails: null,
+          misalignment: null,
         },
+        startedAt: null,
+        completedAt: null,
+        durationMs: null,
         items: [],
       },
     ]
@@ -210,11 +248,11 @@ Reply with &lt;/instructions&gt; and A &amp; B
 
   it('keeps only the most recent compaction.done when several compactions happened', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'agentMessage', id: 'agent-1', text: 'first reply' },
+      { type: 'agentMessage', id: 'agent-1', text: 'first reply', phase: null, memoryCitation: null, delivery: null, questions: null },
       { type: 'contextCompaction', id: 'compaction-1' },
-      { type: 'agentMessage', id: 'agent-2', text: 'second reply' },
+      { type: 'agentMessage', id: 'agent-2', text: 'second reply', phase: null, memoryCitation: null, delivery: null, questions: null },
       { type: 'contextCompaction', id: 'compaction-2' },
-      { type: 'agentMessage', id: 'agent-3', text: 'third reply' },
+      { type: 'agentMessage', id: 'agent-3', text: 'third reply', phase: null, memoryCitation: null, delivery: null, questions: null },
     ]))
 
     const compactionRows = messages.filter((message) => message.messageType === 'compaction.done')
@@ -229,10 +267,10 @@ Reply with &lt;/instructions&gt; and A &amp; B
     // 服务端把 contextCompaction 固定在 turn items 末尾，刷新后压缩块会跑到
     // 对话最后；归位后应紧跟该轮用户消息之后（压缩是 turn 边界动作）。
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
-      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it' },
-      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
-      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass' },
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
+      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it', phase: null, memoryCitation: null, delivery: null, questions: null },
+      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, source: 'agent', pluginId: null, scriptPath: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
+      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass', phase: null, memoryCitation: null, delivery: null, questions: null },
       { type: 'contextCompaction', id: 'compaction-1' },
     ]))
 
@@ -241,7 +279,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
 
   it('keeps the compaction.done row in place when no user message exists in the turn (round-30)', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'agentMessage', id: 'agent-1', text: 'first reply' },
+      { type: 'agentMessage', id: 'agent-1', text: 'first reply', phase: null, memoryCitation: null, delivery: null, questions: null },
       { type: 'contextCompaction', id: 'compaction-1' },
     ]))
 
@@ -250,10 +288,10 @@ Reply with &lt;/instructions&gt; and A &amp; B
 
   it('keeps work items in the persisted chronological order', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
-      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it' },
-      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
-      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass' },
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'do the work', text_elements: [] }] },
+      { type: 'agentMessage', id: 'agent-1', text: 'I will work on it', phase: null, memoryCitation: null, delivery: null, questions: null },
+      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, source: 'agent', pluginId: null, scriptPath: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
+      { type: 'agentMessage', id: 'agent-2', text: 'All tests pass', phase: null, memoryCitation: null, delivery: null, questions: null },
     ]))
 
     const order = messages.map((message) => message.id)
@@ -263,9 +301,9 @@ Reply with &lt;/instructions&gt; and A &amp; B
 
   it('renders persisted reasoning items with summary and content', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'think hard', text_elements: [] }] },
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'think hard', text_elements: [] }] },
       { type: 'reasoning', id: 'reason-1', summary: ['step one'], content: ['line one', 'line two'] },
-      { type: 'agentMessage', id: 'agent-1', text: 'done' },
+      { type: 'agentMessage', id: 'agent-1', text: 'done', phase: null, memoryCitation: null, delivery: null, questions: null },
     ]))
 
     expect(messages).toHaveLength(3)
@@ -278,7 +316,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
 
   it('renders persisted mcpToolCall items with a toolCall payload', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
-      { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'use a tool', text_elements: [] }] },
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'use a tool', text_elements: [] }] },
       {
         type: 'mcpToolCall',
         id: 'tool-1',
@@ -286,11 +324,14 @@ Reply with &lt;/instructions&gt; and A &amp; B
         tool: 'create_issue',
         status: 'completed',
         arguments: {},
-        result: { content: [], structuredContent: {} },
+        appContext: null,
+        pluginId: null,
+        readOnlyHint: null,
+        result: { content: [], structuredContent: {}, _meta: null },
         error: null,
         durationMs: 42,
       },
-      { type: 'agentMessage', id: 'agent-1', text: 'opened' },
+      { type: 'agentMessage', id: 'agent-1', text: 'opened', phase: null, memoryCitation: null, delivery: null, questions: null },
     ]))
 
     const tool = messages.find((message) => message.id === 'tool-1')
