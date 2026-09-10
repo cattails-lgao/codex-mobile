@@ -55,4 +55,4 @@ paginated 的 `thread/revert` 返回体 `thread.turns` 恒为空（契约如此�
 - 桥接快照不写入空 turns revert 响应，读失败兜底保持更完整的上一次有效快照。
 
 ## 发布
-- 版本 `0.1.118 → 0.1.119`。git tag `v0.1.119` 与 GitHub Release 由维护者创建；`codex-mobile-re@0.1.119` 由用户 publish 至 npm 官方源完成闭环。
+- 版本 `0.1.118 → 0.1.119`。git tag `v0.1.119` 与 GitHub Release 由维护者创建；`codex-mobile-re@0.1.119` 已由用户 publish 至 npm 官方源并成为 `latest`，发布链路闭环。

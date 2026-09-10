@@ -6,9 +6,9 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-74：回退 paginated 历史迁移补完——消除探路 502 + revert 游标增量 hydrate + 桥接裁剪，v0.1.119；与 `origin/main` 同步） |
+| Git 分支 | main（round-74：回退 paginated 历史迁移补完——消除探路 502 + revert 游标增量 hydrate + 桥接裁剪，v0.1.119 已发布闭环；与 `origin/main` 同步） |
 | Dav 端口 | 4173 |
-| Dev 状态 | dev server 已验证；round-74 以定向 Vitest 与 `vue-tsc`/`pnpm run build` 验证；版本 0.1.119 已 tag/Release，待用户 npm publish 闭环；不操作 5173 |
+| Dev 状态 | dev server 已验证；round-74 以定向 Vitest 与 `vue-tsc`/`pnpm run build` 验证；版本 0.1.119 已 tag/Release 且 npm publish 完成（`latest` = 0.1.119），发布链路闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.153.4` 已生成并验证 app-server schema（json 416 + typescript 827 文件） |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
 | 最近提交 | round-74：回退 paginated 历史迁移补完三缺陷——①`historyMode` 接线 `UiThread`（缺省 legacy），`rollbackThreadWithRevertFallback` 读 `historyMode` 一次直达 `thread/revert`（paginated）或 `thread/rollback`（legacy），消除每次回退的探路 502；②`revertThread` 不再消费恒空的 `thread.turns`，改用返回的 `turnsBackwardsCursor` 经 `thread/turns/list`（desc/200/itemsView full）增量 hydrate 裁剪后历史，消除「先清空再全量重灌」的消息列表刷新；③桥接 `THREAD_METHODS_WITH_TURNS` 加入 `thread/revert`（trim/inline/session 对空 turns 无害空转），`THREAD_METHODS_WITH_THREAD_SNAPSHOT` 改显式枚举避免空快照污染 read 兜底。版本 bump 至 0.1.119 |
