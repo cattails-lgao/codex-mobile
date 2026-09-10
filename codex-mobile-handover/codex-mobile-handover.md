@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-72：修复线程模型切换被 resume 旧模型覆盖，v0.1.117 发布中；与 `origin/main` 同步） |
+| Git 分支 | main（round-73：切换模型后上下文窗口失效待新事件 + 模型切换分割栏，v0.1.118；与 `origin/main` 同步） |
 | Dev 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-72 以定向 Vitest 与 `vue-tsc` 验证；tag/GitHub Release 已建，npm `0.1.117` 待 publish；不操作 5173 |
+| Dev 状态 | dev server 已重启验证；round-73 以定向 Vitest 与 `vue-tsc` 验证；版本 0.1.118 待 tag/Release/tag 与 publish；不操作 5173 |
 | App-server | 本机 Codex CLI `0.149.1` 已生成并验证 app-server schema |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-72 修复「线程模型切换不生效」——UI 切到新模型后，`startTurnForThread` 首个 turn 前 resume 线程时无条件把服务端持久化的旧 model 写回覆盖 UI 选择（旧模型已下线→请求带旧 ID→LiteLLM 400）。新增 `hasThreadModelSelection`（`useDesktopModelPreferences.ts`），resume 覆盖前加门控：线程有显式 UI 选择时不覆盖。版本 bump 至 0.1.117 |
+| 最近提交 | round-73：切换模型后 `invalidateThreadContextWindow` 把 `modelContextWindow` 置 null（待新模型首个 usage 事件恢复，不再显示旧窗口）；同时 `injectModelSwitchDivision` 往消息列表注入本地持久化「旧→新」分割栏（不参与过程/结论区）。`App.onSelectModel` 触发注入与失效；`ThreadConversation.filteredMessages` 剔除 modelSwitch 并在列表末尾渲染 `ModelSwitchDivider.vue`。版本 bump 至 0.1.118 |
 
 ---
 ## 文档结构
@@ -102,6 +102,7 @@
 | 第七十轮 v0.1.115 发布（修复空的 processFold 块） | [rounds/round-70-fix-empty-processfold-block.md](rounds/round-70-fix-empty-processfold-block.md) |
 | 第七十一轮 v0.1.116 发布（修复空的 agentMessage/通用正文过程行） | [rounds/round-71-fix-empty-process-row.md](rounds/round-71-fix-empty-process-row.md) |
 | 第七十二轮 v0.1.117 发布（修复线程模型切换被 resume 旧模型覆盖） | [rounds/round-72-fix-thread-model-switch-on-resume.md](rounds/round-72-fix-thread-model-switch-on-resume.md) |
+| 第七十三轮 v0.1.118（切换模型后上下文窗口失效 + 模型切换分割栏） | [rounds/round-73-model-switch-context-and-divider.md](rounds/round-73-model-switch-context-and-divider.md) |
 
 ## 项目概况
 

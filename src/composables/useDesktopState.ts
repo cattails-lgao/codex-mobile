@@ -50,6 +50,7 @@ import type {
 } from '../types/codex'
 import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 import { parsePlanFromMessageText } from '../utils/plan'
+import { isModelSwitchMessage, MODEL_SWITCH_MESSAGE_TYPE, MAX_MODEL_SWITCH_MARKERS_PER_THREAD } from '../utils/modelSwitchMessages'
 
 // useDesktopState「A 批」纯工具 +「B 批」持久化（见 domain-modularization-plan）。
 // 原文件头 74-1776 的模块级辅助函数已分别卷入 useDesktopStateUtils(tools) 与
@@ -203,6 +204,7 @@ import {
   loadLastPlanMap,
   loadPersistedReasoningMap,
   loadPersistedTurnDurationMap,
+  loadModelSwitchMarkerMap,
   loadReadStateMap,
   loadSelectedThreadId,
   loadThreadTerminalOpenMap,
@@ -211,6 +213,7 @@ import {
   saveLastPlanMap,
   savePersistedReasoningMap,
   savePersistedTurnDurationMap,
+  saveModelSwitchMarkerMap,
   saveReadStateMap,
   saveSelectedThreadId,
   saveThreadTerminalOpenMap,
@@ -495,6 +498,7 @@ export function useDesktopState() {
   } = createDesktopRateLimits()
   const threadTokenUsageByThreadId = ref<Record<string, UiThreadTokenUsage>>(loadThreadTokenUsageMap())
   const terminalOpenByThreadId = ref<Record<string, boolean>>(loadThreadTerminalOpenMap())
+  const modelSwitchMarkersByThreadId = ref<Record<string, UiMessage[]>>(loadModelSwitchMarkerMap())
 
   const isSendingMessage = ref(false)
   const isInterruptingTurn = ref(false)
@@ -682,7 +686,11 @@ export function useDesktopState() {
     const summary = turnSummaryByThreadId.value[threadId]
     const withSummary = summary ? insertTurnSummaryMessage(combined, summary) : combined
     // round-65：合入持久化的各轮耗时（live turn 摘要已插入时跳过，避免重复）。
-    return insertPersistedTurnDurations(withSummary, persistedTurnDurationsByThreadId.value[threadId])
+    const withDurations = insertPersistedTurnDurations(withSummary, persistedTurnDurationsByThreadId.value[threadId])
+    // round-73：本地「模型切换」分割栏追加在消息列表末尾（不进入过程区/结论区，
+    // 渲染侧在 filteredMessages 提前剔除，见 ThreadConversation.vue）。
+    const modelSwitchMarkers = modelSwitchMarkersByThreadId.value[threadId] ?? []
+    return modelSwitchMarkers.length > 0 ? [...withDurations, ...modelSwitchMarkers] : withDurations
   })
   // 需求 9：当前线程「中断后服务端移除未提交 turn」时待回填的用户消息载荷
   const interruptedUnsubmittedMessage = computed<InterruptRecoverPayload | null>(() => {
@@ -760,6 +768,47 @@ export function useDesktopState() {
       ...pendingTurnRequestByThreadId.value,
       [threadId]: request,
     }
+  }
+
+  // round-73：往线程消息列表追加一条本地「模型切换」分割栏（持久化到 localStorage，
+  // 不写入服务器）。渲染侧视其为独立分割条，不参与过程区/结论区。
+  function injectModelSwitchDivision(threadId: string, from: string, to: string): void {
+    const normalizedThreadId = threadId.trim()
+    const fromTrim = from.trim()
+    const toTrim = to.trim()
+    if (!normalizedThreadId || !toTrim) return
+    if (fromTrim === toTrim) return
+
+    const previous = modelSwitchMarkersByThreadId.value[normalizedThreadId] ?? []
+    const marker: UiMessage = {
+      id: `model-switch:${normalizedThreadId}:${Date.now()}:${previous.length}`,
+      role: 'system',
+      text: '',
+      messageType: MODEL_SWITCH_MESSAGE_TYPE,
+      modelSwitchFrom: fromTrim || undefined,
+      modelSwitchTo: toTrim,
+    }
+    const next = [...previous, marker].slice(-MAX_MODEL_SWITCH_MARKERS_PER_THREAD)
+    modelSwitchMarkersByThreadId.value = {
+      ...modelSwitchMarkersByThreadId.value,
+      [normalizedThreadId]: next,
+    }
+    saveModelSwitchMarkerMap(modelSwitchMarkersByThreadId.value)
+  }
+
+  // round-73：切换模型后失效「旧模型」的上下文窗口（保留真实 token 计数）。
+  // 新模型首个 thread/tokenUsage/updated 事件到达前，上下文指示器进入待定状态，
+  // 不再展示误导性的旧模型窗口。
+  function invalidateThreadContextWindow(threadId: string): void {
+    const normalizedThreadId = threadId.trim()
+    const current = threadTokenUsageByThreadId.value[normalizedThreadId]
+    if (!current) return
+    if (current.modelContextWindow === null) return
+    threadTokenUsageByThreadId.value = {
+      ...threadTokenUsageByThreadId.value,
+      [normalizedThreadId]: { ...current, modelContextWindow: null },
+    }
+    saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
   }
 
   function clearPendingTurnRequest(threadId: string): void {
@@ -3553,6 +3602,8 @@ export function useDesktopState() {
     setSelectedCollaborationMode,
     readModelIdForThread,
     setSelectedModelIdForThread,
+    injectModelSwitchDivision,
+    invalidateThreadContextWindow,
     setSelectedModelId,
 
     setSelectedReasoningEffort,

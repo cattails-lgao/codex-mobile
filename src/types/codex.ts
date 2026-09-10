@@ -236,6 +236,9 @@ export type UiMessage = {
   fileChanges?: UiFileChange[]
   fileChangeStatus?: UiFileChangeStatus
   messageType?: string
+  /** round-73：模型切换分割栏消息的旧/新模型，仅 `messageType === 'modelSwitch'` 时使用。 */
+  modelSwitchFrom?: string
+  modelSwitchTo?: string
   rawPayload?: string
   isUnhandled?: boolean
   commandExecution?: CommandExecutionData

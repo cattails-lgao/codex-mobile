@@ -428,6 +428,15 @@
       </template>
       </ThreadTurn>
       <LiveOverlayItem v-if="liveOverlay" :overlay="liveOverlay" :feedback-mailto="feedbackMailto" />
+      <li
+        v-for="marker in modelSwitchMessages"
+        :key="marker.id"
+        class="conversation-item conversation-item-model-switch"
+        data-role="system"
+        data-message-type="modelSwitch"
+      >
+        <ModelSwitchDivider :from="marker.modelSwitchFrom" :to="marker.modelSwitchTo" />
+      </li>
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
     </ul>
 
@@ -533,6 +542,7 @@ import DiffViewer from './DiffViewer.vue'
 import FileChangeSummaryBlock from './FileChangeSummaryBlock.vue'
 import FileLinkContextMenu from './FileLinkContextMenu.vue'
 import LiveOverlayItem from './LiveOverlayItem.vue'
+import ModelSwitchDivider from './ModelSwitchDivider.vue'
 import MessageInlineContent from './MessageInlineContent.vue'
 import MessageToolbar from './MessageToolbar.vue'
 import ProcessFold from './ProcessFold.vue'
@@ -712,6 +722,12 @@ function isPlanMessage(message: UiMessage): boolean {
   return message.messageType === 'plan' || message.messageType === 'plan.live'
 }
 
+function isModelSwitchMessage(message: UiMessage): boolean {
+  return message.messageType === 'modelSwitch'
+}
+
+const modelSwitchMessages = computed(() => props.messages.filter(isModelSwitchMessage))
+
 function isReasoningMessage(message: UiMessage): boolean {
   return message.messageType === 'reasoning' && Boolean(message.reasoning)
 }
@@ -860,7 +876,9 @@ const activeWarmLayer = computed(() => warmLayerForSession(warmLayerState.value,
 
 const isLoadingMore = ref(false)
 
-const filteredMessages = computed(() => props.messages.filter((message) => !isPlanMessage(message)))
+const filteredMessages = computed(() =>
+  props.messages.filter((message) => !isPlanMessage(message) && !isModelSwitchMessage(message)),
+)
 
 const turnGroups = computed(() => buildTurnGroups(filteredMessages.value))
 
