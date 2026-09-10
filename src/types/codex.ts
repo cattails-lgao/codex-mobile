@@ -84,6 +84,12 @@ export type UiThread = {
   createdAtIso: string
   updatedAtIso: string
   preview: string
+  /**
+   * Persisted history contract of the underlying app-server thread:
+   * 'legacy' 支持 thread/rollback；'paginated' 只支持 thread/revert。回退时据此直达方法，
+   * 避免每次回退都发一次注定失败的探路请求。缺省视为 'legacy'。
+   */
+  historyMode?: 'legacy' | 'paginated'
   unread: boolean
   inProgress: boolean
   externalSession?: UiExternalSession | null

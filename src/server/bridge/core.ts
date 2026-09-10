@@ -192,5 +192,8 @@ export const THREAD_RESPONSE_TURN_LIMIT = 10
 
 // RPC/thread result post-pipeline method classifiers (shared by the shell rpc
 // dispatcher and the extracted rpcPipeline slice).
-export const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback'])
-export const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set([...THREAD_METHODS_WITH_TURNS, 'thread/start'])
+export const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback', 'thread/revert'])
+// round-74：thread/revert 纳入 WITH_TURNS（trim/inline/session-merge 对空 turns 均为无害
+// 空转），但其返回体 turns 恒为空（paginated 契约），不应作为 thread/read 失败的兜底
+// 快照写入；故 snapshot 集合显式枚举，而不是随 WITH_TURNS 自动扩张带上 revert。
+export const THREAD_METHODS_WITH_THREAD_SNAPSHOT = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback', 'thread/start'])

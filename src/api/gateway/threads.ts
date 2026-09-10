@@ -7,7 +7,9 @@ import type {
   ThreadListResponse,
   ThreadReadResponse,
   ThreadResumeResponse,
+  ThreadRevertResponse,
   ThreadStartResponse,
+  ThreadTurnsListResponse,
   Turn,
 } from '../appServerDtos'
 import {
@@ -584,8 +586,23 @@ export async function rollbackThread(threadId: string, numTurns: number): Promis
 // `thread/revert {threadId, beforeTurnId}`。`beforeTurnId` 为要移除的首个轮次 id：
 // 服务端会丢弃该轮及其后所有轮次，保留其之前的对话前缀。
 export async function revertThread(threadId: string, beforeTurnId: string): Promise<UiMessage[]> {
-  const payload = await callRpc<ThreadReadResponse>('thread/revert', { threadId, beforeTurnId })
-  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
+  // round-74：paginated 的 thread/revert 返回体 `thread.turns` 恒为空，只带
+  // turnsBackwardsCursor；直接 normalize 会把空数组当裁剪结果，前端列表先被清空再
+  // 触发全量重灌（可见的「刷新」）。改用返回的游标去 thread/turns/list 增量 hydrate
+  // 裁剪后的历史——游标天然指向裁剪后保留历史的末尾，无需自行计算。
+  const payload = await callRpc<ThreadRevertResponse>('thread/revert', { threadId, beforeTurnId })
+  if (!payload.turnsBackwardsCursor) return []
+  const page = await callRpc<ThreadTurnsListResponse>('thread/turns/list', {
+    threadId,
+    cursor: payload.turnsBackwardsCursor,
+    sortDirection: 'desc',
+    limit: 200,
+    itemsView: 'full',
+  })
+  return normalizeThreadMessagesV2(
+    { thread: { ...payload.thread, turns: page.data } } as ThreadReadResponse,
+    0,
+  )
 }
 
 export async function startThread(cwd?: string, model?: string): Promise<StartedThread> {

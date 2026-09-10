@@ -3113,22 +3113,20 @@ export function useDesktopState() {
   }
 
   // round-73：legacy 历史用 `thread/rollback`（按轮数），paginated 历史不支持该方法，
-  // 服务端整体拒绝（`paginated threads do not support thread/rollback`）。在此按错误
-  // 特征降级到 `thread/revert {threadId, beforeTurnId}`，与 round-73 文档结论一致。
+  // 服务端整体拒绝（`paginated threads do not support thread/rollback`）。
+  // round-74：服务端已按线程给出 historyMode，据此一次直达正确方法，不再用「先试
+  // thread/rollback、撞墙后用错误文案正则降级」的探路请求——那会每次回退都打一次注定
+  // 502 的调用（nginx 同一秒成对的 502 60 + 200）。
   async function rollbackThreadWithRevertFallback(
     threadId: string,
     numTurns: number,
     beforeTurnId: string,
   ): Promise<UiMessage[]> {
-    try {
-      return await rollbackThread(threadId, numTurns)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (beforeTurnId && /not support thread\/rollback/.test(message)) {
-        return await revertThread(threadId, beforeTurnId)
-      }
-      throw error
+    const mode = selectedThread.value?.historyMode
+    if (mode === 'paginated' && beforeTurnId) {
+      return await revertThread(threadId, beforeTurnId)
     }
+    return await rollbackThread(threadId, numTurns)
   }
 
   async function rollbackSelectedThread(turnId: string): Promise<void> {

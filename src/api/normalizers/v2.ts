@@ -667,6 +667,7 @@ function toUiThread(summary: Thread): UiThread {
     createdAtIso: toIso(summary.createdAt),
     updatedAtIso: toIso(summary.updatedAt),
     preview: summary.preview,
+    historyMode: rawSummary.historyMode === 'paginated' ? 'paginated' : 'legacy',
     unread: false,
     inProgress: readThreadInProgress(summary),
     externalSession: readExternalSessionFromThread(summary),
