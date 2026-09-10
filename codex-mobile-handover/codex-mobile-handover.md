@@ -6,12 +6,12 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | main（round-73：切换模型后上下文窗口失效待新事件 + 模型切换分割栏，v0.1.118；与 `origin/main` 同步） |
+| Git 分支 | main（round-74：回退 paginated 历史迁移补完——消除探路 502 + revert 游标增量 hydrate + 桥接裁剪，v0.1.119；与 `origin/main` 同步） |
 | Dav 端口 | 4173 |
-| Dev 状态 | dev server 已重启验证；round-73 以定向 Vitest 与 `vue-tsc` 验证；版本 0.1.118 已 tag/Release 且 npm publish 完成，release 闭环；构建修复 `ca756cb`（v2.test.ts 夹具对齐 0.153.4 schema）；不操作 5173 |
+| Dev 状态 | dev server 已验证；round-74 以定向 Vitest 与 `vue-tsc`/`pnpm run build` 验证；版本 0.1.119 已 tag/Release，待用户 npm publish 闭环；不操作 5173 |
 | App-server | 本机 Codex CLI `0.153.4` 已生成并验证 app-server schema（json 416 + typescript 827 文件） |
 | 工具链 | Windows：pnpm 11.18.0 · Node 24.18.1（fnm）· codex-cli 0.149.1（pnpm 全局）；macOS：Node v26.3.1 · 需按实际环境确认 codex-cli 版本 |
-| 最近提交 | round-73：切换模型后 `invalidateThreadContextWindow` 把 `modelContextWindow` 置 null（待新模型首个 usage 事件恢复，不再显示旧窗口）；同时 `injectModelSwitchDivision` 往消息列表按切换锚点注入本地持久化「旧→新」分割栏（不参与过程/结论区，重复切换原地更新）。`App.onSelectModel` 触发注入与失效；`ThreadConversation.renderTurns` 重构为多分割栏锚定（leadingDividers/dividers 数组），修复分割栏居中、重复堆积、新消息跑到上次用户消息下方。回退降级：`threads.ts` 新增 `revertThread`，`useDesktopState` `rollbackThreadWithRevertFallback` 按 `not support thread/rollback` 降级 `thread/revert`，且先退对话后退文件、显式 `console.warn` 文件回退错误。协议快照同步至 codex `0.153.4`（`--experimental`）。版本 bump 至 0.1.118 |
+| 最近提交 | round-74：回退 paginated 历史迁移补完三缺陷——①`historyMode` 接线 `UiThread`（缺省 legacy），`rollbackThreadWithRevertFallback` 读 `historyMode` 一次直达 `thread/revert`（paginated）或 `thread/rollback`（legacy），消除每次回退的探路 502；②`revertThread` 不再消费恒空的 `thread.turns`，改用返回的 `turnsBackwardsCursor` 经 `thread/turns/list`（desc/200/itemsView full）增量 hydrate 裁剪后历史，消除「先清空再全量重灌」的消息列表刷新；③桥接 `THREAD_METHODS_WITH_TURNS` 加入 `thread/revert`（trim/inline/session 对空 turns 无害空转），`THREAD_METHODS_WITH_THREAD_SNAPSHOT` 改显式枚举避免空快照污染 read 兜底。版本 bump 至 0.1.119 |
 
 ---
 ## 文档结构
