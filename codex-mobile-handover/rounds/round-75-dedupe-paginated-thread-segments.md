@@ -115,4 +115,6 @@ runRpcResponsePipeline (src/server/bridge/rpcPipeline.ts)
 - 净效应是**减少**渲染行数（重复 id 折叠），不增加渲染开销。
 
 ## 发布
-- 版本 `0.1.119 → 0.1.120`。git tag `v0.1.120` 与 GitHub Release 待维护者创建；`codex-mobile-re@0.1.120` 待用户 publish 至 npm 官方源。
+- 版本 `0.1.119 → 0.1.120`（修复提交 `8852718`，文档/版本提交 `bfcf11b`）。
+- git tag `v0.1.120` 与 GitHub Release 已创建（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.120 ，非草稿/非预发布，已标记 Latest）。
+- `codex-mobile-re@0.1.120` 已由用户 publish 至 npm 官方源并成为 `latest`（`npm view codex-mobile-re dist-tags.latest` → `0.1.120`，发布时刻 2026-09-11T02:31:05Z），发布链路全部闭环。
