@@ -120,12 +120,22 @@ export type UiThreadAutomation = {
   nextRunAtMs: number | null
 }
 
+// Present only when the bridge truncated `aggregatedOutput` (round-76 payload
+// slimming). `ref` is the opaque handle for /codex-api/command-output; it is
+// empty when the output was too large to spill to disk.
+export type CommandOutputSpill = {
+  ref: string
+  totalBytes: number
+  omittedBytes: number
+}
+
 export type CommandExecutionData = {
   command: string
   cwd: string | null
   status: 'inProgress' | 'completed' | 'failed' | 'declined' | 'interrupted'
   aggregatedOutput: string
   exitCode: number | null
+  outputSpill?: CommandOutputSpill
 }
 
 export type UiFileAttachment = { label: string; path: string }

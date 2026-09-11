@@ -32,6 +32,11 @@ const gatewayMocks = vi.hoisted(() => ({
   generateThreadTitle: vi.fn(),
   getThreadReasoningArchive: vi.fn(),
   persistThreadReasoningArchive: vi.fn(),
+  // round-65 的轮耗时镜像导出。此前漏在 mock 外：turn/completed 的耗时按真实墙钟
+  // 计算（completedAtMs - startedAtMs），同毫秒完成时走不到落盘分支、测试侥幸通过，
+  // 并发跑时必跨毫秒 → 调用到这个未 mock 的导出 → vitest 抛
+  // "No persistThreadTurnDuration export is defined on the mock"。补全后与机器负载无关。
+  persistThreadTurnDuration: vi.fn(),
   interruptThreadTurn: vi.fn(),
   listHooks: vi.fn(),
   persistThreadTitle: vi.fn(),
