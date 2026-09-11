@@ -109,6 +109,23 @@ export function loadPersistedTurnDurationMap(): ThreadTurnDurationMap {
   }
 }
 
+// round-77：镜像到桥接层改为「只发增量」。此前每次保存都把全部线程的每一轮
+// 逐条 PUT：启动时从服务端合并存档后又会把服务端已有的数据原样回写——一次启动
+// 约 27 个 PUT，而每个 PUT 在桥接层都是一次「读整份 state 文件 + 写回」，既占满
+// 浏览器的同源并发连接，又串行占用服务端文件 I/O，直接拖慢并发的 thread/list /
+// thread/resume（实测 thread/resume 平均 224ms → 84ms）。这里记住「服务端已经有
+// 哪些」，只 PUT 新增/变化的条目；从服务端载入的存档用 seedMirroredTurnDurations
+// 标记为已知，不回写。
+let mirroredTurnDurations: ThreadTurnDurationMap = {}
+
+export function seedMirroredTurnDurations(state: ThreadTurnDurationMap): void {
+  const snapshot: ThreadTurnDurationMap = {}
+  for (const [threadId, turns] of Object.entries(state)) {
+    if (threadId && Object.keys(turns).length > 0) snapshot[threadId] = { ...turns }
+  }
+  mirroredTurnDurations = snapshot
+}
+
 export function savePersistedTurnDurationMap(state: ThreadTurnDurationMap): void {
   if (typeof window === 'undefined') return
   try {
@@ -121,13 +138,17 @@ export function savePersistedTurnDurationMap(state: ThreadTurnDurationMap): void
     // Ignore localStorage failures (quota/private mode).
   }
   // round-65：镜像到桥接层，刷新/换浏览器后仍能从同一台服务端恢复轮耗时。
+  // round-77：只镜像相对已知快照新增/变化的条目（见上）。
   for (const [threadId, turns] of Object.entries(state)) {
     if (!threadId) continue
+    const alreadyMirrored = mirroredTurnDurations[threadId] ?? {}
     for (const [turnId, durationMs] of Object.entries(turns)) {
       if (!turnId || typeof durationMs !== 'number' || durationMs <= 0) continue
+      if (alreadyMirrored[turnId] === durationMs) continue
       void persistThreadTurnDuration(threadId, turnId, durationMs)
     }
   }
+  seedMirroredTurnDurations(state)
 }
 
 export function loadLastPlanMap(): Record<string, UiMessage> {
