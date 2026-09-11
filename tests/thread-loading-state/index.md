@@ -47,3 +47,5 @@ Return to the [manual test index](../../tests.md).
 | [Rollback works on both legacy and paginated threads](rollback-works-on-legacy-and-paginated-threads.md) |
 | [Sidebar deduplicates paginated thread segments](sidebar-deduplicates-paginated-thread-segments.md) |
 | [Thread payload slimming, command output spill, and read cache](thread-payload-slimming-and-output-spill.md) |
+| [Turn-duration mirror sends only deltas (no write-amplification storm)](turn-duration-mirror-sends-deltas.md) |
+| [Provider model catalog is cached on the server (open-thread path)](provider-model-catalog-cache-server.md) |
