@@ -724,6 +724,7 @@ import { useUiLanguage } from '../../composables/useUiLanguage'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
 import { useThreadRecycleBin } from '../../composables/useThreadRecycleBin'
 import { getPathLeafName, getPathParent, isAbsoluteLikePath, isProjectlessChatPath } from '../../pathUtils.js'
+import { dedupeThreadGroupsById } from '../../utils/threadGroups'
 import ComposerDropdown from '../content/ComposerDropdown.vue'
 import AppDialog from '../content/AppDialog.vue'
 import SidebarMenuRow from './SidebarMenuRow.vue'
@@ -1044,8 +1045,15 @@ function threadMatchesSearch(thread: UiThread): boolean {
   return thread.title.toLowerCase().includes(q) || thread.preview.toLowerCase().includes(q)
 }
 
+/**
+ * 渲染层兜底：服务端 `thread/list` 对 paginated 线程可能返回同一 id 的多行
+ * （每段 rollout 一行，见 `dedupeThreadGroupsById` 注释）。bridge 层已按 id 归并，
+ * 这里再兜一道，保证同一 key 不会被渲染多次、不触发 Vue duplicate-key 告警。
+ */
+const dedupedGroups = computed<UiProjectGroup[]>(() => dedupeThreadGroupsById(props.groups))
+
 const filteredGroups = computed<UiProjectGroup[]>(() => {
-  return props.groups.flatMap((group) => {
+  return dedupedGroups.value.flatMap((group) => {
     const threads = group.threads.filter((thread) => !isProjectlessChatPath(thread.cwd) && threadMatchesSearch(thread))
     if (threads.length > 0) return [{ ...group, threads }]
     return !isSearchActive.value && group.threads.length === 0 ? [{ ...group, threads }] : []
@@ -1057,7 +1065,7 @@ const isChronologicalView = computed(() => threadViewMode.value === 'chronologic
 const globalThreads = computed<UiThread[]>(() => {
   const rows: UiThread[] = []
 
-  for (const group of props.groups) {
+  for (const group of dedupedGroups.value) {
     for (const thread of group.threads) {
       if (pinnedThreadIdSet.value.has(thread.id)) continue
       if (!threadMatchesSearch(thread)) continue
@@ -1096,7 +1104,7 @@ const hasHiddenChatThreads = computed(() => {
 const threadById = computed(() => {
   const map = new Map<string, UiThread>()
 
-  for (const group of props.groups) {
+  for (const group of dedupedGroups.value) {
     for (const thread of group.threads) {
       if (optimisticallyArchivedThreadIdSet.value.has(thread.id)) continue
       map.set(thread.id, thread)
