@@ -26,6 +26,8 @@ import {
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
   getProviderCompatibilityConfigArgs,
+  OPENCODE_ZEN_PROVIDER_ID,
+  refreshFreeModelsInBackground,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
@@ -1423,6 +1425,31 @@ function getSharedBridgeState(): SharedBridgeState {
   return created
 }
 
+/**
+ * round-77：按当前 free-mode 配置预热 `/codex-api/provider-models` 真正会读的
+ * provider 目录。该接口在客户端打开线程的关键路径上（selectThread 会 await
+ * refreshModelPreferences），冷缓存时要等一次外部 provider 往返（本机 zen 约
+ * 0.4s、冷时 1.4s+），把首次点击线程拖到 ~1.1s。启动时就后台取一次，页面
+ * 加载完时目录已在缓存里。纯 best-effort：失败由首次真实请求正常兜底。
+ */
+export function warmProviderModelCatalog(): void {
+  try {
+    const state = ensureDefaultFreeModeStateForMissingAuthSync(join(getCodexHomeDir(), FREE_MODE_STATE_FILE))
+    if (!state?.enabled) return
+    if (state.provider === 'custom' && state.customBaseUrl) {
+      void fetchCustomEndpointModelIds(state.customBaseUrl, state.apiKey ?? '').catch(() => {})
+      return
+    }
+    if (state.provider === OPENCODE_ZEN_PROVIDER_ID) {
+      void fetchOpenCodeZenModelIds(state.apiKey).catch(() => {})
+      return
+    }
+    refreshFreeModelsInBackground()
+  } catch {
+    // Warm-up is best-effort; the first real request still resolves normally.
+  }
+}
+
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   const { appServer, terminalManager, methodCatalog, telegramBridge, backendQueueProcessor } = getSharedBridgeState()
   const externalSessionTracker = createExternalSessionTracker()
@@ -1447,6 +1474,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   // round-76：先把 app-server spawn + initialize 做完，首屏那 ~20 个启动请求就不必
   // 排在冷启动队尾（实测首屏 thread/list 934ms 冷 / 63ms 热）。失败不影响正常流程。
   void appServer.warmUp()
+  // round-77：预热 provider 目录（见 warmProviderModelCatalog），让首次点击线程
+  // 不必排在一次外部 provider 网络往返后面。
+  warmProviderModelCatalog()
   void initializeSkillsSyncOnStartup(appServer)
   void readTelegramBridgeConfig()
     .then((config) => {

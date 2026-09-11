@@ -220,6 +220,7 @@ import {
   saveThreadTerminalOpenMap,
   saveThreadTokenUsageMap,
   saveUnreadCutoffIso,
+  seedMirroredTurnDurations,
 } from './useDesktopStatePersistence'
 import {
   CODEX_CLI_MISSING_MESSAGE,
@@ -3507,6 +3508,10 @@ export function useDesktopState() {
       }
       if (changed) {
         persistedTurnDurationsByThreadId.value = next
+        // round-77：这份合并结果的来源就是服务端存档本身，先把它标记为「已知」，
+        // 免得启动时把服务端已有的每一轮再逐条 PUT 回去（写放大）。只有纯本地
+        // 新增、服务端还没有的条目才会真正上行。
+        seedMirroredTurnDurations(archive)
         savePersistedTurnDurationMap(next)
       }
     } catch {

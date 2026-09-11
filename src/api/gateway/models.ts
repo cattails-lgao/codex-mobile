@@ -33,9 +33,13 @@ export type AvailableModel = {
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
 const PROVIDER_MODELS_CACHE_TTL_MS = 30_000
 const providerModelsCache = new Map<string, { fetchedAt: number; result: { ids: string[], exclusive: boolean } | null }>()
+// round-77：同一 provider 的并发调用共享同一个 in-flight 请求。缓存只在响应回来
+// 后才写入，之前首屏的多个调用方会各自 miss、各发一次（实测 x4，每次 1–1.5s）。
+const providerModelsInflight = new Map<string, Promise<{ ids: string[], exclusive: boolean } | null>>()
 
 export function clearProviderModelsCache(): void {
   providerModelsCache.clear()
+  providerModelsInflight.clear()
 }
 
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
@@ -138,35 +142,47 @@ async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string
   if (cached && Date.now() - cached.fetchedAt < PROVIDER_MODELS_CACHE_TTL_MS) {
     return cached.result
   }
-  let result: { ids: string[], exclusive: boolean } | null = null
-  try {
-    const url = normalizedProviderId
-      ? `/codex-api/provider-models?provider=${encodeURIComponent(normalizedProviderId)}`
-      : '/codex-api/provider-models'
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
-    })
-    let providerPayload: ProviderModelsResponse | null = null
-    try {
-      providerPayload = await response.json() as ProviderModelsResponse
-    } catch {
-      providerPayload = null
-    }
+  const inflight = providerModelsInflight.get(cacheKey)
+  if (inflight) return inflight
 
-    if (response.ok && Array.isArray(providerPayload?.data)) {
-      result = {
-        ids: providerPayload.data
-          .map((candidate) => typeof candidate === 'string' ? candidate.trim() : '')
-          .filter((candidate, index, candidates): candidate is string =>
-            candidate.length > 0 && candidates.indexOf(candidate) === index),
-        exclusive: providerPayload.exclusive === true,
+  const pending = (async (): Promise<{ ids: string[], exclusive: boolean } | null> => {
+    let result: { ids: string[], exclusive: boolean } | null = null
+    try {
+      const url = normalizedProviderId
+        ? `/codex-api/provider-models?provider=${encodeURIComponent(normalizedProviderId)}`
+        : '/codex-api/provider-models'
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+      })
+      let providerPayload: ProviderModelsResponse | null = null
+      try {
+        providerPayload = await response.json() as ProviderModelsResponse
+      } catch {
+        providerPayload = null
       }
+
+      if (response.ok && Array.isArray(providerPayload?.data)) {
+        result = {
+          ids: providerPayload.data
+            .map((candidate) => typeof candidate === 'string' ? candidate.trim() : '')
+            .filter((candidate, index, candidates): candidate is string =>
+              candidate.length > 0 && candidates.indexOf(candidate) === index),
+          exclusive: providerPayload.exclusive === true,
+        }
+      }
+    } catch {
+      // Keep Codex usable when the provider-models endpoint is unavailable.
     }
-  } catch {
-    // Keep Codex usable when the provider-models endpoint is unavailable.
+    providerModelsCache.set(cacheKey, { fetchedAt: Date.now(), result })
+    return result
+  })()
+
+  providerModelsInflight.set(cacheKey, pending)
+  try {
+    return await pending
+  } finally {
+    providerModelsInflight.delete(cacheKey)
   }
-  providerModelsCache.set(cacheKey, { fetchedAt: Date.now(), result })
-  return result
 }
 
 function normalizeAvailableModel(value: unknown): AvailableModel | null {

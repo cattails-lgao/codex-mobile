@@ -123,8 +123,48 @@ export function normalizeCustomEndpointBaseUrl(input: string): string {
   return url.replace(/\/+$/u, '')
 }
 
+// round-77：zen / 自定义端点这两个目录请求以前每次调用都打一次外部 provider
+// （本机 zen ~0.4s，冷时 1.4s+）。而 /codex-api/provider-models 在客户端打开
+// 线程的关键路径上（selectThread 会 await refreshModelPreferences），于是每次
+// 开线程都要白等一次网络往返。这里缓存住：有值先发、后台刷新；空结果只压
+// 1 分钟，避免把一次网络抖动钉死 10 分钟。
+const CATALOG_CACHE_TTL_MS = 10 * 60 * 1000
+const CATALOG_FAILURE_TTL_MS = 60 * 1000
+const catalogCache = new Map<string, { ids: string[]; at: number }>()
+const catalogInflight = new Map<string, Promise<string[]>>()
+
+function catalogTtlMs(ids: string[]): number {
+  return ids.length > 0 ? CATALOG_CACHE_TTL_MS : CATALOG_FAILURE_TTL_MS
+}
+
+function loadCatalog(key: string, load: () => Promise<string[]>): Promise<string[]> {
+  const existing = catalogInflight.get(key)
+  if (existing) return existing
+  const pending = load()
+    .then((ids) => {
+      catalogCache.set(key, { ids, at: Date.now() })
+      return ids
+    })
+    .finally(() => {
+      catalogInflight.delete(key)
+    })
+  catalogInflight.set(key, pending)
+  return pending
+}
+
+async function readCatalog(key: string, load: () => Promise<string[]>): Promise<string[]> {
+  const cached = catalogCache.get(key)
+  if (cached && Date.now() - cached.at < catalogTtlMs(cached.ids)) return cached.ids
+  if (cached) {
+    // TTL 过期：先用旧值把调用方放行，后台刷新。
+    void loadCatalog(key, load).catch(() => {})
+    return cached.ids
+  }
+  return loadCatalog(key, load)
+}
+
 /** Fetch the model id list from a custom endpoint's `/models` (round-41). */
-async function fetchCustomEndpointModelIds(customBaseUrl: string, apiKey: string): Promise<string[]> {
+async function fetchCustomEndpointModelIdsUncached(customBaseUrl: string, apiKey: string): Promise<string[]> {
   try {
     const modelsUrl = customBaseUrl.replace(/\/+$/, '') + '/models'
     const headers: Record<string, string> = {}
@@ -139,7 +179,14 @@ async function fetchCustomEndpointModelIds(customBaseUrl: string, apiKey: string
   }
 }
 
-async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
+async function fetchCustomEndpointModelIds(customBaseUrl: string, apiKey: string): Promise<string[]> {
+  return readCatalog(
+    `custom:${customBaseUrl.replace(/\/+$/, '')}`,
+    () => fetchCustomEndpointModelIdsUncached(customBaseUrl, apiKey),
+  )
+}
+
+async function fetchOpenCodeZenModelIdsUncached(apiKey: string | null | undefined): Promise<string[]> {
   const headers: Record<string, string> = {}
   if (apiKey && apiKey !== 'dummy') {
     headers.Authorization = `Bearer ${apiKey}`
@@ -150,6 +197,10 @@ async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Prom
   })
   if (!response.ok) return []
   return normalizeProviderModelsData(await response.json() as unknown)
+}
+
+async function fetchOpenCodeZenModelIds(apiKey: string | null | undefined): Promise<string[]> {
+  return readCatalog('opencode-zen', () => fetchOpenCodeZenModelIdsUncached(apiKey))
 }
 
 function sortOpenCodeZenModelIds(modelIds: string[]): string[] {

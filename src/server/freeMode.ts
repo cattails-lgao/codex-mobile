@@ -105,29 +105,64 @@ const FALLBACK_FREE_MODELS = [
 
 let cachedFreeModels: string[] | null = null
 let cacheTimestamp = 0
+// round-77：命中「真值」和有 TTL 的兜底列表用不同新鲜度——兜底只压 1 分钟，
+// 让一次网络抖动不至于把整个模型列表钉住 10 分钟。
+let cacheHoldsFallback = false
 const CACHE_TTL_MS = 10 * 60 * 1000
+const FALLBACK_CACHE_TTL_MS = 60 * 1000
+// round-77：这个请求以前没有超时。它是 /codex-api/provider-models 的前置，
+// 前端打开线程会 await 该接口，所以 openrouter.ai 一慢，首次点击线程就白等
+// 一次完整网络往返（本机实测 ~1.0-1.3s，且失败时每次调用都要重付）。
+const FREE_MODELS_FETCH_TIMEOUT_MS = 1_500
 let freeModelsRefreshPromise: Promise<string[]> | null = null
+
+function cacheTtlMs(): number {
+  return cacheHoldsFallback ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS
+}
+
+function isFreeModelsCacheFresh(): boolean {
+  return cachedFreeModels !== null && Date.now() - cacheTimestamp < cacheTtlMs()
+}
+
+function rememberFreeModels(models: string[], holdsFallback: boolean): string[] {
+  cachedFreeModels = models
+  cacheTimestamp = Date.now()
+  cacheHoldsFallback = holdsFallback
+  return models
+}
 
 async function fetchFreeModelsFromOpenRouter(): Promise<string[]> {
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/models')
-    if (!resp.ok) return cachedFreeModels ?? FALLBACK_FREE_MODELS
-    const json = (await resp.json()) as { data: Array<{ id: string }> }
-    const ids = json.data
-      .filter((m) => m.id.endsWith(':free') || m.id === 'openrouter/free')
-      .map((m) => m.id)
-    if (ids.length === 0) return cachedFreeModels ?? FALLBACK_FREE_MODELS
-    const sorted = ['openrouter/free', ...ids.filter((id) => id !== 'openrouter/free')]
-    cachedFreeModels = sorted
-    cacheTimestamp = Date.now()
-    return sorted
+    const resp = await fetch('https://openrouter.ai/api/v1/models', {
+      signal: AbortSignal.timeout(FREE_MODELS_FETCH_TIMEOUT_MS),
+    })
+    if (resp.ok) {
+      const json = (await resp.json()) as { data: Array<{ id: string }> }
+      const ids = json.data
+        .filter((m) => m.id.endsWith(':free') || m.id === 'openrouter/free')
+        .map((m) => m.id)
+      if (ids.length > 0) {
+        const sorted = ['openrouter/free', ...ids.filter((id) => id !== 'openrouter/free')]
+        return rememberFreeModels(sorted, false)
+      }
+    }
   } catch {
-    return cachedFreeModels ?? FALLBACK_FREE_MODELS
+    // Network failure or timeout: fall through to the memoized value below.
   }
+  // 失败也必须记账：旧实现只在成功时写缓存，于是 cachedFreeModels 永远为 null，
+  // 之后每次调用都要重新等一次网络往返。现在记下兜底值（返回值不变），
+  // 后续请求立刻命中。
+  return rememberFreeModels(cachedFreeModels ?? FALLBACK_FREE_MODELS, true)
 }
 
 export async function getFreeModels(): Promise<string[]> {
-  if (cachedFreeModels && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
+  if (isFreeModelsCacheFresh()) {
+    return cachedFreeModels as string[]
+  }
+  // 过期但手里已有值（真值或兜底）时「先发后用」：立刻返回旧值、后台刷新，
+  // 避免 TTL 到期后的第一个请求都卡住一次网络往返。只有从未取到过才阻塞。
+  if (cachedFreeModels) {
+    refreshFreeModelsInBackground()
     return cachedFreeModels
   }
   return fetchFreeModelsFromOpenRouter()
@@ -138,7 +173,7 @@ export function getCachedFreeModels(): string[] {
 }
 
 export function refreshFreeModelsInBackground(): void {
-  if (cachedFreeModels && Date.now() - cacheTimestamp < CACHE_TTL_MS) return
+  if (isFreeModelsCacheFresh()) return
   if (freeModelsRefreshPromise) return
   freeModelsRefreshPromise = fetchFreeModelsFromOpenRouter()
     .finally(() => {
