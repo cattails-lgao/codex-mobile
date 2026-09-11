@@ -103,6 +103,7 @@
 | 第七十一轮 v0.1.116 发布（修复空的 agentMessage/通用正文过程行） | [rounds/round-71-fix-empty-process-row.md](rounds/round-71-fix-empty-process-row.md) |
 | 第七十二轮 v0.1.117 发布（修复线程模型切换被 resume 旧模型覆盖） | [rounds/round-72-fix-thread-model-switch-on-resume.md](rounds/round-72-fix-thread-model-switch-on-resume.md) |
 | 第七十三轮 v0.1.118（切换模型后上下文窗口失效 + 模型切换分割栏） | [rounds/round-73-model-switch-context-and-divider.md](rounds/round-73-model-switch-context-and-divider.md) |
+| 第七十四轮 v0.1.119（回退 paginated 历史迁移补完：按 `historyMode` 一次分流消除探路 502 + `revertThread` 游标增量 hydrate 消除列表刷新 + 桥接裁剪补全 `thread/revert`） | [rounds/round-74-rollback-paginated-fixes.md](rounds/round-74-rollback-paginated-fixes.md) |
 
 ## 项目概况
 
@@ -198,4 +199,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-09-10（round-73：v0.1.118 发布——切换模型后上下文窗口失效 + 模型切换分割栏 + 回退降级 thread/revert + 协议快照同步至 0.153.4；定向 Vitest/`vue-tsc` 通过；tag/GitHub Release 就绪，npm `0.1.118` 待用户 publish）· 内容已脱敏*
+*codexapp · 交接文档 · 2026-09-11（round-74：v0.1.119 发布——回退 paginated 历史迁移补完（按 `historyMode` 一次分流消除探路 502 + `revertThread` 游标增量 hydrate 消除列表刷新 + 桥接裁剪补全 `thread/revert`）；定向 Vitest/`vue-tsc`/`pnpm run build` 通过；tag/GitHub Release 就绪，npm `0.1.119` 已发布闭环）· 内容已脱敏*
