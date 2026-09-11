@@ -160,6 +160,8 @@ import {
   writeApprovalPolicyToConfigFile,
 } from './bridge/approvalPolicy.js'
 import { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
+// thread/read 结果缓存切片（round-76）：命中即跳过 app-server 调用与整条响应管道。
+import { ThreadReadResultCache, threadReadInvalidatesCache } from './bridge/threadReadCache.js'
 // 内联 data-url 净化切片（U 批）：sanitizeThreadTurnsInlinePayloads 原为本
 // 模块公共导出（codexAppServerBridge.inlinePayload.test.ts 依赖），保持透出。
 export { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
@@ -304,6 +306,9 @@ type PendingServerRequest = {
 
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
 
+// round-76：`thread/read` 结果缓存（缓存策略/失效/取键见 bridge/threadReadCache.ts）。
+// 这里只挂实例 + 把失效信号接到通知与写 RPC 上。
+
 // File / project HTTP route family (projectless / github-clone / file-search /
 // prompts) migrated to bridge/projectRoutes.ts; helpers moved with the family.
 
@@ -370,6 +375,7 @@ class AppServerProcess {
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
   private readonly threadTurnPageReadCacheByThreadId = new Map<string, { result: unknown; expiresAt: number }>()
   private readonly threadTurnPageReadPromiseByThreadId = new Map<string, Promise<unknown>>()
+  private readonly threadReadResultCache = new ThreadReadResultCache()
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
   private chatgptAuthRefreshPromise: Promise<ChatgptAuthTokensRefreshResponse> | null = null
@@ -470,6 +476,7 @@ class AppServerProcess {
       this.initialized = false
       this.initializePromise = null
       this.readBuffer = ''
+      this.invalidateThreadReadResultCache()
     })
   }
 
@@ -524,6 +531,7 @@ class AppServerProcess {
     if (nThreadId) {
       this.invalidateLiveStateCache(nThreadId)
       this.threadTurnPageReadCacheByThreadId.delete(nThreadId)
+      this.invalidateThreadReadResultCache(nThreadId)
     }
     for (const listener of this.notificationListeners) {
       listener(notification)
@@ -613,6 +621,23 @@ class AppServerProcess {
 
   cacheLiveState(threadId: string, data: unknown, turnCount: number, sessionSize: number): void {
     this.liveStateCache.set(threadId, { data, turnCount, sessionSize })
+  }
+
+  /**
+   * Cache a post-pipeline `thread/read` result. Called by the RPC handler with
+   * exactly what was sent to the client, so a hit skips the app-server call, the
+   * 10-turn trim, the session-log command merge and the payload slimming.
+   */
+  cacheThreadReadResult(threadId: string, params: unknown, result: unknown): void {
+    this.threadReadResultCache.set(threadId, asRecord(params), result)
+  }
+
+  getCachedThreadReadResult(threadId: string, params: unknown): unknown | null {
+    return this.threadReadResultCache.get(threadId, asRecord(params))
+  }
+
+  invalidateThreadReadResultCache(threadId?: string): void {
+    this.threadReadResultCache.invalidate(threadId)
   }
 
   getCachedLiveState(threadId: string, turnCount: number, sessionSize: number): unknown | null {
@@ -851,8 +876,48 @@ class AppServerProcess {
 
   async rpc(method: string, params: unknown): Promise<unknown> {
     this.disposeIfConfigChanged()
+    // A method that can mutate thread state makes every cached read stale; the
+    // per-thread notification hook covers the rest.
+    if (threadReadInvalidatesCache(method)) {
+      const paramsRecord = asRecord(params)
+      const threadId = readNonEmptyString(paramsRecord?.threadId)
+      this.invalidateThreadReadResultCache(threadId || undefined)
+    }
     await this.ensureInitialized()
     return this.call(method, params)
+  }
+
+  /**
+   * Spawn + initialize the app-server ahead of the first user request.
+   *
+   * Measured cold start: the first page load fires ~20 startup RPCs that all
+   * queue behind one just-spawned app-server (head-of-line blocking —
+   * free-mode/status 2619ms, meta/methods 1306ms, thread/queue-state 1287ms), so
+   * `thread/list` costs 934ms cold vs 63ms warm.
+   *
+   * Honest scope of the win (measured 2026-09-11, dev server): the frontend's
+   * burst arrives ~1-3s after the Vite dev server reports ready, while
+   * `ensureInitialized()` here needs ~2.1s. So warm-up only *overlaps* part of
+   * the init — the first request still waits for the remainder (observed first
+   * GET 1401ms, meta/methods 2118ms). It does not remove the cold start from
+   * first paint; it removes it from every *later* load, and it is what makes the
+   * warm path (all endpoints <=70ms) reachable without an artificial first
+   * request. Treat this as queue-shifting, not as a first-paint fix.
+   *
+   * Side effect to be aware of: this spawns the app-server eagerly whenever the
+   * bridge is created (dev server and packaged `createServer` alike) instead of
+   * lazily on the first request.
+   *
+   * Best-effort: a failure here must not break the bridge, because the next
+   * request retries through the normal ensureInitialized path.
+   */
+  async warmUp(): Promise<void> {
+    try {
+      this.disposeIfConfigChanged()
+      await this.ensureInitialized()
+    } catch {
+      // Ignore: the first real request will surface the error with context.
+    }
   }
 
   onNotification(listener: (value: { method: string; params: unknown }) => void): () => void {
@@ -908,6 +973,7 @@ class AppServerProcess {
     this.initializePromise = null
     this.activeConfigSignature = ''
     this.readBuffer = ''
+    this.invalidateThreadReadResultCache()
 
     const failure = new Error('codex app-server stopped')
     for (const request of this.pending.values()) {
@@ -1315,7 +1381,13 @@ type SharedBridgeState = {
 }
 
 const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
-const SHARED_BRIDGE_VERSION = 'experimental-api-v2'
+// 改这个版本号 = 让进程里缓存的共享桥实例被 dispose 并重建。任何**给
+// AppServerProcess 增加/重命名公共方法**的改动都必须同步升版本：dev 服务器
+// 长驻，模块热更新后 getSharedBridgeState 会复用旧实例，新方法在旧实例上不存在。
+// round-76 加 warmUp/threadRead 缓存时就踩过这个坑（dev 日志刷
+// 「appServer.warmUp is not a function」并陷入 server restart failed 循环），
+// 所以 v2 → v3。
+const SHARED_BRIDGE_VERSION = 'experimental-api-v3'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
@@ -1372,6 +1444,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     }
     return threadSearchIndexPromise
   }
+  // round-76：先把 app-server spawn + initialize 做完，首屏那 ~20 个启动请求就不必
+  // 排在冷启动队尾（实测首屏 thread/list 934ms 冷 / 63ms 热）。失败不影响正常流程。
+  void appServer.warmUp()
   void initializeSkillsSyncOnStartup(appServer)
   void readTelegramBridgeConfig()
     .then((config) => {
@@ -1640,6 +1715,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 	          return
 	        }
 
+        // round-76：thread/read 命中缓存就直接返回，跳过 app-server 调用与整条
+        // 响应管道（10 轮裁剪、会话日志命令合并、载荷瘦身）。
+        const cacheableThreadReadId = body.method === 'thread/read'
+          ? readNonEmptyString(asRecord(body.params)?.threadId)
+          : ''
+        if (cacheableThreadReadId) {
+          const cachedThreadRead = appServer.getCachedThreadReadResult(cacheableThreadReadId, body.params ?? null)
+          if (cachedThreadRead !== null) {
+            setJson(res, 200, { result: cachedThreadRead })
+            return
+          }
+        }
+
         let rpcResult: unknown
         try {
           rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
@@ -1684,6 +1772,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           sanitizeThreadTurnsInlinePayloads,
           mergeImportedThreadsIntoThreadListResult,
         }, body.method, rpcResult)
+
+        if (cacheableThreadReadId) {
+          appServer.cacheThreadReadResult(cacheableThreadReadId, body.params ?? null, pipelineResult)
+        }
 
         setJson(res, 200, { result: pipelineResult })
         return

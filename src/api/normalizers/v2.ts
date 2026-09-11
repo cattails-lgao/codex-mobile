@@ -94,6 +94,21 @@ function toImageGenerationUrl(value: string): string {
   return `data:image/png;base64,${compact}`
 }
 
+// round-76：桥层把超长命令输出截到 16KB 并把溢出落盘，这里读回截断备注，
+// 供命令块渲染「已省略 N」提示与「查看完整输出」入口。
+function readCommandOutputSpill(raw: Record<string, unknown>): CommandExecutionData['outputSpill'] {
+  const spill = raw.aggregatedOutputSpill
+  if (!spill || typeof spill !== 'object' || Array.isArray(spill)) return undefined
+  const record = spill as Record<string, unknown>
+  const ref = typeof record.ref === 'string' ? record.ref.trim() : ''
+  const readCount = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0
+  const totalBytes = readCount(record.totalBytes)
+  const omittedBytes = readCount(record.omittedBytes)
+  if (omittedBytes <= 0) return undefined
+  return { ref, totalBytes, omittedBytes }
+}
+
 function decodeHeartbeatXmlText(value: string): string {
   return value
     .replace(/&lt;/giu, '<')
@@ -542,7 +557,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
         role: 'system' as const,
         text: cmd,
         messageType: 'commandExecution',
-        commandExecution: { command: cmd, cwd, status, aggregatedOutput, exitCode },
+        commandExecution: { command: cmd, cwd, status, aggregatedOutput, exitCode, outputSpill: readCommandOutputSpill(raw) },
       },
     ]
   }

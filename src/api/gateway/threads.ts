@@ -523,6 +523,18 @@ export async function getOlderThreadMessages(threadId: string, beforeTurnId: str
   }
 }
 
+// round-76：命令块默认折叠，桥层只内联 16KB 并把溢出落盘；用户展开后主动
+// 点「查看完整输出」时按不透明句柄取回完整文本。
+export async function getCommandOutputText(ref: string): Promise<string> {
+  const params = new URLSearchParams({ ref })
+  const response = await fetch(`/codex-api/command-output?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error(`Command output request failed with ${response.status}`)
+  }
+  const payload = await response.json() as { text?: unknown }
+  return typeof payload.text === 'string' ? payload.text : ''
+}
+
 export async function resumeThread(threadId: string): Promise<ResumedThread> {
   const existing = recentResumeThreadById.get(threadId)
   if (existing) return existing

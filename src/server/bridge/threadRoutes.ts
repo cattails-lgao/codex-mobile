@@ -9,6 +9,7 @@ import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { asRecord, getErrorMessage, readNonEmptyString, STREAM_EVENT_BUFFER_LIMIT, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
 import { buildSessionFileChangeFallback, mergeSessionCommandsIntoThreadResult, mergeSessionCommandsIntoTurns, mergeSessionSkillInputsIntoThreadResult } from './session.js'
+import { resolveCommandOutputSpillPath } from './payloadSlimming.js'
 import type { ExternalSessionInfo } from '../externalSessionTracker.js'
 
 type SetJson = (res: ServerResponse, statusCode: number, payload: unknown) => void
@@ -336,6 +337,27 @@ export function handleThreadHttpRequest(
             isInProgress: false,
           })
         }
+      }
+      return true
+    })()
+  }
+
+  // Read back a command output that payloadSlimming truncated out of a thread
+  // response. The `ref` is an opaque sha1 handle, so this cannot be used to read
+  // an arbitrary path.
+  if (req.method === 'GET' && url.pathname === '/codex-api/command-output') {
+    return (async () => {
+      const ref = url.searchParams.get('ref')?.trim() ?? ''
+      const spillPath = resolveCommandOutputSpillPath(ref)
+      if (!spillPath) {
+        setJson(res, 400, { error: 'Invalid command output reference.' })
+        return true
+      }
+
+      try {
+        setJson(res, 200, { text: await readFile(spillPath, 'utf8') })
+      } catch {
+        setJson(res, 404, { error: 'Command output is no longer available.' })
       }
       return true
     })()

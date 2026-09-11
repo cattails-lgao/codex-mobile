@@ -33,8 +33,21 @@
         <pre
           class="work-block-output"
           :class="{ 'cmd-output-condensed': outputCondensed }"
-          v-text="command.commandExecution?.aggregatedOutput || '(no output)'"
+          v-text="displayedOutput"
         ></pre>
+        <p v-if="spillNote" class="work-block-output-spill" role="note">
+          <span>{{ spillNote }}</span>
+          <button
+            v-if="spillRef && !fullOutputLoaded"
+            type="button"
+            class="work-block-output-spill-action"
+            :disabled="spillState === 'loading'"
+            @click="loadFullOutput"
+          >
+            {{ spillState === 'loading' ? t('Loading full output…') : t('Show full output') }}
+          </button>
+          <span v-else-if="spillState === 'error'">{{ t('Could not load the full output.') }}</span>
+        </p>
       </div>
     </div>
     <p v-if="permissionHint" class="work-block-permission-hint" role="note">
@@ -44,9 +57,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { UiMessage } from '../../types/codex'
 import { useUiLanguage } from '../../composables/useUiLanguage'
+import { getCommandOutputText } from '../../api/gateway/threads'
 
 const props = defineProps<{
   command: UiMessage
@@ -61,6 +75,53 @@ defineEmits<{
 }>()
 
 const { t } = useUiLanguage()
+
+// round-76：桥层只内联 16KB 命令输出，溢出落盘并留下一个不透明句柄。折叠状态下
+// 用户看到的仍是截断文本，需要时才主动把完整输出取回来。
+const spill = computed(() => props.command.commandExecution?.outputSpill)
+const spillRef = computed(() => spill.value?.ref ?? '')
+const spillState = ref<'idle' | 'loading' | 'error'>('idle')
+const loadedOutput = ref<{ ref: string; text: string } | null>(null)
+
+const fullOutputLoaded = computed(() => {
+  const current = spill.value
+  return Boolean(current && loadedOutput.value && loadedOutput.value.ref === current.ref)
+})
+
+const displayedOutput = computed(() => {
+  const execution = props.command.commandExecution
+  const current = execution?.outputSpill
+  const loaded = loadedOutput.value
+  if (current && loaded && loaded.ref === current.ref) return loaded.text
+  return execution?.aggregatedOutput || '(no output)'
+})
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const spillNote = computed(() => {
+  const current = spill.value
+  if (!current || current.omittedBytes <= 0) return ''
+  return t('Output trimmed: {omitted} omitted of {total}.', {
+    omitted: formatByteSize(current.omittedBytes),
+    total: formatByteSize(current.totalBytes),
+  })
+})
+
+async function loadFullOutput(): Promise<void> {
+  const current = spill.value
+  if (!current?.ref || spillState.value === 'loading') return
+  spillState.value = 'loading'
+  try {
+    loadedOutput.value = { ref: current.ref, text: await getCommandOutputText(current.ref) }
+    spillState.value = 'idle'
+  } catch {
+    spillState.value = 'error'
+  }
+}
 
 const statusClass = computed(() => {
   const s = props.command.commandExecution?.status
@@ -228,6 +289,27 @@ const permissionHint = computed(() => {
 
 .work-block-output.cmd-output-condensed {
   max-height: 9rem;
+}
+
+/* round-76：输出被截断时的提示行 + 按需取回完整输出的入口。放在展开区内部，
+   折叠时不占高度、也不干扰「命令块视觉降噪」的朴素行设计。 */
+.work-block-output-spill {
+  @apply m-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-zinc-700/60 px-3 py-1.5 text-[11px] leading-4;
+  color: #a1a1aa;
+}
+
+.work-block-output-spill-action {
+  @apply cursor-pointer rounded border border-zinc-600 px-1.5 py-0.5 text-[11px] leading-4 transition-colors;
+  color: #e4e4e7;
+  background: transparent;
+}
+
+.work-block-output-spill-action:hover {
+  @apply border-zinc-500 text-white;
+}
+
+.work-block-output-spill-action:disabled {
+  @apply cursor-default opacity-60;
 }
 
 .work-block-permission-hint {

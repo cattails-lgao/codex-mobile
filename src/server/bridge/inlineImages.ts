@@ -1,7 +1,14 @@
-// Inline data-URL sanitization slice, extracted from createCodexBridgeMiddleware.
-// Scans thread payloads for inline data: URLs (images/videos/files) and, when
-// a matching method returns turns, persists them to local media files and
-// rewrites the payload to point at the /codex-local-image proxy. Pure
+// Thread-turn payload preparation slice, extracted from
+// createCodexBridgeMiddleware. Two passes, in order:
+//
+//   1. slimThreadTurnsPayload (payloadSlimming.ts) — drops unread MCP results
+//      and caps oversized command output, spilling the overflow to disk.
+//   2. Inline data-URL externalization — scans the slimmed payload for inline
+//      data: URLs (images/videos/files), persists them to local media files and
+//      rewrites the payload to point at the /codex-local-image proxy.
+//
+// Slimming runs first so the deep media walk never has to visit the (18% of
+// bytes) MCP `result` field it would only have discarded anyway. Pure
 // module-level helpers; rpcPipeline / threadRoutes consume
 // sanitizeThreadTurnsInlinePayloads via injected deps.
 import { createHash } from 'node:crypto'
@@ -9,6 +16,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { asRecord } from './core.js'
+import { slimThreadTurnsPayload } from './payloadSlimming.js'
 
 const THREAD_METHODS_WITH_TURNS = new Set(['thread/read', 'thread/resume', 'thread/fork', 'thread/rollback', 'thread/revert'])
 
@@ -326,10 +334,12 @@ async function sanitizeInlinePayloadDeep(
 export async function sanitizeThreadTurnsInlinePayloads(method: string, result: unknown): Promise<unknown> {
   if (!THREAD_METHODS_WITH_TURNS.has(method)) return result
 
-  const record = asRecord(result)
+  const slimmed = await slimThreadTurnsPayload(method, result)
+
+  const record = asRecord(slimmed)
   const thread = asRecord(record?.thread)
   const turns = Array.isArray(thread?.turns) ? thread.turns : null
-  if (!record || !thread || !turns || turns.length === 0) return result
+  if (!record || !thread || !turns || turns.length === 0) return slimmed
 
   let changed = false
   const nextTurns: unknown[] = []
@@ -377,7 +387,7 @@ export async function sanitizeThreadTurnsInlinePayloads(method: string, result: 
     })
   }
 
-  if (!changed) return result
+  if (!changed) return slimmed
   return {
     ...record,
     thread: {

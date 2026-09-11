@@ -299,6 +299,47 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.find((message) => message.id === 'cmd-1')?.messageType).toBe('commandExecution')
   })
 
+  // round-76：桥层把超长命令输出截到 16KB 并落盘，`aggregatedOutputSpill` 是桥层
+  // 附加字段（不在 app-server 协议里），所以字面量需要显式断言成 ThreadItem。
+  type ThreadItemDto = ThreadReadResponse['thread']['turns'][number]['items'][number]
+
+  it('carries the truncation spill note onto the command execution payload (round-76)', () => {
+    const ref = 'a'.repeat(40)
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      {
+        type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null,
+        source: 'agent', pluginId: null, scriptPath: null, status: 'completed', exitCode: 0,
+        aggregatedOutput: 'ok',
+        aggregatedOutputSpill: { ref, totalBytes: 803_000, omittedBytes: 787_000 },
+        commandActions: [], durationMs: 10,
+      } as unknown as ThreadItemDto,
+    ]))
+
+    expect(messages[0]?.commandExecution?.outputSpill).toEqual({ ref, totalBytes: 803_000, omittedBytes: 787_000 })
+  })
+
+  it('omits the spill note when the output was not truncated', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null, source: 'agent', pluginId: null, scriptPath: null, status: 'completed', exitCode: 0, aggregatedOutput: 'ok', commandActions: [], durationMs: 10 },
+    ]))
+
+    expect(messages[0]?.commandExecution?.outputSpill).toBeUndefined()
+  })
+
+  it('ignores a malformed spill note', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      {
+        type: 'commandExecution', id: 'cmd-1', command: 'npm test', cwd: '/tmp/project', processId: null,
+        source: 'agent', pluginId: null, scriptPath: null, status: 'completed', exitCode: 0,
+        aggregatedOutput: 'ok',
+        aggregatedOutputSpill: { ref: 5, totalBytes: 'many', omittedBytes: 0 },
+        commandActions: [], durationMs: 10,
+      } as unknown as ThreadItemDto,
+    ]))
+
+    expect(messages[0]?.commandExecution?.outputSpill).toBeUndefined()
+  })
+
   it('renders persisted reasoning items with summary and content', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
       { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'think hard', text_elements: [] }] },
