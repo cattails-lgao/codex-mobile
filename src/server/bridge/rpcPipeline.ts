@@ -91,6 +91,52 @@ function filterSubagentThreadsFromThreadListResult(
   return filterThreadListByIds(result, tracker.getUserFacingSubagentThreadIds())
 }
 
+function readUpdatedAt(row: Record<string, unknown> | null): number {
+  const value = row?.updatedAt
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+/**
+ * Collapse `thread/list` rows that share one thread id into a single row.
+ *
+ * A paginated thread's history is never rewritten in place by `thread/revert`:
+ * each revert opens a new rollout segment that points back at the prefix via
+ * `history_base`. The app-server builds `thread/list` by scanning the sessions
+ * directory, so one logical thread surfaces as one row per segment (while
+ * `state_*.sqlite` still holds exactly one row per id). Keep the segment with
+ * the greatest `updatedAt` — that matches the persisted `rollout_path` — and
+ * keep every row in its first-seen position so the list order does not jump.
+ * Rows without a usable id are passed through untouched. Returns the input
+ * unchanged when no id repeats.
+ */
+function dedupeThreadListByIdKeepNewest(result: unknown): unknown {
+  const record = asRecord(result)
+  const data = Array.isArray(record?.data) ? record.data : null
+  if (!record || !data || data.length <= 1) return result
+
+  const rows: unknown[] = []
+  const indexById = new Map<string, number>()
+  for (const row of data) {
+    const rowRecord = asRecord(row)
+    const id = readNonEmptyString(rowRecord?.id)
+    if (!rowRecord || !id) {
+      rows.push(row)
+      continue
+    }
+    const existingIndex = indexById.get(id)
+    if (existingIndex === undefined) {
+      indexById.set(id, rows.length)
+      rows.push(row)
+      continue
+    }
+    if (readUpdatedAt(rowRecord) > readUpdatedAt(asRecord(rows[existingIndex]))) {
+      rows[existingIndex] = row
+    }
+  }
+
+  return rows.length === data.length ? result : { ...record, data: rows }
+}
+
 function overlayExternalSessionOnThreadResult(
   tracker: RpcPipelineDeps['externalSessionTracker'],
   result: unknown,
@@ -124,19 +170,25 @@ export async function runRpcResponsePipeline(deps: RpcPipelineDeps, method: stri
   const subagentFilteredResult = method === 'thread/list'
     ? filterSubagentThreadsFromThreadListResult(externalSessionTracker, mergedResult)
     : mergedResult
+  // Dedupe is terminal for `thread/list`: it collapses the one-row-per-rollout
+  // duplicates the app-server returns for paginated threads, and also covers
+  // any id the subagent filter or the imported-session merge left doubled.
+  const dedupedResult = method === 'thread/list'
+    ? dedupeThreadListByIdKeepNewest(subagentFilteredResult)
+    : subagentFilteredResult
 
   if (THREAD_METHODS_WITH_THREAD_SNAPSHOT.has(method)) {
-    const rpcRecord = asRecord(subagentFilteredResult)
+    const rpcRecord = asRecord(dedupedResult)
     const rpcThread = asRecord(rpcRecord?.thread)
     const rpcThreadId = typeof rpcThread?.id === 'string' ? rpcThread.id : ''
-    if (rpcThreadId) appServer.storeThreadReadSnapshot(rpcThreadId, subagentFilteredResult)
+    if (rpcThreadId) appServer.storeThreadReadSnapshot(rpcThreadId, dedupedResult)
   }
 
   return method === 'thread/list'
-    ? overlayExternalSessionOnThreadList(externalSessionTracker, subagentFilteredResult)
+    ? overlayExternalSessionOnThreadList(externalSessionTracker, dedupedResult)
     : THREAD_METHODS_WITH_TURNS.has(method)
-      ? overlayExternalSessionOnThreadResult(externalSessionTracker, subagentFilteredResult)
-      : subagentFilteredResult
+      ? overlayExternalSessionOnThreadResult(externalSessionTracker, dedupedResult)
+      : dedupedResult
 }
 
 export function getRpcPipelineErrorMessage(error: unknown, fallback: string): string {
