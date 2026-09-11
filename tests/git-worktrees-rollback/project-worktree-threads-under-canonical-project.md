@@ -5,8 +5,8 @@ Managed worktree threads remain visible under their matching canonical workspace
 
 #### Prerequisites/Setup
 1. Dev server running (`pnpm run dev`)
-2. Codex global workspace roots include `/Users/igor/Git-projects/codex-web-local`
-3. Thread history contains at least one thread whose cwd is under `/Users/igor/.codex/worktrees/*/codex-web-local`
+2. Codex global workspace roots include `<项目目录>`
+3. Thread history contains at least one thread whose cwd is under `<CODEX_HOME>/worktrees/*/codex-web-local`
 4. Light theme and dark theme both available from the appearance switcher
 
 #### Steps

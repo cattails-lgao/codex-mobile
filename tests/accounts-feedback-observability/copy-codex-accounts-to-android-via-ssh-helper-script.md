@@ -2,7 +2,7 @@
 
 #### Prerequisites
 - Local Codex state exists at `~/.codex/accounts` and `~/.codex/accounts.json`.
-- Android helper exists and is executable: `/Users/igor/Git-projects/codex-web-local-android/andclaw/ssh.sh`.
+- Android helper exists and is executable: `<外部测试目录>/andclaw/ssh.sh`.
 - Android target is reachable through helper SSH path.
 
 #### Steps

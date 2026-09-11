@@ -1,7 +1,7 @@
 ### Feature: npm run dev uses CLI server on Android
 
 #### Prerequisites
-- Android SSH helper exists and is executable: `/Users/igor/Git-projects/codex-web-local-android/andClaw/ssh.sh`.
+- Android SSH helper exists and is executable: `<外部测试目录>/andClaw/ssh.sh`.
 - Dependencies are installed on the Android clone.
 
 #### Steps

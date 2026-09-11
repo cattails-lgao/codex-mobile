@@ -6,7 +6,7 @@ Threads capture their provider at creation time and keep provider-scoped model m
 #### Prerequisites/Setup
 1. Create a fresh temporary `CODEX_HOME` with no `auth.json`.
 2. Start the app locally with Vite only: `CODEX_HOME=<temp-home> npm run dev -- --host 127.0.0.1 --port 4173`.
-3. Keep a valid host auth file at `/Users/igor/.codex/auth.json`.
+3. Keep a valid host auth file at `<CODEX_HOME>/auth.json`.
 4. Keep a valid OpenRouter key available.
 
 #### Steps
@@ -14,7 +14,7 @@ Threads capture their provider at creation time and keep provider-scoped model m
 2. Create a project chat with no auth present and confirm the provider is OpenCode Zen.
 3. Open the model menu and confirm it only shows Zen models, including `big-pickle`, with no GPT/Codex entries.
 4. Send `hi` and confirm the request uses `big-pickle` and a visible assistant reply appears.
-5. Copy `/Users/igor/.codex/auth.json` into the isolated `CODEX_HOME` while the Vite server is still running, reload the app, and confirm the new-chat composer switches from `big-pickle` to a Codex/GPT model.
+5. Copy `<CODEX_HOME>/auth.json` into the isolated `CODEX_HOME` while the Vite server is still running, reload the app, and confirm the new-chat composer switches from `big-pickle` to a Codex/GPT model.
 6. Restart the Vite server with the same `CODEX_HOME`, reload the app, and confirm the composer still shows Codex/GPT models.
 7. In the same project, create a new chat and confirm it uses the current global Codex provider.
 8. Open the model menu and confirm it only shows Codex/GPT models, with no Zen entries.

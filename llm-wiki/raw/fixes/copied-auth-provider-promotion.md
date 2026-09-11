@@ -50,7 +50,7 @@ Flow:
 1. Start a fresh container with empty mounted `CODEX_HOME`.
 2. Confirm initial provider is `opencode-zen`.
 3. Switch provider to `openrouter`.
-4. Copy `/Users/igor/.codex/auth.json` into the mounted `CODEX_HOME`.
+4. Copy `<CODEX_HOME>/auth.json` into the mounted `CODEX_HOME`.
 5. Reload the UI.
 6. Confirm provider changes to `codex`.
 7. Confirm Accounts count becomes `1`.

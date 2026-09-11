@@ -11,7 +11,7 @@ New-thread sends render the submitted user message immediately, even when the ba
 #### Steps
 1. In light theme, open `http://127.0.0.1:4173/?openProjectPath=<encoded-test-project-path>`.
 2. Send `hi` in a new unauthenticated chat and confirm the conversation pane immediately shows the user row `hi`.
-3. Copy `/Users/igor/.codex/auth.json` to `<temp-home>/auth.json`.
+3. Copy `<CODEX_HOME>/auth.json` to `<temp-home>/auth.json`.
 4. Restart the same Vite server with the same `CODEX_HOME`.
 5. Open the same project path, create another new chat, and send `hi`.
 6. Confirm the conversation pane immediately shows the user row `hi`, then wait for the assistant response.

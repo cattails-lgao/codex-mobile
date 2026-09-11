@@ -14,7 +14,7 @@
 
 ## 问题 2：选 codex 用的不是 codex-cli 的模型
 
-**根因：** 用户的 codex-cli 配置在默认 CODEX_HOME（`C:\Users\cattails\.codex\config.toml`）：`model_provider="custom"`、`model="deepseek-v4-flash"`、`[model_providers.custom]` 指向 litellm（`http://127.0.0.1:4460/v1`）。而 app 的 CODEX_HOME（`d:\code\codex-mobile\.codex\config.toml`）只有 projects 信任设置，无模型配置 → app-server 用内置官方模型（gpt-5.5 等，需 OpenAI 登录，本机无 auth.json）→ 与 codex-cli 不一致。
+**根因：** 用户的 codex-cli 配置在默认 CODEX_HOME（`<CODEX_HOME>\config.toml`）：`model_provider="custom"`、`model="deepseek-v4-flash"`、`[model_providers.custom]` 指向 litellm（`http://127.0.0.1:4460/v1`）。而 app 的 CODEX_HOME（`<项目目录>\.codex\config.toml`）只有 projects 信任设置，无模型配置 → app-server 用内置官方模型（gpt-5.5 等，需 OpenAI 登录，本机无 auth.json）→ 与 codex-cli 不一致。
 
 **修复：** 把 litellm provider 配置同步到 app 的 CODEX_HOME `config.toml`（`model_provider/model/model_reasoning_effort` 顶层 key + `[model_providers.custom]` section，与默认 HOME 一致；备份 `.codex/config.toml.bak-round42`）。
 
@@ -24,21 +24,21 @@
 
 ## 补充修复（模型列表仍不对——缺 model_catalog_json + provider-backed 误判）
 
-用户反馈「之前端点选 codex 取的是哪里的？现在模型列表还是有问题」：round-42 只同步了 litellm provider 配置，**漏了 codex-cli 的模型目录 `model_catalog_json`**（`C:\Users\cattails\.codex\models.json`，定义 deepseek-v4-flash / deepseek-v4-pro）→ app-server 的 `model/list` 仍返回内置官方目录（gpt-5.5 等，需 OpenAI 登录用不了）。且前端把 config.toml 的 `model_provider="custom"`（litellm）误判为 provider-backed → 模型列表只用 `provider-models?provider=custom`（litellm /models 只有 flash），丢 catalog 的 pro 项。
+用户反馈「之前端点选 codex 取的是哪里的？现在模型列表还是有问题」：round-42 只同步了 litellm provider 配置，**漏了 codex-cli 的模型目录 `model_catalog_json`**（`<CODEX_HOME>\models.json`，定义 deepseek-v4-flash / deepseek-v4-pro）→ app-server 的 `model/list` 仍返回内置官方目录（gpt-5.5 等，需 OpenAI 登录用不了）。且前端把 config.toml 的 `model_provider="custom"`（litellm）误判为 provider-backed → 模型列表只用 `provider-models?provider=custom`（litellm /models 只有 flash），丢 catalog 的 pro 项。
 
 **修复：**
-- `.codex/config.toml` 补 `model_catalog_json = "C:\\Users\\cattails\\.codex\\models.json"` → `model/list` 返回 deepseek-v4-flash / deepseek-v4-pro（与 codex-cli 一致）。
+- `.codex/config.toml` 补 `model_catalog_json = "<CODEX_HOME>\\models.json"` → `model/list` 返回 deepseek-v4-flash / deepseek-v4-pro（与 codex-cli 一致）。
 - `src/composables/useDesktopState.ts` `refreshModelPreferences`：`isProviderBacked` 判定从 `targetProviderId !== 'codex'` 改为 `!== 'codex' && !== 'custom'`（config.toml 的 litellm provider 不算 provider-backed，走 model/list 目录；UI 的"自定义端点"是 `custom-endpoint`，不受影响）。
 
 **验证：** `model/list` = deepseek-v4-flash, deepseek-v4-pro；UI 模型下拉显示两项。备注：litellm config.yaml 只配了 flash（deepseek-v4-pro 选了会报错，与 codex-cli 行为一致，需用户在 litellm 补配）。
 
 ## 补充修复（模型强度无中等档——models.json 定义补 medium）
 
-用户反馈「模型强度怎么没有中等」：deepseek 模型在 `C:\Users\cattails\.codex\models.json` 的 `supported_reasoning_levels` 只有 low/high/max（无 medium）→ app 与 codex-cli 的强度下拉均无中等（app 忠实显示模型目录，非 app bug）。
+用户反馈「模型强度怎么没有中等」：deepseek 模型在 `<CODEX_HOME>\models.json` 的 `supported_reasoning_levels` 只有 low/high/max（无 medium）→ app 与 codex-cli 的强度下拉均无中等（app 忠实显示模型目录，非 app bug）。
 
 **实测确认**：向 litellm（4460）发 `reasoning: {effort: "medium"}` 请求，返回 200 且推理正常 → opencode 端点接受 medium 档。
 
-**修改**：`C:\Users\cattails\.codex\models.json`（用户机器文件，非 git 仓库，备份 `.bak-round42`）为 deepseek-v4-flash/pro 的 `supported_reasoning_levels` 加入 `medium`（位于 low 之后；default_reasoning_level 保持 high）。`model/list` 返回 efforts=[low,medium,high,max]；UI 强度下拉显示 Low/Medium/High/Max。
+**修改**：`<CODEX_HOME>\models.json`（用户机器文件，非 git 仓库，备份 `.bak-round42`）为 deepseek-v4-flash/pro 的 `supported_reasoning_levels` 加入 `medium`（位于 low 之后；default_reasoning_level 保持 high）。`model/list` 返回 efforts=[low,medium,high,max]；UI 强度下拉显示 Low/Medium/High/Max。
 
 ## 备注（发现但未修）
 

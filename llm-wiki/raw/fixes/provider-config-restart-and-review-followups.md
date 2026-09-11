@@ -4,7 +4,7 @@ Date: 2026-05-14
 
 ## Context
 
-During local Vite validation with an isolated `CODEX_HOME`, the app started without auth and selected OpenCode Zen / `big-pickle`. After copying `/Users/igor/.codex/auth.json` into the same `CODEX_HOME`, Settings showed `Codex`, but the new-chat composer still showed `big-pickle`.
+During local Vite validation with an isolated `CODEX_HOME`, the app started without auth and selected OpenCode Zen / `big-pickle`. After copying `<CODEX_HOME>/auth.json` into the same `CODEX_HOME`, Settings showed `Codex`, but the new-chat composer still showed `big-pickle`.
 
 The live checks showed the server-side `config/read` path was still using the stale app-server process started with no-auth Zen config, even though frontend free-mode status had promoted the visible Settings provider to Codex.
 
