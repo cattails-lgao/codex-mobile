@@ -137,4 +137,4 @@
 - 代码 + 测试提交、文档/版本提交分开（见 `sections/commit-history.md` round-76 条目）：`0d18ca2`（代码+测试）/ `3e6405c`（文档+版本）/ `449cbc1`（哈希记录）/ `b8642f2`（推送状态）。
 - git tag `v0.1.121`（annotated，指向 `b8642f2`）已推送；GitHub Release `v0.1.121` 已创建（非草稿 / 非预发布，已标记 Latest）：
   https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.121
-- `codex-mobile-re@0.1.121` 的 npm publish 由用户执行；发布后核验 `dist-tags.latest` 并补收尾记录（本文件与总入口同步改为「已全部闭环」）。
+- `codex-mobile-re@0.1.121` 已由用户 publish 至 npm 官方源并成为 `latest`（`dist-tags` → `{"latest":"0.1.121"}`，发布时刻 `2026-09-11T08:05:17.895Z`，shasum `9e67d424ec8da0ec29ada04fd090ce69ec30727f`）。**发布链路全部闭环。**
