@@ -55,7 +55,7 @@ describe('normalizeThreadMessagesV2', () => {
       id: 'user-1',
       content: [
         { type: 'text', text: 'Use the browser skill', text_elements: [] },
-        { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/skills/browser/SKILL.md' },
+        { type: 'skill', name: 'browser-use:browser', path: '/Users/example/.codex/skills/browser/SKILL.md' },
       ],
     }]))
 
@@ -64,7 +64,7 @@ describe('normalizeThreadMessagesV2', () => {
       id: 'user-1',
       role: 'user',
       text: 'Use the browser skill',
-      skills: [{ name: 'browser-use:browser', path: '/Users/igor/.codex/skills/browser/SKILL.md' }],
+      skills: [{ name: 'browser-use:browser', path: '/Users/example/.codex/skills/browser/SKILL.md' }],
     })
   })
 
@@ -74,7 +74,7 @@ describe('normalizeThreadMessagesV2', () => {
       clientId: null,
       id: 'user-2',
       content: [
-        { type: 'skill', name: 'composio-cli', path: '/Users/igor/.codex/skills/composio-cli/SKILL.md' },
+        { type: 'skill', name: 'composio-cli', path: '/Users/example/.codex/skills/composio-cli/SKILL.md' },
       ],
     }]))
 
@@ -83,7 +83,7 @@ describe('normalizeThreadMessagesV2', () => {
       id: 'user-2',
       role: 'user',
       text: '',
-      skills: [{ name: 'composio-cli', path: '/Users/igor/.codex/skills/composio-cli/SKILL.md' }],
+      skills: [{ name: 'composio-cli', path: '/Users/example/.codex/skills/composio-cli/SKILL.md' }],
     })
     expect(messages[0].isUnhandled).toBeUndefined()
   })

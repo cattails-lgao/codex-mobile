@@ -3,7 +3,7 @@ set -euo pipefail
 
 LOCAL_CODEX_HOME="${LOCAL_CODEX_HOME:-$HOME/.codex}"
 REMOTE_CODEX_HOME="${REMOTE_CODEX_HOME:-~/.codex}"
-SSH_HELPER="${SSH_HELPER:-/Users/igor/Git-projects/codex-web-local-android/andclaw/ssh.sh}"
+SSH_HELPER="${SSH_HELPER:-}"
 SSH_MODE_VALUE="${SSH_MODE:-auto}"
 
 usage() {
@@ -27,8 +27,9 @@ if [[ $# -ge 1 ]]; then
   SSH_HELPER="$1"
 fi
 
-if [[ ! -x "$SSH_HELPER" ]]; then
-  echo "SSH helper not executable: $SSH_HELPER" >&2
+if [[ -z "$SSH_HELPER" || ! -x "$SSH_HELPER" ]]; then
+  echo "SSH helper not executable: ${SSH_HELPER:-<unset>}" >&2
+  echo "Pass it as arg 1 or set SSH_HELPER (see --help)." >&2
   exit 1
 fi
 

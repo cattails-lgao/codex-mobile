@@ -329,7 +329,7 @@ describe('thread session skill recovery', () => {
           role: 'user',
           content: [{
             type: 'input_text',
-            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n---\n# Browser\n</skill>',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/example/.codex/plugins/browser/SKILL.md</path>\n---\n# Browser\n</skill>',
           }],
         },
       }),
@@ -338,7 +338,7 @@ describe('thread session skill recovery', () => {
     const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
     expect(merged[0].items[0].content).toEqual([
       { type: 'text', text: 'use a skill', text_elements: [] },
-      { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+      { type: 'skill', name: 'browser-use:browser', path: '/Users/example/.codex/plugins/browser/SKILL.md' },
     ])
   })
 
@@ -350,7 +350,7 @@ describe('thread session skill recovery', () => {
         type: 'userMessage',
         content: [
           { type: 'text', text: 'use a skill', text_elements: [] },
-          { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+          { type: 'skill', name: 'browser-use:browser', path: '/Users/example/.codex/plugins/browser/SKILL.md' },
         ],
       }],
     }]
@@ -363,7 +363,7 @@ describe('thread session skill recovery', () => {
           role: 'user',
           content: [{
             type: 'input_text',
-            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n</skill>',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/example/.codex/plugins/browser/SKILL.md</path>\n</skill>',
           }],
         },
       }),
@@ -402,7 +402,7 @@ describe('thread session skill recovery', () => {
           role: 'user',
           content: [{
             type: 'input_text',
-            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/igor/.codex/plugins/browser/SKILL.md</path>\n</skill>',
+            text: '<skill>\n<name>browser-use:browser</name>\n<path>/Users/example/.codex/plugins/browser/SKILL.md</path>\n</skill>',
           }],
         },
       }),
@@ -412,7 +412,7 @@ describe('thread session skill recovery', () => {
     expect(merged[0].items[0].content).toEqual([{ type: 'text', text: 'first message', text_elements: [] }])
     expect(merged[0].items[2].content).toEqual([
       { type: 'text', text: 'second message', text_elements: [] },
-      { type: 'skill', name: 'browser-use:browser', path: '/Users/igor/.codex/plugins/browser/SKILL.md' },
+      { type: 'skill', name: 'browser-use:browser', path: '/Users/example/.codex/plugins/browser/SKILL.md' },
     ])
   })
 })
