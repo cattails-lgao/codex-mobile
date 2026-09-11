@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DB_PATH="${1:-/Users/igor/Git-projects/any-auto-register/account_manager.db}"
+DB_PATH="${1:-}"
 LIMIT="${2:-10}"
 CODEX_HOME_DIR="${CODEX_HOME:-$HOME/.codex}"
+
+if [[ -z "$DB_PATH" ]]; then
+  echo "Usage: $0 <path-to-account_manager.db> [limit]" >&2
+  exit 1
+fi
 
 if [[ ! -f "$DB_PATH" ]]; then
   echo "DB not found: $DB_PATH" >&2

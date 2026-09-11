@@ -1,9 +1,10 @@
 const { chromium } = require('playwright')
 const { existsSync, mkdirSync, rmSync, writeFileSync } = require('node:fs')
 const { resolve, join } = require('node:path')
+const { tmpdir } = require('node:os')
 
 const baseUrl = process.env.TESTCHAT_PROFILE_BASE_URL || 'http://127.0.0.1:4173'
-const testChatRoot = process.env.TESTCHAT_ROOT || '/Users/igor/temp/TestChat'
+const testChatRoot = process.env.TESTCHAT_ROOT || join(tmpdir(), 'TestChat')
 const label = process.env.TESTCHAT_PROFILE_LABEL || 'optimized'
 const timeoutMs = Number.parseInt(process.env.TESTCHAT_PROFILE_TIMEOUT_MS || '240000', 10)
 const outputDir = resolve(process.cwd(), 'output/playwright')

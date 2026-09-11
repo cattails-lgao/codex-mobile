@@ -187,19 +187,19 @@ describe('filterGroupsByWorkspaceRoots', () => {
     const groups: UiProjectGroup[] = [
       {
         projectName: 'TestChat',
-        threads: [thread('testchat-chat', '/Users/igor/temp/TestChat')],
+        threads: [thread('testchat-chat', '/Users/example/temp/TestChat')],
       },
     ]
     const rootsState: WorkspaceRootsState = {
-      order: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
+      order: ['/Users/example/Documents/New project 2/TestChat', '/Users/example/temp/TestChat'],
       labels: {},
-      active: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
-      projectOrder: ['/Users/igor/Documents/New project 2/TestChat', '/Users/igor/temp/TestChat'],
+      active: ['/Users/example/Documents/New project 2/TestChat', '/Users/example/temp/TestChat'],
+      projectOrder: ['/Users/example/Documents/New project 2/TestChat', '/Users/example/temp/TestChat'],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.length])).toEqual([
-      ['/Users/igor/Documents/New project 2/TestChat', 0],
-      ['/Users/igor/temp/TestChat', 1],
+      ['/Users/example/Documents/New project 2/TestChat', 0],
+      ['/Users/example/temp/TestChat', 1],
     ])
   })
 
@@ -229,16 +229,16 @@ describe('filterGroupsByWorkspaceRoots', () => {
       {
         projectName: 'codex-web-local',
         threads: [
-          thread('main-chat', '/Users/igor/Git-projects/codex-web-local'),
-          thread('worktree-chat', '/Users/igor/.codex/worktrees/53e7/codex-web-local', { hasWorktree: true }),
+          thread('main-chat', '/Users/example/Git-projects/codex-web-local'),
+          thread('worktree-chat', '/Users/example/.codex/worktrees/53e7/codex-web-local', { hasWorktree: true }),
         ],
       },
     ]
     const rootsState: WorkspaceRootsState = {
-      order: ['/Users/igor/Git-projects/codex-web-local'],
+      order: ['/Users/example/Git-projects/codex-web-local'],
       labels: {},
-      active: ['/Users/igor/Git-projects/codex-web-local'],
-      projectOrder: ['/Users/igor/Git-projects/codex-web-local'],
+      active: ['/Users/example/Git-projects/codex-web-local'],
+      projectOrder: ['/Users/example/Git-projects/codex-web-local'],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
@@ -251,27 +251,27 @@ describe('filterGroupsByWorkspaceRoots', () => {
       {
         projectName: 'codex-web-local',
         threads: [
-          thread('main-chat', '/Users/igor/Git-projects/codex-web-local'),
-          thread('registered-worktree-chat', '/Users/igor/.codex/worktrees/a77f/codex-web-local', { hasWorktree: true }),
-          thread('unregistered-worktree-chat', '/Users/igor/.codex/worktrees/53e7/codex-web-local', { hasWorktree: true }),
+          thread('main-chat', '/Users/example/Git-projects/codex-web-local'),
+          thread('registered-worktree-chat', '/Users/example/.codex/worktrees/a77f/codex-web-local', { hasWorktree: true }),
+          thread('unregistered-worktree-chat', '/Users/example/.codex/worktrees/53e7/codex-web-local', { hasWorktree: true }),
         ],
       },
     ]
     const rootsState: WorkspaceRootsState = {
       order: [
-        '/Users/igor/Git-projects/codex-web-local',
-        '/Users/igor/.codex/worktrees/a77f/codex-web-local',
+        '/Users/example/Git-projects/codex-web-local',
+        '/Users/example/.codex/worktrees/a77f/codex-web-local',
       ],
       labels: {
-        '/Users/igor/.codex/worktrees/a77f/codex-web-local': 'codex-web-local2',
+        '/Users/example/.codex/worktrees/a77f/codex-web-local': 'codex-web-local2',
       },
-      active: ['/Users/igor/Git-projects/codex-web-local'],
-      projectOrder: ['/Users/igor/Git-projects/codex-web-local'],
+      active: ['/Users/example/Git-projects/codex-web-local'],
+      projectOrder: ['/Users/example/Git-projects/codex-web-local'],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
-      ['/Users/igor/Git-projects/codex-web-local', ['main-chat', 'unregistered-worktree-chat']],
-      ['/Users/igor/.codex/worktrees/a77f/codex-web-local', ['registered-worktree-chat']],
+      ['/Users/example/Git-projects/codex-web-local', ['main-chat', 'unregistered-worktree-chat']],
+      ['/Users/example/.codex/worktrees/a77f/codex-web-local', ['registered-worktree-chat']],
     ])
   })
 
@@ -280,20 +280,20 @@ describe('filterGroupsByWorkspaceRoots', () => {
       {
         projectName: 'codex-web-local',
         threads: [
-          thread('main-chat', '/Users/igor/Git-projects/codex-web-local'),
+          thread('main-chat', '/Users/example/Git-projects/codex-web-local'),
           thread('other-git-worktree-chat', '/tmp/other/.git/worktrees/codex-web-local', { hasWorktree: true }),
         ],
       },
     ]
     const rootsState: WorkspaceRootsState = {
-      order: ['/Users/igor/Git-projects/codex-web-local'],
+      order: ['/Users/example/Git-projects/codex-web-local'],
       labels: {},
-      active: ['/Users/igor/Git-projects/codex-web-local'],
-      projectOrder: ['/Users/igor/Git-projects/codex-web-local'],
+      active: ['/Users/example/Git-projects/codex-web-local'],
+      projectOrder: ['/Users/example/Git-projects/codex-web-local'],
     }
 
     expect(filterGroupsByWorkspaceRoots(groups, rootsState).map((group) => [group.projectName, group.threads.map((row) => row.id)])).toEqual([
-      ['/Users/igor/Git-projects/codex-web-local', ['main-chat']],
+      ['/Users/example/Git-projects/codex-web-local', ['main-chat']],
     ])
   })
 })
