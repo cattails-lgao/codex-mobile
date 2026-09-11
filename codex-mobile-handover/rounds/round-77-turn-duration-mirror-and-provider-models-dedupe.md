@@ -1,4 +1,4 @@
-# Round-77：线程打开时延——轮耗时镜像写放大消除 + provider-models 并发去重（2026-09-11，未发布）
+# Round-77：线程打开时延——轮耗时镜像写放大消除 + provider-models 并发去重（2026-09-11，随 v0.1.122 发布，已闭环）
 
 > **背景：** round-76 交付后用户反馈「左侧线程加载是快了一点，但是还是有点慢；消息列表感觉没有变化」。按 AGENTS.md 先测量再改动：以真实 home 环境（本机 `~/.codex`，最重 rollout 4.03MB）搭 dev server（4173），用桥层 RPC profiler + 浏览器 profiler + 新增的感知时延探针定位。结论：round-76 减的是**响应字节**，而打开线程的耗时由**并发请求争抢**（尤其轮耗时镜像的 PUT 风暴）主导，字节瘦身自然「感觉没变化」。
 
@@ -82,4 +82,4 @@
 
 ## 发布
 
-- **未发布**。版本仍为 `0.1.121`，未 bump、未 tag、未 publish；是否发版待维护者决定。
+- **已随 v0.1.122 发布（与 round-78 同批）**。版本 bump 至 `0.1.122`；代码+测试提交 `66b6996`、文档/版本提交 `a2d43c0`、哈希记录 `d87859d`、推送状态 `3393175` 均已推送 `origin/main`。git tag `v0.1.122`（annotated，指向 `3393175`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.122 。`codex-mobile-re@0.1.122` 已由用户 publish 至 npm 官方源并成为 `latest`（`dist-tags.latest` → `0.1.122`，发布时刻 `2026-09-11T13:27:47.938Z`，shasum `3a331aab8ba9ea361a4c071498a964193fbbcf9e`），发布链路全部闭环。

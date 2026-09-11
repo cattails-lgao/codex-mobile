@@ -1,4 +1,4 @@
-# 第七十八轮（未发布）：接入 codegraph MCP + 用图谱复查线程打开时延
+# 第七十八轮（随 v0.1.122 发布，已闭环）：接入 codegraph MCP + 用图谱复查线程打开时延
 
 > 承接 round-77。用户要求「配置好 `@colbymchenry/codegraph` MCP 后再排查一次」。本轮先接 MCP，再用图谱复查同一条链路，定位并修掉 round-77 遗留的**首次点击线程 ~1.1s** 问题。
 
@@ -138,6 +138,6 @@ start=  1274  end=  1370  dur=    96  config/read
 
 ## 7. 状态
 
-- 工作区改动（含 round-77 未提交部分）：`src/composables/useDesktopStatePersistence.ts`、`src/composables/useDesktopState.ts`、`src/api/gateway/models.ts`、`src/server/bridge/models.ts`、`src/server/freeMode.ts`、`src/server/codexAppServerBridge.ts`；新增 `src/composables/useDesktopStatePersistence.turn-durations.test.ts`、`src/server/freeMode.freeModelsCache.test.ts`、`src/server/bridge/models.catalogCache.test.ts`、`tests/thread-loading-state/turn-duration-mirror-sends-deltas.md`、`tests/thread-loading-state/provider-model-catalog-cache-server.md`、`output/playwright/perceived-latency.cjs`；配置文件 `~/.workbuddy/bin/codegraph-mcp.cjs`、`~/.workbuddy/mcp.json`（仓库外）。
-- **未提交、未 bump 版本（仍 0.1.121）、未 tag、未 publish**。
+- 本轮改动（与 round-77 同批提交）：`src/composables/useDesktopStatePersistence.ts`、`src/composables/useDesktopState.ts`、`src/api/gateway/models.ts`、`src/server/bridge/models.ts`、`src/server/freeMode.ts`、`src/server/codexAppServerBridge.ts`；新增 `src/composables/useDesktopStatePersistence.turn-durations.test.ts`、`src/server/freeMode.freeModelsCache.test.ts`、`src/server/bridge/models.catalogCache.test.ts`、`tests/thread-loading-state/turn-duration-mirror-sends-deltas.md`、`tests/thread-loading-state/provider-model-catalog-cache-server.md`、`output/playwright/perceived-latency.cjs`；配置文件 `~/.workbuddy/bin/codegraph-mcp.cjs`、`~/.workbuddy/mcp.json`（仓库外）。
+- **已随 v0.1.122 发布**：版本 bump 至 `0.1.122`；提交 `66b6996`（代码+测试）/ `a2d43c0`（文档+版本）/ `d87859d`（哈希记录）/ `3393175`（推送状态）已推送 `origin/main`；git tag `v0.1.122` 与 GitHub Release 已创建（Latest）；`codex-mobile-re@0.1.122` 已 publish 至 npm 官方源并成为 `latest`，发布链路全部闭环。
 - dev server 仍在 `127.0.0.1:4173` 运行；不操作 5173。
