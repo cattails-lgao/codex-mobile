@@ -46,3 +46,4 @@ Return to the [manual test index](../../tests.md).
 | [Foreground resume sync on desktop and mobile](foreground-resume-sync-on-desktop-and-mobile.md) |
 | [Rollback works on both legacy and paginated threads](rollback-works-on-legacy-and-paginated-threads.md) |
 | [Sidebar deduplicates paginated thread segments](sidebar-deduplicates-paginated-thread-segments.md) |
+| [Thread payload slimming, command output spill, and read cache](thread-payload-slimming-and-output-spill.md) |
