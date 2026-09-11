@@ -6,7 +6,7 @@
 
 `codex app-server` 给每个线程一把「active writer」锁，锁实体是 `CODEX_HOME/thread-writer-locks/<threadId>.lock` 这个零字节文件上的 **OS 级文件锁（flock）**。WebUI 会启动**自己专用的、长生命周期**的 app-server 进程，与用户真正的 TUI（codex-cli）共享同一个 `CODEX_HOME`。一旦 WebUI 的 app-server 对某线程执行过 `thread/resume`（发消息时经桥接层 `turn/start → thread/resume`），它就会**在该进程的整个生命周期内持有这把 OS 文件锁**，于是 TUI 稍后再对该线程 `thread/resume` 就报 32600。
 
-## 实测结论（本地双 app-server 复现实验，`C:\Users\cattails\AppData\Local\Temp\writer-repro.mjs`）
+## 实测结论（本地双 app-server 复现实验，`<临时目录>\writer-repro.mjs`）
 
 两个 `codex app-server` 进程（一个代 WebUI、一个代 TUI）共享同一隔离 `CODEX_HOME`、种子一个会话，依次验证：
 

@@ -56,7 +56,7 @@ No-auth container:
 
 Auth-mounted container:
 - URL: `http://127.0.0.1:4192/#/`
-- Mounted `/Users/igor/.codex/auth.json` to `/codex-home/auth.json`.
+- Mounted `<CODEX_HOME>/auth.json` to `/codex-home/auth.json`.
 - `config/read`: `model = null`, `model_provider = null`
 - App-server command has no Zen proxy flags.
 - Sending `hi` returns an assistant reply.

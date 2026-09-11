@@ -1,7 +1,7 @@
 ### Feature: Import 10 working DB accounts and keep Accounts section collapsed by default
 
 #### Prerequisites
-- Have a SQLite DB with `account_tokens.refresh_token` rows (default path: `/Users/igor/Git-projects/any-auto-register/account_manager.db`).
+- Have a SQLite DB with `account_tokens.refresh_token` rows (default path: `<外部测试目录>/account_manager.db`).
 - Network access available for token exchange against OpenAI OAuth endpoint.
 - Codex home available at `~/.codex` (or set `CODEX_HOME`).
 - Start the app from this repository (`pnpm run dev`).

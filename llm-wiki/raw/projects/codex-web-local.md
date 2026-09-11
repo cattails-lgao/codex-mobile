@@ -2,7 +2,7 @@
 
 Date: 2026-04-10
 Source type: local repository snapshot
-Path: /Users/igor/Git-projects/codex-web-local
+Path: <项目目录>
 
 ## Core facts
 - Project name: `codexapp`

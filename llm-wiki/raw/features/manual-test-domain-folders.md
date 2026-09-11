@@ -2,7 +2,7 @@
 
 Date: 2026-05-19
 Source type: local repository documentation update
-Path: /Users/igor/.codex/worktrees/8f4d/codex-web-local
+Path: <CODEX_HOME>/worktrees/8f4d/codex-web-local
 
 ## Facts
 - `tests.md` is now the root manual test index, not the append-only body for all manual regression steps.

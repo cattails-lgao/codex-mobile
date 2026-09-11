@@ -25,7 +25,7 @@ rollout-2026-09-08T19-09-09-...                updatedAt 1789046586
 而 `state_5.sqlite` 里该 id 只有 1 行（`id` 是 PRIMARY KEY），指向最新那段：
 
 ```
-01a080b5-...| /root/.codex/sessions/2026/09/11/rollout-...00-51-58....jsonl | 1789086830
+01a080b5-...| <CODEX_HOME>/sessions/2026/09/11/rollout-...00-51-58....jsonl | 1789086830
 ```
 
 结论：SQLite 侧是「一 id 一行」的正确结构，但 app-server **从 `sessions/` 目录扫描**构建 `thread/list`，把同一 session 的多个 rollout 段当成了多条线程。

@@ -163,7 +163,7 @@ Only if no reusable CDP target exists, prefer running a separate Codex.app debug
 In this repo, prefer the maintained helper script first:
 
 ```bash
-bash /Users/igor/Git-projects/codex-web-local/scripts/run-codex-unpacked-debug.sh
+bash <项目目录>/scripts/run-codex-unpacked-debug.sh
 ```
 
 The script:
@@ -241,7 +241,7 @@ Important caveats:
 ## Findings: External Electron Debug Launcher (2026-05-06)
 
 - In this workspace, the most reliable parity-debug launch path is now:
-  - `bash /Users/igor/Git-projects/codex-web-local/scripts/run-codex-unpacked-debug.sh`
+  - `bash <项目目录>/scripts/run-codex-unpacked-debug.sh`
 - The helper intentionally uses external Electron instead of `/Applications/Codex.app/Contents/MacOS/Codex`, because that preserves the generic Electron-style process/icon behavior some parity workflows expect while still launching the installed Codex `app.asar`.
 - Using an unpinned external Electron such as `pnpm dlx electron` can break startup because Codex.app expects Electron-41-era native resources; the current helper pins the runtime to `electron@41.2.0`.
 - External-Electron startup also needs Codex’s bundled Sparkle native addon available at the external Electron resource path. The helper now prepares a shim by linking:

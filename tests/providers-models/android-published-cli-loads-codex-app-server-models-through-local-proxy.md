@@ -4,7 +4,7 @@
 Android `codexui-android` startup passes the bound server port to app-server free-mode config.
 
 #### Prerequisites/Setup
-1. Android proot access works through `/Users/igor/Git-projects/codex-web-local-android/andClaw-codex/ssh.sh`.
+1. Android proot access works through `<外部测试目录>/andClaw-codex/ssh.sh`.
 2. The published `codexui-android` package version under test is available from npm.
 3. ADB forward maps device port `17923` to local port `17923`.
 4. For the custom-provider case, prepare a temporary `~/.codex/config.toml` with a top-level `model_provider = "azure"` and matching `[model_providers.azure]` entry, and remove `~/.codex/webui-custom-providers.json`.
