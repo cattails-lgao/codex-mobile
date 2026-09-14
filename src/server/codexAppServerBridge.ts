@@ -142,6 +142,9 @@ import {
   normalizeReasoningEffort,
   type ResolvedCollaborationModeSettings,
 } from './bridge/turnFactory.js'
+// 空正文兜底（见 utils/turnPromptText.ts）：首轮只有附件/图片而无文本时，
+// app-server 派生出的 preview 为空串，thread/list 会把整行筛掉且无法用 RPC 修回。
+import { resolveTurnPromptText } from '../utils/turnPromptText.js'
 // R 批 workspace-roots 切片：canonicalizeThreadListResponseForRead、
 // canonicalizeWorkspaceRootsStateForRead 与 writeWorkspaceRootsState 原为本
 // 模块公共导出，供测试继续从本模块导入。
@@ -1203,7 +1206,10 @@ export class BackendQueueProcessor {
 
     const input: Array<Record<string, unknown>> = [{
       type: 'text',
-      text: buildTextWithAttachments(turn.message.text, dedupedFileAttachments),
+      text: buildTextWithAttachments(
+        resolveTurnPromptText(turn.message.text, dedupedFileAttachments, turn.message.imageUrls),
+        dedupedFileAttachments,
+      ),
     }]
 
     for (const imageUrl of turn.message.imageUrls) {

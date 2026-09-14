@@ -1,5 +1,6 @@
 import { asRecord, callRpc, readString } from './core'
 import { normalizeCodexApiError } from '../codexErrors'
+import { resolveTurnPromptText } from '../../utils/turnPromptText'
 import type {
   ConfigReadResponse,
   ModelListResponse,
@@ -726,7 +727,10 @@ export async function startThreadTurn(
     const allFileAttachments = [...fileAttachments, ...localImageAttachments]
     const dedupedFileAttachments = allFileAttachments.filter((entry, index) =>
       allFileAttachments.findIndex((candidate) => candidate.fsPath === entry.fsPath) === index)
-    const finalText = buildTextWithAttachments(text, dedupedFileAttachments)
+    const finalText = buildTextWithAttachments(
+      resolveTurnPromptText(text, dedupedFileAttachments, imageUrls),
+      dedupedFileAttachments,
+    )
     const input: Array<Record<string, unknown>> = [{ type: 'text', text: finalText }]
     for (const imageUrl of imageUrls) {
       const normalizedUrl = imageUrl.trim()

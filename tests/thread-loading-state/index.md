@@ -49,3 +49,4 @@ Return to the [manual test index](../../tests.md).
 | [Thread payload slimming, command output spill, and read cache](thread-payload-slimming-and-output-spill.md) |
 | [Turn-duration mirror sends only deltas (no write-amplification storm)](turn-duration-mirror-sends-deltas.md) |
 | [Provider model catalog is cached on the server (open-thread path)](provider-model-catalog-cache-server.md) |
+| [Attachment-only first message keeps its thread listable](attachment-only-first-message-keeps-thread-listable.md) |
