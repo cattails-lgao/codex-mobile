@@ -611,8 +611,11 @@ export async function revertThread(threadId: string, beforeTurnId: string): Prom
     limit: 200,
     itemsView: 'full',
   })
+  // round-79：desc 分页返回 newest-first（实测确认），normalize 按输入顺序保序并按
+  // 输入顺序递增 turnIndex——直接消费会把整段保留历史倒序渲染（最老消息沉底、形似
+  // 最新），且 turnIndex 全部反向破坏后续回退的轮次计算。反转成时间序后再 normalize。
   return normalizeThreadMessagesV2(
-    { thread: { ...payload.thread, turns: page.data } } as ThreadReadResponse,
+    { thread: { ...payload.thread, turns: [...page.data].reverse() } } as ThreadReadResponse,
     0,
   )
 }

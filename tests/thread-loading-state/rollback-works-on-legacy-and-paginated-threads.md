@@ -67,3 +67,42 @@ console warning instead of being silently dropped.
 - `src/api/gateway/threads.ts` exposes `revertThread(threadId, beforeTurnId)` using the revert
   `turnsBackwardsCursor` + `thread/turns/list` incremental hydration.
 - Type-check (`vue-tsc --noEmit`) clean.
+
+### Feature: Reverted paginated thread keeps chronological order (round-79)
+
+#### Prerequisites
+- Same setup as the round-74 section above (paginated thread with 3+ user turns on `127.0.0.1:4173`).
+
+#### Background
+`thread/turns/list` with `sortDirection: 'desc'` returns the page **newest-first** (verified live:
+with cursor anchoring the retained end, the first returned turn id is the newest). Round-74's
+`revertThread` consumed that page without reversing, so `normalizeThreadMessagesV2` — which is
+order-preserving and assigns `turnIndex` by input order — produced an upside-down list: the oldest
+retained message rendered at the bottom as if it were the newest, and every `turnIndex` was
+inverted. The post-rollback silent reload did not self-heal because its
+`mergeMessages(..., { preserveMissing: true })` keeps the existing arrangement.
+
+Fix: `revertThread` reverses the desc page (`[...page.data].reverse()`) before normalizing, so the
+hydrated list is chronological and `turnIndex` counts up from the oldest retained turn.
+
+#### Steps
+1. Open a **paginated** thread with 3+ distinguishable user turns (e.g. "第一轮/第二轮/第三轮").
+2. Roll back the **middle** turn and confirm.
+3. Inspect the remaining message list order, then reload the page and inspect again.
+
+#### Expected Results
+- After rollback the remaining turns stay in original chronological order — the oldest remaining
+  message is at the **top**, the newest at the bottom (before the fix, the whole list rendered
+  upside down with the oldest message at the bottom).
+- After a page reload the order is unchanged (server-side history is untouched by the client-side
+  ordering; the reload was already correct).
+- A subsequent rollback on the reverted thread still removes the intended turn (turnIndex-based
+  `numTurns` math stays correct).
+
+#### Rollback/Cleanup
+- Same as round-74: rollback is destructive; use a scratch thread.
+
+#### Automated check
+- `src/api/gateway/threads.revertOrder.test.ts` (2 cases): pins that the desc page is reversed into
+  chronological order with `turnIndex` ascending from 0, and that no `thread/turns/list` call is
+  made when the revert response has no cursor.
