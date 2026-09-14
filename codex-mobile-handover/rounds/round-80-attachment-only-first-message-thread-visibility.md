@@ -35,7 +35,9 @@ CREATE INDEX idx_threads_visible_recency_at_ms
 
 同一份库按列表谓词统计：**3 行里只有 1 行可见**。A 与 B 的唯一差别是正文，因此可确认 app-server 是「剥掉前言取正文」而不是「取整段文本」——A 的整段文本非空，落库预览仍是空串。
 
-**③ 已经空掉的 preview 无法用 RPC 修回。** 协议里唯一能改线程元数据的是 `thread/metadata/update`，其 `ThreadMetadataUpdateParams` 只含 `threadId` / `gitInfo` / `projectId`（见 `documentation/app-server-schemas/json/v2/ThreadMetadataUpdateParams.json`）；`thread/name/set` 只写 `name`，而列表谓词只看 `preview`。app-server 内部另有 `UPDATE threads SET preview = ? WHERE id = ? AND preview = ''` 与 `UPDATE threads SET preview = ?` 的补写路径（goals 扩展有 `failed to set empty thread preview from goal objective` 的报错文案），但都没有对外 RPC。**结论：只能预防，不能事后修。**
+**③ 没有直接「写元数据」的 RPC 能修回 preview。** 协议里唯一能改线程元数据的是 `thread/metadata/update`，其 `ThreadMetadataUpdateParams` 只含 `threadId` / `gitInfo` / `projectId`（见 `documentation/app-server-schemas/json/v2/ThreadMetadataUpdateParams.json`）；`thread/name/set` 只写 `name`，而列表谓词只看 `preview`。app-server 内部另有 `UPDATE threads SET preview = ? WHERE id = ? AND preview = ''` 与迁移期 `UPDATE threads SET preview = first_user_message WHERE preview = '' AND first_user_message <> ''` 的补写路径（goals 扩展有 `failed to set empty thread preview from goal objective` 的报错文案），但都没有对外 RPC。**结论：只能预防，不能靠元数据 RPC 事后修。**
+
+> ⚠️ **本段在 round-81 被修正。** 当时还断言「唯一救济是停服务直写 `state_*.sqlite` 的 `preview` 列」——**这是错的**：rollout 才是元数据事实源，sqlite 只是写穿缓存，直写列对 `thread/list` 完全无效（运行中改、停机改完重启，都不生效）。真正可用的是 `thread/resume` + `thread/goal/set` 这条侧门，详见 [round-81](round-81-vanished-thread-rescue.md)。
 
 **④ 本机存量排查（如实记录）。** 扫描 `<codex 用户目录>` 的 `state_*.sqlite`（只读拷贝副本打开）与全部 rollout：30 行 `threads`、0 行空 preview；首条用户消息没有一条是「附件前言 + 空正文」。也就是说本机当前没有受害者，本轮是**预防性修复**。
 
@@ -64,7 +66,7 @@ CREATE INDEX idx_threads_visible_recency_at_ms
 
 ## 边界（如实记录）
 
-- 只覆盖**未来**的发送：已经被筛掉的线程无法通过 RPC 修回（见根因③）。唯一路径是 app-server 停止时直接改 `state_*.sqlite` 的 `preview` 列（WAL 库、外部写入需谨慎），本轮未实现、也未对任何真实库执行。
+- 只覆盖**未来**的发送：已经被筛掉的线程需要事后救济，见 round-81 的 `scripts/rescue-empty-preview.mjs`（`thread/resume` + `thread/goal/set` + `thread/goal/clear`，走运行中的服务，已在隔离环境端到端验证）。本轮未对任何真实库执行过救济。
 - 兜底把「首个附件名」同时用作正文与派生标题。作为模型输入它是冗余信息（附件清单已在前言里），但保证线程可列出、且与 UI 标题一致；多附件时正文只体现第一个附件名。
 - 队列路径（`buildQueuedTurnParams`）同理修复，但其调用点没有单独单测锁定（只有共用纯函数被单测覆盖）——若后续有人删掉该处一行兜底，单测不会失败。
 
