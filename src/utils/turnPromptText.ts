@@ -5,9 +5,15 @@
 // — the filter is baked into the list query *and* into the partial sort indexes of
 // codex 0.153.4 (`state/src/runtime/threads.rs`). A first turn whose body ends up empty
 // therefore creates a thread that exists on disk, keeps appending to its rollout, but is
-// invisible in every list (`thread/list`, search, pinned sections) — and no RPC can write
-// `preview` back afterwards (`thread/metadata/update` only patches gitInfo/projectId), so
-// the thread is unrecoverable.
+// invisible in every list (`thread/list`, search, pinned sections).
+//
+// Nothing writes `preview` directly: `thread/metadata/update` only patches gitInfo /
+// projectId, and editing `threads.preview` in `state_*.sqlite` is ignored because the
+// rollout is the source of truth and the sqlite file is only a write-through cache.
+// An existing victim can still be rescued through a side door — `thread/resume` (which
+// loads the thread so its rollout writer is attached) followed by `thread/goal/set`,
+// whose `thread_goal_updated` rollout event the metadata derivation falls back to; see
+// `scripts/rescue-empty-preview.mjs`. This function is the prevention half.
 //
 // Reproduced live against app-server 0.153.4 with an isolated CODEX_HOME:
 //   attachments + "## My request for Codex:" + empty body -> preview/title/fum all ''
