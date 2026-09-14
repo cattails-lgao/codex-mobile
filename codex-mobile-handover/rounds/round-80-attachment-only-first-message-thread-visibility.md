@@ -1,4 +1,4 @@
-# Round-80：首条用户消息正文为空导致线程从列表消失（2026-09-14）
+# Round-80：首条用户消息正文为空导致线程从列表消失（2026-09-14，v0.1.123 发布）
 
 > **背景：** 用户反馈一条线程在 WebUI 里「消失」了。该线程的首条用户消息只带附件、没有正文，WebUI 把用户文本拼成「文件头 + 空正文」（`## My request for Codex:` 后面什么都没有）。app-server 从首条用户消息派生列表元数据，正文为空 → `preview` / `title` / `first_user_message` 三者都是空串 → 列表查询带 `preview <> ''` 过滤，空值行被整条筛掉。线程本身没丢、没归档、rollout 一直在写。
 
@@ -72,4 +72,4 @@ CREATE INDEX idx_threads_visible_recency_at_ms
 
 ## 发布状态
 
-代码改动（`src/utils/turnPromptText.ts` + 2 处调用点 + 2 个测试文件）、手测文档与本文档待提交。**版本 bump / tag / Release / npm publish 未做**（待用户指示）；round-79 的回退顺序修复同样仍在待发布队列里。
+**已随 v0.1.123 发布（与 round-79、round-81 同批）**。版本 bump 至 `0.1.123`；代码提交 `b7d88e4`（新增 `src/utils/turnPromptText.ts` 的 `resolveTurnPromptText` + `startThreadTurn` / `buildQueuedTurnParams` 两处接入 + 2 个测试文件 + 手测文档，已推送 `origin/main`）；提交链、tag 与 GitHub Release 记录见 `sections/commit-history.md` 的 v0.1.123 段。

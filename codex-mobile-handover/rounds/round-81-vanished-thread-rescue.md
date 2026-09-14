@@ -1,4 +1,4 @@
-# Round-81：已消失线程的救济路径（2026-09-14）
+# Round-81：已消失线程的救济路径（2026-09-14，v0.1.123 发布）
 
 > **背景：** round-80 定位了「首条用户消息正文为空 → `preview` 为空 → 线程从列表整条消失」，并断言**只能预防、事后修不回来**（当时的结论是「唯一路径是停下 app-server 直写 `state_*.sqlite` 的 `preview` 列」）。用户随后指出：**受害者出现在线上环境**（本机那份 `CODEX_HOME` 里确实没有受害者）。为线上那条线程找可执行救济时，实测把 round-80 的收尾结论推翻了两次：直写库**无效**，而协议里存在一条可用的侧门。本轮只做调研 + 交付救济工具，**不改动任何产品运行路径**。
 
@@ -101,4 +101,4 @@ thread/goal/clear { threadId }                       # 可选：清掉 goal，pr
 
 ## 发布状态
 
-新增 `scripts/rescue-empty-preview.mjs` + round-80 结论修正 + 本文档待提交。**版本 bump / tag / Release / npm publish 仍未做**（待用户指示）；round-79 的回退顺序修复同样仍在待发布队列里。
+**已随 v0.1.123 发布（与 round-79、round-80 同批）**。版本 bump 至 `0.1.123`；工具提交 `450b642`（新增 `scripts/rescue-empty-preview.mjs` + round-80 文档与 `turnPromptText.ts` 注释的结论修正，已推送 `origin/main`）；提交链、tag 与 GitHub Release 记录见 `sections/commit-history.md` 的 v0.1.123 段。本轮不触动任何产品运行路径。

@@ -1,4 +1,4 @@
-# round-79：回退后消息列表倒序渲染修复（待发布）
+# round-79：回退后消息列表倒序渲染修复（v0.1.123 发布）
 
 ## 需求
 
@@ -42,4 +42,4 @@
 
 ## 发布状态
 
-代码提交 `f2cd90a`（fix + 测试 + 手测文档）。**待发布**：版本 bump / tag / npm publish 未做（待用户指示）。
+**已随 v0.1.123 发布（与 round-80、round-81 同批）**。版本 bump 至 `0.1.123`；代码提交 `f2cd90a`（fix + 回归测试 + 手测文档，已推送 `origin/main`）；提交链、tag 与 GitHub Release 记录见 `sections/commit-history.md` 的 v0.1.123 段。
