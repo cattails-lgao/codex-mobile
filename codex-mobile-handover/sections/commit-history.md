@@ -119,4 +119,4 @@
 
 ## v0.1.123 发布（round-79 + round-80 + round-81，同批）
 
-- **v0.1.123 发布**（版本 bump + 文档）：版本从 `0.1.122` 升至 `0.1.123`，一并收录 round-79（回退后消息列表倒序修复）、round-80（首条用户消息正文为空导致线程从列表消失）、round-81（已消失线程的救济路径）。代码/工具提交 `f2cd90a`、`b7d88e4`、`450b642`（均已推送 `origin/main`）。版本 bump + 文档提交 `4199dd3`；推送状态提交（本段所在提交）已推送 `origin/main`；tag/Release 记录待补。
+- **v0.1.123 发布**（版本 bump + 文档）：版本从 `0.1.122` 升至 `0.1.123`，一并收录 round-79（回退后消息列表倒序修复）、round-80（首条用户消息正文为空导致线程从列表消失）、round-81（已消失线程的救济路径）。代码/工具提交 `f2cd90a`、`b7d88e4`、`450b642`（均已推送 `origin/main`）。版本 bump + 文档提交 `4199dd3`；`b2cbb12` 记录提交哈希、`c967957` 记录推送状态（`01c3539..c967957` 已推送 `origin/main`）。git tag `v0.1.123`（annotated，指向 `c967957`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.123 。`codex-mobile-re@0.1.123` 待用户 publish 至 npm 官方源。
