@@ -20,7 +20,23 @@ export type ServerOptions = {
 export type ServerInstance = {
   app: Express
   dispose: () => void
-  attachWebSocket: (server: HttpServer) => void
+  /** Attaches the websocket endpoint. The returned disposer terminates the connected clients. */
+  attachWebSocket: (server: HttpServer) => () => void
+}
+
+/**
+ * Terminate every connected websocket client and close the server.
+ *
+ * Upgraded sockets are dropped from the http server's tracked connection set, so
+ * `closeIdleConnections()` and `closeAllConnections()` cannot reach them: `server.close()`
+ * then waits for the client to hang up on its own and never calls back. Callers must run
+ * this before `server.close()` or shutdown falls through to the forced-exit timer.
+ */
+export function shutdownWebSocketServer(wss: WebSocketServer): void {
+  for (const client of wss.clients) {
+    client.terminate()
+  }
+  wss.close()
 }
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
@@ -333,6 +349,8 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
         ws.on('close', unsubscribe)
         ws.on('error', unsubscribe)
       })
+
+      return () => shutdownWebSocketServer(wss)
     },
   }
 }
