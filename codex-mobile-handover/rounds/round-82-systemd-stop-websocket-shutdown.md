@@ -88,4 +88,4 @@
 
 ## 发布状态
 
-随 **v0.1.124** 发布。commit 链、tag 与 GitHub Release 记录见 [sections/commit-history.md](../sections/commit-history.md) 的 v0.1.124 段；npm publish 由用户执行。
+随 **v0.1.124** 发布。commit 链、tag 与 GitHub Release 记录见 [sections/commit-history.md](../sections/commit-history.md) 的 v0.1.124 段；npm publish 由用户执行（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
