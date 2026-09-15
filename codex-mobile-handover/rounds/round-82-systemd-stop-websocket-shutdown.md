@@ -54,6 +54,7 @@
 | 机制探测（真实 Node 22.22.2 + 真实 ws） | 见根因表：定位到 websocket 是唯一持有者，且 `close*Connections()` 对它无效——决定了修法 |
 | 新增契约单测 [httpServer.websocketShutdown.test.ts](../../src/server/httpServer.websocketShutdown.test.ts) | **2/2 通过**：① 有 ws 客户端时 `server.close()` 不回调（基线，复现 bug）→ `shutdownWebSocketServer()` 后回调；② 无客户端时安全不抛 |
 | 真实 dist-cli 端到端 | 启动日志 `Codex Web Local is running!` 正常；`GET /` → **200**；`/codex-api/ws` 握手返回 `{"method":"ready","params":{"ok":true},...}` |
+| **打包产物端到端 A/B（补充，Windows）** | 同一 `dist-cli/index.js` 位置、真实 ws 客户端 **2 个**：修复前 **exit 1 @ 5015ms**（线上 `status=1/exit-code` 形态）→ 修复后 **exit 0 @ 11ms**；无客户端对照 **exit 0 @ 10ms**。信号投递本身未参与（见下方「未能验证」） |
 | `vue-tsc --noEmit` | **通过**（`TSC_EXIT=0`） |
 | 全量 Vitest | **589 通过 / 2 失败**。基线为 587 通过 / 2 失败，**+2 即本轮新增用例**；2 例失败为既有的 `codexAppServerBridge.archive.test.ts` Windows 环境性失败，与本轮无关 |
 | tsup CLI 构建 | **通过**（`dist-cli/index.js` 651.27 KB） |
@@ -63,6 +64,17 @@
 
 - **本机 Windows 无法投递真实 SIGTERM**。实测 `child.kill('SIGTERM')` 在 Windows 上走 `TerminateProcess`，JS 的 `process.on('SIGTERM')` 处理器**不执行**（子进程 stdout 只有 `ready`，没有 `GOT_SIGTERM`，`exit code=null / signal=SIGTERM`）。因此「收到 SIGTERM → 约 1s 内 `exit 0`」这一段只能在 Linux 侧验证，用户线上环境正是 Linux。
 - 未在 Linux/systemd 环境实测 `systemctl restart` 日志（待 Linux 侧复核，步骤见 [手测文档](../../tests/cli-network-platform/systemd-stop-finishes-inside-timeout.md)）。
+
+**Windows 侧能补到哪一步（后续补充验证）：** 为了不把整条链路都留给 Linux，改用一次性探针（`tmp/shutdown-signal-probe.cjs`，`tmp/` 已 gitignore，与本文档前述探测同样的处置）绕过**信号投递**这一个环节：起真实 `dist-cli/index.js`（隔离 `CODEX_HOME`、`--no-password --no-tunnel --no-open --no-login`）→ 连上真实 `/codex-api/ws` 客户端 → 通过 Node inspector 在**同一个运行中的进程内**执行 `process.emit('SIGTERM')`，即调用 `SIGINT`/`SIGTERM` 所绑定的那个 `shutdown()`，再测「t0 → 进程消失」的时延与退出码。
+
+- 结果：修复前 **exit 1 @ 5015ms**（`server.close()` 不回调 → 5s 兜底）；修复后 **exit 0 @ 11ms**（2 个 ws 客户端）/ **10ms**（0 个）。这同时给这份修复留下了一个能**判非**的对照：同一探针在旧产物上确实报 FAIL。
+- 探针本身有两个坑，记录备查：① 产物必须留在 `dist-cli/` **原位**运行——复制到别处会让 `readCliVersion`/静态目录的 `__dirname/..` 解析失效（banner 会打印 `Version: unknown`）；② inspector **附着期间** `process.exit()` 会阻塞在 `Waiting for the debugger to disconnect...`，必须在触发后立刻断开 inspector，否则退出码与时延都测不到。
+- 由此**仍未闭环的只剩 OS 信号投递本身**：Linux 内核把 SIGTERM 交给 Node 后，运行时代为执行已注册的 handler（这正是进程内 `emit` 所模拟的那一步），无平台分支。`systemctl restart` 的日志消除仍需按手测文档在 Linux 侧确认。
+
+**复查时注意的两点（本轮顺带发现，非本次修复引入）：**
+
+- `dist-cli/` **未入库**，是构建产物（`prepublishOnly` 会重新构建，故不影响发布）。本轮开始时工作区那份仍是 **v0.1.123 的旧产物**（不含 `terminate` / `close*Connections`），与本文档「产物校验」那一行描述的不一致——那一行校验的是 round-82 当场新构建的包。凡复核产物，先 `tsup` 重建再断言。
+- `--port 0`（请求临时端口）时 `listenWithFallback` 回传的是**尝试值**而非实际端口，于是 banner 的 `Bind:` 与 `CODEXUI_SERVER_PORT` 都会是 `0`，而服务实际监听在随机端口上。本轮探针绕开了它（自行预留端口），属独立小缺陷，未在本次修复范围内改动。
 
 ## 性能审计
 
