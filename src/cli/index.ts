@@ -536,7 +536,7 @@ async function startServer(options: {
     : null
   const { app, dispose, attachWebSocket } = createApp({ password })
   const server = createServer(app)
-  attachWebSocket(server)
+  const shutdownWebSockets = attachWebSocket(server)
   const port = await listenWithFallback(server, requestedPort)
   process.env.CODEXUI_SERVER_PORT = String(port)
   let tunnelChild: ReturnType<typeof spawn> | null = null
@@ -601,18 +601,33 @@ async function startServer(options: {
 
   function shutdown() {
     console.log('\nShutting down...')
-    if (tunnelChild && !tunnelChild.killed) {
-      tunnelChild.kill('SIGTERM')
-    }
-    server.close(() => {
-      dispose()
-      process.exit(0)
-    })
-    // Force exit after timeout
+    // Force exit after timeout. Registered first so a failure in any cleanup step below
+    // still reaches the exit instead of hanging until systemd's stop timeout.
     setTimeout(() => {
       dispose()
       process.exit(1)
     }, 5000).unref()
+
+    if (tunnelChild && !tunnelChild.killed) {
+      tunnelChild.kill('SIGTERM')
+    }
+    // Upgraded websocket sockets leave the http server's tracked connection set, so the
+    // close*Connections() calls below cannot reach them: without terminating them here the
+    // server.close() callback never fires and shutdown always lands in the 5s fallback.
+    shutdownWebSockets()
+    server.close(() => {
+      dispose()
+      process.exit(0)
+    })
+    // server.close() only stops accepting new connections; a pending long-lived response
+    // (the SSE fallback) still holds the callback open. Let in-flight work settle briefly,
+    // then drop the remainder so shutdown finishes well inside systemd's stop timeout.
+    if (typeof server.closeIdleConnections === 'function') {
+      server.closeIdleConnections()
+      setTimeout(() => {
+        server.closeAllConnections()
+      }, 1000).unref()
+    }
   }
 
   process.on('SIGINT', shutdown)
