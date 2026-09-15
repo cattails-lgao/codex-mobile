@@ -2497,6 +2497,20 @@ describe('client-side auto-compact pre-send stash & flush', () => {
     expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
   })
 
+  it('ignores the stale remaining-context percentage once a model switch invalidates the window', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    // 失效窗口前剩余 5%（低于阈值），残值若被留下就会按「旧模型窗口」误判为需要压缩。
+    notifyTokenUsage(5)
+    state.invalidateThreadContextWindow('thread-auto-compact')
+
+    await state.sendMessageToSelectedThread('hello')
+
+    expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
+    expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
+  })
+
   it('flushes the stashed message after compaction completes', async () => {
     installTestWindow()
     const { state, notifyTokenUsage } = installAutoCompactState()
