@@ -1,5 +1,7 @@
 ### Feature: Thread stream parity works on Linux (Oracle A1 ARM64)
 
+> **⚠️ Superseded (2026-09-15) — do not run as written.** Every harness step below is stale: the `codex/thread-stream-parity` branch and the `ssh a1` host are both gone, and `GET /codex-api/thread-live-state` — the endpoint steps 5 and 9 exercise — is a server-only route with **zero client callers** (not referenced under `src/`, absent from the built `dist/assets` bundle). The behaviour it verified is now covered on the live read paths by [Thread item parity — commands and file changes come from the persisted read path](thread-item-parity-commands-and-file-changes.md). The 2026-04-08 results below are kept as a historical record of the ARM64 session-log recovery run.
+
 #### Prerequisites
 - Oracle A1 server accessible via SSH (`ssh a1`).
 - Codex CLI installed on A1 (`codex --version` works).

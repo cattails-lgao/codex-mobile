@@ -8,6 +8,8 @@ Docker authenticated first-turn live-state pending read handling.
 2. Build a fresh Docker image that installs `@openai/codex` and runs the packed `codexapp` artifact.
 3. Prepare two isolated `CODEX_HOME` states: one empty and one with only `auth.json` mounted.
 
+> Note (2026-09-15): `GET /codex-api/thread-live-state` is a server-only route — the client no longer calls it (not referenced under `src/`, absent from the built `dist/assets` bundle). It remains usable as a diagnostic probe, but nothing the UI renders comes from it, and its `liveStateError` field is not surfaced by any client path. Re-point these checks at the client read (`thread/read` over `/codex-api/rpc`) before treating them as UI coverage.
+
 #### Steps
 1. Start the no-auth container and open the app in light theme.
 2. Confirm `config/read` uses `model_provider="opencode-zen"` and `model="big-pickle"`.
