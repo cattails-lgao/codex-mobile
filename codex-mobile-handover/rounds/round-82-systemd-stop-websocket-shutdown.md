@@ -55,21 +55,31 @@
 | 新增契约单测 [httpServer.websocketShutdown.test.ts](../../src/server/httpServer.websocketShutdown.test.ts) | **2/2 通过**：① 有 ws 客户端时 `server.close()` 不回调（基线，复现 bug）→ `shutdownWebSocketServer()` 后回调；② 无客户端时安全不抛 |
 | 真实 dist-cli 端到端 | 启动日志 `Codex Web Local is running!` 正常；`GET /` → **200**；`/codex-api/ws` 握手返回 `{"method":"ready","params":{"ok":true},...}` |
 | **打包产物端到端 A/B（补充，Windows）** | 同一 `dist-cli/index.js` 位置、真实 ws 客户端 **2 个**：修复前 **exit 1 @ 5015ms**（线上 `status=1/exit-code` 形态）→ 修复后 **exit 0 @ 11ms**；无客户端对照 **exit 0 @ 10ms**。信号投递本身未参与（见下方「未能验证」） |
+| **打包产物端到端 A/B（Linux/WSL2，真实 POSIX 信号）** | 用 `wsl.exe -d Ubuntu` 里的 Linux Node v22.23.2 跑同一位置的真实 bundle，`kill('SIGTERM')` 由内核真实投递：修复前 **exit 1 @ 5009ms** → 修复后 **exit 0 @ 7ms**（2 个 ws 客户端）/ **8ms**（0 个）。判据是退出时 `signal=null` 而非 `SIGTERM`——说明 JS handler 真的执行并主动 `exit(0)`，不是内核按默认处置杀死进程 |
 | `vue-tsc --noEmit` | **通过**（`TSC_EXIT=0`） |
 | 全量 Vitest | **589 通过 / 2 失败**。基线为 587 通过 / 2 失败，**+2 即本轮新增用例**；2 例失败为既有的 `codexAppServerBridge.archive.test.ts` Windows 环境性失败，与本轮无关 |
 | tsup CLI 构建 | **通过**（`dist-cli/index.js` 651.27 KB） |
 | 产物校验 | `dist-cli/index.js` 含 `client.terminate()` 与 `closeIdleConnections` / `closeAllConnections`，确认打包链路接上了新逻辑 |
 
-**未能验证（如实记录）：**
+**平台限制与补齐（2026-09-15：已在真实 Linux 闭环）：**
 
-- **本机 Windows 无法投递真实 SIGTERM**。实测 `child.kill('SIGTERM')` 在 Windows 上走 `TerminateProcess`，JS 的 `process.on('SIGTERM')` 处理器**不执行**（子进程 stdout 只有 `ready`，没有 `GOT_SIGTERM`，`exit code=null / signal=SIGTERM`）。因此「收到 SIGTERM → 约 1s 内 `exit 0`」这一段只能在 Linux 侧验证，用户线上环境正是 Linux。
-- 未在 Linux/systemd 环境实测 `systemctl restart` 日志（待 Linux 侧复核，步骤见 [手测文档](../../tests/cli-network-platform/systemd-stop-finishes-inside-timeout.md)）。
+- **Windows 侧无法投递真实 SIGTERM**（保留记录）。实测 `child.kill('SIGTERM')` 在 Windows 上走 `TerminateProcess`，JS 的 `process.on('SIGTERM')` 处理器**不执行**（子进程 stdout 只有 `ready`，没有 `GOT_SIGTERM`，`exit code=null / signal=SIGTERM`）。故 Windows 上只能用进程内 `emit` 绕过信号投递（见下节）。
+- **Linux 侧已用 WSL2 补齐**：`wsl.exe -d Ubuntu`（Ubuntu 22.04.1 / WSL2 内核 6.18.33.2 / Linux Node v22.23.2，装在 WSL 的 `$HOME/.local/node`，不碰 Windows）跑同一份 bundle，`SIGTERM` 走真实内核投递：修复前 **exit 1 @ 5009ms**、修复后 **exit 0 @ 7ms**，与 Windows 进程内 `emit` 的结果（5015 / 11ms）同量级，说明「信号投递」这一步在 Linux 上不引入平台分支。
+- **systemd 本身也已实测**：在 WSL 里临时启用 systemd 249（`/etc/wsl.conf` 加 `[boot] systemd=true`，跑完已还原、PID1 回到 `init(Ubuntu)`），装一个与线上同构的探针 unit（`Type=simple`、`TimeoutStopSec=30`），用 `tmp/hold-ws.cjs` 在停止期间保持 2 个 `/codex-api/ws` 连接跨过停止（无客户端时这条 bug 本就不复现）：
+
+| unit | `systemctl stop` | `Result` / `ExecMainStatus` | `systemctl restart` | journal |
+| --- | --- | --- | --- | --- |
+| pre-fix（`dist-cli/prefix-v01123.js`，即 v0.1.123 旧产物） | **5015ms** | **`exit-code` / `1`** | 5092ms | **`Main process exited, code=exited, status=1/FAILURE`** + **`Failed with result 'exit-code'.`**（stop 与 restart 各一条） |
+| post-fix（重建的 `dist-cli/index.js`） | **14ms** | **`success` / `0`** | **40ms** | **无任何失败行** |
+
+  即：**用户报告的 `Failed with result 'exit-code'` 在 pre-fix 上被逐字复现、在 post-fix 上完全消失**。post-fix 日志里唯一与信号相关的行是 `Killing process … (node) with signal SIGKILL`——那是 systemd 对 cgroup 内残留子进程（CLI 拉起的 app-server）的正常清理，不是 unit 失败（同一次停止的 `Result=success`）。
+- `timeout` 形态（systemd SIGKILL 赢）未复现，属预期：探针 unit 的 `TimeoutStopSec=30` 远大于应用的 5s 兜底，所以只可能出现 `exit-code` 形态。
 
 **Windows 侧能补到哪一步（后续补充验证）：** 为了不把整条链路都留给 Linux，改用一次性探针（`tmp/shutdown-signal-probe.cjs`，`tmp/` 已 gitignore，与本文档前述探测同样的处置）绕过**信号投递**这一个环节：起真实 `dist-cli/index.js`（隔离 `CODEX_HOME`、`--no-password --no-tunnel --no-open --no-login`）→ 连上真实 `/codex-api/ws` 客户端 → 通过 Node inspector 在**同一个运行中的进程内**执行 `process.emit('SIGTERM')`，即调用 `SIGINT`/`SIGTERM` 所绑定的那个 `shutdown()`，再测「t0 → 进程消失」的时延与退出码。
 
 - 结果：修复前 **exit 1 @ 5015ms**（`server.close()` 不回调 → 5s 兜底）；修复后 **exit 0 @ 11ms**（2 个 ws 客户端）/ **10ms**（0 个）。这同时给这份修复留下了一个能**判非**的对照：同一探针在旧产物上确实报 FAIL。
 - 探针本身有两个坑，记录备查：① 产物必须留在 `dist-cli/` **原位**运行——复制到别处会让 `readCliVersion`/静态目录的 `__dirname/..` 解析失效（banner 会打印 `Version: unknown`）；② inspector **附着期间** `process.exit()` 会阻塞在 `Waiting for the debugger to disconnect...`，必须在触发后立刻断开 inspector，否则退出码与时延都测不到。
-- 由此**仍未闭环的只剩 OS 信号投递本身**：Linux 内核把 SIGTERM 交给 Node 后，运行时代为执行已注册的 handler（这正是进程内 `emit` 所模拟的那一步），无平台分支。`systemctl restart` 的日志消除仍需按手测文档在 Linux 侧确认。
+- 当时**仍未闭环的只剩 OS 信号投递本身**：Linux 内核把 SIGTERM 交给 Node 后，运行时代为执行已注册的 handler（这正是进程内 `emit` 所模拟的那一步），无平台分支。**该环节与 `systemctl restart` 日志已在 2026-09-15 经 WSL2 真实 Linux + 真实 systemd 补齐，见上节「平台限制与补齐」。**
 
 **复查时注意的两点（本轮顺带发现，非本次修复引入）：**
 
@@ -88,4 +98,4 @@
 
 ## 发布状态
 
-随 **v0.1.124** 发布。commit 链、tag 与 GitHub Release 记录见 [sections/commit-history.md](../sections/commit-history.md) 的 v0.1.124 段；npm publish 由用户执行（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
+随 **v0.1.124** 发布。commit 链、tag 与 GitHub Release 记录见 [sections/commit-history.md](../sections/commit-history.md) 的 v0.1.124 段；npm publish **用户决定暂缓**（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
