@@ -29,3 +29,4 @@ Return to the [manual test index](../../tests.md).
 | [Home route no longer crashes on dev startup](home-route-no-longer-crashes-on-dev-startup.md)                                                                              |
 | [Vite root route and events SSE routing](vite-root-route-and-events-sse-routing.md)                                                                                        |
 | [Zen proxy expands multi-agent namespace tools](zen-proxy-multi-agent-namespace-tools.md)                                                                                |
+| [Systemd stop finishes inside TimeoutStopSec](systemd-stop-finishes-inside-timeout.md)                                                                                     |
