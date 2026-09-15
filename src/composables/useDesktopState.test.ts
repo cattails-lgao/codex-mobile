@@ -2450,7 +2450,11 @@ describe('client-side auto-compact pre-send stash & flush', () => {
       })
     }
 
-    return { state, notifyTokenUsage }
+    function sendNotification(notification: { method: string; params?: unknown }): void {
+      notificationHandler(notification)
+    }
+
+    return { state, notifyTokenUsage, sendNotification }
   }
 
   it('stashes the message and starts compaction when remaining context is at the threshold', async () => {
@@ -2516,6 +2520,70 @@ describe('client-side auto-compact pre-send stash & flush', () => {
       expect(state.selectedThreadQueuedMessages.value).toHaveLength(0)
     })
   })
+
+  it(
+    'compacts when a turn ends with the context still at the threshold (round-83)',
+    async () => {
+      installTestWindow()
+      const { notifyTokenUsage, sendNotification } = installAutoCompactState()
+      notifyTokenUsage(10)
+
+      // turn 进行中不预检（上下文已定型）——长时间 Thinking 期间不会触发压缩。
+      sendNotification({
+        method: 'turn/started',
+        params: {
+          threadId: 'thread-auto-compact',
+          turnId: 'turn-1',
+          turn: { id: 'turn-1', status: 'in_progress' },
+        },
+      })
+      await Promise.resolve()
+      expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+
+      // turn 结束（线程转空闲）→ 用量仍在阈值内 → 立即压缩，不再等用户下一次发送。
+      sendNotification({
+        method: 'turn/completed',
+        params: {
+          threadId: 'thread-auto-compact',
+          turnId: 'turn-1',
+          turn: { id: 'turn-1', status: 'completed' },
+        },
+      })
+      await vi.waitFor(() => {
+        expect(gatewayMocks.compactThread).toHaveBeenCalledWith('thread-auto-compact')
+      })
+    },
+  )
+
+  it(
+    'does not compact at the turn boundary while the context is above the threshold',
+    async () => {
+      installTestWindow()
+      const { notifyTokenUsage, sendNotification } = installAutoCompactState()
+      notifyTokenUsage(50)
+
+      sendNotification({
+        method: 'turn/started',
+        params: {
+          threadId: 'thread-auto-compact',
+          turnId: 'turn-1',
+          turn: { id: 'turn-1', status: 'in_progress' },
+        },
+      })
+      await Promise.resolve()
+      sendNotification({
+        method: 'turn/completed',
+        params: {
+          threadId: 'thread-auto-compact',
+          turnId: 'turn-1',
+          turn: { id: 'turn-1', status: 'completed' },
+        },
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(gatewayMocks.compactThread).not.toHaveBeenCalled()
+    },
+  )
 
   it('resumes stashed messages after a refresh once usage syncs in above the threshold', async () => {
     installTestWindow({
