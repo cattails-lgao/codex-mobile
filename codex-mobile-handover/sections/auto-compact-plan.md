@@ -109,3 +109,14 @@ Codex app-server 的自动压缩是服务端行为：上下文 token 超过 `mod
 - **验证**：`vue-tsc --noEmit` 通过；`pnpm run build:frontend` 通过；全量单测 323/325（2 个既有 Windows 环境性失败：`codexAppServerBridge.archive.test.ts` symlink EPERM 与 free-mode 状态文件字节数漂移，与本次改动无关）；新增单测 8 例（暂存/阈值关闭/用量充足直发/压缩后补发/刷新恢复/恢复时再压缩/删除暂存/Steer 立即发送）。手动测试文档：`tests/chat-composer-rendering/client-side-auto-compact-pre-send-stash-resend.md`。
 - **性能审计**：发送路径新增 O(1) 的 usage 读取与阈值比较；仅阈值内发送时新增一次 localStorage 写入与压缩 RPC；压缩轮询复用既有 `compactThreadById`（上限 14×2s），无新增高频请求。
 
+## 8. 实施记录（round-83，2026-09-15）：turn 边界预检
+
+> 用户报告「自动压缩还有问题，正在 Thinking 的时候 size 超出了」——长 turn（Thinking + 工具调用）进行中上下文涨过阈值，客户端全程无动作。
+
+- **根因**：阈值只被「发送前预检」消费，而该预检在 turn 进行中跳过（§3.5「turn 进行中：跳过预检」）；turn 结束（`setThreadInProgress(false)`）此前只补发暂存、不做压缩 → 用户不再发送时压缩永不发生。
+- **改动**（`src/composables/useDesktopState.ts` 2 处）：新增 `shouldAutoCompactOnTurnEnd(threadId)`（与发送前预检共用阈值与防重入条件）；`setThreadInProgress(false)` 改为「命中阈值 → `compactThreadById`，否则 → `flushStashedForThread`」（压缩收口内部本就会补发暂存）。
+- **不在用量事件上挂钩**：Thinking 期间用量事件高频到达，若压缩后用量仍 ≤ 阈值会形成「压缩 → 用量事件 → 再压缩」的循环；挂在 turn 结束的状态迁移上每轮最多一次。
+- **测量补充（真实 rollout 数据）**：服务端自动压缩发生在 **turn 内**（两次压缩分别落在 turn 3 / turn 14 内部），触发点 ≈ 90% 已用（峰值 96.1% / 93.3%，窗口 121,600）；单个长 turn 约吃 4–10% 窗口。**客户端默认阈值 10% 剩余 = 服务端 90% 已用，两者同点**，而客户端只在发送时判定 → 客户端无法抢在服务端前面（与 §3.1「略先于服务端 ~90% 阈值」的意图不符）。
+- **本轮决策（用户确认）**：默认阈值维持 10%（可在设置项上调）；版本不 bump（工作区停在 `0.1.124` 待发）。
+- **验证**：新增单测 2 例 + 判别力 A/B（移出源改动后用例失败）；全量 Vitest 591 通过 / 2 既有 Windows 环境性失败；`vue-tsc` 干净、`vite build` 通过。详见 [round-83](../rounds/round-83-auto-compact-turn-boundary.md)。
+

@@ -1150,8 +1150,16 @@ export function useDesktopState() {
       inProgressById.value = omitKey(inProgressById.value, threadId)
       clearCompletedTurnLiveState(threadId)
       clearInterruptPersistenceGate(threadId)
-      // 线程空闲后补发等待中的暂存消息（如压缩期间用户又发送的消息）。
-      void flushStashedForThread(threadId)
+      // round-83：长时间 turn（Thinking/工具调用）会把上下文推过阈值，而发送前预检在
+      // turn 进行中被跳过（上下文已定型），此前只有「用户再发一条消息」才会触发压缩。
+      // 这里在 turn 结束（线程转为空闲）时用同一阈值再检查一次，使压缩不再依赖下一次发送。
+      // 压缩收口（成功/失败/超时）内部都会补发暂存消息，故走压缩分支时不再单独 flush。
+      if (shouldAutoCompactOnTurnEnd(threadId)) {
+        void compactThreadById(threadId)
+      } else {
+        // 线程空闲后补发等待中的暂存消息（如压缩期间用户又发送的消息）。
+        void flushStashedForThread(threadId)
+      }
     }
     applyThreadFlags()
     if (
@@ -2632,6 +2640,16 @@ export function useDesktopState() {
         },
       },
     })
+  }
+
+  // turn 边界自动压缩的判定：与发送前预检共用同一阈值与防重入条件。
+  // 只在 turn 结束这一瞬间判定，不会形成「压缩 → 用量仍超阈值 → 再压缩」的循环。
+  function shouldAutoCompactOnTurnEnd(threadId: string): boolean {
+    if (autoCompactThreshold.value <= 0) return false
+    if (compactingThreadIds.value.has(threadId)) return false
+    const usage: UiThreadTokenUsage | undefined = threadTokenUsageByThreadId.value[threadId]
+    if (!usage || usage.remainingContextPercent === null) return false
+    return usage.remainingContextPercent <= autoCompactThreshold.value
   }
 
   // 发送前预检：线程空闲且剩余上下文占比 ≤ 阈值时，把消息暂存并触发压缩；
