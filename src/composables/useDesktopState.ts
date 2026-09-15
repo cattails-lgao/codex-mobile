@@ -856,6 +856,9 @@ export function useDesktopState() {
   // round-73：切换模型后失效「旧模型」的上下文窗口（保留真实 token 计数）。
   // 新模型首个 thread/tokenUsage/updated 事件到达前，上下文指示器进入待定状态，
   // 不再展示误导性的旧模型窗口。
+  // 派生字段必须与来源同生共死：remainingContextPercent 是发送前压缩预检
+  // （maybeStashForAutoCompact）的唯一输入，只清 modelContextWindow 会把「旧窗口算出来的
+  // 残值」留给预检，让预检按已失效的窗口做判定。
   function invalidateThreadContextWindow(threadId: string): void {
     const normalizedThreadId = threadId.trim()
     const current = threadTokenUsageByThreadId.value[normalizedThreadId]
@@ -863,7 +866,12 @@ export function useDesktopState() {
     if (current.modelContextWindow === null) return
     threadTokenUsageByThreadId.value = {
       ...threadTokenUsageByThreadId.value,
-      [normalizedThreadId]: { ...current, modelContextWindow: null },
+      [normalizedThreadId]: {
+        ...current,
+        modelContextWindow: null,
+        remainingContextTokens: null,
+        remainingContextPercent: null,
+      },
     }
     saveThreadTokenUsageMap(threadTokenUsageByThreadId.value)
   }
