@@ -128,17 +128,21 @@
 
 ## v0.1.124 发布（round-82）
 
-- **v0.1.124 发布**（版本 bump + 文档）：版本从 `0.1.123` 升至 `0.1.124`，收录 round-82（systemd 停止超时修复）。代码/测试提交 `93d4b69`（已推送 `origin/main`）；版本 bump + 文档提交 `1fe51e3`（已推送 `origin/main`）。git tag `v0.1.124`（annotated，指向 `1fe51e3`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.124 。`codex-mobile-re@0.1.124` 待用户 publish 至 npm 官方源（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
+- **v0.1.124 发布**（版本 bump + 文档）：版本从 `0.1.123` 升至 `0.1.124`，收录 round-82（systemd 停止超时修复）。代码/测试提交 `93d4b69`（已推送 `origin/main`）；版本 bump + 文档提交 `1fe51e3`（已推送 `origin/main`）。git tag `v0.1.124`（annotated，指向 `1fe51e3`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.124 。`codex-mobile-re@0.1.124` 最终**未 publish 至 npm**（2026-09-15 复查 `dist-tags.latest` 仍为 `0.1.123`；2026-09-16 复查确认 `GET /codex-mobile-re/0.1.124` 始终 404 —— 该版本号在 npm 上留空，内容已并入 `0.1.125`）。
 
 ## v0.1.125 发布（round-83 ~ round-86）
 
-版本从 `0.1.124` 升至 **`0.1.125`**，收录 round-83 ~ round-86 与「切模型清派生字段」一处小修复。本批代码/测试/文档提交共 9 个（推送范围 `7348f53..3534018`），加推送状态文档提交 `46a5e0e`，随后是版本 bump + 文档提交 `f2678df`（已推送 `origin/main`）。git tag `v0.1.125`（annotated，tag 对象 `6c18f64`，指向 `f2678df`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.125 。`codex-mobile-re@0.1.125` 待用户 publish 至 npm 官方源。
+版本从 `0.1.124` 升至 **`0.1.125`**，收录 round-83 ~ round-86 与「切模型清派生字段」一处小修复。本批代码/测试/文档提交共 9 个（推送范围 `7348f53..3534018`），加推送状态文档提交 `46a5e0e`，随后是版本 bump + 文档提交 `f2678df`（已推送 `origin/main`）。git tag `v0.1.125`（annotated，tag 对象 `6c18f64`，指向 `f2678df`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.125 。`codex-mobile-re@0.1.125` 已由用户 publish 至 npm 官方源。
 
 > 版本序列说明：上一版 `v0.1.124`（round-82）只创建了 tag 与 GitHub Release，**从未 publish 至 npm**（复查 registry 时 npm `latest` 仍是 `0.1.123`，`GET /codex-mobile-re/0.1.124` 返回 404）。为避免版本断号影响使用者，`0.1.125` 一并包含 round-82 的内容，`0.1.124` 在 npm 上留空。
 
 **版本 bump + 文档提交 `f2678df`**（已推送 `origin/main`）：`package.json` `0.1.124` → `0.1.125`；同步总入口交接文档（快照「Git 分支」「Dev 状态」「npm `latest`」，新增「最近发布（v0.1.125）」行并把原 v0.1.124 行改标注为未 publish 至 npm）、轮次索引四行（round-83 ~ round-86）加「v0.1.125 发布」前缀、未完成事项四条口径由「已推送、未发版」改为「随 v0.1.125 发布」、落款，以及本小节。round-82 ~ round-86 的 round 文档与 `sections/auto-compact-plan.md` 同步补了「已随 v0.1.125 发布」的回填。
 
-**推送状态**：版本 bump 提交 `f2678df`、tag `v0.1.125` 与本次回填提交均已推送 `origin/main`（远端 `refs/tags/v0.1.125` → tag 对象 `6c18f64` → 指向 `f2678df`）。Release 正文由 `.git/release-notes-v0.1.125.md` 提供、创建后已删除。**唯一剩余动作：`npm publish`（由用户执行；`prepublishOnly` 会先跑 `pnpm run build`）。**
+**推送状态**：版本 bump 提交 `f2678df`、tag `v0.1.125` 与本次回填提交均已推送 `origin/main`（远端 `refs/tags/v0.1.125` → tag 对象 `6c18f64` → 指向 `f2678df`）。Release 正文由 `.git/release-notes-v0.1.125.md` 提供、创建后已删除。
+
+**发布闭环**：用户于 2026-09-16 执行 `npm publish`（`prepublishOnly` 先跑 `pnpm run build`，工作区 `dist/` 与 `dist-cli/` 于 14:43 重建），registry 记录发布时刻 `2026-09-16T06:46:49.279Z`，`dist-tags.latest` 由 `0.1.123` 切换为 **`0.1.125`**（版本总数 35 → 36）。维护者随后下载 tarball 复核：1,468,953 字节、47 个文件（`dist/` 36 + `dist-cli/` 2 + `scripts/` 3 + `README.md`/`LICENSE`/…）、sha1 `558cfcc2d6edab8428a67e7e7540a9f3d16f426d` 与 integrity `sha512-wY1bCTtc93GfmZHLPwbAe6ahVI103qjk9ELIfU/b7MzR82jzpsJiEatzC/RES3hV/5mVx8ybXG2V4niK9paO3g==` 与 registry 逐项一致，包内 `package.json` 版本为 `0.1.125`、`bin` 指向 `dist-cli/index.js`。
+
+> **操作提示（本轮踩过）**：`npm publish` 的构建阶段结束后，**上传与 registry 入库还有数分钟延迟**——本轮镜像构建完成于 14:43:18，而 registry 直到 **14:46:49** 才记录该版本。因此发布后立刻查 `dist-tags.latest` 会看到旧值（甚至 `GET /codex-mobile-re/0.1.125` 返回 404），**不要据此判定发布失败**；等待数分钟再复查即可。另记两点本机环境特征：`pnpm publish` 用的是 pnpm 自己的凭据库（`%LOCALAPPDATA%\pnpm\config\auth.ini`，token 有效、`whoami` = `lgao7779`），而 `~/.npmrc` 里另有一个**已失效**的 `_authToken`（直连 `GET /-/whoami` 返回 401）——经 `pnpm` 发布不受影响，但若改用 `npm publish` 会因它报 401，宜清理掉那条陈旧凭据。
 
 - **round-83（`2aa962a`，单提交含代码+测试+文档）**：客户端自动压缩在长 turn 下不触发——阈值此前只被「发送 + 空闲」消费，turn 内按设计跳过、turn 结束又只补发暂存不做压缩，改为在 turn 转空闲那一刻按同一阈值预检（`shouldAutoCompactOnTurnEnd` 接入 `setThreadInProgress(false)`）。刻意不挂在 `thread/tokenUsage/updated` 上（避免「压缩→用量事件→再压缩」循环）。按用户决定阈值维持 **10%**、不 bump 版本。新增单测 2 例（含 `git stash` 判别力 A/B）、全量 **591 通过 / 2 失败**。
 - **测试文档清理（`365d41d`）**：退役 stream-first 水合手测、修正漂移的 harness 登记（`tests.md`、`tests/thread-loading-state/index.md` 等）。
