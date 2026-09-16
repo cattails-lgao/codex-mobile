@@ -8,7 +8,7 @@ import { isAbsolute } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { asRecord, getErrorMessage, readNonEmptyString, STREAM_EVENT_BUFFER_LIMIT, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
-import { buildSessionFileChangeFallback, mergeSessionCommandsIntoThreadResult, mergeSessionCommandsIntoTurns, mergeSessionSkillInputsIntoThreadResult } from './session.js'
+import { buildSessionFileChangeFallback, mergeSessionCommandsIntoThreadResult, mergeSessionCommandsIntoTurnsFromPath, mergeSessionSkillInputsIntoThreadResult } from './session.js'
 import { resolveCommandOutputSpillPath } from './payloadSlimming.js'
 import type { ExternalSessionInfo } from '../externalSessionTracker.js'
 
@@ -271,8 +271,7 @@ export function handleThreadHttpRequest(
 
         if (sessionPath && isAbsolute(sessionPath) && sessionSize > 0) {
           try {
-            const sessionLogRaw = await readFile(sessionPath, 'utf8')
-            turns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
+            turns = await mergeSessionCommandsIntoTurnsFromPath(turns, sessionPath)
           } catch {
             // Session log not available — continue without command recovery
           }
