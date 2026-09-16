@@ -129,3 +129,15 @@
 ## v0.1.124 发布（round-82）
 
 - **v0.1.124 发布**（版本 bump + 文档）：版本从 `0.1.123` 升至 `0.1.124`，收录 round-82（systemd 停止超时修复）。代码/测试提交 `93d4b69`（已推送 `origin/main`）；版本 bump + 文档提交 `1fe51e3`（已推送 `origin/main`）。git tag `v0.1.124`（annotated，指向 `1fe51e3`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.124 。`codex-mobile-re@0.1.124` 待用户 publish 至 npm 官方源（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
+
+## 未发布批次（round-83 ~ round-86，已推送 `origin/main`，未发版）
+
+推送范围 `7348f53..3534018`，本地与远端一致。版本号仍停 **0.1.124**（已发但 npm `latest` 仍为 `0.1.123`），本批改动随下一次发布一起走。
+
+- **round-83（`2aa962a`，单提交含代码+测试+文档）**：客户端自动压缩在长 turn 下不触发——阈值此前只被「发送 + 空闲」消费，turn 内按设计跳过、turn 结束又只补发暂存不做压缩，改为在 turn 转空闲那一刻按同一阈值预检（`shouldAutoCompactOnTurnEnd` 接入 `setThreadInProgress(false)`）。刻意不挂在 `thread/tokenUsage/updated` 上（避免「压缩→用量事件→再压缩」循环）。按用户决定阈值维持 **10%**、不 bump 版本。新增单测 2 例（含 `git stash` 判别力 A/B）、全量 **591 通过 / 2 失败**。
+- **测试文档清理（`365d41d`）**：退役 stream-first 水合手测、修正漂移的 harness 登记（`tests.md`、`tests/thread-loading-state/index.md` 等）。
+- **auto-compact 派生字段清理（`5e98cf6`）**：切模型失效上下文窗口时同步清派生字段（`remainingContextPercent` 是发送前预检的唯一输入），否则预检读到陈旧百分比。与 round-83 改同一对文件但 hunk 相隔较远，rebase 零冲突，两者互补。
+- **round-84（`1e6045d` 代码+测试+脚本 / `0a319e0` 文档）**：打开会话去掉全量历史水合。`thread/resume` 原让 app-server 全量水合 16 轮（12.12MB / 1.9s）后桥才 slice 到 10 轮，成本白付；改为 `{excludeTurns, initialTurnsPage{limit:10, desc, itemsView:'full'}}`，桥把返回页反转成升序提升为 `thread.turns`、补 `threadTurnStartIndex`、丢弃 `initialTurnsPage`，前端与既有管道零改动；旧 app-server 忽略该字段时按原请求重放兜底。新增单测 23 例、`scripts/probe-resume-turn-page.cjs` 7/7 PASS、同桥 A/B **2.0–3.1×** 且输出逐字一致、全量 **615 通过 / 2 失败**。
+- **round-85（`d8d31bb` 代码+测试+脚本 / `33295ce` 文档）**：会话日志时序恢复的适用范围。管道最大一段是命令合并（**434–681ms**），而 CLI 已把命令从 `function_call exec_command` 换成 `custom_tool_call exec`，对当前形状日志**识别 0 行**、纯白付；更糟的是没有命令槽时它仍把 user/agent 提前、命令追加轮末，**抹掉 app-server 已正确的交错**。改为「形状闸门（无 `commandExecution`/`fileChange` 槽即原样返回、全无改动返回入参同一引用）+ 版本判据缓存（`mergeSessionCommandsIntoTurnsFromPath`：判据为假只付一次 stat、不读文件）」。同环境 `git stash` A/B 热态中位 **1071→610ms（−43%）**、条目顺序与「跳过合并」基线 10/10 逐字一致、旧形状两会话仍 58/58 与 51/51、新增 `scripts/probe-session-log-recovery.cjs` 固化判据、全量 **623 通过 / 2 失败**。
+- **round-86（`8db72cc` 代码+测试+脚本 / `3534018` 文档）**：上翻更早轮次改为游标分页（去掉最后一处全量水合）。`readThreadForTurnPage` 原发 `thread/read {includeTurns:true}` 再内存 slice，实测 **1295ms / 12.12MB**（`includeTurns:false` 仅 2ms / 0.00MB）；**并纠正 round-84/85「顶层 `turnsBackwardsCursor` 是该用的游标」这一错误措辞**（它 `includeAnchor:true`、用它只会重发自己那一页；真正往更老走的是 `initialTurnsPage.nextCursor`；游标是不透明 JSON、turn id 不是游标 → 只能逐页串链）。新增 `src/server/bridge/threadTurnPage.ts`（升序 id 列 + 游标链 + 页长/页首页尾校验，任何意外返回 null 回落原全量水合且回落路径逐字相同）、`SHARED_BRIDGE_VERSION` v3→v4。新增单测 24 例、`scripts/probe-turn-page.cjs` 11/11 PASS、`git stash` 端到端 A/B 四锚点响应逐字相同（含字节数）、**真实 Linux（WSL2）全量 649 通过 / 0 失败**（关闭既有的 2 例 Windows 环境性失败注记）。
+
