@@ -67,6 +67,8 @@
 ## 6. 遗留与后续（本轮未做）
 
 - **`readThreadForTurnPage` 仍是全量水合**（`src/server/codexAppServerBridge.ts`，上翻更早轮次用）：发 `thread/read{includeTurns:true}` 再 `slice`，首调约 1s，之后靠 20s 缓存。本轮拿到的 `turnsBackwardsCursor`（顶层，已在响应里原样透出）正是它该用的游标——协议描述为「Pass this as `cursor` to `thread/turns/list` with `sortDirection: "desc"`」。改成真分页可让上翻也走有界路径，属独立的下一步。
+
+  > **更正（round-86 实测）：** 上面「`turnsBackwardsCursor` 正是它该用的游标」**是错的**。该游标带 `includeAnchor: true`，用它 desc 只会**原样重发同一页**（`scripts/probe-turn-page.cjs` 已固化为断言）。真正往更老走的是 `initialTurnsPage.nextCursor`（`includeAnchor: false`）；游标只能逐页串链，且游标是不透明的（把 turn id 当 `cursor` 会被 `invalid cursor` 拒绝）。round-86 据此实现并修掉了这条遗留。
 - **桥侧管道的成本现在浮上来了**：app-server 侧新路径只要 198ms，而经桥端到端是 734–1242ms。差值来自 `sanitizeThreadTurnsInlinePayloads`（内联图片外化）+ skill/命令合并（要读 session 日志）等既有步骤——它们在改动前后**同样发生**，不是本轮引入的回归，但已成为打开会话的主要成本，值得单独剖面。
 - **`threadArchiveRecovery` 里的辅助 resume**（`turn/start` 失败后补一次 `thread/resume`）调用方丢弃返回值，可顺带改成 `excludeTurns:true`；本轮未动，因为它只在罕见救济路径上。
 - 版本号仍停在 **0.1.124**（npm publish 由用户执行），本轮改动随下一次发布一起走。
