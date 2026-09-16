@@ -54,6 +54,15 @@ export type ThreadResumeTurnPageDeps = RpcExecutor & {
    * archive-recovery wrapper around the call.
    */
   sendResume: (params: unknown) => Promise<unknown>
+  /**
+   * Reports the cursor that reaches the turns immediately older than
+   * `oldestTurnId`, which is the resume page's own `nextCursor` (round-86).
+   * `turnsBackwardsCursor` is *not* that cursor -- it carries
+   * `includeAnchor: true` and re-serves the page it came with. Feeding this to
+   * the older-turn route lets its first scroll-up skip the walk that cursors
+   * otherwise require.
+   */
+  onTurnPageBoundary?: (threadId: string, oldestTurnId: string, olderCursor: string | null) => void
 }
 
 function readPageData(result: unknown): unknown[] | null {
@@ -200,6 +209,16 @@ export async function resumeThreadWithTurnPage(
 
   const pageData = readPageData(result) ?? []
   const page = asRecord(asRecord(result)?.initialTurnsPage)
+  // The page is newest-first, so its oldest turn is the last one; the boundary
+  // it hands over is the cursor that reaches the turns before that turn.
+  const oldestTurnId = readNonEmptyString(asRecord(pageData[pageData.length - 1])?.id)
+  if (oldestTurnId && deps.onTurnPageBoundary) {
+    deps.onTurnPageBoundary(
+      readNonEmptyString(asRecord(asRecord(result)?.thread)?.id),
+      oldestTurnId,
+      readNonEmptyString(page?.nextCursor) || null,
+    )
+  }
   // A full page means older turns may exist, and their existence is the only
   // thing `threadTurnStartIndex` needs the count for. A short page already
   // covers the whole thread, so the extra RPC is skipped on new/small threads.

@@ -201,6 +201,46 @@ describe('resumeThreadWithTurnPage', () => {
     expect((result.thread as { turns: unknown[] }).turns).toHaveLength(3)
   })
 
+  it('hands the older-turn route the cursor that actually reaches older turns', async () => {
+    const onTurnPageBoundary = vi.fn()
+    const d = deps({
+      rpc: vi.fn(async () => ({ data: new Array(16).fill({ id: 'x' }), nextCursor: null })),
+      sendResume: vi.fn(async () => resumeResult(DESC_PAGE_IDS, 'older-cursor')),
+      onTurnPageBoundary,
+    })
+
+    await resumeThreadWithTurnPage(d, { threadId: 'thread-1' })
+
+    // The page is newest-first, so its oldest turn is the last one, and the
+    // cursor for "even older" is the page's nextCursor -- `turnsBackwardsCursor`
+    // carries includeAnchor:true and would just re-serve this same page.
+    expect(onTurnPageBoundary).toHaveBeenCalledWith('thread-1', ASC_PAGE_IDS[0], 'older-cursor')
+  })
+
+  it('reports a null boundary cursor when the page already starts the thread', async () => {
+    const onTurnPageBoundary = vi.fn()
+    const d = deps({
+      sendResume: vi.fn(async () => resumeResult(DESC_PAGE_IDS, null)),
+      onTurnPageBoundary,
+    })
+
+    await resumeThreadWithTurnPage(d, { threadId: 'thread-1' })
+
+    expect(onTurnPageBoundary).toHaveBeenCalledWith('thread-1', ASC_PAGE_IDS[0], null)
+  })
+
+  it('reports nothing for an empty page, which has no boundary turn', async () => {
+    const onTurnPageBoundary = vi.fn()
+    const d = deps({
+      sendResume: vi.fn(async () => resumeResult([], 'older-cursor')),
+      onTurnPageBoundary,
+    })
+
+    await resumeThreadWithTurnPage(d, { threadId: 'thread-1' })
+
+    expect(onTurnPageBoundary).not.toHaveBeenCalled()
+  })
+
   it('skips the count request entirely when the page already covers the thread', async () => {
     const d = deps({ sendResume: vi.fn(async () => resumeResult(DESC_PAGE_IDS, null)) })
 
