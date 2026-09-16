@@ -103,6 +103,8 @@ round-84 收尾时记的遗留项原文：「桥侧管道的成本现在浮上�
 
 - **识别器落后于形状这件事本身没有根治。** 本轮只让「识别不到」变得**便宜且无害**，没有把 `custom_tool_call exec` 认成命令。真要恢复新形状的时序恢复，需要同时解决两件事：`custom_tool_call_output` 的输出解析（`exec` 的 payload 与 `exec_command` 不同），以及**管道顺序**——当前 `sanitize`（16KB 中段截断 + sha1 落盘）排在合并**之前**，而合并注入的命令对象携带**未截断**的全量输出，一旦识别器认了新形状，这些输出就会绕过瘦身直接发给浏览器。要做就得把 `sanitize` 挪到合并之后，或对恢复出的命令单独瘦身。**在 app-server 已经自己产出正确交错的前提下，更可能正确的方向是直接退役这条恢复路径**（保留 `collectFileChangesForTurns` 那条独立的 rollback 用途）——但那需要产品决策，本轮不动。
 - **`readThreadForTurnPage` 仍是全量水合**（round-84 的遗留项，未动）：上翻更早轮次走 `thread/read{includeTurns:true}` 再 `slice`，首调约 1s，之后靠 20s 缓存；round-84 拿到的顶层 `turnsBackwardsCursor` 正是它该用的游标。
+
+  > **更正（round-86 落地）：** 这条遗留已修，同时**该遗留的措辞是错的**——`turnsBackwardsCursor` 带 `includeAnchor: true`，用它 desc 会重发同一页；真正往更老走的是 `initialTurnsPage.nextCursor`。详见 round-86 文档与 `scripts/probe-turn-page.cjs`。
 - **`threadArchiveRecovery` 的辅助 resume** 仍可改成 `excludeTurns:true`（round-84 遗留，未动）。
 - 版本号仍停在 **0.1.124**（npm publish 由用户执行）。
 
