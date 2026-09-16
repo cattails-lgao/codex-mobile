@@ -130,9 +130,13 @@
 
 - **v0.1.124 发布**（版本 bump + 文档）：版本从 `0.1.123` 升至 `0.1.124`，收录 round-82（systemd 停止超时修复）。代码/测试提交 `93d4b69`（已推送 `origin/main`）；版本 bump + 文档提交 `1fe51e3`（已推送 `origin/main`）。git tag `v0.1.124`（annotated，指向 `1fe51e3`）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.124 。`codex-mobile-re@0.1.124` 待用户 publish 至 npm 官方源（2026-09-15 复查 registry：`dist-tags.latest` 仍为 `0.1.123`，`0.1.124` 尚未发布）。
 
-## 未发布批次（round-83 ~ round-86，已推送 `origin/main`，未发版）
+## v0.1.125 发布（round-83 ~ round-86）
 
-推送范围 `7348f53..3534018`，本地与远端一致。版本号仍停 **0.1.124**（已发但 npm `latest` 仍为 `0.1.123`），本批改动随下一次发布一起走。
+版本从 `0.1.124` 升至 **`0.1.125`**，收录 round-83 ~ round-86 与「切模型清派生字段」一处小修复。本批代码/测试/文档提交共 9 个（推送范围 `7348f53..3534018`），加推送状态文档提交 `46a5e0e`，随后是版本 bump + 文档提交。git tag `v0.1.125`（annotated）与 GitHub Release 已由维护者创建（非草稿/非预发布，已标记 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.125 。`codex-mobile-re@0.1.125` 待用户 publish 至 npm 官方源。
+
+> 版本序列说明：上一版 `v0.1.124`（round-82）只创建了 tag 与 GitHub Release，**从未 publish 至 npm**（复查 registry 时 npm `latest` 仍是 `0.1.123`，`GET /codex-mobile-re/0.1.124` 返回 404）。为避免版本断号影响使用者，`0.1.125` 一并包含 round-82 的内容，`0.1.124` 在 npm 上留空。
+
+**版本 bump + 文档提交**：`package.json` `0.1.124` → `0.1.125`；同步总入口交接文档（快照「Git 分支」「Dev 状态」「npm `latest`」，新增「最近发布（v0.1.125）」行并把原 v0.1.124 行改标注为未 publish 至 npm）、轮次索引四行（round-83 ~ round-86）加「v0.1.125 发布」前缀、未完成事项四条口径由「已推送、未发版」改为「随 v0.1.125 发布」、落款，以及本小节。
 
 - **round-83（`2aa962a`，单提交含代码+测试+文档）**：客户端自动压缩在长 turn 下不触发——阈值此前只被「发送 + 空闲」消费，turn 内按设计跳过、turn 结束又只补发暂存不做压缩，改为在 turn 转空闲那一刻按同一阈值预检（`shouldAutoCompactOnTurnEnd` 接入 `setThreadInProgress(false)`）。刻意不挂在 `thread/tokenUsage/updated` 上（避免「压缩→用量事件→再压缩」循环）。按用户决定阈值维持 **10%**、不 bump 版本。新增单测 2 例（含 `git stash` 判别力 A/B）、全量 **591 通过 / 2 失败**。
 - **测试文档清理（`365d41d`）**：退役 stream-first 水合手测、修正漂移的 harness 登记（`tests.md`、`tests/thread-loading-state/index.md` 等）。
