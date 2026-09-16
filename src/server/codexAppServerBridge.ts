@@ -82,6 +82,9 @@ import { runRpcResponsePipeline } from './bridge/rpcPipeline.js'
 // round-84：thread/resume 的有界水合（元数据 + 一页轮次），替换协议已标
 // deprecated 的全量历史水合；详见 bridge/threadResumeTurnPage.ts 头部实测数据。
 import { resumeThreadWithTurnPage } from './bridge/threadResumeTurnPage.js'
+// round-86：上翻更早轮次不再全量水合；用 turns/list 游标链按页取，详见
+// bridge/threadTurnPage.ts 头部实测数据。
+import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
 import {
   handleTelegramHttpRequest,
   readTelegramBridgeConfig,
@@ -314,6 +317,9 @@ type PendingServerRequest = {
 }
 
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
+/** Bounds on the round-86 bounded-turn-page cache (per-thread, then per-page). */
+const BOUNDED_TURN_PAGE_CACHE_MAX_THREADS = 32
+const BOUNDED_TURN_PAGE_CACHE_MAX_PAGES_PER_THREAD = 64
 
 // round-76：`thread/read` 结果缓存（缓存策略/失效/取键见 bridge/threadReadCache.ts）。
 // 这里只挂实例 + 把失效信号接到通知与写 RPC 上。
@@ -384,6 +390,10 @@ class AppServerProcess {
   private readonly lastThreadReadSnapshotByThreadId = new Map<string, unknown>()
   private readonly threadTurnPageReadCacheByThreadId = new Map<string, { result: unknown; expiresAt: number }>()
   private readonly threadTurnPageReadPromiseByThreadId = new Map<string, Promise<unknown>>()
+  // round-86：上翻更早轮次的有界路径。游标链本身不做失效（陈旧游标由 id 列表
+  // 复核拦下）；这里只缓存已组装好的页，语义与 threadTurnPageReadCacheByThreadId 一致。
+  private readonly threadTurnPageCursorChain = new ThreadTurnPageCursorChain()
+  private readonly boundedThreadTurnPageCacheByThreadId = new Map<string, Map<string, { page: BoundedThreadTurnPage; expiresAt: number }>>()
   private readonly threadReadResultCache = new ThreadReadResultCache()
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
@@ -540,6 +550,7 @@ class AppServerProcess {
     if (nThreadId) {
       this.invalidateLiveStateCache(nThreadId)
       this.threadTurnPageReadCacheByThreadId.delete(nThreadId)
+      this.invalidateBoundedThreadTurnPageCache(nThreadId)
       this.invalidateThreadReadResultCache(nThreadId)
     }
     for (const listener of this.notificationListeners) {
@@ -596,6 +607,7 @@ class AppServerProcess {
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
     this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
     this.threadTurnPageReadCacheByThreadId.delete(threadId)
+    this.invalidateBoundedThreadTurnPageCache(threadId)
   }
 
   getLastThreadReadSnapshot(threadId: string): unknown | null {
@@ -626,6 +638,70 @@ class AppServerProcess {
 
     this.threadTurnPageReadPromiseByThreadId.set(threadId, promise)
     return promise
+  }
+
+  /**
+   * Record that `olderCursor` reaches the turns immediately before
+   * `oldestTurnId`, so the older-turn route can start paging without walking
+   * the cursor chain from the newest turn (round-86).
+   */
+  recordThreadTurnPageBoundary(threadId: string, oldestTurnId: string, olderCursor: string | null): void {
+    this.threadTurnPageCursorChain.record(threadId, oldestTurnId, olderCursor)
+  }
+
+  /**
+   * The turns immediately before `beforeTurnId`, loaded as one `thread/turns/list`
+   * page instead of a full-history `thread/read` (round-86; see
+   * bridge/threadTurnPage.ts for the measurements and the cursor semantics).
+   *
+   * Returns null whenever the bounded path cannot answer -- no cursor anchored
+   * at the anchor turn, a stale cursor, an app-server that errors on the call --
+   * and the caller then runs the unbounded read it used to run.
+   */
+  async readBoundedThreadTurnPage(
+    threadId: string,
+    beforeTurnId: string,
+    limit: number,
+  ): Promise<BoundedThreadTurnPage | null> {
+    const pageKey = `${beforeTurnId}\u0000${limit}`
+    const perThread = this.boundedThreadTurnPageCacheByThreadId.get(threadId)
+    const cached = perThread?.get(pageKey)
+    if (cached) {
+      if (cached.expiresAt > Date.now()) return cached.page
+      perThread?.delete(pageKey)
+    }
+
+    let page: BoundedThreadTurnPage | null
+    try {
+      page = await readBoundedThreadTurnPage({
+        rpc: (method, params) => this.rpc(method, params),
+        chain: this.threadTurnPageCursorChain,
+      }, threadId, beforeTurnId, limit)
+    } catch {
+      return null
+    }
+    if (!page) return null
+
+    let bucket = this.boundedThreadTurnPageCacheByThreadId.get(threadId)
+    if (!bucket) {
+      bucket = new Map()
+      this.boundedThreadTurnPageCacheByThreadId.set(threadId, bucket)
+      if (this.boundedThreadTurnPageCacheByThreadId.size > BOUNDED_TURN_PAGE_CACHE_MAX_THREADS) {
+        const oldestThreadId = this.boundedThreadTurnPageCacheByThreadId.keys().next().value
+        if (typeof oldestThreadId === 'string') this.boundedThreadTurnPageCacheByThreadId.delete(oldestThreadId)
+      }
+    }
+    bucket.set(pageKey, { page, expiresAt: Date.now() + THREAD_TURN_PAGE_READ_CACHE_TTL_MS })
+    if (bucket.size > BOUNDED_TURN_PAGE_CACHE_MAX_PAGES_PER_THREAD) {
+      const oldestKey = bucket.keys().next().value
+      if (typeof oldestKey === 'string') bucket.delete(oldestKey)
+    }
+    return page
+  }
+
+  private invalidateBoundedThreadTurnPageCache(threadId?: string): void {
+    if (threadId) this.boundedThreadTurnPageCacheByThreadId.delete(threadId)
+    else this.boundedThreadTurnPageCacheByThreadId.clear()
   }
 
   cacheLiveState(threadId: string, data: unknown, turnCount: number, sessionSize: number): void {
@@ -1398,8 +1474,9 @@ const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
 // 长驻，模块热更新后 getSharedBridgeState 会复用旧实例，新方法在旧实例上不存在。
 // round-76 加 warmUp/threadRead 缓存时就踩过这个坑（dev 日志刷
 // 「appServer.warmUp is not a function」并陷入 server restart failed 循环），
-// 所以 v2 → v3。
-const SHARED_BRIDGE_VERSION = 'experimental-api-v3'
+// 所以 v2 → v3；round-86 加 readBoundedThreadTurnPage / recordThreadTurnPageBoundary，
+// 所以 v3 → v4。
+const SHARED_BRIDGE_VERSION = 'experimental-api-v4'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
@@ -1778,6 +1855,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             ? await resumeThreadWithTurnPage({
               rpc: (method, params) => appServer.rpc(method, params),
               sendResume: (params) => callRpcWithArchiveRecovery(appServer, 'thread/resume', params),
+              // round-86：把这一页的边界交给上翻路由的游标链，使第一次上翻就能
+              // 直接用游标取页，而不必从最新处逐页走。
+              onTurnPageBoundary: (threadId, oldestTurnId, olderCursor) => {
+                appServer.recordThreadTurnPageBoundary(threadId, oldestTurnId, olderCursor)
+              },
             }, body.params ?? null)
             : await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
         } catch (error) {

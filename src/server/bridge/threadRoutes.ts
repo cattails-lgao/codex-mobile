@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { asRecord, getErrorMessage, readNonEmptyString, STREAM_EVENT_BUFFER_LIMIT, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
 import { buildSessionFileChangeFallback, mergeSessionCommandsIntoThreadResult, mergeSessionCommandsIntoTurnsFromPath, mergeSessionSkillInputsIntoThreadResult } from './session.js'
 import { resolveCommandOutputSpillPath } from './payloadSlimming.js'
+import type { BoundedThreadTurnPage } from './threadTurnPage.js'
 import type { ExternalSessionInfo } from '../externalSessionTracker.js'
 
 type SetJson = (res: ServerResponse, statusCode: number, payload: unknown) => void
@@ -23,6 +24,12 @@ type StreamEventFrame = {
 export type ThreadReadAppServerFacade = {
   rpc(method: string, params: unknown): Promise<unknown>
   readThreadForTurnPage(threadId: string): Promise<unknown>
+  /**
+   * Bounded alternative to `readThreadForTurnPage` (round-86): the turns before
+   * `beforeTurnId` loaded as one `thread/turns/list` page, or null when the
+   * caller must fall back to the full-hydration read.
+   */
+  readBoundedThreadTurnPage(threadId: string, beforeTurnId: string, limit: number): Promise<BoundedThreadTurnPage | null>
   getStreamEvents(threadId: string, limit: number): StreamEventFrame[]
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void
   getLastThreadReadSnapshot(threadId: string): unknown | null
@@ -133,7 +140,46 @@ export function handleThreadHttpRequest(
           return true
         }
 
-        const threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.readThreadForTurnPage(threadId))
+        // round-86：先试有界的 turns/list 取页（元数据 + 一页），失败或不可用再
+        // 回落到原来的「全量 thread/read + 内存切片」——回落路径与改动前逐字一致。
+        const boundedPage = await appServer.readBoundedThreadTurnPage(threadId, beforeTurnId, limit)
+
+        let threadReadResult: unknown
+        let startTurnIndex: number
+        let hasMoreOlder: boolean
+
+        if (boundedPage) {
+          threadReadResult = mergeStreamTurnErrorsIntoThreadResult(appServer, boundedPage.result)
+          startTurnIndex = boundedPage.startTurnIndex
+          hasMoreOlder = boundedPage.hasMoreOlder
+        } else {
+          const fullRead = mergeStreamTurnErrorsIntoThreadResult(appServer, await appServer.readThreadForTurnPage(threadId))
+          const fullRecord = asRecord(fullRead)
+          const fullThread = asRecord(fullRecord?.thread)
+          if (!fullRecord || !fullThread) {
+            setJson(res, 502, { error: 'thread/read returned an invalid thread response' })
+            return true
+          }
+
+          const turns = Array.isArray(fullThread.turns) ? fullThread.turns : []
+          const beforeIndex = beforeTurnId
+            ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
+            : turns.length
+          startTurnIndex = beforeTurnId && beforeIndex < 0 ? 0 : Math.max(0, beforeIndex - limit)
+          const pageTurns = beforeTurnId && beforeIndex < 0
+            ? []
+            : turns.slice(startTurnIndex, beforeIndex)
+          hasMoreOlder = startTurnIndex > 0
+
+          threadReadResult = {
+            ...fullRecord,
+            thread: {
+              ...fullThread,
+              turns: pageTurns,
+            },
+          }
+        }
+
         const record = asRecord(threadReadResult)
         const thread = asRecord(record?.thread)
         if (!record || !thread) {
@@ -141,43 +187,14 @@ export function handleThreadHttpRequest(
           return true
         }
 
-        const turns = Array.isArray(thread.turns) ? thread.turns : []
-        const beforeIndex = beforeTurnId
-          ? turns.findIndex((turn) => asRecord(turn)?.id === beforeTurnId)
-          : turns.length
-        if (beforeTurnId && beforeIndex < 0) {
-          setJson(res, 200, {
-            result: {
-              ...record,
-              thread: {
-                ...thread,
-                turns: [],
-              },
-            },
-            startTurnIndex: 0,
-            hasMoreOlder: false,
-          })
-          return true
-        }
-
-        const endIndex = beforeIndex
-        const startIndex = Math.max(0, endIndex - limit)
-        const pageTurns = turns.slice(startIndex, endIndex)
-        const pagedResult = {
-          ...record,
-          thread: {
-            ...thread,
-            turns: pageTurns,
-          },
-        }
-        const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', pagedResult)
+        const sanitized = await sanitizeThreadTurnsInlinePayloads('thread/read', threadReadResult)
         const skillMerged = await mergeSessionSkillInputsIntoThreadResult(sanitized)
         const result = await mergeSessionCommandsIntoThreadResult(skillMerged)
 
         setJson(res, 200, {
           result,
-          startTurnIndex: startIndex,
-          hasMoreOlder: startIndex > 0,
+          startTurnIndex,
+          hasMoreOlder,
         })
       } catch (error) {
         setJson(res, 500, { error: getErrorMessage(error, 'Failed to load earlier thread messages') })
