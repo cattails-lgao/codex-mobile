@@ -79,6 +79,9 @@ import { handleAutomationsHttpRequest } from './bridge/automationsRoutes.js'
 import { handleProjectHttpRequest } from './bridge/projectRoutes.js'
 import { handleThreadHttpRequest } from './bridge/threadRoutes.js'
 import { runRpcResponsePipeline } from './bridge/rpcPipeline.js'
+// round-84：thread/resume 的有界水合（元数据 + 一页轮次），替换协议已标
+// deprecated 的全量历史水合；详见 bridge/threadResumeTurnPage.ts 头部实测数据。
+import { resumeThreadWithTurnPage } from './bridge/threadResumeTurnPage.js'
 import {
   handleTelegramHttpRequest,
   readTelegramBridgeConfig,
@@ -1766,7 +1769,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
         let rpcResult: unknown
         try {
-          rpcResult = await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+          // round-84：打开会话不再让 app-server 全量水合历史再被裁剪。resume 改发
+          // {excludeTurns,initialTurnsPage}，桥把返回的那一页提升为 thread.turns 并补
+          // threadTurnStartIndex；管道与前端归一化都不需要改。app-server 若忽略
+          // initialTurnsPage（旧版本）则回落到原来的请求重放。
+          rpcResult = body.method === 'thread/resume'
+            ? await resumeThreadWithTurnPage({
+              rpc: (method, params) => appServer.rpc(method, params),
+              sendResume: (params) => callRpcWithArchiveRecovery(appServer, 'thread/resume', params),
+            }, body.params ?? null)
+            : await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
         } catch (error) {
 	          if (body.method === 'account/rateLimits/read' && isUnauthenticatedRateLimitError(error)) {
 	            setJson(res, 200, { result: null })
