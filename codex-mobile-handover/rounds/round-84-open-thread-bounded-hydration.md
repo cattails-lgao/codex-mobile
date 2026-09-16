@@ -71,7 +71,7 @@
   > **更正（round-86 实测）：** 上面「`turnsBackwardsCursor` 正是它该用的游标」**是错的**。该游标带 `includeAnchor: true`，用它 desc 只会**原样重发同一页**（`scripts/probe-turn-page.cjs` 已固化为断言）。真正往更老走的是 `initialTurnsPage.nextCursor`（`includeAnchor: false`）；游标只能逐页串链，且游标是不透明的（把 turn id 当 `cursor` 会被 `invalid cursor` 拒绝）。round-86 据此实现并修掉了这条遗留。
 - **桥侧管道的成本现在浮上来了**：app-server 侧新路径只要 198ms，而经桥端到端是 734–1242ms。差值来自 `sanitizeThreadTurnsInlinePayloads`（内联图片外化）+ skill/命令合并（要读 session 日志）等既有步骤——它们在改动前后**同样发生**，不是本轮引入的回归，但已成为打开会话的主要成本，值得单独剖面。
 - **`threadArchiveRecovery` 里的辅助 resume**（`turn/start` 失败后补一次 `thread/resume`）调用方丢弃返回值，可顺带改成 `excludeTurns:true`；本轮未动，因为它只在罕见救济路径上。
-- 版本号仍停在 **0.1.124**（npm publish 由用户执行），本轮改动随下一次发布一起走。
+- 版本号仍停在 **0.1.124**（npm publish 由用户执行），本轮改动随下一次发布一起走 —— **已随 v0.1.125 发布**（2026-09-16）。
 
 ## 7. 手测
 

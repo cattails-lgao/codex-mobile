@@ -117,6 +117,6 @@ Codex app-server 的自动压缩是服务端行为：上下文 token 超过 `mod
 - **改动**（`src/composables/useDesktopState.ts` 2 处）：新增 `shouldAutoCompactOnTurnEnd(threadId)`（与发送前预检共用阈值与防重入条件）；`setThreadInProgress(false)` 改为「命中阈值 → `compactThreadById`，否则 → `flushStashedForThread`」（压缩收口内部本就会补发暂存）。
 - **不在用量事件上挂钩**：Thinking 期间用量事件高频到达，若压缩后用量仍 ≤ 阈值会形成「压缩 → 用量事件 → 再压缩」的循环；挂在 turn 结束的状态迁移上每轮最多一次。
 - **测量补充（真实 rollout 数据）**：服务端自动压缩发生在 **turn 内**（两次压缩分别落在 turn 3 / turn 14 内部），触发点 ≈ 90% 已用（峰值 96.1% / 93.3%，窗口 121,600）；单个长 turn 约吃 4–10% 窗口。**客户端默认阈值 10% 剩余 = 服务端 90% 已用，两者同点**，而客户端只在发送时判定 → 客户端无法抢在服务端前面（与 §3.1「略先于服务端 ~90% 阈值」的意图不符）。
-- **本轮决策（用户确认）**：默认阈值维持 10%（可在设置项上调）；版本不 bump（工作区停在 `0.1.124` 待发）。
+- **本轮决策（用户确认）**：默认阈值维持 10%（可在设置项上调）；版本不 bump（工作区停在 `0.1.124` 待发）—— **该轮改动已随 v0.1.125 发布**（2026-09-16），默认阈值仍为 10%。
 - **验证**：新增单测 2 例 + 判别力 A/B（移出源改动后用例失败）；全量 Vitest 591 通过 / 2 既有 Windows 环境性失败；`vue-tsc` 干净、`vite build` 通过。详见 [round-83](../rounds/round-83-auto-compact-turn-boundary.md)。
 

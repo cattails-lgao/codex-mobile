@@ -106,7 +106,7 @@ round-84 收尾时记的遗留项原文：「桥侧管道的成本现在浮上�
 
   > **更正（round-86 落地）：** 这条遗留已修，同时**该遗留的措辞是错的**——`turnsBackwardsCursor` 带 `includeAnchor: true`，用它 desc 会重发同一页；真正往更老走的是 `initialTurnsPage.nextCursor`。详见 round-86 文档与 `scripts/probe-turn-page.cjs`。
 - **`threadArchiveRecovery` 的辅助 resume** 仍可改成 `excludeTurns:true`（round-84 遗留，未动）。
-- 版本号仍停在 **0.1.124**（npm publish 由用户执行）。
+- 版本号仍停在 **0.1.124**（npm publish 由用户执行）—— **已随 v0.1.125 发布**（2026-09-16）。
 
 ## 8. 手测
 
