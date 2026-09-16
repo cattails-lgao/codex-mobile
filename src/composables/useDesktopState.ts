@@ -377,6 +377,7 @@ export function useDesktopState() {
     applyFallbackModelSelection,
     buildPendingTurnDetails,
     hasThreadModelSelection,
+    hasThreadOwnModelSelection,
     pruneThreadModelState,
     readModelIdForThread,
     refreshModelPreferences,
@@ -388,7 +389,14 @@ export function useDesktopState() {
     setThreadModelProviderId,
     syncSelectedThreadModel,
     updateSelectedSpeedMode,
-  } = createDesktopModelPreferences({ selectedThreadId, error })
+  } = createDesktopModelPreferences({
+    selectedThreadId,
+    error,
+    // round-87：回退换模型时同步失效旧模型的上下文窗口。函数声明在同一作用域内
+    // 提升，且回调只在运行时（回退发生时）执行，早于 threadTokenUsageByThreadId /
+    // invalidateThreadContextWindow 的声明求值，无 TDZ 风险。
+    onThreadModelChanged: (threadId) => invalidateThreadContextWindow(threadId),
+  })
   const {
     availableCollaborationModes,
     selectedCollaborationMode,
@@ -448,6 +456,7 @@ export function useDesktopState() {
     setThreadModelProviderId,
     setThreadModelId,
     resolveThreadModelForProvider,
+    hasThreadOwnModelSelection,
     clearTransientTurnErrorForThread,
     clearCompletedTurnLiveState,
     setTurnErrorForThread,

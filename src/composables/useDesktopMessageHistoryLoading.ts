@@ -46,6 +46,8 @@ export interface MessageHistoryLoadingDeps {
   setThreadModelProviderId: (threadId: string, providerId: string) => void
   setThreadModelId: (threadId: string, modelId: string) => void
   resolveThreadModelForProvider: (threadId: string, modelId: string, providerId: string) => string
+  // round-87：线程详情的 model 只用于「初始化本线程没有显式选择」的情形。
+  hasThreadOwnModelSelection: (threadId: string) => boolean
   clearTransientTurnErrorForThread: (threadId: string) => void
   clearCompletedTurnLiveState: (threadId: string) => void
   setTurnErrorForThread: (
@@ -122,7 +124,11 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       if (detail.modelProvider) {
         deps.setThreadModelProviderId(threadId, detail.modelProvider)
       }
-      if (detail.model) {
+      if (detail.model && !deps.hasThreadOwnModelSelection(threadId)) {
+        // round-87：此前这里无条件用服务端 model 覆盖：用户在本线程切了模型但还没
+        // 发送就刷新/重开线程，选择会被服务端旧值改回去（连同一并失效的上下文窗口
+        // 也白失效）。判据只认「线程自身键」：含新线程兜底的宽判据会把落在裸
+        // `__new-thread__` 键上的默认值算成本线程的选择，挡住应有的初始化。
         deps.setThreadModelId(threadId, deps.resolveThreadModelForProvider(threadId, detail.model, detail.modelProvider))
       }
       if (resumedThread) {

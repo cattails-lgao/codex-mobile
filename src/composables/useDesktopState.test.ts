@@ -2511,6 +2511,58 @@ describe('client-side auto-compact pre-send stash & flush', () => {
     expect(gatewayMocks.startThreadTurn).toHaveBeenCalled()
   })
 
+  it('invalidates the stale context window when the model falls back after an unsupported-model error', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage, sendNotification } = installAutoCompactState()
+    state.setSelectedModelIdForThread('thread-auto-compact', 'unsupported-model')
+    // 线程详情必须报「进行中」：发送后的消息同步看到 inProgress=false 会收口并清掉
+    // 暂存请求（clearCompletedTurnLiveState → clearPendingTurnRequest），回退就没得补发。
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [{ id: 'user-1', role: 'user', text: 'hi', messageType: 'userMessage' }],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+
+    await state.sendMessageToSelectedThread('first try')
+    notifyTokenUsage(5)
+    expect(state.selectedThreadTokenUsage.value?.remainingContextPercent).toBe(5)
+
+    sendNotification({
+      method: 'error',
+      params: { threadId: 'thread-auto-compact', message: 'Model is not supported' },
+    })
+
+    // round-87：回退换模型与手动切换同一语义——旧模型的窗口必须一起失效。
+    // 漏了这一步，回退到窗口更小的模型后预检仍按旧（更大）窗口的残值判「还有余量」。
+    await vi.waitFor(() => {
+      expect(state.readModelIdForThread('thread-auto-compact')).toBe('gpt-5.4-mini')
+    })
+    expect(state.selectedThreadTokenUsage.value?.modelContextWindow).toBeNull()
+    expect(state.selectedThreadTokenUsage.value?.remainingContextPercent).toBeNull()
+  })
+
+  it('invalidates the stale context window when a failed turn/start falls back to another model', async () => {
+    installTestWindow()
+    const { state, notifyTokenUsage } = installAutoCompactState()
+    state.setSelectedModelIdForThread('thread-auto-compact', 'unsupported-model')
+    // 旧模型窗口：剩余 50%，高于阈值 → 不触发发送前暂存，直接走发送。
+    notifyTokenUsage(50)
+    expect(state.selectedThreadTokenUsage.value?.remainingContextPercent).toBe(50)
+    gatewayMocks.startThreadTurn
+      .mockRejectedValueOnce(new Error('Model is not supported'))
+      .mockResolvedValue('turn-2')
+
+    await state.sendMessageToSelectedThread('first try')
+
+    // turn/start 同步失败触发的回退（startTurnForThread 内联分支）是这条路径的真实
+    // 入口：换到回退模型的同时，旧模型的窗口必须失效，否则预检按旧窗口残值误判。
+    expect(state.readModelIdForThread('thread-auto-compact')).toBe('gpt-5.4-mini')
+    expect(state.selectedThreadTokenUsage.value?.remainingContextPercent).toBeNull()
+    expect(state.selectedThreadTokenUsage.value?.modelContextWindow).toBeNull()
+  })
+
   it('flushes the stashed message after compaction completes', async () => {
     installTestWindow()
     const { state, notifyTokenUsage } = installAutoCompactState()
@@ -2900,5 +2952,44 @@ describe('message stream merge helpers', () => {
     const live = [persistedMessage('cmd1', 'system', 0, { messageType: 'commandExecution' })]
     const merged = mergeLiveMessages('thread-y', [live], persisted)
     expect(merged.map((message) => message.id)).toEqual([])
+  })
+})
+
+// round-87：线程详情的服务端 model 只用来「初始化本线程没有显式选择」的情形。
+// 判据必须是「线程自身键」而非含兜底读的宽判据（兜底读会把新线程默认算成本线程的
+// 选择），否则本线程模型的水合会被挡住；反之若完全不加判据，用户切了模型但还没
+// 发送就刷新/重开线程，选择会被服务端旧值改回去。
+describe('thread model hydration vs explicit per-thread selection', () => {
+  function installHydrationState(threadId: string, serverModel: string) {
+    installTestWindow()
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: serverModel,
+      modelProvider: '',
+      messages: [],
+      inProgress: false,
+      activeTurnId: '',
+      hasMoreOlder: false,
+      turnIndexByTurnId: {},
+    })
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('keeps the model the user picked for the thread instead of the server model', async () => {
+    const state = installHydrationState('thread-pick', 'server-model')
+    state.setSelectedModelIdForThread('thread-pick', 'picked-model')
+
+    await state.loadMessages('thread-pick')
+
+    expect(state.readModelIdForThread('thread-pick')).toBe('picked-model')
+  })
+
+  it('adopts the server model when the thread has no explicit selection', async () => {
+    const state = installHydrationState('thread-inherit', 'server-model')
+
+    await state.loadMessages('thread-inherit')
+
+    expect(state.readModelIdForThread('thread-inherit')).toBe('server-model')
   })
 })
