@@ -38,6 +38,10 @@ const REASONING_EFFORT_OPTIONS: readonly ReasoningEffort[] = REASONING_EFFORTS
 export interface DesktopModelPreferencesDeps {
   selectedThreadId: Ref<string>
   error: Ref<string>
+  // round-87：回退换模型是真正的「变更」，且只发生在这里，没有水合角色，
+  // 因此把「失效旧模型上下文窗口」的语义下沉到这个出口：调用方不必各写一遍，
+  // 也不会漏写（此前各回退调用点与回退补发的重试路径都没失效）。
+  onThreadModelChanged?: (threadId: string) => void
 }
 
 export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps) {
@@ -82,6 +86,19 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
     const contextId = toThreadContextId(normalizedThreadId)
     if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) return false
     return readSelectedModel(selectedModelIdByContext.value, normalizedThreadId).trim().length > 0
+  }
+
+  // round-87：只看「线程自身」的上下文键，不含新线程兜底键。用于区分
+  // 「用户在本线程显式选过模型」与「只是继承新线程默认」——线程详情的模型水合只能
+  // 被前者拦住。宽判据的兜底读会把落在裸 `__new-thread__` 键上的新线程默认（早期
+  // 版本写入的数据）算成该线程的选择，从而挡住本线程模型本应发生的初始化。
+  // （hasThreadModelSelection 服务于发送路径的 round-72 判据，语义更宽，不动它。）
+  function hasThreadOwnModelSelection(threadId: string): boolean {
+    const normalizedThreadId = threadId.trim()
+    if (!normalizedThreadId) return false
+    const contextId = toThreadContextId(normalizedThreadId)
+    if (contextId === NEW_THREAD_COLLABORATION_MODE_CONTEXT) return false
+    return normalizeStoredModelId(selectedModelIdByContext.value[contextId]).length > 0
   }
 
   function readSupportedReasoningEffortsForModel(modelId: string): readonly ReasoningEffort[] {
@@ -230,8 +247,13 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
   }
 
   async function applyFallbackModelSelection(threadId: string = deps.selectedThreadId.value): Promise<void> {
-    if (threadId.trim()) {
-      setThreadModelId(threadId, MODEL_FALLBACK_ID)
+    const normalizedThreadId = threadId.trim()
+    if (normalizedThreadId) {
+      setThreadModelId(normalizedThreadId, MODEL_FALLBACK_ID)
+      // round-87：回退也是「换模型」，旧模型的窗口必须一并失效。漏了这一步时，
+      // 回退到窗口更小的模型后，指示器与发送前压缩预检仍按旧（更大）窗口判定，
+      // 会误判「还有余量」而跳过压缩，直接把请求顶到真实上限。
+      deps.onThreadModelChanged?.(normalizedThreadId)
     } else {
       setSelectedModelId(MODEL_FALLBACK_ID)
     }
@@ -384,6 +406,7 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
     applyFallbackModelSelection,
     buildPendingTurnDetails,
     hasThreadModelSelection,
+    hasThreadOwnModelSelection,
     pruneThreadModelState,
     readModelIdForThread,
     refreshModelPreferences,
