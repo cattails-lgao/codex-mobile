@@ -36,6 +36,28 @@ type SessionSkillInputCacheEntry = {
 const SESSION_SKILL_INPUT_CACHE_LIMIT = 64
 const sessionSkillInputCache = new Map<string, SessionSkillInputCacheEntry>()
 
+type SessionLogRecoveryCacheEntry = {
+  size: number
+  mtimeMs: number
+  // False when a full scan of this file version found no tool row the command
+  // recovery recognises (see isRecoverableToolPayload). Such a log can never
+  // contribute a command or file-change slot, so it is not read again.
+  recoverable: boolean
+}
+
+const SESSION_LOG_RECOVERY_CACHE_LIMIT = 64
+const sessionLogRecoveryCache = new Map<string, SessionLogRecoveryCacheEntry>()
+
+function rememberSessionLogRecovery(sessionPath: string, size: number, mtimeMs: number, recoverable: boolean): void {
+  sessionLogRecoveryCache.delete(sessionPath)
+  sessionLogRecoveryCache.set(sessionPath, { size, mtimeMs, recoverable })
+  while (sessionLogRecoveryCache.size > SESSION_LOG_RECOVERY_CACHE_LIMIT) {
+    const oldestKey = sessionLogRecoveryCache.keys().next().value
+    if (!oldestKey) break
+    sessionLogRecoveryCache.delete(oldestKey)
+  }
+}
+
 function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith('<skill>')) return null
@@ -482,10 +504,33 @@ type SessionItemSlot = {
   fileChange?: SessionRecoveredFileChangeItem
 }
 
-function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map<string, SessionItemSlot[]> {
+type SessionItemOrderScan = {
+  orderByTurnId: Map<string, SessionItemSlot[]>
+  // True when the log holds at least one tool row this recovery recognises,
+  // whichever turn it belongs to. mergeSessionCommandsIntoThreadResult caches
+  // this per file version, so a log that can never contribute is not re-read.
+  sawRecoverableToolRow: boolean
+}
+
+/**
+ * The tool shapes this recovery was written against. The CLI has since moved
+ * commands from `function_call` / `function_call_output` named `exec_command`
+ * or `shell_command` to `custom_tool_call` / `custom_tool_call_output` named
+ * `exec`, so a session written by a current app-server answers false here.
+ * A false verdict means the recovery has no command or file-change slot to
+ * interleave, which is what `mergeSessionCommandsIntoTurns` gates on.
+ */
+function isRecoverableToolPayload(payload: Record<string, unknown>): boolean {
+  const name = readNonEmptyString(payload.name)
+  if (payload.type === 'function_call') return name === 'exec_command' || name === 'shell_command'
+  return payload.type === 'custom_tool_call' && name === 'apply_patch'
+}
+
+function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): SessionItemOrderScan {
   let currentTurnId = ''
   const orderByTurnId = new Map<string, SessionItemSlot[]>()
   const callIdToCommand = new Map<string, SessionRecoveredCommand>()
+  let sawRecoverableToolRow = false
 
   for (const line of sessionLogRaw.split('\n')) {
     if (!line.trim()) continue
@@ -509,9 +554,15 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
       continue
     }
 
-    if (row.type !== 'response_item' || !currentTurnId || !turnIds.has(currentTurnId)) continue
+    if (row.type !== 'response_item') continue
     const payload = asRecord(row.payload)
     if (!payload) continue
+
+    // The shape probe runs before the turn filter on purpose: the verdict has
+    // to describe the whole log, not just the page being served right now.
+    if (isRecoverableToolPayload(payload)) sawRecoverableToolRow = true
+
+    if (!currentTurnId || !turnIds.has(currentTurnId)) continue
 
     let slots = orderByTurnId.get(currentTurnId)
     if (!slots) {
@@ -595,7 +646,7 @@ function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): Map
     }
   }
 
-  return orderByTurnId
+  return { orderByTurnId, sawRecoverableToolRow }
 }
 
 function extractFilePathsFromCommand(cmd: string, cwd: string): string[] {
@@ -1089,20 +1140,31 @@ export async function revertTurnFileChanges(
   return { reverted, errors, revertedPatchIds }
 }
 
-export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+function collectTurnIds(turns: unknown[]): Set<string> {
   const turnIds = new Set<string>()
   for (const turn of turns) {
-    const turnRecord = asRecord(turn)
-    const turnId = readNonEmptyString(turnRecord?.id)
+    const turnId = readNonEmptyString(asRecord(turn)?.id)
     if (turnId) turnIds.add(turnId)
   }
+  return turnIds
+}
 
+export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+  const turnIds = collectTurnIds(turns)
   if (turnIds.size === 0) return turns
 
-  const orderByTurnId = buildSessionItemOrder(sessionLogRaw, turnIds)
+  const { orderByTurnId } = buildSessionItemOrder(sessionLogRaw, turnIds)
+  return mergeSessionCommandsIntoTurnsFromOrder(turns, orderByTurnId)
+}
+
+function mergeSessionCommandsIntoTurnsFromOrder(
+  turns: unknown[],
+  orderByTurnId: Map<string, SessionItemSlot[]>,
+): unknown[] {
   if (orderByTurnId.size === 0) return turns
 
-  return turns.map((turn) => {
+  let changed = false
+  const nextTurns = turns.map((turn) => {
     const turnRecord = asRecord(turn)
     if (!turnRecord) return turn
     const turnId = readNonEmptyString(turnRecord.id)
@@ -1110,6 +1172,15 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
 
     const slots = orderByTurnId.get(turnId)
     if (!slots || slots.length === 0) return turn
+
+    // Slots with no command and no file change carry nothing this recovery
+    // exists to interleave. Running it anyway only pulls the user and agent
+    // messages to the front and pushes every command to the end of the turn,
+    // undoing the stream order the app-server already produced. Sessions whose
+    // commands are written as `custom_tool_call exec` land exactly here (see
+    // isRecoverableToolPayload), so leave the server's order untouched.
+    const hasWorkSlot = slots.some((slot) => slot.type === 'commandExecution' || slot.type === 'fileChange')
+    if (!hasWorkSlot) return turn
 
     const existingItems = Array.isArray(turnRecord.items) ? (turnRecord.items as Record<string, unknown>[]) : []
     // round-31：不再用 `session-` id 前缀做幂等判断——新版本 app-server 物化
@@ -1198,11 +1269,14 @@ export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: s
       interleaved.push(item)
     }
 
+    changed = true
     return {
       ...turnRecord,
       items: interleaved,
     }
   })
+
+  return changed ? nextTurns : turns
 }
 
 function stripWindowsLongPathPrefix(value: string): string {
@@ -1210,6 +1284,43 @@ function stripWindowsLongPathPrefix(value: string): string {
   if (trimmed.startsWith('\\\\?\\UNC\\')) return `\\\\${trimmed.slice('\\\\?\\UNC\\'.length)}`
   if (trimmed.startsWith('\\\\?\\')) return trimmed.slice('\\\\?\\'.length)
   return trimmed
+}
+
+/**
+ * Apply the session-log chronology recovery to `turns` from the log at
+ * `sessionPath`.
+ *
+ * The log is read at most once per file version. A scan that finds no tool row
+ * the recovery recognises is remembered as such, and later calls return `turns`
+ * untouched without opening the file at all — reading is the expensive half of
+ * opening a thread (a 30MB session is a full read plus a full JSON parse on
+ * every open), and a session written by a current app-server has nothing for
+ * the recovery to do.
+ */
+export async function mergeSessionCommandsIntoTurnsFromPath(turns: unknown[], sessionPath: string): Promise<unknown[]> {
+  const turnIds = collectTurnIds(turns)
+  if (turnIds.size === 0) return turns
+
+  let sessionStat: Awaited<ReturnType<typeof stat>> | null = null
+  try {
+    sessionStat = await stat(sessionPath)
+  } catch {
+    sessionStat = null
+  }
+  if (!sessionStat || !sessionStat.isFile()) {
+    sessionLogRecoveryCache.delete(sessionPath)
+    return turns
+  }
+
+  const cached = sessionLogRecoveryCache.get(sessionPath)
+  if (cached && cached.size === sessionStat.size && cached.mtimeMs === sessionStat.mtimeMs && !cached.recoverable) {
+    return turns
+  }
+
+  const sessionLogRaw = await readFile(sessionPath, 'utf8')
+  const { orderByTurnId, sawRecoverableToolRow } = buildSessionItemOrder(sessionLogRaw, turnIds)
+  rememberSessionLogRecovery(sessionPath, sessionStat.size, sessionStat.mtimeMs, sawRecoverableToolRow)
+  return mergeSessionCommandsIntoTurnsFromOrder(turns, orderByTurnId)
 }
 
 /**
@@ -1229,8 +1340,7 @@ export async function mergeSessionCommandsIntoThreadResult(result: unknown): Pro
   }
 
   try {
-    const sessionLogRaw = await readFile(sessionPath, 'utf8')
-    const mergedTurns = mergeSessionCommandsIntoTurns(turns, sessionLogRaw)
+    const mergedTurns = await mergeSessionCommandsIntoTurnsFromPath(turns, sessionPath)
     if (mergedTurns === turns) return result
     return {
       ...record,

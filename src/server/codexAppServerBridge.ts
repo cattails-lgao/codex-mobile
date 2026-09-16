@@ -250,6 +250,7 @@ import {
 // 此前是公共导出，供消费者（含测试）继续从本模块导入。
 export {
   mergeSessionCommandsIntoTurns,
+  mergeSessionCommandsIntoTurnsFromPath,
   mergeSessionSkillInputsIntoTurns,
   pathSetMatchesChange,
   revertTurnFileChanges,
