@@ -67,16 +67,26 @@
   src: url("/fonts/bricolage-grotesque-var.woff2") format("woff2");
 }
 
+/* 字体族单独一个非 inline 的 @theme：inline 只把值内联进工具类、不会把变量写到
+   :root，而 preflight 里 body 的默认字体要读 --font-sans 这个变量，把它写在 inline
+   块里会解析不到。 */
+@theme {
+  /* 一个家族两种口吻：等宽说机器的话（命令、读数、时间、标签），无衬线说人的话
+     （正文、标题、用户内容）。两者都只覆盖 latin 子集，CJK 逐字回退到系统字体，
+     所以中文的观感与迁移前一致；绝不打包 CJK 字体。 */
+  --font-sans: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", system-ui,
+    -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas,
+    "Liberation Mono", monospace;
+
+  /* 展示字体只出现在品牌与空态（Hero），永不进入用户内容。 */
+  --font-display: "Bricolage Grotesque", "IBM Plex Sans", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}
+
 /* 颜色 token 走 inline：生成 bg-s1 这类工具类时直接引用运行时可切换的变量，
    于是覆盖 :root 上的 --s1 就能换掉全站该语义，不必重写任何规则。 */
 @theme inline {
-  /* 一个家族两种口吻：等宽说机器的话，无衬线说人的话。
-     --font-sans / --font-mono 换成 Plex 会让全站字形变化，所以另开一次提交做，
-     本次「颜色 token 化」才能被验证为零视觉变化（上面的 @font-face 此时没有任何
-     引用者，浏览器不会去下载）。展示字体只出现在品牌与空态，永不进入用户内容。 */
-  --font-display: "Bricolage Grotesque", "IBM Plex Sans", "PingFang SC",
-    "Microsoft YaHei", sans-serif;
-
   --color-s0: var(--s0);
   --color-s1: var(--s1);
   --color-s2: var(--s2);

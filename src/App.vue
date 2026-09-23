@@ -5339,6 +5339,9 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .new-thread-hero {
   @apply m-0 text-2xl sm:text-[2.5rem] font-normal leading-[1.05] text-zinc-900;
+  /* 全站唯一使用品牌脸的地方。写成显式属性而不是 @apply font-display：这条声明在源码里
+     就是「此处用品牌脸」的说明，不依赖工具类是否被生成，也免掉嵌套 @apply 的解析顺序问题。 */
+  font-family: var(--font-display);
 }
 
 .new-thread-folder-dropdown {

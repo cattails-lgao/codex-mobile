@@ -11,13 +11,26 @@
 //
 // 用法：先跑 `PROFILE_BASE_URL=... node scripts/ui-audit-shots.cjs` 采集新快照，再跑本脚本。
 //   节点 --max-old-space-size 无需调整；无浏览器依赖，纯数值。
+//
+// 第二个参数可按属性筛选，形如 --props=background,color,border。基线快照冻结在「颜色迁移
+// 之前」，所以当后续提交有意改变排版时（例如切字体族、落字号阶梯），fontFamily / fontSize
+// 会合法地不同；这时用 --props 只看颜色，才能把「颜色没被顺手改坏」独立断言出来。
 const fs = require('fs')
 const path = require('path')
 
 const BASELINE = path.join('docs', 'ui-audit', 'current-computed-styles.json')
-const CURRENT = process.argv[2] || path.join('output', 'playwright', 'ui-audit', 'facts.json')
+const args = process.argv.slice(2).filter((a) => a.startsWith('--'))
+const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+const CURRENT = positional[0] || path.join('output', 'playwright', 'ui-audit', 'facts.json')
 const TOLERANCE = 2 // 每通道允许的最大差异（/255）
-const PROPS = ['fontFamily', 'fontSize', 'background', 'color', 'border', 'radius']
+const ALL_PROPS = ['fontFamily', 'fontSize', 'background', 'color', 'border', 'radius']
+const propsArg = (args.find((a) => a.startsWith('--props=')) || '').slice('--props='.length)
+const PROPS = propsArg ? propsArg.split(',').map((s) => s.trim()).filter(Boolean) : ALL_PROPS
+const unknown = PROPS.filter((p) => !ALL_PROPS.includes(p))
+if (unknown.length) {
+  console.error(`未知属性：${unknown.join(', ')}（可选：${ALL_PROPS.join(', ')}）`)
+  process.exit(2)
+}
 
 // oklch → sRGB，按 CSS Color 4 的权威公式。
 function oklchToRgb(L, C, Hdeg) {
@@ -163,7 +176,7 @@ let failed = false
 if (overTolerance.length) {
   failed = true
   console.log('')
-  console.log(`  ✗ ${overTolerance.length} 项超出 ${TOLERANCE}/255 容差——迁移改变了颜色：`)
+  console.log(`  ✗ ${overTolerance.length} 项超出容差——这些属性真的变了：`)
   for (const r of overTolerance) {
     console.log(`    [${r.page}] ${r.sel} .${r.prop}`)
     console.log(`       before ${r.before}`)

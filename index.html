@@ -11,6 +11,10 @@
     <link rel="icon" type="image/svg+xml" href="/icons/codexui-icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/pwa-192x192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <!-- 首屏最常用的两个字重提前拉取，缩短 font-display: swap 造成的字形跳动。
+         其余 face（500 字重、Bricolage 展示字体）交给 @font-face 按需加载。 -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-sans-400.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-400.woff2" crossorigin />
     <title>Codex Web</title>
   </head>
   <body class="bg-slate-950">
