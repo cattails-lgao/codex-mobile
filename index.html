@@ -3,7 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#020617" />
+    <meta name="theme-color" content="#09090b" />
+    <!-- 首屏绘制之前定主题。不这么做就没有办法修亮色：`:root` 是亮色基线、`:root.dark`
+         是暗色覆盖，默认（还没读到存储值）会先按亮色画一帧，暗色用户会看到闪白。
+         这段判据与 App.vue 的 applyDarkMode 必须一致——同一个 localStorage 键、同样的
+         'system' 语义（键值不是 light/dark 就跟随系统）。改一处务必同步另一处。 -->
+    <script>
+      (function () {
+        var pref = null
+        try {
+          pref = localStorage.getItem('codex-web-local.dark-mode.v1')
+        } catch (err) {
+          /* 隐私模式下取不到就按 system 处理 */
+        }
+        var dark =
+          pref === 'dark' ||
+          (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', dark ? '#09090b' : '#f7f7f9')
+      })()
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Codex Web" />
@@ -17,7 +37,7 @@
     <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-400.woff2" crossorigin />
     <title>Codex Web</title>
   </head>
-  <body class="bg-slate-950">
+  <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

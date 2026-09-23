@@ -3,60 +3,61 @@
     "name": "desktop-dark-home",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".desktop-sidebar",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".sidebar-root",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "14px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "color": "rgb(244, 244, 245)",
         "radius": "12px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
@@ -69,61 +70,61 @@
     "name": "desktop-dark-thread",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".desktop-sidebar",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".sidebar-root",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "14px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "color": "rgb(244, 244, 245)",
         "radius": "12px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
@@ -136,22 +137,22 @@
     "name": "desktop-light-thread",
     "themeClass": "",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.129 0.042 264.695)",
-        "color": "rgb(0, 0, 0)",
+        "background": "rgb(247, 247, 249)",
+        "color": "rgb(63, 63, 70)",
         "radius": "0px",
-        "border": "0px solid rgb(0, 0, 0)"
+        "border": "0px solid rgb(63, 63, 70)"
       },
       {
         "sel": ".desktop-sidebar",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "oklch(0.968 0.007 247.896)",
         "color": "oklch(0.208 0.042 265.755)",
@@ -160,7 +161,7 @@
       },
       {
         "sel": ".sidebar-root",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
         "color": "oklch(0.208 0.042 265.755)",
@@ -169,7 +170,7 @@
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgb(255, 255, 255)",
         "color": "oklch(0.208 0.042 265.755)",
@@ -178,7 +179,7 @@
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "14px",
         "background": "rgba(0, 0, 0, 0)",
         "color": "oklch(0.21 0.006 285.885)",
@@ -187,7 +188,7 @@
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
         "color": "oklch(0.442 0.017 285.786)",
@@ -203,51 +204,51 @@
     "name": "desktop-dark-skills",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".desktop-sidebar",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".sidebar-root",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
@@ -260,109 +261,110 @@
     "name": "desktop-dark-thread-rightpanel",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".desktop-sidebar",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".sidebar-root",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "14px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "color": "rgb(244, 244, 245)",
         "radius": "12px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1026,
+    "nodes": 1326,
     "file": "output\\playwright\\ui-audit\\desktop-dark-thread-rightpanel.png"
   },
   {
     "name": "mobile-dark-home",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "color": "rgb(244, 244, 245)",
         "radius": "12px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
@@ -375,49 +377,49 @@
     "name": "mobile-dark-thread",
     "themeClass": "dark",
     "families": [
-      "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
     ],
     "samples": [
       {
         "sel": "body",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.21 0.006 285.885)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(24, 24, 27)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": ".content-header",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "oklch(0.141 0.005 285.823)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "background": "rgb(9, 9, 11)",
+        "color": "rgb(244, 244, 245)",
         "radius": "0px",
-        "border": "0px solid oklch(0.274 0.006 286.033)"
+        "border": "0px solid rgb(39, 39, 42)"
       },
       {
         "sel": ".thread-composer textarea",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.967 0.001 286.375)",
+        "color": "rgb(244, 244, 245)",
         "radius": "12px",
-        "border": "0px solid oklch(0.967 0.001 286.375)"
+        "border": "0px solid rgb(244, 244, 245)"
       },
       {
         "sel": "button",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
         "background": "rgba(0, 0, 0, 0)",
-        "color": "oklch(0.705 0.015 286.067)",
+        "color": "rgb(161, 161, 170)",
         "radius": "6px",
         "border": "1px solid rgba(0, 0, 0, 0)"
       }
     ],
     "scrollHeight": 844,
-    "nodes": 338,
+    "nodes": 849,
     "file": "output\\playwright\\ui-audit\\mobile-dark-thread.png"
   }
 ]
