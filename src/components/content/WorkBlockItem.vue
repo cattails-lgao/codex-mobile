@@ -171,7 +171,7 @@ const permissionHint = computed(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .work-block-list {
   @apply flex w-full min-w-0 flex-col gap-1;

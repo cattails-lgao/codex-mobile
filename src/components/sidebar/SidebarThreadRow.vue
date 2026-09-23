@@ -122,7 +122,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-row-item {
   @apply m-0;

@@ -143,7 +143,7 @@ defineProps<{
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .sidebar-settings-account-section {
   @apply border-t border-zinc-100 bg-zinc-50/60 px-3 py-3;
@@ -270,6 +270,6 @@ defineProps<{
 }
 
 :global(:root.dark) .visible-error-feedback {
-  @apply border-rose-700 bg-zinc-900 text-rose-300 hover:bg-zinc-800;
+  @apply border-rose-700 bg-s1 text-rose-300 hover:bg-s2;
 }
 </style>

@@ -87,7 +87,7 @@ const emit = defineEmits<{
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .directory-section {
   @apply mx-auto flex w-full max-w-5xl flex-col gap-3;
@@ -201,43 +201,43 @@ const emit = defineEmits<{
 
 :global(:root.dark) .directory-loading,
 :global(:root.dark) .directory-empty {
-  @apply border-zinc-700 bg-zinc-900;
+  @apply border-line-2 bg-s1;
 }
 
 :global(:root.dark) .directory-mini-heading {
-  @apply text-zinc-100;
+  @apply text-ink-1;
 }
 
 :global(:root.dark) .directory-mini-list {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .mcp-skill-name {
-  @apply text-zinc-100;
+  @apply text-ink-1;
 }
 
 :global(:root.dark) .mcp-skill-owner {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .mcp-skill-meta {
-  @apply text-zinc-300;
+  @apply text-ink-3;
 }
 
 :global(:root.dark) .skills-embedded-toggle,
 :global(:root.dark) .skills-embedded-title {
-  @apply text-zinc-300 hover:text-zinc-100;
+  @apply text-ink-3 hover:text-ink-1;
 }
 
 :global(:root.dark) .mcp-skill-card {
-  @apply border-zinc-700 bg-zinc-900 hover:border-zinc-600;
+  @apply border-line-2 bg-s1 hover:border-line-3;
 }
 
 :global(:root.dark) .mcp-skill-avatar-fallback {
-  @apply bg-zinc-700 text-zinc-300;
+  @apply bg-s3 text-ink-3;
 }
 
 :global(:root.dark) .mcp-skill-chevron {
-  @apply text-zinc-500;
+  @apply text-ink-4;
 }
 </style>

@@ -409,7 +409,7 @@ watch(selectedBranchCommits, (commits) => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .right-git-panel {
   @apply flex h-full min-h-0 flex-col gap-1.5 overflow-y-auto p-2;

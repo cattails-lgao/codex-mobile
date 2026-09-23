@@ -131,7 +131,7 @@ function onJump(anchor: QuestionAnchor): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .question-jump-bar {
   @apply pointer-events-none absolute right-0 top-1/2 z-20 w-14 -translate-y-1/2;

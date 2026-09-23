@@ -607,7 +607,7 @@ defineExpose({ containsTarget })
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .sidebar-settings-panel {
   @apply flex h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
@@ -945,15 +945,15 @@ defineExpose({ containsTarget })
 }
 
 :global(:root.dark) .sidebar-settings-segmented {
-  @apply border-zinc-600 bg-zinc-800;
+  @apply border-line-3 bg-s2;
 }
 
 :global(:root.dark) .sidebar-settings-segmented-option {
-  @apply text-zinc-300;
+  @apply text-ink-3;
 }
 
 :global(:root.dark) .sidebar-settings-segmented-option.is-active {
-  @apply bg-zinc-100 text-zinc-900;
+  @apply bg-s-inv text-ink-inv;
 }
 
 :global(:root.dark) .sidebar-settings-provider-link {
@@ -961,23 +961,23 @@ defineExpose({ containsTarget })
 }
 
 :global(:root.dark) .sidebar-settings-key-input {
-  @apply border-zinc-600 bg-zinc-800 text-zinc-200 placeholder:text-zinc-500;
+  @apply border-line-3 bg-s2 text-ink-2 placeholder:text-ink-4;
 }
 
 :global(:root.dark) .sidebar-settings-key-input:focus {
-  @apply border-zinc-500;
+  @apply border-line-4;
 }
 
 :global(:root.dark) .sidebar-settings-key-save {
-  @apply border-zinc-600 bg-zinc-700 text-zinc-200 hover:bg-zinc-600;
+  @apply border-line-3 bg-s3 text-ink-2 hover:bg-s4;
 }
 
 :global(:root.dark) .sidebar-settings-key-masked {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .sidebar-settings-key-clear {
-  @apply border-zinc-600 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500;
+  @apply border-line-3 text-ink-4 hover:text-ink-3 hover:border-line-4;
 }
 
 .sidebar-settings-rate-limits {
@@ -997,6 +997,6 @@ defineExpose({ containsTarget })
 }
 
 :global(:root.dark) .visible-error-feedback {
-  @apply border-rose-700 bg-zinc-900 text-rose-300 hover:bg-zinc-800;
+  @apply border-rose-700 bg-s1 text-rose-300 hover:bg-s2;
 }
 </style>

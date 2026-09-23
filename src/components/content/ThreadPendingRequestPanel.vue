@@ -1004,7 +1004,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-pending-request {
   position: fixed;

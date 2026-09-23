@@ -46,7 +46,7 @@ const summaryText = computed(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 /* round-24：思考过程块改为与 Running command（WorkBlockItem）同款朴素行样式：
    去掉圆角/边框/背景卡片，标题行「图标 + 标题 + toggle」与命令块的

@@ -1985,7 +1985,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .conversation-root {
   @apply relative h-full min-h-0 min-w-0 p-0 flex flex-col overflow-y-hidden overflow-x-hidden bg-transparent border-none rounded-none;
@@ -2061,12 +2061,12 @@ onBeforeUnmount(() => {
 }
 
 :root.dark .conversation-item-request .message-card[data-role='user'] {
-  @apply border-zinc-700 bg-zinc-800;
+  @apply border-line-2 bg-s2;
 }
 
 :root.dark .conversation-item-process .message-row,
 :root.dark .conversation-item-plan .message-row {
-  @apply border-zinc-700;
+  @apply border-line-2;
 }
 
 .thread-plan-record {
@@ -2102,15 +2102,15 @@ onBeforeUnmount(() => {
 }
 
 :root.dark .thread-plan-record {
-  @apply border-zinc-700 text-zinc-400;
+  @apply border-line-2 text-ink-4;
 }
 
 :root.dark .thread-plan-record-header {
-  @apply text-zinc-200;
+  @apply text-ink-2;
 }
 
 :root.dark .thread-plan-record-marker {
-  @apply text-zinc-500;
+  @apply text-ink-4;
 }
 
 .conversation-item-overlay {
@@ -2147,7 +2147,7 @@ onBeforeUnmount(() => {
 }
 
 :root.dark .thread-compaction-inline {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-400;
+  @apply border-line-2 bg-s2 text-ink-4;
 }
 
 :root.dark .thread-compaction-inline--done {
@@ -2155,7 +2155,7 @@ onBeforeUnmount(() => {
 }
 
 :root.dark .thread-compaction-spinner {
-  @apply border-zinc-600 border-t-zinc-300;
+  @apply border-line-3 border-t-line-5;
 }
 
 .conversation-bottom-anchor {

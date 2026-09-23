@@ -222,7 +222,7 @@ function onBrowseFiles(): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .sdm-overlay {
   @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40;

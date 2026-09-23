@@ -228,7 +228,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .composer-dropdown {
   @apply relative inline-flex min-w-0;

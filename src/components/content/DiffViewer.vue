@@ -170,7 +170,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .diff-viewer-backdrop {
   /* 与 AppDialog/ConfirmDialog 一致：Teleport 到 body 后用共享弹层层级，

@@ -75,7 +75,7 @@ function onToggle(): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 /* 折叠条视觉降噪（round-17 反馈「不需要圆形边框和背景色、收起按钮放文本旁」）：
    去掉圆角/边框/背景，toggle 紧跟文本（不再推到行尾）。 */

@@ -93,7 +93,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .conversation-turn {
   @apply m-0 flex w-full flex-col gap-3 border-t border-zinc-200 py-5 first:border-t-0 first:pt-0;
@@ -143,7 +143,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 :global(:root.dark) .conversation-turn-time {
-  @apply bg-zinc-800 text-zinc-400;
+  @apply bg-s2 text-ink-4;
 }
 
 .conversation-turn-row {
@@ -151,23 +151,23 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 :global(:root.dark) .conversation-turn {
-  @apply border-zinc-800;
+  @apply border-line-1;
 }
 
 :global(:root.dark) .conversation-turn-process {
-  @apply border-zinc-700;
+  @apply border-line-2;
 }
 
 :global(:root.dark) .conversation-turn-process-heading {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .conversation-turn-process-toggle {
-  @apply hover:text-zinc-100 focus-visible:ring-zinc-500 focus-visible:ring-offset-zinc-950;
+  @apply hover:text-ink-1 focus-visible:ring-line-4 focus-visible:ring-offset-s0;
 }
 
 :global(:root.dark) .conversation-turn-process-count {
-  @apply text-zinc-500;
+  @apply text-ink-4;
 }
 
 </style>

@@ -27,7 +27,7 @@ const { t } = useUiLanguage()
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .api-panel-root {
   @apply h-full min-h-0 rounded-2xl border border-slate-200 bg-white p-4 flex flex-col;

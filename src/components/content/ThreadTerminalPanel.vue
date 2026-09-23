@@ -599,7 +599,7 @@ function readString(value: unknown): string {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-terminal-panel {
   @apply overflow-hidden rounded-lg border border-zinc-800 bg-black shadow-lg;

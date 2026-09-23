@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-type-menu-wrap {
   @apply relative;

@@ -187,7 +187,7 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .rate-limit-status {
   @apply flex w-full flex-col items-end gap-2;
