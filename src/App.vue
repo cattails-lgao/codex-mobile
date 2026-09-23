@@ -84,7 +84,7 @@
             :project-git-repo-by-name="projectGitRepoByName"
             :project-cwd-by-name="projectCwdByName"
             v-if="!isSidebarCollapsed"
-            :selected-thread-id="selectedThreadId" :is-loading="isLoadingThreads"
+            :selected-thread-id="sidebarSelectedThreadId" :is-loading="isLoadingThreads"
             :is-thread-list-fully-loaded="isThreadListFullyLoaded"
             :search-query="sidebarSearchQuery"
             :search-matched-thread-ids="serverMatchedThreadIds"
@@ -2215,6 +2215,10 @@ watch(visibleFeedbackErrors, (values, oldValues) => {
 })
 
 // 输入框容器出现/尺寸变化时同步测量宽度（路由切换 home/thread 会重建容器）。
+// 测量要落在布局之后：ResizeObserver 回调在帧内布局完成后才触发，那里读
+// getComputedStyle 不会强制同步样式/布局；而在这个 watch 里直接量，正好压在
+// 路由切换那次 patch 上（新容器刚建、样式还是脏的），实测一次 getComputedStyle
+// 就强制出 89ms 的样式+布局。只有在没有 ResizeObserver 时才退化成直接测量。
 watch(composerQueueRef, (el) => {
   if (composerQueueResizeObserver) {
     composerQueueResizeObserver.disconnect()
@@ -2223,6 +2227,7 @@ watch(composerQueueRef, (el) => {
   if (typeof ResizeObserver !== 'undefined') {
     composerQueueResizeObserver = new ResizeObserver(updateComposerShellWidth)
     if (el) composerQueueResizeObserver.observe(el)
+    return
   }
   updateComposerShellWidth()
 }, { immediate: true })
@@ -2436,10 +2441,52 @@ async function saveTelegramConfig(): Promise<void> {
   }
 }
 
+// 侧栏高亮允许早于路由落地。线程切换的整条链（路由换视图 → selectThread →
+// 会话内容水合与首帧布局）会排进同一次任务+微任务排空，浏览器要等它跑完才有绘制
+// 机会——生产构建实测点击后 100~260ms 一帧未画，用户看到的就是「点了没反应、
+// 侧栏也没有选中态」。这里先只画高亮：不写 selectedThreadId，路由落地后仍走完整
+// 的 selectThread（含模型偏好与技能刷新），只把「切视图」挪到下一个任务。
+const optimisticSelectedThreadId = ref('')
+const sidebarSelectedThreadId = computed(
+  () => optimisticSelectedThreadId.value || selectedThreadId.value,
+)
+watch(selectedThreadId, () => {
+  optimisticSelectedThreadId.value = ''
+})
+
+// rAF 回调仍在绘制之前执行，所以要再跨一次任务边界绘制才会真正发生；后台标签页
+// 不触发 rAF，用定时器兜底，避免导航被无限推迟。
+function yieldToNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+    requestAnimationFrame(() => setTimeout(finish, 0))
+    setTimeout(finish, 80)
+  })
+}
+
+let pendingThreadNavigation = 0
+
 function onSelectThread(threadId: string): void {
   if (!threadId) return
-  if (route.name === 'thread' && routeThreadId.value === threadId) return
-  void router.push({ name: 'thread', params: { threadId } })
+  if (route.name === 'thread' && routeThreadId.value === threadId) {
+    // 点回「当前这条」：撤销还没落地的导航，否则「先点 A 再点回 B」会停在 A
+    // （B 的点击被这里的早退吃掉，A 的延迟导航照常发出）。
+    pendingThreadNavigation += 1
+    optimisticSelectedThreadId.value = ''
+    return
+  }
+  optimisticSelectedThreadId.value = threadId
+  const token = (pendingThreadNavigation += 1)
+  void yieldToNextPaint().then(() => {
+    // 期间又点了别的线程：那次点击会自己把导航排上，这次作废。
+    if (token !== pendingThreadNavigation) return
+    void router.push({ name: 'thread', params: { threadId } })
+  })
   if (isMobile.value) setSidebarCollapsed(true)
 }
 
