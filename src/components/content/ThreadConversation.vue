@@ -1740,6 +1740,11 @@ function scrollToBottom(): void {
   const container = conversationListRef.value
   const anchor = bottomAnchorRef.value
   if (!container || !anchor) return
+  // 已在底部时不再重复「写 scrollTop + scrollIntoView」：底部锁定一次连打 6 帧，
+  // 而 scrollIntoView 会再强制一次同步布局（并可能滚动祖先容器）。内容没增长时
+  // 这些强制布局全是白做的——每次都要为整棵文档布局，成本随文档规模放大（右侧
+  // Git 面板曾把文档撑到 3.2 万个布局对象，一次读 scrollHeight 就是 ~81ms）。
+  if (isAtBottom(container)) return
   container.scrollTop = container.scrollHeight
   anchor.scrollIntoView({ block: 'end' })
 }

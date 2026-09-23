@@ -51,8 +51,8 @@
           :placeholder="t('Search branches...')"
         />
       </div>
-      <ul class="rgp-branches" role="listbox">
-        <li v-for="branch in filteredBranches" :key="branch.value" class="rgp-branch-item">
+      <ul class="rgp-branches" role="listbox" @scroll="onBranchListScroll">
+        <li v-for="branch in visibleBranches" :key="branch.value" class="rgp-branch-item">
           <div class="rgp-branch-row">
             <button
               class="rgp-branch-button"
@@ -178,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { GitCommitFileChange, GitCommitOption, WorktreeBranchOption } from '../../api/codexGateway'
 import IconTablerFilePencil from '../icons/IconTablerFilePencil.vue'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
@@ -219,6 +219,13 @@ const emit = defineEmits<{
 
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const searchQuery = ref('')
+// A repo can carry thousands of refs (this one ships 4 608 / 624 KB from the
+// bridge). Rendering them all costs a >100 ms main-thread insert and leaves a
+// ~32 000-layout-object document behind, which turns the conversation's own
+// scrollHeight reads into ~80 ms forced layouts. Render a window and grow it as
+// the list is scrolled, so every branch stays reachable.
+const BRANCH_PAGE_SIZE = 100
+const visibleBranchCount = ref(BRANCH_PAGE_SIZE)
 const commitSearchQuery = ref('')
 const selectedBranch = ref('')
 const selectedCommitSha = ref('')
@@ -262,6 +269,20 @@ const filteredBranches = computed(() => {
   })
   if (!query) return branches
   return branches.filter((branch) => branch.label.toLowerCase().includes(query) || branch.value.toLowerCase().includes(query))
+})
+const visibleBranches = computed(() => filteredBranches.value.slice(0, visibleBranchCount.value))
+
+function onBranchListScroll(event: Event): void {
+  const list = event.currentTarget as HTMLElement | null
+  if (!list) return
+  if (list.scrollTop + list.clientHeight < list.scrollHeight - 24) return
+  if (visibleBranchCount.value >= filteredBranches.value.length) return
+  visibleBranchCount.value += BRANCH_PAGE_SIZE
+}
+
+// A new query or a refreshed branch list starts from the top of the window.
+watch(filteredBranches, () => {
+  visibleBranchCount.value = BRANCH_PAGE_SIZE
 })
 const selectedBranchOption = computed(() => props.branches.find((branch) => branch.value === selectedBranch.value) ?? null)
 const selectedBranchIsRemote = computed(() => selectedBranchOption.value?.isRemote === true)
@@ -355,7 +376,6 @@ function ensureSelectedBranchCommits(): void {
 
 onMounted(() => {
   ensureSelectedBranchCommits()
-  void nextTick(() => searchInputRef.value?.focus())
 })
 
 watch(
