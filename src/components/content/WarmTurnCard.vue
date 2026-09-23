@@ -33,7 +33,7 @@ function onToggle(): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .warm-turn {
   @apply w-full min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50/60;

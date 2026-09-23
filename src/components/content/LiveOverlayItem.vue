@@ -72,7 +72,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 /* 与普通消息同款的 message-row/message-stack：ThreadConversation 的 scoped
    样式不会进入本组件，缺了 mx-auto/最大宽度会让 live overlay 与其他消息类型

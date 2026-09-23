@@ -60,7 +60,7 @@ const title = computed(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 /* round-24：工具调用块与 Running command（WorkBlockItem）同款朴素行——
    round-22 命令块已去卡片化，工具块却仍保留背景/边框/圆角，视觉不一致。

@@ -2034,7 +2034,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-tree-root {
   @apply flex flex-col;

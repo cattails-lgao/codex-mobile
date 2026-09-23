@@ -146,7 +146,7 @@ function onPlanPanelImplement(): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-composer-plan-panel {
   @apply mb-2 overflow-visible rounded-xl border border-zinc-200 bg-zinc-50;

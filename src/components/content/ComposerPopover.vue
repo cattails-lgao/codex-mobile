@@ -167,7 +167,7 @@ defineExpose({ root: rootRef })
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .composer-popover-anchor {
   @apply relative shrink-0;

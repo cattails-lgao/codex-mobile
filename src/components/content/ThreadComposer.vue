@@ -1968,7 +1968,7 @@ watch(
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-composer {
   @apply w-full max-w-[min(var(--chat-column-max,72rem),100%)] mx-auto;
@@ -2033,7 +2033,7 @@ watch(
 }
 
 :global(:root.dark) .thread-composer-context-usage-inline {
-  @apply border-zinc-700 bg-zinc-900 hover:bg-zinc-800;
+  @apply border-line-2 bg-s1 hover:bg-s2;
 }
 
 :global(:root.dark) .thread-composer-context-usage-inline.is-warning {

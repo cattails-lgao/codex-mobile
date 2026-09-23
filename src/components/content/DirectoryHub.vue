@@ -1674,7 +1674,7 @@ onMounted(async () => {
 </script>
 
 <style>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .directory-hub {
   @apply flex h-full w-full flex-col gap-3 overflow-y-auto p-3 sm:p-6;
@@ -2087,11 +2087,11 @@ button.directory-card {
 :global(:root.dark) .directory-action,
 :global(:root.dark) .directory-action-link,
 :global(:root.dark) .directory-modal-close {
-  @apply border-zinc-700 bg-zinc-900;
+  @apply border-line-2 bg-s1;
 }
 
 :global(:root.dark) .directory-search {
-  @apply text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500;
+  @apply text-ink-1 placeholder:text-ink-4 focus:border-line-4;
 }
 
 :global(:root.dark) .directory-tab.is-active,
@@ -2099,11 +2099,11 @@ button.directory-card {
 :global(:root.dark) .directory-detail-block,
 :global(:root.dark) .directory-auth-panel,
 :global(:root.dark) .directory-chip {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
+  @apply border-line-2 bg-s2 text-ink-1;
 }
 
 :global(:root.dark) .directory-sort-group {
-  @apply border-zinc-700 bg-zinc-950;
+  @apply border-line-2 bg-s0;
 }
 
 :global(:root.dark) .directory-marketplace,
@@ -2112,16 +2112,16 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-upgrade,
 :global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
-  @apply border-zinc-700;
+  @apply border-line-2;
 }
 
 :global(:root.dark) .directory-marketplace {
-  @apply bg-zinc-900/60;
+  @apply bg-s1/60;
 }
 
 :global(:root.dark) .directory-marketplace-title,
 :global(:root.dark) .directory-marketplace-name {
-  @apply text-zinc-200;
+  @apply text-ink-2;
 }
 
 :global(:root.dark) .directory-marketplace-row,
@@ -2129,22 +2129,22 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-upgrade,
 :global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
-  @apply bg-zinc-800;
+  @apply bg-s2;
 }
 
 :global(:root.dark) .directory-marketplace-path,
 :global(:root.dark) .directory-marketplace-empty {
-  @apply text-zinc-500;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .directory-marketplace-source {
-  @apply text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500;
+  @apply text-ink-1 placeholder:text-ink-4 focus:border-line-4;
 }
 
 :global(:root.dark) .directory-marketplace-upgrade,
 :global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
-  @apply text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200;
+  @apply text-ink-4 hover:bg-s3 hover:text-ink-2;
 }
 
 :global(:root.dark) .directory-marketplace-remove:hover {
@@ -2154,20 +2154,20 @@ button.directory-card {
 :global(:root.dark) .directory-share-row,
 :global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
-  @apply border-zinc-700 bg-zinc-800;
+  @apply border-line-2 bg-s2;
 }
 
 :global(:root.dark) .directory-share-name {
-  @apply text-zinc-200;
+  @apply text-ink-2;
 }
 
 :global(:root.dark) .directory-share-link {
-  @apply text-zinc-500 hover:text-zinc-300;
+  @apply text-ink-4 hover:text-ink-3;
 }
 
 :global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
-  @apply text-zinc-400 hover:bg-zinc-700;
+  @apply text-ink-4 hover:bg-s3;
 }
 
 :global(:root.dark) .directory-share-delete:hover {
@@ -2175,7 +2175,7 @@ button.directory-card {
 }
 
 :global(:root.dark) .directory-auth-status.is-muted {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-400;
+  @apply border-line-2 bg-s1 text-ink-4;
 }
 
 :global(:root.dark) .composio-preview-hero {
@@ -2183,7 +2183,7 @@ button.directory-card {
 }
 
 :global(:root.dark) .composio-preview-card {
-  @apply border-sky-900/60 bg-zinc-900;
+  @apply border-sky-900/60 bg-s1;
 }
 
 :global(:root.dark) .composio-preview-kicker {
@@ -2191,11 +2191,11 @@ button.directory-card {
 }
 
 :global(:root.dark) .composio-preview-title {
-  @apply text-zinc-100;
+  @apply text-ink-1;
 }
 
 :global(:root.dark) .composio-preview-text {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :global(:root.dark) .directory-auth-status.is-error,

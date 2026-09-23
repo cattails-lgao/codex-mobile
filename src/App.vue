@@ -5041,7 +5041,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "./style.css";
 
 .sidebar-root {
   @apply h-full flex flex-col select-none;
@@ -5788,17 +5788,17 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 :root.dark .project-zip-modal {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-100;
+  @apply border-line-2 bg-s1 text-ink-1;
 }
 
 :root.dark .project-zip-modal-close,
 :root.dark .project-zip-modal-cancel,
 :root.dark .project-zip-modal-action {
-  @apply border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800;
+  @apply border-line-2 bg-s1 text-ink-3 hover:bg-s2;
 }
 
 :root.dark .project-zip-modal-copy {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :root.dark .project-zip-modal-error {
@@ -5806,15 +5806,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 :root.dark .project-zip-modal-action-primary {
-  @apply border-zinc-100 bg-zinc-100 text-zinc-950 hover:bg-white;
+  @apply border-s-inv bg-s-inv text-ink-inv hover:bg-white;
 }
 
 :root.dark .project-zip-progress-label span:last-child {
-  @apply text-zinc-400;
+  @apply text-ink-4;
 }
 
 :root.dark .project-zip-progress-track {
-  @apply bg-zinc-800;
+  @apply bg-s2;
 }
 
 :root.dark .project-zip-progress-fill {

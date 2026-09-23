@@ -100,7 +100,7 @@ function skillBadgeLabel(scope: string | undefined): string {
 </template>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .composer-popover-group-label {
   @apply px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 first:pt-1;

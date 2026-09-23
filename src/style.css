@@ -2238,7 +2238,7 @@ body {
 }
 
 :root.dark .runtime-toggle-option:focus-visible {
-  @apply ring-line-3 ring-offset-zinc-900;
+  @apply ring-line-3 ring-offset-s1;
 }
 
 :root.dark .runtime-toggle-option-icon {

@@ -142,7 +142,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .file-change-summary-block {
   @apply flex w-full min-w-0 flex-col gap-0;

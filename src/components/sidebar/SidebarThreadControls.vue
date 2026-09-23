@@ -46,7 +46,7 @@ const { t } = useUiLanguage()
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .sidebar-thread-controls {
   @apply flex flex-row flex-nowrap items-center gap-2;

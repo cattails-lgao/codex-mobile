@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .app-dialog-overlay {
   @apply fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/40 p-4;

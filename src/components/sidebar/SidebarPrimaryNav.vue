@@ -14,7 +14,7 @@ const { t } = useUiLanguage()
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .sidebar-primary-nav {
   @apply flex flex-col gap-1;

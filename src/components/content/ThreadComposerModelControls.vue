@@ -84,7 +84,7 @@ function onReasoningEffortSelect(value: string): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-composer-control {
   @apply shrink-1 min-w-0;

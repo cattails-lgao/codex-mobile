@@ -40,7 +40,7 @@ const title = computed(() => props.messages.map((message) => message.toolCall?.t
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .tool-batch-block {
   @apply w-full min-w-0 border-l-2 border-zinc-200 pl-2;

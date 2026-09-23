@@ -55,7 +55,7 @@ defineEmits<{
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .confirm-dialog-overlay {
   @apply fixed inset-0 z-[var(--z-modal-top)] flex items-center justify-center bg-black/40 p-4;

@@ -84,7 +84,7 @@ watch(
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .right-file-preview {
   @apply flex h-full min-h-0 flex-col;

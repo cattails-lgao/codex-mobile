@@ -101,7 +101,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .account-menu {
   @apply relative;

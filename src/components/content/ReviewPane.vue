@@ -936,7 +936,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .review-pane-backdrop {
   @apply fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50 p-4;

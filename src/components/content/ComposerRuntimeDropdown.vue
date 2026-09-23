@@ -43,7 +43,7 @@ function onSelect(value: RuntimeMode): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .runtime-toggle {
   @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 p-1;

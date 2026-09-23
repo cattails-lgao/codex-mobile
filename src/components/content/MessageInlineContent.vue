@@ -38,7 +38,7 @@ defineProps<{
 </template>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .message-bold-text {
   /* round-23 字体规范：加粗 #17181a（与标题同色） */

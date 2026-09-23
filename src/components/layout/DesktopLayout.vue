@@ -107,7 +107,7 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .desktop-layout {
   @apply isolate grid bg-slate-100 text-slate-900 overflow-hidden;

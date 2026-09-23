@@ -343,7 +343,7 @@ function getPathLeaf(path: string): string {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .automations-panel {
   @apply flex min-h-0 flex-1 flex-col gap-3 px-2 pb-3 sm:px-6 sm:pb-6;

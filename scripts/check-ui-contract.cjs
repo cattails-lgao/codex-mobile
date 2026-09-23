@@ -2,6 +2,11 @@
 // UI 契约检查（P0）：把「设计系统不该退化」这件事变成可复跑的断言。
 //
 // 断言的是**计数与取值**，不是毫秒——稳定、不会因为机器负载抖动而误报。
+//
+// 扫描范围 = **全部 CSS 单元**：src/style.css 加上每个 .vue 的 <style> 块。这一点很关键：
+// 原先只扫 style.css 却断言「深色覆盖层已无裸色板」，于是组件 <style> 里另外 108 处
+// 暗色覆盖类（:global(:root.dark) …）全都溜了过去——闸门覆盖不到的地方就等于没有闸门。
+//
 // 用法: node scripts/check-ui-contract.cjs
 const fs = require('fs')
 const path = require('path')
@@ -12,7 +17,8 @@ const FONT_DIR = 'public/fonts'
 // 基线：迁移前的实测值。断言的语义是「不得退化」，不是「必须等于」。
 const BASELINE = {
   arbitraryText: 147, // 全 src 的 text-[Npx] 临时字号
-  statusNaked: 250, // style.css 深色层里的状态色裸类（P0 有意留到 P1）
+  lightNaked: 1112, // 亮色基线里的裸 zinc/slate 颜色类（两套主题都对等时才能换掉）
+  statusNakedInStyle: 250, // style.css 内的状态色裸类（亮暗都在，P1 迁移）
 }
 
 let failed = 0
@@ -22,7 +28,81 @@ function check(name, pass, detail) {
   if (!pass) failed++
 }
 
-const css = fs.readFileSync(STYLE, 'utf8')
+// ------------------------------------------------------------ 收集 CSS 单元
+// ring-offset-* 也要算进来：它同样是「暗色层里的裸色板」，漏掉它闸门就有洞（实测漏过 2 处）。
+const NAKED_NS = /(?:bg|text|border|ring|ring-offset|from|to|via|fill|stroke|divide|placeholder|outline|decoration|shadow|accent|caret)(?:-[trblxy])?-(?:zinc|slate)-\d{2,3}/
+const STATUS = /(?:bg|text|border|ring)-(?:rose|emerald|amber|sky|red|blue|violet)-\d{2,3}/
+
+function walkVue(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) walkVue(p, out)
+    else if (e.name.endsWith('.vue')) out.push(p)
+  }
+  return out
+}
+
+const vueFiles = walkVue('src')
+const units = [{ label: STYLE, text: fs.readFileSync(STYLE, 'utf8') }]
+for (const f of vueFiles) {
+  const src = fs.readFileSync(f, 'utf8')
+  let i = 0
+  for (const m of src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
+    units.push({ label: `${f}#style${i++}`, text: m[1] })
+  }
+}
+
+// 逐字符扫描，判读每个类名落在「暗色覆盖层」还是「亮色基线」。
+// 选择器可能写成 `:root.dark .x {`、`:global(:root.dark) .a, :global(:root.dark) .b {`，
+// 也可能包在 @media 里；逐行正则判块会在 `}` 与 `{` 不同行时读错状态，所以按字符扫。
+function classify(text) {
+  const stack = []
+  const dark = []
+  const light = []
+  let i = 0
+  let segStart = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '{') {
+      const sel = text.slice(segStart, i).trim()
+      const at = /^@(media|supports|layer|container|document)/.test(sel)
+      stack.push(at ? stack[stack.length - 1] || false : /:root\.dark/.test(sel))
+      segStart = i + 1
+    } else if (ch === '}') {
+      stack.pop()
+      segStart = i + 1
+    } else if (/[a-z-]/.test(ch)) {
+      const m = /^[A-Za-z0-9_:/[\]().%-]+/.exec(text.slice(i))
+      if (m) {
+        ;(stack.some(Boolean) ? dark : light).push(m[0])
+        i += m[0].length
+        continue
+      }
+    }
+    i++
+  }
+  return { dark, light }
+}
+
+const nakedDarkWhere = []
+const nakedLightWhere = []
+let nakedDarkTotal = 0
+let nakedLightTotal = 0
+const lightTokens = []
+const classByUnit = new Map()
+for (const u of units) {
+  const r = classify(u.text)
+  classByUnit.set(u.label, r)
+  const d = r.dark.filter((t) => NAKED_NS.test(t)).length
+  const l = r.light.filter((t) => NAKED_NS.test(t)).length
+  nakedDarkTotal += d
+  nakedLightTotal += l
+  if (d) nakedDarkWhere.push(`${u.label}(${d})`)
+  if (l) nakedLightWhere.push(`${u.label}(${l})`)
+  if (u.label === STYLE) lightTokens.push(...r.light)
+}
+
+const css = units[0].text
 
 // ---------------------------------------------------------------- token 完整性
 const REQUIRED_TOKENS = [
@@ -64,54 +144,31 @@ check(`亮色 token 齐全（${REQUIRED_TOKENS.length} 个）`, missingLight.len
 check(`暗色 token 齐全（${REQUIRED_TOKENS.length} 个）`, missingDark.length === 0, missingDark.join(', '))
 
 // --------------------------------------------- 深色层不再出现裸色板（回归闸门）
-const NAKED_RE =
-  /(?:bg|text|border|ring|from|to|via|fill|stroke|divide|placeholder|outline|decoration|shadow|accent|caret)(?:-[trblxy])?-(?:zinc|slate)-\d{2,3}/
-const lines = css.split('\n')
-let inDark = false
-let inComment = false
-const nakedInDark = []
-const nakedInLight = []
-for (let i = 0; i < lines.length; i++) {
-  const line = lines[i]
-  const trimmed = line.trim()
-  // 跟踪块注释，注释里提到类名不算违规
-  if (inComment) {
-    if (trimmed.includes('*/')) inComment = false
-    continue
-  }
-  if (trimmed.startsWith('/*')) {
-    if (!trimmed.includes('*/')) inComment = true
-    continue
-  }
-  const hit = NAKED_RE.test(line)
-  if (!inDark) {
-    if (/^:root\.dark\b/.test(trimmed) && trimmed.includes('{')) {
-      if (hit) nakedInDark.push(i + 1)
-      if (!trimmed.endsWith('}')) inDark = true
-      continue
-    }
-    if (hit) nakedInLight.push(i + 1)
-    continue
-  }
-  if (hit) nakedInDark.push(i + 1)
-  if (trimmed === '}' || trimmed.startsWith('}')) inDark = false
-}
 check(
-  '深色覆盖层已无裸色板（全部走 token）',
-  nakedInDark.length === 0,
-  nakedInDark.length ? `行 ${nakedInDark.join(', ')}` : '',
+  '深色覆盖层已无裸色板（style.css + 全部组件 <style>）',
+  nakedDarkTotal === 0,
+  nakedDarkTotal ? nakedDarkWhere.join(', ') : `扫描 ${units.length} 个 CSS 单元`,
 )
 check(
-  '浅色基线未被 P0 触碰（仍是裸色板，P2 处理）',
-  nakedInLight.length > 0 && nakedInLight.length <= 8,
-  `行 ${nakedInLight.join(', ')}`,
+  `亮色基线裸色板不增（基线 ${BASELINE.lightNaked}，待两套主题对等后统一迁移）`,
+  nakedLightTotal > 0 && nakedLightTotal <= BASELINE.lightNaked,
+  `当前 ${nakedLightTotal}`,
+)
+
+// 组件样式要用 token 类，@reference 必须指向项目样式表；指向 "tailwindcss" 只会拿到
+// 框架默认主题，`@apply bg-s1` 会在构建期报 unknown utility class。
+const badRef = vueFiles.filter((f) => fs.readFileSync(f, 'utf8').includes('@reference "tailwindcss"'))
+check(
+  '组件 @reference 指向项目样式表（否则 token 类不可 @apply）',
+  badRef.length === 0,
+  badRef.slice(0, 3).join(', '),
 )
 
 // ------------------------------------------- 状态色裸类不增（P1 才迁移）
-const statusLeft = (css.match(/(?:bg|text|border|ring)-(?:rose|emerald|amber|sky|red|blue|violet)-\d{2,3}/g) || []).length
+const statusLeft = (css.match(new RegExp(STATUS.source, 'g')) || []).length
 check(
-  `状态色裸类不增（基线 ${BASELINE.statusNaked}，P1 迁移时应下降）`,
-  statusLeft <= BASELINE.statusNaked,
+  `style.css 内状态色裸类不增（基线 ${BASELINE.statusNakedInStyle}，P1 迁移时应下降）`,
+  statusLeft <= BASELINE.statusNakedInStyle,
   `当前 ${statusLeft}`,
 )
 
@@ -175,46 +232,22 @@ check(
   `对亮色 s0 只有 ${lightInk4Worst.toFixed(2)}:1`,
 )
 // 上面那条只有在「亮色侧真的没拿它写文字」时才有意义——否则它就是一条自证的废话。
-const lightInk4Text = []
-{
-  let inDark = false
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim()
-    if (!inDark) {
-      if (/^:root\.dark\b/.test(trimmed) && trimmed.includes('{')) {
-        if (!trimmed.endsWith('}')) inDark = true
-        continue
-      }
-      if (/\btext-ink-4\b/.test(lines[i])) lightInk4Text.push(i + 1)
-      continue
-    }
-    if (trimmed === '}' || trimmed.startsWith('}')) inDark = false
-  }
-}
+const lightInk4Text = lightTokens.filter((t) => /(?:^|:)text-ink-4$/.test(t))
 check(
-  '亮色侧没有把 ink-4 用在文字上',
+  '亮色侧（style.css 不带 :root.dark 前缀的规则）没有把 ink-4 用在文字上',
   lightInk4Text.length === 0,
-  lightInk4Text.length ? `行 ${lightInk4Text.join(', ')}` : '',
+  lightInk4Text.slice(0, 3).join(', '),
 )
 
 // -------------------------------------------------------- 字号临时值不增
-const sourceFiles = []
-const walk = (dir) => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name)
-    if (e.isDirectory()) walk(p)
-    else if (/\.(vue|css)$/.test(e.name)) sourceFiles.push(p)
-  }
-}
-walk('src')
 let arbitraryText = 0
-for (const f of sourceFiles) {
+for (const f of [...vueFiles, STYLE]) {
   arbitraryText += (fs.readFileSync(f, 'utf8').match(/text-\[[0-9]/g) || []).length
 }
 check(
   `全 src 的 text-[Npx] 临时字号不增（基线 ${BASELINE.arbitraryText}）`,
   arbitraryText <= BASELINE.arbitraryText,
-  `当前 ${arbitraryText}（扫描 ${sourceFiles.length} 个文件）`,
+  `当前 ${arbitraryText}（扫描 ${vueFiles.length + 1} 个文件）`,
 )
 
 // -------------------------------------------------------------- 字体资产
@@ -240,6 +273,10 @@ check('绝不打包 CJK 字体', !FACES.some((f) => /cjk|sc|jp|kr|han/i.test(f))
 console.log('UI 契约检查\n')
 for (const r of results) {
   console.log(`  ${r.pass ? 'ok  ' : 'FAIL'}  ${r.name}${r.detail ? `  (${r.detail})` : ''}`)
+}
+if (nakedLightWhere.length) {
+  console.log(`\n  亮色基线里仍留着裸色板的单元（共 ${nakedLightTotal} 处，P0 不动）：`)
+  for (const w of nakedLightWhere.slice(0, 12)) console.log(`    ${w}`)
 }
 console.log(`\n${failed === 0 ? '全部通过' : `${failed} 项失败`}  (${results.length - failed}/${results.length})`)
 process.exit(failed === 0 ? 0 : 1)

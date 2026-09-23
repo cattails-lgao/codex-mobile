@@ -199,7 +199,7 @@ watch(
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .right-files-panel {
   @apply flex h-full min-h-0 flex-col;

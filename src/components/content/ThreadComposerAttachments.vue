@@ -143,7 +143,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .thread-composer-attachments {
   @apply mb-2 flex flex-wrap gap-2;

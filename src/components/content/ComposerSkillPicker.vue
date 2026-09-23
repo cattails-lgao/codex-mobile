@@ -103,7 +103,7 @@ watch(query, () => {
 </script>
 
 <style scoped>
-@reference "tailwindcss";
+@reference "../../style.css";
 
 .skill-picker {
   @apply absolute z-40 w-72 max-sm:!left-4 max-sm:!right-4 max-sm:!w-auto max-h-64 rounded-xl border border-zinc-200 bg-white shadow-lg flex flex-col overflow-hidden;
