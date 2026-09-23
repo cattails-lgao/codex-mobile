@@ -1313,7 +1313,7 @@ function updateComposerShellWidth(): void {
   // round-23：审批/询问面板需与输入框同宽。输入框 max-width 为
   // min(var(--chat-column-max), 100%) 且 mx-auto 居中；宽屏下面板若直接用
   // 容器全宽会比输入框宽，这里按继承的 --chat-column-max 收口。
-  const inheritedColumnMax = window.getComputedStyle(el).getPropertyValue('--chat-column-max').trim()
+  const inheritedColumnMax = style.getPropertyValue('--chat-column-max').trim()
   const columnMaxPx = Number.parseFloat(inheritedColumnMax) * (inheritedColumnMax.endsWith('rem') ? 16 : 1)
   const capped = Number.isFinite(columnMaxPx) && columnMaxPx > 0 ? Math.min(contentWidth, columnMaxPx) : contentWidth
   composerShellWidthPx.value = capped
