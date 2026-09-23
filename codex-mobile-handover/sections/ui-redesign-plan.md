@@ -158,6 +158,7 @@
   - 字号：`grep -rho "\btext-\(xs\|sm\|base\|lg\|xl\|2xl\)\b" src/ | sort | uniq -c` / `grep -rho "text-\[[0-9]" src/ | wc -l`
   - 暗色副本：`grep -c "^:root.dark" src/style.css`
 - 度量稿的运行时校验：无头浏览器 14 项断言（无页面错误、深链生效、两个变体在字体/表面/图块用色上**确实不同**、按钮切换确实改变计算值）全通过。
+- **关于度量稿的可维护性**：`docs/ui-redesign-mockup.html` 是**自包含**产物（字体已 base64 内嵌），可以直接手改；本次用的模板与构建脚本（把 woff2 内联进 HTML）留在本机 `tmp/` 下、**未入库**（`tmp/` 被 gitignore）。若日后要用同一套流程重新生成，做法见用户级技能 `ui-design-audit-and-mockup`；也可以直接改这份 HTML 的 `CURRENT` 映射表来同步"现状"变体。
 
 ## 9. 实施记录
 
