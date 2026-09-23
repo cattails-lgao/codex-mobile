@@ -32,3 +32,4 @@ Return to the [manual test index](../../tests.md).
 | [H5 right-sidebar compatibility and inline image preview in the Files tab](h5-right-sidebar-files-inline-preview.md) |
 | [Settings group navigation, pending-request scroll, and thinking persistence](settings-group-navigation-pending-scroll-thinking-persistence.md) |
 | [R13: settings fixed height, live thinking, floating pending panel, plan panel fixes](r13-settings-height-live-thinking-floating-pending-plan-panel.md) |
+| [Feature: Design tokens reach the component styles too (dark layer complete)](round-90-dark-token-layer-completion.md) — the dark theme must look unchanged; ships the runnable contract and equivalence checks |
