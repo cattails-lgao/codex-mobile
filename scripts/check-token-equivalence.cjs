@@ -1,20 +1,21 @@
-// 证明 P0 的 token 迁移没有改变深色外观。
-//
-// 做法：拿迁移前存档的计算样式快照（docs/ui-audit/current-computed-styles.json）跟迁移后
-// 重新采集的快照逐条比对。迁移前 Tailwind 输出 oklch()，迁移后 token 层输出 rgb()，所以先
-// 把两边都归一成 sRGB 三元组再比。
+// 证明「界面外观没有被顺手改坏」。拿基线快照（docs/ui-audit/current-computed-styles.json）
+// 跟当前重新采集的快照逐条比对，两边先归一成 sRGB 三元组再比——基线里 Tailwind 输出 oklch()，
+// token 层输出 rgb()，不归一就会把记法差异误报成回归。
 //
 // 允许的偏差是 **每通道 ≤2/255**：Tailwind v4 的调色板以 oklch 存储、小数位只保留 3 位，它
-// 自己光栅化出来的像素与官方 hex 就差 1~2/255（例如 zinc-500 的 oklch 落成 113,113,123，
-// 而 #71717a 是 113,113,122）。这不是迁移引入的差异，是上游数值本身的舍入；超过 2 就说明
-// 迁移真的换了颜色。
+// 自己光栅化出来的像素与官方 hex 就差 1~2/255（zinc-500 的 oklch 落成 113,113,123，而
+// #71717a 是 113,113,122）。这是上游数值本身的舍入，不是改动引入的；超过 2 才算真改色。
+//
+// 基线是**滚动**的：每完成一次有意的视觉变更，就把新快照覆盖到该路径，闸门重新武装。历史
+// 版本的证据单独留档（docs/ui-audit/before-p0-computed-styles.json 就是 token 迁移之前那份，
+// 用来核对迁移本身是否等值）。
 //
 // 用法：先跑 `PROFILE_BASE_URL=... node scripts/ui-audit-shots.cjs` 采集新快照，再跑本脚本。
-//   节点 --max-old-space-size 无需调整；无浏览器依赖，纯数值。
+//   无浏览器依赖，纯数值。
 //
-// 第二个参数可按属性筛选，形如 --props=background,color,border。基线快照冻结在「颜色迁移
-// 之前」，所以当后续提交有意改变排版时（例如切字体族、落字号阶梯），fontFamily / fontSize
-// 会合法地不同；这时用 --props 只看颜色，才能把「颜色没被顺手改坏」独立断言出来。
+// `--props=` 可按属性筛选，形如 --props=background,color,border。改变了排版的提交（切字体族、
+// 落字号阶梯）会让 fontFamily / fontSize 合法地不同，这时只看颜色，才能把「颜色没被顺手改坏」
+// 独立断言出来。
 const fs = require('fs')
 const path = require('path')
 
@@ -189,8 +190,8 @@ if (structural.length) failed = true
 if (!failed) {
   const worst = declared.reduce((m, d) => Math.max(m, d.maxDelta), 0)
   console.log('')
-  console.log(`  ✓ 通过：无任何颜色差异超过 ${TOLERANCE}/255（实测最大 ${worst}/255）`)
-  console.log('    → 深色外观未被改动，差异全部来自 Tailwind 调色板本身的 oklch 舍入。')
+  console.log(`  ✓ 通过：无任何属性差异超过 ${TOLERANCE}/255（实测最大 ${worst}/255）`)
+  console.log('    → 外观与基线一致；残留差异全部来自 Tailwind 调色板本身的 oklch 舍入。')
 }
 
 process.exit(failed ? 1 : 0)

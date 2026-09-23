@@ -44,14 +44,24 @@ const REQUIRED_TOKENS = [
   '--ink-4',
   '--ink-inv',
 ]
-const rootBlock = css.match(/\n:root \{([\s\S]*?)\n\}/)
-check(':root token 块存在', Boolean(rootBlock), STYLE)
-const TOK = {}
-if (rootBlock) {
-  for (const m of rootBlock[1].matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{6})/g)) TOK[m[1]] = m[2]
+function readTokens(block) {
+  const out = {}
+  if (!block) return out
+  for (const m of block[1].matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{6})/g)) out[m[1]] = m[2]
+  return out
 }
-const missing = REQUIRED_TOKENS.filter((t) => !TOK[t])
-check(`token 定义齐全（${REQUIRED_TOKENS.length} 个）`, missing.length === 0, missing.join(', '))
+// `:root` 是亮色基线、`:root.dark` 是暗色覆盖（与 style.css 里「不带前缀的规则是亮色基线」
+// 的结构一致）。两套都必须齐全，并且各自满足自己的对比度下限——只查一套会让另一套悄悄退化。
+const lightBlock = css.match(/\n:root \{([\s\S]*?)\n\}/)
+const darkBlock = css.match(/\n:root\.dark \{([\s\S]*?)\n\}/)
+check(':root（亮色）token 块存在', Boolean(lightBlock), STYLE)
+check(':root.dark（暗色）token 块存在', Boolean(darkBlock), STYLE)
+const LIGHT = readTokens(lightBlock)
+const DARK = readTokens(darkBlock)
+const missingLight = REQUIRED_TOKENS.filter((t) => !LIGHT[t])
+const missingDark = REQUIRED_TOKENS.filter((t) => !DARK[t])
+check(`亮色 token 齐全（${REQUIRED_TOKENS.length} 个）`, missingLight.length === 0, missingLight.join(', '))
+check(`暗色 token 齐全（${REQUIRED_TOKENS.length} 个）`, missingDark.length === 0, missingDark.join(', '))
 
 // --------------------------------------------- 深色层不再出现裸色板（回归闸门）
 const NAKED_RE =
@@ -126,28 +136,65 @@ function contrast(fg, bg) {
   return (a + 0.05) / (b + 0.05)
 }
 const AA = 4.5
+
+// 正文与次级文字：两套主题下都必须对每一个表面达标。
 const under = []
-for (const ink of ['--ink-1', '--ink-2', '--ink-3']) {
-  for (const s of ['--s0', '--s1', '--s2', '--s3', '--s4']) {
-    const r = contrast(TOK[ink], TOK[s])
-    if (r < AA) under.push(`${ink} on ${s} = ${r.toFixed(2)}:1`)
+for (const [theme, TOK] of [
+  ['暗色', DARK],
+  ['亮色', LIGHT],
+]) {
+  for (const ink of ['--ink-1', '--ink-2', '--ink-3']) {
+    for (const s of ['--s0', '--s1', '--s2', '--s3', '--s4']) {
+      const r = contrast(TOK[ink], TOK[s])
+      if (r < AA) under.push(`${theme} ${ink} on ${s} = ${r.toFixed(2)}:1`)
+    }
   }
 }
-check('ink-1/2/3 对全部 5 个表面 ≥4.5:1', under.length === 0, under.join('; '))
+check('ink-1/2/3 对全部 5 个表面 ≥4.5:1（两套主题）', under.length === 0, under.join('; '))
 
+// 最低一级墨：只在「它确实达标」的地方允许承载文字。暗色下它承载了 12px 时间戳，
+// 所以必须对 s0/s1/s2 达标；亮色下它到不了 AA，因此亮色侧不许把它用在文字上。
 const ink4bad = []
 for (const s of ['--s0', '--s1', '--s2']) {
-  const r = contrast(TOK['--ink-4'], TOK[s])
+  const r = contrast(DARK['--ink-4'], DARK[s])
   if (r < AA) ink4bad.push(`${s}=${r.toFixed(2)}:1`)
 }
-check('ink-4 对 s0/s1/s2 ≥4.5:1', ink4bad.length === 0, ink4bad.join('; '))
-// ink-4 是「最低一级墨」，在 s3 上到不了 AA。这里断言它**仍然**不达标，
-// 是为了让这个已知上限显式存在，而不是被悄悄忘记（P1 调值时这条会翻转）。
-const ink4OnS3 = contrast(TOK['--ink-4'], TOK['--s3'])
+check('暗色 ink-4 对 s0/s1/s2 ≥4.5:1（它承载时间戳等正文级小字）', ink4bad.length === 0, ink4bad.join('; '))
+
+const ink4OnS3 = contrast(DARK['--ink-4'], DARK['--s3'])
 check(
-  'ink-4 对 s3 仍低于 AA（已知上限，留 P1 调值）',
+  '暗色 ink-4 对 s3 仍低于 AA（已知上限，留 P1 调值）',
   ink4OnS3 < AA,
   `s3=${ink4OnS3.toFixed(2)}:1（迁移前 zinc-500 在该背景只有 2.16:1）`,
+)
+
+const lightInk4Worst = contrast(LIGHT['--ink-4'], LIGHT['--s0'])
+check(
+  '亮色 ink-4 不可承载文字（低于 AA，仅作非文本）',
+  lightInk4Worst < AA,
+  `对亮色 s0 只有 ${lightInk4Worst.toFixed(2)}:1`,
+)
+// 上面那条只有在「亮色侧真的没拿它写文字」时才有意义——否则它就是一条自证的废话。
+const lightInk4Text = []
+{
+  let inDark = false
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (!inDark) {
+      if (/^:root\.dark\b/.test(trimmed) && trimmed.includes('{')) {
+        if (!trimmed.endsWith('}')) inDark = true
+        continue
+      }
+      if (/\btext-ink-4\b/.test(lines[i])) lightInk4Text.push(i + 1)
+      continue
+    }
+    if (trimmed === '}' || trimmed.startsWith('}')) inDark = false
+  }
+}
+check(
+  '亮色侧没有把 ink-4 用在文字上',
+  lightInk4Text.length === 0,
+  lightInk4Text.length ? `行 ${lightInk4Text.join(', ')}` : '',
 )
 
 // -------------------------------------------------------- 字号临时值不增

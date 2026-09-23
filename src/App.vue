@@ -4563,6 +4563,16 @@ function applyDarkMode(): void {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     root.classList.toggle('dark', prefersDark)
   }
+  syncThemeColorMeta()
+}
+
+// 地址栏/状态栏底色跟随主题。读 --s0 而不是写死 hex：token 层是唯一定义处，
+// index.html 里首屏前那段引导脚本因为此时样式表还没解析，只能写死，两处需同步。
+function syncThemeColorMeta(): void {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (!meta) return
+  const surface = window.getComputedStyle(document.documentElement).getPropertyValue('--s0').trim()
+  if (surface) meta.setAttribute('content', surface)
 }
 
 const settingsDialogProps = computed(() => ({
