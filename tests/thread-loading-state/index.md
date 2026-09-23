@@ -19,6 +19,7 @@ Return to the [manual test index](../../tests.md).
 | [Feature: Pinned threads persist across reload and prune removed threads](pinned-threads-persist-across-reload-and-prune-removed-threads.md) |
 | [Feature: Keep manual chat scroll position during streaming](keep-manual-chat-scroll-position-during-streaming.md) |
 | [Feature: Rapid thread switching during active load](rapid-thread-switching-during-active-load.md) |
+| [Feature: Sidebar click feedback is painted before the switch work](round-89-optimistic-sidebar-highlight.md) — highlight must not wait for the messages; includes the A→B→C→A and "click back to the current thread" cases, with a runnable check |
 | [Feature: Thread switch avoids loading flash and provider-models refetch](thread-switch-loading-flash-and-provider-models-cache.md) |
 | [Feature: Thread auto-scrolls to latest message after load](thread-auto-scrolls-to-latest-message-after-load.md) |
 | [Feature: Assistant streaming does not force-scroll when user is reading history](assistant-streaming-does-not-force-scroll-when-user-is-reading-history.md) |
