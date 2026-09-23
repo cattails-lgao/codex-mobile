@@ -35,3 +35,4 @@ Return to the [manual test index](../../tests.md).
 | [Hide worktree controls for non-Git folders](hide-worktree-controls-for-non-git-folders.md) |
 | [Project worktree threads under canonical project](project-worktree-threads-under-canonical-project.md) |
 | [Worktree creation persists across refresh](worktree-creation-persists-across-refresh.md) |
+| [Feature: Branch list renders a bounded window and grows on scroll](round-88-branch-list-render-window.md) |
