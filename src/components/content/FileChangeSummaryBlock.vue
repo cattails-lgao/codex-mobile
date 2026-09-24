@@ -156,7 +156,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-chevron {
-  @apply shrink-0 text-[10px] leading-none text-zinc-400 transition-transform duration-150;
+  @apply shrink-0 text-nano leading-none text-ink-3 transition-transform duration-150;
 }
 
 .file-change-chevron-open {
@@ -170,7 +170,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-summary-status {
-  @apply inline-flex max-w-28 shrink-0 items-center justify-end gap-1.5 text-right text-[11px] font-semibold text-zinc-500;
+  @apply inline-flex max-w-28 shrink-0 items-center justify-end gap-1.5 text-right text-micro font-semibold text-ink-3;
 }
 
 .file-change-panel {
@@ -189,32 +189,32 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 
 /* 展开列表：去卡片化，左竖线缩进锚定层次 */
 .file-change-list {
-  @apply m-0 flex list-none flex-col gap-0 border-l border-zinc-200/80 py-0.5 pl-2.5;
+  @apply m-0 flex list-none flex-col gap-0 border-l border-line-1/80 py-0.5 pl-2.5;
 }
 
 .file-change-item {
   /* round-35：行内不换行，路径过长省略；变更数字与撤销按钮靠右（ml-auto） */
-  @apply flex min-w-0 items-center gap-1.5 py-0.5 text-sm text-zinc-600;
+  @apply flex min-w-0 items-center gap-1.5 py-0.5 text-sm text-ink-3;
 }
 
 .file-change-badge {
-  @apply inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em];
+  @apply inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-nano font-semibold uppercase tracking-[0.08em];
 }
 
 .file-change-badge[data-operation='add'] {
-  @apply bg-emerald-50 text-emerald-700;
+  @apply bg-ok text-ok;
 }
 
 .file-change-badge[data-operation='update'] {
-  @apply bg-sky-50 text-sky-700;
+  @apply bg-s1 text-ink-2;
 }
 
 .file-change-badge[data-operation='delete'] {
-  @apply bg-rose-50 text-rose-700;
+  @apply bg-alert text-alert;
 }
 
 .file-change-badge[data-operation='move'] {
-  @apply bg-amber-50 text-amber-700;
+  @apply bg-live text-live;
 }
 
 .file-change-path-group {
@@ -222,16 +222,16 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-path-button {
-  @apply min-w-0 truncate border-0 bg-transparent p-0 text-left font-mono text-xs text-[#0969da] hover:text-[#1f6feb] hover:underline underline-offset-2;
+  @apply min-w-0 truncate border-0 bg-transparent p-0 text-left font-mono text-xs text-ink-1 hover:text-ink-1 hover:underline underline-offset-2;
 }
 
 .file-change-arrow {
-  @apply shrink-0 text-zinc-400;
+  @apply shrink-0 text-ink-3;
 }
 
 .file-change-delta {
   /* round-35：变更数字与撤销按钮靠右（ml-auto），行内最右端 */
-  @apply ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-zinc-500;
+  @apply ml-auto inline-flex shrink-0 items-center gap-1.5 text-micro font-semibold text-ink-3;
 }
 
 .file-change-actions {
@@ -239,7 +239,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-action-button {
-  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center gap-1 rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs font-medium text-ink-2 transition hover:border-line-2 hover:bg-s0 hover:text-ink-1 disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .file-change-action-icon {
@@ -251,12 +251,12 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-action-error {
-  @apply m-0 min-w-0 flex-1 text-xs text-rose-600;
+  @apply m-0 min-w-0 flex-1 text-xs text-alert;
 }
 
 .file-change-file-undo-button {
   /* round-35：撤销按钮与变更数字一起靠右（delta 带 ml-auto 推到行尾），自身不再推右 */
-  @apply inline-flex shrink-0 items-center rounded-md border border-transparent bg-transparent p-1 text-zinc-400 transition hover:border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700;
+  @apply inline-flex shrink-0 items-center rounded-md border border-transparent bg-transparent p-1 text-ink-3 transition hover:border-line-1 hover:bg-s0 hover:text-ink-2;
 }
 
 .file-change-signed-count {
@@ -264,10 +264,10 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-signed-count[data-tone='add'] {
-  @apply text-emerald-600;
+  @apply text-ok;
 }
 
 .file-change-signed-count[data-tone='remove'] {
-  @apply text-rose-600;
+  @apply text-alert;
 }
 </style>

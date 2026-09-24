@@ -132,7 +132,7 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-messages-inner {
-  @apply flex max-h-[30dvh] flex-col gap-px overflow-y-auto rounded-t-2xl border-x border-t border-zinc-300 bg-zinc-50/80 px-3 py-1.5;
+  @apply flex max-h-[30dvh] flex-col gap-px overflow-y-auto rounded-t-2xl border-x border-t border-line-2 bg-s0/80 px-3 py-1.5;
 }
 
 .queued-row {
@@ -144,23 +144,23 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-row.is-drop-target {
-  @apply bg-zinc-200/70;
+  @apply bg-line-1/70;
 }
 
 .queued-row-drag {
-  @apply inline-flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-md border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 active:cursor-grabbing;
+  @apply inline-flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-line-1 hover:text-ink-2 active:cursor-grabbing;
 }
 
 .queued-row-icon {
-  @apply h-4 w-4 shrink-0 text-zinc-400;
+  @apply h-4 w-4 shrink-0 text-ink-3;
 }
 
 .queued-row-text {
-  @apply min-w-0 flex-1 truncate text-zinc-700;
+  @apply min-w-0 flex-1 truncate text-ink-2;
 }
 
 .queued-row-badge {
-  @apply shrink-0 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700;
+  @apply shrink-0 rounded-full border border-live bg-live px-1.5 py-0.5 text-nano font-medium text-live;
 }
 
 .queued-row-actions {
@@ -168,14 +168,14 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-row-steer {
-  @apply rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
+  @apply rounded-md border border-line-2 bg-s2 px-2 py-0.5 text-xs font-medium text-ink-2 transition hover:bg-s1;
 }
 
 .queued-row-edit {
-  @apply rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
+  @apply rounded-md border border-line-2 bg-s2 px-2 py-0.5 text-xs font-medium text-ink-2 transition hover:bg-s1;
 }
 
 .queued-row-delete {
-  @apply inline-flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700;
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-line-1 hover:text-ink-2;
 }
 </style>

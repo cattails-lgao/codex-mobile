@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-trigger {
-  @apply inline-flex h-8 items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 text-sm text-zinc-700 transition hover:bg-zinc-50;
+  @apply inline-flex h-8 items-center gap-2 rounded-full border border-line-1 bg-s2 px-3 text-sm text-ink-2 transition hover:bg-s0;
 }
 
 .account-menu-trigger-label {
@@ -116,11 +116,11 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-trigger-chevron {
-  @apply text-xs text-zinc-500;
+  @apply text-xs text-ink-3;
 }
 
 .account-menu-panel {
-  @apply absolute right-0 top-[calc(100%+8px)] z-50 flex w-80 max-w-[calc(100vw-24px)] flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg;
+  @apply absolute right-0 top-[calc(100%+8px)] z-50 flex w-80 max-w-[calc(100vw-24px)] flex-col gap-3 rounded-2xl border border-line-1 bg-s2 p-3 shadow-lg;
 }
 
 .account-menu-header {
@@ -128,15 +128,15 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-title {
-  @apply text-sm font-medium text-zinc-900;
+  @apply text-sm font-medium text-ink-1;
 }
 
 .account-menu-error {
-  @apply rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700;
+  @apply rounded-xl bg-alert px-3 py-2 text-xs text-alert;
 }
 
 .account-menu-empty {
-  @apply text-sm text-zinc-500;
+  @apply text-sm text-ink-3;
 }
 
 .account-menu-list {
@@ -144,11 +144,11 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-item {
-  @apply flex items-center gap-3 rounded-2xl border border-zinc-200 px-3 py-2;
+  @apply flex items-center gap-3 rounded-2xl border border-line-1 px-3 py-2;
 }
 
 .account-menu-item.is-active {
-  @apply border-emerald-200 bg-emerald-50;
+  @apply border-ok bg-ok;
 }
 
 .account-menu-item-main {
@@ -156,14 +156,14 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-item-email {
-  @apply truncate text-sm font-medium text-zinc-900;
+  @apply truncate text-sm font-medium text-ink-1;
 }
 
 .account-menu-item-meta {
-  @apply truncate text-xs text-zinc-500;
+  @apply truncate text-xs text-ink-3;
 }
 
 .account-menu-switch {
-  @apply rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 px-3 py-1 text-xs text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 </style>

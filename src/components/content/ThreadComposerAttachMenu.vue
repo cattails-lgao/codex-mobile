@@ -179,15 +179,15 @@ function onApprovalPolicySelect(value: string): void {
 @reference "../../style.css";
 
 .thread-composer-attach-trigger {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border-0 bg-transparent pb-px text-xl leading-tight text-zinc-700 transition hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border-0 bg-transparent pb-px text-xl leading-tight text-ink-2 transition hover:text-ink-1 disabled:cursor-not-allowed disabled:text-ink-3;
 }
 
 .thread-composer-attach-item {
-  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-ink-2 transition hover:bg-s1 disabled:cursor-not-allowed disabled:text-ink-3;
 }
 
 .thread-composer-attach-separator {
-  @apply my-1 h-px bg-zinc-100;
+  @apply my-1 h-px bg-s1;
 }
 
 .thread-composer-attach-mode {
@@ -195,27 +195,27 @@ function onApprovalPolicySelect(value: string): void {
 }
 
 .thread-composer-attach-mode-label {
-  @apply text-sm text-zinc-800;
+  @apply text-sm text-ink-2;
 }
 
 .thread-composer-attach-mode-buttons {
-  @apply inline-flex items-center rounded-full border border-zinc-200 bg-white p-0.5;
+  @apply inline-flex items-center rounded-full border border-line-1 bg-s2 p-0.5;
 }
 
 .thread-composer-attach-mode-button {
-  @apply rounded-full border-0 bg-transparent px-2 py-1 text-xs text-zinc-600 transition hover:text-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply rounded-full border-0 bg-transparent px-2 py-1 text-xs text-ink-3 transition hover:text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3;
 }
 
 .thread-composer-attach-mode-button.is-active {
-  @apply bg-zinc-900 text-white hover:text-white;
+  @apply bg-s-inv text-ink-inv hover:text-ink-inv;
 }
 
 .thread-composer-menu-error {
-  @apply px-3 py-1 text-xs text-red-600;
+  @apply px-3 py-1 text-xs text-alert;
 }
 
 .thread-composer-approval-tip {
-  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm;
+  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-ok bg-ok px-2.5 py-1 text-micro font-medium text-ok shadow-sm;
   transform: translateX(-50%);
 }
 

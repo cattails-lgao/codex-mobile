@@ -44,7 +44,10 @@ export type QuestionAnchor = { turn: number; text: string }
 // 少于 2 个问题时导航无意义（对应 Reasonix QUESTION_NAV_MIN_COUNT）
 const MIN_ANCHORS = 2
 
-const ACTIVE_COLOR = '#3b82f6' // blue-500
+// 活动标记色走 token（canvas 里读不到工具类）：--live 是「需要你注意」的语义色，
+// 两套主题各自取值，canvas 重绘前实时读取。
+const activeColor = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--live').trim() || '#b26a12'
 
 const props = defineProps<{
   anchors: QuestionAnchor[]
@@ -67,18 +70,20 @@ const hoveredAnchor = computed(() => {
 
 // Reasonix dotProps 的「距离感」效果：悬停点放大、相邻 1/2 档渐变缩小，
 // 其余按激活态（最后一个问题）着色，transitionDelay 随距离递增形成波。
+// 波纹的另外两档是 --live 的 60% / 35% 透明（8 位 hex 直接拼 alpha）。
 function dotStyle(index: number): Record<string, string | undefined> {
   const isActive = props.activeTurn === props.anchors[index]?.turn
+  const live = activeColor()
   const style: Record<string, string | undefined> = {}
   if (hoverIndex.value < 0) {
     style.width = isActive ? '18px' : '12px'
-    style.background = isActive ? ACTIVE_COLOR : undefined
+    style.background = isActive ? live : undefined
     return style
   }
   const d = Math.abs(index - hoverIndex.value)
   style.width = d === 0 ? '32px' : d === 1 ? '20px' : d === 2 ? '14px' : isActive ? '18px' : '12px'
   style.background =
-    d === 0 ? ACTIVE_COLOR : d === 1 ? 'rgba(59,130,246,0.6)' : d === 2 ? 'rgba(59,130,246,0.35)' : isActive ? ACTIVE_COLOR : undefined
+    d === 0 ? live : d === 1 ? live + '99' : d === 2 ? live + '59' : isActive ? live : undefined
   style.transitionDelay = `${d * 20}ms`
   return style
 }
@@ -177,7 +182,7 @@ function onJump(anchor: QuestionAnchor): void {
 }
 
 .question-jump-preview {
-  @apply pointer-events-none absolute right-full mr-3 -translate-y-1/2 max-w-[240px] overflow-hidden rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 shadow-md;
+  @apply pointer-events-none absolute right-full mr-3 -translate-y-1/2 max-w-[240px] overflow-hidden rounded-md border border-line-1 bg-s2 px-2.5 py-1.5 text-xs text-ink-3 shadow-md;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

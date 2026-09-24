@@ -150,7 +150,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-attachment {
-  @apply relative h-14 w-14 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50;
+  @apply relative h-14 w-14 overflow-hidden rounded-lg border border-line-1 bg-s0;
 }
 
 .thread-composer-attachment:has(video) {
@@ -166,7 +166,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-attachment-remove {
-  @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-white;
+  @apply absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-0 bg-black/70 text-xs leading-none text-ink-inv;
 }
 
 .thread-composer-file-chips {
@@ -178,11 +178,11 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-folder-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800;
+  @apply inline-flex items-center gap-1 rounded-md border border-live bg-live px-2 py-0.5 text-xs text-live;
 }
 
 .thread-composer-folder-chip-icon {
-  @apply h-3.5 w-3.5 text-amber-600 shrink-0;
+  @apply h-3.5 w-3.5 text-live shrink-0;
 }
 
 .thread-composer-folder-chip-name {
@@ -190,19 +190,19 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-folder-chip-meta {
-  @apply text-amber-700/90;
+  @apply text-live/90;
 }
 
 .thread-composer-folder-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-amber-600 transition hover:bg-amber-200 hover:text-amber-800 text-xs leading-none p-0;
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-live transition hover:bg-live hover:text-live text-xs leading-none p-0;
 }
 
 .thread-composer-file-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
+  @apply inline-flex items-center gap-1 rounded-md border border-line-1 bg-s0 px-2 py-0.5 text-xs text-ink-2;
 }
 
 .thread-composer-file-chip-icon {
-  @apply h-3.5 w-3.5 text-zinc-400 shrink-0;
+  @apply h-3.5 w-3.5 text-ink-3 shrink-0;
 }
 
 .thread-composer-file-chip-name {
@@ -210,7 +210,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-file-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 text-xs leading-none p-0;
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-ink-3 transition hover:bg-line-1 hover:text-ink-2 text-xs leading-none p-0;
 }
 
 .thread-composer-skill-chips {
@@ -218,14 +218,14 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-skill-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700;
+  @apply inline-flex items-center gap-1 rounded-md border border-ok bg-ok px-2 py-0.5 text-xs text-ok;
 }
 
 .thread-composer-skill-chip-name {
-  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500;
+  @apply min-w-0 max-w-[12rem] truncate border-0 bg-transparent p-0 text-left font-medium text-inherit underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ok;
 }
 
 .thread-composer-skill-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-emerald-500 transition hover:bg-emerald-200 hover:text-emerald-700 text-xs leading-none p-0;
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-ok transition hover:bg-ok hover:text-ok text-xs leading-none p-0;
 }
 </style>

@@ -1689,38 +1689,38 @@ onMounted(async () => {
 }
 
 .directory-title {
-  @apply m-0 text-xl font-semibold text-zinc-900 sm:text-2xl;
+  @apply m-0 text-xl font-semibold text-ink-1 sm:text-2xl;
 }
 
 .directory-subtitle {
-  @apply m-0 mt-1 text-sm text-zinc-500;
+  @apply m-0 mt-1 text-sm text-ink-3;
 }
 
 .directory-refresh,
 .directory-action,
 .directory-action-link,
 .directory-modal-close {
-  @apply shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 no-underline transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply shrink-0 rounded-lg border border-line-1 bg-s2 px-3 py-1.5 text-xs font-medium text-ink-3 no-underline transition hover:border-line-2 hover:bg-s0 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .directory-action.primary {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-black;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-black;
 }
 
 .directory-action.danger {
-  @apply border-rose-600 bg-rose-600 text-white hover:bg-rose-700;
+  @apply border-alert bg-alert text-ink-inv hover:bg-alert;
 }
 
 .directory-tabs {
-  @apply mx-auto grid w-full max-w-5xl grid-cols-4 rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+  @apply mx-auto grid w-full max-w-5xl grid-cols-4 rounded-lg border border-line-1 bg-s1 p-1;
 }
 
 .directory-tab {
-  @apply rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-zinc-500 transition hover:text-zinc-800;
+  @apply rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-ink-3 transition hover:text-ink-2;
 }
 
 .directory-tab.is-active {
-  @apply bg-white text-zinc-900 shadow-sm;
+  @apply bg-s2 text-ink-1 shadow-sm;
 }
 
 .directory-section {
@@ -1740,23 +1740,23 @@ onMounted(async () => {
 }
 
 .directory-search {
-  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400;
+  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-2 outline-none transition placeholder:text-ink-3 focus:border-line-3;
 }
 
 .directory-sort-group {
-  @apply inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1;
+  @apply inline-flex rounded-lg border border-line-1 bg-s1 p-1;
 }
 
 .directory-sort-button {
-  @apply rounded-md border-0 bg-transparent px-2.5 py-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-800;
+  @apply rounded-md border-0 bg-transparent px-2.5 py-1 text-xs font-medium text-ink-3 transition hover:text-ink-2;
 }
 
 .directory-sort-button.is-active {
-  @apply bg-white text-zinc-900 shadow-sm;
+  @apply bg-s2 text-ink-1 shadow-sm;
 }
 
 .directory-marketplace {
-  @apply mt-2 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 py-2.5;
+  @apply mt-2 rounded-xl border border-line-1 bg-s0/70 px-3 py-2.5;
 }
 
 .directory-marketplace-header {
@@ -1764,15 +1764,15 @@ onMounted(async () => {
 }
 
 .directory-marketplace-title {
-  @apply text-sm font-semibold text-zinc-700;
+  @apply text-sm font-semibold text-ink-2;
 }
 
 .directory-marketplace-upgrade {
-  @apply rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+  @apply rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs font-medium text-ink-3 transition hover:bg-s0 hover:text-ink-1 cursor-pointer disabled:opacity-50;
 }
 
 .directory-marketplace-empty {
-  @apply mt-2 text-xs text-zinc-500;
+  @apply mt-2 text-xs text-ink-3;
 }
 
 .directory-marketplace-list {
@@ -1780,19 +1780,19 @@ onMounted(async () => {
 }
 
 .directory-marketplace-row {
-  @apply flex min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+  @apply flex min-w-0 items-center gap-2 rounded-md border border-line-1 bg-s2 px-2 py-1.5;
 }
 
 .directory-marketplace-name {
-  @apply shrink-0 text-xs font-medium text-zinc-800;
+  @apply shrink-0 text-xs font-medium text-ink-2;
 }
 
 .directory-marketplace-path {
-  @apply min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500;
+  @apply min-w-0 flex-1 truncate font-mono text-micro text-ink-3;
 }
 
 .directory-marketplace-remove {
-  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert hover:text-alert cursor-pointer disabled:opacity-50;
 }
 
 .directory-marketplace-add {
@@ -1800,11 +1800,11 @@ onMounted(async () => {
 }
 
 .directory-marketplace-source {
-  @apply min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400;
+  @apply min-w-0 flex-1 rounded-md border border-line-1 bg-s2 px-2 py-1.5 text-xs text-ink-2 outline-none transition placeholder:text-ink-3 focus:border-line-3;
 }
 
 .directory-marketplace-add-button {
-  @apply shrink-0 rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md bg-s-inv-soft px-3 py-1.5 text-xs font-medium text-ink-inv transition hover:bg-s-inv-soft cursor-pointer disabled:opacity-50;
 }
 
 .directory-share-list {
@@ -1812,7 +1812,7 @@ onMounted(async () => {
 }
 
 .directory-share-row {
-  @apply flex min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+  @apply flex min-w-0 items-center gap-2 rounded-md border border-line-1 bg-s2 px-2 py-1.5;
 }
 
 .directory-share-info {
@@ -1820,24 +1820,24 @@ onMounted(async () => {
 }
 
 .directory-share-name {
-  @apply text-xs font-medium text-zinc-800;
+  @apply text-xs font-medium text-ink-2;
 }
 
 .directory-share-link {
-  @apply truncate font-mono text-[11px] text-zinc-500 hover:text-zinc-800 hover:underline;
+  @apply truncate font-mono text-micro text-ink-3 hover:text-ink-2 hover:underline;
 }
 
 .directory-share-checkout,
 .directory-share-delete {
-  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-zinc-50 cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-s0 cursor-pointer disabled:opacity-50;
 }
 
 .directory-share-checkout:hover {
-  @apply text-zinc-900;
+  @apply text-ink-1;
 }
 
 .directory-share-delete:hover {
-  @apply bg-rose-50 text-rose-600;
+  @apply bg-alert text-alert;
 }
 
 .directory-grid {
@@ -1849,7 +1849,7 @@ onMounted(async () => {
 }
 
 .directory-card {
-  @apply flex min-h-36 flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-300 hover:shadow-sm;
+  @apply flex min-h-36 flex-col gap-2 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm;
 }
 
 button.directory-card {
@@ -1870,7 +1870,7 @@ button.directory-card {
 
 .directory-card-icon,
 .directory-card-fallback {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 object-cover text-sm font-semibold uppercase text-zinc-500;
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-s1 object-cover text-sm font-semibold uppercase text-ink-3;
 }
 
 .directory-card-main {
@@ -1882,23 +1882,23 @@ button.directory-card {
 }
 
 .directory-card-title {
-  @apply truncate text-sm font-semibold text-zinc-900;
+  @apply truncate text-sm font-semibold text-ink-1;
 }
 
 .directory-card-meta {
-  @apply mt-0.5 block truncate text-xs text-zinc-400;
+  @apply mt-0.5 block truncate text-xs text-ink-3;
 }
 
 .directory-card-description {
-  @apply m-0 line-clamp-3 text-xs leading-relaxed text-zinc-500;
+  @apply m-0 line-clamp-3 text-xs leading-relaxed text-ink-3;
 }
 
 .directory-badge {
-  @apply shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium leading-none text-emerald-700;
+  @apply shrink-0 rounded-md border border-ok bg-ok px-1.5 py-0.5 text-nano font-medium leading-none text-ok;
 }
 
 .directory-badge.is-muted {
-  @apply border-zinc-200 bg-zinc-100 text-zinc-500;
+  @apply border-line-1 bg-s1 text-ink-3;
 }
 
 .directory-chip-row {
@@ -1906,7 +1906,7 @@ button.directory-card {
 }
 
 .directory-chip {
-  @apply rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500;
+  @apply rounded-md border border-line-1 bg-s0 px-1.5 py-0.5 text-nano font-medium text-ink-3;
 }
 
 .directory-card-actions {
@@ -1916,7 +1916,7 @@ button.directory-card {
 .directory-loading,
 .directory-empty,
 .directory-error {
-  @apply rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500;
+  @apply rounded-xl border border-line-1 bg-s2 p-4 text-sm text-ink-3;
 }
 
 .directory-empty-copy {
@@ -1929,15 +1929,15 @@ button.directory-card {
 
 .directory-error,
 .directory-toast.is-error {
-  @apply border-rose-200 bg-rose-50 text-rose-700;
+  @apply border-alert bg-alert text-alert;
 }
 
 .directory-auth-status.is-error {
-  @apply border-rose-200 bg-rose-50 text-rose-700;
+  @apply border-alert bg-alert text-alert;
 }
 
 .directory-toast {
-  @apply mx-auto w-full max-w-5xl rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700;
+  @apply mx-auto w-full max-w-5xl rounded-lg border border-ok bg-ok px-3 py-2 text-sm font-medium text-ok;
 }
 
 .directory-card-toggle {
@@ -1945,16 +1945,16 @@ button.directory-card {
 }
 
 .directory-mcp-detail {
-  @apply flex flex-col gap-3 border-t border-zinc-100 pt-3;
+  @apply flex flex-col gap-3 border-t border-line-1 pt-3;
 }
 
 .directory-mini-heading,
 .directory-detail-heading {
-  @apply m-0 text-xs font-semibold text-zinc-700;
+  @apply m-0 text-xs font-semibold text-ink-2;
 }
 
 .directory-mini-list {
-  @apply m-0 text-xs leading-relaxed text-zinc-500;
+  @apply m-0 text-xs leading-relaxed text-ink-3;
 }
 
 .directory-modal-overlay {
@@ -1962,7 +1962,7 @@ button.directory-card {
 }
 
 .directory-modal {
-  @apply flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[82vh] sm:rounded-2xl;
+  @apply flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-s2 shadow-xl sm:max-h-[82vh] sm:rounded-2xl;
 }
 
 .directory-modal-header,
@@ -1971,15 +1971,15 @@ button.directory-card {
 }
 
 .directory-modal-header {
-  @apply border-b border-zinc-100;
+  @apply border-b border-line-1;
 }
 
 .directory-modal-footer {
-  @apply justify-end border-t border-zinc-100;
+  @apply justify-end border-t border-line-1;
 }
 
 .directory-modal-title {
-  @apply m-0 truncate text-lg font-semibold text-zinc-900;
+  @apply m-0 truncate text-lg font-semibold text-ink-1;
 }
 
 .directory-modal-body {
@@ -1987,7 +1987,7 @@ button.directory-card {
 }
 
 .directory-detail-description {
-  @apply m-0 text-sm leading-relaxed text-zinc-600;
+  @apply m-0 text-sm leading-relaxed text-ink-3;
 }
 
 .directory-detail-grid {
@@ -1996,31 +1996,31 @@ button.directory-card {
 
 .directory-detail-block,
 .directory-auth-panel {
-  @apply rounded-xl border border-zinc-200 bg-zinc-50 p-3;
+  @apply rounded-xl border border-line-1 bg-s0 p-3;
 }
 
 .directory-include-row {
-  @apply mt-2 flex items-center justify-between gap-3 text-xs text-zinc-600;
+  @apply mt-2 flex items-center justify-between gap-3 text-xs text-ink-3;
 }
 
 .directory-auth-status {
-  @apply ml-2 inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none;
+  @apply ml-2 inline-flex rounded-md border px-1.5 py-0.5 text-nano font-medium leading-none;
 }
 
 .directory-auth-status.is-ok {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  @apply border-ok bg-ok text-ok;
 }
 
 .directory-auth-status.is-warning {
-  @apply border-amber-200 bg-amber-50 text-amber-700;
+  @apply border-live bg-live text-live;
 }
 
 .directory-auth-status.is-muted {
-  @apply border-zinc-200 bg-white text-zinc-500;
+  @apply border-line-1 bg-s2 text-ink-3;
 }
 
 .directory-include-row button {
-  @apply border-0 bg-transparent p-0 text-xs font-medium text-blue-600 hover:underline;
+  @apply border-0 bg-transparent p-0 text-xs font-medium text-ink-1 hover:underline;
 }
 
 .directory-screenshots {
@@ -2028,7 +2028,7 @@ button.directory-card {
 }
 
 .directory-screenshots img {
-  @apply max-h-56 w-full rounded-xl border border-zinc-200 object-cover;
+  @apply max-h-56 w-full rounded-xl border border-line-1 object-cover;
 }
 
 .composio-status-card {
@@ -2040,7 +2040,7 @@ button.directory-card {
 }
 
 .composio-preview-hero {
-  @apply flex flex-col gap-4 overflow-hidden rounded-xl border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-center sm:justify-between;
+  @apply flex flex-col gap-4 overflow-hidden rounded-xl border border-line-1 bg-s1 p-4 sm:flex-row sm:items-center sm:justify-between;
 }
 
 .composio-preview-copy {
@@ -2048,15 +2048,15 @@ button.directory-card {
 }
 
 .composio-preview-kicker {
-  @apply m-0 text-xs font-semibold uppercase text-sky-700;
+  @apply m-0 text-xs font-semibold uppercase text-ink-2;
 }
 
 .composio-preview-title {
-  @apply m-0 mt-1 max-w-2xl text-lg font-semibold leading-snug text-zinc-950;
+  @apply m-0 mt-1 max-w-2xl text-lg font-semibold leading-snug text-ink-1;
 }
 
 .composio-preview-text {
-  @apply m-0 mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600;
+  @apply m-0 mt-2 max-w-2xl text-sm leading-relaxed text-ink-3;
 }
 
 .composio-preview-actions {
@@ -2068,11 +2068,11 @@ button.directory-card {
 }
 
 .composio-preview-card {
-  @apply border-sky-100 bg-white;
+  @apply border-line-1 bg-s2;
 }
 
 .composio-fallback {
-  @apply bg-sky-100 text-sky-700;
+  @apply bg-s1 text-ink-2;
 }
 
 /* Application theme state lives on :root; scoped targets remain safe here. */
@@ -2112,7 +2112,7 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-upgrade,
 :global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
-  @apply border-line-2;
+  @apply text-ink-4 hover:bg-s3 hover:text-ink-2;
 }
 
 :global(:root.dark) .directory-marketplace {
@@ -2144,7 +2144,7 @@ button.directory-card {
 :global(:root.dark) .directory-marketplace-upgrade,
 :global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
-  @apply text-ink-4 hover:bg-s3 hover:text-ink-2;
+  @apply border-line-2;
 }
 
 :global(:root.dark) .directory-marketplace-remove:hover {
@@ -2154,7 +2154,7 @@ button.directory-card {
 :global(:root.dark) .directory-share-row,
 :global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
-  @apply border-line-2 bg-s2;
+  @apply text-ink-4 hover:bg-s3;
 }
 
 :global(:root.dark) .directory-share-name {
@@ -2167,7 +2167,7 @@ button.directory-card {
 
 :global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
-  @apply text-ink-4 hover:bg-s3;
+  @apply border-line-2 bg-s2;
 }
 
 :global(:root.dark) .directory-share-delete:hover {

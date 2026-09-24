@@ -110,18 +110,18 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 @reference "../../style.css";
 
 .desktop-layout {
-  @apply isolate grid bg-slate-100 text-slate-900 overflow-hidden;
+  @apply isolate grid bg-s1 text-ink-1 overflow-hidden;
   height: 100vh;
   height: 100dvh;
   grid-template-columns: var(--layout-columns);
 }
 
 .desktop-sidebar {
-  @apply relative z-0 bg-slate-100 min-h-0 overflow-hidden;
+  @apply relative z-0 bg-s1 min-h-0 overflow-hidden;
 }
 
 .desktop-resize-handle {
-  @apply relative w-px cursor-col-resize bg-slate-300 hover:bg-slate-400 transition;
+  @apply relative w-px cursor-col-resize bg-line-2 hover:bg-line-3 transition;
 }
 
 .desktop-resize-handle::before {
@@ -130,7 +130,7 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 }
 
 .desktop-main {
-  @apply relative z-[100] bg-white min-h-0 overflow-y-hidden overflow-x-visible;
+  @apply relative z-[100] bg-s2 min-h-0 overflow-y-hidden overflow-x-visible;
 }
 
 .mobile-drawer-backdrop {
@@ -138,7 +138,7 @@ function onResizeHandleMouseDown(event: MouseEvent): void {
 }
 
 .mobile-drawer {
-  @apply absolute top-0 left-0 bottom-0 w-[85vw] max-w-80 bg-slate-100 overflow-hidden shadow-2xl;
+  @apply absolute top-0 left-0 bottom-0 w-[85vw] max-w-80 bg-s1 overflow-hidden shadow-2xl;
 }
 
 .drawer-enter-active,

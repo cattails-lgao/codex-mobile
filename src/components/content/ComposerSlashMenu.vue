@@ -103,43 +103,43 @@ function skillBadgeLabel(scope: string | undefined): string {
 @reference "../../style.css";
 
 .composer-popover-group-label {
-  @apply px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 first:pt-1;
+  @apply px-2 pb-1 pt-2 text-nano font-semibold uppercase tracking-wide text-ink-3 first:pt-1;
 }
 
 .composer-popover-group-label--skills {
-  @apply border-t border-zinc-100 mt-1;
+  @apply border-t border-line-1 mt-1;
 }
 
 .thread-composer-slash-row {
-  @apply flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-ink-2 transition hover:bg-s1;
 }
 
 .thread-composer-slash-row.is-active {
-  @apply bg-zinc-100;
+  @apply bg-s1;
 }
 
 .thread-composer-slash-prefix {
-  @apply inline-flex h-5 min-w-5 items-center justify-center rounded bg-zinc-700 px-1 text-[9px] font-semibold leading-none text-white;
+  @apply inline-flex h-5 min-w-5 items-center justify-center rounded bg-s-inv-soft px-1 text-nano font-semibold leading-none text-ink-inv;
 }
 
 .thread-composer-slash-skill-icon {
-  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold leading-none;
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-nano font-semibold leading-none;
 }
 
 .thread-composer-slash-skill-icon.is-user {
-  @apply bg-sky-100 text-sky-700;
+  @apply bg-s1 text-ink-2;
 }
 
 .thread-composer-slash-skill-icon.is-system {
-  @apply bg-amber-100 text-amber-700;
+  @apply bg-live text-live;
 }
 
 .thread-composer-slash-skill-icon.is-repo {
-  @apply bg-emerald-100 text-emerald-700;
+  @apply bg-ok text-ok;
 }
 
 .thread-composer-slash-skill-icon.is-plugin {
-  @apply bg-violet-100 text-violet-700;
+  @apply bg-model text-model;
 }
 
 .thread-composer-slash-body {
@@ -151,16 +151,16 @@ function skillBadgeLabel(scope: string | undefined): string {
 }
 
 .thread-composer-slash-name {
-  @apply truncate font-medium text-zinc-900;
+  @apply truncate font-medium text-ink-1;
 }
 
 .thread-composer-slash-skill-name {
-  @apply min-w-0 whitespace-normal break-words font-medium text-zinc-900;
+  @apply min-w-0 whitespace-normal break-words font-medium text-ink-1;
   overflow-wrap: anywhere;
 }
 
 .thread-composer-slash-desc {
-  @apply truncate text-zinc-400;
+  @apply truncate text-ink-3;
 }
 
 .thread-composer-slash-desc--skill {
@@ -174,6 +174,6 @@ function skillBadgeLabel(scope: string | undefined): string {
 }
 
 .thread-composer-slash-kind {
-  @apply shrink-0 text-[10px] uppercase tracking-wide text-zinc-400;
+  @apply shrink-0 text-nano uppercase tracking-wide text-ink-3;
 }
 </style>

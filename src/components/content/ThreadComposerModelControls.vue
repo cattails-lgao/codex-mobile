@@ -132,7 +132,7 @@ function onReasoningEffortSelect(value: string): void {
   }
 
   .thread-composer-control :deep(.composer-dropdown-trigger--pill) {
-    @apply h-7 px-2 text-[11px];
+    @apply h-7 px-2 text-micro;
   }
 
   .thread-composer-control :deep(.composer-dropdown-chevron) {

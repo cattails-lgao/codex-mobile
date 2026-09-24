@@ -206,11 +206,11 @@ watch(
 }
 
 .rfp-toolbar {
-  @apply shrink-0 border-b border-zinc-200 p-2;
+  @apply shrink-0 border-b border-line-1 p-2;
 }
 
 .rfp-search {
-  @apply w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none transition focus:border-zinc-400;
+  @apply w-full rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs text-ink-2 outline-none transition focus:border-line-3;
 }
 
 .rfp-groups {
@@ -222,15 +222,15 @@ watch(
 }
 
 .rfp-dir {
-  @apply flex w-full items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left text-xs font-medium text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left text-xs font-medium text-ink-2 transition hover:bg-s1;
 }
 
 .rfp-dir-chevron {
-  @apply w-3 shrink-0 text-zinc-400;
+  @apply w-3 shrink-0 text-ink-3;
 }
 
 .rfp-dir-icon {
-  @apply shrink-0 text-[11px] leading-none;
+  @apply shrink-0 text-micro leading-none;
 }
 
 .rfp-dir-name {
@@ -238,22 +238,22 @@ watch(
 }
 
 .rfp-file {
-  @apply flex min-w-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left transition hover:bg-zinc-100;
+  @apply flex min-w-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-1 py-1 text-left transition hover:bg-s1;
 }
 
 .rfp-file-icon {
-  @apply shrink-0 text-[11px] leading-none text-zinc-400;
+  @apply shrink-0 text-micro leading-none text-ink-3;
 }
 
 .rfp-file-label {
-  @apply truncate text-xs font-medium text-zinc-800;
+  @apply truncate text-xs font-medium text-ink-2;
 }
 
 .rfp-empty {
-  @apply px-3 py-3 text-xs text-zinc-500;
+  @apply px-3 py-3 text-xs text-ink-3;
 }
 
 .rfp-empty.is-error {
-  @apply text-red-600;
+  @apply text-alert;
 }
 </style>

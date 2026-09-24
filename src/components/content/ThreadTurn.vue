@@ -96,7 +96,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 @reference "../../style.css";
 
 .conversation-turn {
-  @apply m-0 flex w-full flex-col gap-3 border-t border-zinc-200 py-5 first:border-t-0 first:pt-0;
+  @apply m-0 flex w-full flex-col gap-3 border-t border-line-1 py-5 first:border-t-0 first:pt-0;
 }
 
 .conversation-turn-items,
@@ -111,15 +111,15 @@ watch(processItemCount, (nextCount, previousCount) => {
 
 
 .conversation-turn-process {
-  @apply flex w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto flex-col gap-1.5 border-l-2 border-zinc-200 pl-3;
+  @apply flex w-full max-w-[min(var(--chat-column-max,45rem),100%)] mx-auto flex-col gap-1.5 border-l-2 border-line-1 pl-3;
 }
 
 .conversation-turn-process-heading {
-  @apply text-xs font-medium tracking-normal text-zinc-600;
+  @apply text-xs font-medium tracking-normal text-ink-3;
 }
 
 .conversation-turn-process-toggle {
-  @apply inline-flex w-fit items-center gap-1 border-0 bg-transparent p-0 text-left cursor-pointer hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2;
+  @apply inline-flex w-fit items-center gap-1 border-0 bg-transparent p-0 text-left cursor-pointer hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-3 focus-visible:ring-offset-2;
 }
 
 .conversation-turn-process-toggle-icon {
@@ -127,7 +127,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 .conversation-turn-process-count {
-  @apply text-[11px] font-normal text-zinc-500;
+  @apply text-micro font-normal text-ink-3;
 }
 
 .conversation-turn-process-items {
@@ -139,7 +139,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 .conversation-turn-time {
-  @apply inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-500 tabular-nums whitespace-nowrap;
+  @apply inline-flex items-center gap-1 rounded-full bg-s1 px-1.5 py-0.5 text-nano font-medium leading-none text-ink-3 tabular-nums whitespace-nowrap;
 }
 
 :global(:root.dark) .conversation-turn-time {
@@ -163,7 +163,7 @@ watch(processItemCount, (nextCount, previousCount) => {
 }
 
 :global(:root.dark) .conversation-turn-process-toggle {
-  @apply hover:text-ink-1 focus-visible:ring-line-4 focus-visible:ring-offset-s0;
+  @apply hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-4 focus-visible:ring-offset-2 focus-visible:ring-offset-s0;
 }
 
 :global(:root.dark) .conversation-turn-process-count {

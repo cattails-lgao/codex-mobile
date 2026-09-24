@@ -120,10 +120,10 @@ onBeforeUnmount(() => {
 @reference "../../style.css";
 
 .file-link-context-menu {
-  @apply fixed z-[var(--z-context-menu)] flex min-w-36 flex-col gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl;
+  @apply fixed z-[var(--z-context-menu)] flex min-w-36 flex-col gap-0.5 rounded-lg border border-line-1 bg-s2 p-1 shadow-xl;
 }
 
 .file-link-context-menu-item {
-  @apply block w-full rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-900;
+  @apply block w-full rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-ink-2 transition hover:bg-s1 hover:text-ink-1;
 }
 </style>

@@ -62,15 +62,15 @@ defineEmits<{
 }
 
 .confirm-dialog-panel {
-  @apply w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl;
+  @apply w-full max-w-sm rounded-xl border border-line-1 bg-s2 p-4 shadow-2xl;
 }
 
 .confirm-dialog-title {
-  @apply m-0 text-sm font-semibold text-zinc-900;
+  @apply m-0 text-sm font-semibold text-ink-1;
 }
 
 .confirm-dialog-message {
-  @apply m-0 mt-1.5 text-sm leading-5 text-zinc-500;
+  @apply m-0 mt-1.5 text-sm leading-5 text-ink-3;
 }
 
 .confirm-dialog-actions {
@@ -78,14 +78,14 @@ defineEmits<{
 }
 
 .confirm-dialog-btn {
-  @apply rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50;
+  @apply rounded-lg border border-line-1 bg-s2 px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .confirm-dialog-btn-confirm {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 .confirm-dialog-btn-confirm.is-danger {
-  @apply border-rose-600 bg-rose-600 text-white hover:bg-rose-700;
+  @apply border-alert bg-alert text-ink-inv hover:bg-alert;
 }
 </style>

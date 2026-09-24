@@ -43,15 +43,15 @@ const title = computed(() => props.messages.map((message) => message.toolCall?.t
 @reference "../../style.css";
 
 .tool-batch-block {
-  @apply w-full min-w-0 border-l-2 border-zinc-200 pl-2;
+  @apply w-full min-w-0 border-l-2 border-line-1 pl-2;
 }
 
 .tool-batch-head {
-  @apply flex w-full min-h-[30px] items-center gap-1.5 px-0 py-1 text-left transition hover:text-zinc-900;
+  @apply flex w-full min-h-[30px] items-center gap-1.5 px-0 py-1 text-left transition hover:text-ink-1;
 }
 
 .tool-batch-toggle {
-  @apply shrink-0 text-[10px] leading-none text-zinc-400;
+  @apply shrink-0 text-nano leading-none text-ink-3;
 }
 
 .tool-batch-icon {
@@ -59,14 +59,14 @@ const title = computed(() => props.messages.map((message) => message.toolCall?.t
 }
 
 .tool-batch-label {
-  @apply min-w-0 flex-1 truncate text-xs font-medium text-zinc-600;
+  @apply min-w-0 flex-1 truncate text-xs font-medium text-ink-3;
 }
 
 .tool-batch-count {
-  @apply shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-[10px] leading-3 text-zinc-500;
+  @apply shrink-0 rounded bg-line-1 px-1.5 py-0.5 font-mono text-nano leading-3 text-ink-3;
 }
 
 .tool-batch-body {
-  @apply flex flex-col gap-1.5 border-l border-zinc-200 pl-2 py-1.5;
+  @apply flex flex-col gap-1.5 border-l border-line-1 pl-2 py-1.5;
 }
 </style>

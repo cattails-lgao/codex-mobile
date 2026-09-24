@@ -89,7 +89,7 @@ const { t } = useUiLanguage()
    `.message-row:hover .message-toolbar { opacity: 1 }`。 */
 
 .message-fork-button {
-  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-[11px] font-medium leading-none text-slate-500 transition hover:text-slate-900;
+  @apply inline-flex items-center gap-0.5 px-0.5 py-0 text-micro font-medium leading-none text-ink-3 transition hover:text-ink-1;
 }
 
 /* round-24：用户消息下回退与复制按钮统一风格（同为朴素 icon 按钮）并加大：
@@ -97,22 +97,22 @@ const { t } = useUiLanguage()
    现在统一为同款「图标 + 可选文字」按钮：同字号、同间距、同 hover 背景。 */
 .message-rollback-button,
 .message-copy-button {
-  @apply inline-flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[11px] font-medium leading-none transition;
+  @apply inline-flex items-center gap-0.5 rounded-full px-1.5 py-1 text-micro font-medium leading-none transition;
 }
 
 /* round-27：回退按钮与复制按钮颜色统一（此前回退为琥珀色、复制为中性灰，
    同为图标按钮却色相不一致）。现在回退按钮与复制/分叉按钮同为中性灰，
    语义通过图标形状区分。 */
 .message-rollback-button {
-  @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900;
+  @apply text-ink-3 hover:bg-s1 hover:text-ink-1;
 }
 
 .message-copy-button {
-  @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900;
+  @apply text-ink-3 hover:bg-s1 hover:text-ink-1;
 }
 
 .message-copy-button[data-copied='true'] {
-  @apply text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700;
+  @apply text-ok hover:bg-ok hover:text-ok;
 }
 
 .message-fork-icon,

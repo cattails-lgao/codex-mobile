@@ -146,7 +146,7 @@ defineProps<{
 @reference "../../style.css";
 
 .sidebar-settings-account-section {
-  @apply border-t border-zinc-100 bg-zinc-50/60 px-3 py-3;
+  @apply border-t border-line-1 bg-s0/60 px-3 py-3;
 }
 
 .sidebar-settings-account-header {
@@ -158,27 +158,27 @@ defineProps<{
 }
 
 .sidebar-settings-account-collapse {
-  @apply inline-flex h-5 w-5 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-100;
+  @apply inline-flex h-5 w-5 items-center justify-center rounded border border-line-1 bg-s2 text-ink-3 transition hover:bg-s1;
 }
 
 .sidebar-settings-account-collapse-icon {
-  @apply text-[11px] leading-none;
+  @apply text-micro leading-none;
 }
 
 .sidebar-settings-account-title {
-  @apply text-sm font-medium text-zinc-800;
+  @apply text-sm font-medium text-ink-2;
 }
 
 .sidebar-settings-account-count {
-  @apply rounded bg-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-600;
+  @apply rounded bg-line-1 px-1.5 py-0.5 text-micro text-ink-3;
 }
 
 .sidebar-settings-account-error {
-  @apply mb-2 rounded-md bg-rose-50 px-2 py-1.5 text-xs text-rose-700;
+  @apply mb-2 rounded-md bg-alert px-2 py-1.5 text-xs text-alert;
 }
 
 .sidebar-settings-account-refresh {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply shrink-0 rounded-full border border-line-1 bg-s2 px-2.5 py-1 text-xs text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-login {
@@ -186,15 +186,15 @@ defineProps<{
 }
 
 .sidebar-settings-account-login-button {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply shrink-0 rounded-full border border-line-1 bg-s2 px-3 py-1 text-xs font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-login-link {
-  @apply min-w-0 truncate text-xs text-blue-600 hover:text-blue-700 hover:underline;
+  @apply min-w-0 truncate text-xs text-ink-1 hover:text-ink-1 hover:underline;
 }
 
 .sidebar-settings-account-empty {
-  @apply text-xs text-zinc-500;
+  @apply text-xs text-ink-3;
 }
 
 .sidebar-settings-account-list {
@@ -202,15 +202,15 @@ defineProps<{
 }
 
 .sidebar-settings-account-item {
-  @apply flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2;
+  @apply flex items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2;
 }
 
 .sidebar-settings-account-item.is-active {
-  @apply border-emerald-200 bg-emerald-50;
+  @apply border-ok bg-ok;
 }
 
 .sidebar-settings-account-item.is-unavailable {
-  @apply border-rose-200 bg-rose-50;
+  @apply border-alert bg-alert;
 }
 
 .sidebar-settings-account-main {
@@ -222,35 +222,35 @@ defineProps<{
 }
 
 .sidebar-settings-account-email {
-  @apply truncate text-sm text-zinc-800;
+  @apply truncate text-sm text-ink-2;
 }
 
 .sidebar-settings-account-meta {
-  @apply truncate text-[11px] text-zinc-500;
+  @apply truncate text-micro text-ink-3;
 }
 
 .sidebar-settings-account-quota {
-  @apply truncate text-[11px] text-zinc-600;
+  @apply truncate text-micro text-ink-3;
 }
 
 .sidebar-settings-account-id {
-  @apply mt-1 inline-flex max-w-full rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[11px] text-zinc-700;
+  @apply mt-1 inline-flex max-w-full rounded-full bg-s1 px-2 py-0.5 font-mono text-micro text-ink-2;
 }
 
 .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
-  @apply bg-emerald-100 text-emerald-800;
+  @apply bg-ok text-ok;
 }
 
 .sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
-  @apply bg-rose-100 text-rose-800;
+  @apply bg-alert text-alert;
 }
 
 .sidebar-settings-account-switch {
-  @apply min-w-[4.75rem] shrink-0 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-center text-xs text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply min-w-[4.75rem] shrink-0 rounded-full border border-line-1 bg-s2 px-2.5 py-1 text-center text-xs text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-remove {
-  @apply invisible shrink-0 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] leading-4 text-zinc-500 opacity-0 pointer-events-none transition-colors hover:bg-amber-50 disabled:cursor-default disabled:opacity-60;
+  @apply invisible shrink-0 rounded-full border border-live bg-s2 px-2 py-0.5 text-nano leading-4 text-ink-3 opacity-0 pointer-events-none transition-colors hover:bg-live disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-account-remove.is-visible {
@@ -258,7 +258,7 @@ defineProps<{
 }
 
 .sidebar-settings-account-remove.is-confirming {
-  @apply border-amber-300 bg-amber-50 text-amber-700 font-medium;
+  @apply border-live bg-live text-live font-medium;
 }
 
 .visible-error-with-feedback {
@@ -266,7 +266,7 @@ defineProps<{
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 :global(:root.dark) .visible-error-feedback {

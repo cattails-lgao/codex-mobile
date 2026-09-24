@@ -1022,7 +1022,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 
 .thread-pending-request-shell {
   max-height: min(60dvh, calc(var(--visual-viewport-height, 100dvh) - max(1rem, env(safe-area-inset-bottom)) - 1rem), 28rem);
-  @apply w-full overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-zinc-800 shadow-xl;
+  @apply w-full overflow-y-auto rounded-2xl border border-line-1 bg-s2 px-4 py-3 text-ink-2 shadow-xl;
 }
 
 .thread-pending-request-shell--no-top-radius {
@@ -1038,21 +1038,21 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-eyebrow {
-  @apply m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400;
+  @apply m-0 text-micro font-semibold uppercase tracking-[0.18em] text-ink-3;
 }
 
 .thread-pending-request-title {
-  @apply m-0 text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap break-words;
+  @apply m-0 text-body leading-relaxed text-ink-1 whitespace-pre-wrap break-words;
 }
 
 .thread-pending-request-counter {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500;
+  @apply shrink-0 rounded-full border border-line-1 bg-s1 px-2 py-0.5 text-micro text-ink-3;
 }
 
 .thread-pending-request-command-line,
 .thread-pending-request-preview {
   /* round-23：命令过长时命令展示块内部滚动，避免撑爆整个审批面板 */
-  @apply mt-3 max-h-28 overflow-y-auto rounded-xl bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700;
+  @apply mt-3 max-h-28 overflow-y-auto rounded-xl bg-s1 px-3 py-2 text-xs font-medium text-ink-2;
   overflow-wrap: anywhere;
 }
 
@@ -1070,49 +1070,49 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-option {
-  @apply flex min-h-10 w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-left transition hover:border-zinc-400 hover:bg-zinc-50;
+  @apply flex min-h-10 w-full items-center gap-3 rounded-xl border border-line-1 bg-s2 px-3.5 py-2 text-left transition hover:border-line-3 hover:bg-s0;
 }
 
 .thread-pending-request-option.is-selected {
-  @apply border-zinc-500 bg-zinc-100;
+  @apply border-line-4 bg-s1;
   box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.06);
 }
 
 .thread-pending-request-option-index {
-  @apply shrink-0 text-sm font-medium leading-none text-zinc-400;
+  @apply shrink-0 text-sm font-medium leading-none text-ink-3;
 }
 
 .thread-pending-request-option-label {
-  @apply min-w-0 whitespace-normal break-words text-sm leading-snug text-zinc-800;
+  @apply min-w-0 whitespace-normal break-words text-sm leading-snug text-ink-2;
 }
 
 .thread-pending-request-inline-input {
-  @apply flex h-10 min-w-0 flex-1 items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 text-sm text-zinc-400 transition focus-within:border-zinc-400 focus-within:bg-white;
+  @apply flex h-10 min-w-0 flex-1 items-center gap-3 rounded-xl border border-line-1 bg-s0 px-3.5 text-sm text-ink-3 transition focus-within:border-line-3 focus-within:bg-s2;
 }
 
 .thread-pending-request-inline-input.is-active {
-  @apply text-zinc-900;
+  @apply text-ink-1;
 }
 
 .thread-pending-request-inline-control {
-  @apply w-full min-w-0 border-none bg-transparent p-0 text-sm leading-none text-zinc-900 outline-none placeholder:text-zinc-400;
+  @apply w-full min-w-0 border-none bg-transparent p-0 text-sm leading-none text-ink-1 outline-none placeholder:text-ink-3;
 }
 
 .thread-pending-request-question {
-  @apply rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 py-2.5;
+  @apply rounded-xl border border-line-1 bg-s0/70 px-3 py-2.5;
 }
 
 .thread-pending-request-question-title {
-  @apply m-0 text-sm font-medium leading-relaxed text-zinc-900;
+  @apply m-0 text-sm font-medium leading-relaxed text-ink-1;
 }
 
 .thread-pending-request-question-text,
 .thread-pending-request-question-description {
-  @apply m-0 mt-1 text-xs leading-relaxed text-zinc-500;
+  @apply m-0 mt-1 text-xs leading-relaxed text-ink-3;
 }
 
 .thread-pending-request-validation-error {
-  @apply m-0 mt-3 text-sm leading-relaxed text-rose-600;
+  @apply m-0 mt-3 text-sm leading-relaxed text-alert;
 }
 
 .thread-pending-request-question-options,
@@ -1121,7 +1121,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-link {
-  @apply inline-flex w-fit items-center rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 transition hover:border-zinc-500 hover:bg-zinc-100;
+  @apply inline-flex w-fit items-center rounded-full border border-line-2 px-3 py-1.5 text-sm text-ink-2 transition hover:border-line-4 hover:bg-s1;
 }
 
 .thread-pending-request-select-wrap {
@@ -1129,20 +1129,20 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-select-label {
-  @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500;
+  @apply text-micro font-semibold uppercase tracking-[0.18em] text-ink-3;
 }
 
 .thread-pending-request-input {
-  @apply h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none;
+  @apply h-10 rounded-xl border border-line-2 bg-s2 px-3 text-sm text-ink-1 outline-none;
 }
 
 .thread-pending-request-input:focus {
-  @apply border-zinc-500;
+  @apply border-line-4;
   box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.12);
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-10 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900;
+  @apply h-10 w-full rounded-xl border border-line-2 bg-s2 px-3 text-sm text-ink-1;
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-value) {
@@ -1150,15 +1150,15 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-input::placeholder {
-  @apply text-zinc-400;
+  @apply text-ink-3;
 }
 
 .thread-pending-request-checkbox-row {
-  @apply flex items-center gap-2 text-sm text-zinc-700;
+  @apply flex items-center gap-2 text-sm text-ink-2;
 }
 
 .thread-pending-request-checkbox {
-  @apply h-4 w-4 rounded border-zinc-400 bg-white text-zinc-900;
+  @apply h-4 w-4 rounded border-line-3 bg-s2 text-ink-1;
 }
 
 .thread-pending-request-checkbox-label {
@@ -1180,11 +1180,11 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-primary {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 .thread-pending-request-secondary {
-  @apply border-zinc-300 bg-transparent text-zinc-600 hover:border-zinc-500 hover:bg-zinc-100;
+  @apply border-line-2 bg-transparent text-ink-3 hover:border-line-4 hover:bg-s1;
 }
 
 @media (max-width: 640px) {

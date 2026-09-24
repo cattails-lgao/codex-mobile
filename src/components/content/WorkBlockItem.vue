@@ -314,7 +314,7 @@ const permissionHint = computed(() => {
 }
 
 .work-block-output-wrap {
-  @apply bg-zinc-900;
+  @apply bg-s-inv;
   display: grid;
   /* 列轨道固定为 minmax(0,1fr)：auto 轨道会被子项 max-content（超长行）撑开，
      导致 break-words 永不触发、输出无限变宽 */
@@ -337,12 +337,12 @@ const permissionHint = computed(() => {
 }
 
 .work-block-output {
-  @apply m-0 px-3 py-2 text-xs font-mono text-zinc-200 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
+  @apply m-0 px-3 py-2 text-xs font-mono text-ink-3 whitespace-pre-wrap break-words max-h-60 overflow-y-auto;
 }
 
 /* 展开区第一行：具体命令（与结果放一起），下边一条暗色分隔线 */
 .work-block-output-command {
-  @apply m-0 px-3 pt-2 pb-1.5 text-xs font-mono whitespace-pre-wrap break-words border-b border-zinc-700/60 text-sky-300/90;
+  @apply m-0 px-3 pt-2 pb-1.5 text-xs font-mono whitespace-pre-wrap break-words border-b border-ink-2/60 text-ink-3/90;
 }
 
 .work-block-output.cmd-output-condensed {
@@ -352,18 +352,18 @@ const permissionHint = computed(() => {
 /* round-76：输出被截断时的提示行 + 按需取回完整输出的入口。放在展开区内部，
    折叠时不占高度、也不干扰「命令块视觉降噪」的朴素行设计。 */
 .work-block-output-spill {
-  @apply m-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-zinc-700/60 px-3 py-1.5 text-[11px] leading-4;
+  @apply m-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink-2/60 px-3 py-1.5 text-micro leading-4;
   color: #a1a1aa;
 }
 
 .work-block-output-spill-action {
-  @apply cursor-pointer rounded border border-zinc-600 px-1.5 py-0.5 text-[11px] leading-4 transition-colors;
+  @apply cursor-pointer rounded border border-line-5 px-1.5 py-0.5 text-micro leading-4 transition-colors;
   color: #e4e4e7;
   background: transparent;
 }
 
 .work-block-output-spill-action:hover {
-  @apply border-zinc-500 text-white;
+  @apply border-line-4 text-ink-inv;
 }
 
 .work-block-output-spill-action:disabled {
@@ -371,6 +371,6 @@ const permissionHint = computed(() => {
 }
 
 .work-block-permission-hint {
-  @apply mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-800;
+  @apply mx-3 mb-2 rounded-md border border-live bg-live px-2.5 py-1.5 text-micro leading-4 text-live;
 }
 </style>

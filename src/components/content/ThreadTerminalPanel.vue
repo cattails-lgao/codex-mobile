@@ -602,13 +602,13 @@ function readString(value: unknown): string {
 @reference "../../style.css";
 
 .thread-terminal-panel {
-  @apply overflow-hidden rounded-lg border border-zinc-800 bg-black shadow-lg;
+  @apply overflow-hidden rounded-lg border border-ink-1 bg-black shadow-lg;
   height: min(34vh, 20rem);
   min-height: 13rem;
 }
 
 .thread-terminal-header {
-  @apply flex h-9 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-2;
+  @apply flex h-9 items-center justify-between border-b border-ink-1 bg-s-inv px-2;
 }
 
 .thread-terminal-tabs {
@@ -616,23 +616,23 @@ function readString(value: unknown): string {
 }
 
 .thread-terminal-tab {
-  @apply flex h-7 min-w-20 max-w-36 shrink-0 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-300 transition hover:border-zinc-700 hover:text-white;
+  @apply flex h-7 min-w-20 max-w-36 shrink-0 items-center gap-2 rounded-md border border-ink-1 bg-s-inv px-2 text-xs text-ink-3 transition hover:border-ink-2 hover:text-ink-inv;
 }
 
 .thread-terminal-tab.is-active {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-100;
+  @apply border-ink-2 bg-s-inv-soft text-ink-3;
 }
 
 .thread-terminal-dot {
-  @apply h-2 w-2 shrink-0 rounded-full bg-zinc-500;
+  @apply h-2 w-2 shrink-0 rounded-full bg-line-4;
 }
 
 .thread-terminal-dot[data-status='attached'] {
-  @apply bg-emerald-400;
+  @apply bg-ok;
 }
 
 .thread-terminal-dot[data-status='error'] {
-  @apply bg-rose-400;
+  @apply bg-alert;
 }
 
 .thread-terminal-title {
@@ -644,11 +644,11 @@ function readString(value: unknown): string {
 }
 
 .thread-terminal-action {
-  @apply rounded-md border border-transparent px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white;
+  @apply rounded-md border border-transparent px-2 py-1 text-xs text-ink-3 transition hover:border-ink-2 hover:bg-s-inv hover:text-ink-inv;
 }
 
 .thread-terminal-error {
-  @apply m-0 border-b border-rose-900 bg-rose-950 px-3 py-1.5 text-xs text-rose-200;
+  @apply m-0 border-b border-alert bg-alert px-3 py-1.5 text-xs text-ink-inv;
 }
 
 .thread-terminal-host {
@@ -678,7 +678,7 @@ function readString(value: unknown): string {
   }
 
   .thread-terminal-action {
-    @apply px-1.5 text-[11px];
+    @apply px-1.5 text-micro;
   }
 
   .thread-terminal-host {

@@ -36,15 +36,15 @@ function onToggle(): void {
 @reference "../../style.css";
 
 .warm-turn {
-  @apply w-full min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50/60;
+  @apply w-full min-w-0 overflow-hidden rounded-lg border border-line-1 bg-s0/60;
 }
 
 .warm-turn__head {
-  @apply flex w-full min-h-[38px] items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-100;
+  @apply flex w-full min-h-[38px] items-center gap-2 px-3 py-2 text-left transition hover:bg-s1;
 }
 
 .warm-turn__chevron {
-  @apply shrink-0 text-zinc-400 transition-transform duration-150;
+  @apply shrink-0 text-ink-3 transition-transform duration-150;
 }
 
 .warm-turn__chevron--open {
@@ -52,14 +52,14 @@ function onToggle(): void {
 }
 
 .warm-turn__preview {
-  @apply min-w-0 flex-1 truncate font-medium text-zinc-800;
+  @apply min-w-0 flex-1 truncate font-medium text-ink-2;
 }
 
 .warm-turn__meta {
-  @apply shrink-0 whitespace-nowrap text-[11px] text-zinc-400;
+  @apply shrink-0 whitespace-nowrap text-micro text-ink-3;
 }
 
 .warm-turn__assistant {
-  @apply truncate px-3 pb-2.5 pl-11 text-xs leading-snug text-zinc-400;
+  @apply truncate px-3 pb-2.5 pl-11 text-xs leading-snug text-ink-3;
 }
 </style>

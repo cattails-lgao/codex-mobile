@@ -21,15 +21,15 @@ defineProps<{
 @reference "../../style.css";
 
 .content-header {
-  @apply relative z-[250] w-full min-w-0 min-h-12 sm:min-h-14 flex items-center gap-2 sm:gap-3 px-2 sm:px-3 pt-3 sm:pt-4 pb-2 bg-white;
+  @apply relative z-[250] w-full min-w-0 min-h-12 sm:min-h-14 flex items-center gap-2 sm:gap-3 px-2 sm:px-3 pt-3 sm:pt-4 pb-2 bg-s2;
 }
 
 .content-title {
-  @apply m-0 min-w-0 max-w-[min(72ch,100%)] flex-1 truncate text-sm font-medium leading-6 text-slate-900 max-sm:text-xs;
+  @apply m-0 min-w-0 max-w-[min(72ch,100%)] flex-1 truncate text-sm font-medium leading-6 text-ink-1 max-sm:text-xs;
 }
 
 .content-title.is-accent {
-  @apply text-lg font-semibold leading-7 tracking-[-0.01em] text-zinc-950 sm:text-[1.4rem];
+  @apply text-lg font-semibold leading-7 tracking-[-0.01em] text-ink-1 sm:text-2xl;
 }
 
 .content-actions {

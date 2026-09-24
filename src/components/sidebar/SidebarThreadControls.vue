@@ -53,7 +53,7 @@ const { t } = useUiLanguage()
 }
 
 .sidebar-thread-controls-button {
-  @apply h-6.75 w-6.75 rounded-md border border-transparent bg-transparent text-zinc-600 flex items-center justify-center transition hover:border-zinc-200 hover:bg-zinc-50;
+  @apply h-6.75 w-6.75 rounded-md border border-transparent bg-transparent text-ink-3 flex items-center justify-center transition hover:border-line-1 hover:bg-s0;
 }
 
 .sidebar-thread-controls-icon {

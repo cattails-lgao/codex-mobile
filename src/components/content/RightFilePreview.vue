@@ -91,7 +91,7 @@ watch(
 }
 
 .right-file-preview-header {
-  @apply flex shrink-0 items-start gap-3 border-b border-zinc-200 bg-white px-3 py-2;
+  @apply flex shrink-0 items-start gap-3 border-b border-line-1 bg-s2 px-3 py-2;
 }
 
 .right-file-preview-title-wrap {
@@ -99,19 +99,19 @@ watch(
 }
 
 .right-file-preview-title {
-  @apply truncate text-xs font-semibold text-zinc-900;
+  @apply truncate text-xs font-semibold text-ink-1;
 }
 
 .right-file-preview-path {
-  @apply truncate font-mono text-[10px] leading-4 text-zinc-400;
+  @apply truncate font-mono text-nano leading-4 text-ink-3;
 }
 
 .right-file-preview-open {
-  @apply shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 transition hover:bg-zinc-100;
+  @apply shrink-0 rounded-md border border-line-1 px-2 py-1 text-micro font-medium text-ink-3 transition hover:bg-s1;
 }
 
 .right-file-preview-body {
-  @apply min-h-0 flex-1 overflow-auto bg-slate-50;
+  @apply min-h-0 flex-1 overflow-auto bg-s0;
 }
 
 .right-file-preview-image {
@@ -119,18 +119,18 @@ watch(
 }
 
 .right-file-preview-code {
-  @apply m-0 min-h-full whitespace-pre bg-zinc-950 p-3 font-mono text-[11px] leading-5 text-zinc-100;
+  @apply m-0 min-h-full whitespace-pre bg-s-inv p-3 font-mono text-micro leading-5 text-ink-3;
 }
 
 .right-file-preview-empty {
-  @apply flex flex-col items-center gap-3 px-4 py-8 text-center text-xs text-zinc-500;
+  @apply flex flex-col items-center gap-3 px-4 py-8 text-center text-xs text-ink-3;
 }
 
 .right-file-preview-empty.is-error {
-  @apply text-red-600;
+  @apply text-alert;
 }
 
 .right-file-preview-footer {
-  @apply shrink-0 border-t border-zinc-200 px-3 py-1.5 text-center text-[11px] text-zinc-400;
+  @apply shrink-0 border-t border-line-1 px-3 py-1.5 text-center text-micro text-ink-3;
 }
 </style>
