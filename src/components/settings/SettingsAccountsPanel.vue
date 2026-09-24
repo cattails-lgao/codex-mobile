@@ -270,6 +270,6 @@ defineProps<{
 }
 
 :global(:root.dark) .visible-error-feedback {
-  @apply border-rose-700 bg-s1 text-rose-300 hover:bg-s2;
+  @apply bg-s1 hover:bg-s2;
 }
 </style>

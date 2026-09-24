@@ -956,9 +956,6 @@ defineExpose({ containsTarget })
   @apply bg-s-inv text-ink-inv;
 }
 
-:global(:root.dark) .sidebar-settings-provider-link {
-  @apply text-blue-400 hover:text-blue-300;
-}
 
 :global(:root.dark) .sidebar-settings-key-input {
   @apply border-line-3 bg-s2 text-ink-2 placeholder:text-ink-4;
@@ -997,6 +994,6 @@ defineExpose({ containsTarget })
 }
 
 :global(:root.dark) .visible-error-feedback {
-  @apply border-rose-700 bg-s1 text-rose-300 hover:bg-s2;
+  @apply bg-s1 hover:bg-s2;
 }
 </style>

@@ -5804,8 +5804,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply border-line-2 bg-s1 text-ink-1;
 }
 
-:root.dark .project-zip-modal-close,
-:root.dark .project-zip-modal-cancel,
 :root.dark .project-zip-modal-action {
   @apply border-line-2 bg-s1 text-ink-3 hover:bg-s2;
 }
@@ -5814,9 +5812,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply text-ink-4;
 }
 
-:root.dark .project-zip-modal-error {
-  @apply border-amber-900/60 bg-amber-950/40 text-amber-100;
-}
 
 :root.dark .project-zip-modal-action-primary {
   @apply border-s-inv bg-s-inv text-ink-inv hover:bg-white;
@@ -5830,9 +5825,6 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply bg-s2;
 }
 
-:root.dark .project-zip-progress-fill {
-  @apply bg-emerald-500;
-}
 
 .sidebar-settings-context-row {
   @apply cursor-default;

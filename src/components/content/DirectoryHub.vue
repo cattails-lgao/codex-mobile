@@ -2077,15 +2077,6 @@ button.directory-card {
 
 /* Application theme state lives on :root; scoped targets remain safe here. */
 
-:global(:root.dark) .directory-tabs,
-:global(:root.dark) .directory-search,
-:global(:root.dark) .directory-card,
-:global(:root.dark) .directory-loading,
-:global(:root.dark) .directory-empty,
-:global(:root.dark) .directory-modal,
-:global(:root.dark) .directory-refresh,
-:global(:root.dark) .directory-action,
-:global(:root.dark) .directory-action-link,
 :global(:root.dark) .directory-modal-close {
   @apply border-line-2 bg-s1;
 }
@@ -2094,10 +2085,6 @@ button.directory-card {
   @apply text-ink-1 placeholder:text-ink-4 focus:border-line-4;
 }
 
-:global(:root.dark) .directory-tab.is-active,
-:global(:root.dark) .directory-sort-button.is-active,
-:global(:root.dark) .directory-detail-block,
-:global(:root.dark) .directory-auth-panel,
 :global(:root.dark) .directory-chip {
   @apply border-line-2 bg-s2 text-ink-1;
 }
@@ -2106,11 +2093,6 @@ button.directory-card {
   @apply border-line-2 bg-s0;
 }
 
-:global(:root.dark) .directory-marketplace,
-:global(:root.dark) .directory-marketplace-row,
-:global(:root.dark) .directory-marketplace-source,
-:global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
   @apply text-ink-4 hover:bg-s3 hover:text-ink-2;
 }
@@ -2119,20 +2101,14 @@ button.directory-card {
   @apply bg-s1/60;
 }
 
-:global(:root.dark) .directory-marketplace-title,
 :global(:root.dark) .directory-marketplace-name {
   @apply text-ink-2;
 }
 
-:global(:root.dark) .directory-marketplace-row,
-:global(:root.dark) .directory-marketplace-source,
-:global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
   @apply bg-s2;
 }
 
-:global(:root.dark) .directory-marketplace-path,
 :global(:root.dark) .directory-marketplace-empty {
   @apply text-ink-4;
 }
@@ -2141,18 +2117,11 @@ button.directory-card {
   @apply text-ink-1 placeholder:text-ink-4 focus:border-line-4;
 }
 
-:global(:root.dark) .directory-marketplace-upgrade,
-:global(:root.dark) .directory-marketplace-remove,
 :global(:root.dark) .directory-marketplace-add-button {
   @apply border-line-2;
 }
 
-:global(:root.dark) .directory-marketplace-remove:hover {
-  @apply bg-rose-900/50 text-rose-300;
-}
 
-:global(:root.dark) .directory-share-row,
-:global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
   @apply text-ink-4 hover:bg-s3;
 }
@@ -2165,30 +2134,20 @@ button.directory-card {
   @apply text-ink-4 hover:text-ink-3;
 }
 
-:global(:root.dark) .directory-share-checkout,
 :global(:root.dark) .directory-share-delete {
   @apply border-line-2 bg-s2;
 }
 
-:global(:root.dark) .directory-share-delete:hover {
-  @apply bg-rose-900/50 text-rose-300;
-}
 
 :global(:root.dark) .directory-auth-status.is-muted {
   @apply border-line-2 bg-s1 text-ink-4;
 }
 
-:global(:root.dark) .composio-preview-hero {
-  @apply border-sky-900/70 bg-sky-950/40;
-}
 
 :global(:root.dark) .composio-preview-card {
-  @apply border-sky-900/60 bg-s1;
+  @apply bg-s1;
 }
 
-:global(:root.dark) .composio-preview-kicker {
-  @apply text-sky-300;
-}
 
 :global(:root.dark) .composio-preview-title {
   @apply text-ink-1;
@@ -2198,13 +2157,5 @@ button.directory-card {
   @apply text-ink-4;
 }
 
-:global(:root.dark) .directory-auth-status.is-error,
-:global(:root.dark) .directory-error,
-:global(:root.dark) .directory-toast.is-error {
-  @apply border-rose-900/60 bg-rose-950/60 text-rose-300;
-}
 
-:global(:root.dark) .composio-fallback {
-  @apply bg-sky-950 text-sky-300;
-}
 </style>
