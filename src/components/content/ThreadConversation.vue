@@ -2391,35 +2391,35 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+/* round-95: markdown headings get a real ladder (20/18/16/14px on the standard
+   Tailwind steps - no new arbitrary text-[Npx]). All levels are ink-1; h5/h6
+   shrink and gain tracking instead of colour so hierarchy never leans on hue. */
 .message-heading {
-  /* round-23 字体规范：标题 16px / #17181a */
-  @apply m-0 font-semibold leading-snug;
-  color: #17181a;
-  font-size: 16px;
+  @apply m-0 font-semibold leading-snug text-ink-1;
 }
 
 .message-heading-h1 {
-  @apply leading-tight;
+  @apply text-xl leading-tight;
 }
 
 .message-heading-h2 {
-  @apply leading-tight;
+  @apply text-lg leading-tight;
 }
 
 .message-heading-h3 {
-  @apply leading-snug;
+  @apply text-base leading-snug;
 }
 
 .message-heading-h4 {
-  @apply leading-snug;
+  @apply text-sm leading-snug;
 }
 
 .message-heading-h5 {
-  @apply leading-snug tracking-[0.02em];
+  @apply text-sm leading-snug tracking-[0.02em];
 }
 
 .message-heading-h6 {
-  @apply leading-snug tracking-[0.04em];
+  @apply text-sm leading-snug tracking-[0.04em];
 }
 
 .message-blockquote {

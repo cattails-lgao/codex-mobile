@@ -2065,7 +2065,7 @@ onBeforeUnmount(() => {
 }
 
 .section-toggle-row {
-  @apply hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400;
+  @apply hover:bg-s2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-line-2;
 }
 
 .thread-tree-header {
@@ -2077,11 +2077,11 @@ onBeforeUnmount(() => {
 }
 
 .chats-section-action {
-  @apply h-5 w-5 rounded text-zinc-500 flex items-center justify-center transition hover:bg-zinc-200 hover:text-zinc-700;
+  @apply h-5 w-5 rounded text-ink-3 flex items-center justify-center transition hover:bg-s2 hover:text-ink-1;
 }
 
 .chats-section-action[aria-pressed='true'] {
-  @apply bg-zinc-200 text-zinc-800;
+  @apply bg-s2 text-ink-1;
 }
 
 .organize-menu-wrap {
@@ -2089,7 +2089,7 @@ onBeforeUnmount(() => {
 }
 
 .organize-menu-trigger {
-  @apply h-5 w-5 rounded text-zinc-500 flex items-center justify-center transition hover:bg-zinc-200 hover:text-zinc-700;
+  @apply h-5 w-5 rounded text-ink-3 flex items-center justify-center transition hover:bg-s2 hover:text-ink-1;
 }
 
 .organize-menu-panel {

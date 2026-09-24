@@ -6,6 +6,7 @@
     <SidebarMenuRow
       class="thread-row"
       :data-active="props.selected"
+      :data-live="props.threadState === 'working' ? 'true' : 'false'"
       :data-pinned="props.pinned"
       :data-menu-open="props.menuOpen ? 'true' : 'false'"
       :force-right-hover="props.menuOpen"
@@ -132,8 +133,23 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
   @apply relative z-40;
 }
 
+/* round-95: thread rows follow the mockup's .row — hover/active lift to the s2
+   surface, the selected row gets a 2px neutral rail (ink-2) and a running row
+   overrides the rail to --live so amber strictly means "something is moving".
+   The rail lives on this component's scoped rules; .thread-row lands on the
+   SidebarMenuRow root element together with this file's data-v attribute. */
 .thread-row {
-  @apply hover:bg-zinc-200;
+  @apply relative hover:bg-s2;
+}
+
+.thread-row[data-active='true']::before,
+.thread-row[data-live='true']::before {
+  content: "";
+  @apply absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-ink-2;
+}
+
+.thread-row[data-live='true']::before {
+  @apply bg-live;
 }
 
 .thread-row[data-menu-open='true'] {
@@ -169,7 +185,11 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row-title {
-  @apply min-w-0 block flex-1 text-sm leading-5 font-normal text-zinc-800 truncate whitespace-nowrap;
+  @apply min-w-0 block flex-1 text-sm leading-5 font-normal text-ink-2 truncate whitespace-nowrap;
+}
+
+.thread-row[data-active='true'] .thread-row-title {
+  @apply font-medium text-ink-1;
 }
 
 .thread-row-worktree-icon {
@@ -192,8 +212,9 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
   @apply w-2.5 h-2.5 rounded-full;
 }
 
+/* 度量稿 .when：等宽（机器口径）+ tabular-nums，相对时间跳变时列宽稳定。 */
 .thread-row-time {
-  @apply block text-sm font-normal text-zinc-500;
+  @apply block font-mono text-xs text-ink-3 tabular-nums;
 }
 
 .thread-menu-wrap {
@@ -217,7 +238,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row[data-active='true'] {
-  @apply bg-zinc-200;
+  @apply bg-s2;
 }
 
 .thread-row:hover .thread-delete-button,
@@ -232,8 +253,33 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
   @apply bg-blue-600;
 }
 
+/* round-95: 运行中从「转圈的边框」改成度量稿的 pip——6px 圆点 + --live + 22% 光晕 +
+   1.6s 呼吸（prefers-reduced-motion 归零）。其余状态指示本轮不动（属状态色裸类清理，P2）。 */
 .thread-status-indicator[data-state='working'] {
-  @apply border-2 border-zinc-500 border-t-transparent bg-transparent animate-spin;
+  @apply relative w-1.5 h-1.5 rounded-full bg-live;
+}
+
+.thread-status-indicator[data-state='working']::after {
+  content: "";
+  @apply absolute inset-0 rounded-full;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent);
+  animation: thread-pip-breathe 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-status-indicator[data-state='working']::after {
+    animation: none;
+  }
+}
+
+@keyframes thread-pip-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .thread-status-indicator[data-state='external'] {
