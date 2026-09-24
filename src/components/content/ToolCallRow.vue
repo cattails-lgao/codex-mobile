@@ -2,15 +2,10 @@
   <div class="message-row" data-role="system">
     <div class="message-stack" data-role="system">
       <div class="tool-call-block" :class="statusClass" :title="title">
-        <span class="tool-call-icon" aria-hidden="true">🛠</span>
-        <span v-if="message.toolCall?.server" class="tool-call-server">{{ message.toolCall.server }}</span>
-        <code class="tool-call-name">{{ message.toolCall?.tool || message.text || '(tool)' }}</code>
-        <span class="tool-call-status">
-          <span v-if="message.toolCall?.status === 'inProgress'" class="work-block-spinner" aria-hidden="true" />
-          <span v-else-if="message.toolCall?.status === 'completed'" class="tool-call-status-icon" aria-hidden="true">✓</span>
-          <span v-else class="tool-call-status-icon" aria-hidden="true">✗</span>
-          {{ statusLabel }}
-        </span>
+        <span class="tool-call-pip" :class="badgeClass" aria-hidden="true" />
+        <code class="tool-call-name">{{ nameLabel }}</code>
+        <span v-if="metricText" class="tool-call-metric">{{ metricText }}</span>
+        <span v-if="badgeText" class="tool-call-status" :class="badgeClass">{{ badgeText }}</span>
       </div>
     </div>
   </div>
@@ -26,6 +21,38 @@ const props = defineProps<{
 }>()
 
 const { t } = useUiLanguage()
+
+// round-93：与 WorkBlockItem 同一套「工具调用行」语言（度量稿 .toolrow）——
+// 14px pip 列 + 等宽工具名 + 右侧耗时读数 + 等宽大写徽记。
+const nameLabel = computed(() => {
+  const toolCall = props.message.toolCall
+  if (!toolCall) return props.message.text || '(tool)'
+  return toolCall.server ? `${toolCall.server} · ${toolCall.tool}` : toolCall.tool
+})
+
+// 读数只写真实拥有的数据：MCP 工具调用带 durationMs，显示真实耗时；没有就不显示。
+const metricText = computed(() => {
+  const duration = props.message.toolCall?.durationMs
+  if (typeof duration !== 'number' || duration < 0) return ''
+  return duration < 1000 ? `${duration}ms` : `${(duration / 1000).toFixed(1)}s`
+})
+
+// 机器口径徽记（等宽大写，颜色只表示状态）。本地化状态文案保留在 title 里。
+const badge = computed(() => {
+  switch (props.message.toolCall?.status) {
+    case 'inProgress':
+      return { text: 'RUN', cls: 'is-live' }
+    case 'failed':
+      return { text: 'FAIL', cls: 'is-alert' }
+    case 'completed':
+      return { text: 'OK', cls: 'is-ok' }
+    default:
+      return { text: '', cls: '' }
+  }
+})
+
+const badgeText = computed(() => badge.value.text)
+const badgeClass = computed(() => badge.value.cls)
 
 const statusLabel = computed(() => {
   const toolCall = props.message.toolCall
@@ -48,9 +75,7 @@ const statusClass = computed(() => {
 const title = computed(() => {
   const toolCall = props.message.toolCall
   if (!toolCall) return ''
-  const parts: string[] = []
-  if (toolCall.server) parts.push(toolCall.server)
-  parts.push(toolCall.tool)
+  const parts = [nameLabel.value, statusLabel.value]
   if (toolCall.error) parts.push(toolCall.error)
   if (typeof toolCall.durationMs === 'number' && toolCall.durationMs >= 0) {
     parts.push(`${toolCall.durationMs}ms`)
@@ -62,52 +87,90 @@ const title = computed(() => {
 <style scoped>
 @reference "../../style.css";
 
-/* round-24：工具调用块与 Running command（WorkBlockItem）同款朴素行——
-   round-22 命令块已去卡片化，工具块却仍保留背景/边框/圆角，视觉不一致。
-   这里去掉卡片，改为「图标 + server chip + 工具名 + 状态」的透明行。 */
+/* 自带的 message-row / message-stack 不经过 ThreadConversation 的 scoped 规则
+   （那条只落在「作为组件根」的 message-row 上），message-stack 是无样式 flex 子项、
+   会缩成内容宽——命令行卡片实测 706px 全列宽而工具行只有 ~220px，参差。这里显式拉伸。 */
+.message-row {
+  @apply w-full min-w-0;
+}
+
+.message-stack {
+  @apply w-full min-w-0;
+}
+
+/* round-93：与 WorkBlockItem 同款「工具调用行」卡片（度量稿 .toolrow）。
+   round-24 去掉的是旧的高对比卡片；这里回归的是度量稿里安静的发丝边框形态，
+   并把状态从「emoji + 本地化文案」改成 pip + 等宽徽记（状态可扫描）。 */
 .tool-call-block {
-  @apply flex w-full min-w-0 items-center gap-2 px-0 py-0.5;
+  @apply grid w-full min-w-0 cursor-default items-center gap-2.5 rounded-[10px] border border-line-1 bg-s2 px-3 py-2 transition-colors;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
 }
 
-.tool-call-icon {
-  @apply shrink-0 text-xs leading-none;
+.tool-call-block:hover {
+  @apply border-line-2;
 }
 
-.tool-call-server {
-  /* round-23 字体规范：工具文字 #737373 */
-  @apply shrink-0 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] leading-3;
-  color: #737373;
+/* 运行中：边框转 --live 40%。写在 :hover 之后，同权重下后者胜出。 */
+.tool-call-block.tool-call-running {
+  border-color: color-mix(in srgb, var(--live) 40%, transparent);
+}
+
+.tool-call-pip {
+  @apply h-1.5 w-1.5 justify-self-center rounded-full;
+}
+
+.tool-call-pip.is-ok {
+  @apply bg-ok;
+}
+
+.tool-call-pip.is-alert {
+  @apply bg-alert;
+}
+
+.tool-call-pip.is-live {
+  @apply bg-live;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent);
+  animation: tool-pip-breathe 1.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-call-pip.is-live {
+    animation: none;
+  }
+}
+
+@keyframes tool-pip-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .tool-call-name {
-  /* round-23 字体规范：工具文字 #737373 */
-  @apply min-w-0 flex-1 truncate font-mono text-xs;
-  color: #737373;
+  @apply min-w-0 truncate font-mono text-xs text-ink-1;
+}
+
+/* 耗时读数：等宽 + tabular-nums（机器口径），ink-3。 */
+.tool-call-metric {
+  @apply shrink-0 font-mono text-xs tabular-nums text-ink-3;
 }
 
 .tool-call-status {
-  /* round-23 字体规范：工具文字 #737373 */
-  @apply flex shrink-0 items-center gap-1 text-[11px] font-medium;
-  color: #737373;
+  @apply shrink-0 font-mono text-xs uppercase tracking-[0.08em];
 }
 
-.tool-call-status-icon {
-  @apply text-xs leading-none;
+.tool-call-status.is-ok {
+  @apply text-ok;
 }
 
-.work-block-spinner {
-  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500/40 border-t-amber-500;
+.tool-call-status.is-live {
+  @apply text-live;
 }
 
-.tool-call-block.tool-call-running .tool-call-status {
-  @apply text-amber-600;
-}
-
-.tool-call-block.tool-call-ok .tool-call-status-icon {
-  @apply text-emerald-600;
-}
-
-.tool-call-block.tool-call-error .tool-call-status {
-  @apply text-rose-600;
+.tool-call-status.is-alert {
+  @apply text-alert;
 }
 </style>

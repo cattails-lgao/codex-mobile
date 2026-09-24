@@ -239,6 +239,47 @@ check(
   queueRule ? queueRule[1].replace(/\s+/g, ' ').trim() : '未找到 .thread-composer-submit--queue 规则',
 )
 
+// ------------------------------------------------- 会话区：工具调用行（签名组件）
+// 方案 §5 P1 的签名组件：等宽命令名 + 耗时/字节读数 + OK/RUN 徽记（度量稿 .toolrow）。
+// 改造前状态色是 amber/emerald/rose 裸类 + #737373 硬编码（还叠着全局暗色层同权重覆盖）；
+// 改造后颜色只表示状态、一律走状态 token。下面两条是它的回归闸门。
+const workBlockVue = fs.readFileSync('src/components/content/WorkBlockItem.vue', 'utf8')
+const toolCallVue = fs.readFileSync('src/components/content/ToolCallRow.vue', 'utf8')
+const toolRowSources = [
+  ['WorkBlockItem.vue', workBlockVue],
+  ['ToolCallRow.vue', toolCallVue],
+]
+// 工具行的旧状态色（500/600 阶）与硬编码灰。权限提示面板的 amber-50/200/800 属于
+// 警示表面、不在此列，所以模式只锁 500/600 两阶。
+const legacyToolRowColorHits = toolRowSources
+  .map(([name, src]) => [name, src.match(/#737373|amber-(?:500|600)|emerald-(?:500|600)|rose-(?:500|600)/g) || []])
+  .filter(([, hits]) => hits.length)
+check(
+  '工具调用行状态色只用状态 token（amber/emerald/rose 裸类与 #737373 已清）',
+  legacyToolRowColorHits.length === 0,
+  legacyToolRowColorHits.map(([n, h]) => `${n}: ${h.slice(0, 3).join(',')}`).join('; ') ||
+    'WorkBlockItem.vue + ToolCallRow.vue',
+)
+const monoRowSelectors = [
+  ['WorkBlockItem.vue', workBlockVue, ['work-block-command', 'work-block-metric', 'work-block-status']],
+  ['ToolCallRow.vue', toolCallVue, ['tool-call-name', 'tool-call-metric', 'tool-call-status']],
+]
+const nonMonoRowRules = (() => {
+  const bad = []
+  for (const [name, src, selectors] of monoRowSelectors) {
+    for (const sel of selectors) {
+      const rule = src.match(new RegExp(`\\.${sel} \\{([^}]*)\\}`))
+      if (!rule || !/font-mono/.test(rule[1])) bad.push(`${name} .${sel}`)
+    }
+  }
+  return bad
+})()
+check(
+  '工具调用行命令名 / 读数 / 徽记都用等宽（机器口径）',
+  nonMonoRowRules.length === 0,
+  nonMonoRowRules.join(', ') || 'command + metric + status × 2 组件',
+)
+
 // --------------------------------------------------- 文字只用墨色 token
 // 防止后人把表面色/线色当文字色用——那会立刻掉出对比度保证。
 const textOnSurface = [...css.matchAll(/\btext-(s[0-4]|s-inv(?:-soft)?|line-[1-5])(?![\w-])/g)].map((m) => m[0])

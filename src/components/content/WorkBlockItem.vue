@@ -13,16 +13,14 @@
       type="button"
       class="work-block-header"
       :aria-expanded="expanded"
+      :aria-label="rowAriaLabel"
+      :title="rowAriaLabel"
       @click="$emit('toggle')"
     >
-      <span class="work-step-dot" :title="`${t('Step')} ${String(stepIndex + 1)}`">{{ stepIndex + 1 }}</span>
-      <code class="work-block-command">{{ t('Command') }}</code>
-      <span class="work-block-status">
-        <span v-if="command.commandExecution?.status === 'inProgress'" class="work-block-spinner" aria-hidden="true" />
-        <span v-else-if="command.commandExecution?.status === 'completed' && command.commandExecution?.exitCode === 0" class="work-block-status-icon" aria-hidden="true">✓</span>
-        <span v-else-if="command.commandExecution?.status === 'failed'" class="work-block-status-icon" aria-hidden="true">✗</span>
-        {{ statusLabel }}
-      </span>
+      <span class="work-block-pip" :class="badgeClass" aria-hidden="true" />
+      <code class="work-block-command">{{ commandText }}</code>
+      <span v-if="metricText" class="work-block-metric">{{ metricText }}</span>
+      <span v-if="badgeText" class="work-block-status" :class="badgeClass">{{ badgeText }}</span>
     </button>
     <div
       class="work-block-output-wrap"
@@ -143,6 +141,55 @@ const statusLabel = computed(() => {
   }
 })
 
+// ---- round-93：会话区签名组件「工具调用行」--------------------------------
+// 度量稿 .toolrow：14px pip 列 + 等宽命令名 + 右侧读数 + 等宽大写徽记。
+
+const commandText = computed(() => props.command.commandExecution?.command || '(command)')
+
+// 读数只写真实拥有的数据。协议里命令执行没有时长字段，所以读数只给输出字节：
+// 有 spill 时用 totalBytes（准确总数），否则按 UTF-8 字节估 aggregatedOutput。
+const outputBytes = computed(() => {
+  const execution = props.command.commandExecution
+  if (!execution) return 0
+  if (execution.outputSpill && execution.outputSpill.totalBytes > 0) {
+    return execution.outputSpill.totalBytes
+  }
+  if (!execution.aggregatedOutput) return 0
+  return new TextEncoder().encode(execution.aggregatedOutput).length
+})
+
+const metricText = computed(() => (outputBytes.value > 0 ? formatByteSize(outputBytes.value) : ''))
+
+// 机器口径徽记（等宽大写，颜色只表示状态）。本地化状态文案不丢——放在 title/aria 里。
+const badge = computed(() => {
+  const execution = props.command.commandExecution
+  if (!execution) return { text: '', cls: '' }
+  switch (execution.status) {
+    case 'inProgress':
+      return { text: 'RUN', cls: 'is-live' }
+    case 'completed':
+      return execution.exitCode === 0
+        ? { text: 'OK', cls: 'is-ok' }
+        : { text: `EXIT ${execution.exitCode ?? '?'}`, cls: 'is-alert' }
+    case 'failed':
+      return { text: 'FAIL', cls: 'is-alert' }
+    case 'declined':
+      return { text: 'SKIP', cls: 'is-alert' }
+    case 'interrupted':
+      return { text: 'STOP', cls: 'is-alert' }
+    default:
+      return { text: '', cls: '' }
+  }
+})
+
+const badgeText = computed(() => badge.value.text)
+const badgeClass = computed(() => badge.value.cls)
+
+const rowAriaLabel = computed(() => {
+  const parts = [commandText.value, statusLabel.value, metricText.value]
+  return parts.filter(Boolean).join(' · ')
+})
+
 const PERMISSION_BLOCKED_PATTERNS = [
   /access to the path .* is denied/iu,
   /access is denied/iu,
@@ -177,82 +224,93 @@ const permissionHint = computed(() => {
   @apply flex w-full min-w-0 flex-col gap-1;
 }
 
-/* 命令块视觉降噪（round-16 反馈「命令执行块太显眼」+ round-17 反馈「不需要圆形
-   边框和背景色」）：去掉圆角/边框/背景，改为「序号 + "命令"标签 + 状态」的朴素行，
-   颜色浅。输出区保持深色代码块，具体命令与结果都在展开后的输出区里。 */
+/* round-93：会话区签名组件「工具调用行」（方案 §5 P1，度量稿 .toolrow）。
+   形态＝14px pip 列 + 等宽命令名 + 右侧读数 + OK/RUN 徽记，外面是度量稿里
+   「已认可」的发丝边框 + s2 表面卡片。旧 round-16/17 去掉的是当时的高对比
+   大卡片（粗边框、翠绿渐变、圆形序号徽章），不是这种安静形态。 */
 .work-block {
-  @apply w-full min-w-0;
+  @apply w-full min-w-0 overflow-hidden rounded-[10px] border border-line-1 bg-s2;
 }
 
-.work-block.work-block-compact .work-block-header {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+.work-block:hover {
+  @apply border-line-2;
 }
 
-.work-block.work-block-compact .work-step-dot {
-  font-size: 10px;
-}
-
-.work-block.work-block-compact .work-block-command {
-  font-size: 0.75rem;
-}
-
-.work-block.work-block-compact .work-block-status {
-  max-width: 4.5rem;
-  font-size: 0.75rem;
+/* 运行中：边框转 --live 40%（度量稿 data-state="run"）。写在 :hover 之后，
+   同权重下后者胜出，悬停不会盖掉运行态边框。 */
+.work-block.cmd-status-running {
+  border-color: color-mix(in srgb, var(--live) 40%, transparent);
 }
 
 .work-block-header {
-  @apply flex w-full min-w-0 items-center gap-1.5 px-0 py-0.5 text-left cursor-pointer transition-colors;
+  @apply grid w-full min-w-0 cursor-pointer items-center gap-2.5 px-3 py-2 text-left transition-colors;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
 }
 
-/* 序号：纯文本数字，浅灰，无圆形徽章 */
-.work-step-dot {
-  @apply shrink-0 text-[11px] font-medium leading-none text-zinc-400 tabular-nums;
+.work-block.work-block-compact .work-block-header {
+  @apply px-2 py-1;
 }
 
-.work-block.cmd-status-running .work-step-dot {
-  @apply text-amber-500;
+/* pip：状态点。运行中呼吸 + 22% 光晕；prefers-reduced-motion 下归零。 */
+.work-block-pip {
+  @apply h-1.5 w-1.5 justify-self-center rounded-full;
 }
 
-.work-block.cmd-status-ok .work-step-dot {
-  @apply text-emerald-500;
+.work-block-pip.is-ok {
+  @apply bg-ok;
 }
 
-.work-block.cmd-status-error .work-step-dot {
-  @apply text-rose-500;
+.work-block-pip.is-alert {
+  @apply bg-alert;
 }
 
+.work-block-pip.is-live {
+  @apply bg-live;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent);
+  animation: work-pip-breathe 1.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-block-pip.is-live {
+    animation: none;
+  }
+}
+
+@keyframes work-pip-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* 命令名：等宽（机器口径）+ ink-1。完整命令本来就在展开区第一行，这里截断即可。 */
 .work-block-command {
-  /* round-23 字体规范：工具文字 #737373 */
-  @apply flex-1 min-w-0 truncate text-xs font-mono;
-  color: #737373;
+  @apply min-w-0 truncate font-mono text-xs text-ink-1;
 }
 
+/* 读数：等宽 + tabular-nums（机器口径），ink-3。 */
+.work-block-metric {
+  @apply shrink-0 font-mono text-xs tabular-nums text-ink-3;
+}
+
+/* 徽记：等宽大写；颜色只表示状态（ok/live/alert token），ink-4 禁用于文字。 */
 .work-block-status {
-  /* round-23 字体规范：工具文字 #737373 */
-  @apply inline-flex max-w-24 shrink-0 items-center gap-1 truncate text-right text-[11px] font-medium;
-  color: #737373;
+  @apply shrink-0 font-mono text-xs uppercase tracking-[0.08em];
 }
 
-.work-block.cmd-status-running .work-block-status {
-  @apply text-amber-600/80;
+.work-block-status.is-ok {
+  @apply text-ok;
 }
 
-.work-block.cmd-status-ok .work-block-status {
-  @apply text-emerald-600/80;
+.work-block-status.is-live {
+  @apply text-live;
 }
 
-.work-block.cmd-status-error .work-block-status {
-  @apply text-rose-600/80;
-}
-
-.work-block-status-icon {
-  @apply inline-flex shrink-0 items-center text-[11px] leading-none;
-}
-
-.work-block-spinner {
-  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-500/40 border-t-amber-500;
+.work-block-status.is-alert {
+  @apply text-alert;
 }
 
 .work-block-output-wrap {

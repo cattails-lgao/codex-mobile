@@ -776,66 +776,21 @@ body {
 /* .work-block-list 由 ThreadConversation 模板渲染，样式定义在 WorkBlockItem 的 scoped
    内不匹配（scoped 选择器带 data-v 只作用于组件内部元素），导致 display:block 且无
    min-w-0，超长命令/输出会把消息行撑宽产生横向溢出。这里补全局基础规则。
-   round-17：命令块已无边框/背景，gap 收紧到 0.25rem。 */
+   round-93：命令行变成带发丝边框的卡片（度量稿 .toolrow），间距放宽到 0.375rem。 */
 .work-block-list {
-  @apply flex w-full min-w-0 flex-col gap-1;
+  @apply flex w-full min-w-0 flex-col gap-1.5;
 }
 
 :root.dark .work-block-permission-hint {
   @apply border-amber-900 bg-amber-950/50 text-amber-300;
 }
 
-/* round-17：命令块无边框/背景，暗色仅文字色适配 */
-:root.dark .work-step-dot {
-  @apply text-ink-4;
-}
-
-:root.dark .work-block.cmd-status-running .work-step-dot {
-  @apply text-amber-400;
-}
-
-:root.dark .work-block.cmd-status-ok .work-step-dot {
-  @apply text-emerald-400;
-}
-
-:root.dark .work-block.cmd-status-error .work-step-dot {
-  @apply text-rose-400;
-}
-
-:root.dark .work-block-command {
-  @apply text-ink-3;
-}
-
-:root.dark .work-block-status {
-  @apply text-ink-4;
-}
-
+/* round-93：`.work-block-command` / `.work-block-status` / `.tool-call-*` / `.work-step-dot`
+   的暗色覆盖整块删除——round-93 起这些类由组件自己用主题感知 token（ink-1/ink-3、
+   ok/live/alert）定义，两套主题各自取值，全局层再写一份就是同权重打架（胜负只由
+   打包顺序决定，见 round-92 的模型芯片 bug）。输出区与权限提示不归组件管，覆盖保留。 */
 :root.dark .work-block-output-wrap {
   @apply bg-black/70;
-}
-
-:root.dark .tool-call-server {
-  @apply bg-s3 text-ink-3;
-}
-
-:root.dark .tool-call-name {
-  @apply text-ink-2;
-}
-
-:root.dark .tool-call-status {
-  @apply text-ink-4;
-}
-
-:root.dark .tool-call-block.tool-call-running .tool-call-status {
-  @apply text-amber-400;
-}
-
-:root.dark .tool-call-block.tool-call-ok .tool-call-status-icon {
-  @apply text-emerald-400;
-}
-
-:root.dark .tool-call-block.tool-call-error .tool-call-status {
-  @apply text-rose-400;
 }
 
 /* ThreadPendingRequestPanel：Awaiting response / 权限审核面板暗色覆盖
