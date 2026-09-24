@@ -280,6 +280,34 @@ check(
   nonMonoRowRules.join(', ') || 'command + metric + status × 2 组件',
 )
 
+// ------------------------------------------------- 会话区：代码块楼层（round-94）
+// 度量稿 pre：s2 表面 + 发丝 line-1 边 + 14px 圆角，bar（语言左 / 复制右）走 s1，
+// 代码区 ink-2。改造前是永远深底的 bg-slate-950 裸色板 + slate 系标签；楼层颜色
+// 一律 token 化，且复制控件必须同时存在于两条渲染路径（模板 + v-html）。
+const conversationVue = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+const markdownRenderingTs = fs.readFileSync('src/components/content/useMarkdownRendering.ts', 'utf8')
+const codeFloorRule = conversationVue.match(/\n\.message-code-block \{([^}]*)\}/)
+check(
+  '代码块楼层颜色只用 token（不再永远深底的裸色板）',
+  Boolean(codeFloorRule) &&
+    /bg-s2/.test(codeFloorRule[1]) &&
+    /border-line-1/.test(codeFloorRule[1]) &&
+    !/slate-|zinc-|gray-/.test(codeFloorRule[1]),
+  codeFloorRule ? codeFloorRule[1].replace(/\s+/g, ' ').trim() : '未找到 .message-code-block 规则',
+)
+const codeCopyPathHits = [
+  ['ThreadConversation.vue', conversationVue],
+  ['useMarkdownRendering.ts', markdownRenderingTs],
+]
+  .map(([name, src]) => [name, /data-code-copy/.test(src) && /message-code-copy/.test(src)])
+  .filter(([, ok]) => !ok)
+  .map(([name]) => name)
+check(
+  '代码块复制控件两条渲染路径都在（模板 + v-html，data-code-copy 委托）',
+  codeCopyPathHits.length === 0,
+  codeCopyPathHits.join(', ') || 'ThreadConversation.vue + useMarkdownRendering.ts',
+)
+
 // --------------------------------------------------- 文字只用墨色 token
 // 防止后人把表面色/线色当文字色用——那会立刻掉出对比度保证。
 const textOnSurface = [...css.matchAll(/\btext-(s[0-4]|s-inv(?:-soft)?|line-[1-5])(?![\w-])/g)].map((m) => m[0])

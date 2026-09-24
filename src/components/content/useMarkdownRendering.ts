@@ -295,9 +295,12 @@ export function createMarkdownRendering(deps: MarkdownRenderingDeps) {
     }
     if (block.kind === 'codeBlock') {
       const language = block.language
-        ? `<div class="message-code-language">${escapeHtml(block.language)}</div>`
+        ? `<span class="message-code-language">${escapeHtml(block.language)}</span>`
         : ''
-      return `<div class="message-code-block">${language}<pre class="message-code-pre"><code class="hljs">${renderCachedHighlightedCodeAsHtml(block.language, block.value)}</code></pre></div>`
+      // round-94: mockup's code floor — a bar (language left, copy right) above the code.
+      // The copy control is a span with data-code-copy; ThreadConversation delegates the
+      // click (button is not in the sanitizer's tag allowlist, and v-html cannot bind events).
+      return `<div class="message-code-block"><div class="message-code-bar">${language}<span class="message-code-copy" role="button" tabindex="0" data-code-copy>Copy</span></div><pre class="message-code-pre"><code class="hljs">${renderCachedHighlightedCodeAsHtml(block.language, block.value)}</code></pre></div>`
     }
     if (block.kind === 'thematicBreak') {
       return '<hr class="message-divider">'

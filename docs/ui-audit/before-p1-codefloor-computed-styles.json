@@ -257,7 +257,7 @@
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1028,
+    "nodes": 517,
     "file": "output\\playwright\\ui-audit\\desktop-dark-thread.png"
   },
   {
@@ -387,7 +387,7 @@
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1028,
+    "nodes": 517,
     "file": "output\\playwright\\ui-audit\\desktop-light-thread.png"
   },
   {
@@ -577,37 +577,10 @@
         "color": "rgb(62, 207, 142)",
         "radius": "0px",
         "border": "0px solid rgb(62, 207, 142)"
-      },
-      {
-        "sel": ".message-code-block",
-        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
-        "fontSize": "16px",
-        "background": "rgb(39, 39, 42)",
-        "color": "rgb(244, 244, 245)",
-        "radius": "14px",
-        "border": "1px solid rgb(39, 39, 42)"
-      },
-      {
-        "sel": ".message-code-language",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
-        "fontSize": "11px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
-      },
-      {
-        "sel": ".message-code-pre",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
-        "fontSize": "13px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(228, 228, 231)",
-        "radius": "0px",
-        "border": "0px solid rgb(228, 228, 231)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 7740,
+    "nodes": 7729,
     "file": "output\\playwright\\ui-audit\\desktop-dark-tools.png"
   },
   {
@@ -797,37 +770,10 @@
         "color": "rgb(29, 125, 84)",
         "radius": "0px",
         "border": "0px solid rgb(29, 125, 84)"
-      },
-      {
-        "sel": ".message-code-block",
-        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
-        "fontSize": "16px",
-        "background": "rgb(255, 255, 255)",
-        "color": "oklch(0.208 0.042 265.755)",
-        "radius": "14px",
-        "border": "1px solid rgb(227, 227, 232)"
-      },
-      {
-        "sel": ".message-code-language",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
-        "fontSize": "11px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(99, 99, 109)",
-        "radius": "0px",
-        "border": "0px solid rgb(99, 99, 109)"
-      },
-      {
-        "sel": ".message-code-pre",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
-        "fontSize": "13px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(63, 63, 70)",
-        "radius": "0px",
-        "border": "0px solid rgb(63, 63, 70)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 7740,
+    "nodes": 7729,
     "file": "output\\playwright\\ui-audit\\desktop-light-tools.png"
   },
   {
@@ -1194,7 +1140,7 @@
       }
     ],
     "scrollHeight": 844,
-    "nodes": 849,
+    "nodes": 338,
     "file": "output\\playwright\\ui-audit\\mobile-dark-thread.png"
   }
 ]
