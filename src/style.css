@@ -8,7 +8,7 @@
    不新增装饰。
 
    P0 不变量：下面每个取值都逐一对等于迁移前的 zinc 阶梯，因此深色外观不发生
-   变化——唯一的例外是原先不达 AA 的 text-zinc-500/600（2.2–3.1:1）被有意提升
+   变化——唯一的例外是原先不达 AA 的 text-ink-3/600（2.2–3.1:1）被有意提升
    到 ink-4。P1 才在 token 这一层把表面 5 档收成 4 档、墨色统一到目标值。
 
    注意 style.css 里同时存在两个主题层：`:root.dark .x` 是深色覆盖（1241 处颜色
@@ -82,6 +82,16 @@
   /* 展示字体只出现在品牌与空态（Hero），永不进入用户内容。 */
   --font-display: "Bricolage Grotesque", "IBM Plex Sans", "PingFang SC",
     "Microsoft YaHei", sans-serif;
+
+  /* 排版阶梯（§4 表的补充实现）：nano 10px 是度量稿徽记级（方案表 micro 11 之下的
+     一档，度量稿实际用了 9 处）；12px 复用 text-xs、18/24px 复用 text-lg/text-2xl，
+     不再造别名。只定字号、不绑行高——与被替换的 text-[Npx] 逐字同行为，行高由
+     使用点按阶梯表搭配。 */
+  --text-nano: 10px;
+  --text-micro: 11px;
+  --text-ui: 13px;
+  --text-body: 15px;
+  --text-display: 40px;
 }
 
 /* 颜色 token 走 inline：生成 bg-s1 这类工具类时直接引用运行时可切换的变量，
@@ -172,11 +182,32 @@
 }
 
 /* 亮色下的页面底色。深色由下面的 `:root.dark body` 接管；这一条修掉的是「亮色下
-   body 仍是近黑」——原先 index.html 上硬编码的 bg-slate-950 既错了主题，也跟应用
+   body 仍是近黑」——原先 index.html 上硬编码的 bg-s-inv 既错了主题，也跟应用
    自己的深色表面（zinc-950 而非 slate-950）不是一个值。 */
 body {
   background-color: var(--s0);
   color: var(--ink-2);
+}
+
+/* 全局焦点可见性（P2 a11y 兜底）：组件自带的 focus-visible:ring 都伴随
+   focus-visible:outline-none（更高优先级），会压掉这条规则——只有完全没有
+   焦点样式的交互元素才会吃到它。焦点环统一 --line-focus（两主题各自取值）。 */
+:focus-visible {
+  outline: 2px solid var(--line-focus);
+  outline-offset: 2px;
+}
+
+/* 全局动效归零（P2 a11y 兜底）：呼吸 pip 等组件级动画已各自处理过，这里是
+   对所有未处理动画/过渡的最后覆盖。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 :root.dark {
@@ -249,11 +280,11 @@ body {
 }
 
 :root.dark .sidebar-settings-area {
-  @apply bg-s1 border-line-2;
+  @apply border-line-1 bg-s0;
 }
 
 :root.dark .sidebar-settings-icon-button {
-  @apply text-ink-4 hover:bg-s2 hover:text-ink-2;
+  @apply text-ink-4 hover:bg-s2 hover:text-ink-1;
 }
 
 :root.dark .sidebar-settings-panel {
@@ -309,15 +340,15 @@ body {
 }
 
 .thread-compaction-banner {
-  @apply mx-auto flex max-w-[min(var(--chat-column-max,72rem),100%)] items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 shadow-sm;
+  @apply mx-auto flex max-w-[min(var(--chat-column-max,72rem),100%)] items-center gap-2 rounded-lg border border-line-1 bg-s2 px-3 py-1.5 text-xs text-ink-3 shadow-sm;
 }
 
 .thread-compaction-banner.is-done {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  @apply border-ok bg-ok text-ok;
 }
 
 .thread-compaction-banner-spinner {
-  @apply inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
+  @apply inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-line-2 border-t-line-5;
 }
 
 :root.dark .thread-compaction-banner {
@@ -368,7 +399,7 @@ body {
 :root.dark .sidebar-settings-remote-reload,
 :root.dark .sidebar-settings-remote-client,
 :root.dark .sidebar-settings-remote-client-revoke {
-  @apply border-line-2 bg-s2;
+  @apply text-ink-4 hover:bg-rose-900/50 hover:text-rose-300;
 }
 
 :root.dark .sidebar-settings-remote-row {
@@ -389,7 +420,7 @@ body {
 }
 
 :root.dark .sidebar-settings-remote-client-revoke {
-  @apply text-ink-4 hover:bg-rose-900/50 hover:text-rose-300;
+  @apply border-line-2 bg-s2;
 }
 
 :root.dark .sidebar-settings-context-value {
@@ -1750,7 +1781,7 @@ body {
 :root.dark .review-pane-bulk-button,
 :root.dark .review-pane-row-button,
 :root.dark .review-pane-primary-cta {
-  @apply border-line-3 bg-s2 text-ink-2 hover:bg-s3;
+  @apply border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-400;
 }
 
 :root.dark .review-pane-control-label {
@@ -1786,7 +1817,7 @@ body {
 }
 
 :root.dark .review-pane-primary-cta {
-  @apply border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-400;
+  @apply border-line-3 bg-s2 text-ink-2 hover:bg-s3;
 }
 
 :root.dark .review-pane-refresh {
@@ -2569,7 +2600,7 @@ body {
    Extracted so both popovers share the same geometry, surface tokens, and
    entrance motion instead of duplicating the container rules per component. */
 .composer-popover {
-  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-line-1 bg-s2 p-1 shadow-lg;
   animation: composer-popover-in 150ms ease-out;
 }
 
@@ -2899,11 +2930,11 @@ body {
 }
 
 :root.dark .sidebar-settings-area {
-  @apply border-line-1 bg-s0;
+  @apply bg-s1 border-line-2;
 }
 
 :root.dark .sidebar-settings-icon-button {
-  @apply text-ink-4 hover:bg-s2 hover:text-ink-1;
+  @apply text-ink-4 hover:bg-s2 hover:text-ink-2;
 }
 
 :root.dark .settings-group-nav {

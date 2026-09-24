@@ -155,9 +155,9 @@ check(
   nakedDarkTotal ? nakedDarkWhere.join(', ') : `扫描 ${units.length} 个 CSS 单元`,
 )
 check(
-  `亮色基线裸色板不增（基线 ${BASELINE.lightNaked}，待两套主题对等后统一迁移）`,
-  nakedLightTotal > 0 && nakedLightTotal <= BASELINE.lightNaked,
-  `当前 ${nakedLightTotal}`,
+  `亮色基线裸色板清零（round-97 收敛，原基线 ${BASELINE.lightNaked}）`,
+  nakedLightTotal === 0,
+  nakedLightTotal ? nakedLightWhere.join(', ') : '亮侧（暗色覆盖块之外）已无 zinc/slate/状态色板类',
 )
 
 // 组件样式要用 token 类，@reference 必须指向项目样式表；指向 "tailwindcss" 只会拿到
@@ -441,12 +441,22 @@ check(
 // -------------------------------------------------------- 字号临时值不增
 let arbitraryText = 0
 for (const f of [...vueFiles, STYLE]) {
-  arbitraryText += (fs.readFileSync(f, 'utf8').match(/text-\[[0-9]/g) || []).length
+  // 只计固定 px/rem 任意值；text-[1em] 是「继承字号」重置（等宽于 inherit），不属阶梯违规。
+  arbitraryText += (fs.readFileSync(f, 'utf8').match(/text-\[\d+(\.\d+)?(px|rem)\]/g) || []).length
 }
 check(
-  `全 src 的 text-[Npx] 临时字号不增（基线 ${BASELINE.arbitraryText}）`,
-  arbitraryText <= BASELINE.arbitraryText,
+  `全 src 的 text-[Npx] 临时字号清零（基线 ${BASELINE.arbitraryText}，round-96 阶梯化）`,
+  arbitraryText === 0,
   `当前 ${arbitraryText}（扫描 ${vueFiles.length + 1} 个文件）`,
+)
+// 阶梯 token（round-96）：nano/micro/ui/body 必须在非 inline @theme 里定义——
+// 12px 复用 text-xs，18/24/40px 复用 text-lg/2xl 与 display 字体。
+const ladderTokens = ['--text-nano', '--text-micro', '--text-ui', '--text-body']
+const missingLadder = ladderTokens.filter((t) => !new RegExp(`^\\s*${t}:`, 'm').test(fs.readFileSync(STYLE, 'utf8')))
+check(
+  '排版阶梯 token（nano 10 / micro 11 / ui 13 / body 15）已在 @theme 定义',
+  missingLadder.length === 0,
+  missingLadder.join(', ') || ladderTokens.join(' / '),
 )
 
 // -------------------------------------------------------------- 字体资产

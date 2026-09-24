@@ -436,43 +436,43 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-title {
-  @apply text-xl sm:text-2xl font-semibold text-zinc-900 m-0;
+  @apply text-xl sm:text-2xl font-semibold text-ink-1 m-0;
 }
 
 .skills-hub-subtitle {
-  @apply text-sm text-zinc-500 m-0;
+  @apply text-sm text-ink-3 m-0;
 }
 
 .skills-hub-sort {
-  @apply shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:border-zinc-300 cursor-pointer;
+  @apply shrink-0 rounded-lg border border-line-1 bg-s2 px-2.5 py-1.5 text-xs font-medium text-ink-3 transition hover:bg-s0 hover:border-line-2 cursor-pointer;
 }
 
 .skills-sync-panel {
-  @apply rounded-xl border border-zinc-200 bg-zinc-50 p-3 flex flex-col gap-2;
+  @apply rounded-xl border border-line-1 bg-s0 p-3 flex flex-col gap-2;
 }
 
 .skills-sync-header {
-  @apply flex flex-wrap items-center gap-2 text-sm text-zinc-700;
+  @apply flex flex-wrap items-center gap-2 text-sm text-ink-2;
 }
 
 .skills-sync-badge {
-  @apply text-xs rounded-md border border-zinc-300 bg-white px-2 py-0.5;
+  @apply text-xs rounded-md border border-line-2 bg-s2 px-2 py-0.5;
 }
 
 .skills-sync-badge-link {
-  @apply text-zinc-700 hover:text-zinc-900 hover:border-zinc-400;
+  @apply text-ink-2 hover:text-ink-1 hover:border-line-3;
 }
 
 .skills-sync-device {
-  @apply text-xs text-zinc-600 flex items-center gap-2 flex-wrap;
+  @apply text-xs text-ink-3 flex items-center gap-2 flex-wrap;
 }
 
 .skills-sync-meta {
-  @apply text-xs text-zinc-600 flex items-center gap-3 flex-wrap;
+  @apply text-xs text-ink-3 flex items-center gap-3 flex-wrap;
 }
 
 .skills-sync-error {
-  @apply flex items-start justify-between gap-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-2 py-1;
+  @apply flex items-start justify-between gap-3 text-xs text-alert bg-alert border border-alert rounded-md px-2 py-1;
 }
 
 .skills-sync-actions {
@@ -480,7 +480,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-search-panel {
-  @apply rounded-xl border border-zinc-200 bg-white p-3 flex flex-col gap-2;
+  @apply rounded-xl border border-line-1 bg-s2 p-3 flex flex-col gap-2;
 }
 
 .skills-search-header {
@@ -488,15 +488,15 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-search-copy {
-  @apply flex flex-col gap-0.5 text-sm text-zinc-700;
+  @apply flex flex-col gap-0.5 text-sm text-ink-2;
 }
 
 .skills-search-copy span {
-  @apply text-xs text-zinc-500;
+  @apply text-xs text-ink-3;
 }
 
 .skills-directory-link {
-  @apply inline-flex shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-white hover:text-zinc-900;
+  @apply inline-flex shrink-0 items-center justify-center rounded-lg border border-line-1 bg-s0 px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-line-2 hover:bg-s2 hover:text-ink-1;
 }
 
 .skills-search-form {
@@ -504,7 +504,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-search-input {
-  @apply min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
+  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s0 px-3 py-2 text-sm text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
 }
 
 .skills-hub-toast {
@@ -512,11 +512,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-toast-success {
-  @apply border border-emerald-200 bg-emerald-50 text-emerald-700;
+  @apply border border-ok bg-ok text-ok;
 }
 
 .skills-hub-toast-error {
-  @apply border border-rose-200 bg-rose-50 text-rose-700;
+  @apply border border-alert bg-alert text-alert;
 }
 
 .skills-hub-section {
@@ -524,7 +524,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-section-toggle {
-  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 cursor-pointer;
+  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
 }
 
 .skills-hub-section-title {
@@ -544,18 +544,18 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-loading {
-  @apply text-sm text-zinc-400 py-8 text-center;
+  @apply text-sm text-ink-3 py-8 text-center;
 }
 
 .skills-hub-error {
-  @apply flex items-start justify-between gap-3 text-sm text-rose-600 p-4 text-left rounded-lg border border-rose-200 bg-rose-50;
+  @apply flex items-start justify-between gap-3 text-sm text-alert p-4 text-left rounded-lg border border-alert bg-alert;
 }
 
 .skills-error-feedback {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .skills-hub-empty {
-  @apply text-sm text-zinc-400 py-8 text-center;
+  @apply text-sm text-ink-3 py-8 text-center;
 }
 </style>

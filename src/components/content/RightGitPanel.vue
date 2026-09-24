@@ -416,7 +416,7 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-review {
-  @apply flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-left text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50;
+  @apply flex w-full items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2 text-left text-sm font-medium text-ink-2 shadow-sm transition hover:bg-s0;
 }
 
 .rgp-review-icon {
@@ -432,47 +432,47 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-added {
-  @apply text-emerald-600;
+  @apply text-ok;
 }
 
 .rgp-removed {
-  @apply text-red-600;
+  @apply text-alert;
 }
 
 .rgp-state {
-  @apply rounded-lg bg-zinc-50 px-2 py-1.5 text-xs;
+  @apply rounded-lg bg-s0 px-2 py-1.5 text-xs;
 }
 
 .rgp-state-label {
-  @apply block text-[0.68rem] uppercase tracking-wide text-zinc-500;
+  @apply block text-micro uppercase tracking-wide text-ink-3;
 }
 
 .rgp-state-value {
-  @apply block truncate font-medium text-zinc-800;
+  @apply block truncate font-medium text-ink-2;
 }
 
 .rgp-state-meta {
-  @apply mt-0.5 block truncate text-[0.68rem] text-zinc-500;
+  @apply mt-0.5 block truncate text-micro text-ink-3;
 }
 
 .rgp-status {
-  @apply flex items-start justify-between gap-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800;
+  @apply flex items-start justify-between gap-2 rounded-lg bg-live px-2 py-1.5 text-xs text-live;
 }
 
 .rgp-status.is-error {
-  @apply bg-red-50 text-red-700;
+  @apply bg-alert text-alert;
 }
 
 .rgp-feedback {
-  @apply shrink-0 rounded-full border border-red-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-red-700 transition hover:bg-red-50;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2 py-0.5 text-nano font-semibold text-alert transition hover:bg-alert;
 }
 
 .rgp-section {
-  @apply rounded-lg border border-zinc-100 bg-zinc-50 p-1;
+  @apply rounded-lg border border-line-1 bg-s0 p-1;
 }
 
 .rgp-section-title {
-  @apply flex items-center justify-between gap-2 px-1 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-zinc-500;
+  @apply flex items-center justify-between gap-2 px-1 py-1 text-micro font-semibold uppercase tracking-wide text-ink-3;
 }
 
 .rgp-search-wrap {
@@ -480,11 +480,11 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-search {
-  @apply w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-zinc-400;
+  @apply w-full rounded-md border border-line-1 bg-s2 px-2 py-1.5 text-xs text-ink-2 outline-none transition focus:border-line-3;
 }
 
 .rgp-toggle-row {
-  @apply mx-1 mb-1 flex items-center gap-2 rounded-md px-1 py-1 text-xs text-zinc-500;
+  @apply mx-1 mb-1 flex items-center gap-2 rounded-md px-1 py-1 text-xs text-ink-3;
 }
 
 .rgp-toggle-row input {
@@ -511,20 +511,20 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-branch-button {
-  @apply min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 disabled:cursor-wait;
+  @apply min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-2 hover:bg-s1 disabled:cursor-wait;
 }
 
 .rgp-branch-button.is-current,
 .rgp-branch-button.is-selected {
-  @apply bg-zinc-100 text-zinc-950;
+  @apply bg-s1 text-ink-1;
 }
 
 .rgp-branch-button.is-selected {
-  @apply ring-1 ring-zinc-300;
+  @apply ring-1 ring-line-2;
 }
 
 .rgp-branch-checkout {
-  @apply w-auto shrink-0 items-center rounded-lg px-2 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-wait;
+  @apply w-auto shrink-0 items-center rounded-lg px-2 py-1.5 text-xs text-ink-3 hover:bg-s1 hover:text-ink-2 disabled:cursor-wait;
 }
 
 .rgp-branch-name,
@@ -533,23 +533,23 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-branch-meta {
-  @apply shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.65rem] uppercase text-zinc-500;
+  @apply shrink-0 rounded-full bg-s1 px-1.5 py-0.5 text-nano uppercase text-ink-3;
 }
 
 .rgp-commit {
-  @apply flex-col gap-0.5 rounded-md px-2 py-1.5 text-xs text-zinc-700 hover:bg-white disabled:cursor-wait;
+  @apply flex-col gap-0.5 rounded-md px-2 py-1.5 text-xs text-ink-2 hover:bg-s2 disabled:cursor-wait;
 }
 
 .rgp-commit.is-current {
-  @apply bg-white ring-1 ring-zinc-300;
+  @apply bg-s2 ring-1 ring-line-2;
 }
 
 .rgp-commit.is-selected {
-  @apply bg-white ring-1 ring-zinc-400;
+  @apply bg-s2 ring-1 ring-line-3;
 }
 
 .rgp-commit-top {
-  @apply flex items-center justify-between gap-2 text-[0.68rem] text-zinc-500;
+  @apply flex items-center justify-between gap-2 text-micro text-ink-3;
 }
 
 .rgp-commit-meta {
@@ -557,23 +557,23 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-ref {
-  @apply inline-flex w-fit max-w-full items-center rounded border-0 bg-zinc-200 px-1 py-0.5 font-mono text-[0.68rem] text-zinc-700 outline-none transition hover:bg-zinc-300;
+  @apply inline-flex w-fit max-w-full items-center rounded border-0 bg-line-1 px-1 py-0.5 font-mono text-micro text-ink-2 outline-none transition hover:bg-line-2;
 }
 
 .rgp-empty {
-  @apply px-2 py-1.5 text-xs text-zinc-500;
+  @apply px-2 py-1.5 text-xs text-ink-3;
 }
 
 .rgp-empty.is-error {
-  @apply text-red-700;
+  @apply text-alert;
 }
 
 .rgp-commit-detail-subject {
-  @apply m-0 mt-1 line-clamp-2 px-1 pb-1 text-xs text-zinc-800;
+  @apply m-0 mt-1 line-clamp-2 px-1 pb-1 text-xs text-ink-2;
 }
 
 .rgp-reset-commit {
-  @apply rounded-md border border-zinc-200 bg-zinc-900 px-2 py-1 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-wait disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400;
+  @apply rounded-md border border-line-1 bg-s-inv px-2 py-1 text-xs font-medium text-ink-inv transition hover:bg-s-inv-soft disabled:cursor-wait disabled:border-line-1 disabled:bg-s1 disabled:text-ink-3;
 }
 
 .rgp-file-list {
@@ -581,7 +581,7 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-file {
-  @apply mt-1 flex-col gap-1 rounded-md px-2 py-1.5 text-xs text-zinc-700 hover:bg-white;
+  @apply mt-1 flex-col gap-1 rounded-md px-2 py-1.5 text-xs text-ink-2 hover:bg-s2;
 }
 
 .rgp-file-meta-row {
@@ -589,11 +589,11 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-file-status {
-  @apply w-fit rounded bg-zinc-200 px-1.5 py-0.5 text-[0.65rem] uppercase text-zinc-600;
+  @apply w-fit rounded bg-line-1 px-1.5 py-0.5 text-nano uppercase text-ink-3;
 }
 
 .rgp-file-delta {
-  @apply flex shrink-0 items-center gap-1 font-mono text-[0.68rem];
+  @apply flex shrink-0 items-center gap-1 font-mono text-micro;
 }
 
 .rgp-file-path {
@@ -601,6 +601,6 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-file-previous-path {
-  @apply min-w-0 truncate text-[0.68rem] text-zinc-500;
+  @apply min-w-0 truncate text-micro text-ink-3;
 }
 </style>

@@ -21,6 +21,6 @@ const { t } = useUiLanguage()
 }
 
 .sidebar-nav-item {
-  @apply text-sm font-normal text-slate-700 hover:bg-slate-200;
+  @apply text-sm font-normal text-ink-2 hover:bg-line-1;
 }
 </style>

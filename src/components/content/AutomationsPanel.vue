@@ -350,15 +350,15 @@ function getPathLeaf(path: string): string {
 }
 
 .automations-toolbar {
-  @apply flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 pb-3;
+  @apply flex shrink-0 items-center justify-between gap-3 border-b border-line-1 pb-3;
 }
 
 .automations-summary {
-  @apply flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-zinc-500;
+  @apply flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-ink-3;
 }
 
 .automations-summary span {
-  @apply rounded-full bg-zinc-100 px-2 py-1;
+  @apply rounded-full bg-s1 px-2 py-1;
 }
 
 .automations-actions {
@@ -367,11 +367,11 @@ function getPathLeaf(path: string): string {
 
 .automations-refresh,
 .automations-create {
-  @apply h-8 shrink-0 rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60;
+  @apply h-8 shrink-0 rounded-full border border-line-1 bg-s2 px-3 text-xs font-medium text-ink-2 transition hover:bg-s0 disabled:opacity-60;
 }
 
 .automations-error {
-  @apply m-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;
+  @apply m-0 rounded-lg border border-alert bg-alert px-3 py-2 text-sm text-alert;
 }
 
 .automations-layout {
@@ -379,25 +379,25 @@ function getPathLeaf(path: string): string {
 }
 
 .automations-list {
-  @apply min-h-0 overflow-y-auto rounded-lg border border-zinc-200 bg-white;
+  @apply min-h-0 overflow-y-auto rounded-lg border border-line-1 bg-s2;
 }
 
 .automation-row {
-  @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-zinc-100 px-3 py-3 text-left transition last:border-b-0 hover:bg-zinc-50;
+  @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-line-1 px-3 py-3 text-left transition last:border-b-0 hover:bg-s0;
 }
 
 .automation-row.is-selected {
-  @apply bg-zinc-100;
+  @apply bg-s1;
 }
 
 .automation-row-icon,
 .automation-detail-icon {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700;
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ok text-ok;
 }
 
 .automation-row-icon[data-status='PAUSED'],
 .automation-detail-icon[data-status='PAUSED'] {
-  @apply bg-zinc-100 text-zinc-500;
+  @apply bg-s1 text-ink-3;
 }
 
 .automation-row-icon :deep(svg),
@@ -410,11 +410,11 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-row-title {
-  @apply truncate text-sm font-medium text-zinc-950;
+  @apply truncate text-sm font-medium text-ink-1;
 }
 
 .automation-row-meta {
-  @apply truncate text-xs text-zinc-500;
+  @apply truncate text-xs text-ink-3;
 }
 
 .automation-row-side {
@@ -422,20 +422,20 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-row-status {
-  @apply text-xs font-medium text-emerald-700;
+  @apply text-xs font-medium text-ok;
 }
 
 .automation-row-status[data-status='PAUSED'] {
-  @apply text-zinc-500;
+  @apply text-ink-3;
 }
 
 .automation-row-schedule {
-  @apply max-w-36 truncate text-xs text-zinc-500;
+  @apply max-w-36 truncate text-xs text-ink-3;
 }
 
 .automation-edit-button,
 .automation-detail-edit {
-  @apply h-7 shrink-0 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50;
+  @apply h-7 shrink-0 rounded-md border border-line-1 bg-s2 px-2 text-xs font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .automation-detail-edit {
@@ -443,7 +443,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail {
-  @apply flex min-h-0 flex-col gap-4 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-4;
+  @apply flex min-h-0 flex-col gap-4 overflow-y-auto rounded-lg border border-line-1 bg-s2 p-4;
 }
 
 .automation-detail-heading {
@@ -455,11 +455,11 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail-title-wrap h2 {
-  @apply m-0 truncate text-base font-semibold text-zinc-950;
+  @apply m-0 truncate text-base font-semibold text-ink-1;
 }
 
 .automation-detail-title-wrap span {
-  @apply text-xs font-medium uppercase tracking-[0.14em] text-zinc-500;
+  @apply text-xs font-medium uppercase tracking-[0.14em] text-ink-3;
 }
 
 .automation-detail-grid {
@@ -467,15 +467,15 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail-grid div {
-  @apply min-w-0 rounded-lg bg-zinc-50 px-3 py-2;
+  @apply min-w-0 rounded-lg bg-s0 px-3 py-2;
 }
 
 .automation-detail-grid dt {
-  @apply text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500;
+  @apply text-micro font-medium uppercase tracking-[0.12em] text-ink-3;
 }
 
 .automation-detail-grid dd {
-  @apply m-0 truncate text-sm text-zinc-900;
+  @apply m-0 truncate text-sm text-ink-1;
 }
 
 .automation-detail-prompt {
@@ -483,23 +483,23 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail-prompt h3 {
-  @apply m-0 text-xs font-medium uppercase tracking-[0.14em] text-zinc-500;
+  @apply m-0 text-xs font-medium uppercase tracking-[0.14em] text-ink-3;
 }
 
 .automation-detail-prompt p {
-  @apply m-0 whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-sm leading-6 text-zinc-800;
+  @apply m-0 whitespace-pre-wrap rounded-lg bg-s0 p-3 text-sm leading-6 text-ink-2;
 }
 
 .automations-empty {
-  @apply mx-auto flex min-h-72 w-full max-w-xl flex-1 flex-col items-center justify-center gap-2 text-center text-zinc-500;
+  @apply mx-auto flex min-h-72 w-full max-w-xl flex-1 flex-col items-center justify-center gap-2 text-center text-ink-3;
 }
 
 .automations-empty-icon {
-  @apply h-8 w-8 text-zinc-400;
+  @apply h-8 w-8 text-ink-3;
 }
 
 .automations-empty p {
-  @apply m-0 text-base font-medium text-zinc-800;
+  @apply m-0 text-base font-medium text-ink-2;
 }
 
 .automations-empty span {

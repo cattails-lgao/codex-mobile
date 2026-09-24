@@ -2035,16 +2035,16 @@ onBeforeUnmount(() => {
 }
 
 .conversation-loading {
-  @apply m-0 px-6 text-sm text-slate-500;
+  @apply m-0 px-6 text-sm text-ink-3;
 }
 
 .conversation-switching-bar {
-  @apply pointer-events-none absolute top-0 left-0 right-0 z-10 px-3 py-1 text-center text-xs text-slate-500
-         bg-slate-100/85 dark:bg-slate-800/85 backdrop-blur-sm;
+  @apply pointer-events-none absolute top-0 left-0 right-0 z-10 px-3 py-1 text-center text-xs text-ink-3
+         bg-s1/85 backdrop-blur-sm;
 }
 
 .conversation-empty {
-  @apply m-0 px-6 text-sm text-slate-500;
+  @apply m-0 px-6 text-sm text-ink-3;
 }
 
 .conversation-list {
@@ -2056,9 +2056,9 @@ onBeforeUnmount(() => {
 }
 
 .load-more-button {
-  @apply px-4 py-1.5 text-xs rounded-full border border-slate-300 dark:border-slate-600
-         text-slate-500 dark:text-slate-400 bg-transparent
-         hover:bg-slate-100 dark:hover:bg-slate-800
+  @apply px-4 py-1.5 text-xs rounded-full border border-line-2
+         text-ink-3 bg-transparent
+         hover:bg-s1
          disabled:opacity-40 disabled:cursor-not-allowed
          transition-colors cursor-pointer;
 }
@@ -2084,11 +2084,11 @@ onBeforeUnmount(() => {
 .conversation-item-process[data-role='assistant'] .message-list,
 .conversation-item-process[data-role='assistant'] .message-list-item-text,
 .conversation-item-process[data-role='assistant'] .message-blockquote {
-  @apply text-[13px] leading-6 text-zinc-600;
+  @apply text-ui leading-6 text-ink-3;
 }
 
 .conversation-item-process[data-role='assistant'] .message-heading {
-  @apply text-[15px] text-zinc-700;
+  @apply text-body text-ink-2;
 }
 
 .conversation-item-final {
@@ -2100,7 +2100,7 @@ onBeforeUnmount(() => {
 }
 
 .conversation-item-request .message-card[data-role='user'] {
-  @apply rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3 shadow-none;
+  @apply rounded-lg border border-line-1 bg-s1 px-4 py-3 shadow-none;
 }
 
 :root.dark .conversation-item-request .message-card[data-role='user'] {
@@ -2113,11 +2113,11 @@ onBeforeUnmount(() => {
 }
 
 .thread-plan-record {
-  @apply w-full max-w-[min(var(--chat-card-max,76ch),100%)] border-l-2 border-zinc-300 py-1 pl-3 text-xs leading-5 text-zinc-600;
+  @apply w-full max-w-[min(var(--chat-card-max,76ch),100%)] border-l-2 border-line-2 py-1 pl-3 text-xs leading-5 text-ink-3;
 }
 
 .thread-plan-record-header {
-  @apply font-medium text-zinc-700;
+  @apply font-medium text-ink-2;
 }
 
 .thread-plan-record-explanation {
@@ -2133,15 +2133,15 @@ onBeforeUnmount(() => {
 }
 
 .thread-plan-record-marker {
-  @apply shrink-0 font-mono text-[11px] text-zinc-400;
+  @apply shrink-0 font-mono text-micro text-ink-3;
 }
 
 .thread-plan-record-steps li[data-status='completed'] .thread-plan-record-marker {
-  @apply text-emerald-600;
+  @apply text-ok;
 }
 
 .thread-plan-record-steps li[data-status='inProgress'] .thread-plan-record-marker {
-  @apply text-amber-600;
+  @apply text-live;
 }
 
 :root.dark .thread-plan-record {
@@ -2178,15 +2178,15 @@ onBeforeUnmount(() => {
 }
 
 .thread-compaction-inline {
-  @apply inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-500;
+  @apply inline-flex items-center gap-1.5 rounded-full border border-line-1 bg-s0 px-3 py-1 text-micro text-ink-3;
 }
 
 .thread-compaction-inline--done {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  @apply border-ok bg-ok text-ok;
 }
 
 .thread-compaction-spinner {
-  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
+  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-2 border-t-line-5;
 }
 
 :root.dark .thread-compaction-inline {
@@ -2206,7 +2206,7 @@ onBeforeUnmount(() => {
 }
 
 .jump-to-latest-button {
-  @apply absolute left-1/2 bottom-4 z-20 inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/96 text-slate-700 shadow-lg shadow-slate-900/10 transition hover:-translate-x-1/2 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900;
+  @apply absolute left-1/2 bottom-4 z-20 inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-line-2 bg-s2/96 text-ink-2 shadow-lg shadow-ink-1/10 transition hover:-translate-x-1/2 hover:-translate-y-0.5 hover:bg-s2 hover:text-ink-1;
 }
 
 .jump-to-latest-icon {
@@ -2218,19 +2218,19 @@ onBeforeUnmount(() => {
 }
 
 .request-card {
-  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2;
+  @apply w-full max-w-[min(var(--chat-column-max,45rem),100%)] rounded-xl border border-live bg-live px-4 py-3 flex flex-col gap-2;
 }
 
 .request-title {
-  @apply m-0 text-sm leading-5 font-semibold text-amber-900;
+  @apply m-0 text-sm leading-5 font-semibold text-live;
 }
 
 .request-meta {
-  @apply m-0 text-xs leading-4 text-amber-700;
+  @apply m-0 text-xs leading-4 text-live;
 }
 
 .request-reason {
-  @apply m-0 text-sm leading-5 text-amber-900 whitespace-pre-wrap break-words;
+  @apply m-0 text-sm leading-5 text-live whitespace-pre-wrap break-words;
   overflow-wrap: anywhere;
 }
 
@@ -2239,11 +2239,11 @@ onBeforeUnmount(() => {
 }
 
 .request-button {
-  @apply rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100 transition;
+  @apply rounded-md border border-live bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live transition;
 }
 
 .request-button-primary {
-  @apply border-amber-500 bg-amber-500 text-white hover:bg-amber-600;
+  @apply border-live bg-live text-ink-inv hover:bg-live;
 }
 
 .request-user-input {
@@ -2255,27 +2255,27 @@ onBeforeUnmount(() => {
 }
 
 .request-question-title {
-  @apply m-0 text-sm leading-5 font-medium text-amber-900;
+  @apply m-0 text-sm leading-5 font-medium text-live;
 }
 
 .request-question-text {
-  @apply m-0 text-xs leading-4 text-amber-800;
+  @apply m-0 text-xs leading-4 text-live;
 }
 
 .request-question-option-description {
-  @apply m-0 text-xs leading-4 text-amber-700;
+  @apply m-0 text-xs leading-4 text-live;
 }
 
 .request-link {
-  @apply inline-flex w-fit rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100 transition;
+  @apply inline-flex w-fit rounded-md border border-live bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live transition;
 }
 
 .request-select {
-  @apply h-8 rounded-md border border-amber-300 bg-white px-2 text-sm text-amber-900;
+  @apply h-8 rounded-md border border-live bg-s2 px-2 text-sm text-live;
 }
 
 .request-input {
-  @apply h-8 rounded-md border border-amber-300 bg-white px-2 text-sm text-amber-900 placeholder:text-amber-500;
+  @apply h-8 rounded-md border border-live bg-s2 px-2 text-sm text-live placeholder:text-live;
 }
 
 .request-checkbox-list {
@@ -2283,11 +2283,11 @@ onBeforeUnmount(() => {
 }
 
 .request-checkbox-row {
-  @apply flex items-center gap-2 text-sm text-amber-900;
+  @apply flex items-center gap-2 text-sm text-live;
 }
 
 .turn-error-feedback {
-  @apply mt-3 inline-flex w-fit rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply mt-3 inline-flex w-fit rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .message-body {
@@ -2323,7 +2323,7 @@ onBeforeUnmount(() => {
 }
 
 .message-image-button {
-  @apply block rounded-xl overflow-hidden border border-slate-300 bg-white p-0 transition hover:border-slate-400;
+  @apply block rounded-xl overflow-hidden border border-line-2 bg-s2 p-0 transition hover:border-line-3;
 }
 
 .message-image-preview {
@@ -2339,7 +2339,7 @@ onBeforeUnmount(() => {
 }
 
 .message-generated-image-preview {
-  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-white;
+  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-s2;
 }
 
 .message-file-attachments {
@@ -2351,15 +2351,15 @@ onBeforeUnmount(() => {
 }
 
 .message-file-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700;
+  @apply inline-flex items-center gap-1 rounded-md border border-line-1 bg-s0 px-2 py-0.5 text-xs text-ink-2;
 }
 
 .message-skill-chip {
-  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800 no-underline transition hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-900;
+  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-ok bg-ok px-2 py-0.5 text-xs text-ok no-underline transition hover:border-ok hover:bg-ok hover:text-ok;
 }
 
 .message-skill-chip-prefix {
-  @apply shrink-0 font-medium text-emerald-700;
+  @apply shrink-0 font-medium text-ok;
 }
 
 .message-skill-chip-name {
@@ -2367,7 +2367,7 @@ onBeforeUnmount(() => {
 }
 
 .message-file-chip-icon {
-  @apply text-[10px] leading-none;
+  @apply text-nano leading-none;
 }
 
 .message-file-chip-name {
@@ -2423,7 +2423,7 @@ onBeforeUnmount(() => {
 }
 
 .message-blockquote {
-  @apply m-0 border-l-4 border-slate-300 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-700 bg-slate-50/70 rounded-r-lg;
+  @apply m-0 border-l-4 border-line-2 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words text-ink-2 bg-s0/70 rounded-r-lg;
   overflow-wrap: anywhere;
 }
 
@@ -2467,7 +2467,7 @@ onBeforeUnmount(() => {
 }
 
 .message-task-checkbox {
-  @apply mt-0.5 text-sm leading-none text-slate-500 select-none;
+  @apply mt-0.5 text-sm leading-none text-ink-3 select-none;
 }
 
 .message-table-wrap {
@@ -2475,12 +2475,12 @@ onBeforeUnmount(() => {
 }
 
 .message-table {
-  @apply min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-slate-200 bg-white text-sm text-slate-800;
+  @apply min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-line-1 bg-s2 text-sm text-ink-2;
 }
 
 .message-table-head-cell,
 .message-table-cell {
-  @apply border-b border-l border-slate-200 px-3 py-2 align-top whitespace-pre-wrap break-words;
+  @apply border-b border-l border-line-1 px-3 py-2 align-top whitespace-pre-wrap break-words;
   overflow-wrap: anywhere;
 }
 
@@ -2490,7 +2490,7 @@ onBeforeUnmount(() => {
 }
 
 .message-table-head-cell {
-  @apply bg-slate-100 font-semibold text-slate-900;
+  @apply bg-s1 font-semibold text-ink-1;
 }
 
 .message-table-body-row:last-child .message-table-cell {
@@ -2508,11 +2508,11 @@ onBeforeUnmount(() => {
 }
 
 .message-strikethrough-text {
-  @apply line-through text-slate-500;
+  @apply line-through text-ink-3;
 }
 
 .message-markdown-image {
-  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-white;
+  @apply w-auto h-auto max-w-[min(560px,85vw)] max-h-[min(460px,62vh)] object-contain bg-s2;
 }
 
 .message-inline-code {
@@ -2532,11 +2532,11 @@ onBeforeUnmount(() => {
 }
 
 .message-code-language {
-  @apply mr-auto font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3;
+  @apply mr-auto font-mono text-micro uppercase tracking-[0.08em] text-ink-3;
 }
 
 .message-code-copy {
-  @apply ml-auto shrink-0 cursor-pointer font-mono text-[11px] text-ink-3 transition hover:text-ink-1;
+  @apply ml-auto shrink-0 cursor-pointer font-mono text-micro text-ink-3 transition hover:text-ink-1;
 }
 
 .message-code-copy[data-copied] {
@@ -2544,7 +2544,7 @@ onBeforeUnmount(() => {
 }
 
 .message-code-pre {
-  @apply m-0 overflow-x-auto px-3.5 py-3 text-[13px] leading-[1.65] font-mono text-ink-2 whitespace-pre;
+  @apply m-0 overflow-x-auto px-3.5 py-3 text-ui leading-[1.65] font-mono text-ink-2 whitespace-pre;
 }
 
 .message-code-pre :deep(.hljs) {
@@ -2552,11 +2552,11 @@ onBeforeUnmount(() => {
 }
 
 .message-file-link {
-  @apply text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
+  @apply text-sm leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
 }
 
 .message-divider {
-  @apply m-0 border-0 h-px bg-slate-300/80;
+  @apply m-0 border-0 h-px bg-line-2/80;
 }
 
 .message-stack[data-role='user'] {
@@ -2569,18 +2569,18 @@ onBeforeUnmount(() => {
 }
 
 .message-card[data-role='user'] {
-  @apply rounded-2xl bg-slate-200 px-4 py-3 max-w-[min(560px,100%)];
+  @apply rounded-2xl bg-line-1 px-4 py-3 max-w-[min(560px,100%)];
   width: 100%;
   margin-left: auto;
   align-self: flex-end;
 }
 
 .automation-message-label {
-  @apply mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
+  @apply mb-2 flex flex-wrap items-center gap-2 text-micro font-semibold uppercase tracking-[0.12em] text-ink-3;
 }
 
 .automation-message-label code {
-  @apply rounded-full bg-white/70 px-2 py-0.5 text-[10px] normal-case tracking-normal text-slate-600;
+  @apply rounded-full bg-s2/70 px-2 py-0.5 text-nano normal-case tracking-normal text-ink-3;
 }
 
 .message-card[data-role='assistant'],
@@ -2613,11 +2613,11 @@ onBeforeUnmount(() => {
 }
 
 .image-modal-close {
-  @apply absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-white/90 text-slate-900 border border-slate-300 flex items-center justify-center;
+  @apply absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-s2/90 text-ink-1 border border-line-2 flex items-center justify-center;
 }
 
 .image-modal-image {
-  @apply block max-w-full max-h-[90vh] rounded-2xl shadow-2xl bg-white;
+  @apply block max-w-full max-h-[90vh] rounded-2xl shadow-2xl bg-s2;
 }
 
 .icon-svg {

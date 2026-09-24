@@ -98,7 +98,7 @@ const emit = defineEmits<{
 }
 
 .skills-embedded-toggle {
-  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 cursor-pointer;
+  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
 }
 
 .skills-embedded-title {
@@ -122,7 +122,7 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-card {
-  @apply flex w-full flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-300 hover:shadow-sm cursor-pointer;
+  @apply flex w-full flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm cursor-pointer;
 }
 
 .mcp-skill-card-top {
@@ -130,7 +130,7 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-avatar-fallback {
-  @apply w-8 h-8 rounded-full shrink-0 bg-zinc-200 text-zinc-500 flex items-center justify-center text-xs font-medium uppercase;
+  @apply w-8 h-8 rounded-full shrink-0 bg-line-1 text-ink-3 flex items-center justify-center text-xs font-medium uppercase;
 }
 
 .mcp-skill-info {
@@ -142,19 +142,19 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-name {
-  @apply text-sm font-medium text-zinc-900 truncate;
+  @apply text-sm font-medium text-ink-1 truncate;
 }
 
 .mcp-skill-owner {
-  @apply text-xs text-zinc-400;
+  @apply text-xs text-ink-3;
 }
 
 .mcp-skill-meta {
-  @apply m-0 text-xs text-zinc-500;
+  @apply m-0 text-xs text-ink-3;
 }
 
 .mcp-skill-chevron {
-  @apply inline-block text-base leading-none text-zinc-400 transition-transform;
+  @apply inline-block text-base leading-none text-ink-3 transition-transform;
 }
 
 .mcp-skill-chevron.is-open {
@@ -162,41 +162,41 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-badge {
-  @apply shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none border;
+  @apply shrink-0 rounded-md px-1.5 py-0.5 text-nano font-medium leading-none border;
 }
 
 .mcp-skill-badge-ok {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  @apply border-ok bg-ok text-ok;
 }
 
 .mcp-skill-badge-warning {
-  @apply border-amber-200 bg-amber-50 text-amber-700;
+  @apply border-live bg-live text-live;
 }
 
 .mcp-skill-badge-muted {
-  @apply border-zinc-200 bg-zinc-100 text-zinc-500;
+  @apply border-line-1 bg-s1 text-ink-3;
 }
 
 .directory-loading,
 .directory-empty,
 .directory-error {
-  @apply rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500;
+  @apply rounded-xl border border-line-1 bg-s2 p-4 text-sm text-ink-3;
 }
 
 .directory-error {
-  @apply border-rose-200 bg-rose-50 text-rose-700;
+  @apply border-alert bg-alert text-alert;
 }
 
 .directory-mcp-detail {
-  @apply flex flex-col gap-3 border-t border-zinc-100 pt-3;
+  @apply flex flex-col gap-3 border-t border-line-1 pt-3;
 }
 
 .directory-mini-heading {
-  @apply m-0 text-xs font-semibold text-zinc-700;
+  @apply m-0 text-xs font-semibold text-ink-2;
 }
 
 .directory-mini-list {
-  @apply m-0 text-xs leading-relaxed text-zinc-500;
+  @apply m-0 text-xs leading-relaxed text-ink-3;
 }
 
 :global(:root.dark) .directory-loading,

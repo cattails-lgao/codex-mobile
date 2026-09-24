@@ -194,7 +194,7 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 }
 
 .rate-limit-card {
-  @apply w-full rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-right shadow-sm backdrop-blur;
+  @apply w-full rounded-xl border border-line-1 bg-s2/95 px-3 py-2 text-right shadow-sm backdrop-blur;
   max-width: 22rem;
 }
 
@@ -203,11 +203,11 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 }
 
 .rate-limit-card-title {
-  @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500;
+  @apply text-micro font-semibold uppercase tracking-[0.08em] text-ink-3;
 }
 
 .rate-limit-card-plan {
-  @apply rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600;
+  @apply rounded-full bg-s1 px-2 py-0.5 text-nano font-medium text-ink-3;
 }
 
 .rate-limit-card-metrics {
@@ -215,10 +215,10 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 }
 
 .rate-limit-card-metric {
-  @apply rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800;
+  @apply rounded-full bg-live px-2 py-0.5 text-xs font-medium text-live;
 }
 
 .rate-limit-card-footer {
-  @apply mt-1 text-[11px] text-zinc-500;
+  @apply mt-1 text-micro text-ink-3;
 }
 </style>

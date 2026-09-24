@@ -46,31 +46,31 @@ function onSelect(value: RuntimeMode): void {
 @reference "../../style.css";
 
 .runtime-toggle {
-  @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 p-1;
+  @apply inline-flex items-center gap-1 rounded-full border border-line-1 bg-s1 p-1;
 }
 
 .runtime-toggle-option {
-  @apply inline-flex h-8 items-center gap-1.5 rounded-full border border-transparent bg-transparent px-3 text-sm text-zinc-600 transition;
+  @apply inline-flex h-8 items-center gap-1.5 rounded-full border border-transparent bg-transparent px-3 text-sm text-ink-3 transition;
 }
 
 .runtime-toggle-option:hover {
-  @apply bg-zinc-200/70 text-zinc-900;
+  @apply bg-line-1/70 text-ink-1;
 }
 
 .runtime-toggle-option.is-selected {
-  @apply border-zinc-200 bg-white text-zinc-900 shadow-sm;
+  @apply border-line-1 bg-s2 text-ink-1 shadow-sm;
 }
 
 .runtime-toggle-option:focus-visible {
-  @apply outline-none ring-2 ring-zinc-300 ring-offset-1 ring-offset-white;
+  @apply outline-none ring-2 ring-line-2 ring-offset-1 ring-offset-white;
 }
 
 .runtime-toggle-option-icon {
-  @apply h-3.5 w-3.5 shrink-0 text-zinc-500;
+  @apply h-3.5 w-3.5 shrink-0 text-ink-3;
 }
 
 .runtime-toggle-option.is-selected .runtime-toggle-option-icon {
-  @apply text-zinc-700;
+  @apply text-ink-2;
 }
 
 .runtime-toggle-option-label {

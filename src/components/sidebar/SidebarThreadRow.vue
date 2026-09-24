@@ -161,15 +161,15 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-delete-button {
-  @apply absolute left-0 top-1/2 -translate-y-1/2 h-4 min-w-4 rounded text-zinc-500 opacity-0 pointer-events-none transition flex items-center justify-center;
+  @apply absolute left-0 top-1/2 -translate-y-1/2 h-4 min-w-4 rounded text-ink-3 opacity-0 pointer-events-none transition flex items-center justify-center;
 }
 
 .thread-delete-button[data-confirming='true'] {
-  @apply z-10 h-5 min-w-16 px-1.5 bg-rose-600 text-white opacity-100 pointer-events-auto shadow-sm;
+  @apply z-10 h-5 min-w-16 px-1.5 bg-alert text-ink-inv opacity-100 pointer-events-auto shadow-sm;
 }
 
 .thread-delete-confirm-label {
-  @apply text-[11px] font-medium leading-none;
+  @apply text-micro font-medium leading-none;
 }
 
 .thread-main-button {
@@ -193,19 +193,19 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row-worktree-icon {
-  @apply w-3 h-3 text-zinc-500 shrink-0;
+  @apply w-3 h-3 text-ink-3 shrink-0;
 }
 
 .thread-row-request-chip {
-  @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
+  @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-micro font-medium leading-none;
 }
 
 .thread-row-request-chip[data-state='approval'] {
-  @apply border-emerald-500/20 bg-emerald-500/15 text-emerald-700;
+  @apply border-ok/20 bg-ok/15 text-ok;
 }
 
 .thread-row-request-chip[data-state='response'] {
-  @apply border-sky-200 bg-sky-50 text-sky-700;
+  @apply border-line-1 bg-s1 text-ink-2;
 }
 
 .thread-status-indicator {
@@ -222,11 +222,11 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-menu-trigger {
-  @apply h-4 w-4 rounded p-0 text-xs text-zinc-600 flex items-center justify-center;
+  @apply h-4 w-4 rounded p-0 text-xs text-ink-3 flex items-center justify-center;
 }
 
 .thread-row-automation-chip {
-  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-amber-100 px-1 text-amber-800;
+  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-live px-1 text-live;
 }
 
 .thread-row-automation-icon {
@@ -234,7 +234,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row-automation-count {
-  @apply text-[10px] font-semibold leading-none tabular-nums;
+  @apply text-nano font-semibold leading-none tabular-nums;
 }
 
 .thread-row[data-active='true'] {
@@ -250,7 +250,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 .thread-status-indicator[data-state='unread'] {
   width: 6.6667px;
   height: 6.6667px;
-  @apply bg-blue-600;
+  @apply bg-s-inv;
 }
 
 /* round-95: 运行中从「转圈的边框」改成度量稿的 pip——6px 圆点 + --live + 22% 光晕 +
@@ -283,15 +283,15 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-status-indicator[data-state='external'] {
-  @apply bg-amber-500;
+  @apply bg-live;
 }
 
 .thread-status-indicator[data-state='awaiting-approval'] {
-  @apply bg-emerald-500;
+  @apply bg-ok;
 }
 
 .thread-status-indicator[data-state='awaiting-response'] {
-  @apply bg-sky-500;
+  @apply bg-ink-3;
 }
 
 .thread-row:hover .thread-status-indicator[data-state='unread'],

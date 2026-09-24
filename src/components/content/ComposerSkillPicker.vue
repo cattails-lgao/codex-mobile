@@ -106,15 +106,15 @@ watch(query, () => {
 @reference "../../style.css";
 
 .skill-picker {
-  @apply absolute z-40 w-72 max-sm:!left-4 max-sm:!right-4 max-sm:!w-auto max-h-64 rounded-xl border border-zinc-200 bg-white shadow-lg flex flex-col overflow-hidden;
+  @apply absolute z-40 w-72 max-sm:!left-4 max-sm:!right-4 max-sm:!w-auto max-h-64 rounded-xl border border-line-1 bg-s2 shadow-lg flex flex-col overflow-hidden;
 }
 
 .skill-picker-header {
-  @apply p-2 border-b border-zinc-100;
+  @apply p-2 border-b border-line-1;
 }
 
 .skill-picker-search {
-  @apply w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-800 outline-none placeholder-zinc-400 transition focus:border-zinc-300 focus:bg-white;
+  @apply w-full rounded-lg border border-line-1 bg-s0 px-2.5 py-1.5 text-sm text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
 }
 
 .skill-picker-list {
@@ -122,22 +122,22 @@ watch(query, () => {
 }
 
 .skill-picker-item {
-  @apply flex w-full flex-col items-start gap-0.5 rounded-lg border-0 bg-transparent px-2.5 py-1.5 text-left transition hover:bg-zinc-50;
+  @apply flex w-full flex-col items-start gap-0.5 rounded-lg border-0 bg-transparent px-2.5 py-1.5 text-left transition hover:bg-s0;
 }
 
 .skill-picker-item.is-highlighted {
-  @apply bg-zinc-100;
+  @apply bg-s1;
 }
 
 .skill-picker-name {
-  @apply text-sm font-medium text-zinc-800;
+  @apply text-sm font-medium text-ink-2;
 }
 
 .skill-picker-desc {
-  @apply text-xs text-zinc-500 line-clamp-1;
+  @apply text-xs text-ink-3 line-clamp-1;
 }
 
 .skill-picker-empty {
-  @apply p-3 text-center text-sm text-zinc-400;
+  @apply p-3 text-center text-sm text-ink-3;
 }
 </style>

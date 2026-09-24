@@ -5059,7 +5059,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-root {
-  @apply h-full min-h-0 min-w-0 w-full flex flex-col overflow-y-hidden overflow-x-hidden bg-white;
+  @apply h-full min-h-0 min-w-0 w-full flex flex-col overflow-y-hidden overflow-x-hidden bg-s2;
 }
 
 .content-root.is-virtual-keyboard-open {
@@ -5073,11 +5073,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-search-toggle {
-  @apply h-6.75 w-6.75 rounded-md border border-transparent bg-transparent text-zinc-600 flex items-center justify-center transition hover:border-zinc-200 hover:bg-zinc-50;
+  @apply h-6.75 w-6.75 rounded-md border border-transparent bg-transparent text-ink-3 flex items-center justify-center transition hover:border-line-1 hover:bg-s0;
 }
 
 .sidebar-search-toggle[aria-pressed='true'] {
-  @apply border-zinc-300 bg-zinc-100 text-zinc-700;
+  @apply border-line-2 bg-s1 text-ink-2;
 }
 
 .sidebar-search-toggle-icon {
@@ -5085,19 +5085,19 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-search-bar {
-  @apply flex items-center gap-1.5 mx-2 px-2 py-1 rounded-md border border-zinc-200 bg-white transition-colors focus-within:border-zinc-400;
+  @apply flex items-center gap-1.5 mx-2 px-2 py-1 rounded-md border border-line-1 bg-s2 transition-colors focus-within:border-line-3;
 }
 
 .sidebar-search-bar-icon {
-  @apply w-3.5 h-3.5 text-zinc-400 shrink-0;
+  @apply w-3.5 h-3.5 text-ink-3 shrink-0;
 }
 
 .sidebar-search-input {
-  @apply flex-1 min-w-0 bg-transparent text-sm text-zinc-800 placeholder-zinc-400 outline-none border-none p-0;
+  @apply flex-1 min-w-0 bg-transparent text-sm text-ink-2 placeholder-ink-3 outline-none border-none p-0;
 }
 
 .sidebar-search-clear {
-  @apply w-4 h-4 rounded text-zinc-400 flex items-center justify-center transition hover:text-zinc-600;
+  @apply w-4 h-4 rounded text-ink-3 flex items-center justify-center transition hover:text-ink-3;
 }
 
 .sidebar-search-clear-icon {
@@ -5142,7 +5142,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-skills-link-subtitle {
-  @apply truncate text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500;
+  @apply truncate text-micro font-medium uppercase tracking-[0.18em] text-ink-3;
 }
 
 .sidebar-thread-controls-header-host {
@@ -5191,7 +5191,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 
 .content-error {
-  @apply m-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;
+  @apply m-0 rounded-lg border border-alert bg-alert px-3 py-2 text-sm text-alert;
 }
 
 .content-grid {
@@ -5211,19 +5211,19 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .composer-runtime-error {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-alert bg-alert px-3 py-2 text-sm font-medium text-alert shadow-sm;
 }
 
 .external-session-banner {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-live bg-live px-3 py-2 text-sm font-medium text-live shadow-sm;
 }
 
 .interrupt-recovered-banner {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800 shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-line-1 bg-s1 px-3 py-2 text-sm font-medium text-ink-2 shadow-sm;
 }
 
 .interrupt-recovered-dismiss {
-  @apply shrink-0 cursor-pointer border-none bg-transparent text-base leading-none text-sky-500 transition hover:text-sky-800;
+  @apply shrink-0 cursor-pointer border-none bg-transparent text-base leading-none text-ink-3 transition hover:text-ink-2;
 }
 
 .visible-error-with-feedback {
@@ -5231,7 +5231,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .content-root-wrap {
@@ -5239,7 +5239,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel {
-  @apply relative z-10 flex h-full min-h-0 shrink-0 flex-col border-l border-zinc-200 bg-slate-50;
+  @apply relative z-10 flex h-full min-h-0 shrink-0 flex-col border-l border-line-1 bg-s0;
   width: var(--right-panel-width, 20rem);
 }
 
@@ -5254,11 +5254,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .content-right-panel-resize-handle:hover::after,
 .content-right-panel-resize-handle.is-dragging::after {
-  @apply bg-zinc-300;
+  @apply bg-line-2;
 }
 
 .content-right-panel-header {
-  @apply flex h-10 shrink-0 items-center justify-between gap-1 border-b border-zinc-200 bg-white px-1.5;
+  @apply flex h-10 shrink-0 items-center justify-between gap-1 border-b border-line-1 bg-s2 px-1.5;
 }
 
 .content-right-panel-tabs {
@@ -5266,11 +5266,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-tab {
-  @apply inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
+  @apply inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium text-ink-3 transition hover:bg-s1 hover:text-ink-1;
 }
 
 .content-right-panel-tab.is-active {
-  @apply border-zinc-200 bg-zinc-100 text-zinc-950;
+  @apply border-line-1 bg-s1 text-ink-1;
 }
 
 .content-right-panel-tab--preview {
@@ -5282,7 +5282,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-tab-close {
-  @apply ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[11px] leading-none text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700;
+  @apply ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-micro leading-none text-ink-3 transition hover:bg-line-1 hover:text-ink-2;
 }
 
 .content-right-panel-tab-icon,
@@ -5301,19 +5301,19 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-add {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-white text-sm text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-line-1 bg-s2 text-sm text-ink-3 transition hover:bg-s1 hover:text-ink-1;
 }
 
 .content-right-panel-menu {
-  @apply absolute right-0 top-8 z-[var(--z-context-menu)] flex w-40 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply absolute right-0 top-8 z-[var(--z-context-menu)] flex w-40 flex-col overflow-hidden rounded-lg border border-line-1 bg-s2 p-1 shadow-lg;
 }
 
 .content-right-panel-menu button {
-  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-ink-2 transition hover:bg-s1;
 }
 
 .content-right-panel-close {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-s1 hover:text-ink-2;
 }
 
 .content-right-panel-body {
@@ -5328,7 +5328,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-header-right-panel-toggle {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-s1 hover:text-ink-1;
 }
 
 .right-panel-menu-enter-active,
@@ -5361,18 +5361,18 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-hero {
-  @apply m-0 text-2xl sm:text-[2.5rem] font-normal leading-[1.05] text-zinc-900;
+  @apply m-0 text-2xl sm:text-display font-normal leading-[1.05] text-ink-1;
   /* 全站唯一使用品牌脸的地方。写成显式属性而不是 @apply font-display：这条声明在源码里
      就是「此处用品牌脸」的说明，不依赖工具类是否被生成，也免掉嵌套 @apply 的解析顺序问题。 */
   font-family: var(--font-display);
 }
 
 .new-thread-folder-dropdown {
-  @apply text-2xl sm:text-[2.5rem] text-zinc-500;
+  @apply text-2xl sm:text-display text-ink-3;
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-auto p-0 text-2xl sm:text-[2.5rem] leading-[1.05];
+  @apply h-auto p-0 text-2xl sm:text-display leading-[1.05];
 }
 
 .new-thread-folder-dropdown :deep(.composer-dropdown-value) {
@@ -5384,7 +5384,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-folder-selected {
-  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-zinc-500 break-all;
+  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-ink-3 break-all;
 }
 
 .new-thread-folder-actions {
@@ -5396,7 +5396,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card {
-  @apply mt-4 w-full max-w-3xl rounded-[28px] border border-emerald-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_42%),linear-gradient(135deg,_#f4fff8,_#ffffff_58%)] px-5 py-5 text-left shadow-[0_18px_50px_-28px_rgba(5,150,105,0.45)];
+  @apply mt-4 w-full max-w-3xl rounded-[28px] border border-ok bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_42%),linear-gradient(135deg,_#f4fff8,_#ffffff_58%)] px-5 py-5 text-left shadow-[0_18px_50px_-28px_rgba(5,150,105,0.45)];
 }
 
 .new-thread-launch-card-copy {
@@ -5408,7 +5408,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card-badge {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-emerald-700 text-white shadow-[0_12px_28px_-18px_rgba(5,150,105,0.9)];
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-ok text-ink-inv shadow-[0_12px_28px_-18px_rgba(5,150,105,0.9)];
 }
 
 .new-thread-launch-card-badge :deep(svg) {
@@ -5416,15 +5416,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card-eyebrow {
-  @apply m-0 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700;
+  @apply m-0 text-micro font-semibold uppercase tracking-[0.24em] text-ok;
 }
 
 .new-thread-launch-card-title {
-  @apply m-0 text-xl font-semibold leading-tight text-zinc-950 sm:text-2xl;
+  @apply m-0 text-xl font-semibold leading-tight text-ink-1 sm:text-2xl;
 }
 
 .new-thread-launch-card-text {
-  @apply m-0 max-w-2xl text-sm leading-6 text-zinc-700 sm:text-[15px];
+  @apply m-0 max-w-2xl text-sm leading-6 text-ink-2 sm:text-body;
 }
 
 .new-thread-launch-card-actions {
@@ -5436,23 +5436,23 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card-pill {
-  @apply inline-flex items-center rounded-full border border-emerald-100 bg-white/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700;
+  @apply inline-flex items-center rounded-full border border-ok bg-s2/80 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.12em] text-ok;
 }
 
 .new-thread-launch-card-button {
-  @apply inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50;
+  @apply inline-flex h-10 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-sm font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .new-thread-launch-card-button-primary {
-  @apply border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-600;
+  @apply border-ok bg-ok text-ink-inv hover:bg-ok;
 }
 
 .new-thread-folder-action {
-  @apply inline-flex h-9 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-9 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-sm font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .new-thread-folder-action-primary {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 .new-thread-open-folder-overlay {
@@ -5460,11 +5460,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder {
-  @apply flex w-full max-w-3xl max-h-[90vh] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-xl;
+  @apply flex w-full max-w-3xl max-h-[90vh] flex-col gap-2 overflow-y-auto rounded-2xl border border-line-1 bg-s2 px-4 py-4 text-left shadow-xl;
 }
 
 .new-thread-project-modal {
-  @apply flex w-full max-w-xl max-h-[90vh] flex-col gap-3 overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left shadow-xl;
+  @apply flex w-full max-w-xl max-h-[90vh] flex-col gap-3 overflow-y-auto rounded-2xl border border-line-1 bg-s2 px-4 py-4 text-left shadow-xl;
 }
 
 .new-thread-open-folder-header {
@@ -5472,15 +5472,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-title {
-  @apply m-0 text-sm font-semibold text-zinc-900;
+  @apply m-0 text-sm font-semibold text-ink-1;
 }
 
 .new-thread-open-folder-close {
-  @apply border-0 bg-transparent p-0 text-sm text-zinc-500 transition hover:text-zinc-800;
+  @apply border-0 bg-transparent p-0 text-sm text-ink-3 transition hover:text-ink-2;
 }
 
 .new-thread-open-folder-label {
-  @apply m-0 text-xs font-medium uppercase tracking-wide text-zinc-500;
+  @apply m-0 text-xs font-medium uppercase tracking-wide text-ink-3;
 }
 
 .new-thread-open-folder-current {
@@ -5488,7 +5488,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-path {
-  @apply min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 font-mono text-xs text-zinc-700 outline-none transition focus:border-zinc-400;
+  @apply min-w-0 flex-1 rounded-xl border border-line-1 bg-s2 px-3 py-2 font-mono text-xs text-ink-2 outline-none transition focus:border-line-3;
 }
 
 .new-thread-open-folder-actions {
@@ -5496,15 +5496,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-project-mode-tabs {
-  @apply grid grid-cols-2 rounded-xl border border-zinc-200 bg-zinc-50 p-1;
+  @apply grid grid-cols-2 rounded-xl border border-line-1 bg-s0 p-1;
 }
 
 .new-thread-project-mode-tab {
-  @apply inline-flex h-9 items-center justify-center rounded-lg border-0 bg-transparent px-3 text-sm font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-9 items-center justify-center rounded-lg border-0 bg-transparent px-3 text-sm font-medium text-ink-3 transition hover:bg-s2 hover:text-ink-1 disabled:cursor-default disabled:opacity-60;
 }
 
 .new-thread-project-mode-tab.is-active {
-  @apply bg-white text-zinc-950 shadow-sm;
+  @apply bg-s2 text-ink-1 shadow-sm;
 }
 
 .new-thread-project-field {
@@ -5516,11 +5516,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-toggle {
-  @apply inline-flex items-center gap-2 text-sm text-zinc-600;
+  @apply inline-flex items-center gap-2 text-sm text-ink-3;
 }
 
 .new-thread-open-folder-toggle-input {
-  @apply relative h-4 w-4 shrink-0 appearance-none rounded-[4px] border border-zinc-300 bg-white outline-none transition;
+  @apply relative h-4 w-4 shrink-0 appearance-none rounded-[4px] border border-line-2 bg-s2 outline-none transition;
 }
 
 .new-thread-open-folder-toggle-input:focus-visible {
@@ -5550,7 +5550,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-filter {
-  @apply w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400;
+  @apply w-full rounded-xl border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3;
 }
 
 .new-thread-open-folder-create {
@@ -5562,7 +5562,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-create-input {
-  @apply w-full min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400;
+  @apply w-full min-w-0 flex-1 rounded-xl border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3;
 }
 
 .new-thread-open-folder-create-submit {
@@ -5570,15 +5570,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-folder-action[aria-pressed='true'] {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 .new-thread-open-folder-status {
-  @apply m-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600;
+  @apply m-0 rounded-xl border border-line-1 bg-s0 px-3 py-2 text-sm text-ink-3;
 }
 
 .new-thread-open-folder-error {
-  @apply m-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700;
+  @apply m-0 rounded-xl border border-alert bg-alert px-3 py-2 text-sm text-alert;
 }
 
 .new-thread-open-folder-error-actions {
@@ -5616,7 +5616,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-item-main {
-  @apply min-w-0 truncate rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-left text-sm font-medium leading-5 text-zinc-900 transition hover:border-zinc-300 hover:bg-zinc-100;
+  @apply min-w-0 truncate rounded-xl border border-line-1 bg-s0 px-2.5 py-1 text-left text-sm font-medium leading-5 text-ink-1 transition hover:border-line-2 hover:bg-s1;
 }
 
 .new-thread-open-folder-item-main:disabled,
@@ -5629,7 +5629,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-item-open {
-  @apply inline-flex h-7 items-center justify-center rounded-xl border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50;
+  @apply inline-flex h-7 items-center justify-center rounded-xl border border-line-1 bg-s2 px-2.5 text-xs font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .new-thread-runtime-dropdown {
@@ -5641,19 +5641,19 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-branch-select-label {
-  @apply m-0 mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500;
+  @apply m-0 mb-1 text-xs font-medium uppercase tracking-wide text-ink-3;
 }
 
 .new-thread-branch-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-700;
+  @apply h-9 rounded-xl border border-line-1 bg-s2 px-3 text-sm text-ink-2;
 }
 
 .new-thread-branch-select-help {
-  @apply mt-1 mb-0 text-xs text-zinc-500;
+  @apply mt-1 mb-0 text-xs text-ink-3;
 }
 
 .new-thread-runtime-help {
-  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-zinc-500;
+  @apply mt-2 mb-0 max-w-3xl text-center text-xs text-ink-3;
 }
 
 .worktree-init-status {
@@ -5661,11 +5661,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .worktree-init-status.is-running {
-  @apply border-zinc-300 bg-zinc-50 text-zinc-700;
+  @apply border-line-2 bg-s0 text-ink-2;
 }
 
 .worktree-init-status.is-error {
-  @apply border-rose-300 bg-rose-50 text-rose-800;
+  @apply border-alert bg-alert text-alert;
 }
 
 .worktree-init-status-title {
@@ -5677,7 +5677,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-area {
-  @apply shrink-0 bg-slate-100 pt-2 px-2 pb-2 border-t border-zinc-200;
+  @apply shrink-0 bg-s1 pt-2 px-2 pb-2 border-t border-line-1;
 }
 
 .sidebar-settings-actions {
@@ -5685,7 +5685,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-icon-button {
-  @apply flex h-10 flex-1 items-center justify-center rounded-lg border-0 bg-transparent text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900 cursor-pointer;
+  @apply flex h-10 flex-1 items-center justify-center rounded-lg border-0 bg-transparent text-ink-3 transition hover:bg-line-1 hover:text-ink-1 cursor-pointer;
 }
 
 .sidebar-settings-icon {
@@ -5698,7 +5698,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .codex-login-modal {
-  @apply flex w-full max-w-md flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl;
+  @apply flex w-full max-w-md flex-col gap-3 rounded-xl border border-line-1 bg-s2 p-4 shadow-2xl;
 }
 
 .codex-login-modal-header {
@@ -5706,27 +5706,27 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .codex-login-modal-title {
-  @apply text-base font-semibold text-zinc-900;
+  @apply text-base font-semibold text-ink-1;
 }
 
 .codex-login-modal-close {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-lg leading-none text-zinc-600 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-full border border-line-1 bg-s2 text-lg leading-none text-ink-3 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .codex-login-modal-copy {
-  @apply text-sm leading-5 text-zinc-600;
+  @apply text-sm leading-5 text-ink-3;
 }
 
 .codex-login-modal-link {
-  @apply min-w-0 truncate text-sm text-blue-600 hover:text-blue-700 hover:underline;
+  @apply min-w-0 truncate text-sm text-ink-1 hover:text-ink-1 hover:underline;
 }
 
 .codex-login-modal-input {
-  @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 disabled:cursor-default disabled:opacity-60;
+  @apply w-full rounded-lg border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3 disabled:cursor-default disabled:opacity-60;
 }
 
 .codex-login-modal-error {
-  @apply rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700;
+  @apply rounded-md bg-alert px-3 py-2 text-xs text-alert;
 }
 
 .codex-login-modal-actions {
@@ -5735,11 +5735,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .codex-login-modal-cancel,
 .codex-login-modal-submit {
-  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-sm text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .codex-login-modal-submit {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 
@@ -5748,7 +5748,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .project-zip-modal {
-  @apply flex w-full max-w-md flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-2xl;
+  @apply flex w-full max-w-md flex-col gap-4 rounded-xl border border-line-1 bg-s2 p-4 text-ink-1 shadow-2xl;
 }
 
 .project-zip-modal-header {
@@ -5760,15 +5760,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .project-zip-modal-close {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-lg leading-none text-zinc-600 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-full border border-line-1 bg-s2 text-lg leading-none text-ink-3 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .project-zip-modal-copy {
-  @apply min-h-5 truncate text-sm text-zinc-600;
+  @apply min-h-5 truncate text-sm text-ink-3;
 }
 
 .project-zip-modal-error {
-  @apply rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900;
+  @apply rounded-lg border border-live bg-live px-3 py-2 text-sm text-live;
 }
 
 .project-zip-progress-label {
@@ -5776,15 +5776,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .project-zip-progress-label span:last-child {
-  @apply shrink-0 text-xs font-medium text-zinc-500;
+  @apply shrink-0 text-xs font-medium text-ink-3;
 }
 
 .project-zip-progress-track {
-  @apply h-2 overflow-hidden rounded-full bg-zinc-100;
+  @apply h-2 overflow-hidden rounded-full bg-s1;
 }
 
 .project-zip-progress-fill {
-  @apply h-full rounded-full bg-emerald-600 transition-all duration-150;
+  @apply h-full rounded-full bg-ok transition-all duration-150;
 }
 
 .project-zip-modal-actions {
@@ -5793,11 +5793,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .project-zip-modal-cancel,
 .project-zip-modal-action {
-  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .project-zip-modal-action-primary {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800;
+  @apply border-ink-1 bg-s-inv text-ink-inv hover:bg-s-inv-soft;
 }
 
 :root.dark .project-zip-modal {
@@ -5839,27 +5839,27 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-settings-context-compact {
-  @apply shrink-0 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] leading-4 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-800 disabled:cursor-default disabled:opacity-60;
+  @apply shrink-0 rounded-full border border-line-1 bg-s2 px-2 py-0.5 text-micro leading-4 text-ink-3 transition hover:bg-s0 hover:text-ink-2 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-context-value {
-  @apply text-xs font-semibold text-zinc-700 text-right;
+  @apply text-xs font-semibold text-ink-2 text-right;
 }
 
 .sidebar-settings-context-value[data-state='ok'] {
-  @apply text-emerald-700;
+  @apply text-ok;
 }
 
 .sidebar-settings-context-value[data-state='warning'] {
-  @apply text-amber-700;
+  @apply text-live;
 }
 
 .sidebar-settings-context-value[data-state='danger'] {
-  @apply text-rose-700;
+  @apply text-alert;
 }
 
 .sidebar-settings-context-meta {
-  @apply block text-[11px] font-normal text-zinc-500;
+  @apply block text-micro font-normal text-ink-3;
 }
 
 

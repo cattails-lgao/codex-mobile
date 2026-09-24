@@ -118,7 +118,7 @@ function onAvatarError(e: Event): void {
 @reference "../../style.css";
 
 .skill-card {
-  @apply flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-300 hover:shadow-sm cursor-pointer;
+  @apply flex flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm cursor-pointer;
 }
 
 .skill-card.is-disabled {
@@ -130,11 +130,11 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-avatar {
-  @apply w-8 h-8 rounded-full shrink-0 bg-zinc-100;
+  @apply w-8 h-8 rounded-full shrink-0 bg-s1;
 }
 
 .skill-card-avatar-fallback {
-  @apply w-8 h-8 rounded-full shrink-0 bg-zinc-200 text-zinc-500 flex items-center justify-center text-xs font-medium uppercase;
+  @apply w-8 h-8 rounded-full shrink-0 bg-line-1 text-ink-3 flex items-center justify-center text-xs font-medium uppercase;
 }
 
 .skill-card-info {
@@ -146,23 +146,23 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-name {
-  @apply text-sm font-medium text-zinc-900 truncate;
+  @apply text-sm font-medium text-ink-1 truncate;
 }
 
 .skill-card-badge {
-  @apply shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 leading-none;
+  @apply shrink-0 rounded-md border border-ok bg-ok px-1.5 py-0.5 text-nano font-medium text-ok leading-none;
 }
 
 .skill-card-badge-disabled {
-  @apply shrink-0 rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 leading-none;
+  @apply shrink-0 rounded-md border border-line-1 bg-s1 px-1.5 py-0.5 text-nano font-medium text-ink-3 leading-none;
 }
 
 .skill-card-owner {
-  @apply text-xs text-zinc-400;
+  @apply text-xs text-ink-3;
 }
 
 .skill-card-browse {
-  @apply shrink-0 ml-auto h-7 w-7 rounded-lg border-0 bg-transparent text-zinc-300 flex items-center justify-center transition hover:bg-zinc-100 hover:text-zinc-600;
+  @apply shrink-0 ml-auto h-7 w-7 rounded-lg border-0 bg-transparent text-ink-3 flex items-center justify-center transition hover:bg-s1 hover:text-ink-3;
 }
 
 .skill-card-browse-icon {
@@ -170,7 +170,7 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-desc {
-  @apply m-0 text-xs text-zinc-500 line-clamp-2;
+  @apply m-0 text-xs text-ink-3 line-clamp-2;
 }
 
 .skill-card-meta-row {
@@ -178,6 +178,6 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-meta {
-  @apply text-[10px] text-zinc-300;
+  @apply text-nano text-ink-3;
 }
 </style>

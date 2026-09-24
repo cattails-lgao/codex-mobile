@@ -104,7 +104,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 
 /* round-23：运行中的脉冲提示，让「Thinking 但还没有内容」的阶段有可见活动感 */
 .live-overlay-spinner {
-  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600;
+  @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-2 border-t-line-5;
 }
 
 .live-overlay-heading {
@@ -112,7 +112,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-toggle {
-  @apply shrink-0 text-xs leading-5 text-zinc-400;
+  @apply shrink-0 text-xs leading-5 text-ink-3;
 }
 
 .live-overlay-reasoning {
@@ -134,10 +134,10 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-error {
-  @apply m-0 flex items-start justify-between gap-3 text-sm leading-5 text-rose-600 whitespace-pre-wrap;
+  @apply m-0 flex items-start justify-between gap-3 text-sm leading-5 text-alert whitespace-pre-wrap;
 }
 
 .live-overlay-feedback {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 </style>

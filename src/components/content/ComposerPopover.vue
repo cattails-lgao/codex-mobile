@@ -174,7 +174,7 @@ defineExpose({ root: rootRef })
 }
 
 .composer-popover-panel {
-  @apply z-20 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply z-20 max-w-[calc(100vw-1rem)] rounded-xl border border-line-1 bg-s2 p-1 shadow-lg;
 }
 
 .composer-popover-panel--md {

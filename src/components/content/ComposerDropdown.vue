@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-trigger {
-  @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-zinc-500 outline-none transition;
+  @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-ink-3 outline-none transition;
 }
 
 /* `--pill` 变体只有输入区那两个控件在用（已核：模型 / 推理强度），所以这里写下的就是
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-trigger:disabled {
-  @apply cursor-not-allowed text-zinc-500;
+  @apply cursor-not-allowed text-ink-3;
 }
 
 .composer-dropdown-value {
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-chevron {
-  @apply mt-px h-3.5 w-3.5 shrink-0 text-zinc-500;
+  @apply mt-px h-3.5 w-3.5 shrink-0 text-ink-3;
 }
 
 .composer-dropdown-menu-wrap {
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-menu {
-  @apply m-0 min-w-56 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg;
+  @apply m-0 min-w-56 rounded-xl border border-line-1 bg-s2 p-1 shadow-lg;
 }
 
 .composer-dropdown-search-wrap {
@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-search-input {
-  @apply w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none transition focus:border-zinc-400;
+  @apply w-full rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs text-ink-2 outline-none transition focus:border-line-3;
 }
 
 .composer-dropdown-options {
@@ -295,14 +295,14 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-option {
-  @apply flex w-full items-center rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sm text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full items-center rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sm text-ink-2 transition hover:bg-s1;
 }
 
 .composer-dropdown-option.is-selected {
-  @apply bg-zinc-100;
+  @apply bg-s1;
 }
 
 .composer-dropdown-empty {
-  @apply px-2 py-1.5 text-xs text-zinc-500;
+  @apply px-2 py-1.5 text-xs text-ink-3;
 }
 </style>

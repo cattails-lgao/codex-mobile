@@ -1975,11 +1975,11 @@ watch(
 }
 
 .thread-composer:has(.thread-composer-input-wrap--expanded) {
-  @apply fixed inset-0 z-[300] max-w-none bg-white/95 p-3 sm:p-6;
+  @apply fixed inset-0 z-[300] max-w-none bg-s2/95 p-3 sm:p-6;
 }
 
 .thread-composer-shell {
-  @apply relative rounded-2xl border border-zinc-300 bg-white p-2 sm:p-3 shadow-sm;
+  @apply relative rounded-2xl border border-line-2 bg-s2 p-2 sm:p-3 shadow-sm;
 }
 
 .thread-composer:has(.thread-composer-input-wrap--expanded) .thread-composer-shell {
@@ -1987,7 +1987,7 @@ watch(
 }
 
 .thread-composer-shell--drag-active {
-  @apply border-zinc-900 shadow-md;
+  @apply border-ink-1 shadow-md;
 }
 
 .thread-composer-shell--no-top-radius {
@@ -1995,7 +1995,7 @@ watch(
 }
 
 .thread-composer-rate-limit {
-  @apply mb-1.5 px-1 text-[11px] leading-5 text-zinc-500;
+  @apply mb-1.5 px-1 text-micro leading-5 text-ink-3;
 }
 
 .thread-composer-rate-limit-row {
@@ -2008,17 +2008,17 @@ watch(
 
 .thread-composer-context-usage-inline {
   --context-usage-accent: rgb(34 197 94);
-  @apply inline-flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 text-xs transition hover:bg-zinc-100;
+  @apply inline-flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-line-1 bg-s2 px-2.5 text-xs transition hover:bg-s1;
 }
 
 .thread-composer-context-usage-inline.is-warning {
   --context-usage-accent: rgb(245 158 11);
-  @apply border-amber-200 bg-amber-50 hover:bg-amber-100;
+  @apply border-live bg-live hover:bg-live;
 }
 
 .thread-composer-context-usage-inline.is-danger {
   --context-usage-accent: rgb(239 68 68);
-  @apply border-rose-200 bg-rose-50 hover:bg-rose-100;
+  @apply border-alert bg-alert hover:bg-alert;
 }
 
 .thread-composer-context-usage-value {
@@ -2027,7 +2027,7 @@ watch(
 }
 
 .thread-composer-context-usage-compact {
-  @apply shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold;
+  @apply shrink-0 rounded-full px-1.5 py-0.5 text-nano font-semibold;
   color: var(--context-usage-accent);
   background: color-mix(in srgb, var(--context-usage-accent) 15%, transparent);
 }
@@ -2069,47 +2069,47 @@ watch(
 }
 
 .thread-composer-input-wrap--drag-active {
-  @apply rounded-xl bg-zinc-50;
+  @apply rounded-xl bg-s0;
 }
 
 .thread-composer-drop-overlay {
-  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-zinc-900 bg-white/90;
+  @apply pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border border-dashed border-ink-1 bg-s2/90;
 }
 
 .thread-composer-drop-overlay-copy {
-  @apply rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white shadow-sm;
+  @apply rounded-full bg-s-inv px-3 py-1 text-xs font-medium text-ink-inv shadow-sm;
 }
 
 .thread-composer-file-mention-row {
-  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-zinc-700 transition hover:bg-zinc-100;
+  @apply flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-ink-2 transition hover:bg-s1;
 }
 
 .thread-composer-file-mention-row.is-active {
-  @apply bg-zinc-100;
+  @apply bg-s1;
 }
 
 .thread-composer-file-mention-icon-badge {
-  @apply inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[9px] font-semibold leading-none;
+  @apply inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-nano font-semibold leading-none;
 }
 
 .thread-composer-file-mention-icon-badge.is-ts {
-  @apply bg-zinc-700 text-white;
+  @apply bg-s-inv-soft text-ink-inv;
 }
 
 .thread-composer-file-mention-icon-badge.is-js {
-  @apply bg-zinc-600 text-white;
+  @apply bg-line-5 text-ink-inv;
 }
 
 .thread-composer-file-mention-icon-badge.is-json {
-  @apply bg-zinc-600 text-white;
+  @apply bg-line-5 text-ink-inv;
 }
 
 .thread-composer-file-mention-icon-markdown {
-  @apply inline-flex h-5 min-w-5 items-center justify-center text-sm leading-none text-zinc-700;
+  @apply inline-flex h-5 min-w-5 items-center justify-center text-sm leading-none text-ink-2;
 }
 
 .thread-composer-file-mention-icon-file {
-  @apply h-4 w-4 text-zinc-600;
+  @apply h-4 w-4 text-ink-3;
 }
 
 .thread-composer-file-mention-text {
@@ -2117,19 +2117,19 @@ watch(
 }
 
 .thread-composer-file-mention-name {
-  @apply truncate text-zinc-900;
+  @apply truncate text-ink-1;
 }
 
 .thread-composer-file-mention-dir {
-  @apply truncate text-zinc-400;
+  @apply truncate text-ink-3;
 }
 
 .thread-composer-file-mention-empty {
-  @apply px-2 py-1.5 text-xs text-zinc-500;
+  @apply px-2 py-1.5 text-xs text-ink-3;
 }
 
 .thread-composer-input {
-  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 pr-10 text-sm text-zinc-900 outline-none transition resize-none overflow-y-auto;
+  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 pr-10 text-sm text-ink-1 outline-none transition resize-none overflow-y-auto;
 }
 
 .thread-composer-input-wrap--expanded .thread-composer-input {
@@ -2141,11 +2141,11 @@ watch(
 }
 
 .thread-composer-input:disabled {
-  @apply bg-zinc-100 text-zinc-500 cursor-not-allowed;
+  @apply bg-s1 text-ink-3 cursor-not-allowed;
 }
 
 .thread-composer-expand {
-  @apply absolute right-0.5 top-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-zinc-100 text-zinc-500 shadow-sm transition hover:bg-zinc-200 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply absolute right-0.5 top-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-s1 text-ink-3 shadow-sm transition hover:bg-line-1 hover:text-ink-1 disabled:cursor-not-allowed disabled:text-ink-3;
 }
 
 .thread-composer-expand-icon {
@@ -2199,11 +2199,11 @@ watch(
 }
 
 .thread-composer-menu-item {
-  @apply flex w-full items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60;
+  @apply flex w-full items-center justify-between gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left transition hover:bg-s1 disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .thread-composer-menu-item.is-active {
-  @apply bg-zinc-50;
+  @apply bg-s0;
 }
 
 .thread-composer-menu-item-copy {
@@ -2211,27 +2211,27 @@ watch(
 }
 
 .thread-composer-menu-item-title {
-  @apply text-sm text-zinc-800;
+  @apply text-sm text-ink-2;
 }
 
 .thread-composer-menu-item-sub {
-  @apply mt-0.5 text-xs text-zinc-500;
+  @apply mt-0.5 text-xs text-ink-3;
 }
 
 .thread-composer-menu-item-hint {
-  @apply mt-0.5 text-xs text-amber-600;
+  @apply mt-0.5 text-xs text-live;
 }
 
 .thread-composer-menu-item-check {
-  @apply shrink-0 text-sm font-semibold text-zinc-900;
+  @apply shrink-0 text-sm font-semibold text-ink-1;
 }
 
 .thread-composer-menu-error {
-  @apply px-3 py-1 text-xs text-red-600;
+  @apply px-3 py-1 text-xs text-alert;
 }
 
 .thread-composer-approval-tip {
-  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm;
+  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-ok bg-ok px-2.5 py-1 text-micro font-medium text-ok shadow-sm;
   transform: translateX(-50%);
 }
 
@@ -2299,7 +2299,7 @@ watch(
   }
 
   .thread-composer-context-usage-inline {
-    @apply h-7 px-2 text-[11px] shrink min-w-0;
+    @apply h-7 px-2 text-micro shrink min-w-0;
   }
 }
 </style>

@@ -229,7 +229,7 @@ function onBrowseFiles(): void {
 }
 
 .sdm-panel {
-  @apply w-full max-w-lg max-h-[90vh] sm:max-h-[80vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden;
+  @apply w-full max-w-lg max-h-[90vh] sm:max-h-[80vh] rounded-t-2xl sm:rounded-2xl bg-s2 shadow-xl flex flex-col overflow-hidden;
 }
 
 .sdm-header {
@@ -241,7 +241,7 @@ function onBrowseFiles(): void {
 }
 
 .sdm-avatar {
-  @apply w-10 h-10 rounded-full shrink-0 bg-zinc-100;
+  @apply w-10 h-10 rounded-full shrink-0 bg-s1;
 }
 
 .sdm-title-col {
@@ -253,19 +253,19 @@ function onBrowseFiles(): void {
 }
 
 .sdm-title {
-  @apply text-lg font-semibold text-zinc-900 m-0 truncate;
+  @apply text-lg font-semibold text-ink-1 m-0 truncate;
 }
 
 .sdm-badge-disabled {
-  @apply shrink-0 rounded-md border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 leading-none;
+  @apply shrink-0 rounded-md border border-line-1 bg-s1 px-1.5 py-0.5 text-nano font-medium text-ink-3 leading-none;
 }
 
 .sdm-owner {
-  @apply text-xs text-zinc-400;
+  @apply text-xs text-ink-3;
 }
 
 .sdm-close {
-  @apply shrink-0 h-7 w-7 rounded-lg border-0 bg-transparent text-zinc-400 flex items-center justify-center transition hover:bg-zinc-100 hover:text-zinc-700;
+  @apply shrink-0 h-7 w-7 rounded-lg border-0 bg-transparent text-ink-3 flex items-center justify-center transition hover:bg-s1 hover:text-ink-2;
 }
 
 .sdm-close-icon {
@@ -277,31 +277,31 @@ function onBrowseFiles(): void {
 }
 
 .sdm-desc {
-  @apply m-0 text-sm text-zinc-600 leading-relaxed;
+  @apply m-0 text-sm text-ink-3 leading-relaxed;
 }
 
 .sdm-readme-loading {
-  @apply text-xs text-zinc-400;
+  @apply text-xs text-ink-3;
 }
 
 .sdm-readme {
-  @apply text-xs text-zinc-700 leading-relaxed border-t border-zinc-100 pt-3;
+  @apply text-xs text-ink-2 leading-relaxed border-t border-line-1 pt-3;
 }
 
 .sdm-readme :deep(h2) {
-  @apply text-sm font-semibold text-zinc-800 mt-3 mb-1;
+  @apply text-sm font-semibold text-ink-2 mt-3 mb-1;
 }
 
 .sdm-readme :deep(h3) {
-  @apply text-xs font-semibold text-zinc-700 mt-2 mb-1;
+  @apply text-xs font-semibold text-ink-2 mt-2 mb-1;
 }
 
 .sdm-readme :deep(h4) {
-  @apply text-xs font-medium text-zinc-600 mt-2 mb-0.5;
+  @apply text-xs font-medium text-ink-3 mt-2 mb-0.5;
 }
 
 .sdm-readme :deep(code) {
-  @apply bg-zinc-100 rounded px-1 py-0.5 text-[11px] font-mono;
+  @apply bg-s1 rounded px-1 py-0.5 text-micro font-mono;
 }
 
 .sdm-readme :deep(ul) {
@@ -317,11 +317,11 @@ function onBrowseFiles(): void {
 }
 
 .sdm-link {
-  @apply text-xs text-blue-600 hover:text-blue-700 no-underline hover:underline shrink-0;
+  @apply text-xs text-ink-1 hover:text-ink-1 no-underline hover:underline shrink-0;
 }
 
 .sdm-footer {
-  @apply p-4 sm:p-5 pt-3 border-t border-zinc-100 shrink-0;
+  @apply p-4 sm:p-5 pt-3 border-t border-line-1 shrink-0;
 }
 
 .sdm-footer-actions {
@@ -333,14 +333,14 @@ function onBrowseFiles(): void {
 }
 
 .sdm-btn-primary {
-  @apply bg-zinc-900 text-white hover:bg-black;
+  @apply bg-s-inv text-ink-inv hover:bg-black;
 }
 
 .sdm-btn-danger {
-  @apply bg-rose-600 text-white hover:bg-rose-700;
+  @apply bg-alert text-ink-inv hover:bg-alert;
 }
 
 .sdm-btn-secondary {
-  @apply bg-zinc-100 text-zinc-700 hover:bg-zinc-200;
+  @apply bg-s1 text-ink-2 hover:bg-line-1;
 }
 </style>

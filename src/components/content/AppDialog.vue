@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog-panel {
-  @apply flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl;
+  @apply flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl bg-s2 shadow-2xl;
 }
 
 .app-dialog-panel--sm {
@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog-header {
-  @apply flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3;
+  @apply flex shrink-0 items-start justify-between gap-3 border-b border-line-1 px-4 py-3;
 }
 
 .app-dialog-title-wrap {
@@ -123,15 +123,15 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog-title {
-  @apply m-0 text-base font-semibold text-zinc-900;
+  @apply m-0 text-base font-semibold text-ink-1;
 }
 
 .app-dialog-subtitle {
-  @apply m-0 mt-0.5 text-sm leading-5 text-zinc-500;
+  @apply m-0 mt-0.5 text-sm leading-5 text-ink-3;
 }
 
 .app-dialog-close {
-  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line-1 text-ink-3 transition hover:bg-s1 hover:text-ink-2;
 }
 
 .app-dialog-close-icon {
@@ -143,6 +143,6 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog-footer {
-  @apply flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3;
+  @apply flex shrink-0 items-center justify-end gap-2 border-t border-line-1 px-4 py-3;
 }
 </style>

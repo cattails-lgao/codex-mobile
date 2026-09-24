@@ -149,15 +149,15 @@ function onPlanPanelImplement(): void {
 @reference "../../style.css";
 
 .thread-composer-plan-panel {
-  @apply mb-2 overflow-visible rounded-xl border border-zinc-200 bg-zinc-50;
+  @apply mb-2 overflow-visible rounded-xl border border-line-1 bg-s0;
 }
 
 .thread-composer-plan-panel[data-streaming='true'] {
-  @apply border-sky-200 bg-sky-50;
+  @apply border-line-1 bg-s1;
 }
 
 .thread-composer-plan-panel-header {
-  @apply flex w-full items-center gap-2 border-0 bg-transparent px-2.5 py-1.5 text-left transition hover:bg-zinc-100;
+  @apply flex w-full items-center gap-2 border-0 bg-transparent px-2.5 py-1.5 text-left transition hover:bg-s1;
 }
 
 .thread-composer-plan-panel-icon {
@@ -165,19 +165,19 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-chevron {
-  @apply h-3.5 w-3.5 shrink-0 text-zinc-400;
+  @apply h-3.5 w-3.5 shrink-0 text-ink-3;
 }
 
 .thread-composer-plan-panel-title {
-  @apply text-xs font-semibold text-zinc-800;
+  @apply text-xs font-semibold text-ink-2;
 }
 
 .thread-composer-plan-panel-badge {
-  @apply rounded-full bg-sky-500 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white;
+  @apply rounded-full bg-ink-3 px-1.5 py-0.5 text-nano font-medium leading-none text-ink-inv;
 }
 
 .thread-composer-plan-panel-progress {
-  @apply shrink-0 text-[11px] tabular-nums text-zinc-500;
+  @apply shrink-0 text-micro tabular-nums text-ink-3;
 }
 
 .thread-composer-plan-panel-latest {
@@ -189,24 +189,24 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-latest-status[data-status='completed'] {
-  @apply text-emerald-600;
+  @apply text-ok;
 }
 
 .thread-composer-plan-panel-latest-status[data-status='inProgress'] {
-  @apply text-sky-600;
+  @apply text-ink-2;
 }
 
 .thread-composer-plan-panel-latest-status[data-status='pending'] {
-  @apply text-zinc-400;
+  @apply text-ink-3;
 }
 
 .thread-composer-plan-panel-latest-text {
-  @apply min-w-0 truncate text-xs text-zinc-600;
+  @apply min-w-0 truncate text-xs text-ink-3;
 }
 
 .thread-composer-plan-panel-explanation {
   /* round-23：摘要一句话 + 超出省略 */
-  @apply m-0 line-clamp-2 break-words rounded-xl bg-zinc-100 px-3 py-2 text-xs leading-5;
+  @apply m-0 line-clamp-2 break-words rounded-xl bg-s1 px-3 py-2 text-xs leading-5;
   color: #4b5563;
 }
 
@@ -216,7 +216,7 @@ function onPlanPanelImplement(): void {
 
 .thread-composer-plan-panel-step {
   /* round-23：步骤项改为一行，超出省略 */
-  @apply flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs leading-5;
+  @apply flex items-center gap-2 rounded-xl border border-line-1 bg-s2 px-3 py-1.5 text-xs leading-5;
   color: #4b5563;
 }
 
@@ -225,15 +225,15 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-step-status[data-status='completed'] {
-  @apply text-emerald-600;
+  @apply text-ok;
 }
 
 .thread-composer-plan-panel-step-status[data-status='inProgress'] {
-  @apply text-sky-600;
+  @apply text-ink-2;
 }
 
 .thread-composer-plan-panel-step-status[data-status='pending'] {
-  @apply text-zinc-400;
+  @apply text-ink-3;
 }
 
 .thread-composer-plan-panel-step-text {
@@ -241,7 +241,7 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-implement {
-  @apply h-10 w-full rounded-full bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300;
+  @apply h-10 w-full rounded-full bg-s-inv px-4 text-xs font-medium text-ink-inv transition hover:bg-s-inv-soft disabled:cursor-not-allowed disabled:bg-line-2;
 }
 
 :deep(.thread-composer-plan-panel-popover) {
@@ -258,11 +258,11 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-popover-footer {
-  @apply shrink-0 border-t border-zinc-200 p-3;
+  @apply shrink-0 border-t border-line-1 p-3;
 }
 
 .thread-composer-plan-panel-popover-head {
-  @apply flex items-center gap-2 border-b border-zinc-200 pb-2.5;
+  @apply flex items-center gap-2 border-b border-line-1 pb-2.5;
 }
 
 .thread-composer-plan-panel-popover-section {
@@ -270,6 +270,6 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-section-label {
-  @apply m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400;
+  @apply m-0 mb-1.5 text-micro font-semibold uppercase tracking-[0.14em] text-ink-3;
 }
 </style>

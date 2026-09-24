@@ -66,7 +66,7 @@ const summaryText = computed(() => {
 }
 
 .reasoning-block-toggle {
-  @apply shrink-0 text-[10px] leading-none text-zinc-400;
+  @apply shrink-0 text-nano leading-none text-ink-3;
 }
 
 .reasoning-block-body {
@@ -81,14 +81,14 @@ const summaryText = computed(() => {
 
 .reasoning-block-content {
   /* round-23 字体规范：思考文字 #737373 */
-  @apply max-h-72 overflow-y-auto text-[13px] leading-relaxed;
+  @apply max-h-72 overflow-y-auto text-ui leading-relaxed;
   color: #737373;
 }
 
 .reasoning-block-content :deep(.message-text),
 .reasoning-block-content :deep(.message-heading),
 .reasoning-block-content :deep(.message-list) {
-  @apply text-[13px] leading-relaxed;
+  @apply text-ui leading-relaxed;
   color: inherit;
 }
 </style>

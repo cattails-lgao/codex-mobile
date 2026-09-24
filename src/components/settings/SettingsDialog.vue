@@ -610,7 +610,7 @@ defineExpose({ containsTarget })
 @reference "../../style.css";
 
 .sidebar-settings-panel {
-  @apply flex h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl;
+  @apply flex h-[min(84vh,46rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-line-1 bg-s2 shadow-2xl;
 }
 
 .settings-dialog-backdrop {
@@ -618,15 +618,15 @@ defineExpose({ containsTarget })
 }
 
 .settings-dialog-header {
-  @apply flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 px-4;
+  @apply flex h-12 shrink-0 items-center justify-between gap-2 border-b border-line-1 px-4;
 }
 
 .settings-dialog-title {
-  @apply m-0 text-sm font-semibold text-zinc-900;
+  @apply m-0 text-sm font-semibold text-ink-1;
 }
 
 .settings-dialog-close {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-s1 hover:text-ink-2;
 }
 
 .settings-dialog-close-icon {
@@ -638,15 +638,15 @@ defineExpose({ containsTarget })
 }
 
 .settings-group-nav {
-  @apply flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-zinc-100 p-2;
+  @apply flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line-1 p-2;
 }
 
 .settings-group-nav-item {
-  @apply w-full rounded-lg border-0 px-3 py-2 text-left text-[13px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 cursor-pointer;
+  @apply w-full rounded-lg border-0 px-3 py-2 text-left text-ui font-medium text-ink-3 transition hover:bg-s1 hover:text-ink-2 cursor-pointer;
 }
 
 .settings-group-nav-item.is-active {
-  @apply bg-zinc-100 text-zinc-900;
+  @apply bg-s1 text-ink-1;
 }
 
 .settings-group-content {
@@ -654,7 +654,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-row {
-  @apply flex items-center justify-between w-full px-3 py-2.5 text-sm text-zinc-700 border-0 bg-transparent transition hover:bg-zinc-50 cursor-pointer;
+  @apply flex items-center justify-between w-full px-3 py-2.5 text-sm text-ink-2 border-0 bg-transparent transition hover:bg-s0 cursor-pointer;
 }
 
 .sidebar-settings-row--select {
@@ -666,7 +666,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-language-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-auto rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
+  @apply h-auto rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs text-ink-2;
 }
 
 .sidebar-settings-language-dropdown :deep(.composer-dropdown-value) {
@@ -674,11 +674,11 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-row + .sidebar-settings-row {
-  @apply border-t border-zinc-100;
+  @apply border-t border-line-1;
 }
 
 .sidebar-settings-hooks-section {
-  @apply border-t border-zinc-100 px-3 py-2.5;
+  @apply border-t border-line-1 px-3 py-2.5;
 }
 
 .sidebar-settings-hooks-header {
@@ -686,15 +686,15 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-hooks-title {
-  @apply text-sm font-medium text-zinc-700;
+  @apply text-sm font-medium text-ink-2;
 }
 
 .sidebar-settings-hooks-reload {
-  @apply rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+  @apply rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-s0 hover:text-ink-1 cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-hooks-empty {
-  @apply mt-1.5 text-xs text-zinc-500;
+  @apply mt-1.5 text-xs text-ink-3;
 }
 
 .sidebar-settings-hooks-list {
@@ -702,11 +702,11 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-hooks-entry {
-  @apply rounded-md border border-zinc-200 bg-zinc-50/70 px-2 py-1.5;
+  @apply rounded-md border border-line-1 bg-s0/70 px-2 py-1.5;
 }
 
 .sidebar-settings-hooks-cwd {
-  @apply mb-1 font-mono text-[10px] uppercase tracking-wide text-zinc-400 break-all;
+  @apply mb-1 font-mono text-nano uppercase tracking-wide text-ink-3 break-all;
 }
 
 .sidebar-settings-hooks-item {
@@ -714,23 +714,23 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-hooks-state {
-  @apply rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-medium text-zinc-500;
+  @apply rounded-full bg-line-1 px-1.5 py-px text-nano font-medium text-ink-3;
 }
 
 .sidebar-settings-hooks-state.is-on {
-  @apply bg-emerald-100 text-emerald-700;
+  @apply bg-ok text-ok;
 }
 
 .sidebar-settings-hooks-event {
-  @apply font-medium text-zinc-700;
+  @apply font-medium text-ink-2;
 }
 
 .sidebar-settings-hooks-command {
-  @apply min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500;
+  @apply min-w-0 flex-1 truncate font-mono text-micro text-ink-3;
 }
 
 .sidebar-settings-remote-section {
-  @apply border-t border-zinc-100 px-3 py-2.5;
+  @apply border-t border-line-1 px-3 py-2.5;
 }
 
 .sidebar-settings-remote-header {
@@ -738,7 +738,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-title {
-  @apply text-sm font-medium text-zinc-700;
+  @apply text-sm font-medium text-ink-2;
 }
 
 .sidebar-settings-remote-toggle {
@@ -746,15 +746,15 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-toggle-track {
-  @apply relative inline-flex h-4 w-8 items-center rounded-full bg-zinc-300 transition;
+  @apply relative inline-flex h-4 w-8 items-center rounded-full bg-line-2 transition;
 }
 
 .sidebar-settings-remote-toggle-track.is-on {
-  @apply bg-emerald-500;
+  @apply bg-ok;
 }
 
 .sidebar-settings-remote-toggle-thumb {
-  @apply inline-block h-3 w-3 transform rounded-full bg-white shadow transition translate-x-0.5;
+  @apply inline-block h-3 w-3 transform rounded-full bg-s2 shadow transition translate-x-0.5;
 }
 
 .sidebar-settings-remote-toggle-track.is-on .sidebar-settings-remote-toggle-thumb {
@@ -762,31 +762,31 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-toggle-label {
-  @apply text-xs text-zinc-600;
+  @apply text-xs text-ink-3;
 }
 
 .sidebar-settings-remote-empty {
-  @apply mt-1.5 text-xs text-zinc-500;
+  @apply mt-1.5 text-xs text-ink-3;
 }
 
 .sidebar-settings-remote-error {
-  @apply mt-1.5 text-xs text-rose-600;
+  @apply mt-1.5 text-xs text-alert;
 }
 
 .sidebar-settings-remote-notice {
-  @apply mt-1.5 text-xs text-emerald-600;
+  @apply mt-1.5 text-xs text-ok;
 }
 
 .sidebar-settings-remote-row {
-  @apply flex w-full items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-50 mt-1.5 cursor-pointer disabled:opacity-50;
+  @apply flex w-full items-center justify-between rounded-md border border-line-1 bg-s2 px-2 py-1.5 text-xs text-ink-2 transition hover:bg-s0 mt-1.5 cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-remote-label {
-  @apply text-xs text-zinc-700;
+  @apply text-xs text-ink-2;
 }
 
 .sidebar-settings-remote-value {
-  @apply font-mono text-xs font-medium text-zinc-600;
+  @apply font-mono text-xs font-medium text-ink-3;
 }
 
 .sidebar-settings-remote-clients {
@@ -798,23 +798,23 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-reload {
-  @apply rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 cursor-pointer disabled:opacity-50;
+  @apply rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-s0 hover:text-ink-1 cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-remote-client {
-  @apply mt-1 flex items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5;
+  @apply mt-1 flex items-center justify-between rounded-md border border-line-1 bg-s2 px-2 py-1.5;
 }
 
 .sidebar-settings-remote-client-name {
-  @apply min-w-0 flex-1 truncate text-xs text-zinc-700;
+  @apply min-w-0 flex-1 truncate text-xs text-ink-2;
 }
 
 .sidebar-settings-remote-client-revoke {
-  @apply shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-500 transition hover:bg-rose-50 hover:text-rose-600 cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert hover:text-alert cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-telegram-panel {
-  @apply border-t border-zinc-100 bg-zinc-50/70 px-3 py-3;
+  @apply border-t border-line-1 bg-s0/70 px-3 py-3;
 }
 
 .sidebar-settings-field {
@@ -826,12 +826,12 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-field-label {
-  @apply text-xs font-medium text-zinc-700;
+  @apply text-xs font-medium text-ink-2;
 }
 
 .sidebar-settings-input,
 .sidebar-settings-textarea {
-  @apply w-full rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-800 outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200;
+  @apply w-full rounded-md border border-line-1 bg-s2 px-2.5 py-2 text-sm text-ink-2 outline-none transition focus:border-line-3 focus:ring-2 focus:ring-line-1;
 }
 
 .sidebar-settings-textarea {
@@ -839,11 +839,11 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-field-help {
-  @apply mt-2 text-xs leading-5 text-zinc-500;
+  @apply mt-2 text-xs leading-5 text-ink-3;
 }
 
 .sidebar-settings-telegram-error {
-  @apply mt-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs text-rose-700;
+  @apply mt-2 rounded-md bg-alert px-2.5 py-2 text-xs text-alert;
 }
 
 .sidebar-settings-telegram-actions {
@@ -851,7 +851,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-telegram-save {
-  @apply rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .sidebar-settings-label {
@@ -859,21 +859,21 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-value {
-  @apply text-xs text-zinc-500 bg-zinc-100 rounded px-1.5 py-0.5;
+  @apply text-xs text-ink-3 bg-s1 rounded px-1.5 py-0.5;
 }
 
 
 .sidebar-settings-toggle {
-  @apply relative w-9 h-5 rounded-full bg-zinc-300 transition-colors shrink-0;
+  @apply relative w-9 h-5 rounded-full bg-line-2 transition-colors shrink-0;
 }
 
 .sidebar-settings-toggle::after {
   content: '';
-  @apply absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm;
+  @apply absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-s2 transition-transform shadow-sm;
 }
 
 .sidebar-settings-toggle.is-on {
-  @apply bg-zinc-800;
+  @apply bg-s-inv-soft;
 }
 
 .sidebar-settings-toggle.is-on::after {
@@ -885,7 +885,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-error {
-  @apply text-xs text-red-600 bg-red-50 rounded px-2 py-1.5 break-words;
+  @apply text-xs text-alert bg-alert rounded px-2 py-1.5 break-words;
 }
 
 .sidebar-settings-key-group {
@@ -893,23 +893,23 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-key-input {
-  @apply flex-1 min-w-0 text-xs rounded border border-zinc-200 bg-white px-2 py-1 outline-none transition-colors placeholder:text-zinc-400;
+  @apply flex-1 min-w-0 text-xs rounded border border-line-1 bg-s2 px-2 py-1 outline-none transition-colors placeholder:text-ink-3;
 }
 
 .sidebar-settings-key-input:focus {
-  @apply border-zinc-400;
+  @apply border-line-3;
 }
 
 .sidebar-settings-key-save {
-  @apply shrink-0 rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-default;
+  @apply shrink-0 rounded border border-line-1 bg-s2 px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-s0 disabled:opacity-40 disabled:cursor-default;
 }
 
 .sidebar-settings-key-masked {
-  @apply flex-1 min-w-0 text-xs text-zinc-500 font-mono truncate;
+  @apply flex-1 min-w-0 text-xs text-ink-3 font-mono truncate;
 }
 
 .sidebar-settings-key-clear {
-  @apply shrink-0 w-6 h-6 flex items-center justify-center rounded-full border border-zinc-200 text-xs text-zinc-400 transition-colors hover:text-zinc-600 hover:border-zinc-300 disabled:opacity-40;
+  @apply shrink-0 w-6 h-6 flex items-center justify-center rounded-full border border-line-1 text-xs text-ink-3 transition-colors hover:text-ink-3 hover:border-line-2 disabled:opacity-40;
 }
 
 .sidebar-settings-provider-dropdown {
@@ -917,7 +917,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-provider-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-auto rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700;
+  @apply h-auto rounded-md border border-line-1 bg-s2 px-2 py-1 text-xs text-ink-2;
 }
 
 .sidebar-settings-provider-dropdown :deep(.composer-dropdown-value) {
@@ -925,15 +925,15 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-segmented {
-  @apply inline-flex items-center rounded-md border border-zinc-200 bg-white p-0.5;
+  @apply inline-flex items-center rounded-md border border-line-1 bg-s2 p-0.5;
 }
 
 .sidebar-settings-segmented-option {
-  @apply rounded px-2 py-1 text-xs text-zinc-600 transition-colors;
+  @apply rounded px-2 py-1 text-xs text-ink-3 transition-colors;
 }
 
 .sidebar-settings-segmented-option.is-active {
-  @apply bg-zinc-800 text-white;
+  @apply bg-s-inv-soft text-ink-inv;
 }
 
 .sidebar-settings-provider-info {
@@ -941,7 +941,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-provider-link {
-  @apply text-xs text-blue-600 hover:text-blue-700 underline shrink-0;
+  @apply text-xs text-ink-1 hover:text-ink-1 underline shrink-0;
 }
 
 :global(:root.dark) .sidebar-settings-segmented {
@@ -981,11 +981,11 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-rate-limits {
-  @apply border-t border-zinc-200 px-2 pt-2;
+  @apply border-t border-line-1 px-2 pt-2;
 }
 
 .sidebar-settings-build-label {
-  @apply border-t border-zinc-100 px-3 py-2 text-[11px] text-zinc-500;
+  @apply border-t border-line-1 px-3 py-2 text-micro text-ink-3;
 }
 
 .visible-error-with-feedback {
@@ -993,7 +993,7 @@ defineExpose({ containsTarget })
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-rose-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300;
+  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 :global(:root.dark) .visible-error-feedback {

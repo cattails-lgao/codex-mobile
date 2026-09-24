@@ -84,7 +84,7 @@ function onToggle(): void {
 }
 
 .process-fold--running .process-fold-label {
-  @apply text-amber-600;
+  @apply text-live;
 }
 
 .process-fold-header {
@@ -98,7 +98,7 @@ function onToggle(): void {
 }
 
 .process-fold-toggle {
-  @apply shrink-0 text-[10px] leading-none text-zinc-400;
+  @apply shrink-0 text-nano leading-none text-ink-3;
 }
 
 .process-fold-body {

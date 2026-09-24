@@ -51,7 +51,7 @@ defineProps<{
 }
 
 .message-strikethrough-text {
-  @apply line-through text-slate-500;
+  @apply line-through text-ink-3;
 }
 
 .message-inline-code {
@@ -60,6 +60,6 @@ defineProps<{
 }
 
 .message-file-link {
-  @apply text-sm leading-relaxed text-[#0969da] no-underline hover:text-[#1f6feb] hover:underline underline-offset-2;
+  @apply text-sm leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
 }
 </style>
