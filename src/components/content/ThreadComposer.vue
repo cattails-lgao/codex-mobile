@@ -2036,13 +2036,7 @@ watch(
   @apply border-line-2 bg-s1 hover:bg-s2;
 }
 
-:global(:root.dark) .thread-composer-context-usage-inline.is-warning {
-  @apply border-amber-900 bg-amber-950/50 hover:bg-amber-950;
-}
 
-:global(:root.dark) .thread-composer-context-usage-inline.is-danger {
-  @apply border-rose-900 bg-rose-950/50 hover:bg-rose-950;
-}
 
 .thread-composer-main {
   @apply flex flex-col gap-2 sm:gap-2.5;

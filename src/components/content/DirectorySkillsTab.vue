@@ -199,7 +199,6 @@ const emit = defineEmits<{
   @apply m-0 text-xs leading-relaxed text-ink-3;
 }
 
-:global(:root.dark) .directory-loading,
 :global(:root.dark) .directory-empty {
   @apply border-line-2 bg-s1;
 }
@@ -224,7 +223,6 @@ const emit = defineEmits<{
   @apply text-ink-3;
 }
 
-:global(:root.dark) .skills-embedded-toggle,
 :global(:root.dark) .skills-embedded-title {
   @apply text-ink-3 hover:text-ink-1;
 }

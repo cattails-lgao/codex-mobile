@@ -327,9 +327,6 @@ body {
   @apply bg-s3 text-ink-4;
 }
 
-:root.dark .sidebar-settings-hooks-state.is-on {
-  @apply bg-emerald-900/60 text-emerald-300;
-}
 
 :root.dark .sidebar-settings-hooks-event {
   @apply text-ink-2;
@@ -355,9 +352,6 @@ body {
   @apply border-line-2 bg-s2 text-ink-3;
 }
 
-:root.dark .thread-compaction-banner.is-done {
-  @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
-}
 
 :root.dark .thread-compaction-banner-spinner {
   @apply border-line-3 border-t-line-5;
@@ -375,9 +369,6 @@ body {
   @apply bg-s4;
 }
 
-:root.dark .sidebar-settings-remote-toggle-track.is-on {
-  @apply bg-emerald-600;
-}
 
 :root.dark .sidebar-settings-remote-toggle-label {
   @apply text-ink-4;
@@ -387,26 +378,16 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .sidebar-settings-remote-error {
-  @apply text-rose-400;
-}
 
-:root.dark .sidebar-settings-remote-notice {
-  @apply text-emerald-400;
-}
 
-:root.dark .sidebar-settings-remote-row,
-:root.dark .sidebar-settings-remote-reload,
-:root.dark .sidebar-settings-remote-client,
 :root.dark .sidebar-settings-remote-client-revoke {
-  @apply text-ink-4 hover:bg-rose-900/50 hover:text-rose-300;
+  @apply text-ink-4;
 }
 
 :root.dark .sidebar-settings-remote-row {
   @apply text-ink-3 hover:bg-s3;
 }
 
-:root.dark .sidebar-settings-remote-label,
 :root.dark .sidebar-settings-remote-client-name {
   @apply text-ink-3;
 }
@@ -427,17 +408,8 @@ body {
   @apply text-ink-3;
 }
 
-:root.dark .sidebar-settings-context-value[data-state='ok'] {
-  @apply text-emerald-300;
-}
 
-:root.dark .sidebar-settings-context-value[data-state='warning'] {
-  @apply text-amber-300;
-}
 
-:root.dark .sidebar-settings-context-value[data-state='danger'] {
-  @apply text-rose-300;
-}
 
 :root.dark .sidebar-settings-context-meta {
   @apply text-ink-4;
@@ -459,12 +431,7 @@ body {
   @apply bg-s3 text-ink-3;
 }
 
-:root.dark .sidebar-settings-account-error {
-  @apply bg-rose-950/40 text-rose-200;
-}
 
-:root.dark .sidebar-settings-account-refresh,
-:root.dark .sidebar-settings-account-switch,
 :root.dark .sidebar-settings-account-login-button {
   @apply border-line-3 bg-s3 text-ink-2 hover:bg-s4;
 }
@@ -473,9 +440,6 @@ body {
   @apply border-line-3 bg-s3 text-ink-2 hover:bg-s4;
 }
 
-:root.dark .sidebar-settings-account-login-link {
-  @apply text-sky-300 hover:text-sky-200;
-}
 
 :root.dark .sidebar-settings-account-empty {
   @apply text-ink-4;
@@ -485,13 +449,7 @@ body {
   @apply border-line-2 bg-s1/70;
 }
 
-:root.dark .sidebar-settings-account-item.is-active {
-  @apply border-emerald-500/35 bg-emerald-500/10;
-}
 
-:root.dark .sidebar-settings-account-item.is-unavailable {
-  @apply border-rose-500/35 bg-rose-500/10;
-}
 
 :root.dark .sidebar-settings-account-email {
   @apply text-ink-1;
@@ -509,21 +467,12 @@ body {
   @apply bg-s2 text-ink-3;
 }
 
-:root.dark .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
-  @apply bg-emerald-500/15 text-emerald-200;
-}
 
-:root.dark .sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
-  @apply bg-rose-500/15 text-rose-200;
-}
 
 :root.dark .sidebar-settings-account-remove {
-  @apply border-amber-500/35 bg-s3 text-ink-4 hover:bg-amber-500/10;
+  @apply bg-s3 text-ink-4;
 }
 
-:root.dark .sidebar-settings-account-remove.is-confirming {
-  @apply border-amber-400/50 bg-amber-500/10 text-amber-200;
-}
 
 :root.dark .sidebar-settings-value {
   @apply text-ink-4 bg-s3;
@@ -567,9 +516,6 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .thread-tree-action-error {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100;
-}
 
 :root.dark .section-toggle-row {
   @apply hover:bg-s2 focus-visible:ring-line-3;
@@ -645,14 +591,10 @@ body {
 }
 
 /* ThreadComposer 计划面板（含展开 popover）暗色覆盖：scoped 内
-   :global(:root.dark) 在本构建中不生效，按仓库规则放全局样式表 */
 :root.dark .thread-composer-plan-panel {
   @apply border-line-2 bg-s1;
 }
 
-:root.dark .thread-composer-plan-panel[data-streaming='true'] {
-  @apply border-sky-800 bg-sky-950/40;
-}
 
 :root.dark .thread-composer-plan-panel-header:hover {
   @apply bg-s2/70;
@@ -691,7 +633,6 @@ body {
 }
 
 /* ThreadConversation 思考块（reasoning-block）暗色覆盖：scoped 内
-   :global(:root.dark) 在本构建中不生效，按仓库规则放全局样式表。
    round-24：思考块已去卡片化（与 Running command 同款朴素行），暗色只需文字色。 */
 :root.dark .reasoning-block-title {
   @apply text-ink-4;
@@ -701,7 +642,6 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .reasoning-block-content .message-text,
 :root.dark .reasoning-block-content .message-heading {
   @apply text-ink-4;
 }
@@ -712,9 +652,6 @@ body {
 
 /* Process Fold（阶段 A 折叠容器）暗色覆盖：scoped :global 不生效，放全局。
    round-17：折叠条已无边框/背景，仅文字色需要暗色适配。 */
-:root.dark .process-fold--running .process-fold-label {
-  @apply text-amber-400;
-}
 
 :root.dark .process-fold-label {
   @apply text-ink-4;
@@ -801,9 +738,6 @@ body {
   @apply flex w-full min-w-0 flex-col gap-1.5;
 }
 
-:root.dark .work-block-permission-hint {
-  @apply border-amber-900 bg-amber-950/50 text-amber-300;
-}
 
 /* round-93：`.work-block-command` / `.work-block-status` / `.tool-call-*` / `.work-step-dot`
    的暗色覆盖整块删除——round-93 起这些类由组件自己用主题感知 token（ink-1/ink-3、
@@ -831,7 +765,6 @@ body {
   @apply border-line-2 bg-s2 text-ink-4;
 }
 
-:root.dark .thread-pending-request-command-line,
 :root.dark .thread-pending-request-preview {
   @apply bg-s2/85 text-ink-1;
 }
@@ -873,14 +806,10 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .thread-pending-request-question-text,
 :root.dark .thread-pending-request-question-description {
   @apply text-ink-4;
 }
 
-:root.dark .thread-pending-request-validation-error {
-  @apply text-rose-300;
-}
 
 :root.dark .thread-pending-request-link {
   @apply border-line-2 text-ink-1 hover:border-line-4 hover:bg-s2;
@@ -935,56 +864,29 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .thread-composer-menu-item-hint {
-  @apply text-amber-400;
-}
 
 :root.dark .thread-composer-menu-item-check {
   @apply text-ink-1;
 }
 
-:root.dark .thread-composer-menu-error {
-  @apply text-red-400;
-}
 
-:root.dark .thread-composer-approval-tip {
-  @apply border-emerald-700 bg-emerald-900/80 text-emerald-300;
-}
 
 /* `:root.dark .thread-composer-stop` 覆盖同上，已删除：基础规则改用 --ink-1 / --ink-inv 后
    两套主题自动各自取值（暗色＝亮底深字，亮色＝深底亮字），与发送按钮同一支墨色。 */
 
 :root.dark .composer-runtime-error {
-  @apply border-rose-800/70 bg-rose-950/70 text-rose-100 shadow-none;
+  @apply shadow-none;
 }
 
 :root.dark .interrupt-recovered-banner {
-  @apply border-sky-800/70 bg-sky-950/70 text-sky-100 shadow-none;
+  @apply shadow-none;
 }
 
-:root.dark .interrupt-recovered-dismiss {
-  @apply text-sky-400 hover:text-sky-100;
-}
 
-:root.dark .visible-error-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
-}
 
-:root.dark .skills-error-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
-}
 
-:root.dark .live-overlay-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
-}
 
-:root.dark .turn-error-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
-}
 
-:root.dark .header-git-feedback {
-  @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
-}
 
 /* 排除 `--pill`：那是输入区的芯片（只有模型 / 推理强度两个控件在用），颜色该由芯片规则与
    模型芯片的 `--model` 决定。不排除的话，这条与组件里的芯片规则**同权重（0,3,0）**，谁赢
@@ -1011,7 +913,6 @@ body {
   @apply border-line-1 bg-s0;
 }
 
-:root.dark .content-header .content-title,
 :root.dark .content-title {
   @apply text-ink-2;
 }
@@ -1040,9 +941,6 @@ body {
   @apply bg-s3 text-ink-3;
 }
 
-:root.dark .rate-limit-card-metric {
-  @apply bg-amber-900/40 text-amber-200;
-}
 
 :root.dark .rate-limit-card-footer {
   @apply text-ink-4;
@@ -1092,21 +990,9 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .thread-composer-slash-skill-icon.is-user {
-  @apply bg-sky-900/60 text-sky-300;
-}
 
-:root.dark .thread-composer-slash-skill-icon.is-system {
-  @apply bg-amber-900/60 text-amber-300;
-}
 
-:root.dark .thread-composer-slash-skill-icon.is-repo {
-  @apply bg-emerald-900/60 text-emerald-300;
-}
 
-:root.dark .thread-composer-slash-skill-icon.is-plugin {
-  @apply bg-violet-900/60 text-violet-300;
-}
 
 :root.dark .thread-composer-file-chip {
   @apply border-line-3 bg-s3 text-ink-3;
@@ -1148,9 +1034,6 @@ body {
   @apply text-ink-4 hover:bg-transparent;
 }
 
-:root.dark .thread-menu-item-danger {
-  @apply text-rose-300 hover:bg-rose-900/40;
-}
 
 :root.dark .thread-menu-trigger {
   @apply text-ink-4;
@@ -1208,7 +1091,6 @@ body {
   @apply border-line-2 text-ink-4;
 }
 
-:root.dark .automation-thread-select,
 :root.dark .automation-thread-textarea {
   @apply border-line-3 bg-s3 text-ink-1;
 }
@@ -1229,23 +1111,17 @@ body {
   @apply border-line-2 bg-s1;
 }
 
-:root.dark .automation-schedule-copy,
 :root.dark .automation-schedule-preview {
   @apply text-ink-4;
 }
 
-:root.dark .automation-schedule-time,
-:root.dark .automation-schedule-number,
 :root.dark .automation-schedule-unit {
   @apply border-line-3 bg-s3 text-ink-1;
 }
 
-:root.dark .automation-thread-notice {
-  @apply text-emerald-400;
-}
 
 :root.dark .thread-row-automation-chip {
-  @apply bg-amber-900/40 text-amber-200 ring-1 ring-amber-700/40;
+  @apply ring-1;
 }
 
 :root.dark .rename-thread-button {
@@ -1257,7 +1133,7 @@ body {
 }
 
 :root.dark .rename-thread-button-danger {
-  @apply bg-rose-500 text-white hover:bg-rose-400;
+  @apply text-white;
 }
 
 :root.dark .thread-delete-button {
@@ -1265,7 +1141,7 @@ body {
 }
 
 :root.dark .thread-delete-button[data-confirming='true'] {
-  @apply bg-rose-500 text-white hover:bg-rose-400;
+  @apply text-white;
 }
 
 :root.dark .message-bubble {
@@ -1300,9 +1176,6 @@ body {
   @apply text-ink-3;
 }
 
-:root.dark .conversation-item-process[data-role='assistant'] .message-text,
-:root.dark .conversation-item-process[data-role='assistant'] .message-list,
-:root.dark .conversation-item-process[data-role='assistant'] .message-list-item-text,
 :root.dark .conversation-item-process[data-role='assistant'] .message-blockquote {
   @apply text-ink-4;
 }
@@ -1358,9 +1231,6 @@ body {
   @apply text-ink-4 hover:bg-s2 hover:text-ink-1;
 }
 
-:root.dark .message-copy-button[data-copied='true'] {
-  @apply text-emerald-300 hover:bg-emerald-500/10;
-}
 
 :root.dark .message-rollback-button {
   @apply text-ink-4 hover:bg-s2 hover:text-ink-1;
@@ -1374,7 +1244,6 @@ body {
   @apply border-line-2 bg-s1/90 text-ink-1;
 }
 
-:root.dark .message-table-head-cell,
 :root.dark .message-table-cell {
   @apply border-line-2;
 }
@@ -1394,7 +1263,6 @@ body {
   @apply border-line-3 bg-s3 text-ink-3;
 }
 
-:root.dark .conversation-loading,
 :root.dark .conversation-empty {
   @apply text-ink-4;
 }
@@ -1435,17 +1303,8 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .cmd-status-running .cmd-status {
-  @apply text-amber-300;
-}
 
-:root.dark .cmd-status-ok .cmd-status {
-  @apply text-emerald-300;
-}
 
-:root.dark .cmd-status-error .cmd-status {
-  @apply text-rose-300;
-}
 
 :root.dark .cmd-output-wrap.cmd-output-visible {
   @apply border-line-2;
@@ -1455,9 +1314,6 @@ body {
   @apply text-ink-2;
 }
 
-:root.dark .file-change-path-button {
-  @apply text-sky-300 hover:text-sky-200;
-}
 
 :root.dark .file-change-summary-status {
   @apply text-ink-4;
@@ -1471,21 +1327,9 @@ body {
   @apply text-ink-2;
 }
 
-:root.dark .file-change-badge[data-operation='add'] {
-  @apply bg-emerald-950/70 text-emerald-300;
-}
 
-:root.dark .file-change-badge[data-operation='update'] {
-  @apply bg-sky-950/70 text-sky-300;
-}
 
-:root.dark .file-change-badge[data-operation='delete'] {
-  @apply bg-rose-950/70 text-rose-300;
-}
 
-:root.dark .file-change-badge[data-operation='move'] {
-  @apply bg-amber-950/70 text-amber-300;
-}
 
 :root.dark .file-change-arrow {
   @apply text-ink-4;
@@ -1499,17 +1343,8 @@ body {
   @apply border-line-2 bg-s2 text-ink-2 hover:border-line-3 hover:bg-s3 hover:text-ink-1;
 }
 
-:root.dark .file-change-action-error {
-  @apply text-rose-300;
-}
 
-:root.dark .file-change-signed-count[data-tone='add'] {
-  @apply text-emerald-300;
-}
 
-:root.dark .file-change-signed-count[data-tone='remove'] {
-  @apply text-rose-300;
-}
 
 :root.dark .diff-viewer-shell {
   @apply border-line-2 bg-s1;
@@ -1536,7 +1371,7 @@ body {
 }
 
 :root.dark .diff-viewer-file-button[data-active='true'] {
-  @apply border-sky-800 bg-s1;
+  @apply bg-s1;
 }
 
 :root.dark .diff-viewer-file-label {
@@ -1635,27 +1470,14 @@ body {
   @apply border-line-2 bg-s2 shadow-none;
 }
 
-:root.dark .header-git-review-row,
-:root.dark .header-git-branch-button,
-:root.dark .header-git-branch-checkout,
-:root.dark .header-git-commit,
 :root.dark .header-git-file {
   @apply text-ink-2;
 }
 
-:root.dark .header-git-review-row:hover,
-:root.dark .header-git-branch-button:hover,
-:root.dark .header-git-branch-checkout:hover,
-:root.dark .header-git-commit:hover,
-:root.dark .header-git-file:hover,
-:root.dark .header-git-commit.is-current,
-:root.dark .header-git-commit.is-selected,
-:root.dark .header-git-branch-button.is-selected,
 :root.dark .header-git-branch-button.is-current {
   @apply bg-s2;
 }
 
-:root.dark .header-git-branch-button.is-selected,
 :root.dark .header-git-commit.is-selected {
   @apply ring-line-3;
 }
@@ -1664,46 +1486,24 @@ body {
   @apply ring-line-3;
 }
 
-:root.dark .header-git-state,
-:root.dark .header-git-commit-panel,
-:root.dark .header-git-branch-panel,
-:root.dark .header-git-commit-detail-panel,
 :root.dark .header-git-commits {
   @apply border-line-2 bg-s2;
 }
 
-:root.dark .header-git-state-value,
 :root.dark .header-git-commit-detail-subject {
   @apply text-ink-1;
 }
 
-:root.dark .header-git-state-label,
-:root.dark .header-git-state-meta,
-:root.dark .header-git-toggle-row,
-:root.dark .header-git-branch-meta,
-:root.dark .header-git-commit-top,
-:root.dark .header-git-empty,
-:root.dark .header-git-commits-empty,
-:root.dark .header-git-commit-detail-title,
-:root.dark .header-git-files-empty,
 :root.dark .header-git-file-previous-path {
   @apply text-ink-4;
 }
 
-:root.dark .header-git-file-added {
-  @apply text-emerald-400;
-}
 
-:root.dark .header-git-file-removed {
-  @apply text-red-400;
-}
 
 :root.dark .header-git-search {
   @apply border-line-2 bg-s2 text-ink-1 focus:border-line-3;
 }
 
-:root.dark .header-git-ref,
-:root.dark .header-git-file-status,
 :root.dark .header-git-branch-meta {
   @apply bg-s3 text-ink-2;
 }
@@ -1720,37 +1520,16 @@ body {
   @apply border-line-3 bg-s-inv text-ink-inv hover:bg-white disabled:border-line-2 disabled:bg-s2 disabled:text-ink-4;
 }
 
-:root.dark .header-git-status {
-  @apply bg-amber-950/40 text-amber-300;
-}
 
-:root.dark .header-git-status.is-error,
-:root.dark .header-git-commits-empty.is-error,
-:root.dark .header-git-files-empty.is-error {
-  @apply bg-red-950/40 text-red-300;
-}
 
 :root.dark .review-pane {
   @apply border-line-2 bg-s1;
 }
 
-:root.dark .review-pane-header,
-:root.dark .review-pane-toolbar,
-:root.dark .review-pane-bulk-actions,
 :root.dark .review-pane-hunk-header {
   @apply border-line-2;
 }
 
-:root.dark .review-pane-header,
-:root.dark .review-pane-toolbar,
-:root.dark .review-pane-content,
-:root.dark .review-pane-main,
-:root.dark .review-pane-diff,
-:root.dark .review-pane-hunk-header,
-:root.dark .review-pane-summary-card,
-:root.dark .review-pane-file-header,
-:root.dark .review-pane-hunk,
-:root.dark .review-pane-sheet-list,
 :root.dark .review-pane-sheet {
   @apply bg-s1;
 }
@@ -1759,29 +1538,16 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .review-pane-title,
-:root.dark .review-pane-empty-title,
-:root.dark .review-pane-file-title,
-:root.dark .review-pane-summary-title,
-:root.dark .review-pane-finding-title,
 :root.dark .review-pane-sheet-title {
   @apply text-ink-1;
 }
 
-:root.dark .review-pane-empty-text,
-:root.dark .review-pane-file-subtitle,
-:root.dark .review-pane-hunk-meta,
 :root.dark .review-pane-hunk-title {
   @apply text-ink-4;
 }
 
-:root.dark .review-pane-close,
-:root.dark .review-pane-mobile-files-button,
-:root.dark .review-pane-refresh,
-:root.dark .review-pane-bulk-button,
-:root.dark .review-pane-row-button,
 :root.dark .review-pane-primary-cta {
-  @apply border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-400;
+  @apply text-white;
 }
 
 :root.dark .review-pane-control-label {
@@ -1809,7 +1575,7 @@ body {
 }
 
 :root.dark .review-pane-segmented-button[data-active='true'] {
-  @apply border-sky-400/40 bg-sky-500 text-white;
+  @apply text-white;
 }
 
 :root.dark .review-pane-segmented-button[data-active='true']::before {
@@ -1820,22 +1586,12 @@ body {
   @apply border-line-3 bg-s2 text-ink-2 hover:bg-s3;
 }
 
-:root.dark .review-pane-refresh {
-  @apply border-amber-500/35 bg-amber-500/12 text-amber-200 hover:bg-amber-500/20;
-}
 
-:root.dark .review-pane-meta span,
 :root.dark .review-pane-sheet-count {
   @apply bg-s2 text-ink-3;
 }
 
-:root.dark .review-pane-summary-pill.review-pane-summary-pill-add {
-  @apply bg-emerald-500/15 text-emerald-300;
-}
 
-:root.dark .review-pane-summary-pill.review-pane-summary-pill-remove {
-  @apply bg-rose-500/15 text-rose-300;
-}
 
 :root.dark .review-pane-file-list {
   @apply border-line-2 bg-s0/70;
@@ -1861,9 +1617,6 @@ body {
   @apply bg-s4;
 }
 
-:root.dark .review-pane-resizer:hover::before {
-  @apply bg-sky-400;
-}
 
 :root.dark .review-pane-file {
   @apply text-ink-1 hover:border-line-3 hover:bg-s2;
@@ -1881,41 +1634,20 @@ body {
   @apply text-inherit;
 }
 
-:root.dark .review-pane-file-op[data-operation='update'] {
-  @apply bg-amber-500/15 text-amber-200;
-}
 
-:root.dark .review-pane-file-op[data-operation='add'] {
-  @apply bg-emerald-500/15 text-emerald-200;
-}
 
-:root.dark .review-pane-file-op[data-operation='delete'] {
-  @apply bg-rose-500/15 text-rose-200;
-}
 
-:root.dark .review-pane-file-op[data-operation='rename'] {
-  @apply bg-sky-500/15 text-sky-200;
-}
 
-:root.dark .review-pane-file-delta,
 :root.dark .review-pane-meta {
   @apply text-ink-4;
 }
 
-:root.dark .review-pane-delta-add {
-  @apply text-emerald-300;
-}
 
-:root.dark .review-pane-delta-remove {
-  @apply text-rose-300;
-}
 
 :root.dark .review-pane-delta-separator {
   @apply text-ink-4;
 }
 
-:root.dark .review-pane-file-header,
-:root.dark .review-pane-hunk,
 :root.dark .review-pane-summary-card {
   @apply border-line-2;
 }
@@ -1925,25 +1657,15 @@ body {
   @apply border-line-5;
 }
 
-:root.dark .review-pane-lines,
 :root.dark .review-pane-raw-diff {
   @apply border-line-2 bg-s0;
 }
 
-:root.dark .review-pane-line-number,
 :root.dark .review-pane-line-marker {
   @apply text-ink-4;
 }
 
-:root.dark .review-pane-line[data-kind='add'] .review-pane-line-marker,
-:root.dark .review-pane-line[data-kind='add'] .review-pane-line-code {
-  @apply text-emerald-300;
-}
 
-:root.dark .review-pane-line[data-kind='remove'] .review-pane-line-marker,
-:root.dark .review-pane-line[data-kind='remove'] .review-pane-line-code {
-  @apply text-rose-300;
-}
 
 :root.dark .review-pane-sheet-handle {
   @apply bg-s3;
@@ -1953,53 +1675,29 @@ body {
   @apply bg-black/55;
 }
 
-:root.dark .request-card {
-  @apply border-amber-700 bg-amber-900/30;
-}
 
-:root.dark .request-title {
-  @apply text-amber-200;
-}
 
-:root.dark .request-meta {
-  @apply text-amber-400;
-}
 
-:root.dark .request-reason {
-  @apply text-amber-200;
-}
 
 :root.dark .request-button {
-  @apply border-amber-700 bg-s2 text-amber-200 hover:bg-s3;
+  @apply bg-s2 hover:bg-s3;
 }
 
 :root.dark .request-button-primary {
-  @apply border-amber-600 bg-amber-600 text-white hover:bg-amber-700;
+  @apply text-white;
 }
 
-:root.dark .request-question-option-description {
-  @apply text-amber-400;
-}
 
 :root.dark .plan-card {
-  @apply border-sky-700/70 bg-s0/78;
+  @apply bg-s0/78;
 }
 
-:root.dark .plan-card-title {
-  @apply text-sky-200;
-}
 
-:root.dark .plan-card-badge {
-  @apply bg-sky-800 text-sky-100;
-}
 
 :root.dark .plan-card-explanation {
   @apply text-ink-2;
 }
 
-:root.dark .plan-card-markdown .message-text,
-:root.dark .plan-card-markdown .message-heading,
-:root.dark .plan-card-markdown .message-list,
 :root.dark .plan-card-markdown .message-list-item-text {
   @apply text-ink-2;
 }
@@ -2016,9 +1714,6 @@ body {
   @apply bg-transparent text-inherit;
 }
 
-:root.dark .plan-card-markdown .message-file-link {
-  @apply text-sky-300 decoration-sky-500;
-}
 
 :root.dark .plan-card-markdown .message-table {
   @apply bg-s1/90;
@@ -2028,25 +1723,13 @@ body {
   @apply border-line-2 bg-s2/72 text-ink-1;
 }
 
-:root.dark .plan-step-item[data-status='completed'] {
-  @apply border-emerald-900 bg-emerald-950/40;
-}
 
-:root.dark .plan-step-item[data-status='inProgress'] {
-  @apply border-amber-900 bg-amber-950/40;
-}
 
 :root.dark .plan-step-status {
   @apply bg-s3 text-ink-2;
 }
 
-:root.dark .plan-step-status[data-status='completed'] {
-  @apply bg-emerald-900 text-emerald-200;
-}
 
-:root.dark .plan-step-status[data-status='inProgress'] {
-  @apply bg-amber-900 text-amber-200;
-}
 
 :root.dark .plan-card-implement-button {
   @apply border-line-3 bg-s2 text-ink-1 hover:border-line-4 hover:bg-s3;
@@ -2056,9 +1739,6 @@ body {
   @apply border-line-3 bg-s2;
 }
 
-:root.dark .message-file-link {
-  @apply text-blue-400 hover:text-blue-300;
-}
 
 :root.dark .composer-dropdown-search-input {
   @apply border-line-3 bg-s3 text-ink-2;
@@ -2075,14 +1755,10 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .search-dropdown-trigger,
-:root.dark .search-dropdown-trigger:disabled,
-:root.dark .search-dropdown-value,
 :root.dark .search-dropdown-chevron {
   @apply text-ink-4;
 }
 
-:root.dark .search-dropdown-menu-wrap-up,
 :root.dark .search-dropdown-menu-wrap-down {
   @apply border-line-2 bg-s1 shadow-[0_18px_48px_rgba(0,0,0,0.45)];
 }
@@ -2091,13 +1767,10 @@ body {
   @apply border-line-1;
 }
 
-:root.dark .search-dropdown-search,
-:root.dark .search-dropdown-create,
 :root.dark .search-dropdown-create-icon {
   @apply border-line-2 bg-s0 text-ink-1 placeholder-ink-4;
 }
 
-:root.dark .search-dropdown-create:hover,
 :root.dark .search-dropdown-create-icon:hover {
   @apply bg-s1;
 }
@@ -2106,7 +1779,6 @@ body {
   @apply text-ink-2;
 }
 
-:root.dark .search-dropdown-option.is-highlighted,
 :root.dark .search-dropdown-option-main:hover {
   @apply bg-s2;
 }
@@ -2131,9 +1803,6 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .thread-composer-skill-chip {
-  @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
-}
 
 :root.dark .thread-composer-input::placeholder {
   @apply text-ink-4;
@@ -2159,7 +1828,6 @@ body {
   @apply border-s-inv bg-s-inv text-ink-inv hover:bg-white;
 }
 
-:root.dark .new-thread-open-folder,
 :root.dark .new-thread-project-modal {
   @apply border-line-2 bg-s0 text-ink-1;
 }
@@ -2168,7 +1836,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .new-thread-open-folder-close,
 :root.dark .new-thread-open-folder-label {
   @apply text-ink-4;
 }
@@ -2177,8 +1844,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .new-thread-open-folder-path,
-:root.dark .new-thread-open-folder-filter,
 :root.dark .new-thread-open-folder-create-input {
   @apply border-line-2 bg-s1 text-ink-1 focus:border-line-4;
 }
@@ -2195,9 +1860,6 @@ body {
   @apply bg-s-inv text-ink-inv;
 }
 
-:root.dark .new-thread-open-folder-error {
-  @apply border-rose-900 bg-rose-950/60 text-rose-200;
-}
 
 :root.dark .runtime-toggle {
   @apply border-line-2 bg-s1;
@@ -2231,9 +1893,6 @@ body {
   @apply border-line-3 bg-s2 text-ink-3;
 }
 
-:root.dark .worktree-init-status.is-error {
-  @apply border-rose-700 bg-rose-950/40 text-rose-200;
-}
 
 :root.dark .skills-hub-title {
   @apply text-ink-1;
@@ -2255,7 +1914,6 @@ body {
   @apply text-ink-2 placeholder-ink-4;
 }
 
-:root.dark .skills-hub-search-btn,
 :root.dark .skills-hub-sort {
   @apply border-line-3 bg-s2 text-ink-2 hover:bg-s3 hover:border-line-4;
 }
@@ -2280,22 +1938,15 @@ body {
   @apply text-ink-2 hover:text-white hover:border-line-4;
 }
 
-:root.dark .skills-sync-device,
 :root.dark .skills-sync-meta {
   @apply text-ink-4;
 }
 
-:root.dark .skills-sync-device a {
-  @apply text-blue-400 hover:text-blue-300;
-}
 
 :root.dark .skills-sync-device code {
   @apply border border-line-3 bg-s3 px-1.5 py-0.5 rounded text-ink-2;
 }
 
-:root.dark .skills-sync-error {
-  @apply border-rose-800 bg-rose-950/40 text-rose-200;
-}
 
 :root.dark .skills-search-panel {
   @apply border-line-2 bg-s1;
@@ -2321,45 +1972,23 @@ body {
   @apply text-ink-3 hover:text-ink-1;
 }
 
-:root.dark .skills-hub-loading,
 :root.dark .skills-hub-empty {
   @apply text-ink-4;
 }
 
-:root.dark .skills-hub-error {
-  @apply border-rose-800 bg-rose-950/40 text-rose-200;
-}
 
-:root.dark .directory-title,
-:root.dark .directory-card-title,
-:root.dark .directory-modal-title,
-:root.dark .directory-mini-heading,
 :root.dark .directory-detail-heading {
   @apply text-ink-1;
 }
 
-:root.dark .directory-subtitle,
-:root.dark .directory-card-meta,
-:root.dark .directory-card-description,
-:root.dark .directory-mini-list,
 :root.dark .directory-detail-description {
   @apply text-ink-4;
 }
 
-:root.dark .directory-tabs,
-:root.dark .directory-search,
-:root.dark .directory-card,
-:root.dark .directory-loading,
-:root.dark .directory-empty,
-:root.dark .directory-modal,
-:root.dark .directory-refresh,
-:root.dark .directory-action,
-:root.dark .directory-action-link,
 :root.dark .directory-modal-close {
   @apply border-line-2 bg-s1 text-ink-1;
 }
 
-:root.dark .directory-tab,
 :root.dark .directory-sort-button {
   @apply text-ink-4 hover:text-ink-1;
 }
@@ -2368,10 +1997,6 @@ body {
   @apply text-ink-1 placeholder:text-ink-4 focus:border-line-4;
 }
 
-:root.dark .directory-tab.is-active,
-:root.dark .directory-sort-button.is-active,
-:root.dark .directory-detail-block,
-:root.dark .directory-auth-panel,
 :root.dark .directory-chip {
   @apply border-line-2 bg-s2 text-ink-1;
 }
@@ -2392,7 +2017,6 @@ body {
   @apply text-ink-2 hover:bg-s2 hover:text-ink-1 focus-visible:ring-line-4;
 }
 
-:root.dark .directory-badge.is-muted,
 :root.dark .directory-auth-status.is-muted {
   @apply border-line-2 bg-s1 text-ink-4;
 }
@@ -2445,7 +2069,6 @@ body {
   @apply text-ink-3;
 }
 
-:root.dark .skills-embedded-toggle,
 :root.dark .skills-embedded-title {
   @apply text-ink-3 hover:text-ink-1;
 }
@@ -2462,13 +2085,7 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .message-skill-chip {
-  @apply border-emerald-800/70 bg-emerald-950/50 text-emerald-100;
-}
 
-:root.dark .message-skill-chip-prefix {
-  @apply text-emerald-300;
-}
 
 :root.dark .sdm-panel {
   @apply bg-s2;
@@ -2534,26 +2151,14 @@ body {
   @apply border-line-1;
 }
 
-:root.dark .automations-summary span,
-:root.dark .automation-row-icon[data-status='PAUSED'],
 :root.dark .automation-detail-icon[data-status='PAUSED'] {
   @apply bg-s2 text-ink-4;
 }
 
-:root.dark .automations-refresh,
-:root.dark .automations-create,
-:root.dark .automation-edit-button,
-:root.dark .automation-detail-edit,
-:root.dark .automations-list,
 :root.dark .automation-detail {
   @apply border-line-1 bg-s0 text-ink-1;
 }
 
-:root.dark .automations-refresh:hover,
-:root.dark .automations-create:hover,
-:root.dark .automation-edit-button:hover,
-:root.dark .automation-detail-edit:hover,
-:root.dark .automation-row:hover,
 :root.dark .automation-row.is-selected {
   @apply bg-s1;
 }
@@ -2562,24 +2167,14 @@ body {
   @apply border-line-1;
 }
 
-:root.dark .automation-row-title,
-:root.dark .automation-detail-title-wrap h2,
-:root.dark .automation-detail-grid dd,
 :root.dark .automations-empty p {
   @apply text-ink-1;
 }
 
-:root.dark .automation-row-meta,
-:root.dark .automation-row-schedule,
-:root.dark .automation-detail-title-wrap span,
-:root.dark .automation-detail-grid dt,
-:root.dark .automation-detail-prompt h3,
-:root.dark .automations-summary,
 :root.dark .automations-empty {
   @apply text-ink-4;
 }
 
-:root.dark .automation-detail-grid div,
 :root.dark .automation-detail-prompt p {
   @apply bg-s1 text-ink-2;
 }
@@ -2623,7 +2218,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .thread-composer-file-mention-icon-file,
 :root.dark .thread-composer-file-mention-icon-markdown {
   @apply text-ink-4;
 }
@@ -2649,7 +2243,6 @@ body {
   @apply border-line-1 bg-s1;
 }
 
-:root.dark .content-right-panel-resize-handle:hover::after,
 :root.dark .content-right-panel-resize-handle.is-dragging::after {
   @apply bg-s4;
 }
@@ -2695,7 +2288,6 @@ body {
   @apply border-line-2 bg-s2 text-ink-1 hover:bg-s3;
 }
 
-:root.dark .rgp-state,
 :root.dark .rgp-section {
   @apply border-line-2 bg-s2;
 }
@@ -2704,23 +2296,14 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .rgp-state-value,
-:root.dark .rgp-commit-detail-subject,
-:root.dark .rgp-branch-button,
-:root.dark .rgp-commit,
 :root.dark .rgp-file {
   @apply text-ink-2;
 }
 
-:root.dark .rgp-branch-button:hover,
-:root.dark .rgp-commit:hover,
 :root.dark .rgp-file:hover {
   @apply bg-s3;
 }
 
-:root.dark .rgp-branch-button.is-current,
-:root.dark .rgp-branch-button.is-selected,
-:root.dark .rgp-commit.is-current,
 :root.dark .rgp-commit.is-selected {
   @apply bg-s3 text-ink-1;
 }
@@ -2741,22 +2324,14 @@ body {
   @apply bg-s4 text-ink-3;
 }
 
-:root.dark .rgp-section-title,
-:root.dark .rgp-empty,
 :root.dark .rgp-file-previous-path {
   @apply text-ink-4;
 }
 
-:root.dark .rgp-status {
-  @apply bg-amber-950/50 text-amber-300;
-}
 
-:root.dark .rgp-status.is-error {
-  @apply bg-red-950/50 text-red-300;
-}
 
 :root.dark .rgp-feedback {
-  @apply border-red-900 bg-s1 text-red-300 hover:bg-s2;
+  @apply bg-s1 hover:bg-s2;
 }
 
 :root.dark .rgp-toggle-row {
@@ -2767,7 +2342,6 @@ body {
   @apply text-ink-4 hover:bg-s3 hover:text-ink-1;
 }
 
-:root.dark .rgp-state-meta,
 :root.dark .rgp-commit-top {
   @apply text-ink-4;
 }
@@ -2776,9 +2350,6 @@ body {
   @apply border-line-3 bg-s-inv text-ink-inv hover:bg-white disabled:border-line-2 disabled:bg-s2 disabled:text-ink-4;
 }
 
-:root.dark .rgp-empty.is-error {
-  @apply text-red-400;
-}
 
 /* RightFilesPanel */
 :root.dark .rfp-toolbar {
@@ -2817,9 +2388,6 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .rfp-empty.is-error {
-  @apply text-red-400;
-}
 
 /* RightFilePreview */
 :root.dark .right-file-preview-header {
@@ -2859,7 +2427,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .api-panel-count,
 :root.dark .api-panel-loading {
   @apply text-ink-4;
 }
@@ -2873,40 +2440,25 @@ body {
   @apply text-ink-4;
 }
 
-:root.dark .skills-hub-toast-success {
-  @apply border-emerald-900/70 bg-emerald-950/50 text-emerald-300;
-}
 
-:root.dark .skills-hub-toast-error {
-  @apply border-rose-900/70 bg-rose-950/50 text-rose-300;
-}
 
 :root.dark .review-pane-branch-dropdown .composer-dropdown-trigger {
   @apply border-line-2 bg-s1 text-ink-2;
 }
 
-:root.dark .review-pane-banner {
-  @apply border-amber-900/70 bg-amber-950/40 text-amber-300;
-}
 
-:root.dark .review-pane-banner.is-error {
-  @apply border-rose-900/70 bg-rose-950/40 text-rose-300;
-}
 
 :root.dark .content-header-right-panel-toggle {
   @apply text-ink-4 hover:bg-s2 hover:text-ink-1;
 }
 
 :root.dark .new-thread-launch-card {
-  @apply border-emerald-900/80 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_38%),linear-gradient(135deg,_rgba(6,78,59,0.32),_rgba(24,24,27,0.96)_58%)] shadow-[0_24px_64px_-34px_rgba(16,185,129,0.35)];
+  @apply bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_38%),linear-gradient(135deg,_rgba(6,78,59,0.32),_rgba(24,24,27,0.96)_58%)] shadow-[0_24px_64px_-34px_rgba(16,185,129,0.35)];
 }
 
-:root.dark .new-thread-launch-card-eyebrow {
-  @apply text-emerald-300;
-}
 
 :root.dark .new-thread-launch-card-badge {
-  @apply bg-emerald-500 text-white;
+  @apply text-white;
 }
 
 :root.dark .new-thread-launch-card-title {
@@ -2918,7 +2470,7 @@ body {
 }
 
 :root.dark .new-thread-launch-card-pill {
-  @apply border-emerald-900 bg-s1/70 text-emerald-300;
+  @apply bg-s1/70;
 }
 
 :root.dark .new-thread-launch-card-button {
@@ -2926,7 +2478,7 @@ body {
 }
 
 :root.dark .new-thread-launch-card-button-primary {
-  @apply border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500;
+  @apply text-white;
 }
 
 :root.dark .sidebar-settings-area {
@@ -2969,7 +2521,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .codex-login-modal-close,
 :root.dark .codex-login-modal-cancel {
   @apply border-line-3 bg-s2 text-ink-2 hover:bg-s3;
 }
@@ -2978,17 +2529,11 @@ body {
   @apply text-ink-3;
 }
 
-:root.dark .codex-login-modal-link {
-  @apply text-sky-300 hover:text-sky-200;
-}
 
 :root.dark .codex-login-modal-input {
   @apply border-line-3 bg-s0 text-ink-1 placeholder:text-ink-4 focus:border-line-5;
 }
 
-:root.dark .codex-login-modal-error {
-  @apply bg-rose-950/40 text-rose-200;
-}
 
 :root.dark .codex-login-modal-submit {
   @apply border-s-inv bg-s-inv text-ink-inv hover:bg-white;
@@ -3050,7 +2595,6 @@ body {
   @apply text-ink-1;
 }
 
-:root.dark .recycle-bin-item-meta,
 :root.dark .recycle-bin-item-time {
   @apply text-ink-4;
 }
@@ -3064,12 +2608,9 @@ body {
 }
 
 :root.dark .recycle-bin-button-danger {
-  @apply border-rose-800 text-rose-400 hover:bg-s2;
+  @apply hover:bg-s2;
 }
 
-:root.dark .recycle-bin-error {
-  @apply border-rose-800 bg-rose-950/40 text-rose-300;
-}
 
 :root.dark .automation-thread-panel .rename-thread-actions {
   @apply border-line-2 bg-s2;
@@ -3095,7 +2636,6 @@ body {
   @apply bg-s2;
 }
 
-:root.dark .queued-row-edit,
 :root.dark .queued-row-steer {
   @apply border-line-3 bg-s2 text-ink-3 hover:bg-s3 hover:text-ink-1;
 }
@@ -3104,6 +2644,3 @@ body {
   @apply text-ink-4 hover:bg-s3 hover:text-ink-2;
 }
 
-:root.dark .queued-row-badge {
-  @apply border-amber-800 bg-amber-950/50 text-amber-300;
-}

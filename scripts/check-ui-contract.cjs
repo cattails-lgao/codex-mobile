@@ -160,6 +160,23 @@ check(
   nakedLightTotal ? nakedLightWhere.join(', ') : '亮侧（暗色覆盖块之外）已无 zinc/slate/状态色板类',
 )
 
+// round-98 暗色覆盖层退役：暗色块内不再有 raw 档位类（任何色系）。基线 token 自动切
+// 主题，暗色特化只允许非颜色属性（shadow-none 等）与 text-white 这类反色墨。
+const DARK_RAW_NS = /(?:bg|text|border|ring|placeholder|from|to|via|divide|outline|decoration|shadow|accent|caret|fill|stroke)(?:-[trblxy])?-(?:zinc|slate|gray|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}/
+const darkRawWhere = []
+let darkRawTotal = 0
+for (const u of units) {
+  const r = classByUnit.get(u.label)
+  const d = r.dark.filter((t) => DARK_RAW_NS.test(t)).length
+  darkRawTotal += d
+  if (d) darkRawWhere.push(`${u.label}(${d})`)
+}
+check(
+  '暗色覆盖层 raw 档位清零（round-98 退役）',
+  darkRawTotal === 0,
+  darkRawTotal ? darkRawWhere.slice(0, 8).join(', ') : '暗色块内已无任何 raw 色板类',
+)
+
 // 组件样式要用 token 类，@reference 必须指向项目样式表；指向 "tailwindcss" 只会拿到
 // 框架默认主题，`@apply bg-s1` 会在构建期报 unknown utility class。
 const badRef = vueFiles.filter((f) => fs.readFileSync(f, 'utf8').includes('@reference "tailwindcss"'))

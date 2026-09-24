@@ -2107,7 +2107,6 @@ onBeforeUnmount(() => {
   @apply border-line-2 bg-s2;
 }
 
-:root.dark .conversation-item-process .message-row,
 :root.dark .conversation-item-plan .message-row {
   @apply border-line-2;
 }
@@ -2193,9 +2192,6 @@ onBeforeUnmount(() => {
   @apply border-line-2 bg-s2 text-ink-4;
 }
 
-:root.dark .thread-compaction-inline--done {
-  @apply border-emerald-800 bg-emerald-900/40 text-emerald-300;
-}
 
 :root.dark .thread-compaction-spinner {
   @apply border-line-3 border-t-line-5;
