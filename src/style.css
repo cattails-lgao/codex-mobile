@@ -616,31 +616,9 @@ body {
   @apply text-ink-4 hover:text-ink-2;
 }
 
-:root.dark .thread-composer-submit {
-  @apply bg-s-inv-soft text-ink-inv hover:bg-white;
-}
-
-:root.dark .thread-composer-submit:disabled {
-  @apply bg-s3 text-ink-4;
-}
-
-:root.dark .thread-composer-plan-trigger,
-:root.dark .thread-composer-approval-trigger {
-  @apply border-line-3 bg-s3 text-ink-3 hover:border-line-4 hover:text-ink-1;
-}
-
-:root.dark .composer-dropdown-trigger--pill {
-  @apply border-line-3 bg-s3 text-ink-3 hover:border-line-4 hover:text-ink-1;
-}
-
-:root.dark .composer-dropdown-trigger--pill .composer-dropdown-chevron {
-  @apply text-ink-4;
-}
-
-:root.dark .thread-composer-plan-trigger.is-active,
-:root.dark .thread-composer-approval-trigger.is-active {
-  @apply border-s-inv bg-s-inv-soft text-ink-inv hover:text-ink-inv;
-}
+/* 输入区控件的暗色覆盖已整块删除（P1 输入区）：基础规则改用 token 之后，两套主题各自取值，
+   覆盖层就是多余的。而且这一块正是「四个下拉长得一模一样」的来源——暗色下它们全落成 s3 底 +
+   ink-3 字，连边框都一样。`--pill` 变体只被输入区的模型/推理两个控件使用（已核），没有别的受害者。 */
 
 :root.dark .composer-popover-panel {
   @apply border-line-3 bg-s2;
@@ -998,9 +976,8 @@ body {
   @apply border-emerald-700 bg-emerald-900/80 text-emerald-300;
 }
 
-:root.dark .thread-composer-stop {
-  @apply bg-s-inv-soft text-ink-inv hover:bg-white;
-}
+/* `:root.dark .thread-composer-stop` 覆盖同上，已删除：基础规则改用 --ink-1 / --ink-inv 后
+   两套主题自动各自取值（暗色＝亮底深字，亮色＝深底亮字），与发送按钮同一支墨色。 */
 
 :root.dark .composer-runtime-error {
   @apply border-rose-800/70 bg-rose-950/70 text-rose-100 shadow-none;
@@ -1034,7 +1011,11 @@ body {
   @apply border-rose-800/80 bg-rose-950 text-rose-100 hover:bg-rose-900 focus:ring-rose-700;
 }
 
-:root.dark .composer-dropdown-trigger {
+/* 排除 `--pill`：那是输入区的芯片（只有模型 / 推理强度两个控件在用），颜色该由芯片规则与
+   模型芯片的 `--model` 决定。不排除的话，这条与组件里的芯片规则**同权重（0,3,0）**，谁赢
+   只取决于样式表顺序——实测暗色下这条赢，于是模型芯片出现「紫底 + 灰字」的自相矛盾。
+   记住这个雷：全局暗色层不要再去改组件自己要重新定义的类。 */
+:root.dark .composer-dropdown-trigger:not(.composer-dropdown-trigger--pill) {
   @apply text-ink-4;
 }
 
@@ -2113,7 +2094,10 @@ body {
   @apply border-line-3 bg-s3 text-ink-2;
 }
 
-:root.dark .composer-dropdown-chevron {
+/* 同上：折角图标只出现在触发器内部（全仓库仅 ComposerDropdown 模板用到这个类），因此把
+   `--pill` 排除掉，芯片里的折角就能跟随 currentColor（模型芯片＝紫、中性芯片＝ink-3），
+   而不是被这条固定成 ink-4。 */
+:root.dark .composer-dropdown-trigger:not(.composer-dropdown-trigger--pill) .composer-dropdown-chevron {
   @apply text-ink-4;
 }
 

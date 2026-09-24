@@ -4,8 +4,7 @@
     "themeClass": "dark",
     "families": [
       "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
-      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
+      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
     ],
     "samples": [
       {
@@ -82,52 +81,52 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "oklab(0.708958 0.0636038 -0.145903 / 0.12)",
-        "color": "rgb(167, 139, 250)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.708958 0.0636038 -0.145903 / 0.4)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "6px",
-        "border": "1px solid rgb(39, 39, 42)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-plan-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-approval-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(161, 161, 170)",
-        "radius": "6px",
-        "border": "1px solid rgb(63, 63, 70)"
+        "radius": "3.35544e+07px",
+        "border": "0px solid rgb(161, 161, 170)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 235,
+    "nodes": 234,
     "file": "output\\playwright\\ui-audit\\desktop-dark-home.png"
   },
   {
@@ -212,52 +211,52 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "oklab(0.708958 0.0636038 -0.145903 / 0.12)",
-        "color": "rgb(167, 139, 250)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.708958 0.0636038 -0.145903 / 0.4)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "6px",
-        "border": "1px solid rgb(39, 39, 42)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-plan-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-approval-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(161, 161, 170)",
-        "radius": "6px",
-        "border": "1px solid rgb(63, 63, 70)"
+        "radius": "3.35544e+07px",
+        "border": "0px solid rgb(161, 161, 170)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1028,
+    "nodes": 1027,
     "file": "output\\playwright\\ui-audit\\desktop-dark-thread.png"
   },
   {
@@ -342,52 +341,52 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "oklab(0.52747 0.0661265 -0.192298 / 0.12)",
-        "color": "rgb(109, 74, 214)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.52747 0.0661265 -0.192298 / 0.4)"
+        "background": "rgb(255, 255, 255)",
+        "color": "oklch(0.37 0.013 285.805)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid oklch(0.92 0.004 286.32)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(99, 99, 109)",
-        "radius": "6px",
-        "border": "1px solid rgb(227, 227, 232)"
+        "background": "rgb(255, 255, 255)",
+        "color": "oklch(0.37 0.013 285.805)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid oklch(0.92 0.004 286.32)"
       },
       {
         "sel": ".thread-composer-plan-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(99, 99, 109)",
-        "radius": "0px",
-        "border": "0px solid rgb(99, 99, 109)"
+        "background": "rgb(255, 255, 255)",
+        "color": "oklch(0.37 0.013 285.805)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid oklch(0.92 0.004 286.32)"
       },
       {
         "sel": ".thread-composer-approval-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(99, 99, 109)",
-        "radius": "0px",
-        "border": "0px solid rgb(99, 99, 109)"
+        "background": "rgb(255, 255, 255)",
+        "color": "oklch(0.37 0.013 285.805)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid oklch(0.92 0.004 286.32)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(165, 165, 174)",
-        "radius": "6px",
-        "border": "1px solid rgb(201, 201, 210)"
+        "background": "oklch(0.92 0.004 286.32)",
+        "color": "oklch(0.552 0.016 285.938)",
+        "radius": "3.35544e+07px",
+        "border": "0px solid oklch(0.552 0.016 285.938)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1028,
+    "nodes": 1027,
     "file": "output\\playwright\\ui-audit\\desktop-light-thread.png"
   },
   {
@@ -556,52 +555,52 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "oklab(0.708958 0.0636038 -0.145903 / 0.12)",
-        "color": "rgb(167, 139, 250)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.708958 0.0636038 -0.145903 / 0.4)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "6px",
-        "border": "1px solid rgb(39, 39, 42)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-plan-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-approval-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "12px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(212, 212, 216)",
-        "radius": "0px",
-        "border": "0px solid rgb(212, 212, 216)"
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(161, 161, 170)",
-        "radius": "6px",
-        "border": "1px solid rgb(63, 63, 70)"
+        "radius": "3.35544e+07px",
+        "border": "0px solid rgb(161, 161, 170)"
       }
     ],
     "scrollHeight": 900,
-    "nodes": 1328,
+    "nodes": 1327,
     "file": "output\\playwright\\ui-audit\\desktop-dark-thread-rightpanel.png"
   },
   {
@@ -609,8 +608,7 @@
     "themeClass": "dark",
     "families": [
       "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
-      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-      "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace"
+      "\"Bricolage Grotesque\", \"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
     ],
     "samples": [
       {
@@ -651,30 +649,30 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "11px",
-        "background": "oklab(0.708958 0.0636038 -0.145903 / 0.12)",
-        "color": "rgb(167, 139, 250)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.708958 0.0636038 -0.145903 / 0.4)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "11px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "6px",
-        "border": "1px solid rgb(39, 39, 42)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(161, 161, 170)",
-        "radius": "6px",
-        "border": "1px solid rgb(63, 63, 70)"
+        "radius": "3.35544e+07px",
+        "border": "0px solid rgb(161, 161, 170)"
       }
     ],
     "scrollHeight": 844,
@@ -727,30 +725,30 @@
       },
       {
         "sel": ".thread-composer-model-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "11px",
-        "background": "oklab(0.708958 0.0636038 -0.145903 / 0.12)",
-        "color": "rgb(167, 139, 250)",
-        "radius": "6px",
-        "border": "1px solid oklab(0.708958 0.0636038 -0.145903 / 0.4)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-thinking-control .composer-dropdown-trigger",
-        "fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "11px",
-        "background": "rgba(0, 0, 0, 0)",
-        "color": "rgb(212, 212, 216)",
-        "radius": "6px",
-        "border": "1px solid rgb(39, 39, 42)"
+        "background": "rgb(63, 63, 70)",
+        "color": "rgb(161, 161, 170)",
+        "radius": "3.35544e+07px",
+        "border": "1px solid rgb(82, 82, 91)"
       },
       {
         "sel": ".thread-composer-submit",
         "fontFamily": "\"IBM Plex Sans\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
         "fontSize": "16px",
-        "background": "rgba(0, 0, 0, 0)",
+        "background": "rgb(63, 63, 70)",
         "color": "rgb(161, 161, 170)",
-        "radius": "6px",
-        "border": "1px solid rgb(63, 63, 70)"
+        "radius": "3.35544e+07px",
+        "border": "0px solid rgb(161, 161, 170)"
       }
     ],
     "scrollHeight": 844,

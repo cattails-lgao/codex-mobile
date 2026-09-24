@@ -39,6 +39,19 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
   const page = await ctx.newPage()
   await page.goto(`${BASE}/#${url}`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(wait)
+  // 输入区的**配置控件**（模型 / 推理 / 协作模式 / 审批）在线程数据就绪之前是 disabled 的，而
+  // disabled 与 enabled 是两套计算值——采到哪一套只取决于「截图那一刻加载完没有」。这里显式
+  // 等到模型控件可用，把采样钉在 enabled 状态上；首页没有活动线程，超时是预期结果，忽略即可。
+  // （发送按钮因为草稿为空而 disabled，那是稳定状态，不属于这里的不确定性。）
+  await page
+    .waitForFunction(
+      () => {
+        const el = document.querySelector('.thread-composer-model-control .composer-dropdown-trigger')
+        return el ? !el.disabled : true
+      },
+      { timeout: 12000 },
+    )
+    .catch(() => {})
   if (before) await before(page)
   const file = path.join(OUT, `${name}.png`)
   await page.screenshot({ path: file })
@@ -78,6 +91,14 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
         pick('.sidebar-skills-link'),
         pick('.sidebar-automations-link-icon'),
         pick('.skills-route-header-icon'),
+        // 输入区四个控件（缺陷②的现场）：原先只采到 `.thread-composer textarea`，四个下拉
+        // 长什么样、有没有被改动，闸门一概看不见。round-91 的教训是「采样范围＝可见范围」，
+        // 这里把要改的元素先纳入采样，改动才可能被等值检查抓到。
+        pick('.thread-composer-model-control .composer-dropdown-trigger'),
+        pick('.thread-composer-thinking-control .composer-dropdown-trigger'),
+        pick('.thread-composer-plan-trigger'),
+        pick('.thread-composer-approval-trigger'),
+        pick('.thread-composer-submit'),
       ].filter(Boolean),
       scrollHeight: document.documentElement.scrollHeight,
       nodes: document.querySelectorAll('body *').length,

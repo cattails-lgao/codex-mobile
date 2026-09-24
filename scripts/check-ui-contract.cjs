@@ -203,6 +203,42 @@ check(
         .join(' · '),
 )
 
+// ------------------------------ 输入区：模型前置 / 用 --model 标示 / 一屏一个主按钮
+// 审计第②条确凿缺陷：协作模式、审批策略、模型、推理强度这四个语义完全不同的下拉长得一模一样
+// （同为全圆角药丸、同为 s3 底 + ink-3 字），模型还排在第三位。修法＝模型前置并用 --model
+// 标明身份、其余三个退成中性芯片并合并成一组、发送按钮改用最亮墨色。下面四条就是它的闸门。
+const composerVue = fs.readFileSync('src/components/content/ThreadComposer.vue', 'utf8')
+const modelControlsVue = fs.readFileSync('src/components/content/ThreadComposerModelControls.vue', 'utf8')
+
+const atModel = composerVue.indexOf('<ThreadComposerModelControls')
+const atSecondary = composerVue.indexOf('thread-composer-secondary')
+const atApproval = composerVue.indexOf('thread-composer-approval-trigger')
+check(
+  '输入区：模型控件排在协作模式 / 审批策略之前',
+  atModel > -1 && atSecondary > -1 && atApproval > -1 && atModel < atSecondary && atModel < atApproval,
+  `model@${atModel} · secondary@${atSecondary} · approval@${atApproval}`,
+)
+
+check(
+  '输入区：模型芯片用 --model 标示（不与其余三个中性芯片同款）',
+  /text-model/.test(modelControlsVue) && /border-model/.test(modelControlsVue),
+  'ThreadComposerModelControls.vue 中应出现 text-model + border-model',
+)
+
+const submitRule = composerVue.match(/\n\.thread-composer-submit \{([\s\S]*?)\n\}/)
+check(
+  '输入区：发送按钮用最亮墨色（--ink-1）而非强调色',
+  Boolean(submitRule) && /bg-ink-1/.test(submitRule[1]),
+  submitRule ? submitRule[1].replace(/\s+/g, ' ').trim().slice(0, 70) : '未找到 .thread-composer-submit 规则',
+)
+
+const queueRule = composerVue.match(/\n\.thread-composer-submit--queue \{([\s\S]*?)\n\}/)
+check(
+  '输入区：队列态用 --live token（不再是裸 amber-600）',
+  Boolean(queueRule) && /bg-live/.test(queueRule[1]) && !/amber-\d/.test(queueRule[1]),
+  queueRule ? queueRule[1].replace(/\s+/g, ' ').trim() : '未找到 .thread-composer-submit--queue 规则',
+)
+
 // --------------------------------------------------- 文字只用墨色 token
 // 防止后人把表面色/线色当文字色用——那会立刻掉出对比度保证。
 const textOnSurface = [...css.matchAll(/\btext-(s[0-4]|s-inv(?:-soft)?|line-[1-5])(?![\w-])/g)].map((m) => m[0])

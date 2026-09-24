@@ -238,16 +238,20 @@ onBeforeUnmount(() => {
   @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-zinc-500 outline-none transition;
 }
 
+/* `--pill` 变体只有输入区那两个控件在用（已核：模型 / 推理强度），所以这里写下的就是
+   「芯片」语言本身，而不是一个泛用变体：等宽字、6px 圆角、发丝边框、无填充、中性墨色。
+   模型那枚由 ThreadComposerModelControls 覆盖成 --model（紫），以标明「这是模型身份」；
+   这正是审计第②条那个缺陷的正面修法——四个下拉原本是四颗一模一样的全圆角药丸。 */
 .composer-dropdown-trigger--pill {
-  @apply h-8 rounded-full border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply h-7 rounded-md border border-line-1 bg-transparent px-2 font-mono text-xs text-ink-3 transition hover:border-line-2 hover:text-ink-1 disabled:cursor-not-allowed disabled:text-ink-4;
 }
 
 .composer-dropdown-trigger--pill .composer-dropdown-chevron {
-  @apply text-zinc-400;
+  @apply text-current opacity-70;
 }
 
 .composer-dropdown-prefix-icon {
-  @apply h-3.5 w-3.5 shrink-0 text-amber-500;
+  @apply h-3.5 w-3.5 shrink-0 text-live;
 }
 
 .composer-dropdown-trigger:disabled {
