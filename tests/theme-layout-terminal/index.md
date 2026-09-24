@@ -33,3 +33,4 @@ Return to the [manual test index](../../tests.md).
 | [Settings group navigation, pending-request scroll, and thinking persistence](settings-group-navigation-pending-scroll-thinking-persistence.md) |
 | [R13: settings fixed height, live thinking, floating pending panel, plan panel fixes](r13-settings-height-live-thinking-floating-pending-plan-panel.md) |
 | [Feature: Design tokens reach the component styles too (dark layer complete)](round-90-dark-token-layer-completion.md) — the dark theme must look unchanged; ships the runnable contract and equivalence checks |
+| [Feature: Sidebar tool entries use distinct glyphs and quiet tiles](round-91-sidebar-entry-symbols.md) — the two entries must stay distinguishable with colour removed; plates measure 22×22 / 6px / 15% tint, and the selected rail is neutral |
