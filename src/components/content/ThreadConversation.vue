@@ -1,5 +1,10 @@
 <template>
-  <section class="conversation-root" @contextmenu.capture="handleConversationContextMenu">
+  <section
+    class="conversation-root"
+    @contextmenu.capture="handleConversationContextMenu"
+    @click="handleCodeCopyActivate"
+    @keydown.enter="handleCodeCopyActivate"
+  >
     <div v-if="isLoading && messages.length > 0" class="conversation-switching-bar" role="status">
       {{ t('Loading messages...') }}
     </div>
@@ -377,7 +382,15 @@
                       </table>
                     </div>
                     <div v-else-if="block.kind === 'codeBlock'" class="message-code-block">
-                      <div v-if="block.language" class="message-code-language">{{ block.language }}</div>
+                      <div class="message-code-bar">
+                        <span v-if="block.language" class="message-code-language">{{ block.language }}</span>
+                        <span
+                          class="message-code-copy"
+                          role="button"
+                          tabindex="0"
+                          data-code-copy
+                        >{{ t('Copy') }}</span>
+                      </div>
                       <pre class="message-code-pre"><code class="hljs" v-html="renderCachedHighlightedCodeAsHtml(block.language, block.value)"></code></pre>
                     </div>
                     <hr v-else-if="block.kind === 'thematicBreak'" class="message-divider" />
@@ -535,6 +548,7 @@ import { createCommandExecutionDisplay } from './useCommandExecutionDisplay'
 import { createFileChangeActionMachine } from './useFileChangeActionMachine'
 import { createFileLinkContextMenu } from './useFileLinkContextMenu'
 import { createMessageImageDisplay } from './useMessageImageDisplay'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 function buildFileChangeCopyText(summary: TurnFileChangeSummary | null): string {
   return buildFileChangeCopyTextCore(summary, props.cwd, t)
@@ -706,6 +720,35 @@ const {
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
 const { t } = useUiLanguage()
 const feedbackMailto = feedbackMailtoBase()
+
+// round-94: code floors (mockup .bar) carry a copy control. Both render paths — the
+// per-block template and ReasoningBlock's v-html — emit <span data-code-copy>, so a
+// single delegated listener on the root covers both. The copied acknowledgement lives
+// on the trigger's text so it also works inside the sanitized v-html subtree.
+const copyFeedbackTimers = new WeakMap<HTMLElement, number>()
+
+async function handleCodeCopyActivate(event: Event): Promise<void> {
+  const target = event.target as HTMLElement | null
+  const trigger = target?.closest<HTMLElement>('[data-code-copy]')
+  if (!trigger) return
+  const code = trigger.closest('.message-code-block')?.querySelector('code')
+  if (!code) return
+  try {
+    await copyTextToClipboard(code.textContent ?? '')
+  } catch {
+    return
+  }
+  trigger.textContent = t('Copied')
+  trigger.dataset.copied = 'true'
+  const previous = copyFeedbackTimers.get(trigger)
+  if (previous !== undefined) window.clearTimeout(previous)
+  copyFeedbackTimers.set(trigger, window.setTimeout(() => {
+    trigger.textContent = t('Copy')
+    delete trigger.dataset.copied
+    copyFeedbackTimers.delete(trigger)
+  }, 1600))
+}
+
 
 function prepareTurnErrorFeedback(event: MouseEvent, message: string): void {
   recordVisibleFailure(message)
@@ -2477,16 +2520,31 @@ onBeforeUnmount(() => {
   line-height: inherit;
 }
 
+/* round-94: mockup's code floor — the block follows the theme tokens (s2 surface,
+   hairline line-1 border, 14px radius) instead of always being dark, with a bar
+   (language left, copy right) on an s1 strip and code in ink-2. */
 .message-code-block {
-  @apply overflow-hidden rounded-xl border border-slate-200 bg-slate-950 text-slate-100;
+  @apply overflow-hidden rounded-[14px] border border-line-1 bg-s2;
+}
+
+.message-code-bar {
+  @apply flex items-center gap-2 border-b border-line-1 bg-s1 px-3 py-2;
 }
 
 .message-code-language {
-  @apply border-b border-slate-800 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.08em] text-slate-400;
+  @apply mr-auto font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3;
+}
+
+.message-code-copy {
+  @apply ml-auto shrink-0 cursor-pointer font-mono text-[11px] text-ink-3 transition hover:text-ink-1;
+}
+
+.message-code-copy[data-copied] {
+  @apply text-ok;
 }
 
 .message-code-pre {
-  @apply m-0 overflow-x-auto px-3 py-3 text-[13px] leading-relaxed font-mono whitespace-pre;
+  @apply m-0 overflow-x-auto px-3.5 py-3 text-[13px] leading-[1.65] font-mono text-ink-2 whitespace-pre;
 }
 
 .message-code-pre :deep(.hljs) {

@@ -722,6 +722,7 @@ const zhCN: Record<string, string> = {
   'Commits': '提交',
   'Completed': '已完成',
   'Copied commit ref': '已复制提交引用',
+  'Copied': '已复制',
   'Copy': '复制',
   'Copy chat': '复制聊天',
   'Create a new automation': '创建新自动化',

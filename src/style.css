@@ -1363,13 +1363,8 @@ body {
   @apply bg-s2 text-ink-1;
 }
 
-:root.dark .message-code-block {
-  @apply border-line-2 bg-s0 text-ink-1;
-}
-
-:root.dark .message-code-language {
-  @apply border-line-1 text-ink-4;
-}
+/* round-94: the code floor's dark overrides retired — the component styles are
+   token-based now (bg-s2 / border-line-1 / text-ink-*), same as round-93's tool rows. */
 
 :root.dark .message-divider {
   @apply bg-s3/80;
