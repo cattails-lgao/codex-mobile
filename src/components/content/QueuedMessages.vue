@@ -160,7 +160,7 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-row-badge {
-  @apply shrink-0 rounded-full border border-live bg-live px-1.5 py-0.5 text-nano font-medium text-live;
+  @apply shrink-0 rounded-full border border-live/40 bg-live/10 px-1.5 py-0.5 text-nano font-medium text-live;
 }
 
 .queued-row-actions {

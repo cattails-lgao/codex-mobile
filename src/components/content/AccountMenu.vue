@@ -132,7 +132,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-error {
-  @apply rounded-xl bg-alert px-3 py-2 text-xs text-alert;
+  @apply rounded-xl bg-alert/10 px-3 py-2 text-xs text-alert;
 }
 
 .account-menu-empty {

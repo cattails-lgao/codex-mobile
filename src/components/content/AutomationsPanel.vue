@@ -371,7 +371,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automations-error {
-  @apply m-0 rounded-lg border border-alert bg-alert px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
 }
 
 .automations-layout {
@@ -392,7 +392,7 @@ function getPathLeaf(path: string): string {
 
 .automation-row-icon,
 .automation-detail-icon {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ok text-ok;
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ok/15 text-ok;
 }
 
 .automation-row-icon[data-status='PAUSED'],

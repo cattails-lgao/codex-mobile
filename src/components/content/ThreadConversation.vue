@@ -2182,7 +2182,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-compaction-inline--done {
-  @apply border-ok bg-ok text-ok;
+  @apply border-ok/30 bg-ok/10 text-ok;
 }
 
 .thread-compaction-spinner {
@@ -2239,7 +2239,7 @@ onBeforeUnmount(() => {
 }
 
 .request-button {
-  @apply rounded-md border border-live bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live transition;
+  @apply rounded-md border border-live/40 bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live/15 transition;
 }
 
 .request-button-primary {
@@ -2267,7 +2267,7 @@ onBeforeUnmount(() => {
 }
 
 .request-link {
-  @apply inline-flex w-fit rounded-md border border-live bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live transition;
+  @apply inline-flex w-fit rounded-md border border-live/40 bg-s2 px-3 py-1.5 text-xs text-live hover:bg-live/15 transition;
 }
 
 .request-select {
@@ -2287,7 +2287,7 @@ onBeforeUnmount(() => {
 }
 
 .turn-error-feedback {
-  @apply mt-3 inline-flex w-fit rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply mt-3 inline-flex w-fit rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert/10 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .message-body {
@@ -2355,7 +2355,7 @@ onBeforeUnmount(() => {
 }
 
 .message-skill-chip {
-  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-ok bg-ok px-2 py-0.5 text-xs text-ok no-underline transition hover:border-ok hover:bg-ok hover:text-ok;
+  @apply inline-flex max-w-full items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2 py-0.5 text-xs text-ok no-underline transition hover:border-ok/30 hover:bg-ok/10 hover:text-ok;
 }
 
 .message-skill-chip-prefix {

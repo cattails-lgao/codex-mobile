@@ -1069,15 +1069,15 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-refresh {
-  @apply border-live bg-live text-live hover:bg-live;
+  @apply border-live/40 bg-live/10 text-live hover:bg-live/15;
 }
 
 .review-pane-banner {
-  @apply mx-3 mt-2.5 rounded-xl border border-live bg-live px-3 py-2 text-sm text-live;
+  @apply mx-3 mt-2.5 rounded-xl border border-live/30 bg-live/10 px-3 py-2 text-sm text-live;
 }
 
 .review-pane-banner.is-error {
-  @apply border-alert bg-alert text-alert;
+  @apply border-alert/30 bg-alert/10 text-alert;
 }
 
 .review-pane-meta {
@@ -1089,11 +1089,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-summary-pill.review-pane-summary-pill-add {
-  @apply bg-ok text-ok;
+  @apply bg-ok/15 text-ok;
 }
 
 .review-pane-summary-pill.review-pane-summary-pill-remove {
-  @apply bg-alert text-alert;
+  @apply bg-alert/15 text-alert;
 }
 
 .review-pane-content {
@@ -1181,11 +1181,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-op[data-operation='add'] {
-  @apply bg-ok text-ok;
+  @apply bg-ok/15 text-ok;
 }
 
 .review-pane-file-op[data-operation='delete'] {
-  @apply bg-alert text-alert;
+  @apply bg-alert/15 text-alert;
 }
 
 .review-pane-file-op[data-operation='rename'] {
@@ -1193,7 +1193,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-op[data-operation='update'] {
-  @apply bg-live text-live;
+  @apply bg-live/15 text-live;
 }
 
 .review-pane-file-path {

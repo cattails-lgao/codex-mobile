@@ -215,7 +215,7 @@ function buildTooltip(snapshot: UiRateLimitSnapshot): string {
 }
 
 .rate-limit-card-metric {
-  @apply rounded-full bg-live px-2 py-0.5 text-xs font-medium text-live;
+  @apply rounded-full bg-live/10 px-2 py-0.5 text-xs font-medium text-live;
 }
 
 .rate-limit-card-footer {

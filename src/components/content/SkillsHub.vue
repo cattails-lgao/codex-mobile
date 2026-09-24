@@ -472,7 +472,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-sync-error {
-  @apply flex items-start justify-between gap-3 text-xs text-alert bg-alert border border-alert rounded-md px-2 py-1;
+  @apply flex items-start justify-between gap-3 text-xs text-alert bg-alert/10 border border-alert/30 rounded-md px-2 py-1;
 }
 
 .skills-sync-actions {
@@ -512,11 +512,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-toast-success {
-  @apply border border-ok bg-ok text-ok;
+  @apply border border-ok/30 bg-ok/10 text-ok;
 }
 
 .skills-hub-toast-error {
-  @apply border border-alert bg-alert text-alert;
+  @apply border border-alert/30 bg-alert/10 text-alert;
 }
 
 .skills-hub-section {
@@ -548,11 +548,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-error {
-  @apply flex items-start justify-between gap-3 text-sm text-alert p-4 text-left rounded-lg border border-alert bg-alert;
+  @apply flex items-start justify-between gap-3 text-sm text-alert p-4 text-left rounded-lg border border-alert/30 bg-alert/10;
 }
 
 .skills-error-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert/15 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .skills-hub-empty {
