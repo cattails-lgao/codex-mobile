@@ -178,7 +178,9 @@
 - ✅ **排版阶梯**（round-96）：7 级 + `nano` 10px 补充档落地为 `@theme` token（`--text-nano/micro/ui/body/display`，只定字号不绑行高＝与任意值逐字同行为）；全仓 `text-[Npx]` **141 处清零**（px 127 + rem 14；`text-[1em]` 继承重置保留）；契约断言收紧为「清零」。
 - ✅ **亮色 token 取值定案＝方案原值（中性）**（§7 已记录）；**亮色收敛 sweep**（round-97）：1924+14 处 zinc/slate/sky/blue/状态色板类 → token，**亮侧裸色板 = 0**（契约断言「清零」）；文字整体满足 ≥4.5:1（`zinc-400/500→ink-3`）；sky/blue（无 token 角色）归入墨/线中性；状态色剥档位换 `ok/alert/live/model`。
 - ✅ **a11y**：全局 `:focus-visible` 兜底（组件 ring 均伴 `outline-none`，互不打架）、全局 `prefers-reduced-motion` 归零块、`body`/`theme-color` 已随主题（round-90）。
-- ⏸ **遗留**：暗色覆盖层退役（268 个 raw 档位类仍在 `:root.dark` 块——它们是正确的暗值，收敛需逐块人工判读 token 角色，见 rounds/round-97）；`sr-only` 全量清点未做（抽查图标按钮均已有 `aria-label`）。
+- ✅ **状态色回归修复**（round-98）：round-97 sweep 把浅色状态底错映射成实色 token 底（`bg-alert bg-alert text-alert` 同色底字不可读），81 处恢复为状态 token 透明度淡底（bg 50→/10、100→/15、200→/25；border 200→/30、300→/40）；契约新增「状态色底与同色文字不共存」断言。
+- ✅ **暗色覆盖层退役**（round-98）：token 自动切主题后，135 处暗色 raw 档位规则全部剥离（98 整删 + 37 只剥 raw 保留非颜色内容；16 块为组件重构遗留死规则）；暗色状态文字收敛到状态 token、sky/blue 信息色与亮色决策一致归中性；契约新增「暗色层 raw 档位清零」（35 项）；等值 870/870、截图裁决盲区健康。
+- ⏸ **遗留**：`sr-only` 全量清点未做（抽查图标按钮均已有 `aria-label`）。
 
 **P3 · 次要界面与动效**
 - 技能库/应用目录（卡片 → 行列表，去掉"字母头像"占位符：现在两个不同的 MCP 都显示 `C`）、Git 面板、各类弹窗与菜单；动效按 §4 统一。
