@@ -552,21 +552,10 @@ body {
   @apply bg-s2 text-ink-2;
 }
 
-:root.dark .thread-row {
-  @apply hover:bg-s2;
-}
-
-:root.dark .thread-row[data-active='true'] {
-  @apply bg-s2;
-}
-
-:root.dark .thread-row-title {
-  @apply text-ink-2;
-}
-
-:root.dark .thread-row-time {
-  @apply text-ink-4;
-}
+/* round-95: the four thread-row dark overrides retired — the component base now
+   owns these values (hover/active bg-s2, title ink-2, time ink-3 mono). Keeping
+   global copies would re-create the round-92 weight-collision trap. The title's
+   active colour rides on the same scoped rules for both themes. */
 
 :root.dark .project-header-row {
   @apply hover:bg-s2;
@@ -1268,9 +1257,9 @@ body {
   @apply text-ink-2;
 }
 
-:root.dark .message-heading {
-  @apply text-ink-1;
-}
+/* round-95: :root.dark .message-heading { text-ink-1 } retired — the component
+   base now sets ink-1 for every heading level. The h6 override below stays (its
+   darker ink is a deliberate dark-theme step). */
 
 :root.dark .message-heading-h6 {
   @apply text-ink-4;

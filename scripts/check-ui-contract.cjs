@@ -308,6 +308,48 @@ check(
   codeCopyPathHits.join(', ') || 'ThreadConversation.vue + useMarkdownRendering.ts',
 )
 
+// ------------------------------------------- 会话区标题层级 + 侧栏线程行（round-95）
+// 标题：h1-h6 必须各自不同档（-xl/lg/base/sm，标准 Tailwind 档、不加 text-[Npx]），
+// 且全部落在 ink-1 上——层级靠字号与字距，不靠色相。
+const headingLevels = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+  .map((level) => {
+    const rule = conversationVue.match(new RegExp(`\\.message-heading-${level} \\{([^}]*)\\}`))
+    return [level, rule ? rule[1].replace(/\s+/g, ' ').trim() : '']
+  })
+const headingSizes = headingLevels.map(([level, body]) => [level, (body.match(/text-(?:xl|lg|base|sm)/) || [])[0] || '?'])
+const headingSizeSet = new Set(headingSizes.map(([, size]) => size))
+check(
+  'Markdown 标题分级落在标准字号档（h1-h4 递减 20/18/16/14，h5/h6 并入 14 靠字距）',
+  headingLevels.every(([, body]) => body) &&
+    new Set(headingSizes.slice(0, 4).map(([, s]) => s)).size === 4 &&
+    headingSizes.every(([, s]) => s !== '?'),
+  headingSizes.map(([l, s]) => `${l}=${s}`).join(' ') || '未找到 heading 规则',
+)
+// 过程消息（conversation-item-process）里的标题是有意的次级样式（15px 弱化），不在本断言范围。
+// 行锚定（^ + m）保证捕获完整选择器行，前缀过滤才有效。
+const headingOffToken = conversationVue.match(/^[^{}\n]*\.message-heading(?:-h\d)? \{[^}]*\}/gm)
+  ?.filter((rule) => !rule.includes('conversation-item-process'))
+  ?.filter((rule) => /#(?:[0-9a-f]{3,6})|slate-|zinc-/.test(rule)) ?? []
+check(
+  'Markdown 标题颜色只用 ink token（round-23 的 #17181a 硬编码已清）',
+  headingOffToken.length === 0,
+  headingOffToken.slice(0, 3).join(' | '),
+)
+// 线程行：相对时间等宽（机器口径）、运行 pip 用 --live、选中行有中性导轨。
+const threadRowVue = fs.readFileSync('src/components/sidebar/SidebarThreadRow.vue', 'utf8')
+const rowTimeRule = threadRowVue.match(/\n\.thread-row-time \{([^}]*)\}/)
+check(
+  '线程行相对时间用等宽 + tabular-nums（度量稿 .when）',
+  Boolean(rowTimeRule) && /font-mono/.test(rowTimeRule[1]) && /tabular-nums/.test(rowTimeRule[1]),
+  rowTimeRule ? rowTimeRule[1].replace(/\s+/g, ' ').trim() : '未找到 .thread-row-time 规则',
+)
+check(
+  '线程行运行 pip 用 --live（spinner 退场）且选中行有中性导轨',
+  /data-state='working'[^}]*bg-live/.test(threadRowVue) &&
+    /data-active='true'\]::before[\s\S]*?bg-ink-2/.test(threadRowVue),
+  'SidebarThreadRow.vue（working→pip live；active→2px ink-2 rail）',
+)
+
 // --------------------------------------------------- 文字只用墨色 token
 // 防止后人把表面色/线色当文字色用——那会立刻掉出对比度保证。
 const textOnSurface = [...css.matchAll(/\btext-(s[0-4]|s-inv(?:-soft)?|line-[1-5])(?![\w-])/g)].map((m) => m[0])

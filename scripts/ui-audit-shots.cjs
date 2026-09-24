@@ -114,6 +114,12 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
         pick('.message-code-block'),
         pick('.message-code-language'),
         pick('.message-code-pre'),
+        // round-95 的现场：Markdown 标题（默认线程有 4 个 h2）与侧栏线程行（等宽时间 /
+        // 运行 pip / 选中导轨）。线程行只在侧栏展开的页面上有值。
+        pick('.message-heading'),
+        pick('.thread-row'),
+        pick('.thread-row-title'),
+        pick('.thread-row-time'),
       ].filter(Boolean),
       scrollHeight: document.documentElement.scrollHeight,
       nodes: document.querySelectorAll('body *').length,
