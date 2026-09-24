@@ -73,6 +73,11 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
         pick('.content-header'),
         pick('.thread-composer textarea'),
         pick('button'),
+        // 侧栏两个工具入口与路由头部图标：缺陷①的现场。原先采样点只到 .sidebar-root 这一层，
+        // 这里改了什么都测不到（闸门覆盖不到的地方等于没有闸门）。
+        pick('.sidebar-skills-link'),
+        pick('.sidebar-automations-link-icon'),
+        pick('.skills-route-header-icon'),
       ].filter(Boolean),
       scrollHeight: document.documentElement.scrollHeight,
       nodes: document.querySelectorAll('body *').length,

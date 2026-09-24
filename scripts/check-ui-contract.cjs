@@ -123,6 +123,11 @@ const REQUIRED_TOKENS = [
   '--ink-3',
   '--ink-4',
   '--ink-inv',
+  '--live', // 运行中 / 待批准
+  '--ok', // 完成 / 已连接
+  '--alert', // 失败 / 破坏性
+  '--model', // 仅模型身份
+  '--line-focus', // 焦点环
 ]
 function readTokens(block) {
   const out = {}
@@ -170,6 +175,32 @@ check(
   `style.css 内状态色裸类不增（基线 ${BASELINE.statusNakedInStyle}，P1 迁移时应下降）`,
   statusLeft <= BASELINE.statusNakedInStyle,
   `当前 ${statusLeft}`,
+)
+
+// ------------------------------------ 技能库与定时任务不得共用同一个字形
+// 审计里的第①条确凿缺陷：这两个语义完全不同的入口用的是同一个闪电 SVG，只靠翠绿/橙区分。
+// 颜色一旦不成立（色觉障碍、灰度截图、缩到 22px），两个入口就再也分不出来——所以必须靠字形，
+// 而不是靠颜色。这条断言就是那个缺陷的回归闸门。
+const appVue = fs.readFileSync('src/App.vue', 'utf8')
+function glyphAfter(atClass) {
+  const m = appVue.match(new RegExp(`class="${atClass}"[\\s\\S]{0,200}?<(IconTabler\\w+)`))
+  return m ? m[1] : null
+}
+const glyphPairs = [
+  ['侧栏', 'sidebar-skills-link-icon', 'sidebar-skills-link-icon sidebar-automations-link-icon'],
+  ['路由头部', 'skills-route-header-icon', 'skills-route-header-icon automations-route-header-icon'],
+]
+const sharedGlyph = glyphPairs
+  .map(([where, a, b]) => [where, glyphAfter(a), glyphAfter(b)])
+  .filter(([, a, b]) => !a || !b || a === b)
+check(
+  '技能库与定时任务用不同字形（不能只靠颜色区分）',
+  sharedGlyph.length === 0,
+  sharedGlyph.length
+    ? sharedGlyph.map(([w, a, b]) => `${w}: ${a || '缺失'} vs ${b || '缺失'}`).join('; ')
+    : glyphPairs
+        .map(([w, a, b]) => `${w} ${glyphAfter(a)}/${glyphAfter(b)}`)
+        .join(' · '),
 )
 
 // --------------------------------------------------- 文字只用墨色 token
@@ -237,6 +268,27 @@ check(
   '亮色侧（style.css 不带 :root.dark 前缀的规则）没有把 ink-4 用在文字上',
   lightInk4Text.length === 0,
   lightInk4Text.slice(0, 3).join(', '),
+)
+
+// -------------------------------------------------- 状态色可辨认（而不是装饰色）
+// 状态色要当图标与标签用，因此对两个主表面都得达到 UI 组件的 3:1；达不到就只剩装饰作用，
+// 而规则一是「颜色只表示状态」——装饰性的强调色恰恰是这次要清掉的东西。
+const weakStatus = []
+for (const [theme, TOK] of [
+  ['暗色', DARK],
+  ['亮色', LIGHT],
+]) {
+  for (const t of ['--live', '--ok', '--alert', '--model']) {
+    for (const s of ['--s1', '--s2']) {
+      const r = contrast(TOK[t], TOK[s])
+      if (r < 3) weakStatus.push(`${theme} ${t} on ${s} = ${r.toFixed(2)}:1`)
+    }
+  }
+}
+check(
+  '状态色对 s1/s2 ≥3:1（两套主题）',
+  weakStatus.length === 0,
+  weakStatus.join('; ') || 'live/ok/alert/model × 2 主题 × 2 表面',
 )
 
 // -------------------------------------------------------- 字号临时值不增

@@ -56,7 +56,7 @@
             @click="router.push({ name: 'skills' }); isMobile && setSidebarCollapsed(true)"
           >
             <span class="sidebar-skills-link-icon" aria-hidden="true">
-              <IconTablerBolt />
+              <IconTablerListLines />
             </span>
             <span class="sidebar-skills-link-copy">
               <span class="sidebar-skills-link-title">{{ t('Skills') }}</span>
@@ -72,7 +72,7 @@
             @click="router.push({ name: 'automations' }); isMobile && setSidebarCollapsed(true)"
           >
             <span class="sidebar-skills-link-icon sidebar-automations-link-icon" aria-hidden="true">
-              <IconTablerBolt />
+              <IconTablerClock />
             </span>
             <span class="sidebar-skills-link-copy">
               <span class="sidebar-skills-link-title">{{ t('Automations') }}</span>
@@ -163,10 +163,10 @@
               @start-new-thread="onStartNewThreadFromToolbar"
             />
             <span v-if="isSkillsRoute" class="skills-route-header-icon" aria-hidden="true">
-              <IconTablerBolt />
+              <IconTablerListLines />
             </span>
             <span v-else-if="isAutomationsRoute" class="skills-route-header-icon automations-route-header-icon" aria-hidden="true">
-              <IconTablerBolt />
+              <IconTablerClock />
             </span>
           </template>
           <template #actions>
@@ -953,6 +953,8 @@ import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
+import IconTablerClock from './components/icons/IconTablerClock.vue'
+import IconTablerListLines from './components/icons/IconTablerListLines.vue'
 import IconTablerSearch from './components/icons/IconTablerSearch.vue'
 import IconTablerSettings from './components/icons/IconTablerSettings.vue'
 import IconTablerTrash from './components/icons/IconTablerTrash.vue'
@@ -5103,23 +5105,32 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-skills-link {
-  @apply mx-2 flex items-center gap-3 rounded-2xl border border-transparent bg-transparent px-3 py-2.5 text-left text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950 cursor-pointer;
+  @apply relative mx-2 flex items-center gap-3 rounded-[10px] border border-transparent bg-transparent px-3 py-2.5 text-left text-ink-2 transition hover:bg-s2 hover:text-ink-1 cursor-pointer;
 }
 
+/* 选中态＝中性表面抬升 + 2px 中性导轨。导轨刻意用 ink-2 而不是 --live：琥珀严格留给
+   「运行中」，否则「出现颜色」就不再等于「有事发生」。 */
 .sidebar-skills-link.is-active {
-  @apply border-transparent bg-zinc-100 text-zinc-950;
+  @apply border-line-2 bg-s2 text-ink-1;
 }
 
+.sidebar-skills-link.is-active::before {
+  content: "";
+  @apply absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-ink-2;
+}
+
+/* 图标底片：22×22、6px 圆角、状态色只铺 15% 的一层淡底。
+   原先这里是 40×40 的实心饱和方片——整屏唯一的饱和元素，注意力会从线程列表被抢走。 */
 .sidebar-skills-link-icon {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white;
+  @apply flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-md bg-ok/15 text-ok;
 }
 
 .sidebar-automations-link-icon {
-  @apply bg-amber-500;
+  @apply bg-live/15 text-live;
 }
 
 .sidebar-skills-link-icon :deep(svg) {
-  @apply h-5 w-5;
+  @apply h-3.5 w-3.5;
 }
 
 .sidebar-skills-link-copy {
@@ -5138,12 +5149,14 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply ml-1;
 }
 
+/* 路由头部图标：与侧栏两个入口同一套字形与淡底片。原先 36px 实心翠绿/橙 + 同色光晕
+   阴影——违反规则四（不新增装饰：不用彩色阴影）。 */
 .skills-route-header-icon {
-  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-[0_16px_32px_-20px_rgba(5,150,105,0.9)];
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ok/15 text-ok;
 }
 
 .automations-route-header-icon {
-  @apply bg-amber-500 shadow-[0_16px_32px_-20px_rgba(245,158,11,0.9)];
+  @apply bg-live/15 text-live;
 }
 
 .skills-route-header-icon :deep(svg) {
