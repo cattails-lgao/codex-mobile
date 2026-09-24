@@ -103,6 +103,25 @@ function onReasoningEffortSelect(value: string): void {
   @apply w-full;
 }
 
+/* 「谁在干活」用 --model（紫）标示：它不是状态，所以不占用 live/ok/alert 三色，
+   但必须一眼区别于右侧那三个中性配置芯片——这是本方案允许出现的第四个强调色。
+   这也是审计第②条缺陷的正面修法：四个下拉原本长得一模一样，只靠位置猜。 */
+.thread-composer-model-control :deep(.composer-dropdown-trigger--pill) {
+  @apply border-model/40 bg-model/12 text-model hover:border-model/70 hover:text-model;
+}
+
+/* disabled 与 enabled 是同权重的两条规则（都在 --pill 上），谁赢取决于样式表顺序——不能靠这个。
+   显式写出来：不可用时退回中性墨色，跟其余三个芯片一致（颜色只表示状态，什么都不在跑就没有颜色）。 */
+.thread-composer-model-control :deep(.composer-dropdown-trigger--pill:disabled) {
+  @apply border-line-1 bg-transparent text-ink-4;
+}
+
+/* 模型名前的点：颜色取 currentColor，于是自动就是 --model，不需要再写一遍色值。 */
+.thread-composer-model-control :deep(.composer-dropdown-trigger--pill)::before {
+  content: "";
+  @apply h-1.5 w-1.5 shrink-0 rounded-full bg-current;
+}
+
 .thread-composer-thinking-control :deep(.composer-dropdown-options) {
   @apply max-h-64;
 }

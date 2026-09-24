@@ -156,8 +156,20 @@
           @select-approval-policy="onApprovalPolicySelect"
         />
 
+        <ThreadComposerModelControls
+          :models="models"
+          :selected-model="selectedModel"
+          :model-reasoning-efforts="modelReasoningEfforts"
+          :selected-reasoning-effort="selectedReasoningEffort"
+          :selected-speed-mode="selectedSpeedMode"
+          :disabled="disabled"
+          :active-thread-id="activeThreadId"
+          @update:selected-model="onModelSelect"
+          @update:selected-reasoning-effort="onReasoningEffortSelect"
+        />
+
+        <div v-if="!isMobile" class="thread-composer-secondary">
         <ComposerPopover
-          v-if="!isMobile"
           :open="isPlanMenuOpen"
           align="start"
           width="md"
@@ -198,7 +210,6 @@
         </ComposerPopover>
 
         <ComposerPopover
-          v-if="!isMobile"
           :open="isApprovalMenuOpen"
           align="center"
           width="md"
@@ -239,18 +250,7 @@
             <span v-if="approvalPolicyNotice" class="thread-composer-approval-tip" role="status">{{ approvalPolicyNotice }}</span>
           </Transition>
         </ComposerPopover>
-
-        <ThreadComposerModelControls
-          :models="models"
-          :selected-model="selectedModel"
-          :model-reasoning-efforts="modelReasoningEfforts"
-          :selected-reasoning-effort="selectedReasoningEffort"
-          :selected-speed-mode="selectedSpeedMode"
-          :disabled="disabled"
-          :active-thread-id="activeThreadId"
-          @update:selected-model="onModelSelect"
-          @update:selected-reasoning-effort="onReasoningEffortSelect"
-        />
+        </div>
 
         <button
           v-if="contextUsageView"
@@ -2160,19 +2160,42 @@ watch(
   @apply gap-1 sm:gap-2;
 }
 
+/* 次要开关合并成一组：协作模式 + 审批策略共用一层发丝外框、组内一条发丝分隔，于是它们在
+   视觉上是一个整体，而不是两个和模型一样抢眼的全圆角药丸。两者语义都是「机器怎么干活」的
+   配置、都不表示状态，因此一律中性墨色；整组比模型芯片更暗更小。 */
+.thread-composer-secondary {
+  @apply inline-flex min-w-0 items-stretch overflow-hidden rounded-md border border-line-1;
+}
+
+/* anchor 本身是 block，行内级子元素会在下面留出一截基线间隙（组高就比模型芯片高出一截）。
+   给它 flex，按钮就能真正撑满组高。 */
+.thread-composer-secondary > .composer-popover-anchor {
+  @apply flex items-stretch;
+}
+
+.thread-composer-secondary > .composer-popover-anchor + .composer-popover-anchor {
+  @apply border-l border-line-1;
+}
+
 .thread-composer-plan-trigger,
 .thread-composer-approval-trigger {
-  @apply inline-flex h-8 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-400;
+  @apply inline-flex h-7 items-center gap-1 border-0 bg-transparent px-2.5 font-mono text-xs text-ink-3 transition hover:text-ink-1 disabled:cursor-not-allowed disabled:text-ink-4;
 }
 
 .thread-composer-plan-trigger.is-active,
 .thread-composer-approval-trigger.is-active {
-  @apply border-zinc-900 bg-zinc-900 text-white hover:text-white;
+  @apply bg-s3 text-ink-1 hover:text-ink-1;
 }
 
 .thread-composer-plan-trigger-chevron,
 .thread-composer-approval-trigger-chevron {
-  @apply h-3.5 w-3.5;
+  @apply h-3.5 w-3.5 opacity-70;
+}
+
+/* 输入区聚焦：琥珀焦点环 + 3px 光晕（暗/亮各自取值，不靠压不透明度）。 */
+.thread-composer-shell:focus-within {
+  @apply border-line-focus;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--line-focus) 22%, transparent);
 }
 
 .thread-composer-menu-item {
@@ -2233,12 +2256,16 @@ watch(
   @apply ml-auto flex min-w-0 items-center gap-2;
 }
 
+/* 一屏只有一个主按钮，而且它靠「最亮的墨色」而不是强调色取胜——琥珀严格留给机器状态，
+   这样「颜色出现」就等于「有事发生」。 */
 .thread-composer-submit {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink-1 bg-ink-1 text-ink-inv transition hover:brightness-110 disabled:cursor-not-allowed disabled:border-line-2 disabled:bg-transparent disabled:text-ink-4;
 }
 
+/* 队列态＝「当前轮结束后自动发出」，这确实是机器状态（待发出），所以这支琥珀是语义色而非
+   装饰色；它只是从裸的 amber-600 换成了 token 里的 --live。 */
 .thread-composer-submit--queue {
-  @apply bg-amber-600 hover:bg-amber-700;
+  @apply bg-live text-ink-inv;
 }
 
 .thread-composer-submit-icon {
@@ -2246,7 +2273,7 @@ watch(
 }
 
 .thread-composer-stop {
-  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-zinc-900 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500;
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-ink-1 bg-ink-1 text-ink-inv transition hover:brightness-110 disabled:cursor-not-allowed disabled:border-line-2 disabled:bg-transparent disabled:text-ink-4;
 }
 
 .thread-composer-stop-icon {
