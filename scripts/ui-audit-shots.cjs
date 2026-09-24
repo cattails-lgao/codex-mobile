@@ -18,6 +18,9 @@ const LAUNCHER = [...EDGE_CANDIDATES, ...CHROME_CANDIDATES].find((p) => fs.exist
 const BASE = (process.env.PROFILE_BASE_URL || 'http://127.0.0.1:4190').replace(/\/$/, '')
 const THEME_KEY = 'codex-web-local.dark-mode.v1'
 const THREAD_ID = process.env.THREAD_ID || '01a0238c-d5e7-7651-97cc-2303f044f00e'
+// round-93：工具调用行的采样线程。默认线程里没有任何 commandExecution / toolCall 消息，
+// 采样点会全部落空；这条线程实测渲染 78 条命令行 + 50 条 MCP 工具行（见 tmp/probe-toolrows.cjs）。
+const TOOLS_THREAD_ID = process.env.TOOLS_THREAD_ID || '01a04679-d12b-7350-b560-9013a9a7dee1'
 const OUT = path.join('output', 'playwright', 'ui-audit')
 
 fs.mkdirSync(OUT, { recursive: true })
@@ -49,7 +52,7 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
         const el = document.querySelector('.thread-composer-model-control .composer-dropdown-trigger')
         return el ? !el.disabled : true
       },
-      { timeout: 12000 },
+      { timeout: 20000 },
     )
     .catch(() => {})
   if (before) await before(page)
@@ -99,6 +102,15 @@ async function shoot(browser, { name, url, width, height, theme, wait = 3500, be
         pick('.thread-composer-plan-trigger'),
         pick('.thread-composer-approval-trigger'),
         pick('.thread-composer-submit'),
+        // 会话区工具调用行（round-93 签名组件的现场）：命令行（WorkBlockItem）与 MCP
+        // 工具行（ToolCallRow）。只在工具线程页有值，其余页面上 pick 返回 null 被过滤。
+        pick('.work-block'),
+        pick('.work-block-header'),
+        pick('.work-block-command'),
+        pick('.work-block-status'),
+        pick('.tool-call-block'),
+        pick('.tool-call-name'),
+        pick('.tool-call-status'),
       ].filter(Boolean),
       scrollHeight: document.documentElement.scrollHeight,
       nodes: document.querySelectorAll('body *').length,
@@ -114,6 +126,10 @@ async function main() {
     { name: 'desktop-dark-home', url: '/', width: 1440, height: 900, theme: 'dark' },
     { name: 'desktop-dark-thread', url: `/thread/${THREAD_ID}`, width: 1440, height: 900, theme: 'dark' },
     { name: 'desktop-light-thread', url: `/thread/${THREAD_ID}`, width: 1440, height: 900, theme: 'light' },
+    // round-93：工具调用行采样页（默认线程没有命令/工具行）。这条线程有 600+ 条消息，
+    // 水合慢，等待放宽到 6s，确保采样发生在数据就绪之后。
+    { name: 'desktop-dark-tools', url: `/thread/${TOOLS_THREAD_ID}`, width: 1440, height: 900, theme: 'dark', wait: 6000 },
+    { name: 'desktop-light-tools', url: `/thread/${TOOLS_THREAD_ID}`, width: 1440, height: 900, theme: 'light', wait: 6000 },
     { name: 'desktop-dark-skills', url: '/skills', width: 1440, height: 900, theme: 'dark' },
     {
       name: 'desktop-dark-thread-rightpanel',
