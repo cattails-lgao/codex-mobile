@@ -106,6 +106,16 @@
   --color-ink-3: var(--ink-3);
   --color-ink-4: var(--ink-4);
   --color-ink-inv: var(--ink-inv);
+
+  /* 状态色只有三个 + 一个身份色（方案规则一：颜色只表示状态）。此刻还没有消费者，
+     所以补它们本身不改变任何外观；侧栏两个工具入口的「淡底片」是第一批用到的。 */
+  --color-live: var(--live);
+  --color-ok: var(--ok);
+  --color-alert: var(--alert);
+  --color-model: var(--model);
+
+  /* 焦点环：两套主题各自取值——靠 opacity 或滤镜一定掉到 AA 以下。 */
+  --color-line-focus: var(--line-focus);
 }
 
 :root {
@@ -151,6 +161,14 @@
   --ink-3: #63636d; /* 次级文字 */
   --ink-4: #a5a5ae; /* 仅非文本（图标底、点阵、分隔） */
   --ink-inv: #f7f7f9; /* 反色底上的墨 */
+
+  /* 状态色：亮色下必须单独取值（不能复用暗色那套），否则必然掉到 AA 以下。 */
+  --live: #b26a12; /* 运行中 / 待批准 */
+  --ok: #1d7d54; /* 完成 / 已连接 */
+  --alert: #c62b2b; /* 失败 / 破坏性 */
+  --model: #6d4ad6; /* 仅模型身份 */
+
+  --line-focus: #b26a12; /* 焦点环（亮色） */
 }
 
 /* 亮色下的页面底色。深色由下面的 `:root.dark body` 接管；这一条修掉的是「亮色下
@@ -184,6 +202,14 @@ body {
   --ink-3: #d4d4d8; /* zinc-300 */
   --ink-4: #a1a1aa; /* zinc-400 */
   --ink-inv: #18181b; /* zinc-900 */
+
+  /* 状态色取自方案规格（暗色那一列）；与亮色一样是独立取值。 */
+  --live: #f0a53a; /* 运行中 / 待批准 */
+  --ok: #3ecf8e; /* 完成 / 已连接 */
+  --alert: #ff5c5c; /* 失败 / 破坏性 */
+  --model: #a78bfa; /* 仅模型身份 */
+
+  --line-focus: #f0a53a; /* 焦点环（暗色） */
 }
 
 :root.dark body {
@@ -484,13 +510,11 @@ body {
   @apply bg-s1;
 }
 
-:root.dark .sidebar-skills-link {
-  @apply border-emerald-900/70 bg-[linear-gradient(135deg,_rgba(6,78,59,0.42),_rgba(24,24,27,0.96))] text-ink-1 hover:border-emerald-700 hover:bg-emerald-950;
-}
-
-:root.dark .sidebar-skills-link.is-active {
-  @apply border-emerald-700 bg-emerald-950/80 text-ink-1;
-}
+/* 侧栏两个工具入口（技能库 / 定时任务）的暗色覆盖层已整块删除。
+   原先这里是「翠绿渐变卡片 + 翠绿边框 + 翠绿 hover」，两个语义完全不同的入口只靠翠绿/橙
+   的方片区分——既违反规则四（不新增装饰：不用渐变），又违反规则一（颜色只表示状态）。
+   改正后它们用中性表面 + 各自的字形区分，基础规则本身已是 token，两套主题自动各自取值，
+   不再需要这层覆盖。 */
 
 :root.dark .sidebar-search-toggle {
   @apply text-ink-4 hover:border-line-3 hover:bg-s2;
