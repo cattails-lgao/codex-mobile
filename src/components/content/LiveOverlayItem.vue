@@ -138,6 +138,6 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert/15 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 </style>

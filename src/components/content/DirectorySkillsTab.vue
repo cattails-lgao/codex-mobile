@@ -166,11 +166,11 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-badge-ok {
-  @apply border-ok bg-ok text-ok;
+  @apply border-ok/30 bg-ok/10 text-ok;
 }
 
 .mcp-skill-badge-warning {
-  @apply border-live bg-live text-live;
+  @apply border-live/30 bg-live/10 text-live;
 }
 
 .mcp-skill-badge-muted {
@@ -184,7 +184,7 @@ const emit = defineEmits<{
 }
 
 .directory-error {
-  @apply border-alert bg-alert text-alert;
+  @apply border-alert/30 bg-alert/10 text-alert;
 }
 
 .directory-mcp-detail {

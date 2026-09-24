@@ -456,15 +456,15 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-status {
-  @apply flex items-start justify-between gap-2 rounded-lg bg-live px-2 py-1.5 text-xs text-live;
+  @apply flex items-start justify-between gap-2 rounded-lg bg-live/10 px-2 py-1.5 text-xs text-live;
 }
 
 .rgp-status.is-error {
-  @apply bg-alert text-alert;
+  @apply bg-alert/10 text-alert;
 }
 
 .rgp-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2 py-0.5 text-nano font-semibold text-alert transition hover:bg-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2 py-0.5 text-nano font-semibold text-alert transition hover:bg-alert/10;
 }
 
 .rgp-section {

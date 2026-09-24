@@ -112,7 +112,7 @@ const { t } = useUiLanguage()
 }
 
 .message-copy-button[data-copied='true'] {
-  @apply text-ok hover:bg-ok hover:text-ok;
+  @apply text-ok hover:bg-ok/10 hover:text-ok;
 }
 
 .message-fork-icon,

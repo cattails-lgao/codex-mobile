@@ -1792,7 +1792,7 @@ onMounted(async () => {
 }
 
 .directory-marketplace-remove {
-  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert hover:text-alert cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert/10 hover:text-alert cursor-pointer disabled:opacity-50;
 }
 
 .directory-marketplace-add {
@@ -1837,7 +1837,7 @@ onMounted(async () => {
 }
 
 .directory-share-delete:hover {
-  @apply bg-alert text-alert;
+  @apply bg-alert/10 text-alert;
 }
 
 .directory-grid {
@@ -1894,7 +1894,7 @@ button.directory-card {
 }
 
 .directory-badge {
-  @apply shrink-0 rounded-md border border-ok bg-ok px-1.5 py-0.5 text-nano font-medium leading-none text-ok;
+  @apply shrink-0 rounded-md border border-ok/30 bg-ok/10 px-1.5 py-0.5 text-nano font-medium leading-none text-ok;
 }
 
 .directory-badge.is-muted {
@@ -1929,15 +1929,15 @@ button.directory-card {
 
 .directory-error,
 .directory-toast.is-error {
-  @apply border-alert bg-alert text-alert;
+  @apply border-alert/30 bg-alert/10 text-alert;
 }
 
 .directory-auth-status.is-error {
-  @apply border-alert bg-alert text-alert;
+  @apply border-alert/30 bg-alert/10 text-alert;
 }
 
 .directory-toast {
-  @apply mx-auto w-full max-w-5xl rounded-lg border border-ok bg-ok px-3 py-2 text-sm font-medium text-ok;
+  @apply mx-auto w-full max-w-5xl rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-sm font-medium text-ok;
 }
 
 .directory-card-toggle {
@@ -2008,11 +2008,11 @@ button.directory-card {
 }
 
 .directory-auth-status.is-ok {
-  @apply border-ok bg-ok text-ok;
+  @apply border-ok/30 bg-ok/10 text-ok;
 }
 
 .directory-auth-status.is-warning {
-  @apply border-live bg-live text-live;
+  @apply border-live/30 bg-live/10 text-live;
 }
 
 .directory-auth-status.is-muted {

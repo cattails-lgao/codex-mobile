@@ -150,7 +150,7 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-badge {
-  @apply shrink-0 rounded-md border border-ok bg-ok px-1.5 py-0.5 text-nano font-medium text-ok leading-none;
+  @apply shrink-0 rounded-md border border-ok/30 bg-ok/10 px-1.5 py-0.5 text-nano font-medium text-ok leading-none;
 }
 
 .skill-card-badge-disabled {

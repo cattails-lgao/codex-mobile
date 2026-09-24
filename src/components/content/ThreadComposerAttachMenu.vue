@@ -215,7 +215,7 @@ function onApprovalPolicySelect(value: string): void {
 }
 
 .thread-composer-approval-tip {
-  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-ok bg-ok px-2.5 py-1 text-micro font-medium text-ok shadow-sm;
+  @apply pointer-events-none absolute bottom-11 left-1/2 z-30 whitespace-nowrap rounded-full border border-ok/30 bg-ok/10 px-2.5 py-1 text-micro font-medium text-ok shadow-sm;
   transform: translateX(-50%);
 }
 

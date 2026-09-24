@@ -2157,11 +2157,11 @@ onBeforeUnmount(() => {
 }
 
 .recycle-bin-button-danger {
-  @apply border-alert text-alert hover:bg-alert;
+  @apply border-alert/30 text-alert hover:bg-alert/10;
 }
 
 .recycle-bin-error {
-  @apply mt-2 rounded-md border border-alert bg-alert px-3 py-2 text-xs text-alert;
+  @apply mt-2 rounded-md border border-alert/30 bg-alert/10 px-3 py-2 text-xs text-alert;
 }
 
 .thread-start-button {
@@ -2177,7 +2177,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-tree-action-error {
-  @apply mx-2 my-1 rounded-lg border border-alert bg-alert px-3 py-2 text-xs text-alert;
+  @apply mx-2 my-1 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-xs text-alert;
 }
 
 .thread-tree-groups {
@@ -2247,7 +2247,7 @@ onBeforeUnmount(() => {
 }
 
 .project-menu-item-danger {
-  @apply text-alert hover:bg-alert;
+  @apply text-alert hover:bg-alert/10;
 }
 
 .project-menu-label {
@@ -2305,7 +2305,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-menu-item-danger {
-  @apply text-alert hover:bg-alert;
+  @apply text-alert hover:bg-alert/10;
 }
 
 .thread-icon {
@@ -2325,7 +2325,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-row-automation-chip {
-  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-live px-1 text-live;
+  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-live/15 px-1 text-live;
 }
 
 .thread-row-automation-icon {

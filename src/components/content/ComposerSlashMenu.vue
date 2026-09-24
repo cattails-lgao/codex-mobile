@@ -131,15 +131,15 @@ function skillBadgeLabel(scope: string | undefined): string {
 }
 
 .thread-composer-slash-skill-icon.is-system {
-  @apply bg-live text-live;
+  @apply bg-live/15 text-live;
 }
 
 .thread-composer-slash-skill-icon.is-repo {
-  @apply bg-ok text-ok;
+  @apply bg-ok/15 text-ok;
 }
 
 .thread-composer-slash-skill-icon.is-plugin {
-  @apply bg-model text-model;
+  @apply bg-model/15 text-model;
 }
 
 .thread-composer-slash-body {

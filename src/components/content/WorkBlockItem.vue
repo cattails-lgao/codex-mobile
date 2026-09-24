@@ -371,6 +371,6 @@ const permissionHint = computed(() => {
 }
 
 .work-block-permission-hint {
-  @apply mx-3 mb-2 rounded-md border border-live bg-live px-2.5 py-1.5 text-micro leading-4 text-live;
+  @apply mx-3 mb-2 rounded-md border border-live/30 bg-live/10 px-2.5 py-1.5 text-micro leading-4 text-live;
 }
 </style>

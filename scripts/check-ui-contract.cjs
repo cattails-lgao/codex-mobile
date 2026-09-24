@@ -438,6 +438,33 @@ check(
   weakStatus.join('; ') || 'live/ok/alert/model × 2 主题 × 2 表面',
 )
 
+// -------------------------------------------------------- 状态色底字不可同色
+// 回归形态（round-97 sweep 引入、round-98 修复）：浅色状态底被错映射成实色 token 底，
+// 与同色 token 文字叠加后不可读（bg-alert bg-alert 上写 text-alert）。实色底上的文字
+// 只允许 ink-inv（实心按钮）这类反色墨；带透明度的淡底（bg-ok/10）不算实色底。
+const sameColorBgText = []
+for (const f of [...vueFiles, STYLE]) {
+  const lines = fs.readFileSync(f, 'utf8').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] + ' ' + (lines[i + 1] || '')
+    for (const s of ['ok', 'alert', 'live', 'model']) {
+      const solidBg = new RegExp(`(?<![-\\w/:])bg-${s}(?![-\\w/])`)
+      const txt = new RegExp(`(?<![-\\w/:])text-${s}(?![-\\w/])`)
+      const hoverSolid = new RegExp(`(?<![-\\w/:])hover:bg-${s}(?![-\\w/])`)
+      const hoverTxt = new RegExp(`(?<![-\\w/:])hover:text-${s}(?![-\\w/])`)
+      if ((solidBg.test(line) && txt.test(line)) || (hoverSolid.test(line) && hoverTxt.test(line))) {
+        sameColorBgText.push(`${f}:${i + 1} bg-${s}+text-${s}`)
+        break
+      }
+    }
+  }
+}
+check(
+  '状态色底与同色文字不共存（实色底上的文字必须是反色墨）',
+  sameColorBgText.length === 0,
+  sameColorBgText.slice(0, 5).join('; ') || 'ok/alert/live/model × bg+text 无同色叠加',
+)
+
 // -------------------------------------------------------- 字号临时值不增
 let arbitraryText = 0
 for (const f of [...vueFiles, STYLE]) {

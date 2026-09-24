@@ -5191,7 +5191,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 
 .content-error {
-  @apply m-0 rounded-lg border border-alert bg-alert px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
 }
 
 .content-grid {
@@ -5211,11 +5211,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .composer-runtime-error {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-alert bg-alert px-3 py-2 text-sm font-medium text-alert shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm font-medium text-alert shadow-sm;
 }
 
 .external-session-banner {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-live bg-live px-3 py-2 text-sm font-medium text-live shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-sm font-medium text-live shadow-sm;
 }
 
 .interrupt-recovered-banner {
@@ -5231,7 +5231,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert/15 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 .content-root-wrap {
@@ -5578,7 +5578,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-error {
-  @apply m-0 rounded-xl border border-alert bg-alert px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-xl border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
 }
 
 .new-thread-open-folder-error-actions {
@@ -5665,7 +5665,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .worktree-init-status.is-error {
-  @apply border-alert bg-alert text-alert;
+  @apply border-alert/40 bg-alert/10 text-alert;
 }
 
 .worktree-init-status-title {
@@ -5726,7 +5726,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .codex-login-modal-error {
-  @apply rounded-md bg-alert px-3 py-2 text-xs text-alert;
+  @apply rounded-md bg-alert/10 px-3 py-2 text-xs text-alert;
 }
 
 .codex-login-modal-actions {
@@ -5768,7 +5768,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .project-zip-modal-error {
-  @apply rounded-lg border border-live bg-live px-3 py-2 text-sm text-live;
+  @apply rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-sm text-live;
 }
 
 .project-zip-progress-label {

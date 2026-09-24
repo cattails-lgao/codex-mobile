@@ -718,7 +718,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-hooks-state.is-on {
-  @apply bg-ok text-ok;
+  @apply bg-ok/15 text-ok;
 }
 
 .sidebar-settings-hooks-event {
@@ -810,7 +810,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-client-revoke {
-  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert hover:text-alert cursor-pointer disabled:opacity-50;
+  @apply shrink-0 rounded-md border border-line-1 bg-s2 px-2 py-0.5 text-xs text-ink-3 transition hover:bg-alert/10 hover:text-alert cursor-pointer disabled:opacity-50;
 }
 
 .sidebar-settings-telegram-panel {
@@ -843,7 +843,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-telegram-error {
-  @apply mt-2 rounded-md bg-alert px-2.5 py-2 text-xs text-alert;
+  @apply mt-2 rounded-md bg-alert/10 px-2.5 py-2 text-xs text-alert;
 }
 
 .sidebar-settings-telegram-actions {
@@ -885,7 +885,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-error {
-  @apply text-xs text-alert bg-alert rounded px-2 py-1.5 break-words;
+  @apply text-xs text-alert bg-alert/10 rounded px-2 py-1.5 break-words;
 }
 
 .sidebar-settings-key-group {
@@ -993,7 +993,7 @@ defineExpose({ containsTarget })
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert/15 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 :global(:root.dark) .visible-error-feedback {

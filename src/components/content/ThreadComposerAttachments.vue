@@ -178,7 +178,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-folder-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-live bg-live px-2 py-0.5 text-xs text-live;
+  @apply inline-flex items-center gap-1 rounded-md border border-live/30 bg-live/10 px-2 py-0.5 text-xs text-live;
 }
 
 .thread-composer-folder-chip-icon {
@@ -194,7 +194,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-folder-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-live transition hover:bg-live hover:text-live text-xs leading-none p-0;
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-live transition hover:bg-live/25 hover:text-live text-xs leading-none p-0;
 }
 
 .thread-composer-file-chip {
@@ -218,7 +218,7 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-skill-chip {
-  @apply inline-flex items-center gap-1 rounded-md border border-ok bg-ok px-2 py-0.5 text-xs text-ok;
+  @apply inline-flex items-center gap-1 rounded-md border border-ok/30 bg-ok/10 px-2 py-0.5 text-xs text-ok;
 }
 
 .thread-composer-skill-chip-name {
@@ -226,6 +226,6 @@ function openSkillMarkdown(skill: SkillItem): void {
 }
 
 .thread-composer-skill-chip-remove {
-  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-ok transition hover:bg-ok hover:text-ok text-xs leading-none p-0;
+  @apply ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border-0 bg-transparent text-ok transition hover:bg-ok/25 hover:text-ok text-xs leading-none p-0;
 }
 </style>

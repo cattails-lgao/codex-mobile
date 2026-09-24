@@ -202,7 +202,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-badge[data-operation='add'] {
-  @apply bg-ok text-ok;
+  @apply bg-ok/10 text-ok;
 }
 
 .file-change-badge[data-operation='update'] {
@@ -210,11 +210,11 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-badge[data-operation='delete'] {
-  @apply bg-alert text-alert;
+  @apply bg-alert/10 text-alert;
 }
 
 .file-change-badge[data-operation='move'] {
-  @apply bg-live text-live;
+  @apply bg-live/10 text-live;
 }
 
 .file-change-path-group {

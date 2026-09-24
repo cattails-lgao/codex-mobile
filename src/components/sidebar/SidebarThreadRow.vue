@@ -226,7 +226,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row-automation-chip {
-  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-live px-1 text-live;
+  @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center gap-0.5 rounded-full bg-live/15 px-1 text-live;
 }
 
 .thread-row-automation-icon {

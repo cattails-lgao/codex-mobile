@@ -344,7 +344,7 @@ body {
 }
 
 .thread-compaction-banner.is-done {
-  @apply border-ok bg-ok text-ok;
+  @apply border-ok/30 bg-ok/10 text-ok;
 }
 
 .thread-compaction-banner-spinner {

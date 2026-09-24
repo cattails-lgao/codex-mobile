@@ -174,7 +174,7 @@ defineProps<{
 }
 
 .sidebar-settings-account-error {
-  @apply mb-2 rounded-md bg-alert px-2 py-1.5 text-xs text-alert;
+  @apply mb-2 rounded-md bg-alert/10 px-2 py-1.5 text-xs text-alert;
 }
 
 .sidebar-settings-account-refresh {
@@ -238,11 +238,11 @@ defineProps<{
 }
 
 .sidebar-settings-account-item.is-active .sidebar-settings-account-id {
-  @apply bg-ok text-ok;
+  @apply bg-ok/15 text-ok;
 }
 
 .sidebar-settings-account-item.is-unavailable .sidebar-settings-account-id {
-  @apply bg-alert text-alert;
+  @apply bg-alert/15 text-alert;
 }
 
 .sidebar-settings-account-switch {
@@ -258,7 +258,7 @@ defineProps<{
 }
 
 .sidebar-settings-account-remove.is-confirming {
-  @apply border-live bg-live text-live font-medium;
+  @apply border-live/40 bg-live/10 text-live font-medium;
 }
 
 .visible-error-with-feedback {
@@ -266,7 +266,7 @@ defineProps<{
 }
 
 .visible-error-feedback {
-  @apply shrink-0 rounded-full border border-alert bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert focus:outline-none focus:ring-2 focus:ring-alert;
+  @apply shrink-0 rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold text-alert transition hover:bg-alert/15 focus:outline-none focus:ring-2 focus:ring-alert;
 }
 
 :global(:root.dark) .visible-error-feedback {
