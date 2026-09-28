@@ -205,4 +205,6 @@
 
 **验证基线（发版时点）**：契约 **37/37**、主题 15/15、字体 13/13、等值探针 **870/870 逐字相同**、`vue-tsc` 干净、`vite build` 通过、全量 Vitest **658 例 656 通过 / 2 失败**（既有 Windows 平台差异，真实 Linux 全绿）。
 
-**发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.126`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）。`npm publish` 按分工由用户执行（registry dist-tags 有分钟级延迟，不能据此判失败）。
+**发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.126`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.126 。
+
+**发布闭环**：用户于 2026-09-28 执行 `npm publish`，registry 记录发布时刻 `2026-09-28T09:06:42.665Z`，`dist-tags.latest` 由 `0.1.125` 切换为 **`0.1.126`**。维护者随后下载 tarball 复核：1,605,877 字节、55 个条目（`dist/` 47 + `dist-cli/` 2 + `scripts/` 3 + `package.json`/`README.md`/`LICENSE`）、sha1 `6a34332a4aa5c4384ee6ec157fea1e32d21abe77` 与 integrity `sha512-4mel2hXVvxzEd11sMdIOpJOFSrAH+epBGMfdYby6a5BUkb9yKouKP2JSsOdrVf3vt9AaYnDkBKaBW9zxxZQRdw==` 均与 registry 逐项一致，包内 `package.json` 为 `codex-mobile-re@0.1.126`。（复查时再次确认 v0.1.125 的口径：registry 传播有分钟级延迟——`npm view dist-tags` 先报 `0.1.125`、版本详情 404，约 1 分钟后 `latest` 即挪正，不能据此判失败。）
