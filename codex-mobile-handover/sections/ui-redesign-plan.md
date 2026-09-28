@@ -185,6 +185,12 @@
 **P3 · 次要界面与动效**
 - 技能库/应用目录（卡片 → 行列表，去掉"字母头像"占位符：现在两个不同的 MCP 都显示 `C`）、Git 面板、各类弹窗与菜单；动效按 §4 统一。
 
+**P3 完成情况（2026-09-28，round-99）**
+- ✅ **动效统一**：`@theme` 加 `--default-transition-duration: 120ms` + 统一缓动 `cubic-bezier(.22,.61,.36,1)`（Tailwind `transition` 工具类直接读，一处生效全站）；面板/焦点 200ms（composer-popover 两处 + QuestionJumpBar）；路由进入 320ms 挂 `.content-body > *`（全站无 RouterView，路由切换＝该容器换子元素，CSS 动画只在子元素挂载时跑一次，零模板改动）；reduced-motion 由既有全局归零块接管。契约新增「动效阶梯」断言。
+- ✅ **卡片 → 行列表 + 字母头像清零**：删全部 10 处 `charAt(0)` 字母占位符（真实 logo/avatar 保留；`fallbackStyle` prop 链与 `ComposioPreviewConnector.initial` 数据一并退役）；四套网格（directory/skills-hub/composio-preview/mcp-skill）→ 单列行列表，卡片去 `min-h-36`/`hover:shadow-sm`、图标 40px→28px。契约新增「字母头像占位符清零」断言（**35→37 项**）。
+- ✅ **Git 面板与弹窗降噪**：Git 面板 review 按钮、目录 tab/排序选中态去 `shadow-sm`；SkillDetailModal 检查后无需改动。
+- 验证：契约 37/37、主题 15/15、字体 13/13、等值 870/870、`vue-tsc` 0、build 通过、Vitest 656/658；新增 `desktop-light-directory` 截图证据页。见 [round-99](../rounds/round-99-p3-secondary-surfaces-motion.md)。
+
 ---
 
 ## 6. 风险与代价（如实记录）
