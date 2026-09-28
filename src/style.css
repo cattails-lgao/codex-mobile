@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
+/* Utility emission is limited to app code: automatic content detection picks
+   up docs/handover/test files otherwise and bakes their class names into the
+   bundle (e.g. the string "sr-only" in round notes became a dead rule). */
+@source not "../codex-mobile-handover";
+@source not "../docs";
+@source not "../tests";
+@source not "../scripts";
+
 /* ===========================================================================
    设计系统 token —— 「控制台 / Instrument Panel」
    方案与取值依据：codex-mobile-handover/sections/ui-redesign-plan.md
