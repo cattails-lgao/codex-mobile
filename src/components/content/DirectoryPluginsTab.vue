@@ -94,9 +94,6 @@
             :alt="plugin.displayName"
             loading="lazy"
           />
-          <div v-else class="directory-card-fallback" :style="fallbackStyle(plugin)">
-            {{ plugin.displayName.charAt(0) }}
-          </div>
           <div class="directory-card-main">
             <div class="directory-card-title-row">
               <span class="directory-card-title">{{ plugin.displayName }}</span>
@@ -139,7 +136,6 @@ defineProps<{
   marketplaceActionName: string
   isMarketplaceActionInFlight: boolean
   pluginIconSrc: (plugin: DirectoryPluginSummary | null) => string
-  fallbackStyle: (plugin: DirectoryPluginSummary) => Record<string, string>
   openPluginDetail: (plugin: DirectoryPluginSummary) => void
   addMarketplace: () => void
   removeMarketplace: (name: string) => void

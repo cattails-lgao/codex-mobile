@@ -32,7 +32,6 @@
       <article v-for="app in apps" :key="app.id" class="directory-card">
         <div class="directory-card-top">
           <img v-if="appLogoSrc(app)" class="directory-card-icon" :src="appLogoSrc(app)" :alt="app.name" loading="lazy" />
-          <div v-else class="directory-card-fallback">{{ app.name.charAt(0) }}</div>
           <div class="directory-card-main">
             <div class="directory-card-title-row">
               <span class="directory-card-title">{{ app.name }}</span>

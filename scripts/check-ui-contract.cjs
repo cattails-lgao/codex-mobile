@@ -503,6 +503,39 @@ check(
   missingLadder.join(', ') || ladderTokens.join(' / '),
 )
 
+// ------------------------------------------------- 字母头像占位符清零（round-99）
+// 回归形态：目录/技能库卡片用 `xxx.charAt(0)` 渲染字母头像占位符——不同实体首字相同
+// 时完全无法区分（两个不同 MCP 都显示「C」）。真实 logo/avatar 图片保留，占位符禁止。
+const fallbackHits = []
+for (const f of vueFiles) {
+  const src = fs.readFileSync(f, 'utf8')
+  if (/(?:avatar-fallback|card-fallback|composio-fallback)/.test(src)) {
+    fallbackHits.push(`${f}: fallback 类残留`)
+    continue
+  }
+  // <template> 块内的 charAt(0)（脚本里的首字母大写、状态解析不算）
+  const tpl = src.match(/<template>[\s\S]*<\/template>/)
+  if (tpl && tpl[0].includes('charAt(0)')) fallbackHits.push(`${f}: template 内 charAt(0)`)
+}
+check(
+  '字母头像占位符清零（去「不同 MCP 都显示 C」的占位符）',
+  fallbackHits.length === 0,
+  fallbackHits.slice(0, 5).join('; ') || '目录/技能库/弹窗头无字母占位符，真实图片保留',
+)
+
+// ------------------------------------------------------------ 动效阶梯（round-99）
+// §4：悬停/按压 120ms 是全站默认（Tailwind transition 工具类直接读这两个 @theme 变量）。
+const styleSrc = fs.readFileSync(STYLE, 'utf8')
+const motionMissing = [
+  ['--default-transition-duration: 120ms', '默认时长 120ms'],
+  ['--default-transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1)', '统一缓动'],
+].filter(([needle]) => !styleSrc.includes(needle))
+check(
+  '动效阶梯：120ms 默认时长 + 标准缓动已在 @theme 定义',
+  motionMissing.length === 0,
+  motionMissing.map(([, label]) => label).join(', ') || '悬停/按压 120ms + cubic-bezier(.22,.61,.36,1)',
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',

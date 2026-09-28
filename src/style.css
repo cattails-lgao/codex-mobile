@@ -92,6 +92,12 @@
   --text-ui: 13px;
   --text-body: 15px;
   --text-display: 40px;
+
+  /* 动效阶梯（§4）：悬停/按压 120ms 是全站默认——Tailwind 的 transition 工具类
+     直接读这两个变量；面板与焦点环 200ms、路由进入 320ms 在使用点显式写。
+     统一缓动 cubic-bezier(.22,.61,.36,1)。 */
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* 颜色 token 走 inline：生成 bg-s1 这类工具类时直接引用运行时可切换的变量，
@@ -2196,7 +2202,7 @@ body {
    entrance motion instead of duplicating the container rules per component. */
 .composer-popover {
   @apply absolute left-0 right-0 bottom-[calc(100%+8px)] z-40 max-h-52 min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-line-1 bg-s2 p-1 shadow-lg;
-  animation: composer-popover-in 150ms ease-out;
+  animation: composer-popover-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 @keyframes composer-popover-in {

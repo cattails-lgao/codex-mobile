@@ -43,7 +43,6 @@
       :marketplace-action-name="marketplaceActionName"
       :is-marketplace-action-in-flight="isMarketplaceActionInFlight"
       :plugin-icon-src="pluginIconSrc"
-      :fallback-style="fallbackStyle"
       :open-plugin-detail="openPluginDetail"
       :add-marketplace="addMarketplace"
       :remove-marketplace="removeMarketplace"
@@ -168,7 +167,6 @@
                 :alt="selectedPlugin.displayName"
                 loading="lazy"
               />
-              <div v-else class="directory-card-fallback">{{ selectedPlugin?.displayName.charAt(0) }}</div>
               <div class="directory-card-main">
                 <h3 class="directory-modal-title">{{ selectedPlugin?.displayName || t('Plugin') }}</h3>
                 <span class="directory-card-meta">{{ selectedPlugin?.developerName || selectedPlugin?.marketplaceDisplayName || selectedPlugin?.marketplaceName }}</span>
@@ -368,7 +366,6 @@
                 :alt="selectedComposioDetail.connector.name"
                 loading="lazy"
               />
-              <div v-else class="directory-card-fallback composio-fallback">{{ selectedComposioDetail?.connector.name.charAt(0) }}</div>
               <div class="directory-card-main">
                 <h3 class="directory-modal-title">{{ selectedComposioDetail?.connector.name || 'Composio' }}</h3>
                 <span class="directory-card-meta">{{ selectedComposioDetail ? composioMetaLabel(selectedComposioDetail.connector) : t('Connector') }}</span>
@@ -589,7 +586,6 @@ const composioPreviewConnectors = [
   {
     name: 'Gmail',
     slug: 'gmail',
-    initial: 'G',
     meta: 'Inbox, drafts, attachments',
     description: 'Find emails, summarize threads, draft replies, and pull attachment context into a chat.',
     chips: ['Email', 'Search', 'Drafts'],
@@ -597,7 +593,6 @@ const composioPreviewConnectors = [
   {
     name: 'Google Calendar',
     slug: 'google-calendar',
-    initial: 'C',
     meta: 'Events and availability',
     description: 'Check what is next, find open time, and turn follow-ups into calendar blocks.',
     chips: ['Events', 'Availability', 'Reminders'],
@@ -605,7 +600,6 @@ const composioPreviewConnectors = [
   {
     name: 'Reddit',
     slug: 'reddit',
-    initial: 'R',
     meta: 'Posts, comments, communities',
     description: 'Search communities, inspect posts, and prepare natural replies before posting.',
     chips: ['Search', 'Comments', 'Posts'],
@@ -613,7 +607,6 @@ const composioPreviewConnectors = [
   {
     name: 'YouTube',
     slug: 'youtube',
-    initial: 'Y',
     meta: 'Videos, channels, comments',
     description: 'Look up channel details, inspect video metadata, and help manage comment workflows.',
     chips: ['Videos', 'Channels', 'Comments'],
@@ -621,7 +614,6 @@ const composioPreviewConnectors = [
   {
     name: 'Google Drive',
     slug: 'google-drive',
-    initial: 'D',
     meta: 'Files, docs, folders',
     description: 'Find files, read shared docs, and bring Drive context into a Codex thread.',
     chips: ['Files', 'Docs', 'Search'],
@@ -629,7 +621,6 @@ const composioPreviewConnectors = [
   {
     name: 'X',
     slug: 'x',
-    initial: 'X',
     meta: 'Posts, replies, profiles',
     description: 'Research public posts, draft replies, and keep social workflows reviewable.',
     chips: ['Posts', 'Replies', 'Profiles'],
@@ -1135,10 +1126,6 @@ function openFirstAppLoginIfNeeded(apps: DirectoryPluginAppSummary[]): boolean {
   if (!app) return false
   openExternalUrl(app.installUrl)
   return true
-}
-
-function fallbackStyle(plugin: DirectoryPluginSummary): Record<string, string> {
-  return plugin.brandColor ? { backgroundColor: plugin.brandColor, color: '#fff' } : {}
 }
 
 async function loadMethods(): Promise<void> {
@@ -1720,7 +1707,7 @@ onMounted(async () => {
 }
 
 .directory-tab.is-active {
-  @apply bg-s2 text-ink-1 shadow-sm;
+  @apply bg-s2 text-ink-1;
 }
 
 .directory-section {
@@ -1752,7 +1739,7 @@ onMounted(async () => {
 }
 
 .directory-sort-button.is-active {
-  @apply bg-s2 text-ink-1 shadow-sm;
+  @apply bg-s2 text-ink-1;
 }
 
 .directory-marketplace {
@@ -1841,15 +1828,11 @@ onMounted(async () => {
 }
 
 .directory-grid {
-  @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
-}
-
-.directory-list {
-  @apply flex flex-col gap-3;
+  @apply flex flex-col gap-2;
 }
 
 .directory-card {
-  @apply flex min-h-36 flex-col gap-2 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm;
+  @apply flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-2.5 text-left transition hover:border-line-2;
 }
 
 button.directory-card {
@@ -1865,12 +1848,11 @@ button.directory-card {
 }
 
 .directory-card-top {
-  @apply flex min-w-0 items-start gap-3;
+  @apply flex min-w-0 items-center gap-2.5;
 }
 
-.directory-card-icon,
-.directory-card-fallback {
-  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-s1 object-cover text-sm font-semibold uppercase text-ink-3;
+.directory-card-icon {
+  @apply h-7 w-7 shrink-0 rounded-lg bg-s1 object-cover;
 }
 
 .directory-card-main {
@@ -1890,7 +1872,7 @@ button.directory-card {
 }
 
 .directory-card-description {
-  @apply m-0 line-clamp-3 text-xs leading-relaxed text-ink-3;
+  @apply m-0 line-clamp-2 text-xs leading-relaxed text-ink-3;
 }
 
 .directory-badge {
@@ -1938,14 +1920,6 @@ button.directory-card {
 
 .directory-toast {
   @apply mx-auto w-full max-w-5xl rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-sm font-medium text-ok;
-}
-
-.directory-card-toggle {
-  @apply flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left;
-}
-
-.directory-mcp-detail {
-  @apply flex flex-col gap-3 border-t border-line-1 pt-3;
 }
 
 .directory-mini-heading,
@@ -2064,15 +2038,11 @@ button.directory-card {
 }
 
 .composio-preview-grid {
-  @apply grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3;
+  @apply flex flex-col gap-2;
 }
 
 .composio-preview-card {
   @apply border-line-1 bg-s2;
-}
-
-.composio-fallback {
-  @apply bg-s1 text-ink-2;
 }
 
 /* Application theme state lives on :root; scoped targets remain safe here. */

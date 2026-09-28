@@ -37,7 +37,6 @@
     <div v-else-if="!composioStatus.authenticated" class="composio-preview">
       <article class="composio-preview-hero">
         <div class="composio-preview-copy">
-          <div class="directory-card-fallback composio-fallback">C</div>
           <div>
             <p class="composio-preview-kicker">Connector catalog preview</p>
             <h3 class="composio-preview-title">Connect everyday apps like Gmail, Calendar, Reddit, YouTube, and Drive.</h3>
@@ -58,7 +57,6 @@
       <div class="composio-preview-grid">
         <article v-for="connector in visibleComposioPreviewConnectors" :key="connector.slug" class="directory-card composio-preview-card">
           <div class="directory-card-top">
-            <div class="directory-card-fallback composio-fallback">{{ connector.initial }}</div>
             <div class="directory-card-main">
               <div class="directory-card-title-row">
                 <span class="directory-card-title">{{ connector.name }}</span>
@@ -77,7 +75,6 @@
     <div v-else class="directory-section composio-section">
       <article class="directory-card directory-card-wide composio-status-card">
         <div class="directory-card-top">
-          <div class="directory-card-fallback composio-fallback">C</div>
           <div class="directory-card-main">
             <div class="directory-card-title-row">
               <span class="directory-card-title">{{ workspaceLabel }}</span>
@@ -108,7 +105,6 @@
         <article v-for="connector in visibleComposioConnectors" :key="connector.slug" class="directory-card">
           <div class="directory-card-top">
             <img v-if="connector.logoUrl" class="directory-card-icon" :src="connector.logoUrl" :alt="connector.name" loading="lazy" />
-            <div v-else class="directory-card-fallback composio-fallback">{{ connector.name.charAt(0) }}</div>
             <div class="directory-card-main">
               <div class="directory-card-title-row">
                 <span class="directory-card-title">{{ connector.name }}</span>
@@ -170,7 +166,6 @@ import type { DirectorySortMode } from './directoryHubUtils'
 type ComposioPreviewConnector = {
   name: string
   slug: string
-  initial: string
   meta: string
   description: string
   chips: string[]

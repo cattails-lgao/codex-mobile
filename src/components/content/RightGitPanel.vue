@@ -416,7 +416,7 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-review {
-  @apply flex w-full items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2 text-left text-sm font-medium text-ink-2 shadow-sm transition hover:bg-s0;
+  @apply flex w-full items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2 text-left text-sm font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .rgp-review-icon {
