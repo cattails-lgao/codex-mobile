@@ -140,6 +140,8 @@ async function main() {
     { name: 'desktop-dark-tools', url: `/thread/${TOOLS_THREAD_ID}`, width: 1440, height: 900, theme: 'dark', wait: 6000 },
     { name: 'desktop-light-tools', url: `/thread/${TOOLS_THREAD_ID}`, width: 1440, height: 900, theme: 'light', wait: 6000 },
     { name: 'desktop-dark-skills', url: '/skills', width: 1440, height: 900, theme: 'dark' },
+    // round-99：目录/技能库行列表改造（去字母头像）的证据页——亮色目录页。
+    { name: 'desktop-light-directory', url: '/skills', width: 1440, height: 900, theme: 'light' },
     {
       name: 'desktop-dark-thread-rightpanel',
       url: `/thread/${THREAD_ID}`,

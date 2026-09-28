@@ -186,15 +186,15 @@ defineExpose({ root: rootRef })
 }
 
 .composer-popover-panel button:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--line-focus);
   outline-offset: 1px;
 }
 
 .composer-popover-enter-active {
-  animation: composer-popover-in 150ms ease-out;
+  animation: composer-popover-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .composer-popover-leave-active {
-  animation: composer-popover-in 150ms ease-out reverse;
+  animation: composer-popover-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1) reverse;
 }
 </style>

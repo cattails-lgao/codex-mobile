@@ -14,7 +14,6 @@
         loading="lazy"
         @error="onAvatarError"
       />
-      <div class="skill-card-avatar-fallback" v-else>{{ skill.owner.charAt(0) }}</div>
       <div class="skill-card-info">
         <div class="skill-card-header">
           <span class="skill-card-name">{{ skill.displayName || skill.name }}</span>
@@ -118,7 +117,7 @@ function onAvatarError(e: Event): void {
 @reference "../../style.css";
 
 .skill-card {
-  @apply flex flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm cursor-pointer;
+  @apply flex min-w-0 flex-col gap-1 rounded-xl border border-line-1 bg-s2 p-2.5 text-left transition hover:border-line-2 cursor-pointer;
 }
 
 .skill-card.is-disabled {
@@ -126,15 +125,11 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-top {
-  @apply flex items-start gap-2.5;
+  @apply flex min-w-0 items-center gap-2.5;
 }
 
 .skill-card-avatar {
-  @apply w-8 h-8 rounded-full shrink-0 bg-s1;
-}
-
-.skill-card-avatar-fallback {
-  @apply w-8 h-8 rounded-full shrink-0 bg-line-1 text-ink-3 flex items-center justify-center text-xs font-medium uppercase;
+  @apply h-7 w-7 rounded-lg shrink-0 bg-s1 object-cover;
 }
 
 .skill-card-info {
@@ -170,7 +165,7 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-desc {
-  @apply m-0 text-xs text-ink-3 line-clamp-2;
+  @apply m-0 text-xs text-ink-3 line-clamp-1;
 }
 
 .skill-card-meta-row {

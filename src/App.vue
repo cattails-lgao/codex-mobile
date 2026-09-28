@@ -5167,6 +5167,24 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   @apply flex-1 min-h-0 min-w-0 w-full flex flex-col gap-2 sm:gap-3 pt-1 pb-2 sm:pb-4 overflow-x-hidden;
 }
 
+/* 路由进入（§4 动效）：全站路由切换＝.content-body 直接换子元素（无 RouterView），
+   CSS 动画恰好只在子元素挂载时跑一次，320ms 标准缓动的淡入+4px 上移。
+   reduced-motion 由 style.css 的全局归零块接管。 */
+.content-body > * {
+  animation: route-enter 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .content-root.is-virtual-keyboard-open .content-body {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }

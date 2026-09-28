@@ -141,7 +141,7 @@ function onJump(anchor: QuestionAnchor): void {
 .question-jump-bar {
   @apply pointer-events-none absolute right-0 top-1/2 z-20 w-14 -translate-y-1/2;
   opacity: 0;
-  animation: question-jump-in 0.18s ease-out 0.08s forwards;
+  animation: question-jump-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1) 0.08s forwards;
 }
 
 @keyframes question-jump-in {

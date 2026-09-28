@@ -22,7 +22,6 @@
               <article v-for="server in visibleMcpServers" :key="server.name">
                 <button class="mcp-skill-card skill-card" type="button" @click="toggleMcpExpanded(server.name)">
                   <div class="mcp-skill-card-top">
-                    <div class="mcp-skill-avatar-fallback">{{ server.name.charAt(0) }}</div>
                     <div class="mcp-skill-info">
                       <div class="mcp-skill-header">
                         <span class="mcp-skill-name">{{ server.name }}</span>
@@ -118,19 +117,15 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-grid {
-  @apply grid grid-cols-1 gap-3 md:grid-cols-2;
+  @apply flex flex-col gap-2;
 }
 
 .mcp-skill-card {
-  @apply flex w-full flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-3 text-left transition hover:border-line-2 hover:shadow-sm cursor-pointer;
+  @apply flex w-full flex-col gap-1.5 rounded-xl border border-line-1 bg-s2 p-2.5 text-left transition hover:border-line-2 cursor-pointer;
 }
 
 .mcp-skill-card-top {
-  @apply flex items-start gap-2.5;
-}
-
-.mcp-skill-avatar-fallback {
-  @apply w-8 h-8 rounded-full shrink-0 bg-line-1 text-ink-3 flex items-center justify-center text-xs font-medium uppercase;
+  @apply flex min-w-0 items-center gap-2.5;
 }
 
 .mcp-skill-info {
@@ -229,10 +224,6 @@ const emit = defineEmits<{
 
 :global(:root.dark) .mcp-skill-card {
   @apply border-line-2 bg-s1 hover:border-line-3;
-}
-
-:global(:root.dark) .mcp-skill-avatar-fallback {
-  @apply bg-s3 text-ink-3;
 }
 
 :global(:root.dark) .mcp-skill-chevron {
