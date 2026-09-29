@@ -44,7 +44,6 @@ const gatewayMocks = vi.hoisted(() => ({
   replyToServerRequest: vi.fn(),
   resumeThread: vi.fn(),
   revertThreadFileChanges: vi.fn(),
-  rollbackThread: vi.fn(),
   revertThread: vi.fn(),
   setCodexSpeedMode: vi.fn(),
   setThreadQueueState: vi.fn(),
@@ -1988,7 +1987,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     })
     gatewayMocks.interruptThreadTurn.mockResolvedValue(null)
     gatewayMocks.resumeThread.mockResolvedValue(null)
-    gatewayMocks.rollbackThread.mockResolvedValue([
+    gatewayMocks.revertThread.mockResolvedValue([
       {
         id: 'user-1',
         role: 'user',
@@ -2010,7 +2009,8 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).toHaveBeenCalledWith('thread-rollback', 'turn-2')
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback', 2)
+    // round-106：thread/rollback 已移除，回退统一走 thread/revert（beforeTurnId=目标轮）。
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback', 'turn-1')
   })
 
   it('skips the interrupt and rolls back directly when the thread is idle', async () => {
@@ -2020,7 +2020,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     expect(gatewayMocks.interruptThreadTurn).not.toHaveBeenCalled()
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-idle', 2)
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-idle', 'turn-1')
   })
 
   it('removes the last turn when rolling back the final user message instead of no-oping', async () => {
@@ -2044,7 +2044,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
       turnIndexByTurnId: { 'turn-1': 0 },
       hasMoreOlder: false,
     })
-    gatewayMocks.rollbackThread.mockResolvedValue([])
+    gatewayMocks.revertThread.mockResolvedValue([])
     const state = useDesktopState()
     state.primeSelectedThread('thread-rollback-last')
     await state.loadMessages('thread-rollback-last')
@@ -2052,7 +2052,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-1')
 
     // 目标轮即最后一轮：此前 numTurns=0 静默 return，现在应移除该轮本身。
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-last', 1)
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-last', 'turn-1')
   })
 
   it('removes the target turn and everything after it when rolling back a middle turn', async () => {
@@ -2074,7 +2074,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
       turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1, 'turn-3': 2 },
       hasMoreOlder: false,
     })
-    gatewayMocks.rollbackThread.mockResolvedValue([])
+    gatewayMocks.revertThread.mockResolvedValue([])
     const state = useDesktopState()
     state.primeSelectedThread('thread-rollback-middle')
     await state.loadMessages('thread-rollback-middle')
@@ -2082,7 +2082,7 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
     await state.rollbackSelectedThread('turn-2')
 
     // 回退中间轮：目标轮（turn-2）及其后的 turn-3 都应被移除。
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-middle', 2)
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-middle', 'turn-2')
   })
 
   it('clamps to the newest turn instead of silently no-oping when the target turnIndex is unresolved', async () => {
@@ -2101,16 +2101,17 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
       turnIndexByTurnId: { 'turn-1': 0 },
       hasMoreOlder: false,
     })
-    gatewayMocks.rollbackThread.mockResolvedValue([])
+    gatewayMocks.revertThread.mockResolvedValue([])
     const state = useDesktopState()
     state.primeSelectedThread('thread-rollback-unresolved')
     await state.loadMessages('thread-rollback-unresolved')
 
     await state.rollbackSelectedThread('turn-2')
 
-    // 目标轮无法解析时应钳制到最新轮回退（numTurns=1），而不是静默放弃导致
-    // 「点了回退没反应、最后一条消息还在」。
-    expect(gatewayMocks.rollbackThread).toHaveBeenCalledWith('thread-rollback-unresolved', 1)
+    // 目标轮无法解析时应钳制到最新轮回退，而不是静默放弃导致
+    // 「点了回退没反应、最后一条消息还在」。该线程 turn-2 消息自带 turnId，
+    // revert 据此直达撤销点。
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-unresolved', 'turn-2')
   })
 
   it('uses thread/revert directly for paginated history without an exploratory 502 (round-74)', async () => {
@@ -2145,13 +2146,13 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
 
     await state.rollbackSelectedThread('turn-2')
 
-    // paginated：直达 thread/revert，且不调用 thread/rollback（无探路请求）。
+    // round-106：回退统一走 thread/revert；thread/rollback 已随上游移除，不存在探路请求。
     expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-paginated', 'turn-2')
-    expect(gatewayMocks.rollbackThread).not.toHaveBeenCalled()
+    expect(gatewayMocks.revertThread).toHaveBeenCalledTimes(1)
     expect(state.messages.value.map((m) => m.id)).toEqual(['user-1'])
   })
 
-  it('does not fall back to thread/revert when the rollback error is unrelated', async () => {
+  it('surfaces revert failures to the user instead of failing silently', async () => {
     installTestWindow()
     gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
     gatewayMocks.getPendingServerRequests.mockResolvedValue([])
@@ -2165,14 +2166,14 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
       turnIndexByTurnId: { 'turn-1': 0 },
       hasMoreOlder: false,
     })
-    gatewayMocks.rollbackThread.mockRejectedValue(new Error('some other failure'))
+    gatewayMocks.revertThread.mockRejectedValue(new Error('some other failure'))
     const state = useDesktopState()
     state.primeSelectedThread('thread-rollback-unrelated')
     await state.loadMessages('thread-rollback-unrelated')
 
     await state.rollbackSelectedThread('turn-1')
 
-    expect(gatewayMocks.revertThread).not.toHaveBeenCalled()
+    expect(gatewayMocks.revertThread).toHaveBeenCalledTimes(1)
     expect(state.error.value.length).toBeGreaterThan(0)
   })
 })

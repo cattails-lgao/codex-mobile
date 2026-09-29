@@ -1,9 +1,11 @@
 <template>
   <div
-    v-if="showEdit || showFork || showCopy"
+    v-if="showEdit || showFork || showCopy || timestamp"
     class="message-toolbar"
     :data-role="role"
   >
+    <!-- round-106：turn 时间戳（0.157 #47114），hover 工具栏内以弱化文字展示时点。 -->
+    <span v-if="timestamp" class="message-timestamp">{{ timestamp }}</span>
     <button
       v-if="showEdit"
       type="button"
@@ -55,11 +57,13 @@ withDefaults(defineProps<{
   showFork?: boolean
   showCopy?: boolean
   copied?: boolean
+  timestamp?: string
 }>(), {
   showEdit: false,
   showFork: false,
   showCopy: false,
   copied: false,
+  timestamp: '',
 })
 
 defineEmits<{
@@ -76,6 +80,10 @@ const { t } = useUiLanguage()
 
 .message-toolbar {
   @apply mt-1 self-start flex items-center gap-1 opacity-[0.01] transition-opacity duration-200;
+}
+
+.message-timestamp {
+  @apply mr-1 text-micro leading-none text-ink-3 select-none;
 }
 
 /* round-23：用户消息下的操作条默认常显（无需 hover）、图标化、整体右对齐 */

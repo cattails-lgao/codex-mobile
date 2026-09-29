@@ -390,3 +390,42 @@ describe('readThreadInProgressFromResponse', () => {
     expect(readThreadInProgressFromResponse(response)).toBe(true)
   })
 })
+
+describe('round-106: 0.157/0.159 field adoption', () => {
+  it('attaches turn.startedAt lifecycle timestamps to every message of the turn', () => {
+    const response = threadReadResponseWithContent([
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'hello', text_elements: [] }] },
+      { type: 'agentMessage', id: 'agent-1', text: 'ok', phase: null, memoryCitation: null, delivery: null, questions: null },
+    ])
+    const turn = response.thread.turns[0] as unknown as { startedAt: number }
+    // 秒口径（summary.createdAt 同单位）；>1e11 的毫秒口径同样要能解析。
+    turn.startedAt = 1782213747
+
+    const messages = normalizeThreadMessagesV2(response)
+
+    expect(messages).toHaveLength(2)
+    for (const message of messages) {
+      expect(message.turnStartedAtIso).toBe(new Date(1782213747 * 1000).toISOString())
+    }
+  })
+
+  it('omits turnStartedAtIso when the turn has no parseable startedAt', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'userMessage', clientId: null, id: 'user-1', content: [{ type: 'text', text: 'hello', text_elements: [] }] },
+    ]))
+
+    expect(messages[0]?.turnStartedAtIso).toBeUndefined()
+  })
+
+  it('passes the thread creator identity (originator) through to UiThread', async () => {
+    const { normalizeThreadSummaryV2 } = await import('./v2')
+    const response = threadReadResponseWithContent([])
+    ;(response.thread as unknown as { originator: unknown }).originator = 'codex_cli_rs'
+
+    const uiThread = normalizeThreadSummaryV2(response)
+    expect(uiThread.originator).toBe('codex_cli_rs')
+
+    ;(response.thread as unknown as { originator: unknown }).originator = ''
+    expect(normalizeThreadSummaryV2(response).originator).toBeNull()
+  })
+})

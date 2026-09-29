@@ -599,14 +599,9 @@ export async function renameThread(threadId: string, threadName: string): Promis
   await callRpc('thread/name/set', { threadId, name: threadName })
 }
 
-export async function rollbackThread(threadId: string, numTurns: number): Promise<UiMessage[]> {
-  const payload = await callRpc<ThreadReadResponse>('thread/rollback', { threadId, numTurns })
-  return normalizeThreadMessagesV2(payload, readThreadTurnStartIndex(payload))
-}
-
-// round-73：codex app-server 自 0.148 起 paginated 历史不再支持 `thread/rollback`
-//（回退被整体拒绝：`paginated threads do not support thread/rollback`），必须改用
-// `thread/revert {threadId, beforeTurnId}`。`beforeTurnId` 为要移除的首个轮次 id：
+// round-106：codex 0.156 起已移除废弃的 `thread/rollback`（#44915），0.159 上对任何
+// 线程都只剩 `thread/revert {threadId, beforeTurnId}` 一条回退路径，legacy 按轮数回滚
+// 不再存在。`beforeTurnId` 为要移除的首个轮次 id：
 // 服务端会丢弃该轮及其后所有轮次，保留其之前的对话前缀。
 export async function revertThread(threadId: string, beforeTurnId: string): Promise<UiMessage[]> {
   // round-74：paginated 的 thread/revert 返回体 `thread.turns` 恒为空，只带
@@ -629,6 +624,45 @@ export async function revertThread(threadId: string, beforeTurnId: string): Prom
     { thread: { ...payload.thread, turns: [...page.data].reverse() } } as ThreadReadResponse,
     0,
   )
+}
+
+// round-106：0.159 新增 `thread/items/list` 锚点分页（#48151）——按 item 而非轮次
+// 拉取线程内容。协议形状（scripts/probe-items-page.cjs 已固化）：默认页 25 条、
+// 记录为 `{turnId, item}`、`nextCursor` 续链；resume 载荷另带 itemsBackwardsCursor。
+// 目前仅暴露有界单页能力，供超大单轮的 item 级懒加载按需接线，尚未进入消息流水线。
+export type ThreadItemEntry = {
+  id: string | null
+  turnId: string | null
+  item: Record<string, unknown> | null
+}
+
+export type ThreadItemsPage = {
+  entries: ThreadItemEntry[]
+  nextCursor: string | null
+}
+
+export async function listThreadItemsPage(
+  threadId: string,
+  options: { cursor?: string; limit?: number; sortDirection?: 'asc' | 'desc' } = {},
+): Promise<ThreadItemsPage> {
+  const params: Record<string, unknown> = {
+    threadId,
+    limit: options.limit ?? 25,
+    sortDirection: options.sortDirection ?? 'asc',
+  }
+  if (options.cursor) params.cursor = options.cursor
+  const payload = await callRpc<Record<string, unknown>>('thread/items/list', params)
+  const data = Array.isArray(payload.data) ? payload.data : []
+  const entries = data.map((row) => {
+    const record = asRecord(row) ?? {}
+    const item = asRecord(record.item)
+    return {
+      id: readString(record.id) ?? readString(item?.id),
+      turnId: readString(record.turnId),
+      item,
+    }
+  })
+  return { entries, nextCursor: readString(payload.nextCursor) }
 }
 
 export async function startThread(cwd?: string, model?: string): Promise<StartedThread> {

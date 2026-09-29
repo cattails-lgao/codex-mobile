@@ -443,6 +443,7 @@
                 :show-fork="showForkResponseButton(message)"
                 :show-copy="showCopyResponseButton(message) || isCopyableUserMessage(message)"
                 :copied="copiedResponseAnchorId === message.id"
+                :timestamp="formatMessageTimestamp(message.turnStartedAtIso)"
                 @edit="editMessage(message.id)"
                 @fork="forkResponse(message.id)"
                 @copy="message.role === 'user' ? copyUserMessage(message.id) : copyResponse(message.id)"
@@ -728,6 +729,22 @@ const {
 const { buildFeedbackMailto, feedbackMailtoBase, recordVisibleFailure } = useFeedbackDiagnostics()
 const { t } = useUiLanguage()
 const feedbackMailto = feedbackMailtoBase()
+
+// round-106：消息行时间戳（turn.startedAt，0.157 #47114）。当天只显示时分，
+// 跨天带月日；无法解析返回空串（工具栏随之不展示时间）。
+function formatMessageTimestamp(iso: string | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate()
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (sameDay) return time
+  const monthDay = date.toLocaleDateString([], { month: '2-digit', day: '2-digit' })
+  return `${monthDay} ${time}`
+}
 
 // round-94: code floors (mockup .bar) carry a copy control. Both render paths — the
 // per-block template and ReasoningBlock's v-html — emit <span data-code-copy>, so a

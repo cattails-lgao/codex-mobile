@@ -85,11 +85,13 @@ export type UiThread = {
   updatedAtIso: string
   preview: string
   /**
-   * Persisted history contract of the underlying app-server thread:
-   * 'legacy' 支持 thread/rollback；'paginated' 只支持 thread/revert。回退时据此直达方法，
-   * 避免每次回退都发一次注定失败的探路请求。缺省视为 'legacy'。
+   * Persisted history contract of the underlying app-server thread：
+   * 0.156 起 `thread/rollback` 已被上游移除（#44915），回退一律走 thread/revert，
+   * 该字段仅作信息保留。缺省视为 'paginated'。
    */
   historyMode?: 'legacy' | 'paginated'
+  /** round-106：0.157 起线程创建者身份持久化（#47113）。null = 服务器未提供。 */
+  originator?: string | null
   unread: boolean
   inProgress: boolean
   externalSession?: UiExternalSession | null
@@ -265,6 +267,8 @@ export type UiMessage = {
   plan?: UiPlanData
   turnId?: string
   turnIndex?: number
+  /** round-106：0.157 起 turn 载荷带生命周期时间戳（#47114），消息行可展示时点。 */
+  turnStartedAtIso?: string
   /** round-23：本地存档思考的时序锚点——插回到该消息 id 之后（按真实出现顺序与工具交错）。 */
   reasoningAnchorMessageId?: string
   durationMs?: number

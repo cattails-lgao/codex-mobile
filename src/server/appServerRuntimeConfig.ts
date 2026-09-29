@@ -22,12 +22,14 @@ type AppServerRuntimeConfig = {
   sandboxMode: CodexSandboxMode
   approvalPolicy: CodexApprovalPolicy
   memories: boolean
+  instantInterrupt: boolean
 }
 
 const DEFAULT_RUNTIME_CONFIG: AppServerRuntimeConfig = {
   sandboxMode: 'danger-full-access',
   approvalPolicy: 'never',
   memories: true,
+  instantInterrupt: true,
 }
 
 const APPROVAL_POLICY_LABELS: Record<CodexApprovalPolicy, string> = {
@@ -95,11 +97,23 @@ function readMemoriesFromEnv(): boolean {
   return DEFAULT_RUNTIME_CONFIG.memories
 }
 
+function readInstantInterruptFromEnv(): boolean {
+  const candidate = normalizeRuntimeValue(process.env.CODEXUI_INSTANT_INTERRUPT)
+  if (candidate === 'false' || candidate === '0' || candidate === 'no') {
+    return false
+  }
+  if (candidate === 'true' || candidate === '1' || candidate === 'yes') {
+    return true
+  }
+  return DEFAULT_RUNTIME_CONFIG.instantInterrupt
+}
+
 export function resolveAppServerRuntimeConfig(): AppServerRuntimeConfig {
   return {
     sandboxMode: readSandboxModeFromEnv(),
     approvalPolicy: readApprovalPolicyFromEnv(),
     memories: readMemoriesFromEnv(),
+    instantInterrupt: readInstantInterruptFromEnv(),
   }
 }
 
@@ -113,6 +127,10 @@ export function buildAppServerArgs(): string[] {
     `sandbox_mode="${config.sandboxMode}"`,
     '-c',
     `features.memories=${config.memories ? 'true' : 'false'}`,
+    // round-106：0.159 opt-in 特性——新输入到达时立即抢占模型响应，中断不再等
+    // 流式优雅停止。默认开启，CODEXUI_INSTANT_INTERRUPT=false 可退回。
+    '-c',
+    `features.instant_interrupt=${config.instantInterrupt ? 'true' : 'false'}`,
   ]
 }
 
