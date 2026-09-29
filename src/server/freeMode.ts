@@ -297,7 +297,22 @@ function getOpenCodeZenProviderConfigArgs(serverPort?: number): string[] {
 }
 
 export function getProviderCompatibilityConfigArgs(serverPort?: number): string[] {
-  return getOpenCodeZenProviderConfigArgs(serverPort)
+  return [
+    ...getOpenCodeZenProviderConfigArgs(serverPort),
+    // Older deployments (e.g. the hosted server) recorded free-mode threads
+    // with `model_provider="custom"`. app-server refuses to resume such a
+    // rollout unless that provider exists in config ("Model provider `custom`
+    // not found" -> thread/resume 502 -> the thread never opens). Defining an
+    // inert placeholder here makes every legacy thread loadable again without
+    // selecting it as the active provider. Registering only for reads matches
+    // the OpenCode Zen compat registration above.
+    // ponytail: history reads work, but sending in a legacy `custom` thread
+    // still hits the dead placeholder endpoint; upgrade path = point base_url
+    // at the live custom proxy when free-mode custom is enabled.
+    '-c', 'model_providers.custom.name="Legacy Custom Endpoint"',
+    '-c', 'model_providers.custom.base_url="http://127.0.0.1:9/v1"',
+    '-c', 'model_providers.custom.wire_api="responses"',
+  ]
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number): string[] {

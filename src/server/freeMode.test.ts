@@ -45,6 +45,15 @@ describe('unauthenticated free mode defaults', () => {
     expect(args.some((arg) => arg.startsWith('model="'))).toBe(false)
   })
 
+  it('registers an inert legacy `custom` provider so old free-mode rollouts can resume', () => {
+    const args = getProviderCompatibilityConfigArgs(4173)
+
+    expect(args).toContain('model_providers.custom.name="Legacy Custom Endpoint"')
+    expect(args).toContain('model_providers.custom.wire_api="responses"')
+    expect(args).not.toContain('model_provider="custom"')
+    expect(args.some((arg) => arg.startsWith('model="'))).toBe(false)
+  })
+
   it('suppresses community fallback providers when Codex auth appears', () => {
     expect(shouldSuppressCommunityFreeModeForCodexAuth({
       enabled: true,
