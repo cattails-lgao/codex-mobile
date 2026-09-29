@@ -1,5 +1,5 @@
 import { asRecord, callRpc, readString } from './core'
-import { normalizeCodexApiError } from '../codexErrors'
+import { CodexApiError, normalizeCodexApiError } from '../codexErrors'
 import { resolveTurnPromptText } from '../../utils/turnPromptText'
 import type {
   ConfigReadResponse,
@@ -448,6 +448,16 @@ async function getOlderThreadMessagesV2(threadId: string, beforeTurnId: string, 
     result?: ThreadReadResponse
     hasMoreOlder?: unknown
     startTurnIndex?: unknown
+    olderTurnsUnavailable?: unknown
+  }
+  // round-102 P0：app-server 不实现 thread/turns/list（codex-cli 0.158.0）时，
+  // 路由返回该边界而不是回落全量水合（那会挂死）。带码抛出让上层把本线程的
+  // 「还有更早消息」标记收敛为 false，避免每次上翻都重试。
+  if (payload.olderTurnsUnavailable === true) {
+    throw new CodexApiError('当前 codex-cli 版本暂不支持加载更早的消息', {
+      code: 'older_turns_unavailable',
+      method: 'thread/turns/list',
+    })
   }
   if (!payload.result) {
     throw new Error('Older thread page response did not include a thread result')

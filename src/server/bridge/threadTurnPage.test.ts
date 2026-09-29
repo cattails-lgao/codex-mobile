@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  isTurnListUnsupportedError,
   readBoundedThreadTurnPage,
   readThreadTurnIds,
   ThreadTurnPageCursorChain,
+  ThreadTurnPageUnsupportedError,
   TURN_ID_MAX_PAGES,
   type BoundedThreadTurnPageDeps,
   type TurnPageRpc,
@@ -164,6 +166,22 @@ describe('readThreadTurnIds', () => {
     expect(await readThreadTurnIds(vi.fn(async () => ({ data: [{}] })), 'thread-1')).toBeNull()
   })
 
+  // round-102 P0：0.158.0 对 thread/turns/list 回 `-32601: list_turns is not
+  // supported yet`。这必须作为「不支持」抛出而不是 null——null 会让调用方回落
+  // 全量水合，而那个路径在这个构建上挂死 UI。
+  it('throws the unsupported error instead of falling back when the app-server does not implement the listing', async () => {
+    const rpc = vi.fn(async () => { throw new Error('-32601: list_turns is not supported yet') })
+    await expect(readThreadTurnIds(rpc, 'thread-1')).rejects.toBeInstanceOf(ThreadTurnPageUnsupportedError)
+    expect(rpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies only genuine unsupported-method errors', () => {
+    expect(isTurnListUnsupportedError(new Error('-32601: list_turns is not supported yet'))).toBe(true)
+    expect(isTurnListUnsupportedError(new Error('thread not found'))).toBe(false)
+    expect(isTurnListUnsupportedError(new Error('boom'))).toBe(false)
+    expect(isTurnListUnsupportedError(undefined)).toBe(false)
+  })
+
   it('refuses an empty thread id without calling anything', async () => {
     const rpc = vi.fn(async () => ({ data: [] }))
     expect(await readThreadTurnIds(rpc, '')).toBeNull()
@@ -296,6 +314,33 @@ describe('readBoundedThreadTurnPage', () => {
     })
     expect(await readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10)).toBeNull()
     expect(servedListing).toBe(true)
+  })
+
+  // round-102 P0：两条 turns/list 调用点（id 列表、整页获取）都必须把「未实现」
+  // 升级为不支持错误——这条路径上的 null 等于让调用方去跑会挂死的全量水合。
+  it('throws the unsupported error from either turns/list call site', async () => {
+    const chain = new ThreadTurnPageCursorChain()
+    chain.record('thread-1', 't6', encodeCut(6))
+
+    // The id listing is the first call; its failure surfaces the error directly.
+    await expect(readBoundedThreadTurnPage(
+      deps(vi.fn(async () => { throw new Error('list_turns is not supported yet') }), chain),
+      'thread-1', 't6', 10,
+    )).rejects.toBeInstanceOf(ThreadTurnPageUnsupportedError)
+
+    // The full-page fetch fails on the same method and must classify too.
+    let listed = false
+    const rpc = vi.fn(async (_method: string, params: unknown) => {
+      const p = (params ?? {}) as Record<string, unknown>
+      if (p.itemsView === 'notLoaded') {
+        listed = true
+        return { data: [...TURN_IDS].reverse().map((id) => ({ id })), nextCursor: null }
+      }
+      throw new Error('-32601: list_turns is not supported yet')
+    })
+    await expect(readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10))
+      .rejects.toBeInstanceOf(ThreadTurnPageUnsupportedError)
+    expect(listed).toBe(true)
   })
 
   it('refuses an empty thread id or anchor without calling anything', async () => {

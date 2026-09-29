@@ -31,7 +31,36 @@
 //
 // Everything here is best-effort: any surprise returns null and the caller falls
 // back to the unbounded read, which is byte-for-byte what used to happen.
-import { asRecord, readNonEmptyString } from './core.js'
+//
+// round-102 P0: the one surprise that must NOT fall back is an app-server that
+// does not implement `thread/turns/list` at all. codex-cli 0.158.0 registers the
+// method but answers every call with `-32601: list_turns is not supported yet`,
+// and on that build the full-hydration fallback hangs the UI (>90s on a large
+// thread). Such failures are rethrown as ThreadTurnPageUnsupportedError so the
+// bridge can remember the capability gap and the route can answer "older turns
+// unavailable" instead of hydrating.
+import { asRecord, getErrorMessage, readNonEmptyString } from './core.js'
+
+/**
+ * The app-server registered `thread/turns/list` but does not implement it
+ * (codex-cli 0.158.0). Thrown instead of returning null so the caller can
+ * distinguish "try the legacy fallback" from "never hydrate, tell the UI".
+ */
+export class ThreadTurnPageUnsupportedError extends Error {
+  constructor(cause: unknown) {
+    super(`thread/turns/list is not supported by this app-server: ${getErrorMessage(cause, 'unknown error')}`)
+    this.name = 'ThreadTurnPageUnsupportedError'
+  }
+}
+
+// 0.158.0 answers `-32601: list_turns is not supported yet`; matched broadly so a
+// future rename or an "unknown variant" retirement notice is still caught. A
+// false positive merely disables the legacy fallback; a false negative hangs.
+const TURN_LIST_UNSUPPORTED_PATTERN = /-32601|not supported|not implemented|unknown variant|method not found|unknown method/i
+
+export function isTurnListUnsupportedError(error: unknown): boolean {
+  return TURN_LIST_UNSUPPORTED_PATTERN.test(getErrorMessage(error, ''))
+}
 
 /**
  * Page size for the id listing. `itemsView: "notLoaded"` returns turn ids
@@ -151,7 +180,8 @@ export async function readThreadTurnIds(rpc: TurnPageRpc['rpc'], threadId: strin
     let result: unknown
     try {
       result = await rpc('thread/turns/list', params)
-    } catch {
+    } catch (error) {
+      if (isTurnListUnsupportedError(error)) throw new ThreadTurnPageUnsupportedError(error)
       return null
     }
 
@@ -204,7 +234,9 @@ async function buildThreadTurnPage(
  * building the history.
  *
  * Returns null whenever the question cannot be answered cheaply and safely, and
- * the caller then runs the old full-hydration path.
+ * the caller then runs the old full-hydration path. Throws
+ * ThreadTurnPageUnsupportedError instead when the app-server does not implement
+ * `thread/turns/list` — on those builds hydrating is the dangerous move.
  */
 export async function readBoundedThreadTurnPage(
   deps: BoundedThreadTurnPageDeps,
@@ -247,7 +279,8 @@ export async function readBoundedThreadTurnPage(
         limit: wanted,
         itemsView: 'full',
       })
-    } catch {
+    } catch (error) {
+      if (isTurnListUnsupportedError(error)) throw new ThreadTurnPageUnsupportedError(error)
       return null
     }
 

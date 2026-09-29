@@ -8,6 +8,7 @@
 // stays cycle-free. Only read requests and cache ownership move here; the
 // live-turn / final-summary / realtime write flows are untouched.
 import { ref, type Ref } from 'vue'
+import { CodexApiError } from '../api/codexErrors'
 import { getOlderThreadMessages, getThreadDetail, resumeThread } from '../api/codexGateway'
 import type { UiExternalSession, UiMessage } from '../types/codex'
 import {
@@ -252,6 +253,15 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
         [threadId]: page.hasMoreOlder,
       }
     } catch (loadError) {
+      // round-102 P0：app-server 不实现 thread/turns/list（codex-cli 0.158.0）时
+      // 上翻是终态不可用——收敛 hasMoreOlder 停止重试，仅提示一次边界，其余失败
+      // 保持原行为（hasMoreOlder 不动，滚动可重试）。
+      if (loadError instanceof CodexApiError && loadError.code === 'older_turns_unavailable') {
+        hasMoreOlderMessagesByThreadId.value = {
+          ...hasMoreOlderMessagesByThreadId.value,
+          [threadId]: false,
+        }
+      }
       deps.error.value = loadError instanceof Error ? loadError.message : 'Failed to load earlier messages'
       throw loadError
     } finally {
