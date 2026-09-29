@@ -57,10 +57,6 @@ function normalizeSpeedMode(value: unknown): SpeedMode {
     : 'standard'
 }
 
-export async function setDefaultModel(model: string): Promise<void> {
-  await callRpc('setDefaultModel', { model })
-}
-
 export async function setCodexSpeedMode(mode: SpeedMode): Promise<void> {
   const normalizedMode: SpeedMode = mode === 'fast' ? 'fast' : 'standard'
   await callRpc('config/batchWrite', {
