@@ -51,11 +51,24 @@ function resolveCodexBin() {
   throw new Error('cannot locate the codex launcher; pass it as the 3rd argument')
 }
 
+// Threads created via the WebUI's custom-endpoint free mode record
+// model_provider="custom" (legacy runtime id) in their rollout. Resuming them
+// fails with "failed to load configuration: Model provider `custom` not found"
+// unless the provider exists at spawn time -- the live bridge injects it via
+// freeMode.ts. Defining an inert placeholder here is harmless for threads that
+// do not use it and lets the probe resume every thread shape.
+const PLACEHOLDER_PROVIDER_ARGS = [
+  '-c', 'model_providers.custom.name="Custom Endpoint (probe placeholder)"',
+  '-c', 'model_providers.custom.base_url="http://127.0.0.1:9/v1"',
+  '-c', 'model_providers.custom.wire_api="responses"',
+]
+
 const proc = spawn(process.execPath, [
   resolveCodexBin(), 'app-server',
   '-c', 'approval_policy="on-request"',
   '-c', 'sandbox_mode="danger-full-access"',
   '-c', 'features.memories=true',
+  ...PLACEHOLDER_PROVIDER_ARGS,
 ], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME } })
 proc.stderr.on('data', () => {})
 

@@ -50,12 +50,23 @@ function resolveCodexBin() {
   throw new Error('cannot locate the codex launcher; pass it as the 3rd argument')
 }
 
+// Threads created via the WebUI's custom-endpoint free mode record
+// model_provider="custom" (legacy runtime id) in their rollout; resume fails
+// to load configuration unless the provider exists (the live bridge injects
+// it via freeMode.ts). Inert for threads that do not use it.
+const PLACEHOLDER_PROVIDER_ARGS = [
+  '-c', 'model_providers.custom.name="Custom Endpoint (probe placeholder)"',
+  '-c', 'model_providers.custom.base_url="http://127.0.0.1:9/v1"',
+  '-c', 'model_providers.custom.wire_api="responses"',
+]
+
 const proc = spawn(process.execPath, [
   resolveCodexBin(),
   'app-server',
   '-c', 'approval_policy="on-request"',
   '-c', 'sandbox_mode="danger-full-access"',
   '-c', 'features.memories=true',
+  ...PLACEHOLDER_PROVIDER_ARGS,
 ], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CODEX_HOME } })
 proc.stderr.on('data', () => {})
 
