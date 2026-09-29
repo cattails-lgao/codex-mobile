@@ -38,7 +38,9 @@ function resolveCodexBin() {
   if (CODEX_BIN) return fs.realpathSync(CODEX_BIN)
   const candidates = [
     // pnpm store link layout: the launcher must be realpath'd, because
-    // require.resolve() cannot see through it.
+    // require.resolve() cannot see through it. The store hash changes on
+    // every CLI upgrade -- prefer passing the path as argv[3] or CODEXUI_CODEX_COMMAND.
+    'D:/Application/NodeManage/pnpm/global/v11/11d44-1a0ec1f91bc/node_modules/@openai/codex/bin/codex.js',
     'D:/Application/NodeManage/pnpm/global/v11/2c10-1a08f22f0da/node_modules/@openai/codex/bin/codex.js',
     '/usr/lib/node_modules/@openai/codex/bin/codex.js',
     '/usr/local/lib/node_modules/@openai/codex/bin/codex.js',
