@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addDirectoryMarketplace, checkoutPluginShare, clearProviderModelsCache, compactThread, deletePluginShare, getAvailableModelIds, getAvailableModels, getCurrentModelConfig, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, listRemoteControlClients, normalizeFuzzyFileSearchResults, readRemoteControlStatus, removeDirectoryMarketplace, resumeThread, revokeRemoteControlClient, savePluginShare, setRemoteControlEnabled, startFuzzyFileSearchSession, startRemoteControlPairing, startThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
+import { addDirectoryMarketplace, checkoutPluginShare, clearProviderModelsCache, compactThread, deletePluginShare, getAvailableModelIds, getAvailableModels, getCurrentModelConfig, getThreadDetail, listDirectoryComposioConnectors, listHooks, listPluginShares, listRemoteControlClients, normalizeFuzzyFileSearchResults, readRemoteControlStatus, removeDirectoryMarketplace, resumeThread, revokeRemoteControlClient, savePluginShare, setRemoteControlEnabled, startFuzzyFileSearchSession, startRemoteControlPairing, startThreadTurn, steerThreadTurn, updateFuzzyFileSearchSession, upgradeDirectoryMarketplaces } from './codexGateway'
 
 function mockRpcFetch(): { requests: Array<{ method: string, params: Record<string, unknown> }> } {
   const requests: Array<{ method: string, params: Record<string, unknown> }> = []
@@ -397,6 +397,63 @@ describe('compactThread', () => {
     expect(requests).toEqual([
       { method: 'thread/compact/start', params: { threadId: 'thread-compact-me' } },
     ])
+  })
+})
+
+describe('steerThreadTurn', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('calls turn/steer with input and expectedTurnId, returning the server turn id', async () => {
+    const requests: Array<{ method: string; params: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string'
+        ? JSON.parse(init.body) as { method: string; params: Record<string, unknown> }
+        : { method: '', params: {} }
+      requests.push(body)
+      return new Response(JSON.stringify({ result: { turnId: 'turn-active-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    const turnId = await steerThreadTurn('thread-1', 'turn-active-1', '转向：改用英文', [], undefined, [])
+
+    expect(turnId).toBe('turn-active-1')
+    expect(requests).toEqual([
+      {
+        method: 'turn/steer',
+        params: {
+          threadId: 'thread-1',
+          input: [{ type: 'text', text: '转向：改用英文' }],
+          expectedTurnId: 'turn-active-1',
+        },
+      },
+    ])
+  })
+
+  it('falls back to the expected turn id when the response omits turnId', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ result: {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const turnId = await steerThreadTurn('thread-1', 'turn-active-2', '继续')
+
+    expect(turnId).toBe('turn-active-2')
+  })
+
+  it('preserves the app-server not-steerable detail in the error message', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: 'cannot steer a compact turn',
+    }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    await expect(steerThreadTurn('thread-1', 'turn-active-3', '不应被接受'))
+      .rejects.toThrow(/cannot steer a compact turn/)
   })
 })
 

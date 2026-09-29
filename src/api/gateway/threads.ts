@@ -712,6 +712,58 @@ export async function forkThread(
   }
 }
 
+// round-105：turn/start 与 turn/steer 共用的输入构建。返回 input 数组与去重后的
+// 附件列表（turn/start 需要 params.attachments；turn/steer 无 attachments 字段，
+// 附件已并入文本与 localImage 输入项）。
+function buildTurnInputParts(
+  text: string,
+  imageUrls: string[],
+  skills?: Array<{ name: string; path: string }>,
+  fileAttachments: FileAttachmentParam[] = [],
+): { input: Array<Record<string, unknown>>; dedupedFileAttachments: FileAttachmentParam[] } {
+  const localImageAttachments: FileAttachmentParam[] = []
+  for (const imageUrl of imageUrls) {
+    const localImagePath = extractLocalImagePathFromUrl(imageUrl.trim())
+    if (!localImagePath) continue
+    localImageAttachments.push({
+      label: fileNameFromPath(localImagePath),
+      path: localImagePath,
+      fsPath: localImagePath,
+    })
+  }
+  const allFileAttachments = [...fileAttachments, ...localImageAttachments]
+  const dedupedFileAttachments = allFileAttachments.filter((entry, index) =>
+    allFileAttachments.findIndex((candidate) => candidate.fsPath === entry.fsPath) === index)
+  const finalText = buildTextWithAttachments(
+    resolveTurnPromptText(text, dedupedFileAttachments, imageUrls),
+    dedupedFileAttachments,
+  )
+  const input: Array<Record<string, unknown>> = [{ type: 'text', text: finalText }]
+  for (const imageUrl of imageUrls) {
+    const normalizedUrl = imageUrl.trim()
+    if (!normalizedUrl) continue
+    const localImagePath = extractLocalImagePathFromUrl(normalizedUrl)
+    if (localImagePath) {
+      input.push({
+        type: 'localImage',
+        path: localImagePath,
+      })
+      continue
+    }
+    input.push({
+      type: 'image',
+      url: normalizedUrl,
+      image_url: normalizedUrl,
+    })
+  }
+  if (skills) {
+    for (const skill of skills) {
+      input.push({ type: 'skill', name: skill.name, path: skill.path })
+    }
+  }
+  return { input, dedupedFileAttachments }
+}
+
 export async function startThreadTurn(
   threadId: string,
   text: string,
@@ -724,46 +776,7 @@ export async function startThreadTurn(
 ): Promise<string> {
   try {
     const normalizedModel = model?.trim() ?? ''
-    const localImageAttachments: FileAttachmentParam[] = []
-    for (const imageUrl of imageUrls) {
-      const localImagePath = extractLocalImagePathFromUrl(imageUrl.trim())
-      if (!localImagePath) continue
-      localImageAttachments.push({
-        label: fileNameFromPath(localImagePath),
-        path: localImagePath,
-        fsPath: localImagePath,
-      })
-    }
-    const allFileAttachments = [...fileAttachments, ...localImageAttachments]
-    const dedupedFileAttachments = allFileAttachments.filter((entry, index) =>
-      allFileAttachments.findIndex((candidate) => candidate.fsPath === entry.fsPath) === index)
-    const finalText = buildTextWithAttachments(
-      resolveTurnPromptText(text, dedupedFileAttachments, imageUrls),
-      dedupedFileAttachments,
-    )
-    const input: Array<Record<string, unknown>> = [{ type: 'text', text: finalText }]
-    for (const imageUrl of imageUrls) {
-      const normalizedUrl = imageUrl.trim()
-      if (!normalizedUrl) continue
-      const localImagePath = extractLocalImagePathFromUrl(normalizedUrl)
-      if (localImagePath) {
-        input.push({
-          type: 'localImage',
-          path: localImagePath,
-        })
-        continue
-      }
-      input.push({
-        type: 'image',
-        url: normalizedUrl,
-        image_url: normalizedUrl,
-      })
-    }
-    if (skills) {
-      for (const skill of skills) {
-        input.push({ type: 'skill', name: skill.name, path: skill.path })
-      }
-    }
+    const { input, dedupedFileAttachments } = buildTurnInputParts(text, imageUrls, skills, fileAttachments)
     const attachments = dedupedFileAttachments.map((f) => ({ label: f.label, path: f.path, fsPath: f.fsPath }))
     const params: Record<string, unknown> = {
       threadId,
@@ -791,6 +804,36 @@ export async function startThreadTurn(
     return typeof payload?.turn?.id === 'string' ? payload.turn.id.trim() : ''
   } catch (error) {
     throw normalizeCodexApiError(error, `Failed to start turn for thread ${threadId}`, 'turn/start')
+  }
+}
+
+// round-105 P2：显式 mid-turn steering（codex app-server `turn/steer`，stable）。
+// `expectedTurnId` 是服务端前置条件：不匹配当前活跃 turn 即失败（轮次恰好完成的
+// 竞态会得到干净错误而不是静默开新轮）；当前 turn 不可转向（/review、/compact）
+// 时返回 `cannot steer a ... turn` / `ActiveTurnNotSteerable`。steering 继承活跃
+// turn 的 model/effort 设置，故参数里没有它们。返回实际 turnId。
+export async function steerThreadTurn(
+  threadId: string,
+  expectedTurnId: string,
+  text: string,
+  imageUrls: string[] = [],
+  skills?: Array<{ name: string; path: string }>,
+  fileAttachments: FileAttachmentParam[] = [],
+): Promise<string> {
+  const normalizedThreadId = threadId.trim()
+  const normalizedTurnId = expectedTurnId.trim()
+  try {
+    const { input } = buildTurnInputParts(text, imageUrls, skills, fileAttachments)
+    const payload = await callRpc<{ turnId?: string }>('turn/steer', {
+      threadId: normalizedThreadId,
+      input,
+      expectedTurnId: normalizedTurnId,
+    })
+    return typeof payload?.turnId === 'string' && payload.turnId.trim().length > 0
+      ? payload.turnId.trim()
+      : normalizedTurnId
+  } catch (error) {
+    throw normalizeCodexApiError(error, `Failed to steer turn for thread ${normalizedThreadId}`, 'turn/steer')
   }
 }
 
