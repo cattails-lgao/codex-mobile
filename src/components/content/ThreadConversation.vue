@@ -10,7 +10,7 @@
     </div>
     <p v-if="isLoading && messages.length === 0" class="conversation-loading">{{ t('Loading messages...') }}</p>
     <p
-      v-if="showSlowLoadHint && isLoading"
+      v-if="isSlowOpen"
       class="conversation-loading conversation-loading-slow"
       role="status"
     >
@@ -622,6 +622,7 @@ const props = defineProps<{
   liveOverlay: UiLiveOverlay | null
   liveTurnId?: string
   isLoading: boolean
+  isSlowOpen?: boolean
   activeThreadId: string
   cwd: string
   hasMorePersistedAbove?: boolean
@@ -932,29 +933,6 @@ const warmLayerState = ref<WarmLayerState>(createWarmLayerState(props.activeThre
 const activeWarmLayer = computed(() => warmLayerForSession(warmLayerState.value, props.activeThreadId))
 
 const isLoadingMore = ref(false)
-
-// round-101 P1：codex-cli 0.158.0 上首次打开超大旧线程时 app-server 做一次性迁移
-// （实测 32MB 线程 ~280s），期间 UI 只有「加载消息中」。加载超过阈值仍未完成时，
-// 追加一行诚实提示，避免长时间无解释的等待。
-const SLOW_LOAD_HINT_DELAY_MS = 5000
-const showSlowLoadHint = ref(false)
-let slowLoadHintTimer = 0
-
-function clearSlowLoadHintTimer(): void {
-  if (slowLoadHintTimer) {
-    clearTimeout(slowLoadHintTimer)
-    slowLoadHintTimer = 0
-  }
-  showSlowLoadHint.value = false
-}
-
-function beginSlowLoadHintTimer(): void {
-  clearSlowLoadHintTimer()
-  slowLoadHintTimer = window.setTimeout(() => {
-    slowLoadHintTimer = 0
-    if (props.isLoading) showSlowLoadHint.value = true
-  }, SLOW_LOAD_HINT_DELAY_MS)
-}
 
 const filteredMessages = computed(() =>
   props.messages.filter((message) => !isPlanMessage(message) && !isModelSwitchMessage(message)),
@@ -1994,12 +1972,7 @@ watch(
 
 watch(
   () => props.isLoading,
-  async (loading) => {
-    if (loading) {
-      beginSlowLoadHintTimer()
-      return
-    }
-    clearSlowLoadHintTimer()
+  async () => {
     await scheduleConversationScroll()
   },
 )
@@ -2011,12 +1984,6 @@ watch(
     modalImageUrl.value = ''
     isLoadingMore.value = false
     resetFileChangeActions()
-    // 换线程时按当前加载状态重置慢加载提示计时（前一线程的等待不累计到新线程）
-    if (props.isLoading) {
-      beginSlowLoadHintTimer()
-    } else {
-      clearSlowLoadHintTimer()
-    }
     warmLayerState.value = createWarmLayerState(props.activeThreadId)
     await scheduleConversationScroll()
   },
@@ -2056,7 +2023,6 @@ function isVideoMediaUrl(value: string): boolean {
 
 onBeforeUnmount(() => {
   clearRenderCaches()
-  clearSlowLoadHintTimer()
   if (conversationScrollFrame) {
     cancelAnimationFrame(conversationScrollFrame)
     conversationScrollFrame = 0

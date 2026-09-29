@@ -580,6 +580,7 @@
               <template v-else>
                 <div class="content-thread">
                   <ThreadConversation ref="threadConversationRef" :messages="displayFilteredMessages" :is-loading="isLoadingMessages"
+                    :is-slow-open="slowOpenThreadId !== null && slowOpenThreadId === composerThreadContextId"
                     :active-thread-id="composerThreadContextId" :cwd="composerCwd"
                     :live-overlay="liveOverlay"
                     :live-turn-id="selectedActiveTurnId"
@@ -1201,6 +1202,7 @@ const {
   isLoadingThreads,
   isThreadListFullyLoaded,
   isLoadingMessages,
+  slowOpenThreadId,
   isLoadingOlderMessages,
   isSendingMessage,
   isInterruptingTurn,

@@ -473,6 +473,7 @@ export function useDesktopState() {
     loadedVersionByThreadId,
     loadingOlderMessagesByThreadId,
     pruneMessageHistoryState,
+    slowOpenThreadId,
   } = messageHistoryLoading
 
   const threadTitleCache = createDesktopThreadTitleCache({
@@ -3692,6 +3693,7 @@ export function useDesktopState() {
     isLoadingThreads: threadListLoading.isLoadingThreads,
     isThreadListFullyLoaded: threadListLoading.isThreadListFullyLoaded,
     isLoadingMessages,
+    slowOpenThreadId,
     isLoadingOlderMessages,
     isSendingMessage,
     isInterruptingTurn,
