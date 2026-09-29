@@ -79,3 +79,4 @@ Return to the [manual test index](../../tests.md).
 | [Round 40: completed agent message renders as final assistant block](round40-completed-agent-message-final-assistant.md) |
 | [Componentization round-62: file-change summary + diff viewer hook](componentization-round-62-file-change-summaries-and-diff-viewer.md) |
 | [Turn time: per-round duration shown at turn end](turn-time-per-turn-duration.md) |
+| [Round-106: upstream field adoption (turn timestamps, originator, instant_interrupt)](round-106-upstream-field-adoption.md) |

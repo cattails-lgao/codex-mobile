@@ -11,7 +11,6 @@ import {
   pickCodexRateLimitSnapshot,
   replyToServerRequest,
   revertThreadFileChanges,
-  rollbackThread,
   revertThread,
   getWorkspaceRootsState,
   setWorkspaceRootsState,
@@ -909,13 +908,23 @@ export function useDesktopState() {
       await applyFallbackModelSelection(threadId)
       // Remove the failed user turn before replaying on fallback model to avoid duplicated user messages.
       try {
-        const rolledBackMessages = await rollbackThread(threadId, 1)
-        setPersistedMessagesForThread(threadId, rolledBackMessages)
-        clearLivePlansForThread(threadId)
-        setLiveAgentMessagesForThread(threadId, [])
-        clearLiveReasoningForThread(threadId)
-        if (liveCommandsByThreadId.value[threadId]) {
-          liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+        // round-106：thread/rollback 已被上游移除（0.156 #44915），按 beforeTurnId 走
+        // thread/revert——失败轮即最新持久化轮，revert 移除该轮及其后所有轮次。
+        const failedTurnId = (persistedMessagesByThreadId.value[threadId] ?? [])
+          .reduce<UiMessage | null>((acc, m) => {
+            const idx = typeof m.turnIndex === 'number' ? m.turnIndex : -1
+            const accIdx = acc !== null && typeof acc.turnIndex === 'number' ? acc.turnIndex : -1
+            return idx >= 0 && idx > accIdx ? m : acc
+          }, null)?.turnId?.trim() ?? ''
+        if (failedTurnId) {
+          const rolledBackMessages = await revertThread(threadId, failedTurnId)
+          setPersistedMessagesForThread(threadId, rolledBackMessages)
+          clearLivePlansForThread(threadId)
+          setLiveAgentMessagesForThread(threadId, [])
+          clearLiveReasoningForThread(threadId)
+          if (liveCommandsByThreadId.value[threadId]) {
+            liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+          }
         }
       } catch {
         // If rollback fails, continue with retry rather than dropping the turn.
@@ -2615,10 +2624,16 @@ export function useDesktopState() {
       setTurnErrorForThread(forkedThreadId, null)
       setThreadInProgress(forkedThreadId, false)
 
-      const turnsToRollback = lastTurnIndex - turnIndex
-      if (turnsToRollback > 0) {
-        const rolledBackMessages = await rollbackThread(forkedThreadId, turnsToRollback)
-        setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
+      // round-106：thread/rollback 已被上游移除，fork 后裁剪改走 thread/revert——
+      // beforeTurnId = turnIndex 之后首个轮次的 id，revert 会移除该轮及其后所有轮次。
+      if (lastTurnIndex - turnIndex > 0) {
+        const cutoff = forked.messages.find(
+          (m) => typeof m.turnIndex === 'number' && m.turnIndex > turnIndex && Boolean(m.turnId?.trim()),
+        )
+        if (cutoff?.turnId) {
+          const rolledBackMessages = await revertThread(forkedThreadId, cutoff.turnId.trim())
+          setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
+        }
       }
 
       await renameThreadById(forkedThreadId, forkedThreadTitle)
@@ -3207,21 +3222,18 @@ export function useDesktopState() {
     }
   }
 
-  // round-73：legacy 历史用 `thread/rollback`（按轮数），paginated 历史不支持该方法，
-  // 服务端整体拒绝（`paginated threads do not support thread/rollback`）。
-  // round-74：服务端已按线程给出 historyMode，据此一次直达正确方法，不再用「先试
-  // thread/rollback、撞墙后用错误文案正则降级」的探路请求——那会每次回退都打一次注定
-  // 502 的调用（nginx 同一秒成对的 502 60 + 200）。
+  // round-73：paginated 历史不支持 `thread/rollback`（服务端整体拒绝）。
+  // round-74：按 historyMode 一次直达正确方法，不再发探路请求。
+  // round-106：0.156 起上游已移除 thread/rollback（#44915），legacy 按轮数回滚不复
+  // 存在，回退只剩 thread/revert {threadId, beforeTurnId} 一条路径，分发成为死代码。
   async function rollbackThreadWithRevertFallback(
     threadId: string,
-    numTurns: number,
     beforeTurnId: string,
   ): Promise<UiMessage[]> {
-    const mode = selectedThread.value?.historyMode
-    if (mode === 'paginated' && beforeTurnId) {
-      return await revertThread(threadId, beforeTurnId)
+    if (!beforeTurnId) {
+      throw new Error('Cannot roll back: failed to resolve the turn id where the removal starts')
     }
-    return await rollbackThread(threadId, numTurns)
+    return await revertThread(threadId, beforeTurnId)
   }
 
   async function rollbackSelectedThread(turnId: string): Promise<void> {
@@ -3256,16 +3268,16 @@ export function useDesktopState() {
         console.warn(`[rollback] turn ${turnId} not resolvable (index=${turnIndex}), clamping to newest turn`)
         turnIndex = maxTurnIndex
       }
-      // 回退到目标轮：移除该轮（含其用户消息）及其后的所有轮次。
-      // 用户回退某条消息期望撤销它本身（文本回填输入框后重发），而非保留
-      // 目标轮只删后续；目标轮即最后一轮时 maxTurnIndex - turnIndex 为 0，
-      // +1 后仍为 1，删除该轮而不是静默无操作。
-      const numTurns = maxTurnIndex - turnIndex + 1
-
-      // round-73：除 legacy 的 numTurns 外，预计算 paginated 历史（thread/revert）所需的
-      // beforeTurnId = 要移除的首个轮次 id。目标轮无法直接定位（钳制到最新一轮）时，
-      // 退而求其次用最新持久化消息的 turnId 作为撤销点。
+      // 回退到目标轮：移除该轮（含其用户消息）及其后的所有轮次（thread/revert 语义）。
+      // round-106：thread/rollback 已被上游移除，numTurns 不再参与请求；beforeTurnId
+      // 必须解析到要移除的首个轮次 id。解析顺序：目标消息自带 turnId → turnIndex 反查
+      // 轮次映射（通知增量通道写入的存档可能缺 turnIndex）→ 钳制场景退而求其次用
+      // 最新持久化轮作为撤销点。
       let beforeTurnId = matchedMessage?.turnId?.trim() ?? ''
+      if (!beforeTurnId && turnIndex >= 0) {
+        const indexToTurnId = turnIndexByTurnIdByThreadId.value[threadId] ?? {}
+        beforeTurnId = Object.keys(indexToTurnId).find((id) => indexToTurnId[id] === turnIndex) ?? ''
+      }
       if (!beforeTurnId) {
         const newest = persisted.reduce<UiMessage | null>((acc, m) => {
           const mIndex = typeof m.turnIndex === 'number' ? m.turnIndex : -1
@@ -3277,7 +3289,7 @@ export function useDesktopState() {
 
       // round-73：先回滚对话、成功后再回退文件。若仍按旧序先退文件，paginated 线程
       // 回滚会抛错导致「文件已退、对话未退」的静默不一致；降级路径同样在对话成功后执行。
-      const nextMessages = await rollbackThreadWithRevertFallback(threadId, numTurns, beforeTurnId)
+      const nextMessages = await rollbackThreadWithRevertFallback(threadId, beforeTurnId)
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
       if (threadCwd) {
         // round-73：文件回退的失败语义是 return { errors: [...] } 而非 throw，此前返回值

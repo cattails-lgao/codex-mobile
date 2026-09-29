@@ -23,4 +23,26 @@ describe('app-server runtime config', () => {
       delete process.env.CODEXUI_MEMORIES
     }
   })
+
+  it('enables instant_interrupt by default for spawned app-server processes (round-106)', () => {
+    const args = buildAppServerArgs()
+    const featureIndex = args.indexOf('features.instant_interrupt=true')
+
+    expect(featureIndex).toBeGreaterThan(0)
+    expect(args[featureIndex - 1]).toBe('-c')
+  })
+
+  it('can disable instant_interrupt through CODEXUI_INSTANT_INTERRUPT', () => {
+    process.env.CODEXUI_INSTANT_INTERRUPT = 'false'
+    try {
+      const args = buildAppServerArgs()
+      const featureIndex = args.indexOf('features.instant_interrupt=false')
+
+      expect(featureIndex).toBeGreaterThan(0)
+      expect(args[featureIndex - 1]).toBe('-c')
+      expect(args).not.toContain('features.instant_interrupt=true')
+    } finally {
+      delete process.env.CODEXUI_INSTANT_INTERRUPT
+    }
+  })
 })

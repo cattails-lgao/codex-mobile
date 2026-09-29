@@ -36,3 +36,22 @@
 - `instant_interrupt` 的实际中断延迟收益：需 live turn 手测（steer 探针同款流程可复用）。
 - `thread/items/list` 接入评估：暂无消费场景，探针固化协议形状备用。
 - `TURN_ID_PAGE_LIMIT=10_000` 的误导命名（round-104 已记）仍未清理。
+
+---
+
+## 五、phase-2：0.154→0.159 更新盘点落地（2026-09-30 同日）
+
+用户逐项确认后，把盘点中「有用但未接入」的条目落地：
+
+1. **`instant_interrupt` 接入**：`buildAppServerArgs()` 默认追加 `-c features.instant_interrupt=true`；`CODEXUI_INSTANT_INTERRUPT=false` 可退回。默认开启的理由：升级即得「中断立即生效」，且探针已验证 0.159.0 接受该 flag。
+2. **`thread/rollback` 死分支清理（警惕项收口）**：探针实测 0.159.0 方法注册表对 `thread/rollback` 返回 **`unknown variant`**——0.156（#44915）移除后对 legacy 线程同样无效。删除 gateway `rollbackThread`；`useDesktopState` 三处调用点改走 `thread/revert`：①fallback 重试移除失败轮（取最新持久化轮 turnId 作 beforeTurnId）；②fork 后裁剪（取 turnIndex 之后首个轮次 turnId）；③主回退路径 `rollbackThreadWithRevertFallback` 简化为纯 revert（签名去掉 numTurns），并增强 beforeTurnId 解析（目标消息 turnId → turnIndex 反查轮次映射 → 钳制场景取最新轮）。normalizer historyMode 缺省从 'legacy' 改 'paginated'（legacy 仅剩理论值）；bridge `THREAD_METHODS_WITH_TURNS` / `THREAD_METHODS_WITH_THREAD_SNAPSHOT` 移除 `thread/rollback`；UiThread.historyMode 注释同步。
+3. **`thread/items/list` gateway 能力**：新增 `listThreadItemsPage`（有界单页 `{threadId,limit,sortDirection,cursor}` → `{entries:[{id,turnId,item}],nextCursor}`），协议形状与 probe-items-page 固化一致；**未接消息流水线**，等超大单轮懒加载的真实需求。
+4. **turn 时间戳（0.157 #47114）**：探针确认 turn 载荷带 `startedAt/completedAt/durationMs`（item 级无时间戳）。normalizer 把 `turn.startedAt`（秒/毫秒双口径兼容）挂为 `UiMessage.turnStartedAtIso`；消息工具栏弱化展示（当天 `HH:mm`、跨天 `MM-dd HH:mm`，不可解析不显示）。
+5. **线程创建者身份（0.157 #47113）**：summary 的 `originator` 挂为 `UiThread.originator`；侧栏线程行标题后弱文字 + 行 tooltip 展示。
+6. **daemon 自动更新/线程恢复（0.155 #43542/#44314）**：判定 **N/A**——codexapp 直连 spawn app-server，全仓无 daemon 引用。
+
+### phase-2 验证
+
+- 全量 Vitest **675/677**（668 基线 + 新增 7 例：instant_interrupt 配置 2 + items/list gateway 2 + normalizer round-106 3；2 失败仍为既有 Windows archive 平台差异）。
+- `vue-tsc --noEmit` 零错误。
+- 手测文档：`tests/chat-composer-rendering/round-106-upstream-field-adoption.md`（消息时间戳 / originator / instant_interrupt 中断延迟 live 手测步骤），tests.md 索引同步。

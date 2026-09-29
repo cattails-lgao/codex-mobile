@@ -34,10 +34,12 @@
         </span>
       </template>
 
-      <button class="thread-main-button" type="button" @click.stop="emit('select')">
+      <button class="thread-main-button" type="button" :title="originatorTooltip" @click.stop="emit('select')">
         <span class="thread-row-title-wrap">
           <span class="thread-row-title-line">
             <span class="thread-row-title">{{ props.thread.title }}</span>
+            <!-- round-106：创建者身份（0.157 #47113）以 tooltip 弱展示，不占行内空间。 -->
+            <span v-if="props.thread.originator" class="thread-row-originator">{{ props.thread.originator }}</span>
             <IconTablerGitFork v-if="props.thread.hasWorktree" class="thread-row-worktree-icon" :title="props.worktreeLabel" />
             <span
               v-if="props.automationCount > 0"
@@ -80,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import type { UiThread } from '../../types/codex'
 import IconTablerBolt from '../icons/IconTablerBolt.vue'
@@ -116,6 +119,11 @@ const emit = defineEmits<{
   'row-leave': [event: MouseEvent]
   'row-contextmenu': [event: MouseEvent]
 }>()
+
+// round-106：创建者身份 tooltip——悬停可见该线程由哪个客户端创建（如 codex_cli_rs）。
+const originatorTooltip = computed(() => (
+  props.thread.originator ? `${props.thread.originator}` : ''
+))
 
 function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void {
   props.setMenuWrapRef(element instanceof HTMLDivElement ? element : null)
@@ -194,6 +202,11 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 
 .thread-row-worktree-icon {
   @apply w-3 h-3 text-ink-3 shrink-0;
+}
+
+/* round-106：创建者身份（originator）弱化文字，紧跟标题之后。 */
+.thread-row-originator {
+  @apply shrink-0 text-nano leading-none text-ink-3;
 }
 
 .thread-row-request-chip {

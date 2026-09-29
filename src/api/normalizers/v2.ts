@@ -24,6 +24,14 @@ function toIso(seconds: number): string {
   return new Date(seconds * 1000).toISOString()
 }
 
+// round-106：turn 载荷的时间戳（startedAt）历史上有秒/毫秒两种口径，>1e11 视为毫秒。
+function toIsoFromTurnTimestamp(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  const ms = value > 1e11 ? value : value * 1000
+  const date = new Date(ms)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 function toRawPayload(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2)
@@ -682,7 +690,13 @@ function toUiThread(summary: Thread): UiThread {
     createdAtIso: toIso(summary.createdAt),
     updatedAtIso: toIso(summary.updatedAt),
     preview: summary.preview,
-    historyMode: rawSummary.historyMode === 'paginated' ? 'paginated' : 'legacy',
+    // round-106：0.156 起服务端已移除 thread/rollback（#44915），historyMode 不再影响
+    // 回退分发；缺省按 'paginated' 处理（0.148+ 服务端默认，legacy 仅剩理论值）。
+    historyMode: rawSummary.historyMode === 'legacy' ? 'legacy' : 'paginated',
+    // round-106：线程创建者身份（0.157 #47113，落 rollout 与 SQLite）。
+    originator: typeof rawSummary.originator === 'string' && rawSummary.originator.trim().length > 0
+      ? rawSummary.originator.trim()
+      : null,
     unread: false,
     inProgress: readThreadInProgress(summary),
     externalSession: readExternalSessionFromThread(summary),
@@ -729,10 +743,14 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
     const rawTurnId = typeof turn?.id === 'string' ? turn.id.trim() : ''
     const turnId = rawTurnId.length > 0 ? rawTurnId : undefined
     const items = Array.isArray(turn.items) ? turn.items : []
+    // round-106：turn.startedAt（0.157 #47114 生命周期时间戳）供消息行展示时点。
+    const turnStartedAtIso = toIsoFromTurnTimestamp(
+      (turn as Record<string, unknown> | null | undefined)?.startedAt,
+    )
     const turnMessages: UiMessage[] = []
     for (const item of items) {
       for (const msg of toUiMessages(item)) {
-        turnMessages.push({ ...msg, turnId, turnIndex })
+        turnMessages.push({ ...msg, turnId, turnIndex, turnStartedAtIso: turnStartedAtIso ?? undefined })
       }
     }
     const errorText = readTurnErrorText(turn)
@@ -745,6 +763,7 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
         messageType: 'turnError',
         turnId,
         turnIndex,
+        turnStartedAtIso: turnStartedAtIso ?? undefined,
       })
     }
     // Keep the server-provided item order: the app-server (and the bridge's
