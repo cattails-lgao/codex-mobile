@@ -9,6 +9,7 @@ Return to the [manual test index](../../tests.md).
 | Section |
 | --- |
 | [Codex thread deep links render as local web thread URLs](codex-thread-deep-links-render-as-local-web-thread-urls.md) |
+| [Round 105: Steer mode sends via explicit turn/steer protocol with queue fallback](round-105-steer-uses-turn-steer-protocol.md) |
 | [Composer @ file mention uses server fuzzy search with fallback](composer-at-file-mention-uses-server-fuzzy-search.md) |
 | [Composer / slash command menu](composer-slash-command-menu.md) |
 | [Composer realtime voice conversation button](composer-realtime-voice-conversation-button.md) |
