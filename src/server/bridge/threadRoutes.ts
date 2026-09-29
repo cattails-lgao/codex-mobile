@@ -30,6 +30,13 @@ export type ThreadReadAppServerFacade = {
    * caller must fall back to the full-hydration read.
    */
   readBoundedThreadTurnPage(threadId: string, beforeTurnId: string, limit: number): Promise<BoundedThreadTurnPage | null>
+  /**
+   * True once the app-server admitted it does not implement `thread/turns/list`
+   * (codex-cli 0.158.0). On such builds the full-hydration fallback below is
+   * forbidden — it hangs the UI — and the route must answer with an explicit
+   * `olderTurnsUnavailable` boundary instead (round-102 P0).
+   */
+  isThreadTurnPageUnsupported(): boolean
   getStreamEvents(threadId: string, limit: number): StreamEventFrame[]
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void
   getLastThreadReadSnapshot(threadId: string): unknown | null
@@ -142,7 +149,19 @@ export function handleThreadHttpRequest(
 
         // round-86：先试有界的 turns/list 取页（元数据 + 一页），失败或不可用再
         // 回落到原来的「全量 thread/read + 内存切片」——回落路径与改动前逐字一致。
+        // round-102 P0：app-server 不实现 thread/turns/list 时（codex-cli 0.158.0）
+        // 兜底=挂死，改答边界状态：前端据此停住上翻并提示，绝不水合全量历史。
         const boundedPage = await appServer.readBoundedThreadTurnPage(threadId, beforeTurnId, limit)
+
+        if (!boundedPage && appServer.isThreadTurnPageUnsupported()) {
+          setJson(res, 200, {
+            result: null,
+            startTurnIndex: 0,
+            hasMoreOlder: false,
+            olderTurnsUnavailable: true,
+          })
+          return true
+        }
 
         let threadReadResult: unknown
         let startTurnIndex: number

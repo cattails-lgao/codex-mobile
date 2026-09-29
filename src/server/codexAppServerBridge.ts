@@ -84,7 +84,7 @@ import { runRpcResponsePipeline } from './bridge/rpcPipeline.js'
 import { resumeThreadWithTurnPage } from './bridge/threadResumeTurnPage.js'
 // round-86：上翻更早轮次不再全量水合；用 turns/list 游标链按页取，详见
 // bridge/threadTurnPage.ts 头部实测数据。
-import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
+import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, ThreadTurnPageUnsupportedError, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
 import {
   handleTelegramHttpRequest,
   readTelegramBridgeConfig,
@@ -394,6 +394,10 @@ class AppServerProcess {
   // 复核拦下）；这里只缓存已组装好的页，语义与 threadTurnPageReadCacheByThreadId 一致。
   private readonly threadTurnPageCursorChain = new ThreadTurnPageCursorChain()
   private readonly boundedThreadTurnPageCacheByThreadId = new Map<string, Map<string, { page: BoundedThreadTurnPage; expiresAt: number }>>()
+  // round-102 P0：app-server 一旦承认不实现 thread/turns/list（codex-cli 0.158.0
+  // 注册了方法但回 `-32601: list_turns is not supported yet`），就记住这个能力位。
+  // 上翻路由据此拒绝回落全量水合——0.158.0 上大线程的全量 thread/read 会挂死 UI。
+  private threadTurnPageUnsupported = false
   private readonly threadReadResultCache = new ThreadReadResultCache()
   private readonly capturedItemsByThreadId = new Map<string, Map<string, CapturedItem>>()
   private readonly liveStateCache = new Map<string, { data: unknown; turnCount: number; sessionSize: number }>()
@@ -677,7 +681,12 @@ class AppServerProcess {
         rpc: (method, params) => this.rpc(method, params),
         chain: this.threadTurnPageCursorChain,
       }, threadId, beforeTurnId, limit)
-    } catch {
+    } catch (error) {
+      if (error instanceof ThreadTurnPageUnsupportedError) {
+        // Latch for the life of the process: the CLI binary does not change
+        // under a running app-server, so one admission is definitive.
+        this.threadTurnPageUnsupported = true
+      }
       return null
     }
     if (!page) return null
@@ -702,6 +711,17 @@ class AppServerProcess {
   private invalidateBoundedThreadTurnPageCache(threadId?: string): void {
     if (threadId) this.boundedThreadTurnPageCacheByThreadId.delete(threadId)
     else this.boundedThreadTurnPageCacheByThreadId.clear()
+  }
+
+  /**
+   * True once the app-server has admitted it does not implement
+   * `thread/turns/list` (codex-cli 0.158.0 and any future build that retires the
+   * method before its replacement ships). The older-turn route checks this
+   * before falling back to the full-hydration read, which hangs the UI on such
+   * builds (round-102 P0).
+   */
+  isThreadTurnPageUnsupported(): boolean {
+    return this.threadTurnPageUnsupported
   }
 
   cacheLiveState(threadId: string, data: unknown, turnCount: number, sessionSize: number): void {
@@ -1475,8 +1495,9 @@ const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
 // round-76 加 warmUp/threadRead 缓存时就踩过这个坑（dev 日志刷
 // 「appServer.warmUp is not a function」并陷入 server restart failed 循环），
 // 所以 v2 → v3；round-86 加 readBoundedThreadTurnPage / recordThreadTurnPageBoundary，
-// 所以 v3 → v4。
-const SHARED_BRIDGE_VERSION = 'experimental-api-v4'
+// 所以 v3 → v4；round-102 加 isThreadTurnPageUnsupported（翻旧页能力位），
+// 所以 v4 → v5。
+const SHARED_BRIDGE_VERSION = 'experimental-api-v5'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
