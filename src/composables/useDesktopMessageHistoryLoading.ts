@@ -67,6 +67,33 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
   const loadingOlderMessagesByThreadId = ref<Record<string, boolean>>({})
   const isLoadingMessages = ref(false)
 
+  // round-101 P1：打开超大旧线程（首触全量水合可到秒级~分钟级）期间要给一句
+  // 慢加载提示。注意首开路径全部以 silent:true 调 loadMessages，isLoadingMessages
+  // 不会置真——慢开信号必须由这里自己发：网络工作真正开始后计时，超过阈值把
+  // slowOpenThreadId 指向该线程，完成即清除（换线程重新计时，前线程不累计）。
+  const SLOW_OPEN_HINT_DELAY_MS = 5000
+  const slowOpenThreadId = ref<string | null>(null)
+  let slowOpenHintTimer = 0
+  let slowOpenPendingThreadId: string | null = null
+
+  function clearSlowOpenHint(): void {
+    if (slowOpenHintTimer) {
+      clearTimeout(slowOpenHintTimer)
+      slowOpenHintTimer = 0
+    }
+    slowOpenPendingThreadId = null
+    slowOpenThreadId.value = null
+  }
+
+  function beginSlowOpenHintTimer(threadId: string): void {
+    clearSlowOpenHint()
+    slowOpenPendingThreadId = threadId
+    slowOpenHintTimer = window.setTimeout(() => {
+      slowOpenHintTimer = 0
+      slowOpenThreadId.value = slowOpenPendingThreadId
+    }, SLOW_OPEN_HINT_DELAY_MS)
+  }
+
   const loadMessagePromiseByThreadId = new Map<string, Promise<void>>()
   const lastMessageLoadAtByThreadId = new Map<string, number>()
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
@@ -94,6 +121,7 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       loadingIndicatorCount += 1
       isLoadingMessages.value = true
     }
+    beginSlowOpenHintTimer(threadId)
 
     const loadPromise = (async () => {
       try {
@@ -212,6 +240,7 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       }
       }
     })().finally(() => {
+      if (slowOpenPendingThreadId === threadId) clearSlowOpenHint()
       loadMessagePromiseByThreadId.delete(threadId)
     })
 
@@ -294,5 +323,6 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
     loadedVersionByThreadId,
     loadingOlderMessagesByThreadId,
     pruneMessageHistoryState,
+    slowOpenThreadId,
   }
 }
