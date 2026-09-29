@@ -7,6 +7,8 @@
 //      `fullHydration.slice(-limit)` reversed, item-for-item.
 //   2. `thread/turns/list {itemsView:"notLoaded"}` can supply the thread's total
 //      turn count cheaply, and its cursor paging neither overlaps nor skips.
+//      (codex-cli 0.159.0 clamps the per-page limit to 100, so the count walks
+//      the cursor chain -- exactly what the bridge's readThreadTurnCount does.)
 //
 // Run this after a Codex app-server upgrade. A failure here means the bridge's
 // promotion would silently reverse or truncate the transcript, so treat the
@@ -158,8 +160,32 @@ function check(label, ok) {
       sortDirection: 'desc',
       itemsView: 'notLoaded',
     })
-    const countData = count.message?.result?.data || []
-    report('turns/list {10000, notLoaded}  (count)', count, `count=${countData.length}`)
+    // codex-cli 0.159.0 clamps the per-page limit to 100, so the count has to
+    // chain cursors just like the bridge's readThreadTurnCount does.
+    const countIds = []
+    let countCursor
+    let countMs = count.ms
+    let countMb = count.mb
+    {
+      countCursor = count.message?.result?.nextCursor
+      countIds.push(...ids(count.message?.result?.data))
+      let pages = 1
+      while (countCursor && pages < 50) {
+        const next = await call('thread/turns/list', {
+          threadId: THREAD_ID,
+          cursor: countCursor,
+          limit: 10_000,
+          sortDirection: 'desc',
+          itemsView: 'notLoaded',
+        })
+        countMs += next.ms
+        countMb += next.mb
+        countIds.push(...ids(next.message?.result?.data))
+        countCursor = next.message?.result?.nextCursor
+        pages += 1
+      }
+    }
+    report('turns/list {notLoaded, chained}  (count)', count, `count=${countIds.length}`)
 
     console.log('')
     console.log('assumption 1 - page equals fullHydration.slice(-limit).reverse()')
@@ -180,12 +206,13 @@ function check(label, ok) {
 
     console.log('')
     console.log('assumption 2 - notLoaded paging gives an exact count')
-    check('single-shot count equals the full hydration turn count', countData.length === fullTurns.length)
-    check('single-shot count had no remaining cursor', !count.message?.result?.nextCursor)
+    check('chained notLoaded count equals the full hydration turn count', countIds.length === fullTurns.length)
+    check('chained count has no duplicates', new Set(countIds).size === countIds.length)
+    check('chained count is complete (no remaining cursor)', !countCursor)
 
     let cursor
     const paged = []
-    for (let page = 0; page < 8; page += 1) {
+    for (let page = 0; page < 50; page += 1) {
       const params = { threadId: THREAD_ID, limit: 5, sortDirection: 'desc', itemsView: 'notLoaded' }
       if (cursor) params.cursor = cursor
       const r = await call('thread/turns/list', params)
@@ -198,15 +225,15 @@ function check(label, ok) {
       paged.length === fullTurns.length && new Set(paged).size === paged.length)
 
     console.log('')
-    const derived = Math.max(0, countData.length - (boundedPage?.data || []).length)
+    const derived = Math.max(0, countIds.length - (boundedPage?.data || []).length)
     const legacyStartIndex = Math.max(0, fullTurns.length - LIMIT)
     console.log(`  derived threadTurnStartIndex = ${derived}  (legacy trim would stamp ${legacyStartIndex})`)
     check('derived start index matches the legacy trim', derived === legacyStartIndex)
 
     console.log('')
     const total = legacy.ms + 0
-    const boundedTotal = bounded.ms + (boundedPage?.nextCursor ? count.ms : 0)
-    console.log(`  open-thread cost: ${total}ms / ${legacy.mb.toFixed(2)}MB  ->  ${boundedTotal}ms / ${(bounded.mb + (boundedPage?.nextCursor ? count.mb : 0)).toFixed(2)}MB`)
+    const boundedTotal = bounded.ms + (boundedPage?.nextCursor ? countMs : 0)
+    console.log(`  open-thread cost: ${total}ms / ${legacy.mb.toFixed(2)}MB  ->  ${boundedTotal}ms / ${(bounded.mb + (boundedPage?.nextCursor ? countMb : 0)).toFixed(2)}MB`)
   } catch (error) {
     console.log(`FAILED: ${error.message}`)
     checks.push({ label: 'probe completed', ok: false })
