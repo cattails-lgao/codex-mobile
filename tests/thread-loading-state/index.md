@@ -51,3 +51,4 @@ Return to the [manual test index](../../tests.md).
 | [Turn-duration mirror sends only deltas (no write-amplification storm)](turn-duration-mirror-sends-deltas.md) |
 | [Provider model catalog is cached on the server (open-thread path)](provider-model-catalog-cache-server.md) |
 | [Attachment-only first message keeps its thread listable](attachment-only-first-message-keeps-thread-listable.md) |
+| [Slow-load hint appears when a large history takes unusually long to open](round-103-slow-load-hint-large-thread.md) — delayed honest hint, round-101 P1 UX guard |

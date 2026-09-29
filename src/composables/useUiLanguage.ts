@@ -178,6 +178,7 @@ const zhCN: Record<string, string> = {
   'Drop images or files': '拖放图片或文件',
   'Selected image': '已选图片',
   'Loading messages...': '加载消息中...',
+  'Still loading — the first open of a large history can take a while.': '仍在加载——较大的历史会话首次打开可能需要较长时间。',
   'Plan': '计划',
   'Updating': '更新中',
   'Step': '步骤',
