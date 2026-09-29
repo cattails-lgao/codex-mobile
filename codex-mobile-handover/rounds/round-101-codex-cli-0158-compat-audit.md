@@ -4,15 +4,15 @@
 
 ## 一、兼容性结论（实测，`tmp/probe-appserver-0158.cjs` 直连 app-server）
 
-| 桥层路径 | 0.158.0 表现 | 结论 |
-|---|---|---|
-| `initialize` + `capabilities.experimentalApi` | 正常 | ✅ 桥已发送（codexAppServerBridge.ts:947）——**现在成为硬要求**：不带它 `initialTurnsPage` 报 `-32600 requires experimentalApi capability` |
-| 打开会话（有界 resume：`excludeTurns:true` + `initialTurnsPage`） | 正常，32MB/20 轮线程冷进程 **1.6s** | ✅ 兼容；`initialTurnsPage.data` 键名未变（桥读 `page.data`，threadResumeTurnPage.ts:70） |
-| **首触大线程的一次性成本** | 32MB 线程**首次** resume 花了 **~280s**，之后同线程 1.6s | ⚠️ 疑似一次性迁移/索引；3MB 小线程无此现象（~2s）。首次打开超大旧线程会长时间白屏 |
-| `thread/read {includeTurns:false}` 元数据 | 正常、快（32 键） | ✅ |
-| **全量水合**（`excludeTurns:false, includeTurns:true`） | **3MB 小线程 5.6s 能回；32MB 线程 >90s 无响应（挂死）** | ❌ 病态退化（旧版 1.3s）。上游 deprecation 通知明说废弃全量水合，指名分页方法 |
-| **翻旧轮次**（`thread/turns/list` 游标链，round-86 核心） | `-32601: list_turns is not supported yet` | ❌ **方法已注册但未实现**。旧名 `turns/list` 已从 171 个合法方法中移除（unknown variant） |
-| `thread/items/list` / `thread/timeline/list` | 同样 `not supported yet` | ❌ 上游发了 deprecation 通知却还没实现处理逻辑（提前退役了） |
+| 桥层路径                                                     | 0.158.0 表现                                       | 结论                                                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `initialize` + `capabilities.experimentalApi`            | 正常                                               | ✅ 桥已发送（codexAppServerBridge.ts:947）——**现在成为硬要求**：不带它 `initialTurnsPage` 报 `-32600 requires experimentalApi capability` |
+| 打开会话（有界 resume：`excludeTurns:true` + `initialTurnsPage`） | 正常，32MB/20 轮线程冷进程 **1.6s**                       | ✅ 兼容；`initialTurnsPage.data` 键名未变（桥读 `page.data`，threadResumeTurnPage.ts:70）                                           |
+| **首触大线程的一次性成本**                                          | 32MB 线程**首次** ~~resume ~~花了 **~280s**，之后同线程 1.6s | ⚠️ 疑似一次性迁移/索引；3MB 小线程无此现象（~2s）。首次打开超大旧线程会长时间白屏                                                                         |
+| `thread/read {includeTurns:false}` 元数据                   | 正常、快（32 键）                                       | ✅                                                                                                                      |
+| **全量水合**（`excludeTurns:false, includeTurns:true`）        | **3MB 小线程 5.6s 能回；32MB 线程 >90s 无响应（挂死）**         | ❌ 病态退化（旧版 1.3s）。上游 deprecation 通知明说废弃全量水合，指名分页方法                                                                       |
+| **翻旧轮次**（`thread/turns/list` 游标链，round-86 核心）            | `-32601: list_turns is not supported yet`        | ❌ **方法已注册但未实现**。旧名 `turns/list` 已从 171 个合法方法中移除（unknown variant）                                                       |
+| `thread/items/list` / `thread/timeline/list`             | 同样 `not supported yet`                           | ❌ 上游发了 deprecation 通知却还没实现处理逻辑（提前退役了）                                                                                  |
 
 **净结论**：主路径（打开会话）兼容；但 round-86 的设计「任何意外 → 回落全量水合」在 0.158.0 上变成**毒药**——翻旧轮次失败后回落全量水合，而全量水合在大线程上挂死 → **Web UI 上翻长会话会卡死**。上游 0.158.0 的分页 API 处于「方法表已登记、处理逻辑未实现」的中间态。
 
@@ -25,6 +25,7 @@
 ## 二、机会清单（release notes 0.154~0.158 中对 codex-app 有用的）
 
 **协议能力（app-server 方法表实测存在）**：
+
 1. **`thread/queue/*`**（add/list/update/delete/reorder/start）——Web UI 可以做「turn 进行中排队下一条消息」，对应 TUI 0.154 的 inline 追问。
 2. **`turn/steer`**——turn 进行中转向（mid-turn steering），比排队更实时。
 3. **`thread/compact/start`**——显式触发压缩，配合 round-83 的压缩预检可做「手动压缩」按钮。
@@ -38,6 +39,7 @@
 11. **`windowsSandbox/setupStart`/`readiness`**——Windows 沙箱初始化状态可查询。
 
 **行为修复（用户可感知）**：
+
 - 0.156：turn 失败/中断时**保留已流式输出的答案与计划**（#45549/#46867）——Web UI 的失败渲染不再「内容消失」。
 - 0.158：**命令完成事件带早期输出、进程启动失败会上报**（#47529/#47665）——工具调用行可显示启动失败的诚实读数（配合 round-93 的 FAIL 徽记）。
 - 0.158：**修复 Windows 10 普通路径的沙箱失败**（#47672）——本机是 Windows，直接受益。
