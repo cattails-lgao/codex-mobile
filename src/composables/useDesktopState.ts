@@ -26,6 +26,7 @@ import {
   startThread,
   subscribeCodexNotifications,
   startThreadTurn,
+  steerThreadTurn,
   type RpcNotification,
   type WorkspaceRootsState,
 } from '../api/codexGateway'
@@ -2731,6 +2732,64 @@ export function useDesktopState() {
     }
   }
 
+  // round-105 P2：steer 模式改走显式 `turn/steer` 协议（expectedTurnId 前置条件）。
+  // - 当前活跃 turn 不可转向（/review、/compact 进行中）→ 自动降级为排队消息，
+  //   不再把「cannot steer a compact turn」这类裸错误甩给用户。
+  // - expectedTurnId 不匹配（客户端状态陈旧、轮次恰好完成）→ 回落 turn/start：
+  //   线程已空闲则开新轮；仍活跃则服务端会把 turn/start 当作 steering（0.158.0 实测）。
+  // - 无活跃 turn 记录 → 直接走原 turn/start 路径。
+  function isActiveTurnNotSteerableError(unknownError: unknown): boolean {
+    return unknownError instanceof Error
+      && /ActiveTurnNotSteerable|cannot steer a \S+ turn|same-turn steering/i.test(unknownError.message)
+  }
+
+  function isTurnPreconditionMismatchError(unknownError: unknown): boolean {
+    return unknownError instanceof Error && /expected active turn id/i.test(unknownError.message)
+  }
+
+  async function steerActiveTurnForThread(
+    threadId: string,
+    nextText: string,
+    imageUrls: string[],
+    skills: Array<{ name: string; path: string }>,
+    fileAttachments: FileAttachment[],
+    collaborationModeOverride?: CollaborationModeKind,
+  ): Promise<void> {
+    const expectedTurnId = activeTurnIdByThreadId.value[threadId] ?? ''
+    if (expectedTurnId) {
+      try {
+        await steerThreadTurn(threadId, expectedTurnId, nextText, imageUrls, skills, fileAttachments)
+        appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
+        pendingThreadMessageRefresh.add(threadId)
+        await syncFromNotifications()
+        scheduleDelayedTurnSync(threadId)
+        return
+      } catch (unknownError) {
+        if (isActiveTurnNotSteerableError(unknownError)) {
+          // 降级排队：与 queue 分支同构（排队 UI 自渲染行，故不追加乐观消息）。
+          const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          enqueueQueuedMessage(threadId, {
+            id,
+            text: nextText,
+            imageUrls,
+            skills,
+            fileAttachments,
+            collaborationMode: collaborationModeOverride === 'plan'
+              ? 'plan'
+              : collaborationModeOverride === 'default'
+                ? 'default'
+                : selectedCollaborationMode.value,
+          })
+          return
+        }
+        if (!isTurnPreconditionMismatchError(unknownError)) throw unknownError
+        // 轮次恰好完成/状态陈旧：回落 turn/start（见函数注释）。
+      }
+    }
+    appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
+    await startTurnForThread(threadId, nextText, imageUrls, skills, fileAttachments, collaborationModeOverride)
+  }
+
   async function sendMessageToSelectedThread(
     text: string,
     imageUrls: string[] = [],
@@ -2777,8 +2836,7 @@ export function useDesktopState() {
 
     if (isInProgress) {
       shouldAutoScrollOnNextAgentEvent = true
-      appendOptimisticUserMessage(threadId, nextText, imageUrls, skills, fileAttachments)
-      void startTurnForThread(
+      void steerActiveTurnForThread(
         threadId,
         nextText,
         imageUrls,

@@ -51,6 +51,7 @@ const gatewayMocks = vi.hoisted(() => ({
   setWorkspaceRootsState: vi.fn(),
   startThread: vi.fn(),
   startThreadTurn: vi.fn(),
+  steerThreadTurn: vi.fn(),
   subscribeCodexNotifications: vi.fn(),
 }))
 
@@ -2232,6 +2233,94 @@ describe('sendMessageToSelectedThread shows the user message immediately', () =>
     expect(state.messages.value.some((message) => (
       message.role === 'user' &&
       message.text === 'hello' &&
+      message.messageType === 'userMessage.optimistic'
+    ))).toBe(true)
+  })
+})
+
+describe('sendMessageToSelectedThread steer mode uses explicit turn/steer', () => {
+  function installSteerState(threadId: string) {
+    installTestWindow()
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadReasoningArchive.mockResolvedValue({})
+    // 服务器真相：首次发送后线程处于进行中且活跃轮为 turn-first。
+    // loadMessages 会用 detail.inProgress / detail.activeTurnId 覆盖内存状态，
+    // mock 必须与之一致，否则发送完成后的 sync 会清掉进行中状态。
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [],
+      inProgress: true,
+      activeTurnId: 'turn-first',
+      turnIndexByTurnId: { 'turn-first': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.resumeThread.mockResolvedValue({
+      model: '',
+      modelProvider: '',
+      messages: [],
+      inProgress: true,
+      activeTurnId: 'turn-first',
+      turnIndexByTurnId: { 'turn-first': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.startThreadTurn.mockResolvedValue('turn-first')
+    gatewayMocks.steerThreadTurn.mockResolvedValue('turn-first')
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return { state }
+  }
+
+  it('steers via turn/steer with the active turn id instead of turn/start', async () => {
+    const { state } = installSteerState('thread-steer')
+    // 第一次发送走空闲路径建立进行中状态（与真实前端一致），随后同线程的
+    // 第二次发送应命中 steer 分支。
+    await state.sendMessageToSelectedThread('first message')
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalledTimes(1)
+
+    await state.sendMessageToSelectedThread('steer me')
+
+    expect(gatewayMocks.steerThreadTurn).toHaveBeenCalledWith('thread-steer', 'turn-first', 'steer me', [], [], [])
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalledTimes(1)
+    expect(state.messages.value.some((message) => (
+      message.role === 'user' &&
+      message.text === 'steer me' &&
+      message.messageType === 'userMessage.optimistic'
+    ))).toBe(true)
+  })
+
+  it('falls back to queueing when the active turn is not steerable', async () => {
+    const { state } = installSteerState('thread-steer-blocked')
+    await state.sendMessageToSelectedThread('first message')
+    gatewayMocks.steerThreadTurn.mockRejectedValue(new Error('RPC turn/steer failed with HTTP 502: cannot steer a compact turn'))
+
+    await state.sendMessageToSelectedThread('排到后面')
+
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalledTimes(1)
+    // 排队走 setThreadQueueState 持久化，且不追加乐观消息（排队 UI 自渲染行）。
+    expect(gatewayMocks.setThreadQueueState).toHaveBeenCalled()
+    const queuedPayload = gatewayMocks.setThreadQueueState.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(JSON.stringify(queuedPayload)).toContain('排到后面')
+    expect(state.messages.value.some((message) => message.text === '排到后面' && message.messageType === 'userMessage.optimistic')).toBe(false)
+  })
+
+  it('falls back to turn/start when the expected turn id no longer matches', async () => {
+    const { state } = installSteerState('thread-steer-race')
+    await state.sendMessageToSelectedThread('first message')
+    gatewayMocks.steerThreadTurn.mockRejectedValue(new Error('RPC turn/steer failed with HTTP 502: expected active turn id `turn-first` but found `turn-999`'))
+
+    await state.sendMessageToSelectedThread('hello after race')
+
+    expect(gatewayMocks.startThreadTurn).toHaveBeenCalledTimes(2)
+    expect(state.messages.value.some((message) => (
+      message.role === 'user' &&
+      message.text === 'hello after race' &&
       message.messageType === 'userMessage.optimistic'
     ))).toBe(true)
   })
