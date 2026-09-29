@@ -150,7 +150,18 @@ function check(label, ok) {
     const listing = await call('thread/turns/list', {
       threadId: THREAD_ID, limit: 10_000, sortDirection: 'desc', itemsView: 'notLoaded',
     })
-    const listingIds = ids(listing.message?.result?.data)
+    // codex-cli 0.159.0 clamps the per-page limit to 100; chain cursors the way
+    // the bridge's readThreadTurnIds does.
+    const listingIds = []
+    let listingCursor = listing.message?.result?.nextCursor || null
+    listingIds.push(...ids(listing.message?.result?.data))
+    while (listingCursor) {
+      const next = await call('thread/turns/list', {
+        threadId: THREAD_ID, cursor: listingCursor, sortDirection: 'desc', itemsView: 'notLoaded',
+      })
+      listingIds.push(...ids(next.message?.result?.data))
+      listingCursor = next.message?.result?.nextCursor || null
+    }
     report('turns/list {10000, notLoaded, desc}', listing, `ids=${listingIds.length}`)
     console.log('')
 
