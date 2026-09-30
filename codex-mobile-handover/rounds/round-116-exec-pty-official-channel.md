@@ -170,6 +170,7 @@ rpc('command/exec', {
    - resize / close / exit 全通
    - 通知流 `{terminal-attached:1, terminal-data:11, terminal-exit:2}`
    - **`outputDelta leaked to UI : no`**（§四.4 的过滤生效）
+5. **最终状态下复跑**：修好 `node_modules` 的链接残缺（§七）后重跑 —— `vue-tsc --noEmit` **EXIT=0**，全量 **`714 passed (714) / 74 files passed`**（32.28s）。
 
 ## 七、行为变化与诚实边界
 
