@@ -19,7 +19,7 @@ Vite 解析 bridge 时 `import '../commandResolution.js'` 命中旧产物，导�
 
 ### 2. pnpm 11 构建脚本拦截（任何电脑都会遇到）
 
-pnpm 11 默认阻止依赖的 build scripts（`node-pty`、`esbuild`、`@firebase/util`、`protobufjs` 等）。`package.json` 里的旧字段 `pnpm.onlyBuiltDependencies` 已被 pnpm 11 忽略，导致 `pnpm install` 返回非零码、dev 无法启动。
+pnpm 11 默认阻止依赖的 build scripts（`esbuild`、`@firebase/util`、`protobufjs` 等；round-116 起 `node-pty` 已从依赖中移除，集成终端改跑 app-server 官方 `command/exec { tty: true }` 通道）。`package.json` 里的旧字段 `pnpm.onlyBuiltDependencies` 已被 pnpm 11 忽略，导致 `pnpm install` 返回非零码、dev 无法启动。
 
 修复：新增 `pnpm-workspace.yaml`，用 `allowBuilds` 声明允许构建的包（等价于旧字段的迁移）。
 
