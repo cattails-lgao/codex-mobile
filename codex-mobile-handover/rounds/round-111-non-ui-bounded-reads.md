@@ -31,6 +31,8 @@
 | `threadRoutes.ts:233` `thread-file-change-fallback` | `buildSessionFileChangeFallback(threadReadResult, sessionLogRaw)` 要**全部轮次**的 patch 信息才能列出所有文件变更。 |
 | `threadRoutes.ts:279` `thread-live-state` | `rawTurns` 既进 snapshot 又参与 `getCachedLiveState(threadId, rawTurns.length, sessionSize)` 的缓存键。有界化会同时改变 snapshot 内容与缓存语义。 |
 | `AppServerProcess.readThreadForTurnPage:633` | 它是上翻的**兜底**——主路径已经是有界的 `readBoundedThreadTurnPage`（round-86），只有游标链失效时才到这里。兜底的意义就是绕开失效的机制，把它也有界化会取消这条保险。 |
+| `codexAppServerBridge.ts:1985`（HTTP `/codex-api/thread/rollback-files`） | **round-112 复核补录**（本表初版漏收）：它**直连 `appServer.rpc`**、绕过桥的 rpc 分派，故 round-110 的有界分支不覆盖；撤销文件变更需要「目标 turn **及其之后**全部轮次」的 `patchIds`/`filePaths`（同 `thread-file-change-fallback` 一类，有界读给不了这一未知长度区间），且是**用户显式点击回滚**才触发的一次性操作。有意保留。 |
+| `threadArchiveRecovery.ts:86`（`callRpcWithArchiveRecovery` 的 `turn/start` 分支） | **round-112 复核补录**（本表初版漏收）：`turn/start` 报 thread-not-found 时先全量 `thread/resume` 再重发。这是**错误恢复兜底**（低频），刻意不动——与对本表 `readThreadForTurnPage` 的取舍同理。有意保留。 |
 | `api/gateway/threads.ts`、`develop.ts` 的 `thread/read` | 它们是 **UI 主路径**，走桥的 rpc 分派 → **round-110 已经全部覆盖**。本轮无需再碰。 |
 
 ## 三、遗留 1 / 2 的处置
