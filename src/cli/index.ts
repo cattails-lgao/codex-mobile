@@ -566,6 +566,7 @@ async function startServer(options: {
     `  Bind:     http://0.0.0.0:${String(port)}`,
     `  Codex sandbox: ${runtimeConfig.sandboxMode}`,
     `  Approval policy: ${runtimeConfig.approvalPolicy}`,
+    `  Instant interrupt: ${runtimeConfig.instantInterrupt ? 'on' : 'off'} (needs codex-cli >= 0.159)`,
   ]
   const accessUrls = getAccessibleUrls(port)
   if (accessUrls.length > 0) {
