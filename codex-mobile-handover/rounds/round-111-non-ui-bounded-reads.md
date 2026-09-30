@@ -35,7 +35,7 @@
 
 ## 三、遗留 1 / 2 的处置
 
-**遗留 1（`thread/items/list` + `thread/timeline/list` 接消息流水线）——不做。** 这是**新功能**（改消息流水的取数方式），不是遗留缺陷；牵动前端渲染与分页语义，需要产品侧先定「消息流水线要不要走 item 级分页」。列入候选，不在清理范围。
+**遗留 1（`thread/items/list` + `thread/timeline/list` 接消息流水线）——不做（用户 2026-09-30 明确「先不做」）。** 这是**新功能**（改消息流水的取数方式），不是遗留缺陷；牵动前端渲染与分页语义。**决策已下**：不做，gateway 的 `listThreadItemsPage`（`threads.ts:644`，默认 `limit:25 / sortDirection:'asc' / 返回 {entries, nextCursor}`）维持「已备好、零产品调用」现状。**重开触发条件**（满足其一才重新评估）：①出现「超长单轮（单 turn 内含大量 item）打开卡顿」的真实症状；②要新增「按 item 增量载入 / 边生成边载历史」的体验目标。届时按该目标设计，不由本轮遗留驱动。
 
 **遗留 2（`threadResumeTurnPage` 与 `threadReadTurnPage` 的取页代码合并）——不做，附量化。** 两者的**入口本质不同**：
 
@@ -75,5 +75,5 @@
 
 ## 六、遗留
 
-1. `thread/items/list` + `thread/timeline/list` 接消息流水线——**新功能**，需产品决策（区别于本轮）。
+1. `thread/items/list` + `thread/timeline/list` 接消息流水线——**新功能**；**用户 2026-09-30 裁定「先不做」**（重开条件见 §三），`listThreadItemsPage` 保持已备好零调用。
 2. 上表「评估后不改」的四处是**有意的设计选择**，不是待办；若未来 `threadSearch` 需要「只搜最近 N 轮」或有界增量索引，才是重新评估的触发点。
