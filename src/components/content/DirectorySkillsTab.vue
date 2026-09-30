@@ -97,11 +97,11 @@ const emit = defineEmits<{
 }
 
 .skills-embedded-toggle {
-  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
+  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-ui font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
 }
 
 .skills-embedded-title {
-  @apply text-sm font-medium;
+  @apply text-ui font-medium;
 }
 
 .skills-embedded-chevron {
@@ -137,7 +137,7 @@ const emit = defineEmits<{
 }
 
 .mcp-skill-name {
-  @apply text-sm font-medium text-ink-1 truncate;
+  @apply text-ui font-medium text-ink-1 truncate;
 }
 
 .mcp-skill-owner {
@@ -175,7 +175,7 @@ const emit = defineEmits<{
 .directory-loading,
 .directory-empty,
 .directory-error {
-  @apply rounded-xl border border-line-1 bg-s2 p-4 text-sm text-ink-3;
+  @apply rounded-xl border border-line-1 bg-s2 p-4 text-ui text-ink-3;
 }
 
 .directory-error {

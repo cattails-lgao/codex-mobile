@@ -277,7 +277,7 @@ function onBrowseFiles(): void {
 }
 
 .sdm-desc {
-  @apply m-0 text-sm text-ink-3 leading-relaxed;
+  @apply m-0 text-ui text-ink-3 leading-relaxed;
 }
 
 .sdm-readme-loading {
@@ -289,7 +289,7 @@ function onBrowseFiles(): void {
 }
 
 .sdm-readme :deep(h2) {
-  @apply text-sm font-semibold text-ink-2 mt-3 mb-1;
+  @apply text-ui font-semibold text-ink-2 mt-3 mb-1;
 }
 
 .sdm-readme :deep(h3) {
@@ -329,7 +329,7 @@ function onBrowseFiles(): void {
 }
 
 .sdm-btn {
-  @apply rounded-lg px-3 py-1.5 text-sm font-medium transition border-0 disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply rounded-lg px-3 py-1.5 text-ui font-medium transition border-0 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 .sdm-btn-primary {

@@ -94,7 +94,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 
 .live-overlay-label {
   /* round-23 字体规范：工具与思考文字色 #737373 */
-  @apply m-0 text-sm leading-5 font-medium;
+  @apply m-0 text-ui leading-5 font-medium;
   color: #737373;
 }
 
@@ -118,7 +118,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 .live-overlay-reasoning {
   /* round-23 字体规范：思考文字色 #737373 */
   /* round-26：高度从 5 行调高到 12 行，避免长思考被压得过扁 */
-  @apply m-0 text-sm leading-5 whitespace-pre-wrap break-words;
+  @apply m-0 text-ui leading-5 whitespace-pre-wrap break-words;
   color: #737373;
   display: block;
   max-height: calc(1.25rem * 12);
@@ -134,7 +134,7 @@ function prepareErrorFeedback(event: MouseEvent, message: string): void {
 }
 
 .live-overlay-error {
-  @apply m-0 flex items-start justify-between gap-3 text-sm leading-5 text-alert whitespace-pre-wrap;
+  @apply m-0 flex items-start justify-between gap-3 text-ui leading-5 text-alert whitespace-pre-wrap;
 }
 
 .live-overlay-feedback {

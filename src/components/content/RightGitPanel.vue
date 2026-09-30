@@ -416,7 +416,7 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-review {
-  @apply flex w-full items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2 text-left text-sm font-medium text-ink-2 transition hover:bg-s0;
+  @apply flex w-full items-center gap-2 rounded-lg border border-line-1 bg-s2 px-2.5 py-2 text-left text-ui font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .rgp-review-icon {
@@ -511,7 +511,7 @@ watch(selectedBranchCommits, (commits) => {
 }
 
 .rgp-branch-button {
-  @apply min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-2 hover:bg-s1 disabled:cursor-wait;
+  @apply min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-ui text-ink-2 hover:bg-s1 disabled:cursor-wait;
 }
 
 .rgp-branch-button.is-current,

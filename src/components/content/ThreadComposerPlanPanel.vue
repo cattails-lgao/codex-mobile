@@ -161,7 +161,7 @@ function onPlanPanelImplement(): void {
 }
 
 .thread-composer-plan-panel-icon {
-  @apply text-sm leading-none;
+  @apply text-ui leading-none;
 }
 
 .thread-composer-plan-panel-chevron {

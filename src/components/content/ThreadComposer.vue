@@ -2099,7 +2099,7 @@ watch(
 }
 
 .thread-composer-file-mention-icon-markdown {
-  @apply inline-flex h-5 min-w-5 items-center justify-center text-sm leading-none text-ink-2;
+  @apply inline-flex h-5 min-w-5 items-center justify-center text-ui leading-none text-ink-2;
 }
 
 .thread-composer-file-mention-icon-file {
@@ -2123,7 +2123,7 @@ watch(
 }
 
 .thread-composer-input {
-  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 pr-10 text-sm text-ink-1 outline-none transition resize-none overflow-y-auto;
+  @apply w-full min-w-0 min-h-10 sm:min-h-11 max-h-40 rounded-xl border-0 bg-transparent px-1 py-2 pr-10 text-ui text-ink-1 outline-none transition resize-none overflow-y-auto;
 }
 
 .thread-composer-input-wrap--expanded .thread-composer-input {
@@ -2205,7 +2205,7 @@ watch(
 }
 
 .thread-composer-menu-item-title {
-  @apply text-sm text-ink-2;
+  @apply text-ui text-ink-2;
 }
 
 .thread-composer-menu-item-sub {
@@ -2217,7 +2217,7 @@ watch(
 }
 
 .thread-composer-menu-item-check {
-  @apply shrink-0 text-sm font-semibold text-ink-1;
+  @apply shrink-0 text-ui font-semibold text-ink-1;
 }
 
 .thread-composer-menu-error {

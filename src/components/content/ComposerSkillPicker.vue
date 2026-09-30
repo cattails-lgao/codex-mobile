@@ -114,7 +114,7 @@ watch(query, () => {
 }
 
 .skill-picker-search {
-  @apply w-full rounded-lg border border-line-1 bg-s0 px-2.5 py-1.5 text-sm text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
+  @apply w-full rounded-lg border border-line-1 bg-s0 px-2.5 py-1.5 text-ui text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
 }
 
 .skill-picker-list {
@@ -130,7 +130,7 @@ watch(query, () => {
 }
 
 .skill-picker-name {
-  @apply text-sm font-medium text-ink-2;
+  @apply text-ui font-medium text-ink-2;
 }
 
 .skill-picker-desc {
@@ -138,6 +138,6 @@ watch(query, () => {
 }
 
 .skill-picker-empty {
-  @apply p-3 text-center text-sm text-ink-3;
+  @apply p-3 text-center text-ui text-ink-3;
 }
 </style>

@@ -1079,15 +1079,15 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-option-index {
-  @apply shrink-0 text-sm font-medium leading-none text-ink-3;
+  @apply shrink-0 text-ui font-medium leading-none text-ink-3;
 }
 
 .thread-pending-request-option-label {
-  @apply min-w-0 whitespace-normal break-words text-sm leading-snug text-ink-2;
+  @apply min-w-0 whitespace-normal break-words text-ui leading-snug text-ink-2;
 }
 
 .thread-pending-request-inline-input {
-  @apply flex h-10 min-w-0 flex-1 items-center gap-3 rounded-xl border border-line-1 bg-s0 px-3.5 text-sm text-ink-3 transition focus-within:border-line-3 focus-within:bg-s2;
+  @apply flex h-10 min-w-0 flex-1 items-center gap-3 rounded-xl border border-line-1 bg-s0 px-3.5 text-ui text-ink-3 transition focus-within:border-line-3 focus-within:bg-s2;
 }
 
 .thread-pending-request-inline-input.is-active {
@@ -1095,7 +1095,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-inline-control {
-  @apply w-full min-w-0 border-none bg-transparent p-0 text-sm leading-none text-ink-1 outline-none placeholder:text-ink-3;
+  @apply w-full min-w-0 border-none bg-transparent p-0 text-ui leading-none text-ink-1 outline-none placeholder:text-ink-3;
 }
 
 .thread-pending-request-question {
@@ -1103,7 +1103,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-question-title {
-  @apply m-0 text-sm font-medium leading-relaxed text-ink-1;
+  @apply m-0 text-ui font-medium leading-relaxed text-ink-1;
 }
 
 .thread-pending-request-question-text,
@@ -1112,7 +1112,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-validation-error {
-  @apply m-0 mt-3 text-sm leading-relaxed text-alert;
+  @apply m-0 mt-3 text-ui leading-relaxed text-alert;
 }
 
 .thread-pending-request-question-options,
@@ -1121,7 +1121,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-link {
-  @apply inline-flex w-fit items-center rounded-full border border-line-2 px-3 py-1.5 text-sm text-ink-2 transition hover:border-line-4 hover:bg-s1;
+  @apply inline-flex w-fit items-center rounded-full border border-line-2 px-3 py-1.5 text-ui text-ink-2 transition hover:border-line-4 hover:bg-s1;
 }
 
 .thread-pending-request-select-wrap {
@@ -1133,7 +1133,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-input {
-  @apply h-10 rounded-xl border border-line-2 bg-s2 px-3 text-sm text-ink-1 outline-none;
+  @apply h-10 rounded-xl border border-line-2 bg-s2 px-3 text-ui text-ink-1 outline-none;
 }
 
 .thread-pending-request-input:focus {
@@ -1142,7 +1142,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-10 w-full rounded-xl border border-line-2 bg-s2 px-3 text-sm text-ink-1;
+  @apply h-10 w-full rounded-xl border border-line-2 bg-s2 px-3 text-ui text-ink-1;
 }
 
 .thread-pending-request-dropdown :deep(.composer-dropdown-value) {
@@ -1154,7 +1154,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 }
 
 .thread-pending-request-checkbox-row {
-  @apply flex items-center gap-2 text-sm text-ink-2;
+  @apply flex items-center gap-2 text-ui text-ink-2;
 }
 
 .thread-pending-request-checkbox {
@@ -1176,7 +1176,7 @@ function onRejectUnknownRequest(request: UiServerRequest): void {
 
 .thread-pending-request-primary,
 .thread-pending-request-secondary {
-  @apply h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition;
+  @apply h-10 shrink-0 rounded-full border px-4 text-ui font-medium transition;
 }
 
 .thread-pending-request-primary {

@@ -50,7 +50,7 @@ function onSelect(value: RuntimeMode): void {
 }
 
 .runtime-toggle-option {
-  @apply inline-flex h-8 items-center gap-1.5 rounded-full border border-transparent bg-transparent px-3 text-sm text-ink-3 transition;
+  @apply inline-flex h-8 items-center gap-1.5 rounded-full border border-transparent bg-transparent px-3 text-ui text-ink-3 transition;
 }
 
 .runtime-toggle-option:hover {

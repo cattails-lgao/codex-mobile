@@ -193,7 +193,7 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
 }
 
 .thread-row-title {
-  @apply min-w-0 block flex-1 text-sm leading-5 font-normal text-ink-2 truncate whitespace-nowrap;
+  @apply min-w-0 block flex-1 text-ui leading-5 font-normal text-ink-2 truncate whitespace-nowrap;
 }
 
 .thread-row[data-active='true'] .thread-row-title {

@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-trigger {
-  @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-sm leading-tight text-ink-3 outline-none transition;
+  @apply inline-flex min-h-7 min-w-0 items-center gap-1 border-0 bg-transparent px-0 py-0.5 text-ui leading-tight text-ink-3 outline-none transition;
 }
 
 /* `--pill` 变体只有输入区那两个控件在用（已核：模型 / 推理强度），所以这里写下的就是
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-dropdown-option {
-  @apply flex w-full items-center rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sm text-ink-2 transition hover:bg-s1;
+  @apply flex w-full items-center rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-ui text-ink-2 transition hover:bg-s1;
 }
 
 .composer-dropdown-option.is-selected {

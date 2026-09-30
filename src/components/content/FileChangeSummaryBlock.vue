@@ -194,7 +194,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 
 .file-change-item {
   /* round-35：行内不换行，路径过长省略；变更数字与撤销按钮靠右（ml-auto） */
-  @apply flex min-w-0 items-center gap-1.5 py-0.5 text-sm text-ink-3;
+  @apply flex min-w-0 items-center gap-1.5 py-0.5 text-ui text-ink-3;
 }
 
 .file-change-badge {
@@ -243,7 +243,7 @@ const fileChangeFileUndoLabel = computed(() => (change: UiFileChange) => `${t('U
 }
 
 .file-change-action-icon {
-  @apply text-sm;
+  @apply text-ui;
 }
 
 .file-change-action-icon-redo {

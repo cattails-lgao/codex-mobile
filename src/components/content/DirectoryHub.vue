@@ -1682,7 +1682,7 @@ onMounted(async () => {
 }
 
 .directory-subtitle {
-  @apply m-0 mt-1 text-sm text-ink-3;
+  @apply m-0 mt-1 text-ui text-ink-3;
 }
 
 .directory-refresh,
@@ -1705,7 +1705,7 @@ onMounted(async () => {
 }
 
 .directory-tab {
-  @apply rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-ink-3 transition hover:text-ink-2;
+  @apply rounded-md border-0 bg-transparent px-2 py-1.5 text-ui font-medium text-ink-3 transition hover:text-ink-2;
 }
 
 .directory-tab.is-active {
@@ -1729,7 +1729,7 @@ onMounted(async () => {
 }
 
 .directory-search {
-  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-2 outline-none transition placeholder:text-ink-3 focus:border-line-3;
+  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s2 px-3 py-2 text-ui text-ink-2 outline-none transition placeholder:text-ink-3 focus:border-line-3;
 }
 
 .directory-sort-group {
@@ -1753,7 +1753,7 @@ onMounted(async () => {
 }
 
 .directory-marketplace-title {
-  @apply text-sm font-semibold text-ink-2;
+  @apply text-ui font-semibold text-ink-2;
 }
 
 .directory-marketplace-upgrade {
@@ -1866,7 +1866,7 @@ button.directory-card {
 }
 
 .directory-card-title {
-  @apply truncate text-sm font-semibold text-ink-1;
+  @apply truncate text-ui font-semibold text-ink-1;
 }
 
 .directory-card-meta {
@@ -1900,7 +1900,7 @@ button.directory-card {
 .directory-loading,
 .directory-empty,
 .directory-error {
-  @apply rounded-xl border border-line-1 bg-s2 p-4 text-sm text-ink-3;
+  @apply rounded-xl border border-line-1 bg-s2 p-4 text-ui text-ink-3;
 }
 
 .directory-empty-copy {
@@ -1921,7 +1921,7 @@ button.directory-card {
 }
 
 .directory-toast {
-  @apply mx-auto w-full max-w-5xl rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-sm font-medium text-ok;
+  @apply mx-auto w-full max-w-5xl rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-ui font-medium text-ok;
 }
 
 .directory-mini-heading,
@@ -1963,7 +1963,7 @@ button.directory-card {
 }
 
 .directory-detail-description {
-  @apply m-0 text-sm leading-relaxed text-ink-3;
+  @apply m-0 text-ui leading-relaxed text-ink-3;
 }
 
 .directory-detail-grid {
@@ -2032,7 +2032,7 @@ button.directory-card {
 }
 
 .composio-preview-text {
-  @apply m-0 mt-2 max-w-2xl text-sm leading-relaxed text-ink-3;
+  @apply m-0 mt-2 max-w-2xl text-ui leading-relaxed text-ink-3;
 }
 
 .composio-preview-actions {

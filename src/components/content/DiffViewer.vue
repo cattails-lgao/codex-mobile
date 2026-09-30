@@ -191,7 +191,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 }
 
 .diff-viewer-sidebar-title {
-  @apply m-0 text-sm font-semibold text-ink-1;
+  @apply m-0 text-ui font-semibold text-ink-1;
 }
 
 .diff-viewer-sidebar-count {
@@ -239,7 +239,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 }
 
 .diff-viewer-subtitle {
-  @apply mt-1 mb-0 text-sm text-ink-3;
+  @apply mt-1 mb-0 text-ui text-ink-3;
 }
 
 .diff-viewer-close {
@@ -259,7 +259,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
 }
 
 .diff-viewer-empty-text {
-  @apply mt-2 max-w-2xl text-sm leading-relaxed text-ink-3;
+  @apply mt-2 max-w-2xl text-ui leading-relaxed text-ink-3;
 }
 
 .diff-viewer-panel {
@@ -401,7 +401,7 @@ const displayFileChangePath = computed(() => (pathValue: string) => displayFileC
   }
 
   .diff-viewer-title {
-    @apply text-sm leading-5;
+    @apply text-ui leading-5;
   }
 
   .diff-viewer-subtitle {

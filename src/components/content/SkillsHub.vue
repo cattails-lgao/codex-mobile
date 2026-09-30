@@ -440,7 +440,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-subtitle {
-  @apply text-sm text-ink-3 m-0;
+  @apply text-ui text-ink-3 m-0;
 }
 
 .skills-hub-sort {
@@ -452,7 +452,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-sync-header {
-  @apply flex flex-wrap items-center gap-2 text-sm text-ink-2;
+  @apply flex flex-wrap items-center gap-2 text-ui text-ink-2;
 }
 
 .skills-sync-badge {
@@ -488,7 +488,7 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-search-copy {
-  @apply flex flex-col gap-0.5 text-sm text-ink-2;
+  @apply flex flex-col gap-0.5 text-ui text-ink-2;
 }
 
 .skills-search-copy span {
@@ -504,11 +504,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-search-input {
-  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s0 px-3 py-2 text-sm text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
+  @apply min-w-0 flex-1 rounded-lg border border-line-1 bg-s0 px-3 py-2 text-ui text-ink-2 outline-none placeholder-ink-3 transition focus:border-line-2 focus:bg-s2;
 }
 
 .skills-hub-toast {
-  @apply rounded-lg px-3 py-2 text-sm font-medium;
+  @apply rounded-lg px-3 py-2 text-ui font-medium;
 }
 
 .skills-hub-toast-success {
@@ -524,11 +524,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-section-toggle {
-  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-sm font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
+  @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-ui font-medium text-ink-3 transition hover:text-ink-1 cursor-pointer;
 }
 
 .skills-hub-section-title {
-  @apply text-sm font-medium;
+  @apply text-ui font-medium;
 }
 
 .skills-hub-section-chevron {
@@ -544,11 +544,11 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-loading {
-  @apply text-sm text-ink-3 py-8 text-center;
+  @apply text-ui text-ink-3 py-8 text-center;
 }
 
 .skills-hub-error {
-  @apply flex items-start justify-between gap-3 text-sm text-alert p-4 text-left rounded-lg border border-alert/30 bg-alert/10;
+  @apply flex items-start justify-between gap-3 text-ui text-alert p-4 text-left rounded-lg border border-alert/30 bg-alert/10;
 }
 
 .skills-error-feedback {
@@ -556,6 +556,6 @@ watch(visibleSkillErrors, (values, oldValues) => {
 }
 
 .skills-hub-empty {
-  @apply text-sm text-ink-3 py-8 text-center;
+  @apply text-ui text-ink-3 py-8 text-center;
 }
 </style>
