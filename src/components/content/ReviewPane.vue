@@ -991,7 +991,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-title {
-  @apply m-0 truncate text-sm font-medium text-ink-1;
+  @apply m-0 truncate text-ui font-medium text-ink-1;
 }
 
 .review-pane-header-actions {
@@ -1073,7 +1073,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-banner {
-  @apply mx-3 mt-2.5 rounded-xl border border-live/30 bg-live/10 px-3 py-2 text-sm text-live;
+  @apply mx-3 mt-2.5 rounded-xl border border-live/30 bg-live/10 px-3 py-2 text-ui text-live;
 }
 
 .review-pane-banner.is-error {
@@ -1197,7 +1197,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-path {
-  @apply min-w-0 truncate text-sm text-ink-2;
+  @apply min-w-0 truncate text-ui text-ink-2;
 }
 
 .review-pane-file-delta {
@@ -1240,7 +1240,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-file-title {
-  @apply m-0 break-all text-sm font-medium text-ink-1;
+  @apply m-0 break-all text-ui font-medium text-ink-1;
 }
 
 .review-pane-file-subtitle,
@@ -1331,11 +1331,11 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-empty-title {
-  @apply m-0 text-sm font-medium text-ink-1;
+  @apply m-0 text-ui font-medium text-ink-1;
 }
 
 .review-pane-empty-text {
-  @apply mt-2 max-w-sm text-sm text-ink-3;
+  @apply mt-2 max-w-sm text-ui text-ink-3;
 }
 
 .review-pane-primary-cta {
@@ -1359,7 +1359,7 @@ onBeforeUnmount(() => {
 }
 
 .review-pane-sheet-title {
-  @apply m-0 text-sm font-medium text-ink-1;
+  @apply m-0 text-ui font-medium text-ink-1;
 }
 
 .review-pane-sheet-count {

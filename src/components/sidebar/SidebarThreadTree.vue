@@ -2069,7 +2069,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-tree-header {
-  @apply text-sm font-normal text-ink-3 select-none;
+  @apply text-ui font-normal text-ink-3 select-none;
 }
 
 .chats-section-actions {
@@ -2105,7 +2105,7 @@ onBeforeUnmount(() => {
 }
 
 .organize-menu-item {
-  @apply w-full rounded-lg px-2 py-1.5 text-sm text-ink-2 flex items-center justify-between hover:bg-s1;
+  @apply w-full rounded-lg px-2 py-1.5 text-ui text-ink-2 flex items-center justify-between hover:bg-s1;
 }
 
 .organize-menu-item[data-active='true'] {
@@ -2117,7 +2117,7 @@ onBeforeUnmount(() => {
 }
 
 .recycle-bin-empty {
-  @apply py-6 text-center text-sm text-ink-3;
+  @apply py-6 text-center text-ui text-ink-3;
 }
 
 .recycle-bin-list {
@@ -2133,7 +2133,7 @@ onBeforeUnmount(() => {
 }
 
 .recycle-bin-item-title {
-  @apply truncate text-sm font-medium text-ink-2;
+  @apply truncate text-ui font-medium text-ink-2;
 }
 
 .recycle-bin-item-meta {
@@ -2169,11 +2169,11 @@ onBeforeUnmount(() => {
 }
 
 .thread-tree-loading {
-  @apply px-3 py-2 text-sm text-ink-3;
+  @apply px-3 py-2 text-ui text-ink-3;
 }
 
 .thread-tree-no-results {
-  @apply px-3 py-2 text-sm text-ink-3;
+  @apply px-3 py-2 text-ui text-ink-3;
 }
 
 .thread-tree-action-error {
@@ -2217,7 +2217,7 @@ onBeforeUnmount(() => {
 }
 
 .project-title {
-  @apply min-w-0 flex-1 text-sm font-normal text-ink-2 truncate select-none;
+  @apply min-w-0 flex-1 text-ui font-normal text-ink-2 truncate select-none;
 }
 
 .project-menu-wrap {
@@ -2243,7 +2243,7 @@ onBeforeUnmount(() => {
 }
 
 .project-menu-item {
-  @apply rounded px-2 py-1 text-left text-sm text-ink-2 hover:bg-s1;
+  @apply rounded px-2 py-1 text-left text-ui text-ink-2 hover:bg-s1;
 }
 
 .project-menu-item-danger {
@@ -2255,7 +2255,7 @@ onBeforeUnmount(() => {
 }
 
 .project-menu-input {
-  @apply px-2 py-1 text-sm text-ink-2 bg-transparent border-none outline-none;
+  @apply px-2 py-1 text-ui text-ink-2 bg-transparent border-none outline-none;
 }
 
 .project-empty-row {
@@ -2267,7 +2267,7 @@ onBeforeUnmount(() => {
 }
 
 .project-empty {
-  @apply text-sm text-ink-3;
+  @apply text-ui text-ink-3;
 }
 
 .thread-list {
@@ -2297,7 +2297,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-menu-item {
-  @apply rounded px-2 py-1 text-left text-sm text-ink-2 hover:bg-s1;
+  @apply rounded px-2 py-1 text-left text-ui text-ink-2 hover:bg-s1;
 }
 
 .thread-menu-item:disabled {
@@ -2321,7 +2321,7 @@ onBeforeUnmount(() => {
 }
 
 .thread-show-more-button {
-  @apply block mx-auto rounded-lg px-2 py-0.5 text-sm font-normal text-ink-3 transition hover:text-ink-2 hover:bg-line-1;
+  @apply block mx-auto rounded-lg px-2 py-0.5 text-ui font-normal text-ink-3 transition hover:text-ink-2 hover:bg-line-1;
 }
 
 .thread-row-automation-chip {
@@ -2358,11 +2358,11 @@ onBeforeUnmount(() => {
 }
 
 .rename-thread-subtitle {
-  @apply mt-1 mb-3 text-sm text-ink-3 overflow-y-auto flex-1 min-h-0 min-w-0 break-words;
+  @apply mt-1 mb-3 text-ui text-ink-3 overflow-y-auto flex-1 min-h-0 min-w-0 break-words;
 }
 
 .rename-thread-input {
-  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none focus:border-line-4 shrink-0;
+  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-ui text-ink-1 outline-none focus:border-line-4 shrink-0;
 }
 
 .rename-thread-actions {
@@ -2370,7 +2370,7 @@ onBeforeUnmount(() => {
 }
 
 .rename-thread-button {
-  @apply rounded-md px-3 py-1.5 text-sm text-ink-2 hover:bg-s1;
+  @apply rounded-md px-3 py-1.5 text-ui text-ink-2 hover:bg-s1;
 }
 
 .rename-thread-button-primary {
@@ -2424,7 +2424,7 @@ onBeforeUnmount(() => {
 }
 
 .automation-thread-list-item {
-  @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-ink-2 hover:bg-s2;
+  @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-ui text-ink-2 hover:bg-s2;
 }
 
 .automation-thread-list-item.is-active {
@@ -2444,11 +2444,11 @@ onBeforeUnmount(() => {
 }
 
 .automation-thread-textarea {
-  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none focus:border-line-4;
+  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-ui text-ink-1 outline-none focus:border-line-4;
 }
 
 .automation-thread-dropdown :deep(.composer-dropdown-trigger) {
-  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-sm text-ink-1;
+  @apply w-full rounded-md border border-line-2 bg-s2 px-3 py-2 text-ui text-ink-1;
 }
 
 .automation-thread-dropdown :deep(.composer-dropdown-value) {
@@ -2472,17 +2472,17 @@ onBeforeUnmount(() => {
 }
 
 .automation-schedule-copy {
-  @apply text-sm text-ink-3;
+  @apply text-ui text-ink-3;
 }
 
 .automation-schedule-time,
 .automation-schedule-number,
 .automation-schedule-unit {
-  @apply rounded-md border border-line-2 bg-s2 px-2 py-1.5 text-sm text-ink-1 outline-none focus:border-line-4;
+  @apply rounded-md border border-line-2 bg-s2 px-2 py-1.5 text-ui text-ink-1 outline-none focus:border-line-4;
 }
 
 .automation-schedule-unit-dropdown :deep(.composer-dropdown-trigger) {
-  @apply min-h-8 rounded-md border border-line-2 bg-s2 px-2 py-1.5 text-sm text-ink-1;
+  @apply min-h-8 rounded-md border border-line-2 bg-s2 px-2 py-1.5 text-ui text-ink-1;
 }
 
 .automation-schedule-number {

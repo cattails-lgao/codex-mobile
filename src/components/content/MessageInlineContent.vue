@@ -60,6 +60,6 @@ defineProps<{
 }
 
 .message-file-link {
-  @apply text-sm leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
+  @apply text-body leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
 }
 </style>

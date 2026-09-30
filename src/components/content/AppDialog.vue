@@ -127,7 +127,7 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog-subtitle {
-  @apply m-0 mt-0.5 text-sm leading-5 text-ink-3;
+  @apply m-0 mt-0.5 text-ui leading-5 text-ink-3;
 }
 
 .app-dialog-close {

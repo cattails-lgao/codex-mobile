@@ -66,11 +66,11 @@ defineEmits<{
 }
 
 .confirm-dialog-title {
-  @apply m-0 text-sm font-semibold text-ink-1;
+  @apply m-0 text-ui font-semibold text-ink-1;
 }
 
 .confirm-dialog-message {
-  @apply m-0 mt-1.5 text-sm leading-5 text-ink-3;
+  @apply m-0 mt-1.5 text-ui leading-5 text-ink-3;
 }
 
 .confirm-dialog-actions {
@@ -78,7 +78,7 @@ defineEmits<{
 }
 
 .confirm-dialog-btn {
-  @apply rounded-lg border border-line-1 bg-s2 px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-s0;
+  @apply rounded-lg border border-line-1 bg-s2 px-3 py-1.5 text-ui font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .confirm-dialog-btn-confirm {

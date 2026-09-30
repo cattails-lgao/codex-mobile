@@ -183,7 +183,7 @@ function onApprovalPolicySelect(value: string): void {
 }
 
 .thread-composer-attach-item {
-  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-sm text-ink-2 transition hover:bg-s1 disabled:cursor-not-allowed disabled:text-ink-3;
+  @apply block w-full rounded-lg border-0 bg-transparent px-3 py-2 text-left text-ui text-ink-2 transition hover:bg-s1 disabled:cursor-not-allowed disabled:text-ink-3;
 }
 
 .thread-composer-attach-separator {
@@ -195,7 +195,7 @@ function onApprovalPolicySelect(value: string): void {
 }
 
 .thread-composer-attach-mode-label {
-  @apply text-sm text-ink-2;
+  @apply text-ui text-ink-2;
 }
 
 .thread-composer-attach-mode-buttons {

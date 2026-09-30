@@ -622,7 +622,7 @@ defineExpose({ containsTarget })
 }
 
 .settings-dialog-title {
-  @apply m-0 text-sm font-semibold text-ink-1;
+  @apply m-0 text-ui font-semibold text-ink-1;
 }
 
 .settings-dialog-close {
@@ -654,7 +654,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-row {
-  @apply flex items-center justify-between w-full px-3 py-2.5 text-sm text-ink-2 border-0 bg-transparent transition hover:bg-s0 cursor-pointer;
+  @apply flex items-center justify-between w-full px-3 py-2.5 text-ui text-ink-2 border-0 bg-transparent transition hover:bg-s0 cursor-pointer;
 }
 
 .sidebar-settings-row--select {
@@ -686,7 +686,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-hooks-title {
-  @apply text-sm font-medium text-ink-2;
+  @apply text-ui font-medium text-ink-2;
 }
 
 .sidebar-settings-hooks-reload {
@@ -738,7 +738,7 @@ defineExpose({ containsTarget })
 }
 
 .sidebar-settings-remote-title {
-  @apply text-sm font-medium text-ink-2;
+  @apply text-ui font-medium text-ink-2;
 }
 
 .sidebar-settings-remote-toggle {
@@ -831,7 +831,7 @@ defineExpose({ containsTarget })
 
 .sidebar-settings-input,
 .sidebar-settings-textarea {
-  @apply w-full rounded-md border border-line-1 bg-s2 px-2.5 py-2 text-sm text-ink-2 outline-none transition focus:border-line-3 focus:ring-2 focus:ring-line-1;
+  @apply w-full rounded-md border border-line-1 bg-s2 px-2.5 py-2 text-ui text-ink-2 outline-none transition focus:border-line-3 focus:ring-2 focus:ring-line-1;
 }
 
 .sidebar-settings-textarea {

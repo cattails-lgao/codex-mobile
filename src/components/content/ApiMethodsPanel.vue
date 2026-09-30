@@ -46,7 +46,7 @@ const { t } = useUiLanguage()
 }
 
 .api-panel-loading {
-  @apply mt-3 mb-0 text-sm text-ink-3;
+  @apply mt-3 mb-0 text-ui text-ink-3;
 }
 
 .api-method-list {

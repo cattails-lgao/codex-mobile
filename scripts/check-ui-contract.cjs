@@ -352,6 +352,25 @@ check(
   headingOffToken.length === 0,
   headingOffToken.slice(0, 3).join(' | '),
 )
+
+// ------------------------------------------- 排版阶梯归档（round-117）
+// UI 层不得再使用阶梯外的 text-sm(14px)：阶梯是 micro 11 / meta 12 / ui 13 /
+// body 15 / h3 18 / h2 24 / display 40（另加 nano 10）。162 处 text-sm 已按语义
+// 归档——会话正文 → text-body(15)，控件/列表行/面板正文 → text-ui(13)。
+// 唯一允许的例外是 Markdown 标题链（h4/h5/h6），它走 Tailwind 默认档体系，
+// 由上方「Markdown 标题分级」断言单独管辖。
+const textSmHits = []
+for (const file of vueFiles) {
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
+  lines.forEach((line, i) => {
+    if (/\btext-sm\b/.test(line)) textSmHits.push(`${path.basename(file)}:${i + 1}`)
+  })
+}
+check(
+  'UI 字号不落在阶梯外：text-sm(14px) 只余 Markdown 标题链 3 处',
+  textSmHits.length === 3 && textSmHits.every((h) => h.startsWith('ThreadConversation.vue')),
+  textSmHits.length ? textSmHits.join(', ') : '无',
+)
 // 线程行：相对时间等宽（机器口径）、运行 pip 用 --live、选中行有中性导轨。
 const threadRowVue = fs.readFileSync('src/components/sidebar/SidebarThreadRow.vue', 'utf8')
 const rowTimeRule = threadRowVue.match(/\n\.thread-row-time \{([^}]*)\}/)

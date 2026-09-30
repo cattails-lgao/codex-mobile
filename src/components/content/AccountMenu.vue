@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-trigger {
-  @apply inline-flex h-8 items-center gap-2 rounded-full border border-line-1 bg-s2 px-3 text-sm text-ink-2 transition hover:bg-s0;
+  @apply inline-flex h-8 items-center gap-2 rounded-full border border-line-1 bg-s2 px-3 text-ui text-ink-2 transition hover:bg-s0;
 }
 
 .account-menu-trigger-label {
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-title {
-  @apply text-sm font-medium text-ink-1;
+  @apply text-ui font-medium text-ink-1;
 }
 
 .account-menu-error {
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-empty {
-  @apply text-sm text-ink-3;
+  @apply text-ui text-ink-3;
 }
 
 .account-menu-list {
@@ -156,7 +156,7 @@ onBeforeUnmount(() => {
 }
 
 .account-menu-item-email {
-  @apply truncate text-sm font-medium text-ink-1;
+  @apply truncate text-ui font-medium text-ink-1;
 }
 
 .account-menu-item-meta {

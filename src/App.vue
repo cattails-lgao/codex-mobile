@@ -5098,7 +5098,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-search-input {
-  @apply flex-1 min-w-0 bg-transparent text-sm text-ink-2 placeholder-ink-3 outline-none border-none p-0;
+  @apply flex-1 min-w-0 bg-transparent text-ui text-ink-2 placeholder-ink-3 outline-none border-none p-0;
 }
 
 .sidebar-search-clear {
@@ -5143,7 +5143,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .sidebar-skills-link-title {
-  @apply truncate text-sm font-semibold leading-5 tracking-[-0.01em];
+  @apply truncate text-ui font-semibold leading-5 tracking-[-0.01em];
 }
 
 .sidebar-skills-link-subtitle {
@@ -5214,7 +5214,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 
 .content-error {
-  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-ui text-alert;
 }
 
 .content-grid {
@@ -5234,15 +5234,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .composer-runtime-error {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm font-medium text-alert shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-ui font-medium text-alert shadow-sm;
 }
 
 .external-session-banner {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-sm font-medium text-live shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-ui font-medium text-live shadow-sm;
 }
 
 .interrupt-recovered-banner {
-  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-line-1 bg-s1 px-3 py-2 text-sm font-medium text-ink-2 shadow-sm;
+  @apply flex w-full items-start justify-between gap-3 rounded-lg border border-line-1 bg-s1 px-3 py-2 text-ui font-medium text-ink-2 shadow-sm;
 }
 
 .interrupt-recovered-dismiss {
@@ -5324,7 +5324,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .content-right-panel-add {
-  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-line-1 bg-s2 text-sm text-ink-3 transition hover:bg-s1 hover:text-ink-1;
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-line-1 bg-s2 text-ui text-ink-3 transition hover:bg-s1 hover:text-ink-1;
 }
 
 .content-right-panel-menu {
@@ -5447,7 +5447,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card-text {
-  @apply m-0 max-w-2xl text-sm leading-6 text-ink-2 sm:text-body;
+  @apply m-0 max-w-2xl text-ui leading-6 text-ink-2 sm:text-body;
 }
 
 .new-thread-launch-card-actions {
@@ -5463,7 +5463,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-launch-card-button {
-  @apply inline-flex h-10 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-sm font-medium text-ink-2 transition hover:bg-s0;
+  @apply inline-flex h-10 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-ui font-medium text-ink-2 transition hover:bg-s0;
 }
 
 .new-thread-launch-card-button-primary {
@@ -5471,7 +5471,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-folder-action {
-  @apply inline-flex h-9 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-sm font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-9 items-center justify-center rounded-full border border-line-1 bg-s2 px-4 text-ui font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .new-thread-folder-action-primary {
@@ -5495,11 +5495,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-title {
-  @apply m-0 text-sm font-semibold text-ink-1;
+  @apply m-0 text-ui font-semibold text-ink-1;
 }
 
 .new-thread-open-folder-close {
-  @apply border-0 bg-transparent p-0 text-sm text-ink-3 transition hover:text-ink-2;
+  @apply border-0 bg-transparent p-0 text-ui text-ink-3 transition hover:text-ink-2;
 }
 
 .new-thread-open-folder-label {
@@ -5523,7 +5523,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-project-mode-tab {
-  @apply inline-flex h-9 items-center justify-center rounded-lg border-0 bg-transparent px-3 text-sm font-medium text-ink-3 transition hover:bg-s2 hover:text-ink-1 disabled:cursor-default disabled:opacity-60;
+  @apply inline-flex h-9 items-center justify-center rounded-lg border-0 bg-transparent px-3 text-ui font-medium text-ink-3 transition hover:bg-s2 hover:text-ink-1 disabled:cursor-default disabled:opacity-60;
 }
 
 .new-thread-project-mode-tab.is-active {
@@ -5539,7 +5539,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-toggle {
-  @apply inline-flex items-center gap-2 text-sm text-ink-3;
+  @apply inline-flex items-center gap-2 text-ui text-ink-3;
 }
 
 .new-thread-open-folder-toggle-input {
@@ -5573,7 +5573,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-filter {
-  @apply w-full rounded-xl border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3;
+  @apply w-full rounded-xl border border-line-1 bg-s2 px-3 py-2 text-ui text-ink-1 outline-none transition focus:border-line-3;
 }
 
 .new-thread-open-folder-create {
@@ -5585,7 +5585,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-create-input {
-  @apply w-full min-w-0 flex-1 rounded-xl border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3;
+  @apply w-full min-w-0 flex-1 rounded-xl border border-line-1 bg-s2 px-3 py-2 text-ui text-ink-1 outline-none transition focus:border-line-3;
 }
 
 .new-thread-open-folder-create-submit {
@@ -5597,11 +5597,11 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-status {
-  @apply m-0 rounded-xl border border-line-1 bg-s0 px-3 py-2 text-sm text-ink-3;
+  @apply m-0 rounded-xl border border-line-1 bg-s0 px-3 py-2 text-ui text-ink-3;
 }
 
 .new-thread-open-folder-error {
-  @apply m-0 rounded-xl border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-xl border border-alert/30 bg-alert/10 px-3 py-2 text-ui text-alert;
 }
 
 .new-thread-open-folder-error-actions {
@@ -5639,7 +5639,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-open-folder-item-main {
-  @apply min-w-0 truncate rounded-xl border border-line-1 bg-s0 px-2.5 py-1 text-left text-sm font-medium leading-5 text-ink-1 transition hover:border-line-2 hover:bg-s1;
+  @apply min-w-0 truncate rounded-xl border border-line-1 bg-s0 px-2.5 py-1 text-left text-ui font-medium leading-5 text-ink-1 transition hover:border-line-2 hover:bg-s1;
 }
 
 .new-thread-open-folder-item-main:disabled,
@@ -5668,7 +5668,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .new-thread-branch-dropdown :deep(.composer-dropdown-trigger) {
-  @apply h-9 rounded-xl border border-line-1 bg-s2 px-3 text-sm text-ink-2;
+  @apply h-9 rounded-xl border border-line-1 bg-s2 px-3 text-ui text-ink-2;
 }
 
 .new-thread-branch-select-help {
@@ -5680,7 +5680,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .worktree-init-status {
-  @apply mt-3 flex w-full max-w-xl flex-col gap-1 rounded-xl border px-3 py-2 text-sm;
+  @apply mt-3 flex w-full max-w-xl flex-col gap-1 rounded-xl border px-3 py-2 text-ui;
 }
 
 .worktree-init-status.is-running {
@@ -5737,15 +5737,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .codex-login-modal-copy {
-  @apply text-sm leading-5 text-ink-3;
+  @apply text-ui leading-5 text-ink-3;
 }
 
 .codex-login-modal-link {
-  @apply min-w-0 truncate text-sm text-ink-1 hover:text-ink-1 hover:underline;
+  @apply min-w-0 truncate text-ui text-ink-1 hover:text-ink-1 hover:underline;
 }
 
 .codex-login-modal-input {
-  @apply w-full rounded-lg border border-line-1 bg-s2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-line-3 disabled:cursor-default disabled:opacity-60;
+  @apply w-full rounded-lg border border-line-1 bg-s2 px-3 py-2 text-ui text-ink-1 outline-none transition focus:border-line-3 disabled:cursor-default disabled:opacity-60;
 }
 
 .codex-login-modal-error {
@@ -5758,7 +5758,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .codex-login-modal-cancel,
 .codex-login-modal-submit {
-  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-sm text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-ui text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .codex-login-modal-submit {
@@ -5787,15 +5787,15 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 }
 
 .project-zip-modal-copy {
-  @apply min-h-5 truncate text-sm text-ink-3;
+  @apply min-h-5 truncate text-ui text-ink-3;
 }
 
 .project-zip-modal-error {
-  @apply rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-sm text-live;
+  @apply rounded-lg border border-live/30 bg-live/10 px-3 py-2 text-ui text-live;
 }
 
 .project-zip-progress-label {
-  @apply flex items-center justify-between gap-3 text-sm font-semibold;
+  @apply flex items-center justify-between gap-3 text-ui font-semibold;
 }
 
 .project-zip-progress-label span:last-child {
@@ -5816,7 +5816,7 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
 
 .project-zip-modal-cancel,
 .project-zip-modal-action {
-  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
+  @apply rounded-full border border-line-1 bg-s2 px-3 py-1.5 text-ui font-medium text-ink-2 transition hover:bg-s0 disabled:cursor-default disabled:opacity-60;
 }
 
 .project-zip-modal-action-primary {

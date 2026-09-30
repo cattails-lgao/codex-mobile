@@ -166,7 +166,7 @@ defineProps<{
 }
 
 .sidebar-settings-account-title {
-  @apply text-sm font-medium text-ink-2;
+  @apply text-ui font-medium text-ink-2;
 }
 
 .sidebar-settings-account-count {
@@ -222,7 +222,7 @@ defineProps<{
 }
 
 .sidebar-settings-account-email {
-  @apply truncate text-sm text-ink-2;
+  @apply truncate text-ui text-ink-2;
 }
 
 .sidebar-settings-account-meta {

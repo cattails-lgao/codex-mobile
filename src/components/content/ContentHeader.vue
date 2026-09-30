@@ -25,7 +25,7 @@ defineProps<{
 }
 
 .content-title {
-  @apply m-0 min-w-0 max-w-[min(72ch,100%)] flex-1 truncate text-sm font-medium leading-6 text-ink-1 max-sm:text-xs;
+  @apply m-0 min-w-0 max-w-[min(72ch,100%)] flex-1 truncate text-ui font-medium leading-6 text-ink-1 max-sm:text-xs;
 }
 
 .content-title.is-accent {

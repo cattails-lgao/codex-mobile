@@ -371,7 +371,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automations-error {
-  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-sm text-alert;
+  @apply m-0 rounded-lg border border-alert/30 bg-alert/10 px-3 py-2 text-ui text-alert;
 }
 
 .automations-layout {
@@ -410,7 +410,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-row-title {
-  @apply truncate text-sm font-medium text-ink-1;
+  @apply truncate text-ui font-medium text-ink-1;
 }
 
 .automation-row-meta {
@@ -475,7 +475,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail-grid dd {
-  @apply m-0 truncate text-sm text-ink-1;
+  @apply m-0 truncate text-ui text-ink-1;
 }
 
 .automation-detail-prompt {
@@ -487,7 +487,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automation-detail-prompt p {
-  @apply m-0 whitespace-pre-wrap rounded-lg bg-s0 p-3 text-sm leading-6 text-ink-2;
+  @apply m-0 whitespace-pre-wrap rounded-lg bg-s0 p-3 text-ui leading-6 text-ink-2;
 }
 
 .automations-empty {
@@ -503,7 +503,7 @@ function getPathLeaf(path: string): string {
 }
 
 .automations-empty span {
-  @apply text-sm;
+  @apply text-ui;
 }
 
 </style>

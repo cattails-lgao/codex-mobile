@@ -136,7 +136,7 @@ function getMessagePreview(message: QueuedMessageRow): string {
 }
 
 .queued-row {
-  @apply flex min-w-0 items-center gap-2 rounded-lg py-1 text-sm transition;
+  @apply flex min-w-0 items-center gap-2 rounded-lg py-1 text-ui transition;
 }
 
 .queued-row.is-dragging {

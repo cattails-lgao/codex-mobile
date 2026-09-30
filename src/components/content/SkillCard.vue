@@ -141,7 +141,7 @@ function onAvatarError(e: Event): void {
 }
 
 .skill-card-name {
-  @apply text-sm font-medium text-ink-1 truncate;
+  @apply text-ui font-medium text-ink-1 truncate;
 }
 
 .skill-card-badge {

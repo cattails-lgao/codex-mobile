@@ -2059,7 +2059,7 @@ onBeforeUnmount(() => {
 }
 
 .conversation-loading {
-  @apply m-0 px-6 text-sm text-ink-3;
+  @apply m-0 px-6 text-ui text-ink-3;
 }
 
 .conversation-loading-slow {
@@ -2072,7 +2072,7 @@ onBeforeUnmount(() => {
 }
 
 .conversation-empty {
-  @apply m-0 px-6 text-sm text-ink-3;
+  @apply m-0 px-6 text-ui text-ink-3;
 }
 
 .conversation-list {
@@ -2246,7 +2246,7 @@ onBeforeUnmount(() => {
 }
 
 .request-title {
-  @apply m-0 text-sm leading-5 font-semibold text-live;
+  @apply m-0 text-ui leading-5 font-semibold text-live;
 }
 
 .request-meta {
@@ -2254,7 +2254,7 @@ onBeforeUnmount(() => {
 }
 
 .request-reason {
-  @apply m-0 text-sm leading-5 text-live whitespace-pre-wrap break-words;
+  @apply m-0 text-ui leading-5 text-live whitespace-pre-wrap break-words;
   overflow-wrap: anywhere;
 }
 
@@ -2279,7 +2279,7 @@ onBeforeUnmount(() => {
 }
 
 .request-question-title {
-  @apply m-0 text-sm leading-5 font-medium text-live;
+  @apply m-0 text-ui leading-5 font-medium text-live;
 }
 
 .request-question-text {
@@ -2295,11 +2295,11 @@ onBeforeUnmount(() => {
 }
 
 .request-select {
-  @apply h-8 rounded-md border border-live bg-s2 px-2 text-sm text-live;
+  @apply h-8 rounded-md border border-live bg-s2 px-2 text-ui text-live;
 }
 
 .request-input {
-  @apply h-8 rounded-md border border-live bg-s2 px-2 text-sm text-live placeholder:text-live;
+  @apply h-8 rounded-md border border-live bg-s2 px-2 text-ui text-live placeholder:text-live;
 }
 
 .request-checkbox-list {
@@ -2307,7 +2307,7 @@ onBeforeUnmount(() => {
 }
 
 .request-checkbox-row {
-  @apply flex items-center gap-2 text-sm text-live;
+  @apply flex items-center gap-2 text-ui text-live;
 }
 
 .turn-error-feedback {
@@ -2410,7 +2410,7 @@ onBeforeUnmount(() => {
 
 .message-text {
   /* round-23 字体规范：正文 14px / #171717 */
-  @apply m-0 text-sm leading-relaxed whitespace-pre-wrap break-words;
+  @apply m-0 text-body leading-relaxed whitespace-pre-wrap break-words;
   color: #171717;
   overflow-wrap: anywhere;
 }
@@ -2447,13 +2447,13 @@ onBeforeUnmount(() => {
 }
 
 .message-blockquote {
-  @apply m-0 border-l-4 border-line-2 pl-4 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words text-ink-2 bg-s0/70 rounded-r-lg;
+  @apply m-0 border-l-4 border-line-2 pl-4 py-1 text-body leading-relaxed whitespace-pre-wrap break-words text-ink-2 bg-s0/70 rounded-r-lg;
   overflow-wrap: anywhere;
 }
 
 .message-list {
   /* round-23 字体规范：列表正文 #171717 */
-  @apply m-0 pl-5 text-sm leading-relaxed flex flex-col gap-1.5;
+  @apply m-0 pl-5 text-body leading-relaxed flex flex-col gap-1.5;
   color: #171717;
 }
 
@@ -2491,7 +2491,7 @@ onBeforeUnmount(() => {
 }
 
 .message-task-checkbox {
-  @apply mt-0.5 text-sm leading-none text-ink-3 select-none;
+  @apply mt-0.5 text-body leading-none text-ink-3 select-none;
 }
 
 .message-table-wrap {
@@ -2499,7 +2499,7 @@ onBeforeUnmount(() => {
 }
 
 .message-table {
-  @apply min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-line-1 bg-s2 text-sm text-ink-2;
+  @apply min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-line-1 bg-s2 text-body text-ink-2;
 }
 
 .message-table-head-cell,
@@ -2576,7 +2576,7 @@ onBeforeUnmount(() => {
 }
 
 .message-file-link {
-  @apply text-sm leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
+  @apply text-body leading-relaxed text-ink-1 no-underline hover:text-ink-1 hover:underline underline-offset-2;
 }
 
 .message-divider {
@@ -2624,7 +2624,7 @@ onBeforeUnmount(() => {
 
 .work-summary-text {
   /* round-23 字体规范：正文 #171717 */
-  @apply m-0 text-sm leading-relaxed font-normal;
+  @apply m-0 text-body leading-relaxed font-normal;
   color: #171717;
 }
 
