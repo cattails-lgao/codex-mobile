@@ -68,3 +68,38 @@ export function sortComposioConnectors(
     (composioConnectionRank(a) - composioConnectionRank(b))
   ) || (composioPopularScore(b) - composioPopularScore(a)) || a.name.localeCompare(b.name))
 }
+
+// Directory try-item（App 的 onTryDirectoryItem）开新线程时要带上被点选的技能项，
+// 而技能输入项里的 path 是绝对路径（UserInput 的 skill 变体里 path 必填）。历史上
+// 这里写过作者本机的绝对路径，换台机器就失效——所以改为只传名字，由调用方拿
+// app-server 返回的已安装技能列表解析真实路径。
+export type DirectoryTrySkillRequest = { name: string; path?: string }
+export type DirectoryTrySkill = { name: string; path: string }
+export type InstalledSkillPathRef = { name: string; path: string }
+
+// 技能名可能带插件前缀（例如 `browser-use:browser`），所以除了全名相等，再按
+// 最后一段匹配一次。
+function findInstalledSkillPath(name: string, installedSkills: InstalledSkillPathRef[]): string {
+  const separator = name.lastIndexOf(':')
+  const leaf = separator >= 0 ? name.slice(separator + 1) : name
+  const match =
+    installedSkills.find((skill) => skill.name === name) ??
+    installedSkills.find((skill) => skill.name === leaf || skill.name.endsWith(`:${leaf}`))
+  return match?.path?.trim() ?? ''
+}
+
+// 解析不到就丢掉这一项——带一个不存在的路径只会让消息里记录一个假来源。
+export function resolveTryItemSkills(
+  requested: DirectoryTrySkillRequest[],
+  installedSkills: InstalledSkillPathRef[],
+): DirectoryTrySkill[] {
+  const resolved: DirectoryTrySkill[] = []
+  for (const skill of requested) {
+    const name = skill.name.trim()
+    if (!name) continue
+    const resolvedPath = (skill.path ?? '').trim() || findInstalledSkillPath(name, installedSkills)
+    if (!resolvedPath) continue
+    resolved.push({ name, path: resolvedPath })
+  }
+  return resolved
+}

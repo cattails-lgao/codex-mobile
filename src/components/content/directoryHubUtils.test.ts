@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DirectoryComposioConnector } from '../../api/codexGateway'
-import { sortComposioConnectors } from './directoryHubUtils'
+import { resolveTryItemSkills, sortComposioConnectors } from './directoryHubUtils'
 
 function connector(overrides: Partial<DirectoryComposioConnector> & Pick<DirectoryComposioConnector, 'slug' | 'name'>): DirectoryComposioConnector {
   return {
@@ -57,5 +57,39 @@ describe('sortComposioConnectors', () => {
     ]
 
     expect(sortComposioConnectors(rows, 'popular').map((row) => row.slug)).toEqual(['github', 'slack'])
+  })
+})
+
+
+describe('resolveTryItemSkills', () => {
+  const installed = [
+    { name: 'composio-cli', path: '/home/u/.codex/skills/composio-cli/SKILL.md' },
+    { name: 'browser-use:browser', path: '/home/u/.codex/skills/browser/SKILL.md' },
+  ]
+
+  it('fills a request that only carries a name from the installed skills', () => {
+    expect(resolveTryItemSkills([{ name: 'composio-cli' }], installed)).toEqual([
+      { name: 'composio-cli', path: '/home/u/.codex/skills/composio-cli/SKILL.md' },
+    ])
+  })
+
+  it('keeps an explicit path and never invents one for unknown skills', () => {
+    expect(resolveTryItemSkills([{ name: 'composio-cli', path: '/explicit/SKILL.md' }], installed)).toEqual([
+      { name: 'composio-cli', path: '/explicit/SKILL.md' },
+    ])
+    expect(resolveTryItemSkills([{ name: 'not-installed' }], installed)).toEqual([])
+  })
+
+  it('matches a plugin-prefixed name by its leaf segment', () => {
+    expect(resolveTryItemSkills([{ name: 'browser' }], installed)).toEqual([
+      { name: 'browser', path: '/home/u/.codex/skills/browser/SKILL.md' },
+    ])
+  })
+
+  it('drops blank names and blank paths', () => {
+    expect(resolveTryItemSkills([
+      { name: '   ' },
+      { name: 'composio-cli', path: '  ' },
+    ], [{ name: 'composio-cli', path: '  ' }])).toEqual([])
   })
 })

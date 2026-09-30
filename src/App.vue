@@ -1016,6 +1016,7 @@ import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathFor
 import { copyTextToClipboard } from './utils/clipboard'
 import { shouldSyncAfterForeground } from './utils/foregroundResume'
 import { readPlanData } from './utils/plan'
+import { resolveTryItemSkills } from './components/content/directoryHubUtils'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
 const ThreadTerminalPanel = defineAsyncComponent(() => import('./components/content/ThreadTerminalPanel.vue'))
@@ -1045,7 +1046,7 @@ type DirectoryTryItemPayload = {
   displayName: string
   skillPath?: string
   prompt?: string
-  attachedSkills?: Array<{ name: string; path: string }>
+  attachedSkills?: Array<{ name: string; path?: string }>
 }
 
 type ChatWidthPreset = {
@@ -4995,15 +4996,17 @@ function getDirectoryTryItemKey(payload: DirectoryTryItemPayload): string {
   return `${payload.kind}:${payload.name}:${payload.skillPath ?? ''}`
 }
 
+
 async function onTryDirectoryItem(payload: DirectoryTryItemPayload): Promise<void> {
   if (directoryTryInFlightKey.value) return
   directoryTryInFlightKey.value = getDirectoryTryItemKey(payload)
   const text = buildDirectoryTryPrompt(payload)
-  const skills = payload.attachedSkills?.length
+  const requestedSkills = payload.attachedSkills?.length
     ? payload.attachedSkills
     : payload.kind === 'skill' && payload.skillPath
     ? [{ name: payload.name, path: payload.skillPath }]
     : []
+  const skills = resolveTryItemSkills(requestedSkills, installedSkills.value)
   try {
     const targetCwd = directoryCwd.value.trim() || composerCwd.value.trim()
     const threadId = await sendMessageToNewThread(text, targetCwd, [], skills, [])
