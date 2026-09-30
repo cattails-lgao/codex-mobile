@@ -128,7 +128,10 @@
 - ✅ 字体自托管（`public/fonts/` 6 枚 woff2 + OFL 许可证，不打包 CJK）；首屏 `preload` 两枚。
 - ✅ 亮色 `body` / `theme-color` 跟随主题（原列 **P2**，作为确证缺陷提前到 P0）。
 - ✅ 可复跑检查四个：`scripts/check-ui-contract.cjs`（**18 项**）、`check-fonts.cjs`（13 项）、`check-theme.cjs`（15 项）、`check-token-equivalence.cjs`（外观等值闸门，2026-09-23 实测 **222/222 逐字相同**）。
-- ⏸ **排版阶梯移出 P0**：用户 2026-09-23 决定「先只做 token 化、排版等看过 P1 主界面再一起做」，故 `text-xs` 215 / `text-sm` 162 / `text-[Npx]` 147 一处未动，随 P1 一起落。
+- ✅ **排版阶梯已落地**（round-117 收口）：`text-[Npx]` 147 处由 round-96 清零（现存 2 处 `text-[1em]` 是相对单位、合同保留）；余下的 **`text-sm`(14px) 162 处**于 round-117 按「**语义分档**」归档——**会话正文 8 处 → `text-body` 15px**（`.message-text`/`.message-list`/`.message-blockquote`/`.message-table`/`.message-file-link`/`.message-task-checkbox`/`.work-summary-text`）、**控件/列表行/面板正文 151 处 → `text-ui` 13px**。`text-xs`(12px) **本就是阶梯的 meta 档**（`style.css:94` 注释明确「12px 复用 text-xs」），未动。
+  - **边界（重要）**：Markdown 标题链（`.message-heading-h4/h5/h6` = 14px）**有意不归入** UI 阶梯——它走 **Tailwind 默认档体系**（h1–h4 = `text-xl/lg/base/sm`），由 `check-ui-contract.cjs` 的「Markdown 标题分级」断言**单独管辖**。两套体系不要互相收编。
+  - **契约同步加固**：新增断言 **「UI 字号不落在阶梯外：`text-sm`(14px) 只余 Markdown 标题链 3 处」**（37 → **38 项**）。
+  - **改动硬证据**：等值前后对比 132 样本 → 118 未变、14 变化且**只有 `14px→13px` 一个方向**、元素增删 0、字体族/背景/文字色/圆角/边框差异 **0**；实测 computed `.message-text` = 15px、`.thread-row-title` = 13px。
 - ❌ **亮色基线未 token 化**（1112 处硬编码 slate/zinc，契约基线锁定不得增长）：**前置是定下亮色 token 取值**，属 P1/P2，见 §7。注意已提交的亮色取值（中性 `#f1f1f4`/`#121215`）与现状实际渲染（冷调 `slate-100 #f1f5f9` / `slate-900 #0f172a`）**不是同一套**——直接替换等于顺手改掉默认主题的色调。
 
 **P1 · 重做主界面**（侧栏 / 会话 / 输入区）
