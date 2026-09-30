@@ -1211,7 +1211,15 @@ export class BackendQueueProcessor {
   }
 
   private async canStartQueuedTurn(threadId: string): Promise<boolean> {
-    const response = asRecord(await this.appServer.rpc('thread/read', { threadId, includeTurns: true }))
+    // round-111：这一问（能不能开跑下一轮）每次队列 drain 都问一次，原先发的是
+    // 全量 thread/read（大线程 6.0–6.2s / 26MB）。有界读恰好覆盖它要的两件事：
+    // 线程自身的 status 在元数据里，而「有没有正在跑的轮」只看最新一页就够——
+    // 正在跑的轮必然是最新的那一轮。失败时 readThreadWithTurnPage 会重放原请求，
+    // 与改动前逐字一致。
+    const response = asRecord(await readThreadWithTurnPage({
+      rpc: (method, params) => this.appServer.rpc(method, params),
+      sendRead: (params) => this.appServer.rpc('thread/read', params),
+    }, { threadId, includeTurns: true }))
     const thread = asRecord(response?.thread)
     if (!thread) return false
 
