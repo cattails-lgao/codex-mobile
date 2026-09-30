@@ -36,6 +36,7 @@ import { handleOpenRouterProxyRequest } from './openRouterProxy.js'
 import { handleZenProxyRequest } from './zenProxy.js'
 import { handleCustomEndpointProxyRequest } from './customEndpointProxy.js'
 import { ThreadTerminalManager } from './terminalManager.js'
+import { createExecPtySpawn } from './bridge/execPtyChannel.js'
 import { getSpawnInvocation } from '../utils/commandInvocation.js'
 import {
   resolveCodexCommand,
@@ -1519,8 +1520,9 @@ const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
 // 「appServer.warmUp is not a function」并陷入 server restart failed 循环），
 // 所以 v2 → v3；round-86 加 readBoundedThreadTurnPage / recordThreadTurnPageBoundary，
 // 所以 v3 → v4；round-102 加 isThreadTurnPageUnsupported（翻旧页能力位），
-// 所以 v4 → v5。
-const SHARED_BRIDGE_VERSION = 'experimental-api-v5'
+// 所以 v4 → v5；round-116 起 ThreadTerminalManager 改为注入 app-server exec/PTY
+// 通道（构造参数变化，复用旧实例会继续用 node-pty），所以 v5 → v6。
+const SHARED_BRIDGE_VERSION = 'experimental-api-v6'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {
@@ -1538,7 +1540,16 @@ function getSharedBridgeState(): SharedBridgeState {
   }
 
   const appServer = new AppServerProcess()
-  const terminalManager = new ThreadTerminalManager()
+  const terminalManager = new ThreadTerminalManager({
+    // round-116: the integrated terminal runs on the app-server's official
+    // exec/PTY channel instead of a locally built native PTY (node-pty), which
+    // was an optional dependency whose build failures silently disabled the
+    // terminal on affected hosts.
+    spawn: createExecPtySpawn({
+      rpc: (method, params) => appServer.rpc(method, params),
+      onNotification: (listener) => appServer.onNotification(listener),
+    }),
+  })
   const backendQueueProcessor = new BackendQueueProcessor(appServer)
   const created: SharedBridgeState = {
     version: SHARED_BRIDGE_VERSION,
@@ -2309,6 +2320,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
     listener: (value: { method: string; params: unknown; atIso: string }) => void,
   ) => {
     const unsubscribeAppServer = appServer.onNotification((notification: { method: string; params: unknown }) => {
+      // round-116: `command/exec/outputDelta` frames belong to the integrated
+      // terminal's exec channel. They are consumed by bridge/execPtyChannel.ts
+      // and re-emitted as `terminal-data`; letting the raw base64 frames through
+      // would leak terminal bytes into the UI notification stream.
+      if (notification.method === 'command/exec/outputDelta') return
       listener({
         ...notification,
         atIso: new Date().toISOString(),

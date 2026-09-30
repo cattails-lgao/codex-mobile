@@ -56,11 +56,10 @@ packageJson.scripts = {
   ...(packageJson.scripts || {}),
 };
 delete packageJson.scripts.prepublishOnly;
-for (const dep of ['node-pty', 'node-pty-prebuilt-multiarch']) {
-  delete packageJson.dependencies?.[dep];
-  delete packageJson.optionalDependencies?.[dep];
-  delete packageJson.devDependencies?.[dep];
-}
+// round-116: the integrated terminal now runs on the app-server's exec/PTY
+// channel, so there is no `node-pty` dependency left to strip from the Android
+// package -- Android builds previously had no terminal at all because the
+// native PTY could not be compiled for android-arm64.
 delete packageJson.bundleDependencies;
 delete packageJson.bundledDependencies;
 packageJson.files = (packageJson.files || []).filter((entry) => !entry.startsWith('vendor/'));

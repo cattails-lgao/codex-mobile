@@ -1,14 +1,11 @@
-import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { createRequire } from 'node:module'
-import { basename, dirname, join } from 'node:path'
+import { basename } from 'node:path'
 import { homedir } from 'node:os'
-import { spawnSync } from 'node:child_process'
 const TERMINAL_BUFFER_LIMIT = 16 * 1024
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
 const TERMINAL_NAME = 'xterm-256color'
-const require = createRequire(import.meta.url)
 
 export type TerminalNotification = {
   method: string
@@ -47,7 +44,7 @@ export type TerminalPty = {
   onExit(listener: (event: TerminalExitEvent) => void): void
 }
 
-type SpawnTerminal = (
+export type SpawnTerminal = (
   file: string,
   args: string[],
   opt: {
@@ -66,7 +63,6 @@ export type TerminalManagerOptions = {
   cwd?: () => string
   platform?: NodeJS.Platform
   shell?: string
-  ensureSpawnHelperExecutable?: () => void
 }
 
 export type TerminalAvailability = {
@@ -83,6 +79,18 @@ export type TerminalAttachParams = {
   newSession?: boolean
 }
 
+/**
+ * Owns terminal sessions, their output buffer and the notification contract
+ * the web UI consumes (`terminal-attached` / `terminal-data` /
+ * `terminal-init-log` / `terminal-exit`).
+ *
+ * The PTY itself is delegated to a `spawn` factory. It used to default to the
+ * optional `node-pty` native module; it is now supplied by the bridge, which
+ * points it at the app-server's official exec/PTY channel
+ * (`bridge/execPtyChannel.ts`). That removes the terminal's dependence on a
+ * native build. When no factory is injected the terminal reports itself
+ * unavailable, rather than failing construction.
+ */
 export class ThreadTerminalManager {
   private readonly sessions = new Map<string, TerminalSession>()
   private readonly activeSessionIdByThreadId = new Map<string, string>()
@@ -94,10 +102,9 @@ export class ThreadTerminalManager {
   private readonly cwd: () => string
   private readonly platform: NodeJS.Platform
   private readonly shell: string | null
-  private readonly ensureSpawnHelperExecutable: () => void
 
   constructor(options: TerminalManagerOptions = {}) {
-    const terminalSpawn = loadOptionalTerminalSpawn(options.spawn)
+    const terminalSpawn = resolveTerminalSpawn(options.spawn)
     this.spawn = terminalSpawn.spawn
     this.unavailableReason = terminalSpawn.reason
     this.exists = options.exists ?? existsSync
@@ -105,7 +112,6 @@ export class ThreadTerminalManager {
     this.cwd = options.cwd ?? process.cwd
     this.platform = options.platform ?? process.platform
     this.shell = options.shell ?? null
-    this.ensureSpawnHelperExecutable = options.ensureSpawnHelperExecutable ?? ensureNodePtyPrebuiltExecutable
   }
 
   subscribe(listener: (notification: TerminalNotification) => void): () => void {
@@ -225,7 +231,6 @@ export class ThreadTerminalManager {
     delete env.TERMINFO
     delete env.TERMINFO_DIRS
 
-    this.ensureSpawnHelperExecutable()
     if (!this.spawn) {
       throw new Error(this.unavailableReason || 'Integrated terminal is unavailable on this host')
     }
@@ -365,125 +370,25 @@ export class ThreadTerminalManager {
   }
 }
 
-function loadOptionalTerminalSpawn(spawn: SpawnTerminal | null | undefined): { spawn: SpawnTerminal | null, reason: string | null } {
+/**
+ * No factory means no terminal. This used to fall back to requiring the
+ * optional `node-pty` native module (and repairing its build in place); the
+ * bridge now injects an app-server-backed factory instead, so an absent factory
+ * is simply an unwired host.
+ */
+function resolveTerminalSpawn(
+  spawn: SpawnTerminal | null | undefined,
+): { spawn: SpawnTerminal | null, reason: string | null } {
   if (spawn) {
     return { spawn, reason: null }
   }
-  if (spawn === null) {
-    return { spawn: null, reason: 'Integrated terminal is unavailable on this host' }
-  }
-  try {
-    return { spawn: loadTerminalSpawn(), reason: null }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const suffix = message.includes('Cannot find module')
-      ? 'Native PTY support is not installed.'
-      : sanitizeUnavailableReason(message)
-    return {
-      spawn: null,
-      reason: `Integrated terminal is unavailable on this host. ${suffix}`,
-    }
-  }
-}
-
-function sanitizeUnavailableReason(message: string): string {
-  const firstLine = message.split('\n')[0]?.trim() || ''
-  return firstLine ? firstLine : 'Native PTY support could not be loaded.'
+  return { spawn: null, reason: 'Integrated terminal is unavailable on this host' }
 }
 
 function normalizeDimension(value: unknown, fallback: number): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.max(1, Math.min(500, Math.trunc(parsed)))
-}
-
-function loadTerminalSpawn(): SpawnTerminal {
-  repairNativePtyBuild('node-pty')
-
-  if (resolveNodePtyPrebuiltPath()) {
-    try {
-      const terminal = require('node-pty-prebuilt-multiarch') as { spawn: SpawnTerminal }
-      return terminal.spawn
-    } catch {
-      // Fall back to maintained node-pty when the legacy prebuild exists but cannot load.
-    }
-  }
-  const terminal = require('node-pty') as { spawn: SpawnTerminal }
-  return terminal.spawn
-}
-
-function repairNativePtyBuild(packageName: string): void {
-  try {
-    const packageJson = require.resolve(`${packageName}/package.json`)
-    const packageRoot = dirname(packageJson)
-    const buildDir = join(packageRoot, 'build')
-    const makefile = join(buildDir, 'Makefile')
-    const binary = join(buildDir, 'Release', 'pty.node')
-    if (!existsSync(makefile)) return
-    if (!isBrokenSymlink(binary)) return
-
-    const source = readFileSync(makefile, 'utf8')
-    const patched = source.replace(
-      /^cmd_copy = ln -f "\$<" "\$@" 2>\/dev\/null \|\| \(rm -rf "\$@" && cp -af "\$<" "\$@"\)$/m,
-      'cmd_copy = rm -rf "$@" && cp -af "$<" "$@"',
-    )
-    if (patched !== source) {
-      writeFileSync(makefile, patched)
-    }
-    rmSync(binary, { force: true })
-    spawnSync('make', ['BUILDTYPE=Release', '-C', buildDir], { stdio: 'ignore' })
-  } catch {
-    // Native PTY load below will surface the actionable error if repair fails.
-  }
-}
-
-function isBrokenSymlink(path: string): boolean {
-  try {
-    if (!lstatSync(path).isSymbolicLink()) return false
-    try {
-      return !existsSync(realpathSync(path))
-    } catch {
-      return true
-    }
-  } catch {
-    return false
-  }
-}
-
-function resolveNodePtyPrebuiltPath(): string | null {
-  try {
-    const packageJson = require.resolve('node-pty-prebuilt-multiarch/package.json')
-    const packageRoot = dirname(packageJson)
-    const builtPath = join(packageRoot, 'build', 'Release', 'pty.node')
-    if (existsSync(builtPath)) {
-      return builtPath
-    }
-    const runtime = Object.prototype.hasOwnProperty.call(process.versions, 'electron') ? 'electron' : 'node'
-    const libc = process.platform === 'linux' && existsSync('/etc/alpine-release') ? '.musl' : ''
-    const binaryName = `${runtime}.abi${process.versions.modules}${libc}.node`
-    const binaryPath = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, binaryName)
-    return existsSync(binaryPath) ? binaryPath : null
-  } catch {
-    return null
-  }
-}
-
-function ensureNodePtyPrebuiltExecutable(): void {
-  if (process.platform !== 'darwin' && process.platform !== 'linux') return
-  ensurePackageSpawnHelperExecutable('node-pty')
-  ensurePackageSpawnHelperExecutable('node-pty-prebuilt-multiarch')
-}
-
-function ensurePackageSpawnHelperExecutable(packageName: string): void {
-  try {
-    const packageRoot = dirname(require.resolve(`${packageName}/package.json`))
-    const helperPath = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
-    if (existsSync(helperPath)) {
-      chmodSync(helperPath, 0o755)
-    }
-  } catch {
-    // If the PTY package changes layout, let it surface its own spawn error.
-  }
 }
 
 function normalizeLocaleEnv(env: Record<string, string>, platform: NodeJS.Platform): void {
