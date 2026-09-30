@@ -205,7 +205,12 @@ describe('writeWorkspaceRootsState', () => {
       // macOS 上 tmpdir 的 /var 是指向 /private/var 的符号链接，realpath 后路径不同；
       // 以 realpath 后的规范路径作为断言基准，与实现写入的规范形式保持一致
       const canonicalRoot = await realpath(canonicalRootRaw)
-      await symlink(canonicalRoot, symlinkRoot)
+      // Windows 上 symlink(target, path) 的 type 默认是 'file'，指向目录时造出的
+      // 条目 realpath 不会解析（实测 lstat().isSymbolicLink() 为 false、realpath
+      // 返回条目自身路径），于是下方「symlink 被规范化合并」的断言在 Windows 上
+      // 退化成 3 个元素。改用 'junction'：Windows 上无需特权且可被 realpath 解析，
+      // 其它平台会忽略该参数、仍是普通 symlink。
+      await symlink(canonicalRoot, symlinkRoot, 'junction')
       await writeWorkspaceRootsState({
         order: [symlinkRoot, 'remote-project-id', canonicalRoot],
         labels: {
@@ -412,7 +417,10 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
 
       const info = await stat(statePath)
       expect(info.isFile()).toBe(true)
-      expect(info.mode & 0o777).toBe(0o600)
+      // POSIX 上 writeFile({ mode: 0o600 }) 会真的收紧权限；Windows 不实现 POSIX
+      // 权限位（Node 的 chmod 只能切只读位），stat().mode 恒为 0o666。
+      const expectedMode = process.platform === 'win32' ? 0o666 : 0o600
+      expect(info.mode & 0o777).toBe(expectedMode)
     } finally {
       await rm(codexHome, { recursive: true, force: true })
     }
