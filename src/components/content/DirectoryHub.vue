@@ -503,7 +503,6 @@ import DirectoryPluginsTab from './DirectoryPluginsTab.vue'
 import DirectorySkillsTab from './DirectorySkillsTab.vue'
 
 type DirectoryTab = 'plugins' | 'apps' | 'composio' | 'skills'
-const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
 const COMPOSIO_PAGE_LIMIT = 50
 
 const POPULAR_LIMIT = 100
@@ -563,7 +562,7 @@ export type DirectoryTryItemPayload = {
   displayName: string
   skillPath?: string
   prompt?: string
-  attachedSkills?: Array<{ name: string; path: string }>
+  attachedSkills?: Array<{ name: string; path?: string }>
 }
 
 const emit = defineEmits<{
@@ -1111,7 +1110,10 @@ function tryComposio(connector: DirectoryComposioConnector, connections: Directo
     name: connector.slug,
     displayName: connector.name,
     prompt: buildComposioTryPrompt(connector, connections),
-    attachedSkills: [{ name: 'composio-cli', path: COMPOSIO_SKILL_PATH }],
+    // 技能路径不在这里写死：写死的绝对路径只在作者机器上成立（历史上就是
+    // 写死的 /Users/igor/...）。真正生效的路径由 App 从 app-server 的已安装
+    // 技能列表按名字解析，解析不到就不带这一项（round-114）。
+    attachedSkills: [{ name: 'composio-cli' }],
   })
 }
 
