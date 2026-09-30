@@ -439,6 +439,36 @@ describe('backend queue scheduling', () => {
 
     processor.dispose()
   })
+
+  it('resumes with excludeTurns before starting a queued turn (no full-history hydration)', async () => {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = []
+    const processor = new BackendQueueProcessor({
+      onNotification: () => () => undefined,
+      rpc: async (method: string, params: Record<string, unknown>) => {
+        calls.push({ method, params })
+        return method === 'thread/resume' ? { thread: { id: 'thread-1', turns: [] } } : { turn: { id: 'turn-1' } }
+      },
+    } as never)
+
+    const startQueuedTurn = (processor as unknown as {
+      startQueuedTurn: (turn: unknown) => Promise<void>
+    }).startQueuedTurn.bind(processor)
+
+    await startQueuedTurn({
+      threadId: 'thread-1',
+      message: { id: 'm1', text: 'hello', imageUrls: [], fileAttachments: [], skills: [] },
+    })
+
+    // buildQueuedTurnParams probes config/read + model/list on its way to
+    // turn/start, so assert on the resume call itself rather than the whole list.
+    const resumeIndex = calls.findIndex((call) => call.method === 'thread/resume')
+    const startIndex = calls.findIndex((call) => call.method === 'turn/start')
+    expect(resumeIndex).toBe(0)
+    expect(resumeIndex).toBeLessThan(startIndex)
+    expect(calls[resumeIndex].params).toEqual({ threadId: 'thread-1', excludeTurns: true })
+
+    processor.dispose()
+  })
 })
 
 describe('automation TOML handling', () => {
