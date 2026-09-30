@@ -1367,7 +1367,16 @@ export class BackendQueueProcessor {
   }
 
   private async startQueuedTurn(turn: BackendQueuedTurn): Promise<void> {
-    await this.appServer.rpc('thread/resume', { threadId: turn.threadId })
+    // round-112：这一发 resume 的唯一目的是把线程加载进 app-server（紧接着就
+    // turn/start），返回的轮次从来没人读。原先不传 excludeTurns → app-server 会
+    // 全量构造轮次：本机 0.158.0 实测 3MB/16 轮线程 3267ms，大线程按 round-84
+    // 的量级是 2118ms/12.12MB，而每个排队轮开跑都要付一次。
+    // ThreadResumeParams.excludeTurns 的协议语义正是「只返回线程元数据与
+    // live-resume 状态、不填 thread.turns」——加载语义不变。探针实测
+    // （tmp/probe-0158-resume-exclude-turns.cjs，同线程）：3267ms → 61ms，
+    // 返回的 32 个 thread 元数据字段与全量 resume **逐字相同**（除 turns），
+    // 且随后 turns/list 照常可用（52ms/5 条）。
+    await this.appServer.rpc('thread/resume', { threadId: turn.threadId, excludeTurns: true })
     await this.appServer.rpc('turn/start', await this.buildQueuedTurnParams(turn))
   }
 }
