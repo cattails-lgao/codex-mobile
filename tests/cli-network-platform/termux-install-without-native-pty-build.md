@@ -1,5 +1,9 @@
 ### Termux install without native PTY build
 
+> **Superseded (round-116):** 集成终端已不再依赖 `node-pty`（改用 app-server 官方
+> `command/exec { tty: true }` 通道），该依赖与 `scripts/fix-pty-native-build.cjs` 已从
+> 项目移除，故本场景的前置条件与最后一条期望结果只剩历史意义。
+
 #### Feature/Change Name
 Android Termux installs can complete when `node-pty` has no compatible native build.
 

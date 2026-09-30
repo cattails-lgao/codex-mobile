@@ -9,7 +9,7 @@ The integrated terminal feature adds a Codex.app-style xterm panel to local/work
 
 ## Architecture
 - The browser renders the terminal with `@xterm/xterm` and `@xterm/addon-fit` in `ThreadTerminalPanel.vue`.
-- The server bridge manages PTYs with `node-pty` in `terminalManager.ts`.
+- The server bridge manages PTYs with `node-pty` in `terminalManager.ts`. **Superseded (round-116):** it now drives the app-server's official `command/exec { tty: true }` channel through `src/server/bridge/execPtyChannel.ts`, which adapts to the existing `SpawnTerminal` contract; `node-pty` was removed from the project.
 - Terminal notifications reuse the existing `/codex-api/ws` stream with Codex.app-style event names:
   - `terminal-attached`
   - `terminal-init-log`

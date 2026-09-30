@@ -19,7 +19,7 @@
 - The deprecated `prebuild-install` dependency chain warnings no longer appear for `codexapp` installation.
 - Re-running `npx codexapp --no-login` works without getting stuck in the same failed temporary install loop.
 - Global installation succeeds on Windows.
-- Integrated terminal continues to work through `node-pty` on supported hosts.
+- Integrated terminal continues to work through the app-server exec/PTY channel on supported hosts（round-116 起不再经由 `node-pty`，该依赖已移除）。
 - Light theme and dark theme terminal surfaces remain readable and unchanged.
 
 #### Rollback/Cleanup

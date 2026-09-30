@@ -28,7 +28,7 @@ VITE v6.4.3  ready in 2029 ms
 
 #### 层 2：pnpm 11 默认阻止依赖的 build scripts
 
-- **根因**：pnpm 11 默认阻止依赖的 build scripts（`node-pty`、`esbuild`、`@firebase/util`、`protobufjs`），旧字段 `pnpm.onlyBuiltDependencies` 已被忽略，导致 `pnpm install` 返回非零码、dev 无法启动
+- **根因**：pnpm 11 默认阻止依赖的 build scripts（`esbuild`、`@firebase/util`、`protobufjs`；round-116 前还有 `node-pty`，现已随集成终端改走 exec/PTY 通道而移除），旧字段 `pnpm.onlyBuiltDependencies` 已被忽略，导致 `pnpm install` 返回非零码、dev 无法启动
 - **换机是否复现**：会（任何 pnpm 11 电脑）
 - **解决方案**：新增 `pnpm-workspace.yaml` 用 `allowBuilds` 声明允许构建的包
 
