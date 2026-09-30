@@ -12,7 +12,8 @@
 // turns — but it did so *after* the app-server had constructed all of them, so
 // `trimThreadTurnsInRpcResult` could never reduce the cost. `ThreadReadParams`
 // documents full-history hydration as deprecated for paginated threads and
-// points at exactly this pair of calls (`excludeTurns` + `initialTurnsPage`).
+// points at the paging pair `thread/turns/list` + `thread/items/list` -- not at
+// `excludeTurns`/`initialTurnsPage`, which exist only on `ThreadResumeParams`.
 //
 // Wire contract kept for the browser: the response still carries `thread.turns`
 // (ascending, at most THREAD_RESPONSE_TURN_LIMIT of them) plus

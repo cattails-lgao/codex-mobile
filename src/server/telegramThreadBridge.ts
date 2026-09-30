@@ -1,4 +1,5 @@
 import { basename } from 'node:path'
+import { readThreadWithTurnPage } from './bridge/threadReadTurnPage.js'
 
 type TelegramUpdate = {
   update_id?: number
@@ -707,8 +708,20 @@ export class TelegramThreadBridge {
     }
   }
 
+  /**
+   * round-111：telegram 只关心「最近发生了什么」（最后一条 assistant 回复、
+   * 一段历史摘要），却一直在发全量 thread/read——大线程上 6.0–6.2s / 26MB。
+   * 有界读给元数据 + 最新一页就够了；失败时 readThreadWithTurnPage 重放原请求。
+   */
+  private async readRecentThreadTurns(threadId: string): Promise<Record<string, unknown> | null> {
+    return asRecord(await readThreadWithTurnPage({
+      rpc: (method, params) => this.appServer.rpc(method, params),
+      sendRead: (params) => this.appServer.rpc('thread/read', params),
+    }, { threadId, includeTurns: true }))
+  }
+
   private async readLatestAssistantMessage(threadId: string): Promise<string> {
-    const response = asRecord(await this.appServer.rpc('thread/read', { threadId, includeTurns: true }))
+    const response = await this.readRecentThreadTurns(threadId)
     const thread = asRecord(response?.thread)
     const turns = Array.isArray(thread?.turns) ? thread.turns : []
 
@@ -727,7 +740,7 @@ export class TelegramThreadBridge {
   }
 
   private async readThreadHistorySummary(threadId: string): Promise<string> {
-    const response = asRecord(await this.appServer.rpc('thread/read', { threadId, includeTurns: true }))
+    const response = await this.readRecentThreadTurns(threadId)
     const thread = asRecord(response?.thread)
     const turns = Array.isArray(thread?.turns) ? thread.turns : []
     const historyRows: string[] = []
