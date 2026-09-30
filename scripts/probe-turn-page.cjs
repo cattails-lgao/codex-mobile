@@ -21,6 +21,11 @@
 //
 // Usage:
 //   node scripts/probe-turn-page.cjs <threadId> [CODEX_HOME] [codexBinPath] [limit]
+//
+// Env:
+//   PROBE_TIMEOUT_MS  per-call budget in ms (default 120000). Raise it when the
+//                     thread has never been resumed on this machine -- the
+//                     first resume on a large cold rollout can take minutes.
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 
@@ -96,11 +101,26 @@ proc.stdout.on('data', (chunk) => {
   }
 })
 
+// Per-call budget. The first `thread/resume` on a cold, large rollout pays a
+// one-time migration that can take minutes (round-101/108 measured >330s on a
+// 32MB thread, then 33s once warm), so 120s is a smoke-test budget for small
+// threads only. Raise it for a big thread's first probe:
+//   PROBE_TIMEOUT_MS=600000 node scripts/probe-turn-page.cjs <threadId> ...
+const CALL_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || '') > 0
+  ? Number(process.env.PROBE_TIMEOUT_MS)
+  : 120_000
+
 function call(method, params) {
   const id = nextId++
   const startedAt = process.hrtime.bigint()
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`timeout after 120s: ${method}`)) }, 120_000)
+    const timer = setTimeout(() => {
+      pending.delete(id)
+      reject(new Error(
+        `timeout after ${Math.round(CALL_TIMEOUT_MS / 1000)}s: ${method}`
+        + ' (cold large thread? raise PROBE_TIMEOUT_MS)',
+      ))
+    }, CALL_TIMEOUT_MS)
     pending.set(id, (message) => {
       clearTimeout(timer)
       resolve({
