@@ -85,6 +85,9 @@ import { resumeThreadWithTurnPage } from './bridge/threadResumeTurnPage.js'
 // round-110：thread/read 的有界读取（元数据读 + thread/turns/list 一页）；头部实测
 // 数据与回落契约见 bridge/threadReadTurnPage.ts。
 import { readThreadWithTurnPage } from './bridge/threadReadTurnPage.js'
+// round-113：文件回退路由（/codex-api/thread/rollback-files）不再为了拿 session
+// 路径与「目标轮及其后」的 id 而全量水合线程；对照数据与回落契约见该模块头部。
+import { readRollbackTurnContext } from './bridge/rollbackTurnContext.js'
 // round-86：上翻更早轮次不再全量水合；用 turns/list 游标链按页取，详见
 // bridge/threadTurnPage.ts 头部实测数据。
 import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, ThreadTurnPageUnsupportedError, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
@@ -1991,11 +1994,23 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          const threadReadResult = await appServer.rpc('thread/read', { threadId, includeTurns: true })
-          const record = asRecord(threadReadResult)
-          const thread = asRecord(record?.thread)
-          const turns = Array.isArray(thread?.turns) ? thread.turns : []
-          const sessionPath = readNonEmptyString(thread?.path)
+          // round-113：原来这里发全量 `thread/read {includeTurns:true}`，只为拿 session
+          // log 路径和「目标轮及其后」的轮次 id —— 水合出来的轮次没有别的用途。两者都
+          // 能廉价取得（元数据读 + `notLoaded` id 链），任何一半不可信才回落到全量读
+          // （等价对照见 readRollbackTurnContext 头部）。
+          const context = await readRollbackTurnContext(appServer, threadId)
+          let sessionPath = ''
+          let turnIds: string[] = []
+          if (context) {
+            sessionPath = context.sessionPath
+            turnIds = context.turnIds
+          } else {
+            const threadReadResult = await appServer.rpc('thread/read', { threadId, includeTurns: true })
+            const thread = asRecord(asRecord(threadReadResult)?.thread)
+            sessionPath = readNonEmptyString(thread?.path)
+            const turns = Array.isArray(thread?.turns) ? thread.turns : []
+            turnIds = turns.map((turn) => readNonEmptyString(asRecord(turn)?.id) ?? '')
+          }
 
           if (!sessionPath || !isAbsolute(sessionPath)) {
             setJson(res, 200, { reverted: 0, errors: [], message: 'No session log available' })
@@ -2004,9 +2019,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 
           let foundTurnIndex = -1
           const turnIdsToRevert = new Set<string>()
-          for (let i = 0; i < turns.length; i++) {
-            const turnRecord = asRecord(turns[i])
-            const id = readNonEmptyString(turnRecord?.id)
+          for (let i = 0; i < turnIds.length; i++) {
+            const id = turnIds[i]
             if (id === turnId) {
               foundTurnIndex = i
             }
