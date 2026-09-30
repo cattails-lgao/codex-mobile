@@ -35,13 +35,6 @@
     "scripts/dev.cjs",
     "scripts/dev-random-home.cjs"
   ],
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@firebase/util",
-      "esbuild",
-      "protobufjs"
-    ]
-  },
   "scripts": {
     "dev": "node scripts/dev.cjs",
     "dev2": "node scripts/dev-random-home.cjs",

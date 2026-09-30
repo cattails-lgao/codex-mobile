@@ -12,7 +12,7 @@ const CHROME_CANDIDATES = [
   `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
 ]
 const SYSTEM_LAUNCHER = [...EDGE_CANDIDATES, ...CHROME_CANDIDATES].find((p) => fs.existsSync(p))
-const BASE = 'http://127.0.0.1:4173/'
+const BASE = `${(process.env.PROFILE_BASE_URL || 'http://127.0.0.1:4173').replace(/\/+$/, '')}/`
 const SHOT_DIR = 'output/playwright'
 
 async function launchBrowser() {
@@ -44,32 +44,40 @@ async function main() {
   await page.waitForTimeout(2000)
   check('home renders as HTML app', (await page.locator('body').innerText()).length > 50)
 
-  // 尝试进入某个线程视图以获得右侧面板可用性（canShowRightPanel 依赖 thread 路由）
-  const openBtn = page.getByLabel('Open side panel')
+  // 进入一个真实线程，content header（右侧面板开关的所在）才会存在。
+  // 375px 下首页是「Let's build」空态——既无侧栏也无 content header，所以旧的
+  // 「点第一个项目 → 点第一个会话项」路径已随 UI 改版失效（点到的只是空态里的按钮）。
+  // 改为直接向桥要一个真实线程 id，再进对应路由。
+  // 面板开关用 class 定位而非 aria-label：后者是 i18n 文本（中文界面渲染为
+  // 「打开侧边面板」），按英文原文 getByLabel 永远匹配不到。
+  const openBtn = page.locator('.content-header-right-panel-toggle')
   if ((await openBtn.count()) === 0) {
-    // 点第一个项目，等待会话树出现
-    const projectNames = await page.locator('button, .project-item, [role="button"]').allInnerTexts()
-    const target = projectNames.find((t) => t && t.trim() && t.trim() !== '+' && t.trim() !== 'Create Project' && t.trim() !== 'Import Project')
-    if (target) {
-      await page.getByText(target.trim(), { exact: true }).first().click().catch(() => {})
-      await page.waitForTimeout(1500)
+    const threadId = await page
+      .evaluate(async () => {
+        try {
+          const res = await fetch('/codex-api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method: 'thread/list', params: {} }),
+          })
+          const json = await res.json()
+          const r = json && json.result
+          const list = (r && (r.data || r.threads)) || []
+          const first = list[0]
+          return first ? (first.id || first.threadId || null) : null
+        } catch {
+          return null
+        }
+      })
+      .catch(() => null)
+    if (threadId) {
+      await page.goto(`${BASE}#/thread/${threadId}`, { waitUntil: 'networkidle' }).catch(() => {})
+      await page.waitForTimeout(2500)
     }
-    await page.screenshot({ path: `${SHOT_DIR}/mobile-375-after-project-click.png` })
+    await page.screenshot({ path: `${SHOT_DIR}/mobile-375-after-thread-nav.png` })
   }
 
-  // 定位移动端抽屉开合按钮（aria-label = Open/Close side panel）
-  let gotBtn = (await openBtn.count()) > 0
-  if (!gotBtn) {
-    // 尝试点击会话树中第一个会话项进入 thread 路由
-    const threadSel = '.thread-item, li, [data-thread-id], a'
-    const firstThread = page.locator(threadSel)
-    const n = await firstThread.count().catch(() => 0)
-    if (n > 0) {
-      await firstThread.first().click().catch(() => {})
-      await page.waitForTimeout(1500)
-    }
-    gotBtn = (await openBtn.count()) > 0
-  }
+  const gotBtn = (await openBtn.count()) > 0
   check('mobile side-panel open button found (thread scope reached)', gotBtn)
   await page.screenshot({ path: `${SHOT_DIR}/mobile-375-before-drawer.png` })
 
@@ -79,9 +87,8 @@ async function main() {
     await page.waitForTimeout(600)
     await page.screenshot({ path: `${SHOT_DIR}/mobile-375-drawer-open.png` })
 
-    const closeBtn = page.getByLabel('Close side panel')
-    const drawerVisible = await page.locator('.content-right-panel, [class*="right-panel"]').first().isVisible().catch(() => false)
-    check('drawer opens as overlay (open->close label swap)', (await closeBtn.count()) > 0)
+    const drawerVisible = (await page.locator('.content-right-panel.is-mobile-open').count()) > 0
+    check('drawer opens as overlay (mobile-open class set)', drawerVisible)
 
     // 切换 tab（Git / 文件 / Terminal）
     const tabs = page.locator('button[aria-selected], [role="tab"]')
@@ -96,12 +103,13 @@ async function main() {
     }
     check('tab switching executed without throwing', tabSwitched)
 
-    // 关闭抽屉：优先抽屉内部关闭按钮（aria-label="Close panel"），否则回退 header toggle
-    const panelClose = page.getByLabel('Close panel')
+    // 关闭抽屉：优先抽屉内部关闭按钮，否则回退 header toggle。两者都用 class 定位
+    // ——aria-label 是 i18n 文本（中文界面为「关闭面板」），按英文原文匹配不到。
+    const panelClose = page.locator('.content-right-panel-close')
     if ((await panelClose.count()) > 0) {
       await panelClose.first().click().catch(() => {})
-    } else if ((await closeBtn.count()) > 0) {
-      await closeBtn.first().click().catch(() => {})
+    } else {
+      await openBtn.first().click().catch(() => {})
     }
     await page.waitForTimeout(500)
     // 移动端面板容器常驻 DOM，以 .is-mobile-open 表征开合；该 class 由 isMobileRightPanelOpen 驱动
