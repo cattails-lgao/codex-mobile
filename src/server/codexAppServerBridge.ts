@@ -82,6 +82,9 @@ import { runRpcResponsePipeline } from './bridge/rpcPipeline.js'
 // round-84：thread/resume 的有界水合（元数据 + 一页轮次），替换协议已标
 // deprecated 的全量历史水合；详见 bridge/threadResumeTurnPage.ts 头部实测数据。
 import { resumeThreadWithTurnPage } from './bridge/threadResumeTurnPage.js'
+// round-110：thread/read 的有界读取（元数据读 + thread/turns/list 一页）；头部实测
+// 数据与回落契约见 bridge/threadReadTurnPage.ts。
+import { readThreadWithTurnPage } from './bridge/threadReadTurnPage.js'
 // round-86：上翻更早轮次不再全量水合；用 turns/list 游标链按页取，详见
 // bridge/threadTurnPage.ts 头部实测数据。
 import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, ThreadTurnPageUnsupportedError, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
@@ -1872,6 +1875,9 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
           // {excludeTurns,initialTurnsPage}，桥把返回的那一页提升为 thread.turns 并补
           // threadTurnStartIndex；管道与前端归一化都不需要改。app-server 若忽略
           // initialTurnsPage（旧版本）则回落到原来的请求重放。
+          // round-110：thread/read 同样有界化。ThreadReadParams 没有
+          // excludeTurns/initialTurnsPage，故走「元数据读 + thread/turns/list 一页」
+          // （bridge/threadReadTurnPage.ts）；回落路径与改动前逐字一致。
           rpcResult = body.method === 'thread/resume'
             ? await resumeThreadWithTurnPage({
               rpc: (method, params) => appServer.rpc(method, params),
@@ -1882,7 +1888,12 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
                 appServer.recordThreadTurnPageBoundary(threadId, oldestTurnId, olderCursor)
               },
             }, body.params ?? null)
-            : await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
+            : body.method === 'thread/read'
+              ? await readThreadWithTurnPage({
+                rpc: (method, params) => appServer.rpc(method, params),
+                sendRead: (params) => callRpcWithArchiveRecovery(appServer, 'thread/read', params),
+              }, body.params ?? null)
+              : await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
         } catch (error) {
 	          if (body.method === 'account/rateLimits/read' && isUnauthenticatedRateLimitError(error)) {
 	            setJson(res, 200, { result: null })
