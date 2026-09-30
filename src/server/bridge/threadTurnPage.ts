@@ -63,13 +63,16 @@ export function isTurnListUnsupportedError(error: unknown): boolean {
 }
 
 /**
- * Page size for the id listing. `itemsView: "notLoaded"` returns turn ids
- * without items, so a single shot covers any realistic thread (measured 14ms /
- * 0.00MB for 16 turns). Larger threads fall back to cursor paging.
+ * Requested page size for the id listing. Round-104 measured that the
+ * app-server clamps a page to **100 ids** regardless of `limit` (173-turn
+ * thread, `limit: 10_000` -> 100 ids), so this is a per-page size, not a
+ * "one shot gets everything" budget: what collects the whole list is the
+ * `nextCursor` chain in `readThreadTurnIds`. `itemsView: "notLoaded"` returns
+ * ids without items, so a page costs nothing (measured 14ms / 0.00MB).
  */
-export const TURN_ID_PAGE_LIMIT = 10_000
+export const TURN_ID_PAGE_SIZE = 10_000
 
-/** Safety cap on that paging fallback (50 x 10_000 turns). */
+/** Safety cap on the cursor chain (50 pages), not on the turn count. */
 export const TURN_ID_MAX_PAGES = 50
 
 export type TurnPageRpc = {
@@ -171,7 +174,7 @@ export async function readThreadTurnIds(rpc: TurnPageRpc['rpc'], threadId: strin
   for (let page = 0; page < TURN_ID_MAX_PAGES; page += 1) {
     const params: Record<string, unknown> = {
       threadId,
-      limit: TURN_ID_PAGE_LIMIT,
+      limit: TURN_ID_PAGE_SIZE,
       sortDirection: 'desc',
       itemsView: 'notLoaded',
     }

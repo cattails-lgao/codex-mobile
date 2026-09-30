@@ -30,17 +30,17 @@
 import { asRecord, readNonEmptyString, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
 
 /**
- * Page size for the cheap turn-count probe. `itemsView: "notLoaded"` returns
- * turn metadata without items, so a single shot covers any realistic thread
- * (measured 14ms / 0.00MB for 16 turns). Larger threads fall back to cursor
- * paging rather than failing.
+ * Requested page size for the cheap turn-count probe. The app-server clamps a
+ * page to 100 entries regardless of `limit` (round-104), so the count is what
+ * the `nextCursor` chain below collects, not a single shot. A page is free:
+ * `itemsView: "notLoaded"` returns turn metadata without items.
  */
-export const TURN_COUNT_PAGE_LIMIT = 10_000
+export const TURN_COUNT_PAGE_SIZE = 10_000
 
 /**
- * Safety cap on the paging fallback (50 x 10_000 turns). Reached only by a
- * thread far beyond a rollout file anyone could open, in which case the caller
- * degrades to "count unknown" instead of looping.
+ * Safety cap on the cursor chain (50 pages). Reached only by a thread far
+ * beyond a rollout file anyone could open, in which case the caller degrades to
+ * "count unknown" instead of looping.
  */
 export const TURN_COUNT_MAX_PAGES = 50
 
@@ -128,7 +128,7 @@ export async function readThreadTurnCount(rpc: RpcExecutor['rpc'], threadId: str
   for (let page = 0; page < TURN_COUNT_MAX_PAGES; page += 1) {
     const params: Record<string, unknown> = {
       threadId,
-      limit: TURN_COUNT_PAGE_LIMIT,
+      limit: TURN_COUNT_PAGE_SIZE,
       sortDirection: 'desc',
       itemsView: 'notLoaded',
     }
