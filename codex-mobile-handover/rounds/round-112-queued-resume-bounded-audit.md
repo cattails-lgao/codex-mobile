@@ -44,11 +44,11 @@ metadata diff (full vs bare excludeTurns, ignoring turns):
 
 **本轮未做**：真跑一轮排队 turn 的端到端。理由：那会真实消耗模型额度并改写用户线程，而这条路径的全部语义就是「加载 → 立刻 turn/start」，加载部分已由上面的探针逐项证明等价（协议接受、元数据逐字相同、后续 RPC 可用），桥侧的传参由新增单测锁定。
 
-## 三、补记录的两处（有意保留）
+## 三、补记录的两处（其一的判定在 round-113 被推翻）
 
 | 位置 | 为什么不改 |
 |---|---|
-| `codexAppServerBridge.ts` HTTP `/codex-api/thread/rollback-files` | 它**直连 `appServer.rpc('thread/read', {includeTurns:true})`**，绕过桥分派，故 round-110 的有界分支不覆盖。它要遍历轮次找到目标 `turnId` 的下标，并收集**该轮及其之后全部轮次**的 `patchIds`/`filePaths` 才能撤销文件变更 —— 与 `threadRoutes` 的 `thread-file-change-fallback` 同类（有界读给不了「从目标轮到最后」这一未知长度区间）。触发方式是**用户显式点击回滚文件**，低频且背后没有轮询。 |
+| `codexAppServerBridge.ts` HTTP `/codex-api/thread/rollback-files` | ~~直连全量 `thread/read`，绕过桥分派；需要「目标轮及其后全部轮次」，且是点击触发的低频操作~~ **round-113 已推翻此判定并修掉**：它要的是轮次 **id**（不是轮次内容），`turns/list {notLoaded}` 就能免费给；而且**每次消息回退都会付**这一发，不是低频。本行留档以示判读过程，现行结论见 `round-113-rollback-files-bounded-read.md`。 |
 | `threadArchiveRecovery.ts` 的 `callRpcWithArchiveRecovery`（`turn/start` 分支） | `turn/start` 报 thread-not-found 时先 `thread/resume {threadId}` 再重发原请求 —— 这是**错误恢复**路径（低频），且此处的 resume 与上面的 `startQueuedTurn` 同属「加载线程」性质，本可同样带 `excludeTurns:true`，但它是异常兜底、失败时会立刻走 `throw`，收益仅限「线程恰好很大且确实未加载」这一交叉情形。**本轮刻意不动兜底路径**（与 round-111 对 `readThreadForTurnPage` 的取舍一致：兜底的意义就是绕开失效的机制）。 |
 
 ## 四、对照清单（复核已覆盖 / 已记录，无漏）
@@ -73,5 +73,5 @@ metadata diff (full vs bare excludeTurns, ignoring turns):
 
 ## 七、遗留
 
-- 无新增待办。`rollback-files` 与 `archiveRecovery` 属**有意保留**（已记录），不是待办。
+- ~~无新增待办。`rollback-files` 与 `archiveRecovery` 属**有意保留**（已记录），不是待办。~~ **round-113 修正**：`rollback-files` 的有界化已在 round-113 完成（本轮判定被推翻——见 §三 表）；仍属有意保留的只剩 `archiveRecovery`。
 - 若日后 `thread/read` 的兜底路径（`readThreadForTurnPage`）或归档恢复需要重新评估，触发点是「兜底被高频走到」或「有明确的 file-change 分页需求」。
