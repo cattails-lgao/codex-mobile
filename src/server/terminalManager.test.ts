@@ -58,7 +58,6 @@ function createHarness(options: {
   const ptys: FakePty[] = []
   const spawnCalls: Array<{ file: string, opt: { cols?: number, rows?: number, cwd?: string, env?: Record<string, string | undefined> } }> = []
   const notifications: TerminalNotification[] = []
-  let helperCalls = 0
   const manager = new ThreadTerminalManager({
     spawn: (file, _args, opt) => {
       const pty = new FakePty()
@@ -71,9 +70,6 @@ function createHarness(options: {
     cwd: options.cwd ?? (() => '/fallback-cwd'),
     shell: options.shell ?? '/bin/zsh',
     platform: 'darwin',
-    ensureSpawnHelperExecutable: () => {
-      helperCalls += 1
-    },
   })
   manager.subscribe((notification) => notifications.push(notification))
   return {
@@ -81,9 +77,6 @@ function createHarness(options: {
     ptys,
     spawnCalls,
     notifications,
-    get helperCalls() {
-      return helperCalls
-    },
   }
 }
 
@@ -144,13 +137,11 @@ describe('ThreadTerminalManager edge cases', () => {
     expect(ptys[0]?.resizes).toEqual([{ cols: 1, rows: 500 }])
   })
 
-  it('normalizes PTY environment for macOS locale and PTY helper', () => {
-    const harness = createHarness()
-    const { manager, spawnCalls } = harness
+  it('normalizes PTY environment for the host locale', () => {
+    const { manager, spawnCalls } = createHarness()
 
     manager.attach({ threadId: 'thread-1', cwd: '/repo' })
 
-    expect(harness.helperCalls).toBe(1)
     expect(spawnCalls[0]?.opt.env?.TERM).toBe('xterm-256color')
     expect(spawnCalls[0]?.opt.env?.LANG).toBe('en_US.UTF-8')
     expect(spawnCalls[0]?.opt.env?.LC_ALL).toBe('en_US.UTF-8')
