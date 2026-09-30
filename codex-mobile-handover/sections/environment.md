@@ -44,3 +44,31 @@ VITE v6.4.3  ready in 2029 ms
 
 > **排查方法。** 转圈时不要只看进程是否存在，要发真实请求验证：`curl.exe -s -o NUL -w "%{http_code}" --max-time 8 http://127.0.0.1:4173/`。若超时即进程僵死，重启即可。
 
+#### 层 2 补充（round-117）：`package.json` 的 `pnpm` 字段已删除
+
+pnpm 11 起，`package.json` 的 `pnpm` 字段**整体不再被读取**，构建白名单只认 `pnpm-workspace.yaml` 的 `allowBuilds`。round-117 已把 `package.json` 的 `pnpm.onlyBuiltDependencies` 整块删除——删前核实其三项（`@firebase/util` / `esbuild` / `protobufjs`）与 `allowBuilds` 完全等价，故零功能影响。
+
+### 问题三：UI 契约闸门跑不起来，或跑出误导性结果
+
+`scripts/` 下有 6 个 UI 闸门（round-117 首次全部跑通基线）。它们**不是都能裸跑**，误用会得到假结论：
+
+| 闸门 | 需要服务 | 端口 |
+|---|---|---|
+| `check-ui-contract.cjs`（38 项） | **不需要**（纯静态扫 `src/`） | — |
+| `check-fonts.cjs`（13）/ `check-theme.cjs`（15） | **需要带 `/codex-api` 桥的服务** | `PROFILE_BASE_URL`（默认 4190） |
+| `check-token-equivalence.cjs` | 不需要（比对磁盘快照） | — |
+| `check-thread-switch-feedback.cjs`（11） | 需要，且**必须跑生产构建** | `PROFILE_BASE_URL`（默认 4173） |
+| `verify-mobile-375.cjs`（6） | 需要 | `PROFILE_BASE_URL`（原先硬编码 4173，已支持覆盖） |
+
+**正确起 4190 服务**：
+
+```bash
+CODEX_HOME=<项目>/.codex node dist-cli/index.js \
+  --no-tunnel --no-open --no-login --no-password -p 4190
+```
+
+- **不要用 `vite preview`**：它只是静态文件服务器、**没有桥**，前端调 `/codex-api/*` 必然 404 → `check-fonts` 的「无失败请求」断言 FAIL，而失败信息里出现的是 `/codex-api/rpc 404`、**与字体无关**，极易误判成字体缺陷。
+- **`dist/` 与 `dist-cli/` 是两个独立产物，必须一起重建**：`vite build` 只更新前端，`tsup`（`pnpm run build:cli`）才更新服务端。round-117 就因 `dist-cli/` 停在 round-116 之前（仍在找已删除的 `node-pty`）而得到 `/codex-api/thread-terminal/status → {"available":false,"reason":"…Native PTY support is not installed."}` → `canShowRightPanel` 为假 → 移动端闸门找不到面板按钮；`tsup` 重建后立即 `available:true`。**闸门只有跑在当前源码构建的产物上才有意义。**
+- **采集类闸门**（`ui-audit-shots.cjs` → `check-token-equivalence.cjs`）：先采集再比对，基线是 `docs/ui-audit/current-computed-styles.json`。**每次有意改外观后都要重置基线并留下理由**——round-117 即因 P0 基线撞上 P1 之后的界面而永久失败（9 项超容差全是 round-99「行列表」的有意改色），已重置一次。
+- **定位元素别用 `aria-label`**：`App.vue` 的 aria-label 多数是 `t(...)` 的 i18n 文本（中文渲染为「打开侧边面板」等），按英文原文查找会永远匹配不到；用 class（`.content-header-right-panel-toggle` 等）。
+
