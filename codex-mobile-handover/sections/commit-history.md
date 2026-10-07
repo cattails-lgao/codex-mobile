@@ -220,4 +220,4 @@
 
 **发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.127`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.127 。
 
-**发布闭环**：（待用户 `npm publish` 后回填——registry 发布时刻、dist-tags.latest 切换、tarball 复核。）
+**发布闭环**：用户于 2026-10-08 执行 `npm publish`，registry 记录发布时刻 `2026-10-07T17:33:05.712Z`（＝北京时间 2026-10-08 01:33:05），`dist-tags.latest` 由 `0.1.126` 切换为 **`0.1.127`**。维护者随后下载 tarball 复核：1,618,158 字节、54 个条目（`dist/` 47 + `dist-cli/` 2 + `scripts/` 2 + `package.json`/`README.md`/`LICENSE`）、sha1 `05a2f3311f852d817f3932e4a8d14e3fea721132` 与 integrity `sha512-Y+07jli5GfpXLxH9SFleHqNnEDuj9XrzaudS5P+2Rvc04m7EtyH7CiPNxiVrCU6maUHh8Oxa+FXWSMTA1KpaHw==` 均与 registry 逐项一致，包内 `package.json` 为 `codex-mobile-re@0.1.127`，主前端 bundle（`dist/assets/index-CkZzIAPA.js`）含 round-121 乐观消息修复标记（`userMessage.optimistic`）。**本次传播延迟明显长于既往**：发布后约 5 分钟内 curl 直查 registry 源头仍报旧 packument（`time.modified` 停在 v0.1.126 时点、404），约 8 分钟后才可见——复查时不能凭单次查询判失败，须以 `time.modified` 变更或更长等待窗为准。
