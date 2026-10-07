@@ -104,15 +104,31 @@ const SNAP = `
 }
 `
 
-// Picks sidebar threads that actually have messages, in DOM order. The check is
-// about content appearing for the clicked thread, so its targets must be threads
-// that have some - a sidebar full of never-used threads would otherwise fail
-// every content assertion for environmental reasons. Runs in the page so it uses
-// the app's own origin and session.
+// Picks sidebar threads that actually have messages, in DOM order, in two
+// tiers. The check is about content appearing for the clicked thread, so its
+// targets must be threads that have some - a sidebar full of never-used threads
+// would otherwise fail every content assertion for environmental reasons. Runs
+// in the page so it uses the app's own origin and session.
+//
+// Tier 1 is thread/turns/list, the direct oracle. But it reports 0 turns for a
+// few old-shape rollouts that still render when opened (round-118: two ~50 KB
+// rollouts answered 0), so a 0 must not disqualify a thread outright - a purely
+// turns-based selection would exit with "environment not satisfied" on homes
+// where those threads are exactly the ones that have content.
+//
+// Tier 2, consulted only when tier 1 comes up short: a non-empty `preview`
+// from thread/list is derived from the first user message, so it marks threads
+// that hold content turns/list failed to count. Every pick - tier 1 or 2 - is
+// still judged afterwards by the settle conditions (content must actually
+// render), so a bad fallback pick fails those assertions loudly rather than
+// being waved through. (Known edge, accepted: a preview filled by the
+// round-81 goal-rescue path may have no messages; the diagnostic line below
+// makes such a pick visible for attribution.)
 const CONTENT_IDS = `
 async (limit) => {
   const ids = Array.from(document.querySelectorAll('.thread-row')).map((row) => row.getAttribute('data-thread-id') || '')
-  const withContent = []
+  const byTurns = []
+  const zeroTurns = []
   for (const id of ids) {
     let data = []
     try {
@@ -126,10 +142,33 @@ async (limit) => {
     } catch {
       data = []
     }
-    if (data.length > 0) withContent.push(id)
-    if (withContent.length >= limit) break
+    if (data.length > 0) {
+      byTurns.push(id)
+      if (byTurns.length >= limit) return { picked: byTurns, fromFallback: 0 }
+    } else {
+      zeroTurns.push(id)
+    }
   }
-  return withContent
+  const res = await fetch('/codex-api/rpc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method: 'thread/list', params: {} }),
+  })
+  const json = await res.json()
+  const previewById = new Map(
+    (json && json.result && Array.isArray(json.result.data) ? json.result.data : []).map((t) => [t.id, (t.preview || '').trim()]),
+  )
+  const picked = [...byTurns]
+  let fromFallback = 0
+  for (const id of [...zeroTurns, ...ids.filter((i) => !byTurns.includes(i) && !zeroTurns.includes(i))]) {
+    if (picked.includes(id)) continue
+    if ((previewById.get(id) || '').length > 0) {
+      picked.push(id)
+      fromFallback += 1
+      if (picked.length >= limit) break
+    }
+  }
+  return { picked, fromFallback }
 }
 `
 
@@ -201,10 +240,17 @@ async function main() {
     process.exit(1)
   }
 
-  const contentIds = await page.evaluate(`(${CONTENT_IDS})(4)`)
+  const contentPick = await page.evaluate(`(${CONTENT_IDS})(4)`)
+  const contentIds = contentPick.picked
   console.log(
     `rows=${rows} with-messages=${contentIds.length} dev=${isDev} budget=${FREEZE_BUDGET_MS}ms settleTimeout=${SETTLE_TIMEOUT_MS}ms`,
   )
+  if (contentPick.fromFallback > 0) {
+    console.log(
+      `note  content selection: ${contentIds.length - contentPick.fromFallback} by turns/list + ` +
+        `${contentPick.fromFallback} by preview fallback (turns/list reports 0 for some old-shape rollouts)`,
+    )
+  }
   if (contentIds.length < 2) {
     console.log(
       'FAIL  need at least 2 sidebar threads that have messages to check a switch' +
