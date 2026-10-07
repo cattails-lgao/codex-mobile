@@ -281,7 +281,72 @@ export function mergeMessages(
 
   const previousIdSet = new Set(previous.map((message) => message.id))
   const appended = mergedIncoming.filter((message) => !previousIdSet.has(message.id))
-  const merged = [...mergedFromPrevious, ...appended]
+
+  // round-121：乐观用户消息发出后，上一轮的收尾消息（final 回复等）可能随
+  // turn/completed 触发的防抖刷新才物化进快照——此时用户已经把下一条消息发出
+  // （乐观消息已进 previous）。尾追加会把上一轮收尾排到乐观用户消息之后，渲染
+  // 上表现为「新发的用户消息出现在上一轮 message 中间」（分组以 user 消息为界）。
+  // 修复：以快照里第一条真实用户消息（等值对应任一乐观消息）为时序锚——锚之前的
+  // 新消息都属于发送前的历史，插到乐观消息之前；锚（含）之后才是新轮内容，保持
+  // 尾追加。快照还没有真实对应（新 turn 服务端尚未落地）时，所有新消息都视为
+  // 发送前历史。真实用户消息到达后乐观消息被过滤掉，此处插入的位置即自然归位。
+  const optimistics = previous.filter(isOptimisticUserMessage)
+  // 默认保持原语义：全部尾追加（无乐观消息时不改变行为）。
+  let appendedBefore: UiMessage[] = []
+  let appendedAfter = appended
+  if (optimistics.length > 0) {
+    const anchorIndex = mergedIncoming.findIndex((message) =>
+      optimistics.some((optimistic) => hasEquivalentUserMessage(optimistic, [message])),
+    )
+    if (anchorIndex >= 0) {
+      const anchorPos = appended.findIndex((message) => message.id === mergedIncoming[anchorIndex].id)
+      if (anchorPos >= 0) {
+        appendedBefore = appended.slice(0, anchorPos)
+        appendedAfter = appended.slice(anchorPos)
+      } else {
+        // 锚已在 previous（非新增）：乐观消息会被下方过滤，无内容需要前插。
+        appendedBefore = []
+        appendedAfter = appended
+      }
+    } else {
+      // 快照里还没有真实对应（新 turn 服务端尚未落地）。此时新增消息有两种
+      // 可能：①上一轮的收尾物化（本缺陷）；②新轮自身的回包先于用户消息进
+      // 快照（新线程首轮实测形态，其助手消息甚至可能没有 turnId）。按 turnId
+      // 归属判别：已出现在 previous 的 turn 属发送前历史 → 前插；未知或缺失
+      // turnId 的保守尾追加（保持旧行为，宁可漏修不可错排）。
+      const knownTurnIds = new Set(
+        previous
+          .map((message) => message.turnId?.trim() ?? '')
+          .filter((turnId) => turnId !== ''),
+      )
+      if (knownTurnIds.size > 0) {
+        const before: UiMessage[] = []
+        const after: UiMessage[] = []
+        for (const message of appended) {
+          const turnId = message.turnId?.trim() ?? ''
+          if (turnId !== '' && knownTurnIds.has(turnId)) {
+            before.push(message)
+          } else {
+            after.push(message)
+          }
+        }
+        appendedBefore = before
+        appendedAfter = after
+      }
+    }
+  }
+
+  const firstOptimisticIndex = mergedFromPrevious.findIndex(isOptimisticUserMessage)
+  // firstOptimisticIndex = -1 说明乐观消息已被过滤（真实消息到达）：前插内容
+  // 仍须保留，按序拼回尾部，不能丢。
+  const merged = firstOptimisticIndex >= 0
+    ? [
+        ...mergedFromPrevious.slice(0, firstOptimisticIndex),
+        ...appendedBefore,
+        ...mergedFromPrevious.slice(firstOptimisticIndex),
+        ...appendedAfter,
+      ]
+    : [...mergedFromPrevious, ...appendedBefore, ...appendedAfter]
 
   return areMessageArraysEqual(previous, merged) ? previous : merged
 }
