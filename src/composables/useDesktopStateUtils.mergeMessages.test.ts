@@ -7,7 +7,7 @@
 // 尚未落地）时全部前插；锚已在 previous（乐观将被过滤）时维持尾追加。
 
 import { describe, expect, it } from 'vitest'
-import { mergeMessages } from './useDesktopStateUtils'
+import { mergeMessages, mergeThreadMessageStreams } from './useDesktopStateUtils'
 import type { UiMessage } from '../types/codex'
 
 function msg(
@@ -159,5 +159,71 @@ describe('mergeMessages preserveMissing: 乐观消息时序锚定', () => {
     const merged = mergeMessages(previous, incoming)
 
     expect(merged.map((m) => m.id)).toEqual(['user-1', 'assistant-1b'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// mergeThreadMessageStreams 的乐观消息边界（round-121 第二路径）
+// ---------------------------------------------------------------------------
+
+function liveMsg(
+  id: string,
+  turnIndex: number | undefined,
+  messageType = 'agentMessage.live',
+): UiMessage {
+  return {
+    id,
+    role: 'assistant',
+    text: `${id}-text`,
+    messageType,
+    ...(turnIndex !== undefined ? { turnIndex } : {}),
+  }
+}
+
+function userMsg(id: string, turnIndex?: number, messageType?: string): UiMessage {
+  return {
+    id,
+    role: 'user',
+    text: `${id}-text`,
+    ...(turnIndex !== undefined ? { turnIndex } : {}),
+    ...(messageType ? { messageType } : {}),
+  }
+}
+
+describe('mergeThreadMessageStreams: 乐观用户消息边界', () => {
+  it('上一轮 final 仍在 live 层时，插到乐观用户消息之前而不是之后', () => {
+    const persisted = [
+      userMsg('u1', 0),
+      userMsg('opt-2', undefined, 'userMessage.optimistic'),
+    ]
+    const live = [liveMsg('a1-final', 0)]
+
+    const merged = mergeThreadMessageStreams('thread-opt-boundary', persisted, [], [live], [])
+
+    expect(merged.map((m) => m.id)).toEqual(['u1', 'a1-final', 'opt-2'])
+  })
+
+  it('无乐观消息时保持原语义：最后一轮 live 内容仍插到持久化末尾', () => {
+    const persisted = [userMsg('u1', 0)]
+    const live = [liveMsg('a1-final', 0)]
+
+    const merged = mergeThreadMessageStreams('thread-no-opt', persisted, [], [live], [])
+
+    expect(merged.map((m) => m.id)).toEqual(['u1', 'a1-final'])
+  })
+
+  it('新轮的 live 内容（未知 turnIndex）仍排在乐观用户消息之后', () => {
+    const persisted = [
+      userMsg('u1', 0),
+      userMsg('opt-2', undefined, 'userMessage.optimistic'),
+    ]
+    const live = [
+      liveMsg('a1-final', 0),
+      liveMsg('a2-new', 9),
+    ]
+
+    const merged = mergeThreadMessageStreams('thread-opt-newturn', persisted, [], [live], [])
+
+    expect(merged.map((m) => m.id)).toEqual(['u1', 'a1-final', 'opt-2', 'a2-new'])
   })
 })

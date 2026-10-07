@@ -1312,7 +1312,18 @@ export function mergeThreadMessageStreams(
     if (previousTurnIndex !== undefined) insertAtByTurnIndex.set(previousTurnIndex, index)
     previousTurnIndex = message.turnIndex
   }
-  if (previousTurnIndex !== undefined) insertAtByTurnIndex.set(previousTurnIndex, persisted.length)
+  if (previousTurnIndex !== undefined) {
+    // round-121：乐观用户消息没有 turnIndex，上面的扫描不会把它登记为轮次边界。
+    // 上一轮的流式正文在 turn/completed 之后、防抖刷新物化之前仍留在 live 层，
+    // 若按 persisted.length 插入会排到乐观消息之后，复现「用户消息串进上一轮」。
+    // 已存在的 live 内容都早于发送时刻，把最后一轮的插入点上限收到第一条乐观消息；
+    // 无乐观消息时行为逐字不变。
+    const firstOptimisticIndex = persisted.findIndex(isOptimisticUserMessage)
+    insertAtByTurnIndex.set(
+      previousTurnIndex,
+      firstOptimisticIndex >= 0 ? firstOptimisticIndex : persisted.length,
+    )
+  }
 
   const liveByInsertIndex = new Map<number, UiMessage[]>()
   const unattachedLive: UiMessage[] = []
