@@ -5,6 +5,7 @@
   >
     <SidebarMenuRow
       class="thread-row"
+      :data-thread-id="props.thread.id"
       :data-active="props.selected"
       :data-live="props.threadState === 'working' ? 'true' : 'false'"
       :data-pinned="props.pinned"

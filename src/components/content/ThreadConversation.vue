@@ -1,6 +1,7 @@
 <template>
   <section
     class="conversation-root"
+    :data-thread-id="props.activeThreadId"
     @contextmenu.capture="handleConversationContextMenu"
     @click="handleCodeCopyActivate"
     @keydown.enter="handleCodeCopyActivate"
