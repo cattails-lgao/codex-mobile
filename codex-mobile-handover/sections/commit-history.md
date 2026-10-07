@@ -208,3 +208,16 @@
 **发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.126`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.126 。
 
 **发布闭环**：用户于 2026-09-28 执行 `npm publish`，registry 记录发布时刻 `2026-09-28T09:06:42.665Z`，`dist-tags.latest` 由 `0.1.125` 切换为 **`0.1.126`**。维护者随后下载 tarball 复核：1,605,877 字节、55 个条目（`dist/` 47 + `dist-cli/` 2 + `scripts/` 3 + `package.json`/`README.md`/`LICENSE`）、sha1 `6a34332a4aa5c4384ee6ec157fea1e32d21abe77` 与 integrity `sha512-4mel2hXVvxzEd11sMdIOpJOFSrAH+epBGMfdYby6a5BUkb9yKouKP2JSsOdrVf3vt9AaYnDkBKaBW9zxxZQRdw==` 均与 registry 逐项一致，包内 `package.json` 为 `codex-mobile-re@0.1.126`。（复查时再次确认 v0.1.125 的口径：registry 传播有分钟级延迟——`npm view dist-tags` 先报 `0.1.125`、版本详情 404，约 1 分钟后 `latest` 即挪正，不能据此判失败。）
+\n
+
+## v0.1.127 发布（round-101 ~ round-121）
+
+版本从 `0.1.126` 升至 **`0.1.127`**，收录 round-101 ~ round-121 共 51 个提交（推送范围 `b761b601..v0.1.127`）——主线是「codex-cli 0.157–0.159 协议升级适配」与「全量水合彻底退场」两大战役，外加消息串位排序修复、测试基线零失败治理与集成终端去 native 依赖。
+
+**内容总览**：①**协议升级与兼容**（round-101/103/106/108/109）——codex-cli 0.153.4→0.158.0→0.159.0 三段式升级：纯调研审计先行、真实探针逐项验证后接入 `instant_interrupt`（按 `codex --version` 门控，<0.159 整条 key 不发）、回退改 `thread/revert`-only（`thread/rollback` 已被移除）、`items/list` 网关与 turn 时间戳/originator 身份采纳、steer 改显式 `turn/steer {expectedTurnId}`（不可转向自动降级排队、前置不匹配回落 `turn/start`）；legacy `custom` provider 在 spawn 时注册占位（旧自定义端点线程 502→200）；②**性能：全量水合退场收口**（round-102/110/111/112/113）——`thread/read` 有界化、翻旧页兜底在 turns/list 不可用时改答边界**绝不回落全量水合**、队列 drain / 排队轮开跑 / telegram 转发 / 回退文件路径的裸全量读逐处收口（大线程 6.0–6.2s/26MB 的 `canStartQueuedTurn` 路径在内）；③**正确性**（round-104/121）——真实 124MB/173 轮大线程实测揭出并修复「legacy custom 线程打开必 502」与「慢开提示接在死信号上」两枚真 bug；**修「新发用户消息串进上一轮 message 中间」**：`mergeMessages` 乐观消息时序锚定 + `mergeThreadMessageStreams` 乐观消息边界（codegraph 复核发现的 live 层第二路径），不变量＝乐观用户消息代表「现在」，发送前已存在的内容不得排到它后面；大线程慢开 5s 诚实提示；④**集成终端**（round-116）——改走 app-server 官方 `command/exec {tty:true}` PTY 通道，删 `node-pty` native 依赖与 postinstall 修补；⑤**测试基线**（round-115）——从「恒定 2 例失败」修到**零失败**（三个根因全在测试与环境口径，产品代码零改动）；⑥**UI 与闸门**（round-117/118/119/120/114）——7 级排版阶梯归档（`text-sm` 162 处语义分档）、侧栏/会话区 `data-thread-id` 稳定标识 + 闸门按 id 定位条件等待（12 项）+ 内容挑选 preview 兜底、设计审计三处机械小改（过冲缓动/裸 hex token 化/缓动家族统一）、Directory 写死的他人机器技能绝对路径清理。
+
+**验证基线（发版时点）**：`vue-tsc --noEmit` 干净、全量 Vitest **725/725 零失败**（714→725，round-115 治理后零失败基线）、UI 契约 **38/38**（round-117 起）、闸门 `check-thread-switch-feedback` **12/12**。
+
+**发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.127`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.127 。
+
+**发布闭环**：（待用户 `npm publish` 后回填——registry 发布时刻、dist-tags.latest 切换、tarball 复核。）
