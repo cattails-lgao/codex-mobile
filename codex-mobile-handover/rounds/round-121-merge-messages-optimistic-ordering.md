@@ -29,9 +29,20 @@
 
 改动仅 `mergeMessages` 一个函数（约 30 行 + 注释），不动调用方、不动渲染分组。
 
+### 补充：codegraph 复核发现的第二路径（live 层变体，同轮补修）
+
+用户装上 codegraph 后要求独立复核，`clearCompletedTurnLiveState`（`useDesktopState.ts:1480`）的调用链暴露出**同一症状的第二条路径**：
+
+- `clearCompletedTurnLiveState` 清 plan/思考/命令/活动态，但**不清 `liveAgentMessagesByThreadId`**——上一轮的流式正文在 turn/completed 之后、防抖刷新物化之前**一直留在 live 层**
+- `mergeThreadMessageStreams`（`useDesktopStateUtils.ts:1293`）把带 turnIndex 的 live 消息插到「下一 user 消息之前」，最后一轮的插入点是 `persisted.length`；而**乐观用户消息没有 turnIndex**，不构成边界 → 上一轮 live 正文插到乐观消息**之后**，同样渲染成「用户消息串进上一轮」
+- **补修**：最后一轮的插入点在存在乐观消息时收到 `firstOptimisticIndex`（已存在的 live 内容都早于发送时刻，时序上必在乐观消息之前）；新轮 live 内容（未知 turnIndex）仍走 unattached 尾追加、排在乐观消息之后——语义正确。无乐观消息时行为逐字不变
+- 新增 3 个边界用例（live final 前插 / 无乐观原语义 / 新轮 live 仍在其后），回归测试累计 **11/11**
+
+两条路径共用一个不变量：**乐观用户消息代表「现在」，一切发送前已存在的内容（持久化或 live）都不得排到它后面。**
+
 ## 三、验证
 
-- 新增纯函数回归测试 `useDesktopStateUtils.mergeMessages.test.ts` **8/8**：
+- 新增纯函数回归测试 `useDesktopStateUtils.mergeMessages.test.ts` **11/11**（mergeMessages 8 + mergeThreadMessageStreams 边界 3）：
   1. 复现场景（收尾晚物化 + 已知 turnId + 无真实对应）→ 前插 ✓
   2. 锚切分（真实对应在快照）→ 锚前前插 / 锚起尾追加 + 乐观过滤 ✓
   3. 历史脏序自愈（previous 已错序）→ 过滤后归位 ✓
@@ -40,10 +51,14 @@
   6. 无锚 + 未知 turnId（真正的新轮内容）→ 保守尾追加 ✓
   7. 无乐观消息 → 原语义不变 ✓
   8. `preserveMissing` 关闭 → incoming 顺序直接生效 ✓
+  9. live 层：上一轮 final 留在 live 层时插到乐观消息之前 ✓
+  10. live 层：无乐观消息 → 原末尾插入语义不变 ✓
+  11. live 层：新轮 live 内容（未知 turnIndex）仍排在乐观消息之后 ✓
 - **全量 Vitest 抓回一次真回归**：首轮全量跑出 1 失败（`captures the active provider when creating a new thread`，期望 `user:hi, assistant:Hi.` 实得反序）——正是「无锚一刀切前插」破坏新线程首轮形态的实证；引入 turnId 判别器后该用例恢复通过
 - `vue-tsc --noEmit` → **EXIT=0**
-- 全量 Vitest → **722/722 零失败**（714 + 新增 8）
+- 全量 Vitest → **725/725 零失败**（714 + 新增 11）
 - UI 契约 → **38/38**
+- **codegraph 独立复核**（用户安装后要求）：`callers mergeMessages` 确认生产调用点仅 `loadMessages` / `loadOlderMessages` 两处；`callers setPersistedMessagesForThread` 确认其余持久化写入者（rollback/interrupt/fork/retry 回退）均为删/替换语义、无第二个「尾追加助手内容」入口；`impact` 影响面全部落在消息组合链内；`clearCompletedTurnLiveState` 调用链暴露第二路径（已补修，见 §二补充）
 
 ## 四、诚实边界
 
