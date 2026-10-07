@@ -726,9 +726,8 @@ body {
 }
 
 /* QuestionJumpBar（阶段 C 问题导航）暗色覆盖 */
-:root.dark .question-jump-dot {
-  background: #3f3f46; /* zinc-700 */
-}
+/* round-120: .question-jump-dot 的暗色 raw 覆盖已删——基类改 var(--line-2)
+   后两主题自动切换（暗色原覆盖值 #3f3f46 即 line-2 暗色取值）。 */
 
 :root.dark .question-jump-preview {
   @apply border-line-2 bg-s1 text-ink-3 shadow-black/40;

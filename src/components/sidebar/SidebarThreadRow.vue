@@ -277,7 +277,8 @@ function setMenuWrapRef(element: Element | ComponentPublicInstance | null): void
   content: "";
   @apply absolute inset-0 rounded-full;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent);
-  animation: thread-pip-breathe 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  /* round-120: 缓动归队统一家族（此前是 0.22,1,0.36,1 的漏网档）。 */
+  animation: thread-pip-breathe 1.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

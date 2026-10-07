@@ -175,10 +175,12 @@ function onJump(anchor: QuestionAnchor): void {
   display: block;
   height: 3px;
   border-radius: 2px;
-  background: #d4d4d8; /* zinc-300 */
+  /* 非激活态走 line token，两主题自动切换（round-120 前是裸 #d4d4d8 +
+     style.css 里的暗色 raw 覆盖，token 化后覆盖层已删）。 */
+  background: var(--line-2);
   transition:
     background 200ms,
-    width 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .question-jump-preview {
