@@ -8,6 +8,7 @@ Return to the [manual test index](../../tests.md).
 
 | Section |
 | --- |
+| [Thread switch feedback gate: identity targets and condition waits](thread-switch-feedback-gate-identity-and-waits.md) |
 | [Pinned threads remain visible during background pagination](pinned-threads-remain-visible-during-background-pagination.md) |
 | [Thread archive recovery and sidebar pruning](thread-archive-recovery-and-sidebar-pruning.md) |
 | [Thread context compaction button](thread-context-compaction-button.md) |
