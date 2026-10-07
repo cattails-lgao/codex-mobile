@@ -17,6 +17,10 @@ re-sorts by `updatedAt` and opening a thread can move its row.
   The project sandbox is thin; `tmp/r118-seed-sandbox.cjs --apply` copies a few small
   real rollouts in as copies if needed. The gate prints `with-messages=N` and exits with a
   clear message when it cannot find two.
+- Content selection is two-tier (round-119): tier 1 asks `thread/turns/list`; when it comes
+  up short (it answers 0 turns for a few old-shape rollouts that still render), tier 2
+  falls back to a non-empty `preview` from `thread/list`. When the fallback is used the
+  gate prints `note  content selection: N by turns/list + M by preview fallback`.
 
 #### Steps
 
@@ -25,6 +29,9 @@ re-sorts by `updatedAt` and opening a thread can move its row.
    `SETTLE_TIMEOUT_MS` to change the per-switch settle budget (default 15000).
 3. Read the trailing `note  sidebar order:` line - it reports how many row indices changed
    thread during the run, which is expected behaviour and not a failure.
+4. If present, read the `note  content selection:` line - it reports how many target
+   threads came from the preview fallback instead of `turns/list` (round-119); on a
+   healthy home this line does not appear.
 
 #### Expected Results
 
