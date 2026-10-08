@@ -296,23 +296,54 @@ function getOpenCodeZenProviderConfigArgs(serverPort?: number): string[] {
   ]
 }
 
-export function getProviderCompatibilityConfigArgs(serverPort?: number): string[] {
-  return [
-    ...getOpenCodeZenProviderConfigArgs(serverPort),
-    // Older deployments (e.g. the hosted server) recorded free-mode threads
-    // with `model_provider="custom"`. app-server refuses to resume such a
-    // rollout unless that provider exists in config ("Model provider `custom`
-    // not found" -> thread/resume 502 -> the thread never opens). Defining an
-    // inert placeholder here makes every legacy thread loadable again without
-    // selecting it as the active provider. Registering only for reads matches
-    // the OpenCode Zen compat registration above.
-    // ponytail: history reads work, but sending in a legacy `custom` thread
-    // still hits the dead placeholder endpoint; upgrade path = point base_url
-    // at the live custom proxy when free-mode custom is enabled.
-    '-c', 'model_providers.custom.name="Legacy Custom Endpoint"',
-    '-c', 'model_providers.custom.base_url="http://127.0.0.1:9/v1"',
-    '-c', 'model_providers.custom.wire_api="responses"',
-  ]
+/** 旧版托管 free-mode 写进 rollout 的 runtime provider id。 */
+export const LEGACY_CUSTOM_PROVIDER_ID = 'custom'
+
+/** 遗留 `custom` 占位 provider 指向的本地兼容路由（见下）。 */
+export const LEGACY_CUSTOM_COMPAT_PATH = '/codex-api/provider-compat/v1'
+
+/** 拿不到本机端口时的兜底（旧行为，必然连接失败）。 */
+const LEGACY_CUSTOM_DEAD_BASE_URL = 'http://127.0.0.1:9/v1'
+
+/**
+ * 为**读取**遗留 rollout 注册兼容 provider（不选为当前 provider）。
+ *
+ * Older deployments (e.g. the hosted server) recorded free-mode threads with
+ * `model_provider="custom"`. app-server refuses to resume such a rollout unless
+ * that provider exists in config ("Model provider `custom` not found" ->
+ * thread/resume 502 -> the thread never opens).
+ *
+ * round-122：注册前必须确认用户在 config.toml 里**没有**定义同名 provider。
+ * `-c` 的优先级高于 config.toml，无条件注册会把用户自己的
+ * `[model_providers.custom]`（base_url 等）整体顶掉；用户若把 `model_provider`
+ * 指向 `custom`，WebUI 里发送会一直卡在 `Reconnecting... waiting for network`
+ * （0.1.127 回归）。用户已定义时跳过——遗留 rollout 会解析到用户自己的
+ * provider，历史照样能读，语义也比指向死端点更合理。
+ *
+ * round-122 同时不再用死端口当哨兵：base_url 改指本机兼容路由，那条路由回一个
+ * 明确的 4xx。实测（真实 codex exec）死端口会让客户端陷入
+ * `Reconnecting... 1/5` 并一直挂住（25s 不退出），而 4xx 在 ~5s 内带着可读原因
+ * 失败——遗留线程里发送至少能知道「这里发不出去」。
+ */
+export function getProviderCompatibilityConfigArgs(
+  serverPort: number | undefined,
+  userProviderIds: ReadonlySet<string>,
+): string[] {
+  const args: string[] = []
+  if (!userProviderIds.has(OPENCODE_ZEN_RUNTIME_PROVIDER_ID)) {
+    args.push(...getOpenCodeZenProviderConfigArgs(serverPort))
+  }
+  if (!userProviderIds.has(LEGACY_CUSTOM_PROVIDER_ID)) {
+    const baseUrl = serverPort
+      ? `http://127.0.0.1:${serverPort}${LEGACY_CUSTOM_COMPAT_PATH}`
+      : LEGACY_CUSTOM_DEAD_BASE_URL
+    args.push(
+      '-c', 'model_providers.custom.name="Legacy Custom Endpoint"',
+      '-c', `model_providers.custom.base_url="${baseUrl}"`,
+      '-c', 'model_providers.custom.wire_api="responses"',
+    )
+  }
+  return args
 }
 
 export function getFreeModeConfigArgs(state: FreeModeState, serverPort?: number): string[] {

@@ -36,7 +36,7 @@ describe('unauthenticated free mode defaults', () => {
   })
 
   it('can register OpenCode Zen for legacy thread reads without selecting it as active provider', () => {
-    const args = getProviderCompatibilityConfigArgs(4173)
+    const args = getProviderCompatibilityConfigArgs(4173, new Set())
 
     expect(args).toContain('model_providers.opencode_zen.base_url="http://127.0.0.1:4173/codex-api/zen-proxy/v1"')
     expect(args).toContain('model_providers.opencode_zen.wire_api="responses"')
@@ -46,12 +46,41 @@ describe('unauthenticated free mode defaults', () => {
   })
 
   it('registers an inert legacy `custom` provider so old free-mode rollouts can resume', () => {
-    const args = getProviderCompatibilityConfigArgs(4173)
+    const args = getProviderCompatibilityConfigArgs(4173, new Set())
 
     expect(args).toContain('model_providers.custom.name="Legacy Custom Endpoint"')
     expect(args).toContain('model_providers.custom.wire_api="responses"')
     expect(args).not.toContain('model_provider="custom"')
     expect(args.some((arg) => arg.startsWith('model="'))).toBe(false)
+  })
+
+  it('skips the legacy `custom` placeholder when the user config.toml defines that provider (round-122)', () => {
+    const args = getProviderCompatibilityConfigArgs(4173, new Set(['custom']))
+
+    // `-c` 优先级高于 config.toml：整个占位块都不得出现，否则用户的
+    // [model_providers.custom] 会被顶成死端点，WebUI 直接发不出消息。
+    expect(args.some((arg) => arg.startsWith('model_providers.custom.'))).toBe(false)
+    // 其它兼容注册不受影响。
+    expect(args).toContain('model_providers.opencode_zen.wire_api="responses"')
+  })
+
+  it('skips the OpenCode Zen compat registration when the user defines that provider id', () => {
+    const args = getProviderCompatibilityConfigArgs(4173, new Set(['opencode_zen']))
+
+    expect(args.some((arg) => arg.startsWith('model_providers.opencode_zen.'))).toBe(false)
+    expect(args).toContain('model_providers.custom.name="Legacy Custom Endpoint"')
+    // 指向本机兼容路由（明确 4xx），而不是必然连接失败的死端口。
+    expect(args).toContain('model_providers.custom.base_url="http://127.0.0.1:4173/codex-api/provider-compat/v1"')
+  })
+
+  it('falls back to the dead sentinel only when no local server port is known', () => {
+    const args = getProviderCompatibilityConfigArgs(undefined, new Set())
+
+    expect(args).toContain('model_providers.custom.base_url="http://127.0.0.1:9/v1"')
+  })
+
+  it('emits no compat provider args when the user already defines every compat id', () => {
+    expect(getProviderCompatibilityConfigArgs(undefined, new Set(['custom', 'opencode_zen']))).toEqual([])
   })
 
   it('suppresses community fallback providers when Codex auth appears', () => {

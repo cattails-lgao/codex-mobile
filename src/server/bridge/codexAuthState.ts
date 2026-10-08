@@ -196,7 +196,9 @@ type TomlScanState = {
   inMultilineLiteralString: boolean
 }
 
-function stripTomlComment(line: string, state: TomlScanState): string {
+/** 剥掉一行的 TOML 注释，并跨行跟踪 `"""` / `'''` 多行字符串（round-122 起同时供
+ * appServerRuntimeConfig 的 model_providers 扫描复用，避免两份实现漂移）。 */
+export function stripTomlComment(line: string, state: TomlScanState): string {
   let content = ''
   let inSingleQuote = false
   let inDoubleQuote = false

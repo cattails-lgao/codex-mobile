@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   buildAppServerArgs,
   codexCliSupportsInstantInterrupt,
+  collectModelProviderIds,
   parseVersionTriple,
+  readUserConfiguredProviderIds,
 } from './appServerRuntimeConfig'
 
 /**
@@ -94,6 +99,77 @@ describe('app-server runtime config', () => {
     expect(codexCliSupportsInstantInterrupt(null)).toBe(true)
     expect(codexCliSupportsInstantInterrupt('')).toBe(true)
     expect(codexCliSupportsInstantInterrupt('dev')).toBe(true)
+  })
+
+  it('collects model_providers ids from every TOML shape a user config can use (round-122)', () => {
+    const ids = collectModelProviderIds([
+      // `model_provider` 是「选哪个」，不是「定义了哪个」——不得被当成 provider id。
+      'model = "deepseek-flash"',
+      'model_provider = "custom"',
+      '',
+      '[model_providers.custom]',
+      'name = "litellm"',
+      'base_url = "http://127.0.0.1:4460/v1"',
+      '',
+      '[model_providers."my.provider"]',
+      'base_url = "http://example.test/v1"',
+      '',
+      '[model_providers.nested.child]',
+      'base_url = "http://example.test/v2"',
+      '',
+      'model_providers.dotted.base_url = "http://example.test/v3"',
+      '',
+      '[profiles.work.model_providers.profiled]',
+      'base_url = "http://example.test/v4"',
+      '',
+      '[model_providers]',
+      'inline_table = { base_url = "http://example.test/v5" }',
+    ].join('\n'))
+
+    expect([...ids].sort()).toEqual([
+      'custom', 'dotted', 'inline_table', 'my.provider', 'nested', 'profiled',
+    ])
+  })
+
+  it('does not mistake comments, strings or unrelated tables for provider definitions', () => {
+    const ids = collectModelProviderIds([
+      '# [model_providers.commented_out]',
+      'note = "see [model_providers.in_a_string]"',
+      'block = """',
+      '[model_providers.in_a_multiline_string]',
+      '"""',
+      '[hooks]',
+      'model_providers = "not-a-table"',
+      '[model_providers.custom]',
+      'name = "litellm"   # trailing comment',
+    ].join('\n'))
+
+    expect([...ids]).toEqual(['custom'])
+  })
+
+  it('reads the provider ids actually defined in $CODEX_HOME/config.toml', () => {
+    const home = mkdtempSync(join(tmpdir(), 'r122-providers-'))
+    const previousHome = process.env.CODEX_HOME
+    process.env.CODEX_HOME = home
+    try {
+      // 文件不存在时是空集合，而不是抛错（调用方会照常注入兼容占位）。
+      expect([...readUserConfiguredProviderIds()]).toEqual([])
+
+      writeFileSync(
+        join(home, 'config.toml'),
+        'model_provider = "custom"\n\n[model_providers.custom]\nbase_url = "http://127.0.0.1:4460/v1"\n',
+        'utf8',
+      )
+      expect([...readUserConfiguredProviderIds()]).toEqual(['custom'])
+
+      // 内容变了缓存必须失效：桥的配置签名比对靠它决定是否重启 app-server。
+      writeFileSync(join(home, 'config.toml'), '[model_providers.other]\nbase_url = "http://example.test/v1"\n', 'utf8')
+      expect([...readUserConfiguredProviderIds()]).toEqual(['other'])
+    } finally {
+      if (previousHome === undefined) delete process.env.CODEX_HOME
+      else process.env.CODEX_HOME = previousHome
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 
   it('parses a version triple out of decorated CLI output', () => {

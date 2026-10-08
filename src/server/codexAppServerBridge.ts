@@ -9,7 +9,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { handleAccountRoutes } from './accountRoutes.js'
-import { buildAppServerArgs, parseApprovalPolicy } from './appServerRuntimeConfig.js'
+import { buildAppServerArgs, parseApprovalPolicy, readUserConfiguredProviderIds } from './appServerRuntimeConfig.js'
 import { handleReviewRoutes } from './reviewGit.js'
 import { handleSkillsRoutes, initializeSkillsSyncOnStartup } from './skillsRoutes.js'
 import { TelegramThreadBridge } from './telegramThreadBridge.js'
@@ -26,6 +26,7 @@ import {
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
   getProviderCompatibilityConfigArgs,
+  LEGACY_CUSTOM_COMPAT_PATH,
   OPENCODE_ZEN_PROVIDER_ID,
   refreshFreeModelsInBackground,
   shouldCreateDefaultFreeModeStateForMissingAuth,
@@ -424,7 +425,9 @@ class AppServerProcess {
     const args = buildAppServerArgs()
     let extraEnv: Record<string, string> = {}
     const serverPort = parseInt(process.env.CODEXUI_SERVER_PORT ?? '', 10) || undefined
-    args.push(...getProviderCompatibilityConfigArgs(serverPort))
+    // round-122：用户在 config.toml 里自己定义了同名 provider 时不再注入兼容占位——
+    // `-c` 优先级高于 config.toml，会把用户的定义（base_url 等）整体顶掉。
+    args.push(...getProviderCompatibilityConfigArgs(serverPort, readUserConfiguredProviderIds()))
     const statePath = join(getCodexHomeDir(), FREE_MODE_STATE_FILE)
     try {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
@@ -1680,6 +1683,22 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
       const url = new URL(req.url, 'http://localhost')
       if (!url.pathname.startsWith('/codex-api/')) {
         next()
+        return
+      }
+
+      // round-122：遗留 `custom` 兼容占位 provider 的 base_url 指到这里
+      // （freeMode.getProviderCompatibilityConfigArgs）。它只用于**读取**旧 rollout；
+      // 在这类线程里发送没有真实端点可去，于是明确回一个 4xx——旧的哨兵值
+      // 127.0.0.1:9 必然连接失败，CLI 会陷入 `Reconnecting... waiting for network`
+      // 无限重试（真实 codex exec 实测 25s 仍不退出），而 4xx 在 ~5s 内带着这条
+      // 消息失败，用户至少知道「这里发不出去、去哪改」。
+      if (req.method === 'POST' && url.pathname === `${LEGACY_CUSTOM_COMPAT_PATH}/responses`) {
+        setJson(res, 400, {
+          error: {
+            type: 'invalid_request_error',
+            message: 'This thread uses a legacy compatibility provider that has no endpoint. Start a new thread, or define [model_providers.custom] in your config.toml to send from here.',
+          },
+        })
         return
       }
 

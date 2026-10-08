@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveCodexCommand } from '../commandResolution.js'
 import { spawnSyncCommand } from '../utils/commandInvocation.js'
+import { stripTomlComment } from './bridge/codexAuthState.js'
 
 const SANDBOX_MODES = new Set([
   'read-only',
@@ -95,6 +96,128 @@ function readApprovalPolicyFromConfigFileSync(): CodexApprovalPolicy | null {
     return null
   } catch {
     return null
+  }
+}
+
+const MODEL_PROVIDERS_KEY = 'model_providers'
+
+const NO_USER_PROVIDERS: ReadonlySet<string> = new Set<string>()
+
+/** 按 TOML 点号切分键路径：引号内的点号不切分，各段剥掉外层引号。 */
+function splitTomlKeyPath(text: string): string[] {
+  const segments: string[] = []
+  let segment = ''
+  let quote = ''
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = ''
+      else segment += char
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '.') {
+      segments.push(segment.trim())
+      segment = ''
+      continue
+    }
+    segment += char
+  }
+  segments.push(segment.trim())
+  return segments
+}
+
+/**
+ * 收集 `config.toml` 里定义的 `model_providers.<id>`。
+ *
+ * 四种写法都要认：`[model_providers.custom]`、`[model_providers.custom.x]`、
+ * `model_providers.custom.base_url = …`（点号键）、`[model_providers]` 段内的
+ * `custom = { … }`；带 profile 前缀（`[profiles.p.model_providers.custom]`）同样收集。
+ * 只做「有没有定义」的判定，不解析取值。注释与 `"""` / `'''` 多行字符串的剥离复用
+ * `bridge/codexAuthState` 的实现（那里还有 `model_provider` 的同类判定），
+ * 不再养第二份会漂移的扫描器。
+ */
+export function collectModelProviderIds(raw: string): Set<string> {
+  const ids = new Set<string>()
+  let section: string[] = []
+  const scanState = { inMultilineBasicString: false, inMultilineLiteralString: false }
+  for (const rawLine of raw.split(/\r?\n/u)) {
+    const line = stripTomlComment(rawLine, scanState).trim()
+    if (!line) continue
+    if (line.startsWith('[')) {
+      section = splitTomlKeyPath(line.replace(/^\[+/u, '').replace(/\]+$/u, ''))
+      const index = section.indexOf(MODEL_PROVIDERS_KEY)
+      const id = index >= 0 ? section[index + 1] : undefined
+      if (id) ids.add(id)
+      continue
+    }
+    const equals = line.indexOf('=')
+    if (equals <= 0) continue
+    const keyPath = splitTomlKeyPath(line.slice(0, equals))
+    if (keyPath[0] === MODEL_PROVIDERS_KEY && keyPath.length > 1) {
+      const id = keyPath[1]
+      if (id) ids.add(id)
+      continue
+    }
+    // `[model_providers]`（或带 profile 前缀的同名表）里直接写 `custom = { … }`。
+    const index = section.indexOf(MODEL_PROVIDERS_KEY)
+    const id = keyPath[0]
+    if (index >= 0 && index === section.length - 1 && id) ids.add(id)
+  }
+  return ids
+}
+
+let cachedProviderIdsPath: string | null = null
+let cachedProviderIdsMtimeMs: number | null = null
+let cachedProviderIdsSize: number | null = null
+let cachedProviderIds: ReadonlySet<string> = NO_USER_PROVIDERS
+
+/**
+ * 用户 `config.toml` 里已经定义过的 provider id（round-122）。
+ *
+ * 给 app-server 追加 `-c model_providers.<id>.*` 兼容占位之前**必须先问这个**：
+ * `-c` 的优先级高于 config.toml，无条件追加会把用户自己同名 provider 的
+ * `base_url` 整体顶掉——用户把 `model_provider` 指向 `custom` 时，整个 WebUI
+ * 都发不出消息（0.1.127 回归）。
+ *
+ * 缓存按 `mtimeMs + size` 键控（与 `bridge/codexAuthState` 同一套做法，不是内容
+ * 比对）：本调用点在**每次 RPC** 的 `disposeIfConfigChanged()` 里，实测本机
+ * `readFileSync` 一个 1.3KB 配置要 ~1.4ms、`existsSync` ~0.6ms，而 `statSync` 只
+ * ~14µs。config.toml 一改（mtime/size 变）即失效，桥的配置签名比对照旧能察觉并重启
+ * app-server。代价：同一 mtime 粒度 + 同尺寸的两次写入会被漏掉（与 codexAuthState
+ * 同一个已知取舍）。
+ */
+export function readUserConfiguredProviderIds(): ReadonlySet<string> {
+  const configPath = join(getCodexHomeDir(), 'config.toml')
+  let info: ReturnType<typeof statSync>
+  try {
+    info = statSync(configPath)
+  } catch {
+    // 文件不存在/不可读：清缓存并当作「用户没有定义」，让调用方照常注入兼容占位。
+    cachedProviderIdsPath = null
+    cachedProviderIds = NO_USER_PROVIDERS
+    return NO_USER_PROVIDERS
+  }
+  if (
+    cachedProviderIdsPath === configPath
+    && cachedProviderIdsMtimeMs === info.mtimeMs
+    && cachedProviderIdsSize === info.size
+  ) {
+    return cachedProviderIds
+  }
+  try {
+    const raw = readFileSync(configPath, 'utf8')
+    const ids = collectModelProviderIds(raw)
+    cachedProviderIdsPath = configPath
+    cachedProviderIdsMtimeMs = info.mtimeMs
+    cachedProviderIdsSize = info.size
+    cachedProviderIds = ids
+    return ids
+  } catch {
+    // 读失败不写缓存，下次调用重试。
+    return NO_USER_PROVIDERS
   }
 }
 
