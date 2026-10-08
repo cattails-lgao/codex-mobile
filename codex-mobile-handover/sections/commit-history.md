@@ -302,3 +302,31 @@
 **验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 3 例负载敏感 fs 超时 → 隔离复跑 63/63、15.89s）。
 
 **未发布**：未 bump 版本、未 tag、已推送 `origin/main`（`308f368b`，2026-10-08）。
+
+## round-127（会话重挂不再把滚动位置丢回 TOP，未发布）
+
+**修复提交 `b0b6a990`**：`fix(ui): 会话重挂不再把滚动位置丢回 TOP（挂载期滚动初始化）（round-127）`（3 文件；产品源码只有 `src/components/content/ThreadConversation.vue` 一处，11 增 1 删）。
+
+**由来**：收口 round-126 的两条遗留——①「新增命令块的时候会闪一下」尚未定案；②没有挂载期滚动恢复。round-125 / round-126 都把「加挂载期滚动恢复」写成「独立议题，本轮不做」，理由是「那会改变**所有**挂载路径（含首次打开线程）的行为」；要判断值不值得改，得先回答一个可测的问题：**除了已被修掉的两条路径（审查面板、慢开提示），还有哪条路会重挂而 `activeThreadId` 不变？**
+
+**先证后改（决定性探针 `tmp/probe-r127-remount.cjs`）**：`ThreadConversation` 是 `defineAsyncComponent`（`App.vue:1019`），会话列位于 `<template v-else>` 分支 ⇒ 切到非线程视图会整棵卸载。实测四个入口——`#/` / `#/directory` / `#/settings` / `#/automations`——「切走再切回**同一条**线程」时 `.conversation-root` 各摘挂 1 次（`rootsRemoved/Added = 4/4`）、**scrollTop 438 → 0**（四个入口全中）。机制：该组件五个滚动相关 watcher（`messages` / `pendingRequests` / `liveOverlay` / `isLoading` / `activeThreadId`）**一个都不会触发**（`activeThreadId` 没变、props 也没变），而它当时**没有 `onMounted`** ⇒ 新挂载的 `<ul class="conversation-list">` 停在浏览器默认 `scrollTop = 0`。⇒ **这是可复现的真缺陷，不是理论隐患。**
+
+**改动**：`import` 补 `onMounted`；新增 `onMounted(() => { void scheduleConversationScroll() })`。两点分寸：①**只做一件事**——结算一次滚动（`autoFollowOutput` / `modalImageUrl` / `isLoadingMore` / `warmLayerState` 在挂载时本就处于初值，不必像 `activeThreadId` watcher 那样逐项重置）；②**与「切换线程」同口径 = 落到最新内容（底部）**，不是恢复用户停下的原位置：剩余的重挂路径**全是用户主动导航**（切走再切回），此时「打开就看见最新」才是预期；而两类**非导航**的意外重挂已由 round-125（审查面板改覆盖层）与 round-126（滚动容器脱离 `v-if` 链）修掉。
+
+**新增闸门（2 个）**：
+- `scripts/verify-conversation-mount-scroll.cjs`（新，浏览器侧可复跑）：进入可滚动线程 → 停在底部记录 `scrollTop` → 依次切到 `#/` / `#/directory` / `#/settings` / `#/automations` 再切回 → 断言位置未丢；**并断言「会话确实被重挂过」（`rootsRemoved > 0`），否则闸门会空过**。**真机 A/B**：改动前 四个入口全部 `438 → 0`（**FAILED 4/7**，exit 1）；改动后 全部 `438 → 438`（**ALL GREEN 7/7**）。
+- `scripts/check-ui-contract.cjs` **40 → 41 项**：新增「会话挂载期有滚动初始化，重挂不停在 TOP（round-127）」（同时校验 `onMounted` 从 `vue` 导入、挂载回调里确实调用了 `scheduleConversationScroll`）。**反跑证明非空**——改动前 **40/41**、该项 FAIL（诊断行 `未定位到 onMounted()`），改动后 **41/41**（`onMounted@2021`）。
+
+**性能审计（按 `AGENTS.md` 量测，`tmp/probe-r127-perf.cjs`）**：在页面里挂 `Element.prototype.scrollIntoView` 计数 + 给 `.conversation-list` 装 `scrollTop` setter 计数，量「hash 切到线程」这一段。`codex-api` 请求数 **8 / 8 / 8**、`scrollIntoView` 调用 **1 / 1 / 1**、`scrollTop` 写入 **1 / 1 / 1** —— **改动前后逐项相同**。原因是 `scheduleConversationScroll` 自带 in-flight 合并（`if (conversationScrollPromise) return conversationScrollPromise`）：首次打开时「挂载初始化」与「`activeThreadId` watcher」落在同一次结算里，零额外滚动、零额外请求、零额外布局读取。（量测口径的一处诚实说明：探针给 `scrollTop` 装自定义 setter 后回读的是**写入值**而非浏览器钳制后的值，日志会出现 `endTop=1008/438` 这种越界读数——那是探针副作用。）
+
+**「闪一下」的取证（候选从 2 条收窄到 1 类，仍未定案）**：`tmp/probe-r127-append-flash.cjs` 用应用自己的链路注入——①桩 `thread/list` 的 `updatedAt` +1h（让重载真的发生）②往 `thread/read` 响应最后一轮的 `items` **追加一个合成的 `commandExecution` 条目**（形状抄自同线程真实条目：`{id,type,command,cwd,status,aggregatedOutput,exitCode,durationMs}`）③伪造 `visibilitychange` hidden→visible，且**把列表停在底部触发**（走「跟随输出」链 = 用户看最新内容时的真实处境）。**排除 4 条候选**：①**重载重建既有 item**——`itemsAdded=0 / itemsRemoved=0`，items 10 → 11（纯追加）；②**顶部 `isLoading` 切换条闪动**——全程 `switching-bar=false`（代码依据：`isLoadingMessages` 只在 `options.silent !== true && !alreadyLoaded` 时置真，而重载路径全部 `silent:true`）；③**`scrollIntoView` 连带滚动祖先**——原语级 A/B 显示 `list.scrollTop = scrollHeight` 单独已到底（两次 `listTop` 都是 438），加不加 `scrollIntoView` 时**11 个祖先的 `scrollTop` 逐位相同、`document.scrollingElement` 也是 0**（耗时 0 → 0.1ms）；④**位置被重置回 TOP**——`listTop` 轨迹 `438 → 510`（跟随到底）。**唯一新增的形态证据**：内容变化的重载确实带来非 item 节点重建（文本节点 ×80/−50、`<li.conversation-turn>` ×12/−7、`<section.conversation-turn-process>` ×2、v-if 占位注释 ×2 移除），但都在**同一次 patch** 内完成、观测不到可见中间态。⇒ 剩余只有 **(a) 真实流式回合里 live 项 → 持久化项的交接**（本条注入只造了持久化项，live 侧未被触发）与 **(b) 内容落地与滚动跟随之间那一帧的差**（滚动写在 `requestAnimationFrame` 里）；两者都必须驱动**真实流式回合**（需要模型在跑），本轮不做、也不据此下结论。
+
+**生产构建复跑**：`vite build` EXIT=0（9.47s，重建 `dist/`）→ `dist-cli` 起 4190（隔离 `CODEX_HOME`）→ 新闸门 **7/7**（与 dev 数字逐字相同：438→438、removed=4/added=4）、`verify-mobile-375` **EXIT=0**、`check-thread-switch-feedback` **12 项全过**（`frozen=8ms/11ms` ≤ 60ms 预算）、`check-fonts` **13/13**、`check-theme` **15/15**、`check-ui-contract` **41/41**。
+
+**验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例 / 742 通过（76 文件）零失败**（默认 15s 超时下即零失败）。
+
+**本轮未跑（环境不足，非失败）**：`verify-conversation-list-persists` 与 `verify-review-pane-scroll` 都要求线程可滚动 **>600px**，而本机沙箱 `.codex` 里最长只有 **438px** ⇒ 两者均 **SKIP（退 2）**；`check-token-equivalence` 因缺 `output/playwright/ui-audit/facts.json` 未跑（本改动是纯 DOM 生命周期、不触碰样式/token）。`check-fonts` / `check-theme` 需顶层 `playwright-core`（本机只在 pnpm store 里）——用 `NODE_PATH=<store>/playwright-core@1.62.1/node_modules` 指过去后正常运行。
+
+**新环境事实**：**dev server 与 `dist-cli` 共用同一个 `CODEX_HOME` 会互抢 writer lock** —— 先起 dev 再起 dist-cli，后者打开线程得 `RPC thread/resume failed with HTTP 502: thread … already has an active writer`，页面表现为「消息列表只剩 1 项、一个 `thread/read`/`resume` 请求都没发」。跑生产构建闸门前必须先停 dev（或换 home）。这是 round-44 记录的 writer 锁限制在现场的样子。
+
+**未发布**：未 bump 版本、未 tag；`b0b6a990` 已在本地 `main`。
