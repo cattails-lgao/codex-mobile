@@ -8,7 +8,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
-  createDefaultOpenCodeZenFreeModeState,
+  createDefaultOpenRouterFreeModeState,
   shouldCreateDefaultFreeModeStateForMissingAuth,
   shouldSuppressCommunityFreeModeForCodexAuth,
   type FreeModeState,
@@ -340,7 +340,18 @@ export function ensureDefaultFreeModeStateForMissingAuthSync(statePath: string):
     return current
   }
 
-  return createDefaultOpenCodeZenFreeModeState()
+  // round-123：默认兜底从 OpenCode Zen 改为 OpenRouter 社区免费池。
+  //
+  // 上游 2026-09 起把 Zen 免费档收紧成「客户端指纹门」——先是回 403
+  // `FreeTierError: ...can only be used from within OpenCode`，再要求请求体带
+  // stream + bash/read 工具桩，最后要求 `User-Agent` 声明 `opencode/1.18.0` 以上。
+  // 插件 zenProxy 的伪装停在旧形状上，因此**不登录的新用户一发言就吃 403**：
+  // 插件默认给的这条兜底路实际是死的（round-123 实测）。
+  // OpenRouter 社区 key（freeMode.ts 的混淆池）实测仍可直接调用，故改播它。
+  //
+  // 语义未变：只在「无可用 auth **且** 用户没在 config.toml 里显式写顶层
+  // `model_provider`」时才播种，绝不覆盖用户的显式选择（与 round-122 同一原则）。
+  return createDefaultOpenRouterFreeModeState()
 }
 
 export function hasUsableCodexAuthSyncPublicForBridge(): boolean {

@@ -179,11 +179,11 @@ describe('unauthenticated free mode defaults', () => {
       'deepseek-v4-flash-free',
       'GPT-5.5',
       'claude-opus-4-7',
-      'nemotron-3-super-free',
+      'nemotron-3-ultra-free',
     ], null)).toEqual([
       'big-pickle',
       'deepseek-v4-flash-free',
-      'nemotron-3-super-free',
+      'nemotron-3-ultra-free',
     ])
   })
 

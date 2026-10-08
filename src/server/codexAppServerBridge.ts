@@ -21,7 +21,6 @@ import {
   FREE_MODE_RUNTIME_PROVIDER_ID,
   OPENCODE_ZEN_RUNTIME_PROVIDER_ID,
   CUSTOM_RUNTIME_PROVIDER_ID,
-  createDefaultOpenCodeZenFreeModeState,
   filterOpenCodeZenModelsForAuthState,
   getFreeModeConfigArgs,
   getFreeModeEnvVars,
@@ -2184,7 +2183,8 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               } catch {
                 // OpenCode Zen model fetch failed
               }
-              setJson(res, 200, { data: ['big-pickle', 'minimax-m2.5-free', 'nemotron-3-super-free', 'trinity-large-preview-free'], exclusive: true, source: 'opencode-zen' })
+              // round-123：与 bridge/models.ts、bridge/freeModeRoutes.ts 三处同步。
+              setJson(res, 200, { data: ['big-pickle', 'mimo-v2.6-flash-free', 'space-bunny-free', 'ling-3.1-flash-free', 'nemotron-3-ultra-free'], exclusive: true, source: 'opencode-zen' })
               return
             }
             if (fmState.provider === 'custom' && fmState.customBaseUrl) {

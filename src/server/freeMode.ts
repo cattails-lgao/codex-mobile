@@ -95,12 +95,16 @@ export const FREE_MODE_PROVIDER_ID = 'openrouter-free'
 export const FREE_MODE_BASE_URL = 'https://openrouter.ai/api/v1'
 export const FREE_MODE_RUNTIME_PROVIDER_ID = 'openrouter_free'
 
+// round-123：按 2026-10-08 实测的 OpenRouter 目录校准。原列表里 gemma-3-27b、
+// llama-3.3-70b、qwen3-coder 三个 slug 都已下架（后者当时报 "this model is
+// unavailable for free"）。现列表每一项都做过一次真实 chat/completions 调用、
+// 确认能返回内容；gemma-4-26b 实测被上游临时 429，但仍在目录内，保留。
 const FALLBACK_FREE_MODELS = [
   'openrouter/free',
   'google/gemma-4-26b-a4b-it:free',
-  'google/gemma-3-27b-it:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen3-coder:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'cohere/north-mini-code:free',
+  'liquid/lfm-2.5-2.6b:free',
 ]
 
 let cachedFreeModels: string[] | null = null

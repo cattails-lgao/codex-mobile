@@ -352,7 +352,10 @@ export async function readProviderModelIdsForProvider(
       // Fall through to the offline Zen defaults.
     }
     return {
-      data: ['big-pickle', 'minimax-m2.5-free', 'nemotron-3-super-free', 'trinity-large-preview-free'],
+      // round-123：只留实测仍可用的 slug（原 minimax-m2.5-free / nemotron-3-super-free /
+      // trinity-large-preview-free 已从 Zen 目录消失）。另两处同名单见
+      // freeModeRoutes.ts 与 codexAppServerBridge.ts，改动需三处同步。
+      data: ['big-pickle', 'mimo-v2.6-flash-free', 'space-bunny-free', 'ling-3.1-flash-free', 'nemotron-3-ultra-free'],
       providerId: 'opencode-zen',
       source: 'provider',
     }

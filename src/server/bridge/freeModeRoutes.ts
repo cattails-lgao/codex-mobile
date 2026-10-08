@@ -144,19 +144,23 @@ export async function handleFreeModeHttpRequest(
           if (zenModels.length > 0) {
             models = zenModels
           } else {
+            // round-123：三个旧 slug 已从 Zen 目录消失；与 bridge/models.ts、
+            // codexAppServerBridge.ts 三处同步。
             models = [
               OPENCODE_ZEN_DEFAULT_MODEL,
-              'minimax-m2.5-free',
-              'nemotron-3-super-free',
-              'trinity-large-preview-free',
+              'mimo-v2.6-flash-free',
+              'space-bunny-free',
+              'ling-3.1-flash-free',
+              'nemotron-3-ultra-free',
             ]
           }
         } catch {
           models = [
             OPENCODE_ZEN_DEFAULT_MODEL,
-            'minimax-m2.5-free',
-            'nemotron-3-super-free',
-            'trinity-large-preview-free',
+            'mimo-v2.6-flash-free',
+            'space-bunny-free',
+            'ling-3.1-flash-free',
+            'nemotron-3-ultra-free',
           ]
         }
         wireApi = 'responses'

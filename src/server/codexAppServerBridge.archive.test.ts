@@ -426,7 +426,7 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
     }
   })
 
-  it('uses OpenCode Zen as a runtime fallback without creating a state file', async () => {
+  it('uses OpenRouter as a runtime fallback without creating a state file', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-runtime-zen-'))
     const statePath = join(codexHome, 'webui-custom-providers.json')
     process.env.CODEX_HOME = codexHome
@@ -434,14 +434,14 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
 
       expect(state?.enabled).toBe(true)
-      expect(state?.provider).toBe('opencode-zen')
+      expect(state?.provider).toBe('openrouter')
       await expect(stat(statePath)).rejects.toThrow()
     } finally {
       await rm(codexHome, { recursive: true, force: true })
     }
   })
 
-  it('does not synthesize OpenCode Zen after Codex auth exists and no state file is present', async () => {
+  it('does not synthesize OpenRouter after Codex auth exists and no state file is present', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-auth-no-state-'))
     const statePath = join(codexHome, 'webui-custom-providers.json')
     process.env.CODEX_HOME = codexHome
@@ -455,7 +455,7 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
     }
   })
 
-  it('does not synthesize OpenCode Zen when config.toml explicitly selects a model provider', async () => {
+  it('does not synthesize OpenRouter when config.toml explicitly selects a model provider', async () => {
     const codexHome = await mkdtemp(join(tmpdir(), 'codex-home-config-provider-'))
     const statePath = join(codexHome, 'webui-custom-providers.json')
     process.env.CODEX_HOME = codexHome
@@ -511,7 +511,7 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
 
       expect(state?.enabled).toBe(true)
-      expect(state?.provider).toBe('opencode-zen')
+      expect(state?.provider).toBe('openrouter')
       await expect(stat(statePath)).rejects.toThrow()
     } finally {
       await rm(codexHome, { recursive: true, force: true })
@@ -532,7 +532,7 @@ describe('ensureDefaultFreeModeStateForMissingAuthSync', () => {
       const state = ensureDefaultFreeModeStateForMissingAuthSync(statePath)
 
       expect(state?.enabled).toBe(true)
-      expect(state?.provider).toBe('opencode-zen')
+      expect(state?.provider).toBe('openrouter')
       await expect(stat(statePath)).rejects.toThrow()
     } finally {
       await rm(codexHome, { recursive: true, force: true })
