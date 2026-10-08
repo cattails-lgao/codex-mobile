@@ -356,6 +356,54 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-134（收尾 round-132 §10.6 的 ②③④：关掉「0 条 + Thinking」的剩余通道，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `9f013db0` | `fix(thread-load): 收尾 round-132 §10.6 的 ②③④，关掉「0 条 + Thinking」的剩余通道（round-134）` | 9 文件（产品 5 + 测试 3 + 闸门脚本 1，191 增 12 删） |
+| （本文档提交） | `docs(handover): round-134 收尾 §10.6 的 ②③④（轮次文档 + 总入口 + 提交史）` | 3 文件 |
+
+**由来**：用户「继续处理遗留项」—— 承接 round-132 §10.6 / §11.6 与 round-133 §五 点名却未实施的三条。
+
+**② 桥层不再伪造 `inProgress`**：`thread/read` 的 materialization-pending 兜底原本回 `{thread:{id,turns:[],status:{type:'inProgress'}}}`，`status` 那一项被 `readThreadInProgressFromResponse` 读成「正在思考」⇒ **同一个响应既答「没有轮次」又给一个没在跑的线程挂上 Thinking 浮层**（round-132 §10.4 第 1 条）。载荷抽成 `threadErrors.ts` 的纯函数 `buildPendingMaterializationThreadReadResult` 并去掉 `status` —— 客户端于是保留自己最后从通知里学到的状态，这是唯一诚实的答案。**注意同名兄弟**：`threadRoutes.ts` L338–347 的 `thread-live-state` 兜底也写 `isInProgress: true`，本轮**未动**（该路由经审计零客户端调用方）。
+
+**③ 有界读区分「页空」与「答不出」**：round-110 把「一次全量 `thread/read`」换成「元数据读 + `thread/turns/list` 一页」，随之出现一个旧路径没有的判据 —— **一页空数组被直接采纳为「线程真的没有轮次」**（`turns=[]` / `threadTurnStartIndex=0`），于是偶发空页就能把整个对话区答空（§10.4 第 3 条）。两条有界路径（`threadReadTurnPage.ts`、`threadResumeTurnPage.ts`）现在都加同一道闸：
+
+```ts
+if (page.data.length === 0) {
+  const turnCount = await readThreadTurnCount(deps.rpc, threadId)
+  if (turnCount === null || turnCount > 0) return await deps.sendRead(originalParams)
+}
+```
+
+  `readThreadTurnCount` 走 `thread/turns/list {itemsView:'notLoaded'}`（14ms / 0.00MB 量级），只在空页这条路上多花一次；判据方向是「确有轮次**或**数不出来 ⇒ 回放原请求」，即本模块既有的降级语义；计数为 0 的真·空线程**行为逐字不变**。上翻路由（`readBoundedThreadTurnPage`）**没动** —— 它拿到 `data.length !== wanted` 本来就回落，空页早被拒。
+
+**④ 前台恢复不再强制重取选中线程消息**：`src/App.vue` 的 `syncAfterForeground()` 从 `includeSelectedThreadMessages: true` 改为 `false`。两条论据都在代码里可复核：
+
+- 那一次重取**只在线程 `inProgress` 时才真的发请求**（`loadMessages` 的复用判据 `alreadyLoaded && (loadedRecently || (version 未变 && !inProgress))`，非 inProgress 时直接 `markThreadAsRead` 返回、连一个 `thread/read` 都不发 —— round-132 探针已实测到这个负结果）⇒ 它只在消息最新鲜、最不需要重取的时刻发请求，而 round-132 的「0 条清表」与 round-133 的「链未命中回落全量 ~7.5s」**正好都从这条入口进来**（§10.3 / §10.6 第 4 条）。
+- 兜底本来就在下一行：`syncThreadSelectionWithRoute()` → `ensureThreadMessagesLoaded(threadId, {silent:true})`，其首句 `if (loadedMessagesByThreadId.value[threadId] === true) return` ⇒ **只在从没加载过时才取数**（深链、刚启动），且 `silent` 语义下 `preserveMissing` 恒为真、**不可能清表**。
+
+**`FOREGROUND_RESUME_MIN_HIDDEN_MS = 400` 有意未改**：没有任何读数能把 400ms 和两个症状联系起来，而 §10.6 第 4 条里有因果的是「强制重取消息」那一半（已改）。
+
+**测试与反跑（决定性）**：
+
+- **单测 +8 例**：`threadReadTurnPage.test.ts` 11 → **14**（空页+计数>0 ⇒ 回放 / 空页+计数数不出来 ⇒ 回放 / 空页+计数 0 ⇒ 采纳，并断言只发一次 `sendRead`、只探一次 notLoaded）；`threadResumeTurnPage.test.ts` 26 → **29**（同三条，回放对象是 `sendResume(originalParams)`）；`codexAppServerBridge.archive.test.ts` 32 → **34**（兜底载荷 `toEqual({thread:{id,turns:[]}})` —— `toEqual` 是精确比较，谁把 `status` 加回来就红）。
+- **`tmp/r134-flip.cjs off|on [inprogress|readEmpty|resumeEmpty|foreground|all]`**：每处替换做「出现次数必须为 1」断言，`off` 留 `.r134bak`、`on` 逐字节复核。`off all` ⇒ **5 failed | 72 passed (77)**、契约 **43/44** 且诊断行 `前台恢复跳过强制取数=NO`；`on all` ⇒ **77 passed**、契约 **44/44**，且 `threadErrors.ts` 2237 B / `threadReadTurnPage.ts` 8036 B / `threadResumeTurnPage.ts` 10596 B / `App.vue` 222404 B 四项均 `与备份一致=true`，仓库内无 `.r134bak` 残留。**一处实现细节**：`App.vue` 里 `await refreshAll({includeSelectedThreadMessages:false})` 有 3 处（另两处在 free-mode 保存/清除），锚点不唯一 ⇒ 脚本用「唯一注释 → 其后的调用」定位。
+- **静态契约 43 → 44 项**：新增「前台恢复不再强制重取选中线程消息（round-134）」，钉三个子事实（前台恢复体内有 `false` 且无 `true` / 仍接 `syncThreadSelectionWithRoute()` / 该函数体内存在 `ensureThreadMessagesLoaded(..., { silent: true })`）。**诚实说明**：钉的是形状，行为证据在单测与调用点分析。
+
+**真实桥层冒烟**（`tmp/r134-e2e-smoke.cjs`，4196 隔离服务；**改动在 `src/server/**` ⇒ 必须先 `tsup` 重建 `dist-cli`**）：123.93MB 大线程 `thread/read {includeTurns:true}` **3038ms / turns 10 / threadTurnStartIndex 164 / status=notLoaded**；紧接着上翻一页 `/codex-api/thread-turn-page` **1041ms / turns 10 / startTurnIndex 154 / hasMoreOlder=true** ⇒ **③ 没有拖慢正常路径**，round-133 播种的链在用，有界页形状与 round-130 实测一致。真浏览器探针 `tmp/r134-probe-newthread-ui.cjs`（新建线程 → 输入 → 发送）：`thread/start` 200 → `turn/start` 200 → `thread/read(includeTurns:true)` × 5 **全 200**，62 条 `/codex-api` 响应里非 2xx **仅 1 条与本轮无关的 404**，DOM `items 2 → 4` 无错误。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**、全量 **755 例 / 755 通过（76 文件）零失败**（＝ round-133 基线 747 ＋ 本轮 8 例）、`check-ui-contract` **44/44**、`node --check scripts/check-ui-contract.cjs` OK、`tsup` 重建 EXIT=0。
+
+**附带发现（不属本轮，未实施）**：对「还没有首条用户消息、rollout 未写入」的线程，app-server 把 `thread/turns/list` 与 `thread/read {includeTurns:true}` **都**答成 `list_turns is not supported yet`；该文案**两条兜底谓词都不匹配**（`isEmptyThreadReadError` 要 `failed to read thread`+`rollout`+`is empty`、`isThreadMaterializationPendingError` 要 `not materialized yet`+`includeturns is unavailable before first user message`）⇒ 桥直接 throw、502 到客户端。**与 round-134 无关可证**：`resume:(bounded)` 就已 502 ⇒ `sendResume` 在 ③ 的闸门之前抛出；`turns/list` 502 ⇒ `readLatestTurnPage` 返回 null、在 ③ 闸门之前回放；② 需要的是另一段文案；④ 是纯前端。**用户可见性已确证「真实客户端走不到」**：真实流程是 `thread/start` → `turn/start`（在首次 `thread/read` 之前就把 rollout 写出来了）→ 随后 5 次 `thread/read` 全 200。故这是潜伏边界（手工探针、或深链到从未发过消息的线程），不是线上症状。**若要修**：给 `thread/read` 的兜底谓词补上这条文案（回 `{thread:{id,turns:[]}}`，即 ② 的同一种诚实答案），本轮不擅自扩大改动面。
+
+**诚实边界**：①③ 的闸门在本机 app-server 上**没被真正触发过**（本 build 对未 materialize 线程直接答错误，在到达空页闸门之前就回放了）⇒ ③ 的端到端证据只到「不回归」，其行为证据是单测 + 反跑；要真端到端复现「空页」需要故障注入。②全量搜索确认 `useDesktopState.ts` 里**没有任何 `setInterval` 轮询** ⇒ ④ 之后消息兜底＝SSE 通知 + `ready`→`recoverBridgeState()`（且只在该线程从没加载过时补一次）+ 路由/选中变化时的 `ensureThreadMessagesLoaded`；若 SSE「活着但不再送事件」（中间代理静默缓冲），本轮之后没有东西会自动纠正它 —— 该风险在 ④ 之前也由同一个洞覆盖，但方向上确实被 ④ 略微放大，记在这里而不当作没发生。③`FOREGROUND_RESUME_MIN_HIDDEN_MS = 400` 有意保留。④`thread-live-state` 的同名兜底仍伪造 `isInProgress`（零客户端调用方）。⑤②③ 都只收窄桥层，`setThreadInProgress`/`status` 的前端语义一行未动 —— **这不等于浮层逻辑被重构过**。⑥只在本机 Windows / codex-cli 0.160.1 / 隔离 home 实测。
+
+**清理**：本轮起于 `4196`，并停掉了 `4196` / `4194`（round-132 起）/ `4191`（round-130 起）三个临时服务（`listeners=0`，记录见 `tmp/r134-stop-services.txt`）。
+
+**未发布**：未 bump 版本、未 tag（npm `latest` 仍是 `0.1.127`）。
 ## round-133（经 `thread/read` 打开的线程也播种游标链：上翻 7.5s → 1.0s，未发布）
 
 **提交**：
