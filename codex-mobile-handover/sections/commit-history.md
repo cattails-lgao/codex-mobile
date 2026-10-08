@@ -161,7 +161,7 @@
 
 ## round-88（侧边栏线程切换卡顿：分支列表渲染窗口化）
 
-- **round-88（`da887f4` 代码+脚本+测试 / 文档提交紧随其后；**未推送**）**：由用户口径「在左侧边栏中进行线程切换的时候，页面会卡顿」驱动，先测后改，全部在生产构建（`vite build` + `dist-cli` 起在非 4173 端口）上用 headless 真实浏览器测量。**先否定「稳态切换慢」这个前提**：同一行反复点、内容已渲染过时主线程阻塞 **0–9ms、无长任务**；卡顿集中在「本会话**首次**打开某条线程」（75–164ms）与首次打开 **~2.5s 后**的一次追加冻结。
+- **round-88（`da887f4` 代码+脚本+测试 / 文档提交紧随其后；**已推送 `origin/main`**）**：由用户口径「在左侧边栏中进行线程切换的时候，页面会卡顿」驱动，先测后改，全部在生产构建（`vite build` + `dist-cli` 起在非 4173 端口）上用 headless 真实浏览器测量。**先否定「稳态切换慢」这个前提**：同一行反复点、内容已渲染过时主线程阻塞 **0–9ms、无长任务**；卡顿集中在「本会话**首次**打开某条线程」（75–164ms）与首次打开 **~2.5s 后**的一次追加冻结。
   **根因（DOM 记账 + Chrome timeline 实测）**：右侧 Git 面板的分支选择器是「224px 高的可滚动 listbox + 搜索框」，而 `filteredBranches` 在搜索为空时**返回全部分支**、模板 `v-for` 全渲染——本工作区 `git/branches` 响应体 **624 101 字节 / `data.options` 4 608 项**（含大量 `origin/bot/*`），渲染出 **4 608 个 `<li>` / 23 040 节点 / 205 818 字符**（同一面板的提交列表只有 50 项）；`branches` RPC 返回后**一次 mutation 批次插入 +4 614 个节点**（文档 538 → **23 589**），落在点击后 +2.5~+2.8s，对应长任务 **66–128ms**（高负载时 **358ms**）。**危害不止那一次插入**：文档布局对象从 669 涨到 **32 987**，于是会话底部锁定每次读 `scrollHeight`（强制同步布局）都要付 **`Layout dirty=32295 total=32987 → 81.1ms`**——单对象 **0.0025ms 完全正常**，**没有慢元素，是树被撑大 50 倍**。这回收了一处旧误判：开发态 CPU 采样榜首的 `scrollToBottom`（压缩名 `Ln` = `isAtBottom`，self time 116–130ms）**不是它自己慢**，而是它的 `scrollHeight` 读在为 3.2 万对象的树做布局。
   **修①**（`src/components/content/RightGitPanel.vue`）：新增 `BRANCH_PAGE_SIZE = 100` / `visibleBranchCount` / `visibleBranches = filteredBranches.slice(0, count)`，`<ul>` 加 `@scroll="onBranchListScroll"`（距底 24px 内按 100 增长，越界即停），`watch(filteredBranches)` 在新查询或新列表时重置；空态仍判 `filteredBranches.length`。**否掉的备选**：`content-visibility: auto` / `contain-intrinsic-size`（实测**无效**——跳过屏外布局但**拦不住 Vue 创建节点**，`ul` 子项仍 4 608，这解释了「CSS 层怎么调都不动」）、硬截断+提示行（静默丢掉第 200 条之后的分支）、真虚拟化（对 4 608 项 picker 属过度实现）。
   **修②**：删掉 `RightGitPanel` `onMounted` 的 `nextTick(() => searchInputRef.value?.focus())`（连带移除已无用的 `nextTick` 导入）——该面板是 `defineAsyncComponent`、**首次选中线程才挂载**，这次聚焦会把用户按键引到**分支搜索框**而不是消息输入框（切 Files/Git 往复还会反复触发）；实测 `focus()` 只 4–6.5ms，**不是卡顿主因但是确凿缺陷**。
@@ -172,7 +172,7 @@
 
 ## round-89（切换时点击反馈被长任务吞掉：先画高亮再切路由）
 
-- **round-89（`c8a5e14` 代码+脚本 / 文档提交紧随其后；**未推送**）**：用户口径「解决切换的时候消息列表会卡的问题吗？卡了后左侧的线程列表点击切换都没有选中状态了」。round-88 把「稳态切换 0–9ms」与「首点 170–200ms」分开之后留了个尾巴，本轮由用户补充的后半句（**点击连选中态都不出现**）切入，把尾巴修掉并给机制定性。
+- **round-89（`c8a5e14` 代码+脚本 / 文档提交紧随其后；**已推送 `origin/main`**）**：用户口径「解决切换的时候消息列表会卡的问题吗？卡了后左侧的线程列表点击切换都没有选中状态了」。round-88 把「稳态切换 0–9ms」与「首点 170–200ms」分开之后留了个尾巴，本轮由用户补充的后半句（**点击连选中态都不出现**）切入，把尾巴修掉并给机制定性。
   **现象量化（生产构建 + 真实页面）**：CDP `Profiler` 采样 + `Tracing` 主线程嵌套树（按 pid/tid 过滤、按 ts/dur 包含关系缩进）显示，一次点击是 `EventDispatch type=click` 内的 `FunctionCall（点击监听器）` **1.2ms**，随后 `UpdateLayoutTree` / `Layout dirty=67 total=256 → 38.5ms`；**高亮进 DOM 的时刻与「点击任务结束」重合 → 59–127ms（中位 102ms）**。`requestAnimationFrame` 帧间隔之和（「冻结窗口」= 点击后连续帧间隔之和，直到出现一帧 <40ms）**76–143ms（中位 112ms）**——这段时间浏览器**一帧都没画**，高亮即使已经写进 DOM 也看不见。
   **根因**：不是渲染慢，是**绘制被推迟**——点击监听器同步走完 `router.push` → 路由换视图 → `selectThread` → 会话内容水合与首帧布局（`Layout dirty=411 total=644`），全部落在同一个任务 + 微任务排空内，浏览器要等它跑完才有绘制机会。这也解释了 round-88 为什么把候选一个个排除掉仍压不下去：被排除的每一项都不是「这段时间为什么长」的答案。
   **修①**（`src/App.vue` `onSelectThread`，主修）：点击只落**过渡高亮**、让出一帧、再切路由。新增 `optimisticSelectedThreadId` + 计算属性 `sidebarSelectedThreadId`（`optimistic || selectedThreadId`，侧栏 `:selected-thread-id` 改绑后者）；`yieldToNextPaint()` = `rAF` + `setTimeout(0)`（**纯 `nextTick` 不够**——微任务仍在绘制前跑完；**纯 `rAF` 也不够**——rAF 回调就在绘制前执行；后台标签页不触发 rAF，故加 80ms 定时器兜底避免导航被无限推迟）；`watch(selectedThreadId)` 清空过渡值。
@@ -184,7 +184,7 @@
   **实测对照（交错 A/B，4 轮）**：点击→高亮画出 基线 59/102/127/86ms（中位 **102ms**）→ 修复 5.4/6.2/2.9/9.3ms（中位 **6ms**）；点击后冻结窗口 基线 76/112/143/94ms（中位 **112ms**）→ 修复 21/17/22/16ms（中位 **21ms**，≈ 一个 60Hz 帧）；点击→内容画出 基线 86/159/188/127ms → 修复 201/112/148/186ms（**区间大幅重叠 → 无可测的内容延迟代价**）。**验证**：新增可复跑检查 `scripts/check-thread-switch-feedback.cjs`（**11 项**；基线构建 **3 项失败**：`first-open freeze 152ms` / `switch freeze 62ms` / 连点停在 A；修复构建 **11/11 通过**；dev 模式下自动跳过计时断言，因 Vite 按需编译污染计时）、`vue-tsc --noEmit` 干净（`TSC_EXIT=0`）、`vite build` 通过、全量 Vitest **658 例 656 通过 / 2 失败**（与 round-88 逐字相同）、round-88 的 `scripts/check-branch-list-budget.cjs` **5/5 仍通过**。
   **残留（未修，如实记录）**：**会话内容首帧布局仍在**（`Layout dirty=411 total=644 → 148ms`），只是现在排在「高亮已绘制」之后——切换的**内容**仍要约 110–200ms 才出现，用户看到的是「立刻选中 + Loading messages…」、期间帧不再冻结；点击任务里约 **36ms「无任何 trace 事件」的空隙**与「**644 对象花 148ms**」（0.23ms/对象，比合成对照组高一个数量级）的机制**未定论**（已排除内容量/字体/整形/子树自身布局成本；最可能是本机负载放大）。**未测**：非 headless 真实浏览器、更重会话（本机 `CODEX_HOME` 只有 1 条真实线程）、合成帧率、非 Windows 平台。手测见 `tests/thread-loading-state/round-89-optimistic-sidebar-highlight.md`。详见 `rounds/round-89-switch-feedback-masked-by-long-task.md`。
 
-- **round-90（`03da220` 代码+脚本；文档提交紧随其后；**未推送**）**：用户对 UI 方案的选择——「先只做 token 化的部分、排版等看过 P1 主界面再一起做」。本轮据此把 **P0 的 token 化真正做完**，一行排版未动。
+- **round-90（`03da220` 代码+脚本；文档提交紧随其后；**已推送 `origin/main`**）**：用户对 UI 方案的选择——「先只做 token 化的部分、排版等看过 P1 主界面再一起做」。本轮据此把 **P0 的 token 化真正做完**，一行排版未动。
   **发现一（漏做 + 闸门失明）**：上一轮报的「token 层 + 深色迁移已完成」只覆盖 `src/style.css`。扫描全部 `.vue` 的 `<style>` 块得 **1213 处裸 zinc/slate 类（模板/脚本里 0 处）**，按层切开是 **暗色覆盖层 108 处 / 亮色基线 1105 处**（108 处分布：`DirectoryHub` 34、`SettingsDialog` 21、`DirectorySkillsTab` 15、`App.vue` 13、`ThreadConversation` 12、`ThreadTurn` 8、`ThreadComposer` 3、`SettingsAccountsPanel` 2）；而 `scripts/check-ui-contract.cjs` 同样只读 `src/style.css`，却断言「深色覆盖层已无裸色板」——**断言的覆盖面小于措辞**，所以「检查全绿」与「还有 108 处裸类」能同时成立。另漏 2 处 `ring-offset-*`（旧检查的属性表里没有它）。
   **发现二（架构澄清）**：这套 UI **默认是亮色**，暗色是 `src/style.css` 里 841 个 `:root.dark` 覆盖层堆出来的。用像素探针（`tmp/probe-png-pixels.cjs`，解码 PNG 后读点；肉眼第一眼把两张截图都看成亮色，故不采信肉眼）裁决：暗色侧栏 `rgb(24,24,27)` / 正文 `rgb(9,9,11)`，亮色侧栏 `rgb(241,245,249)`＝**slate-100** / 正文白；源码侧对应 `.desktop-layout { @apply bg-slate-100 text-slate-900 }` 与 `:root.dark .desktop-layout { @apply bg-s1 text-ink-1 }`。**推论：token 化天然分两半，且难度不同**——暗色半边 token 取值＝原 zinc 值，纯机械、可证等值；亮色半边取值即设计。
   **修复①（108 处 + 2 处）**：一次性脚本 `tmp/migrate-vue-dark-to-tokens.cjs` 用**与上次完全同一张 MAP** 替换，20 个类名 100% 命中、零未映射；`ring-offset-zinc-900/950 → ring-offset-s1/s0`。亮色基线一处未动（`style.css` 7 处 + 组件 1105 处 = 1112，与迁移前一致）。
@@ -231,7 +231,7 @@
 
 **修复提交 `375852ee`**：`fix(free-mode): 默认兜底改 OpenRouter，并清理失效模型 slug`（7 文件，+44/−22）。`bridge/codexAuthState.ts` 的 `ensureDefaultFreeModeStateForMissingAuthSync` 由 `createDefaultOpenCodeZenFreeModeState()` 改 `createDefaultOpenRouterFreeModeState()`（判定语义不变——仍只在「无可用 auth **且** config.toml 未显式写顶层 `model_provider`」时播种）；`freeMode.ts` 的 `FALLBACK_FREE_MODELS` 按 2026-10-08 实测校准（`gemma-3-27b` / `llama-3.3-70b` / `qwen3-coder` 三个 `:free` 已下架）；`bridge/models.ts`、`bridge/freeModeRoutes.ts`、`codexAppServerBridge.ts` 三处 Zen 离线兜底清单同步换掉三个已从目录消失的 slug；删 `codexAppServerBridge.ts` 里 `createDefaultOpenCodeZenFreeModeState` 的死导入；`freeMode.test.ts` 与 `codexAppServerBridge.archive.test.ts` 同步更新（3 条断言 + 3 个用例标题改 OpenRouter）。
 
-**未发布**：未 bump 版本、未 tag、未推送。
+**未发布**：未 bump 版本、未 tag、已推送 `origin/main`（`308f368b`，2026-10-08）。
 
 **本轮的重要结论（推翻用户前提）**：OpenCode Zen 免费档**没有下线**，是插件 `zenProxy` 的客户端指纹过期。上游闸门是递进的，实测分界点：`403 FreeTierError`（缺 `stream:true` + `bash`/`read` 工具桩）→ 补齐后 `426 UpgradeRequired`（要求 `opencode/1.18.0+`，插件 UA 硬编码 `1.15.9`）→ UA 提上去后 **13 个免费模型 8 个可用**（含插件默认的 `big-pickle`），另 2 个地区限制（`RegionError`）、3 个上游端点不可用。**故未按用户原意移除 Zen 模块**——它同时是遗留 rollout 的承重 provider 注册（round-104 / round-122 的 `getProviderCompatibilityConfigArgs`）。**指纹不修**：属持续绕过上游明确设置的门禁，且 9 月内已收紧两级，判定为军备竞赛，只诊断上报、不实施。**验证**：定向 60/60、`vue-tsc` EXIT=0、全量 **732/732 零失败**。
 
@@ -245,7 +245,7 @@
 
 **真机验证（决定性）**：一次性 vitest 探针（`src/server/zenProxyLiveness.test.ts`，跑完即删）把真实 `handleZenProxyRequest` 挂本地端口、发**带工具的 Codex 风格** Responses 请求打真实上游 —— 非流式 **HTTP 200** 返回真实内容（`output` 含 `{type:'message', content:[{type:'output_text', text:'PONG'}]}` 与一段 `reasoning`，`usage = 194/13/207`）、流式 **HTTP 200** 且 SSE 含 `response.created` / `response.completed`。
 
-**未发布**：未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
+**未发布**：未 bump 版本、未 tag、已推送 `origin/main`（`308f368b`，2026-10-08）。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
 
 **文档提交**（见 git log）：round-124 轮次文档 + 总入口登记（快照 / Dev 状态 / rounds 索引 / 未完成事项 / 落款）+ 手测章节 `tests/providers-models/round-124-zen-free-tier-fingerprint.md` + 两处索引登记；**顺带修掉 round-122 在 commit-history 里遗留的两处格式瑕疵** —— 第 198 / 211 行的两处字面 `\n` 文本行，以及被 round-123 段落插入切断的 `314cded6` 登记残片（已补回 `**文档提交 \`314cded6\`**` 前缀并归位到 round-122 段落）。
 
@@ -275,7 +275,7 @@
 
 **验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 5 例负载敏感 fs 超时 → `--testTimeout=30000` 降为 1 例 → 隔离复跑 2/2 通过、1518ms）。
 
-**未发布**：未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
+**未发布**：未 bump 版本、未 tag、已推送 `origin/main`（`308f368b`，2026-10-08）。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
 
 ## round-126（滚动容器不再被加载状态摘掉，未发布）
 
@@ -301,4 +301,4 @@
 
 **验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 3 例负载敏感 fs 超时 → 隔离复跑 63/63、15.89s）。
 
-**未发布**：未 bump 版本、未 tag、未推送。
+**未发布**：未 bump 版本、未 tag、已推送 `origin/main`（`308f368b`，2026-10-08）。

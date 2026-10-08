@@ -1,6 +1,6 @@
 # macOS 侧跨平台回归（2026-08-07）
 
-> **2026-08-07 进展：** macOS 侧跨平台回归验证完成，4 项全部通过；期间修复 1 个 macOS 特有单测环境性失败（commit `04f470b`，已提交、未推送）。环境：macOS（`/var` 为 `/private/var` 符号链接）+ Node v26.3.1 + pnpm 11.18.0。
+> **2026-08-07 进展：** macOS 侧跨平台回归验证完成，4 项全部通过；期间修复 1 个 macOS 特有单测环境性失败（commit `04f470b`，已提交、已推送）。环境：macOS（`/var` 为 `/private/var` 符号链接）+ Node v26.3.1 + pnpm 11.18.0。
 
 1. **依赖安装**：首次 `pnpm install` 成功（8.3s），`pnpm-workspace.yaml` 的 `allowBuilds` 完整覆盖（esbuild/node-pty/protobufjs/@firebase/util 均正常构建），**无新的「Ignored build scripts」警告**；`node-pty` postinstall 在 macOS 上按预期跳过（由 `scripts/fix-pty-native-build.cjs` 处理）。〔round-116 追加：`node-pty` 与该脚本均已删除，集成终端改跑 app-server 官方 `command/exec { tty: true }` 通道，本条只剩历史意义〕交接文档「依赖安装历史」验证点通过
 2. **`vue-tsc --noEmit`**：通过，无类型错误
