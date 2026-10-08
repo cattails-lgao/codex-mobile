@@ -356,6 +356,38 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-131（`execPtyChannel` / `rollbackTurnContext` 的 0.158.0 实测在 0.160.1 上复验，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `15db1cfb` | `docs(comments): 复验 execPtyChannel / rollbackTurnContext 的「0.158.0 实测」结论（round-131）` | 2 文件（20 增 0 删，纯注释） |
+| （本文档提交） | `docs(handover): round-131 PTY / 回滚复验（轮次文档 + 总入口 + 提交史）` | 3 文件 |
+
+**由来**：用户「execPtyChannel.ts / rollbackTurnContext.ts 的旧结论进行复验」，结清 round-130 §十⑥ 与 §十一① 明确记的「未在 0.160.1 复验」。
+
+**结论先行**：两个模块头部那批「0.158.0 实测」的结论在 0.160.1 上**逐条成立**（PTY 14/14 断言、回滚正确性 5 项全过），**产品源码零行为改动**（只追加注释）。唯一未复现的是 round-113 §三 那张成本表的**绝对值**，原因已定性（下）。
+
+**口径**：与 round-116 / round-113 同构——**直连 `codex app-server`**（stdio JSON-RPC；PTY 用全新空 home，rollback 用「逐字拷贝的 home」），不是经桥。exec 与线程无关，故不受下面的隔离问题影响。
+
+**PTY（`command/exec`，14/14）**：banner = `\u001b[2J\u001b[m\u001b[HMicrosoft Windows [版本 10.0.19045.6466]\u001b]0;C:\Windows\system32\cmd.exe\u0007\u001b[?25h`；4 帧 / 4 个不同到达时刻＝真增量；`echo R130PTY-MARKER` 回显命中；`chcp 65001` 后 `中文-测试-é` 逐字命中；`resize`/`terminate` 均 `{}`；大输出 **283 帧 / 38248B / `capReached=true` 的帧 0**；`exit` → `{"exitCode":0,"stdout":"","stderr":""}` 且**所有 delta 先于最终响应**；会话 B 含 `ONLY-B` 而不含 A 的 marker；`terminate` 后 `exitCode = 1`（与 round-116 §四「退出码透传」一致）；stderr 无 error/warning。**附带修正一条读法**：`command/exec/outputDelta` 的 params 键实测为 `processId, stream, deltaBase64, capReached`——`capReached` 是**每帧自带**的布尔字段，用「有没有收到 cap 通知」判上限是错的。
+
+**回滚读取（7 个真实线程，正确性全过）**：三条路径 A=`thread/read{includeTurns:true}`、B=`{includeTurns:false}`、C=`thread/turns/list{limit:10000,desc,itemsView:"notLoaded"}` + `nextCursor` 链（与 `readThreadTurnIds` 同参数）。读数（12 轮那条）：A **21ms / 0.01MB**、B **1ms / 1046B**、C **1ms / 2381B / 1 页**；其余 6 条线程 A 2–4ms、B 0–2ms / ~1KB、C 1–2ms / 0.4–0.8KB。**7/7 线程**：C 的 id 序列与 A **逐位一致**；B 与 A 的 `thread` 对象**字段集与取值逐字相同**（`onlyFull`/`onlyMeta`/`changed` 三类全空，字段数仍 **32**）；两次读的 `path` 相同。**scope 语义**：最老/中间/最新/不存在四种 target 下 `single_turn` 与 `turn_and_later` 由 A 与由 C 推得的集合**完全相等**。**桥端到端**：`POST /codex-api/thread/rollback-files`（bogus anchor，只读）→ `200 {"reverted":0,"errors":[],"message":"No turns to revert"}`。
+
+**为什么绝对值没复现（三条证据）**：①本机已无大线程——最大 **155KB / 12 轮**，round-113 的 12.12MB/16 轮线程随 `tmp` 清理；②把最大 rollout 的 `message` 正文（唯一会被水合成 items 的形态）膨胀到 **13.37MB**，A 列响应仍是 **0.01MB**；差分定位：响应里**有**原始正文「只回复一个词」、**没有**膨胀串 `R131PADDING`；③真因 = **拷 home 不是隔离**——app-server 的 turns/items 走自有状态库，副本 `state_*.sqlite` 记的是 rollout 的**绝对路径**，直接证据：`CODEX_HOME=D:/code/codex-mobile/tmp/r130-rb-inject` 时 `thread.path` 仍返回 `D:\code\codex-mobile\tmp\r130-codex-home\sessions\…jsonl`。另两条排除项：只拷 `sessions/`（无 sqlite）→ `thread/list` 7 条但 **turns = 0**（轮次索引在库里）；同长度改写副本 sqlite 的绝对路径（`state_5.sqlite` 7 处 / `logs_2.sqlite` 57 处）→ 仍 **0 轮**（`logs_2.sqlite` 带 `-wal`，未随副本）。`thread/inject_items` 注入 12×1MB 后 `thread/read` 与 `turns/list` 都**不含**注入串——该方法只进「模型可见历史」。
+
+**0.160.1 的新契约事实（本轮的额外收获）**：`ThreadReadParams.includeTurns` 的文档已改为「When true, include turns and their items from rollout history. **Full-history hydration is deprecated for paginated threads; prefer a metadata-only read and page with `thread/turns/list` and `thread/items/list`.**」；`Turn` 新增必填 `itemsView`（`TurnItemsView = "notLoaded" | "summary" | "full"`），`ThreadTurnsListParams` / `ThreadResumeInitialTurnsPageParams` 均有 `itemsView?`。⇒ `rollbackTurnContext`（round-113）、`threadTurnPage`（round-86/104）、`threadReadTurnPage`（round-110）一直以来的做法**正是上游现在的官方建议**；`includeTurns:true` 作为回落兜底仍可用，但语义上已是过渡形态。
+
+**本轮踩的坑（已还原）**：取证期间 `thread/inject_items` **写穿到 4191 服务真实 home 的 rollout**（`01a11baf…d8b7`：155.4KB / 123 行 → 12.16MB / 136 行），根因同上（副本里的线程仍解析回源 home 的绝对路径）。处置：用探针运行**之前**就拷好的干净副本逐文件还原——7 份里 6 份本来就逐字节相同，1 份还原后**逐字节相同**；复核服务 home 内**探针标记零残留**。教训：拷 home 只对「从未被加载过」的线程等价于隔离；一旦拷了 `state_*.sqlite` 就必须同长度改写其中的 rollout 绝对路径**并连 `-wal`/`-shm` 一起拷**；更稳的做法是造**全新空 home 再自己种数据**。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**、全量 **742 例 / 742 通过（76 文件）零失败**、`check-ui-contract` **42/42**、exec/PTY 探针 **14/14**、回滚复验探针 **11/12**（唯一 FAIL ＝ §四 已定性为「不可复现」的那条断言）。改动只有注释，复跑是为了不把「注释改动」当免检理由。
+
+**诚实边界**：①回滚侧的性能结论本轮**没有量测**，只有「两条廉价路径恒定在毫秒/千字节级」这一相对事实。②PTY 只覆盖协议层，**未**重跑 round-116 的端到端（真实 vite dev + SSE + 终端路由）。③桥端到端只测 bogus anchor 前缀，「找到轮之后的 patch 应用 / 命令文件回退」一行未动。④`multiPage = 0`，id 链多页能力无新读数。⑤污染已还原但「还原」是**文件层**的（4191 是本轮自起的 dev 实例）。⑥未发布（npm `latest` 仍 `0.1.127`）、未推送（本会话外网不通）。
+
+**未发布**：未 bump 版本、未 tag；`15db1cfb` 待在本地 `main`（round-122 ~ round-131 随下一次发布走）。
+
+
 ## round-130（codex-cli 0.160.1 协议复测，未发布）
 
 **三个提交**（按「src → schema → 闸门」拆分，每个提交单独可编译）：
