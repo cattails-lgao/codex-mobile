@@ -577,101 +577,99 @@
                 @close="isReviewPaneOpen = false"
               />
 
-              <template v-else>
-                <div class="content-thread">
-                  <ThreadConversation ref="threadConversationRef" :messages="displayFilteredMessages" :is-loading="isLoadingMessages"
-                    :is-slow-open="slowOpenThreadId !== null && slowOpenThreadId === composerThreadContextId"
-                    :active-thread-id="composerThreadContextId" :cwd="composerCwd"
-                    :live-overlay="liveOverlay"
-                    :live-turn-id="selectedActiveTurnId"
-                    :pending-requests="selectedThreadServerRequests"
-                    :has-more-persisted-above="hasMoreOlderMessages"
-                    :is-loading-persisted-above="isLoadingOlderMessages"
-                    :load-earlier-messages="loadOlderMessages"
-                    @fork-thread="onForkThreadFromMessage"
-                    @rollback="onRollback"
-                    @file-changes-changed="onFileChangesChanged"
-                    @respond-server-request="onRespondServerRequest" />
-                </div>
+              <div class="content-thread">
+                <ThreadConversation ref="threadConversationRef" :messages="displayFilteredMessages" :is-loading="isLoadingMessages"
+                  :is-slow-open="slowOpenThreadId !== null && slowOpenThreadId === composerThreadContextId"
+                  :active-thread-id="composerThreadContextId" :cwd="composerCwd"
+                  :live-overlay="liveOverlay"
+                  :live-turn-id="selectedActiveTurnId"
+                  :pending-requests="selectedThreadServerRequests"
+                  :has-more-persisted-above="hasMoreOlderMessages"
+                  :is-loading-persisted-above="isLoadingOlderMessages"
+                  :load-earlier-messages="loadOlderMessages"
+                  @fork-thread="onForkThreadFromMessage"
+                  @rollback="onRollback"
+                  @file-changes-changed="onFileChangesChanged"
+                  @respond-server-request="onRespondServerRequest" />
+              </div>
 
-                <div class="composer-with-queue" ref="composerQueueRef">
-                  <div v-if="isSelectedThreadExternalActive" class="external-session-banner" role="alert">
-                    {{ t('This thread is running in the Codex TUI') }}
-                  </div>
-                  <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
-                    <span>{{ t(codexCliMissingError) }}</span>
-                    <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
-                  </div>
-                  <QueuedMessages
-                    :messages="selectedThreadQueuedMessages"
-                    @edit="onEditQueuedMessage"
-                    @steer="steerQueuedMessage"
-                    @delete="removeQueuedMessage"
-                    @reorder="onReorderQueuedMessage"
-                  />
-                  <div v-if="interruptedRecoverNotice" class="interrupt-recovered-banner" role="status">
-                    <span>{{ interruptedRecoverNotice }}</span>
-                    <button
-                      type="button"
-                      class="interrupt-recovered-dismiss"
-                      :aria-label="t('Dismiss')"
-                      @click="interruptedRecoverNotice = ''"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <ThreadPendingRequestPanel
-                    v-if="selectedThreadPendingRequest"
-                    :request="selectedThreadPendingRequest"
-                    :request-count="selectedThreadServerRequests.length"
-                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                    :panel-width="composerShellWidthPx"
-                    :visual-viewport-height="isVirtualKeyboardOpen ? visualViewportHeight : 0"
-                    :panel-error="selectedPendingReplyError"
-                    @respond-server-request="onRespondServerRequest"
-                  />
-                  <ThreadComposer
-                    v-else
-                    ref="threadComposerRef"
-                    :active-thread-id="composerThreadContextId"
-                    :cwd="composerCwd"
-                    :fuzzy-file-search-results="fuzzyFileSearchResults"
-                    @register-fuzzy-session="registerFuzzyFileSearchSession"
-                    :collaboration-modes="availableCollaborationModes"
-                    :selected-collaboration-mode="selectedCollaborationMode"
-                    :models="availableModelIds"
-                    :model-reasoning-efforts="availableModelReasoningEfforts"
-                    :selected-model="composerSelectedModelId"
-                    :selected-reasoning-effort="selectedReasoningEffort"
-                    :selected-speed-mode="selectedSpeedMode"
-                    :is-updating-speed-mode="isUpdatingSpeedMode"
-                    :skills="installedSkills"
-                    :thread-token-usage="selectedThreadTokenUsage"
-                    :codex-quota="codexQuota"
-                    :is-turn-in-progress="isSelectedThreadInProgress"
-                    :is-stop-pending="isSelectedThreadInterruptPending"
-                    :is-interrupting-turn="isInterruptingTurn"
-                    :is-compacting="isSelectedThreadCompacting"
-                    :external-session-active="isSelectedThreadExternalActive"
-                    :has-queue-above="selectedThreadQueuedMessages.length > 0"
-                    :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
-                    :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
-                    :dictation-language="dictationLanguage"
-                    @update:selected-collaboration-mode="onSelectCollaborationMode"
-                    @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
-                    @update:selected-reasoning-effort="onSelectReasoningEffort"
-                    @update:selected-speed-mode="onSelectSpeedMode"
-                    :approval-policy="approvalPolicy"
-                    :is-approval-policy-saving="isApprovalPolicySaving"
-                    :approval-policy-error="approvalPolicyError"
-                    :approval-policy-notice="approvalPolicyNotice"
-                    @update:approval-policy="onApprovalPolicyChange"
-                    @save-approval-policy="onSaveApprovalPolicy"
-                    :plan-panel="composerPlanPanel"
-                    @interrupt="onInterruptTurn" @slash-command="onSlashCommand"
-                    @implement-plan="onImplementPlan" @compact-context="onCompactContext" />
+              <div class="composer-with-queue" ref="composerQueueRef">
+                <div v-if="isSelectedThreadExternalActive" class="external-session-banner" role="alert">
+                  {{ t('This thread is running in the Codex TUI') }}
                 </div>
-              </template>
+                <div v-if="codexCliMissingError" class="composer-runtime-error" role="alert">
+                  <span>{{ t(codexCliMissingError) }}</span>
+                  <a class="visible-error-feedback" :href="feedbackMailto" @click="prepareFeedbackLink($event, codexCliMissingError)">{{ t('Send feedback') }}</a>
+                </div>
+                <QueuedMessages
+                  :messages="selectedThreadQueuedMessages"
+                  @edit="onEditQueuedMessage"
+                  @steer="steerQueuedMessage"
+                  @delete="removeQueuedMessage"
+                  @reorder="onReorderQueuedMessage"
+                />
+                <div v-if="interruptedRecoverNotice" class="interrupt-recovered-banner" role="status">
+                  <span>{{ interruptedRecoverNotice }}</span>
+                  <button
+                    type="button"
+                    class="interrupt-recovered-dismiss"
+                    :aria-label="t('Dismiss')"
+                    @click="interruptedRecoverNotice = ''"
+                  >
+                    ×
+                  </button>
+                </div>
+                <ThreadPendingRequestPanel
+                  v-if="selectedThreadPendingRequest"
+                  :request="selectedThreadPendingRequest"
+                  :request-count="selectedThreadServerRequests.length"
+                  :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                  :panel-width="composerShellWidthPx"
+                  :visual-viewport-height="isVirtualKeyboardOpen ? visualViewportHeight : 0"
+                  :panel-error="selectedPendingReplyError"
+                  @respond-server-request="onRespondServerRequest"
+                />
+                <ThreadComposer
+                  v-else
+                  ref="threadComposerRef"
+                  :active-thread-id="composerThreadContextId"
+                  :cwd="composerCwd"
+                  :fuzzy-file-search-results="fuzzyFileSearchResults"
+                  @register-fuzzy-session="registerFuzzyFileSearchSession"
+                  :collaboration-modes="availableCollaborationModes"
+                  :selected-collaboration-mode="selectedCollaborationMode"
+                  :models="availableModelIds"
+                  :model-reasoning-efforts="availableModelReasoningEfforts"
+                  :selected-model="composerSelectedModelId"
+                  :selected-reasoning-effort="selectedReasoningEffort"
+                  :selected-speed-mode="selectedSpeedMode"
+                  :is-updating-speed-mode="isUpdatingSpeedMode"
+                  :skills="installedSkills"
+                  :thread-token-usage="selectedThreadTokenUsage"
+                  :codex-quota="codexQuota"
+                  :is-turn-in-progress="isSelectedThreadInProgress"
+                  :is-stop-pending="isSelectedThreadInterruptPending"
+                  :is-interrupting-turn="isInterruptingTurn"
+                  :is-compacting="isSelectedThreadCompacting"
+                  :external-session-active="isSelectedThreadExternalActive"
+                  :has-queue-above="selectedThreadQueuedMessages.length > 0"
+                  :send-with-enter="sendWithEnter" :in-progress-submit-mode="inProgressSendMode"
+                  :dictation-click-to-toggle="dictationClickToToggle" :dictation-auto-send="dictationAutoSend"
+                  :dictation-language="dictationLanguage"
+                  @update:selected-collaboration-mode="onSelectCollaborationMode"
+                  @submit="onSubmitThreadMessage" @update:selected-model="onSelectModel"
+                  @update:selected-reasoning-effort="onSelectReasoningEffort"
+                  @update:selected-speed-mode="onSelectSpeedMode"
+                  :approval-policy="approvalPolicy"
+                  :is-approval-policy-saving="isApprovalPolicySaving"
+                  :approval-policy-error="approvalPolicyError"
+                  :approval-policy-notice="approvalPolicyNotice"
+                  @update:approval-policy="onApprovalPolicyChange"
+                  @save-approval-policy="onSaveApprovalPolicy"
+                  :plan-panel="composerPlanPanel"
+                  @interrupt="onInterruptTurn" @slash-command="onSlashCommand"
+                  @implement-plan="onImplementPlan" @compact-context="onCompactContext" />
+              </div>
             </div>
           </template>
         </section>

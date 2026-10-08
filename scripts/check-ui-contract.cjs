@@ -555,6 +555,26 @@ check(
   motionMissing.map(([, label]) => label).join(', ') || '悬停/按压 120ms + cubic-bezier(.22,.61,.36,1)',
 )
 
+// ------------------------------------------------- 覆盖层不得顶掉它盖住的内容（round-125）
+// 审查面板是 <Teleport to="body"> 的全屏覆盖层，它与会话列**必须是同一槽位里并存的两个**。
+// 曾经它不是：提交 0e147705「Show review pane in place of thread content」把它和会话列做成
+// `v-if`/`v-else` 互斥分支 ⇒ 打开面板＝卸载整条会话 ⇒ 关闭时全新挂载、scrollTop 回到默认 0，
+// 用户看到「消息列表跳回最顶部」，并连带丢掉已上翻分页 / autoFollowOutput / 图片预览 / 变更
+// 动作态等全部内部状态（还白付一次整条线程重渲）。这是结构性不变式，钉住它。
+// 实测口径：同一 harness 在改动前 count=0、scrollTop 2018→0；改动后 count=1、2018→2018。
+const appLines = fs.readFileSync('src/App.vue', 'utf8').split(/\r?\n/)
+const paneAt = appLines.findIndex((l) => l.trim().startsWith('<ReviewPane'))
+const threadAt = appLines.findIndex((l) => l.trim() === '<div class="content-thread">')
+const vElseWrapsThread = threadAt > 0 &&
+  appLines.slice(Math.max(0, threadAt - 3), threadAt).some((l) => l.trim().startsWith('<template v-else>'))
+check(
+  '审查面板是覆盖层，不得与会话列构成 v-if/v-else 互斥（round-125）',
+  paneAt > 0 && threadAt > 0 && !vElseWrapsThread,
+  paneAt > 0 && threadAt > 0
+    ? `ReviewPane@${paneAt + 1}, content-thread@${threadAt + 1}${vElseWrapsThread ? ' ← 仍被 v-else 包着' : ''}`
+    : '未定位到 ReviewPane / .content-thread',
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',
