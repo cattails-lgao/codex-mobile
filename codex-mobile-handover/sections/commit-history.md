@@ -228,5 +228,5 @@
 
 **文档提交 `6c8d291e`**：`docs: round-122 轮次文档 + 总入口登记 + 手测章节（round-122）`（5 文件，+168/−4）——轮次文档、总入口快照/索引/未完成事项/落款、手测章节 `tests/providers-models/round-122-user-owned-custom-provider-not-overridden.md` 与两处索引登记。
 
-**未发布**：改动尚未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含此缺陷；受影响用户当下可「把激活 provider 改成不冲突的名字（旧线程需重建）」或「回退 0.1.126」绕开，正式修复随下一次发布走。
+**未发布**：改动尚未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含此缺陷；受影响用户当下可「把激活 provider 改成不冲突的名字（旧线程需重建）」或「回退 0.1.126」绕开，正式修复随下一次发布走。**补验提交 `314cded6`**：`docs: round-122 补真实 CLI（发布路径）端到端验证记录（round-122）`（2 文件，+16/−4）——轮次文档补入真实 `dist-cli` 双变体 `config/read` 结果（A 用户定义 `custom` → `active=custom` / `name=litellm` / `base_url=http://127.0.0.1:4460/v1`；B 未定义 → 占位指向 `http://127.0.0.1:4291/codex-api/provider-compat/v1` 且该路由回 400）与路由返回体原文，总入口的当前快照行与 Dev 状态行同步补记该验证路径——**只有打包 CLI 会设置 `CODEXUI_SERVER_PORT`，故 fix③ 的兼容路由 `base_url` 只在发布路径上生效、也只能在发布路径上验**。
 
