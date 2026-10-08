@@ -355,3 +355,37 @@
 **复现真实回合的四道坑（本轮都真实拦过一次）**：①**不能在仓内 cwd 起服务** —— codex 按**进程 cwd** 发现 `<cwd>/.codex/config.toml`，其 `model_provider` 会被「忽略为 unsupported」却仍**覆盖**，实测把模型打回 `deepseek-v4-flash`（litellm 死端口 → 404）；②**`%TEMP%` 不可作 `CODEX_HOME`** —— codex 拒绝在临时目录创建 helper 二进制（PATH aliases），app-server 会中途异常退出（`thread/read 502 thread not loaded` / `turn/start 502 app-server exited unexpectedly`）；③`env_key = "OPENAI_API_KEY"` ⇒ 服务进程需要该环境变量（从真实 `~/.codex/auth.json` 读出来注入）；④隔离 home **只拷 `auth.json`**，其余全部自建 —— **绝不碰真实库**。
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
+
+## round-129（闸门 freeze 预算按环境帧节奏归一，未发布）
+
+**闸门提交 `ce8e7d75`**：`test(gate): freeze 预算按环境帧节奏归一，载机器上不再误红（round-129）`（1 文件：`scripts/check-thread-switch-feedback.cjs` 17 538 → 27 112 字节 / 203 增 9 删；**产品源码零改动**）。
+
+**由来**：round-120 明确记「round-119 的 freeze 预算断言负载敏感仍未处置（闸门观察项，与重排无关）」。round-119 的原始记录：macOS 机器上老闸门无注入连跑 15 次，按失败签名分类得「`first-open freeze <= 60ms` 失败 **6/15**（frozen 61–100ms）」，且「本机空载时读数 50–60ms 本就贴着预算」。
+
+**根因（两个独立缺陷）**：①断言＝**单次采样 + 绝对 60ms 阈值**，与机器无关的常数对比；②**指标本身会退化** —— `window.__freeze()` 原本「从点击那一帧起累加帧间隙，直到出现一个 <40ms 的帧就停」，默认机器正常帧短于 40ms；当每帧都 ≥40ms（载机器正是如此）时循环**永不 break**（旧实现无界累加；若只加一个 12 帧边界则变成 12×帧长），两个数都不再表示「点击到首次绘制」。**因此只把阈值放宽是无效的**——值已经爆炸，指标与阈值都得改。
+
+**改动（唯一文件 `scripts/check-thread-switch-feedback.cjs`）**：①`__ambient(pct)` 支持任意分位、点击前开 **700ms 静默窗**（`AMBIENT_WINDOW_MS`）量本机此刻帧节奏；②`__freeze` 的停止条件从写死的 `<40ms` 改成 `quiet = max(40ms, 2×ambient_p50)`（快机器上退化为原来的 40ms 地板 ⇒ 测量逐字不变；慢机器上点击后第一帧就 break，读数回到「点击到首次绘制」语义）；③预算 `min(max(60ms, 2×ambient_p90), 200ms)`；④`FREEZE_BUDGET_MODE=absolute` 保留 round-128 及以前行为；⑤过载（2×ambient > cap）**跳过而非误红**（只打印 skip、不计失败）；⑥自测开关默认全关：`FREEZE_SYNTHETIC_LOAD_MS`（每帧 rAF 忙等）、`FREEZE_INJECT_CLICK_STALL_MS`（捕获相点击期阻塞）；⑦新增浏览器无关 `--self-test`（8 例算式，含 cap / skip）。
+
+**关于合成负载为何必须是 rAF 忙等**：实测 `setInterval` 忙等（90ms 忙 / 180ms 周期）只把帧间隙 `max` 从 10ms 抬到 **96ms**、`p90` **仍是 8ms**（大多数帧不受影响、点击多半落在快帧上）⇒ 复现不了载机器；改成每帧忙等后 `p50 = p90 = max = 70ms`（**均匀**变慢），才等价于载机器看到的帧节奏。
+
+**取证（决定性，唯一变量＝判定模式）**：跑在生产构建服务上（`dist/` 按请求读盘、`isDev=false`、该 home 10 条线程 / 4 条有消息）。
+
+| 腿 | 条件 | 读数 | 结果 |
+| --- | --- | --- | --- |
+| A / A2 | 空载 / scaled | `frozen 10→11ms, ambient90 8ms, budget 60ms` | **PASS** |
+| B | load=70 / **absolute**（＝round-128 及以前） | `frozen=74ms, ambient90=71ms, budget=60ms` ×2 | **FAIL 2/2** |
+| C / C2 | load=70 / scaled | `frozen 74→73ms, ambient90 71→70ms, budget 142→140ms` | **PASS** |
+| D | load=70 / scaled + 注入 150ms 点击期阻塞 | `frozen 316→300ms, ambient90 70ms, budget 140ms` | **FAIL 2/2** |
+| E | load=70 / scaled + `cap=60`（过载） | `skip ×2`，无失败项 | **PASS**（EXIT 0） |
+
+B vs C 是对照组：同一负载、同一构建、**唯一变量是判定模式**——`absolute` 判 `74>60` 失败（＝round-119 的假红逐字复现），`scaled` 判 `74≤142` 通过（假红消除）。D 证明没有「一律放行」（真回归形状仍 FAIL）。A/A2 证明空载严格度不变。E 证明过载走跳过。
+
+**`--self-test`**：`node scripts/check-thread-switch-feedback.cjs --self-test` → **8/8、EXIT 0**（idle 保地板 60 / load 放大到 140 / absolute 忽略节奏 / 超限截到 cap / zero-ambient 回落地板 / 三条 cap-skip 判定）。
+
+**为什么本轮不加静态契约断言**：`check-ui-contract.cjs` 只读 `src/` 的产品源码、不读 `scripts/`（已核对），把闸门断言塞进「UI 契约」属错位；本轮的「非空过」证据是上表的 **B vs C**（同一负载、唯一变量）与 **`--self-test` 8 例**，强度高于静态断言。
+
+**验证基线**：`node --check` SYNTAX_OK、`vue-tsc --noEmit` EXIT=0、全量 **742 例 / 742 通过（76 文件）零失败**（与 round-128 基线逐字相同）、`vite build` EXIT=0（13.46s）。
+
+**诚实边界**：本机（Windows）空载 `frozen=8–11ms`，**复现不了 round-119 的真实假红**，载态只能合成（且合成的是均匀变慢、与真实载机器的突发式停顿不同构）；归一化必然降低载机器上的灵敏度（`2×ambient` 以内的停顿无法与调度抖动区分），空载不受影响；ambient 只在点击前 700ms 窗口内采样，窗口内无停顿而点击瞬间来停顿仍可能误红（概率性残留）；过载跳过是「静默放行」，本仓无 CI 接线（只有 `.github/workflows/build-apk.yml`，不跑这些闸门）；未在 0.160.1 上复测。
+
+**未发布**：未 bump 版本、未 tag；`ce8e7d75` 待在本地 `main`（round-122 ~ round-129 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
