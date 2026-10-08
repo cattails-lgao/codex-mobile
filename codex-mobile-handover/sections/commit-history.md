@@ -330,3 +330,28 @@
 **新环境事实**：**dev server 与 `dist-cli` 共用同一个 `CODEX_HOME` 会互抢 writer lock** —— 先起 dev 再起 dist-cli，后者打开线程得 `RPC thread/resume failed with HTTP 502: thread … already has an active writer`，页面表现为「消息列表只剩 1 项、一个 `thread/read`/`resume` 请求都没发」。跑生产构建闸门前必须先停 dev（或换 home）。这是 round-44 记录的 writer 锁限制在现场的样子。
 
 **未发布**：未 bump 版本、未 tag；`b0b6a990` 已在本地 `main`。
+
+## round-128（命令块 live→持久化交接延迟清空，未发布）
+
+**修复提交 `5133d130`**：`fix(ui): 命令块 live→持久化交接延迟清空，回合收尾不再「闪一下」（round-128）`（3 文件：`src/composables/useDesktopState.ts` **64 增 10 删**、`scripts/check-ui-contract.cjs` +50、新增 `scripts/verify-command-block-handoff.cjs`）。
+
+**由来**：用户口径「继续收口」，收口 round-127 的唯一遗留——「新增命令块时闪一下」尚未定案。round-126 排除了重载重渲与顶部 `isLoading` 切换条，round-127 又排除了 `scrollIntoView` 连带滚动与「位置被重置回 TOP」，把候选收窄到 **(a) 真实流式回合里 live→持久化项的交接**、**(b) 内容落地与滚动跟随之间那一帧的差** —— 两者都必须驱动**真实流式回合**才能判。
+
+**根因（本轮定案，逐帧取证）**：先搭出能跑真实回合的隔离环境（隔离 `CODEX_HOME` + `gpt-5.5` relay），再用 rAF 逐帧采样 ⇒ `turn/completed` **急切清空 live 命令**（`liveCommandsByThreadId[thread]`），而渲染用的持久化副本要等防抖 `EVENT_SYNC_DEBOUNCE_MS = 220` 的收尾 `thread/read` 才落地 ⇒ 命令块从 DOM 真空约 **250ms**（A 侧实测 `@+11635ms 消失、持续 250ms`；真空期结构读数 `request(2:userMessage|userMessage) + final(2:agentMessage|agentMessage)` —— 命令块所在的 `process` 段**整段被摘掉**，落地后回来的才是 `+ process(1:commandExecution)`）。**清空本身必需、不能改成不清**：live 命令 id 是通知里的裸 `call_xxx`、桥层重建的持久化命令 id 是 `session-cmd-<callId>`，**不同源**，`removeLiveCommandsPersistedIn` 的按 id 剪除对它无效，不收尾清空就会在原位多出一个命令块。
+
+**关键发现（第一版修复因此失效）**：收尾有**两条通知路径** —— `applyRealtimeUpdates(notification)`（WS 回调里**先**执行，含 `setThreadInProgress(completedTurn.threadId, false)`）与 `handleNotification(notification)` 的 `turn/completed` 分支。第一版只改了后者，A 侧读数与改动前**逐字相同**（临时钩子 `window.__r128dbg` 显示 `defer` 从未置 1、`liveCmd` 仍 `1→0`）；抽出 `finishTurnForThread` 作**统一收尾入口**、两条路径都调它之后，`defer=1` 首次出现且 `cmds` 全程不归零。
+
+**改动**：`src/composables/useDesktopState.ts`（唯一产品改动文件）——新增 `deferredLiveCommandClearThreadIds` / `flushDeferredLiveCommands` / `finishTurnForThread`；`clearCompletedTurnLiveState` 支持 `keepLiveCommands`；`setThreadInProgress` 透传 `keepDeferredLiveCommands`；新增 1.5s 兜底上界 `LIVE_COMMAND_HANDOFF_FALLBACK_MS`；**只对当前选中线程延迟**，非选中线程维持立即清空。之所以「同一拍」安全：`loadMessages` 在 `setPersistedMessagesForThread` 之后**同一同步块（无 await）**里调 `clearCompletedTurnLiveState` ⇒ 新旧副本在同一帧换手。取证用的 `TEMP-r128-DEBUG` 钩子在提交前已整体删除（`grep -rn "__r128dbg\|TEMP-r128-DEBUG" src/ scripts/` 返回 none）。
+
+**新增闸门（2 个）**：
+
+- `scripts/verify-command-block-handoff.cjs`（新，浏览器侧可复跑）：用 UI composer 发一条**会触发 shell 命令**的提示词驱动**真实流式回合**（先热身一轮），逐帧记 `[data-message-type="commandExecution"]` 的个数 `cmds`；判定「`cmds` 从 >0 归零、随后又在 5s 内回到 >0」= 真空事件。**真机 A/B（交错三跑 B1→A1→B2，唯一变量是代码）**：改动前 **FAILED 1/6**（真空 `@+11635ms` 250ms）、改动后 **ALL GREEN 6/6**（无真空）。三条**非空过**断言：观测回合确实产出命令块（`maxCmds=1`）、确实有 `lastStatus=completed` 的收尾 `thread/read`、采样帧数 ≥60（实测 1658 / 1787 / 1849 帧，最大帧间隔 13–17ms）；模型整轮没出命令块或回合没跑完 ⇒ **SKIP 退 2**（不是失败也不是通过）。
+- `scripts/check-ui-contract.cjs` **41 → 42 项**：新增「命令块 live→持久化交接延迟清空，不出现真空（round-128）」，钉 9 个子事实（延迟集合 / 兜底常量 / flush 清 live / `finishTurnForThread` 调用点 ≥2 / 仅选中线程延迟 / clear 接受 `keepLiveCommands` / `turn/completed` 走 finish / **`turn/completed` 不得再急切清空** / **`applyRealtimeUpdates` 不得直接 `setThreadInProgress(completedTurn.threadId, false)`**）。**反跑证明非空**——改动前 **41/42**、该项 FAIL 且诊断行 `…turn/completed 仍急切清空=YES(退化了) / applyRealtimeUpdates 直接 setThreadInProgress=YES(退化了)`；改动后 **42/42**。（**口径修正的诚实说明**：断言第一版写的是「live 命令的 `omitKey` 清空**全文件只允许 1 处**」，实测全文件有 **4** 处——另三处是**合法**路径（回合失败回滚 / fork / 重置）——故改钉「**收尾路径**不得急切清空」这一语义不变式，而不是数个数。）
+
+**生产构建复跑**：`vite build` EXIT=0（重建 `dist/`；服务 4191 按请求从磁盘读 `dist/index.html` ⇒ 重建即生效、无需重启）→ 新闸门 **6/6**、`verify-mobile-375` **exit 0**、`check-thread-switch-feedback` **12 项全过**（`frozen=12/9ms` ≤ 60ms 预算；`chars=161→197`；`rows=10 with-messages=4`）、`check-fonts` **13/13**、`check-theme` **15/15**、`check-ui-contract` **42/42**；`verify-conversation-mount-scroll`（需线程可滚 >150px）、`verify-conversation-list-persists` / `verify-review-pane-scroll`（需 >600px）因本轮隔离 `CODEX_HOME` 里最长线程只可滚 **132px** 而 **SKIP 退 2**（环境不足、非失败）。`check-fonts` / `check-theme` 需 `NODE_PATH=node_modules/.pnpm/playwright-core@1.62.1/node_modules`。
+
+**验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例 / 742 通过（76 文件）零失败**（默认 15s 超时下即零失败）、`vite build` EXIT=0（三次：13.77s / 12.97s / 13.66s）。
+
+**复现真实回合的四道坑（本轮都真实拦过一次）**：①**不能在仓内 cwd 起服务** —— codex 按**进程 cwd** 发现 `<cwd>/.codex/config.toml`，其 `model_provider` 会被「忽略为 unsupported」却仍**覆盖**，实测把模型打回 `deepseek-v4-flash`（litellm 死端口 → 404）；②**`%TEMP%` 不可作 `CODEX_HOME`** —— codex 拒绝在临时目录创建 helper 二进制（PATH aliases），app-server 会中途异常退出（`thread/read 502 thread not loaded` / `turn/start 502 app-server exited unexpectedly`）；③`env_key = "OPENAI_API_KEY"` ⇒ 服务进程需要该环境变量（从真实 `~/.codex/auth.json` 读出来注入）；④隔离 home **只拷 `auth.json`**，其余全部自建 —— **绝不碰真实库**。
+
+**未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
