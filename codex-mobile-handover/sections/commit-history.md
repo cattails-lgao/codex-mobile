@@ -356,6 +356,56 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-133（经 `thread/read` 打开的线程也播种游标链：上翻 7.5s → 1.0s，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| （本轮修复提交） | `fix(thread-turn-page): 经 thread/read 打开的线程也播种游标链（round-133）` | 3 文件（产品 2 + 测试 1，30 增 0 删） |
+| （本文档提交） | `docs(handover): round-133 上翻游标链播种修复（轮次文档 + 总入口 + 提交史）` | 4 文件 |
+
+**由来**：用户「推送，接着修症状2」—— 先把本地 8 个提交推上 `origin/main`（`e8e7a94a..c9d4a052`），再实施 round-132 §3.2 / §3.3 / §10.6 / §11.6 **点名却未实施**的那条缺口。
+
+**根因（一条接线漏了，不是路由本身慢）**：上翻路由 `/codex-api/thread-turn-page` 只在 `ThreadTurnPageCursorChain` 里有该锚点的游标时才走有界页（`threadTurnPage.ts` L279 `chain.lookup(...)`，拿不到就 `return null` ⇒ 路由回落 `readThreadForTurnPage()` ＝ 全量 `thread/read {includeTurns:true}` + 内存切片）。而链的**唯一**种子本来是 `thread/resume` 的 `initialTurnsPage.nextCursor`；round-110 引入的 **`thread/read` 有界读同样拿到了 `nextCursor`，却没有交给同一个 `onTurnPageBoundary`**（`codexAppServerBridge.ts` L1943–1947 未传）⇒ **任何经 `thread/read` 打开的线程链是空的**，首次上翻必然未命中并回落。而 `readThreadWithTurnPage` 内部**早就在用这个游标**（`needsCount = page.data.length > 0 && page.nextCursor !== ''`），**手里握着播种所需的全部信息，只是没有出口**。
+
+**改动（2 个产品文件 + 1 个测试文件）**：
+
+- `src/server/bridge/threadReadTurnPage.ts`：`ThreadReadTurnPageDeps` 新增 `onTurnPageBoundary?: (threadId, oldestTurnId, olderCursor) => void`；在 `const turns = [...page.data].reverse()` 之后、`needsCount` 之前回报边界 ——
+
+```ts
+const oldestTurnId = readNonEmptyString(asRecord(turns[0])?.id)
+if (oldestTurnId && deps.onTurnPageBoundary) {
+  deps.onTurnPageBoundary(threadId, oldestTurnId, page.nextCursor || null)
+}
+```
+
+  三处细节是有意的：①锚点取 **reverse 之后**的 `turns[0]`（页是 newest-first，最老一轮才是前端下次要问「它之前是什么」的锚点）；②空页（新线程）**不回报**（`readNonEmptyString` 自然得空串）；③`page.nextCursor || null` —— 短页 `nextCursor === ''` 表示已到线程开头，而 `ThreadTurnPageCursorChain.record` 对空游标本来就是**直接 return**（不记）。
+- `src/server/codexAppServerBridge.ts`：`thread/read` 那一支接上 `recordThreadTurnPageBoundary`，与 resume 支**逐字对称**（resume 支是 round-86 加的，同样一行）。
+
+**为什么这个改动只会变快、不会变慢**：`readBoundedThreadTurnPage` 在拿不到游标时**才**回落。多播一个边界 ⇒ 命中率只增不减；命中时是 ~1.0s 的有界单页，未命中时是 ~7.5s 的全量读，而**两条路返回的内容已被 A/B 证明逐字节相同**。
+
+**测试与反跑（决定性）**：
+
+- **单测 8 → 11 例**（新 describe「older-turn cursor boundary (round-132)」）：①满页 ⇒ 回报 `('thread-1', 't11', 'cursor-back')`（page `t20…t11`、reverse 后 `turns[0] === t11`）；②短页到线程开头 ⇒ `('thread-1', 't1', null)`；③空页（新线程）⇒ **一次都不回报**。
+- **`tmp/r133-flip-boundary.cjs off|on`**（把回报语句改成 `if (false && …)`）⇒ `off` 时 **2 failed | 9 passed**（`expected "vi.fn()" to be called 1 times, but got 0 times`）、`on` 还原后 **11 passed** 且与备份**逐字节一致**（7515 字节）。**踩到并修掉的一处**：第一版用**跨行**锚点，而该文件是 **CRLF** ⇒ `NEEDLE` 出现 **0 次**、脚本正确拒绝写盘（`断言失败：NEEDLE 出现 0 次（应为 1），不写盘`）；改**单行**锚点后 `NEEDLE=1 次`。
+- **端到端 A/B（同窗口同锚点）**：`tmp/r133-e2e-first-scrollup.cjs`。线程 `01a0cdce-…-4801b2a1cfa9`（**174 轮**），锚点 `ids[len-10]` ＝ `01a0eace-18ec-7243-bfdf-94a22035cd82`（index 164）：
+
+| 相 | 进程/链路状态 | 首次上翻 | 字节 | turns | startTurnIndex | oldestReturnedTurnId |
+| --- | --- | --- | --- | --- | --- | --- |
+| **A** | 进程刚起、链空（＝修复前等效） | **7558ms** | 1631498 | 10 | 154 | `01a0e64e-…-6f3d2d9e31fb` |
+| **B** | 先 `thread/read` 打开（修复后已播种） | **1018ms** | **1631498** | **10** | **154** | **`01a0e64e-…-6f3d2d9e31fb`** |
+
+  ⇒ **7.4×**，且载荷**逐字节相同**。B 相里 `thread/read` 返回的 10 轮其**最老一轮恰好就是锚点**（`threadTurnStartIndex = 164`）—— 这正是被播进链的那个键，所以下一句请求必然命中。
+- **排除替代解释（同进程换一个没播种过的锚点）**：`tmp/r133-probe-unseeded-anchor.cjs` —— B 相之后**同一个已「热」的进程**里，已播种锚点 `01a0eace-…` **999ms** vs 未播种锚点 `01a0e3ae-…`（`ids[len-30]`）**6566ms** ⇒ 「快」的唯一条件是**该锚点在链上**，不是 app-server 变热、也不是缓存副作用。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**、全量 **747 例 / 747 通过（76 文件）零失败**（＝ round-132 基线 744 ＋ 本轮 3 例）。**闸门脚本本轮未改**：`check-ui-contract.cjs` 不覆盖 `src/server/**`（实测 `grep src/server` **零命中**），故该不变式由单测 ＋ 端到端守，**不硬塞进 UI 契约**。
+
+**推送（本轮完成）**：本地 8 个提交（round-130 ~ round-133 前序）推上 `origin/main`，`e8e7a94a..c9d4a052`。**环境事实**：本机 WorkBuddy 注入的 `HTTP(S)_PROXY=127.0.0.1:64639` 对 `github.com` 的 `CONNECT` 返 **502**（只放行 `api.github.com` / `codeload`），用户自建的 **7890** 可通 ⇒ 正确姿势是 `env -u HTTPS_PROXY -u HTTP_PROXY -u https_proxy -u http_proxy git -c http.proxy=http://127.0.0.1:7890 push origin main`。**另一条坑**：git **没有** `https.proxy` 这个配置项（写它等于没写、仍走环境变量 `https_proxy`），必须用 **`http.proxy`**；`credentials` 走 `manager-core`，`git` 会打印 `git: 'credential-manager-core' is not a git command` 但推送仍然成功（凭据从 Windows 凭据管理器取到）。
+
+**诚实边界**：①**链仍是进程内内存** —— 桥 / app-server 重启（rollout ordinal 重编号）、LRU 淘汰（64 线程 × 每线程 256 锚点）之后仍会回到未命中；本轮只是把「打开线程」这条路也接上，**不等于**链永远命中（重启后若在打开该线程**之前**就上翻，仍是 7.5s 量级，A 相读数就是它）。②**回落路径仍不登记锚点**（`threadTurnPage.ts` L323 只在有界路径执行）⇒ 一次未命中之后靠 30s TTL 的全量读缓存兜住（A 相第二次 891ms），而该缓存会被 `thread/resume`/`thread/read`/`thread/fork`/`thread/start` 的 pipeline 快照与任何带该 threadId 的通知清掉，清掉之后又是 7.5s。③**`record` 对 `null` 游标是 no-op** ⇒「线程开头」这个边界靠的是「查不到 ⇒ 未命中 ⇒ 回落」，不是「查到 null ⇒ 停住」；本轮没有改变这一语义。④只在本机 Windows / codex-cli 0.160.1 的隔离 home（174 轮线程）上实测；更大的线程（round-132 记的 30.89MB / 16 轮那种）收益比例只会更高但**未实测**。⑤症状 A 的 §10.6 第 ②③④ 条**一行未动**。
+
+**未发布**：未 bump 版本、未 tag（npm `latest` 仍是 `0.1.127`）。
 ## round-132（线上「Thinking 时消息列表整段消失」定位并修复 + 上翻 6–7s 归因，未发布）
 
 **提交**：
