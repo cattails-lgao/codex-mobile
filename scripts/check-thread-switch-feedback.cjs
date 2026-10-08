@@ -25,6 +25,9 @@
 //
 //   node scripts/check-thread-switch-feedback.cjs
 //
+// 退出码: 0 全绿 / 1 有断言失败或运行异常 / 2 环境不足（SKIP，例如这个 CODEX_HOME
+//         里没有 ≥2 条有消息的线程可供切换）
+//
 // Env:
 //   PROFILE_BASE_URL      app url (default http://127.0.0.1:4173)
 //   PROFILE_EDGE          chromium/edge executable override
@@ -371,7 +374,16 @@ async function main() {
   const page = await context.newPage()
   await page.addInitScript(OBSERVE)
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('.thread-row', { timeout: 30000 })
+  // 环境不足（这个 CODEX_HOME 里一条线程都没有 → 侧栏不渲染任何行）→ SKIP（退出码 2），
+  // 而不是让 waitForSelector 超时冒到 main().catch 里被当成「运行异常」。隔离回放用的
+  // 空 CODEX_HOME 正是这种情形，它不该让闸门看起来像回归。
+  try {
+    await page.waitForSelector('.thread-row', { timeout: 30000 })
+  } catch {
+    console.log(`SKIP: no .thread-row appeared within 30s at ${BASE} - this CODEX_HOME has no threads`)
+    await browser.close()
+    process.exit(2)
+  }
   await page.waitForTimeout(3000)
   if (FREEZE_SYNTHETIC_LOAD_MS > 0) {
     await page.evaluate((ms) => window.__synthLoad(ms), FREEZE_SYNTHETIC_LOAD_MS)
@@ -414,12 +426,15 @@ async function main() {
     )
   }
   if (contentIds.length < 2) {
+    // 环境不足（这个 CODEX_HOME 里没有 ≥2 条有消息的线程）→ SKIP（退出码 2），
+    // 与 verify-command-block-handoff / verify-*-scroll 的约定一致：退 1 只留给
+    // 「真断言失败」。否则一个空隔离 home 会把环境欠缺伪装成回归。
     console.log(
-      'FAIL  need at least 2 sidebar threads that have messages to check a switch' +
+      'SKIP: need at least 2 sidebar threads that have messages to check a switch' +
         ` (found ${contentIds.length} of ${rows} rows) - seed the CODEX_HOME used by this service with real threads`,
     )
     await browser.close()
-    process.exit(1)
+    process.exit(2)
   }
   if (isDev) console.log('note  dev server: frame-timing assertions skipped (Vite compiles on demand)')
 
