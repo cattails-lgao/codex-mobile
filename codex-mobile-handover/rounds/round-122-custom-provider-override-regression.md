@@ -82,6 +82,17 @@ args.push(...getProviderCompatibilityConfigArgs(serverPort))
   | 2 用户未定义 `custom` | 占位仍注册，`base_url=http://127.0.0.1:4271/codex-api/provider-compat/v1` |
   | 3 运行中把 `[model_providers.custom]` 写进 config.toml | 写入前 = 兼容路由 → **写入后 = `http://127.0.0.1:4460/v1`、active = `custom`**（缓存在 mtime/size 变化时失效 → 配置签名变 → app-server 重启） |
   | 兼容路由 | `HTTP 400` + 上述消息（两个变体下均验证） |
+- **真实 CLI 端到端（发布路径，`tmp/probe-r122-cli-e2e.cjs`：`node dist-cli/index.js -p <port> --no-password --no-tunnel --no-open --no-login`，隔离 `CODEX_HOME`）**——**这是唯一能验到「占位 `base_url` 指向本机兼容路由」的路径**：`CODEXUI_SERVER_PORT` 由打包 CLI 自己设置（`src/cli/index.ts`），dev server 不设，所以只有发布路径才走得到 fix 3 那条路由。两变体同样以 `config/read` 为判据：
+  | 变体 | `active provider` | `custom.name` | `custom.base_url` | 兼容路由 |
+  | --- | --- | --- | --- | --- |
+  | A 用户定义 `[model_providers.custom]` → litellm | `custom` | `litellm` | `http://127.0.0.1:4460/v1` | `HTTP 400` |
+  | B 用户未定义 `custom` | `opencode_zen` | `Legacy Custom Endpoint` | `http://127.0.0.1:4291/codex-api/provider-compat/v1` | `HTTP 400` |
+
+  A 即报告的症状场景：修复后用户配置**逐字保留**且成为 active provider；B 证明遗留保护未被误删、且占位不再指向死端口。兼容路由返回体实测（`tmp/probe-r122-compat-body.cjs`，端口 4292）：
+  ```json
+  {"error":{"type":"invalid_request_error","message":"This thread uses a legacy compatibility provider that has no endpoint. Start a new thread, or define [model_providers.custom] in your config.toml to send from here."}}
+  ```
+  B 的 `active provider` 是 `opencode_zen` 而非 `custom`，属**既有设计**、非本轮副作用：`ensureDefaultFreeModeStateForMissingAuthSync`（`bridge/codexAuthState.ts:331`）只在「无可用 auth **且** 用户 config.toml 里没写顶层 `model_provider`」时才播种 opencode-zen free mode；A 写了显式 `model_provider = "custom"` 因而跳过播种——与本轮「不顶掉用户显式选择」同一个原则。
 - **报告里的复现命令也复核过**：`codex exec -c model_providers.custom.base_url="http://127.0.0.1:9/v1" "say ok"` 在本机确实复现无限重连（见上表）。
 - **单测**：`freeMode.test.ts` **16/16**（原 15 + 新增：跳过 `custom`、跳过 `opencode_zen`、两者都定义时为空、有端口指向兼容路由、无端口回落死哨兵）；`appServerRuntimeConfig.test.ts` **12/12**（原 9 + `collectModelProviderIds` 四种写法 / 注释与多行字符串不误判 / `readUserConfiguredProviderIds` 的空文件与缓存失效）。定向 **28/28**。
 - `vue-tsc --noEmit` → **EXIT=0**。
@@ -108,13 +119,14 @@ args.push(...getProviderCompatibilityConfigArgs(serverPort))
 | `src/server/appServerRuntimeConfig.test.ts` | 3 例新增（扫描器两种输入形态 + 真实 `$CODEX_HOME` 读取与缓存失效） |
 | `tests/providers-models/round-122-user-owned-custom-provider-not-overridden.md` | 新增手测章节（含 `config/read` 判据与兼容路由期望） |
 | `tests.md` / `tests/providers-models/index.md` | 登记新章节 |
-| `tmp/probe-r122-*.cjs`（3 个，未入库） | 覆盖探针 / 死端点判定 / 桥层端到端三变体 |
+| `tmp/probe-r122-*.cjs`（5 个，未入库） | 覆盖探针 / 死端点判定 / 桥层端到端三变体 / 真实 CLI 双变体（4290、4291）/ 兼容路由返回体（4292） |
 
 ## 七、收尾验证说明
 
 - `vue-tsc --noEmit`：**EXIT=0**
 - 定向 Vitest：**28/28**（`freeMode` 16 + `appServerRuntimeConfig` 12）
 - 全量 Vitest：**732 例 / 731 通过 / 1 失败**（失败 = 文档记录的负载敏感 fs 超时；隔离 61/61 通过）
-- 端到端：桥层三变体全绿（`config/read` 判据）+ 死端点/4xx 对照实验
+- 端到端：桥层三变体全绿 + **真实 CLI（发布路径）双变体全绿**（均为 `config/read` 判据）+ 死端点/4xx 对照实验
+- 路由返回体：实测 `HTTP 400` + 可读 message（文本已抄录于 §四）
 - 性能：`statSync` 14.4µs vs `readFileSync` 1359µs（同文件），据此改缓存策略
 - 未做：0.160.1 复核、`opencode_zen` 跳过的端到端、`publish` 到 npm（随下一次发布）
