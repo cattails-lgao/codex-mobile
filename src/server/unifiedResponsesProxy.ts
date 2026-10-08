@@ -44,7 +44,7 @@ type ChatMessage = {
   }>
 }
 
-type ChatCompletionsRequest = {
+export type ChatCompletionsRequest = {
   model: string
   messages: ChatMessage[]
   temperature?: number
@@ -68,6 +68,13 @@ export type UnifiedProxyOptions = {
   allowToolFallbackToResponses: boolean
   responsesPayloadFormat?: 'raw' | 'chat'
   sanitizeResponsesRequest?: (payload: Record<string, unknown>) => Record<string, unknown>
+  /**
+   * Rewrite the translated chat-completions payload right before it goes
+   * upstream. Providers whose upstream gates on a specific client
+   * fingerprint (e.g. OpenCode Zen) use this to force `stream` and append
+   * required tool-name stubs without touching the caller's own tools.
+   */
+  chatRequestTransform?: (payload: ChatCompletionsRequest) => ChatCompletionsRequest
   upstreamHeaders?: (payload: string) => Record<string, string>
 }
 
@@ -321,6 +328,120 @@ function responsesToolChoiceToChatToolChoice(toolChoice: unknown): ChatCompletio
       : ''
   if (!name) return undefined
   return { type: 'function', function: { name } }
+}
+
+/**
+ * Collapse an SSE chat-completions stream into a single chat-completions
+ * object. Some upstreams only accept `stream: true` (client-fingerprint
+ * gated, e.g. OpenCode Zen), yet we still need a complete payload whenever
+ * the caller cannot take a raw stream — notably when tools are present and
+ * the reply has to be translated back into the Responses format.
+ *
+ * Throws when the stream carried no chat chunks or an error event, so the
+ * caller's parse-failure path can surface the raw body instead of silently
+ * returning an empty completion.
+ */
+function aggregateSseChatCompletion(raw: string): Record<string, unknown> {
+  const contentParts: string[] = []
+  const reasoningParts: string[] = []
+  const toolCalls = new Map<number, { id?: string; name?: string; args: string }>()
+  let id: string | undefined
+  let model: string | undefined
+  let created: number | undefined
+  let usage: Record<string, number> | undefined
+  let sawChunk = false
+
+  for (const line of raw.split('\n')) {
+    if (!line.startsWith('data:')) continue
+    const data = line.slice(5).trim()
+    if (!data || data === '[DONE]') continue
+    let chunk: {
+      id?: string
+      model?: string
+      created?: number
+      usage?: Record<string, number>
+      error?: unknown
+      choices?: Array<{
+        delta?: {
+          content?: string
+          reasoning_content?: string
+          tool_calls?: Array<{
+            index?: number
+            id?: string
+            function?: { name?: string; arguments?: string }
+          }>
+        }
+      }>
+    }
+    try {
+      chunk = JSON.parse(data) as typeof chunk
+    } catch {
+      continue
+    }
+    if (chunk.error) throw new Error('Upstream stream returned an error event')
+    sawChunk = true
+    if (chunk.id) id = chunk.id
+    if (chunk.model) model = chunk.model
+    if (chunk.created) created = chunk.created
+    if (chunk.usage) usage = chunk.usage
+    const delta = chunk.choices?.[0]?.delta
+    if (!delta) continue
+    if (delta.content) contentParts.push(delta.content)
+    if (delta.reasoning_content) reasoningParts.push(delta.reasoning_content)
+    for (const call of delta.tool_calls ?? []) {
+      const index = call.index ?? 0
+      const current = toolCalls.get(index) ?? { args: '' }
+      if (call.id) current.id = call.id
+      if (call.function?.name) current.name = call.function.name
+      if (call.function?.arguments) current.args += call.function.arguments
+      toolCalls.set(index, current)
+    }
+  }
+
+  if (!sawChunk) throw new Error('Upstream stream contained no chat chunks')
+
+  const message: Record<string, unknown> = { role: 'assistant', content: contentParts.join('') }
+  const reasoningText = reasoningParts.join('')
+  if (reasoningText) message.reasoning_content = reasoningText
+  if (toolCalls.size > 0) {
+    message.tool_calls = [...toolCalls.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([, call]) => ({
+        id: call.id ?? `call_${Date.now()}`,
+        type: 'function',
+        function: { name: call.name ?? '', arguments: call.args || '{}' },
+      }))
+      .filter((call) => (call.function as { name: string }).name.length > 0)
+  }
+
+  return {
+    id,
+    object: 'chat.completion',
+    created,
+    model,
+    choices: [{ index: 0, message, finish_reason: 'stop' }],
+    ...(usage ? { usage } : {}),
+  }
+}
+
+/**
+ * Parse an upstream chat-completions body that may arrive either as JSON or
+ * as an SSE stream (because we forced `stream: true` to satisfy a fingerprint
+ * gate). Sniffing the body keeps this transparent to callers that already
+ * used `JSON.parse` here.
+ */
+function parseUpstreamChatPayload(
+  raw: string,
+  headers: IncomingMessage['headers'],
+): Record<string, unknown> {
+  const contentType = String(headers['content-type'] ?? '')
+  const trimmed = raw.trimStart()
+  const looksLikeSse = contentType.includes('event-stream')
+    || trimmed.startsWith('data:')
+    || trimmed.includes('\ndata:')
+  return looksLikeSse
+    ? aggregateSseChatCompletion(raw)
+    : (JSON.parse(raw) as Record<string, unknown>)
 }
 
 export function chatCompletionToResponsesFormat(
@@ -589,7 +710,8 @@ export function handleUnifiedResponsesProxyRequest(
           requestNamespaceMap.set(qualifiedName, namespaceName)
         }
         if (chatToolChoice) chatReq.tool_choice = chatToolChoice
-        payload = JSON.stringify(chatReq)
+        const finalChatReq = options.chatRequestTransform ? options.chatRequestTransform(chatReq) : chatReq
+        payload = JSON.stringify(finalChatReq)
         upstreamUrl = new URL(options.chatCompletionsEndpoint)
       } else {
         const requestBody =
@@ -642,7 +764,7 @@ export function handleUnifiedResponsesProxyRequest(
           }
 
           try {
-            const upstreamPayload = JSON.parse(rawResponseBody) as Record<string, unknown>
+            const upstreamPayload = parseUpstreamChatPayload(rawResponseBody, upstreamRes.headers)
             if (upstreamPayload.error || status >= 400) {
               if (process.env.CODEXUI_PROXY_DEBUG === '1') {
                 console.warn('[unified-responses-proxy]', JSON.stringify({

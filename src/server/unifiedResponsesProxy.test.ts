@@ -279,6 +279,72 @@ describe('unified responses proxy reasoning_content translation', () => {
     }
   })
 
+  it('aggregates a forced upstream SSE stream when tools route through the non-stream path (round-124)', async () => {
+    const upstream = createServer((req, res) => {
+      req.resume()
+      req.on('end', () => {
+        // The upstream only ever answers with SSE (a fingerprint hook forces
+        // stream:true), yet tools disable the passthrough streaming path — so the
+        // proxy has to collapse the stream itself instead of failing to JSON.parse it.
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        const frames = [
+          { id: 'chatcmpl-sse', model: 'big-pickle', choices: [{ delta: { role: 'assistant', content: 'He' } }] },
+          { choices: [{ delta: { content: 'llo' } }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'exec_command', arguments: '{"cmd":' } }] } }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"ls"}' } }] } }] },
+          { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+        ]
+        for (const frame of frames) res.write(`data: ${JSON.stringify(frame)}\n\n`)
+        res.write('data: [DONE]\n\n')
+        res.end()
+      })
+    })
+    const upstreamPort = await listen(upstream)
+
+    const proxy = createServer((req, res) => {
+      handleUnifiedResponsesProxyRequest(req, res, {
+        bearerToken: '',
+        requireBearerToken: false,
+        wireApi: 'responses',
+        responsesEndpoint: `http://127.0.0.1:${upstreamPort}/v1/responses`,
+        chatCompletionsEndpoint: `http://127.0.0.1:${upstreamPort}/v1/chat/completions`,
+        missingKeyMessage: 'missing',
+        allowToolFallbackToResponses: false,
+        responsesPayloadFormat: 'chat',
+        chatRequestTransform: (payload) => ({ ...payload, stream: true }),
+      })
+    })
+    const proxyPort = await listen(proxy)
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/v1/responses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'big-pickle',
+          input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hi' }] }],
+          tools: [{ type: 'function', name: 'exec_command', parameters: { type: 'object' } }],
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      const body = await response.json() as { output: Array<Record<string, unknown>> }
+      expect(body.output).toContainEqual(expect.objectContaining({
+        type: 'function_call',
+        name: 'exec_command',
+        call_id: 'call_1',
+        arguments: '{"cmd":"ls"}',
+      }))
+      expect(body.output).toContainEqual(expect.objectContaining({
+        type: 'message',
+        content: [{ type: 'output_text', text: 'Hello' }],
+      }))
+    } finally {
+      await close(proxy)
+      await close(upstream)
+    }
+  })
+
   it('applies provider-specific upstream headers', async () => {
     let upstreamHeaders: Record<string, string | string[] | undefined> | null = null
     const upstream = createServer((req, res) => {
