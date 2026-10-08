@@ -252,3 +252,27 @@
 **诚实边界**：主动绕过上游明确设置的门禁（**非 bug 修复**），上游再收紧即失效；桩会让模型看见 `bash`/`read` 两个不该调用的工具（**未做响应侧过滤**）；`OPENCODE_ZEN_MIN_CLIENT_VERSION` 是硬编码快照，上游提高门槛后须人工同步；修指纹只恢复「门」、不修上游模型可用性（13 个免费模型里 5 个本身就是坏的）。
 
 **验证基线**：定向 21/21、`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 6 例负载敏感 fs 超时 → `--testTimeout=30000` 降为 1 例 → 隔离复跑通过，与本改动无关）。
+
+## round-125（审查面板改为独立覆盖层，未发布）
+
+**修复提交 `c0a91c72`**：`fix(ui): 审查面板改为独立覆盖层，不再顶掉消息列表`（3 文件，+294/−93；产品源码只有 `src/App.vue` 一处，91 增 93 删）。
+
+**现象与根因**：用户报告「点开审查工作树更改再关闭，消息列表回到最上面」。`src/App.vue:569-580` 里 `ReviewPane` 与「会话列 + composer」是 `v-if`/`v-else` 的**互斥分支** ⇒ 打开面板即**卸载整条 `ThreadConversation`**，关闭时**全新挂载**；而 `ThreadConversation.vue` **没有 `onMounted`**（全文件只有 `onBeforeUnmount`）、五个滚动相关 watcher（`messages`/`isLoading`/`activeThreadId`/`liveOverlay`/`pendingRequests`）**都没有 `immediate`** ⇒ 重挂时 props 未变、一个都不触发 ⇒ 新 `<ul class="conversation-list">` 的 `scrollTop` 停在浏览器默认 **0**。同因一并丢失已上翻加载的更早分页、`autoFollowOutput`（重置为 true）、`warmLayerState`、图片预览、文件变更动作态，并白付一次整条线程 DOM 重渲。
+
+**溯源**：`0e147705`「Show review pane in place of thread content」（2026-04-02，taobo）把**并列布局**（`content-grid.has-review-pane` 的 `md:grid-cols-[minmax(0,1fr)_34rem]` + `.content-thread-column`，会话列常驻）改成互斥。故「顶掉会话列」是当时**有意**的（让窄屏下的审查面板占满宽度），**丢滚动位置是没被考虑到的副作用**；该重构此前未出现在任何轮次文档中。`ReviewPane` 本是 `<Teleport to="body">` + `fixed inset-0` 的覆盖层，因此「覆盖」与「顶掉」在这里被混为一谈。
+
+**改动**：只做三件事 —— 删 `<template v-else>`、删配对的 `</template>`、中间 93 行整体减 2 空格缩进；`<ReviewPane>` **原地不动**（Teleport 到 body，不占布局）。改后 `.content-grid` 的三个子节点（`ReviewPane` + `.content-thread` + `.composer-with-queue`）全部为无条件渲染；关闭态 DOM 与改前**逐字相同**（`<template>` 是 fragment、不产生元素），故布局与 CSS 零变化。
+
+**新增闸门（2 个）**：
+- `scripts/check-ui-contract.cjs` **38 → 39 项**：新增「审查面板是覆盖层，不得与会话列构成 v-if/v-else 互斥」。**反跑证明非空**——改动前 **38/39**、该项 FAIL（诊断行 `← 仍被 v-else 包着`），改动后 **39/39**。
+- `scripts/verify-review-pane-scroll.cjs`（新，浏览器侧可复跑）：断言 ①面板打开期间 `.conversation-list` 仍挂载 ②关闭后 `scrollTop` 与打开前一致；改动前的构建必然失败（退出码 1），环境不足时 SKIP（退出码 2）。
+
+**真机 A/B（同一 harness 交错三跑，决定性）**：改动前 ①**count=0** ②**scrollTop 2018 → 0**（FAILED 3/7，逐字复现用户报告）／改动后 ①count=1 ②**2018 → 2018**（ALL GREEN 7/7）／换回旧码再跑一次仍 ALL GREEN（交错确认）。测试线程为隔离 `CODEX_HOME` 里一条真实线程（可滚动 5768px）。
+
+**生产构建复跑**：`vite build`（46.26s，EXIT=0）→ `dist-cli` 起 4190（隔离 `CODEX_HOME`）→ 闸门 **7/7**、`verify-mobile-375.cjs` **EXIT=0**。
+
+**环境新事实**：`dist-cli` 绑 `0.0.0.0:4190` 时，本机沙箱内 **node 的 `fetch` 连不上它**（`TypeError: fetch failed`，`127.0.0.1` / `localhost` 皆然、`NO_PROXY=*` 无效），**但系统浏览器（Edge）可正常访问** ⇒ 这类闸门必须走浏览器，不能用 node 探针判断「服务是否就绪」。另：1280px 下右侧面板**默认已展开**，点 `.content-header-right-panel-toggle` 会把它收起。
+
+**验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 5 例负载敏感 fs 超时 → `--testTimeout=30000` 降为 1 例 → 隔离复跑 2/2 通过、1518ms）。
+
+**未发布**：未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
