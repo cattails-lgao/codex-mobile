@@ -168,16 +168,40 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       }
 
       const { messages: nextMessages, inProgress, activeTurnId, turnIndexByTurnId } = detail
+      // round-132：非 silent 刷新（前台恢复 / 账号刷新 / selectThread）遇到服务端答
+      // 「0 条」时，下面这行 preserveMissing 为假 → mergeMessages 直接把本地历史整体
+      // 替换成空数组（它只在 preserveMissing 为真时保留缺失项）。而桥层有三条会把
+      // 「取不到内容」当成「线程没有内容」的通道：materialization pending 兜底、
+      // 空缓存快照、有界读把一页空数组当作线程真的没有轮次；其中前两条还会顺手带上
+      // status=inProgress。两个效果叠加就是用户报的「Thinking 的时候整个消息列表都
+      // 不见了」：列表被清空，只剩一个 Thinking 浮层，且此时 isLoadingMessages 为假
+      // （非 silent 且已加载过），App.vue 的 lastStableFilteredMessages 兜底不生效。
+      // 判据：本地有历史而服务端答空 → 视为可疑响应，保留本地历史并留痕，不把界面
+      // 交给空响应；真正空线程（本地也为空）不受影响，行为不变。
+      const previousPersisted = deps.persistedMessagesByThreadId.value[threadId] ?? []
+      const suspiciousEmptyResponse = nextMessages.length === 0 && previousPersisted.length > 0
+      if (suspiciousEmptyResponse) {
+        console.warn(
+          `[thread-load] ${threadId}: server returned 0 messages while ${previousPersisted.length} are persisted locally; keeping local history`,
+        )
+      }
       hasMoreOlderMessagesByThreadId.value = {
         ...hasMoreOlderMessagesByThreadId.value,
         [threadId]: detail.hasMoreOlder === true,
       }
       deps.markThreadMessagesPersisted(threadId, nextMessages)
-      deps.replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
+      if (!suspiciousEmptyResponse) {
+        // 空快照同样没有轮次，整体覆盖会让保留下来的消息失去轮次索引（轮次耗时 /
+        // 轮次摘要 / 计划归档都按 turnId 查这张表）。既然已判定这张快照不可信，
+        // 就不让它覆盖本地索引。
+        deps.replaceTurnIndexLookupForThread(threadId, turnIndexByTurnId)
+      }
       deps.rebindLiveFileChangeTurnIndices(threadId)
-      const previousPersisted = deps.persistedMessagesByThreadId.value[threadId] ?? []
       const mergedMessages = mergeMessages(previousPersisted, nextMessages, {
-        preserveMissing: options.silent === true || hasOptimisticUserMessages(previousPersisted),
+        preserveMissing:
+          options.silent === true ||
+          hasOptimisticUserMessages(previousPersisted) ||
+          suspiciousEmptyResponse,
       })
       deps.setPersistedMessagesForThread(threadId, mergedMessages)
 

@@ -841,6 +841,89 @@ describe('live error overlay', () => {
   })
 })
 
+describe('empty thread-read snapshot protection (round-132)', () => {
+  const THREAD_ID = 'thread-empty-snapshot'
+
+  it('keeps local history when a non-silent refresh gets an empty snapshot (round-132)', async () => {
+    // 线上症状 A：「Thinking 的时候整个消息列表都不见了」。非 silent 刷新（前台恢复 /
+    // 账号刷新 / selectThread）拿到 0 条响应时 preserveMissing 为假 → 本地历史被整体
+    // 替换成空数组；而空快照常同时带 inProgress=true（桥层 materialization-pending
+    // 兜底就长这样），于是列表清空、只剩一个 Thinking 浮层。修复后必须保留本地历史，
+    // 并留一条可检索的警告。
+    installTestWindow()
+    let now = 1_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValueOnce({
+      messages: [
+        { id: 'user-1', role: 'user', text: '改一下', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+        { id: 'agent-1', role: 'assistant', text: '好的', messageType: 'agentMessage', turnId: 'turn-1', turnIndex: 0 },
+      ],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+
+    const state = useDesktopState()
+    state.primeSelectedThread(THREAD_ID)
+    await state.loadMessages(THREAD_ID)
+    expect(state.messages.value.map((message) => message.id)).toEqual(['user-1', 'agent-1'])
+
+    // 前台恢复：非 silent、不带 force——靠「后台驻留超过复用窗口 + 线程 inProgress」
+    // 跳过复用，与线上真实触发条件一致（Date.now 前推 5s）。
+    now += 5000
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    gatewayMocks.getThreadDetail.mockResolvedValueOnce({
+      messages: [],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    await state.loadMessages(THREAD_ID)
+
+    expect(state.messages.value.map((message) => message.id)).toEqual(['user-1', 'agent-1'])
+    // 空快照同样没有轮次，不能让它整体覆盖本地轮次索引（耗时 / 轮次摘要按 turnId 查表）。
+    expect(state.resolveThreadTurnIndex(THREAD_ID, 'turn-1')).toBe(0)
+    const keptWarnings = warnSpy.mock.calls.filter((call) =>
+      String(call[0] ?? '').includes('keeping local history'),
+    )
+    expect(keptWarnings).toHaveLength(1)
+    expect(String(keptWarnings[0][0])).toContain(THREAD_ID)
+    warnSpy.mockRestore()
+    nowSpy.mockRestore()
+  })
+
+  it('leaves a genuinely empty thread empty, and a non-empty snapshot still replaces history', async () => {
+    // 反向保证：真的空线程（本地也没有历史）不受保护影响，也不该产生噪音警告。
+    installTestWindow()
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => 1_000_000)
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-brand-new')
+    await state.loadMessages('thread-brand-new')
+
+    expect(state.messages.value).toEqual([])
+    expect(
+      warnSpy.mock.calls.filter((call) => String(call[0] ?? '').includes('keeping local history')),
+    ).toHaveLength(0)
+    warnSpy.mockRestore()
+    nowSpy.mockRestore()
+  })
+})
+
 describe('provider model selection', () => {
   it('ignores global selected-model localStorage when OpenCode Zen is the active provider', async () => {
     installTestWindow({

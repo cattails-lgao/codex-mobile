@@ -668,6 +668,41 @@ check(
   ].join(' / '),
 )
 
+// ------------------------------------------- 空快照不得清空本地消息历史（round-132）
+// 线上症状：Thinking 期间（只有此时非 silent 的前台恢复刷新真的会取数）服务端答 0 条时，
+// `preserveMissing` 为假 ⇒ `mergeMessages` 把本地历史**整体替换**成空数组 ⇒ 列表整段消失、
+// 只剩一个 Thinking 浮层（空快照往往同时带 `status:{type:'inProgress'}`，桥层
+// materialization-pending 兜底就长这样）。本断言钉住修复的不变式：
+//   ① 判据必须**双侧**（服务端 0 条 **且** 本地有历史）——只判前者会给真正的空线程刷噪音警告；
+//   ② 该判据必须进 `preserveMissing`，并在成立时**不**让空快照整体覆盖轮次索引；
+//   ③ 成立时留一条可检索的 warning；④ `previousPersisted` 必须在写回之前读取（否则读到的是新值）。
+const loadingSource = fs.readFileSync('src/composables/useDesktopMessageHistoryLoading.ts', 'utf8')
+const suspiciousDecl =
+  /const\s+suspiciousEmptyResponse\s*=\s*nextMessages\.length\s*===\s*0\s*&&\s*previousPersisted\.length\s*>\s*0/.test(
+    loadingSource,
+  )
+const mergeCallIdx = loadingSource.indexOf('mergeMessages(previousPersisted, nextMessages, {')
+const preserveBlock = mergeCallIdx >= 0 ? loadingSource.slice(mergeCallIdx, mergeCallIdx + 260) : ''
+const preserveKeepsSuspicious = /suspiciousEmptyResponse/.test(preserveBlock)
+const prevPersistedIdx = loadingSource.indexOf('const previousPersisted = deps.persistedMessagesByThreadId.value[threadId]')
+const setPersistedIdx = loadingSource.indexOf('deps.setPersistedMessagesForThread(threadId, mergedMessages)')
+const readsPreviousBeforeWrite = prevPersistedIdx >= 0 && setPersistedIdx >= 0 && prevPersistedIdx < setPersistedIdx
+const indexGuardIdx = loadingSource.indexOf('if (!suspiciousEmptyResponse) {')
+const indexGuardBody = indexGuardIdx >= 0 ? loadingSource.slice(indexGuardIdx, indexGuardIdx + 320) : ''
+const indexGuardSkipsReplace = /replaceTurnIndexLookupForThread/.test(indexGuardBody)
+const warnsOnSuspicious = /console\.warn\([\s\S]{0,200}keeping local history/.test(loadingSource)
+check(
+  '空快照不覆盖本地消息历史与轮次索引（round-132）',
+  suspiciousDecl && preserveKeepsSuspicious && readsPreviousBeforeWrite && indexGuardSkipsReplace && warnsOnSuspicious,
+  [
+    `双侧判据=${suspiciousDecl ? 'yes' : 'NO'}`,
+    `进 preserveMissing=${preserveKeepsSuspicious ? 'yes' : 'NO'}`,
+    `previousPersisted 先读后写=${readsPreviousBeforeWrite ? 'yes' : 'NO'}`,
+    `跳过轮次索引覆盖=${indexGuardSkipsReplace ? 'yes' : 'NO'}`,
+    `留 warning=${warnsOnSuspicious ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',
