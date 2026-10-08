@@ -226,12 +226,14 @@ import {
 // threadErrors.ts；Shell 内注入 threadRoutes 的 isThreadMaterializationPendingError
 // 与 archive.test.ts 依赖的 re-export 保持一致。
 import {
+  buildPendingMaterializationThreadReadResult,
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
   isUnauthenticatedRateLimitError,
 } from './bridge/threadErrors.js'
 export {
+  buildPendingMaterializationThreadReadResult,
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
@@ -1972,15 +1974,11 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             const params = asRecord(body.params)
             const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
             if (threadId) {
-              setJson(res, 200, {
-                result: {
-                  thread: {
-                    id: threadId,
-                    turns: [],
-                    status: { type: 'inProgress' },
-                  },
-                },
-              })
+              // round-134：兜底不再写 status:{type:'inProgress'}（见
+              // buildPendingMaterializationThreadReadResult 的注释）——那一行会让
+              // 同一个响应既答「没有轮次」又把前端置成 Thinking，正是 round-132
+              // §10.4 第 1 条记录的「空列表 + 浮层」同源通道。
+              setJson(res, 200, { result: buildPendingMaterializationThreadReadResult(threadId) })
               return
             }
           }

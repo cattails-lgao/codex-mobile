@@ -210,6 +210,16 @@ export async function resumeThreadWithTurnPage(
 
   const pageData = readPageData(result) ?? []
   const page = asRecord(asRecord(result)?.initialTurnsPage)
+  // round-134：与 threadReadTurnPage 同一条收紧——空页不等于「线程没有轮次」。
+  // 此前空页会被 promote 成 turns=[] / threadTurnStartIndex=0，于是 app-server 的
+  // 一次偶发空页就能把打开线程答成一个空对话（round-132 §10.4 第 3 条）。空页先做
+  // 一次便宜的轮次计数交叉校验：确有轮次、或数不出来时回放未改写的原请求；真正的
+  // 空线程（计数 0）仍走 promote 路径，行为不变。
+  if (pageData.length === 0) {
+    const threadId = readNonEmptyString(asRecord(asRecord(result)?.thread)?.id)
+    const turnCount = await readThreadTurnCount(deps.rpc, threadId)
+    if (turnCount === null || turnCount > 0) return await deps.sendResume(originalParams)
+  }
   // The page is newest-first, so its oldest turn is the last one; the boundary
   // it hands over is the cursor that reaches the turns before that turn.
   const oldestTurnId = readNonEmptyString(asRecord(pageData[pageData.length - 1])?.id)

@@ -272,6 +272,42 @@ describe('resumeThreadWithTurnPage', () => {
     expect(d.rpc).not.toHaveBeenCalled()
   })
 
+  // round-134：空页 ≠「线程真的没有轮次」。空页会被 promote 成 turns=[] +
+  // threadTurnStartIndex=0，于是 app-server 的一次偶发空页就能把打开线程答成一个空对话
+  // （round-132 §10.4 第 3 条）。空页先做一次 notLoaded 计数交叉校验。
+  it('replays the untouched request when the page is empty but the thread has turns', async () => {
+    const legacy = { thread: { id: 'thread-1', turns: [{ id: 'from-full-hydration' }] } }
+    const sendResume = vi.fn(async (params: unknown) =>
+      (params as { excludeTurns?: boolean }).excludeTurns ? resumeResult([], null) : legacy)
+    const d = deps({
+      rpc: vi.fn(async () => ({ data: [{ id: 't1' }, { id: 't2' }], nextCursor: null })),
+      sendResume,
+    })
+
+    await expect(resumeThreadWithTurnPage(d, { threadId: 'thread-1' })).resolves.toBe(legacy)
+    expect(sendResume).toHaveBeenCalledTimes(2)
+    expect(sendResume).toHaveBeenNthCalledWith(2, { threadId: 'thread-1' })
+  })
+
+  it('replays when an empty page cannot be verified (the count probe fails)', async () => {
+    const legacy = { thread: { id: 'thread-1', turns: [{ id: 'from-full-hydration' }] } }
+    const sendResume = vi.fn(async (params: unknown) =>
+      (params as { excludeTurns?: boolean }).excludeTurns ? resumeResult([], null) : legacy)
+    const d = deps({ rpc: vi.fn(async () => { throw new Error('turns/list unavailable') }), sendResume })
+
+    await expect(resumeThreadWithTurnPage(d, { threadId: 'thread-1' })).resolves.toBe(legacy)
+    expect(sendResume).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps an empty page the count agrees with (a genuinely empty thread)', async () => {
+    const d = deps()
+    const result = await resumeThreadWithTurnPage(d, { threadId: 'thread-1' }) as Record<string, unknown>
+
+    expect(d.sendResume).toHaveBeenCalledTimes(1)
+    expect((result.thread as { turns: unknown[] }).turns).toEqual([])
+    expect(result.threadTurnStartIndex).toBe(0)
+  })
+
   it('still returns the turns when the count probe fails', async () => {
     const d = deps({
       rpc: vi.fn(async () => { throw new Error('turns/list unavailable') }),

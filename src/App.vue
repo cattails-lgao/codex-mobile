@@ -3270,9 +3270,15 @@ async function syncAfterForeground(): Promise<void> {
   foregroundSyncInProgress.value = true
 
   try {
-    await refreshAll({
-      includeSelectedThreadMessages: true,
-    })
+    // round-134：前台恢复不再强制重取选中线程的消息（round-132 §10.6 第 4 条）。
+    // ① 消息本就是事件驱动的（SSE 通知 → syncFromNotifications）；而这一次重取只在
+    //    线程 inProgress 时才真的发请求（复用判据里 alreadyLoaded && !inProgress 直接
+    //    跳过），也就是数据最新鲜的时刻——它带来的只有风险：round-132 的「0 条清表」
+    //    与 round-133 的「链未命中回落全量 ~7.5s」都从这条非 silent 入口进来。
+    // ② 兜底仍在下一行：syncThreadSelectionWithRoute() 会对选中线程调
+    //    ensureThreadMessagesLoaded(..., { silent: true })，未加载过的线程（深链、
+    //    刚启动）照样按需加载，且 silent 语义下不可能清表。
+    await refreshAll({ includeSelectedThreadMessages: false })
     await syncThreadSelectionWithRoute()
   } finally {
     foregroundSyncInProgress.value = false

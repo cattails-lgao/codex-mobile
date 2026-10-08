@@ -125,6 +125,17 @@ export async function readThreadWithTurnPage(
   const page = await readLatestTurnPage(deps.rpc, threadId, pageSize)
   if (!page) return await deps.sendRead(originalParams)
 
+  // round-134：「一页空」与「答不出」不是同一件事。此前一页空数组是「合法返回值」，
+  // 会被当成「线程真的没有轮次」直接采纳（turns=[] / threadTurnStartIndex=0）——于是
+  // app-server 的一次偶发空页就能把整个对话区答空（round-132 §10.4 第 3 条）。
+  // 空页现在先做一次便宜的交叉校验（notLoaded 列表，14ms / 0.00MB 量级）：线程确有
+  // 轮次、或数不出来时，回放未改写的原请求（＝本模块既有的降级语义，也是旧版本
+  // app-server 上唯一安全的动作）；真正的空线程（计数 0）行为逐字不变。
+  if (page.data.length === 0) {
+    const turnCount = await readThreadTurnCount(deps.rpc, threadId)
+    if (turnCount === null || turnCount > 0) return await deps.sendRead(originalParams)
+  }
+
   // The page arrives newest-first (see the module header); `thread.turns` is
   // oldest-first everywhere else in the bridge.
   const turns = [...page.data].reverse()

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildPendingMaterializationThreadReadResult,
   buildProjectlessFolderName,
   callRpcWithArchiveRecovery,
   canonicalizeThreadListResponseForRead,
@@ -342,6 +343,30 @@ describe('isThreadMaterializationPendingError', () => {
   it('does not match unrelated thread read failures', () => {
     expect(isThreadMaterializationPendingError(new Error('thread read failed: permission denied'))).toBe(false)
     expect(isThreadMaterializationPendingError(new Error('not materialized yet'))).toBe(false)
+  })
+})
+
+// round-134：materialization-pending 兜底不再伪造 inProgress。此前它回的
+// `status:{type:'inProgress'}` 会被前端归一化读成「正在思考」，于是同一个响应既答
+// 「没有轮次」又给一个没在跑的线程挂上 Thinking 浮层（round-132 §10.4 第 1 条）。
+describe('buildPendingMaterializationThreadReadResult', () => {
+  it('answers "no turns yet" without claiming the thread is running', () => {
+    const result = buildPendingMaterializationThreadReadResult('thread-1')
+
+    // toEqual is exact: re-adding any status field turns this red.
+    expect(result).toEqual({ thread: { id: 'thread-1', turns: [] } })
+    expect((result as { thread: Record<string, unknown> }).thread).not.toHaveProperty('status')
+  })
+
+  it('leaves the client to keep its own last-known status', () => {
+    const thread = (buildPendingMaterializationThreadReadResult('thread-1') as { thread: Record<string, unknown> }).thread
+
+    // Mirrors `readThreadInProgress` in src/api/normalizers/v2.ts: with no
+    // `status`/`inProgress`/`turnStatus` and no turns, the thread reads back as
+    // not-in-progress -- i.e. no phantom Thinking overlay.
+    expect(thread).not.toHaveProperty('inProgress')
+    expect(thread).not.toHaveProperty('turnStatus')
+    expect(thread.turns).toEqual([])
   })
 })
 

@@ -244,4 +244,53 @@ describe('readThreadWithTurnPage', () => {
       expect(boundary).not.toHaveBeenCalled()
     })
   })
+
+  // round-134：一页空 ≠「线程真的没有轮次」。此前空页被直接采纳（turns=[] /
+  // threadTurnStartIndex=0），app-server 的一次偶发空页就能把整个对话答空
+  // （round-132 §10.4 第 3 条）。空页现在先做一次 notLoaded 计数交叉校验。
+  describe('empty page cross-check (round-134)', () => {
+    it('replays the untouched request when the page is empty but the thread has turns', async () => {
+      const original = { threadId: 'thread-1', includeTurns: true }
+      const h = harness({
+        metaSequence: [META, { thread: { id: 'thread-1', turns: [turn('full')] } }],
+        page: { data: [], nextCursor: null },
+        count: { data: [{ id: 't1', items: [] }], nextCursor: null },
+      })
+
+      const result = await readThreadWithTurnPage(h.deps, original) as { thread: { turns: Array<{ id: string }> } }
+
+      expect(result.thread.turns.map((t) => t.id)).toEqual(['full'])
+      expect(h.sendRead).toHaveBeenCalledTimes(2)
+      expect(h.sendRead.mock.calls[1][0]).toBe(original)
+      // the cross-check is the cheap notLoaded listing, asked exactly once
+      expect(h.calls.filter((c) => c.params.itemsView === 'notLoaded')).toHaveLength(1)
+    })
+
+    it('replays when an empty page cannot be verified (the count probe fails)', async () => {
+      const original = { threadId: 'thread-1', includeTurns: true }
+      const h = harness({
+        metaSequence: [META, { thread: { id: 'thread-1', turns: [turn('full')] } }],
+        page: { data: [], nextCursor: null },
+        count: { __throw: 'list_turns failed' },
+      })
+
+      await readThreadWithTurnPage(h.deps, original)
+
+      expect(h.sendRead).toHaveBeenCalledTimes(2)
+      expect(h.sendRead.mock.calls[1][0]).toBe(original)
+    })
+
+    it('keeps an empty page the count agrees with (a genuinely empty thread)', async () => {
+      const h = harness({ meta: META, page: { data: [], nextCursor: null } })
+      const result = await readThreadWithTurnPage(h.deps, { threadId: 'thread-1', includeTurns: true }) as {
+        thread: Record<string, unknown>
+        threadTurnStartIndex?: number
+      }
+
+      // no replay, and the wire shape is byte-for-byte the old empty answer
+      expect(h.sendRead).toHaveBeenCalledTimes(1)
+      expect(result.thread.turns).toEqual([])
+      expect(result.threadTurnStartIndex).toBe(0)
+    })
+  })
 })

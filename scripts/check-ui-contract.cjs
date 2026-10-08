@@ -703,6 +703,31 @@ check(
   ].join(' / '),
 )
 
+// ------------------------------------------- 前台恢复不再强制重取选中线程消息（round-134）
+// round-132 §10.6 第 4 条：前台恢复那次**非 silent** 的消息重取只在线程 `inProgress` 时才真的
+// 发请求（复用判据 alreadyLoaded && !inProgress 直接跳过）——恰是消息最新鲜、最不需要重取的
+// 时刻；而 round-132 的「0 条清表」与 round-133 的「链未命中回落全量 ~7.5s」都从这条入口进来。
+// 现在前台恢复只刷线程列表（+附状态），选中线程的消息交给紧随其后的 **silent** 兜底：
+// syncThreadSelectionWithRoute → ensureThreadMessagesLoaded，且只在「从未加载过」时才取数。
+const foregroundBodyIdx = appVue.indexOf('async function syncAfterForeground(')
+const foregroundBody = foregroundBodyIdx >= 0 ? appVue.slice(foregroundBodyIdx, foregroundBodyIdx + 900) : ''
+const foregroundSkipsForcedMessages =
+  /includeSelectedThreadMessages:\s*false/.test(foregroundBody) &&
+  !/includeSelectedThreadMessages:\s*true/.test(foregroundBody)
+const foregroundKeepsSilentNet = /syncThreadSelectionWithRoute\(\)/.test(foregroundBody)
+const routeSyncIdx = appVue.indexOf('async function syncThreadSelectionWithRoute(')
+const routeSyncBody = routeSyncIdx >= 0 ? appVue.slice(routeSyncIdx, routeSyncIdx + 2000) : ''
+const routeSyncLoadsSilently = /ensureThreadMessagesLoaded\([^)]*\{[^}]*silent:\s*true/.test(routeSyncBody)
+check(
+  '前台恢复不再强制重取选中线程消息（round-134）',
+  foregroundBodyIdx >= 0 && foregroundSkipsForcedMessages && foregroundKeepsSilentNet && routeSyncLoadsSilently,
+  [
+    `前台恢复跳过强制取数=${foregroundSkipsForcedMessages ? 'yes' : 'NO'}`,
+    `仍接 silent 兜底=${foregroundKeepsSilentNet ? 'yes' : 'NO'}`,
+    `silent 兜底按需加载=${routeSyncLoadsSilently ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',
