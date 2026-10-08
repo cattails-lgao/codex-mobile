@@ -228,5 +228,13 @@
 
 **文档提交 `6c8d291e`**：`docs: round-122 轮次文档 + 总入口登记 + 手测章节（round-122）`（5 文件，+168/−4）——轮次文档、总入口快照/索引/未完成事项/落款、手测章节 `tests/providers-models/round-122-user-owned-custom-provider-not-overridden.md` 与两处索引登记。
 
-**未发布**：改动尚未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含此缺陷；受影响用户当下可「把激活 provider 改成不冲突的名字（旧线程需重建）」或「回退 0.1.126」绕开，正式修复随下一次发布走。**补验提交 `314cded6`**：`docs: round-122 补真实 CLI（发布路径）端到端验证记录（round-122）`（2 文件，+16/−4）——轮次文档补入真实 `dist-cli` 双变体 `config/read` 结果（A 用户定义 `custom` → `active=custom` / `name=litellm` / `base_url=http://127.0.0.1:4460/v1`；B 未定义 → 占位指向 `http://127.0.0.1:4291/codex-api/provider-compat/v1` 且该路由回 400）与路由返回体原文，总入口的当前快照行与 Dev 状态行同步补记该验证路径——**只有打包 CLI 会设置 `CODEXUI_SERVER_PORT`，故 fix③ 的兼容路由 `base_url` 只在发布路径上生效、也只能在发布路径上验**。
+## round-123（免费兜底改 OpenRouter + 失效模型 slug 校准，未发布）
+
+**修复提交 `375852ee`**：`fix(free-mode): 默认兜底改 OpenRouter，并清理失效模型 slug`（7 文件，+44/−22）。`bridge/codexAuthState.ts` 的 `ensureDefaultFreeModeStateForMissingAuthSync` 由 `createDefaultOpenCodeZenFreeModeState()` 改 `createDefaultOpenRouterFreeModeState()`（判定语义不变——仍只在「无可用 auth **且** config.toml 未显式写顶层 `model_provider`」时播种）；`freeMode.ts` 的 `FALLBACK_FREE_MODELS` 按 2026-10-08 实测校准（`gemma-3-27b` / `llama-3.3-70b` / `qwen3-coder` 三个 `:free` 已下架）；`bridge/models.ts`、`bridge/freeModeRoutes.ts`、`codexAppServerBridge.ts` 三处 Zen 离线兜底清单同步换掉三个已从目录消失的 slug；删 `codexAppServerBridge.ts` 里 `createDefaultOpenCodeZenFreeModeState` 的死导入；`freeMode.test.ts` 与 `codexAppServerBridge.archive.test.ts` 同步更新（3 条断言 + 3 个用例标题改 OpenRouter）。
+
+**未发布**：未 bump 版本、未 tag、未推送。
+
+**本轮的重要结论（推翻用户前提）**：OpenCode Zen 免费档**没有下线**，是插件 `zenProxy` 的客户端指纹过期。上游闸门是递进的，实测分界点：`403 FreeTierError`（缺 `stream:true` + `bash`/`read` 工具桩）→ 补齐后 `426 UpgradeRequired`（要求 `opencode/1.18.0+`，插件 UA 硬编码 `1.15.9`）→ UA 提上去后 **13 个免费模型 8 个可用**（含插件默认的 `big-pickle`），另 2 个地区限制（`RegionError`）、3 个上游端点不可用。**故未按用户原意移除 Zen 模块**——它同时是遗留 rollout 的承重 provider 注册（round-104 / round-122 的 `getProviderCompatibilityConfigArgs`）。**指纹不修**：属持续绕过上游明确设置的门禁，且 9 月内已收紧两级，判定为军备竞赛，只诊断上报、不实施。**验证**：定向 60/60、`vue-tsc` EXIT=0、全量 **732/732 零失败**。
+
+：`docs: round-122 补真实 CLI（发布路径）端到端验证记录（round-122）`（2 文件，+16/−4）——轮次文档补入真实 `dist-cli` 双变体 `config/read` 结果（A 用户定义 `custom` → `active=custom` / `name=litellm` / `base_url=http://127.0.0.1:4460/v1`；B 未定义 → 占位指向 `http://127.0.0.1:4291/codex-api/provider-compat/v1` 且该路由回 400）与路由返回体原文，总入口的当前快照行与 Dev 状态行同步补记该验证路径——**只有打包 CLI 会设置 `CODEXUI_SERVER_PORT`，故 fix③ 的兼容路由 `base_url` 只在发布路径上生效、也只能在发布路径上验**。
 

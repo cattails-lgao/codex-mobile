@@ -2,6 +2,27 @@
 
 Big Pickle is a free stealth model available on [OpenCode Zen](https://opencode.ai/docs/zen/) during its beta period. It uses the Chat Completions API exclusively.
 
+## Free-Tier Gate Change (measured 2026-10-08, round-123)
+
+**This page's "Direct curl works" premise is obsolete.** Since 2026-09 the Zen free tier is gated on a **client fingerprint**, enforced server-side and tightened in stages. Measured progression against `https://opencode.ai/zen/v1` with `NO_PROXY='*'`:
+
+| Request shape | Result |
+|---|---|
+| bare, or with the legacy `zenProxy` spoof headers | `403 FreeTierError: ...free tier can only be used from within OpenCode` |
+| `+ X-Opencode-Session: ses_<12 hex><14 Base62>` (26 chars; the proxy used to send 24) | `403` (unchanged) |
+| `+ stream: true` | `403` (unchanged) |
+| `+ function tools named bash and read` | **`426 UpgradeRequired: OpenCode 1.18.0 or newer is required to use the free tier`** — the previous gate passed |
+| `+ User-Agent: opencode/1.18.0` (proxy hard-codes `1.15.9`) | gates pass; per-model availability decides |
+
+With all four satisfied, **8 of 13 free models returned 200 with real content** (`big-pickle`, `mimo-v2.6-flash-free`, `space-bunny-free`, `longcat-2.5-preview-free`, `ling-3.1-flash-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`, `fledge-alpha-free`); `muse-spark-*.contributor-free` returns `403 RegionError` outside some regions, and 3 others fail upstream.
+
+Consequences already applied in round-123:
+- The **default free-mode fallback** no longer seeds OpenCode Zen (it would 403 for every new user); it seeds the OpenRouter community pool instead.
+- The Zen offline model list no longer advertises `minimax-m2.5-free` / `nemotron-3-super-free` / `trinity-large-preview-free` — all three are **gone from the catalog**.
+- The fingerprint was deliberately **not** updated: satisfying it means continuously defeating an access control the provider states explicitly, and the gate has already tightened twice. See `codex-mobile-handover/rounds/round-123-free-fallback-and-zen-fingerprint-gate.md`.
+
+Note the anonymous free lane is separate from the **keyed** lane: a syntactically valid but bogus `sk-…` key returns `401 AuthError` (not `403`), so a real Zen API key is a different door. `GET /v1/models` remains open (200, no auth). `POST /v1/responses` returns `500` upstream — the working endpoint is `/v1/chat/completions`.
+
 ## Compatibility Matrix
 
 | Tool | Version | Works? | Notes |
@@ -9,7 +30,7 @@ Big Pickle is a free stealth model available on [OpenCode Zen](https://opencode.
 | Codex CLI | v0.93.0 | Yes | Last version with `wire_api = "chat"` |
 | Codex CLI | v0.118.0+ | No | Removed chat completions support |
 | OpenCode CLI | v1.4.3 | Yes | Pipe empty stdin in non-TTY: `echo "" \| opencode run --pure "msg"` |
-| Direct curl | - | Yes | POST to `/v1/chat/completions` |
+| Direct curl | - | **No longer** | Was: POST to `/v1/chat/completions`. Now needs the 4-part free-tier fingerprint, or a real API key |
 
 ## Config Recipes
 
