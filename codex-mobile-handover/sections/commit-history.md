@@ -356,6 +356,50 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-130（codex-cli 0.160.1 协议复测，未发布）
+
+**三个提交**（按「src → schema → 闸门」拆分，每个提交单独可编译）：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `1f281aab` | `fix(protocol): 适配 codex-cli 0.160.1 的契约漂移 + 补齐复测口径注释（round-130）` | 13 文件（43 增 12 删） |
+| `47d32ede` | `chore(docs): 同步 app-server 协议快照到 codex-cli 0.160.1（--experimental）` | 190 文件（9 172 增 3 514 删） |
+| `3a4cdc47` | `test(gate): 切换反馈闸门在环境不足时退 2（SKIP），不再伪装成回归（round-130）` | 1 文件（18 增 3 删） |
+
+**由来**：用户「我把 codex-cli 更新到了 0.160.1，还有哪些需要处理？」，并结清 round-129 §四⑤ 明确记的「未在 0.160.1 上复测」。
+
+**结论先行**：**本轮未发现任何回归**；升级本身带来两项**正向**行为变化（历史可真正分页上翻、中断抢占快约 3 倍），代价是 schema 出现 3 处类型层漂移（已处置，无运行时影响）。
+
+**契约变化（真机实测）**：①`thread/turns/list` **已实现**（0.158.0 档每次回 `-32601: list_turns is not supported yet`），返回 `{data:[{id,items,itemsView,status,error,startedAt,completedAt,durationMs}],nextCursor,backwardsCursor}`——turn 新增 `itemsView` 字段，`notLoaded` → `items:[]`、`full` → 带正文（实测 4 项）、**省略即 full**；②`features.instant_interrupt` **首次真实生效**——同 prompt / 同隔离 home / 同二进制，唯一变量是 flag：`true` 抢占间隔 **5799ms** vs `false` **17476ms**（≈3×），横幅 `Instant interrupt: on`、stderr 零警告；③请求方法表 **170 个**（`thread/*` 48），`thread/rollback` 确已移除（上游 0.156），**未发现任何本仓活跃调用被移除**——本仓 round-106 起已统一走 `thread/revert`。
+
+**最重要的发现：round-86/110 的有界分页第一次真正生效**。这两轮写的有界路径（打开线程走 `initialTurnsPage`、上翻走 `turns/list` 游标链）**都依赖 `thread/turns/list`**，而它在 0.158.0 档上必回 `-32601` ⇒ 打开线程回落到全量 `thread/resume`、上翻走到 round-102 的 `olderTurnsUnavailable` 边界（提示「当前 codex-cli 版本暂不支持加载更早的消息」）。**即：那两轮写的有界代码在本机历史上从未被真正驱动过。** 0.160.1 让它第一次跑通，真机取证（隔离 home 上造的 **12 轮**线程，经真实服务）：
+
+| 环节 | 读数 | 期望 |
+| --- | --- | --- |
+| 连续开 12 轮时 `thread/read` 的 turns | 递增到 **10 就停住**（第 11、12 轮仍 10） | 只水合一页的表征 |
+| `thread/resume` 返回 turns | **10** | 10（= `THREAD_RESPONSE_TURN_LIMIT`） |
+| `threadTurnStartIndex` | **2** | 2 = 12 − 10 |
+| `initialTurnsPage` 残留 | **false** | false（不得发两遍轮次） |
+| 页内首轮 `items` 数 | **2** | > 0（页必须带正文） |
+| 上翻 `beforeTurnId=第3条&limit=3` | ids **恰好 t1、t2**；`startTurnIndex=0`、`hasMoreOlder=false`、**`olderTurnsUnavailable` 未触发** | t1、t2 |
+| 再上翻（`beforeTurnId=t1`） | **空** | 已到起点 |
+
+⇒ 用户可见：「暂不支持加载更早的消息」**不再出现**；长线程上翻**不再回落全量水合**（＝round-102 P0 想避免的挂死路径）。round-102 的 P0 分支与 `isThreadTurnPageUnsupported()` 闩锁在 0.160.1 上恒为 false——**对旧二进制仍然有效**，只是不再是每台机器的必经之路。
+
+**schema 快照同步暴露的契约漂移（本轮的意外收获）**：快照 0.153.4 → 0.160.1（json 416→440：新增 26 / 删 2 / 改 62；ts 827→875：新增 50 / 删 2 / 改 47；删的 2 个是 `v2/ThreadRollback{Params,Response}`）。因为 `src/api/appServerDtos.ts` 直接 export 这些生成的 TS 类型，**换快照＝换类型定义**，`vue-tsc` 当场报出 **5 条错误 / 3 个位置**：①`UserInput` 的 image 变体变成 `{ type:"image", detail? } & ({url} | {fileId})`，直接读 `.url` 不再合法；②`Thread` 新增必填 `environments` / `originator` / `daybreakEnabled`；③`mcpToolCall` 新增必填 `mcpAppUi`。处置：②③ 补 fixture；①加 `'url' in block` 收窄联合类型——**运行时行为逐字不变**（原守卫 `typeof block.url === 'string'` 对 `{fileId}` 变体本就是 false），差别仅在能否编译。修完 **0 错**。
+
+**注释口径更正（16 处 / 11 文件）**：原注释称「app-server 不实现 thread/turns/list（codex-cli 0.158.0）」，补一行 round-130 复测结论说明该降级分支只对旧二进制可达。**原则：只追加、不改写历史版本号**——因为本轮同时发现这批「0.158.0」标注本身存疑（见下）。改动脚本对每个片段断言「出现次数必须为 1」，任一失败整批不写盘。
+
+**闸门退码（环境不足不再伪装成回归）**：`check-thread-switch-feedback.cjs` 有两处在环境不足时走退 1：①等 `.thread-row` 30s 超时（这个 home **一条线程都没有**），②`contentIds.length < 2`（**只有 1 条有消息**）。均改为打印 `SKIP:` 并**退 2**，退出码约定写进文档头。**三条取证**：空 home（4192，`thread/list=[]`）→ **2**；只有 1 条有消息线程（4193，`rows=1 with-messages=1`）→ **2**；正常 home（4191，7 行 / ≥2 条有消息）→ **0**（`all checks passed`，`frozen=8ms ≤ 60ms` 预算）。①那处是修脚本时才发现的第二处——原报告只提「1 条有消息的线程退 1」。
+
+**环境层新事实（影响「升级是否生效」的判断）**：本机有 **3 套 codex** —— ①PATH 上的 pnpm 全局 = **0.160.1**（用户升级的这套，`resolveCodexCommand()` 当前正确解析到它）；②`%LOCALAPPDATA%\OpenAI\Codex\bin\<16hex>\codex.exe` = 桌面 App 的内容寻址缓存 = **0.154.0-alpha.6.2**（Sep 15）；③`~/.codex/packages/app-server-daemon/releases/{0.159.0,0.161.0}/` = 桌面 App 的托管守护进程。**关键**：此前 4191 的服务被显式钉在②上 ⇒ **round-123 ~ round-129 的闸门实际驱动的 app-server 是 0.154.0-alpha.6.2，而文档标注的是 0.158.0**。本轮已改钉 0.160.1 并重取全部读数。**这不推翻那些轮的结论**（它们量的是本仓行为，与补丁号无关；`turns/list` 相关几条更是从来没走通过），但**版本标注不可再当凭据**；本轮**未回溯修正**历史文档，只在此披露一次。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**（换快照初跑 5 错 → 修完归零）、全量 **742 例 / 742 通过（76 文件）零失败**、`vite build` EXIT=0（13.73s）、`check-ui-contract` **42/42**、`check-fonts` **13/13**、`check-theme` **15/15**、`check-thread-switch-feedback --self-test` **8/8**、`verify-command-block-handoff` **6/6**、`verify-mobile-375` PASS。三个滚动闸门在隔离 home 上 **SKIP 退 2**（线程只可滚 0px，环境不足）。
+
+**诚实边界**：①「有界分页首次生效」由**代码路径 + 端到端读数**推出，不是与旧二进制直接对照（本机没有 0.158.0 可跑，只有 0.160.1 与被钉过一阵的 0.154.0-alpha.6.2）；那三条读数本身独立于版本叙事。②测试线程是 **12 轮**，不是 round-86 的 30.89MB/16 轮对照 ⇒ 只证**正确性**（含「确实走了有界分支」），**没有量性能**。③**`{fileId}` 形式的图片在 UI 上仍不显示**，且是**静默缺失**（`image` 类型不在「未处理」通道里）；要修需先定 fileId→URL 的解析语义与产品口径。④滚动类闸门在隔离 home 上是 SKIP ⇒ 0.160.1 上的**滚动行为本轮未验证**。⑤`execPtyChannel.ts` / `rollbackTurnContext.ts` 的 0.158.0 结论**未复验**（协议表层面已确认 `command/exec`、`thread/revert` 都还在）。⑥schema 生成环境未完全对齐历史（历史提交未记录 cwd 与 feature flag）。⑦未在 0.160.1 上复验即时中断的 **UI 侧观感**（A/B 是端到端时序）。
+
+**未发布**：未 bump 版本、未 tag；`1f281aab` / `47d32ede` / `3a4cdc47` 待在本地 `main`（round-122 ~ round-130 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
+
 ## round-129（闸门 freeze 预算按环境帧节奏归一，未发布）
 
 **闸门提交 `ce8e7d75`**：`test(gate): freeze 预算按环境帧节奏归一，载机器上不再误红（round-129）`（1 文件：`scripts/check-thread-switch-feedback.cjs` 17 538 → 27 112 字节 / 203 增 9 删；**产品源码零改动**）。
