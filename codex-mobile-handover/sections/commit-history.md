@@ -276,3 +276,29 @@
 **验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 5 例负载敏感 fs 超时 → `--testTimeout=30000` 降为 1 例 → 隔离复跑 2/2 通过、1518ms）。
 
 **未发布**：未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
+
+## round-126（滚动容器不再被加载状态摘掉，未发布）
+
+**修复提交 `64ce0b54`**：`fix(ui): 消息列表的滚动容器不再被加载状态摘掉`（3 文件，+298/−2；产品源码只有 `src/components/content/ThreadConversation.vue` 一处，2 增 2 删）。
+
+**现象与根因**：用户报「有时消息列表会跑到 TOP 去」与「新增命令块的时候会闪一下」。`ThreadConversation.vue` 里会话唯一的滚动容器 `<ul class="conversation-list">` 是 `v-if`/`v-else` 链的最后一环：`<p v-if="isSlowOpen">` → `<p v-else-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay">` → `<ul v-else>`。`isSlowOpen` 由 `useDesktopMessageHistoryLoading.ts` 决定（`SLOW_OPEN_HINT_DELAY_MS = 5000`；`loadMessages` 每次都会武装该定时器、与 `silent` 无关）⇒ 任何一次重载超过 5 秒，整条 `<ul>` 就从 DOM 消失；加载结束后它作为全新元素挂回来，`scrollTop` 从浏览器默认 0 开始，而该组件没有挂载期滚动恢复（无 `onMounted`，五个滚动 watcher 都没有 `immediate`）。**关键推理**：`scrollToBottom()` 只写 `scrollHeight`、`loadMoreAbove()` 只写正数，**没有任何代码把 `scrollTop` 设为 0** ⇒ 元素被重新创建是「列表自己跑到 TOP」的唯一机制。
+
+**为什么日常必踩**：`useDesktopState.syncFromNotifications()` 在 `currentThreadVersion`（= 线程行的 `updatedAtIso`）变化时强制重载选中线程，而**每持久化一个新条目（= 每个新命令块）都会改变它** ⇒ 流式回合期间重载是常态。另有两条用户可触发的强制重载：`App.onFileChangesChanged`（文件变更动作后，`silent:true, force:true`）与 compaction 后的重读。
+
+**溯源**：`git log -S '<ul v-else ref="conversationListRef"'` 与 `-S 'v-else-if="messages.length === 0'` 都只命中 **`fbc8a668`（2026-02-16, "init"）** ⇒ 这条链是初版设计、不是后来引入的回归，这正是它长期没被发现的原因。
+
+**改动**：空态 `<p>` 由 `v-else-if` 改为 `v-if` 并补 `&& !isSlowOpen`（保持「慢开提示出现时不显示『本线程还没有消息』」的原有观感）；`<ul class="conversation-list">` 去掉 `v-else`，无条件渲染。`.conversation-list` 无内边距/边框/背景 ⇒ 空线程时它没有子节点、视觉上不存在，与改前一致；`hasMoreAbove`/`hasColdTurns` 在无轮次分组时均为 false，不会冒出「Load earlier messages」。改后语义是「慢开提示与列表并存」，而不是「用提示把列表换掉」。
+
+**新增闸门（2 个）**：
+- `scripts/check-ui-contract.cjs` **39 → 40 项**：新增「消息列表是滚动容器，不得挂在 v-if/v-else 分支上（round-126）」。**反跑证明非空**——改动前 **39/40**、该项 FAIL（诊断行 `<ul class="conversation-list">@28 ← 仍带 v-if/v-else 指令；空态仍是 v-else-if（链未断开）`），改动后 **40/40**。
+- `scripts/verify-conversation-list-persists.cjs`（新，浏览器侧可复跑）：用应用自己的触发链（桩 `thread/list` 的 `updatedAt` +1h 让重载真的发生 → 伪造 `visibilitychange` hidden→visible ＝ 切走再切回标签页 → `refreshAll({includeSelectedThreadMessages:true})` → `thread/read` 注入 9s），断言「慢开提示出现时列表仍在 DOM、仍有内容、保持原位置」+「加载结束后位置不变」。**慢开提示若没被触发会 SKIP 退 2 —— 闸门不允许空过。**
+
+**真机 A/B（同一 harness 交错四跑，决定性）**：改动前 提示出现那一刻 `listPresent=false`（items=0）、摘除 1 次、**`scrollTop` 2307 → 0**；改动后 `listPresent=true`（items=108、`scrollTop` 2307）、摘除 0 次、最终 **2307**；交错复跑重复同样结果（提示命中 6119 / 6133 / 6085 / 5902 ms，唯一变量是代码）。测试线程为隔离 `CODEX_HOME` 里一条真实线程（108 个条目、可滚动 5768px）。
+
+**生产构建复跑**：`vite build`（34.95s，EXIT=0）→ `dist-cli` 起 4190（隔离 `CODEX_HOME`）→ 新闸门 **10/10**、`verify-review-pane-scroll` **7/7**、`verify-mobile-375` **EXIT=0**、`check-fonts` **13/13**、`check-theme` **15/15**、`check-token-equivalence` **EXIT=0**（外观与基线一致 → 无需重置基线）、`check-thread-switch-feedback` **12/12**（`chars=24506→24517`，冻结 17/21ms ≤ 60ms 预算）。`check-thread-switch-feedback` 的 `chars` 正是读 `.conversation-list` 的 `textContent.length`（缺席按 0 计）——它仍通过，说明「空列表现在存在于 DOM」没有改变它的判读口径。
+
+**「闪一下」的取证（未定案）**：用同一条触发链做了一次「内容不变的重载」，实测 `.conversation-item` 新增 **0**、删除 **0**，滚动容器也未摘除 ⇒ **重载本身不重渲**（键稳定，Vue 走 patch）。又核对 `removeLiveCommandsPersistedIn` 是**按 id 相等**过滤的 ⇒ live 项与持久化项 key 不换、节点不重建。剩余候选（未证）：新块插入本身的一帧布局变化 + `autoFollowOutput` 重新钉底（`scrollToBottom()` 里还有 `anchor.scrollIntoView({block:'end'})`，会连带滚动祖先容器）。**要定案必须驱动一个真实的流式回合**，本轮不做。
+
+**验证基线**：`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 3 例负载敏感 fs 超时 → 隔离复跑 63/63、15.89s）。
+
+**未发布**：未 bump 版本、未 tag、未推送。
