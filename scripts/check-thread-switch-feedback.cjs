@@ -29,7 +29,24 @@
 //   PROFILE_BASE_URL      app url (default http://127.0.0.1:4173)
 //   PROFILE_EDGE          chromium/edge executable override
 //   PROFILE_HEADLESS=false to watch it run
-//   FREEZE_BUDGET_MS      max unpainted window after a click (default 60)
+//   FREEZE_BUDGET_MS      base max unpainted window after a click (default 60)
+//   FREEZE_BUDGET_MODE    'scaled' (default) grows the budget with the ambient
+//                         frame cadence measured on this run; 'absolute' pins it
+//                         to FREEZE_BUDGET_MS (round-128 and earlier behaviour)
+//   FREEZE_AMBIENT_FACTOR multiplier applied to the ambient 90th-percentile
+//                         frame gap when scaling (default 2)
+//   FREEZE_BUDGET_CAP_MS  hard ceiling for the scaled budget (default 200). If
+//                         the ambient cadence alone needs more, the timing
+//                         assertion is skipped with a note instead of failing
+//   FREEZE_SYNTHETIC_LOAD_MS
+//                         busy-wait this many ms inside every animation frame,
+//                         to reproduce a uniformly slow (loaded) machine
+//                         (default 0 = off; self-test aid for the A/B above)
+//   FREEZE_INJECT_CLICK_STALL_MS
+//                         busy-wait this many ms in a capture-phase click
+//                         listener that runs before the app's own handler - the
+//                         round-89 regression shape. Proves the assertion still
+//                         fires even after the budget is scaled (default 0)
 //   SETTLE_TIMEOUT_MS     max wait for a click to settle (default 15000)
 const { chromium } = require('playwright')
 
@@ -38,6 +55,11 @@ const EDGE =
   process.env.PROFILE_EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const headless = process.env.PROFILE_HEADLESS !== 'false'
 const FREEZE_BUDGET_MS = Number.parseInt(process.env.FREEZE_BUDGET_MS || '60', 10)
+const FREEZE_BUDGET_MODE = process.env.FREEZE_BUDGET_MODE || 'scaled'
+const FREEZE_AMBIENT_FACTOR = Number.parseFloat(process.env.FREEZE_AMBIENT_FACTOR || '2')
+const FREEZE_BUDGET_CAP_MS = Number.parseInt(process.env.FREEZE_BUDGET_CAP_MS || '200', 10)
+const FREEZE_SYNTHETIC_LOAD_MS = Number.parseInt(process.env.FREEZE_SYNTHETIC_LOAD_MS || '0', 10)
+const FREEZE_INJECT_CLICK_STALL_MS = Number.parseInt(process.env.FREEZE_INJECT_CLICK_STALL_MS || '0', 10)
 const SETTLE_TIMEOUT_MS = Number.parseInt(process.env.SETTLE_TIMEOUT_MS || '15000', 10)
 
 const failures = []
@@ -48,6 +70,65 @@ function check(ok, label, detail) {
 
 const short = (id) => (id ? id.slice(0, 8) : '(none)')
 const rowSelector = (id) => `.thread-row[data-thread-id="${id}"]`
+
+// Quiet window opened before each measured click, so the ambient frame cadence
+// can be read on this run rather than assumed from a fixed number.
+const AMBIENT_WINDOW_MS = 700
+
+// The freeze budget, normalised by this machine's ambient frame cadence. On an
+// idle machine the ambient 90th-percentile gap is a few ms, so the budget stays
+// at FREEZE_BUDGET_MS and the assertion is as strict as before. On a loaded one
+// a single frame already costs tens of ms, so the budget grows with it (up to
+// FREEZE_BUDGET_CAP_MS) and a click that paints on the next frame passes
+// regardless of load. Round-119/120 recorded this assertion failing 6 of 15
+// runs on a busy machine at frozen 61-100 ms with no product regression - pure
+// scheduling noise, which is exactly what this normalisation removes.
+function effectiveFreezeBudget(
+  ambientGap,
+  mode = FREEZE_BUDGET_MODE,
+  base = FREEZE_BUDGET_MS,
+  factor = FREEZE_AMBIENT_FACTOR,
+  cap = FREEZE_BUDGET_CAP_MS,
+) {
+  if (mode === 'absolute') return base
+  const scaled = Math.ceil((ambientGap || 0) * factor)
+  return Math.min(Math.max(base, scaled), cap)
+}
+
+// True when even the cap cannot absorb the ambient cadence: the machine is too
+// loaded for a wall-clock timing assertion to mean anything. Reported and
+// skipped, never failed - the alternative is a red run that blames the product
+// for the host.
+function ambientExceedsCap(
+  ambientGap,
+  mode = FREEZE_BUDGET_MODE,
+  factor = FREEZE_AMBIENT_FACTOR,
+  cap = FREEZE_BUDGET_CAP_MS,
+) {
+  return mode !== 'absolute' && Math.ceil((ambientGap || 0) * factor) > cap
+}
+
+// Single freeze assertion with the measured cadence in the detail line, so a
+// pass or fail can always be attributed to the click vs the machine.
+function checkFreeze(label, frozen, ambient, budget) {
+  if (frozen === null || frozen === undefined) {
+    check(false, `${label} measured`, 'no click recorded')
+    return
+  }
+  if (ambientExceedsCap(ambient)) {
+    console.log(
+      `skip  ${label} - machine too loaded to time a ${FREEZE_BUDGET_CAP_MS}ms window ` +
+        `(ambient90=${ambient}ms would need ${Math.ceil(ambient * FREEZE_AMBIENT_FACTOR)}ms)`,
+    )
+    return
+  }
+  check(
+    frozen <= budget,
+    `${label} <= ${budget}ms`,
+    `frozen=${frozen}ms ambient90=${ambient}ms budget=${budget}ms` +
+      (FREEZE_BUDGET_MODE === 'absolute' ? ' mode=absolute' : ''),
+  )
+}
 
 const OBSERVE = `
 (() => {
@@ -61,16 +142,81 @@ const OBSERVE = `
   const loop = () => { const now = performance.now(); window.__f.frames.push({ t: rel(), gap: Math.round(now - last) }); last = now; requestAnimationFrame(loop) }
   requestAnimationFrame(loop)
   window.__resetF = () => { window.__f.clicks.length = 0; window.__f.frames.length = 0 }
+  // Unpainted window after the click: the frame gaps up to and including the
+  // first frame the browser painted. Bounded so a machine whose frames never
+  // fall under the quiet-gap threshold cannot sum forever.
+  // Ambient cadence: the frame gaps recorded before the click, i.e. the quiet
+  // window the gate opens on purpose. A percentile of them is what one frame
+  // costs on this machine right now.
+  window.__ambient = (p) => {
+    const click = window.__f.clicks[0]
+    const gaps = window.__f.frames.filter((f) => !click || f.t < click.t).map((f) => f.gap)
+    if (!gaps.length) return 0
+    const sorted = gaps.slice().sort((a, b) => a - b)
+    const pct = p === undefined ? 0.9 : p
+    return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * pct)))]
+  }
+  const MAX_FREEZE_FRAMES = 12
+  // Unpainted window after the click: sum the frame gaps up to and including the
+  // first frame painted at this machine's normal cadence. A frame counts as
+  // painted when its gap is within the cadence - twice the median, never below
+  // the 40 ms floor the metric always used. On a fast machine that is the exact
+  // old measurement; on a slow one it stops at the first frame the browser
+  // actually produced instead of summing stalled frames until the bound, which
+  // is what made the reading (and the fixed budget) meaningless under load.
   window.__freeze = () => {
     const click = window.__f.clicks[0]
     if (!click) return null
+    const quiet = Math.max(40, (window.__ambient(0.5) || 0) * 2)
     let frozen = 0
+    let seen = 0
     for (const frame of window.__f.frames) {
       if (frame.t < click.t) continue
       frozen += frame.gap
-      if (frame.gap < 40) break
+      seen += 1
+      if (frame.gap <= quiet || seen >= MAX_FREEZE_FRAMES) break
     }
     return frozen
+  }
+  // Self-test aid: busy-wait busyMs inside every animation frame, so every frame
+  // costs that much and the page runs at a uniformly slow cadence - which is
+  // what a loaded machine looks like to the freeze metric. A setInterval busy
+  // loop does not do this: it leaves most frames at the normal cadence and only
+  // spikes the max, so a click usually still lands on a fast frame.
+  window.__slBusy = 0
+  window.__slStarted = false
+  window.__synthLoad = (busyMs) => {
+    window.__slBusy = busyMs > 0 ? busyMs : 0
+    if (window.__slBusy > 0 && !window.__slStarted) {
+      window.__slStarted = true
+      const loop = () => {
+        const end = performance.now() + window.__slBusy
+        while (performance.now() < end) {}
+        if (window.__slBusy > 0) requestAnimationFrame(loop)
+      }
+      requestAnimationFrame(loop)
+    }
+  }
+  // Self-test aid: block the main thread on the click before the app's own
+  // handler runs (capture phase, registered first), i.e. the round-89 shape of
+  // the bug - the highlight cannot paint until the stall is over.
+  window.__stallMs = 0
+  window.__stallHooked = false
+  window.__injStall = (ms) => {
+    window.__stallMs = ms > 0 ? ms : 0
+    if (window.__stallMs > 0 && !window.__stallHooked) {
+      window.__stallHooked = true
+      document.addEventListener(
+        'click',
+        (e) => {
+          const row = e.target && e.target.closest ? e.target.closest('.thread-row') : null
+          if (!row) return
+          const end = performance.now() + window.__stallMs
+          while (performance.now() < end) {}
+        },
+        true,
+      )
+    }
   }
 })()
 `
@@ -227,6 +373,18 @@ async function main() {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.thread-row', { timeout: 30000 })
   await page.waitForTimeout(3000)
+  if (FREEZE_SYNTHETIC_LOAD_MS > 0) {
+    await page.evaluate((ms) => window.__synthLoad(ms), FREEZE_SYNTHETIC_LOAD_MS)
+    console.log(
+      `note  synthetic load on: ${FREEZE_SYNTHETIC_LOAD_MS}ms busy per animation frame (uniformly slow cadence)`,
+    )
+  }
+  if (FREEZE_INJECT_CLICK_STALL_MS > 0) {
+    await page.evaluate((ms) => window.__injStall(ms), FREEZE_INJECT_CLICK_STALL_MS)
+    console.log(
+      `note  injected click stall on: ${FREEZE_INJECT_CLICK_STALL_MS}ms in a capture-phase listener before the app handler`,
+    )
+  }
 
   const isDev = await page.evaluate(() => !!document.querySelector('script[src*="/@vite/client"]'))
   const startRows = await readRows(page)
@@ -242,8 +400,12 @@ async function main() {
 
   const contentPick = await page.evaluate(`(${CONTENT_IDS})(4)`)
   const contentIds = contentPick.picked
+  const budgetLabel =
+    FREEZE_BUDGET_MODE === 'absolute'
+      ? `${FREEZE_BUDGET_MS}ms (absolute)`
+      : `${FREEZE_BUDGET_MS}ms base, scaled by ambient x${FREEZE_AMBIENT_FACTOR} up to ${FREEZE_BUDGET_CAP_MS}ms`
   console.log(
-    `rows=${rows} with-messages=${contentIds.length} dev=${isDev} budget=${FREEZE_BUDGET_MS}ms settleTimeout=${SETTLE_TIMEOUT_MS}ms`,
+    `rows=${rows} with-messages=${contentIds.length} dev=${isDev} budget=${budgetLabel} settleTimeout=${SETTLE_TIMEOUT_MS}ms`,
   )
   if (contentPick.fromFallback > 0) {
     console.log(
@@ -264,6 +426,7 @@ async function main() {
   // --- first open, from home ---
   const firstId = contentIds[0]
   await page.evaluate(() => window.__resetF())
+  await page.waitForTimeout(AMBIENT_WINDOW_MS)
   await page.locator(rowSelector(firstId)).first().click({ force: true })
   const early = await snap(page)
   check(
@@ -274,6 +437,8 @@ async function main() {
   const settled = await waitForState(page, settledOn(firstId))
   await page.waitForTimeout(800)
   const firstFreeze = await page.evaluate(() => window.__freeze())
+  const firstAmbient = await page.evaluate(() => window.__ambient())
+  const firstBudget = effectiveFreezeBudget(firstAmbient)
   check(
     settled.ok,
     'highlight, route and content agree after the first switch settles',
@@ -285,13 +450,14 @@ async function main() {
     `chars=${settled.snap.conversationChars}`,
   )
   if (!isDev) {
-    check(firstFreeze !== null && firstFreeze <= FREEZE_BUDGET_MS, `first-open freeze <= ${FREEZE_BUDGET_MS}ms`, `frozen=${firstFreeze}ms`)
+    checkFreeze('first-open freeze', firstFreeze, firstAmbient, firstBudget)
   }
 
   // --- switch to a second thread, from a loaded thread ---
   const secondId = contentIds[1]
   const beforeChars = settled.snap.conversationChars
   await page.evaluate(() => window.__resetF())
+  await page.waitForTimeout(AMBIENT_WINDOW_MS)
   await page.locator(rowSelector(secondId)).first().click({ force: true })
   const early2 = await snap(page)
   check(
@@ -302,6 +468,8 @@ async function main() {
   const switched = await waitForState(page, settledOn(secondId))
   await page.waitForTimeout(800)
   const secondFreeze = await page.evaluate(() => window.__freeze())
+  const secondAmbient = await page.evaluate(() => window.__ambient())
+  const secondBudget = effectiveFreezeBudget(secondAmbient)
   check(
     switched.ok,
     'second switch settles on the clicked row',
@@ -313,7 +481,7 @@ async function main() {
     `conv=${short(switched.snap.conversationId)} wanted=${short(secondId)} before=${beforeChars} after=${switched.snap.conversationChars}`,
   )
   if (!isDev) {
-    check(secondFreeze !== null && secondFreeze <= FREEZE_BUDGET_MS, `switch freeze <= ${FREEZE_BUDGET_MS}ms`, `frozen=${secondFreeze}ms`)
+    checkFreeze('switch freeze', secondFreeze, secondAmbient, secondBudget)
   }
 
   // --- two clicks inside one frame must land on the last one ---
@@ -367,7 +535,33 @@ async function main() {
   console.log('\nall checks passed')
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+// Browser-free arithmetic check for the budget normalisation, so the scoring
+// rule can be verified without a model or a running app:
+//   node scripts/check-thread-switch-feedback.cjs --self-test
+function selfTest() {
+  let bad = 0
+  const eq = (label, got, want) => {
+    const ok = got === want
+    if (!ok) bad += 1
+    console.log(`${ok ? 'ok  ' : 'FAIL'}  ${label}  (got=${got} want=${want})`)
+  }
+  eq('idle machine keeps the 60 ms floor', effectiveFreezeBudget(8), 60)
+  eq('loaded machine scales by 2x ambient', effectiveFreezeBudget(70), 140)
+  eq('absolute mode ignores the cadence', effectiveFreezeBudget(70, 'absolute'), 60)
+  eq('scaled budget is capped', effectiveFreezeBudget(300), FREEZE_BUDGET_CAP_MS)
+  eq('zero ambient falls back to the floor', effectiveFreezeBudget(0), 60)
+  eq('idle never exceeds the cap rule', ambientExceedsCap(8), false)
+  eq('very loaded machine exceeds the cap', ambientExceedsCap(300), true)
+  eq('absolute mode never skips', ambientExceedsCap(300, 'absolute'), false)
+  console.log(bad ? `\n${bad} self-test case(s) failed` : '\nself-test passed')
+  process.exit(bad ? 1 : 0)
+}
+
+if (process.argv.includes('--self-test')) {
+  selfTest()
+} else {
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
+}
