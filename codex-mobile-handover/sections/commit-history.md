@@ -221,3 +221,12 @@
 **发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.127`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.127 。
 
 **发布闭环**：用户于 2026-10-08 执行 `npm publish`，registry 记录发布时刻 `2026-10-07T17:33:05.712Z`（＝北京时间 2026-10-08 01:33:05），`dist-tags.latest` 由 `0.1.126` 切换为 **`0.1.127`**。维护者随后下载 tarball 复核：1,618,158 字节、54 个条目（`dist/` 47 + `dist-cli/` 2 + `scripts/` 2 + `package.json`/`README.md`/`LICENSE`）、sha1 `05a2f3311f852d817f3932e4a8d14e3fea721132` 与 integrity `sha512-Y+07jli5GfpXLxH9SFleHqNnEDuj9XrzaudS5P+2Rvc04m7EtyH7CiPNxiVrCU6maUHh8Oxa+FXWSMTA1KpaHw==` 均与 registry 逐项一致，包内 `package.json` 为 `codex-mobile-re@0.1.127`，主前端 bundle（`dist/assets/index-CkZzIAPA.js`）含 round-121 乐观消息修复标记（`userMessage.optimistic`）。**本次传播延迟明显长于既往**：发布后约 5 分钟内 curl 直查 registry 源头仍报旧 packument（`time.modified` 停在 v0.1.126 时点、404），约 8 分钟后才可见——复查时不能凭单次查询判失败，须以 `time.modified` 变更或更长等待窗为准。
+
+## round-122（`-c` 兼容占位顶掉用户自定义 `custom` provider，未发布）
+
+**修复提交 `0c22ab48`**：`fix(server): 兼容占位 provider 仅在用户未定义时注入，不再顶掉用户的 custom（round-122）`（6 文件，+303/−23）。`appServerRuntimeConfig.ts` 新增 `collectModelProviderIds` / `readUserConfiguredProviderIds`（读 `$CODEX_HOME/config.toml` 的 `model_providers.<id>`，mtime+size 键控缓存，复用 `bridge/codexAuthState` 的 `stripTomlComment`）；`bridge/codexAuthState.ts` 仅导出该函数（零逻辑改动）；`freeMode.ts` 的 `getProviderCompatibilityConfigArgs` 第二参数改为必填并对 `custom` / `opencode_zen` 都条件注入，占位 `base_url` 改指 `LEGACY_CUSTOM_COMPAT_PATH`（无端口时回落 `127.0.0.1:9`）；`codexAppServerBridge.ts` 传入已定义的 provider id 并新增 `POST /codex-api/provider-compat/v1/responses` 返回 400 + 可读提示。
+
+**文档提交 `6c8d291e`**：`docs: round-122 轮次文档 + 总入口登记 + 手测章节（round-122）`（5 文件，+168/−4）——轮次文档、总入口快照/索引/未完成事项/落款、手测章节 `tests/providers-models/round-122-user-owned-custom-provider-not-overridden.md` 与两处索引登记。
+
+**未发布**：改动尚未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含此缺陷；受影响用户当下可「把激活 provider 改成不冲突的名字（旧线程需重建）」或「回退 0.1.126」绕开，正式修复随下一次发布走。
+
