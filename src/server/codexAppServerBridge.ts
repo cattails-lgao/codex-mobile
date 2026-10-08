@@ -1944,6 +1944,14 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
               ? await readThreadWithTurnPage({
                 rpc: (method, params) => appServer.rpc(method, params),
                 sendRead: (params) => callRpcWithArchiveRecovery(appServer, 'thread/read', params),
+                // round-132：thread/read 的有界页也把它的 nextCursor 交给游标链。
+                // 此前唯一种子是 resume 的 initialTurnsPage.nextCursor，于是经
+                // thread/read 打开的线程链为空 —— 首次上翻必未命中并回落全量读
+                // （同窗口同锚点实测 7202ms vs 命中链的 969ms）。多播一个边界
+                // 只可能减少回落：路由在拿不到游标时才回落。
+                onTurnPageBoundary: (threadId, oldestTurnId, olderCursor) => {
+                  appServer.recordThreadTurnPageBoundary(threadId, oldestTurnId, olderCursor)
+                },
               }, body.params ?? null)
               : await callRpcWithArchiveRecovery(appServer, body.method, body.params ?? null)
         } catch (error) {

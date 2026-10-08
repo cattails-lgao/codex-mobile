@@ -189,4 +189,59 @@ describe('readThreadWithTurnPage', () => {
     expect(h.sendRead.mock.calls[0][0]).toBe(original)
     expect(h.rpc).not.toHaveBeenCalled()
   })
+
+  // round-132：打开线程也要给上翻路由播下第一个游标边界，否则链为空 →
+  // 首次上翻回落全量读（实测 7202ms vs 969ms）。
+  describe('older-turn cursor boundary (round-132)', () => {
+    it('hands the page cursor to the older-turn route, anchored at the page oldest turn', async () => {
+      const fullPage = Array.from({ length: 10 }, (_, i) => turn(`t${20 - i}`))
+      const h = harness({
+        meta: META,
+        page: { data: fullPage, nextCursor: 'cursor-back' },
+        count: { data: Array.from({ length: 20 }, (_, i) => ({ id: `t${i + 1}`, items: [] })), nextCursor: null },
+      })
+      const boundary = vi.fn()
+
+      await readThreadWithTurnPage(
+        { ...h.deps, onTurnPageBoundary: boundary },
+        { threadId: 'thread-1', includeTurns: true },
+      )
+
+      // The page is newest-first (`t20…t11`), so its oldest turn after the
+      // reverse is `t11` -- the anchor the frontend will ask "before this?" for.
+      expect(boundary).toHaveBeenCalledTimes(1)
+      expect(boundary).toHaveBeenCalledWith('thread-1', 't11', 'cursor-back')
+    })
+
+    it('reports a null cursor when the page already reaches the thread start', async () => {
+      const h = harness({
+        meta: META,
+        page: { data: [turn('t3'), turn('t2'), turn('t1')], nextCursor: null },
+      })
+      const boundary = vi.fn()
+
+      await readThreadWithTurnPage(
+        { ...h.deps, onTurnPageBoundary: boundary },
+        { threadId: 'thread-1', includeTurns: true },
+      )
+
+      expect(boundary).toHaveBeenCalledTimes(1)
+      expect(boundary).toHaveBeenCalledWith('thread-1', 't1', null)
+    })
+
+    it('records nothing for an empty page (a brand-new thread has no anchor)', async () => {
+      const h = harness({
+        meta: META,
+        page: { data: [], nextCursor: null },
+      })
+      const boundary = vi.fn()
+
+      await readThreadWithTurnPage(
+        { ...h.deps, onTurnPageBoundary: boundary },
+        { threadId: 'thread-1', includeTurns: true },
+      )
+
+      expect(boundary).not.toHaveBeenCalled()
+    })
+  })
 })

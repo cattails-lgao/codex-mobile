@@ -42,6 +42,18 @@ export type ThreadReadTurnPageDeps = RpcExecutor & {
    * archive-recovery wrapper around the call.
    */
   sendRead: (params: unknown) => Promise<unknown>
+  /**
+   * Reports the cursor that reaches the turns immediately older than
+   * `oldestTurnId` -- this page's own `nextCursor` (round-132), exactly what
+   * the resume path hands over with `initialTurnsPage.nextCursor`.
+   *
+   * Without it a thread opened through `thread/read` seeds no cursor at all,
+   * so the first scroll-up misses the chain and falls back to the unbounded
+   * full-history read (measured 7202ms against 969ms for the same anchor on
+   * the same thread). The route only ever falls back when it has no cursor, so
+   * feeding this in is purely a saving.
+   */
+  onTurnPageBoundary?: (threadId: string, oldestTurnId: string, olderCursor: string | null) => void
 }
 
 type TurnPage = { data: unknown[]; nextCursor: string }
@@ -116,6 +128,16 @@ export async function readThreadWithTurnPage(
   // The page arrives newest-first (see the module header); `thread.turns` is
   // oldest-first everywhere else in the bridge.
   const turns = [...page.data].reverse()
+
+  // round-132: hand this page's own `nextCursor` to the older-turn route, the
+  // way the resume path does. The page is newest-first, so after the reverse
+  // its oldest turn is `turns[0]`; that turn is the anchor the frontend will
+  // ask "what comes before this?" for. A null cursor means the thread starts
+  // here, and an empty page (brand-new thread) has no anchor to record.
+  const oldestTurnId = readNonEmptyString(asRecord(turns[0])?.id)
+  if (oldestTurnId && deps.onTurnPageBoundary) {
+    deps.onTurnPageBoundary(threadId, oldestTurnId, page.nextCursor || null)
+  }
 
   // A full page means older turns may exist, and their existence is the only
   // thing `threadTurnStartIndex` needs the count for. A short page already
