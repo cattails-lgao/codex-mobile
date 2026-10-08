@@ -618,6 +618,56 @@ check(
     ? `onMounted@${convSource.slice(0, mountedIdx).split('\n').length}${importsOnMounted ? '' : ' ← 未从 vue 导入 onMounted'}${mountedSchedulesScroll ? '' : ' ← 挂载回调未结算滚动（缺 scheduleConversationScroll）'}`
     : '未定位到 onMounted(',
 )
+
+// ------------------------------------------- 命令块 live→持久化交接要延迟清空（round-128）
+// 「新增命令块时闪一下」的根因是**回合收尾处急切清空 live 命令**：`turn/completed` 一到就把
+// `liveCommandsByThreadId[thread]` 删掉，而渲染用的持久化副本要等防抖
+// EVENT_SYNC_DEBOUNCE_MS(220ms) 的收尾 `thread/read` 才落地 ⇒ 命令块从 DOM 里消失约
+// 240–256ms（实测 scrollHeight 666→609、scrollTop 147→90→147）。清空本身**必需**：
+// live 用通知 `item.id`（裸 callId）、持久化用 `session-cmd-<callId>`，不同 id，
+// `removeLiveCommandsPersistedIn` 的按 id 剪除对它无效，不收尾清空就会多出一个命令块。
+// round-128 把这次清空推迟到持久化副本写进 messages 的同一拍。本断言钉住这套不变式：
+//   ① 存在延迟集合 + 兜底上界常量；② live 命令的清空在 `flushDeferredLiveCommands` 里；
+//   ③ 回合收尾统一走 `finishTurnForThread`（两条通知路径都调它），且**只对当前选中线程**
+//      延迟；④ `turn/completed` 分支**不得**再出现急切清空，`applyRealtimeUpdates` 的收尾
+//      路径也不得直接 `setThreadInProgress(completedTurn.threadId, false)`。
+const stateSource = fs.readFileSync('src/composables/useDesktopState.ts', 'utf8')
+const declDeferred = /const\s+deferredLiveCommandClearThreadIds\s*=\s*new\s+Set<string>\(\)/.test(stateSource)
+const hasFallbackConst = /const\s+LIVE_COMMAND_HANDOFF_FALLBACK_MS\s*=\s*\d+/.test(stateSource)
+const flushIdx = stateSource.indexOf('function flushDeferredLiveCommands(')
+const flushBody = flushIdx >= 0 ? stateSource.slice(flushIdx, flushIdx + 420) : ''
+const flushClears = /omitKey\(\s*liveCommandsByThreadId\.value\s*,/.test(flushBody)
+const finishIdx = stateSource.indexOf('function finishTurnForThread(')
+const finishBody = finishIdx >= 0 ? stateSource.slice(finishIdx, finishIdx + 900) : ''
+const finishCallSites = (stateSource.match(/finishTurnForThread\s*\(/g) || []).length - 1
+const finishDefersSelectedOnly = /threadId\s*===\s*selectedThreadId\.value/.test(finishBody)
+const finishKeepsDeferred = /keepDeferredLiveCommands/.test(finishBody)
+const clearKeepsOption = /clearCompletedTurnLiveState\s*\([^)]*keepLiveCommands/.test(stateSource)
+// `turn/completed` 分支：必须走 finishTurnForThread，且**不得**直接清 live 命令
+const completedBranchIdx = stateSource.indexOf("notification.method === 'turn/completed'")
+const completedBranch = completedBranchIdx >= 0 ? stateSource.slice(completedBranchIdx, completedBranchIdx + 900) : ''
+const completedBranchUsesFinish = /finishTurnForThread\s*\(/.test(completedBranch)
+const eagerClearInCompletedBranch = /omitKey\(\s*liveCommandsByThreadId\.value/.test(completedBranch)
+// applyRealtimeUpdates 的收尾路径：不得再直接 setThreadInProgress(completedTurn.threadId, false)
+const realtimeDirectSet = /setThreadInProgress\(\s*completedTurn\.threadId\s*,\s*false\s*\)/.test(stateSource)
+check(
+  '命令块 live→持久化交接延迟清空，不出现真空（round-128）',
+  declDeferred && hasFallbackConst && flushIdx >= 0 && flushClears &&
+    finishIdx >= 0 && finishCallSites >= 2 && finishDefersSelectedOnly && finishKeepsDeferred && clearKeepsOption &&
+    completedBranchIdx >= 0 && completedBranchUsesFinish && !eagerClearInCompletedBranch && !realtimeDirectSet,
+  [
+    `延迟集合=${declDeferred ? 'yes' : 'NO'}`,
+    `兜底常量=${hasFallbackConst ? 'yes' : 'NO'}`,
+    `flush 清空 live=${flushClears ? 'yes' : 'NO'}`,
+    `finishTurnForThread 调用点=${finishCallSites}（须 ≥2，两条通知路径）`,
+    `仅选中线程延迟=${finishDefersSelectedOnly ? 'yes' : 'NO'}`,
+    `clear 接受 keepLiveCommands=${clearKeepsOption ? 'yes' : 'NO'}`,
+    `turn/completed 走 finish=${completedBranchUsesFinish ? 'yes' : 'NO'}`,
+    `turn/completed 仍急切清空=${eagerClearInCompletedBranch ? 'YES(退化了)' : 'no'}`,
+    `applyRealtimeUpdates 直接 setThreadInProgress=${realtimeDirectSet ? 'YES(退化了)' : 'no'}`,
+  ].join(' / '),
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',

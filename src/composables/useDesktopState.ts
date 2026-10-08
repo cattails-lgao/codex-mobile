@@ -244,6 +244,10 @@ type SelectThreadResult = 'ok' | 'not-found' | 'error'
 
 const EVENT_SYNC_DEBOUNCE_MS = 220
 const TURN_START_FOLLOW_UP_SYNC_DELAY_MS = 3000
+// round-128：命令块 live→持久化交接的上界。正常路径由收尾刷新（防抖 220ms）在
+// 同一拍完成清空；这个兜底只在刷新失败/被复用缓存跳过时生效（见
+// deferredLiveCommandClearThreadIds）。
+const LIVE_COMMAND_HANDOFF_FALLBACK_MS = 1500
 
 // Official app-server notifications with no UI consumer in codex-mobile.
 // Each gets an explicit no-op branch (with debug log) so a future unknown
@@ -586,6 +590,19 @@ export function useDesktopState() {
   let pendingThreadsRefresh = false
   let pendingThreadsRefreshForce = false
   const pendingThreadMessageRefresh = new Set<string>()
+  // round-128：回合结束时**先不**清掉该线程的 live 命令（那些仍在 DOM 里渲染的
+  // 命令块），改由收尾那次 `thread/read` 落地时清除。
+  //
+  // 起因（实测：「新增命令块时闪一下」）：`turn/completed` 一处急切清空 live 命令，
+  // 而渲染用的持久化副本要等防抖 220ms 后的刷新才到，于是命令块从 DOM 里消失
+  // 约 256ms（列表 scrollHeight 666→609、scrollTop 147→90→147，视觉上就是内容
+  // 一闪 + 视图跳一下）。清空本身是必需的——桥层重建的持久化命令用
+  // `session-cmd-<callId>`，与 live 通知的 `item.id`（裸 callId）**不同 id**，
+  // 所以 `removeLiveCommandsPersistedIn` 的按 id 剪除对它无效，不收尾清空就会
+  // 在原位多出一个命令块。真正的修法是：把这次清空推迟到「持久化副本已经写进
+  // messages」的同一拍（`loadMessages` 里 `setPersistedMessagesForThread` 与
+  // `clearCompletedTurnLiveState` 之间无 await），这样新旧副本在同一帧换手。
+  const deferredLiveCommandClearThreadIds = new Set<string>()
   let hasHydratedWorkspaceRootsState = false
   let activeReasoningItemId = ''
   let shouldAutoScrollOnNextAgentEvent = false
@@ -1163,7 +1180,10 @@ export function useDesktopState() {
     savePersistedTurnDurationMap(persistedTurnDurationsByThreadId.value)
   }
 
-  function setThreadInProgress(threadId: string, nextInProgress: boolean): void {
+  // round-128：`keepDeferredLiveCommands` 只由 `turn/completed` 一处传入——它表示
+  // 「live 命令要留到收尾刷新把持久化副本写进 messages 之后再清」。其余调用点
+  // （含 `loadMessages` 内部那次 `setThreadInProgress(threadId, false)`）保持原语义。
+  function setThreadInProgress(threadId: string, nextInProgress: boolean, options: { keepDeferredLiveCommands?: boolean } = {}): void {
     if (!threadId) return
     const currentValue = inProgressById.value[threadId] === true
     if (currentValue === nextInProgress) return
@@ -1176,7 +1196,7 @@ export function useDesktopState() {
       restoreLiveReasoningSnapshot(threadId)
     } else {
       inProgressById.value = omitKey(inProgressById.value, threadId)
-      clearCompletedTurnLiveState(threadId)
+      clearCompletedTurnLiveState(threadId, { keepLiveCommands: options.keepDeferredLiveCommands === true })
       clearInterruptPersistenceGate(threadId)
       // round-83：长时间 turn（Thinking/工具调用）会把上下文推过阈值，而发送前预检在
       // turn 进行中被跳过（上下文已定型），此前只有「用户再发一条消息」才会触发压缩。
@@ -1477,7 +1497,21 @@ export function useDesktopState() {
     liveFileChangeMessagesByThreadId.value = omitKey(liveFileChangeMessagesByThreadId.value, threadId)
   }
 
-  function clearCompletedTurnLiveState(threadId: string): void {
+  // round-128：只做「清掉该线程的 live 命令 + 解除延迟标记」这一件事。收尾刷新的
+  // 落地路径与兜底定时器都用它，避免连带 `clearCompletedTurnLiveState` 的其它副作用
+  // （后者会清 pendingTurnRequest——1.5s 内用户可能已经发出下一条消息）。
+  function flushDeferredLiveCommands(threadId: string): void {
+    if (!threadId) return
+    deferredLiveCommandClearThreadIds.delete(threadId)
+    if (liveCommandsByThreadId.value[threadId]) {
+      liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+    }
+  }
+
+  // round-128：`keepLiveCommands` 只由 `turn/completed` → `setThreadInProgress(false)`
+  // 这条路径传入（见 deferredLiveCommandClearThreadIds 的注释）。默认语义不变：
+  // 清掉该线程的 live 命令并解除延迟标记。
+  function clearCompletedTurnLiveState(threadId: string, options: { keepLiveCommands?: boolean } = {}): void {
     if (!threadId) return
     clearLivePlansForThread(threadId)
     // round-31：对话完成后把本地存档的 plan 从 plan.live 修正为 plan——
@@ -1505,13 +1539,34 @@ export function useDesktopState() {
     if (threadId === selectedThreadId.value) {
       activeReasoningItemId = ''
     }
-    if (liveCommandsByThreadId.value[threadId]) {
-      liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
+    if (options.keepLiveCommands === true && liveCommandsByThreadId.value[threadId]) {
+      deferredLiveCommandClearThreadIds.add(threadId)
+    } else {
+      flushDeferredLiveCommands(threadId)
     }
     if (activeTurnIdByThreadId.value[threadId]) {
       activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, threadId)
     }
     clearPendingTurnRequest(threadId)
+  }
+
+  // round-128：回合结束的**统一入口**（`applyRealtimeUpdates` 与 `handleNotification`
+  // 两条通知路径都会走到）。收尾时不清掉「当前正在渲染的那条线程」的 live 命令——
+  // 渲染用的持久化副本要等收尾刷新（防抖 EVENT_SYNC_DEBOUNCE_MS）才到，立刻清会让
+  // 刚出现的命令块从 DOM 消失约 250ms（实测 scrollHeight 瞬降 57px、scrollTop
+  // 147→90→147，即「新增命令块时闪一下」）。改由 `clearCompletedTurnLiveState` 在
+  // `loadMessages` 落地持久化消息的同一同步块里清（同一拍渲染换手，不丢帧、不重复）。
+  // 非选中线程不参与渲染，维持原来的立即清空语义。兜底定时器给刷新失败一个上界。
+  function finishTurnForThread(threadId: string): void {
+    if (!threadId) return
+    const deferLiveCommands = threadId === selectedThreadId.value
+    setThreadInProgress(threadId, false, { keepDeferredLiveCommands: deferLiveCommands })
+    if (!deferLiveCommands || typeof window === 'undefined') return
+    window.setTimeout(() => {
+      if (!deferredLiveCommandClearThreadIds.has(threadId)) return
+      if (inProgressById.value[threadId] === true) return
+      flushDeferredLiveCommands(threadId)
+    }, LIVE_COMMAND_HANDOFF_FALLBACK_MS)
   }
 
   function readPlanUpdate(notification: RpcNotification): { threadId: string; message: UiMessage } | null {
@@ -2033,7 +2088,7 @@ export function useDesktopState() {
       if (activeTurnIdByThreadId.value[completedTurn.threadId]) {
         activeTurnIdByThreadId.value = omitKey(activeTurnIdByThreadId.value, completedTurn.threadId)
       }
-      setThreadInProgress(completedTurn.threadId, false)
+      finishTurnForThread(completedTurn.threadId)
       setTurnActivityForThread(completedTurn.threadId, null)
       markThreadUnreadByEvent(completedTurn.threadId)
       if (!shouldRetryWithFallback) {
@@ -2220,13 +2275,12 @@ export function useDesktopState() {
       clearLiveReasoningForThread(notificationThreadId)
       // round-23：清理本轮推理项文本缓存，避免跨轮残留。
       clearReasoningItemTextCacheImpl(reasoningTimelineDeps)
-      if (liveCommandsByThreadId.value[notificationThreadId]) {
-        liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, notificationThreadId)
-      }
+      // round-128：live 命令**不在此处急切清空**，交给 `finishTurnForThread`
+      // （收尾刷新落地时再清，见该函数与 deferred 注释）。
       const completedThreadId = extractThreadIdFromNotification(notification)
       if (completedThreadId) {
         clearDelayedTurnSync(completedThreadId)
-        setThreadInProgress(completedThreadId, false)
+        finishTurnForThread(completedThreadId)
         setTurnActivityForThread(completedThreadId, null)
         markThreadUnreadByEvent(completedThreadId)
         if (!shouldRetryWithFallback) {
