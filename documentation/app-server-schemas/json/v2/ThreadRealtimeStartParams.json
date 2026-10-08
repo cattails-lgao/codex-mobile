@@ -138,6 +138,10 @@
   },
   "description": "EXPERIMENTAL - start a thread-scoped realtime session.",
   "properties": {
+    "backendReasoningStatus": {
+      "description": "Relays public reasoning summaries as quiet context for realtime V3 delegations. Defaults to false.",
+      "type": "boolean"
+    },
     "clientManagedHandoffs": {
       "description": "Leaves Codex response handoffs to the client's explicit append calls instead of forwarding them automatically. Defaults to false.",
       "type": [

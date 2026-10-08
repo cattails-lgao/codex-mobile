@@ -2,7 +2,7 @@
 
 Документ основан на исходниках [openai/codex](https://github.com/openai/codex) (app-server protocol).
 
-JSON and TypeScript snapshots were generated from local Codex CLI `0.153.4` (with `--experimental`). The method tables below are historical reference material and may lag behind the generated schemas.
+JSON and TypeScript snapshots were generated from local Codex CLI `0.160.1` (with `--experimental`). The method tables below are historical reference material and may lag behind the generated schemas.
 
 ## Локальная материализация схем
 
