@@ -195,7 +195,6 @@
   **明确不做（连同依据）**：排版阶梯（用户决定推迟到看过 P1 主界面；`text-xs` 215 / `text-sm` 162 / `text-[Npx]` 147 一处未动）；**亮色基线 token 化**（1112 处）——前置是**定下亮色 token 取值**，因为已提交的亮色值（中性 `#f1f1f4`/`#121215`）与现状实际渲染（冷调 `slate-100 #f1f5f9`/`slate-900 #0f172a`）**不是同一套**，直接替换等于顺手改掉默认主题色调；且审计已把「侧栏 slate、其余 zinc」列为确证缺陷，故正确顺序是 P1 定值后再统一替换；状态色 250 处（P1，要按「颜色只表示状态」重新归类）。
   **相位变更**：亮色 `body`/`theme-color` 提前到 P0（确证缺陷）；「组件暗色覆盖层 token 化」与「`@reference` 改指向」补入 P0；「亮色基线 token 化」明确为 **P2 且需 P1 先定值**；排版阶梯移出 P0。手测见 `tests/theme-layout-terminal/round-90-dark-token-layer-completion.md`。详见 `rounds/round-90-token-layer-completion.md`。
 
-\n
 
 ## v0.1.126 发布（round-87 ~ round-100）
 
@@ -208,7 +207,6 @@
 **发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.126`（annotated）指向该提交；GitHub Release 由维护者创建（非草稿/非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.126 。
 
 **发布闭环**：用户于 2026-09-28 执行 `npm publish`，registry 记录发布时刻 `2026-09-28T09:06:42.665Z`，`dist-tags.latest` 由 `0.1.125` 切换为 **`0.1.126`**。维护者随后下载 tarball 复核：1,605,877 字节、55 个条目（`dist/` 47 + `dist-cli/` 2 + `scripts/` 3 + `package.json`/`README.md`/`LICENSE`）、sha1 `6a34332a4aa5c4384ee6ec157fea1e32d21abe77` 与 integrity `sha512-4mel2hXVvxzEd11sMdIOpJOFSrAH+epBGMfdYby6a5BUkb9yKouKP2JSsOdrVf3vt9AaYnDkBKaBW9zxxZQRdw==` 均与 registry 逐项一致，包内 `package.json` 为 `codex-mobile-re@0.1.126`。（复查时再次确认 v0.1.125 的口径：registry 传播有分钟级延迟——`npm view dist-tags` 先报 `0.1.125`、版本详情 404，约 1 分钟后 `latest` 即挪正，不能据此判失败。）
-\n
 
 ## v0.1.127 发布（round-101 ~ round-121）
 
@@ -227,6 +225,7 @@
 **修复提交 `0c22ab48`**：`fix(server): 兼容占位 provider 仅在用户未定义时注入，不再顶掉用户的 custom（round-122）`（6 文件，+303/−23）。`appServerRuntimeConfig.ts` 新增 `collectModelProviderIds` / `readUserConfiguredProviderIds`（读 `$CODEX_HOME/config.toml` 的 `model_providers.<id>`，mtime+size 键控缓存，复用 `bridge/codexAuthState` 的 `stripTomlComment`）；`bridge/codexAuthState.ts` 仅导出该函数（零逻辑改动）；`freeMode.ts` 的 `getProviderCompatibilityConfigArgs` 第二参数改为必填并对 `custom` / `opencode_zen` 都条件注入，占位 `base_url` 改指 `LEGACY_CUSTOM_COMPAT_PATH`（无端口时回落 `127.0.0.1:9`）；`codexAppServerBridge.ts` 传入已定义的 provider id 并新增 `POST /codex-api/provider-compat/v1/responses` 返回 400 + 可读提示。
 
 **文档提交 `6c8d291e`**：`docs: round-122 轮次文档 + 总入口登记 + 手测章节（round-122）`（5 文件，+168/−4）——轮次文档、总入口快照/索引/未完成事项/落款、手测章节 `tests/providers-models/round-122-user-owned-custom-provider-not-overridden.md` 与两处索引登记。
+**文档提交 `314cded6`**：`docs: round-122 补真实 CLI（发布路径）端到端验证记录（round-122）`（2 文件，+16/−4）——轮次文档补入真实 `dist-cli` 双变体 `config/read` 结果（A 用户定义 `custom` → `active=custom` / `name=litellm` / `base_url=http://127.0.0.1:4460/v1`；B 未定义 → 占位指向 `http://127.0.0.1:4291/codex-api/provider-compat/v1` 且该路由回 400）与路由返回体原文，总入口的当前快照行与 Dev 状态行同步补记该验证路径——**只有打包 CLI 会设置 `CODEXUI_SERVER_PORT`，故 fix③ 的兼容路由 `base_url` 只在发布路径上生效、也只能在发布路径上验**。
 
 ## round-123（免费兜底改 OpenRouter + 失效模型 slug 校准，未发布）
 
@@ -236,5 +235,20 @@
 
 **本轮的重要结论（推翻用户前提）**：OpenCode Zen 免费档**没有下线**，是插件 `zenProxy` 的客户端指纹过期。上游闸门是递进的，实测分界点：`403 FreeTierError`（缺 `stream:true` + `bash`/`read` 工具桩）→ 补齐后 `426 UpgradeRequired`（要求 `opencode/1.18.0+`，插件 UA 硬编码 `1.15.9`）→ UA 提上去后 **13 个免费模型 8 个可用**（含插件默认的 `big-pickle`），另 2 个地区限制（`RegionError`）、3 个上游端点不可用。**故未按用户原意移除 Zen 模块**——它同时是遗留 rollout 的承重 provider 注册（round-104 / round-122 的 `getProviderCompatibilityConfigArgs`）。**指纹不修**：属持续绕过上游明确设置的门禁，且 9 月内已收紧两级，判定为军备竞赛，只诊断上报、不实施。**验证**：定向 60/60、`vue-tsc` EXIT=0、全量 **732/732 零失败**。
 
-：`docs: round-122 补真实 CLI（发布路径）端到端验证记录（round-122）`（2 文件，+16/−4）——轮次文档补入真实 `dist-cli` 双变体 `config/read` 结果（A 用户定义 `custom` → `active=custom` / `name=litellm` / `base_url=http://127.0.0.1:4460/v1`；B 未定义 → 占位指向 `http://127.0.0.1:4291/codex-api/provider-compat/v1` 且该路由回 400）与路由返回体原文，总入口的当前快照行与 Dev 状态行同步补记该验证路径——**只有打包 CLI 会设置 `CODEXUI_SERVER_PORT`，故 fix③ 的兼容路由 `base_url` 只在发布路径上生效、也只能在发布路径上验**。
+## round-124（OpenCode Zen 客户端指纹修复，未发布）
 
+**修复提交 `ab5cd983`**：`fix(free-mode): 修复 OpenCode Zen 客户端指纹，免费档恢复可用`（4 文件，+364/−6）。`src/server/zenProxy.ts` —— UA 由硬编码 `opencode/1.15.9` 改为常量 `OPENCODE_ZEN_MIN_CLIENT_VERSION = '1.18.0'`；新增 `createOpenCodeSessionId()` 生成规范 `ses_` id（12 位小写 hex + 14 位 base62，共 26 字符，替代原先的 `ses_` + 24 base62）；新增 `ZEN_REQUIRED_TOOL_STUBS` 与 `applyZenFingerprintToChatRequest()`（强制 `stream: true` + **幂等追加** `bash`/`read` 桩，不替换调用方工具、不动 `tool_choice`）；`createZenUpstreamHeaders` 导出供测试。`src/server/unifiedResponsesProxy.ts` —— 导出 `ChatCompletionsRequest` 类型；新增 `chatRequestTransform` 选项（provider 级出站载荷改写钩子，opt-in，不传则行为逐字不变）；新增 SSE 聚合器 `aggregateSseChatCompletion` 与嗅探式 `parseUpstreamChatPayload`，chat 分支应用 transform、响应分支改走嗅探解析。新增 `src/server/zenProxy.test.ts`（9 例）、`src/server/unifiedResponsesProxy.test.ts` +1 例 SSE 聚合。
+
+**为什么需要 SSE 聚合（round-123 §六① 预测漏掉的第四处）**：指纹要求 `stream: true` ⇒ 上游**必定**返回 SSE；而带工具时 `effectiveStreaming` 为 false（既有设计），走的是**非流式分支**，那里原本是裸的 `JSON.parse(rawResponseBody)` —— 对 SSE 必然抛错 → 502。只加 `stream` 而不加聚合，修复会以「403 没了、换成 502」告终。
+
+**闸门的具体值（A/B 探测，决定修法）**：①**闸门检查工具名字** —— 只给 Codex 自己的 `shell`/`apply_patch` → 403 `FreeTierError`，**追加** `bash`/`read` 桩 → 200 ⇒ 桩必须存在但**不必替换**调用方工具；②**`tool_choice` 不在闸门内** —— `'auto'` 与不传都 200 ⇒ 无须强制 `none`、调用方工具选择权可保留；③**版本段独立且必需** —— 其余三段齐全但 UA 停在 `1.15.9` → 426 `UpgradeRequired`。故修法＝「**追加桩 + 保留调用方工具与 `tool_choice`**」，比 round-123 的设想更保守。
+
+**真机验证（决定性）**：一次性 vitest 探针（`src/server/zenProxyLiveness.test.ts`，跑完即删）把真实 `handleZenProxyRequest` 挂本地端口、发**带工具的 Codex 风格** Responses 请求打真实上游 —— 非流式 **HTTP 200** 返回真实内容（`output` 含 `{type:'message', content:[{type:'output_text', text:'PONG'}]}` 与一段 `reasoning`，`usage = 194/13/207`）、流式 **HTTP 200** 且 SSE 含 `response.created` / `response.completed`。
+
+**未发布**：未 bump 版本、未 tag、未推送。`0.1.127` 已 publish 且含 round-122 的 `custom` 缺陷。
+
+**文档提交**（见 git log）：round-124 轮次文档 + 总入口登记（快照 / Dev 状态 / rounds 索引 / 未完成事项 / 落款）+ 手测章节 `tests/providers-models/round-124-zen-free-tier-fingerprint.md` + 两处索引登记；**顺带修掉 round-122 在 commit-history 里遗留的两处格式瑕疵** —— 第 198 / 211 行的两处字面 `\n` 文本行，以及被 round-123 段落插入切断的 `314cded6` 登记残片（已补回 `**文档提交 \`314cded6\`**` 前缀并归位到 round-122 段落）。
+
+**诚实边界**：主动绕过上游明确设置的门禁（**非 bug 修复**），上游再收紧即失效；桩会让模型看见 `bash`/`read` 两个不该调用的工具（**未做响应侧过滤**）；`OPENCODE_ZEN_MIN_CLIENT_VERSION` 是硬编码快照，上游提高门槛后须人工同步；修指纹只恢复「门」、不修上游模型可用性（13 个免费模型里 5 个本身就是坏的）。
+
+**验证基线**：定向 21/21、`vue-tsc --noEmit` EXIT=0、全量 **742 例**（默认 15s 下 6 例负载敏感 fs 超时 → `--testTimeout=30000` 降为 1 例 → 隔离复跑通过，与本改动无关）。
