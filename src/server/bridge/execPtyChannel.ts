@@ -17,6 +17,12 @@ import type { SpawnTerminal, TerminalPty } from '../terminalManager.js'
  * `outputDelta` notifications arrive incrementally, `command/exec/write` round
  * trips keystrokes, and resize/terminate are accepted.
  *
+ * round-131 复测（codex-cli 0.160.1，直连 app-server + 隔离 home）：本节这批行为逐项复验
+ * 通过——`command/exec {tty:true}` 仍产出 ANSI 序列与 Windows banner/提示符、`outputDelta`
+ * 多帧增量到达（4 帧 4 个时刻）、`write` 回显命中、`resize`/`terminate` 被接受、两会话输出
+ * 不串、大输出 283 帧 38KB 未触发 `capReached`、UTF-8 往返正确、`exit` 的延后响应
+ * `{exitCode:0}`、`terminate` 后 `exitCode` 为 1（与本节「退出码透传」一节记录一致）。
+ *
  * Protocol details that shape this adapter:
  *   - bytes are base64 in both directions (`deltaBase64`), so we encode on the
  *     way in and decode on the way out;
