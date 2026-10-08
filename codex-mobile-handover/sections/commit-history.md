@@ -356,6 +356,46 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-132（线上「Thinking 时消息列表整段消失」定位并修复 + 上翻 6–7s 归因，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| （本轮修复提交） | `fix(thread-load): 服务端答 0 条不再清空本地消息历史与轮次索引（round-132）` | 3 文件（产品 1 + 测试 1 + 契约 1，145 增 3 删） |
+| （本文档提交） | `docs(handover): round-132 线上两症状定位与修复（轮次文档 + 总入口 + 提交史）` | 4 文件 |
+
+**由来**：用户报「更新 codex-mobile-re 版本后线上环境 Thinking 状态消息列表没有展示、而且 rpc 接口还会长时间挂起」；追问一轮后补充**关键口径**——「**是整个消息列表都不见了，在 Thinking 的时候**」。本轮先把两个症状拆开定位（§症状② / §症状①），再实施症状①的修复。
+
+**症状②（上翻 RPC 长时间挂起）：6–7s 全部来自「游标链未命中即回落全量水合」**。冷进程**同窗口同锚点** A/B：回落＝全量 `thread/read{includeTurns:true}` ＝ **7202ms / 1.46MB / 1198 items**（每轮 items `7,6,191,196,232,1,90,22,445,8`），命中链的有界单页 ＝ **969ms**，**逐轮 items 个数逐字相同** ⇒ ①6–7 秒在回落、②**回落不丢内容**（早先看到的 0.19MB 那条是**另一个更旧窗口**的固有体积）。链路：`readBoundedThreadTurnPage` 在 `chain.lookup(threadId, beforeTurnId)` 为 null 时 `return null` → 路由回落 `readThreadForTurnPage()`。**游标链唯一种子是 `thread/resume` 的 `initialTurnsPage.nextCursor`**（`threadReadTurnPage` 拿到 `nextCursor` 却**没接** `onTurnPageBoundary`），且链只在**进程内存**、app-server 重启后 rollout ordinal 重编号即全部作废。**真实 App 连续上翻不触发**（浏览器实测 6 次全 852–1013ms，锚点依次是 resume 边界 → 上一页新边界）。**顺带纠正上一轮一条口径**：先前的「稳定 6.0–7.5s 冷热一致」是**探针自污染**——`r132-probe-decompose.cjs` 每次上翻前先发一条 `thread/read{includeTurns:true}`，经 `storeThreadReadSnapshot` 把全量读缓存删掉，于是每次都冷。**本轮只做归因，未改此路**（四条候选见轮次文档 §10.6）。
+
+**症状①（Thinking 时整个消息列表不见）：定案 + 修复**。代码链上 `messages` 的每一步（`mergeThreadMessageStreams` → `insertTurnSummaryMessage` → `insertPersistedTurnDurations` → `insertModelSwitchMarkers`）**只插入不删除** ⇒ 列表空白 **⟺ `persisted` 为空**；而 `persisted` 唯一的清空通道是 `loadMessages` 里那行 `preserveMissing`（非 silent 刷新 **且** 本地无乐观消息时为假 ⇒ `mergeMessages` 把服务端返回**整体替换**本地历史）⇒ 服务端答 0 条＝本地历史被换成空数组；此时 `isLoadingMessages` 为假（非 silent 且已加载过）、App 的 `lastStableFilteredMessages` 兜底不生效，而渲染侧空态又带 `!liveOverlay` ⇒ **列表空掉、只剩一个 Thinking 浮层**。**三个必要条件逐条实测**：①线程处于 Thinking —— 非 inProgress 时前台恢复的全量刷新**命中复用缓存、连一次 `thread/read` 都不发**（发了 list/config/rateLimits/skills，items 167 不动），只有 Thinking 才会真的取数；②`persisted` 里**没有**乐观用户消息 —— 刚发送就给空响应时 items **169 不动**（乐观消息把 `preserveMissing` 抬成 true）；③该次响应 **0 条**。**真实浏览器确定性复现**：两次前台恢复，`refresh#1` 用「真响应打补丁（`status=inProgress` + 补等值 `userMessage`）」让乐观消息退场，`refresh#2` 把 `thread/read` 换成 `{turns:[], status:{type:'inProgress'}}` ⇒ **`items 169 → 1`**（`userRows 11→0`、`turns 11→1`、正文 `38360 → 8` 即 "Thinking" 本身），浮层**全程在位**。**三条会给出「0 条」的现成通道**：`isThreadMaterializationPendingError` 兜底（直接答 `{turns:[],status:{type:'inProgress'}}`——空列表与 Thinking 由**同一响应**制造）、`isEmptyThreadReadError` 的空缓存快照、round-110 有界读把**一页空数组**当作「线程真的没有轮次」（后者是更新后新引入的形态）。
+
+**修复（实施轮次文档 §10.6 第 1 条，并顺手保护轮次索引）**，唯一产品文件 `src/composables/useDesktopMessageHistoryLoading.ts`：把 `previousPersisted` 提前取出，新增判据
+
+```ts
+const suspiciousEmptyResponse = nextMessages.length === 0 && previousPersisted.length > 0
+```
+
+该判据**同时**用于三处——①进 `preserveMissing`（服务端答 0 条时保留本地历史）；②成立时**不**调 `replaceTurnIndexLookupForThread`（空快照同样没有轮次表，覆盖会让保留下来的消息失去轮次索引：轮次耗时 / 轮次摘要 / 计划归档都按 turnId 查这张表）；③成立时打一条可检索的 `[thread-load] <threadId>: server returned 0 messages while N are persisted locally; keeping local history`。**判据与 §10.6 原文的差别**：原文只判 `nextMessages.length === 0`，实现补了 `&& previousPersisted.length > 0`——单侧判据会在**真正的空线程**上刷噪音警告；补上后本地也空时行为与改前**逐字相同**（`mergeMessages` 对两个空数组本来就返回 `[]`）。
+
+**测试与反跑（决定性）**：
+
+- **单测 2 例**（新 describe「empty thread-read snapshot protection (round-132)」）：①本地有历史 + 非 silent 刷新答 0 条 ⇒ 消息仍是 `['user-1','agent-1']`、轮次索引 `turn-1 → 0` 仍在、恰好一条 `keeping local history` 警告；用例**忠实还原触发条件**（`Date.now` 前推 5s 越过 2s 复用窗 + 线程 `inProgress` ⇒ 真的会发请求、非 silent、不带 `force`，与线上「前台恢复」同一路径）。②反向保证：本地也为空的真新线程仍是空列表且无噪音警告。
+- **`tmp/r132-flip-fix.cjs off|on`**（把判据临时换成 `false`）⇒ 用例断言 `expected [] to deeply equal ['user-1','agent-1']` **变红**，`on` 还原后转绿。脚本对替换片段做「出现次数必须为 1」断言并留 `.bak` 复核（`与备份一致 = true`、16381 字节）。
+- **静态契约 42 → 43 项**（`check-ui-contract.cjs`，与 round-128 同做法）：新增「空快照不覆盖本地消息历史与轮次索引（round-132）」钉 5 个子事实（双侧判据 / 进 `preserveMissing` / `previousPersisted` 先读后写 / 跳过轮次索引覆盖 / 留 warning）。**反跑证明非空**：改动前 **42/43**、该项 FAIL 且诊断行 `双侧判据=NO`；改动后 **43/43**。**诚实说明**：静态断言钉的是**形状**（把判据换成 `false` 时其余 4 个子事实仍 `yes`），行为层证据是上面那条单测与下面的浏览器 A/B。
+- **浏览器端到端复跑（同一条决定性探针前后对照）**：`tmp/r132-e2e-thinking-wipe2.cjs` ⇒ 修复前 `refresh#2` 的 `items 169 → 1`；修复后 **`items 169 → 169`**、`items=0` 的样本 **0**。**无需重启服务**：桥按请求从磁盘读 `dist/`（实测服务返回的入口 chunk 哈希与磁盘一致），前端 `vite build` 重建（15.83s）即生效。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**、全量 **744 例 / 744 通过（76 文件）零失败**（＝ round-131 基线 742 ＋ 本轮 2 例）、`check-ui-contract` **43/43**、`node --check scripts/check-ui-contract.cjs` OK、`vite build` EXIT=0。
+
+**本轮新增探针（`tmp/`，未入库）**：`r132-copy-home-measure.cjs`（可复用的**等长路径**隔离副本测量器）、`r132-probe-home-writemap.cjs`、`r132-probe-big-copy.cjs`、`r132-probe-bridge-big.cjs`、`r132-probe-turnpage-coldchain.cjs`、`r132-probe-decompose.cjs`、`r132-probe-cursor-cost.cjs`、`r132-probe-ab-chain.cjs`、`r132-probe-payload-paths.cjs`、`r132-probe-coldchain-ab.cjs`（**冷进程同窗口 A/B，症状②的决定性读数**）、`r132-probe-live-blank.cjs`、`r132-probe-vue-state.cjs`（结论：生产构建下 `app._instance` 不挂、App 的 `setupState` 为空，**该仪表在本构建不可用**）、`r132-e2e-open-big.cjs`、`r132-e2e-scrollup-big.cjs`、`r132-e2e-inject-archive.cjs`（**注入实验：`.reasoning-block` 0 → 10，证明渲染/合流管线正常**）、`r132-e2e-empty-wipe.cjs`、`r132-e2e-thinking-wipe.cjs`、`r132-e2e-thinking-wipe2.cjs`（**决定性复现/复验**）、`r132-e2e-newthread-live.cjs`、`r132-e2e-send-live.cjs`、`r132-e2e-live-blank.cjs`、`r132-flip-fix.cjs`、`r132-doc-crossref.cjs`、`r132-memory-payload*.md` 等 ＋ 各自 `.txt` / `.json`。
+
+**环境事实（本轮踩到并记住）**：①**拷贝 home 不是隔离**的进一步确认——`state_*.sqlite` 记的是 rollout 的**绝对路径**，必须**同长度改写**（`C:\Users\cattails\.codex` 24 字符 → `D:\codex-home-isolate123` 24 字符）才安全；真实 `~/.codex` 被托管 daemon（`app-server-daemon/releases/0.161.0`，PID 33400）占用，**绝不能**在其上再起 app-server。②**写盘映射已实测**：`thread/read` / `thread/turns/list` / `thread/resume` 对 rollout **只读**（只新建 sqlite `-wal/-shm` 边车）⇒ 可安全直连副本 home 做只读测量。③**round-131 的「拷 home 后 0 轮」曾被误判为隔离失败**，本轮用干净副本复测证明那是**那次的 JSON 重写膨胀破坏了 rollout**，隔离手法本身有效（12 轮全在）。
+
+**诚实边界**：①**线上那一次「0 条」出自哪条通道仍未确证**（桥层三条都能给 0 条），区分需要线上桥日志或那一次 `thread/read` 的响应体——建议下次复现时抓 `/codex-api/rpc` 的响应体并查桥日志有无 `materialization` / `rollout … is empty`。②症状②**只归因、未修**。③修复保住的是**消息**，`setThreadInProgress` / `status` 语义未动 ⇒ **可疑响应仍可能让界面出现一个不该有的 Thinking 浮层**。④判据只覆盖「本地有历史而服务端答空」；当前产品里不存在「服务端合法清空一条线程」的路径，若将来出现，该保护会表现为**保留陈旧历史**。⑤与症状②**无因果关系**，是两个独立缺陷。⑥**未发布**（npm `latest` 仍 `0.1.127`）、**未推送**（本会话外网不通）。
+
+**未发布**：未 bump 版本、未 tag；本轮提交待在本地 `main`（round-122 ~ round-132 随下一次发布走）。
+
 ## round-131（`execPtyChannel` / `rollbackTurnContext` 的 0.158.0 实测在 0.160.1 上复验，未发布）
 
 **提交**：
