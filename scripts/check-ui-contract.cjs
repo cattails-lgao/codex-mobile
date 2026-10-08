@@ -575,6 +575,28 @@ check(
     : '未定位到 ReviewPane / .content-thread',
 )
 
+// ------------------------------------------- 滚动容器不得被状态分支摘掉（round-126）
+// 消息列表 `<ul class="conversation-list">` 是会话唯一的滚动容器：它的 scrollTop 只能靠
+// 「这个元素一直在」来保住。它曾经是 v-if/v-else 链的最后一环
+// （<p v-if="isSlowOpen"> → <p v-else-if="messages.length === 0 …"> → <ul v-else>），
+// 而 isSlowOpen 由「任何一次消息加载超过 SLOW_OPEN_HINT_DELAY_MS(5000ms)」置真
+// （useDesktopMessageHistoryLoading.ts）⇒ 加载稍慢就把整个滚动容器从 DOM 摘掉，加载结束后
+// 它作为全新元素挂回来、scrollTop 从 0 开始，而该组件没有挂载期滚动恢复
+// （无 onMounted；五个滚动 watcher 也都没有 immediate）⇒ 用户看到「消息列表跑到最上面」。
+// 实测口径（同一 harness 交错四跑）：改动前提示出现时 listPresent=false、scrollTop 2307→0；
+// 改动后 listPresent=true、最终仍是 2307。
+const convLines = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8').split(/\r?\n/)
+const listAt = convLines.findIndex((l) => l.trim().startsWith('<ul') && l.includes('conversation-list'))
+const listTag = listAt >= 0 ? convLines[listAt] : ''
+const listHasChainDirective = /\bv-(if|else|else-if)\b/.test(listTag)
+const emptyBranchStillChained = convLines.some((l) => l.includes('v-else-if="messages.length === 0'))
+check(
+  '消息列表是滚动容器，不得挂在 v-if/v-else 分支上（round-126）',
+  listAt > 0 && !listHasChainDirective && !emptyBranchStillChained,
+  listAt > 0
+    ? `<ul class="conversation-list">@${listAt + 1}${listHasChainDirective ? ' ← 仍带 v-if/v-else 指令' : ''}${emptyBranchStillChained ? '；空态仍是 v-else-if（链未断开）' : ''}`
+    : '未定位到 <ul class="conversation-list">',
+)
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',

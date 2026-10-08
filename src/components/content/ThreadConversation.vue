@@ -19,13 +19,13 @@
     </p>
 
     <p
-      v-else-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay"
+      v-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay && !isSlowOpen"
       class="conversation-empty"
     >
       {{ t('No messages in this thread yet.') }}
     </p>
 
-    <ul v-else ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
+    <ul ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
       <li v-if="hasMoreAbove" class="conversation-load-more">
         <button
           type="button"
