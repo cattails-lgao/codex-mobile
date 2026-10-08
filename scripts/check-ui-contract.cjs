@@ -597,6 +597,27 @@ check(
     ? `<ul class="conversation-list">@${listAt + 1}${listHasChainDirective ? ' ← 仍带 v-if/v-else 指令' : ''}${emptyBranchStillChained ? '；空态仍是 v-else-if（链未断开）' : ''}`
     : '未定位到 <ul class="conversation-list">',
 )
+
+// ------------------------------------------- 挂载期必须有滚动初始化（round-127）
+// 组件是 defineAsyncComponent：路由切到非线程视图（`#/`、`#/directory`、`#/settings`、
+// `#/automations` …）时整棵 `.conversation-root` 被卸载，切回同一条线程时重新挂载。
+// 而它的五个滚动相关 watcher（messages / pendingRequests / liveOverlay / isLoading /
+// activeThreadId）**一个都不会触发**（activeThreadId 没变、props 也没变）⇒ 新挂载的
+// `<ul class="conversation-list">` 停在浏览器默认 scrollTop = 0 ⇒「列表跑到 TOP」。
+// round-127 补 onMounted → scheduleConversationScroll。实测口径（同一 harness，四个入口）：
+// 改动前 438 → 0（verify-conversation-mount-scroll FAILED 4/7）；改动后 438 → 438（ALL GREEN 7/7）。
+const convSource = convLines.join('\n')
+const importsOnMounted = /import\s*\{[^}]*\bonMounted\b[^}]*\}\s*from\s*'vue'/.test(convSource)
+const mountedIdx = convSource.indexOf('onMounted(')
+const mountedBody = mountedIdx >= 0 ? convSource.slice(mountedIdx, mountedIdx + 240) : ''
+const mountedSchedulesScroll = /scheduleConversationScroll\s*\(/.test(mountedBody)
+check(
+  '会话挂载期有滚动初始化，重挂不停在 TOP（round-127）',
+  importsOnMounted && mountedSchedulesScroll,
+  mountedIdx >= 0
+    ? `onMounted@${convSource.slice(0, mountedIdx).split('\n').length}${importsOnMounted ? '' : ' ← 未从 vue 导入 onMounted'}${mountedSchedulesScroll ? '' : ' ← 挂载回调未结算滚动（缺 scheduleConversationScroll）'}`
+    : '未定位到 onMounted(',
+)
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',

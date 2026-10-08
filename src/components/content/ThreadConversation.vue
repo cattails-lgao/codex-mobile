@@ -538,7 +538,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { UiFileChange, UiLiveOverlay, UiMessage, UiPlanStep, UiServerRequest } from '../../types/codex'
 import { updateThreadFileChanges } from '../../api/codexGateway'
 import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics'
@@ -2007,6 +2007,20 @@ watch(
   },
   { flush: 'post' },
 )
+
+// round-127：挂载期的滚动初始化。此前本组件没有 onMounted，五个滚动相关 watcher
+// （messages / pendingRequests / liveOverlay / isLoading / activeThreadId）也都没有
+// immediate ⇒ 只要发生一次「重挂」而 activeThreadId **没变**（路由切到非线程视图再切回、
+// 外层分支切换等），就一个 watcher 都不会触发，新挂载的 `<ul class="conversation-list">`
+// 停在浏览器默认 scrollTop = 0 ——「列表跑到 TOP 」。实测（同一 harness）：
+// `#/` / `#/directory` / `#/settings` / `#/automations` 四个入口切走再切回同一线程，
+// `.conversation-root` 各摘挂 1 次、scrollTop **438 → 0**。
+// 这里补一次与「切换线程」同口径的初始化（autoFollowOutput 本身就是初始值 true，
+// 故只需结算一次滚动），使任何重挂都落到最新内容；首次打开线程时该路径与
+// activeThreadId watcher 幂等。
+onMounted(() => {
+  void scheduleConversationScroll()
+})
 
 function onConversationScroll(): void {
   const container = conversationListRef.value
