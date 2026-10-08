@@ -2805,7 +2805,8 @@ export function useDesktopState() {
   // - 当前活跃 turn 不可转向（/review、/compact 进行中）→ 自动降级为排队消息，
   //   不再把「cannot steer a compact turn」这类裸错误甩给用户。
   // - expectedTurnId 不匹配（客户端状态陈旧、轮次恰好完成）→ 回落 turn/start：
-  //   线程已空闲则开新轮；仍活跃则服务端会把 turn/start 当作 steering（0.158.0 实测）。
+  //   线程已空闲则开新轮；仍活跃则服务端会把 turn/start 当作 steering（0.158.0 实测；
+  //   round-130 未在 0.160.1 上复验这条回落，见 round-130 待手测清单）。
   // - 无活跃 turn 记录 → 直接走原 turn/start 路径。
   function isActiveTurnNotSteerableError(unknownError: unknown): boolean {
     return unknownError instanceof Error

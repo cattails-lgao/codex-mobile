@@ -169,6 +169,7 @@ describe('readThreadTurnIds', () => {
   // round-102 P0：0.158.0 对 thread/turns/list 回 `-32601: list_turns is not
   // supported yet`。这必须作为「不支持」抛出而不是 null——null 会让调用方回落
   // 全量水合，而那个路径在这个构建上挂死 UI。
+  // （round-130：0.160.1 已实现该方法，本测试用 stub 模拟旧二进制。）
   it('throws the unsupported error instead of falling back when the app-server does not implement the listing', async () => {
     const rpc = vi.fn(async () => { throw new Error('-32601: list_turns is not supported yet') })
     await expect(readThreadTurnIds(rpc, 'thread-1')).rejects.toBeInstanceOf(ThreadTurnPageUnsupportedError)

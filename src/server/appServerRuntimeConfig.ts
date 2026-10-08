@@ -36,6 +36,9 @@ type AppServerRuntimeConfig = {
  * `configWarning` 通知（0.158.0 实测，round-108）。桥把 stderr 显式丢弃、configWarning
  * 也在 KNOWN_IGNORED_NOTIFICATION_METHODS 里是 no-op，所以用户看不见——但它会污染
  * dev 日志，且「传一个无效参数」本身就不诚实。所以只对 >= 0.159 的 CLI 追加。
+ *
+ * round-130 复测（codex-cli 0.160.1）：启动横幅 `Instant interrupt: on`、参数含
+ * `-c features.instant_interrupt=true`、stderr 零警告——门控行为与本节一致。
  */
 const INSTANT_INTERRUPT_MIN_VERSION = '0.159.0'
 

@@ -33,6 +33,10 @@ function threadReadResponseWithContent(content: ThreadReadResponse['thread']['tu
       agentRole: null,
       gitInfo: null,
       name: null,
+      // round-130：0.160.1 起这三个字段是 Thread 的必填项。
+      environments: null,
+      originator: null,
+      daybreakEnabled: null,
       turns: [{
         id: 'turn-1',
         status: 'completed',
@@ -368,6 +372,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
         appContext: null,
         pluginId: null,
         readOnlyHint: null,
+        mcpAppUi: null,
         result: { content: [], structuredContent: {}, _meta: null },
         error: null,
         durationMs: 42,

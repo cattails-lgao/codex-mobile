@@ -285,6 +285,7 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       // round-102 P0：app-server 不实现 thread/turns/list（codex-cli 0.158.0）时
       // 上翻是终态不可用——收敛 hasMoreOlder 停止重试，仅提示一次边界，其余失败
       // 保持原行为（hasMoreOlder 不动，滚动可重试）。
+      // round-130 复测：0.160.1 已实现该方法，故上面的终态分支只对旧二进制可达。
       if (loadError instanceof CodexApiError && loadError.code === 'older_turns_unavailable') {
         hasMoreOlderMessagesByThreadId.value = {
           ...hasMoreOlderMessagesByThreadId.value,

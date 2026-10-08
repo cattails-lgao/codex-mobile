@@ -453,6 +453,7 @@ async function getOlderThreadMessagesV2(threadId: string, beforeTurnId: string, 
   // round-102 P0：app-server 不实现 thread/turns/list（codex-cli 0.158.0）时，
   // 路由返回该边界而不是回落全量水合（那会挂死）。带码抛出让上层把本线程的
   // 「还有更早消息」标记收敛为 false，避免每次上翻都重试。
+  // round-130 复测：0.160.1 已实现该方法，路由改走真正的有界页，此边界不再出现。
   if (payload.olderTurnsUnavailable === true) {
     throw new CodexApiError('当前 codex-cli 版本暂不支持加载更早的消息', {
       code: 'older_turns_unavailable',

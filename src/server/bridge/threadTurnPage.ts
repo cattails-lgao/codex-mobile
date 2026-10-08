@@ -39,12 +39,19 @@
 // thread). Such failures are rethrown as ThreadTurnPageUnsupportedError so the
 // bridge can remember the capability gap and the route can answer "older turns
 // unavailable" instead of hydrating.
+//
+// round-130 re-measured against codex-cli 0.160.1, which *does* implement the
+// call: opening a 12-turn thread resumes with the newest 10 turns plus
+// `threadTurnStartIndex: 2`, and scrolling up returned exactly the 2 remaining
+// turns with no `olderTurnsUnavailable` boundary. So this branch is now
+// compatibility for older binaries rather than the path every build takes.
 import { asRecord, getErrorMessage, readNonEmptyString } from './core.js'
 
 /**
  * The app-server registered `thread/turns/list` but does not implement it
- * (codex-cli 0.158.0). Thrown instead of returning null so the caller can
- * distinguish "try the legacy fallback" from "never hydrate, tell the UI".
+ * (codex-cli 0.158.0; 0.160.1 implements it -- see the module header). Thrown
+ * instead of returning null so the caller can distinguish "try the legacy
+ * fallback" from "never hydrate, tell the UI".
  */
 export class ThreadTurnPageUnsupportedError extends Error {
   constructor(cause: unknown) {
@@ -53,9 +60,10 @@ export class ThreadTurnPageUnsupportedError extends Error {
   }
 }
 
-// 0.158.0 answers `-32601: list_turns is not supported yet`; matched broadly so a
-// future rename or an "unknown variant" retirement notice is still caught. A
-// false positive merely disables the legacy fallback; a false negative hangs.
+// 0.158.0 answers `-32601: list_turns is not supported yet` (0.160.1 answers
+// normally -- round-130); matched broadly so a future rename or an "unknown
+// variant" retirement notice is still caught. A false positive merely disables
+// the legacy fallback; a false negative hangs.
 const TURN_LIST_UNSUPPORTED_PATTERN = /-32601|not supported|not implemented|unknown variant|method not found|unknown method/i
 
 export function isTurnListUnsupportedError(error: unknown): boolean {

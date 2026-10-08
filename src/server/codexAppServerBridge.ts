@@ -403,6 +403,7 @@ class AppServerProcess {
   private readonly boundedThreadTurnPageCacheByThreadId = new Map<string, Map<string, { page: BoundedThreadTurnPage; expiresAt: number }>>()
   // round-102 P0：app-server 一旦承认不实现 thread/turns/list（codex-cli 0.158.0
   // 注册了方法但回 `-32601: list_turns is not supported yet`），就记住这个能力位。
+  // round-130 复测（0.160.1）：该方法已实现，故这个闩锁只在旧二进制上会置位。
   // 上翻路由据此拒绝回落全量水合——0.158.0 上大线程的全量 thread/read 会挂死 UI。
   private threadTurnPageUnsupported = false
   private readonly threadReadResultCache = new ThreadReadResultCache()
@@ -725,7 +726,8 @@ class AppServerProcess {
   /**
    * True once the app-server has admitted it does not implement
    * `thread/turns/list` (codex-cli 0.158.0 and any future build that retires the
-   * method before its replacement ships). The older-turn route checks this
+   * method before its replacement ships; codex-cli 0.160.1 implements it, so this
+   * stays false there -- round-130). The older-turn route checks this
    * before falling back to the full-hydration read, which hangs the UI on such
    * builds (round-102 P0).
    */
@@ -1375,7 +1377,8 @@ export class BackendQueueProcessor {
   private async startQueuedTurn(turn: BackendQueuedTurn): Promise<void> {
     // round-112：这一发 resume 的唯一目的是把线程加载进 app-server（紧接着就
     // turn/start），返回的轮次从来没人读。原先不传 excludeTurns → app-server 会
-    // 全量构造轮次：本机 0.158.0 实测 3MB/16 轮线程 3267ms，大线程按 round-84
+    // 全量构造轮次：本机实测 3MB/16 轮线程 3267ms（round-130 复核：这批读数当时
+    // 驱动的其实是 0.154.0-alpha.6.2，文档标了 0.158.0；量级结论不变），大线程按 round-84
     // 的量级是 2118ms/12.12MB，而每个排队轮开跑都要付一次。
     // ThreadResumeParams.excludeTurns 的协议语义正是「只返回线程元数据与
     // live-resume 状态、不填 thread.turns」——加载语义不变。探针实测

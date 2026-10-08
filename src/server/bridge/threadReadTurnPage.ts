@@ -7,7 +7,8 @@
 // `excludeTurns`/`initialTurnsPage`. Its own doc comment points at the paging
 // pair `thread/turns/list` + `thread/items/list` instead. So the bounded read is
 // two `experimentalApi`-gated calls (verified working on the local codex-cli
-// 0.158.0, with and without the capability bit):
+// 0.158.0, with and without the capability bit; round-130 re-verified on
+// codex-cli 0.160.1, where both calls answer for real):
 //
 //   1. `thread/read { includeTurns: false }` -> full thread metadata (id, path,
 //      model, status, cliVersion, ...) with `turns: []`, ~12ms.

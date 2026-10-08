@@ -1,7 +1,8 @@
 // round-102 P0：`/codex-api/thread-turn-page` 的兜底契约。
 //
 // codex-cli 0.158.0 注册了 `thread/turns/list` 却回 `-32601: list_turns is not
-// supported yet`，而它的全量 `thread/read {includeTurns:true}` 在大线程上挂死
+// supported yet`（round-130：0.160.1 已实现，本文件改用 stub 模拟旧二进制），
+// 而它的全量 `thread/read {includeTurns:true}` 在大线程上挂死
 // (>90s)。所以有界路径失败时分两种走向：
 //   - app-server 承认不实现 turns/list（isThreadTurnPageUnsupported）→ 答边界
 //     状态，绝不碰 readThreadForTurnPage；

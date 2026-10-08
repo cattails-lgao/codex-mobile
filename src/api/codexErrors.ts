@@ -12,6 +12,7 @@ export type CodexErrorCode =
   | 'unknown_error'
   // round-102 P0：app-server 不实现 thread/turns/list（codex-cli 0.158.0），
   // 上翻更早轮次是终态不可用而非请求失败——UI 据此停止重试并提示边界。
+  // round-130 复测：0.160.1 已实现该调用（有界分页真机走通），本码只对旧二进制可达。
   | 'older_turns_unavailable'
 
 export class CodexApiError extends Error {
