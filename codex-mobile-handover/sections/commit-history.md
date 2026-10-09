@@ -381,7 +381,8 @@
 | `5fd35be9` | `feat(attachments): fileId 图片机会性解析（推翻 round-137「协议不可行」）+ audio/localAudio/mention 补可见面（round-138）` | 10 文件（5 改 + 1 新增模块 + 1 新增测试 + 2 测试改 + 1 闸门），659 增 7 删 |
 | `4781a6d8` | `docs(handover): round-138 …（轮次文档 + 总入口 + 提交史）` | 3 文档（+371/-5） |
 | `2d20344e` | `docs(round-138): 校正 §八 涉及文件的增删行数（以 5fd35be9 的 numstat 为准）` | 2 文件（轮次文档 + 提交史，+7/-6） |
-| （本文档提交） | `test(ui): 新增 audio / localAudio / mention 面的浏览器级闸门（check-message-media-surfaces，44 项）` | 1 文件（新增闸门 +403） |
+| `767162c7` | `test(ui): 新增 audio / localAudio / mention 面的浏览器级闸门（round-138 追办，44 项）` | 1 文件（新增闸门 +402） |
+| `b0c6e516` | `docs(handover): round-138 追办 —— audio / mention 浏览器级闸门（轮次文档 §十 + 总入口 + 提交史）` | 3 文件（+111/−10） |
 
 **由来**：用户口径「**待办1/2，待办4，你都一并处理不行吗**」—— 一次收口 round-137 §六 的两条遗留（① 完整 fileId → 可渲染内容、② `mention` / `audio` / `localAudio` 的可见化）＋ 待办 4（OAuth 泄漏凭据的上游归属与外包路径）。
 
