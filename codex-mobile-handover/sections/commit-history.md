@@ -372,6 +372,33 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-138（fileId 图片机会性解析 + audio/localAudio/mention 补可见面 + 待办 4 凭据泄漏归属定案，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `5fd35be9` | `feat(attachments): fileId 图片机会性解析（推翻 round-137「协议不可行」）+ audio/localAudio/mention 补可见面（round-138）` | 10 文件（5 改 + 1 新增模块 + 1 新增测试 + 2 测试改 + 1 闸门），659 增 7 删 |
+| （本文档提交） | `docs(handover): round-138 …（轮次文档 + 总入口 + 提交史）` | 3 文档 |
+
+**由来**：用户口径「**待办1/2，待办4，你都一并处理不行吗**」—— 一次收口 round-137 §六 的两条遗留（① 完整 fileId → 可渲染内容、② `mention` / `audio` / `localAudio` 的可见化）＋ 待办 4（OAuth 泄漏凭据的上游归属与外包路径）。
+
+**① fileId 图片（round-137 §六① / §3.3）：推翻「协议不可行」的推论。** round-137 的四条依据逐条仍成立（附件面只有 `thread/attachment/{add,list,remove}`、`list` 只回元数据、`payload` 是 opaque `JsonValue`、无内容取回端点）；本轮另把 167 个 client method 全枚举、并在 332MB 的 `codex.exe` 里搜 `attachment-store` / `fileId` / `data:image` 等字串，确无「客户端可用」的内容取回通道。**但推论错了** —— 用 `node:sqlite`（只读）复核 `state_5.sqlite`：`thread_attachments = (id TEXT PK, thread_id, attachment_type, identity_key, payload TEXT NOT NULL, created_at, UNIQUE(thread_id, attachment_type, identity_key))`，**本机 0 行**，即**纯客户端写的 KV**；没有内容端点**恰恰**意味着客户端想让附件有意义就只能把可解析内容写进 `payload`。故新增 `src/server/bridge/threadAttachmentImageSources.ts`：**不猜字段名、只按「值的形态」识别**（`data:image|video` / `http(s)://` 直接当源；`file://` 或绝对路径且扩展名在 `LOCAL_IMAGE_EXTENSIONS`（16，与 `httpServer.ts` 的 `IMAGE_CONTENT_TYPES` 对齐）内 ⇒ 换 `/codex-local-image?path=` 代理），BFS 有界（`MAX_PAYLOAD_NODES=200` / `MAX_PAYLOAD_DEPTH=6`），`attachment.id` 与 `identityKey` **双索引**。三道短路保证零成本：无 fileId ⇒ **一次 RPC 都不发**；无 `thread.id` ⇒ 原样返回；查表抛错 ⇒ 吞掉。命中即把 block 改写成 `{ type:'image', url }`（**幂等**：已改写的 block 不再带 `fileId`），未命中**保持 round-137 的虚线占位** ⇒ **严格单调变好**。接入：模块级 `resolveThreadReadFileIdImages(appServer, result)`，两个注入点（rpc 管道 + `handleThreadHttpRequest`）都把它作 `sanitizeThreadTurnsInlinePayloads` 的**后置一趟**。（第一版把它写成 `/codex-api/rpc` 块里的 `const` ⇒ 下游 `handleThreadHttpRequest` 作用域外，`TS2304`；抽到模块级解决。）
+
+**② audio / localAudio / mention（round-137 §六②）：与 fileId 同因，静默消失 ⇒ 各开可见面。** `parseUserMessageContent` 把未显式处理的 block 推成 `rawBlocks`（`isUnhandled: true`），而 **`rawBlocks` / `isUnhandled` 在 UI 上没有任何渲染分支**（全库唯一消费点 `useDesktopStateUtils.ts:231` 只做等值比较）；同时 `shouldOmitEmptyGenericMessage` → `hasMessageBodyContent` 对「无 text/images/fileAttachments/skills」的消息返回 true（**省略**）⇒ 两类叠加使 audio / localAudio / mention 在历史里静默消失。本轮：`audio{url}` → `<audio controls preload="metadata">`；`localAudio{path}` → `/codex-local-file?path=` 代理（复用既有「打开本地文件」通道）；`mention{name,path}` → `@name` chip（`path` 只作 title）。**关键是两道闸都要补**：`hasMessageBodyContent` 与 `toUiMessages` 的 `hasRenderableUserContent` —— 只补前者时「只发一条语音」的用户消息仍会被**整条丢掉**（本轮实测抓到）。兜底从 8 个 `!==` 长链改成 `HANDLED_USER_INPUT_TYPES` 集合，因为长链会把 `UserInput` 联合**收窄成 `never`**（`TS2339`）；`rawBlocks` 保留（将来新增变体不静默丢数据），并由新用例「**gives every UserInput variant a visible surface**」遍历全 8 变体钉住。
+
+**③ 待办 4（OAuth 泄漏凭据）：只取证、不外发。** `gh api` 定案本仓 `cattails-lgao/codex-mobile` 是 **`friuns2/codex-mobile` 的 fork**（`fork: true`）；泄漏提交 `3cecaa60`（"Add GitHub OAuth env vars for web login", 2026-03-13）是**上游**的，且上游该 ref **至今返回明文** client id + secret；OAuth App 名 **`codexui`**（授权页 "to continue to codexui"）；上游 owner `friuns2` = Igor Levochkin，公开邮箱 `igor.levochkin@deltacygnilabs.com`；上游 `security_and_analysis` 为空 ⇒ **未开私密漏洞报告** ⇒ 只能走私信/站外，**不得**开公开 issue。已排除：secret scanning（只检测、不回扫历史）、`revoke credentials` API（只认 `ghp_` / `github_pat_` / `gho_` / `ghu_` / `ghr_` 类 token，**不是** OAuth client id+secret）、DMCA（只有数据权利人能提）、再改历史（改不动**上游**存储）。⇒ 只剩两条人类动作：(a) 请上游**轮换/删除** App `codexui`；(b) **GitHub Support 工单**回收两仓重写后不可达的对象。**用户裁决 (a) 私信「先不发」**；草稿 `tmp/r138-upstream-notice.md` / `tmp/r138-github-support-draft.md` 与取证 `tmp/r138-oauth-upstream-evidence.txt` **未入库（`tmp/` 已 gitignore）**。
+
+**为什么 `SHARED_BRIDGE_VERSION` 未 bump（有意）**：该版本号唯一作用是 dev 重启时 `getSharedBridgeState()` 是否**复用**上一进程的 `{appServer, terminalManager, …}`；历次 bump 全部对应**共享对象本身**变了（round-86 加 `readBoundedThreadTurnPage`、round-102 加能力位、round-116 改 `ThreadTerminalManager` 构造、round-136 给链加 `hydrate/snapshot` 并持有落盘定时器）。本轮只加了**无状态**模块 + 改了 `createCodexBridgeMiddleware()` 里的响应管道，而 `configureServer()`（`vite.config.ts:141`）每次 dev 重启都会**重新调用** `createCodexBridgeMiddleware()` ⇒ 新管道必然生效，与版本号无关；版本号也盖不住「进程没重启」那种情形（那时 `getSharedBridgeState()` 根本不执行）。⇒ 不 bump（否则是毫无意义的 v7→v8）。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0**；全量 **802 例 / 802 通过（78 文件）零失败**（＝ round-137 基线 777 ＋ 25）；`check-ui-contract.cjs` **52/52**（50 → 52）；`vite build` **EXIT=0**（`✓ built in 1m 30s`，仅既有 chunk >500kB 提示）；`tsup` **EXIT=0**（改了 `src/server/**` ⇒ `dist/` 与 `dist-cli/` 都要重建）。**注意**：`vite build` 在沙箱内会被 safe-delete shim 拦（`genie-trash ETIMEDOUT`，发生在 `prepareOutDir`/`emptyDir`）⇒ 须沙箱外跑。**单测增量**：新增 `threadAttachmentImageSources.test.ts` **19 例**（`toRenderableMediaSource` 8 / `extractRenderableAttachmentSource` 4 / `resolveFileIdImageBlocksInThreadResult` 7）、`v2.test.ts` +4（audio-only、localAudio→代理、mention-only、全变体可见）、`messageContent.test.ts` +2。
+
+**反跑（决定性，证明非空）**：`node tmp/r138-flip.cjs snapshot|off|on`（`.bak` 本轮改为**直接从 `HEAD` 导出**以保证基线可信；`off` = 5 生产文件回退 + 新模块换「功能关闭」桩，**保留全部断言**）⇒ 契约 **50/52**（round-138 两项，子项全 `NO`）＋ 定向 **17 failed | 37 passed (54)**；`on` ⇒ 6 文件 `same` **逐字节一致**、契约 52/52、定向 54/54。
+
+**诚实边界**：①**fileId 解析的「命中」路径无端到端真机证据** —— 本机 `thread_attachments` **0 行**（本 home 从未写过附件），「命中 ⇒ 出真图」只由**合成 payload 的单测**证明；真实命中率取决于 CLI 是否/如何写 `payload`，未测。②**浏览器类闸门未跑**：新增 CSS 只 1 块（`.message-audio-attachments` / `.message-audio-player` / `.message-mention-chip`，只用既有 token），`<audio>` 与 @chip 的**暗色真机观感无截图证据**；`localAudio` 走 `/codex-local-file`（**无**扩展名白名单）⇒ 比 `localImage` 语义更宽。③`mention` chip 只显示 `name`，`path` 仅在 `title`；长名是否截断未验证。④**待办 4 未闭环**：凭据**仍未轮换**、工单**未提交**、私信按用户裁决**暂缓**。
+
+**未发布**：未 bump 版本、未 tag；`5fd35be9` 待在本地 `main`（round-122 ~ round-138 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
+
 ## round-137（空状态文案补齐「下一步动作」+ attachment-only（fileId）图片不再静默缺失，未发布）
 
 **提交**：
