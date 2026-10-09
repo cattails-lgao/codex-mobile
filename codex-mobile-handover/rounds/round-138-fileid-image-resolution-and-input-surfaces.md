@@ -289,16 +289,16 @@ DMCA（只有数据权利人能提）、**再改写一次历史**（改不动**�
 
 ## 八、涉及文件 + 复现方式
 
-**改动文件（10 个，+285 / −7；另有 2 个新文件）**
+**改动（提交 `5fd35be9`：10 文件，+659 / −7）** = **8 个既有文件**（合计 +285/−7）＋ **2 个新文件**（合计 374 行）
 
-- **新增** `src/server/bridge/threadAttachmentImageSources.ts`（~200 行）：机会性解析模块
-- **新增** `src/server/bridge/threadAttachmentImageSources.test.ts`（19 例）
-- `src/server/codexAppServerBridge.ts`（+31/−1）：模块级 `resolveThreadReadFileIdImages` + 两个注入点后置一趟
-- `src/api/normalizers/v2.ts`（+64/−6）：`HANDLED_USER_INPUT_TYPES` / `toLocalFileUrl` / `audioSources` / `mentions` / `hasRenderableUserContent`
+- **新增** `src/server/bridge/threadAttachmentImageSources.ts`（+200）：机会性解析模块
+- **新增** `src/server/bridge/threadAttachmentImageSources.test.ts`（+174，19 例）
+- `src/server/codexAppServerBridge.ts`（+29/−2）：模块级 `resolveThreadReadFileIdImages` + 两个注入点后置一趟
+- `src/api/normalizers/v2.ts`（+60/−4）：`HANDLED_USER_INPUT_TYPES` / `toLocalFileUrl` / `audioSources` / `mentions` / `hasRenderableUserContent`
 - `src/types/codex.ts`（+7）：`UiMessage.audioSources?` / `mentions?`
 - `src/utils/messageContent.ts`（+2）：计入可见正文
 - `src/components/content/ThreadConversation.vue`（+37）：`<audio>` 播放器 + @提及 chip + 3 条新样式
-- `src/api/normalizers/v2.test.ts`（+74）、`src/utils/messageContent.test.ts`（+8）：单测
+- `src/api/normalizers/v2.test.ts`（+73/−1）、`src/utils/messageContent.test.ts`（+8）：单测
 - `scripts/check-ui-contract.cjs`（+69）：2 项契约（50 → 52）
 
 **复现命令**
