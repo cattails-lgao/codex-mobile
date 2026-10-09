@@ -384,9 +384,19 @@
 
 **发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.129`（**annotated**，与 0.1.119 ~ 0.1.127 一致；0.1.128 误用了轻量 tag）指向该提交；GitHub Release 由维护者创建（非草稿／非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.129 。
 
-**发布闭环**：（待用户 `npm publish` 后回填 —— registry 发布时刻、`dist-tags.latest` 切换、tarball 条目数与 shasum 复核。）
+**发布闭环（2026-10-09 完成）**：`codex-mobile-re@0.1.129` 已发布到 npm 官方源并成为 `latest`。
 
-**发版前置（环境，2026-10-09 实测）**：`~/.npmrc` 的 npm 凭据仍失效 —— `npm whoami --registry=https://registry.npmjs.org/` → **E401 401 Unauthorized**（`GET /-/whoami`），与 round-135 的对照实验结果一致 ⇒ `npm publish` 前需先 `npm login`（维护者＝用户本人）。`prepublishOnly = pnpm run build`（`vue-tsc --noEmit && vite build` ＋ `tsup`）会在 publish 时重建 `dist/`、`dist-cli/`，故两者不入库。
+- **registry 发布时刻**：**2026-10-09T09:19:51.957Z**（packument `time.modified` = `09:19:52.155Z`；`_rev` 由 `38-9b2a92e4375f675d912e1115d3e59935` 升至 `39-1e819164bb6a52d8502a9c437cf697aa`）。
+- **`dist-tags`**：`latest` 由 `0.1.127` **切到 `0.1.129`**（`GET /codex-mobile-re/0.1.129` → 200；`HEAD …/-/codex-mobile-re-0.1.129.tgz` → 200）。
+- **tarball**：**54 个文件**、`shasum` = **`7d47aabdcfb7fc1983e88c980562040d8934efda`**、`integrity` = `sha512-9ANOyYHVctNrGAW6RUr9VIyRiTPio4Uap3g+a1sp5xQwyeyy2+TQQ5PKXWS5dPMdwsbsJFdP4TI4vcQ474HzAw==`、`unpackedSize` = **5,142,065 B**、下载体积 **1,649,774 B**。
+- **产物一致性复核（本轮新增的口径）**：把 tarball 解开逐个比对本地构建目录 ⇒ **53/54 文件逐字节一致**；唯一差异是 `package.json`（本地 2575 B / 包内 2281 B），且差异**恰好是两个键** —— `packageManager` 与 `scripts.prepublishOnly`（**pnpm 打包会剥掉发布期专用元数据**；16:54 那次 npm 打包的清单显示 `package.json` 为 2.6 kB ＝ 本地 2575 B ⇒ 剥离发生在 pnpm 侧）。`dist/` 的 mtime = **09:17:00Z**（晚于最新源码 `08:11:29Z`）⇒ 构建确实在 publish 时跑过、产物是当前源码的。
+- **构建可复现**：16:54（npm，未发成）与 17:17（pnpm）两次独立打包的**文件清单与逐个字节数完全一致**（`dist-cli/index.js` 712248、`index-rc4ZsEIH.js` 580282、`ThreadConversation-BB19p4J3.js` 109353 ……）。
+
+**发版前置（环境，2026-10-09 实测）**：**`npm publish` 在本机发不出去，本版实际是由 `pnpm publish` 发成的**。原因是**两套凭据彼此独立**：
+
+- npm 读 `~/.npmrc` 的 `//registry.npmjs.org/:_authToken`，该 token **已失效** —— `npm whoami --registry=https://registry.npmjs.org/` → **E401**（`GET /-/whoami` body `{}`），`npm publish` → **404**。**404 是「无权」的伪装**（npm 对无发布权的请求返 404 而非 403）⇒ **不要**误读成「包名不存在」（`GET` 包元数据仍 200）或「版本被占用」（那是 **403** `You cannot publish over the previously published version`）。
+- pnpm 读**自己的目录** `%LOCALAPPDATA%\pnpm\config\auth.ini`（形如 `//registry.npmjs.org/:_authToken=…`），**与 `~/.npmrc` 完全分离**；`npm whoami` 401 与 `pnpm publish` 成功**并不矛盾**。
+- 另有：`prepublishOnly = pnpm run build`（`vue-tsc --noEmit && vite build` ＋ `tsup`）会在 publish 时重建 `dist/`、`dist-cli/`（两者不入库），且该键**只存在于本地清单、不会出现在发布包内**。
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
