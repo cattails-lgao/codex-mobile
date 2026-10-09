@@ -244,11 +244,28 @@ Deleted branch codex/extract-desktop-queue-state (was c31265af).
 | 1 | **联系 GitHub Support 清理该仓库的不可达对象 / 缓存视图**（§6.2，唯一能真正删除泄露凭据的路径） | **需用户提工单** |
 | 2 | 若可识别泄露凭据所属的 OAuth App 归属方，通知其轮换 | 需用户判断 |
 | 3 | round-132 §七 第 1 条：`thread/read` 有界页 `nextCursor` 交 `onTurnPageBoundary` | **已在 round-133 完成** |
-| 4 | B1/B2/B3 的**端到端秒级收益**未量（§九 3） | 可做（重跑 round-132 的 A/B 探针） |
-| 5 | B3 的「桥真重启后第一次上翻变快」端到端未验（§九 4） | 可做 |
-| 6 | round-131 §十 第 2 条：造一条大线程量回滚成本 | 可做，但耗时 |
-| 7 | round-131 §十 第 3/4 条：`{fileId}` 图片 UI 口径 / round-120 空状态文案 i18n | 需产品口径 / 用户拍板 |
-| 8 | 0.1.128 之后的发布：`package.json` 已是 `0.1.128`、GitHub Release `v0.1.128` **已存在**（本轮把它的 tag 重指到重写后提交），npm `latest` 仍是 `0.1.127`；npm publish 由用户做 | 待授权 |
+| 4 | B1/B2/B3 的**端到端收益** | **已量（§10.1）**：B1 无可测收益（本机可索引线程太小）；B3 闭环证实 |
+| 5 | B3 的「桥真重启后第一次上翻」端到端 | **已验（§10.1）**：重启后命中同一锚点并再持久化 |
+| 6 | round-131 §十 第 2 条：造一条大线程量回滚成本 | 可做，但耗时（**未做**） |
+| 7 | round-131 §十 第 3/4 条：`{fileId}` 图片 UI 口径 / round-120 空状态文案 i18n | 需产品口径 / 用户拍板（**未做**） |
+| 8 | npm publish（`latest` 仍 `0.1.127`；`0.1.128` 在 registry 上 404） | **受阻**：`~/.npmrc` 里指向 `registry.npmjs.org` 的 token 返回 **401 E401**（`registry=` 另指向 npmmirror 镜像）；包维护者＝`lgao7779`（用户本人）⇒ 用户 `npm login` 后 `npm publish` |
+| 9 | GitHub Support 工单（§6.2） | **草稿已就绪**：`tmp/r136-github-support-draft.md`（已查实泄露应用名＝**`codexui`**） |
+
+### 10.1 收尾实测（round-136 追加）
+
+只在 `D:/codex-home-r136ab`（**镜像** home：拷 `state_*.sqlite` + `session_index.jsonl`，rollout 原地只读）上跑，**零模型调用**。探针 `tmp/r136ab-turnpage.cjs`；真实线程 `01a04679`（15 轮 / 2965 行 / 19MB），锚点＝resume 载入的最老一轮。
+
+| 场景 | page#1 | page#2 | sidecar |
+| --- | --- | --- | --- |
+| ON（B1/B2/B3 生效）+ 清空 sidecar | **341ms** | 142ms | 写入 226B / 1 线程 / 1 锚点 |
+| ON + 保留 sidecar（**重启后**） | **204ms** | 69ms | 同一锚点被再持久化 |
+| OFF（`tmp/r136-flip.cjs off`）+ 清空 sidecar | **342ms** | 117ms | 亦写入 |
+
+- **B3 闭环成立**：真实上翻后 sidecar 出现真锚点（`rolloutOrdinal:582`）；**`afterResume` 恒为 `{}`** ⇒ 种子来自**页请求**（B1 的 record-before-use），不是 resume；重启后命中同一锚点 ⇒ hydrate → 用 → snapshot 全通。
+- **B1 无可测收益**：341 vs 342ms。原因是本机可索引线程仅 15 轮，OFF 的全量读本身 <400ms ⇒ **没有可省的时间**。round-132 的 7202→969ms 属**另一台机器 + 大得多的线程**，**不可外推**。
+- 真正的瓶颈不在翻页：thread `01a04679` 每次 `thread/resume` 要 22s（解析整条 19MB rollout）。
+- **`logs_2.sqlite`（表 `logs`，列 `feedback_log_body`＝`app-server request: <method>`，带 `ts`）可作 RPC 跟踪**：ON 窗口内只见 `thread/turns/list` ×3 + `thread/read` ×1（=3 次 resume 的元数据读 + 两次翻页），**未出现为翻页额外引入的全量读**；但 OFF 窗口的请求在 `taskkill /F` 前未 flush ⇒ 仅作旁证。
+- **副作用（已还原）**：`thread/resume` 会向**真实** rollout 尾部追加 `event_msg`/`thread_settings`（3 个文件分别 +3246/+6480/+8128 B，append-only）。按基线 `truncateSync` + `utimesSync` 还原，20 个 rollout 全部回到基线尺寸。
 
 ---
 
