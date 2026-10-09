@@ -232,6 +232,8 @@ Deleted branch codex/extract-desktop-queue-state (was c31265af).
 6. **`.env` 泄露的凭据仍在 GitHub 的不可达对象里**（§6.2）：本地已做到「主分支与所有 tag 都不再指向重写前历史」，但**服务端回收不由我们控制**。这条需要用户去 GitHub Support 提工单才能闭环。凭据**不是用户的**，所以用户**无法自行轮换** ⇒ 若该 OAuth App 有归属方可识别，通知归属方是另一条缓解路径。
 7. **D 只删了两条本地分支**，没有做其他仓库级清理（如 tag 归并、历史压缩）；远端本就没有这两条分支，故远端零变化。
 8. **未发布**：未 bump 版本、未 tag（本轮只动了 `v0.1.128` 这个**既有** tag 的指向，没有新建 tag）。
+9. **UI / 浏览器闸门本轮未跑**：`check-fonts` / `check-theme` / `check-token-equivalence` 与四个 `verify-*`（review-pane-scroll / conversation-list-persists / conversation-mount-scroll / command-block-handoff）。理由：本轮**产品侧零 UI、零 CSS、零样式改动**（唯一改动全在 `src/server/**`），且这些闸门需要 playwright 与一个跑着**生产构建**、且含足够长（>600px）真实线程的服务，本机按约定在环境不足时 SKIP 退 2。**纯静态的 `check-ui-contract` 已跑并通过 48/48**（它同时是本轮唯一新增 UI 侧断言的地方）。
+10. **一次全量单测的间歇性失败已定位为既有 flake，不是本轮的回归**：提交后在**改动已冻结**的树（本地 = 远端 = `bfe364e6`）上复跑全量，出现过一次 `1 failed | 771 passed (772)`，失败用例是 `src/server/bridge/execPtyChannel.test.ts > encodes writes as base64 and keeps keystroke order`（断言三条**链式异步** write 已完成，实测只到 `['a','b']`）。**该文件与 `execPtyChannel.ts` 本轮一行未改**（`git diff HEAD --stat` 为空），且**隔离复跑 4/4 全绿（8/8）** ⇒ 属**负载敏感**的调度竞态（全量并发跑 77 个文件时被挤掉），与 round-125/126 记录的「全量并发下若干例超时/抖动、隔离复跑通过」同类。**未修**：不属本轮范围，且它不是产品缺陷（该测试断言的是自身桩的调度顺序）。
 
 ---
 
