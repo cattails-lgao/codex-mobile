@@ -83,6 +83,14 @@ export const TURN_ID_PAGE_SIZE = 10_000
 /** Safety cap on the cursor chain (50 pages), not on the turn count. */
 export const TURN_ID_MAX_PAGES = 50
 
+/**
+ * The largest page `thread/turns/list` actually hands back: round-104 measured
+ * the app-server clamping a page to **100 entries** regardless of `limit` (a
+ * 173-turn thread answered `limit: 10_000` with 100 ids). So one listing can
+ * only reach 100 turns back from the newest one.
+ */
+export const TURN_LIST_SERVER_PAGE_CLAMP = 100
+
 export type TurnPageRpc = {
   rpc(method: string, params: unknown): Promise<unknown>
 }
@@ -159,6 +167,33 @@ export class ThreadTurnPageCursorChain {
   clear(threadId?: string): void {
     if (threadId) this.cursorByThreadId.delete(threadId)
     else this.cursorByThreadId.clear()
+  }
+
+  /**
+   * Restore a persisted snapshot (round-136). Entries go in through `record`,
+   * so the caps and the least-recently-recorded eviction order apply to restored
+   * anchors exactly as they do to fresh ones -- the caller therefore feeds the
+   * snapshot oldest-first, and a snapshot older than the caps degrades to "the
+   * newest entries survive" rather than to a rejected file.
+   */
+  hydrate(state: Record<string, Record<string, string>> | null | undefined): void {
+    if (!state) return
+    for (const [threadId, perThread] of Object.entries(state)) {
+      for (const [turnId, cursor] of Object.entries(perThread ?? {})) {
+        this.record(threadId, turnId, cursor)
+      }
+    }
+  }
+
+  /** What is currently known, oldest registration first (the persist order). */
+  snapshot(): Record<string, Record<string, string>> {
+    const state: Record<string, Record<string, string>> = {}
+    for (const [threadId, perThread] of this.cursorByThreadId) {
+      const entries: Record<string, string> = {}
+      for (const [turnId, cursor] of perThread) entries[turnId] = cursor
+      if (Object.keys(entries).length > 0) state[threadId] = entries
+    }
+    return state
   }
 }
 
@@ -276,9 +311,10 @@ export async function readBoundedThreadTurnPage(
   let boundaryCursor: unknown = null
 
   if (wanted > 0) {
-    const cursor = deps.chain.lookup(threadId, beforeTurnId)
     // Without a cursor anchored at the anchor turn there is no way to ask for
-    // "the turns just before it" -- see the module header.
+    // "the turns just before it" -- see the module header. A missing seed is
+    // rebuilt from one cheap id listing before giving up (round-136).
+    const cursor = await resolveChainCursor(deps, threadId, ids, beforeIndex)
     if (!cursor) return null
 
     let page: unknown
@@ -322,4 +358,72 @@ export async function readBoundedThreadTurnPage(
   // the cursor that reaches them. A null cursor means the thread starts here.
   if (boundaryTurnId) deps.chain.record(threadId, boundaryTurnId, boundaryCursor)
   return built
+}
+
+/**
+ * The cursor that reaches the turns immediately older than `ids[beforeIndex]`.
+ *
+ * Normally the chain already holds it: `thread/read` and `thread/resume` seed
+ * the newest boundary and every bounded page records the next one. When it does
+ * not -- a bridge restart (the chain is in-process memory), a thread opened
+ * before those seeds existed, an LRU-evicted entry -- the route used to pay a
+ * full-history `thread/read`: 7202ms against 969ms for the same anchor on the
+ * same thread (round-132 §3.1), and it paid it again on every repeat, because
+ * the fallback registers nothing (round-132 §3.3).
+ *
+ * One cheap listing rebuilds the missing seed. Cursors only chain at page
+ * boundaries, and asking for the newest `ids.length - beforeIndex` ids makes
+ * the anchor turn that page's own oldest element -- so the page's `nextCursor`
+ * is by definition the cursor for the turns just before the anchor, which is
+ * exactly what `record` is handed everywhere else. The listing is id-only
+ * (`itemsView: "notLoaded"`), measured at ~100ms rather than seconds.
+ *
+ * The rebuilt cursor is recorded before it is used, so the next request at this
+ * anchor is a normal chain hit and the listing is never repeated.
+ *
+ * Returns null -- the caller then falls back exactly as before -- when the
+ * anchor is further than one page from the newest turn (that needs a walk this
+ * module deliberately does not do), when the page does not come back anchored
+ * where it was asked for (a revert racing us), or when the listing fails for
+ * any reason other than an app-server that does not implement it.
+ */
+async function resolveChainCursor(
+  deps: BoundedThreadTurnPageDeps,
+  threadId: string,
+  ids: string[],
+  beforeIndex: number,
+): Promise<string | null> {
+  const anchorTurnId = ids[beforeIndex]
+  if (!anchorTurnId) return null
+
+  const known = deps.chain.lookup(threadId, anchorTurnId)
+  if (known) return known
+
+  const span = ids.length - beforeIndex
+  if (span < 1 || span > TURN_LIST_SERVER_PAGE_CLAMP) return null
+
+  let page: unknown
+  try {
+    page = await deps.rpc('thread/turns/list', {
+      threadId,
+      limit: span,
+      sortDirection: 'desc',
+      itemsView: 'notLoaded',
+    })
+  } catch (error) {
+    if (isTurnListUnsupportedError(error)) throw new ThreadTurnPageUnsupportedError(error)
+    return null
+  }
+
+  const record = asRecord(page)
+  const data = Array.isArray(record?.data) ? record.data : null
+  // The page arrives newest-first, so its oldest element is the anchor if the
+  // cut landed where it was asked to. Anything else would yield a cursor for
+  // some other window, so refuse it rather than serve a page off by N turns.
+  const oldestTurnId = data ? readNonEmptyString(asRecord(data[data.length - 1])?.id) : ''
+  const cursor = readNonEmptyString(record?.nextCursor)
+  if (!data || oldestTurnId !== anchorTurnId || !cursor) return null
+
+  deps.chain.record(threadId, anchorTurnId, cursor)
+  return cursor
 }

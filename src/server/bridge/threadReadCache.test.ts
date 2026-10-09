@@ -42,6 +42,48 @@ describe('threadReadInvalidatesCache', () => {
   })
 })
 
+// round-136：这个谓词现在也门控「上翻更早轮次」的两个缓存
+// （codexAppServerBridge 的 emitNotification）。
+//
+// 为什么实时流不该清它们：那些缓存只服务更早的窗口，窗口边界由锚点轮的位置
+// 决定；一次回合里真正高频的是 item/*（agentMessage / reasoning 的增量与
+// item 生命周期），它们改的是**最新一轮**，不移动更早窗口。原先「任意带
+// threadId 的通知都清」使缓存恒为冷 ⇒ 同一锚点重复上翻重复付 6–7s
+// （round-132 §3.3）。轮次结构真的变了（新回合、回滚、revert、会话生命周期）
+// 仍必须清，这条断言把两侧都钉住。
+describe('older-turn caches: which notifications invalidate (round-136)', () => {
+  it('clears on anything that can move, truncate, or reorder the turn list', () => {
+    for (const method of [
+      'turn/started',
+      'turn/completed',
+      'turn/interrupt',
+      'thread/rollback',
+      'thread/revert',
+      'thread/compact/start',
+      'thread/archived',
+      'thread/resumed',
+      // 谓词刻意保守：thread/name/ 也在模式里，于是改名也会清一次 —— 浪费但安全。
+      'thread/name/updated',
+    ]) {
+      expect(threadReadInvalidatesCache(method)).toBe(true)
+    }
+  })
+
+  it('keeps the cache through in-place content traffic and status pings', () => {
+    for (const method of [
+      'item/started',
+      'item/completed',
+      'item/agentMessage/delta',
+      'item/reasoning/textDelta',
+      'item/reasoning/summaryTextDelta',
+      'thread/status/changed',
+      'thread/tokenUsage/updated',
+    ]) {
+      expect(threadReadInvalidatesCache(method)).toBe(false)
+    }
+  })
+})
+
 describe('ThreadReadResultCache', () => {
   it('returns what was stored for the same thread and parameters', () => {
     const cache = new ThreadReadResultCache()

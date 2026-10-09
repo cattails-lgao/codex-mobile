@@ -92,6 +92,8 @@ import { readRollbackTurnContext } from './bridge/rollbackTurnContext.js'
 // round-86：上翻更早轮次不再全量水合；用 turns/list 游标链按页取，详见
 // bridge/threadTurnPage.ts 头部实测数据。
 import { readBoundedThreadTurnPage, ThreadTurnPageCursorChain, ThreadTurnPageUnsupportedError, type BoundedThreadTurnPage } from './bridge/threadTurnPage.js'
+// round-136：游标链的持久化 sidecar（为什么另开文件、容量上限见模块头）。
+import { readThreadTurnPageCursors, writeThreadTurnPageCursors } from './bridge/threadTurnPageCursorStore.js'
 import {
   handleTelegramHttpRequest,
   readTelegramBridgeConfig,
@@ -328,6 +330,9 @@ type PendingServerRequest = {
 }
 
 const THREAD_TURN_PAGE_READ_CACHE_TTL_MS = 30_000
+// round-136：游标链落盘的去抖。一次上翻会登记一个新边界，而文件是整体重写的，
+// 去抖把连续的滚动压成一次写。
+const THREAD_TURN_PAGE_CURSOR_SAVE_DEBOUNCE_MS = 2_000
 /** Bounds on the round-86 bounded-turn-page cache (per-thread, then per-page). */
 const BOUNDED_TURN_PAGE_CACHE_MAX_THREADS = 32
 const BOUNDED_TURN_PAGE_CACHE_MAX_PAGES_PER_THREAD = 64
@@ -404,6 +409,9 @@ class AppServerProcess {
   // round-86：上翻更早轮次的有界路径。游标链本身不做失效（陈旧游标由 id 列表
   // 复核拦下）；这里只缓存已组装好的页，语义与 threadTurnPageReadCacheByThreadId 一致。
   private readonly threadTurnPageCursorChain = new ThreadTurnPageCursorChain()
+  // round-136：链的持久化。hydrate 只在首次用到时做一次；save 走去抖。
+  private cursorChainHydration: Promise<void> | null = null
+  private cursorChainSaveTimer: ReturnType<typeof setTimeout> | null = null
   private readonly boundedThreadTurnPageCacheByThreadId = new Map<string, Map<string, { page: BoundedThreadTurnPage; expiresAt: number }>>()
   // round-102 P0：app-server 一旦承认不实现 thread/turns/list（codex-cli 0.158.0
   // 注册了方法但回 `-32601: list_turns is not supported yet`），就记住这个能力位。
@@ -567,7 +575,14 @@ class AppServerProcess {
     const nThreadId = this.extractThreadIdFromParams(notification.params)
     if (nThreadId) {
       this.invalidateLiveStateCache(nThreadId)
-      this.threadTurnPageReadCacheByThreadId.delete(nThreadId)
+      // round-136：上翻的全量读缓存只服务「更早轮次」这一个窗口，而窗口的边界
+      // 由锚点轮的位置决定 —— 实时回合里的 item/* 增量改的是最新一轮，不会移动
+      // 更早窗口。原先「任意带 threadId 的通知都清」使它在一次回合里恒为冷，同一
+      // 锚点重复上翻就重复付 6–7s（round-132 §3.3）。改为只在可能改变轮次结构的
+      // 方法上清（turn/* 与 thread/start|resume|fork|rollback|revert|archive…）。
+      if (threadReadInvalidatesCache(notification.method)) {
+        this.threadTurnPageReadCacheByThreadId.delete(nThreadId)
+      }
       this.invalidateBoundedThreadTurnPageCache(nThreadId)
       this.invalidateThreadReadResultCache(nThreadId)
     }
@@ -624,7 +639,10 @@ class AppServerProcess {
 
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
     this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
-    this.threadTurnPageReadCacheByThreadId.delete(threadId)
+    // round-136：这里以前把上翻的全量读缓存一起删。但「存一份快照」并不改变轮次，
+    // 而 `thread/read` 也走这条管道 —— 一次纯读就把缓存清空，正是 round-132 §四
+    // 里「探针每次上翻前先发一条 thread/read，于是每次都冷」的自污染来源。真正的
+    // 轮次变化改由 rpc() 的结构性方法判定（下面）与通知门控负责。
     this.invalidateBoundedThreadTurnPageCache(threadId)
   }
 
@@ -665,6 +683,45 @@ class AppServerProcess {
    */
   recordThreadTurnPageBoundary(threadId: string, oldestTurnId: string, olderCursor: string | null): void {
     this.threadTurnPageCursorChain.record(threadId, oldestTurnId, olderCursor)
+    this.scheduleThreadTurnPageCursorPersist()
+  }
+
+  /**
+   * Load the persisted chain, once, best-effort (round-136). The chain is the
+   * difference between a 969ms scroll and a 7202ms one for the same anchor
+   * (round-132 §3.1), and it used to die with the process -- so the first scroll
+   * of every session (every packaged launch, every dev reload) was the slow one.
+   * An absent or corrupt file is simply an empty chain.
+   */
+  private ensureThreadTurnPageCursorChainHydrated(): Promise<void> {
+    if (!this.cursorChainHydration) {
+      this.cursorChainHydration = readThreadTurnPageCursors()
+        .then((state) => { this.threadTurnPageCursorChain.hydrate(state) })
+        .catch(() => {})
+    }
+    return this.cursorChainHydration
+  }
+
+  private scheduleThreadTurnPageCursorPersist(): void {
+    if (this.cursorChainSaveTimer) return
+    this.cursorChainSaveTimer = setTimeout(() => {
+      this.cursorChainSaveTimer = null
+      this.persistThreadTurnPageCursorChain()
+    }, THREAD_TURN_PAGE_CURSOR_SAVE_DEBOUNCE_MS)
+    // Never hold the process -- or a test run -- open just to flush a cache.
+    this.cursorChainSaveTimer.unref?.()
+  }
+
+  private persistThreadTurnPageCursorChain(): void {
+    void writeThreadTurnPageCursors(this.threadTurnPageCursorChain.snapshot()).catch(() => {})
+  }
+
+  private flushThreadTurnPageCursorChain(): void {
+    if (this.cursorChainSaveTimer) {
+      clearTimeout(this.cursorChainSaveTimer)
+      this.cursorChainSaveTimer = null
+    }
+    this.persistThreadTurnPageCursorChain()
   }
 
   /**
@@ -682,6 +739,8 @@ class AppServerProcess {
     limit: number,
   ): Promise<BoundedThreadTurnPage | null> {
     const pageKey = `${beforeTurnId}\u0000${limit}`
+    await this.ensureThreadTurnPageCursorChainHydrated()
+
     const perThread = this.boundedThreadTurnPageCacheByThreadId.get(threadId)
     const cached = perThread?.get(pageKey)
     if (cached) {
@@ -725,6 +784,11 @@ class AppServerProcess {
   private invalidateBoundedThreadTurnPageCache(threadId?: string): void {
     if (threadId) this.boundedThreadTurnPageCacheByThreadId.delete(threadId)
     else this.boundedThreadTurnPageCacheByThreadId.clear()
+  }
+
+  private invalidateThreadTurnPageReadCache(threadId?: string): void {
+    if (threadId) this.threadTurnPageReadCacheByThreadId.delete(threadId)
+    else this.threadTurnPageReadCacheByThreadId.clear()
   }
 
   /**
@@ -1002,6 +1066,11 @@ class AppServerProcess {
       const paramsRecord = asRecord(params)
       const threadId = readNonEmptyString(paramsRecord?.threadId)
       this.invalidateThreadReadResultCache(threadId || undefined)
+      // round-136：通知门控收窄之后，结构性变更由这里兜住。thread/revert 与
+      // thread/rollback（以及 turn/start）是客户端自己发起的 RPC，未必伴随一条
+      // 可判定的通知，而它们会截断/重排轮次 —— 上翻的全量读缓存必须作废，否则
+      // 会按已经不存在的锚点切窗口。thread/read 不在该模式内，纯读不再自清。
+      this.invalidateThreadTurnPageReadCache(threadId || undefined)
     }
     await this.ensureInitialized()
     return this.call(method, params)
@@ -1094,6 +1163,7 @@ class AppServerProcess {
     this.activeConfigSignature = ''
     this.readBuffer = ''
     this.invalidateThreadReadResultCache()
+    this.flushThreadTurnPageCursorChain()
 
     const failure = new Error('codex app-server stopped')
     for (const request of this.pending.values()) {
@@ -1530,8 +1600,11 @@ const SHARED_BRIDGE_KEY = '__codexRemoteSharedBridge__'
 // 所以 v2 → v3；round-86 加 readBoundedThreadTurnPage / recordThreadTurnPageBoundary，
 // 所以 v3 → v4；round-102 加 isThreadTurnPageUnsupported（翻旧页能力位），
 // 所以 v4 → v5；round-116 起 ThreadTerminalManager 改为注入 app-server exec/PTY
-// 通道（构造参数变化，复用旧实例会继续用 node-pty），所以 v5 → v6。
-const SHARED_BRIDGE_VERSION = 'experimental-api-v6'
+// 通道（构造参数变化，复用旧实例会继续用 node-pty），所以 v5 → v6；round-136 给
+// ThreadTurnPageCursorChain 加了 hydrate/snapshot、AppServerProcess 新增
+// ensureThreadTurnPageCursorChainHydrated / flushThreadTurnPageCursorChain 等
+// 私有成员并持有落盘定时器，所以 v6 → v7。
+const SHARED_BRIDGE_VERSION = 'experimental-api-v7'
 
 function getSharedBridgeState(): SharedBridgeState {
   const globalScope = globalThis as typeof globalThis & {

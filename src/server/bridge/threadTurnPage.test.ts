@@ -6,6 +6,7 @@ import {
   ThreadTurnPageCursorChain,
   ThreadTurnPageUnsupportedError,
   TURN_ID_MAX_PAGES,
+  TURN_LIST_SERVER_PAGE_CLAMP,
   type BoundedThreadTurnPageDeps,
   type TurnPageRpc,
 } from './threadTurnPage.js'
@@ -46,7 +47,14 @@ function makeRpc(ascIds: string[] = TURN_IDS, options: { countPages?: boolean } 
     if (p.itemsView === 'notLoaded') {
       if (options.countPages) return { data: [{ id: `p${calls.length}` }], nextCursor: encodeCut(calls.length) }
       if (p.cursor) throw new Error('the id listing must not be paged for these threads')
-      return { data: [...ascIds].reverse().map((id) => ({ id })), nextCursor: null }
+      // round-136: the chain-seed rebuild asks for the newest `limit` ids (the
+      // full id listing asks for 10_000 and gets the whole thread), so the fake
+      // has to bound the page the way the server does -- the page's oldest id
+      // then *is* the anchor, which is what makes its nextCursor the right seed.
+      const want = Number.isFinite(Number(p.limit)) ? Number(p.limit) : ascIds.length
+      const take = Math.max(1, Math.min(ascIds.length, Math.floor(want)))
+      const cut = ascIds.length - take
+      return { data: [...ascIds.slice(cut)].reverse().map((id) => ({ id })), nextCursor: cut > 0 ? encodeCut(cut) : null }
     }
     if (p.itemsView !== 'full') throw new Error(`unexpected itemsView ${String(p.itemsView)}`)
     if (p.sortDirection !== 'desc') throw new Error('older turns are reached descending')
@@ -269,10 +277,21 @@ describe('readBoundedThreadTurnPage', () => {
     expect(fullPageCalls(calls)).toHaveLength(0)
   })
 
-  it('falls back (null) when no cursor is known for the anchor', async () => {
-    const { rpc, calls } = makeRpc()
+  // round-136 之前这条叫「链上没游标就回落」。现在冷链会先重建种子（见下），
+  // 于是这个入口只剩「重建也答不出来」这一种失败：列表本身报错 ⇒ 保持回落，
+  // 且绝不因此去跑全量读。
+  it('falls back (null) when the anchor has no cursor and the rebuild listing fails', async () => {
+    let listings = 0
+    const rpc = vi.fn(async (method: string, params: unknown) => {
+      const p = (params ?? {}) as Record<string, unknown>
+      if (method === 'thread/read') return { thread: { id: 'thread-1', turns: [] } }
+      listings += 1
+      // 第一次是全量 id 列表，第二次是重建种子那一次 —— 让它失败。
+      if (listings === 1) return { data: [...TURN_IDS].reverse().map((id) => ({ id })), nextCursor: null }
+      throw new Error('listing down')
+    })
     expect(await readBoundedThreadTurnPage(deps(rpc), 'thread-1', 't6', 10)).toBeNull()
-    expect(fullPageCalls(calls)).toHaveLength(0)
+    expect(rpc.mock.calls.some((call) => (call[1] as Record<string, unknown>)?.itemsView === 'full')).toBe(false)
   })
 
   it('falls back when the cursor no longer points at the anchor it was recorded for', async () => {
@@ -360,5 +379,86 @@ describe('readBoundedThreadTurnPage', () => {
     expect(page?.startTurnIndex).toBe(5)
     expect(fullPageCalls(calls)[0].params.limit).toBe(1)
     expect(idsOf((page as { result: { thread: { turns: unknown[] } } }).result.thread.turns)).toEqual(['t5'])
+  })
+
+  // round-136：链未命中时不再直接回落全量读。同窗口同锚点实测，回落 7202ms 而命中
+  // 链 969ms（round-132 §3.1），且回落路径不登记锚点 ⇒ 同一位置反复付 6–7s
+  // （round-132 §3.3）。现在先用一次**只含 id** 的列表把缺失的种子重建出来。
+  it('rebuilds a missing chain seed from one id listing instead of falling back', async () => {
+    const { rpc, calls } = makeRpc()
+    const chain = new ThreadTurnPageCursorChain()
+
+    const page = await readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10)
+
+    expect(page).not.toBeNull()
+    expect(idsOf((page as { result: { thread: { turns: unknown[] } } }).result.thread.turns)).toEqual(
+      ['t0', 't1', 't2', 't3', 't4', 't5'],
+    )
+    expect(page?.startTurnIndex).toBe(0)
+
+    // 两次列表：先是全量 id 列表（16 轮），再是重建种子那一次（锚点在 index 6，
+    // 故只问最新 10 个 id）。重建不发全量读。
+    const idListings = calls.filter((call) => call.params.itemsView === 'notLoaded')
+    expect(idListings).toHaveLength(2)
+    expect(idListings[1].params).toMatchObject({ threadId: 'thread-1', sortDirection: 'desc', limit: 10 })
+    expect(idListings[1].params.cursor).toBeUndefined()
+    expect(calls.some((call) => call.method === 'thread/read' && call.params.includeTurns === true)).toBe(false)
+  })
+
+  it('records the rebuilt seed, so the next request at that anchor is a chain hit', async () => {
+    const { rpc } = makeRpc()
+    const chain = new ThreadTurnPageCursorChain()
+
+    await readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10)
+
+    // 与 resume/read 首开时种下的种子同形：锚点轮 -> 「更早那些轮」的游标。
+    expect(chain.lookup('thread-1', 't6')).toBe(encodeCut(6))
+  })
+
+  it('still falls back when the anchor is more than one page from the newest turn', async () => {
+    const ascIds = Array.from({ length: 130 }, (_, index) => `t${index}`)
+    const { rpc, calls } = makeRpc(ascIds)
+    const chain = new ThreadTurnPageCursorChain()
+
+    expect(await readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't10', 10)).toBeNull()
+    // 130 - 10 = 120 > 服务端单页上限：重建需要逐步回溯（本模块有意不做）⇒ 仍回落。
+    expect(ascIds.length - 10).toBeGreaterThan(TURN_LIST_SERVER_PAGE_CLAMP)
+    expect(calls.filter((call) => call.params.itemsView === 'notLoaded')).toHaveLength(1)
+    expect(fullPageCalls(calls)).toHaveLength(0)
+  })
+
+  it('refuses a rebuilt cursor whose page does not end at the anchor', async () => {
+    const rpc = vi.fn(async (method: string, params: unknown) => {
+      const p = (params ?? {}) as Record<string, unknown>
+      if (method === 'thread/read') return { thread: { id: 'thread-1', turns: [] } }
+      if (p.itemsView === 'notLoaded') {
+        // 列表答的是从最新处切下的另一段：最老一轮不是锚点 ⇒ 它的游标指错窗口。
+        return { data: [...TURN_IDS].reverse().map((id) => ({ id })), nextCursor: encodeCut(3) }
+      }
+      throw new Error('the bounded path must not fetch a page off an unverified cursor')
+    })
+    const chain = new ThreadTurnPageCursorChain()
+
+    expect(await readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10)).toBeNull()
+    expect(chain.lookup('thread-1', 't6')).toBeNull()
+  })
+
+  it('keeps classifying an app-server that does not implement turns/list while rebuilding', async () => {
+    // 重建同样走 thread/turns/list，所以「未实现」必须仍是 NotSupported 而不是 null
+    // —— 在这条路径上 null 等于让调用方回落会挂死 UI 的全量水合（round-102 P0）。
+    const rpc = vi.fn(async (_method: string, params: unknown) => {
+      const p = (params ?? {}) as Record<string, unknown>
+      if (p.itemsView === 'notLoaded') {
+        const want = Number.isFinite(Number(p.limit)) ? Number(p.limit) : TURN_IDS.length
+        const take = Math.max(1, Math.min(TURN_IDS.length, Math.floor(want)))
+        const cut = TURN_IDS.length - take
+        return { data: [...TURN_IDS.slice(cut)].reverse().map((id) => ({ id })), nextCursor: cut > 0 ? encodeCut(cut) : null }
+      }
+      throw new Error('-32601: list_turns is not supported yet')
+    })
+    const chain = new ThreadTurnPageCursorChain()
+
+    await expect(readBoundedThreadTurnPage(deps(rpc, chain), 'thread-1', 't6', 10))
+      .rejects.toBeInstanceOf(ThreadTurnPageUnsupportedError)
   })
 })

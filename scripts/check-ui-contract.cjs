@@ -789,6 +789,80 @@ check(
 )
 check('绝不打包 CJK 字体', !FACES.some((f) => /cjk|sc|jp|kr|han/i.test(f)), '')
 
+// ----------------------------- 上翻链路：种子重建 / 骨架缓存的失效面 / 链持久化
+// round-132 定位到「上翻 6–7 秒」的唯一成本源是**游标链未命中后回落全量读**
+// （同窗口同锚点 7202ms vs 命中链 969ms），而回落路径不登记锚点 ⇒ 同一位置反复付
+// 这笔钱。round-136 从三处收口，这里各钉一条（断言的都是「调用形态」，
+// 语义由 threadTurnPage.test.ts / threadTurnPageCursorStore.test.ts 覆盖）。
+const turnPageSrc = fs.readFileSync('src/server/bridge/threadTurnPage.ts', 'utf8')
+const bridgeSrc136 = fs.readFileSync('src/server/codexAppServerBridge.ts', 'utf8')
+const cursorStoreSrc = fs.readFileSync('src/server/bridge/threadTurnPageCursorStore.ts', 'utf8')
+
+// ① 未命中时先用一次「只含 id」的列表重建种子；重建出的游标必须**先登记再使用**
+//    （否则下一次同锚点还得重建），且必须校验该页最老一轮就是锚点（否则游标指错窗口）。
+const rebuildCallSite = /const cursor = await resolveChainCursor\(deps, threadId, ids, beforeIndex\)/.test(turnPageSrc)
+const rebuildRecordsBeforeUse = /deps\.chain\.record\(threadId, anchorTurnId, cursor\)\s*\n\s*return cursor/.test(turnPageSrc)
+const rebuildVerifiesAnchor = /oldestTurnId !== anchorTurnId \|\| !cursor\) return null/.test(turnPageSrc)
+const rebuildHonoursClamp = /span > TURN_LIST_SERVER_PAGE_CLAMP\) return null/.test(turnPageSrc)
+check(
+  '上翻链未命中时先重建种子而非直接回落全量读（round-136）',
+  rebuildCallSite && rebuildRecordsBeforeUse && rebuildVerifiesAnchor && rebuildHonoursClamp,
+  [
+    `调用点=await resolveChainCursor(${rebuildCallSite ? 'yes' : 'NO'})`,
+    `先登记再用=${rebuildRecordsBeforeUse ? 'yes' : 'NO'}`,
+    `校验页尾即锚点=${rebuildVerifiesAnchor ? 'yes' : 'NO'}`,
+    `尊重单页上限=${rebuildHonoursClamp ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+// ② 全量读缓存（threadTurnPageReadCacheByThreadId）只服务「更早轮次」窗口：
+//    通知必须按「能否改变轮次结构」门控（否则实时回合里恒为冷 ⇒ 重复付 6–7s）；
+//    存快照是纯读行为、不得再清它；真正的结构性变更（thread/revert 等客户端 RPC）
+//    改由 rpc() 兜住，不能在收窄通知面之后丢掉。
+const emitBody = (/private emitNotification\([\s\S]*?\n  \}/.exec(bridgeSrc136) ?? [''])[0]
+const emitGatesFullRead = /if \(threadReadInvalidatesCache\(notification\.method\)\) \{\s*\n\s*this\.threadTurnPageReadCacheByThreadId\.delete\(nThreadId\)/.test(emitBody)
+const snapshotBody = (/storeThreadReadSnapshot\(threadId: string, snapshot: unknown\): void \{([\s\S]*?)\n  \}/.exec(bridgeSrc136) ?? ['', ''])[1]
+const snapshotStillSetsSnapshot = /lastThreadReadSnapshotByThreadId\.set\(threadId, snapshot\)/.test(snapshotBody)
+const snapshotNoLongerClears = !/threadTurnPageReadCacheByThreadId\.delete\(threadId\)/.test(snapshotBody)
+const rpcClearsTurnPageCache = /this\.invalidateThreadTurnPageReadCache\(threadId \|\| undefined\)/.test(bridgeSrc136)
+check(
+  '上翻全量读缓存按轮次结构门控失效，纯读不再自清（round-136）',
+  emitGatesFullRead && snapshotStillSetsSnapshot && snapshotNoLongerClears && rpcClearsTurnPageCache,
+  [
+    `通知门控=${emitGatesFullRead ? 'yes' : 'NO'}`,
+    `快照仍入库=${snapshotStillSetsSnapshot ? 'yes' : 'NO'}`,
+    `快照不再清全量读缓存=${snapshotNoLongerClears ? 'yes' : 'NO'}`,
+    `结构性 RPC 仍清=${rpcClearsTurnPageCache ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+// ③ 游标链跨重启持久化：链要能 hydrate/snapshot，桥要在首次用到前装载、在登记后
+//    去抖落盘、在 dispose 时 flush；文件落在 $CODEX_HOME 下（不是共享的
+//    .codex-global-state.json，理由见 store 模块头）。新增公共方法 ⇒ 必须升
+//    SHARED_BRIDGE_VERSION，否则 dev 热更新会复用旧实例。
+const chainHasHydrate = /hydrate\(state: Record<string, Record<string, string>>/.test(turnPageSrc)
+const chainHasSnapshot = /snapshot\(\): Record<string, Record<string, string>>/.test(turnPageSrc)
+const bridgeHydrates = /readThreadTurnPageCursors\(\)/.test(bridgeSrc136) &&
+  /this\.threadTurnPageCursorChain\.hydrate\(state\)/.test(bridgeSrc136)
+const bridgeHydratesBeforeUse = /await this\.ensureThreadTurnPageCursorChainHydrated\(\)/.test(bridgeSrc136)
+const bridgePersists = /writeThreadTurnPageCursors\(this\.threadTurnPageCursorChain\.snapshot\(\)\)/.test(bridgeSrc136)
+const bridgeFlushesOnDispose = /this\.flushThreadTurnPageCursorChain\(\)/.test(bridgeSrc136)
+const versionBumped = /const SHARED_BRIDGE_VERSION = 'experimental-api-v7'/.test(bridgeSrc136)
+const storeFileNamed = cursorStoreSrc.includes('codex-mobile-turn-page-cursors.json')
+check(
+  '上翻游标链跨重启持久化（round-136）',
+  chainHasHydrate && chainHasSnapshot && bridgeHydrates && bridgeHydratesBeforeUse &&
+    bridgePersists && bridgeFlushesOnDispose && versionBumped && storeFileNamed,
+  [
+    `链 hydrate/snapshot=${chainHasHydrate && chainHasSnapshot ? 'yes' : 'NO'}`,
+    `桥装载=${bridgeHydrates && bridgeHydratesBeforeUse ? 'yes' : 'NO'}`,
+    `桥去抖落盘=${bridgePersists ? 'yes' : 'NO'}`,
+    `dispose flush=${bridgeFlushesOnDispose ? 'yes' : 'NO'}`,
+    `版本=v7 ${versionBumped ? 'yes' : 'NO'}`,
+    `sidecar 文件名=${storeFileNamed ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {
