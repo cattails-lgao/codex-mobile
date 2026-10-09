@@ -372,6 +372,37 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-135（未 materialize 线程的 `thread/read` 与 `thread/resume` 不再 502，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `ae5db727` | `fix(thread-load): 未 materialize 线程的 thread/read 与 thread/resume 不再 502（round-135）` | 4 文件（产品 2 + 测试 1 + 闸门脚本 1，106 增 3 删） |
+| （本文档提交） | `docs(handover): round-135 未 materialize 线程不再 502（轮次文档 + 总入口 + 提交史）` | 3 文件 |
+
+**由来**：用户「继续处理未完成项」（并说明已把 codex-cli 升级到 0.160.1）。承接 round-134 §七 那条**明确标注「待授权」**的潜伏边界 —— 「给 `thread/read` 的兜底谓词补上这条文案（回 `{thread:{id,turns:[]}}`，即 ② 的同一种诚实答案）」。
+
+**复现（0.161.0）**：隔离 home `D:\codex-home-fresh` + 4197 桥 + `tmp/r135-repro-502.cjs`。`thread/start` **200**；`thread/read {includeTurns:false}` **200**（元数据正常）；`thread/read {includeTurns:true}` **502** `{"error":"list_turns is not supported yet"}`；`thread/turns/list` **502** 同文案；`thread/resume` **502** 同文案 ⇒ 与 round-134 §七 在 **0.160.1** 上记的形态**逐字一致**。**走位**：`thread/read` 是「元数据读成功 → `readLatestTurnPage` 调 `thread/turns/list` 抛错被吞、返回 null → **回放**原请求 → 抛出」；`thread/resume` 是「`sendResume(boundedParams)` 第一步就抛」⇒ 两条都落到 shell 同一个 catch，而那里原本只认两条既有谓词。
+
+**修复**：`threadErrors.ts` 新增窄匹配谓词 `isThreadTurnsNotListableError`（`message.includes('list_turns')` 且含 unsupported 短语）；`codexAppServerBridge.ts` 的 `thread/read` 错误分支扩成同时接纳 `thread/resume`，回 round-134 的 `buildPendingMaterializationThreadReadResult(threadId)`（**不带 `status`**，一行未改）。**为什么必须窄**：`threadTurnPage.ts` 里另有一个宽模式 `isTurnListUnsupportedError`（裸 `-32601` / `not supported` / `unknown variant` …）—— 那里宽是对的（兜底只是关掉旧版回落）；**这里是相反的**，宽匹配会把一条**真有轮次**的线程答成空对话，所以锚在 `list_turns` 上。**为什么不会撞 0.158.0**：0.158.0 上 `thread/read {includeTurns:true}` 仍成功（全量水合可用），只有 `thread/turns/list` 报 gap，而那一步的异常被有界模块**内部吞掉**、从不到达 shell ⇒ 谓词在 0.158.0 上不可达。
+
+**为什么 `thread/resume` 也要修（可达性）**：round-134 §七 的「已确证真实客户端走不到」只覆盖「新建线程 + 发送」这一条路径。代码复核显示 `resumeThread` 在 `resumedThreadById[threadId] !== true` 时被调用，共三处入口：`useDesktopMessageHistoryLoading.ts:149`（取历史）、`useDesktopState.ts:3099`（发消息前）、`:958`（重试待发回合）⇒「**打开一条空线程 → 发消息**」就会命中，pre-fix 必然 502 ⇒ 这条通道值得一并关掉，不是纯防御性对称。**诚实说明**：这是代码层论证，本轮未用真浏览器跑该 UI 路径。
+
+**测试与反跑（决定性）**：单测 **+2 例**（`archive.test.ts` 34 → **36**：三条正例 + 四条反例，其中 `-32601: method not found` 与 `items/list is not supported` 专门钉「只锚 `list_turns`、短语不能落在别的方法上」）。`tmp/r135-flip.cjs off|on` 把谓词体换成 `return false`（替换做「出现次数必须为 1」断言，`off` 留 `.r135bak`）：`off` ⇒ **1 failed | 35 passed (36)**、契约 **44/45** 且诊断行 `谓词锚在 list_turns=NO / 谓词保持窄匹配=NO`；`on` ⇒ **36 passed**、契约 **45/45**，`与备份一致=true`、无 `.r135bak` 残留。**反跑同时覆盖端到端**：OFF 态重建后探针复现 **502 / 502**，ON 态回到 **200 / 200**。
+
+**静态契约 44 → 45 项**：新增「未 materialize 线程的 thread/read 与 thread/resume 不再 502（round-135）」，钉三个子事实（谓词体含 `includes('list_turns')` / 且**不**含宽模式 `TURN_LIST_UNSUPPORTED_PATTERN` 或 `-32601|not supported` / 桥兜底分支同时覆盖 `thread/read` 与 `thread/resume` 且回 `buildPendingMaterializationThreadReadResult(threadId)`）。**诚实说明**：第三条钉的是形状，行为证据在单测与真实端到端。
+
+**真实桥层端到端（决定性）**：改动在 `src/server/**` ⇒ 先 `tsup` 重建 `dist-cli`（682.81KB → 683.14KB）。4197 隔离服务上，**改动前** `thread/read {includeTurns:true}` **502** / `thread/resume` **502**；**改动后**两者都 **200** `{"result":{"thread":{"id":"…","turns":[]}}}`（响应体逐字核对：无 `status` ⇒ 前端 `readThreadInProgressFromResponse` 读回 false，不造幽灵 Thinking 浮层）；`thread/read {includeTurns:false}` 始终 200。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**、全量 **757 例 / 757 通过（76 文件）零失败**（＝ round-134 基线 755 ＋ 本轮 2 例）、`check-ui-contract` **45/45**、`node --check scripts/check-ui-contract.cjs` OK、`tsup` 重建 EXIT=0。**改动前先复核本机基线** ⇒ **755/755 + 契约 44/44 + vue-tsc EXIT=0**，与文档基线逐字一致。
+
+**诚实边界**：①**版本口径** —— 用户按「0.160.1」操作，本机 pnpm 全局实测 **0.161.0**（两个 v11 全局条目都指向 store 里 `@openai/codex/0.161.0` 的同一 link；`~/.codex/packages/app-server-daemon/releases/` 仍只有 0.158.0；桌面 App 缓存 `codex.exe` = 0.154.0-alpha.6.2）⇒ 本轮「本机读数」= **0.161.0**，跨一个小版本边界形态未变，但不要把 0.160.1 的读数当成 0.161.0 的。②**本机是新机器** —— round-130~134 的隔离 home `D:\codex-home-isolate123` 本机不存在，本轮改用自建空 home `D:\codex-home-fresh`（空 home 天然隔离，不需要等长路径改写）。③**直连 `thread/turns/list` 仍 502**（有意）：客户端不直连该端点（全仓两处 `callRpc('thread/turns/list')`：`threads.ts:614` 在 `thread/revert` 之后用游标 hydrate；`threads.ts:460` 只是错误对象里的 `method` 字段），上翻走 `/codex-api/thread-turn-page` 路由。④未在真浏览器跑「刷新 → 打开空线程 → 发送」。⑤只在本机 Windows / codex-cli 0.161.0 / `D:\codex-home-fresh` 实测。⑥`threadRoutes.ts` 的 `thread-live-state` 同名兜底仍伪造 `isInProgress: true`（零客户端调用方），仍未动。
+
+**清理**：本轮起于 `4197`，已停（`listeners=0`）。隔离 home `D:\codex-home-fresh` 保留供下次复跑。
+
+**未发布**：未 bump 版本、未 tag（npm `latest` 仍是 `0.1.127`）。
+
 ## round-134（收尾 round-132 §10.6 的 ②③④：关掉「0 条 + Thinking」的剩余通道，未发布）
 
 **提交**：
