@@ -728,6 +728,48 @@ check(
   ].join(' / '),
 )
 
+// ------------------------------------------- 未 materialize 线程不再 502（round-135）
+// round-134 §七：未 materialize 的线程上 thread/read {includeTurns:true} 会 502
+// `list_turns is not supported yet` —— 两条兜底谓词都不匹配。round-135 在
+// codex-cli 0.161.0 上实测形态逐字不变（thread/resume 同样 502）。本断言钉三件事：
+//   ① 新谓词**窄匹配**：必须锚在 `list_turns` 上，不能退回 threadTurnPage.ts 的裸
+//      `-32601|not supported` 宽模式 —— 那会把一条真有轮次的线程答成空对话；
+//   ② 桥的兜底分支同时覆盖 thread/read 与 thread/resume；
+//   ③ 载荷仍是 buildPendingMaterializationThreadReadResult（不带 status，见 round-134）。
+const threadErrorsSource = fs.readFileSync('src/server/bridge/threadErrors.ts', 'utf8')
+const bridgeShellSource = fs.readFileSync('src/server/codexAppServerBridge.ts', 'utf8')
+const notListableIdx = threadErrorsSource.indexOf('export function isThreadTurnsNotListableError')
+const notListableBody = notListableIdx >= 0 ? threadErrorsSource.slice(notListableIdx, notListableIdx + 360) : ''
+const notListableAnchorsListTurns = /includes\('list_turns'\)/.test(notListableBody)
+const notListableStaysNarrow =
+  /includes\('not supported'\)/.test(notListableBody) &&
+  !/TURN_LIST_UNSUPPORTED_PATTERN|-32601\|not supported/.test(notListableBody)
+const shellFallbackIdx = bridgeShellSource.indexOf('isThreadTurnsNotListableError(error)')
+const shellFallbackLine = shellFallbackIdx >= 0
+  ? bridgeShellSource.slice(
+      bridgeShellSource.lastIndexOf('\n', shellFallbackIdx) + 1,
+      bridgeShellSource.indexOf('\n', shellFallbackIdx),
+    )
+  : ''
+const shellFallbackCoversRead = /thread\/read/.test(shellFallbackLine)
+const shellFallbackCoversResume = /thread\/resume/.test(shellFallbackLine)
+const shellFallbackUsesHonestPayload = shellFallbackIdx >= 0 &&
+  /setJson\(res,\s*200,\s*\{\s*result:\s*buildPendingMaterializationThreadReadResult\(threadId\)\s*\}\)/.test(
+    bridgeShellSource.slice(shellFallbackIdx, shellFallbackIdx + 900),
+  )
+check(
+  '未 materialize 线程的 thread/read 与 thread/resume 不再 502（round-135）',
+  notListableIdx >= 0 && notListableAnchorsListTurns && notListableStaysNarrow &&
+    shellFallbackIdx >= 0 && shellFallbackCoversRead && shellFallbackCoversResume && shellFallbackUsesHonestPayload,
+  [
+    `谓词锚在 list_turns=${notListableAnchorsListTurns ? 'yes' : 'NO'}`,
+    `谓词保持窄匹配=${notListableStaysNarrow ? 'yes' : 'NO'}`,
+    `兜底覆盖 thread/read=${shellFallbackCoversRead ? 'yes' : 'NO'}`,
+    `兜底覆盖 thread/resume=${shellFallbackCoversResume ? 'yes' : 'NO'}`,
+    `诚实载荷（无 status）=${shellFallbackUsesHonestPayload ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // -------------------------------------------------------------- 字体资产
 const FACES = [
   'ibm-plex-sans-400.woff2',

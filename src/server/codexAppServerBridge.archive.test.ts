@@ -13,6 +13,7 @@ import {
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
+  isThreadTurnsNotListableError,
   isUnauthenticatedRateLimitError,
   writeFreeModeStateFile,
   writeWorkspaceRootsState,
@@ -343,6 +344,28 @@ describe('isThreadMaterializationPendingError', () => {
   it('does not match unrelated thread read failures', () => {
     expect(isThreadMaterializationPendingError(new Error('thread read failed: permission denied'))).toBe(false)
     expect(isThreadMaterializationPendingError(new Error('not materialized yet'))).toBe(false)
+  })
+})
+
+// round-135：未 materialize 的线程在 codex-cli 0.160.1/0.161.0 上连
+// `thread/turns/list` 都不支持 —— app-server 对 `thread/read {includeTurns:true}`
+// 与 `thread/resume` 都回 `list_turns is not supported yet`。此前两条兜底谓词都
+// 不匹配 ⇒ 桥直接 throw、客户端拿到 502（实测复现）。这条谓词把两条通道都改成回
+// 「线程存在但没有可渲染内容」的诚实载荷。
+describe('isThreadTurnsNotListableError', () => {
+  it('matches the turn-listing capability error an unmaterialized thread reports', () => {
+    expect(isThreadTurnsNotListableError(new Error('-32601: list_turns is not supported yet'))).toBe(true)
+    expect(isThreadTurnsNotListableError(new Error('list_turns is not supported yet'))).toBe(true)
+    expect(isThreadTurnsNotListableError(new Error('list_turns is not implemented'))).toBe(true)
+  })
+
+  it('does not match anything else, so a thread with turns is never answered empty', () => {
+    expect(isThreadTurnsNotListableError(new Error('failed to read thread: permission denied'))).toBe(false)
+    expect(isThreadTurnsNotListableError(new Error('not materialized yet; includeTurns is unavailable before first user message'))).toBe(false)
+    // `-32601` alone is not enough -- the match is anchored on `list_turns`.
+    expect(isThreadTurnsNotListableError(new Error('-32601: method not found'))).toBe(false)
+    // An unsupported-method phrase on a different method must not match either.
+    expect(isThreadTurnsNotListableError(new Error('items/list is not supported'))).toBe(false)
   })
 })
 

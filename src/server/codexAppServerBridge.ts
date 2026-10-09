@@ -230,6 +230,7 @@ import {
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
+  isThreadTurnsNotListableError,
   isUnauthenticatedRateLimitError,
 } from './bridge/threadErrors.js'
 export {
@@ -237,6 +238,7 @@ export {
   isEmptyThreadReadError,
   isThreadMaterializationPendingError,
   isThreadNotFoundError,
+  isThreadTurnsNotListableError,
   isUnauthenticatedRateLimitError,
 } from './bridge/threadErrors.js'
 // thread archive-recovery 切片（AA 批）：callRpcWithArchiveRecovery /
@@ -1970,7 +1972,16 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
 		              return
 		            }
 		          }
-          if (body.method === 'thread/read' && isThreadMaterializationPendingError(error)) {
+          // round-135：未 materialize 的线程连 thread/turns/list 都不支持 ——
+          // app-server 对 thread/read {includeTurns:true} 与 thread/resume 都答
+          // `list_turns is not supported yet`（0.160.1/0.161.0 实测），两条兜底
+          // 谓词都不匹配 ⇒ 桥直接 throw、客户端吃到一个 502。它与
+          // materialization-pending 是同一处「线程存在但没有可渲染内容」，回同一种
+          // 诚实载荷（buildPendingMaterializationThreadReadResult，不带 status）。
+          if (
+            (body.method === 'thread/read' && isThreadMaterializationPendingError(error))
+            || ((body.method === 'thread/read' || body.method === 'thread/resume') && isThreadTurnsNotListableError(error))
+          ) {
             const params = asRecord(body.params)
             const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : ''
             if (threadId) {
