@@ -372,6 +372,37 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-136（上翻游标链的补登记 / 缓存失效面收窄 / 跨重启持久化 + PTY 端到端在 0.161.0 复跑 + 仓库清理，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `58323faa` | `feat(thread-page): 上翻链未命中先重建种子 + 缓存失效面收窄 + 跨重启持久化（round-136）` | 7 文件（2 产品源码改 + **1 新增** + 3 测试 + 1 闸门），636 增 10 删 |
+| （本次） | `docs(handover): round-136 …（轮次文档 + 总入口 + 提交史）` | 3 文档 |
+
+**由来**：用户口径「**1. 轮换 GitHub OAuth 凭据不是我的，可以清空 / 2. 把 B 和 D 的内容全部实施**」。B ＝ round-135 §七 第 1/2/3/5 条（B1 回落路径补登记锚点、B2 收窄全量读缓存失效面、B3 游标链持久化、B4 PTY 端到端在 0.161.0 重跑），D ＝ 删两条已合并的本地分支。四条同源于 round-132 §3.3 记的同一条根因「**上翻链未命中即回落全量水合：7202ms vs 969ms**」。
+
+**B1（`bridge/threadTurnPage.ts`）**：`readBoundedThreadTurnPage` 原先写死 `deps.chain.lookup(...)`，`null` 即回落全量读 —— 而桥一重启（打包启动 / dev HMR）、线程在种子机制之前被打开过、或条目被 LRU 淘汰，链就是空的，于是**同一锚点每次**都付 6–7s，且**回落不登记任何东西**。改为 `resolveChainCursor()`：拿「最新 `ids.length - beforeIndex` 条 id」（**跨度 ≤ `TURN_LIST_SERVER_PAGE_CLAMP = 100`**，round-104 实测 app-server 把一页钳到 100 条），这一页的**最老一条**若正好是锚点轮，其 `nextCursor` **按定义**就是「锚点之前那几轮」的游标（与代码里其他所有 `record` 点的语义一致），**先登记再用** ⇒ 同锚点第二次就是普通链命中、列举不重复。三条拒绝条件（跨度 > 100 / 页尾 ≠ 锚点 / 列举失败）各自 `return null`，**回落路径与改动前逐字相同**。
+
+**B2（`codexAppServerBridge.ts`）**：上翻的全量读缓存只服务「更早轮次」这一窗口，窗口边界由锚点轮位置决定；而一次流式回合里最高频的是 **`item/*`**（agentMessage / reasoning 增量），它们改的是**最新一轮**，不动更早窗口。原先「任意带 `threadId` 的通知都清」使缓存恒冷。三处改动：①`emitNotification` 的删除加 `if (threadReadInvalidatesCache(method))` 门控（复用 round-76 保守谓词）；②`storeThreadReadSnapshot` **不再清**它 —— `thread/read` 自己也走这条管道，一次纯读就清空正是 round-132 §四「探针每次上翻前先发一条 `thread/read` 于是每次都冷」的**自污染来源**；③`rpc()` 上加 `invalidateThreadTurnPageReadCache()` 兜底 —— `thread/revert` / `thread/rollback` / `turn/start` 是客户端自己发起的 RPC，**未必**伴随可判定通知，却会截断/重排轮次。陈旧游标不是新风险：拿到后仍与新鲜 id 列表逐位复核、错配回落。
+
+**B3（新增 `bridge/threadTurnPageCursorStore.ts`）**：链原先只在进程内存，重启就没了 ⇒ **每个会话的第一次上翻**永远慢。落到 sidecar `$CODEX_HOME/codex-mobile-turn-page-cursors.json`（**不写 `.codex-global-state.json`**：那文件与 queue/workspace/thread-preference 切片共享、整体 RMW，app-server 自己也可能在写，而这是高翻台率纯缓存）。上限 **8 线程 × 64 锚点**（最近登记的胜出 ＝ 链自己的 LRU 序，重启前后同一规则）、规范化在读写两侧都做、文件缺失/损坏＝空链、写入**串行化**（去抖到期与 dispose flush 可能重叠）。`ThreadTurnPageCursorChain` 加 `hydrate()`/`snapshot()`，`hydrate` 逐条走 `record` ⇒ 上限与淘汰次序对恢复条目同样生效。桥层：惰性 hydrate **一次**、`THREAD_TURN_PAGE_CURSOR_SAVE_DEBOUNCE_MS = 2_000` 去抖落盘（`unref()` 以免拖住测试进程）、`dispose()` 里 flush。**`SHARED_BRIDGE_VERSION` v6 → v7**（给 `AppServerProcess` 加了成员、给链加了公共方法），版本注释同步补「所以 v6 → v7」。
+
+**B4（PTY 端到端在 **codex-cli 0.161.0** 上重跑，13/13）**：round-131 §九② 明确记「PTY 复验只覆盖**协议层**，**没有**端到端走 UI 终端；round-116 §六 的端到端是 **0.158.0** 档」。本轮新建 `tmp/r136-pty-e2e.cjs`（round-116 探针的**严格版**：每条观察都变成断言、任一失败退非零），真实 `scripts/dev.cjs` 起 vite dev（4381、`--strictPort`）+ 隔离 home `D:\codex-home-r136pty`，全程 **HTTP + SSE**、不需浏览器。13 条全过：`availability true` / SSE 连接 / `attach` 拿 session（`shell:"cmd.exe"`、cwd 正确）/ `terminal-attached` + **303B 真实 banner** / `input` 200 / **ASCII marker 回显命中** / `resize` 200 / snapshot（cwd/shell/buffer 1216B）/ 服务端 buffer 亦含 marker / `close` 200 / `terminal-exit` / **`command/exec/outputDelta` 零泄漏**；通知流 `{terminal-attached:1, terminal-data:12, terminal-exit:2}`（exit 2 条与 round-116 一致，属正常）。回显实证：`D:\code\codex-mobile>echo probe-e2e-r136-marker` → `probe-e2e-r136-marker`。
+
+**B4 顺带记下两个探针陷阱（值得进规程）**：①**`fetch` 的连接池会伪装成 `ECONNRESET`** —— undici 池化 POST 连接，而 vite 的 `node:http` 服务端会关空闲 keep-alive（默认 5s），下一次 POST 复用已关 socket 即 `ECONNRESET`，**且 undici 不重试 POST**；两次运行分别落在「socket 还活着/已关闭」两侧，于是同一步一红一绿（而其后的 `resize` 仍 200 证明服务没挂）⇒ 探针改用 `node:http` + `agent: false`（绝不复用 socket）＋一次重试。**这不是产品行为**。②**PTY 回显必须按「剥 ANSI」后匹配** —— 带转义序列回显、转义可落在 marker 字符之间（第一轮裸子串匹配失败但 buffer 从 303 涨到 809，字节其实到了）；另加一条**独立于 SSE**的断言「服务端 snapshot buffer 里也有 marker」，把「回显到达服务端」与「SSE 送达」分开证。
+
+**D（仓库清理）**：`codex/extract-desktop-catalogs`（`6c77dc39`）与 `codex/extract-desktop-queue-state`（`c31265af`）**都已合并进 `main`**（`git branch --merged HEAD` 命中）、**远端无同名分支**，用**安全删除** `git branch -d` 清掉；之后本地只剩 `main`。
+
+**附：OAuth 凭据清空 —— 复核发现上一轮的「彻底」不彻底（本轮最重要的一条）**。用户授权「重写历史并强推（彻底）」。范围先证后改：泄露串只出现在 `3cecaa60:.env` 与 `52e51367:.env`，`codexAppServerBridge.ts` 命中的只是**环境变量名**（`process.env.GITHUB_OAUTH_*`）必须保留。`git filter-branch` 本机**慢到不可用**（12 分钟只推进 62/2127 提交，外推约 7 小时）⇒ 换 `git filter-repo`（**21 秒**）；改前做全量备份 bundle 并 clone 逐树逐对象比对（**1934 棵树逐字节相同、17819 个对象两侧同数、差异只在 `.env` 一个路径**）；强推 `main` + 全部 tag 后核对远端 `main` = `1e4f0429`（重写前 `3f8c363c`）、本地对象库里 `3f8c363c`/`ae5db727` 已不存在。**但收尾 `git ls-remote` 发现远端有一个「只在远端存在」的 tag `v0.1.128` 指向重写前的 `8dddd213`（映射 `8dddd213 → a0a122bf`），而 GitHub Release「v0.1.128」正绑在它上面**；因 `3cecaa60` 是它的祖先，**凭据继续可读**（实测 `gh api .../contents/.env?ref=3cecaa60` 仍返回 `GITHUB_OAUTH_CLIENT_ID=Ov23lixZYTDJGWW9iaYS` + `..._SECRET=fdb0e217…`）⇒ **强推 `main` + `--tags` 并未覆盖这个 tag**，整条重写前祖先链被它吊着。**已修**：把 tag 重指到重写后等价提交并强推（`d8b3d2fc...a0a122bf v0.1.128 -> v0.1.128 (forced update)`）。**残留（本地解决不了）**：tag 重指后重写前对象在 GitHub 上变成**不可达但未回收**，按 SHA 直取**仍可达**（`gh api .../commits/8dddd213` → 200、`.env?ref=3cecaa60` → 200 仍返回凭据）；GitHub 只在服务端 `git gc` 后真正删除，官方亦指出 fork/PR 网络缓存副本可能长期保留 ⇒ **唯一可靠手段是联系 GitHub Support 请求清理不可达对象 / 缓存视图**（记入待办，需用户提工单）。取证全文 `tmp/r136-oauth-residual.txt`。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0 / 0 错误**；全量 **772 例 / 772 通过（77 文件）零失败**（＝ round-135 基线 757/76 ＋ 本轮 15 例；新增 1 个测试文件）；`check-ui-contract.cjs` **48/48**（45 → 48）；定向三文件 **50/50**（`threadTurnPage` 29 ＋ `threadTurnPageCursorStore` 8 ＋ `threadReadCache` 13）；PTY 端到端 **13/13**。**单测增量**：`threadTurnPage.test.ts` 24 → 29（+5）、`threadReadCache.test.ts` 11 → 13（+2，各为一组多方法循环断言）、`threadTurnPageCursorStore.test.ts` **新增 8**。**一处旧测试被有意改写**：`threadTurnPage.test.ts` 的「no cursor ⇒ 回落」在 B1 之后行为已合法改变（冷链现在会先重建），改写为「**重建列举失败时**才回落」，保住那条真实残余的回落通道而不是删断言。
+
+**反跑（决定性，证明非空）**：`tmp/r136-flip.cjs off|on` —— 分别钝化 B1（取消种子重建）/ B2（恢复「一律清」）/ B3（关掉 hydrate），每处断言「出现次数必须为 1」、任一失配整批不写盘。**`off` ⇒ 6 例单测失败（exit 1）＋ 契约 45/48（三项全红，诊断行 `桥装载=NO` 等）；`on` ⇒ 50/50 与 48/48，两文件逐字节还原、无 `.r136bak` 残留。**
+
+**诚实边界**：①B1/B2/B3 **都没有新的端到端性能读数** —— 本轮未重跑 round-132 的「同窗口同锚点 A/B（7202ms vs 969ms）」，收益形态是**代码路径 ＋ 单测**，**秒级收益没量**。②B1 的跨度上限 `TURN_LIST_SERVER_PAGE_CLAMP = 100` 是**实测常量**而非协议保证，跨度 > 100 仍回落全量读（本模块有意不做多页步进）。③B3 只在本机 Windows 验证，且**只测存储层与 hydrate/snapshot 语义**，「桥进程真重启后第一次上翻变快」这条端到端未验。④B4 只覆盖路由 + SSE + 终端通道（无浏览器），**未覆盖** xterm 渲染 / `quick-commands` / 多会话并存。⑤**`.env` 泄露凭据仍在 GitHub 的不可达对象里**，闭环需 GitHub Support；凭据**不是用户的**故用户无法自行轮换。⑥未 bump 版本、未 tag（只把**既有** `v0.1.128` tag 的指向修正），npm `latest` 仍 `0.1.127`。
+
 ## round-135（未 materialize 线程的 `thread/read` 与 `thread/resume` 不再 502，未发布）
 
 **提交**：
