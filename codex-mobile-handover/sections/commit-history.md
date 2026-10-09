@@ -380,8 +380,11 @@
 | --- | --- | --- |
 | `aca0ab18` | `feat(ui): 空状态补「下一步动作」+ attachment-only（fileId）图片渲染可见占位（round-137）` | 10 文件（6 产品源码 + 3 测试 + 1 闸门），154 增 11 删 |
 | `cb94f8ff` | `docs(handover): round-137 …（轮次文档 + 总入口 + 提交史）` | 3 文档（+225/-3） |
+| `（本次）` | `docs(round-137): 用户裁决追认（待办 6 不做 / 待办 7 按本轮口径执行）` | 3 文档 |
 
 **由来**：用户口径「**待办7，round-120你选一个，round-131你来选择处理**」——把两条**积压三轮**的产品口径题（round-120 §三③ 与 round-131 §十③ ＝ round-130 §四①/§十一②）交给 AI 代拍板。
+
+**用户裁决追认（2026-10-09）**：上一轮呈报的三条待办由用户最终裁决 —— **待办 7 的两项（空状态文案 / fileId 图片占位）按本轮 AI 口径执行**（追认，**无代码变更**，`aca0ab18` 即为最终形态）；**待办 6「造一条大线程量回滚成本」不做**。依据见轮次文档 §九：核心命题已被 round-131 证死（回滚读取代价与线程体量无关）、「造大线程」的三条路径全无效（膨胀 rollout / 拷 home / `inject_items`）、唯一可行路径成本高且 `resume` 会向真实 rollout 追加记录、真正的大成本在 `resume` 解析 19MB rollout ≈22s 那条轴上。⇒ 本轮「代拍板」的保留意见（§五①）视为已消解。
 
 **① 空状态（round-120 §三③）**：三处空状态只陈述现状、缺可执行动作。按设计规范「空状态 = 原因 + 可执行动作」补文案，EN 与 zh-CN 同步：`No messages in this thread yet.` → `… Type a message below to get started.`；`No matching threads` → `… Clear the search to see all threads.`；`No threads` → `No threads yet. Start a new thread to begin.`。**三处都改**（不是只挑一处）：三处同一病根，且每处的「下一步」都**真实存在**——下方就是输入框、搜索框旁就有 `Clear search` 的 X 按钮（`sidebar-search-clear`）、工具条上就有 `show-new-thread-button`，文案指向的动作都是用户真能点的。i18n 以**英文串为 key**（`zhCN[message] ?? message`），故「表值 + 调用点 key」两处同步；三个旧 key 在全库各只有 1 处引用，无遗漏面。
 
