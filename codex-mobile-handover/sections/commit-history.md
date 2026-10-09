@@ -400,6 +400,25 @@
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
+## round-139（未完成事项台账分区留档，文档轮 · 未发版）
+
+**提交**：
+
+- `8816130f`（留档主体）`docs(round-139): 未完成事项台账分区留档——77 条原文整体归档到 sections/open-items-ledger.md，主文档只留 5 条仍开着（改判为「已知边界 · 留档」）` —— 3 文件：**新增** `codex-mobile-handover/sections/open-items-ledger.md`（136 行 / 约 190 KB）、**新增** `codex-mobile-handover/rounds/round-139-open-items-ledger-archive.md`、改 `codex-mobile-handover/codex-mobile-handover.md`（5 处：文档结构 / 当前快照 Git 分支 / Dev 状态 / 按轮次记录 / §未完成事项 正文 + 页脚）
+- 本段所在提交：记录上述哈希（提交无法包含自身哈希，故哈希记录单独成一次提交）
+
+**内容**：用户口径「**都留档吧**」（回应我在 round-138 收尾时给的两个选项：开 round-139 收 ①/②/④，或只做 ④ 其余留档 —— **两个都不选**）。
+
+- **问题**：主文档 `## 未完成事项` 是**追加式台账**（每轮 append 当轮交付与「诚实边界」原文、从不回头删），已从 round-3 堆到 round-138 共 **77 条**，其中约七成早已闭环或已被后续轮次覆盖 ⇒ 交接时需要在 77 条里自己划出「哪几条是真的」。
+- **处置**：77 条**原文一条不删**，整体搬到 `sections/open-items-ledger.md` 并**逐条加处置标签**——**A 已闭环 / 已被覆盖 57**（其中「已被覆盖」示例：round-130 ③「`{fileId}` 图片不显示」→ round-137 占位 + round-138 真图解析）· **B 历轮「有意接受的边界」存档 12** · **C 环境与行政 5** · **D 仍开着 3**（含 5 个开放点）。主文档 `## 未完成事项` 收敛为 **22 行**，只留 5 条仍开着，且**全部改判为「已知边界 · 留档（不立项）」**，每条写明性质与**重开条件**。
+- **可核对性（本轮唯一的工程手段）**：归档由 `tmp/r139-ledger-archive.cjs` 一次性完成，脚本对每条 bullet 断言「必须同时有分组与标签」，缺一即**拒绝写盘**（实测 77/77 命中）；主文档手术由 `tmp/r139-maindoc-surgery.cjs` 完成，6 处替换每处断言「**恰好出现 1 次**」后才写盘。搬运顺带修掉 68 + 3 处相对链接（`](rounds/…` → `](../rounds/…`、`](sections/…` → `](../sections/…`）与 3 处可见文本泄漏。
+- **仍开着的 5 条**（性质 / 为什么不立项）：① **fileId 图片「命中 ⇒ 出真图」无真机证据**（验证缺口；本机 `thread_attachments` **0 行** ∧ 本仓 **无 `{fileId}` 发送端**，只能等别的客户端写真样本）② **真实硬件 audio / mention 输入未验 + 播放器是否出声未验**（验证缺口；**本仓无入口**——`useDictation` 只把录音转文本、`applyFileMention` 只写 fileAttachments ⇒ **本条在本仓不可闭合**）③ **线上那次「0 条」出自哪条通道未确证**（观测缺口；响应体没抓到、**不可回指**，三条通道已被 round-134/132 关掉/收窄）④ **13 个闸门不在 CI 里**（工程卫生；`.github/workflows/` 实测只有 `build-apk.yml`，且若干闸门依赖真实模型额度或大线程，是否给本 fork 开 Actions **属用户决定**）⑤ **OAuth 泄漏凭据未轮换**（安全；泄漏属**上游** `friuns2/codex-mobile` 的 OAuth App `codexui`，本仓只剩「上游轮换 App + GitHub Support 回收不可达对象」两条**人类动作**，用户已裁决上游私信**先不发**）。
+- **一处更正**：round-138 收尾时我把「真实硬件 audio / mention 输入」写成「未做的验证」——实为**本仓没有发送端**（`buildTurnInputParts` 只发 `text` / `localImage` / `image{url}` / `skill`），故第 ② 条应以「已知边界」而非「待办」形态存在。
+
+**产品源码 / 闸门 / 测试：零改动。** 验证 = `vue-tsc --noEmit` **EXIT 0** + 归档完整性/幂等性脚本断言；全量单测与契约**未跑**（无源码改动），基线沿用 round-138 的 **802/802（78 文件）** / 契约 **52/52**。
+
+**未发布**：零源码改动 ⇒ **未 bump 版本、未 tag、未 publish**；npm `latest` 仍 `codex-mobile-re@0.1.129`。若下一轮恢复产品改动，版本从 **0.1.130** 起。
+
 ## round-138（fileId 图片机会性解析 + audio/localAudio/mention 补可见面 + 待办 4 凭据泄漏归属定案，未发布）
 
 **提交**：
