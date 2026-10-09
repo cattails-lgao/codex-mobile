@@ -9,6 +9,7 @@ export function hasMessageBodyContent(message: UiMessage): boolean {
     || (Array.isArray(message.images) && message.images.length > 0)
     || (Array.isArray(message.fileAttachments) && message.fileAttachments.length > 0)
     || (Array.isArray(message.skills) && message.skills.length > 0)
+    || (Array.isArray(message.imageAttachmentIds) && message.imageAttachmentIds.length > 0)
   )
 }
 

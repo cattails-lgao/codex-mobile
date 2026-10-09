@@ -150,16 +150,18 @@ function parseUserMessageContent(
   images: string[]
   skills: Array<{ name: string; path: string }>
   fileAttachments: UiFileAttachment[]
+  imageAttachmentIds: string[]
   rawBlocks: UiMessage[]
   isAutomationRun: boolean
   automationDisplayName: string | null
 } {
   if (!Array.isArray(content)) {
-    return { text: '', images: [], skills: [], fileAttachments: [], rawBlocks: [], isAutomationRun: false, automationDisplayName: null }
+    return { text: '', images: [], skills: [], fileAttachments: [], imageAttachmentIds: [], rawBlocks: [], isAutomationRun: false, automationDisplayName: null }
   }
 
   const textChunks: string[] = []
   const images: string[] = []
+  const imageAttachmentIds: string[] = []
   const skills: Array<{ name: string; path: string }> = []
   const rawBlocks: UiMessage[] = []
 
@@ -167,11 +169,18 @@ function parseUserMessageContent(
     if (block.type === 'text' && typeof block.text === 'string' && block.text.length > 0) {
       textChunks.push(block.text)
     }
-    // round-130：0.160.1 的 image 变体是 `{ url } | { fileId }`（附件引用）。运行时守卫
-    // 本来就只接受带 url 的那种，这里只是把联合类型显式收窄——行为逐字不变。fileId
-    // 形式的图片仍然不显示，属于另一条待处置（需要 fileId→URL 的解析能力）。
+    // round-130：0.160.1 的 image 变体是 `{ url } | { fileId }`（附件引用）。带 url 的走
+    // 图片预览；**只有 fileId、无内联 url 的**——round-137 起不再静默丢弃，收进
+    // imageAttachmentIds 交由 UI 渲染成「不可预览」的可见占位。
+    //
+    // 为什么不做完整的 fileId -> 字节/URL 解析：0.161.0 协议上不可行——附件面只有
+    // thread/attachment/{add,list,remove}，list 返回的 ThreadAttachment.payload 是 opaque
+    // JsonValue（无 url/path 语义），且**没有内容取回端点**。属独立的协议侧设计题。
     if (block.type === 'image' && 'url' in block && typeof block.url === 'string' && block.url.trim().length > 0) {
       images.push(block.url.trim())
+    }
+    if (block.type === 'image' && !('url' in block) && 'fileId' in block && typeof block.fileId === 'string' && block.fileId.trim().length > 0) {
+      imageAttachmentIds.push(block.fileId.trim())
     }
     if (block.type === 'localImage' && typeof block.path === 'string' && block.path.trim().length > 0) {
       images.push(toLocalImageUrl(block.path.trim()))
@@ -205,6 +214,7 @@ function parseUserMessageContent(
     images,
     skills,
     fileAttachments,
+    imageAttachmentIds,
     rawBlocks,
     isAutomationRun: heartbeat !== null,
     automationDisplayName: heartbeat?.automationId || null,
@@ -441,7 +451,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'userMessage') {
     const parsed = parseUserMessageContent(item.id, item.content as UserInput[] | undefined)
     const messages: UiMessage[] = []
-    const hasRenderableUserContent = parsed.text.length > 0 || parsed.images.length > 0 || parsed.fileAttachments.length > 0 || parsed.skills.length > 0
+    const hasRenderableUserContent = parsed.text.length > 0 || parsed.images.length > 0 || parsed.fileAttachments.length > 0 || parsed.skills.length > 0 || parsed.imageAttachmentIds.length > 0
 
     if (hasRenderableUserContent) {
       messages.push({
@@ -451,6 +461,7 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
         images: parsed.images,
         skills: parsed.skills.length > 0 ? parsed.skills : undefined,
         fileAttachments: parsed.fileAttachments.length > 0 ? parsed.fileAttachments : undefined,
+        imageAttachmentIds: parsed.imageAttachmentIds.length > 0 ? parsed.imageAttachmentIds : undefined,
         messageType: item.type,
         isAutomationRun: parsed.isAutomationRun,
         automationDisplayName: parsed.automationDisplayName,

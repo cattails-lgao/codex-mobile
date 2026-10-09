@@ -30,6 +30,11 @@ describe('shouldOmitEmptyGenericMessage', () => {
     expect(shouldOmitEmptyGenericMessage(rawMessage({ fileAttachments: [{ path: '/a', label: 'a' }] }))).toBe(false)
   })
 
+  it('keeps a generic message that only has unresolved image attachments (round-137)', () => {
+    expect(shouldOmitEmptyGenericMessage(rawMessage({ imageAttachmentIds: ['file-abc'] }))).toBe(false)
+    expect(hasMessageBodyContent(rawMessage({ imageAttachmentIds: ['file-abc'] }))).toBe(true)
+  })
+
   it('omits when content is empty (hasMessageBodyContent mirrors)', () => {
     expect(hasMessageBodyContent(rawMessage({}))).toBe(false)
     expect(hasMessageBodyContent(rawMessage({ text: 'x' }))).toBe(true)

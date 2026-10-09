@@ -863,6 +863,55 @@ check(
   ].join(' / '),
 )
 
+// ----------------------------------------- 空状态下一步动作 + fileId 图片可见（round-137）
+// round-120 §三③：三处空状态只陈述现状、缺可执行动作（规范口径 = 原因 + 下一步）。
+// round-131 §十③ / round-130 §四①：`{type:'image', fileId}`（无内联 url）的图片在 UI 上
+// 静默消失。round-137 决定：文案补动作 + 这类图片渲染成「不可预览」的可见占位。
+// 完整 fileId -> 字节 的解析在 0.161.0 **协议上不可行**：附件面只有
+// thread/attachment/{add,list,remove}，list 的 ThreadAttachment.payload 是 opaque JsonValue，
+// 且没有内容取回端点 ⇒ 只登记为后续协议侧议题，不在本轮做。
+const i18nSrc137 = fs.readFileSync('src/composables/useUiLanguage.ts', 'utf8')
+const convSrc137 = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+const treeSrc137 = fs.readFileSync('src/components/sidebar/SidebarThreadTree.vue', 'utf8')
+const v2Src137 = fs.readFileSync('src/api/normalizers/v2.ts', 'utf8')
+const codexTypes137 = fs.readFileSync('src/types/codex.ts', 'utf8')
+const msgContentSrc137 = fs.readFileSync('src/utils/messageContent.ts', 'utf8')
+
+const noMessagesHasAction = /'No messages in this thread yet\. Type a message below to get started\.'/.test(i18nSrc137)
+const noMatchHasAction = /'No matching threads\. Clear the search to see all threads\.'/.test(i18nSrc137)
+const noThreadsHasAction = /'No threads yet\. Start a new thread to begin\.'/.test(i18nSrc137)
+const callSitesUpdated = /t\('No messages in this thread yet\. Type a message below to get started\.'\)/.test(convSrc137)
+  && /t\('No matching threads\. Clear the search to see all threads\.'\)/.test(treeSrc137)
+  && /t\('No threads yet\. Start a new thread to begin\.'\)/.test(treeSrc137)
+check(
+  '三处空状态携带可执行的下一步（round-137）',
+  noMessagesHasAction && noMatchHasAction && noThreadsHasAction && callSitesUpdated,
+  [
+    `线程内无消息=${noMessagesHasAction ? 'yes' : 'NO'}`,
+    `搜索无结果=${noMatchHasAction ? 'yes' : 'NO'}`,
+    `项目无线程=${noThreadsHasAction ? 'yes' : 'NO'}`,
+    `调用点同步=${callSitesUpdated ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+const collectsFileId = /block\.type === 'image' && !\('url' in block\) && 'fileId' in block/.test(v2Src137)
+const hasImageAttachmentField = /imageAttachmentIds\?: string\[\]/.test(codexTypes137)
+const countsAsVisibleBody = /Array\.isArray\(message\.imageAttachmentIds\)/.test(msgContentSrc137)
+const rendersPlaceholder = /message\.imageAttachmentIds\.length > 0/.test(convSrc137)
+  && /t\('Image attachment \(preview unavailable\)'\)/.test(convSrc137)
+const keepsSilentDropForUrlImages = /'url' in block && typeof block\.url === 'string'/.test(v2Src137)
+check(
+  'attachment-only（fileId）图片不再静默缺失，改为可见占位（round-137）',
+  collectsFileId && hasImageAttachmentField && countsAsVisibleBody && rendersPlaceholder && keepsSilentDropForUrlImages,
+  [
+    `解析收集=${collectsFileId ? 'yes' : 'NO'}`,
+    `类型字段=${hasImageAttachmentField ? 'yes' : 'NO'}`,
+    `计入可见正文=${countsAsVisibleBody ? 'yes' : 'NO'}`,
+    `渲染占位=${rendersPlaceholder ? 'yes' : 'NO'}`,
+    `url 分支未变=${keepsSilentDropForUrlImages ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

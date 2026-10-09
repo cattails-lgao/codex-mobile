@@ -131,7 +131,7 @@
       <template v-if="isProjectsSectionExpanded">
       <p v-if="projectAutomationActionError" class="thread-tree-action-error">{{ projectAutomationActionError }}</p>
 
-      <p v-if="isSearchActive && filteredGroups.length === 0" class="thread-tree-no-results">{{ t('No matching threads') }}</p>
+      <p v-if="isSearchActive && filteredGroups.length === 0" class="thread-tree-no-results">{{ t('No matching threads. Clear the search to see all threads.') }}</p>
 
       <p v-else-if="isLoading && groups.length === 0" class="thread-tree-loading">{{ t('Loading threads...') }}</p>
 
@@ -320,7 +320,7 @@
             <template #left>
               <span class="project-empty-spacer" />
             </template>
-            <span class="project-empty">{{ t('No threads') }}</span>
+            <span class="project-empty">{{ t('No threads yet. Start a new thread to begin.') }}</span>
           </SidebarMenuRow>
 
           <SidebarMenuRow v-if="hasHiddenThreads(group)" class="thread-show-more-row">

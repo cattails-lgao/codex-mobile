@@ -251,6 +251,9 @@ export type UiMessage = {
   images?: string[]
   skills?: Array<{ name: string; path: string }>
   fileAttachments?: UiFileAttachment[]
+  /** round-137：`{ type:'image', fileId }`（附件引用，无内联 url）的图片 id。UI 渲染成
+   *  「不可预览」的可见占位，避免这类图片在历史里静默消失。 */
+  imageAttachmentIds?: string[]
   fileChanges?: UiFileChange[]
   fileChangeStatus?: UiFileChangeStatus
   messageType?: string

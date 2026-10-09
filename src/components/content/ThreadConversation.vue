@@ -22,7 +22,7 @@
       v-if="messages.length === 0 && pendingRequests.length === 0 && !liveOverlay && !isSlowOpen"
       class="conversation-empty"
     >
-      {{ t('No messages in this thread yet.') }}
+      {{ t('No messages in this thread yet. Type a message below to get started.') }}
     </p>
 
     <ul ref="conversationListRef" class="conversation-list" @scroll="onConversationScroll">
@@ -288,6 +288,18 @@
                   >
                     {{ att.label }}
                   </a>
+                </span>
+              </div>
+
+              <div v-if="message.imageAttachmentIds && message.imageAttachmentIds.length > 0" class="message-file-attachments">
+                <span
+                  v-for="attachmentId in message.imageAttachmentIds"
+                  :key="`${message.id}:${attachmentId}`"
+                  class="message-file-chip message-image-attachment-chip"
+                  :title="attachmentId"
+                >
+                  <span class="message-file-chip-icon">🖼</span>
+                  <span class="message-file-chip-name">{{ t('Image attachment (preview unavailable)') }}</span>
                 </span>
               </div>
 
@@ -2411,6 +2423,12 @@ onBeforeUnmount(() => {
 
 .message-file-chip-name {
   @apply truncate max-w-48 font-mono;
+}
+
+/* round-137：attachment-only（fileId）图片的占位——虚线边示意「内容取不到」，
+   与可点击的普通附件 chip 区分。仅用既有 token，无裸色板。 */
+.message-image-attachment-chip {
+  @apply border-dashed text-ink-3;
 }
 
 .message-card {

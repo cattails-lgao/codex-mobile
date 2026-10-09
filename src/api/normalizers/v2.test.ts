@@ -92,6 +92,41 @@ describe('normalizeThreadMessagesV2', () => {
     expect(messages[0].isUnhandled).toBeUndefined()
   })
 
+  it('surfaces attachment-only images (fileId) as visible ids instead of dropping them silently (round-137)', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      clientId: null,
+      id: 'user-3',
+      content: [
+        { type: 'image', fileId: 'file-abc' },
+      ],
+    }]))
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      id: 'user-3',
+      role: 'user',
+      text: '',
+      imageAttachmentIds: ['file-abc'],
+    })
+    expect(messages[0].isUnhandled).toBeUndefined()
+  })
+
+  it('still prefers the inline url when an image block carries both url and fileId', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      clientId: null,
+      id: 'user-4',
+      content: [
+        { type: 'image', url: 'https://example.com/a.png', fileId: 'file-abc' },
+      ],
+    }]))
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0].images).toEqual(['https://example.com/a.png'])
+    expect(messages[0].imageAttachmentIds).toBeUndefined()
+  })
+
   it('decodes escaped heartbeat instructions without exposing raw XML', () => {
     const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
       type: 'userMessage',
