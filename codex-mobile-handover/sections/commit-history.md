@@ -372,6 +372,24 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## v0.1.129 发布（round-135 ~ round-138）
+
+版本从 `0.1.128` 升至 **`0.1.129`**，收录 round-135 ~ round-138 共 21 个提交（推送范围 `v0.1.128..v0.1.129`）。
+
+**发布口径（一句定案，后续发版照此）**：`v0.1.128` 的 tag 与 GitHub Release 只覆盖 round-122 ~ round-134（33 提交），而本批四轮**全部落地在其之后**；已公开的 tag 与 Release 说明**不回改**（tag 一经推送即视为不可变），故按「一个发布批次一个版本号」新开 **v0.1.129**。`v0.1.128` **未 publish 至 npm**（`npm view codex-mobile-re@0.1.128` → **404**），其内容（round-122 ~ round-134）随本版一并交付 —— 与 v0.1.124「已建 tag + Release 但未发 npm、内容并入 v0.1.125」先例一致；npm `versions` 因此从 `0.1.127` 直接跳到 `0.1.129`。
+
+**内容总览**：①**未 materialize 线程不再 502**（round-135）——0.161.0 实测复现，窄谓词 `isThreadTurnsNotListableError` 把 `thread/read` 与 `thread/resume` 两条通道都改成回 `{thread:{id,turns:[]}}` 的诚实载荷；**有意不**退回裸宽模式（会把真有轮次的线程答成空对话），直连 `thread/turns/list` 仍 502 亦是有意。②**上翻游标链三改 + PTY 复跑**（round-136）——未命中先由**一次 id-only 列举**重建缺失种子（跨度 ≤ 100，校验「页尾即锚点」后先登记再用）；全量读缓存失效面收窄到「轮次结构真的变了」（`threadReadInvalidatesCache` 门控、`storeThreadReadSnapshot` 不再自清）；链落 sidecar `$CODEX_HOME/codex-mobile-turn-page-cursors.json`（8 线程 × 64 锚点、写串行化、损坏＝空链，`SHARED_BRIDGE_VERSION` **v6→v7**）；PTY 端到端在 codex-cli **0.161.0** 复跑 **13/13**。③**空状态 + fileId 占位**（round-137）——三处空状态补「原因 + 下一步动作」（中英同步、动作真实可点）；attachment-only 的 fileId 图片不再静默缺失（`imageAttachmentIds` + 虚线占位）。④**fileId 翻案 + 新输入面**（round-138）——`state_5.sqlite` 的 `thread_attachments` 证实为**纯客户端写的 KV**（`payload TEXT NOT NULL`、本机 **0 行**）⇒ round-137 的「协议不可行」推论被推翻，改为按**值的形态**机会性解析（`data:image|video` / `http(s)://` / `file://` 或绝对路径 ∧ 扩展名在 `/codex-local-image` 白名单内 ⇒ 换代理 URL），命中改写成 `{type:'image',url}`、未命中保持占位、无 fileId **零 RPC**、查表失败静默；`audio` / `localAudio` / `mention` 各开可见面（`<audio controls>` / `/codex-local-file` / `@name` chip），**`hasMessageBodyContent` 与 `hasRenderableUserContent` 两道闸都补**（只补前者会让「只发一条语音」的消息整条丢掉），兜底从 8 个 `!==` 长链改成 `HANDLED_USER_INPUT_TYPES` 集合（长链会把联合收窄成 `never`）。**同日追办**新增浏览器级闸门 `scripts/check-message-media-surfaces.cjs`（44 项 × 亮/暗 × 1440/390，拦 `thread/read`/`thread/resume` 回合成 thread、其余 RPC 透传 ⇒ 检的是真实管线、只有数据是合成的）；并记下两个环境陷阱：agent shell 带 `http_proxy` 会把本机端口的 502 伪装成「服务没起来」，Playwright 亦被透代理。
+
+**验证基线（发版时点）**：`vue-tsc --noEmit` **EXIT=0**、全量 Vitest **802/802 零失败（78 文件）**、UI 契约 **52/52**、`vite build` **EXIT=0** 与 `tsup` **EXIT=0**。反跑（**保留断言、只回退生产代码**）：round-138 主体 ⇒ 契约 50/52 ＋ 定向 17 例转红；追办闸门 ⇒ 14/44 转红；两轮还原后源文件均**逐字节一致**。
+
+**发布动作**：版本 bump + 本小节提交（见 git log）；git tag `v0.1.129`（**annotated**，与 0.1.119 ~ 0.1.127 一致；0.1.128 误用了轻量 tag）指向该提交；GitHub Release 由维护者创建（非草稿／非预发布，标 Latest）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.129 。
+
+**发布闭环**：（待用户 `npm publish` 后回填 —— registry 发布时刻、`dist-tags.latest` 切换、tarball 条目数与 shasum 复核。）
+
+**发版前置（环境，2026-10-09 实测）**：`~/.npmrc` 的 npm 凭据仍失效 —— `npm whoami --registry=https://registry.npmjs.org/` → **E401 401 Unauthorized**（`GET /-/whoami`），与 round-135 的对照实验结果一致 ⇒ `npm publish` 前需先 `npm login`（维护者＝用户本人）。`prepublishOnly = pnpm run build`（`vue-tsc --noEmit && vite build` ＋ `tsup`）会在 publish 时重建 `dist/`、`dist-cli/`，故两者不入库。
+
+**公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
+
 ## round-138（fileId 图片机会性解析 + audio/localAudio/mention 补可见面 + 待办 4 凭据泄漏归属定案，未发布）
 
 **提交**：
