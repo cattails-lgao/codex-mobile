@@ -264,9 +264,11 @@ DMCA（只有数据权利人能提）、**再改写一次历史**（改不动**�
    合法做法，但**真实命中率未测**（取决于 CLI 是否/如何写 payload）。
 2. **`/codex-local-image` 与 `/codex-local-file` 的语义差异是有意的**：前者有扩展名白名单，
    后者没有。`localAudio` 走后者 ⇒ 比 `localImage` **宽松**（沿用既有「打开本地文件」通道的语义）。
-3. **浏览器类闸门本轮未跑**：本轮新增 CSS 只有 1 个块（`.message-audio-attachments` /
-   `.message-audio-player` / `.message-mention-chip`，**只用既有 token、无裸色板**）。
-   **`<audio>` 播放器与 @chip 在暗色下的真机观感没有截图证据**。
+3. **浏览器类闸门**：本轮新增的 3 条样式（`.message-audio-attachments` /
+   `.message-audio-player` / `.message-mention-chip`）已由同日的
+   `scripts/check-message-media-surfaces.cjs` 在真机浏览器上量过（**§十**，44 项，含暗色对比度
+   与超长名截断）。仍**没有**覆盖的：真实硬件上的 audio/mention 输入（§10.2）、
+   round-137 的 fileId 占位 chip 在暗色下的单独采样、播放器能否真的出声（§10.6）。
 4. **mention chip 只显示 `name`**，`path` 仅在 `title` 里；长名字是否截断未验证。
 5. **待办 4 的动作未执行**：私信**用户裁决不发**；(b) 工单**未提交**（需用户）。凭据**仍未轮换**。
 6. **未 bump `SHARED_BRIDGE_VERSION`**，论证见 §4.4。
@@ -282,7 +284,7 @@ DMCA（只有数据权利人能提）、**再改写一次历史**（改不动**�
 | 2 | **GitHub Support 工单**（回收重写前的不可达对象，覆盖两个仓库）：草稿 `tmp/r138-github-support-draft.md` | **需用户提交** |
 | 3 | **上游私密通报**（请 `friuns2` 轮换/删除 OAuth App `codexui`）：草稿 `tmp/r138-upstream-notice.md`。**用户裁决「先不发」** | **需用户**（已暂缓） |
 | 4 | **fileId 解析的真实命中例**：等出现一条「payload 里含可渲染源」的真实附件后再端到端复核（§六①） | 可做（前提是拿到真实样本） |
-| 5 | **audio / mention 面的浏览器级闸门**：暗色对比度与长名截断 | 可做 |
+| 5 | ~~**audio / mention 面的浏览器级闸门**：暗色对比度与长名截断~~ → **同日已完成**（§十）：`scripts/check-message-media-surfaces.cjs`，44 项 | **已做** |
 | 6 | round-137 §六① 的「等上游给内容端点」：本轮已用「值形态」绕开，**不再需要** | — |
 
 ---
@@ -300,6 +302,8 @@ DMCA（只有数据权利人能提）、**再改写一次历史**（改不动**�
 - `src/components/content/ThreadConversation.vue`（+37）：`<audio>` 播放器 + @提及 chip + 3 条新样式
 - `src/api/normalizers/v2.test.ts`（+73/−1）、`src/utils/messageContent.test.ts`（+8）：单测
 - `scripts/check-ui-contract.cjs`（+69）：2 项契约（50 → 52）
+- **追办（§十，同日）**：`scripts/check-message-media-surfaces.cjs`（**新增** 403 行）：
+  audio / localAudio / mention 的浏览器级闸门，44 项
 
 **复现命令**
 
@@ -320,6 +324,10 @@ NODE="C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
 #    emptyDir 被沙箱 shim 拦（genie-trash ETIMEDOUT）⇒ vite build 须沙箱外跑
 "$NODE" node_modules/vite/bin/vite.js build
 "$NODE" node_modules/tsup/dist/cli-default.js
+
+# 4) 浏览器级闸门（audio / localAudio / mention 面，44 项；SKIP 退 2）
+#    起桥 + 等就绪 + 跑闸门 + 杀进程树必须在同一个 shell 会话内（§10.5）
+bash tmp/r138-run-media-gate.sh
 ```
 
 **探针 / 草稿（`tmp/`，未入库）**：`r138-flip.cjs`、`r138-bridge-apply.cjs`、`r138-bridge-fix.cjs`、
@@ -330,6 +338,72 @@ NODE="C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
 ## 九、落款说明
 
 - **未发布**：本轮只动源码与文档，**未 bump 版本、未 tag**。
-- 本轮 **25 例新单测**与 **2 项契约**均**反跑证明非空**（§4.2）。
+- 本轮 **25 例新单测**与 **2 项契约**均**反跑证明非空**（§4.2）；
+  追办的**浏览器级闸门 44 项**同样反跑（§10.4：破坏生产 CSS ⇒ 14/44 转红）。
 - **`SHARED_BRIDGE_VERSION` 未 bump** 是**有意的**（§4.4）。
 - 待办 4 本轮**只做取证与草拟**，外发动作按用户裁决「先不发」**未执行**（§5.3）。
+
+---
+
+## 十、追办：audio / mention 面的浏览器级闸门（2026-10-09 当日追加）
+
+§六③ / §七⑤ 记的「浏览器类闸门本轮未跑」在**同一天内补上了**。新增
+`scripts/check-message-media-surfaces.cjs`：**44 项断言 × 4 个场景**（亮/暗 × 桌面 1440 / 窄屏 390）。
+
+### 10.1 为什么必须量浏览器
+
+§三 给 audio / localAudio / mention 开的可见面，当时的证据只有两种：`check-ui-contract`（读源码
+文本，看得见「写了什么」、看不见「渲染成什么样」）与 `v2.test.ts`（跑在 Node 里，**没有 CSS**）。
+于是「暗色下对比度够不够」「超长名字会不会撑破布局」这两件事**根本没被量过** —— 它们只能量浏览器。
+
+### 10.2 做法：拦 RPC，不造假 DOM
+
+本机 `thread_attachments` 是 **0 行**（§2.2），**没有任何一条真实 CLI 写出的 audio / mention 输入**。
+所以不去找真实线程，而是在浏览器层用 `page.route` **拦下 `thread/read` 与 `thread/resume`**，
+回一份合成的 thread（一条 `audio`（data URL）+ 一条 `localAudio`（走 `/codex-local-file` 代理）放一轮；
+短名 + 超长名两条 `mention` 放另一轮），**其余 RPC 一律透传**，让应用像连真服务一样启动。
+
+被检验的因此是**真实管线**（归一化 → UiMessage → 组件 → CSS），**只有数据是合成的**。
+这条边界是刻意保留的：它**不等于**「真实线程验证」。
+
+### 10.3 量出来的两个事实（都不是靠读 token 推的）
+
+| 场景 | chip 前景 / 背景 | 对比度 | 超长名 |
+| --- | --- | --- | --- |
+| light | `#3f3f46` on `#f7f7f9` | **9.76:1** | scroll 828 / client 192，`nowrap+hidden+ellipsis` |
+| dark | `#d4d4d8` on `#3f3f46` | **7.07:1** | 同上 |
+
+- **暗色不是组件自己算出来的**：`src/style.css:1275` 有一条全局
+  `:root.dark .message-file-chip { @apply border-line-3 bg-s3 text-ink-3; }`，mention chip 复用了
+  `.message-file-chip` 于是吃到它。**照 token 表反推会得到 15.7:1（`ink-2` on `s0`），真机是 7.07:1**
+  —— 又一次「采样点＝真实可见范围」，不要用 token 反推。
+- `<audio controls>` 在 1440 与 390 下都是 **300×32**（`max-w-full` 在窄屏没有把它压成 0）。
+
+### 10.4 反跑（证明 44 项非空）
+
+`tmp/r138-flip-media.cjs off` **只改两处生产 CSS、闸门一行不动**：
+① 去掉 `.message-file-chip-name` 的 `truncate max-w-48`；② `.message-file-chip` 的
+`text-ink-2` → `text-ink-4`（token 表注明 `ink-4` **仅用于非文本**）。重建前端后：
+
+**14/44 转红** ＝ 3 条截断断言 × 4 场景 ＋ 亮色对比度 2 个场景（实测 **2.28:1**，与「掉到 4.5 以下」的预期一致）。
+
+还原后源文件**逐字节相同**（`identical=true`）、重建后 **44/44 全绿**。
+
+### 10.5 环境陷阱（本轮踩到，值得记）
+
+这台机器的 agent shell 带着 WorkBuddy 自己的 `http_proxy=http://127.0.0.1:57298`：
+
+- `curl http://127.0.0.1:<port>/` 会被送去**代理**，稳定拿到 **502 Bad Gateway**
+  （body 是 `upstream connect failed: ... (os error 10061)`）—— 看起来像「服务没起来」，
+  **实际是代理在挡**。正确姿势：`curl --noproxy '*'`；加了这个参数后 `000` 才是真的没人听。
+- **Playwright 会把代理透给浏览器**，于是对 127.0.0.1 的导航也会 502 ⇒ 闸门会把「代理在挡」
+  误判成 SKIP。闸门因此在启动浏览器前**删掉 `http_proxy/https_proxy/...` 并加 `--no-proxy-server`**。
+- **后台 bash 一结束，它拉起的桥会被回收** ⇒ 起桥 + 等就绪 + 跑闸门 + 杀进程树**必须在同一个
+  shell 会话里**（`tmp/r138-run-media-gate.sh`）。
+
+### 10.6 仍然没覆盖的
+
+- 仍**不是**真实线程验证（§10.2）：真实硬件上依旧没有任何 audio / mention 输入。
+- round-137 的 fileId 占位 chip（`.message-image-attachment-chip`）在暗色下**没有单独采样** ——
+  它共用 `.message-file-chip`、吃同一条暗色覆盖，但本轮采样点只挂了 mention chip。
+- 播放器**能不能真的出声**没有验：只验了元素、`src` 与占位尺寸（44 字节空 WAV + `preload="metadata"`）。

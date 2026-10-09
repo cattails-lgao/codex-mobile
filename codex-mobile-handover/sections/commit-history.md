@@ -381,6 +381,7 @@
 | `5fd35be9` | `feat(attachments): fileId 图片机会性解析（推翻 round-137「协议不可行」）+ audio/localAudio/mention 补可见面（round-138）` | 10 文件（5 改 + 1 新增模块 + 1 新增测试 + 2 测试改 + 1 闸门），659 增 7 删 |
 | `4781a6d8` | `docs(handover): round-138 …（轮次文档 + 总入口 + 提交史）` | 3 文档（+371/-5） |
 | `2d20344e` | `docs(round-138): 校正 §八 涉及文件的增删行数（以 5fd35be9 的 numstat 为准）` | 2 文件（轮次文档 + 提交史，+7/-6） |
+| （本文档提交） | `test(ui): 新增 audio / localAudio / mention 面的浏览器级闸门（check-message-media-surfaces，44 项）` | 1 文件（新增闸门 +403） |
 
 **由来**：用户口径「**待办1/2，待办4，你都一并处理不行吗**」—— 一次收口 round-137 §六 的两条遗留（① 完整 fileId → 可渲染内容、② `mention` / `audio` / `localAudio` 的可见化）＋ 待办 4（OAuth 泄漏凭据的上游归属与外包路径）。
 
@@ -397,6 +398,32 @@
 **反跑（决定性，证明非空）**：`node tmp/r138-flip.cjs snapshot|off|on`（`.bak` 本轮改为**直接从 `HEAD` 导出**以保证基线可信；`off` = 5 生产文件回退 + 新模块换「功能关闭」桩，**保留全部断言**）⇒ 契约 **50/52**（round-138 两项，子项全 `NO`）＋ 定向 **17 failed | 37 passed (54)**；`on` ⇒ 6 文件 `same` **逐字节一致**、契约 52/52、定向 54/54。
 
 **诚实边界**：①**fileId 解析的「命中」路径无端到端真机证据** —— 本机 `thread_attachments` **0 行**（本 home 从未写过附件），「命中 ⇒ 出真图」只由**合成 payload 的单测**证明；真实命中率取决于 CLI 是否/如何写 `payload`，未测。②**浏览器类闸门未跑**：新增 CSS 只 1 块（`.message-audio-attachments` / `.message-audio-player` / `.message-mention-chip`，只用既有 token），`<audio>` 与 @chip 的**暗色真机观感无截图证据**；`localAudio` 走 `/codex-local-file`（**无**扩展名白名单）⇒ 比 `localImage` 语义更宽。③`mention` chip 只显示 `name`，`path` 仅在 `title`；长名是否截断未验证。④**待办 4 未闭环**：凭据**仍未轮换**、工单**未提交**、私信按用户裁决**暂缓**。
+
+**④ 追办（同日，用户口径「#22 处理」）：audio / mention 面的浏览器级闸门。** 用户看过 round-138 的待办表后
+直接处理掉第 5 条（「audio / mention 面的浏览器级闸门：暗色对比度与长名截断」），新增
+`scripts/check-message-media-surfaces.cjs`（**44 项** × 亮/暗 × 桌面 1440 / 窄屏 390）。
+
+**做法**：本机 `thread_attachments` 是 **0 行** ⇒ 不去找真实线程，改用 `page.route` 拦下 `thread/read` +
+`thread/resume` 回**合成** thread（一条 `audio` data URL + 一条 `localAudio` 放一轮；短名 + 超长名两条
+`mention` 放另一轮），其余 RPC 一律透传 ⇒ 验的仍是**真实管线**（归一化 → UiMessage → 组件 → CSS），
+**只有数据是合成的**。这条边界刻意保留：它**不等于**真实线程验证。
+
+**量出来的（都不是靠读 token 推的）**：chip 对比度 **亮 9.76:1 / 暗 7.07:1** —— 暗色来自
+`style.css:1275` 的全局 `:root.dark .message-file-chip { @apply border-line-3 bg-s3 text-ink-3; }`
+（mention chip 复用了 `.message-file-chip`），**照 token 表反推会误得 15.7:1**；`<audio controls>` 在
+1440 与 390 下恒 **300×32**；超长名 scroll 828 / client 192，且 `nowrap + hidden + ellipsis`。
+
+**反跑（决定性）**：`node tmp/r138-flip-media.cjs off|on` —— **只改两处生产 CSS、闸门一行不动**
+（去掉 `.message-file-chip-name` 的 `truncate max-w-48`；`.message-file-chip` 的 `text-ink-2` → `text-ink-4`，
+token 表注明 `ink-4` 仅用于非文本）⇒ **14/44 转红** ＝ 3 条截断断言 × 4 场景 ＋ 亮色对比度 2 个场景
+（实测 **2.28:1**）；还原后源文件**逐字节一致**、重建后 **44/44 全绿**。SKIP 分支也验过（死端口 ⇒ 退 2）。
+
+**环境陷阱（值得记）**：agent shell 带 WorkBuddy 自己的 `http_proxy=http://127.0.0.1:57298` ⇒
+① `curl http://127.0.0.1:<port>/` 会被送去**代理**、稳定回 **502 Bad Gateway**（body 是
+`upstream connect failed: … (os error 10061)`），看起来像「服务没起来」，**实际是代理在挡**；
+② Playwright 会把代理透给浏览器 ⇒ 对 127.0.0.1 的导航同样 502、闸门会**误判成 SKIP**；
+③ **后台 bash 一结束、它拉起的桥会被回收** ⇒ 起桥 + 等就绪 + 跑闸门 + 杀进程树必须同一 shell 会话。
+探针：`tmp/r138-run-media-gate.sh`、`tmp/r138-flip-media.cjs`（`tmp/` 未入库）。
 
 **未发布**：未 bump 版本、未 tag；`5fd35be9` 待在本地 `main`（round-122 ~ round-138 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
