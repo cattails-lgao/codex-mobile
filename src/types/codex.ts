@@ -254,6 +254,13 @@ export type UiMessage = {
   /** round-137：`{ type:'image', fileId }`（附件引用，无内联 url）的图片 id。UI 渲染成
    *  「不可预览」的可见占位，避免这类图片在历史里静默消失。 */
   imageAttachmentIds?: string[]
+  /** round-138：`{ type:'audio', url }` 与 `{ type:'localAudio', path }` 的可见面。
+   *  此前这两类（连同 mention）落进 rawBlocks，而 rawBlocks 在 UI 上没有渲染分支、
+   *  空正文又被 shouldOmitEmptyGenericMessage 省略 ⇒ 在历史里静默消失。
+   *  localAudio 在归一化时已换成本仓既有的 /codex-local-file 代理 URL。 */
+  audioSources?: string[]
+  /** round-138：`{ type:'mention', name, path }` 的 @ 提及（同因，此前静默消失）。 */
+  mentions?: Array<{ name: string; path: string }>
   fileChanges?: UiFileChange[]
   fileChangeStatus?: UiFileChangeStatus
   messageType?: string

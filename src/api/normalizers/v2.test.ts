@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeThreadMessagesV2, readThreadInProgressFromResponse } from './v2'
-import type { ThreadReadResponse } from '../appServerDtos'
+import type { ThreadReadResponse, UserInput } from '../appServerDtos'
 
 function threadReadResponseWithContent(content: ThreadReadResponse['thread']['turns'][number]['items'][number][]): ThreadReadResponse {
   return {
@@ -110,6 +110,78 @@ describe('normalizeThreadMessagesV2', () => {
       imageAttachmentIds: ['file-abc'],
     })
     expect(messages[0].isUnhandled).toBeUndefined()
+  })
+
+  it('surfaces audio-only user messages as playable sources (round-138)', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      clientId: null,
+      id: 'user-audio',
+      content: [
+        { type: 'audio', url: 'data:audio/wav;base64,UklGRg==' },
+      ],
+    }]))
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      id: 'user-audio',
+      role: 'user',
+      text: '',
+      audioSources: ['data:audio/wav;base64,UklGRg=='],
+    })
+    expect(messages[0].isUnhandled).toBeUndefined()
+  })
+
+  it('maps a localAudio path onto the /codex-local-file proxy (round-138)', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      clientId: null,
+      id: 'user-local-audio',
+      content: [{ type: 'localAudio', path: '/tmp/recording.m4a' }],
+    }]))
+
+    expect(messages[0]).toMatchObject({
+      audioSources: ['/codex-local-file?path=%2Ftmp%2Frecording.m4a'],
+    })
+    expect(messages[0].isUnhandled).toBeUndefined()
+  })
+
+  it('surfaces mention-only user messages as chips (round-138)', () => {
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+      type: 'userMessage',
+      clientId: null,
+      id: 'user-mention',
+      content: [{ type: 'mention', name: 'src/main.ts', path: '/repo/src/main.ts' }],
+    }]))
+
+    expect(messages[0]).toMatchObject({
+      mentions: [{ name: 'src/main.ts', path: '/repo/src/main.ts' }],
+    })
+    expect(messages[0].isUnhandled).toBeUndefined()
+  })
+
+  it('gives every UserInput variant a visible surface (none lands in rawBlocks, round-138)', () => {
+    const variants: UserInput[] = [
+      { type: 'text', text: 'hi', text_elements: [] },
+      { type: 'image', url: 'data:image/png;base64,AA' },
+      { type: 'image', fileId: 'file-abc' },
+      { type: 'localImage', path: '/tmp/a.png' },
+      { type: 'audio', url: 'https://example/a.wav' },
+      { type: 'localAudio', path: '/tmp/a.m4a' },
+      { type: 'skill', name: 's', path: '/tmp/SKILL.md' },
+      { type: 'mention', name: 'm', path: '/tmp/m.ts' },
+    ]
+
+    for (const block of variants) {
+      const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([{
+        type: 'userMessage',
+        clientId: null,
+        id: 'user-variant',
+        content: [block],
+      }]))
+      expect(messages, `variant ${block.type} should produce one message`).toHaveLength(1)
+      expect(messages[0].isUnhandled, `variant ${block.type} should not be unhandled`).toBeUndefined()
+    }
   })
 
   it('still prefers the inline url when an image block carries both url and fileId', () => {

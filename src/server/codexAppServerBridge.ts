@@ -180,6 +180,7 @@ import {
   writeApprovalPolicyToConfigFile,
 } from './bridge/approvalPolicy.js'
 import { sanitizeThreadTurnsInlinePayloads } from './bridge/inlineImages.js'
+import { resolveFileIdImageBlocksInThreadResult, THREAD_ATTACHMENT_LOOKUP_LIMIT } from './bridge/threadAttachmentImageSources.js'
 // thread/read 结果缓存切片（round-76）：命中即跳过 app-server 调用与整条响应管道。
 import { ThreadReadResultCache, threadReadInvalidatesCache } from './bridge/threadReadCache.js'
 // 内联 data-url 净化切片（U 批）：sanitizeThreadTurnsInlinePayloads 原为本
@@ -1674,6 +1675,26 @@ export function warmProviderModelCatalog(): void {
   }
 }
 
+// round-138：fileId 图片的**机会性解析**（round-137 遗留的「待办 1」）。作为内联载荷
+// 净化的**后置一趟**：只有结果里真的出现 `{ type:'image', fileId }` 才会发一次
+// thread/attachment/list（无 fileId ⇒ 零 RPC）；命中可渲染内容就把 block 重写成
+// `{ type:'image', url }`。识别按**值的形态**（`data:` URL / 绝对图片路径、走既有
+// /codex-local-image 代理），**不猜字段名** —— 详见 bridge/threadAttachmentImageSources.ts。
+// 放在模块级而不是请求处理闭包里：rpc 管道与 threadRoutes 两个注入点都要用。
+function resolveThreadReadFileIdImages(
+  appServer: { rpc(method: string, params: unknown): Promise<unknown> },
+  result: unknown,
+): Promise<unknown> {
+  return resolveFileIdImageBlocksInThreadResult(result, async (threadId) => {
+    const listed = await appServer.rpc('thread/attachment/list', {
+      threadId,
+      limit: THREAD_ATTACHMENT_LOOKUP_LIMIT,
+    })
+    const payload = asRecord(listed)
+    return Array.isArray(payload?.data) ? payload.data : null
+  })
+}
+
 export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
   const { appServer, terminalManager, methodCatalog, telegramBridge, backendQueueProcessor } = getSharedBridgeState()
   const externalSessionTracker = createExternalSessionTracker()
@@ -2074,7 +2095,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             getExternalSession: (threadId) => externalSessionTracker.getExternalSession(threadId),
             getUserFacingSubagentThreadIds: () => new Set(externalSessionTracker.getUserFacingSubagentThreadIds()),
           },
-          sanitizeThreadTurnsInlinePayloads,
+          sanitizeThreadTurnsInlinePayloads: async (method: string, result: unknown) => resolveThreadReadFileIdImages(
+            appServer,
+            await sanitizeThreadTurnsInlinePayloads(method, result),
+          ),
           mergeImportedThreadsIntoThreadListResult,
         }, body.method, rpcResult)
 
@@ -2091,7 +2115,10 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         setJson,
         appServer,
         externalSessionTracker,
-        sanitizeThreadTurnsInlinePayloads,
+        sanitizeThreadTurnsInlinePayloads: async (method: string, result: unknown) => resolveThreadReadFileIdImages(
+          appServer,
+          await sanitizeThreadTurnsInlinePayloads(method, result),
+        ),
         isThreadMaterializationPendingError,
       })) return
 

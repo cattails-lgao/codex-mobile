@@ -82,8 +82,23 @@ function extractCodexUserRequestText(value: string): string {
   return value.slice(markerOffset).trim()
 }
 
+/**
+ * round-138：UserInput 联合里**已有可见面**的变体；其余落进 rawBlocks 兜底。
+ * 用集合而非 `block.type !== '…'` 长链，是因为把 8 个变体全排掉后 TS 会把联合收窄成
+ * `never`（报 `Property 'type' does not exist on type 'never'`）。
+ */
+const HANDLED_USER_INPUT_TYPES = new Set<string>([
+  'text', 'image', 'localImage', 'audio', 'localAudio', 'skill', 'mention',
+])
+
 function toLocalImageUrl(path: string): string {
   return `/codex-local-image?path=${encodeURIComponent(path)}`
+}
+
+// round-138：localAudio 的播放源走既有 /codex-local-file 代理（无扩展名白名单，
+// 与服务端「直接打开本地文件」同一条通道）。
+function toLocalFileUrl(path: string): string {
+  return `/codex-local-file?path=${encodeURIComponent(path)}`
 }
 
 function toImageGenerationUrl(value: string): string {
@@ -151,17 +166,21 @@ function parseUserMessageContent(
   skills: Array<{ name: string; path: string }>
   fileAttachments: UiFileAttachment[]
   imageAttachmentIds: string[]
+  audioSources: string[]
+  mentions: Array<{ name: string; path: string }>
   rawBlocks: UiMessage[]
   isAutomationRun: boolean
   automationDisplayName: string | null
 } {
   if (!Array.isArray(content)) {
-    return { text: '', images: [], skills: [], fileAttachments: [], imageAttachmentIds: [], rawBlocks: [], isAutomationRun: false, automationDisplayName: null }
+    return { text: '', images: [], skills: [], fileAttachments: [], imageAttachmentIds: [], audioSources: [], mentions: [], rawBlocks: [], isAutomationRun: false, automationDisplayName: null }
   }
 
   const textChunks: string[] = []
   const images: string[] = []
   const imageAttachmentIds: string[] = []
+  const audioSources: string[] = []
+  const mentions: Array<{ name: string; path: string }> = []
   const skills: Array<{ name: string; path: string }> = []
   const rawBlocks: UiMessage[] = []
 
@@ -192,13 +211,38 @@ function parseUserMessageContent(
         skills.push({ name, path })
       }
     }
+    // round-138：audio / localAudio / mention 此前**没有**可见面 —— 它们落进 rawBlocks，
+    // 而 rawBlocks 在 UI 上没有渲染分支、空正文又被 shouldOmitEmptyGenericMessage 省略
+    // ⇒ 在历史里静默消失（与 round-137 的 fileId 图片同因）。本轮补齐：
+    //   · audio      → 内联/远程 URL，交给 <audio controls>
+    //   · localAudio → 换成本仓既有的 /codex-local-file 代理 URL
+    //   · mention    → @name chip（path 只作 title 提示）
+    if (block.type === 'audio' && typeof block.url === 'string' && block.url.trim().length > 0) {
+      audioSources.push(block.url.trim())
+    }
+    if (block.type === 'localAudio' && typeof block.path === 'string' && block.path.trim().length > 0) {
+      audioSources.push(toLocalFileUrl(block.path.trim()))
+    }
+    if (block.type === 'mention') {
+      const name = typeof block.name === 'string' ? block.name.trim() : ''
+      const path = typeof block.path === 'string' ? block.path.trim() : ''
+      if (name) {
+        mentions.push({ name, path })
+      }
+    }
 
-    if (block.type !== 'text' && block.type !== 'image' && block.type !== 'localImage' && block.type !== 'skill') {
+    // round-138：UserInput 联合的 8 个变体至此**全部**有可见面（text / image(url|fileId) /
+    // localImage / audio / localAudio / skill / mention）。这里保留 rawBlocks 兜底：将来协议
+    // 新增变体不会静默丢数据，但 UI 目前没有 rawBlocks 渲染分支 ⇒ 新增变体仍须显式接入
+    // （由 v2.test.ts 的「全变体可见」用例钉住）。
+    // 注意：用「先加宽再查集合」而不是长 `!==` 链——后者会把联合类型收窄成 never。
+    const blockType: string = block.type
+    if (!HANDLED_USER_INPUT_TYPES.has(blockType)) {
       rawBlocks.push({
         id: `${itemId}:user-content:${index}`,
         role: 'user',
         text: '',
-        messageType: `userContent.${block.type}`,
+        messageType: `userContent.${blockType}`,
         rawPayload: toRawPayload(block),
         isUnhandled: true,
       })
@@ -215,6 +259,8 @@ function parseUserMessageContent(
     skills,
     fileAttachments,
     imageAttachmentIds,
+    audioSources,
+    mentions,
     rawBlocks,
     isAutomationRun: heartbeat !== null,
     automationDisplayName: heartbeat?.automationId || null,
@@ -451,7 +497,15 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'userMessage') {
     const parsed = parseUserMessageContent(item.id, item.content as UserInput[] | undefined)
     const messages: UiMessage[] = []
-    const hasRenderableUserContent = parsed.text.length > 0 || parsed.images.length > 0 || parsed.fileAttachments.length > 0 || parsed.skills.length > 0 || parsed.imageAttachmentIds.length > 0
+    // round-138：audio / localAudio（音频源）与 mention（@提及）也要计入「有可渲染内容」，
+    // 否则「只发了一条语音」或「只 @了一个文件」的用户消息会被整条丢掉。
+    const hasRenderableUserContent = parsed.text.length > 0
+      || parsed.images.length > 0
+      || parsed.fileAttachments.length > 0
+      || parsed.skills.length > 0
+      || parsed.imageAttachmentIds.length > 0
+      || parsed.audioSources.length > 0
+      || parsed.mentions.length > 0
 
     if (hasRenderableUserContent) {
       messages.push({
@@ -462,6 +516,8 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
         skills: parsed.skills.length > 0 ? parsed.skills : undefined,
         fileAttachments: parsed.fileAttachments.length > 0 ? parsed.fileAttachments : undefined,
         imageAttachmentIds: parsed.imageAttachmentIds.length > 0 ? parsed.imageAttachmentIds : undefined,
+        audioSources: parsed.audioSources.length > 0 ? parsed.audioSources : undefined,
+        mentions: parsed.mentions.length > 0 ? parsed.mentions : undefined,
         messageType: item.type,
         isAutomationRun: parsed.isAutomationRun,
         automationDisplayName: parsed.automationDisplayName,

@@ -316,6 +316,29 @@
                 </a>
               </div>
 
+              <div v-if="message.audioSources && message.audioSources.length > 0" class="message-audio-attachments">
+                <audio
+                  v-for="(source, sourceIndex) in message.audioSources"
+                  :key="`${message.id}:audio:${sourceIndex}`"
+                  class="message-audio-player"
+                  controls
+                  preload="metadata"
+                  :src="source"
+                ></audio>
+              </div>
+
+              <div v-if="message.mentions && message.mentions.length > 0" class="message-file-attachments">
+                <span
+                  v-for="mention in message.mentions"
+                  :key="`${message.id}:mention:${mention.name}:${mention.path}`"
+                  class="message-file-chip message-mention-chip"
+                  :title="mention.path || mention.name"
+                >
+                  <span class="message-file-chip-icon">@</span>
+                  <span class="message-file-chip-name">{{ mention.name }}</span>
+                </span>
+              </div>
+
               <article v-if="message.text.length > 0" class="message-card" :data-role="message.role">
                 <div v-if="message.isAutomationRun" class="automation-message-label">
                   <span>Sent via automation</span>
@@ -2429,6 +2452,20 @@ onBeforeUnmount(() => {
    与可点击的普通附件 chip 区分。仅用既有 token，无裸色板。 */
 .message-image-attachment-chip {
   @apply border-dashed text-ink-3;
+}
+
+/* round-138：audio / localAudio 的播放器与 mention 的可见面。此前这两类落进
+   rawBlocks 而无渲染分支 ⇒ 静默消失。仅用既有 token，无裸色板。 */
+.message-audio-attachments {
+  @apply mb-2 flex flex-wrap gap-1.5;
+}
+
+.message-audio-player {
+  @apply h-8 max-w-full;
+}
+
+.message-mention-chip {
+  @apply gap-0;
 }
 
 .message-card {

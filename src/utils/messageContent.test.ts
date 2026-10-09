@@ -35,6 +35,14 @@ describe('shouldOmitEmptyGenericMessage', () => {
     expect(hasMessageBodyContent(rawMessage({ imageAttachmentIds: ['file-abc'] }))).toBe(true)
   })
 
+  it('keeps a generic message that only has audio (round-138)', () => {
+    expect(shouldOmitEmptyGenericMessage(rawMessage({ audioSources: ['data:audio/wav;base64,A'] }))).toBe(false)
+  })
+
+  it('keeps a generic message that only has mentions (round-138)', () => {
+    expect(shouldOmitEmptyGenericMessage(rawMessage({ mentions: [{ name: 'm', path: '/tmp/m.ts' }] }))).toBe(false)
+  })
+
   it('omits when content is empty (hasMessageBodyContent mirrors)', () => {
     expect(hasMessageBodyContent(rawMessage({}))).toBe(false)
     expect(hasMessageBodyContent(rawMessage({ text: 'x' }))).toBe(true)

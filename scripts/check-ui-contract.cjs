@@ -912,6 +912,75 @@ check(
   ].join(' / '),
 )
 
+// --------------- round-138：fileId 图片的机会性解析 + audio/localAudio/mention 的可见面
+// 【待办 1】round-137 把「fileId -> 字节」判为协议不可行；round-138 修正了推理：服务端确实没有
+// 内容端点（state_5.sqlite 的 thread_attachments 表 = id/thread_id/attachment_type/identity_key/
+// payload/created_at，payload 是**客户端写的** opaque JsonValue），**正因如此**，任何客户端想让
+// 图有意义就只能把可解析内容写进 payload ⇒ 按**值的形态**（`data:` URL / 绝对图片路径走既有
+// /codex-local-image 代理）识别即可，不必猜字段名。只在结果里真出现 fileId 时才查一次附件表；
+// 命中改写 `{type:'image',url}`、未命中保持 round-137 的占位 ⇒ 严格单调变好。
+const attachSrc138 = fs.readFileSync('src/server/bridge/threadAttachmentImageSources.ts', 'utf8')
+const bridgeSrc138 = fs.readFileSync('src/server/codexAppServerBridge.ts', 'utf8')
+const shortCircuitsWithoutFileId = /const blocks = collectFileIdImageBlocks\(result\)\s*\n\s*if \(blocks\.length === 0\) return result/.test(attachSrc138)
+const identifiesByValueShape = /export function toRenderableMediaSource\(value: string\): string \| null/.test(attachSrc138)
+  && /\^data:\(image\|video\)\\?\//.test(attachSrc138)
+const reusesLocalImageProxy = /\/codex-local-image\?path=\$\{encodeURIComponent\(path\)\}/.test(attachSrc138)
+const hasExtensionAllowlist = /const LOCAL_IMAGE_EXTENSIONS = new Set\(\[/.test(attachSrc138)
+const swallowsLookupErrors = /try \{\s*\n\s*attachments = await listAttachments\(threadId\)\s*\n\s*\} catch \{\s*\n\s*return result/.test(attachSrc138)
+const rewritesOnlyOnHit = /delete block\.fileId\s*\n\s*block\.type = 'image'\s*\n\s*block\.url = source/.test(attachSrc138)
+const wiredIntoBridge = /sanitizeThreadTurnsInlinePayloads: async \(method: string, result: unknown\) => resolveThreadReadFileIdImages\(/.test(bridgeSrc138)
+  && /await appServer\.rpc\('thread\/attachment\/list'/.test(bridgeSrc138)
+check(
+  'fileId 图片：按值形态机会性解析，命中出图 / 未命中保持占位（round-138）',
+  shortCircuitsWithoutFileId && identifiesByValueShape && reusesLocalImageProxy && hasExtensionAllowlist
+    && swallowsLookupErrors && rewritesOnlyOnHit && wiredIntoBridge,
+  [
+    `无 fileId 零 RPC=${shortCircuitsWithoutFileId ? 'yes' : 'NO'}`,
+    `按值形态识别=${identifiesByValueShape ? 'yes' : 'NO'}`,
+    `复用本地代理=${reusesLocalImageProxy ? 'yes' : 'NO'}`,
+    `扩展名白名单=${hasExtensionAllowlist ? 'yes' : 'NO'}`,
+    `查表失败静默=${swallowsLookupErrors ? 'yes' : 'NO'}`,
+    `命中才改写=${rewritesOnlyOnHit ? 'yes' : 'NO'}`,
+    `接入桥层=${wiredIntoBridge ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+// 【待办 2】audio / localAudio / mention 之前全部落进 rawBlocks，而 rawBlocks 在 UI 上没有渲染
+// 分支、空正文又被 shouldOmitEmptyGenericMessage 省略 ⇒ 在历史里静默消失（与 round-137 的 fileId
+// 图片同因）。round-138 给三者各自的可见面；兜底改用「集合判定 + 类型加宽」，因为把 8 个变体全用
+// `!==` 长链排掉后 TS 会把联合收窄成 never。
+const typesSrc138 = fs.readFileSync('src/types/codex.ts', 'utf8')
+const mcSrc138 = fs.readFileSync('src/utils/messageContent.ts', 'utf8')
+const handlesAudioBlocks = /block\.type === 'audio' && typeof block\.url === 'string'/.test(v2Src137)
+const handlesLocalAudioBlocks = /toLocalFileUrl\(block\.path\.trim\(\)\)/.test(v2Src137)
+const handlesMentionBlocks = /block\.type === 'mention'/.test(v2Src137)
+const setBasedFallback = /const HANDLED_USER_INPUT_TYPES = new Set<string>\(\[/.test(v2Src137)
+  && /const blockType: string = block\.type\s*\n\s*if \(!HANDLED_USER_INPUT_TYPES\.has\(blockType\)\)/.test(v2Src137)
+const newFieldsDeclared = /audioSources\?: string\[\]/.test(typesSrc138)
+  && /mentions\?: Array<\{ name: string; path: string \}>/.test(typesSrc138)
+const newFieldsCountAsVisible = /Array\.isArray\(message\.audioSources\)/.test(mcSrc138)
+  && /Array\.isArray\(message\.mentions\)/.test(mcSrc138)
+const notDroppedAsEmptyUserMessage = /parsed\.audioSources\.length > 0\s*\n\s*\|\| parsed\.mentions\.length > 0/.test(v2Src137)
+const rendersAudioPlayer = /<audio/.test(convSrc137) && /class="message-audio-player"/.test(convSrc137)
+const rendersMentionChip = /class="message-file-chip message-mention-chip"/.test(convSrc137)
+check(
+  'audio / localAudio / mention 都有可见面，不再静默消失（round-138）',
+  handlesAudioBlocks && handlesLocalAudioBlocks && handlesMentionBlocks && setBasedFallback
+    && newFieldsDeclared && newFieldsCountAsVisible && notDroppedAsEmptyUserMessage
+    && rendersAudioPlayer && rendersMentionChip,
+  [
+    `audio=${handlesAudioBlocks ? 'yes' : 'NO'}`,
+    `localAudio=${handlesLocalAudioBlocks ? 'yes' : 'NO'}`,
+    `mention=${handlesMentionBlocks ? 'yes' : 'NO'}`,
+    `集合兜底=${setBasedFallback ? 'yes' : 'NO'}`,
+    `类型字段=${newFieldsDeclared ? 'yes' : 'NO'}`,
+    `计入可见正文=${newFieldsCountAsVisible ? 'yes' : 'NO'}`,
+    `非空消息判定=${notDroppedAsEmptyUserMessage ? 'yes' : 'NO'}`,
+    `渲染播放器=${rendersAudioPlayer ? 'yes' : 'NO'}`,
+    `渲染提及=${rendersMentionChip ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

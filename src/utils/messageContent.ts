@@ -10,6 +10,8 @@ export function hasMessageBodyContent(message: UiMessage): boolean {
     || (Array.isArray(message.fileAttachments) && message.fileAttachments.length > 0)
     || (Array.isArray(message.skills) && message.skills.length > 0)
     || (Array.isArray(message.imageAttachmentIds) && message.imageAttachmentIds.length > 0)
+    || (Array.isArray(message.audioSources) && message.audioSources.length > 0) // round-138
+    || (Array.isArray(message.mentions) && message.mentions.length > 0) // round-138
   )
 }
 
