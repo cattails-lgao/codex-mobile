@@ -372,6 +372,29 @@
 
 **未发布**：未 bump 版本、未 tag；`5133d130` 已在本地 `main`（round-122 ~ round-128 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
 
+## round-137（空状态文案补齐「下一步动作」+ attachment-only（fileId）图片不再静默缺失，未发布）
+
+**提交**：
+
+| 提交 | 信息 | 规模 |
+| --- | --- | --- |
+| `aca0ab18` | `feat(ui): 空状态补「下一步动作」+ attachment-only（fileId）图片渲染可见占位（round-137）` | 10 文件（6 产品源码 + 3 测试 + 1 闸门），154 增 11 删 |
+| `（本次）` | `docs(handover): round-137 …（轮次文档 + 总入口 + 提交史）` | 3 文档 |
+
+**由来**：用户口径「**待办7，round-120你选一个，round-131你来选择处理**」——把两条**积压三轮**的产品口径题（round-120 §三③ 与 round-131 §十③ ＝ round-130 §四①/§十一②）交给 AI 代拍板。
+
+**① 空状态（round-120 §三③）**：三处空状态只陈述现状、缺可执行动作。按设计规范「空状态 = 原因 + 可执行动作」补文案，EN 与 zh-CN 同步：`No messages in this thread yet.` → `… Type a message below to get started.`；`No matching threads` → `… Clear the search to see all threads.`；`No threads` → `No threads yet. Start a new thread to begin.`。**三处都改**（不是只挑一处）：三处同一病根，且每处的「下一步」都**真实存在**——下方就是输入框、搜索框旁就有 `Clear search` 的 X 按钮（`sidebar-search-clear`）、工具条上就有 `show-new-thread-button`，文案指向的动作都是用户真能点的。i18n 以**英文串为 key**（`zhCN[message] ?? message`），故「表值 + 调用点 key」两处同步；三个旧 key 在全库各只有 1 处引用，无遗漏面。
+
+**② fileId 图片（round-131 §十③ / round-130 §四①）**：0.160.1 起 `UserInput` 的 image 变体是 `{ type:'image', detail? } & ({ url } | { fileId })`；本仓守卫只收 `url`（round-130 已把联合类型显式收窄、行为逐字不变），于是**只有 fileId 的图片既不出图、也不产生任何数据记录** ⇒ 在历史里**静默消失**。**本轮实测确认了一条被隐含假设掩盖的事实**：`rawBlocks`（`isUnhandled: true`）这条路**在 UI 上本身也不可见**——它们没有专用渲染分支，而 `shouldOmitEmptyGenericMessage` → `hasMessageBodyContent` 对「无 text / images / fileAttachments / skills」的消息返回 true（省略）。**故项目里不存在能兜住这类内容的可见「未处理通道」**，必须**新开一个可见面**：新增 `UiMessage.imageAttachmentIds` 收 `!('url' in block) && 'fileId' in block` 的 id、计入 `hasMessageBodyContent`（保证「只发一张 fileId 图片」的用户消息不被当空行省略）、在 `ThreadConversation.vue` 渲染成**虚线边框、不可点击**的占位 chip（复用既有 `.message-file-chip` 尺寸/间距 ＋ 新增修饰类 `.message-image-attachment-chip { @apply border-dashed text-ink-3 }`，零裸色板），文案 `Image attachment (preview unavailable)` / 图片附件（无法预览）。**`url` 分支逐字未变**（同时带 `url` 与 `fileId` 的块只按 url 出图，有单测钉住）。
+
+**为什么不做完整的 fileId → 字节/URL 解析（协议侧取证）**：`documentation/app-server-schemas` 里附件面只有三个方法 `thread/attachment/{add,list,remove}`；`ThreadAttachmentListResponse = { data: ThreadAttachment[], nextCursor }` 而 `ThreadAttachment = { id, attachmentType, identityKey, payload: JsonValue, createdAt }` —— `payload` 是 **opaque** 的、无 url/path 语义，且**全 schema 没有内容取回端点**。⇒ 即便拿到 `fileId` 也没有任何 RPC 能把它换成可渲染的 URL 或字节；硬做只能靠猜 `payload` 字段。**故只登记为后续协议侧议题**。
+
+**验证基线**：`vue-tsc --noEmit` **EXIT=0**；全量 **777 例 / 777 通过（77 文件）零失败**（＝ round-136 基线 772 ＋ 本轮 5 例）；`check-ui-contract.cjs` **50/50**（48 → 50）；`vite build` **EXIT=0**（`✓ built in 1m 27s`，只有既有的 chunk >500kB 提示）。**单测增量**：`v2.test.ts` +2（fileId-only 产出 `imageAttachmentIds`；`url`+`fileId` 并存只按 url）、`messageContent.test.ts` +1、`useUiLanguage.test.ts` +2。
+
+**反跑（决定性，证明非空）**：备份 `tmp/r137-*.bak`（改动前）/ `*.on`（改动后），**只回退 6 个生产文件、保留新写的契约项与单测** ⇒ 契约 **48/50**（2 项红：`线程内无消息=NO / 搜索无结果=NO / 项目无线程=NO / 调用点同步=NO`；`解析收集=NO / 类型字段=NO / 计入可见正文=NO / 渲染占位=NO`）＋ **4 例单测失败**；还原后契约回 50/50、定向 34/34，且 6 个文件与 ON 快照 `cmp` **逐字节一致**。**踩坑记录**：第一次反跑把契约脚本与测试文件**也一起回退**了 ⇒ 「断言本身不存在」、读到 48/48 全绿，属**空过**；正确形态是「回退生产代码、保留断言」。
+
+**诚实边界**：①两项都是**代拍板**，不是用户首肯的口径；改文案只需动 `useUiLanguage.ts` 一条值 + 调用点 key，机械可逆。②**fileId 图片仍看不到内容**，只是不再「无声无息」——协议不给内容，UI 能做的最多是诚实地说一句「这里有一张图，取不到」。③**浏览器类闸门本轮未跑**：新增 CSS 只有 1 处（仅用既有 token、无裸色板），且复用生产在用的 `.message-file-chip` 尺寸/间距；**虚线占位在暗色下的真机对比度没有截图证据**。④**同类问题还剩一个未处置**：`mention` / `audio` / `localAudio` 也走 `rawBlocks`，由 ② 的结论它们在 UI 上**同样不可见**；本轮只修了用户登记的 fileId 图片那条。⑤未 bump 版本、未 tag；npm `latest` 仍 `0.1.127`。
+
 ## round-136（上翻游标链的补登记 / 缓存失效面收窄 / 跨重启持久化 + PTY 端到端在 0.161.0 复跑 + 仓库清理，未发布）
 
 **提交**：
