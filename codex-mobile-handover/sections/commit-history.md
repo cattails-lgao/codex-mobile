@@ -422,7 +422,7 @@
 - **反跑（证明断言非空）**：**保留断言、只退回生产代码**（round-137 的教训：把断言一起回退＝空过）。`tmp/r140-contract-reverse.cjs` 对契约做 **10 个变异** ⇒ **全部如期失败**、还原后 53/53；`tmp/r140-gate-reverse.sh` 对浏览器闸门做 2 个变异 —— **变异 A**（`renderItemKind` 去掉 `agent-note` 分支）⇒ **用户气泡数变 5，逐字复现原 bug**、**48/56 失败**；**变异 B**（让注记开新组）⇒ `turnBlocks = 5`（应 2）、**4/56 失败**；还原后 **56/56**。
 - **浏览器闸门的边界**：`page.route` **只拦** `**/codex-api/rpc`，`thread/read` / `thread/resume` 回**合成** thread、其余 RPC 一律透传 ⇒ 被检验的是**真实管线**（归一化 → 分组 → 组件 → CSS），**只有数据是合成的**。暗色下注记正文对比度实测 **7.76:1**。
 
-**已 bump 到 0.1.130**（`chore(release)` 提交）并建 **annotated tag `v0.1.130`** + GitHub Release（Latest）；**`npm publish` 由维护者执行**（本机 `npm` 凭据 401、`pnpm publish` 才是可用通道 —— 口径见本文件 v0.1.129 段）。
+**发布动作（2026-10-10 已完成）**：`chore(release): v0.1.130` = **`fca7628e`**（`package.json` `0.1.129` → `0.1.130`，1 文件）；**annotated tag `v0.1.130`** 指向哈希回填提交 **`a2f9b3d8`**（因此 tag 内含完整的 round-140 记录）；`main` 已推送（`946a1c85..a2f9b3d8`，本机唯一可用出网代理 `127.0.0.1:10808`），tag 亦已推送（远端 tag 对象 `85012a2a748bc8e67c6c611ac0a9f03acf8a4537`）；**GitHub Release `v0.1.130` 已建**（非草稿 / 非预发布，**标 Latest**，英文正文 `tmp/v0.1.130-notes.md`）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.130 。**`npm publish` 由维护者执行**：本机 `npm whoami` → **401**、`npm publish` → **404（「无权」的伪装）**，故本版沿用 round-138 的口径走 **`pnpm publish`**（读 `%LOCALAPPDATA%\pnpm\config\auth.ini`，与 `~/.npmrc` 彼此独立）—— 口径见本文件 v0.1.129 段。**发布后回填**：registry 时刻 / `dist-tags` / shasum / tarball 与产物一致性需在 publish 后补记。
 
 ## round-139（未完成事项台账分区留档，文档轮 · 未发版）
 
