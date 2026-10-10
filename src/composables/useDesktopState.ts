@@ -3195,7 +3195,9 @@ export function useDesktopState() {
     // 结论）。在中断前按服务端语义判定：该 turn 无 agentMessage/命令/工具/文件变更/
     // plan 等持久化产物（仅用户消息 + 思考不算），则中断后消息必然消失 → 回填输入框。
     const turnMessages = messages.value.filter((message) => message.turnId === turnId)
-    const interruptedUserMessage = turnMessages.find((message) => message.role === 'user')
+    const interruptedUserMessage = turnMessages.find(
+      (message) => message.role === 'user' && message.isAgentNote !== true,
+    )
     const hasAgentOutput = turnMessages.some((message) => {
       if (message.role === 'assistant') return true
       const type = message.messageType ?? ''

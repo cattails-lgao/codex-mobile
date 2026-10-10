@@ -1014,6 +1014,7 @@ import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathFor
 import { copyTextToClipboard } from './utils/clipboard'
 import { shouldSyncAfterForeground } from './utils/foregroundResume'
 import { readPlanData } from './utils/plan'
+import { isUserAuthoredMessage } from './utils/transcriptGrouping'
 import { resolveTryItemSkills } from './components/content/directoryHubUtils'
 
 const ThreadConversation = defineAsyncComponent(() => import('./components/content/ThreadConversation.vue'))
@@ -1799,7 +1800,7 @@ const displayFilteredMessages = computed(() => {
 const latestUserTurnId = computed(() => {
   for (let index = messages.value.length - 1; index >= 0; index -= 1) {
     const message = messages.value[index]
-    if (message.role !== 'user') continue
+    if (!isUserAuthoredMessage(message)) continue
     const turnId = message.turnId?.trim() ?? ''
     if (turnId.length > 0) return turnId
   }
@@ -4147,7 +4148,7 @@ function onRollback(payload: { turnId: string }): void {
     const rollbackUserMessage = [...filteredMessages.value]
       .reverse()
       .find((message) => (
-        message.role === 'user'
+        isUserAuthoredMessage(message)
         && (message.turnId?.trim() ?? '') === targetTurnId
         && message.text.trim().length > 0
       ))

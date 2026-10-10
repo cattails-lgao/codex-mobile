@@ -44,3 +44,13 @@ describe('useUiLanguage empty-state copy carries a next step (round-137)', () =>
     expect(t('Image attachment (preview unavailable)')).toBe('图片附件（无法预览）')
   })
 })
+
+describe('useUiLanguage agent-note source label (round-140)', () => {
+  beforeEach(() => {
+    setUiLanguage('zh-CN')
+  })
+
+  it('translates the agent-note row source label', () => {
+    expect(t('Agent note')).toBe('代理注记')
+  })
+})

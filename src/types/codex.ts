@@ -264,6 +264,14 @@ export type UiMessage = {
   fileChanges?: UiFileChange[]
   fileChangeStatus?: UiFileChangeStatus
   messageType?: string
+  /** round-140：app-server 回写的「客户端提交 id」= `turn/start` / `turn/steer` 的
+   *  `clientUserMessageId`。0.161.0 实测：`thread/read` 与 thread_history 库都带这个字段。
+   *  `null`/缺失 = 该 userMessage 不经任何客户端提交 —— 由服务端多代理投递管线写入。 */
+  clientId?: string | null
+  /** round-140：该 user 消息**不是用户本人发出的**（代理间 `sendInput` 投递 / 子代理回报 /
+   *  环境注入）。渲染成「代理注记」而不是右侧用户气泡。判据见 normalizers/v2.ts
+   *  的 `isInjectedUserMessage`。 */
+  isAgentNote?: boolean
   /** round-73：模型切换分割栏消息的旧/新模型，仅 `messageType === 'modelSwitch'` 时使用。 */
   modelSwitchFrom?: string
   modelSwitchTo?: string

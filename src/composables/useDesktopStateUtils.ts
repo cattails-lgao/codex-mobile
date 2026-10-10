@@ -14,6 +14,7 @@ import type {
 import { CodexApiError } from '../api/codexErrors'
 import type { WorkspaceRootsState } from '../api/codexGateway'
 import { isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
+import { isUserAuthoredMessage } from '../utils/transcriptGrouping'
 
 export * from './useDesktopStateContext'
 
@@ -385,14 +386,14 @@ export function hasOptimisticUserMessages(messages: UiMessage[]): boolean {
 }
 
 export function hasEquivalentUserMessage(target: UiMessage, messages: UiMessage[]): boolean {
-  if (target.role !== 'user') return false
+  if (!isUserAuthoredMessage(target)) return false
   const targetText = normalizeMessageText(target.text)
   const targetImages = Array.isArray(target.images) ? target.images : []
   const targetFileCount = Array.isArray(target.fileAttachments) ? target.fileAttachments.length : 0
   const targetSkillCount = Array.isArray(target.skills) ? target.skills.length : 0
 
   return messages.some((message) => {
-    if (message === target || message.role !== 'user' || isOptimisticUserMessage(message)) return false
+    if (message === target || !isUserAuthoredMessage(message) || isOptimisticUserMessage(message)) return false
     const messageText = normalizeMessageText(message.text)
     const messageImages = Array.isArray(message.images) ? message.images : []
     const messageFileCount = Array.isArray(message.fileAttachments) ? message.fileAttachments.length : 0
@@ -420,7 +421,7 @@ export function dedupeAssistantAgentMessageText(messages: UiMessage[]): UiMessag
       message.role === 'assistant' && typeof message.messageType === 'string'
       && (message.messageType === 'agentMessage' || message.messageType === 'agentMessage.live')
     if (!isAssistantAgentMessage) {
-      if (message.role === 'user') {
+      if (isUserAuthoredMessage(message)) {
         turnAssistantTexts = new Map()
       }
       result.push(message)
@@ -1229,7 +1230,7 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
     for (let index = 0; index < result.length; index += 1) {
       if (result[index].turnIndex !== turnIndex) continue
       lastTurnMessageIndex = index
-      if (result[index].role === 'user') {
+      if (isUserAuthoredMessage(result[index])) {
         lastUserIndex = index
       } else if (result[index].messageType !== 'reasoning') {
         otherIndices.push(index)
@@ -1308,7 +1309,7 @@ export function mergeThreadMessageStreams(
   let previousTurnIndex: number | undefined
   for (let index = 0; index < persisted.length; index += 1) {
     const message = persisted[index]
-    if (message.role !== 'user' || !Number.isInteger(message.turnIndex) || message.turnIndex! < 0) continue
+    if (!isUserAuthoredMessage(message) || !Number.isInteger(message.turnIndex) || message.turnIndex! < 0) continue
     if (previousTurnIndex !== undefined) insertAtByTurnIndex.set(previousTurnIndex, index)
     previousTurnIndex = message.turnIndex
   }

@@ -428,9 +428,15 @@ describe('steerThreadTurn', () => {
           threadId: 'thread-1',
           input: [{ type: 'text', text: '转向：改用英文' }],
           expectedTurnId: 'turn-active-1',
+          // round-140：steer 也带客户端提交 id —— 0.161.0 实测服务端会把它回写成
+          // userMessage.clientId，UI 据此把自己发的 steer 与多代理投递的注入消息区分开。
+          clientUserMessageId: expect.any(String),
         },
       },
     ])
+    // 必须是 v4 形态（非安全上下文下走的是手写回退分支，形态也要一致）。
+    expect(String((requests[0]?.params as Record<string, unknown>).clientUserMessageId))
+      .toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   })
 
   it('falls back to the expected turn id when the response omits turnId', async () => {

@@ -981,6 +981,61 @@ check(
   ].join(' / '),
 )
 
+// --------------- round-140：代理投递写入的 userMessage 不再渲染成用户气泡
+// 【问题】codex 多代理通信（`collabAgentToolCall{tool:'sendInput', receiverThreadIds:[本会话]}`）
+// 会被 app-server **以 userMessage 条目写进接收会话正在运行的那个 turn**，且不经任何客户端
+// ⇒ 线上全库 705 例 clientId 全为 null。UI 从条目流读回来只能画成右侧用户气泡（观感上
+// "我说过这句话"）。判别依据全部经 0.161.0 实测：`turn/start` / `turn/steer` 的
+// `clientUserMessageId` 都会回写成该条 userMessage 的 `clientId`（thread/read 与 thread_history
+// 库都能看到），故「轮内非首条 && clientId 为 null」是精确判据；轮内首条永不判为注入
+// （老数据/别的客户端没写 id 时首条就是用户提问）；`<subagent_notification>` /
+// `<environment_context>` 两种固定包裹形态另算。同一 turn 内出现第 2 条 userMessage 本身是
+// **正常**形态（我们自己 Steer 就会造成，实测它同样带 clientId）—— 这条不变式必须钉住，
+// 否则会把用户自己的 steer 误判成注记。
+const v2Src140 = fs.readFileSync('src/api/normalizers/v2.ts', 'utf8')
+const typesSrc140 = fs.readFileSync('src/types/codex.ts', 'utf8')
+const groupingSrc140 = fs.readFileSync('src/utils/transcriptGrouping.ts', 'utf8')
+const convSrc140 = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+const gatewaySrc140 = fs.readFileSync('src/api/gateway/threads.ts', 'utf8')
+const typeFields140 = /clientId\?: string \| null/.test(typesSrc140) && /isAgentNote\?: boolean/.test(typesSrc140)
+const carriesClientId140 = /clientId: typeof item\.clientId === 'string' && item\.clientId\.length > 0 \? item\.clientId : null/.test(v2Src140)
+const prefixRule140 = /const AGENT_NOTE_TEXT_PREFIXES = \['<subagent_notification>', '<environment_context>'\]/.test(v2Src140)
+// 判据：非首条 + clientId 为 null（顺序有意义——首条豁免必须在 null 判定之前）。
+const nullClientRule140 = /if \(indexAmongUserMessages <= 0\) return false\s*\r?\n\s*return \(message\.clientId \?\? null\) === null/.test(v2Src140)
+const perTurnOrdinal140 = /let userMessageOrdinal = 0/.test(v2Src140)
+  && /isInjectedUserMessage\(message, userMessageOrdinal\)/.test(v2Src140)
+  && /message\.isUnhandled === true\) continue/.test(v2Src140)
+const kindWired140 = /\| 'agent-note'/.test(groupingSrc140)
+  && /if \(message\.isAgentNote === true\) return 'agent-note'/.test(groupingSrc140)
+// 注记不得开辟新渲染组——否则它会成为一轮的 request，又变成独立用户气泡。
+const noNewGroup140 = /if \(isUserAuthoredMessage\(message\) \|\| !current\) \{/.test(groupingSrc140)
+const turnBoundary140 = /function isUserMessage\(message: UiMessage\): boolean \{\s*\r?\n\s*\/\/ round-140：轮次边界只由「用户本人发的」消息确立。\s*\r?\n\s*return isUserAuthoredMessage\(message\)/.test(groupingSrc140)
+const rendersNote140 = /item\.presentation === 'agent-note'/.test(convSrc140)
+  && /class="thread-agent-note"/.test(convSrc140)
+  && /thread-agent-note-header/.test(convSrc140)
+  && /item\.kind === 'agent-note'/.test(convSrc140)
+// 提交侧必须带上 clientUserMessageId（turn/start 与 turn/steer 各一处）。
+const submitIdSites140 = (gatewaySrc140.match(/clientUserMessageId: createClientUserMessageId\(\)/g) || []).length
+const sendsClientUserMessageId140 = /function createClientUserMessageId\(\): string \{/.test(gatewaySrc140)
+  && submitIdSites140 === 2
+check(
+  '代理投递写入的 userMessage 渲染为注记，用户气泡只留给真人（round-140）',
+  typeFields140 && carriesClientId140 && prefixRule140 && nullClientRule140 && perTurnOrdinal140
+    && kindWired140 && noNewGroup140 && turnBoundary140 && rendersNote140 && sendsClientUserMessageId140,
+  [
+    `判据字段=${typeFields140 ? 'yes' : 'NO'}`,
+    `带出 clientId=${carriesClientId140 ? 'yes' : 'NO'}`,
+    `包裹前缀规则=${prefixRule140 ? 'yes' : 'NO'}`,
+    `非首条+null 判据=${nullClientRule140 ? 'yes' : 'NO'}`,
+    `逐轮计数=${perTurnOrdinal140 ? 'yes' : 'NO'}`,
+    `agent-note kind=${kindWired140 ? 'yes' : 'NO'}`,
+    `不开新组=${noNewGroup140 ? 'yes' : 'NO'}`,
+    `轮次边界守卫=${turnBoundary140 ? 'yes' : 'NO'}`,
+    `渲染注记=${rendersNote140 ? 'yes' : 'NO'}`,
+    `提交带 id=${sendsClientUserMessageId140 ? 'yes' : 'NO'}（命中 ${submitIdSites140} 处，须 2）`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

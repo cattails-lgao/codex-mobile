@@ -245,6 +245,21 @@
             </article>
           </div>
         </div>
+        <!-- round-140：代理注记（多代理 sendInput 投递 / 子代理回报 / 环境注入）。
+             这类条目在服务端就是 userMessage，此前被渲染成右侧用户气泡，观感上像"我说过这句话"。 -->
+        <div
+          v-else-if="item.presentation === 'agent-note'"
+          class="message-row thread-agent-note-row"
+          data-role="system"
+          data-message-type="agentNote"
+        >
+          <div class="message-stack" data-role="system">
+            <article class="thread-agent-note">
+              <div class="thread-agent-note-header">{{ t('Agent note') }}</div>
+              <div class="thread-agent-note-body" v-html="renderMarkdownBlocksAsHtml(message.text)" />
+            </article>
+          </div>
+        </div>
         <div v-else class="message-row" :class="{ 'message-row-final': item.presentation === 'final-assistant' }" :data-role="message.role" :data-message-type="message.messageType || ''">
           <div class="message-stack" :data-role="message.role">
             <article class="message-body" :data-role="message.role">
@@ -643,6 +658,7 @@ import {
   warmLayerWithNextColdPage,
   warmPagination,
   warmUserPreview,
+  isUserAuthoredMessage,
   type WarmLayerState,
 } from '../../utils/transcriptGrouping'
 import {
@@ -1111,7 +1127,11 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
       )
       .map((item) => ({
         message: item.message,
-        presentation: item.kind === 'plan' ? 'plan' as const : 'process' as const,
+        presentation: item.kind === 'plan'
+          ? 'plan' as const
+          : item.kind === 'agent-note'
+            ? 'agent-note' as const
+            : 'process' as const,
       }))
 
     const fileChangeAnchorIds = group.items
@@ -1390,7 +1410,7 @@ function forkResponse(anchorMessageId: string): void {
 const editableTurnIdByMessageId = computed<Record<string, string>>(() => {
   const next: Record<string, string> = {}
   for (const message of props.messages) {
-    if (message.role !== 'user' || typeof message.turnIndex !== 'number') continue
+    if (!isUserAuthoredMessage(message) || typeof message.turnIndex !== 'number') continue
     const turnId = typeof message.turnId === 'string' && message.turnId.length > 0 ? message.turnId : ''
     if (!turnId || message.text.trim().length === 0) continue
     next[message.id] = turnId
@@ -2273,6 +2293,41 @@ onBeforeUnmount(() => {
 
 :root.dark .thread-compaction-spinner {
   @apply border-line-3 border-t-line-5;
+}
+
+/* round-140：代理注记（多代理 sendInput 投递 / 子代理回报 / 环境注入）。
+   服务端把这类条目写成 userMessage，此前渲染成右侧用户气泡；这里改成居左、
+   弱化、带来源标签的注记，与用户自己的提问明确区分。 */
+.thread-agent-note-row {
+  @apply justify-start;
+}
+
+.thread-agent-note {
+  @apply m-0 w-full rounded-md border border-line-1 bg-s1/60 px-3 py-2 text-ui text-ink-3;
+}
+
+.thread-agent-note-header {
+  @apply mb-1 text-micro font-medium tracking-normal text-ink-3;
+}
+
+.thread-agent-note-body {
+  @apply whitespace-pre-wrap break-words;
+}
+
+.thread-agent-note-body > :first-child {
+  @apply mt-0;
+}
+
+.thread-agent-note-body > :last-child {
+  @apply mb-0;
+}
+
+:root.dark .thread-agent-note {
+  @apply border-line-2 bg-s2/60 text-ink-4;
+}
+
+:root.dark .thread-agent-note-header {
+  @apply text-ink-4;
 }
 
 .conversation-bottom-anchor {

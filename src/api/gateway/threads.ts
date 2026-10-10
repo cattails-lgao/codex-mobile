@@ -799,6 +799,40 @@ function buildTurnInputParts(
   return { input, dedupedFileAttachments }
 }
 
+/**
+ * round-140：客户端提交 id。app-server 把它原样回写进该条 `userMessage.clientId`
+ * （0.161.0 实测：`thread/read`、`thread/turns/list`、thread_history 库都带）。
+ * UI 判别「用户本人发的消息」与「多代理投递管线写入的消息」全靠它。
+ *
+ * 不用 `crypto.randomUUID`：非安全上下文（http://<lan-ip>）下该方法不存在，
+ * 而本 UI 需要在这种部署形态下可用；回退分支仍产出 v4 形态的随机串。
+ */
+function createClientUserMessageId(): string {
+  const globalCrypto = typeof globalThis === 'undefined' ? undefined : globalThis.crypto
+  if (globalCrypto && typeof globalCrypto.randomUUID === 'function') {
+    try {
+      return globalCrypto.randomUUID()
+    } catch {
+      // 非安全上下文下 randomUUID 会抛，落到下面的回退分支。
+    }
+  }
+  const hexDigits = '0123456789abcdef'
+  let out = ''
+  for (let index = 0; index < 36; index += 1) {
+    if (index === 8 || index === 13 || index === 18 || index === 23) {
+      out += '-'
+      continue
+    }
+    if (index === 14) {
+      out += '4'
+      continue
+    }
+    const value = Math.floor(Math.random() * 16)
+    out += index === 19 ? hexDigits[(value & 0x3) | 0x8] : hexDigits[value]
+  }
+  return out
+}
+
 export async function startThreadTurn(
   threadId: string,
   text: string,
@@ -816,6 +850,8 @@ export async function startThreadTurn(
     const params: Record<string, unknown> = {
       threadId,
       input,
+      // round-140：带上客户端提交 id，服务端会回写成 userMessage.clientId。
+      clientUserMessageId: createClientUserMessageId(),
     }
     if (attachments.length > 0) params.attachments = attachments
     if (normalizedModel) {
@@ -863,6 +899,9 @@ export async function steerThreadTurn(
       threadId: normalizedThreadId,
       input,
       expectedTurnId: normalizedTurnId,
+      // round-140：steer 同样回写 clientId（0.161.0 实测），保证本次改动后
+      // 「同一 turn 内第 2 条 userMessage」不会再被当成代理注记。
+      clientUserMessageId: createClientUserMessageId(),
     })
     return typeof payload?.turnId === 'string' && payload.turnId.trim().length > 0
       ? payload.turnId.trim()

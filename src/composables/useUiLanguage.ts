@@ -481,6 +481,7 @@ const zhCN: Record<string, string> = {
   'Enabled': '已启用',
   'Compacting thread context…': '正在压缩上下文…',
   'Context compacted': '上下文已压缩',
+  'Agent note': '代理注记',
   'Approval policy': '审批策略',
   'Choose when Codex asks for your permission before running commands or changing files.': '选择 Codex 在执行命令或修改文件前何时征求你的许可。',
   'Only untrusted commands': '仅不受信任的命令',

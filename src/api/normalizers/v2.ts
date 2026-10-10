@@ -519,6 +519,8 @@ function toUiMessages(item: ThreadItem): UiMessage[] {
         audioSources: parsed.audioSources.length > 0 ? parsed.audioSources : undefined,
         mentions: parsed.mentions.length > 0 ? parsed.mentions : undefined,
         messageType: item.type,
+        // round-140：把服务端回写的 clientId 带到 UI 层——判别「谁发的」的唯一依据。
+        clientId: typeof item.clientId === 'string' && item.clientId.length > 0 ? item.clientId : null,
         isAutomationRun: parsed.isAutomationRun,
         automationDisplayName: parsed.automationDisplayName,
       })
@@ -804,6 +806,31 @@ export function normalizeThreadGroupsV2(payload: ThreadListResponse): UiProjectG
   return groupThreadsByProject(uiThreads)
 }
 
+/** round-140：被判为「非用户发出」的 user 消息正文前缀（服务端固定包裹形态）。 */
+const AGENT_NOTE_TEXT_PREFIXES = ['<subagent_notification>', '<environment_context>']
+
+/**
+ * round-140：判定某条 user 消息是否**不是用户本人发出的**。三条判据任一成立即算，
+ * 全部经 0.161.0 实测 + 线上库/rollout 取证：
+ *
+ * 1. `轮内非首条 && clientId == null` —— codex 的多代理通信
+ *    （`collabAgentToolCall{tool:'sendInput', receiverThreadIds:[本会话]}`）会被 app-server
+ *    **以 userMessage 条目写进接收会话正在运行的那个 turn**，且不经任何客户端
+ *    （线上全库 705 例，clientId 全为 null）。用户本人提交的消息带 `clientUserMessageId`
+ *    → clientId 非空，故不会误判；同一 turn 内出现第 2 条 userMessage 本身是**正常**形态
+ *    —— `turn/steer` 也会造成，实测它同样把 clientUserMessageId 回写成 clientId。
+ * 2. 正文以 `<subagent_notification>` 开头 —— 子代理回报。
+ * 3. 正文以 `<environment_context>` 开头 —— 环境注入。
+ *
+ * 轮内首条**永不**判为注入：即使老数据 / 别的客户端没写 clientId，首条就是用户提问。
+ */
+function isInjectedUserMessage(message: UiMessage, indexAmongUserMessages: number): boolean {
+  const text = message.text.trimStart()
+  if (AGENT_NOTE_TEXT_PREFIXES.some((prefix) => text.startsWith(prefix))) return true
+  if (indexAmongUserMessages <= 0) return false
+  return (message.clientId ?? null) === null
+}
+
 export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnIndex = 0): UiMessage[] {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const messages: UiMessage[] = []
@@ -822,6 +849,14 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
       for (const msg of toUiMessages(item)) {
         turnMessages.push({ ...msg, turnId, turnIndex, turnStartedAtIso: turnStartedAtIso ?? undefined })
       }
+    }
+    // round-140：标记「不是用户发的」user 消息。计数只认真正的用户消息条目——
+    // rawBlocks（未知 UserInput 变体的兜底）不是独立消息，不参与轮内序号。
+    let userMessageOrdinal = 0
+    for (const message of turnMessages) {
+      if (message.role !== 'user' || message.isUnhandled === true) continue
+      if (isInjectedUserMessage(message, userMessageOrdinal)) message.isAgentNote = true
+      userMessageOrdinal += 1
     }
     const errorText = readTurnErrorText(turn)
     if (turn.status === 'failed' && errorText) {
@@ -882,7 +917,12 @@ function repositionCompactionAfterUserMessage(messages: UiMessage[]): UiMessage[
   const turnIndex = compaction.turnIndex
   let userMessageIndex = -1
   for (let index = 0; index < messages.length; index += 1) {
-    if (messages[index]?.turnIndex === turnIndex && messages[index]?.role === 'user') {
+    const candidate = messages[index]
+    if (
+      candidate?.turnIndex === turnIndex
+      && candidate?.role === 'user'
+      && candidate?.isAgentNote !== true
+    ) {
       userMessageIndex = index
       break
     }

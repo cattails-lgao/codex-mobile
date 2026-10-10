@@ -56,7 +56,7 @@ import IconTablerChevronRight from '../icons/IconTablerChevronRight.vue'
 
 export type ConversationTurnItem = {
   message: UiMessage
-  presentation?: 'process' | 'final-assistant' | 'plan'
+  presentation?: 'process' | 'final-assistant' | 'plan' | 'agent-note'
 }
 
 export type WarmTurnRenderData = {

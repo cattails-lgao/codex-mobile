@@ -20,6 +20,7 @@ export type TurnRenderItemKind =
   | 'final-assistant'
   | 'plan'
   | 'file-change'
+  | 'agent-note'
 
 export type TurnRenderItem = {
   message: UiMessage
@@ -31,7 +32,17 @@ export type TurnRenderGroup = {
   items: TurnRenderItem[]
 }
 
+/**
+ * round-140：该消息是否是「用户本人发出」的 user 消息。
+ * 代理/系统注入的 userMessage（isAgentNote）既不算轮次边界，也不算用户的提问。
+ */
+export function isUserAuthoredMessage(message: UiMessage): boolean {
+  return message.role === 'user' && message.isAgentNote !== true
+}
+
 function renderItemKind(message: UiMessage): TurnRenderItemKind {
+  // round-140：代理注记必须排在 role==='user' 之前判断——它本身就是 user 角色。
+  if (message.isAgentNote === true) return 'agent-note'
   if (message.role === 'user') return 'user'
   if (message.messageType === 'reasoning') return 'reasoning'
   if (message.messageType === 'plan' || message.messageType === 'plan.live') return 'plan'
@@ -68,7 +79,8 @@ export function buildTurnRenderGroups(
   let current: TurnRenderGroup | null = null
 
   for (const message of messages) {
-    if (message.role === 'user' || !current) {
+    // round-140：代理注记不开新组——否则它会被当成一轮的 request，渲染成独立的用户气泡。
+    if (isUserAuthoredMessage(message) || !current) {
       current = { key: `turn-${message.id}`, items: [] }
       groups.push(current)
     }
@@ -183,7 +195,8 @@ export function warmLayerWithExpandedTurn(
 // ---------------------------------------------------------------------------
 
 function isUserMessage(message: UiMessage): boolean {
-  return message.role === 'user'
+  // round-140：轮次边界只由「用户本人发的」消息确立。
+  return isUserAuthoredMessage(message)
 }
 
 function isStreamingAssistant(message: UiMessage): boolean {
