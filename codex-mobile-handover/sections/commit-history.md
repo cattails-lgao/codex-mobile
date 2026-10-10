@@ -400,6 +400,30 @@
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
+## round-140（多代理投递写入的 userMessage 改渲染为「代理注记」，已 bump 0.1.130）
+
+**提交**：
+
+- `（待回填）` `feat(thread): 多代理投递写入的 userMessage 改渲染为「代理注记」，用户气泡只留给真人（round-140）` —— **13 改 + 3 新增**（产品源码 10 / 测试 4 / 闸门 2），`+245/−14`
+- `（待回填）` `docs(handover): round-140 …（轮次文档 + 总入口 + 提交史 + 手动测试）`
+- `（待回填）` `chore(release): v0.1.130`
+- 本段所在提交：记录上述哈希（提交无法包含自身哈希，故哈希记录单独成一次提交）
+
+**内容**：用户报**线上环境**（`codex.arderpanada.top` → `1.15.149.204`）「消息列表压缩时 agent 的消息变成了用户消息」，并指认截图里那句「**这个不是我发的**」。用户先要求上机取证，取证定案后下指令「**按照建议开始**」（＝先花一次实证把判据坐实，再按方案实施）。
+
+- **根因（上机取证定案，非推测）**：那条正文在线上 `thread_history_1.sqlite` 的 `thread_items.item_json` 里**本身就是** `{"type":"userMessage","clientId":null,"content":[…]}` ⇒ **服务端 item 流里就是用户消息**，任何客户端读回都只能画成用户气泡。同段文本在**另一个线程** `01a12390-…` 里是 `{"type":"collabAgentToolCall","tool":"sendInput","senderThreadId":"01a12390-…","receiverThreadIds":["01a112e1-…(本会话)"],"prompt":"CP8恢复实物：…"}` ⇒ **codex 多代理跨线程 `sendInput` 投递被 app-server 以 `userMessage` 写进接收会话正在运行的那个 turn**。**不关压缩的事**：该 rollout 里 19 条 `contextCompaction` 只产出「上下文已压缩」行、只影响折叠与排序，**不碰角色**。
+- **先实证再动手（本轮第一件事）**：三个 script 用 **stdio 直连 `codex.exe app-server`**（绕开 HTTP 与代理）+ `node:sqlite` 只读 DB。①A/B 对照：A 组 `turn/start` **带** `clientUserMessageId` ⇒ **`clientId` 被回写成传入值**（MATCH）；B 组不带 ⇒ `null`。②本地假 provider 回流最小 Responses SSE 让回合**真跑完**后发 `turn/steer` ⇒ **同一 turn 内两条 userMessage，两条都带各自回写的 clientId** ⇒ `turn/steer` **也回写**。③`thread/read {includeTurns:true}` 与 `thread/turns/list` 的 userMessage item 都带 `clientId`。**②纠正了一个危险简化**：曾想按「同轮第 2 条即注入」判定——同轮多条**是正常形态**（本 UI 自己的 steer 就造成）⇒ 位置判据**必须与 clientId 组合**。
+- **判据（定案）**：`clientId == null` **且非该 turn 首条 userMessage** ⇒ 代理注入；另加正文前缀 `<subagent_notification>` / `<environment_context>`（命中即注入，首条也判）。**轮内首条永不判注入**（老数据 / 别的客户端没写 id 时首条就是用户提问）。
+- **线上全库标定（6362 条 userMessage）**：首条·null **5463** / **非首条·null 705（注入）** / 首条·非空 **193** / **非首条·非空 1（客户端 steer，必须保住）** ⇒ 判据精确命中 **705**、放行那条 steer。
+- **前提修复**：`userMessage.clientId` 就是客户端提交时传的 `clientUserMessageId`，而本仓改动前 `grep clientUserMessageId src/` **零命中** ⇒ 线上 clientId 全 `null`、真用户与注入**在数据上不可辨**。故新增 `createClientUserMessageId()`（优先 `crypto.randomUUID`；**非安全上下文 `http://<lan-ip>` 下该方法不存在** ⇒ 回退自产 v4 形态串）并补进 `turn/start` 与 `turn/steer` **两处**（实测两处都会回写；只加前者会让本 UI 自己发出的 steer 被新判据误判）。
+- **修复（客户端渲染侧，13 改 + 3 新增）**：①`src/api/gateway/threads.ts` `createClientUserMessageId()` + 2 处提交带 id；②`src/api/normalizers/v2.ts` 带出 `clientId` + `AGENT_NOTE_TEXT_PREFIXES` / `isInjectedUserMessage` + **逐 turn** 打 `isAgentNote`（`rawBlocks` / `isUnhandled` 不参与轮内计数）+ `repositionCompactionAfterUserMessage` 跳过注记；③`src/types/codex.ts` 加 `UiMessage.clientId?` / `isAgentNote?`；④`src/utils/transcriptGrouping.ts` 加 `'agent-note'` kind（判断**必须排在 `role === 'user'` 之前**，注记本身就是 user 角色）+ 导出 `isUserAuthoredMessage` + `buildTurnRenderGroups` 让注记**不开新轮组**（**这是截图里一条条独立气泡的直接原因**）+ `buildTurnGroups.isUserMessage` 的轮次边界守卫；⑤`ThreadConversation.vue` 加渲染分支（**居左、弱化、带「代理注记」来源标签**，`data-role="system"` / `data-message-type="agentNote"`，正文走既有 `renderMarkdownBlocksAsHtml`）+ `processItems` 映射 + 10 处 `.thread-agent-note*` 样式（含 `:root.dark` 覆盖），`ThreadTurn.vue` 的 `presentation` 加 `'agent-note'`；⑥下游消费点统一切到 `isUserAuthoredMessage` / `isAgentNote` 守卫 —— `App.vue`（`latestUserTurnId` / `onRollback`）、`useDesktopStateUtils.ts`（`hasEquivalentUserMessage` ×2、`dedupeAssistantAgentMessageText` 轮次重置、reasoning 锚点 `lastUserIndex`、live 插入点轮界，共 6 处）、`useDesktopState.ts`（`interruptedUserMessage`）、`useUiLanguage.ts`（`'Agent note': '代理注记'` —— 本仓 i18n **以英文串为 key**，不补表值中文版会直接显示英文）。
+- **未在服务端做任何改动**：app-server 把代理投递写成 `userMessage` 的行为未动（也动不了）⇒ `SHARED_BRIDGE_VERSION` **未 bump**（本轮全部改动在客户端侧、**未碰 `src/server/**`**，共享对象没变）。
+- **验证**：`vue-tsc --noEmit` **EXIT=0**；全量 **812/812（80 文件）**（＝ round-139 基线 802 ＋ 本轮 10 例：`v2.agentNote.test.ts` 5 + `transcriptGrouping.agentNote.test.ts` 4 + `useUiLanguage.test.ts` 1）；`check-ui-contract.cjs` **52 → 53**；**新增**浏览器闸门 `scripts/check-agent-note-surfaces.cjs`（400 行）**56/56 × 4 RUN**（亮/暗 × 1440/390）；`check-fonts` **13/13**、`check-theme` **15/15**、`check-message-media-surfaces` **44/44**、`check-token-equivalence` **792/792 逐字相同**（外观零改动）；`vite build` + `tsup` **EXIT=0**。**一条环境性失败**：`codexAppServerBridge.archive.test.ts > writeWorkspaceRootsState` 在并发跑 80 文件时 `Test timed out in 15000ms`（round-115 已登记的**负载敏感 fs 超时**）⇒ **隔离复跑 36/36**，随后全量复跑 **812/812** 全绿。**一条既有断言因本轮新字段而失败**：`codexGateway.test.ts` 的 `steerThreadTurn` 精确参数断言 ⇒ 改为 `expect.any(String)` + v4 正则（**保留强度、放开取值**）。
+- **反跑（证明断言非空）**：**保留断言、只退回生产代码**（round-137 的教训：把断言一起回退＝空过）。`tmp/r140-contract-reverse.cjs` 对契约做 **10 个变异** ⇒ **全部如期失败**、还原后 53/53；`tmp/r140-gate-reverse.sh` 对浏览器闸门做 2 个变异 —— **变异 A**（`renderItemKind` 去掉 `agent-note` 分支）⇒ **用户气泡数变 5，逐字复现原 bug**、**48/56 失败**；**变异 B**（让注记开新组）⇒ `turnBlocks = 5`（应 2）、**4/56 失败**；还原后 **56/56**。
+- **浏览器闸门的边界**：`page.route` **只拦** `**/codex-api/rpc`，`thread/read` / `thread/resume` 回**合成** thread、其余 RPC 一律透传 ⇒ 被检验的是**真实管线**（归一化 → 分组 → 组件 → CSS），**只有数据是合成的**。暗色下注记正文对比度实测 **7.76:1**。
+
+**已 bump 到 0.1.130**（`chore(release)` 提交）并建 **annotated tag `v0.1.130`** + GitHub Release（Latest）；**`npm publish` 由维护者执行**（本机 `npm` 凭据 401、`pnpm publish` 才是可用通道 —— 口径见本文件 v0.1.129 段）。
+
 ## round-139（未完成事项台账分区留档，文档轮 · 未发版）
 
 **提交**：
