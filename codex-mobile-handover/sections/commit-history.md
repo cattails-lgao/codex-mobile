@@ -416,6 +416,8 @@
 **验证**：`vue-tsc --noEmit` **EXIT=0**；全量 **818/818（81 文件）**（基线 812/80，**+6**）；UI 契约 **53/53**；**反跑**（禁用预检、**保留断言**）⇒ 新用例按预期失败（`revertThread` 被调用一次），随后 **md5 校验还原**；`vite build` + `tsup` **双产物重建**（`dist/index.html` 入口 `index-Bcgrj03j.js` → **`index-BA8F4GsS.js`**，产物内 `already gone on the server` 命中 1 ⇒ 排除发了旧 `dist/`）。
 
 **诚实边界**：**无端到端复现**（本机 codex 0.161.0 vs 线上 0.162.0；隔离 home `D:/codex-home-fresh` 仅 4 条空线程 rollout、无 turn）；预检 **fail-open**，分页未完 / 探针失败 / 老构建时首击仍可能报一次错（由失败自愈兜住）；**未 bump `SHARED_BRIDGE_VERSION`**（改动全在客户端侧、未碰 `src/server/**`）。
+**发布动作（2026-10-13 已完成）**：`chore(release): v0.1.131` = **`3c3be535`**（`package.json` `0.1.130` → `0.1.131`，1 文件）；**annotated tag `v0.1.131`** 指向哈希回填提交 **`260efecd`**（因此 tag 内含完整的 round-141 记录）；`main` 已推送（`3c3be535..260efecd`，本机唯一可用出网代理 `127.0.0.1:10808`）、tag 亦已推送；**GitHub Release `v0.1.131` 已建**（非草稿 / 非预发布，**标 Latest**，英文正文 `tmp/v0.1.131-notes.md`）：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.131 。**`npm publish` 待维护者执行**：本机 `npm whoami` → **401**、`npm publish` → **404（「无权」的伪装）**，故沿用 **`pnpm publish`** 通道（读 `%LOCALAPPDATA%\pnpm\config\auth.ini`，与 `~/.npmrc` 彼此独立）—— 口径见本文件 v0.1.129 段。上架后按 round-140 新增的口径做**产物一致性核验**：不看版本号与文件名，**直接在 tarball 内容里 grep 本轮标记**（本轮可用 `already gone on the server` / `isTargetTurnMissingOnServer` / `listThreadTurnIdPage`）。
+
 ## round-140（多代理投递写入的 userMessage 改渲染为「代理注记」，已 bump 0.1.130）
 
 **提交**：
