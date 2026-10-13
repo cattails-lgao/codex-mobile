@@ -627,6 +627,33 @@ export async function revertThread(threadId: string, beforeTurnId: string): Prom
   )
 }
 
+// round-141：回退前的权威校验。取服务端**最新一页**轮次 id，并告知这一页是否就是
+// 全部轮次（`itemsView: "notLoaded"` 只回 id，实测一页 ~625B / 14ms，见
+// bridge/threadTurnPage.ts 的量测）。
+//
+// 为什么需要它：前端的本地持久化消息缓存并不是服务端镜像（silent 刷新走 preserveMissing
+// 合并 + 版本未变时整体复用，见 rollbackSelectedThread 的说明），服务端已删除的轮次可以
+// 长期留在列表里。把这类轮次的 id 当 beforeTurnId 发出去，服务端只会回「不存在」。
+//
+// 调用方只有在 `complete === true`（这一页没有 nextCursor，即它**就是**全部轮次）时才
+// 允许把「id 不在列表里」判定为「服务端没有该轮」：app-server 把一页钳到 100 条
+// （round-104 实测，见 TURN_LIST_SERVER_PAGE_CLAMP），线程更大时只看第一页无法定论。
+export async function listThreadTurnIdPage(
+  threadId: string,
+): Promise<{ turnIds: string[]; complete: boolean }> {
+  const payload = await callRpc<ThreadTurnsListResponse>('thread/turns/list', {
+    threadId,
+    limit: 10000,
+    sortDirection: 'desc',
+    itemsView: 'notLoaded',
+  })
+  const rows = Array.isArray(payload.data) ? payload.data : []
+  const turnIds = rows
+    .map((row) => readString(asRecord(row)?.id))
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  return { turnIds, complete: !readString(payload.nextCursor) }
+}
+
 // round-106：0.159 新增 `thread/items/list` 锚点分页（#48151）——按 item 而非轮次
 // 拉取线程内容。协议形状（scripts/probe-items-page.cjs 已固化）：默认页 25 条、
 // 记录为 `{turnId, item}`、`nextCursor` 续链；resume 载荷另带 itemsBackwardsCursor。

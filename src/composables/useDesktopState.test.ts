@@ -39,6 +39,8 @@ const gatewayMocks = vi.hoisted(() => ({
   persistThreadTurnDuration: vi.fn(),
   interruptThreadTurn: vi.fn(),
   listHooks: vi.fn(),
+  // round-141：回退前的服务端轮次存在性探针（见 rollbackSelectedThread）。
+  listThreadTurnIdPage: vi.fn(),
   persistThreadTitle: vi.fn(),
   renameThread: vi.fn(),
   replyToServerRequest: vi.fn(),
@@ -106,6 +108,8 @@ beforeEach(() => {
   gatewayMocks.getThreadQueueState.mockResolvedValue({})
   gatewayMocks.getThreadTitleCache.mockResolvedValue({ titles: {} })
   gatewayMocks.getWorkspaceRootsState.mockRejectedValue(new Error('no workspace roots state'))
+  // round-141：默认给「不可定论」（complete: false）⇒ 回退照旧放行，既有用例不受影响。
+  gatewayMocks.listThreadTurnIdPage.mockResolvedValue({ turnIds: [], complete: false })
 })
 
 afterEach(() => {
@@ -2258,6 +2262,66 @@ describe('rollbackSelectedThread interrupts an in-flight turn first', () => {
 
     expect(gatewayMocks.revertThread).toHaveBeenCalledTimes(1)
     expect(state.error.value.length).toBeGreaterThan(0)
+  })
+
+  it('reconciles locally instead of sending a doomed revert when the target turn is already gone on the server', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+        { id: 'user-2', role: 'user', text: 'second', messageType: 'userMessage', turnId: 'turn-2', turnIndex: 1 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.revertThread.mockResolvedValue([])
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-rollback-stale')
+    await state.loadMessages('thread-rollback-stale')
+
+    // 服务端此刻只剩 turn-1（turn-2 已被上一次回退删掉），而本地缓存里还留着它。
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [
+        { id: 'user-1', role: 'user', text: 'first', messageType: 'userMessage', turnId: 'turn-1', turnIndex: 0 },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.listThreadTurnIdPage.mockResolvedValue({ turnIds: ['turn-1'], complete: true })
+
+    await state.rollbackSelectedThread('turn-2')
+
+    // 只在确证服务端没有该轮时才不发请求，改为本地对齐：残留消息消失。
+    expect(gatewayMocks.revertThread).not.toHaveBeenCalled()
+    expect(state.messages.value.map((message) => message.id)).toEqual(['user-1'])
+  })
+
+  it('still sends thread/revert when the server turn page cannot settle the question', async () => {
+    const state = installRollbackState('thread-rollback-paged', { inProgress: false, activeTurnId: '' })
+    await state.loadMessages('thread-rollback-paged')
+    // complete: false = 后面还有更老的页 ⇒ 不能判定 turn-2 不存在，必须照旧回退。
+    gatewayMocks.listThreadTurnIdPage.mockResolvedValue({ turnIds: ['turn-3'], complete: false })
+
+    await state.rollbackSelectedThread('turn-2')
+
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-paged', 'turn-2')
+  })
+
+  it('still sends thread/revert when the server presence probe itself fails', async () => {
+    const state = installRollbackState('thread-rollback-probe-fail', { inProgress: false, activeTurnId: '' })
+    await state.loadMessages('thread-rollback-probe-fail')
+    gatewayMocks.listThreadTurnIdPage.mockRejectedValue(new Error('thread/turns/list is not supported by this app-server'))
+
+    await state.rollbackSelectedThread('turn-2')
+
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-rollback-probe-fail', 'turn-2')
   })
 })
 

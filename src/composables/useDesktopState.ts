@@ -12,6 +12,7 @@ import {
   replyToServerRequest,
   revertThreadFileChanges,
   revertThread,
+  listThreadTurnIdPage,
   getWorkspaceRootsState,
   setWorkspaceRootsState,
   persistThreadTitle,
@@ -3293,6 +3294,49 @@ export function useDesktopState() {
     return await revertThread(threadId, beforeTurnId)
   }
 
+  // round-141：目标轮是否**已不在服务端**。
+  //
+  // 判据必须是「确证」：只取 `thread/turns/list` 的**最新一页**，并且只有
+  // `complete === true`（这一页没有 nextCursor、即它就是全部轮次）时才允许把
+  // 「id 不在页里」当成「服务端没有该轮」。其余一切情形都返回 false（放行），保持
+  // 既有回退行为不变：分页未完（更老的页里可能就有它）、探针请求失败、老构建不实现
+  // 该 RPC（round-102 的 `-32601`），以及
+  //   - 线程正在生成（in-progress 的轮次本来就可能尚未进入 turns/list）；
+  //   - 目标就是当前 active 的那一轮（同上）。
+  // 后两条若误判，会把用户眼前正在跑的那条消息从界面上凭空抹掉。
+  async function isTargetTurnMissingOnServer(threadId: string, turnId: string): Promise<boolean> {
+    if (!threadId || !turnId) return false
+    if (inProgressById.value[threadId] === true) return false
+    if (turnId === (activeTurnIdByThreadId.value[threadId] ?? '')) return false
+    let page: { turnIds: string[]; complete: boolean }
+    try {
+      page = await listThreadTurnIdPage(threadId)
+    } catch {
+      return false
+    }
+    return page.complete && !page.turnIds.includes(turnId)
+  }
+
+  // round-141：剔除本地「服务端已不存在」轮次的持久化内容。与真实回退成功后的本地
+  // 收口保持一致——除了消息本身，还要清掉该轮的思考存档（否则会残留一个没有对应
+  // 轮次的思考块，对照 interruptSelectedThreadTurn 里成对清理 reasoning 的做法）。
+  function dropPersistedTurnLocally(threadId: string, turnId: string): void {
+    const current = persistedMessagesByThreadId.value[threadId] ?? []
+    const remainingMessages = current.filter((message) => (message.turnId?.trim() ?? '') !== turnId)
+    if (remainingMessages.length !== current.length) {
+      setPersistedMessagesForThread(threadId, remainingMessages)
+    }
+    const reasoningForThread = persistedReasoningByThreadId.value[threadId]
+    if (!reasoningForThread) return
+    const remainingReasoning = reasoningForThread.filter((message) => (message.turnId?.trim() ?? '') !== turnId)
+    if (remainingReasoning.length === reasoningForThread.length) return
+    persistedReasoningByThreadId.value = {
+      ...persistedReasoningByThreadId.value,
+      [threadId]: remainingReasoning,
+    }
+    savePersistedReasoningMap(persistedReasoningByThreadId.value)
+  }
+
   async function rollbackSelectedThread(turnId: string): Promise<void> {
     const threadId = selectedThreadId.value
     if (!threadId) return
@@ -3346,6 +3390,26 @@ export function useDesktopState() {
 
       // round-73：先回滚对话、成功后再回退文件。若仍按旧序先退文件，paginated 线程
       // 回滚会抛错导致「文件已退、对话未退」的静默不一致；降级路径同样在对话成功后执行。
+      // round-141：本地持久化缓存不是服务端镜像——`loadMessages` 的 silent 刷新走
+      // preserveMissing 合并，且版本未变时整体复用、连请求都不发，所以服务端已删除的
+      // 轮次可以长期留在列表里（线上 round-141：列表里那条消息点回退只报「不存在」）。
+      // 一旦确证目标轮在服务端已不存在，就不要再发注定失败的 thread/revert：回退语义
+      // 在服务端其实已经完成了，本地对齐即可（剔除该轮 + 强制重读一次）。
+      if (await isTargetTurnMissingOnServer(threadId, beforeTurnId)) {
+        console.warn(
+          `[rollback] ${threadId}: turn ${beforeTurnId} is already gone on the server; reconciling locally instead of sending thread/revert`,
+        )
+        dropPersistedTurnLocally(threadId, beforeTurnId)
+        pendingThreadsRefresh = true
+        try {
+          await loadMessages(threadId, { force: true })
+          await syncFromNotifications()
+        } catch {
+          // 对齐失败不影响「本地已剔除目标轮」这一结果，也不该升级成回退失败。
+        }
+        return
+      }
+
       const nextMessages = await rollbackThreadWithRevertFallback(threadId, beforeTurnId)
       const threadCwd = selectedThread.value?.cwd?.trim() ?? ''
       if (threadCwd) {
@@ -3369,6 +3433,15 @@ export function useDesktopState() {
       await syncFromNotifications()
     } catch (unknownError) {
       error.value = unknownError instanceof Error ? unknownError.message : 'Failed to rollback thread'
+      // round-141：回退失败最常见的原因就是「本地缓存与服务端脱节」（目标轮在服务端已
+      // 不存在，或桥层缓存与 rollout 不一致）。失败后必须做一次**非 silent** 的重读，
+      // 把列表拉回服务端的真实状态；否则那条残留消息会一直留在界面上，用户反复点击、
+      // 反复失败，而界面永远不给出一条出路（线上死结）。
+      try {
+        await loadMessages(threadId, { force: true })
+      } catch {
+        // 重同步自身的失败不得盖掉原始回退错误。
+      }
     } finally {
       isRollingBack.value = false
     }
