@@ -400,6 +400,22 @@
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
+## round-141（回退前权威预检 + 失败后强制重同步，已 bump 0.1.131）
+
+**问题**：线上 `codex.arderpanada.top` 点回退只报「不存在」、消息却留在列表。用户反问「列表里有为何回退说没有」。
+
+**根因**：回退的**列表**与 **`beforeTurnId`** 同出本地缓存 `persistedMessagesByThreadId`（`message.turnId`），而这份缓存不是服务端镜像 —— 静默刷新走 `preserveMissing`（`silent===true` 时保留服务端已删轮次）、线程版本未变时 `loadMessages` 直接复用不发请求 ⇒ 发出服务端已不存在的 turn id；失败后又无重同步 ⇒ 死结。线上只读取证：该线程 16 轮、最新 `01a133f6`=14:32:21，`beforeTurnId` `01a13435`=15:41:52 **不在**轮次里、rollout 段 id `01a13436`=15:42:30 ⇒ 那次回退在服务端其实已成功。
+
+**修复**：新增网关 `listThreadTurnIdPage`（`thread/turns/list {limit:10000, desc, itemsView:'notLoaded'}` ⇒ `{turnIds, complete}`）；`rollbackSelectedThread` 加 **fail-open** 预检 `isTargetTurnMissingOnServer`（仅 `complete===true` 且 id 不在页里才判缺失；正在生成 / 当前 active 轮 / 探针失败一律放行）—— 确证缺失则本地对齐（剔该轮消息 + thinking 存档 + 强制重读），不发注定 502 的请求；`catch` 内补非 silent 全量重读自愈。
+
+- `8ec2e03e` `fix(rollback): 回退前权威预检（fail-open）+ 失败后强制非 silent 重同步，解掉「列表里有、点回退说没有」死结（round-141）` —— **4 文件（3 改 + 1 新增）**
+- `2cf51313` `docs(handover): round-141 —— 线上回退死结修复（轮次文档 + 总入口）` —— **2 文件**
+- `3c3be535` `chore(release): v0.1.131` —— 1 文件（`package.json` `0.1.130` → `0.1.131`）
+- 本段所在提交（`docs(commit-history): round-141 回填提交哈希`）：记录上述哈希（提交无法包含自身哈希，故哈希记录单独成一次提交）。**annotated tag `v0.1.131` 指向本提交**（因此 tag 内含完整的 round-141 记录，含哈希本身）。
+
+**验证**：`vue-tsc --noEmit` **EXIT=0**；全量 **818/818（81 文件）**（基线 812/80，**+6**）；UI 契约 **53/53**；**反跑**（禁用预检、**保留断言**）⇒ 新用例按预期失败（`revertThread` 被调用一次），随后 **md5 校验还原**；`vite build` + `tsup` **双产物重建**（`dist/index.html` 入口 `index-Bcgrj03j.js` → **`index-BA8F4GsS.js`**，产物内 `already gone on the server` 命中 1 ⇒ 排除发了旧 `dist/`）。
+
+**诚实边界**：**无端到端复现**（本机 codex 0.161.0 vs 线上 0.162.0；隔离 home `D:/codex-home-fresh` 仅 4 条空线程 rollout、无 turn）；预检 **fail-open**，分页未完 / 探针失败 / 老构建时首击仍可能报一次错（由失败自愈兜住）；**未 bump `SHARED_BRIDGE_VERSION`**（改动全在客户端侧、未碰 `src/server/**`）。
 ## round-140（多代理投递写入的 userMessage 改渲染为「代理注记」，已 bump 0.1.130）
 
 **提交**：
