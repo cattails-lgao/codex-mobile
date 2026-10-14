@@ -246,4 +246,7 @@ function main() {
   console.log('提醒：documentation/APP_SERVER_DOCUMENTATION.md 顶部的生成版本号需同步更新。')
 }
 
-main()
+// 供其它 probe/gate 复用 codex 解析（本仓已有 3 处同类逻辑，别再添第 4 处）。
+module.exports = { resolveCodex }
+
+if (require.main === module) main()
