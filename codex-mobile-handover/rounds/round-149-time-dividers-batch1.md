@@ -97,7 +97,7 @@ shouldShowTimeDivider(previousMarkerMs, nextMs)
 - **单测**：`src/utils/timeDividers.test.ts` **25/25**
 - **全量**：`vitest run` **882 例 / 83 文件全绿**（批 0 后基线 857/82，**+25 例 +1 文件**，旧例零退化）
 - **类型**：`vue-tsc --noEmit` **EXIT=0**
-- **产物**：未跑 `vite build` / `tsup`（未碰 `src/server/**`，纯前端）
+- **构建**：`vite build` **EXIT=0**（`ThreadConversation-BC9Bil06.js` 产出，`index-BZ7GF1kA.js` 586.38 kB）—— 新增 `.vue` 与模板改动都过编译。**未跑 `tsup`**（未碰 `src/server/**`）
 
 ---
 
