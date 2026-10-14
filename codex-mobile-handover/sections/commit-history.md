@@ -428,6 +428,10 @@
 
 **诚实边界**：① 本机 codex **0.161.0** vs 线上 **0.162.0**，隔离 home `D:/codex-home-fresh` 只有空 rollout（仅 `session_meta`、无 turn）⇒ **做不出「本机自己点一次回退」的端到端**；上面那条端到端是「**本机跑真实代码 + 拉线上真数据**」。② 浏览器闸门走**合成线程** ⇒ 只证明**管线未被改坏**，**不代表线上残留被剔除**（后者由探针那条腿证明）。③ **未 bump `SHARED_BRIDGE_VERSION`**（未改共享对象形态、未给 `AppServerProcess` 加方法，只改 `createCodexBridgeMiddleware` 的响应管道 ⇒ 按判据不必 bump）。
 
+**发布动作（2026-10-14 已完成）**：`chore(release): v0.1.132` = **`41737a45`**（`package.json` `0.1.131` → `0.1.132`，1 文件）；**annotated tag `v0.1.132`** 指向哈希回填提交 **`a60c15be`**（tag 对象 **`a8b27526ec976ba9bf6be586d56d742eb2d39327`**，本地与远端 `git ls-remote` 核验**逐位一致**），因此 tag 内含完整的 round-142 + round-143 记录；`main` 已推送（`1a903dca..a60c15be`，远端 = `a60c15be`）；GitHub Release 已创建并标 **Latest**：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.132 （正文 = `tmp/v0.1.132-notes.md`，英文；按惯例**未含**未闭环的安全问题）。
+
+**npm 上架由维护者执行 `pnpm publish`**（`prepublishOnly = pnpm run build` 会重建 `dist/` + `dist-cli/`；⚠️ 本项目**两套凭据独立**，`npm publish` 因 `~/.npmrc` token 失效会返 **404（「无权」的伪装）**，须用 `pnpm publish`）。**线上 `codex.arderpanada.top` 仍为 0.1.131 构建 ⇒ 本修复要等重新部署才生效**；部署后建议拿那条线程 `01a13083-…` 复核一次「回退 → 刷新 → 不再回来」。
+
 **未发布**：本段随 `0.1.132` 发布；**线上生效需重新部署**（改动含 `src/server/**` ⇒ 必须 `vite build` **+** `tsup`）。
 
 ## round-142（回退成功时清理被移除轮次的思考存档；孤儿存档不再回灌，随 0.1.132 发布）
@@ -444,7 +448,7 @@
 
 **代码提交**：`71fb5011`（**3 文件（3 改）**，`+155/−0`；完整提交表见上方 round-143 段落）。
 
-**未发布**：本段随 `0.1.132` 发布（改动全在客户端侧、未碰 `src/server/**`）。
+**已随 `0.1.132` 发布**（改动全在客户端侧、未碰 `src/server/**`）—— 发版号 `41737a45`，见上方 round-143 段落的发布动作。
 
 ## round-141（回退前权威预检 + 失败后强制重同步，已 bump 0.1.131）
 
