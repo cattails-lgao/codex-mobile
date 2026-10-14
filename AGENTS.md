@@ -132,7 +132,7 @@ Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable
 
 - For `npx` package behavior tests, publish first and test the published `@latest`.
 - Run `npx` validation on the Oracle host unless the user explicitly asks otherwise.
-- For Oracle A1 UI validation from Mac, start the A1 server with Codex CLI in `PATH` using `pnpm run dev --host 0.0.0.0 --port 4173`, use the Tailscale URL such as `http://100.127.77.25:4173`, verify both UI and filesystem effects, and save screenshot evidence.
+- For Oracle A1 UI validation from Mac, start the A1 server with Codex CLI in `PATH` using `pnpm run dev --host 0.0.0.0 --port 4173`, use the Tailscale URL such as `http://<tailnet 地址>:4173`, verify both UI and filesystem effects, and save screenshot evidence.
 
 ## LLM Wiki
 

@@ -16,7 +16,7 @@
 6. Verify `conversationState.turns[*].items` contains `commandExecution` items recovered from session log with correct `command`, `status`, and `aggregatedOutput`.
 7. Verify `fileChange` items recovered from `apply_patch` session log entries with `changes[].path`, `changes[].operation`, and `changes[].diff`.
 8. Verify items are interleaved chronologically with `agentMessage` items (not all commands at the start or end).
-9. Test from Mac via Tailscale: `curl --http1.1 http://100.127.77.25:<port>/codex-api/thread-live-state?threadId=<id>` (use `--http1.1` to avoid Vite HTTP/2 upgrade hang).
+9. Test from Mac via Tailscale: `curl --http1.1 http://<tailnet 地址>:<port>/codex-api/thread-live-state?threadId=<id>` (use `--http1.1` to avoid Vite HTTP/2 upgrade hang).
 
 #### Expected Results
 - Bridge server starts and spawns Codex app-server on Linux ARM64 without errors.
