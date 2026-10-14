@@ -1105,9 +1105,11 @@ const paletteWiring150 = /const isCommandPaletteOpen = ref\(false\)/.test(appSrc
   && /command\.shortcut\.replace\('Mod\+', modifier\)/.test(appSrc150)
   && /function onCommandPaletteRun\(commandId: string\): void \{/.test(appSrc150)
   && /<CommandPalette\s*\r?\n\s*v-if="isCommandPaletteOpen"/.test(appSrc150)
-// The '/' branch may also dismiss the shortcuts help panel (round-151) before
-// toggling, so the window between preventDefault and the toggle is not fixed.
-const paletteHotkey150 = /if \(key === '\/'\) \{\s*\r?\n\s*event\.preventDefault\(\)[\s\S]{0,200}?isCommandPaletteOpen\.value = !isCommandPaletteOpen\.value/.test(appSrc150)
+// round-152：'/' 分支收拢到 onToggleCommandPalette()。断言随之从「内联取反」改为
+// 「分支调用收拢函数 ∧ 收拢函数的两个方向都存在 ∧ 关闭方向归还焦点」——比原来更强。
+const paletteHotkey150 = /if \(key === '\/'\) \{\s*\r?\n\s*event\.preventDefault\(\)\s*\r?\n\s*onToggleCommandPalette\(\)/.test(appSrc150)
+  && /function onToggleCommandPalette\(\): void \{\s*\r?\n\s*if \(isCommandPaletteOpen\.value\) \{\s*\r?\n\s*onCloseCommandPalette\(\)/.test(appSrc150)
+  && /function onToggleCommandPalette\(\): void \{[\s\S]{0,260}?onOpenCommandPalette\(\)/.test(appSrc150)
   && /if \(isCommandPaletteOpen\.value\) return/.test(appSrc150)
 const paletteView150 = /<Teleport to="body">/.test(paletteSrc150)
   && /event\.key === 'ArrowDown'/.test(paletteSrc150)
@@ -1181,6 +1183,29 @@ check(
     `速查接线=${helpWiring151 ? 'yes' : 'NO'}`,
     `互斥=${helpMutex151 ? 'yes' : 'NO'}`,
     `速查视图=${helpView151 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+// ---------------- round-152：浮层关闭统一归还焦点
+// 实测暴露的缺口：命令面板关闭会把焦点还给顶栏入口，速查面板关闭却把焦点丢给
+// <body>（Esc 分支还直接改 ref，绕过了关闭函数）。这里钉住三件事：两个关闭方向
+// 都走 restoreOverlayFocus()、兜底落在命令面板入口、window 的 Esc 兜底也走关闭函数。
+const appSrc152 = fs.readFileSync('src/App.vue', 'utf8')
+const overlayFocusHelper152 = /function rememberOverlayFocus\(\): void \{/.test(appSrc152)
+  && /function restoreOverlayFocus\(\): void \{[\s\S]{0,400}?previous\?\.isConnected[\s\S]{0,400}?commandPaletteButtonRef\.value\?\.focus\(\)/.test(appSrc152)
+const overlayFocusClose152 = /function onCloseShortcutHelp\(\): void \{[\s\S]{0,220}?restoreOverlayFocus\(\)/.test(appSrc152)
+  && /function onCloseCommandPalette\(\): void \{[\s\S]{0,220}?restoreOverlayFocus\(\)/.test(appSrc152)
+const overlayFocusWiring152 = /function onOpenCommandPalette\(\): void \{\s*\r?\n\s*rememberOverlayFocus\(\)/.test(appSrc152)
+  && /if \(event\.key === 'Escape' && isShortcutHelpOpen\.value\) \{\s*\r?\n\s*onCloseShortcutHelp\(\)/.test(appSrc152)
+  && /if \(event\.key === 'Escape' && isCommandPaletteOpen\.value\) \{\s*\r?\n\s*onCloseCommandPalette\(\)/.test(appSrc152)
+  && /function onCommandPaletteRun\(commandId: string\): void \{[\s\S]{0,320}?onCloseCommandPalette\(\)/.test(appSrc152)
+check(
+  '浮层关闭归还焦点：速查面板 / 命令面板 / Esc 兜底 / 执行命令四条路径（round-152）',
+  overlayFocusHelper152 && overlayFocusClose152 && overlayFocusWiring152,
+  [
+    `焦点助手=${overlayFocusHelper152 ? 'yes' : 'NO'}`,
+    `两关闭方向=${overlayFocusClose152 ? 'yes' : 'NO'}`,
+    `接线（打开记忆 / Esc 兜底 / 执行命令）=${overlayFocusWiring152 ? 'yes' : 'NO'}`,
   ].join(' / '),
 )
 

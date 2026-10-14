@@ -163,7 +163,13 @@
 > 那里只有 2 条命令带键位，而速查表要覆盖的多数键位根本不是命令（输入框 Enter / Esc、浮层的方向键）
 > ⇒ 独立目录更诚实。同轮另补了命令面板的**指针入口**（见 §六 人工实测点）。
 > 见 [round-151](../rounds/round-151-palette-entry-and-shortcut-help.md)。
+> **✅ 运行时已验证（round-152）** —— 有头 Chromium 实测：条目数与 DOM 一致（15 条 / 3 组）、
+> Windows 键位标签正确，且 `Ctrl+/` / `Ctrl+B` / `Ctrl+J` / `Esc` 四条全局键位**行为与目录相符**。
+> 同轮修掉「速查面板关闭不归还焦点」。见 [round-152](../rounds/round-152-browser-verification.md)。
 > **#4 不改** —— `Ctrl+J` 不在保留加速键表里、页面能 `preventDefault`；终端面板另有可见 tab 按钮兜底；只剩真机按键验证这一项人工动作。
+> **round-152 补充**：实测 `Ctrl+J` 在页面层工作正常（右侧出现活着的终端），但**CDP 正对照**证明
+> 注入事件绕过浏览器加速键前置处理（按 `Ctrl+T` 页面数 1→1），因此**真实浏览器里的命运仍只能靠人手按一次**。
+> 影响面已缩小：命令面板有 `panel.terminal`（带 `Ctrl+J` 提示）这条等价键盘路径。
 
 | # | 搬什么 | 落地 | 备注 |
 | --- | --- | --- | --- |
@@ -179,6 +185,10 @@
 > 组件放 `src/components/content/CommandPalette.vue`；② 首版 **24 条** 而非 25–30，因为面板只做**无参**命令 ——
 > 「切模型 / 回退·分叉」需要额外的参数载体，留给下一版。`Ctrl/Cmd+/` 按本节选型落地。
 > 见 [round-150](../rounds/round-150-command-palette-batch2.md)。
+> **✅ 运行时已验证（round-152）** —— 有头 Chromium 实测：点击与 `Ctrl+/` 均可打开、`count=13/13`
+> 与 DOM 行数一致、无选中线程时线程/面板组正确收敛、中文关键字召回、`Esc` 与 `Ctrl+/` 关闭后**焦点归还**、
+> 面板内 `Ctrl+B` 让位、执行命令后焦点顺序正确（36/36）。同轮修掉**四条路径**「关闭不归还焦点」。
+> 见 [round-152](../rounds/round-152-browser-verification.md)。
 
 - **搬什么**：搬 `codex.command.*` 的**结构**，不搬清单内容。首版 **25–30 条**，来源 = **已有能力重新聚合**（切线程 / 切模型 / 开设置·目录·技能 / 切面板 / 新建 / 回退·分叉 / 复制导出）
 - **落地**：`src/components/CommandPalette.vue` + `src/composables/useCommandRegistry.ts`（注册表 = 单一数据源）
@@ -283,5 +293,5 @@ grep -n "HOT_TURNS\|WARM_PAGE_SIZE\|scrollIntoView\|LOAD_MORE_SCROLL_THRESHOLD_P
 ## 十、诚实边界
 
 1. 桌面端结论来自**压缩产物静态阅读 + 桌面端自带二进制的 RPC 实测**，未启动桌面端点按验证。
-2. 我方现状来自 `src/**` 静态阅读（含行号）+ 上一轮 grep，**未跑浏览器实测** ⇒ §六两个键位必须人工验。
+2. 我方现状来自 `src/**` 静态阅读（含行号）+ 上一轮 grep，**已由 round-152 补做有头 Chromium 实测**（36/36，见 [round-152](../rounds/round-152-browser-verification.md)）⇒ §六两个键位中 **`Ctrl/Cmd+/` 已端到端验证**；**`Ctrl+J` 仍须人工按一次**——CDP 注入的正对照（`Ctrl+T` 不动页面）证明注入不经浏览器加速键前置处理，自动化测不出。
 3. 桌面端 C 类列表（space / library / PR）未纳入。

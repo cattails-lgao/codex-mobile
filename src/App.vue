@@ -3188,11 +3188,46 @@ const commandPaletteButtonRef = ref<HTMLButtonElement | null>(null)
 const commandPaletteShortcutLabel = computed(() => (isMacPlatform() ? '⌘/' : 'Ctrl+/'))
 const commandPaletteTitle = computed(() => `${t('Command palette')} · ${commandPaletteShortcutLabel.value}`)
 
+// round-152：两个浮层都从「某个具体控件」打开，因此都记住焦点来源并在关闭时
+// 归还（与 AppDialog 同一约定）。原先只有命令面板做到了，速查面板关闭后焦点掉到
+// <body>，键盘用户的落点丢失。
+let overlayReturnFocus: HTMLElement | null = null
+
+function rememberOverlayFocus(): void {
+  const active = document.activeElement
+  overlayReturnFocus = active instanceof HTMLElement ? active : null
+}
+
+function restoreOverlayFocus(): void {
+  const previous = overlayReturnFocus
+  overlayReturnFocus = null
+  void nextTick(() => {
+    if (previous?.isConnected) {
+      previous.focus()
+      return
+    }
+    // 常见的浮层→浮层交接：来源是命令面板的输入框，它随面板一起卸载。
+    // 兜底回到命令面板自身的顶栏入口，而不是把焦点丢给 <body>。
+    commandPaletteButtonRef.value?.focus()
+  })
+}
+
 function onOpenCommandPalette(): void {
+  rememberOverlayFocus()
   // The two overlays are mutually exclusive: stacked modals would give two
   // stacked backdrops, and Ctrl/Cmd+/ is expected to *switch* to the palette.
   isShortcutHelpOpen.value = false
   isCommandPaletteOpen.value = true
+}
+
+// 唯一的 Ctrl/Cmd+/ 入口。收拢成一个函数是为了两件事：关闭分支也要归还焦点，
+// 且不必在键位分支里内联写 true/false。
+function onToggleCommandPalette(): void {
+  if (isCommandPaletteOpen.value) {
+    onCloseCommandPalette()
+    return
+  }
+  onOpenCommandPalette()
 }
 
 // round-151（批 1 #3）：快捷键速查面板。目录数据在 utils/keyboardShortcuts.ts，
@@ -3200,12 +3235,17 @@ function onOpenCommandPalette(): void {
 const isShortcutHelpOpen = ref(false)
 
 function onOpenShortcutHelp(): void {
+  // 刻意不调用 rememberOverlayFocus()：本面板唯一的打开路径是命令面板的
+  // view.shortcuts 命令，此时焦点还在面板输入框上（即将卸载）。沿用命令面板
+  // 已记下的来源，才能把焦点还原到「最初打开命令面板的地方」。
   isCommandPaletteOpen.value = false
   isShortcutHelpOpen.value = true
 }
 
 function onCloseShortcutHelp(): void {
+  if (!isShortcutHelpOpen.value) return
   isShortcutHelpOpen.value = false
+  restoreOverlayFocus()
 }
 
 // Closing a modal hands focus back to the control that opened it, matching
@@ -3213,9 +3253,7 @@ function onCloseShortcutHelp(): void {
 function onCloseCommandPalette(): void {
   if (!isCommandPaletteOpen.value) return
   isCommandPaletteOpen.value = false
-  void nextTick(() => {
-    commandPaletteButtonRef.value?.focus()
-  })
+  restoreOverlayFocus()
 }
 
 const paletteCommands = computed<PaletteCommand[]>(() => {
@@ -3239,7 +3277,9 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
 
 // 每个 case 都只是转发到一个既有处理函数——命令面板本身不新增任何能力。
 function onCommandPaletteRun(commandId: string): void {
-  isCommandPaletteOpen.value = false
+  // 走关闭函数而不是直接置 false：焦点归还排在命令自身之前注册，因此命令若打开
+  // 对话框（如重命名），对话框随后的聚焦仍然胜出。
+  onCloseCommandPalette()
   const threadId = selectedThreadId.value.trim()
   switch (commandId) {
     case 'thread.new':
@@ -3327,11 +3367,11 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
   // 兜底：焦点意外离开面板输入框时，Esc 仍应能关掉命令面板。
   if (event.key === 'Escape' && isShortcutHelpOpen.value) {
-    isShortcutHelpOpen.value = false
+    onCloseShortcutHelp()
     return
   }
   if (event.key === 'Escape' && isCommandPaletteOpen.value) {
-    isCommandPaletteOpen.value = false
+    onCloseCommandPalette()
     return
   }
   if (event.key === 'Escape' && isSettingsOpen.value) {
@@ -3343,8 +3383,7 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   const key = event.key.toLowerCase()
   if (key === '/') {
     event.preventDefault()
-    isShortcutHelpOpen.value = false
-    isCommandPaletteOpen.value = !isCommandPaletteOpen.value
+    onToggleCommandPalette()
     return
   }
   // 命令面板打开时接管其余全局快捷键：Esc / 方向键 / 回车由面板自己处理，
