@@ -21,6 +21,8 @@
  *         `AppData\Local\…` 这种随用户而变的布局、`file:///<盘符>/…` 绝对链接、
  *         `C:\Users\<用户名>\…` 骨架（§5.4 明文点名：脱敏成占位符**也不算**合规，因为盘符与
  *         `Users` 布局本身就是机器相关的，换到 macOS/Linux 必然不同）。
+ *         POSIX 家目录（macOS `/Users/<用户名>`、Linux `/home/<用户名>`）—— round-160 补：
+ *         盘符类管不到它们，而 macOS 的 `/Users/<用户名>` 同样标识这台机器。
  *   不拦（对任何机器都成立的写法）：
  *         · `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe` —— 环境变量锚定 + 产品自定义子路径
  *         · `~/.codex`、`~/.npmrc` —— 家目录相对写法，可移植
@@ -83,6 +85,10 @@ const CLASSES = [
   { id: 'AppData 布局', re: /AppData[\\/]Local[\\/][A-Za-z0-9._-]+/gi },
   // 绝对 file:/// 链接
   { id: 'file:// 绝对链接', re: /file:\/\/\/[A-Za-z]:[\\/]/gi },
+  // POSIX 家目录（macOS `/Users/<user>`、Linux `/home/<user>`）—— 盘符类管不到，round-160 补
+  { id: 'POSIX 家目录-真实用户名', re: new RegExp(NB + '\\/(?:Users|home)\\/[A-Za-z0-9._-]+', 'g') },
+  // POSIX 家目录占位符骨架
+  { id: 'POSIX 家目录骨架', re: new RegExp(NB + '\\/(?:Users|home)\\/<', 'g') },
 ];
 
 // —— 已登记例外（只收「形式上和违规无法区分」的）—————————————
@@ -102,6 +108,11 @@ const EXCEPTIONS = [
     file: 'codex-mobile-handover/rounds/round-158-doc-links-desensitization-and-rpc-verification.md',
     literal: SKELETON_PREFIX,
     reason: SKELETON_IN_RULE + '（round-158 解释该规则时引用）',
+  },
+  {
+    file: 'tests/chat-composer-rendering/markdown-link-with-backticked-label-renders-as-file-link.md',
+    literal: '/Users/example',
+    reason: '构造的测试夹具路径（用户名 example 是保留示例名，非真实用户）：用于验证 markdown 链接渲染，任一机器上都不存在该文件',
   },
 ];
 
