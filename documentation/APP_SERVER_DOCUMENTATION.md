@@ -2,7 +2,9 @@
 
 Документ основан на исходниках [openai/codex](https://github.com/openai/codex) (app-server protocol).
 
-JSON and TypeScript snapshots were generated from local Codex CLI `0.160.1` (with `--experimental`). The method tables below are historical reference material and may lag behind the generated schemas.
+JSON and TypeScript snapshots were generated from local Codex CLI `0.162.1` (with `--experimental`). The method tables below are historical reference material and may lag behind the generated schemas.
+
+Regenerate / detect drift with `node scripts/regen-app-server-schemas.cjs --check` (exit 0 = in sync, 1 = drifted, 2 = no runnable codex). Snapshots are consumed as type definitions by `src/api/appServerDtos.ts`, so a stale snapshot silently pins the app to an older protocol contract.
 
 ## Локальная материализация схем
 

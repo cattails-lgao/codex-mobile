@@ -213,6 +213,9 @@
         }
       ]
     },
+    "BedrockCheckGovCloudRequirementsParams": {
+      "type": "object"
+    },
     "BedrockDiscoverParams": {
       "type": "object"
     },
@@ -824,7 +827,7 @@
       "type": "string"
     },
     "CyberAccessProgram": {
-      "description": "Requested cyber treatment for a ChatGPT-authenticated Codex turn. Authorization and model-tier restrictions remain server-owned.",
+      "description": "Requested cyber treatment for an OpenAI model turn. Authorization and model-tier restrictions remain server-owned.",
       "enum": [
         "standard",
         "daybreakBlue",
@@ -952,6 +955,17 @@
         },
         "execServerUrl": {
           "type": "string"
+        },
+        "skills": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EnvironmentSkillsParams"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required skills supplied by this environment, checked before model inference."
         }
       },
       "required": [
@@ -969,6 +983,21 @@
       "required": [
         "environmentId"
       ],
+      "type": "object"
+    },
+    "EnvironmentSkillsParams": {
+      "properties": {
+        "required": {
+          "description": "Exact catalog names that must be available from this environment.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "EnvironmentStatusParams": {
@@ -2410,7 +2439,7 @@
       "type": "string"
     },
     "MessagePhase": {
-      "description": "Classifies an assistant message as interim commentary or final answer text.\n\nProviders do not emit this consistently, so callers must treat `None` as \"phase unknown\" and keep compatibility behavior for legacy models.",
+      "description": "Classifies assistant text as commentary, a partial answer, or a terminal answer.\n\nProviders do not emit this consistently, so callers must treat `None` as \"phase unknown\" and keep compatibility behavior for legacy models.",
       "oneOf": [
         {
           "description": "Mid-turn assistant text (for example preamble/progress narration).\n\nAdditional tool calls or assistant output may follow before turn completion.",
@@ -2420,7 +2449,14 @@
           "type": "string"
         },
         {
-          "description": "The assistant's terminal answer text for the current turn.",
+          "description": "Stable answer text that may be followed by more assistant output or tools.",
+          "enum": [
+            "partial_answer"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "The assistant's declared terminal answer text for the current turn.",
           "enum": [
             "final_answer"
           ],
@@ -3589,6 +3625,37 @@
     },
     "ResponseItem": {
       "oneOf": [
+        {
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "role": {
+              "type": "string"
+            },
+            "tools": {
+              "items": true,
+              "type": "array"
+            },
+            "type": {
+              "enum": [
+                "additional_tools"
+              ],
+              "title": "AdditionalToolsResponseItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "tools",
+            "type"
+          ],
+          "title": "AdditionalToolsResponseItem",
+          "type": "object"
+        },
         {
           "properties": {
             "content": {
@@ -4934,6 +5001,43 @@
       ],
       "type": "object"
     },
+    "ThreadAttachmentOwnerListParams": {
+      "description": "Parameters for reverse lookup by attachment identity within this server's store.",
+      "properties": {
+        "archived": {
+          "description": "Omitted or null returns all matches; false returns non-archived threads only.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "attachmentType": {
+          "type": "string"
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identityKey": {
+          "type": "string"
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "attachmentType",
+        "identityKey"
+      ],
+      "type": "object"
+    },
     "ThreadAttachmentRemoveParams": {
       "description": "Parameters for deleting an attachment by its stable thread-local identity.",
       "properties": {
@@ -5192,6 +5296,17 @@
     },
     "ThreadGoalClearParams": {
       "properties": {
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ThreadGoalMutationOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Missing provenance does not supply user authorization."
+        },
         "threadId": {
           "type": "string"
         }
@@ -5212,6 +5327,14 @@
       ],
       "type": "object"
     },
+    "ThreadGoalMutationOrigin": {
+      "description": "Distinguishes explicit user actions from automatic goal lifecycle mutations.",
+      "enum": [
+        "user",
+        "automatic"
+      ],
+      "type": "string"
+    },
     "ThreadGoalSetParams": {
       "properties": {
         "objective": {
@@ -5219,6 +5342,17 @@
             "string",
             "null"
           ]
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ThreadGoalMutationOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Missing provenance does not supply user authorization."
         },
         "status": {
           "anyOf": [
@@ -5623,6 +5757,21 @@
         }
       },
       "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadPredictionRequestParams": {
+      "properties": {
+        "sourceTurnId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceTurnId",
         "threadId"
       ],
       "type": "object"
@@ -6338,7 +6487,7 @@
           ]
         },
         "searchTerm": {
-          "description": "Case-insensitive literal substring to find in visible user messages and final assistant messages.",
+          "description": "Case-insensitive literal substring to find in visible user messages and both partial and final assistant answers.",
           "type": "string"
         },
         "threadId": {
@@ -7284,7 +7433,7 @@
               "type": "null"
             }
           ],
-          "description": "EXPERIMENTAL - Request a workspace-authorized cyber program for this turn. Omission preserves automatic behavior. This does not grant access."
+          "description": "EXPERIMENTAL - Request an authorized cyber program for this turn. Omission preserves automatic behavior. This does not grant access."
         },
         "disabledPluginIds": {
           "description": "Replace this thread's disabled plugin IDs. Omitted/null preserves the list; [] clears it.",
@@ -7344,6 +7493,13 @@
         "outputSchema": {
           "description": "Optional JSON Schema used to constrain the final assistant message for this turn."
         },
+        "parentTurnId": {
+          "description": "ID of the turn that caused this new turn to start.\n\nSet this when starting work on behalf of another turn, such as delegated work in a different thread. Leave unset for work started directly by the user. Ignored when this request adds input to an active turn.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "permissions": {
           "description": "Select a named permissions profile id for this turn and subsequent turns. Cannot be combined with `sandboxPolicy`.",
           "type": [
@@ -7369,6 +7525,13 @@
           "description": "Optional metadata to enrich Codex's ResponsesAPI turn metadata.\n\nEntries are flattened into the JSON string sent as `client_metadata[\"x-codex-turn-metadata\"]` on ResponsesAPI HTTP and websocket requests.\n\nThey are not sent as top-level ResponsesAPI `client_metadata` keys, and reserved keys such as `session_id`, `thread_id`, `turn_id`, and `window_id` cannot be overridden.",
           "type": [
             "object",
+            "null"
+          ]
+        },
+        "rootTurnId": {
+          "description": "ID of the first turn in the chain of work that led to this new turn.\n\nWhen setting `parentTurnId`, set this to the parent turn's `rootTurnId` when known. This keeps descendant work attributed to the original turn. If omitted, the new turn becomes its own root. Ignored when this request adds input to an active turn.",
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -8194,6 +8357,30 @@
         },
         "method": {
           "enum": [
+            "thread/prediction/request"
+          ],
+          "title": "Thread/prediction/requestRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/ThreadPredictionRequestParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Thread/prediction/requestRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
             "thread/goal/set"
           ],
           "title": "Thread/goal/setRequestMethod",
@@ -8473,6 +8660,30 @@
         "params"
       ],
       "title": "Thread/attachment/listRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "thread/attachmentOwner/list"
+          ],
+          "title": "Thread/attachmentOwner/listRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/ThreadAttachmentOwnerListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Thread/attachmentOwner/listRequest",
       "type": "object"
     },
     {
@@ -11124,6 +11335,30 @@
         "params"
       ],
       "title": "Account/bedrock/setupRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "account/bedrock/checkGovCloudRequirements"
+          ],
+          "title": "Account/bedrock/checkGovCloudRequirementsRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/BedrockCheckGovCloudRequirementsParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Account/bedrock/checkGovCloudRequirementsRequest",
       "type": "object"
     },
     {

@@ -41,6 +41,8 @@ function threadReadResponseWithContent(content: ThreadReadResponse['thread']['tu
         id: 'turn-1',
         status: 'completed',
         itemsView: 'full',
+        // round-157：0.162.1 起 Turn.rootTurnId 为必填（旧历史与 review/start 响应可为 null）。
+        rootTurnId: null,
         error: null,
         startedAt: null,
         completedAt: null,
@@ -278,6 +280,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
         id: '',
         status: 'failed',
         itemsView: 'full',
+        rootTurnId: null,
         error: {
           message: 'first failed turn',
           codexErrorInfo: null,
@@ -293,6 +296,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
         id: '   ',
         status: 'failed',
         itemsView: 'full',
+        rootTurnId: null,
         error: {
           message: 'second failed turn',
           codexErrorInfo: null,
