@@ -189,6 +189,7 @@ const zhCN: Record<string, string> = {
   'Fork thread from this response': '从此回复分叉线程',
   'Fork': '分叉',
   'Response copied': '回复已复制',
+  'Copy last code block': '复制最后一个代码块',
   'Copy response': '复制回复',
   'Jump to latest': '跳转到最新',
   'Jump to latest output': '跳转到最新输出',

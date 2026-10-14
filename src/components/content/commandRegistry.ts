@@ -57,6 +57,7 @@ export const PALETTE_COMMANDS: PaletteCommand[] = [
   { id: 'thread.archive', title: 'Archive the current thread', group: 'thread', keywords: ['delete', '归档', '删除'], requiresThread: true },
   { id: 'thread.fork', title: 'Fork the current thread', group: 'thread', keywords: ['branch', 'copy', '派生', '分叉'], requiresThread: true },
   { id: 'thread.copy-markdown', title: 'Copy the conversation as Markdown', group: 'thread', keywords: ['export', 'md', '导出', '复制对话'], requiresThread: true },
+  { id: 'thread.copy-last-code-block', title: 'Copy last code block', group: 'thread', keywords: ['code', 'snippet', 'clipboard', '代码块', '复制代码'], requiresThread: true },
   { id: 'thread.compact', title: 'Compact the current thread context', group: 'thread', keywords: ['compress', 'summarize', '压缩', '上下文'], requiresThread: true },
   { id: 'thread.interrupt', title: 'Stop the running turn', group: 'thread', keywords: ['cancel', 'abort', 'interrupt', '中断', '停止'], requiresThread: true },
   { id: 'thread.implement-plan', title: 'Implement the current plan', group: 'thread', keywords: ['execute', 'approve', '执行', '计划'], requiresThread: true },

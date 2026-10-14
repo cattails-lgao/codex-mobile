@@ -1258,6 +1258,42 @@ check(
   ].join(' / '),
 )
 
+// ---------------- round-154：复制最后一个代码块（对齐桌面端 `copyLastCodeBlock`）
+// 判定书 §三·C 的最后一处缺口（桌面端标题「复制最后一个代码块」、描述「复制当前聊天中助手
+// 提供的最后一个代码块」，见 tmp/r145-asar 的 zh-CN 包）。钉住五件事：注册表条目、
+// 面板可用性收敛（没有代码块时不出现在面板里）、App.vue 的执行接线、
+// **解析路径与渲染层同源**（复用 parseMessageBlocks，不另写一份围栏正则）、模块保持纯净。
+const codeBlocksSrc154 = fs.readFileSync('src/utils/conversationCodeBlocks.ts', 'utf8')
+const markdownSrc154 = fs.readFileSync('src/utils/conversationMarkdown.ts', 'utf8')
+const registrySrc154 = fs.readFileSync('src/components/content/commandRegistry.ts', 'utf8')
+const appSrc154 = fs.readFileSync('src/App.vue', 'utf8')
+const codeCommand154 = /id: 'thread\.copy-last-code-block', title: 'Copy last code block', group: 'thread'[\s\S]{0,160}?requiresThread: true/.test(registrySrc154)
+const codeApi154 = /export function findLastAssistantCodeBlock\(/.test(codeBlocksSrc154)
+  && /export function hasAssistantCodeBlock\(/.test(codeBlocksSrc154)
+  && /export function collectCodeBlocksFromMessage\(/.test(codeBlocksSrc154)
+  && /export function isAssistantContentMessage\(/.test(codeBlocksSrc154)
+const codeSharedParser154 = /from '\.\/conversationMarkdown'/.test(codeBlocksSrc154)
+  && /const FENCE_START_PATTERN = '/.test(markdownSrc154)
+  && /export function hasCodeFenceStart\(text: string\): boolean \{/.test(markdownSrc154)
+  && /line\.match\(FENCE_START_LINE\)/.test(markdownSrc154)
+const codeWiring154 = /import \{ findLastAssistantCodeBlock, hasAssistantCodeBlock \} from '\.\/utils\/conversationCodeBlocks'/.test(appSrc154)
+  && /if \(command\.id === 'thread\.copy-last-code-block' && !hasAssistantCodeBlock\(filteredMessages\.value\)\) return false/.test(appSrc154)
+  && /case 'thread\.copy-last-code-block':\s*\r?\n\s*void copyLastCodeBlock\(\)/.test(appSrc154)
+  && /async function copyLastCodeBlock\(\): Promise<void> \{[\s\S]{0,320}?findLastAssistantCodeBlock\(filteredMessages\.value\)[\s\S]{0,220}?copyTextToClipboard\(block\.value\)/.test(appSrc154)
+// 纯函数模块：不得 import vue / 组件（否则无法在组件外单测）。
+const codePure154 = !/from 'vue'/.test(codeBlocksSrc154) && !/\/components\//.test(codeBlocksSrc154)
+check(
+  '复制最后一个代码块：注册表条目 + 可用性收敛 + 执行接线 + 解析同源（round-154）',
+  codeCommand154 && codeApi154 && codeSharedParser154 && codeWiring154 && codePure154,
+  [
+    `注册表条目=${codeCommand154 ? 'yes' : 'NO'}`,
+    `纯函数 API=${codeApi154 ? 'yes' : 'NO'}`,
+    `解析同源=${codeSharedParser154 ? 'yes' : 'NO'}`,
+    `执行接线=${codeWiring154 ? 'yes' : 'NO'}`,
+    `模块纯净=${codePure154 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

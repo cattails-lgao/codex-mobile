@@ -864,13 +864,33 @@ function isThematicBreakLine(line: string): boolean {
   return /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/u.test(line.trim())
 }
 
+// 围栏起始行的**唯一定义**（round-154）：逐行解析的 `readFenceStart` 与整篇廉价扫描的
+// `hasCodeFenceStart` 共用同一条模式串 —— 两处各写一份正则迟早会漂移，而后者恰恰是
+// 前者的「有没有」版本。
+const FENCE_START_PATTERN = '^\\s{0,3}(```+|~~~+)\\s*([^\\s`~][^`]*)?\\s*$'
+const FENCE_START_LINE = new RegExp(FENCE_START_PATTERN, 'u')
+const FENCE_START_LINE_ANYWHERE = new RegExp(FENCE_START_PATTERN, 'gmu')
+
 function readFenceStart(line: string): { marker: string; language: string } | null {
-  const match = line.match(/^\s{0,3}(```+|~~~+)\s*([^\s`~][^`]*)?\s*$/u)
+  const match = line.match(FENCE_START_LINE)
   if (!match) return null
   return {
     marker: match[1],
     language: (match[2] ?? '').trim(),
   }
+}
+
+/**
+ * 整篇文本里是否存在**代码围栏起始行**（round-154）。
+ *
+ * 与 `parseMessageBlocks` 共用 `FENCE_START_PATTERN` ⇒ 命中即保证解析会产出一个 `codeBlock`
+ * （围栏没有闭合行时解析器会一直吃到文末，仍然产出块）。纯扫描、遇首个即返回，供命令面板的
+ * 可用性收敛使用（它依赖 `filteredMessages`，流式期间会反复重算，全量解析在大线程上太贵）。
+ */
+export function hasCodeFenceStart(text: string): boolean {
+  if (!text) return false
+  FENCE_START_LINE_ANYWHERE.lastIndex = 0
+  return FENCE_START_LINE_ANYWHERE.test(text.replace(/\r\n/gu, '\n'))
 }
 
 function parseTextBlocks(text: string): MessageBlock[] {

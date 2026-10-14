@@ -1037,6 +1037,7 @@ import type { UiRemoteControlStatus, UiRemotePairingCode } from './api/codexGate
 import { getPathLeafName, getPathParent, isProjectlessChatPath, normalizePathForUi } from './pathUtils.js'
 import { copyTextToClipboard } from './utils/clipboard'
 import { shouldSyncAfterForeground } from './utils/foregroundResume'
+import { findLastAssistantCodeBlock, hasAssistantCodeBlock } from './utils/conversationCodeBlocks'
 import { readPlanData } from './utils/plan'
 import { isUserAuthoredMessage } from './utils/transcriptGrouping'
 import { resolveTryItemSkills } from './components/content/directoryHubUtils'
@@ -3267,6 +3268,7 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
       if (command.requiresThread && !hasThread) return false
       if (command.id === 'thread.interrupt' && !isSelectedThreadInProgress.value) return false
       if (command.id === 'thread.implement-plan' && !composerPlanPanel.value) return false
+      if (command.id === 'thread.copy-last-code-block' && !hasAssistantCodeBlock(filteredMessages.value)) return false
       if (command.group === 'panel' && !canShowRightPanel.value) return false
       return true
     })
@@ -3296,6 +3298,9 @@ function onCommandPaletteRun(commandId: string): void {
       break
     case 'thread.copy-markdown':
       void copySelectedThreadChat()
+      break
+    case 'thread.copy-last-code-block':
+      void copyLastCodeBlock()
       break
     case 'thread.compact':
       onCompactContext()
@@ -4406,6 +4411,18 @@ async function copySelectedThreadChat(): Promise<void> {
     await copyTextToClipboard(markdown)
   } catch {
     // Clipboard writes can be blocked by browser permissions; keep the menu action best-effort.
+  }
+}
+
+// round-154：桌面端 copyLastCodeBlock 的等价实现 —— 取「最后一个助手代码块」复制。
+// 没有可用代码块时命令不会出现在面板里（见 paletteCommands 的收敛分支），此处再兜一层。
+async function copyLastCodeBlock(): Promise<void> {
+  const block = findLastAssistantCodeBlock(filteredMessages.value)
+  if (!block) return
+  try {
+    await copyTextToClipboard(block.value)
+  } catch {
+    // Clipboard writes can be blocked by browser permissions; keep the action best-effort.
   }
 }
 
