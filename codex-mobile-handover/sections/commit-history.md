@@ -408,6 +408,35 @@
 > ① **round-144 ~ round-147 没有任何提交** —— 那四轮是桌面端 `app.asar` 的**只读盘点**（产出在 `tmp/r145-asar`、`tmp/r146-*`、`tmp/r147-*` 与 `sections/desktop-parity-decision.md`，`tmp/` 不入库）⇒ 台账里没有它们**不是漏记，是本来就没有**。
 > ② `round-142 / round-143` 在首次回填提交（`a60c15be`）之后**还有 3 个文档提交**（发布闭环与 tag/Release 回填），此前只以「本段所在提交」一句带过，本轮补齐哈希。
 
+## round-157（app-server schema 快照升级到 0.162.1 ＋ 台账回填 round-144~156，生成物轮 · 未发版）
+
+**性质**：**零产品代码改动** —— 改的是「生成物快照」「生成物对应的版本记录」「交接台账」，外加 **1 个可复跑的脚本**与 **1 处探针修复**。**未 bump 版本 / 未 tag / 未发版。**
+
+**问题（两件待决项 ＋ 两件顺带查出）**：round-156 §七 把两件事交给用户裁决，用户回复「做」⇒ ①仓库内 app-server schema 快照停在 **0.160.1**，而真机 codex 已是 **0.162.1**（round-156 §八 当时只做了「可完全回滚的编译影响实验」就收手）；②`sections/commit-history.md` 断档 12 轮（`round-144 ~ round-155` 零条目、round-156 未加），round-156 §七 建议**单独开一轮**回填。另有两件在执行中顺带发现：③`MessagePhase` 二态→三态的影响面未定（round-156 §八 只写「要连带决定」）；④`scripts/probe-codex-installations.cjs` **把 PATH 上的 pnpm 全局 codex 误报成「(不可运行)」** —— 而它恰恰是 `resolveCodexCommand()` 会选中的那一套，也正是快照表让读者去核对的那一行。
+
+**修复：**
+
+- **schema 快照镜像升级**：用 0.162.1（`codex app-server generate-json-schema|generate-ts --experimental`）整体覆盖 `documentation/app-server-schemas/{json,typescript}` ⇒ `json` 440→**447**、`typescript` 875→**888**，**新增 20 / 删除 0**（生成集与仓库集是包含关系，`onlyRepo` 为空 ⇒ 升级为**纯增量**）。协议面新增：客户端方法 **+3**（`thread/prediction/request`、`thread/attachmentOwner/list`、`account/bedrock/checkGovCloudRequirements`）、服务端通知 **+1**（`thread/prediction/updated`）；**无任何导出符号或方法被移除**。契约漂移（`src/api/appServerDtos.ts` 直接 `export type … from` 该快照 ⇒ **快照即类型定义**）：`Turn.rootTurnId` 变为**必填**、`ThreadItem.subAgentActivity` 新增**必填** `model` / `reasoningEffort`、`MessagePhase` 二态→三态、`ResponseItem` 联合新增 `additional_tools`。
+- **新增 `scripts/regen-app-server-schemas.cjs`（可复跑）**：`--check`（只比对，漂移 exit 1）/ `--dry-run`（逐文件差异）/ `--apply`（镜像写入）。退出码沿用本仓闸门约定 **0 全绿 / 1 漂移 / 2 环境不足**；选用的 codex 与 `resolveCodexCommand()` **同一优先级**，并复刻 `src/utils/commandInvocation.ts#getSpawnInvocation` 的 `cmd.exe` 包装（本机 `codex` 是 pnpm 的 `.cmd` shim，Node ≥20.12 拒绝直接 spawn）；生成时 `cwd` **必须离开本仓**（codex 会按 cwd 发现 `.codex/config.toml` 并**覆盖**模型）。
+- **测试夹具补字段**：`src/api/normalizers/v2.test.ts` 的 **3 处** `Turn` 字面量补 `rootTurnId: null`（`vue-tsc` 报错**恰好这 3 处、全在夹具**，生产代码零报错；`subAgentActivity` 那条**零报错** ⇒ 两侧都没构造过该 item）。一次性 read-modify-write，**锚点断言「出现次数恰为 1」**，首跑因锚点用 LF 而文件是 CRLF **正确拒写** —— 断言救了一次静默失败。
+- **文档**：`documentation/APP_SERVER_DOCUMENTATION.md` 生成版本 `0.160.1` → **`0.162.1`**，并补上漂移自检入口与「快照被当类型定义消费」的提醒。
+- **台账回填**：见紧随其后的「回填说明」段（929→1053 行、12 个段落，独立复核 27 项断言全绿）；收尾时又追加了**本段**。
+- **探针修复**：`versionOf()` 直接 `spawnSync('.cmd', …)` ⇒ Node ≥20.12 拒绝（`status=null` / `error.code=ENOENT`），失败被**静默吞成「(不可运行)」**；补同口径包装，并把「包目录」那行从「(不可运行)」改为「(包目录)」。修后 PATH shim = **`codex-cli 0.162.1`**、退出码 0。
+
+**提交：**
+
+- `25b535ee` `chore(scripts): 新增 app-server schema 再生成与漂移检测脚本` —— **1 文件（1 新增）**，`+249/−0`
+- `d0c30332` `chore(schemas): app-server schema 快照升级到 0.162.1` —— **84 文件（64 改 + 20 新增）**，`+2964/−172`；其中 `json/` **39 改 + 7 新增**、`typescript/` **23 改 + 13 新增**，另 2 个非生成物（`documentation/APP_SERVER_DOCUMENTATION.md`、`src/api/normalizers/v2.test.ts`）
+- `bdc45e92` `fix(scripts): 探针修正 .cmd shim 版本读取（PATH 上的 pnpm 全局 codex 曾被误报不可运行）` —— **1 文件（1 改）**，`+30/−3`
+- `e606922e` `docs(handover): round-157 交接（schema 快照升级 + 提交台账回填 round-144~156）` —— **3 文件（2 改 + 1 新增）**，`+271/−5`
+- 本段所在提交：`sections/commit-history.md` 追加 round-157 自身条目（**1 文件 1 改**，本文件 **1053 → 1082 行**）
+
+**验证基线（本轮时点）**：`regen-app-server-schemas.cjs --check` **drift = 0**（json 447/447、ts 888/888，新增/删除/改写全 0）—— 这条是本轮核心断言，它证明「仓库快照 == 真机 0.162.1 生成结果」而不是「手动改到看起来对」；`vue-tsc --noEmit` **EXIT=0**；全量 Vitest **998 例 / 87 文件全绿**（与升级前一致、**零退化**）；UI 契约闸门 **59/59**；`vite build` **EXIT=0**（21.01s）；`tsup` 单独重跑 **EXIT=0**（`dist-cli/index.js` 696.31 KB）；台账独立复核 `tmp/r157-verify-ledger.cjs` **27 项断言全绿**。
+
+**两处环境记录（都与上一轮的读数不同）**：①**本机不要并发跑 `vite build` 与 `tsup`** —— 并发时 `tsup` 在 `removeFiles` 阶段抛错（`TSUP_EXIT=1`），**单独重跑 EXIT=0** ⇒ 是本机文件锁竞争，不是构建坏了。②**推送链路的可用性与 round-156 的结论相反**：本轮 `http://127.0.0.1:58043` 的 **fetch 与 push 都成功**（`7943151c..e606922e`），而 `socks5://127.0.0.1:10808` 报 **TLS 握手失败**（`schannel` 与 `http.sslBackend=openssl` 两种后端都失败 ⇒ 不是后端问题）。**⇒ 代理可用性会漂移，两个端点都要试，不要照抄上一轮的结论。**
+
+**未闭环（记在 round-157 §七，共 9 条诚实边界）**：②`MessagePhase` 的结论是「**本仓不用它**」而非「它没用」—— 全仓 `src/` 无 `phase` 消费点、无 `switch` 穷举，本仓用自带的 `messageType`（`agentMessage` / `agentMessage.live`）区分过程与最终消息，故联合加成员**向后兼容、零适配**；若将来要用 `phase` 替掉 `messageType`，那是**行为改动**，需单独一轮 + 真机取证。⑦本轮**未跑真实 app-server RPC**（无运行中的 dev server）⇒ 新增的 3 方法 / 1 通知**一次都没被真机调用过**，类型对齐 ≠ 运行时验证。⑧**脱敏只覆盖本轮新写的文本**：`rounds/round-135-*.md` 与 `rounds/round-156-*.md` 仍留有待清理的字面路径值。⑨顺手量到 `documentation/APP_SERVER_DOCUMENTATION.md` **227/618 条相对链接失效**（**去重口径**：未去重为 793 次引用 / 275 次失效 —— 同一目标被多行引用，两个数都对，别当成算错）（已用 `git ls-tree` 确证**非本轮引入**：schema 目录 1315 → 1335、**+20/−0**），量级说明该文件的「方法表」已与生成集脱节，**本轮未动手**，建议单独一轮处理。
+
 ## round-156（当前快照表改回「真快照」+ codex 版本口径复验，文档轮 · 未发版）
 
 **性质**：**文档轮 · 零源码改动 · 零闸门改动 · 未 bump 版本 / 未 tag / 未发版**（新增 1 个探针脚本，无调用点）。

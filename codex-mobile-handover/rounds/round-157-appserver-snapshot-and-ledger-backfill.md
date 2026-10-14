@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | ① | app-server schema 快照 | 由 **0.160.1 升级到 0.162.1**（json 440→**447**、ts 875→**888**）；镜像替换后 `--check` **drift = 0**；新增**可复跑的重生成 / 漂移检测脚本** |
 | ② | `MessagePhase` 二态→三态（`partial_answer`） | **零运行时影响** —— 该字段在全仓**无消费点**，且无 `switch` 穷举 ⇒ **不需要任何适配** |
-| ③ | `sections/commit-history.md` 断档 12 轮 | 已按体例回填 **round-144 ~ round-156**（929→**1053** 行）；独立复核 27 项断言全绿 |
+| ③ | `sections/commit-history.md` 断档 12 轮 | 已按体例回填 **round-144 ~ round-156**（929→**1053** 行）；收尾再追加**本轮自身条目** ⇒ **1082** 行；独立复核 27 项断言全绿 |
 | ④ | 探针 `probe-codex-installations.cjs` 误报 | 已修（Node ≥20.12 不能直接 spawn `.cmd`）；修后正确报出 `codex-cli 0.162.1` |
 
 ---
@@ -70,7 +70,7 @@ round-156 §八 记下「`MessagePhase` 枚举新增 `partial_answer`（二态�
 
 **修复（`sections/commit-history.md`）：**
 
-- 按体例（**新段倒序**插在 `## round-143（…）` 之前）新增 **12 个段落**：round-156 → round-148 逐轮段 + 一段「round-144 ~ round-147」说明 + 一段「round-142 / round-143 补记」。**929 → 1053 行**。
+- 按体例（**新段倒序**插在 `## round-143（…）` 之前）新增 **12 个段落**：round-156 → round-148 逐轮段 + 一段「round-144 ~ round-147」说明 + 一段「round-142 / round-143 补记」。**929 → 1053 行**；收尾再追加**本轮自身的 `## round-157` 段**（把「台账只到上一轮」这个缺口当轮就地闭合，不再留给下一轮）⇒ **1082 行**。
 - 每段的**提交**清单取自 `git show --stat` / `--name-status` 实测（哈希、文件数、改/新增拆分、`+A/−D`），**不引用轮次文档的自述数字**。
 - **两条与直觉不同的边界**写进开头的「回填说明」：① **round-144 ~ round-147 没有任何提交** —— 那四轮是桌面端 `app.asar` 的**只读盘点**（产出在 `tmp/` 与 `sections/desktop-parity-decision.md`，`tmp/` 不入库）⇒ 台账里没有它们**不是漏记**；② round-142 / round-143 在首次回填提交（`a60c15be`）之后**还有 3 个文档提交**（发布闭环 / tag / Release 回填），此前只以「本段所在提交」一句带过 ⇒ 本轮补齐哈希。
 
@@ -132,4 +132,4 @@ round-156 §八 记下「`MessagePhase` 枚举新增 `partial_answer`（二态�
 6. **探针修复只覆盖 `.cmd` 包装这一条**：路径含空格仍会失败（见 §五），本机无空格故未影响；换到 `%LOCALAPPDATA%` 含空格的机器上，该行会回到「读不到版本」。
 7. **本轮未跑 `Codex app-server` 的真实 RPC**（无运行中的 dev server ⇒ `4173` / `5173` / `4191` 实测均无监听）⇒ 新增的协议方法与通知**没有被真机调用过一次**。类型对齐 ≠ 运行时验证。
 8. **脱敏只覆盖了本轮新写的文本**：本轮台账回填段与主文档改动已按规范 §5.4 处理（**回填区路径扫描 0 命中** —— 其中「round-135 当年 pnpm 全局路径」这条证据我改成了语义描述而非路径骨架，一字信息未丢）。但 **`rounds/round-135-*.md` 与 `rounds/round-156-*.md` 里仍留有该路径的字面值**：前者是**原始取证记录**（当轮留的证据，本轮不回改历史轮次），后者是本轮之前写的。⇒ 记为一个**已知的脱敏缺口**，若将来做一次全仓路径清理，这两处要一并处理。
-9. **顺手量到一个更大的既有问题（本轮未修）：`documentation/APP_SERVER_DOCUMENTATION.md` 有 227 条失效相对链接**（该文件共 618 条相对链接）。**已确证不是本轮引入**：本轮对 schema 目录是**纯新增**（对比 `git ls-tree -r HEAD` ⇒ **1315 → 1335，新增 20 / 删除 0**）⇒ 失效数只可能不变或减少。三类成因：① 指向 `typescript/<X>.ts` 但该类型实际住在 `typescript/v2/` 下（如 `CodexErrorInfo`、`RateLimitSnapshot`、`MessagePhase` 的兄弟类型）；② 指向 `json/v1/*` 的页面，而 v1 现在只剩 `InitializeParams/Response` 两个文件；③ 指向更早世代的旧事件类型（`EventMsg.json`、`AgentMessageEvent.ts` …），生成集里已完全没有。该文件开头本就写着「method tables below are **historical reference material and may lag behind** the generated schemas」⇒ 属**已知的历史快照残留**，但 227 这个量级说明「表格部分」已经与生成集脱节。**本轮未动手**（修它等于重写这些表格，且要先决定「表格是否还有保留价值」），建议单独开一轮处理。
+9. **顺手量到一个更大的既有问题（本轮未修）：`documentation/APP_SERVER_DOCUMENTATION.md` 有 227 条失效相对链接**（该文件共 618 条相对链接；**均按去重口径**，未去重为 793 次引用 / 275 次失效）。**已确证不是本轮引入**：本轮对 schema 目录是**纯新增**（对比 `git ls-tree -r HEAD` ⇒ **1315 → 1335，新增 20 / 删除 0**）⇒ 失效数只可能不变或减少。三类成因：① 指向 `typescript/<X>.ts` 但该类型实际住在 `typescript/v2/` 下（如 `CodexErrorInfo`、`RateLimitSnapshot`、`MessagePhase` 的兄弟类型）；② 指向 `json/v1/*` 的页面，而 v1 现在只剩 `InitializeParams/Response` 两个文件；③ 指向更早世代的旧事件类型（`EventMsg.json`、`AgentMessageEvent.ts` …），生成集里已完全没有。该文件开头本就写着「method tables below are **historical reference material and may lag behind** the generated schemas」⇒ 属**已知的历史快照残留**，但 227 这个量级说明「表格部分」已经与生成集脱节。**本轮未动手**（修它等于重写这些表格，且要先决定「表格是否还有保留价值」），建议单独开一轮处理。
