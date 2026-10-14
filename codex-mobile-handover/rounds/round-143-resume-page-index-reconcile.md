@@ -231,7 +231,7 @@ ESBUILD_BINARY_PATH="$ESBUILD_BINARY_PATH" "$NODE" tmp/r143-refute.cjs
 
 ## 十、落款说明
 
-- **已 bump 版本（2026-10-14 发布）**：`package.json` `0.1.131` → **`0.1.132`**（提交 `41737a45`）；**annotated tag `v0.1.132`**（tag 对象 `a8b27526…`）指向哈希回填提交 **`a60c15be`**；GitHub Release 已建并标 **Latest**（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.132 ）；**npm 上架待维护者执行 `pnpm publish`**。
+- **已 bump 版本（2026-10-14 发布）**：`package.json` `0.1.131` → **`0.1.132`**（提交 `41737a45`）；**annotated tag `v0.1.132`**（tag 对象 `a8b27526…`）指向哈希回填提交 **`a60c15be`**；GitHub Release 已建并标 **Latest**（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.132 ）；**npm 已上架**（`pnpm publish` 成功，registry 记录时刻 `2026-10-14T06:39:37.911Z` ＝北京时间 14:39:37，`dist-tags.latest` 由 `0.1.131` 切至 **`0.1.132`**；tarball **54 文件**、`shasum` `a6fd1bdb…`、`unpackedSize` 5,155,655 B，且**与本地构建逐字节一致**）。
 - **本轮与 round-142 是同一条用户症状的两条通路**（本地存档 / 服务端 rollout 页），两条都已修、都已验证。
 - 修复只动**读侧**（取页时对账），**没有**改写入行为，也没有改任何客户端状态机 ⇒ 别的客户端读同一份数据行为不变。
 - **生效条件**：重新部署（`vite build` **+** `tsup`，改 `src/server/**` 必须跑 `tsup`）。

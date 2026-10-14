@@ -431,6 +431,15 @@
 **发布动作（2026-10-14 已完成）**：`chore(release): v0.1.132` = **`41737a45`**（`package.json` `0.1.131` → `0.1.132`，1 文件）；**annotated tag `v0.1.132`** 指向哈希回填提交 **`a60c15be`**（tag 对象 **`a8b27526ec976ba9bf6be586d56d742eb2d39327`**，本地与远端 `git ls-remote` 核验**逐位一致**），因此 tag 内含完整的 round-142 + round-143 记录；`main` 已推送（`1a903dca..a60c15be`，远端 = `a60c15be`）；GitHub Release 已创建并标 **Latest**：https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.132 （正文 = `tmp/v0.1.132-notes.md`，英文；按惯例**未含**未闭环的安全问题）。
 
 **npm 上架由维护者执行 `pnpm publish`**（`prepublishOnly = pnpm run build` 会重建 `dist/` + `dist-cli/`；⚠️ 本项目**两套凭据独立**，`npm publish` 因 `~/.npmrc` token 失效会返 **404（「无权」的伪装）**，须用 `pnpm publish`）。**线上 `codex.arderpanada.top` 仍为 0.1.131 构建 ⇒ 本修复要等重新部署才生效**；部署后建议拿那条线程 `01a13083-…` 复核一次「回退 → 刷新 → 不再回来」。
+**发布闭环（2026-10-14 同日完成）**：用户执行 **`pnpm publish`** ⇒ 上架成功。registry 记录发布时刻 **`2026-10-14T06:39:37.911Z`**（＝北京时间 **14:39:37**；packument `modified` = `2026-10-14T06:39:38.074Z`），`dist-tags.latest` 由 `0.1.131` 切换为 **`0.1.132`**；`GET /codex-mobile-re/0.1.132` → **200**、`HEAD …/-/codex-mobile-re-0.1.132.tgz` → **200**。
+
+- **tarball**：**54 个文件**、`shasum` = **`a6fd1bdb797cf441789f5e024b5cb32a5884c26b`**、`integrity` = `sha512-Pyx9Myu9Pgn3WdSIeggzCiKotYUoqwJRRsbVlNMSF8BP9SGKr/FyiWr7dPsXpzCxOwYLD7lMa+IjUIw9Gz5Qcw==`、`unpackedSize` = **5,155,655 B**。
+- **产物一致性核验（沿用 round-140/141 口径）**：解开 tarball 与本地构建目录**逐个比对** ⇒ **`dist-cli/index.js` 与前端入口 `index-ShwNdMQK.js` 均逐字节一致**（`dist-cli` md5 `2d2200ae344b38820646fe2cd2d0dcfd` / 713,833 B；前端入口 586,350 B）。本轮标记在包内可见：`dropTurnsMissingFromIndex` **×2**、`readAuthoritativeTurnIds` **×2**、`withResumePageTurns` **×2**、`"declined", "interrupted"` **×1**（`dist-cli` 不 minify ⇒ 符号名可判）。
+- **一处易误判**：round-141 的标记 `already gone on the server` 在 `dist-cli` 里为 **0**，实为**×1 落在前端产物**（`useDesktopState.ts` 的回退日志串、被 minify 后仍是字面量）—— **不在 `dist-cli` ≠ 代码丢了**，谱系完整。round-142 只加函数名（`dropPersistedReasoningForRemovedTurns`，minify 后被改写）**无字面量可 grep**，其存在性由「与本地构建逐字节一致」这一更强证据背书。
+- **`package.json` 差异复核**：与 round-129 的记录**完全一致** —— 只差两个键：`packageManager`（pnpm 打包剥掉）与 `scripts.prepublishOnly`（发布期专用，不进包）；其余 10 个 script 逐字相同。
+- **传播观察（本轮，与 round-140/141 都不同）**：14:39:17 首查时 `versions` 尚无 `0.1.132`、`time.modified` 仍是 0.1.131 的 `2026-10-13` —— 但此时**用户其实还没发成**（registry 记录的 06:39:37.911Z 晚于该次查询 20 秒）；再过约 20 秒（14:39:54）`versions` + `dist-tags` + `time` **同时可见**。⇒ 教训：**「查不到」不必然是传播滞后**，须先对齐真实发布时刻再判。
+- **尚未生效**：线上 `codex.arderpanada.top` 仍是 **0.1.131** 构建 ⇒ 本轮的修复**要等部署新构建才生效**（改动含 `src/server/**` ⇒ 部署必须带 `vite build` **+** `tsup`）；部署后建议拿那条线程 `01a13083-…` 复核一次「点回退 → 刷新 → 不再回来」。
+
 
 **未发布**：本段随 `0.1.132` 发布；**线上生效需重新部署**（改动含 `src/server/**` ⇒ 必须 `vite build` **+** `tsup`）。
 
