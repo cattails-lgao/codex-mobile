@@ -400,6 +400,52 @@
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
+## round-143（thread/resume 有界页与权威索引对账，剔除已回退的残留轮次，已 bump 0.1.132）
+
+**问题**：线上 `codex.arderpanada.top` 线程 `01a13083-68df-7650-b4a5-5e5c8f436d06` 回退成功、消息当场从列表消失，**刷新后同一轮又回来了**；用户补充「**清空了浏览器存储，刷新后也还在**」⇒ 残留**不在浏览器侧**，在服务端响应本身。
+
+**根因（两条读路径数据源不同，线上实证）**：`thread/revert` **只清 app-server 状态索引**，被回退的轮次**仍留在 rollout 里**。于是两条读路径对同一线程给出不同的最新一轮 —— `thread/resume` 的 `initialTurnsPage` 按 **rollout 字节偏移**取页（游标 `{"rolloutOrdinal":9908,…}`）；`thread/turns/list` 与桥层 `thread/read` 的有界页走 **状态索引**。回退当场前端已经 resume 过该线程 ⇒ 走 `thread/read`（看不见那条）；**刷新后第一次打开**走 `thread/resume`（看得见那条）。
+
+**线上取证（只读，三次独立读数）**：① `thread/turns/list` = **54 轮**、`nextCursor=null`，**没有** `01a13435` / `01a138aa`；`thread/read` 最新止于 `01a13856`；② **未经桥改写**的 `thread/resume {excludeTurns:true, initialTurnsPage:{desc,notLoaded}}` 最新一轮**就是 `01a138aa`（status: interrupted）**；③ 跨线程普查 `thread/list` 前 8 条 ⇒ **7 条两条读路径逐位一致**，**唯一不一致者正是被回退过的这条**，多出项即 `01a138aa` ⇒ 证明这是**回退残留**而非 interrupted 轮的普遍行为。另：该线程在**思考存档镜像**里 **0 行**（`GET /codex-api/thread-reasoning`，只有另一条线程 `01a009af-…` 20 行）⇒ 排除 round-142 所修的那条通路。
+
+**修复（产品源码唯一文件 `src/server/bridge/threadResumeTurnPage.ts`，+104/−17）**：不再假设「页与索引同源」，改为**对账** —— ①只剔除「权威索引不认识 **且** 已终态（`completed`/`failed`/`declined`/`interrupted`/`error`）」的轮次；②剔完必须仍是索引的**连续后缀**（锚点校验 `indexTurnIds[indexTurnIds.length - kept.length] === oldestKeptTurnId`），否则**整页照旧**返回 —— **绝不为了剔一条残留回放全量水合**；③索引读不到时三件事全部退回改动前行为。新增 `dropTurnsMissingFromIndex` / `readAuthoritativeTurnIds` / `withResumePageTurns` 三个辅助。
+
+**提交**：
+
+- `71fb5011` `fix(rollback): 回退成功时清理被移除轮次的思考存档，孤儿存档不再回灌（round-142）` —— **3 文件（3 改）**，`+155/−0`
+- `b23aff38` `fix(bridge): thread/resume 有界页与权威状态索引对账，剔除已回退的残留轮次（round-143）` —— **2 文件（2 改）**，`+244/−23`（产品 `+107/−17` ／ 测试 `+137/−6`）
+- `8bf55a8e` `docs(handover): round-142 + round-143 —— 回退残留双通路定位与修复（轮次文档 + 总入口）` —— **3 文件（1 改 + 2 新增）**，`+297/−4`
+- `41737a45` `chore(release): v0.1.132` —— 1 文件（`package.json` `0.1.131` → `0.1.132`）
+- 本段所在提交（`docs(commit-history): round-142 + round-143 回填提交哈希`）：记录上述哈希（提交无法包含自身哈希，故哈希记录单独成一次提交）。**annotated tag `v0.1.132` 指向本提交**（因此 tag 内含完整的 round-142 + round-143 记录，含哈希本身）。
+
+**本地验证（当场重跑，不引用自述）**：`vue-tsc --noEmit` **EXIT=0**；定向 `threadResumeTurnPage.test.ts` **39/39**（含**线上真实形状**用例：页比索引多一条 `interrupted`，`STALE_TURN_ID = '01a138aa-1ca2-7381-a4fa-347d8ccfd6d5'`）；全量 **830/830（81 文件）**（基线 820/81，**+10**）；静态契约 `check-ui-contract.cjs` **53/53**。
+
+**端到端（本仓真实桥层代码 + 线上真数据）**：`tmp/r143-bundle-run.cjs` 用 esbuild 打包 `threadResumeTurnPage.ts`，打线上 `01a13083-…` 的**真实 rollout 页** ⇒ 修复**开**：`turns returned: 9`、`stale turn present: false`、`threadTurnStartIndex: 45`（＝索引 54 − 9）；修复**关**（`if (false)`）：`10`、`stale turn present: true`（`01a138aa` 回来）、`44`。
+
+**反跑**：`tmp/r143-refute.cjs` 断言锚点恰好命中 1 次 ⇒ 改 `if (false)` ⇒ 重建 bundle ⇒ 子进程跑探针 ⇒ **按 md5 还原**（`eeaaa7b04846bf62144735a43f01d77c`），输出 `refute verdict: PASS (fix is load-bearing)`。
+
+**构建与浏览器闸门**：`vite build` EXIT=0、`tsup` EXIT=0；`dist-cli/index.js` grep `dropTurnsMissingFromIndex` ×2 / `readAuthoritativeTurnIds` ×2 / `withResumePageTurns` ×2 / `"declined", "interrupted"` ×1（`dist-cli` 不 minify ⇒ 可用符号名判据；前端 minify ⇒ 须用字面量，见 round-141 教训）；`check-message-media-surfaces` **44/44**（`PROFILE_BASE_URL=http://127.0.0.1:4190`，用含本轮改动的 `dist-cli` 起桥；`page.route` 拦 `thread/read` + `thread/resume` 回**合成** thread、其余 RPC 透传）。
+
+**诚实边界**：① 本机 codex **0.161.0** vs 线上 **0.162.0**，隔离 home `D:/codex-home-fresh` 只有空 rollout（仅 `session_meta`、无 turn）⇒ **做不出「本机自己点一次回退」的端到端**；上面那条端到端是「**本机跑真实代码 + 拉线上真数据**」。② 浏览器闸门走**合成线程** ⇒ 只证明**管线未被改坏**，**不代表线上残留被剔除**（后者由探针那条腿证明）。③ **未 bump `SHARED_BRIDGE_VERSION`**（未改共享对象形态、未给 `AppServerProcess` 加方法，只改 `createCodexBridgeMiddleware` 的响应管道 ⇒ 按判据不必 bump）。
+
+**未发布**：本段随 `0.1.132` 发布；**线上生效需重新部署**（改动含 `src/server/**` ⇒ 必须 `vite build` **+** `tsup`）。
+
+## round-142（回退成功时清理被移除轮次的思考存档；孤儿存档不再回灌，随 0.1.132 发布）
+
+**问题**：回退后刷新，被回退轮次的**思考（reasoning）**仍回灌到列表。
+
+**根因**：思考存档是**双通路** —— localStorage `codex-web-local.thread-reasoning.v1` ＋ 桥层镜像（`PUT /codex-api/thread-reasoning` ⇒ app-server 全局状态文件 `thread-reasoning` 键）。`mergePersistedReasoning` 对「有 `turnId`、**无** `turnIndex`」的**孤儿存档**不设已知轮次守卫 ⇒ 其轮次已被回退/清理后仍被追加回界面。
+
+**修复**：`src/composables/useDesktopStateUtils.ts` 的 `mergePersistedReasoning` 增加 `knownTurnIds` 守卫（无 `turnIndex` 且带 `turnId` 的孤儿存档不再追加）；`src/composables/useDesktopState.ts` 新增 `dropPersistedReasoningForRemovedTurns()`，与**回退成功路径成对清理**。
+
+**验证**：`src/composables/useDesktopState.test.ts` **+99**（merge 用例 ＋ `rollbackSelectedThread clears the thinking archive of removed turns`）。
+
+**与 round-143 的关系**：round-142 修**客户端存档通路**，round-143 修**桥层读路径对账** —— 同一症状的两条独立成因。用户「清空浏览器存储后残留仍在」这条线索把**主因**判给 round-143（该线程在存档镜像里 **0 行**），round-142 作为同症的另一半一并收口。
+
+**代码提交**：`71fb5011`（**3 文件（3 改）**，`+155/−0`；完整提交表见上方 round-143 段落）。
+
+**未发布**：本段随 `0.1.132` 发布（改动全在客户端侧、未碰 `src/server/**`）。
+
 ## round-141（回退前权威预检 + 失败后强制重同步，已 bump 0.1.131）
 
 **问题**：线上 `codex.arderpanada.top` 点回退只报「不存在」、消息却留在列表。用户反问「列表里有为何回退说没有」。
