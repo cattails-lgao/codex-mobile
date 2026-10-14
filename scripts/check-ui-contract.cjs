@@ -1036,6 +1036,45 @@ check(
   ].join(' / '),
 )
 
+// ---------------- round-149：消息列表时间分隔（跨天 / 距上一条分隔栏 ≥30 分钟）
+// 批 1 搬运项之一（桌面端 `shouldShowMarker`）。两条不变式必须钉住：
+//   1) 基准是「上一条**已展示**的分隔栏」而非「上一轮」—— 否则「每 29 分钟一条」的长对话
+//      一条分隔都出不来（负例钉在 src/utils/timeDividers.test.ts）。
+//   2) 时间是**可选**的：turnStartedAtIso 缺失时静默跳过，绝不因此让整轮不渲染。
+const timeDivSrc149 = fs.readFileSync('src/utils/timeDividers.ts', 'utf8')
+const convSrc149 = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+const dividerComponent149 = fs.readFileSync('src/components/content/TimeDivider.vue', 'utf8')
+const gapConstant149 = /export const TIME_DIVIDER_GAP_MS = 30 \* 60 \* 1000/.test(timeDivSrc149)
+const markerBase149 = /previousMarkerMs/.test(timeDivSrc149)
+  && /if \(shouldShowTimeDivider\(previousMarkerMs, ms\)\) \{\s*\r?\n\s*keys\.add\(turn\.key\)\s*\r?\n\s*previousMarkerMs = ms/.test(timeDivSrc149)
+const sameDayRule149 = /return nextMs - previousMarkerMs >= TIME_DIVIDER_GAP_MS/.test(timeDivSrc149)
+const optionalTime149 = /if \(typeof ms !== 'number' \|\| !Number\.isFinite\(ms\)\) continue/.test(timeDivSrc149)
+// 标签一律手写补零（可断言、跨 locale 一致）；不得依赖 toLocaleDateString。
+const manualPad149 = /function pad2\(value: number\): string \{/.test(timeDivSrc149)
+  && !/\.toLocaleDateString\(/.test(timeDivSrc149)
+const attachSites149 = (convSrc149.match(/attachTimeDividers\(turns\)/g) || []).length
+const wired149 = /import \{ formatTimeDividerLabel, selectTimeDividerTurnKeys \} from '\.\.\/\.\.\/utils\/timeDividers'/.test(convSrc149)
+  && /function attachTimeDividers\(list: ConversationRenderTurn\[\]\)/.test(convSrc149)
+  && attachSites149 === 2 // 两条 return 路径（无 hot 轮 / 正常）都要挂
+const renders149 = /data-message-type="timeDivider"/.test(convSrc149)
+  && /<TimeDivider :label="turn\.timeDividerLabel" \/>/.test(convSrc149)
+const component149 = /defineProps<\{\s*\r?\n\s*label: string/.test(dividerComponent149)
+check(
+  '消息列表按「跨天 / 距上一条分隔栏 ≥30 分钟」插时间分隔（round-149）',
+  gapConstant149 && markerBase149 && sameDayRule149 && optionalTime149 && manualPad149
+    && wired149 && renders149 && component149,
+  [
+    `30 分钟常量=${gapConstant149 ? 'yes' : 'NO'}`,
+    `基准=上一条分隔栏=${markerBase149 ? 'yes' : 'NO'}`,
+    `同日间隔规则=${sameDayRule149 ? 'yes' : 'NO'}`,
+    `缺失时间戳跳过=${optionalTime149 ? 'yes' : 'NO'}`,
+    `手写补零(不用 locale)=${manualPad149 ? 'yes' : 'NO'}`,
+    `接线=${wired149 ? 'yes' : 'NO'}（调用点 ${attachSites149}，须 2）`,
+    `渲染 li=${renders149 ? 'yes' : 'NO'}`,
+    `分隔组件=${component149 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

@@ -156,6 +156,11 @@
 
 ### 批 1 · 低风险小件（彼此独立，可并行）
 
+> **状态（round-149）**：**#1 已完成**（`src/utils/timeDividers.ts` + `TimeDivider.vue` + 25 例单测 + 闸门 `round-149`，见 [round-149](../rounds/round-149-time-dividers-batch1.md)）。
+> **#2 无需搬** —— `showJumpToLatestButton` / `jumpToLatest()` / 按钮模板早就在（本文档写作时漏看）。
+> **#3 有意延后到批 2 之后**（命令注册表是它的地基）。
+> **#4 不改** —— `Ctrl+J` 不在保留加速键表里、页面能 `preventDefault`；终端面板另有可见 tab 按钮兜底；只剩真机按键验证这一项人工动作。
+
 | # | 搬什么 | 落地 | 备注 |
 | --- | --- | --- | --- |
 | 1 | **时间分隔**（跨天 / ≥30 分钟） | `src/utils/timeDividers.ts` + 单测；插进 `renderTurns` 的 `leadingDividers` | **形状已现成**：`turn.leadingDividers` + `ModelSwitchDivider` 插槽（`:44-53`），照抄即可 |

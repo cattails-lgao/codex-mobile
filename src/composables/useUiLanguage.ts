@@ -192,6 +192,8 @@ const zhCN: Record<string, string> = {
   'Copy response': '复制回复',
   'Jump to latest': '跳转到最新',
   'Jump to latest output': '跳转到最新输出',
+  'Today': '今天',
+  'Yesterday': '昨天',
   'Close image preview': '关闭图片预览',
   'Expanded message image': '放大消息图片',
   'Changed files': '已更改文件',

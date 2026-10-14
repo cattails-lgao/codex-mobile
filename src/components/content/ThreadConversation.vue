@@ -43,6 +43,14 @@
       </li>
       <template v-for="turn in renderTurns" :key="turn.key">
         <li
+          v-if="turn.timeDividerLabel"
+          class="conversation-item conversation-item-time-divider"
+          data-role="system"
+          data-message-type="timeDivider"
+        >
+          <TimeDivider :label="turn.timeDividerLabel" />
+        </li>
+        <li
           v-for="divider in turn.leadingDividers ?? []"
           :key="`${turn.key}-leading-${(divider.to ?? '')}-${(divider.from ?? '')}`"
           class="conversation-item conversation-item-model-switch"
@@ -595,6 +603,7 @@ import { useFeedbackDiagnostics } from '../../composables/useFeedbackDiagnostics
 import { useMobile } from '../../composables/useMobile'
 import { useUiLanguage } from '../../composables/useUiLanguage'
 import { readPlanData } from '../../utils/plan'
+import { formatTimeDividerLabel, selectTimeDividerTurnKeys } from '../../utils/timeDividers'
 import { headingClass, headingTag } from '../../utils/conversationPaths'
 import {
   buildFileChangeCopyText as buildFileChangeCopyTextCore,
@@ -625,6 +634,7 @@ import FileChangeSummaryBlock from './FileChangeSummaryBlock.vue'
 import FileLinkContextMenu from './FileLinkContextMenu.vue'
 import LiveOverlayItem from './LiveOverlayItem.vue'
 import ModelSwitchDivider from './ModelSwitchDivider.vue'
+import TimeDivider from './TimeDivider.vue'
 import MessageInlineContent from './MessageInlineContent.vue'
 import MessageToolbar from './MessageToolbar.vue'
 import ProcessFold from './ProcessFold.vue'
@@ -1038,6 +1048,8 @@ type ConversationRenderTurn = {
   dividers?: { from?: string; to?: string }[] | undefined
   /** round-74：本轮之前渲染的模型切换分割栏（切换发生在无消息处 / 锚点未命中）。 */
   leadingDividers?: { from?: string; to?: string }[] | undefined
+  /** round-149（批 1）：本轮之前渲染的时间分隔（跨天 / 距上一条分隔栏 ≥30 分钟）。 */
+  timeDividerLabel?: string | undefined
 }
 
 // Warm 继续使用既有扁平展开，Hot 改为真正的 request / process / final turn 容器。
@@ -1046,6 +1058,32 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
   const groups = turnGroups.value
   const turns: ConversationRenderTurn[] = []
   const expanded = expandedWarmTurns.value
+
+  // round-149（批 1）：时间分隔——跨天 / 距上一条分隔栏 ≥30 分钟，在轮次之前插一条。
+  // 基准取「上一条已展示分隔栏」而非「上一轮」（差异见 utils/timeDividers.ts 顶部注释）。
+  function attachTimeDividers(list: ConversationRenderTurn[]): ConversationRenderTurn[] {
+    const readStartedAt = (turn: ConversationRenderTurn): number | null => {
+      const iso = turn.request?.message.turnStartedAtIso
+        ?? turn.finalItem?.message.turnStartedAtIso
+        ?? (typeof turn.warm?.turn === 'number'
+          ? groups[turn.warm.turn]?.userItem.turnStartedAtIso
+          : undefined)
+      if (!iso) return null
+      const ms = Date.parse(iso)
+      return Number.isFinite(ms) ? ms : null
+    }
+    const markerKeys = selectTimeDividerTurnKeys(
+      list.map((turn) => ({ key: turn.key, timestampMs: readStartedAt(turn) })),
+    )
+    if (markerKeys.size === 0) return list
+    for (const turn of list) {
+      if (!markerKeys.has(turn.key)) continue
+      const ms = readStartedAt(turn)
+      if (ms === null) continue
+      turn.timeDividerLabel = formatTimeDividerLabel(ms, { translate: t })
+    }
+    return list
+  }
 
   // round-74：模型切换分割栏按「切换发生处那条真实消息 id」锚定到包含它的轮次之后渲染。
   // 一个锚点可携带多条分割栏（多次切换落在同一位置）；锚点消息是本轮任意一条真实消息
@@ -1105,7 +1143,7 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
 
   const hotMessages = messagesForTurnsFrom(messages, groups, warmEndTurn.value)
   const firstHotMessage = hotMessages[0]
-  if (!firstHotMessage) return turns
+  if (!firstHotMessage) return attachTimeDividers(turns)
   // round-74：用「已剔除 plan/modelSwitch」的 filtered 消息切片，避免尾部 modelSwitch 分割栏
   // （role=system）混入 hot 区、在 buildTurnRenderGroups 里被并入上一轮次组（Bug B）。
   const hotStartIndex = messages.findIndex((message) => message.id === firstHotMessage.id)
@@ -1166,7 +1204,7 @@ const renderTurns = computed<ConversationRenderTurn[]>(() => {
       turns.push({ key: 'leading-divider', warmItems: [], processItems: [], fileChangeAnchorIds: [], leadingDividers })
     }
   }
-  return turns
+  return attachTimeDividers(turns)
 })
 
 const turnDurations = computed<Record<string, number>>(() => sumTurnDurations(props.messages))
