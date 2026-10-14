@@ -1,6 +1,6 @@
 # 批 3 前置评估：距底 API → 窗口化
 
-> 状态：**评估完成（round-151）；批 3a 已落地（round-153）**。所有行号对 `src/components/content/ThreadConversation.vue`
+> 状态：**评估完成（round-151）；批 3a 已落地（round-153）；批 3b 已落地（round-163）**。3c 未开工。所有行号对 `src/components/content/ThreadConversation.vue`
 > 与 round-148 已落地的 `src/utils/turnVirtualizer.ts`。评估材料来自逐行读码，不含推测。
 
 ---
@@ -108,7 +108,7 @@
 | 步骤 | 内容 | 风险 | 可测性 |
 |---|---|---|---|
 | **3a** ✅ **已落地（round-153）** | 距底读写辅助（`getScrollDistanceFromBottomPx` / `getScrollTopForDistanceFromBottomPx` / `readScrollMetricsPx`），把 `isAtBottom` / `scrollToBottom`（`applyConversationScrollState` 经前者）改走它；并顺带移除 `scrollIntoView`（容器落点等价，甩掉「滚动祖先容器」的副作用） | **低**（行为等价：贴底判据仍是 ≤16px） | 已验：32 例单测（含对照扫描）+ 闸门 58/58（五路反跑）；浏览器实测待做，见 §八 |
-| **3b** | **折叠态 warm 轮窗口化**（hot 轮与展开轮保持全量） | 中 | 需浏览器实测：跳转、回退、上翻加载 |
+| **3b** ✅ **已落地（round-163）** | **折叠态 warm 轮窗口化**（hot 轮与展开轮保持全量） | 中 | 已实测：跳转落点 12px 精确、滑动 scrollHeight 逐位守恒、展开/折叠/贴底全过（见 §九） |
 | **3c** | hot 轮窗口化 | **高** | 需实测高度分布，且必解 1/2 必须先落地 |
 
 **3a 不能单独上线**：它是行为等价重构，单独看零收益，价值全在于给 3b 铺路。
@@ -145,3 +145,20 @@
 - **待人工浏览器验证**（3a 的定位就是「无浏览器可验证的一步」，这是它唯一外溢的行为改动）：
   真机「滚到底 / 上翻加载 / 图片晚到补锁底」三种场景下列表落点与 round-152 之前一致。
 - 详见 [round-153](../rounds/round-153-scroll-distance-batch3a.md)。
+
+## 九、批 3b 已落地（round-163）
+
+- **§七 判决执行**：真机实测折叠卡高度是**精确常量**——68.5px（带 assistant 预览行）/ 42px（纯 head），
+  与文本长度无关（truncate 成立）；时间分隔栏 34、冷区按钮 54、gap 恒 12 ⇒ 偏差 0，「低风险」成立。
+  注意是**分数** 68.5：整值 69 会让窗口滑动时每卡累计 +0.5px 漂移（实测 14 卡 7px）。
+- **实现**：`src/utils/warmTurnWindow.ts`（纯函数，21 例单测）+ `ThreadConversation.vue` 接线（+162/−1）。
+  必解 1 已由 3a 消解；必解 2 由「**展开块强制入窗**」消解（jumpToQuestion 必展开目标轮 ⇒ 锚点必在 DOM，
+  getElementById 语义原样保留，无需布局算距）；DOM 不变式守住了：占位走 `<li>`（含 shrink-0 ——
+  空 li 在 flex-col 滚动容器里会被 flex 压成 0 高，实测踩到），窗顶 margin 挂块首 li。
+- **真机验证**（隔离 home + 合成 60 轮 + 真实 Edge headless）：贴底 20 卡 → 渲染 1 张（margin 1660.5）、
+  dist=0；滑动扫描 22 档 scrollHeight 恒 9210（与全量基线**逐位相等**）；JumpBar 跳 cold 区第 0 轮落点
+  12px 精确；展开/折叠往返视口不跳；「跳到最新」dist=0；pageerror 0。
+- **§二 附属坑的处置**：图片补锁底（bindPendingImageHandlers）本轮**未动**——hot 区与展开块恒在 DOM，
+  折叠卡内无图片，现状覆盖面不变；展开折叠卡重算（expandedWarmTurns 变更 → watch → rAF 重算窗口）已接线；
+  高度缓存**无需建**（常量精确 + 展开块恒在 DOM，没有会失真的缓存）。
+- 详见 [round-163](../rounds/round-163-warm-collapsed-windowing.md)。
