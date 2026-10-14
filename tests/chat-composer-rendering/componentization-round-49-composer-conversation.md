@@ -21,7 +21,7 @@
 
 ## Prerequisites
 
-- dev server 运行在 `127.0.0.1:4173`；沙箱内 `CODEX_HOME` 指向项目内 `.codex/`，PATH 含 fnm node 与 `AppData\Local\pnpm\bin`
+- dev server 运行在 `127.0.0.1:4173`；沙箱内 `CODEX_HOME` 指向项目内 `.codex/`，PATH 含 fnm node 与 `<pnpm 全局 bin 目录>`
 - 历史线程含富文本消息（段落/标题/引用/无序/任务/有序列表/表格/内联代码/文件链接）与一条含计划面板的消息
 
 ## 验证步骤

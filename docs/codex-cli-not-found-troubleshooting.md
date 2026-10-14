@@ -25,11 +25,11 @@ pnpm 11 默认阻止依赖的 build scripts（`esbuild`、`@firebase/util`、`pr
 
 ### 3. TRAE 沙箱禁止写 `~/.codex`（仅 TRAE 沙箱环境）
 
-codex CLI 找到后，其 app-server 初始化 sqlite 状态时需要写 `C:\Users\<用户名>\.codex`（`tmp/arg0/*`、`state_5.sqlite-shm` 等），被 TRAE 沙箱拦截：
+codex CLI 找到后，其 app-server 初始化 sqlite 状态时需要写 `<用户主目录>\.codex`（`tmp/arg0/*`、`state_5.sqlite-shm` 等），被 TRAE 沙箱拦截：
 
 ```
 TRAE Sandbox Error: hit restricted
-Not allow operate files: C:\Users\<用户名>\.codex\tmp\arg0\codex-arg0vwyxNE\.lock, ...
+Not allow operate files: <用户主目录>\.codex\tmp\arg0\codex-arg0vwyxNE\.lock, ...
 ```
 
 app-server 启动即退出，RPC 返回 502 `codex app-server exited unexpectedly`。

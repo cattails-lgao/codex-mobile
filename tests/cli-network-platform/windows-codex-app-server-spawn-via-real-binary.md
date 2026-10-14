@@ -15,7 +15,7 @@ same way the JS launcher does) and spawns it directly.
 1. Windows host with Node managed by fnm/nvm and `codex` installed globally
    via `pnpm add -g @openai/codex` or `npm install -g @openai/codex`.
 2. Confirm `where codex` reports a `.cmd`/`.bat` shim (e.g.
-   `C:\Users\<user>\AppData\Local\pnpm\bin\codex.CMD`).
+   `<pnpm 全局 bin 目录>\codex.CMD`).
 3. Confirm the real binary exists under the package `vendor`
    (`node_modules\@openai\codex\vendor\<triple>\bin\codex.exe` or the platform
    optional dependency).

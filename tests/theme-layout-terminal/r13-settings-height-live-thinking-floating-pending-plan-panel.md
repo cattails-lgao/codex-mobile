@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- dev server 运行在 `127.0.0.1:4173`（TRAE 沙箱内需 `CODEX_HOME` 指向项目内 `.codex/`，PATH 需含 fnm node 与 `AppData\Local\pnpm\bin`）
+- dev server 运行在 `127.0.0.1:4173`（TRAE 沙箱内需 `CODEX_HOME` 指向项目内 `.codex/`，PATH 需含 fnm node 与 `<pnpm 全局 bin 目录>`）
 - 至少一个带 plan 的历史线程（如「重命名小工具」，plan 为 markdown 编号列表格式）
 - Playwright（本机 Edge channel）用于布局断言
 
