@@ -98,10 +98,10 @@ codex-web-local/
 │   ├── main.ts                       # Vue app bootstrap
 │   └── style.css                     # Global Tailwind styles
 ├── documentation/                    # Codex app-server protocol docs
-│   ├── APP_SERVER_DOCUMENTATION.md   # Full protocol reference (66 methods, 7 server requests, 34 notifications)
+│   ├── APP_SERVER_DOCUMENTATION.md   # Protocol reference — generated surface (170 methods, 11 server requests, 84 notifications)
 │   └── app-server-schemas/           # Materialized JSON + TypeScript schemas
 │       ├── json/                     # JSON Schema files (v1, v2, root)
-│       └── typescript/               # TypeScript type definitions (v1, v2, root)
+│       └── typescript/               # TypeScript type definitions (root, v2, serde_json)
 ├── index.html                        # SPA entry point
 ├── vite.config.ts                    # Vite config (Vue, Tailwind, bridge middleware)
 ├── tsup.config.ts                    # CLI build config
@@ -139,18 +139,18 @@ Based on the app-server protocol (`documentation/APP_SERVER_DOCUMENTATION.md`), 
 | Feature | Relevant RPC Methods |
 |---|---|
 | Thread forking | `thread/fork` |
-| Thread rollback | `thread/rollback` |
+| ~~Thread rollback~~ | `thread/rollback` no longer exists upstream (removed in codex 0.156) — this repo uses `thread/revert` |
 | Thread naming | `thread/name/set` |
 | Thread unarchiving | `thread/unarchive` |
 | Context compaction | `thread/compact/start` |
 | Code review | `review/start` |
-| Skills management | `skills/list`, `skills/remote/read`, `skills/remote/write`, `skills/config/write` |
+| Skills management | `skills/list`, `skills/config/write` (`skills/remote/read` / `skills/remote/write` no longer exist) |
 | Apps management | `app/list` |
 | MCP server status | `mcpServerStatus/list`, `config/mcpServer/reload` |
 | Account management | `account/login/start`, `account/logout`, `account/read`, `account/rateLimits/read` |
 | Configuration UI | `config/read`, `config/value/write`, `config/batchWrite`, `configRequirements/read` |
 | Command execution | `command/exec` |
-| Git diff view | `gitDiffToRemote` |
+| ~~Git diff view~~ | `gitDiffToRemote` no longer exists in the protocol |
 | Fuzzy file search | `fuzzyFileSearch`, session-based search |
 | Feedback upload | `feedback/upload` |
 | Collaboration modes | `collaborationMode/list` |
