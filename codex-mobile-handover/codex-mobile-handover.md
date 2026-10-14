@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（**领先 origin/main 1 笔待推**，推送成功后回填改「已同步」——round-162 的教训：同步声明不许在推送前落笔）· 当前进度 **round-163** |
+| Git 分支 | `main`（已同步 `origin/main`，落后 0）· 当前进度 **round-163** |
 | Dev 端口 | 4173 |
 | Dev 状态 | **未运行**（2026-10-15 00:01 复测：全无监听（round-163 的隔离 home dev server 与 headless Edge 已全部结束）。**round-163（批 3b 窗口化）产品侧三项全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1019/1019 / 88 文件**（+21 例窗口化单测） · `vite build` 退 0）⇒ 收掉 round-160 §六.①「未跑产品侧构建与单测」（round-158/159/160/161 连续四轮推迟） |
 | App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-161 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**。**round-162 未跑真机**（只改 `--selftest` 夹具字面量并跑产品侧验证） |
