@@ -1192,6 +1192,11 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
   if (reasoningMessages.length === 0) return persisted
   const result = [...persisted]
   const unattached: UiMessage[] = []
+  // round-142：当前消息流里已知的 turnId 集合。用于判断「无 turnIndex 的存档」是否
+  // 属于一个已经不存在于列表里的轮次（回退/删除后的残留），见下方 unattached 分支。
+  const knownTurnIds = new Set(
+    persisted.map((message) => message.turnId?.trim() ?? '').filter((id) => id.length > 0),
+  )
   // round-27：按轮收集「无锚点思考」及其顺序（仅用于锚点缺失时的兜底分摊，
   // 见下方 turnIndex 分支）。
   // round-29：锚点「存在但匹配失败」的思考也一并收集——app-server 从会话
@@ -1220,6 +1225,13 @@ export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessage
     }
     const turnIndex = reasoningMessage.turnIndex
     if (typeof turnIndex !== 'number' || !Number.isFinite(turnIndex)) {
+      // round-142：无 turnIndex 的旧存档仍兜底追加到末尾；但如果它带着 turnId 而该轮
+      // 已不在当前消息流里（例如回退后残留的思考存档），就不要追加——否则刷新后
+      // mergePersistedReasoning 会把「已回退轮次的思考」重新贴到对话最后，表现为
+      // 「回退过的内容刷新后又出现在消息列表」。存档条目本身不删除，只是不渲染；
+      // 轮次经分页重新出现时会照常插回。
+      const orphanTurnId = reasoningMessage.turnId?.trim() ?? ''
+      if (orphanTurnId && !knownTurnIds.has(orphanTurnId)) continue
       unattached.push(reasoningMessage)
       continue
     }

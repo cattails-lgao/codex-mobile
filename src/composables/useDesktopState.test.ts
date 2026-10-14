@@ -3125,6 +3125,22 @@ describe('message stream merge helpers', () => {
     expect(merged.map((message) => message.id)).toEqual(['u1', 'a1', 'rNoTurn'])
   })
 
+  it('does not append orphaned reasoning whose turn id is gone from the stream (round-142)', () => {
+    // round-142：无 turnIndex 的存档此前一律兜底追加到末尾；但带 turnId 而该轮已不在
+    // 消息流里（回退后残留的思考存档）不应再追加，否则刷新后「被回退轮次的思考」会
+    // 重新出现在对话最后。完全没有 turnId 的旧存档仍保持兜底追加（见上一例）。
+    const persisted = [
+      persistedMessage('u2', 'user', 1, { turnId: 'turn-2' }),
+      persistedMessage('a2', 'assistant', 1, { turnId: 'turn-2' }),
+    ]
+    const reasoning = [
+      persistedMessage('rGone', 'system', undefined, { messageType: 'reasoning', turnId: 'turn-1' }),
+      persistedMessage('rLive', 'system', undefined, { messageType: 'reasoning', turnId: 'turn-2' }),
+    ]
+    const merged = mergePersistedReasoning(persisted, reasoning)
+    expect(merged.map((message) => message.id)).toEqual(['u2', 'a2', 'rLive'])
+  })
+
   it('replaces orphaned reasoning when its turn becomes available again (round-39)', () => {
     // 分页加载补齐旧轮后，原本被丢弃的思考（turnIndex 原先不存在）应能按
     // 正常位置插入，而不是永久消失。
@@ -3228,5 +3244,88 @@ describe('thread model hydration vs explicit per-thread selection', () => {
     await state.loadMessages('thread-inherit')
 
     expect(state.readModelIdForThread('thread-inherit')).toBe('server-model')
+  })
+})
+
+describe('rollbackSelectedThread clears the thinking archive of removed turns', () => {
+  it('drops the reverted turn reasoning from the persisted archive (round-142)', async () => {
+    // round-142：在 Thinking 中停止再回退时，成功路径此前只清 live reasoning，
+    // localStorage 里的持久存档会留下已删除轮次的思考块 → 刷新后又被并回消息列表。
+    // 这里断言成功回退后该轮的 thinking 存档确实从持久化里被移除。
+    const threadId = 'thread-rollback-reasoning'
+    installTestWindow({
+      'codex-web-local.thread-reasoning.v1': JSON.stringify({
+        [threadId]: [
+          {
+            id: 'reasoning:local:rollback:1',
+            role: 'system',
+            text: 'thinking for the reverted turn',
+            messageType: 'reasoning',
+            reasoning: { summary: [], content: ['thinking for the reverted turn'] },
+            turnId: 'turn-2',
+            turnIndex: 1,
+          },
+        ],
+      }),
+    })
+    // 本用例位于文件末尾，先前用例可能残留 mockResolvedValueOnce 队列；先 mockReset
+    // 再设桩，保证自包含（vi.clearAllMocks() 不清 once 队列）。
+    gatewayMocks.subscribeCodexNotifications.mockReset().mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockReset().mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockReset().mockResolvedValue({ groups: [], nextCursor: null })
+    // loadMessages 走 `resumeThread ?? getThreadDetail`：不设桩会吃到别的用例残留的
+    // 非空 resume 返回（空 messages），必须显式给 null 才会回落到 getThreadDetail。
+    gatewayMocks.resumeThread.mockReset().mockResolvedValue(null)
+    gatewayMocks.listThreadTurnIdPage.mockReset().mockResolvedValue({ turnIds: [], complete: false })
+    gatewayMocks.getThreadDetail.mockReset().mockResolvedValue({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          text: 'do the thing',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        },
+        {
+          id: 'agent-1',
+          role: 'assistant',
+          text: 'done',
+          messageType: 'agentMessage',
+          turnId: 'turn-2',
+          turnIndex: 1,
+        },
+      ],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: { 'turn-1': 0, 'turn-2': 1 },
+      hasMoreOlder: false,
+    })
+    gatewayMocks.revertThread.mockReset().mockResolvedValue([
+      {
+        id: 'user-1',
+        role: 'user',
+        text: 'do the thing',
+        messageType: 'userMessage',
+        turnId: 'turn-1',
+        turnIndex: 0,
+      },
+    ])
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    await state.loadMessages(threadId)
+    expect(state.messages.value.some((message) => message.messageType === 'reasoning')).toBe(true)
+
+    await state.rollbackSelectedThread('turn-2')
+
+    const storage = (globalThis as unknown as {
+      window: { localStorage: { getItem(key: string): string | null } }
+    }).window.localStorage
+    const archive = JSON.parse(storage.getItem('codex-web-local.thread-reasoning.v1') ?? '{}') as Record<
+      string,
+      Array<{ turnId?: string }>
+    >
+    expect((archive[threadId] ?? []).some((message) => message.turnId === 'turn-2')).toBe(false)
+    expect(state.messages.value.some((message) => message.messageType === 'reasoning')).toBe(false)
   })
 })

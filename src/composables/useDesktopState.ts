@@ -3337,6 +3337,43 @@ export function useDesktopState() {
     savePersistedReasoningMap(persistedReasoningByThreadId.value)
   }
 
+  // round-142：回退成功后清掉「被移除轮次」的 thinking 存档。成功路径此前只清 live
+  // reasoning（clearLiveReasoningForThread），localStorage 里的持久存档
+  // （persistedReasoningByThreadId）会留下已不存在轮次的思考块；刷新后
+  // mergePersistedReasoning 把它兜底追加到列表末尾，于是那条内容又出现在消息列表
+  // （线上：在 Thinking 中点停止后回退，消息从列表消失，刷新后又回来了）。
+  // 中断路径（interruptSelectedThreadTurn）与预检对齐路径（dropPersistedTurnLocally）
+  // 都是成对清理的，这里补齐同一语义。
+  function dropPersistedReasoningForRemovedTurns(
+    threadId: string,
+    removedTurnIds: string[],
+    minRemovedTurnIndex: number,
+  ): void {
+    const reasoningForThread = persistedReasoningByThreadId.value[threadId]
+    if (!reasoningForThread || reasoningForThread.length === 0) return
+    const removed = new Set(removedTurnIds.map((id) => id.trim()).filter((id) => id.length > 0))
+    const remaining = reasoningForThread.filter((message) => {
+      const turnId = message.turnId?.trim() ?? ''
+      if (turnId && removed.has(turnId)) return false
+      const turnIndex = message.turnIndex
+      if (
+        minRemovedTurnIndex >= 0 &&
+        typeof turnIndex === 'number' &&
+        Number.isFinite(turnIndex) &&
+        turnIndex >= minRemovedTurnIndex
+      ) {
+        return false
+      }
+      return true
+    })
+    if (remaining.length === reasoningForThread.length) return
+    persistedReasoningByThreadId.value = {
+      ...persistedReasoningByThreadId.value,
+      [threadId]: remaining,
+    }
+    savePersistedReasoningMap(persistedReasoningByThreadId.value)
+  }
+
   async function rollbackSelectedThread(turnId: string): Promise<void> {
     const threadId = selectedThreadId.value
     if (!threadId) return
@@ -3420,9 +3457,16 @@ export function useDesktopState() {
           console.warn(`[rollback] file revert for ${threadId} left errors: ${fileRevert.errors.join('; ')}`)
         }
       }
+      // round-142：被移除轮次的 thinking 存档也要一并清掉（成功路径此前只清 live）。
+      // turnIndex >= 被回退轮下标者都被本次 revert 移除；更老的轮次下标更小，不受影响。
+      const removedTurnIds = persisted
+        .filter((message) => typeof message.turnIndex === 'number' && message.turnIndex >= turnIndex)
+        .map((message) => message.turnId?.trim() ?? '')
+        .filter((id) => id.length > 0)
       setPersistedMessagesForThread(threadId, nextMessages)
       setLiveAgentMessagesForThread(threadId, [])
       clearLiveReasoningForThread(threadId)
+      dropPersistedReasoningForRemovedTurns(threadId, [...removedTurnIds, beforeTurnId], turnIndex)
       if (liveCommandsByThreadId.value[threadId]) {
         liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
       }
