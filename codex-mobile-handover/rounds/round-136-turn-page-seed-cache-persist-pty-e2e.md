@@ -1,7 +1,7 @@
 # round-136：上翻游标链的补登记 / 缓存失效面收窄 / 跨重启持久化 + PTY 端到端在 0.161.0 复跑 + 仓库清理
 
 **日期**：2026-10-09
-**环境**：Windows 本机、托管 node 22.22.2-6、**codex-cli 0.161.0**（开工前重测，见 §八 1）、隔离 home `D:\codex-home-r136pty`、dev 端口 4381
+**环境**：Windows 本机、托管 node 22.22.2-6、**codex-cli 0.161.0**（开工前重测，见 §八 1）、隔离 home `<PTY-home>`、dev 端口 4381
 **状态**：已实施并验证；**未发布**（npm `latest` 仍 `0.1.127`）
 **承接**：用户「**1. 轮换 GitHub OAuth 凭据不是我的，可以清空** / **2. 把 B 和 D 的内容全部实施**」；其中 B = round-135 §七 第 1/2/3/5 条，D = 删两个已合并的本地分支
 
@@ -89,19 +89,19 @@
 
 **为什么单独做这一条**：round-131 §九② 明确记「PTY 复验只覆盖**协议层**（`command/exec*` 的行为），**没有**端到端走 UI 终端（真实 vite dev + SSE + `/codex-api/thread-terminal/*`）。round-116 §六 的端到端是 **0.158.0** 档的读数」。这是那条待办的全部内容。
 
-**口径**：新增 `tmp/r136-pty-e2e.cjs`（round-116 `tmp/probe-terminal-e2e.cjs` 的**严格版**：每条观察都变成 pass/fail 断言，任一失败即退非零）。真实 `scripts/dev.cjs` 起 vite dev（端口 4381、`--strictPort`），全程只走 **HTTP + SSE**（不需要浏览器）。隔离 home `D:\codex-home-r136pty`。
+**口径**：新增 `tmp/r136-pty-e2e.cjs`（round-116 `tmp/probe-terminal-e2e.cjs` 的**严格版**：每条观察都变成 pass/fail 断言，任一失败即退非零）。真实 `scripts/dev.cjs` 起 vite dev（端口 4381、`--strictPort`），全程只走 **HTTP + SSE**（不需要浏览器）。隔离 home `<PTY-home>`。
 
 **结果：13/13 全部 PASS。**
 
 ```
 PASS  availability true — 200 {"available":true,"reason":null}
 PASS  SSE /codex-api/events connects
-PASS  attach returns a session id — 200 {"session":{"id":"0bc5f62e-…","cwd":"D:\\code\\codex-mobile","shell":"cmd.exe",…}}
+PASS  attach returns a session id — 200 {"session":{"id":"0bc5f62e-…","cwd":"<项目目录>","shell":"cmd.exe",…}}
 PASS  terminal-attached + banner data via SSE — bytes=303
 PASS  input accepted — 200 {"ok":true}
 PASS  ASCII marker round-trips through PTY — marker=probe-e2e-r136-marker
 PASS  resize accepted — 200 {"ok":true}
-PASS  snapshot reports session for thread — cwd="D:\\code\\codex-mobile" shell="cmd.exe" buffer=1216
+PASS  snapshot reports session for thread — cwd="<项目目录>" shell="cmd.exe" buffer=1216
 PASS  snapshot buffer captured output — truncated=false
 PASS  marker present in server-side snapshot buffer — bufferBytes=1216
 PASS  close accepted — 200 {"ok":true}
@@ -113,7 +113,7 @@ notification methods seen: {"terminal-attached":1,"terminal-data":12,"terminal-e
 **回显实证**（从 SSE 的 `terminal-data` 帧拼出、已剥 ANSI）：
 
 ```
-D:\code\codex-mobile>echo probe-e2e-r136-marker
+<项目目录>>echo probe-e2e-r136-marker
 probe-e2e-r136-marker
 ```
 
@@ -253,7 +253,7 @@ Deleted branch codex/extract-desktop-queue-state (was c31265af).
 
 ### 10.1 收尾实测（round-136 追加）
 
-只在 `D:/codex-home-r136ab`（**镜像** home：拷 `state_*.sqlite` + `session_index.jsonl`，rollout 原地只读）上跑，**零模型调用**。探针 `tmp/r136ab-turnpage.cjs`；真实线程 `01a04679`（15 轮 / 2965 行 / 19MB），锚点＝resume 载入的最老一轮。
+只在 `<镜像-home>`（**镜像** home：拷 `state_*.sqlite` + `session_index.jsonl`，rollout 原地只读）上跑，**零模型调用**。探针 `tmp/r136ab-turnpage.cjs`；真实线程 `01a04679`（15 轮 / 2965 行 / 19MB），锚点＝resume 载入的最老一轮。
 
 | 场景 | page#1 | page#2 | sidecar |
 | --- | --- | --- | --- |
@@ -308,15 +308,15 @@ $NODE scripts/check-ui-contract.cjs                    # 45/48
 $NODE tmp/r136-flip.cjs on                             # 逐字节还原、无 .r136bak 残留
 
 # 3) PTY 端到端（真实 vite dev + SSE；**必须沙箱外**，因为 vite 绑 0.0.0.0）
-mkdir -p /d/codex-home-r136pty
-cp ~/.codex/auth.json ~/.codex/config.toml ~/.codex/cc-switch-model-catalog.json /d/codex-home-r136pty/
-env -u HTTP_PROXY -u HTTPS_PROXY CODEX_HOME=D:/codex-home-r136pty \
+mkdir -p <PTY-home>
+cp ~/.codex/auth.json ~/.codex/config.toml ~/.codex/cc-switch-model-catalog.json <PTY-home>/
+env -u HTTP_PROXY -u HTTPS_PROXY CODEX_HOME=<PTY-home> \
   $NODE tmp/r136-pty-e2e.cjs 4381                     # ALL 13 ASSERTIONS PASS
 ```
 
 **探针（`tmp/`，未入库）**：`r136-pty-e2e.cjs`（PTY 端到端闸门）、`r136-flip.cjs`（B1/B2/B3 反跑）、`r136-b1-apply.cjs` / `r136-b2-apply.cjs` / `r136-b3-apply.cjs`（产品源码锚点脚本）、`r136-b1-tests.cjs` / `r136-b2-tests.cjs` / `r136-contract.cjs`（测试与契约锚点脚本）、`r136-oauth-residual.txt`（凭据残留取证）、`r136-*.txt`（各闸门原始输出）。
 
-**本轮环境**：`4381`（PTY 探针起的 dev server）随探针退出已停；隔离 home `D:\codex-home-r136pty` 保留（几 MB，供下次复跑）。
+**本轮环境**：`4381`（PTY 探针起的 dev server）随探针退出已停；隔离 home `<PTY-home>` 保留（几 MB，供下次复跑）。
 
 ---
 

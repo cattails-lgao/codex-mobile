@@ -164,7 +164,7 @@ rpc('command/exec', {
 3. **全量**：**714/714 零失败**（74 个测试文件全过）= round-115 基线 **706** + 本轮新增 **8**。
 4. **真机端到端**（`tmp/probe-terminal-e2e.cjs`，真实 vite dev + 真实 SSE）：
    - `status` → `{available:true}`
-   - `attach` → `{shell:"cmd.exe", cwd:"D:\\code\\codex-mobile"}`（cwd 正确）
+   - `attach` → `{shell:"cmd.exe", cwd:"<项目目录>"}`（cwd 正确）
    - SSE 收到 **303B 真实 PTY banner**（含 ANSI 序列 + `Microsoft Windows [版本 10.0.26200.9457]`）
    - `input echo <marker>` → **回显成功**
    - resize / close / exit 全通

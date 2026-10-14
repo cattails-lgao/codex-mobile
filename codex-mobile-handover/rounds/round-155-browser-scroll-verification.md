@@ -13,7 +13,7 @@
 
 | 环节 | 做法 |
 | --- | --- |
-| 应用服务 | `CODEX_HOME=D:/codex-home-fresh node scripts/dev.cjs --port 5173 --strictPort` —— 隔离 home（空即隔离），Vite 插件桥照常起，`thread/list` 返回空即可 |
+| 应用服务 | `CODEX_HOME=<空-home> node scripts/dev.cjs --port 5173 --strictPort` —— 隔离 home（空即隔离），Vite 插件桥照常起，`thread/list` 返回空即可 |
 | 慢图服务器 | `node tmp/r155-slow-image-server.cjs`（`?delay=<ms>` 可控，返回真 PNG 900×700、9.5KB） |
 | 页面侧**全部**代码 | `tmp/r155-harness.js`（fetch 补丁 + 自录时间线 + 自驱动场景） |
 | 注入方式 | initScript 只有 6 行：同步 XHR 取 `/tmp/r155-harness.js` + `eval` |

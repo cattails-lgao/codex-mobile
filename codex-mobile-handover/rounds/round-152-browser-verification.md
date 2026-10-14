@@ -53,7 +53,7 @@
 | E3 | `Ctrl+B` ⇒ `.desktop-sidebar` 消失；再按 ⇒ 恢复 | PASS |
 | Z | 控制台零 error | PASS |
 
-**视觉证据**：`06-ctrlj.png` 显示右侧已是**活着的终端**（`Microsoft Windows [版本 10.0.26200.9457]` + `D:\code\codex>` 提示符），
+**视觉证据**：`06-ctrlj.png` 显示右侧已是**活着的终端**（`Microsoft Windows [版本 10.0.26200.9457]` + `<项目目录>>` 提示符），
 不是空壳；`08-rename-dialog.png` 显示重命名输入框内容处于全选态。
 
 另外做了一次高清局部量测（`deviceScaleFactor=2`）：速查面板头部的计数徽标右边界 851px、

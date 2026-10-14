@@ -195,9 +195,9 @@ if (isCommandPaletteOpen.value) return     // 面板打开时让位，避免在�
 ## 九、复现
 
 ```bash
-cd /d/code/codex-mobile
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/components/content/commandRegistry.test.ts
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
+cd <项目目录>
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/components/content/commandRegistry.test.ts
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
 node scripts/check-ui-contract.cjs        # 期望 55/55
 ```
 

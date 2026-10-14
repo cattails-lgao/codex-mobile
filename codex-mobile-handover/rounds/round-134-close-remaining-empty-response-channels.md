@@ -1,7 +1,7 @@
 # round-134：收尾 round-132 §10.6 的 ②③④ —— 把「0 条 + Thinking」的剩余通道逐个关掉
 
 **日期**：2026-10-08 / 2026-10-09（跨零点）
-**环境**：Windows 本机、codex-cli 0.160.1、隔离 home `D:\codex-home-isolate123`（31 个 rollout，最大 123.93MB）
+**环境**：Windows 本机、codex-cli 0.160.1、隔离 home `<等长副本-home>`（31 个 rollout，最大 123.93MB）
 **状态**：已实施并验证；**未发布**（npm `latest` 仍 `0.1.127`）
 **承接**：round-132（症状 A 定案并只交 §10.6 第 1 条）、round-133（症状② 上翻游标链播种）
 
@@ -146,7 +146,7 @@ if (pageData.length === 0) {
 
 ```
 thread/start 200 → turn/start 200 → thread/read(includeTurns:true) × 5 全部 200
-62 条响应里非 2xx 仅 1 条：404 /codex-api/project-root-suggestion?basePath=D:\home\lighthouse\...（与本轮无关）
+62 条响应里非 2xx 仅 1 条：404 /codex-api/project-root-suggestion?basePath=<另一台机器的路径>\…（与本轮无关）
 DOM：items 2 → 4，无 error 元素，无 Thinking 卡死
 ```
 
@@ -202,8 +202,8 @@ node tmp/r134-flip.cjs on all                # 还原并逐字节复核
 
 # 2) 真实桥层冒烟（改动在 src/server/** ⇒ 必须先重建 dist-cli）
 node node_modules/tsup/dist/cli-default.js
-cd D:/code/code/codex-mobile
-CODEX_HOME=D:/codex-home-isolate123 node dist-cli/index.js \
+cd <项目目录>
+CODEX_HOME=<等长副本-home> node dist-cli/index.js \
   --port 4196 --no-tunnel --no-open --no-login --no-password &
 BASE=http://127.0.0.1:4196 node tmp/r134-e2e-smoke.cjs
 

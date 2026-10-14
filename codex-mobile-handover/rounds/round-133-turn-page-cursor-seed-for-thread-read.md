@@ -144,7 +144,7 @@ B 相之后**同一个进程**里（app-server 早已「热」了）：
 2. **链的生命周期问题本轮没解决**：链是**进程内内存**，桥重启 / app-server 重启（ordinal 重编号）/ LRU 淘汰（64 线程 × 每线程 256 锚点）之后仍会回到未命中。本轮只是把「打开线程」这条路也接上，**不等于**链就永远命中 —— 重启后的**首次**上翻若发生在「打开该线程之前」，仍会是 7.5s（A 相读数就是它的量级）。
 3. **回落路径仍然不登记锚点**（`threadTurnPage.ts` L323 只在有界路径执行）。所以「一次未命中」之后**同一锚点的第二次**才靠 30s TTL 的全量读缓存兜住（A 相 `secondScrollUp = 891ms`）—— 这个缓存会被 `thread/resume`/`thread/read`/`thread/fork`/`thread/start` 的 pipeline 快照以及任何带该 threadId 的通知清掉，清掉之后又是 7.5s。
 4. **`ThreadTurnPageCursorChain.record` 对 `null` 游标是 no-op**：短页（`nextCursor=''`）不会真的写入任何条目。换句话说，**「线程开头」这个边界靠的是「查不到 ⇒ 未命中 ⇒ 回落」**，而不是「查到 null ⇒ 停住」。本轮没有改变这一语义（改它会动到 `readBoundedThreadTurnPage` 的判据）。
-5. **只测了 Windows / codex-cli 0.160.1 的本机隔离 home**（`D:\codex-home-isolate123`，174 轮线程，标称 rollout 1.6MB 级载荷）。更大的线程（round-132 记的 30.89MB / 16 轮那种）上，落回的绝对值会更大、收益比例只会更高，但**未实测**。
+5. **只测了 Windows / codex-cli 0.160.1 的本机隔离 home**（`<等长副本-home>`，174 轮线程，标称 rollout 1.6MB 级载荷）。更大的线程（round-132 记的 30.89MB / 16 轮那种）上，落回的绝对值会更大、收益比例只会更高，但**未实测**。
 6. **未发布、未推送**（npm `latest` 仍 `0.1.127`）。
 
 ## 六、复现 / 复跑
@@ -154,8 +154,8 @@ B 相之后**同一个进程**里（app-server 早已「热」了）：
 node node_modules/tsup/dist/cli-default.js
 
 # 2) 起隔离服务（新端口，指向隔离 home；不要用真实 ~/.codex）
-cd D:/code/codex-mobile
-CODEX_HOME=D:/codex-home-isolate123 node dist-cli/index.js \
+cd <项目目录>
+CODEX_HOME=<等长副本-home> node dist-cli/index.js \
   --port 4195 --no-tunnel --no-open --no-login --no-password
 
 # 3) A 相（进程刚起，链空 = 修复前等效）

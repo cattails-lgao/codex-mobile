@@ -180,7 +180,7 @@ ESBUILD_BINARY_PATH=<store>/@esbuild/win32-x64/esbuild.exe "$NODE" tmp/r143-bund
 
 ## 八、诚实边界
 
-1. **本机没有可复现的真线程**：隔离 home `D:/codex-home-fresh` 里只有 4 条**空** rollout（仅 `session_meta`、无 turn）。
+1. **本机没有可复现的真线程**：隔离 home `<空-home>` 里只有 4 条**空** rollout（仅 `session_meta`、无 turn）。
    本轮的验证是「线上**只读**取证 + 用真实桥层代码打线上真数据」，**不是**本机跑通一次真实回退。
 2. **浏览器闸门走的是合成线程**：`check-message-media-surfaces` **44/44 通过**（§7.5），但它拦下 `thread/read`/`thread/resume` 回**合成**数据，
    所以它证明的是「**管线没被改坏**」（合成线程拿不到索引 ⇒ 对账整条跳过），**不是**「线上那条线程的回退残留被剔掉了」

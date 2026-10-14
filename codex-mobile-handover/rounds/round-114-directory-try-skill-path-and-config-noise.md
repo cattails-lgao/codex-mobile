@@ -2,7 +2,7 @@
 
 日期：2026-09-30。由头：用户问「还能做什么呢」→ 列候选（发版 / 两处小缺陷 / 新功能 / 测试基线抖动治理 / 安全项）→ 用户选**「清掉两处小缺陷」**。
 
-**结论先行：** 两处都清掉了，且都是**正确性/卫生**修复，不涉及运行行为改变（理由见 §一「诚实边界」）。① `DirectoryHub.vue` 里写死的 `/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md`（2026-04-26 由原作者引入，从未被设计过）删除，改为只传技能名、由 App 从 app-server 的已安装技能列表解析真实路径；② 项目沙箱与用户全局的 `config.toml` 各删掉一行已被 CLI 0.158 忽略的 `disable_response_storage = true`。
+**结论先行：** 两处都清掉了，且都是**正确性/卫生**修复，不涉及运行行为改变（理由见 §一「诚实边界」）。① `DirectoryHub.vue` 里写死的 `<原作者家目录>/.codex/skills/shared_skills/composio-cli/SKILL.md`（2026-04-26 由原作者引入，从未被设计过）删除，改为只传技能名、由 App 从 app-server 的已安装技能列表解析真实路径；② 项目沙箱与用户全局的 `config.toml` 各删掉一行已被 CLI 0.158 忽略的 `disable_response_storage = true`。
 
 ## 一、写死的技能绝对路径
 
@@ -17,7 +17,7 @@ attachedSkills: [{ name: 'composio-cli', path: COMPOSIO_SKILL_PATH }]
 而常量是：
 
 ```ts
-const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cli/SKILL.md'
+const COMPOSIO_SKILL_PATH = '<原作者家目录>/.codex/skills/shared_skills/composio-cli/SKILL.md'
 ```
 
 `git blame` 显示这行由原作者于 **2026-04-26**（`c7d906bc`「Codex worktree snapshot: archive-cleanup」）引入，**从未被设计过**——它就是作者自己机器上的路径，在任何别人的机器上都不存在。
@@ -67,8 +67,8 @@ const COMPOSIO_SKILL_PATH = '/Users/igor/.codex/skills/shared_skills/composio-cl
 
 CLI 0.158 起 `disable_response_storage` 已被忽略（round-101 实测记录：每次启动多一条 `configWarning`，另有一条 warning 通知在 resume 前）。两处都删了：
 
-- `D:/code/codex-mobile/.codex/config.toml` 第 5 行（项目沙箱，该目录 gitignored）
-- `C:/Users/19155/.codex/config.toml` 第 4 行（用户全局）
+- `<项目目录>/.codex/config.toml` 第 5 行（项目沙箱，该目录 gitignored）
+- `<用户主目录>/.codex/config.toml` 第 4 行（用户全局）
 
 **改前先备份**（`tmp/` 被 gitignore，不入库）：
 
@@ -96,7 +96,7 @@ CLI 0.158 起 `disable_response_storage` 已被忽略（round-101 实测记录�
 - 改：`src/App.vue`（加 import、改调 `resolveTryItemSkills`）
 - 改：`src/components/content/directoryHubUtils.ts`（+`resolveTryItemSkills` / `findInstalledSkillPath` + 三个类型）
 - 改：`src/components/content/directoryHubUtils.test.ts`（+4 例）
-- 改（不在仓库内，已备份）：`.codex/config.toml`、`C:/Users/19155/.codex/config.toml`
+- 改（不在仓库内，已备份）：`.codex/config.toml`、`<用户主目录>/.codex/config.toml`
 - 脚本（未入库，供复跑/审计）：`tmp/fix-hardcoded-skill-path.cjs`、`tmp/refactor-try-skill-utils.cjs`、`tmp/fix-utils-eol.cjs`、`tmp/cleanup-config-noise.cjs`
 
 ## 六、遗留

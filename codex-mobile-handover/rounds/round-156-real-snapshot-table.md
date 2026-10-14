@@ -120,7 +120,7 @@
 
 1. **本轮不是「回填」**。用户明确不选「把 141~155 补进快照表」——那会继续喂同一张已退化的日志表。本轮只留当前值；round-141 ~ round-155 的逐轮内容仍在各自的 `rounds/` 文档与 `### 按轮次记录` 索引里，**没有丢**。
 2. **工具链一栏是「实测 + 并列」而非改写**。本会话 PATH 上的 node 是 **WorkBuddy 注入的受管 v22.22.2**，与仓库既往记录的 fnm **24.18.1** 不同 ⇒ 两者并列并注明「按实际 `node -v` 为准」，不改掉仓库记录。
-3. **codex-cli 版本口径已复验闭合**（同日 19:52，见 §八）：PATH 上的 pnpm 全局 = **0.162.1**，即 `resolveCodexCommand()` 会选中的那一套；桌面 App 缓存 = `0.162.0-alpha.17.2`；托管守护进程 releases = `0.159.0 / 0.161.0 / 0.162.0`。**round-131 ~ round-143 标注的「0.161.0」不改** —— 那是**当时那台机器**的实测读数（round-135 §六 1 记的 pnpm 路径 `D:\Application\NodeManage\pnpm\…` 在本机不存在），无法复现也不该翻案。
+3. **codex-cli 版本口径已复验闭合**（同日 19:52，见 §八）：PATH 上的 pnpm 全局 = **0.162.1**，即 `resolveCodexCommand()` 会选中的那一套；桌面 App 缓存 = `0.162.0-alpha.17.2`；托管守护进程 releases = `0.159.0 / 0.161.0 / 0.162.0`。**round-131 ~ round-143 标注的「0.161.0」不改** —— 那是**当时那台机器**的实测读数（round-135 §六 1 记的 pnpm 路径 `<pnpm 全局 bin 目录>\…` 在本机不存在），无法复现也不该翻案。
 4. **归档是「按分区重排」，未保持原行序**。改前顺序是「分支块 / 单值 `Dev 端口` / `Dev 状态` 块 / 其余单值 / 发布块」交织；归档按分区归拢（分支 24 → Dev 状态 24 → 发布 10 → 单值 4）。**行的原文逐字未动**，只是位置变了；若要原顺序，可从 `tmp/r156-main-backup.md` 还原。
 5. **已 commit 并 push**（用户「可以」授权）：改动集见 §六；推送链路与凭据的真实原因见 §八 8.5。
 6. 与本轮修复无关、但属当日环境事实：默认出网链路（`http(s)_proxy` → 本机 **58043**）**对 github.com 返回 `502 CONNECT tunnel failed`**（对 `ghfast.top` 却是 200），直连 github 亦不通 ⇒ 拉取走 **`ghfast.top` 镜像**完成（`git fetch https://ghfast.top/https://github.com/<用户名>/codex-mobile.git main`），本地由 `946a1c85`（round-139）快进到 `b35ee254`（round-155，30 个落后提交全部补齐），tag 亦经同一镜像 `--tags` 补拉（最新 `v0.1.132`）。**同日复验补充**：`socks5://127.0.0.1:10808` 可直连 github（`git ls-remote` 200），本轮提交推送即走它，见 §八 8.5。
@@ -158,7 +158,7 @@ pnpm store 的 `links/@openai/codex/` 与全局 shim 的 mtime 给出完整时�
 
 ### 8.3 历史轮次的「0.161.0」—— 不改
 
-- round-135 §六 1 自己留了取证路径：当时 pnpm 全局在 `D:\Application\NodeManage\pnpm\bin\codex`。**该目录在本机不存在**（实测 `D:/Application/NodeManage` 无此目录）⇒ 那是**另一套 / 另一台机器**的 pnpm 布局。
+- round-135 §六 1 自己留了取证路径：当时 pnpm 全局在 `<pnpm 全局 bin 目录>\codex`。**该目录在本机不存在**（实测 `<pnpm 安装目录>` 无此目录）⇒ 那是**另一套 / 另一台机器**的 pnpm 布局。
 - 同一节还记「`~/.codex/.../releases/` 仍只有 0.158.0」，而本机现在是 **0.159.0 / 0.161.0 / 0.162.0**（已无 0.158.0）⇒ 环境确实在变。
 - 结论：round-131 ~ round-143 文档头部与逐轮条目里的「codex-cli 0.161.0」是**当时那台机器上的实测读数**，本机**无法复现、也不该翻案**。**这些文档一个字未动**，只在此处标明其「历史读数」性质。
 
@@ -199,7 +199,7 @@ pnpm store 的 `links/@openai/codex/` 与全局 shim 的 mtime 给出完整时�
 ### 8.5 推送链路与凭据（同日复验）
 
 - **出网**：默认 `http(s)_proxy` → 本机 **58043** 对 `github.com` 返回 `502 CONNECT tunnel failed`（对 `ghfast.top` 却返回 200），直连 github 握手失败。**可用链路 = `socks5://127.0.0.1:10808`**（`git ls-remote origin HEAD` 实测 200，返回远端 HEAD `b35ee254`）。
-- **凭据**：`~/.gitconfig` 里 github.com 的凭据助手**本来就是 GitHub CLI**（`helper = !'C:\Program Files\GitHub CLI\gh.exe' auth git-credential`）；`gh auth status` = 已登录账号 `cattails-lgao`，token scope 含 `repo`。
+- **凭据**：`~/.gitconfig` 里 github.com 的凭据助手**本来就是 GitHub CLI**（`helper = !'<GitHub CLI 安装目录>\gh.exe' auth git-credential`）；`gh auth status` = 已登录账号 `cattails-lgao`，token scope 含 `repo`。
 - **真正的坑（本轮修掉）**：仓库内**局部**配置留了一条 `credential.helper = manager-core`，而本机 git 是 **PortableGit**（`git --exec-path` → `…/PortableGit/mingw64/libexec/git-core`），它**只有 `manager`、没有 `manager-core`** ⇒ git 报 `'credential-manager-core' is not a git command`，随后回落到交互式询问用户名。已用 `git config --local --unset-all credential.helper` 清掉该条，全局配置即生效。**注意：这不是「没配凭据」，是「局部配置指向了一个本机不存在的助手」。**
 - 本机可复用命令：
 

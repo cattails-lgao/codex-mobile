@@ -4,7 +4,7 @@
 
 ## 调查结论（上游对比 + 实测）
 
-- **上游 v514 与本 fork 行为一致**：拉取 `friuns2/codex-mobile` tag `v514`（commit `48fe5a6`，存放于 `D:\code\codex-mobile-v514`，仅用于对比不入库）逐环节对比：`thread/list` 调用参数（均不带 `sourceKinds`）、`normalizeThreadGroupsV2`/`toUiThread`（均不过滤）、bridge `thread/list` 处理（上游纯透传）。git grep 确认 v514 全仓库无 `subagent`/`sourceKinds` 关键字。**不是 fork 改动引入的差异。**
+- **上游 v514 与本 fork 行为一致**：拉取 `friuns2/codex-mobile` tag `v514`（commit `48fe5a6`，存放于 `<另一份工作副本目录>`，仅用于对比不入库）逐环节对比：`thread/list` 调用参数（均不带 `sourceKinds`）、`normalizeThreadGroupsV2`/`toUiThread`（均不过滤）、bridge `thread/list` 处理（上游纯透传）。git grep 确认 v514 全仓库无 `subagent`/`sourceKinds` 关键字。**不是 fork 改动引入的差异。**
 - **实测（codex-cli 0.146.0，隔离 `CODEX_HOME` 构造会话）**：`thread_source=subagent` 且 `source=cli` 的会话会被 app-server 物化，`Thread.source="cli"`（interactive），因此 `thread/list` 缺省返回它，`sourceKinds=[cli,vscode,exec,appServer]` 也滤不掉；只有 `source` 本身为 subagent 类型才会被 `sourceKinds=subAgent` 过滤，但 TUI/CLI 写入的 subagent 会话 source 是 `cli`。
 - **前端无法区分**：`thread/list`/`thread/read` 返回的 `Thread` 结构无 `thread_source` 字段，RPC 数据层面没有 subagent 标识，唯一可靠信号是本地 rollout 文件 `session_meta.payload.thread_source`。
 

@@ -289,7 +289,7 @@ CDP / Playwright 的按键注入**绕过**浏览器 `PreHandleKeyboardEvent`，�
 ## 九、复现
 
 ```bash
-cd /d/code/codex-mobile
+cd <项目目录>
 # 桌面端消息列表四层
 node tmp/r146c-assets.cjs "<app.asar>"        # 列 chunk
 node tmp/r146c-dump.cjs tmp/r146c-asar/webview__assets__thread-virtualizer-e1964ca5c039.js pretty

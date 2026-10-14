@@ -1,7 +1,7 @@
 # round-135：未 materialize 线程的 `thread/read` 与 `thread/resume` 不再 502
 
 **日期**：2026-10-09
-**环境**：Windows 本机、**codex-cli 0.161.0**（用户按「升级到 0.160.1」操作，pnpm 全局实际装到 0.161.0，见 §六 1）、隔离 home `D:\codex-home-fresh`、桥服务 4197
+**环境**：Windows 本机、**codex-cli 0.161.0**（用户按「升级到 0.160.1」操作，pnpm 全局实际装到 0.161.0，见 §六 1）、隔离 home `<空-home>`、桥服务 4197
 **状态**：已实施并验证；**未发布**（npm `latest` 仍 `0.1.127`）
 **承接**：round-134 §七「附带发现（**不属本轮，未实施**）……**记在此处待授权**」
 
@@ -129,7 +129,7 @@ round-134 §七 的结论是「**已确证真实客户端走不到**」，依据
 
 ### 5.5 真实桥层端到端（**决定性**）
 
-**改动在 `src/server/**` ⇒ 必须先 `tsup` 重建 `dist-cli`**（只跑 `vite build` 不生效）。服务：`CODEX_HOME=D:/codex-home-fresh node dist-cli/index.js --no-tunnel --no-open --no-login --no-password -p 4197`，探针 `tmp/r135-repro-502.cjs`：
+**改动在 `src/server/**` ⇒ 必须先 `tsup` 重建 `dist-cli`**（只跑 `vite build` 不生效）。服务：`CODEX_HOME=<空-home> node dist-cli/index.js --no-tunnel --no-open --no-login --no-password -p 4197`，探针 `tmp/r135-repro-502.cjs`：
 
 | 调用 | 改动前 | 改动后 |
 | --- | --- | --- |
@@ -144,11 +144,11 @@ round-134 §七 的结论是「**已确证真实客户端走不到**」，依据
 
 ## 六、诚实边界
 
-1. **版本口径**：用户口径是「升级到 **0.160.1**」，但本机 pnpm 全局实测 **0.161.0**（`/d/Application/NodeManage/pnpm/bin/codex`，两个 v11 全局条目都指向 store 里 `@openai/codex/0.161.0` 的同一 link）；`~/.codex/packages/app-server-daemon/releases/` 仍**只有 0.158.0**；桌面 App 缓存里的 `codex.exe` 是 0.154.0-alpha.6.2。**故本轮的「本机读数」= 0.161.0**，与 round-130~134 文档标注的 0.160.1 差一个小版本。好消息是**边界形态跨这一个小版本未变**（§二），但**不要把 0.160.1 的读数当成 0.161.0 的读数**。
-2. **本机是「新机器」**：round-130~134 的隔离 home 是 `D:\codex-home-isolate123`，本机**不存在**；本轮改用自建的空 home `D:\codex-home-fresh`（只拷 `auth.json` + `config.toml` + 被 `model_catalog_json` 引用的 `cc-switch-model-catalog.json`）。空 home 天然隔离（无源 home 的 rollout 绝对路径引用），不需要 round-130~134 那种「等长路径改写」。
+1. **版本口径**：用户口径是「升级到 **0.160.1**」，但本机 pnpm 全局实测 **0.161.0**（`<pnpm 全局 bin 目录>/codex`，两个 v11 全局条目都指向 store 里 `@openai/codex/0.161.0` 的同一 link）；`~/.codex/packages/app-server-daemon/releases/` 仍**只有 0.158.0**；桌面 App 缓存里的 `codex.exe` 是 0.154.0-alpha.6.2。**故本轮的「本机读数」= 0.161.0**，与 round-130~134 文档标注的 0.160.1 差一个小版本。好消息是**边界形态跨这一个小版本未变**（§二），但**不要把 0.160.1 的读数当成 0.161.0 的读数**。
+2. **本机是「新机器」**：round-130~134 的隔离 home 是 `<等长副本-home>`，本机**不存在**；本轮改用自建的空 home `<空-home>`（只拷 `auth.json` + `config.toml` + 被 `model_catalog_json` 引用的 `cc-switch-model-catalog.json`）。空 home 天然隔离（无源 home 的 rollout 绝对路径引用），不需要 round-130~134 那种「等长路径改写」。
 3. **`thread/turns/list` 直连仍 502**（有意）：桥只在**有界模块内部**调它（异常被吞、回落），而这第三个通道**客户端不直连** —— 全仓只有两处 `callRpc('thread/turns/list', …)`：`threads.ts:614` 在 `thread/revert` **之后**（线程必有轮次）用游标增量 hydrate；`threads.ts:460` 只是错误对象里的 `method` 字段。上翻走的是 `/codex-api/thread-turn-page` 路由，不是这个端点。故**不动**。
 4. **未在真浏览器上跑「刷新 → 打开空线程 → 发送」**（§四 末）：resume 的可达性是**代码层论证** + 端到端 200 的读数，不是 UI 流程实录。
-5. **只在本机 Windows / codex-cli 0.161.0 / `D:\codex-home-fresh` 上实测**。
+5. **只在本机 Windows / codex-cli 0.161.0 / `<空-home>` 上实测**。
 6. **`threadRoutes.ts` 的 `thread-live-state` 同名兜底仍伪造 `isInProgress: true`**（round-134 §六 4，零客户端调用方）—— 本轮**仍未动**。
 7. **未发布**：未 bump 版本、未 tag。
 
@@ -172,8 +172,8 @@ round-134 §七 的结论是「**已确证真实客户端走不到**」，依据
 
 ```bash
 # 0) 隔离 home（空目录 + 三个文件即可）
-mkdir -p /d/codex-home-fresh
-cp ~/.codex/auth.json ~/.codex/config.toml ~/.codex/cc-switch-model-catalog.json /d/codex-home-fresh/
+mkdir -p <空-home>
+cp ~/.codex/auth.json ~/.codex/config.toml ~/.codex/cc-switch-model-catalog.json <空-home>/
 
 # 1) 静态检查
 node node_modules/vue-tsc/bin/vue-tsc.js --noEmit
@@ -188,7 +188,7 @@ node tmp/r135-flip.cjs on                          # 逐字节还原 + 删备份
 
 # 3) 真实桥层端到端（改动在 src/server/** ⇒ 必须先重建 dist-cli）
 node node_modules/tsup/dist/cli-default.js
-CODEX_HOME=D:/codex-home-fresh node dist-cli/index.js \
+CODEX_HOME=<空-home> node dist-cli/index.js \
   --no-tunnel --no-open --no-login --no-password -p 4197 &
 # 等端口起来（本轮探针实测约 3s）
 node tmp/r135-repro-502.cjs                        # thread/read {includeTurns:true} 与 thread/resume 应 200
@@ -196,4 +196,4 @@ node tmp/r135-repro-502.cjs                        # thread/read {includeTurns:t
 
 **探针（`tmp/`，未入库）**：`r135-repro-502.cjs`（thread/start → read×2 → turns/list → resume，打原始回包）、`r135-flip.cjs`（谓词反跑 + 备份/逐字节复核）、`r135-apply.cjs`（产品源码锚点脚本）、`r135-test-apply.cjs`（测试锚点脚本）、`r135-contract-apply.cjs`（契约锚点脚本）、`r135-ping.cjs`、`r135-svc*.log`。
 
-**本轮清理**：`4197`（本轮起）已停（`listeners=0`）。隔离 home `D:\codex-home-fresh` 保留（约几 MB，供下次复跑）。
+**本轮清理**：`4197`（本轮起）已停（`listeners=0`）。隔离 home `<空-home>` 保留（约几 MB，供下次复跑）。

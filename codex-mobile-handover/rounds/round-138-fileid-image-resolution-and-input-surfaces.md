@@ -308,7 +308,7 @@ DMCA（只有数据权利人能提）、**再改写一次历史**（改不动**�
 **复现命令**
 
 ```bash
-NODE="C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
+NODE="<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
 
 # 1) 静态与全量
 "$NODE" node_modules/vue-tsc/bin/vue-tsc.js --noEmit

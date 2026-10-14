@@ -129,9 +129,9 @@ shouldShowTimeDivider(previousMarkerMs, nextMs)
 ## 八、复现
 
 ```bash
-cd /d/code/codex-mobile
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/utils/timeDividers.test.ts
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
+cd <项目目录>
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/utils/timeDividers.test.ts
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
 node scripts/check-ui-contract.cjs        # 期望 54/54
 ```
 

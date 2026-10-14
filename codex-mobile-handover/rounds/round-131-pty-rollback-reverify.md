@@ -94,8 +94,8 @@ round-113 §三 的绝对值需要一个 **12.12MB / 16 轮**的线程，而：
 3. **真因是：拷 home 不是隔离**（§六）。app-server 的 turns/items 走**自有状态库**，而副本 `state_*.sqlite` 里记的是 rollout 的**绝对路径**。直接证据：
 
 ```
-CODEX_HOME = D:/code/codex-mobile/tmp/r130-rb-inject
-thread.path  = D:\code\codex-mobile\tmp\r130-codex-home\sessions\2026\10\08\rollout-…jsonl
+CODEX_HOME = <项目目录>/tmp/<等长副本-home>
+thread.path  = <项目目录>\tmp\<等长副本-home>\sessions\2026\10\08\rollout-…jsonl
 ```
 
 即使 `CODEX_HOME` 指向副本，`thread.path` **仍解析回源 home**——所以我在副本里膨胀 rollout，服务端读的还是源 home 的原文件。
@@ -189,7 +189,7 @@ itemsView: TurnItemsView,          // TurnItemsView = "notLoaded" | "summary" | 
 **复现**
 
 ```bash
-NODE="C:/Users/cattails/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
+NODE="<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe"
 
 # 1) PTY（直连 app-server，全新空 home，与线程无关）
 $NODE tmp/r130-verify-exec-pty.cjs            # 14/14

@@ -158,14 +158,14 @@ return max(0, distanceFromBottomPx + after - before)
 ## 七、复现
 
 ```bash
-cd /d/code/codex-mobile
+cd <项目目录>
 # 1) 展开桌面端几何层（2131 B 单行）
 node tmp/r146c-dump.cjs tmp/r146c-asar/webview__assets__thread-virtualizer-e1964ca5c039.js pretty > tmp/r148-virtualizer.txt
 # 2) 几何层单测
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/utils/turnVirtualizer.test.ts
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run src/utils/turnVirtualizer.test.ts
 # 3) 类型检查 + 全量
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
-"C:/Users/19155/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vue-tsc/bin/vue-tsc.js --noEmit
+"<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" node_modules/vitest/vitest.mjs run
 ```
 
 ## 八、诚实边界

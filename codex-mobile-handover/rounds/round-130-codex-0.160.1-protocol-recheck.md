@@ -231,10 +231,10 @@ round-86 设计了「上翻更早轮次走 `thread/turns/list` 游标链、不�
 ```bash
 # 0) 起服务：cwd 必须在仓外（仓内 .codex/config.toml 会覆盖 provider），
 #    CODEX_HOME 必须在 %TEMP% 之外（codex 拒绝在临时目录建 helper 二进制）
-cd "$LOCALAPPDATA" && CODEX_HOME="D:/code/codex-mobile/tmp/r130-codex-home" \
-  OPENAI_API_KEY="$(cat D:/code/codex-mobile/tmp/r130-apikey.txt)" \
+cd "$LOCALAPPDATA" && CODEX_HOME="<项目目录>/tmp/<等长副本-home>" \
+  OPENAI_API_KEY="$(cat <项目目录>/tmp/r130-apikey.txt)" \
   CODEXUI_CODEX_COMMAND="<0.160.1 的 codex.exe>" \
-  node /d/code/codex-mobile/dist-cli/index.js --no-tunnel --no-open --no-login --no-password -p 4191
+  node <项目目录>/dist-cli/index.js --no-tunnel --no-open --no-login --no-password -p 4191
 
 # 1) 契约细节（notLoaded / full / 省略 itemsView 三种视图）
 node tmp/r130-turnslist-contract.cjs

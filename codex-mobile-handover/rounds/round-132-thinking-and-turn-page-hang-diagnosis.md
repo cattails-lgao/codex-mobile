@@ -1,6 +1,6 @@
 # round-132：线上两个回归症状定位——「Thinking 不展示」与「上翻 RPC 6–7 秒」
 
-> 日期：2026-10-08 · 环境：Windows / 托管 node 22.22.2-6 / **codex-cli 0.160.1** / 桥 `dist-cli` **0.1.127** / `CODEX_HOME` = 真实 home 的**等长路径副本** `D:\codex-home-isolate123`（24 字符改写，见 round-131 §六）
+> 日期：2026-10-08 · 环境：Windows / 托管 node 22.22.2-6 / **codex-cli 0.160.1** / 桥 `dist-cli` **0.1.127** / `CODEX_HOME` = 真实 home 的**等长路径副本**（24 字符改写，见 round-131 §六）
 > 承接：用户报告「自从更新 codex-mobile-re 版本后，线上环境就出现了 Thinking 状态消息列表没有展示，而且 rpc 接口还会长时间挂起」
 
 **结论先行：两个症状不是一个原因，且都不在「渲染」层。**
@@ -141,7 +141,7 @@ GET /codex-api/thread-turn-page?threadId&beforeTurnId&limit
 
 ```bash
 # 0) 隔离 home（等长路径改写）+ 起服务（勿用真实 ~/.codex：被 0.161.0 托管 daemon PID 33400 持有）
-#    CODEX_HOME=D:/codex-home-isolate123  dist-cli/index.js -p 4194
+#    CODEX_HOME=<等长副本-home>  dist-cli/index.js -p 4194
 
 # 1) 症状②：冷进程 + 同窗口同锚点 A/B（先回落、再 resume 种链、同锚点再取）
 node tmp/r132-probe-coldchain-ab.cjs
@@ -195,7 +195,7 @@ BASE=http://127.0.0.1:4194 node tmp/r132-e2e-inject-archive.cjs
 
 1. **未改任何产品代码**（本轮纯定位）。上述 7 条修复均**未实施**，等用户决定做哪几条。
 2. **未提交**：本文件与 `tmp/r132-*` 探针都在工作区；总入口 `codex-mobile-handover.md` 与 `sections/commit-history.md` **未同步**（等用户确认后按 round 惯例落 4 处 + 1 提交）。
-3. 临时物仍在：桥服务 `4194`（`CODEX_HOME=D:\codex-home-isolate123`，日志 `tmp/r132-svc-big3.log`）、旧服务 `4191`、隔离副本 `D:\codex-home-isolate123`（约 155MB）、`tmp/r132-*` 探针与输出。
+3. 临时物仍在：桥服务 `4194`（`CODEX_HOME=<等长副本-home>`，日志 `tmp/r132-svc-big3.log`）、旧服务 `4191`、隔离副本 `<等长副本-home>`（约 155MB）、`tmp/r132-*` 探针与输出。
 4. **未发布**（用户未授权）。
 
 ---
@@ -246,7 +246,7 @@ BASE=http://127.0.0.1:4194 node tmp/r132-e2e-inject-archive.cjs
 
 `tmp/r132-probe-live-blank.cjs`（进行中回合逐帧轮询 P1/P2/P3）、`tmp/r132-e2e-live-blank.cjs`（浏览器打开 inProgress 线程）、`tmp/r132-e2e-send-live.cjs`（在既有线程发送并采样；含读 Vue 根实例 setupState 的尝试，生产构建下 `_instance` 取不到，未用上）、`tmp/r132-e2e-newthread-live.cjs`（新建线程真实流式回合）＋各自 `.txt` / `.json`。
 
-**副作用（仅隔离副本）**：`D:\codex-home-isolate123` 内新增/改写了几条测试线程（`01a11c08…` 新建线程、大线程被追加两轮 `failed`/`interrupted`）。均为副本，未触真实 home。
+**副作用（仅隔离副本）**：`<等长副本-home>` 内新增/改写了几条测试线程（`01a11c08…` 新建线程、大线程被追加两轮 `failed`/`interrupted`）。均为副本，未触真实 home。
 
 
 ## 十、症状 A 定案：一次「0 条」的非 silent 刷新会把整个对话区清空（已确定性复现）

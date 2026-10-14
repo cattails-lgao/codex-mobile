@@ -19,7 +19,7 @@
 - 本机（Windows）pnpm 全局升级 `@openai/codex@0.147.0`（2026-08-07 发布）；macOS 侧原本已是 0.147.0，两平台版本对齐。
 - 影响评估：0.147.0 含会话分区/长会话增量浏览、命令回放脱敏、Windows 路径/进程修复等；macOS 已有运行验证，协议兼容。
 - 升级后回归：真实 24 轮 rollout 复现 `thread/list`/`thread/read` 物化与分页正常，消息时序修复（轮末最后一条为 `agentMessage`）在 0.147.0 下仍成立。
-- 环境注意：npm 全局曾临时安装 0.147.0（用于绕过 pnpm 全局存储故障），已卸载，现仅 pnpm 全局一份；`pnpm setup` 依赖的 `chcp` 在沙箱终端不可用，用户级 PATH 已确认含 `AppData\Local\pnpm\bin`（新开终端 `codex` 命令可用）。
+- 环境注意：npm 全局曾临时安装 0.147.0（用于绕过 pnpm 全局存储故障），已卸载，现仅 pnpm 全局一份；`pnpm setup` 依赖的 `chcp` 在沙箱终端不可用，用户级 PATH 已确认含 `<pnpm 全局 bin 目录>`（新开终端 `codex` 命令可用）。
 
 ## 涉及文件与提交
 

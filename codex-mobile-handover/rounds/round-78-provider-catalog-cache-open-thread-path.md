@@ -4,7 +4,7 @@
 
 ## 1. codegraph MCP 接入
 
-**现状**：`@colbymchenry/codegraph` v1.5.0 已由 pnpm 全局安装（`~/AppData/Local/pnpm/bin/codegraph.CMD`），项目 `.codegraph/` 索引已存在（699 文件 / 9,709 节点 / 27,644 边 / 41.5MB），`AGENTS.md` 无 codegraph 标记。
+**现状**：`@colbymchenry/codegraph` v1.5.0 已由 pnpm 全局安装（`<pnpm 全局 bin 目录>/codegraph.CMD`），项目 `.codegraph/` 索引已存在（699 文件 / 9,709 节点 / 27,644 边 / 41.5MB），`AGENTS.md` 无 codegraph 标记。
 
 **为什么没直接用包管理器的全局路径**：pnpm 全局目录是版本哈希目录（`pnpm/global/v11/<hash>/node_modules/...`），`codegraph upgrade` 后路径就失效，MCP 配置会静默坏掉。因此新增一个稳定的解析器：
 
@@ -13,8 +13,8 @@
 
 ```json
 "codegraph": {
-  "command": "C:/Users/cattails/.workbuddy/binaries/node/versions/22.22.2-3/node.exe",
-  "args": ["C:/Users/cattails/.workbuddy/bin/codegraph-mcp.cjs", "serve", "--mcp"],
+  "command": "<用户主目录>/.workbuddy/binaries/node/versions/22.22.2-3/node.exe",
+  "args": ["<用户主目录>/.workbuddy/bin/codegraph-mcp.cjs", "serve", "--mcp"],
   "disabled": false
 }
 ```
@@ -56,7 +56,7 @@ start=  1274  end=  1370  dur=    96  config/read
 
 **排除项（有证据，不是瓶颈）**：
 
-- `git/branches`：本机每个真实项目 cwd 要 1419–2777ms（`D:\code\workflow-investor` 稳定 2.6–2.8s），因为路由里串行跑 4–6 个 git 子进程，而本机单个 git 命令就要 316–488ms。但 **A/B 短路全部 `/codex-api/git/**` 后 boot 592→531ms、首次点击 1121→1092ms，几乎无变化** → 它在并行跑，没有闸住渲染。round-77 里曾把 `git/branches` 500 归因为「环境性 git 不可用」，本轮更正：git 可用，只是本机很慢；那个 500 是仓库无提交（`fatal: Needed a single revision`）。
+- `git/branches`：本机每个真实项目 cwd 要 1419–2777ms（`<另一个项目目录>` 稳定 2.6–2.8s），因为路由里串行跑 4–6 个 git 子进程，而本机单个 git 命令就要 316–488ms。但 **A/B 短路全部 `/codex-api/git/**` 后 boot 592→531ms、首次点击 1121→1092ms，几乎无变化** → 它在并行跑，没有闸住渲染。round-77 里曾把 `git/branches` 500 归因为「环境性 git 不可用」，本轮更正：git 可用，只是本机很慢；那个 500 是仓库无提交（`fatal: Needed a single revision`）。
 - `free-mode/status`：**单独**短路它，首次点击 1102→1058ms（无变化）。它本身已经用 `getCachedFreeModels()` + `refreshFreeModelsInBackground()`，不在关键路径上。
 - 消息列表渲染：`.conversation-item` 是暖/冷分页渲染（`WARM_PAGE_SIZE = 20` + `HOT_TURNS`），不是一次性全渲染。
 
