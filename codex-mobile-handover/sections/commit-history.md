@@ -400,6 +400,130 @@
 
 **公开面口径**：GitHub Release 正文（英文，`tmp/v0.1.129-notes.md`）**有意不含** OAuth 凭据泄漏与历史重写的细节 —— 该问题尚未闭环（上游旧 ref 仍返回明文），公开页面不放大。完整记录见本文件 round-136 段与 `codex-mobile-handover.md`。
 
+## round-156 ~ round-144 回填说明（round-157 补）
+
+> **为什么现在才补**：本台账在 round-143 之后**断档 12 轮**（`round-144 ~ round-155` 零条目，round-156 曾实测检索本文件 929 行确认）。round-156 §七 记下了该事实与回填体例、并建议「单独开一轮」；**round-157 按该建议执行回填**。
+> **依据**：各轮 `rounds/round-*.md` 与 `git log` 实测读数，**不做推测**；`+A/−D` 与文件计数取自 `git show --stat` / `--name-status`。
+> **两条与直觉不同的边界**：
+> ① **round-144 ~ round-147 没有任何提交** —— 那四轮是桌面端 `app.asar` 的**只读盘点**（产出在 `tmp/r145-asar`、`tmp/r146-*`、`tmp/r147-*` 与 `sections/desktop-parity-decision.md`，`tmp/` 不入库）⇒ 台账里没有它们**不是漏记，是本来就没有**。
+> ② `round-142 / round-143` 在首次回填提交（`a60c15be`）之后**还有 3 个文档提交**（发布闭环与 tag/Release 回填），此前只以「本段所在提交」一句带过，本轮补齐哈希。
+
+## round-156（当前快照表改回「真快照」+ codex 版本口径复验，文档轮 · 未发版）
+
+**性质**：**文档轮 · 零源码改动 · 零闸门改动 · 未 bump 版本 / 未 tag / 未发版**（新增 1 个探针脚本，无调用点）。
+
+**问题**：主文档 `当前快照` 表自 round-116 起退化成「一行一轮」的追加式日志（Git 分支 / Dev 状态 / 发布记录共 62 行），且自 round-140 后再未回填（同期 `按轮次记录` 索引已到 round-155）⇒ 同一份文件里三处「最新」互相矛盾（顶部 round-140 / 页脚 round-142+143 / 索引 155）。违反本仓写作规范 §2.1「固定表格、每轮交接时更新」与 §6 清单第 1 条。用户追问「为什么要回填交接文档」后裁决口径为**「改回真快照」**（不逐轮追加）。
+
+**修复**：62 行原文**一条不删**，按 4 个分区整体归档到 `sections/snapshot-table-archive.md`；主文档只留 **7 行真快照**（规范 6 项 + `npm latest`），值全部按当日**实测**重写，并新增「读数时间戳」——**只写值不写读数时刻，接手人无法判断它是几分钟前还是一周前的数**。顺带修正 `npm latest` `0.1.127` → **`0.1.132`**、`§未完成事项` 结尾「这 8 条」→「这 10 条」（表里本就是 10 条）、落款日期与两条索引登记。
+
+**提交**：
+
+- `eeaa7765` `chore(scripts): 新增 codex 安装枚举探针（多套 codex 的版本与解析口径）` —— **1 文件（1 新增）**，`+180/−0`
+- `fd711772` `docs(handover): 当前快照表改回「真快照」+ codex 版本口径复验（round-156）` —— **3 文件（1 改 + 2 新增）**，`+333/−63`
+- `7943151c` `docs(handover): round-156 补记「提交台账未回填」的诚实边界` —— **1 文件（1 改）**，`+1/−0`
+
+**codex 版本口径复验**（闭合该轮 §七 第 3 条遗留）：PATH 上的 pnpm 全局 = **0.162.1**，即 `resolveCodexCommand()` 会选中的那一套（本会话 `CODEXUI_CODEX_COMMAND` 未设置）；桌面 App 内容寻址缓存 = `0.162.0-alpha.17.2`；托管守护进程 releases = `0.159.0 / 0.161.0 / 0.162.0`。**时序是关键证据**：19:36 写快照时实测**确为 0.160.1**，19:48 被升级覆盖为 0.162.1（pnpm store 的 0.162.1 条目 mtime = `19:39:46`、全局 shim mtime = `19:48:54`）⇒ **两个读数都是真值**，这也正是快照必须带读数时刻的理由。round-131 ~ round-143 各轮标注的「0.161.0」判定为**当时那台机器的实测读数**（round-135 §六 1 为证明它留了取证路径，该路径属**另一台机器的 pnpm 布局**、**本机不存在**）⇒ 一个字未动。探针已入库：`node scripts/probe-codex-installations.cjs`。
+
+**附带查出（该轮未采纳、未改动）**：仓库内 app-server schema 快照仍停在 **0.160.1**，与真机 0.162.1 相比 json 同名变更 **39** / 新增 **7**、typescript 变更 **23** / 新增 **13**；实质样张 `Turn` 新增必填 `rootTurnId`、`MessagePhase` 新增 `partial_answer`、`subAgentActivity` 新增 `reasoningEffort`。编译影响已**实测并完全回滚**（临时换上 0.162.1 快照跑 `vue-tsc` 仅 3 处测试夹具报错、生产代码零报错；还原后 json 440 / ts 875 与改前一致、`git status documentation/` 为空）。⇒ **该待决项由 round-157 收掉。**
+
+**推送链路（本机实测）**：默认 `http(s)_proxy` → `127.0.0.1:58043` 对 github 返 **502**，直连超时；`socks5://127.0.0.1:10808` 可直连 github ⇒ 本轮 3 提交经 socks5 推送（`b35ee254..7943151c`）。**「缺凭据」是误判**：全局里 github.com 的凭据助手本来就是 **GitHub CLI**（`gh auth git-credential`，已登录 `cattails-lgao`）；真凶是仓库局部残留 `credential.helper = manager-core`，而本机 bash 的 git 是 **PortableGit（只有 `manager`）** ⇒ `--unset-all` 后即通。
+
+## round-155（滚动落点真机实测 + `Ctrl+J` 边界钉死，纯验证 · 未发版）
+
+**性质**：**纯验证，未改任何产品代码**（仅交接文档）。承接 round-153 的两条待人工验证项。
+
+**内容**：真机链路全部可复跑 —— 隔离 home 起 dev server（`CODEX_HOME=<干净 home> node scripts/dev.cjs --port 5173 --strictPort`）+ 可控延迟慢图服务器（`tmp/r155-slow-image-server.cjs`，`?delay=<ms>`，返回真 PNG 900×700）+ 页面侧代码全在 `tmp/r155-harness.js`（拦 `POST /codex-api/rpc` 的 `thread/read`/`thread/resume` 与 `GET /codex-api/thread-turn-page`，**其余透传真桥** ⇒ **数据合成、管线真实**）+ chrome-devtools MCP 驱动。**S1/S2/S3 六条断言全绿**：S1a 打开即在底 `dist −0.33`；S1b 上滚 600 后 1.5s **逐位不回来**且「跳到最新」按钮出现；S1c 点该按钮 `dist 0.33`、`top 7284.67` 对 `maxTop 7285`（写入值被浏览器钳到**分数** `maxTop` ⇒ 残差 0.33px，与旧式 `scrollTop = scrollHeight` 同值）；S2 上翻加载补偿 `ΔscrollTop == ΔscrollHeight` 逐字对上 `loadMoreAbove()` 算式、视口内那条 `rect.top` 位移仅 **0.17px**；S3a 贴底图片晚到 ⇒ 容器**在追内容**（`top` 跟着涨）；S3b 滚开时图片晚到 ⇒ `top` **逐位不变**。
+
+**三条反直觉但必须知道的事实**（已写进轮次文档供复用）：① `initScript` **不跨导航保持**（不带 initScript 再导航 ⇒ `window.__R155` 为 `undefined`）；② Vite 会把 `/tmp/*.js` 当普通 JS 伺服（`200` + `text/javascript`）⇒ initScript 缩成 6 行同步 XHR + eval、长脚本落文件；③ **同文档 hash 跳转不重载文档** ⇒ 换文档必须带会变的查询串。
+
+**方法论修正一处**：第一版把「图还 pending」「图到了」交给**两次工具调用**去采，连续两轮都在列表出现前就已 `complete` ⇒ 改成**页面内每 100ms 自采时间线**（`window.__R155_TL`），取证调用何时进来都不影响结论。
+
+**诚实边界**：① **一处未复现的间歇现象**（贴底 + 第二张图晚到，第一次跑到时图片到达后没回锁、900ms 后距底仍 435.33）；随后 `s3two`/`s3mix`/`s3late`×2 **4 次全部通过**。判定**不是 round-153 引入**，三条理由：失败点在写入之前（`scrollToBottom()` 只要被调用就必然写 `scrollTop = maxTop`）、探针证明写入路径本身准确、round-153 只改这条链最内层且逐位等价。⇒ 记为**未定位的间歇现象**，最小追查动作已写明（在 `onPendingImageSettled` 里给 `shouldLockToBottom()` 与 `trackedPendingImages.size` 留痕、跑 20 次统计）。② **`Ctrl+J` 没能闭合**：CDP 正对照（同一套注入按 `Ctrl+T` ⇒ **页面数 1→1、URL 未跳转**）证明 **CDP 注入不经浏览器加速键前置处理** ⇒ 自动化测不出；已把「为什么不能」与「人工按完怎么判读」钉死，并留下观察器与仍在运行的两个进程供人工按一次。
+
+**提交**：`b35ee254` `docs(verify): 滚动落点真机实测（批 3a 待验证项闭环）+ Ctrl+J 边界钉死（round-155）` —— **3 文件（1 改 + 2 新增）**，`+138/−2`
+
+**验证**：本轮零源码改动 ⇒ 单测/契约基线不变（round-154 后 **998 例 / 87 文件**、契约 **59/59**）。探针与 harness 在 `tmp/`（被 gitignore）⇒ **不进 CI**，且需 dev server + 真实线程，**不适合当闸门**。
+
+## round-154（复制最后一个代码块，对齐桌面端 `copyLastCodeBlock`，未发布）
+
+**内容**：判定书 `sections/desktop-parity-decision.md` §三·C 的**最后一处缺口**，本轮补齐。**纯前端**（未碰 `src/server/**`）。**桌面端原样**（从 `tmp/r145-asar` 逐个读出，非推测）：id `copyLastCodeBlock`、键位 `CmdOrCtrl+Shift+;` ⇒ 关键信息是**描述那句**——范围限定**助手**、语义是**全局最后一个**（执行体在未拆出的懒加载 chunk 里，故语义按描述定义而非照抄实现）。**新增** `src/utils/conversationCodeBlocks.ts`（108 行，CRLF）＝ `ConversationCodeBlock` + `isAssistantContentMessage` + `collectCodeBlocksFromMessage` + `hasAssistantCodeBlock` + `findLastAssistantCodeBlock`。**与渲染层同源**：解析走既有 `parseMessageBlocks`（**不另写围栏正则**，否则「复制出来的和屏幕上的不一样」）；**递归**只发生在列表项，`blockquote` 内部不解析成块 ⇒ **引用块里的围栏不算代码块**。**「最后一个」的正确形状**：从末尾往前找**第一条带代码块的助手消息**、取该消息的**最后一个**块 —— 最后一条助手没有代码块时**继续往前找**，而不是判空。**围栏正则唯一化**（`conversationMarkdown.ts`）：`readFenceStart` 内联正则提为 `FENCE_START_PATTERN` 常量，`'u'`（逐行）与 `'gmu'`（整篇，新增导出 `hasCodeFenceStart`）共用。**为什么需要廉价判定**：面板可用性收敛依赖 `filteredMessages` 且**流式期间反复重算**，全量 `parseMessageBlocks` 是 O(总文本)、不适合放热路径；两者不分歧由语料对照用例断言 `has === (find !== null)`。**接线**：注册表 **25→26**（`thread.copy-last-code-block`，`requiresThread: true`）+ zhCN 补 `'Copy last code block'` + `App.vue` 加 `case` 与 `copyLastCodeBlock()` + 收敛分支（无助手代码块时隐藏 ⇒ **面板永不给出空操作**）。**刻意不加键位**（`onWindowKeyDown` 开头即 `shiftKey/altKey` 早退）。
+
+**提交**：`b58369d8` `feat(palette): 复制最后一个代码块（对齐桌面端 copyLastCodeBlock）` —— **10 文件（7 改 + 3 新增）**，`+663/−3`
+
+**验证**：全量 **998 例 / 87 文件全绿**（round-153 后 961/86，**+37 例 +1 文件**，零退化）；`vue-tsc --noEmit` **EXIT=0**；契约 **59/59**（round-153 后 58，新增 round-154 断言）；`vite build` **EXIT=0**。**未跑 `tsup`**（未碰 `src/server/**`）。
+
+## round-153（批 3a：滚动位置改走「距底坐标」，未发布）
+
+**内容**：承接 round-151 的批 3 评估（`sections/batch3-virtualization-assessment.md`）§五 的 **3a**，**纯前端、行为等价重构**，未碰 `src/server/**`。评估 §三 的**必解 1** 是 `scrollToBottom()` 的 `anchor.scrollIntoView({ block: 'end' })` 要求底部锚点已渲染，窗口化后锚点若在渲染窗口外这次调用**静默无效**、而 `scrollTop = scrollHeight` 那行仍会生效 ⇒「跳到一半」；3a 就是先把这条坐标**立起来**（单独看**零收益**，但它是批 3 里**唯一能在无浏览器环境验证**的一步）。**新增** `src/utils/conversationScrollDistance.ts`（87 行，CRLF）＝ `ScrollMetricsPx` + `DEFAULT_BOTTOM_THRESHOLD_PX = 16`（阈值从组件内搬进来，口径唯一化）+ `getMaxScrollTopPx` / `getScrollDistanceFromBottomPx` / `isScrollAtBottomPx` / `clampScrollDistanceFromBottomPx` / `getScrollTopForDistanceFromBottomPx` / `readScrollMetricsPx`（**唯一 DOM 触点**）。**两处有意差异**：距底距离**钳到 ≥0**（过滚时旧式给负数；钳零**不改变布尔**）、写 `scrollTop` **显式钳到 `[0, max]`**（旧代码靠浏览器钳位，落点相同）。**组件 4 处改动**（锚点脚本 `tmp/r153-patch-scroll.cjs` 落盘，逐处断言命中 1 次 + 结构自检 + 残余检查）。**移除 `scrollIntoView` 的等价性论证**（本轮唯一行为改动）：`.conversation-list` 是 `py-0`、底部锚点 `.conversation-bottom-anchor`（`h-px`）又是最后一个子元素 ⇒ `scrollIntoView({block:'end'})` 在容器上的落点就是 `scrollTop = scrollHeight − clientHeight`（逐位相同）；而它另有一个**已知有害**的副作用——**滚动祖先容器**（代码原注释记的正是它把文档撑到 3.2 万布局对象、一次 `scrollHeight` 读 ~81ms），距底写入只动本容器 ⇒ 甩掉是收益。
+
+**提交**：`7d295da1` `refactor(scroll): 滚动位置改走「距底坐标」（批 3a）` —— **8 文件（5 改 + 3 新增）**，`+594/−15`
+
+**验证**：新增 `conversationScrollDistance.test.ts` **32 例**，最有价值的是**对照扫描**（8 高度 × 6 视口 × 16 个 `scrollTop` 候选，每条断言 >500 例并用 `expect(checked).toBeGreaterThan(500)` 防网格退化）：贴底布尔 === 旧式 `距离 <= 16`、距底距离 === `max(0, 旧式)`、贴底写落点 === 旧式 `scrollTop = scrollHeight` 的钳位结果；对照基准**刻意不 import 被测代码**（否则恒真）。全量 **961 例 / 86 文件全绿**（round-152 后 929/85，**+32 例 +1 文件**）；`vue-tsc --noEmit` **EXIT=0**；契约 **58/58**（round-152 后 57，新增 round-153 断言）；`vite build` **EXIT=0**。**闸门反跑五路**全红且翻红子判据精确（A 写侧距离改 8 ⇒ `接线=NO`；B 阈值 16→20 ⇒ `贴底阈值 16=NO`；C 退回 `scrollTop = scrollHeight` ⇒ `旧写法清零=NO`；D 读侧退回旧公式 ⇒ `读侧=NO`；E 对照基准改名 ⇒ `对照扫描独立定义=NO`），还原后**按字节一致** 58/58。
+
+## round-152（启动浏览器实测三条交互 + 修掉一处只在运行时存在的焦点缺陷，未发布）
+
+**问题（为什么做）**：前两轮的验证一直是「静态闸门 + 单测」，**没有任何一条真的在浏览器里按过键**。本轮起 dev server（`vite --port 5173`，桥是 Vite 插件）+ 真实 `~/.codex`，用 Playwright 驱动**有头** Chromium 把命令面板 / 速查面板 / 全局键位走全（脚本 `tmp/r152-verify-ui.cjs`，**36/36**，含 2 条 INFO 探针不参与退出码）。
+
+**抓到的真缺陷**：round-151 声称的「关闭模态归还焦点」**只对命令面板的一条路径成立** —— 速查面板**任意关闭方式**、命令面板的 `Ctrl/Cmd+/` 关闭分支、window 的 `Esc` 兜底分支、以及**执行命令后**四条路径**都把焦点丢给 `<body>`**；且唯一生效的那条**硬编码**到顶栏按钮而非记住来源。修法＝ `rememberOverlayFocus()` / `restoreOverlayFocus()`（来源已卸载则兜底顶栏入口）+ 键位分支收拢成 `onToggleCommandPalette()` + 四条路径统一走关闭函数。**修 (3) 的顺序风险不成立且已被钉住**：`onCommandPaletteRun` 改走关闭函数后，归还焦点的 `nextTick` **先于**命令自身注册，而 `nextTick` **按注册顺序执行** ⇒ 命令若打开对话框（重命名），对话框后注册、后聚焦、**胜出**（E4 实测 `rename-thread-input` 处于全选态）。
+
+**顺带更正一条运维事实**：dev server 端口是 **5173**（`vite.config.ts:121` 硬编码），**长期记忆里写的 4173 是别的东西**。
+
+**提交**：`1868e208` `fix(palette): 浮层关闭四条路径统一归还焦点；补浏览器实测（round-152）` —— **5 文件（4 改 + 1 新增）**，`+239/−12`
+
+**验证**：契约 **57/57**（round-150 键位断言改写为「分支调用收拢函数 ∧ 两方向都在 ∧ 关闭方向归还焦点」，**比原来更强**；新增 round-152 断言）+ **反跑**（删掉 `restoreOverlayFocus()` ⇒ 精确报 `两关闭方向=NO`）；单测 **929 例 / 85 文件全绿**（零退化）；`vue-tsc --noEmit` **EXIT=0**；`vite build` **EXIT=0**；控制台零 error。**未跑 `tsup`**（未碰 `src/server/**`）。**诚实边界**：`tmp/r152-verify-ui.cjs` 在 `tmp/`（被 gitignore）⇒ 不进 CI、不适合当闸门；闸门覆盖结构、浏览器覆盖行为，**两者不重叠**；24 条命令只端到端抽查 2 条。
+
+## round-151（命令面板指针入口 + 快捷键速查面板 + 批 3 前置评估，未发布）
+
+**内容**：三件事按顺序做完。**① 消除 round-150 遗留的可用性缺口**：`Ctrl/Cmd+/` 的判定走 `event.key`，**只有把 `/` 放在该物理位置的布局才产出 `'/'`**，而面板当时**只有这一个入口** ⇒ 非美式布局等于不可达；处置＝ `ContentHeader` 的 `#actions` 加放大镜按钮（`content-header-command-button`），并补**关闭后焦点还给触发控件**（与 `AppDialog` 一致，否则焦点落 `<body>`）。**② 快捷键速查面板**：新增 `src/utils/keyboardShortcuts.ts`（**纯展示目录**，15 条 / 3 组，文件头注明三类来源）+ `ShortcutHelpPanel.vue` + 命令 `view.shortcuts`（24→25）；**关键取舍**：`formatShortcutTokens` 只映射 `Mod`/`Shift`（仅 mac），拼接按平台分叉；`alsoKeys` 表达「等价替代」；**两模态互斥**；「发送」按 `sendWithEnter` 两分支各列一条。**③ 批 3 评估**（新增 `sections/batch3-virtualization-assessment.md`，七节）：**主结论＝批 3 不是修 bug 而是换地基** —— 我方**没有**「流式追加把列表顶走」的缺陷路径（贴底走 `scrollToBottom()` 硬跳、非贴底**完全不滚动**；整页差补偿只用在 `loadMoreAbove()`，那是**前置插入**、`ΔH` 恰好等于插入高度 ⇒ 补偿精确）⇒ round-148 的对照只说明几何层更通用，**不能读成「我方实现有错」**；**三个必解**＝ `scrollIntoView` 依赖锚点在 DOM 里、`jumpToQuestion` 用 `getElementById` 找目标轮（窗口化后失效）、`<ul>` 唯一滚动容器 + 不能挂 `v-if`；**拆分** 3a 距底 API / 3b 折叠态 warm 轮窗口化 / 3c hot 轮（高风险）；只窗口化折叠态 warm 轮的依据＝ `WarmTurnCard` 文本一律单行 `truncate` ⇒ 行数不随内容变化 ⇒ 高度近似常量。
+
+**提交**：`5b89bc52` `feat(palette): 命令面板指针入口 + 快捷键速查面板；批 3 前置评估（批 1 #3）` —— **11 文件（6 改 + 5 新增）**，`+864/−5`
+
+**验证**：新用例 **20/20**；全量 **929 例 / 85 文件全绿**（批 2 后 909/84，+20 例 +1 文件）；`vue-tsc --noEmit` **EXIT=0**；契约 **56/56**（round-150 的 `Ctrl+/` 断言因该分支多插一行而改为允许分支内 ≤200 字符中间语句，`/` 分支仍是唯一出现该赋值之处 ⇒ 非放宽）；`vite build` **EXIT=0**。**两次反跑**（摘掉入口类 ⇒ `面板指针入口=NO`；把 `'Mention a file'` 改成表里没有的串 ⇒ `i18n 漏键=Mention a file`）。**未跑 `tsup`**（未碰 `src/server/**`）。**遗留**：速查目录是**转写不是探针**（只保证目录与 zhCN 表一致，不保证与运行时绑定一致）。
+
+## round-150（批 2：命令面板（注册表 + 匹配器 + 覆盖层 + `Ctrl/Cmd+/`），未发布）
+
+**内容**：按判定书 §四 的批 2 执行，**纯前端**（未碰 `src/server/**`）。**核心立场：面板不新增任何能力** —— 24 条命令全部 `switch` 转发到既有 `App.vue` 处理函数，注册表是**纯数据 + 纯函数**（不 import 处理函数 / store / 组件），因此能不挂载应用直接单测。**新增 3 文件**：`src/components/content/commandRegistry.ts`（189 行，CRLF）＝ `PaletteCommand` 类型 + `PALETTE_COMMANDS` 24 条 + `scorePaletteText` / `matchPaletteCommands` / `groupPaletteCommands`；`commandRegistry.test.ts` **27 例**；`CommandPalette.vue`（217 行）＝ Teleport 覆盖层 + 输入框 + 分组列表 + 键盘导航，**无 `isOpen` prop**（挂载即打开，执行经 `run` 事件上交）。**评分全整数**（每命中 `+10`、连续命中额外 `+6×run`、词首 `+12`、首个命中靠后 `−2×firstHit`、长度 `−⌊(len差)/4⌋`）保证断言逐位可复现。**排序陷阱（测试专设反例）**：「标题命中整块排在关键字命中之前」**不能靠分数表达**（长标题吃长度惩罚，`'Zebra report of everything'` 标题分 **111** vs keyword `zebra` **152**，后者分高却必须排后）⇒ 用显式排序键 `Number(a.keywordOnly) − Number(b.keywordOnly) || b.score − a.score || a.index − b.index`。**上下文收敛**：例外做成**数据上的** `requiresThread` 标志，因为 `thread.new` 恰恰是没选中线程时最该能用的那条。**键位选 `Ctrl/Cmd+/`**：`Ctrl+K` 是 Chromium 保留功能键、`Ctrl+Shift+P` 需放开现有守卫 ⇒ 只有 `/` 落在现有守卫内且不需放松任何条件；面板内部 `preventDefault()` 处理方向键 / `Tab` / 回车 / `Esc` ⇒ 撞上 window 处理器开头的 `event.defaultPrevented` 直接放行，两套键盘逻辑不互抢。i18n +24 条 zhCN；`keywords` **刻意不翻译**（中英双向召回：`trash`→回收站、`暗色`→主题）。
+
+**提交**：`627f3d56` `feat(palette): 命令面板（注册表 + 匹配器 + 覆盖层 + Ctrl/Cmd+/）（批 2）` —— **9 文件（5 改 + 4 新增）**，`+1024/−0`
+
+**验证**：新用例 **27/27**；全量 **909 例 / 84 文件全绿**（批 1 后 882/83，+27 例 +1 文件）；`vue-tsc --noEmit` **EXIT=0**；契约 **55/55**（含**自动比对 zhCN 表**捕获命令标题漏译；**反跑** ⇒ 把 `nav.settings` 标题改成表里没有的 `'Open preferences'` 即精确报 `i18n 漏键=Open preferences`）；`vite build` **EXIT=0**。**中途踩到既有契约**：输入框初用 `text-sm` 被「UI 字号不落在阶梯外」拦下，改 `text-ui`。**未跑 `tsup`**（未碰 `src/server/**`）。
+
+## round-149（批 1 #1：消息列表时间分隔，未发布）
+
+**内容**：按判定书 §四 的批 1 执行。规则取自桌面端 `shouldShowMarker`，**唯一易错点＝基准**：是「上一条**已展示**的分隔栏」而不是「上一轮」（桌面端变量名即 `previousMarkerSentAtMs`）。差异在「每 29 分钟一条」这类高频对话里是决定性的 —— 按上一轮算**整段一条分隔都出不来**；该对照已固化成断言（`selectTimeDividerTurnKeys` 首例）。**新增** `src/utils/timeDividers.ts`（108 行）+ **25 例**单测 + `src/components/content/TimeDivider.vue`；**接线 6 处**于 `ThreadConversation.vue`——**两条 return 路径都要挂**：无 hot 轮时会提前返回（此时只有 warm 轮），只在末尾挂会让**纯 warm 线程完全没有分隔**；i18n 补 `Today` / `Yesterday` 两条 zhCN 表值。**刻意选择**：标签手写 `pad2` 拼 `MM-DD` / `HH:mm`（**不用 `toLocaleDateString`** —— locale 会换分隔符、不可断言）；`turnStartedAtIso` 缺失时静默跳过、**不打断轮次渲染**；位置排在模型切换栏之前。**批 1 其余三项处置**：#2 滚动到底部按钮**本就存在**（`showJumpToLatestButton` / `jumpToLatest`，**r147 材料看漏**）；#3 快捷键速查**有意延后**到批 2 之后（命令注册表才是它的地基）；#4 `Ctrl+J` **不改** —— 不在保留加速键表里、页面能 `preventDefault` 吃掉，且终端面板本就有可见 tab 按钮兜底（**唯一未闭环＝真机按一次键**）。
+
+**提交**：
+
+- `15a598af` `feat(list): 消息列表时间分隔（跨天 / 距上一条分隔栏 ≥30 分钟）（批 1 #1）` —— **9 文件（5 改 + 4 新增）**，`+537/−2`
+- `4e7ad3f9` `docs(parity): 更正盘点层两处「他们有我们没有」——其实都已存在（round-149 复核）` —— **2 文件（2 改）**，`+8/−2`
+- `c87e0643` `docs(round-149): 补记 vite build 结果（EXIT=0，ThreadConversation-BC9Bil06.js）` —— **2 文件（2 改）**，`+2/−2`
+
+**验证**：新用例 **25/25**；全量 **882 例 / 83 文件全绿**（批 0 后 857/82，**+25 例 +1 文件**，旧例零退化）；`vue-tsc --noEmit` **EXIT=0**；契约 **54/54**（基线 53，本轮 +1 条 `round-149`；**反跑** ⇒ 把 `30 * 60 * 1000` 改成 `20 * 60 * 1000` 即 `30 分钟常量=NO`、53/54）；`vite build` **EXIT=0**（`ThreadConversation-BC9Bil06.js` 产出、`index-BZ7GF1kA.js` 586.38 kB）。**未跑 `tsup`**（未碰 `src/server/**`）。
+
+## round-148（批 0：把桌面端几何层移植为纯函数模块（只落地、不接线），未发布）
+
+**性质**：**新增文件、不接线**（无任何调用点）。前置是 round-145/146/146b/147 的桌面端 `app.asar` 只读盘点；本轮前半给出逐域判定与五批方案。
+
+**内容**：来源 = 桌面端 `app.asar` 的 `webview/assets/thread-virtualizer-e1964ca5c039.js`（**2,131 B**、零 React / 零 DOM / 零状态、仅依赖打包器运行时）⇒ 本轮展开全文（`tmp/r148-virtualizer.txt`，48 行）逐行还原。**关键发现（round-147 材料未讲清）**：两个手写二分面对的是**递减**数组 ⇒ 语义不是「首个 ≥ target」，而是 `o()`＝首个 `bottomOffset <` 视口顶边（**可见起点，incl.**）、`s()`＝首个 `bottomOffset + height ≤` 视口底边（**可见终点，excl.**）；实测校验（10 轮×100px、视口 200px）⇒ 贴底 **[8,10)**、距底 400 ⇒ **[4,6)**、overscan 2 ⇒ **[6,10)**。**新增 2 文件（均 CRLF）**：`src/utils/turnVirtualizer.ts` 298 行（导出 `buildLayout` / `computeVisibleRange` / `getRangeForAnchor` / `computeScrollDistanceForAnchor` / `computeScrollDistanceForTurn` + `DEFAULT_ESTIMATED_HEIGHT_PX = 280` + 5 个类型）；字段名与桌面端**逐字对齐**（`bottomOffsetsPx` / `gapsBeforePx` / `heightsPx` / `topOffsetsPx` / `totalHeightPx` / `turnIndexByKey` / `turnKeys` / `gapKeys` / `collapseEmptyRows`）便于将来数值对拍；**唯一有意偏离**＝读实测高度加一道 `Number.isFinite` 硬化（桌面端直接取 `measuredHeightsByKey[key]`，脏值会让 `totalHeightPx` 变 `NaN`、整页算不出可见区间而渲染空白）。`src/utils/turnVirtualizer.test.ts` 283 行 **27 例**。**最有价值的用例**＝把「按行锚定」与「整页高度差」的差异固化成断言：用户停在距底 300px、末轮从 100 流式长到 400 ⇒ 锚定补偿 **600**（锚点钉住、内容不动），而我方现值（`scrollTop += (800−500)`）会让距底距离留在 300、**视口内容跳 300px**；边界用例同时证明**贴底态不能走补偿路径**。
+
+**提交**：`67a042d1` `feat(list): 移植桌面端消息列表几何层为纯函数模块（批 0，零调用点）` —— **5 文件（1 改 + 4 新增）**，`+1026/−0`
+
+**验证**：新用例 **27/27**；全量 **857 例 / 82 文件全绿**（基线 830/81，正好 +1 文件 +27 例）；`vue-tsc --noEmit` **EXIT=0**；`git status --short` 仅 3 个新增项、**无任何已有文件被改**（`.conversation-list` 的滚动实现一字未动）。**未跑 `vite build` / `tsup`**（未碰 `src/server/**`，新文件无调用点、不进任何产物路径）；**`SHARED_BRIDGE_VERSION` 未 bump**。
+
+## round-144 ~ round-147（桌面端只读盘点，**零提交**）
+
+**这四轮没有任何提交** —— 它们是桌面端 `app.asar` 的**只读盘点**，产出全部落在 `tmp/`（`tmp/r145-asar`、`tmp/r146-*`、`tmp/r147-*`，`tmp/` 被 gitignore ⇒ 不入库）与 `sections/desktop-parity-decision.md`（该文件随后随 round-148 入库）。
+
+**对台账的意义**：`round-144 ~ round-147` 在 `rounds/` 下**也没有轮次文档** —— 这不是「漏写」，而是**那四轮本就没有可提交的产物**。前序引用它们的地方是 round-148 与判定书的「前置」说明（round-148 提到 `round-145/146/146b/147`，其中 `146b` 是 146 的补充取证）。
+
+## round-142 / round-143 补记（首次回填之后的 3 个文档提交）
+
+`a60c15be`（「回填提交哈希」）之后，round-142 / round-143 的发布闭环又产生了 **3 个文档提交**，此前台账只以「本段所在提交」一句带过，本轮补齐哈希：
+
+- `21c72097` `docs(release): round-142 + round-143 回填 npm 上架闭环（registry 时刻/shasum/产物逐字节一致 + 传播观察）` —— **2 文件（2 改）**，`+10/−1`
+- `d178c541` `docs(round-143): 版本状态改为已随 v0.1.132 发布（tag/Release 已闭环，npm 待维护者）` —— **1 文件（1 改）**，`+2/−2`
+- `8285d7eb` `docs(commit-history): round-142 + round-143 回填发布动作（tag v0.1.132 / Release Latest / npm 待维护者）` —— **1 文件（1 改）**，`+5/−1`
+
 ## round-143（thread/resume 有界页与权威索引对账，剔除已回退的残留轮次，已 bump 0.1.132）
 
 **问题**：线上 `codex.arderpanada.top` 线程 `01a13083-68df-7650-b4a5-5e5c8f436d06` 回退成功、消息当场从列表消失，**刷新后同一轮又回来了**；用户补充「**清空了浏览器存储，刷新后也还在**」⇒ 残留**不在浏览器侧**，在服务端响应本身。
