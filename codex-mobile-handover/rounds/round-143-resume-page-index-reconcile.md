@@ -6,7 +6,7 @@
 > **「我刚刚在浏览器清空了存储，刷新后也还在」**。
 > **清存储不生效 ⇒ 残留源不在浏览器里。** 本轮先把「服务端到底还有没有那一轮」实测清楚，再动手。
 >
-> 基线：`1a903dca`（round-141 末次提交，`package.json` = `0.1.131`）。本轮**未 bump**（见 §十）。
+> 基线：`1a903dca`（round-141 末次提交，`package.json` = `0.1.131`）。本轮**已随 `0.1.132` 发布**（tag `v0.1.132` → 回填提交 `a60c15be`，见 §十）。
 
 ---
 
@@ -231,7 +231,7 @@ ESBUILD_BINARY_PATH="$ESBUILD_BINARY_PATH" "$NODE" tmp/r143-refute.cjs
 
 ## 十、落款说明
 
-- **未 bump 版本**：`package.json` 仍 `0.1.131`（本轮的落版本由用户决定，见下）。
+- **已 bump 版本（2026-10-14 发布）**：`package.json` `0.1.131` → **`0.1.132`**（提交 `41737a45`）；**annotated tag `v0.1.132`**（tag 对象 `a8b27526…`）指向哈希回填提交 **`a60c15be`**；GitHub Release 已建并标 **Latest**（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.132 ）；**npm 上架待维护者执行 `pnpm publish`**。
 - **本轮与 round-142 是同一条用户症状的两条通路**（本地存档 / 服务端 rollout 页），两条都已修、都已验证。
 - 修复只动**读侧**（取页时对账），**没有**改写入行为，也没有改任何客户端状态机 ⇒ 别的客户端读同一份数据行为不变。
 - **生效条件**：重新部署（`vite build` **+** `tsup`，改 `src/server/**` 必须跑 `tsup`）。
