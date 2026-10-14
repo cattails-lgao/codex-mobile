@@ -21,9 +21,36 @@ const { spawnSync } = require('node:child_process')
 const HOME = process.env.USERPROFILE || process.env.HOME || ''
 const LOCALAPPDATA = process.env.LOCALAPPDATA || process.env.XDG_DATA_HOME || ''
 
+// Windows 上 `.cmd`/`.bat` 与裸名 `codex` 必须经 cmd.exe 包装 —— Node >= 20.12 直接
+// spawn 会 EINVAL/ENOENT。口径复刻 src/utils/commandInvocation.ts#getSpawnInvocation
+// （**只在含空白时才加引号**）。已知局限：路径含空格时 Node 会把内层引号转义成 `\"`，
+// cmd 不认 ⇒ 该分支仍会失败；这与本仓解析器同源，不是本探针独有。
+const CMD_WRAPPED_NAMES = new Set(['codex', 'npm', 'npx'])
+
+function quoteCmdExeArg(value) {
+  const normalized = value.replace(/"/g, '""')
+  return /[\s"]/u.test(normalized) ? `"${normalized}"` : normalized
+}
+
+function needsCmdExeWrapper(command) {
+  if (process.platform !== 'win32') return false
+  const base = path.basename(command.toLowerCase())
+  if (/\.(cmd|bat)$/i.test(base)) return true
+  if (path.extname(base)) return false
+  return CMD_WRAPPED_NAMES.has(base)
+}
+
+function spawnCodex(command, args) {
+  if (needsCmdExeWrapper(command)) {
+    const line = [quoteCmdExeArg(command), ...args.map(quoteCmdExeArg)].join(' ')
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', line], { encoding: 'utf8', windowsHide: true, timeout: 30000 })
+  }
+  return spawnSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: 30000 })
+}
+
 function versionOf(exe) {
   if (!exe || !fs.existsSync(exe)) return null
-  const r = spawnSync(exe, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: 30000 })
+  const r = spawnCodex(exe, ['--version'])
   const line = ((r.stdout || '') + (r.stderr || ''))
     .split(/\r?\n/)
     .map((s) => s.trim())
@@ -66,7 +93,7 @@ function probePathShims() {
       const shim = path.join(d, 'codex' + ext)
       if (!fs.existsSync(shim) || seen.has(shim)) continue
       seen.add(shim)
-      found.push({ kind: 'PATH shim', label: shim, version: null, note: '' })
+      found.push({ kind: 'PATH shim', label: shim, version: versionOf(shim), note: '' })
       // 从 shim 内容里解析出真实包目录，再按已知布局找 exe
       let pkgDir = null
       try {
@@ -144,7 +171,7 @@ if (!found.length) {
   for (const k of kinds) {
     console.log(`## ${k}`)
     for (const f of found.filter((x) => x.kind === k)) {
-      console.log(`  ${f.version || '(不可运行)'}`.padEnd(24), f.label)
+      console.log(`  ${f.version || (f.kind === 'pnpm/npm 全局包' ? '(包目录)' : '(不可运行)')}`.padEnd(24), f.label)
       if (f.note) console.log(' '.repeat(26) + '↑ ' + f.note)
     }
     console.log()
