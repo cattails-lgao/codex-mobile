@@ -606,6 +606,11 @@ import { readPlanData } from '../../utils/plan'
 import { formatTimeDividerLabel, selectTimeDividerTurnKeys } from '../../utils/timeDividers'
 import { headingClass, headingTag } from '../../utils/conversationPaths'
 import {
+  getScrollTopForDistanceFromBottomPx,
+  isScrollAtBottomPx,
+  readScrollMetricsPx,
+} from '../../utils/conversationScrollDistance'
+import {
   buildFileChangeCopyText as buildFileChangeCopyTextCore,
   displayFileChangePath as displayFileChangePathCore,
   type TurnFileChangeSummary,
@@ -995,7 +1000,9 @@ const toolQuestionAnswers = ref<Record<string, string>>({})
 const toolQuestionOtherAnswers = ref<Record<string, string>>({})
 const mcpElicitationAnswers = ref<Record<string, string | number | boolean | string[]>>({})
 const autoFollowOutput = ref(true)
-const BOTTOM_THRESHOLD_PX = 16
+// 距底坐标（round-153 · 批 3a）：贴底判定 / 滚到底 / 贴底维持统一走
+// utils/conversationScrollDistance（阈值 = 该模块的 DEFAULT_BOTTOM_THRESHOLD_PX = 16，
+// 语义与旧式 scrollHeight - (scrollTop + clientHeight) <= 16 逐位一致）。
 let conversationScrollFrame = 0
 let bottomLockFrame = 0
 let bottomLockFramesLeft = 0
@@ -1898,28 +1905,43 @@ function onRejectUnknownRequest(requestId: number): void {
   })
 }
 
+// round-153（批 3a）：滚动位置的**写入**统一走「距底距离」坐标；容器贴底态即距底 0。
+function setScrollDistanceFromBottom(container: HTMLElement, distancePx: number): void {
+  container.scrollTop = getScrollTopForDistanceFromBottomPx(readScrollMetricsPx(container), distancePx)
+}
+
 function scrollToBottom(): void {
   const container = conversationListRef.value
   const anchor = bottomAnchorRef.value
   if (!container || !anchor) return
-  // 已在底部时不再重复「写 scrollTop + scrollIntoView」：底部锁定一次连打 6 帧，
-  // 而 scrollIntoView 会再强制一次同步布局（并可能滚动祖先容器）。内容没增长时
-  // 这些强制布局全是白做的——每次都要为整棵文档布局，成本随文档规模放大（右侧
-  // Git 面板曾把文档撑到 3.2 万个布局对象，一次读 scrollHeight 就是 ~81ms）。
+  // 已在底部时不再重复写入：底部锁定一次连打 6 帧，而每次写 scrollTop 都要强制一次
+  // 同步布局（内容没增长时全是白做的），成本随文档规模放大（右侧 Git 面板曾把文档
+  // 撑到 3.2 万个布局对象，一次读 scrollHeight 就是 ~81ms）。
   if (isAtBottom(container)) return
-  container.scrollTop = container.scrollHeight
-  anchor.scrollIntoView({ block: 'end' })
+  // 不再调用 anchor.scrollIntoView({ block: 'end' })：
+  //   · 落点在容器上等价 —— .conversation-list 是 py-0，底部锚点又是最后一个子元素
+  //     （.conversation-bottom-anchor 仅 h-px），故 scrollIntoView({block:end}) 的结果
+  //     就是 scrollTop = scrollHeight − clientHeight（即距底 0），与本行逐位相同；
+  //   · 甩掉它的副作用 —— scrollIntoView 会**滚动祖先容器**（上一条注释记的正是它把
+  //     文档撑大的后果），距底写入只动本容器。
+  // 这一步也是窗口化的地基（评估 §三 必解 1）：锚点不在渲染窗口时 scrollIntoView 会
+  // **静默失效**，而按布局表算出的距底距离仍然有效。
+  setScrollDistanceFromBottom(container, 0)
 }
 
 function isAtBottom(container: HTMLElement): boolean {
-  const distance = container.scrollHeight - (container.scrollTop + container.clientHeight)
-  return distance <= BOTTOM_THRESHOLD_PX
+  // 阈值仍是 16（DEFAULT_BOTTOM_THRESHOLD_PX）。语义与旧式
+  // scrollHeight - (scrollTop + clientHeight) <= 16 逐位一致 —— 唯一差异是过滚时距离
+  // 钳到 0，而钳零不改变布尔（负数与 0 都 ≤ 阈值），有对照扫描用例钉住。
+  return isScrollAtBottomPx(readScrollMetricsPx(container))
 }
 
 function applyConversationScrollState(): void {
   const container = conversationListRef.value
   if (!container) return
 
+  // round-153（批 3a）：跟随输出时走 enforceBottomState → scrollToBottom，落点由
+  // 距底距离（0）算出，不再依赖底部锚点能否被 scrollIntoView 命中。
   if (autoFollowOutput.value) {
     enforceBottomState()
     return

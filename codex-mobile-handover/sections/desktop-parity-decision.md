@@ -199,7 +199,7 @@
 
 ### 批 3 · 高风险：把窗口化接进 hot 区
 
-> **评估已完成（round-151），未开工** ⇒ [batch3-virtualization-assessment.md](./batch3-virtualization-assessment.md)。
+> **评估已完成（round-151）；批 3a 已落地（round-153），3b/3c 未开工** ⇒ [batch3-virtualization-assessment.md](./batch3-virtualization-assessment.md)。
 > 三条与本节的差异：
 > 1. **本轮不是修 bug，是换地基** —— 我方**没有**「流式追加把列表顶走」的路径：贴底走
 >    `scrollToBottom()` 硬跳（`:1901`），非贴底**完全不滚动**；整页差补偿只出现在
@@ -213,7 +213,7 @@
 - **搬什么**：③ 渲染层的「外层撑高 + 内层 `margin-top`」+ ② 的可见区间；**④ 只搬 API 形态**（`getLastScrollDistanceFromBottomPx` / `scrollToDistanceFromBottomPx(dist, behavior, origin)` / `shouldFollowContentGrowth`）
 - **前置**：批 0 完成且数值对齐
 - **必须同时解决三件事**：
-  1. 我们贴底用 `anchor.scrollIntoView({block:'end'})` ⇒ **锚点一旦不被渲染就失效**，必须换成距底距离驱动
+  1. ✅ **round-153 已做**：我们贴底原用 `anchor.scrollIntoView({block:'end'})` ⇒ **锚点一旦不被渲染就失效**，已换成距底距离驱动（`utils/conversationScrollDistance.ts` + `setScrollDistanceFromBottom`）
   2. round-143：**回退边界必须仍在渲染集内** ⇒ 卸载边界要保护回退点与进行中的轮
   3. `.conversation-list` 是唯一滚动容器，**闸门断言 `<ul>` 上不能挂 `v-if/v-else`**
 - **降险路线**：先只做「距底 API 抽象 + `[overflow-anchor:none]` + 按轮锚定补偿」这三件**不改 DOM 结构**的事，观察一版；确认无回归再考虑窗口化。

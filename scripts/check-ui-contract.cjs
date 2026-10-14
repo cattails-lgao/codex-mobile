@@ -1209,6 +1209,55 @@ check(
   ].join(' / '),
 )
 
+// ---------------- round-153（批 3a）：滚动位置改走「距底坐标」
+// 批 3 的窗口化（3b/3c）要求滚动落点由**布局表算出的距底距离**驱动，而不是依赖
+// 「DOM 锚点已渲染」——锚点不在渲染窗口时 scrollIntoView 会静默失效。这里钉住四件事：
+//   1) 纯函数模块的导出面齐全（读 / 写 / 钳 / 阈值 / DOM 读取）；
+//   2) 贴底阈值仍是 16（行为等价的前提）；
+//   3) 组件的读侧与写侧都改走新口径；
+//   4) 旧写法确实清零（整页写 scrollTop、scrollIntoView 语句），避免「新旧并存」的假迁移。
+const scrollDistSrc153 = fs.readFileSync('src/utils/conversationScrollDistance.ts', 'utf8')
+const scrollDistTestSrc153 = fs.readFileSync('src/utils/conversationScrollDistance.test.ts', 'utf8')
+const convSrc153 = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+// 注释里会**引用**旧写法（说明为何移除），故残余检查只看非注释行。
+const convCodeLines153 = convSrc153.split(/\r?\n/).filter((line) => !line.trim().startsWith('//'))
+const scrollApi153 = [
+  'getMaxScrollTopPx',
+  'getScrollDistanceFromBottomPx',
+  'clampScrollDistanceFromBottomPx',
+  'isScrollAtBottomPx',
+  'getScrollTopForDistanceFromBottomPx',
+  'readScrollMetricsPx',
+].every((name) => new RegExp(`export function ${name}\\(`).test(scrollDistSrc153))
+const bottomThreshold153 = /export const DEFAULT_BOTTOM_THRESHOLD_PX = 16/.test(scrollDistSrc153)
+const scrollWritePath153 = /function setScrollDistanceFromBottom\(container: HTMLElement, distancePx: number\): void \{\s*\r?\n\s*container\.scrollTop = getScrollTopForDistanceFromBottomPx\(readScrollMetricsPx\(container\), distancePx\)/.test(convSrc153)
+const scrollReadPath153 = /return isScrollAtBottomPx\(readScrollMetricsPx\(container\)\)/.test(convSrc153)
+const scrollWiring153 = /from '\.\.\/\.\.\/utils\/conversationScrollDistance'/.test(convSrc153)
+  && scrollWritePath153
+  && scrollReadPath153
+  && /setScrollDistanceFromBottom\(container, 0\)/.test(convSrc153)
+const legacyScrollRemoved153 = !/const BOTTOM_THRESHOLD_PX = 16/.test(convSrc153)
+  && !convCodeLines153.some((line) => /scrollIntoView\(\{ block: 'end' \}\)/.test(line))
+  && !convCodeLines153.some((line) => /container\.scrollTop = container\.scrollHeight/.test(line))
+// 对照扫描必须独立于被测代码定义（import 同一个常量就不叫对照了）。
+const equivalenceSweep153 = /与旧式口径的对照扫描/.test(scrollDistTestSrc153)
+  && /const legacyDistanceFromBottom = /i.test(scrollDistTestSrc153)
+  && /const legacyIsAtBottom = /i.test(scrollDistTestSrc153)
+  && !/legacyDistanceFromBottom[^\n]*from '\.\/conversationScrollDistance'/.test(scrollDistTestSrc153)
+check(
+  '滚动位置改走距底坐标：纯函数模块 + 组件读/写路径 + 旧写法清零（round-153 · 批 3a）',
+  scrollApi153 && bottomThreshold153 && scrollWiring153 && legacyScrollRemoved153 && equivalenceSweep153,
+  [
+    `距底 API=${scrollApi153 ? 'yes' : 'NO'}`,
+    `贴底阈值 16=${bottomThreshold153 ? 'yes' : 'NO'}`,
+    `读侧=${scrollReadPath153 ? 'yes' : 'NO'}`,
+    `写侧=${scrollWritePath153 ? 'yes' : 'NO'}`,
+    `接线=${scrollWiring153 ? 'yes' : 'NO'}`,
+    `旧写法清零=${legacyScrollRemoved153 ? 'yes' : 'NO'}`,
+    `对照扫描独立定义=${equivalenceSweep153 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

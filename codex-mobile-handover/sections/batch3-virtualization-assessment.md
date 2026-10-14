@@ -1,6 +1,6 @@
 # 批 3 前置评估：距底 API → 窗口化
 
-> 状态：**评估完成，未开工**（round-151）。所有行号对 `src/components/content/ThreadConversation.vue`
+> 状态：**评估完成（round-151）；批 3a 已落地（round-153）**。所有行号对 `src/components/content/ThreadConversation.vue`
 > 与 round-148 已落地的 `src/utils/turnVirtualizer.ts`。评估材料来自逐行读码，不含推测。
 
 ---
@@ -28,8 +28,8 @@
 
 | 机制 | 位置 | 现状 |
 |---|---|---|
-| 贴底判定 | `isAtBottom()` `:1914` | `scrollHeight - (scrollTop + clientHeight) <= 16`（`BOTTOM_THRESHOLD_PX` `:998`） |
-| 滚到底 | `scrollToBottom()` `:1901` | 先判贴底并**提前返回**（省一次强制布局），再 `scrollTop = scrollHeight` + `anchor.scrollIntoView({block:'end'})` |
+| 贴底判定 | `isAtBottom()` `:1914` | ✅ **round-153 起**：`isScrollAtBottomPx(readScrollMetricsPx(container))`（阈值仍是 16，定义搬到 `utils/conversationScrollDistance.ts`） |
+| 滚到底 | `scrollToBottom()` `:1901` | ✅ **round-153 起**：先判贴底并**提前返回**（省一次强制布局），再 `setScrollDistanceFromBottom(container, 0)`（距底坐标写入；**已不再调用 `scrollIntoView`**） |
 | 贴底维持 | `scheduleBottomLock(frames=6)` `:1955` | 连打最多 6 帧 `enforceBottomState()`；图片 `load/error` 后补 3 帧 |
 | 脱离阈值 | `autoFollowOutput` `:997` | 单一布尔；上滚即 `false`，`jumpToLatest()` 置回 `true` |
 | 上翻补偿 | `loadMoreAbove()` `:1975` | `scrollTop = prevScrollTop + (scrollHeight - prevScrollHeight)` |
@@ -107,7 +107,7 @@
 
 | 步骤 | 内容 | 风险 | 可测性 |
 |---|---|---|---|
-| **3a** | 距底读写辅助（`getScrollDistanceFromBottomPx` / `setScrollDistanceFromBottomPx`），把 `isAtBottom` / `scrollToBottom` / `applyConversationScrollState` 改走它 | **低**（行为等价：贴底判据仍是 ≤16px） | 纯函数单测 + 现有 e2e 不变 |
+| **3a** ✅ **已落地（round-153）** | 距底读写辅助（`getScrollDistanceFromBottomPx` / `getScrollTopForDistanceFromBottomPx` / `readScrollMetricsPx`），把 `isAtBottom` / `scrollToBottom`（`applyConversationScrollState` 经前者）改走它；并顺带移除 `scrollIntoView`（容器落点等价，甩掉「滚动祖先容器」的副作用） | **低**（行为等价：贴底判据仍是 ≤16px） | 已验：32 例单测（含对照扫描）+ 闸门 58/58（五路反跑）；浏览器实测待做，见 §八 |
 | **3b** | **折叠态 warm 轮窗口化**（hot 轮与展开轮保持全量） | 中 | 需浏览器实测：跳转、回退、上翻加载 |
 | **3c** | hot 轮窗口化 | **高** | 需实测高度分布，且必解 1/2 必须先落地 |
 
@@ -132,3 +132,16 @@
 
 - 偏差 ≤ 2px ⇒ 3b 可以直接上
 - 偏差大 ⇒ 说明「单行截断」这个前提不成立（例如 CJK 换行、字体回退），要重新设计估算
+
+---
+
+## 八、批 3a 已落地（round-153）
+
+- 新增 `src/utils/conversationScrollDistance.ts` + **32 例**单测（含**对照扫描**：8 高度 × 6 视口 ×
+  16 个 `scrollTop` 候选，三条断言各 >500 例；对照基准**不 import 被测代码**，否则恒真）。
+- 组件读侧 / 写侧改走距底坐标；**移除 `scrollIntoView`**。
+- 等价性论证：`.conversation-list` 是 `py-0`、底部锚点是末位 `h-px` ⇒ 容器落点逐位相同；
+  去掉的是「滚动祖先容器」这个已知有害副作用（原注释记的 Git 面板曾把文档撑到 3.2 万布局对象）。
+- **待人工浏览器验证**（3a 的定位就是「无浏览器可验证的一步」，这是它唯一外溢的行为改动）：
+  真机「滚到底 / 上翻加载 / 图片晚到补锁底」三种场景下列表落点与 round-152 之前一致。
+- 详见 [round-153](../rounds/round-153-scroll-distance-batch3a.md)。
