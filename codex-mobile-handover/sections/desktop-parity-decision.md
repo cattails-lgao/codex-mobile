@@ -172,7 +172,8 @@
 > **✅ 运行时已验证（round-152）** —— 有头 Chromium 实测：条目数与 DOM 一致（15 条 / 3 组）、
 > Windows 键位标签正确，且 `Ctrl+/` / `Ctrl+B` / `Ctrl+J` / `Esc` 四条全局键位**行为与目录相符**。
 > 同轮修掉「速查面板关闭不归还焦点」。见 [round-152](../rounds/round-152-browser-verification.md)。
-> **#4 不改** —— `Ctrl+J` 不在保留加速键表里、页面能 `preventDefault`；终端面板另有可见 tab 按钮兜底；只剩真机按键验证这一项人工动作。
+> **#4 不改** —— `Ctrl+J` 页面能 `preventDefault`（round-152 CDP 实测）；终端面板另有可见 tab 按钮兜底；只剩真机按键验证这一项人工动作。
+> （**round-155 更正口径**：原先这行写「`Ctrl+J` **不在保留加速键表里**」——那是个**没有出处的断言**。本轮检索的 Chromium「网页收不到」清单只覆盖 tab/窗口/DevTools 那一组，`Ctrl+J` 既未被列为保留、也未被明确列为可覆盖 ⇒ **不预设立场**，按 round-155 §四 的判读协议实测。）
 > **round-152 补充**：实测 `Ctrl+J` 在页面层工作正常（右侧出现活着的终端），但**CDP 正对照**证明
 > 注入事件绕过浏览器加速键前置处理（按 `Ctrl+T` 页面数 1→1），因此**真实浏览器里的命运仍只能靠人手按一次**。
 > 影响面已缩小：命令面板有 `panel.terminal`（带 `Ctrl+J` 提示）这条等价键盘路径。
@@ -299,5 +300,5 @@ grep -n "HOT_TURNS\|WARM_PAGE_SIZE\|scrollIntoView\|LOAD_MORE_SCROLL_THRESHOLD_P
 ## 十、诚实边界
 
 1. 桌面端结论来自**压缩产物静态阅读 + 桌面端自带二进制的 RPC 实测**，未启动桌面端点按验证。
-2. 我方现状来自 `src/**` 静态阅读（含行号）+ 上一轮 grep，**已由 round-152 补做有头 Chromium 实测**（36/36，见 [round-152](../rounds/round-152-browser-verification.md)）⇒ §六两个键位中 **`Ctrl/Cmd+/` 已端到端验证**；**`Ctrl+J` 仍须人工按一次**——CDP 注入的正对照（`Ctrl+T` 不动页面）证明注入不经浏览器加速键前置处理，自动化测不出。
+2. 我方现状来自 `src/**` 静态阅读（含行号）+ 上一轮 grep，**已由 round-152 补做有头 Chromium 实测**（36/36，见 [round-152](../rounds/round-152-browser-verification.md)）⇒ §六两个键位中 **`Ctrl/Cmd+/` 已端到端验证**；**`Ctrl+J` 仍须人工按一次**——CDP 注入的正对照（`Ctrl+T` 不动页面）证明注入不经浏览器加速键前置处理，自动化测不出。**round-155 补记**：既然 CDP 不可用，本轮试了唯一的替代路——**操作系统级按键注入**（`Add-Type` 的 P/Invoke `keybd_event` 与 `New-Object -ComObject WScript.Shell` 的 `AppActivate`+`SendKeys`），**两条路都被本机安全策略拦下**（`Add-Type compiles and loads .NET code at runtime` / `COM object instantiation can run arbitrary code`）⇒ **本环境无法自动化，只能人手按一次**。人工判读协议（10 秒）与「键位不可达也不构成功能缺口」的既有指针入口，见 [round-155](../rounds/round-155-browser-scroll-verification.md) §四。
 3. 桌面端 C 类列表（space / library / PR）未纳入。
