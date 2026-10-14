@@ -6,17 +6,17 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（已同步 `origin/main`，落后 0）· 当前进度 **round-159** |
+| Git 分支 | `main`（已同步 `origin/main`，落后 0）· 当前进度 **round-160** |
 | Dev 端口 | 4173 |
-| Dev 状态 | **未运行**（2026-10-14 21:43 复测：本机 `4173` / `5173` / `4191` / `4194`~`4197` 全无监听 ⇒ round-159 **未跑产品侧构建与单测**（该轮只跑三个纯离线 / 真机只读的脚本）） |
-| App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套** |
+| Dev 状态 | **未运行**（2026-10-14 22:05 复测：本机 `4173` / `5173` / `4191` / `4194`~`4197` 全无监听 ⇒ round-160 **未跑产品侧构建与单测**（该轮只改两个纯离线闸门脚本与文档）） |
+| App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-160 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套** |
 | 工具链 | Windows：pnpm **11.18.0** · Node **本会话 PATH 上是受管 v22.22.2**（仓库既往记录为 fnm 24.18.1，按实际 `node -v` 为准）· codex-cli **0.162.1**（PATH 上的 pnpm 全局 `@openai/codex`；**2026-10-14 20:17 读数**，当日 **19:48 由 0.160.1 升级而来**）· **仓库内 app-server schema 快照已升级到 0.162.1**（round-157 重生成，`node scripts/regen-app-server-schemas.cjs --check` ⇒ drift **0**；「此前停在 0.160.1」的发现见 [rounds/round-156-real-snapshot-table.md](rounds/round-156-real-snapshot-table.md) §八）· **round-158 已对 0.162.1 真机直接跑过 RPC**（`initialize` 自报 `…0.162.1 (Windows 10.0.19045; x86_64)`，隔离 home 与版本口径均由服务端自报确认）；**round-159 在同一版本上做了 170 个方法的逐方法普查**（同一隔离纪律，实测零残留） |
-| 最近提交 | **随本文件所在提交落地**（提交无法包含自身哈希，故本行不写字面哈希 —— 与 [sections/commit-history.md](sections/commit-history.md) 的既有体例一致）；其前一个是 `7054cb8d`（round-159 第 5 笔：修正 52 条失效相对链接） |
+| 最近提交 | **随本文件所在提交落地**（提交无法包含自身哈希，故本行不写字面哈希 —— 与 [sections/commit-history.md](sections/commit-history.md) 的既有体例一致）；其前一个是 `ea244809`（round-160 首笔：脱敏闸门补 POSIX 家目录类 + 链接闸门加锚点校验） |
 | npm `latest` | **`codex-mobile-re@0.1.132`**（`2026-10-14T06:39:37.911Z` ＝北京 14:39:37，shasum `a6fd1bdb797cf441789f5e024b5cb32a5884c26b`，tarball 54 文件 / unpacked 5,155,655 B）· **线上 `codex.arderpanada.top` 仍是 0.1.131 构建，待重新部署** |
 
 > **本表是「真快照」**（只记当前值），字段口径见 [handover-writing-guide.md](handover-writing-guide.md) §2.1。它自 round-116 起曾退化成「一行一轮」的追加式日志（Git 分支 / Dev 状态 / 发布记录共 62 行），且自 round-140 后再未回填（索引已到 round-155）；**round-156 已把这 62 行原文一条不删地归档到 [sections/snapshot-table-archive.md](sections/snapshot-table-archive.md)**。
 
-> **本表读数时间：2026-10-14 21:43（北京时间）**（round-159 复读；其中 `4173`/`5173` 与 `4191`/`4194`~`4197` 端口状态为本次实测）—— 快照**只对读数时刻负责**，这不是空话：round-156 写入时（19:36）`codex-cli` 实测确为 `0.160.1`，**12 分钟后**被升级为 `0.162.1`（19:39 下载 / 19:48 切换全局 shim），该行随即过期。所以跨机器接手时**不要直接信表里的数字**，按「交接注意事项」的探测命令现场读数 —— codex 版本可直接跑 `node scripts/probe-codex-installations.cjs`。
+> **本表读数时间：2026-10-14 22:05（北京时间）**（round-160 复读；其中 `4173`/`5173` 与 `4191`/`4194`~`4197` 端口状态为本次实测）—— 快照**只对读数时刻负责**，这不是空话：round-156 写入时（19:36）`codex-cli` 实测确为 `0.160.1`，**12 分钟后**被升级为 `0.162.1`（19:39 下载 / 19:48 切换全局 shim），该行随即过期。所以跨机器接手时**不要直接信表里的数字**，按「交接注意事项」的探测命令现场读数 —— codex 版本可直接跑 `node scripts/probe-codex-installations.cjs`。
 
 ---
 ## 文档结构
@@ -280,14 +280,15 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 - **schema 快照落后真机一版**（round-156 §八）：已由 **round-157** 升级到 0.162.1（`--check` drift 0），并留下可复跑的 `scripts/regen-app-server-schemas.cjs`。
 - **`sections/commit-history.md` 断档**（round-156 §七-7）：已由 **round-157** 回填 round-144~156。
 - **`APP_SERVER_DOCUMENTATION.md` 失效链接**（round-157 §七-9）：已由 **round-158** 收口（**275 次失效引用 / 227 个失效目标 → 0**），派生区改由 `scripts/regen-app-server-doc.cjs` 生成（`--check` drift 0）；**历史表保留但只作沿革参考**（它只覆盖 78/265 个方法，且其中 29 个名字已不在任何当前联合里）。
-- **交接文档脱敏缺口**（round-157 §八-9）：已由 **round-158** 按类全仓收口（**29 文件 / 97 行等量替换**）；**round-159 把扫描范围扩到全仓 md（545 个，含未跟踪）**、补上 §5.4 点名却一直没拦的「盘符家目录骨架」类（8 → 9 类），当前 **违规 0 / 例外 5**。
+- **交接文档脱敏缺口**（round-157 §八-9）：已由 **round-158** 按类全仓收口（**29 文件 / 97 行等量替换**）；**round-159 把扫描范围扩到全仓 md（含未跟踪）**、补上 §5.4 点名却一直没拦的「盘符家目录骨架」类（8 → 9 类）；**round-160 再补 POSIX 家目录两类（9 → 11 类）**，当前 **违规 0 处 / 例外 9 处（登记例外 6 条）**（扫描 546 个 md）。
 - **0.162.1 新增协议面的运行时验证**（round-157 §七-7）：已由 **round-158** 用真机 app-server 验证 —— **2 可用 + `thread/prediction/request` 未实现**；**本仓需新增接线 = 0 处**。
 - **round-158 记下的 3 条：已由 round-159 全部收口** —— ① 真·可用性普查（新增 `scripts/probe-app-server-methods.cjs`，170 个方法逐方法给合法参数）；② 「`documentation/` 下其它文档的失效链接」的真问题是「**全仓其它文档从未体检**」（`documentation/` 下只有 1 个 md），已交给新闸门 `scripts/check-md-links.cjs` 并修完 52 条；③ 脱敏闸门扫描范围已扩到**全仓 md**。
-- **round-159 记下、本轮未做**（详见 [round-159](rounds/round-159-real-availability-census-and-repo-wide-gates.md) §六）：① 普查结论只覆盖 **152/170**（13 个判据不足：10 个 `AbsolutePathBuf` + 3 个需更精确构造；5 个 OAuth / 上传类**有意不开火**）；② 未实现集合的**基线硬编码在脚本里**（换 codex 版本后可能以「已消失」报红）；③ 脱敏闸门**仍不扫源码**（`scripts/*.cjs` 18 处、`src/**/*.test.ts` 7 处未处理）；④ **POSIX 家目录骨架**（`/home/<user>/…`、`/Users/<user>/…`）**仍未建类**；⑤ 链接闸门**只校验存在性、不校验锚点**。
+- **round-159 记下的 5 条**：④ POSIX 家目录骨架类、⑤ 链接闸门锚点校验，**已由 round-160 收口**（见 [round-160](rounds/round-160-posix-home-class-and-md-anchor-check.md)）；①②③ 仍开着 —— ① 普查只覆盖 **152/170**（13 个判据不足：10 个 `AbsolutePathBuf` + 3 个需更精确构造；5 个 OAuth / 上传类**有意不开火**）；② 未实现集合的**基线硬编码在脚本里**（换 codex 版本可能以「已消失」报红）；③ 脱敏闸门**仍不扫源码**（`scripts/*.cjs`、`src/**/*.test.ts`）。
+- **round-160 记下、本轮未做**（详见 [round-160](rounds/round-160-posix-home-class-and-md-anchor-check.md) §六）：① 锚点校验用**近似 github-slugger**，含内联 HTML 锚点 / 脚注 / emoji / GitHub 去重后缀 `-1` 的标题**可能漏报**；② **`#L<n>` 行号锚点完全不校验**（有意：天然随代码漂移）；③ **`~/` 开头的链接目标不校验**；④ 脱敏闸门**仍只管路径骨架**（主机名、内网 / Tailscale IP 不在范围）；⑤ **「平台默认用户名」仍会命中**（Ubuntu 云镜像默认账号 / `ec2-user` / `azureuser` 之类），要用只能登记例外。
 
 ## 交接注意事项
 
-- 本项目在多个环境（Windows/macOS/Linux 及不同机器）运行，**工具链位置不写死**：node/pnpm/codex-cli/git 等一律用语义占位（`<node 安装目录>`、`<pnpm 全局 bin 目录>`、`<Git 安装目录>` 等），不使用任何具体路径骨架（含脱敏后的 `C:\Users\<用户名>\...`）；需要定位时用命令探测（`Get-Command`、`pnpm bin`、`npm prefix -g` 等），并给出探测命令而非路径。**可复跑体检**：`node scripts/check-handover-desensitization.cjs`（退 0 合规 / 1 有违规 / 2 环境不足）——按 8 类判定（项目副本、真实用户名、隔离 home、包管理器安装目录、`AppData` 布局、msys 形式、绝对 `file:///` 链接等），按类不按清单。
+- 本项目在多个环境（Windows/macOS/Linux 及不同机器）运行，**工具链位置不写死**：node/pnpm/codex-cli/git 等一律用语义占位（`<node 安装目录>`、`<pnpm 全局 bin 目录>`、`<Git 安装目录>` 等），不使用任何具体路径骨架（含脱敏后的 `C:\Users\<用户名>\...`）；需要定位时用命令探测（`Get-Command`、`pnpm bin`、`npm prefix -g` 等），并给出探测命令而非路径。**可复跑体检**：`node scripts/check-handover-desensitization.cjs`（退 0 合规 / 1 有违规 / 2 环境不足）——按 **11 类**判定（项目副本、真实用户名、盘符家目录骨架、**POSIX 家目录**、隔离 home、包管理器安装目录、`AppData` 布局、msys 形式、绝对 `file:///` 链接等），按类不按清单；**相对链接与锚点**另有 `node scripts/check-md-links.cjs`（退 0/1/2）。
 - 探测本机 codex 版本 / 来源：`node scripts/probe-codex-installations.cjs` —— 本机常同时存在**三套** codex（PATH 上的 pnpm 全局 / 桌面 App 内容寻址缓存 / 桌面 App 托管的 daemon releases），版本各不相同；**测什么版本，先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**，否则闸门测的不是你以为的那一版
 - 文档与示例中的用户名、本机绝对路径均已脱敏，用户名用 `<用户名>`、项目根目录用 `<项目目录>`、外部目录用 `<外部测试目录>` 占位
 - 不要重新创建被删除的 `vite.config.js` 等本地产物，仓库只用 `vite.config.ts`
@@ -297,4 +298,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-10-14（**round-159：真机可用性普查（「已发布但未实现」1 → 4 个）＋ 脱敏与链接两道文档闸门扩到全仓**（**零产品代码改动**。① **真机普查**：新增 `scripts/probe-app-server-methods.cjs` —— **从 schema 机械构造「含全部 required 字段」的合法参数**再对 **0.162.1** 逐方法调用 **170** 个客户端方法，判定分五档（关键：**域错误 = 已实现的硬证据**；**反序列化失败不携带实现与否的信息**，因为参数校验发生在「未实现」闸门之前）⇒ **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**；**「已发布但未实现」由 1 个更正为 4 个**（`thread/prediction/request` ＋ `thread/items/list` ＋ `thread/searchOccurrences` ＋ `thread/timeline/list`），负控旁证 `serverOnly = 0` / `snapshotOnly = 0`。② **脱敏闸门**：扫描范围 → **全仓 md（545 个，含未跟踪）**，补上 §5.4 点名却一直没拦的「盘符家目录骨架」类（8 → **9** 类），新暴露 10 处、改 **9 处 / 7 文件**（等量替换），例外 5 条；**顺带修掉闸门自身两个缺陷**：缺这一类、以及**只扫已跟踪文件**（新写的文档漏检）。③ **链接闸门**：新增 `scripts/check-md-links.cjs`（**必须先剥代码再扫**，否则多 19 条误报），真实失效 **52 条 / 5 文件 → 0**（改写 50 + 降级 2）；另确认 `documentation/` 下只有 1 个 md）。三闸门全绿：脱敏 **违规 0 / 例外 5**、链接 **失效 0**、普查 **与基线一致**）**；上一轮 **round-158：APP_SERVER_DOCUMENTATION.md 失效链接 227 → 0 ＋ 交接文档脱敏补完 ＋ 0.162.1 新增协议面真机验证**（零产品代码改动；`--check` drift 0；真机 **2 可用 + 1 未实现**，接线 0 处）**；更早轮次见 [sections/commit-history.md](sections/commit-history.md) · 内容已脱敏*
+*codexapp · 交接文档 · 2026-10-14（**round-160：POSIX 家目录骨架建类（脱敏闸门 9 → 11 类）＋ 链接闸门加锚点校验**（**零产品代码改动**。① **脱敏闸门**：补「POSIX 家目录-真实用户名」与「POSIX 家目录骨架」两类（macOS `Users` / Linux `home` 家目录），新暴露 **13 处 / 8 文件** —— 其中 **3 个 `tests/` 文档里指向某 Linux 测试机家目录的**真实用户名**路径改 `<用户主目录>`，`.agents/` 一处描述 macOS 家目录形态的措辞改写，round-159 文档与台账的自指改抽象描述，1 处夹具登记例外 ⇒ **违规 0 处 / 例外 9 处（登记例外 6 条）（11 类）**。② **链接闸门**：`x.md#frag` 现在除校验 `x.md` 存在，还校验 `#frag` 命中标题 slug（同文件锚点一并校验）；**跳过 GitHub 行号锚点 `#L<n>` 与非 md 目标**（实测 8 条跨文件锚点里 7 条是行号锚点）⇒ 修掉 1 条真失效锚点，**失效链接 0 / 失效锚点 0**。③ 复核 round-159 的 9 处等量替换 ⇒ 全部语义等价，无需回退）**；上一轮 **round-159：真机可用性普查（「已发布但未实现」1 → 4 个）＋ 脱敏与链接两道文档闸门扩到全仓**；更早轮次见 [sections/commit-history.md](sections/commit-history.md) · 内容已脱敏*

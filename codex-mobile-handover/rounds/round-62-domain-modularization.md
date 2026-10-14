@@ -70,7 +70,7 @@
 
 ### 新一轮 · 巨型 `.vue` 第二轮组件化（待办）
 
-useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一轮视图组件化，测量与结论记录在 [domain-modularization-plan.md](../sections/domain-modularization-plan.md#巨型-vue-第二轮组件化评估)。要点：`App.vue`/`SidebarThreadTree`/`ThreadConversation` 的"大"在 `<script setup>` 编排逻辑（`App.vue` script 4,271 行 / 102 局部 ref / 124 await），模板已被 round-48/49 抽干净，再抽叶组件收益有限；剩余杠杆是**hook 化**而非 `.vue` 拆分。
+useDesktopState 收敛结束后，盘点前端大文件并评估是否再来一轮视图组件化，测量与结论记录在 [domain-modularization-plan.md](../sections/domain-modularization-plan.md#巨型-vue-第二轮组件化评估2026-08-28)。要点：`App.vue`/`SidebarThreadTree`/`ThreadConversation` 的"大"在 `<script setup>` 编排逻辑（`App.vue` script 4,271 行 / 102 局部 ref / 124 await），模板已被 round-48/49 抽干净，再抽叶组件收益有限；剩余杠杆是**hook 化**而非 `.vue` 拆分。
 
 **下一步（已完成 · SidebarThreadTree 试点）**：先只读评估 `SidebarThreadTree` 的真实簇边界，结论已修正原「过滤 / 键盘导航 / 右键菜单」三簇假设——**键盘导航并非独立簇（仅 `onProjectHeaderKeyDown` 单函数），过滤即树形塑造是 `filteredGroups` 主耦合核心不拆**。真正内聚、可做 hook 的两个目标实现完成：
 

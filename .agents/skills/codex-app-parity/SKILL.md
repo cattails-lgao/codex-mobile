@@ -447,7 +447,7 @@ After each feature implementation session that uses this skill:
 ## Findings: Chat Markdown Image Embeds (2026-03-04)
 
 - Codex.app renderer bundle includes markdown-to-HTML image handling (`image({href,title,text})` emits `<img src="...">`), consistent with inline markdown image rendering in assistant/user text.
-- In web parity mode, absolute local paths in markdown image URLs need explicit server mediation; browser runtime does not resolve `/Users/...` as local files.
+- In web parity mode, absolute local paths in markdown image URLs need explicit server mediation; browser runtime does not resolve absolute macOS home-directory paths (under `/Users`) as local files.
 - A dedicated local image endpoint (`/codex-local-image?path=...`) is required for parity-like rendering of absolute filesystem image paths in browser-delivered UI.
 - Express `sendFile` must allow dot-directory segments (`dotfiles: 'allow'`) or paths under `~/.codex/...` return 404 despite existing files.
 

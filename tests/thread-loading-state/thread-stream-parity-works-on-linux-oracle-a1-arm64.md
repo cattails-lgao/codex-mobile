@@ -22,7 +22,7 @@
 - Bridge server starts and spawns Codex app-server on Linux ARM64 without errors.
 - `thread/list` RPC returns all threads from `~/.codex/sessions/`.
 - `thread-live-state` returns full turn history with recovered `commandExecution` and `fileChange` items.
-- Session log parsing works with Linux file paths (`/home/ubuntu/.codex/sessions/...`).
+- Session log parsing works with Linux file paths (`<用户主目录>/.codex/sessions/...`).
 - Chronological interleaving matches the order seen on macOS (commands appear between agent messages, not appended).
 - Tailscale remote access works with `--http1.1` flag.
 

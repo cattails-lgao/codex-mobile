@@ -3,11 +3,11 @@
 #### Prerequisites
 - App is running from this repository.
 - An active thread is open.
-- File exists at `/home/ubuntu/Documents/New Project (2)/hosting_manager.py`.
+- File exists at `<用户主目录>/Documents/New Project (2)/hosting_manager.py`.
 
 #### Steps
 1. Send this exact message:
-   `[hosting_manager.py](/home/ubuntu/Documents/New Project (2)/hosting_manager.py)`
+   `[hosting_manager.py](<用户主目录>/Documents/New Project (2)/hosting_manager.py)`
 2. In the rendered message, confirm it appears as one clickable file link.
 3. Click the link and confirm it opens local browse for the full file path.
 4. Right-click and use `Copy link`, then verify pasted URL still points to the same full path.

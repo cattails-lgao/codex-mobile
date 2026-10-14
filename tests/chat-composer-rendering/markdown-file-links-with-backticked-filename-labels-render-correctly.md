@@ -4,12 +4,12 @@
 - App is running from this repository.
 - An active thread is open.
 - Light and dark themes are both available.
-- Local file exists at `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
+- Local file exists at `<用户主目录>/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
 
 #### Steps
-1. In light theme, send a message containing: `Added [`TrustedBrowserLauncher.kt`](/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt)`.
+1. In light theme, send a message containing: `Added [`TrustedBrowserLauncher.kt`](<用户主目录>/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt)`.
 2. Confirm the rendered message shows one clickable file link with visible text `TrustedBrowserLauncher.kt`.
-3. Click the link and confirm it opens local browse for `/home/ubuntu/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
+3. Click the link and confirm it opens local browse for `<用户主目录>/andClaw-srcmatch/app/src/main/java/com/coderred/andclaw/ui/util/TrustedBrowserLauncher.kt`.
 4. Right-click the same link and choose `Copy link`, then paste it into a text field and inspect it.
 5. Switch to dark theme and repeat steps 1-4.
 
