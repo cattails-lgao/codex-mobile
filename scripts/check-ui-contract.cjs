@@ -1105,7 +1105,9 @@ const paletteWiring150 = /const isCommandPaletteOpen = ref\(false\)/.test(appSrc
   && /command\.shortcut\.replace\('Mod\+', modifier\)/.test(appSrc150)
   && /function onCommandPaletteRun\(commandId: string\): void \{/.test(appSrc150)
   && /<CommandPalette\s*\r?\n\s*v-if="isCommandPaletteOpen"/.test(appSrc150)
-const paletteHotkey150 = /if \(key === '\/'\) \{\s*\r?\n\s*event\.preventDefault\(\)\s*\r?\n\s*isCommandPaletteOpen\.value = !isCommandPaletteOpen\.value/.test(appSrc150)
+// The '/' branch may also dismiss the shortcuts help panel (round-151) before
+// toggling, so the window between preventDefault and the toggle is not fixed.
+const paletteHotkey150 = /if \(key === '\/'\) \{\s*\r?\n\s*event\.preventDefault\(\)[\s\S]{0,200}?isCommandPaletteOpen\.value = !isCommandPaletteOpen\.value/.test(appSrc150)
   && /if \(isCommandPaletteOpen\.value\) return/.test(appSrc150)
 const paletteView150 = /<Teleport to="body">/.test(paletteSrc150)
   && /event\.key === 'ArrowDown'/.test(paletteSrc150)
@@ -1125,6 +1127,60 @@ check(
     `接线=${paletteWiring150 ? 'yes' : 'NO'}`,
     `Ctrl/Cmd+/ 与让位=${paletteHotkey150 ? 'yes' : 'NO'}`,
     `面板视图=${paletteView150 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
+// ---------------- round-151：命令面板指针入口 + 快捷键速查面板（批 1 #3）
+// 三条必须钉住的结构约束：
+//   1) 命令面板除 Ctrl/Cmd+/ 之外必须有**指针入口**。该键位判定走 event.key，
+//      非美式布局拿不到 '/'，只有绑定的话面板等于不可达 —— 这是 round-150 留下
+//      的唯一实际可用性缺口。
+//   2) 快捷键目录里每个 label/note 都必须是 zhCN 表里已有的键（英文串即 key），
+//      新增条目忘加表值就会在中文界面漏出英文。
+//   3) 速查面板与命令面板互斥：两个模态浮层同时打开会有两层遮罩。
+const shortcutsSrc151 = fs.readFileSync('src/utils/keyboardShortcuts.ts', 'utf8')
+const helpPanelSrc151 = fs.readFileSync('src/components/content/ShortcutHelpPanel.vue', 'utf8')
+const appSrc151 = fs.readFileSync('src/App.vue', 'utf8')
+const i18nSrc151 = fs.readFileSync('src/composables/useUiLanguage.ts', 'utf8')
+const zhBlock151 = i18nSrc151.slice(i18nSrc151.indexOf('const zhCN'), i18nSrc151.indexOf('const LANGUAGE_LABELS'))
+const shortcutLabelKeys151 = [
+  ...shortcutsSrc151.matchAll(/(?:label|note): '([^']+)'/g),
+].map((match) => match[1])
+const shortcutMissingI18n151 = [...new Set(shortcutLabelKeys151)]
+  .filter((key) => key && !zhBlock151.includes(`'${key}':`))
+// Count entries by their `keys: [` member (every entry has one; group objects do
+// not), so the number stays honest when groups are added or removed.
+const shortcutEntryCount151 = (shortcutsSrc151.match(/keys: \[/g) ?? []).length
+const shortcutGroupCount151 = (shortcutsSrc151.match(/^ {4}id: '(global|composer|navigation)',$/gm) ?? []).length
+const shortcutCatalog151 = /export const SHORTCUT_GROUPS: ShortcutGroup\[\] = \[/.test(shortcutsSrc151)
+  && /export function formatShortcutEntry\(entry: ShortcutEntry, isMac: boolean\): string/.test(shortcutsSrc151)
+  && /export function formatShortcutTokens\(keys: string\[\], isMac: boolean\): string\[\]/.test(shortcutsSrc151)
+  && shortcutEntryCount151 >= 12
+  && shortcutGroupCount151 === 3
+const paletteEntryPoint151 = /class="content-header-command-button"/.test(appSrc151)
+  && /ref="commandPaletteButtonRef"/.test(appSrc151)
+  && /@click="onOpenCommandPalette"/.test(appSrc151)
+  && /commandPaletteButtonRef\.value\?\.focus\(\)/.test(appSrc151)
+const helpWiring151 = /const isShortcutHelpOpen = ref\(false\)/.test(appSrc151)
+  && /case 'view\.shortcuts':/.test(appSrc151)
+  && /<ShortcutHelpPanel\s*\r?\n\s*v-if="isShortcutHelpOpen"/.test(appSrc151)
+  && /event\.key === 'Escape' && isShortcutHelpOpen\.value/.test(appSrc151)
+const helpMutex151 = /isShortcutHelpOpen\.value = false\s*\r?\n\s*isCommandPaletteOpen\.value = true/.test(appSrc151)
+  && /isCommandPaletteOpen\.value = false\s*\r?\n\s*isShortcutHelpOpen\.value = true/.test(appSrc151)
+const helpView151 = /formatShortcutEntry\(item, props\.isMac\)/.test(helpPanelSrc151)
+  && /role="dialog"/.test(helpPanelSrc151)
+  && /<Teleport to="body">/.test(helpPanelSrc151)
+check(
+  '命令面板指针入口 + 快捷键速查面板：目录可检索、全部有中文、两面板互斥（round-151）',
+  shortcutCatalog151 && shortcutMissingI18n151.length === 0 && paletteEntryPoint151
+    && helpWiring151 && helpMutex151 && helpView151,
+  [
+    `快捷键目录=${shortcutCatalog151 ? 'yes' : 'NO'}（${shortcutEntryCount151} 条 / ${shortcutGroupCount151} 组）`,
+    `i18n 漏键=${shortcutMissingI18n151.length === 0 ? 'yes' : shortcutMissingI18n151.join(',')}`,
+    `面板指针入口=${paletteEntryPoint151 ? 'yes' : 'NO'}`,
+    `速查接线=${helpWiring151 ? 'yes' : 'NO'}`,
+    `互斥=${helpMutex151 ? 'yes' : 'NO'}`,
+    `速查视图=${helpView151 ? 'yes' : 'NO'}`,
   ].join(' / '),
 )
 

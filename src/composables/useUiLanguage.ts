@@ -841,6 +841,25 @@ const zhCN: Record<string, string> = {
   'Copy the conversation as Markdown': '复制对话为 Markdown',
   'Stop the running turn': '停止正在运行的轮次',
   'Implement the current plan': '执行当前计划',
+  // round-151：快捷键速查面板（分组标题 + 条目 + 条件说明）
+  'Keyboard shortcuts': '键盘快捷键',
+  'Press Esc to close': '按 Esc 关闭',
+  'Composer': '输入框',
+  'Navigation': '导航',
+  'Open the command palette': '打开命令面板',
+  'Close dialogs and popovers': '关闭弹窗与浮层',
+  'Send the message': '发送消息',
+  'When "send with Enter" is on': '当「回车发送」开启时',
+  'When "send with Enter" is off': '当「回车发送」关闭时',
+  'Insert a line break': '插入换行',
+  'Open the slash command menu': '打开斜杠命令菜单',
+  'Mention a file': '提及文件',
+  'Move through the menu': '在菜单中移动',
+  'Accept the highlighted suggestion': '接受高亮的候选',
+  'Dismiss the menu': '关闭菜单',
+  'Move the selection': '移动选择',
+  'Activate the focused item': '激活当前项',
+  'Jump to the first or last item': '跳到第一项 / 最后一项',
 }
 
 const LANGUAGE_LABELS: Record<UiLanguage, string> = {

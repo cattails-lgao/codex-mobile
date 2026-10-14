@@ -76,6 +76,7 @@ export const PALETTE_COMMANDS: PaletteCommand[] = [
   { id: 'view.toggle-language', title: 'Switch the interface language', group: 'view', keywords: ['language', 'chinese', 'english', '语言', '中文'] },
   { id: 'view.send-with-enter', title: 'Toggle send with Enter', group: 'view', keywords: ['keyboard', 'enter', '回车'] },
   { id: 'view.in-progress-send-mode', title: 'Cycle the in-progress send mode', group: 'view', keywords: ['steer', 'queue', '队列'] },
+  { id: 'view.shortcuts', title: 'Keyboard shortcuts', group: 'view', keywords: ['keys', 'bindings', 'help', '快捷键', '帮助'] },
 
   // -------------------------------------------------------------- navigate
   { id: 'nav.skills', title: 'Open the skills page', group: 'navigate', keywords: ['plugins', 'mcp', '技能'] },

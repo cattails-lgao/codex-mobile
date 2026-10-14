@@ -158,14 +158,18 @@
 
 > **状态（round-149）**：**#1 已完成**（`src/utils/timeDividers.ts` + `TimeDivider.vue` + 25 例单测 + 闸门 `round-149`，见 [round-149](../rounds/round-149-time-dividers-batch1.md)）。
 > **#2 无需搬** —— `showJumpToLatestButton` / `jumpToLatest()` / 按钮模板早就在（本文档写作时漏看）。
-> **#3 有意延后到批 2 之后**（命令注册表是它的地基）。
+> **✅ #3 已完成（round-151）** —— 落地 `src/utils/keyboardShortcuts.ts`（15 条 / 3 组纯数据目录）
+> + `ShortcutHelpPanel.vue` + 命令 `view.shortcuts`。**没有复用 `commandRegistry.shortcut`**：
+> 那里只有 2 条命令带键位，而速查表要覆盖的多数键位根本不是命令（输入框 Enter / Esc、浮层的方向键）
+> ⇒ 独立目录更诚实。同轮另补了命令面板的**指针入口**（见 §六 人工实测点）。
+> 见 [round-151](../rounds/round-151-palette-entry-and-shortcut-help.md)。
 > **#4 不改** —— `Ctrl+J` 不在保留加速键表里、页面能 `preventDefault`；终端面板另有可见 tab 按钮兜底；只剩真机按键验证这一项人工动作。
 
 | # | 搬什么 | 落地 | 备注 |
 | --- | --- | --- | --- |
 | 1 | **时间分隔**（跨天 / ≥30 分钟） | `src/utils/timeDividers.ts` + 单测；插进 `renderTurns` 的 `leadingDividers` | **形状已现成**：`turn.leadingDividers` + `ModelSwitchDivider` 插槽（`:44-53`），照抄即可 |
 | 2 | **滚动到底部按钮** | `ThreadConversation.vue` 加 UI | `scrollToBottom()`(`:1863`)、`isAtBottom()`(`:1876`) **都已实现**，只差 UI 与「距底 > 24px 才显示」判据 |
-| 3 | **快捷键速查面板** | 新组件 | 内容写**我们实际可用的键位**（比照搬更有价值：避免用户按了没反应） |
+| 3 | **快捷键速查面板** | ✅ `src/utils/keyboardShortcuts.ts` + `ShortcutHelpPanel.vue`（round-151） | 内容写**我们实际可用的键位**（比照搬更有价值：避免用户按了没反应）。实测全站只有 **4 条全局键位**（`Ctrl/Cmd+/`、`Ctrl/Cmd+B`、`Ctrl/Cmd+J`、`Esc`），另 11 条属输入框与导航 |
 | 4 | **修 `Ctrl+J`** | `App.vue:3173` | 先人工实测（§六）；失效则换 `Alt+J` 或 `Ctrl/Cmd+\`` |
 
 ### 批 2 · 中风险、收益最大：命令面板 + 命令注册表
@@ -184,6 +188,17 @@
 - **不做**：123 条里的内嵌浏览器 / 迷你窗 / 全局呼出 / 标签位跳转（`Ctrl+1..9`、`Ctrl+Tab` 是**硬保留键**，页面根本收不到）
 
 ### 批 3 · 高风险：把窗口化接进 hot 区
+
+> **评估已完成（round-151），未开工** ⇒ [batch3-virtualization-assessment.md](./batch3-virtualization-assessment.md)。
+> 三条与本节的差异：
+> 1. **本轮不是修 bug，是换地基** —— 我方**没有**「流式追加把列表顶走」的路径：贴底走
+>    `scrollToBottom()` 硬跳（`:1901`），非贴底**完全不滚动**；整页差补偿只出现在
+>    `loadMoreAbove()`（`:1982-1992`），而那是**前置插入**，ΔH 恰好等于插入高度 ⇒ 补偿是精确的。
+>    下面的必解 1 因此是**为窗口化铺路**，不是修现有缺陷。
+> 2. **必解 2 的准确形态**：`jumpToQuestion`（`:1262-1286`）靠 `:1273` 先把目标轮展开来保证
+>    `getElementById` 命中，null 时**静默 return**——不是「边界未被保护」，是「命中依赖渲染集」。
+> 3. **只窗口化折叠态 warm 轮**：`WarmTurnCard` 的文本一律单行 `truncate` ⇒ 行数不随内容变化
+>    ⇒ 高度近似常量；hot 轮与展开轮高度不可预知，保持全量。
 
 - **搬什么**：③ 渲染层的「外层撑高 + 内层 `margin-top`」+ ② 的可见区间；**④ 只搬 API 形态**（`getLastScrollDistanceFromBottomPx` / `scrollToDistanceFromBottomPx(dist, behavior, origin)` / `shouldFollowContentGrowth`）
 - **前置**：批 0 完成且数值对齐

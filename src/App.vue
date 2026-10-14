@@ -171,6 +171,16 @@
           </template>
           <template #actions>
             <button
+              ref="commandPaletteButtonRef"
+              class="content-header-command-button"
+              type="button"
+              :aria-label="t('Command palette')"
+              :title="commandPaletteTitle"
+              @click="onOpenCommandPalette"
+            >
+              <IconTablerSearch class="content-header-command-button-icon" />
+            </button>
+            <button
               v-if="canShowRightPanel"
               class="content-header-right-panel-toggle"
               type="button"
@@ -832,8 +842,13 @@
   <CommandPalette
     v-if="isCommandPaletteOpen"
     :commands="paletteCommands"
-    @close="isCommandPaletteOpen = false"
+    @close="onCloseCommandPalette"
     @run="onCommandPaletteRun"
+  />
+  <ShortcutHelpPanel
+    v-if="isShortcutHelpOpen"
+    :is-mac="isMacPlatform()"
+    @close="onCloseShortcutHelp"
   />
   <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-modal-backdrop" role="presentation">
     <div class="project-zip-modal" role="dialog" aria-modal="true" :aria-label="t('Export Project')" @click.stop>
@@ -954,6 +969,7 @@ import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
 import CommandPalette from './components/content/CommandPalette.vue'
+import ShortcutHelpPanel from './components/content/ShortcutHelpPanel.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import { PALETTE_COMMANDS, type PaletteCommand } from './components/content/commandRegistry'
@@ -3165,6 +3181,43 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
 // 'Mod+' 前缀换成本平台实际按键。
 const isCommandPaletteOpen = ref(false)
 
+// The palette needs a pointer entry point as well: 'Ctrl/Cmd+/' resolves through
+// event.key, which only yields '/' on keyboard layouts that expose a slash key in
+// that position, so the binding alone is not a reachable-by-default affordance.
+const commandPaletteButtonRef = ref<HTMLButtonElement | null>(null)
+const commandPaletteShortcutLabel = computed(() => (isMacPlatform() ? '⌘/' : 'Ctrl+/'))
+const commandPaletteTitle = computed(() => `${t('Command palette')} · ${commandPaletteShortcutLabel.value}`)
+
+function onOpenCommandPalette(): void {
+  // The two overlays are mutually exclusive: stacked modals would give two
+  // stacked backdrops, and Ctrl/Cmd+/ is expected to *switch* to the palette.
+  isShortcutHelpOpen.value = false
+  isCommandPaletteOpen.value = true
+}
+
+// round-151（批 1 #3）：快捷键速查面板。目录数据在 utils/keyboardShortcuts.ts，
+// 这里只负责开关与把本平台的修饰键语义交给视图（isMacPlatform 是唯一判据来源）。
+const isShortcutHelpOpen = ref(false)
+
+function onOpenShortcutHelp(): void {
+  isCommandPaletteOpen.value = false
+  isShortcutHelpOpen.value = true
+}
+
+function onCloseShortcutHelp(): void {
+  isShortcutHelpOpen.value = false
+}
+
+// Closing a modal hands focus back to the control that opened it, matching
+// AppDialog; without this the caret falls to <body> and keyboard users lose place.
+function onCloseCommandPalette(): void {
+  if (!isCommandPaletteOpen.value) return
+  isCommandPaletteOpen.value = false
+  void nextTick(() => {
+    commandPaletteButtonRef.value?.focus()
+  })
+}
+
 const paletteCommands = computed<PaletteCommand[]>(() => {
   const hasThread = !isHomeRoute.value
     && !isSkillsRoute.value
@@ -3250,6 +3303,9 @@ function onCommandPaletteRun(commandId: string): void {
     case 'view.in-progress-send-mode':
       cycleInProgressSendMode()
       break
+    case 'view.shortcuts':
+      onOpenShortcutHelp()
+      break
     case 'nav.skills':
       void router.push({ name: 'skills' })
       break
@@ -3270,6 +3326,10 @@ function onCommandPaletteRun(commandId: string): void {
 function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
   // 兜底：焦点意外离开面板输入框时，Esc 仍应能关掉命令面板。
+  if (event.key === 'Escape' && isShortcutHelpOpen.value) {
+    isShortcutHelpOpen.value = false
+    return
+  }
   if (event.key === 'Escape' && isCommandPaletteOpen.value) {
     isCommandPaletteOpen.value = false
     return
@@ -3283,6 +3343,7 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   const key = event.key.toLowerCase()
   if (key === '/') {
     event.preventDefault()
+    isShortcutHelpOpen.value = false
     isCommandPaletteOpen.value = !isCommandPaletteOpen.value
     return
   }
@@ -5483,8 +5544,13 @@ async function loadWorktreeBranches(sourceCwd: string): Promise<void> {
   border: none;
 }
 
-.content-header-right-panel-toggle {
+.content-header-right-panel-toggle,
+.content-header-command-button {
   @apply inline-flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-ink-3 transition hover:bg-s1 hover:text-ink-1;
+}
+
+.content-header-command-button-icon {
+  @apply h-4 w-4 shrink-0;
 }
 
 .right-panel-menu-enter-active,
