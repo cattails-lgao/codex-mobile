@@ -28,7 +28,20 @@
 //      first, i.e. exactly `fullHydration.slice(-limit).reverse()`;
 //   2. `turnsBackwardsCursor`/`nextCursor` are non-null while older turns exist
 //      and null once the page reaches the start of the thread.
+//
+// round-143 实测推翻了一个隐含前提：`initialTurnsPage` 与 `thread/turns/list`
+// **不是同一份数据**。前者按 rollout 字节偏移取页（它的游标里就是
+// `rolloutOrdinal`），后者走 app-server 的状态索引。而 `thread/revert` 只清理
+// 索引——被回退的轮次仍留在 rollout 里。线上被回退过的线程实测：8 条线程中 7 条
+// 两条读路径逐位一致，唯一不一致的那条，rollout 页多出来的正是回退目标那一轮
+// （status: interrupted，且它已不在 turns/list 里）。
+//
+// 这造就了「回退成功了、刷新后那一轮又回来了」：第一次打开线程走的就是本模块
+// （thread/resume），它拿到的 rollout 页会把那一轮重新渲染回消息列表；而
+// thread/read 走索引，所以当场看不到。清浏览器存储也无用——来源在服务端。
+// 因此本模块把页对齐到权威索引，见 `dropTurnsMissingFromIndex`。
 import { asRecord, readNonEmptyString, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
+import { readThreadTurnIds } from './threadTurnPage.js'
 
 /**
  * Requested page size for the cheap turn-count probe. The app-server clamps a
@@ -153,6 +166,59 @@ export async function readThreadTurnCount(rpc: RpcExecutor['rpc'], threadId: str
   return null
 }
 
+// round-143：页里那些「权威索引不认识、且已经是终态」的轮次，只可能是回退后留在
+// rollout 里的残留。没有 id 的轮次、以及状态可能仍在跑的轮次一律保留：这个过滤
+// 只允许剔除能被证明已不存在的轮次——宁可留下一条残留，也不能把正在跑的轮次藏掉。
+const TERMINAL_TURN_STATUSES = new Set(['completed', 'failed', 'declined', 'interrupted', 'error'])
+
+function readTurnStatus(turn: unknown): string {
+  const record = asRecord(turn)
+  const raw = record?.status
+  const text = readNonEmptyString(raw) || readNonEmptyString(asRecord(raw)?.type)
+  return text.toLowerCase()
+}
+
+/**
+ * The subset of `pageData` the authoritative turn index still knows about.
+ *
+ * Order is preserved (the page is newest-first). A turn with no id, an id the
+ * index holds, or a status that could still be running is always kept, so this
+ * can only ever remove a turn that is provably gone.
+ */
+export function dropTurnsMissingFromIndex(pageData: unknown[], indexTurnIds: string[]): unknown[] {
+  const known = new Set(indexTurnIds)
+  return pageData.filter((turn) => {
+    const turnId = readNonEmptyString(asRecord(turn)?.id)
+    if (!turnId || known.has(turnId)) return true
+    return !TERMINAL_TURN_STATUSES.has(readTurnStatus(turn))
+  })
+}
+
+/**
+ * The thread's turn ids, oldest first, or null when they cannot be trusted.
+ *
+ * `readThreadTurnIds` throws when the app-server does not implement
+ * `thread/turns/list`; here that only means "no reconciliation", so it must not
+ * take the bounded resume down with it (replaying the untouched request would
+ * hydrate the whole history, which is exactly what round-84 removed).
+ */
+async function readAuthoritativeTurnIds(rpc: RpcExecutor['rpc'], threadId: string): Promise<string[] | null> {
+  if (!threadId) return null
+  try {
+    return await readThreadTurnIds(rpc, threadId)
+  } catch {
+    return null
+  }
+}
+
+/** The same resume result with its page data replaced by `turns`. */
+function withResumePageTurns(result: unknown, turns: unknown[]): unknown {
+  const record = asRecord(result)
+  const page = asRecord(record?.initialTurnsPage)
+  if (!record || !page) return result
+  return { ...record, initialTurnsPage: { ...page, data: turns } }
+}
+
 /**
  * Move the bounded page onto `thread.turns` and stamp `threadTurnStartIndex`,
  * dropping `initialTurnsPage` so the turns never travel twice.
@@ -208,37 +274,61 @@ export async function resumeThreadWithTurnPage(
     return await deps.sendResume(originalParams)
   }
 
-  const pageData = readPageData(result) ?? []
+  const threadId = readNonEmptyString(asRecord(asRecord(result)?.thread)?.id)
   const page = asRecord(asRecord(result)?.initialTurnsPage)
+  const pageData = readPageData(result) ?? []
+
+  // round-143：一次权威 id 列表（状态索引的 id 链）同时服务三件事——空页的交叉
+  // 校验（round-134 语义不变）、rollout 残留轮次的剔除、以及
+  // `threadTurnStartIndex` 需要的总轮数。拿不到时（旧 app-server 不实现该方法、
+  // 分页超过上限、调用失败）三件事全部退回改动前的行为。
+  const indexTurnIds = await readAuthoritativeTurnIds(deps.rpc, threadId)
+
   // round-134：与 threadReadTurnPage 同一条收紧——空页不等于「线程没有轮次」。
   // 此前空页会被 promote 成 turns=[] / threadTurnStartIndex=0，于是 app-server 的
   // 一次偶发空页就能把打开线程答成一个空对话（round-132 §10.4 第 3 条）。空页先做
   // 一次便宜的轮次计数交叉校验：确有轮次、或数不出来时回放未改写的原请求；真正的
   // 空线程（计数 0）仍走 promote 路径，行为不变。
   if (pageData.length === 0) {
-    const threadId = readNonEmptyString(asRecord(asRecord(result)?.thread)?.id)
-    const turnCount = await readThreadTurnCount(deps.rpc, threadId)
-    if (turnCount === null || turnCount > 0) return await deps.sendResume(originalParams)
+    if (indexTurnIds === null || indexTurnIds.length > 0) return await deps.sendResume(originalParams)
   }
+
+  // round-143：把 rollout 页对齐到权威索引 —— 索引里没有、且已是终态的轮次只可能
+  // 是回退后留在 rollout 里的残留（thread/revert 只清理索引），剔掉它；否则刷新
+  // 打开线程时它会顺着 rollout 页重新回到消息列表。
+  let promoted = result
+  let pageTurns = pageData
+  if (pageData.length > 0 && indexTurnIds !== null && indexTurnIds.length > 0) {
+    const kept = dropTurnsMissingFromIndex(pageData, indexTurnIds)
+    if (kept.length !== pageData.length) {
+      const oldestKeptTurnId = readNonEmptyString(asRecord(kept[kept.length - 1])?.id)
+      // 剔除后剩下的必须是索引里的一段连续后缀（回退只会砍掉 rollout 的尾部）。
+      // 对不上意味着这段页与索引的关系比这里假设的复杂（例如页首还有一个索引
+      // 不认识的运行中轮次）——那就整页照旧返回，只是放弃这一次修复，绝不为了
+      // 一条残留把 resume 打回全量水合。
+      const anchored = kept.length > 0 &&
+        oldestKeptTurnId !== '' &&
+        indexTurnIds[indexTurnIds.length - kept.length] === oldestKeptTurnId
+      if (anchored) {
+        promoted = withResumePageTurns(result, kept)
+        pageTurns = kept
+      }
+    }
+  }
+
   // The page is newest-first, so its oldest turn is the last one; the boundary
   // it hands over is the cursor that reaches the turns before that turn.
-  const oldestTurnId = readNonEmptyString(asRecord(pageData[pageData.length - 1])?.id)
+  const oldestTurnId = readNonEmptyString(asRecord(pageTurns[pageTurns.length - 1])?.id)
   if (oldestTurnId && deps.onTurnPageBoundary) {
-    deps.onTurnPageBoundary(
-      readNonEmptyString(asRecord(asRecord(result)?.thread)?.id),
-      oldestTurnId,
-      readNonEmptyString(page?.nextCursor) || null,
-    )
+    deps.onTurnPageBoundary(threadId, oldestTurnId, readNonEmptyString(page?.nextCursor) || null)
   }
   // A full page means older turns may exist, and their existence is the only
   // thing `threadTurnStartIndex` needs the count for. A short page already
   // covers the whole thread, so the extra RPC is skipped on new/small threads.
-  const needsCount = pageData.length > 0 && readNonEmptyString(page?.nextCursor) !== ''
-  let totalTurnCount: number | null = pageData.length
-  if (needsCount) {
-    const threadId = readNonEmptyString(asRecord(asRecord(result)?.thread)?.id)
-    totalTurnCount = await readThreadTurnCount(deps.rpc, threadId)
-  }
+  const needsCount = pageTurns.length > 0 && readNonEmptyString(page?.nextCursor) !== ''
+  let totalTurnCount: number | null = pageTurns.length
+  if (indexTurnIds !== null) totalTurnCount = indexTurnIds.length
+  else if (needsCount) totalTurnCount = await readThreadTurnCount(deps.rpc, threadId)
 
-  return promoteResumeTurnPage(result, totalTurnCount)
+  return promoteResumeTurnPage(promoted, totalTurnCount)
 }
