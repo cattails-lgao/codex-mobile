@@ -5,7 +5,7 @@
 ## Round 51-A：完成的 agentMessage 未被识别为最终 assistant 块
 
 ### 根因
-[useDesktopState.ts](src/composables/useDesktopState.ts) 的 `readAgentMessageCompleted` 对已完成条目**无条件**把 `messageType` 置为 `agentMessage.live`，而 `transcriptGrouping.ts` 的 `isFinalAssistantItem` 会拒绝 stream 态项，导致最终回答不被渲染成 assistant 块。
+[useDesktopState.ts](../../src/composables/useDesktopState.ts) 的 `readAgentMessageCompleted` 对已完成条目**无条件**把 `messageType` 置为 `agentMessage.live`，而 `transcriptGrouping.ts` 的 `isFinalAssistantItem` 会拒绝 stream 态项，导致最终回答不被渲染成 assistant 块。
 
 ### 修复
 `baa5f6f fix: finalize completed agentMessage as non-live so final reply renders as assistant block`

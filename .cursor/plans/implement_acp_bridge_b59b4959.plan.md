@@ -53,7 +53,7 @@ graph TD
 
 ### 1. ACP Process Bridge (`AcpServerProcess`)
 
-Create a new class `AcpServerProcess` in [src/server/acpBridge.ts](src/server/acpBridge.ts) that:
+Create a new class `AcpServerProcess` in `src/server/acpBridge.ts` that:
 
 - Spawns `acpx gemini` (or configurable agent) with `--approve-all --format json` flags
 - OR spawns `gemini --acp` directly and speaks raw ACP JSON-RPC
@@ -61,7 +61,7 @@ Create a new class `AcpServerProcess` in [src/server/acpBridge.ts](src/server/ac
 - Maps ACP `session/update` notifications to the existing UI notification format
 - **Auto-accepts all `session/request_permission` requests** immediately (yolo mode)
 
-The existing `AppServerProcess` class in [src/server/codexAppServerBridge.ts](src/server/codexAppServerBridge.ts) is the template. The new class will mirror its structure but speak ACP instead of Codex app-server protocol.
+The existing `AppServerProcess` class in [src/server/codexAppServerBridge.ts](../../src/server/codexAppServerBridge.ts) is the template. The new class will mirror its structure but speak ACP instead of Codex app-server protocol.
 
 ### 2. Two Approaches -- Recommend Direct ACP
 
@@ -127,18 +127,18 @@ The existing responsive design (768px breakpoint, mobile drawer sidebar) is alre
 
 ### New Files
 
-- **[src/server/acpBridge.ts](src/server/acpBridge.ts)** -- `AcpServerProcess` class + `createAcpBridgeMiddleware()` function. Mirror of `codexAppServerBridge.ts` but speaking ACP protocol with auto-accept logic.
+- **`src/server/acpBridge.ts`** -- `AcpServerProcess` class + `createAcpBridgeMiddleware()` function. Mirror of `codexAppServerBridge.ts` but speaking ACP protocol with auto-accept logic.
 
 ### Modified Files
 
-- **[src/server/codexAppServerBridge.ts](src/server/codexAppServerBridge.ts)** -- Extract shared types/helpers. Add bridge selection logic (ACP vs Codex) based on config.
-- **[src/server/httpServer.ts](src/server/httpServer.ts)** -- Wire ACP bridge middleware alongside or instead of Codex bridge based on config.
-- **[src/composables/useDesktopState.ts](src/composables/useDesktopState.ts)** -- Handle ACP-style notifications in `applyRealtimeUpdates`. The bridge will normalize ACP events to match existing notification shapes where possible, but some new event types may need handling.
-- **[src/types/codex.ts](src/types/codex.ts)** -- Add ACP-specific types if needed (tool call kinds, plan entries, etc.)
-- **[src/cli/index.ts](src/cli/index.ts)** -- Add `--agent` flag to select ACP agent (default: `gemini`). Skip Codex-specific login when using ACP agent.
-- **[vite.config.ts](vite.config.ts)** -- Wire ACP bridge in dev mode based on env var.
-- **[src/commandResolution.ts](src/commandResolution.ts)** -- Add `resolveGeminiCommand()` and generic ACP agent resolution.
-- **[tests.md](tests.md)** -- Add manual test cases for ACP/Gemini flow.
+- **[src/server/codexAppServerBridge.ts](../../src/server/codexAppServerBridge.ts)** -- Extract shared types/helpers. Add bridge selection logic (ACP vs Codex) based on config.
+- **[src/server/httpServer.ts](../../src/server/httpServer.ts)** -- Wire ACP bridge middleware alongside or instead of Codex bridge based on config.
+- **[src/composables/useDesktopState.ts](../../src/composables/useDesktopState.ts)** -- Handle ACP-style notifications in `applyRealtimeUpdates`. The bridge will normalize ACP events to match existing notification shapes where possible, but some new event types may need handling.
+- **[src/types/codex.ts](../../src/types/codex.ts)** -- Add ACP-specific types if needed (tool call kinds, plan entries, etc.)
+- **[src/cli/index.ts](../../src/cli/index.ts)** -- Add `--agent` flag to select ACP agent (default: `gemini`). Skip Codex-specific login when using ACP agent.
+- **[vite.config.ts](../../vite.config.ts)** -- Wire ACP bridge in dev mode based on env var.
+- **[src/commandResolution.ts](../../src/commandResolution.ts)** -- Add `resolveGeminiCommand()` and generic ACP agent resolution.
+- **[tests.md](../../tests.md)** -- Add manual test cases for ACP/Gemini flow.
 
 ## Implementation Strategy
 

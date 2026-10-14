@@ -10,8 +10,8 @@
 
 ## 改动要点
 
-1. **回收站固定高度**：[SidebarThreadTree.vue](../src/components/sidebar/SidebarThreadTree.vue) 回收站内容容器 `@apply h-64 overflow-y-auto`，固定高度、内容超出滚动，面板不随列表长度伸缩。
-2. **思考强度默认 medium**：[useDesktopModelPreferences.ts](../src/composables/useDesktopModelPreferences.ts) 无用户显式选择时以 `'medium' as const` 作为默认推理强度；测试随更新（`expect(...).toBe('medium')`）。
+1. **回收站固定高度**：[SidebarThreadTree.vue](../../src/components/sidebar/SidebarThreadTree.vue) 回收站内容容器 `@apply h-64 overflow-y-auto`，固定高度、内容超出滚动，面板不随列表长度伸缩。
+2. **思考强度默认 medium**：[useDesktopModelPreferences.ts](../../src/composables/useDesktopModelPreferences.ts) 无用户显式选择时以 `'medium' as const` 作为默认推理强度；测试随更新（`expect(...).toBe('medium')`）。
 3. **H5 附加菜单可见性**：根因是移动端 `.thread-composer-controls` 的 `overflow-x-auto` 使 float 变成裁剪式滚动容器，`ComposerPopover` 原先 `absolute` 向上弹出的菜单被裁剪；改为 viewport `fixed` 定位（与 `ComposerDropdown#updateMenuPosition` 同思路），并保留 `align` 对齐与 resize/scroll/orientationchange 重算。`ThreadComposer` 点击外部关闭仍依赖 `.composer-popover-anchor`，无回归。
 
 ## 验证
