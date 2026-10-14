@@ -42,20 +42,23 @@
         </button>
       </li>
       <template v-for="turn in renderTurns" :key="turn.key">
+      <template v-if="!turn.warm || isWarmTurnRendered(turn.warm.turn)">
         <li
           v-if="turn.timeDividerLabel"
           class="conversation-item conversation-item-time-divider"
           data-role="system"
           data-message-type="timeDivider"
+          :style="warmFirstLiStyle(turn, true)"
         >
           <TimeDivider :label="turn.timeDividerLabel" />
         </li>
         <li
-          v-for="divider in turn.leadingDividers ?? []"
+          v-for="(divider, dividerIndex) in turn.leadingDividers ?? []"
           :key="`${turn.key}-leading-${(divider.to ?? '')}-${(divider.from ?? '')}`"
           class="conversation-item conversation-item-model-switch"
           data-role="system"
           data-message-type="modelSwitch"
+          :style="warmFirstLiStyle(turn, !turn.timeDividerLabel && dividerIndex === 0)"
         >
           <ModelSwitchDivider :from="divider.from" :to="divider.to" />
         </li>
@@ -75,6 +78,7 @@
             class="conversation-item conversation-item-warm-card"
             data-role="system"
             data-message-type="warmTurn"
+            :style="warmFirstLiStyle(turn, !turn.timeDividerLabel && !(turn.leadingDividers?.length))"
           >
             <div class="message-row" data-role="system">
               <div class="message-stack" data-role="system">
@@ -524,6 +528,15 @@
         >
           <ModelSwitchDivider :from="divider.from" :to="divider.to" />
         </li>
+        <!-- 批 3b（round-163）：窗底占位 li —— 补回被跳过的折叠块高度，
+             使 scrollHeight 与全量渲染逐位一致（公式见 warmTurnWindow.ts）。 -->
+        <li
+          v-if="turn.key === warmLastRenderedKey && warmBottomSpacerPx > 0"
+          class="conversation-warm-spacer-bottom"
+          :style="{ height: `${warmBottomSpacerPx}px` }"
+          aria-hidden="true"
+        />
+      </template>
       </template>
       <LiveOverlayItem v-if="liveOverlay" :overlay="liveOverlay" :feedback-mailto="feedbackMailto" />
       <li ref="bottomAnchorRef" class="conversation-bottom-anchor" />
@@ -660,6 +673,11 @@ import {
   type ProcessFoldItem,
 } from '../../utils/conversationFolds'
 import { shouldOmitEmptyGenericMessage as shouldOmitEmptyGenericBodyMessage } from '../../utils/messageContent'
+import {
+  planWarmWindow,
+  type WarmBlockSpec,
+  type WarmWindowPlan,
+} from '../../utils/warmTurnWindow'
 import {
   buildTurnGroups,
   buildTurnRenderGroups,
@@ -1281,6 +1299,10 @@ function jumpToQuestion(turn: number): void {
     warmLayerState.value = next
   }
   autoFollowOutput.value = false
+  // 批 3b：目标轮刚被展开 ⇒ 依赖「展开块强制入窗」才会在 DOM 里。窗口重算走的是
+  // watch → nextTick → rAF 的异步链，可能晚于下面这个 nextTick ⇒ 在此同步重算一次，
+  // 让本次 nextTick 渲染出的 DOM 已包含目标轮（重复计算幂等，rAF 链随后照常收敛）。
+  recomputeWarmWindow()
   void nextTick().then(() => {
     const container = conversationListRef.value
     const el = document.getElementById(questionAnchorId(turn))
@@ -1402,6 +1424,132 @@ function isWorkedMessage(message: UiMessage): boolean {
 }
 
 const hasMoreAbove = computed(() => props.hasMorePersistedAbove === true)
+
+// ---------------------------------------------------------------------------
+// 批 3b（round-163）：折叠态 warm 轮窗口化。
+// 设计与实测常量见 src/utils/warmTurnWindow.ts 顶部注释。要点：
+//  · 只窗口化「折叠态 warm 块」；展开块强制入窗（真实高度留在 DOM 里），
+//    hot 区保持全量渲染 ⇒ scrollToBottom / isAtBottom / loadMoreAbove 补偿等
+//    全部滚动原语照旧操作真实 DOM，一行不改。
+//  · 被跳过的块全是折叠卡 ⇒ 高度是实测常量（69 / 42，round-163 真机实测偏差 0）
+//    ⇒ spacer 把 scrollHeight 补到与全量渲染逐位一致。
+//  · jumpToQuestion 必然展开目标轮 ⇒ 强制入窗保证锚点存在 ⇒ getElementById
+//    路径原样保留（评估 §三 必解 2 由「强制入窗」消解，不需要布局算距）。
+//  · warm 区底边取**实时锚**（热区首个 li.conversation-turn 的顶边）：估算漂移
+//    不随块数累积；折叠块常量精确 ⇒ 锚与布局只在展开块估算处有软偏差，
+//    由 overscan 吸收。
+// -----------------------------------------------------------------------
+const WARM_WINDOW_OVERSCAN_PX = 800
+
+const warmWindowPlan = ref<WarmWindowPlan | null>(null)
+
+const warmBlockSpecs = computed<WarmBlockSpec[]>(() =>
+  renderTurns.value
+    .filter((turn) => turn.warm !== undefined)
+    .map((turn) => ({
+      turn: turn.warm !== undefined ? turn.warm.turn : -1,
+      collapsed: turn.warm !== undefined ? !turn.warm.expanded : true,
+      hasTimeDivider: turn.timeDividerLabel !== undefined,
+      leadingModelSwitchCount: turn.leadingDividers?.length ?? 0,
+      trailingModelSwitchCount: turn.dividers?.length ?? 0,
+      hasAssistantPreview: (turn.warm?.assistantPreview ?? '').length > 0,
+    })),
+)
+
+const warmFirstRenderedKey = computed(() => {
+  const plan = warmWindowPlan.value
+  if (!plan) return null
+  const spec = warmBlockSpecs.value[plan.window.first]
+  return spec ? `warm-${spec.turn}` : null
+})
+
+const warmLastRenderedKey = computed(() => {
+  const plan = warmWindowPlan.value
+  if (!plan) return null
+  const spec = warmBlockSpecs.value[plan.window.last]
+  return spec ? `warm-${spec.turn}` : null
+})
+
+const warmTopMarginPx = computed(() => warmWindowPlan.value?.spacers.topMarginPx ?? 0)
+const warmBottomSpacerPx = computed(() => warmWindowPlan.value?.spacers.bottomSpacerPx ?? 0)
+
+/** 窗口内的 warm 轮序号集合；plan 为 null（未启用 / 无 warm 区）⇒ null = 全量渲染。 */
+const warmRenderedTurnNumbers = computed<Set<number> | null>(() => {
+  const plan = warmWindowPlan.value
+  if (!plan) return null
+  const specs = warmBlockSpecs.value
+  const set = new Set<number>()
+  for (let i = plan.window.first; i <= plan.window.last; i += 1) {
+    const spec = specs[i]
+    if (spec) set.add(spec.turn)
+  }
+  return set
+})
+
+/** hot 块恒渲染；warm 块只在窗口内渲染（展开块已被强制入窗）。 */
+function isWarmTurnRendered(turnNumber: number): boolean {
+  const rendered = warmRenderedTurnNumbers.value
+  return rendered === null || rendered.has(turnNumber)
+}
+
+/** 窗顶 margin 只挂首个渲染块的第一条 li（timeDivider → leadingDivider 首条 → 卡片 li 的优先序）。 */
+function warmFirstLiStyle(
+  turn: ConversationRenderTurn,
+  isFirstLiOfBlock: boolean,
+): { marginTop: string } | undefined {
+  if (!isFirstLiOfBlock || turn.key !== warmFirstRenderedKey.value) return undefined
+  const px = warmTopMarginPx.value
+  if (px <= 0) return undefined
+  return { marginTop: `${px}px` }
+}
+
+let warmWindowFrame = 0
+
+function scheduleWarmWindowRecompute(): void {
+  if (warmWindowFrame) return
+  warmWindowFrame = requestAnimationFrame(() => {
+    warmWindowFrame = 0
+    recomputeWarmWindow()
+  })
+}
+
+function recomputeWarmWindow(): void {
+  const container = conversationListRef.value
+  const specs = warmBlockSpecs.value
+  if (!container || specs.length === 0) {
+    warmWindowPlan.value = null
+    return
+  }
+  // 实时锚：热区首个轮次根 li。warm 区非空 ⇒ hot 区必有 ≥1 轮 ⇒ 锚必然存在；
+  // 若真的查不到（极端时序），退回全量渲染（plan = null）比猜一个位置安全。
+  const hotAnchor = container.querySelector('li.conversation-turn')
+  if (!hotAnchor) {
+    warmWindowPlan.value = null
+    return
+  }
+  const listRect = container.getBoundingClientRect()
+  const warmBottomScrollY =
+    hotAnchor.getBoundingClientRect().top - listRect.top + container.scrollTop
+  const viewportBottomDistancePx =
+    warmBottomScrollY - (container.scrollTop + container.clientHeight)
+  const computedGap = Number.parseFloat(window.getComputedStyle(container).rowGap)
+  const gapPx = Number.isFinite(computedGap) && computedGap > 0 ? computedGap : 12
+  warmWindowPlan.value = planWarmWindow({
+    specs,
+    gapPx,
+    viewportBottomDistancePx,
+    viewportHeightPx: container.clientHeight,
+    overscanPx: WARM_WINDOW_OVERSCAN_PX,
+  })
+}
+
+watch(
+  [warmBlockSpecs, hasColdTurns, hasMoreAbove],
+  () => {
+    // 等 DOM 把新增/移除的块落盘后再量锚，否则读到旧几何。
+    void nextTick(scheduleWarmWindowRecompute)
+  },
+)
 
 const showJumpToLatestButton = computed(
   () => !autoFollowOutput.value && (props.messages.length > 0 || props.pendingRequests.length > 0 || Boolean(props.liveOverlay)),
@@ -2047,6 +2195,7 @@ async function scheduleConversationScroll(): Promise<void> {
       conversationScrollFrame = 0
       conversationScrollPromise = null
       applyConversationScrollState()
+      recomputeWarmWindow()
       bindPendingImageHandlers()
       scheduleBottomLock()
       resolve()
@@ -2141,6 +2290,7 @@ function onConversationScroll(): void {
   const container = conversationListRef.value
   if (!container || props.isLoading) return
   autoFollowOutput.value = isAtBottom(container)
+  scheduleWarmWindowRecompute()
   if (container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX && !isLoadingMore.value) {
     if (hasColdTurns.value) {
       nextColdPage()
@@ -2173,6 +2323,10 @@ onBeforeUnmount(() => {
   if (conversationScrollFrame) {
     cancelAnimationFrame(conversationScrollFrame)
     conversationScrollFrame = 0
+  }
+  if (warmWindowFrame) {
+    cancelAnimationFrame(warmWindowFrame)
+    warmWindowFrame = 0
   }
   if (bottomLockFrame) {
     cancelAnimationFrame(bottomLockFrame)
@@ -2211,6 +2365,13 @@ onBeforeUnmount(() => {
 
 .conversation-load-more {
   @apply flex justify-center py-3 m-0;
+}
+
+/* 批 3b（round-163）：窗底占位 li —— 显式高度补回被跳过的折叠块，无内容。
+   shrink-0 是必须的：列表是 flex-col + 溢出滚动，空 li 的 min-content 为 0，
+   不禁收缩会被 flex 压成 0 高（实测 round-163 验证 S3）。 */
+.conversation-warm-spacer-bottom {
+  @apply m-0 p-0 shrink-0;
 }
 
 .load-more-button {
