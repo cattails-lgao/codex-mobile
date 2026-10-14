@@ -424,6 +424,7 @@
 
 - `527bd5b5` `fix(scripts): --selftest 夹具改用合成地址，让 round-161 的真实 tailnet 地址全仓零出现` —— **1 文件**，`+2/−2`
 - 本段所在提交：`rounds/round-162-*.md`（新增）、`codex-mobile-handover.md`、`sections/commit-history.md` —— **3 文件**，本文件 1184 → 1205 行
+- **追加修正（即本段所在提交，docs-only）**：规范 §5.3 的推送命令仍教 `socks5h://127.0.0.1:10808` —— 该端点当日已死（漂到 FlClashCore 的 `7890`），且 `-c https.proxy=` **不是 git 配置项**（git 只认 `http.proxy`，写了等于没写）⇒ 改为「**先探活端口、只写 `http.proxy=`**」；§5.4「有意不拦」的指涉同步改写。本文件 1205 → 1206 行
 
 **验证基线（本轮时点）**：`check-handover-desensitization.cjs` **违规 0 处 / 例外 9 处（登记例外 6 条），退 0**（548 个 md，**12 类**）；`--selftest` **19 例全过**；`check-md-links.cjs` **失效链接 0 / 失效锚点 0，退 0**（2559 条链接 / 2 条锚点）；`regen-app-server-doc.cjs --check` **drift = 0**；`node --check` 通过；产品侧三项全绿（见上）。端口读数沿用 22:19 实测（本轮未复测）。
 
