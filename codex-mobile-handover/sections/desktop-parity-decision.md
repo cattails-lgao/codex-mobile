@@ -88,7 +88,7 @@
 | 快捷键速查面板 | `showKeyboardShortcuts` | 无 | 他们 |
 | 线程内查找 | `findInThread` + `codex.threadFindBar.*`(18 键) | 无（只有跨线程 `thread/search`） | 他们 |
 | 复制单条消息 | 有 | **有**：`useReplyCopyFork.ts` 覆盖用户消息 / 助手回复 / plan / fileChange 四类 | 打平（上一轮材料漏记） |
-| 整段对话导出为 MD | `copyConversationMarkdown` | **无**（`conversationMarkdown.ts` 是渲染器，不是导出器） | 他们 |
+| 整段对话导出为 MD | `copyConversationMarkdown` | **有**：`buildThreadMarkdown()`（`App.vue:4184`）+ `copySelectedThreadChat()`（`:4173`），入口 = 侧栏线程菜单「复制对话」（`:102` → `onCopyThreadChat` ✓ `:2524`）。这行原先写「无」是把 `conversationMarkdown.ts`（渲染器）错当成了唯一候选，漏看了 `App.vue` 里的导出器 | 打平（round-149 更正） |
 | 复制最后一个代码块 | `copyLastCodeBlock` | 无 | 他们 |
 | 应用级 undo/redo | `undoAppAction` / `redoAppAction` | 仅会话级（undo/redo 通知真实化，P1-3） | 他们（非必须） |
 | 消息队列 | 官方 `threadQueue`（0.148+） | **自研** `QueuedMessages.vue` + `buildQueuedTurnParams`（`codexAppServerBridge.ts:1385`） | 打平（自研可控、已跑通） |
@@ -134,7 +134,7 @@
 
 1. **不是「全量渲染、无虚拟化」** —— 我们有 **hot/warm/cold 三层**：`HOT_TURNS=30`、`WARM_PAGE_SIZE=20`（`ThreadConversation.vue:997-998`），warm 区渲染 `WarmTurnCard`（用户文本 + 助手预览 + 工具计数）。这和桌面端的窗口化**是两种不同的省 DOM 手段**：他们是「几何窗口化（无损）」，我们是「语义折叠（有损，需点开）」。
 2. **不是「无右侧导航轨」** —— `QuestionJumpBar.vue` 已存在并在用（`ThreadConversation.vue:524` 挂载、`:1223 jumpToQuestion`），功能上覆盖桌面端的导航轨（点轨跳转、hover 预览、活动态波点），只是**没有 `IntersectionObserver` 自动跟随**（`activeQuestionTurn` 恒为「最后一个问题」，`:1201`）。
-3. **不是「无复制能力」** —— `useReplyCopyFork.ts` 已覆盖用户消息 / 助手回复 / plan / fileChange 四类复制，且含 `execCommand` 兜底。缺的只是**整段对话导出 MD** 与**复制最后一个代码块**。
+3. **不是「无复制能力」** —— `useReplyCopyFork.ts` 已覆盖用户消息 / 助手回复 / plan / fileChange 四类复制，且含 `execCommand` 兜底。**整段对话导出 MD 也已存在**（`buildThreadMarkdown()` / `copySelectedThreadChat()`，round-149 复核更正 —— 原先写「无」是只看了 `utils/conversationMarkdown.ts`、漏看 `App.vue` 里的导出器）。真正缺的只剩**复制最后一个代码块**。
 
 > 结论：我们和他们的差距**比上一轮材料看起来更小**，且差距集中在**几何层 + 入口层**，不在语义层。
 

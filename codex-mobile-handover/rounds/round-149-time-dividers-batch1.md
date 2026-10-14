@@ -109,6 +109,12 @@ shouldShowTimeDivider(previousMarkerMs, nextMs)
 | 3 | 快捷键速查面板 | **有意延后到批 2 之后**。判定书 §四 已定：命令注册表（批 2）同时是快捷键体系与速查面板的**地基**，先做面板等于把 3 个键位的清单硬编码一遍再返工。当前实际可用的键位只有 3 个（`Ctrl/Cmd+B`、`Ctrl/Cmd+J`、`Esc`），单独做面板价值低 |
 | 4 | 修 `Ctrl+J` | **不改**。绑定本身按 Chromium 语义是成立的：`Ctrl+J` 不在**保留加速键**表里（保留的是 `Ctrl+T/W/N`、`Ctrl+Tab`、`Ctrl+1..9`、`F11/F12`、`Ctrl+Shift+I/J/C` 等），浏览器会**先**把事件交给渲染进程，页面 `preventDefault()` 能吃掉它（`App.vue:3173-3181` 已这么做）。且终端面板本就有**可见 tab 按钮**（`App.vue:753`）作为兜底入口 ⇒ 即使某个浏览器吃掉按键也不影响可用性。**唯一未闭环**：真机按一次键验证（CDP 注入会绕过浏览器前置处理，自动化测不出，见 §八） |
 
+> **顺带更正（盘点层）**：r147 把「整段对话导出 MD」记为**无**，实际**已存在** ——
+> `App.vue:4184 buildThreadMarkdown()` + `:4173 copySelectedThreadChat()`，入口 = 侧栏线程菜单「复制对话」
+> （`:102` → `onCopyThreadChat` `:2524`）。原先只看了 `utils/conversationMarkdown.ts`（渲染器）就下了结论。
+> 连同 #2 的滚动到底按钮，**r147 §六 对照表里「他们有、我们没有」的两行其实是打平**。
+> 判定书 `sections/desktop-parity-decision.md` §C 表与 §137 行已同步更正。
+
 ---
 
 ## 七、诚实边界
