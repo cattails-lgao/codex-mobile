@@ -829,6 +829,12 @@
       </div>
     </template>
   </DesktopLayout>
+  <CommandPalette
+    v-if="isCommandPaletteOpen"
+    :commands="paletteCommands"
+    @close="isCommandPaletteOpen = false"
+    @run="onCommandPaletteRun"
+  />
   <div v-if="projectZipExportStatus.phase !== 'idle'" class="project-zip-modal-backdrop" role="presentation">
     <div class="project-zip-modal" role="dialog" aria-modal="true" :aria-label="t('Export Project')" @click.stop>
       <div class="project-zip-modal-header">
@@ -947,8 +953,10 @@ import { useRoute, useRouter } from 'vue-router'
 import DesktopLayout from './components/layout/DesktopLayout.vue'
 import SidebarThreadTree from './components/sidebar/SidebarThreadTree.vue'
 import ContentHeader from './components/content/ContentHeader.vue'
+import CommandPalette from './components/content/CommandPalette.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
+import { PALETTE_COMMANDS, type PaletteCommand } from './components/content/commandRegistry'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
@@ -3152,8 +3160,120 @@ async function onForkThreadFromMessage(payload: { threadId: string; turnIndex: n
   if (isMobile.value) setSidebarCollapsed(true)
 }
 
+// round-150（桌面端对位批 2）：命令面板。注册表是纯数据，这里只做两件事——
+// 按当前上下文裁剪（没选中线程就不显示线程级命令），以及把抽象写法的
+// 'Mod+' 前缀换成本平台实际按键。
+const isCommandPaletteOpen = ref(false)
+
+const paletteCommands = computed<PaletteCommand[]>(() => {
+  const hasThread = !isHomeRoute.value
+    && !isSkillsRoute.value
+    && !isAutomationsRoute.value
+    && selectedThreadId.value.trim().length > 0
+  const modifier = isMacPlatform() ? '⌘' : 'Ctrl+'
+  return PALETTE_COMMANDS
+    .filter((command) => {
+      if (command.requiresThread && !hasThread) return false
+      if (command.id === 'thread.interrupt' && !isSelectedThreadInProgress.value) return false
+      if (command.id === 'thread.implement-plan' && !composerPlanPanel.value) return false
+      if (command.group === 'panel' && !canShowRightPanel.value) return false
+      return true
+    })
+    .map((command) => (
+      command.shortcut ? { ...command, shortcut: command.shortcut.replace('Mod+', modifier) } : command
+    ))
+})
+
+// 每个 case 都只是转发到一个既有处理函数——命令面板本身不新增任何能力。
+function onCommandPaletteRun(commandId: string): void {
+  isCommandPaletteOpen.value = false
+  const threadId = selectedThreadId.value.trim()
+  switch (commandId) {
+    case 'thread.new':
+      onStartNewThreadFromToolbar()
+      break
+    case 'thread.rename':
+      if (threadId) sidebarThreadTreeRef.value?.openRenameThreadDialog(threadId, selectedThread.value?.title ?? '')
+      break
+    case 'thread.archive':
+      if (threadId) onArchiveThread(threadId)
+      break
+    case 'thread.fork':
+      if (threadId) void onForkThread(threadId)
+      break
+    case 'thread.copy-markdown':
+      void copySelectedThreadChat()
+      break
+    case 'thread.compact':
+      onCompactContext()
+      break
+    case 'thread.interrupt':
+      onInterruptTurn()
+      break
+    case 'thread.implement-plan':
+      onImplementPlan()
+      break
+    case 'panel.git':
+      selectRightPanelTab('git')
+      break
+    case 'panel.files':
+      selectRightPanelTab('files')
+      break
+    case 'panel.terminal':
+      toggleRightPanelTerminal()
+      break
+    case 'panel.toggle':
+      onToggleRightPanelToggle()
+      break
+    case 'panel.close':
+      onCloseRightPanel()
+      break
+    case 'view.toggle-sidebar':
+      setSidebarCollapsed(!isSidebarCollapsed.value)
+      break
+    case 'view.search-threads':
+      if (isSidebarCollapsed.value) setSidebarCollapsed(false)
+      if (!isSidebarSearchVisible.value) toggleSidebarSearch()
+      break
+    case 'view.cycle-theme':
+      cycleDarkMode()
+      break
+    case 'view.cycle-chat-width':
+      cycleChatWidth()
+      break
+    case 'view.toggle-language':
+      setUiLanguage(uiLanguage.value === 'zh-CN' ? 'en' : 'zh-CN')
+      break
+    case 'view.send-with-enter':
+      toggleSendWithEnter()
+      break
+    case 'view.in-progress-send-mode':
+      cycleInProgressSendMode()
+      break
+    case 'nav.skills':
+      void router.push({ name: 'skills' })
+      break
+    case 'nav.automations':
+      void router.push({ name: 'automations' })
+      break
+    case 'nav.recycle-bin':
+      onOpenRecycleBin()
+      break
+    case 'nav.settings':
+      if (!isSettingsOpen.value) onToggleSettings()
+      break
+    default:
+      break
+  }
+}
+
 function onWindowKeyDown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
+  // 兜底：焦点意外离开面板输入框时，Esc 仍应能关掉命令面板。
+  if (event.key === 'Escape' && isCommandPaletteOpen.value) {
+    isCommandPaletteOpen.value = false
+    return
+  }
   if (event.key === 'Escape' && isSettingsOpen.value) {
     isSettingsOpen.value = false
     return
@@ -3161,6 +3281,14 @@ function onWindowKeyDown(event: KeyboardEvent): void {
   if (!event.ctrlKey && !event.metaKey) return
   if (event.shiftKey || event.altKey) return
   const key = event.key.toLowerCase()
+  if (key === '/') {
+    event.preventDefault()
+    isCommandPaletteOpen.value = !isCommandPaletteOpen.value
+    return
+  }
+  // 命令面板打开时接管其余全局快捷键：Esc / 方向键 / 回车由面板自己处理，
+  // 否则在面板里按 Ctrl+B 会把侧栏一起收起来。
+  if (isCommandPaletteOpen.value) return
   if (key === 'b') {
     const isSidebarShortcut = isMacPlatform()
       ? event.metaKey && !event.ctrlKey

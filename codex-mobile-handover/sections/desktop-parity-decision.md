@@ -170,6 +170,12 @@
 
 ### 批 2 · 中风险、收益最大：命令面板 + 命令注册表
 
+> **✅ 已完成（round-150）**。落地路径与本节原计划有两处不同：① 注册表放
+> `src/components/content/commandRegistry.ts`（与 `slashCommands.ts` 同目录，都是「纯目录 + 纯匹配」），
+> 组件放 `src/components/content/CommandPalette.vue`；② 首版 **24 条** 而非 25–30，因为面板只做**无参**命令 ——
+> 「切模型 / 回退·分叉」需要额外的参数载体，留给下一版。`Ctrl/Cmd+/` 按本节选型落地。
+> 见 [round-150](../rounds/round-150-command-palette-batch2.md)。
+
 - **搬什么**：搬 `codex.command.*` 的**结构**，不搬清单内容。首版 **25–30 条**，来源 = **已有能力重新聚合**（切线程 / 切模型 / 开设置·目录·技能 / 切面板 / 新建 / 回退·分叉 / 复制导出）
 - **落地**：`src/components/CommandPalette.vue` + `src/composables/useCommandRegistry.ts`（注册表 = 单一数据源）
 - **键位**：`Ctrl/Cmd+/`（`Ctrl+K` 被浏览器地址栏占用，见 §六）

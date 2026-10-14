@@ -1075,6 +1075,59 @@ check(
   ].join(' / '),
 )
 
+// ---------------- round-150：命令面板（桌面端对位批 2）
+// 面板本身不新增任何能力——注册表是纯数据，App.vue 只把 id 转发到既有处理函数。
+// 三条必须钉住的结构约束：
+//   1) 命令标题与分组标题都是 i18n key（英文串），必须能在 zhCN 表里查到，
+//      否则中文界面会漏出英文——这是新增命令时最容易忘的一步。
+//   2) 无选中线程时要过滤掉「线程级」命令，但 thread.new 例外：它正是没有选中
+//      线程时最该能用的那一条，把 requiresThread 加上去会把它一起吃掉。
+//   3) 面板打开时全局快捷键让位，Ctrl/Cmd+/ 自身负责开关。
+const registrySrc150 = fs.readFileSync('src/components/content/commandRegistry.ts', 'utf8')
+const paletteSrc150 = fs.readFileSync('src/components/content/CommandPalette.vue', 'utf8')
+const appSrc150 = fs.readFileSync('src/App.vue', 'utf8')
+const i18nSrc150 = fs.readFileSync('src/composables/useUiLanguage.ts', 'utf8')
+const zhBlock150 = i18nSrc150.slice(i18nSrc150.indexOf('const zhCN'), i18nSrc150.indexOf('const LANGUAGE_LABELS'))
+const paletteTitles150 = [...registrySrc150.matchAll(/title: '([^']+)'/g)].map((match) => match[1])
+const paletteLabels150 = [...registrySrc150.matchAll(/^ {2}(?:thread|panel|view|navigate): '([^']+)',$/gm)].map((match) => match[1])
+const paletteMissingI18n150 = [...new Set([...paletteTitles150, ...paletteLabels150])]
+  .filter((key) => key && !zhBlock150.includes(`'${key}':`))
+const paletteCatalog150 = /export const PALETTE_COMMANDS: PaletteCommand\[\] = \[/.test(registrySrc150)
+  && /export const PALETTE_GROUP_ORDER: PaletteCommandGroup\[\] = \['thread', 'panel', 'view', 'navigate'\]/.test(registrySrc150)
+  && paletteTitles150.length >= 20
+const paletteMatcher150 = /export function matchPaletteCommands\(commands: PaletteCommand\[\], query: string\): PaletteCommand\[\]/.test(registrySrc150)
+  && /export function groupPaletteCommands\(commands: PaletteCommand\[\]\): PaletteCommandSection\[\]/.test(registrySrc150)
+// 关键字命中必须整块排在标题命中之后——靠显式排序键，而不是靠给关键字扣分。
+const paletteRanking150 = /Number\(a\.keywordOnly\) - Number\(b\.keywordOnly\)/.test(registrySrc150)
+const paletteNewThreadExempt150 = !/id: 'thread\.new'[^\n]*requiresThread/.test(registrySrc150)
+const paletteWiring150 = /const isCommandPaletteOpen = ref\(false\)/.test(appSrc150)
+  && /if \(command\.requiresThread && !hasThread\) return false/.test(appSrc150)
+  && /command\.shortcut\.replace\('Mod\+', modifier\)/.test(appSrc150)
+  && /function onCommandPaletteRun\(commandId: string\): void \{/.test(appSrc150)
+  && /<CommandPalette\s*\r?\n\s*v-if="isCommandPaletteOpen"/.test(appSrc150)
+const paletteHotkey150 = /if \(key === '\/'\) \{\s*\r?\n\s*event\.preventDefault\(\)\s*\r?\n\s*isCommandPaletteOpen\.value = !isCommandPaletteOpen\.value/.test(appSrc150)
+  && /if \(isCommandPaletteOpen\.value\) return/.test(appSrc150)
+const paletteView150 = /<Teleport to="body">/.test(paletteSrc150)
+  && /event\.key === 'ArrowDown'/.test(paletteSrc150)
+  && /event\.key === 'ArrowUp'/.test(paletteSrc150)
+  && /event\.key === 'Escape'/.test(paletteSrc150)
+  && /matchPaletteCommands\(props\.commands, query\.value\)/.test(paletteSrc150)
+check(
+  '命令面板：注册表可检索、标题全部有中文、无选中线程时收敛（round-150）',
+  paletteCatalog150 && paletteMatcher150 && paletteRanking150 && paletteMissingI18n150.length === 0
+    && paletteNewThreadExempt150 && paletteWiring150 && paletteHotkey150 && paletteView150,
+  [
+    `注册表=${paletteCatalog150 ? 'yes' : 'NO'}（${paletteTitles150.length} 条命令）`,
+    `匹配/分组函数=${paletteMatcher150 ? 'yes' : 'NO'}`,
+    `标题优先于关键字=${paletteRanking150 ? 'yes' : 'NO'}`,
+    `i18n 漏键=${paletteMissingI18n150.length === 0 ? 'yes' : paletteMissingI18n150.join(',')}`,
+    `thread.new 免过滤=${paletteNewThreadExempt150 ? 'yes' : 'NO'}`,
+    `接线=${paletteWiring150 ? 'yes' : 'NO'}`,
+    `Ctrl/Cmd+/ 与让位=${paletteHotkey150 ? 'yes' : 'NO'}`,
+    `面板视图=${paletteView150 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {
