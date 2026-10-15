@@ -497,6 +497,7 @@ import {
   type UiPluginShareSummary,
 } from '../../api/codexGateway'
 import { sortComposioConnectors, type DirectorySortMode } from './directoryHubUtils'
+import { CAPABILITY_GATES, isCapabilitySupported } from '../../utils/capabilityGates'
 import DirectoryAppsTab from './DirectoryAppsTab.vue'
 import DirectoryComposioTab from './DirectoryComposioTab.vue'
 import DirectoryPluginsTab from './DirectoryPluginsTab.vue'
@@ -698,20 +699,17 @@ let isComposioLoadQueued = false
 
 const activeCopy = computed(() => tabs.value.find((tab) => tab.id === activeTab.value) ?? tabs.value[0])
 const supportsPlugins = computed(() =>
-  !methodsLoaded.value ||
-  ['plugin/list', 'plugin/read', 'plugin/install', 'plugin/uninstall'].every((method) => methodSet.value.has(method)),
+  !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.plugins),
 )
-const supportsApps = computed(() => !methodsLoaded.value || methodSet.value.has('app/list'))
-const supportsMcps = computed(() => !methodsLoaded.value || methodSet.value.has('mcpServerStatus/list'))
-const supportsMcpReload = computed(() => methodSet.value.has('config/mcpServer/reload'))
-const supportsMcpLogin = computed(() => methodSet.value.has('mcpServer/oauth/login'))
+const supportsApps = computed(() => !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.apps))
+const supportsMcps = computed(() => !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.mcps))
+const supportsMcpReload = computed(() => isCapabilitySupported(methodSet.value, CAPABILITY_GATES.mcpReload))
+const supportsMcpLogin = computed(() => isCapabilitySupported(methodSet.value, CAPABILITY_GATES.mcpLogin))
 const supportsMarketplace = computed(() =>
-  !methodsLoaded.value ||
-  ['marketplace/add', 'marketplace/remove', 'marketplace/upgrade'].every((method) => methodSet.value.has(method)),
+  !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.marketplace),
 )
 const supportsPluginShare = computed(() =>
-  !methodsLoaded.value ||
-  ['plugin/share/save', 'plugin/share/list', 'plugin/share/delete'].every((method) => methodSet.value.has(method)),
+  !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.pluginShare),
 )
 const isTryActionInFlight = computed(() => (props.tryInFlightKey ?? '').length > 0)
 const selectedPluginDescription = computed(() =>

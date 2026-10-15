@@ -416,6 +416,13 @@
 - **round-165（`73f841e5`）**：批 3c——hot 轮窗口化，新增 `src/utils/hotTurnWindow.ts`（16 例单测）+ 组件 +150：块高度来自 RO 实测缓存、未测块强制入窗 ⇒ spacer 求和只含实测值；0 高哨兵 li / 占位 li 公式 `Σh+(k−1)g` / bottomAnchorRef 实时锚 / JumpBar 强制入窗。新闸门 `check-hot-window` 6 场景（sh=9278 守恒、JumpBar 12.0px）。三坑：spacer shrink-0 复踩 / RO 终末事件振荡 / 冷启动超时。详见 [round-165](../rounds/round-165-hot-turn-windowing.md)。
 - **round-166（本轮）**：真实大线程上机实测（批 3b+3c 组合）——真实数据形态夹具（10 轮 / 554 真实 items × 17 = 170 轮，`tmp/r166-real-big-thread.cjs` 9 场景，真实数据不进仓）；**产品修复一处**：`src/utils/warmTurnWindow.ts` `MODEL_SWITCH_DIVIDER_HEIGHT_PX` 44 → 30（真机实测 30.0px，round-163 §六② 闭环，回底 +14px 漂移消失）。首跑 3 败定性：冷区自动扩页属设计（estSum Δ=1886 与 sh 增量逐位一致）、分割栏估算误差、反跑口径照抄错。结论：估算常量真实数据全部命中（68.5 / 34 逐位一致），hot spacer 实测守恒（窗口化 sh == 反跑 sh == 51247，贴底 dom 1339 vs 反跑 12678 ≈ 9.5×）。验证：探针 9/9、hot-window 6/6、bottom-lock 4/4、单测 1035/1035、tsc 0、vite build + tsup 过。详见 [round-166](../rounds/round-166-real-big-thread-windowing.md)。
 
+## round-167 ~ round-168（判定书进度同步 / 批 4 前半，均未发布）
+
+> round-167 当时未回填本台账，此处按「回填说明」先例与本轮一并补记。
+
+- **round-167（`e52acf7b`）**：文档轮——desktop-parity-decision.md 批 3 状态行（停在「3b/3c 未开工」）同步为三步全落地 + round-166 收口；§0「DOM 体积」「高度来源」补 round-165 记；G 域基线计数刷新（uic 53→59、vitest 830/81→1035/89）。
+- **round-168（本轮）**：批 4 前半——① `thread/fork { beforeTurnId }` 一步截断：`threads.ts` 增重载（分发判据改「第二参非 string ⇒ persist 模式」）+ `utils/threadForkTruncation.ts` 纯谓词（cutoff 取源线程消息；`isForkTruncatedAsRequested` 检测上游静默忽略参数）+ `forkThreadFromTurn` 优先一步、未截断时降级 round-106 副本 revert（兼容层保留）；② `utils/capabilityGates.ts` 9 能力门控表，App.vue / DirectoryHub.vue 9 处散落判定改引表（mcpReload/Login 无守卫语义保留）。不触 `src/server/**` ⇒ 不 bump SHARED_BRIDGE_VERSION。验证：单测 1050/1050（91 文件）、tsc 0、双构建过、fork 探针 `tmp/r168-fork-probe.cjs` 7/7（真实桥 4190 + 拦截 fork 相关 RPC：守约=零 revert、忽略参数=回退 revert{beforeTurnId:t3} 上车）、全闸门（uic 59 / fonts 13 / an 56 / media 44 / theme 15 / hot 6 / bl 4）。批 4 #2/#4 未开工（turnTrigger 依赖内联编辑框先行）。详见 [round-168](../rounds/round-168-batch4-fork-one-step-and-capability-gates.md)。
+
 ## round-163（批 3b：折叠态 warm 轮窗口化，未发布）
 
 **性质**：产品侧功能（评估批 3 第二步落地；`ThreadConversation.vue` +162/−1，新增 `src/utils/warmTurnWindow.ts` + 21 例单测）。

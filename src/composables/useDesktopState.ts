@@ -52,6 +52,7 @@ import type {
 } from '../types/codex'
 import { getPathParent, isProjectlessChatPath, normalizePathForUi, toProjectName } from '../pathUtils.js'
 import { parsePlanFromMessageText } from '../utils/plan'
+import { findForkCutoffTurnId, isForkTruncatedAsRequested } from '../utils/threadForkTruncation'
 import { isModelSwitchMessage, MODEL_SWITCH_MESSAGE_TYPE, MAX_MODEL_SWITCH_MARKERS_PER_THREAD } from '../utils/modelSwitchMessages'
 
 // useDesktopState「A 批」纯工具 +「B 批」持久化（见 domain-modularization-plan）。
@@ -2651,7 +2652,13 @@ export function useDesktopState() {
 
     try {
       error.value = ''
-      const forked = await forkThread(normalizedThreadId)
+      // 批 4（round-168）：优先 `thread/fork { beforeTurnId }` 一步截断（桌面端同款，判定书批 4 #1）。
+      // 截断点 = turnIndex 之后首个带 turnId 的轮次（与 round-106 的 revert beforeTurnId 同一取值；
+      // 上游语义：剔除该轮及其后所有轮次）。谓词见 utils/threadForkTruncation.ts。
+      const cutoffTurnId = findForkCutoffTurnId(sourceMessages, turnIndex)
+      const forked = cutoffTurnId
+        ? await forkThread(normalizedThreadId, { beforeTurnId: cutoffTurnId })
+        : await forkThread(normalizedThreadId)
       const forkedThreadId = forked.threadId.trim()
       if (!forkedThreadId) return ''
 
@@ -2681,14 +2688,11 @@ export function useDesktopState() {
 
       // round-106：thread/rollback 已被上游移除，fork 后裁剪改走 thread/revert——
       // beforeTurnId = turnIndex 之后首个轮次的 id，revert 会移除该轮及其后所有轮次。
-      if (lastTurnIndex - turnIndex > 0) {
-        const cutoff = forked.messages.find(
-          (m) => typeof m.turnIndex === 'number' && m.turnIndex > turnIndex && Boolean(m.turnId?.trim()),
-        )
-        if (cutoff?.turnId) {
-          const rolledBackMessages = await revertThread(forkedThreadId, cutoff.turnId.trim())
-          setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
-        }
+      // 批 4（round-168）起降级为**回退路径**：老上游可能静默忽略未知的 beforeTurnId 参数
+      // ⇒ fork 结果里仍含截断点轮次时才执行。
+      if (!isForkTruncatedAsRequested(forked.messages, cutoffTurnId, turnIndex)) {
+        const rolledBackMessages = await revertThread(forkedThreadId, cutoffTurnId)
+        setPersistedMessagesForThread(forkedThreadId, rolledBackMessages)
       }
 
       await renameThreadById(forkedThreadId, forkedThreadTitle)

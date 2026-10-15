@@ -718,17 +718,25 @@ export async function startThread(cwd?: string, model?: string): Promise<Started
 }
 
 export async function forkThread(threadId: string): Promise<ForkedThread>
+export async function forkThread(threadId: string, options: { beforeTurnId: string }): Promise<ForkedThread>
 export async function forkThread(threadId: string, cwd: string | undefined, model: string | undefined): Promise<StartedThread>
 export async function forkThread(
   threadId: string,
-  cwd?: string,
+  cwdOrOptions?: string | { beforeTurnId?: string },
   model?: string,
 ): Promise<StartedThread | ForkedThread> {
-  if (arguments.length <= 1) {
+  // 批 4（round-168）：第二参为对象 ⇒ 「fork 历史并持久化」模式，可带 beforeTurnId
+  // （上游 schema：fork before 该轮、**剔除该轮及其后所有轮次**；不能与 last_turn_id 同用）。
+  // 第二参为字符串/缺省 ⇒ 原「起新线程」模式，行为不变。
+  const persistMode = cwdOrOptions === undefined || (typeof cwdOrOptions === 'object' && cwdOrOptions !== null)
+  if (persistMode) {
+    const beforeTurnId =
+      cwdOrOptions && typeof cwdOrOptions === 'object' ? (cwdOrOptions.beforeTurnId ?? '').trim() : ''
     try {
       const payload = await callRpc<ThreadForkResponse & ThreadReadResponse & { thread?: { id?: string; cwd?: string } }>('thread/fork', {
         threadId,
         persistExtendedHistory: true,
+        ...(beforeTurnId ? { beforeTurnId } : {}),
       })
       const forkedThreadId = normalizeThreadIdFromPayload(payload)
       if (!forkedThreadId) {
@@ -753,8 +761,8 @@ export async function forkThread(
     const params: Record<string, unknown> = {
       threadId: normalizedThreadId,
     }
-    if (typeof cwd === 'string' && cwd.trim().length > 0) {
-      params.cwd = cwd.trim()
+    if (typeof cwdOrOptions === 'string' && cwdOrOptions.trim().length > 0) {
+      params.cwd = cwdOrOptions.trim()
     }
     if (typeof model === 'string' && model.trim().length > 0) {
       params.model = model.trim()

@@ -973,6 +973,7 @@ import ShortcutHelpPanel from './components/content/ShortcutHelpPanel.vue'
 import ThreadComposer from './components/content/ThreadComposer.vue'
 import ComposerDropdown from './components/content/ComposerDropdown.vue'
 import { PALETTE_COMMANDS, type PaletteCommand } from './components/content/commandRegistry'
+import { CAPABILITY_GATES, isCapabilitySupported } from './utils/capabilityGates'
 import ComposerRuntimeDropdown from './components/content/ComposerRuntimeDropdown.vue'
 import SidebarThreadControls from './components/sidebar/SidebarThreadControls.vue'
 import IconTablerBolt from './components/icons/IconTablerBolt.vue'
@@ -1468,10 +1469,9 @@ async function loadSettingsMethods(): Promise<void> {
     methodsLoaded.value = true
   }
 }
-const supportsHooks = computed(() => !methodsLoaded.value || methodSet.value.has('hooks/list'))
-const supportsRemoteControl = computed(() =>
-  !methodsLoaded.value ||
-  ['remoteControl/status/read', 'remoteControl/enable', 'remoteControl/pairing/start', 'remoteControl/client/list'].every((method) => methodSet.value.has(method)),
+const supportsHooks = computed(() => !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.hooks))
+const supportsRemoteControl = computed(
+  () => !methodsLoaded.value || isCapabilitySupported(methodSet.value, CAPABILITY_GATES.remoteControl),
 )
 watch(isSettingsOpen, (open) => {
   if (open) {
