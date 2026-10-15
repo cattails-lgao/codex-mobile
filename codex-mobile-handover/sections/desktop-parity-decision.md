@@ -13,7 +13,7 @@
 | 域 | 谁更好 | 一句话依据 |
 | --- | --- | --- |
 | 滚动几何 / 防跳动 | **他们** | 距底坐标 + 按轮锚定补偿；我们用「总高度差」，流式增长时会误补 |
-| DOM 体积 | **他们**（小胜） | 窗口化**无级差**；我们靠 warm 折叠卡压低，但 hot 区仍是 30 轮全量 |
+| DOM 体积 | **他们**（小胜） | 窗口化**无级差**；我们靠 warm 折叠卡压低，但 hot 区仍是 30 轮全量 **（round-165 补记：hot 区亦已窗口化，此项差距已闭合，见批 3）** |
 | 历史保真 | **他们** | 他们无损；老轮次要「点开折叠卡」才看全文 |
 | 读路径健壮性 | **我们** | round-143 的「索引对账」是我们独有的失败模式与修复，他们不需要 |
 | 回退 / 编辑**语义** | **打平** | 同一条链路：`thread/revert` 截断 + 重发，后续轮次都删除 |
@@ -50,7 +50,7 @@
 | --- | --- | --- | --- |
 | 容器结构 | 两层：外层 `height=totalHeightPx` 撑高 + 内层 `margin-top=topOffsetsPx[start]` | `<ul class="conversation-list">`（`ThreadConversation.vue:28`）单层，全高自然撑开 | 他们更省 DOM |
 | 分层模型 | 窗口化：只渲可见轮 + `retainedTurnKeys` | **三层 hot/warm/cold**：`HOT_TURNS=30`、`WARM_PAGE_SIZE=20`（`:997-998`），老轮次进 `WarmTurnCard`（用户文本 + 助手预览 + 工具计数，`:64-83`） | **语义上我们对**（折叠卡是有信息的摘要），**体量上他们对**（无级差） |
-| 高度来源 | 实测缓存 `measuredHeightsByKey` + 声明估算 + 兜底 280，DPR 对齐 | 浏览器自然高度，不缓存 | 他们更好（可预测、无抖动） |
+| 高度来源 | 实测缓存 `measuredHeightsByKey` + 声明估算 + 兜底 280，DPR 对齐 | 浏览器自然高度，不缓存 **（round-165 补记：hot 区已有 RO 实测高度缓存 `hotBlockSpecs`/`hotHeightCache`）** | 他们更好（可预测、无抖动）；**差距已大幅收窄** |
 | 滚动坐标 | `distanceFromBottomPx`（距底） | `scrollTop`（从顶）+ `LOAD_MORE_SCROLL_THRESHOLD_PX = 200`（`:999`） | **他们更好**——追加内容时距底不变 ⇒ 天然不跳 |
 | 贴底 | `flex-col-reverse` + 距底 API | `scrollTop = scrollHeight` + `anchor.scrollIntoView({block:'end'})`（`:1872-1873`），配 `bottomLockFramesLeft` 连打 6 帧（`:1917`） | 我们这套是**为「无虚拟化」调出来的**，能用但脆 |
 | 加载历史保位 | 按**某一轮**锚定补偿（`computeScrollDistanceForAnchor`） | `scrollTop = prev + (scrollHeight - prevScrollHeight)`（`:1954`）——**整页总高度差** | **他们更好**：我们一旦底部在增长（流式）就会误补 |
@@ -130,7 +130,7 @@
 | 项 | 桌面端 | 我们 | 判定 |
 | --- | --- | --- | --- |
 | 能力门控 | 一张 **60+ 能力 × 最低版本** 表 + 别名表 + 预发布比较 | 散落 `methodSet.has('app/list')` 式探测（如 `DirectoryHub.vue`） | 他们更好（长期收益） |
-| 枢纽约束 | — | 四不变式 + 手写闸门（`check-ui-contract` 53 / `check-message-media-surfaces` 44 / vitest 830 例 81 文件） | **我们更严** |
+| 枢纽约束 | — | 四不变式 + 手写闸门（`check-ui-contract` 59 / `check-message-media-surfaces` 44 / `check-hot-window` 6 / `check-bottom-lock` 4 / vitest 1035 例 89 文件） | **我们更严** |
 
 ---
 
@@ -206,7 +206,8 @@
 
 ### 批 3 · 高风险：把窗口化接进 hot 区
 
-> **评估已完成（round-151）；批 3a 已落地（round-153），3b/3c 未开工** ⇒ [batch3-virtualization-assessment.md](./batch3-virtualization-assessment.md)。
+> **✅ 三步全部落地**：3a（round-153）、3b（round-163）、3c（round-165）；「真实大线程未验」边界已由 round-166 收口 ⇒ [batch3-virtualization-assessment.md](./batch3-virtualization-assessment.md)。
+> **round-165/166 补记**（覆盖上面第 3 条差异）：3c 把 **hot 区也窗口化了**——高度来源不是把估算做得更准，而是**换成 RO 实测缓存**（`src/utils/hotTurnWindow.ts`），sh 守恒 ±2px；round-166 用真实数据形态夹具（170 轮）实测 9 场景全过：3b 的估算常量在真实数据上**逐位命中**（折叠卡 68.5 / 时间分隔栏 34），模型切换分割栏常量由实测 44→30 修正（`warmTurnWindow.ts`）。
 > 三条与本节的差异：
 > 1. **本轮不是修 bug，是换地基** —— 我方**没有**「流式追加把列表顶走」的路径：贴底走
 >    `scrollToBottom()` 硬跳（`:1901`），非贴底**完全不滚动**；整页差补偿只出现在
