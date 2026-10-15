@@ -2184,6 +2184,64 @@ function bindPendingImageHandlers(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// round-164：贴底锁定的**确定性**收口。
+//
+// 之前的补锁只覆盖两条路：① `scheduleConversationScroll` 的 rAF 里锁 6 帧；
+// ② `bindPendingImageHandlers` 给「bind 时点已在 DOM 里的 <img>」绑 load/error。
+// 任何落在两者之外的增高都会漏锁 —— 晚于 bind 创建的 img（warm 窗口重渲染、
+// 分支渲染等）、代码高亮/字体晚到引起的重排……round-155 实测过一次「图到达后
+// 没回锁」（4 次复现未果），形态与此一致。锁底本来就该是**状态**（贴底 ⇒ 任何
+// 内容增高都回到底），不该是**猜帧数**。
+//
+// 这里补第三条路：ResizeObserver 观察容器（视口自身变高/变矮）+ 全部直接子元素
+// （内容增高 = 某个子元素的盒子变高）；MutationObserver 只盯 childList，负责把
+// 新挂载的子元素补进观察集。两者都只在 shouldLockToBottom() 时才真正回锁。
+// 图片 load/error 快路径与 6 帧锁照旧保留（它们先于 RO 触发，少等一帧）。
+//
+// ponytail: 每次 childList 变更都全量重扫子元素（observe 已观察的元素是 no-op）。
+// 当前 DOM 规模被批 3b 压在 ~40 li，扫描可忽略；若将来子元素数量级上到数千，
+// 应换成增量 diff（记录已观察集合）。上限 = 每个变更批一次 O(children)。
+// ---------------------------------------------------------------------------
+let contentResizeObserver: ResizeObserver | null = null
+let contentMutationObserver: MutationObserver | null = null
+
+function syncObservedContent(): void {
+  const container = conversationListRef.value
+  if (!container || !contentResizeObserver) return
+  for (const child of Array.from(container.children)) {
+    contentResizeObserver.observe(child)
+  }
+}
+
+function onContentGrowth(): void {
+  if (shouldLockToBottom()) scheduleBottomLock(2)
+}
+
+function bindContentGrowthObserver(): void {
+  if (contentResizeObserver || contentMutationObserver) return
+  if (typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return
+  const container = conversationListRef.value
+  if (!container) return
+
+  contentResizeObserver = new ResizeObserver(onContentGrowth)
+  contentResizeObserver.observe(container)
+  syncObservedContent()
+
+  contentMutationObserver = new MutationObserver(() => {
+    syncObservedContent()
+    onContentGrowth()
+  })
+  contentMutationObserver.observe(container, { childList: true })
+}
+
+function unbindContentGrowthObserver(): void {
+  contentResizeObserver?.disconnect()
+  contentResizeObserver = null
+  contentMutationObserver?.disconnect()
+  contentMutationObserver = null
+}
+
 async function scheduleConversationScroll(): Promise<void> {
   if (conversationScrollPromise) return conversationScrollPromise
 
@@ -2283,6 +2341,7 @@ watch(
 // 故只需结算一次滚动），使任何重挂都落到最新内容；首次打开线程时该路径与
 // activeThreadId watcher 幂等。
 onMounted(() => {
+  bindContentGrowthObserver()
   void scheduleConversationScroll()
 })
 
@@ -2332,6 +2391,7 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(bottomLockFrame)
     bottomLockFrame = 0
   }
+  unbindContentGrowthObserver()
 })
 </script>
 

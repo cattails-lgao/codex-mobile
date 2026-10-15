@@ -53,3 +53,4 @@ Return to the [manual test index](../../tests.md).
 | [Provider model catalog is cached on the server (open-thread path)](provider-model-catalog-cache-server.md) |
 | [Attachment-only first message keeps its thread listable](attachment-only-first-message-keeps-thread-listable.md) |
 | [Slow-load hint appears when a large history takes unusually long to open](round-103-slow-load-hint-large-thread.md) — delayed honest hint, round-101 P1 UX guard |
+| [Bottom lock re-engages after late content growth](bottom-lock-after-late-content-growth.md) — ResizeObserver determinism, round-164 |

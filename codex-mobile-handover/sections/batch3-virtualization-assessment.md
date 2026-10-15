@@ -162,3 +162,13 @@
   折叠卡内无图片，现状覆盖面不变；展开折叠卡重算（expandedWarmTurns 变更 → watch → rAF 重算窗口）已接线；
   高度缓存**无需建**（常量精确 + 展开块恒在 DOM，没有会失真的缓存）。
 - 详见 [round-163](../rounds/round-163-warm-collapsed-windowing.md)。
+
+## 十、锁底窗口已确定化（round-164）
+
+- §五 遗留的「⚠️ 无 `ResizeObserver`，补锁底只靠 `scheduleBottomLock(3)` 的 rAF 帧窗口」
+  与 round-155 那次「图到达后没回锁」（未复现）——本轮**机制性根治**：ResizeObserver
+  （容器 + 全部直接子元素）+ MutationObserver（childList 补观察集），只在 `shouldLockToBottom()`
+  时回锁；图片 load/error 快路径与帧锁保留。
+- 新闸门 `scripts/check-bottom-lock.cjs`：4 场景（贴底回锁 / 滚开不拽人 / **反跑 stub 复现漏锁** /
+  恢复复锁），反跑证明非空。评估文档里「需要测量层兜底」的缺口就此闭合。
+- 详见 [round-164](../rounds/round-164-bottom-lock-determinism.md)。
