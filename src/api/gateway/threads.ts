@@ -877,6 +877,7 @@ export async function startThreadTurn(
   skills?: Array<{ name: string; path: string }>,
   fileAttachments: FileAttachmentParam[] = [],
   collaborationMode?: CollaborationModeKind,
+  turnTrigger?: string,
 ): Promise<string> {
   try {
     const normalizedModel = model?.trim() ?? ''
@@ -887,6 +888,12 @@ export async function startThreadTurn(
       input,
       // round-140：带上客户端提交 id，服务端会回写成 userMessage.clientId。
       clientUserMessageId: createClientUserMessageId(),
+    }
+    // 批 4（round-169）：turn/start.turnTrigger 是上游的「发起方分类」自由字符串
+    // （schema: string|null，steering 场景被忽略）。桌面端编辑重发用
+    // 'edit_user_message'；仅在有值时携带，普通发送保持不带该键。
+    if (typeof turnTrigger === 'string' && turnTrigger.trim().length > 0) {
+      params.turnTrigger = turnTrigger.trim()
     }
     if (attachments.length > 0) params.attachments = attachments
     if (normalizedModel) {

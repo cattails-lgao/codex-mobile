@@ -10,8 +10,8 @@
       v-if="showEdit"
       type="button"
       class="message-rollback-button"
-      :aria-label="t('Rollback this message')"
-      :title="t('Rollback this message')"
+      :aria-label="t('Edit this message')"
+      :title="t('Edit this message')"
       @click="$emit('edit')"
     >
       <IconTablerArrowBackUp class="icon-svg message-rollback-icon" />

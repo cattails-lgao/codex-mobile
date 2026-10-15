@@ -2873,6 +2873,7 @@ export function useDesktopState() {
     fileAttachments: FileAttachment[] = [],
     queueInsertIndex?: number,
     collaborationModeOverride?: CollaborationModeKind,
+    turnTrigger?: string,
   ): Promise<void> {
     if (isUpdatingSpeedMode.value) return
 
@@ -2956,6 +2957,7 @@ export function useDesktopState() {
         skills,
         fileAttachments,
         collaborationModeOverride,
+        turnTrigger,
       )
     } catch (unknownError) {
       shouldAutoScrollOnNextAgentEvent = false
@@ -3071,6 +3073,7 @@ export function useDesktopState() {
     skills: Array<{ name: string; path: string }> = [],
     fileAttachments: FileAttachment[] = [],
     collaborationModeOverride?: CollaborationModeKind,
+    turnTrigger?: string,
   ): Promise<void> {
     const reasoningEffort = selectedReasoningEffort.value
     const collaborationMode = collaborationModeOverride === 'plan' ? 'plan' : collaborationModeOverride === 'default'
@@ -3131,6 +3134,8 @@ export function useDesktopState() {
           skills.length > 0 ? skills : undefined,
           fileAttachments,
           collaborationMode,
+          // 未传 trigger 时保持原参数个数（调用点对 startThreadTurn 的参数断言按个数比对）。
+          ...(turnTrigger ? [turnTrigger] : []),
         )
       } catch (unknownError) {
         if (modelId && modelId !== MODEL_FALLBACK_ID && isUnsupportedChatGptModelError(unknownError)) {
@@ -3153,6 +3158,7 @@ export function useDesktopState() {
             skills.length > 0 ? skills : undefined,
             fileAttachments,
             collaborationMode,
+            ...(turnTrigger ? [turnTrigger] : []),
           )
         } else {
           throw unknownError

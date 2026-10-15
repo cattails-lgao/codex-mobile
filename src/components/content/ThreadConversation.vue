@@ -529,6 +529,33 @@
                 @fork="forkResponse(message.id)"
                 @copy="message.role === 'user' ? copyUserMessage(message.id) : copyResponse(message.id)"
               />
+
+              <div
+                v-if="isEditingMessage(message.id)"
+                class="message-inline-editor"
+                data-message-inline-editor
+              >
+                <textarea
+                  :ref="setInlineEditorTextareaRef"
+                  v-model="editingMessage!.text"
+                  class="message-inline-editor-textarea"
+                  rows="3"
+                  @keydown.esc.prevent="cancelInlineEdit"
+                ></textarea>
+                <div class="message-inline-editor-actions">
+                  <button
+                    type="button"
+                    class="message-inline-editor-button message-inline-editor-primary"
+                    @click="confirmInlineEdit"
+                  >{{ t('Save') }}</button>
+                  <button
+                    type="button"
+                    class="message-inline-editor-button"
+                    @click="cancelInlineEdit"
+                  >{{ t('Cancel') }}</button>
+                </div>
+                <p class="message-inline-editor-note">{{ t('Saving rolls this turn back and resends it with your changes. Later replies will be removed.') }}</p>
+              </div>
             </article>
           </div>
         </div>
@@ -978,6 +1005,7 @@ function isCopyableAssistantMessage(message: UiMessage): boolean {
 const emit = defineEmits<{
   forkThread: [payload: { threadId: string; turnIndex: number }]
   rollback: [payload: { turnId: string }]
+  editMessage: [payload: { turnId: string; text: string }]
   respondServerRequest: [payload: { id: number; result?: unknown; error?: { code?: number; message: string } }]
   fileChangesChanged: [threadId: string]
 }>()
@@ -1019,23 +1047,15 @@ type PendingFileChangeConfirm = {
   filePaths?: string[]
   filePathLabel?: string
 }
-type PendingEditConfirm = {
-  kind: 'edit-message'
-  messageId: string
-}
-const pendingConfirm = ref<PendingEditConfirm | PendingFileChangeConfirm | null>(null)
+const pendingConfirm = ref<PendingFileChangeConfirm | null>(null)
 const pendingConfirmTitle = computed(() => {
   const pending = pendingConfirm.value
   if (!pending) return ''
-  if (pending.kind === 'edit-message') return t('Rollback this turn?')
   return pending.action === 'undo' ? t('Undo file changes?') : t('Redo file changes?')
 })
 const pendingConfirmMessage = computed(() => {
   const pending = pendingConfirm.value
   if (!pending) return ''
-  if (pending.kind === 'edit-message') {
-    return t('This rolls the thread back to this turn so you can edit the message. Later replies will be removed.')
-  }
   if (pending.filePathLabel) {
     return pending.action === 'undo'
       ? t('Undo the changes to {file}? This modifies the working tree and Codex cannot revert it automatically.', { file: pending.filePathLabel })
@@ -1843,9 +1863,48 @@ function showEditMessageButton(message: UiMessage): boolean {
   return typeof editableTurnIdByMessageId.value[message.id] === 'string'
 }
 
+// 批 4（round-169）：编辑入口从「确认框 + 回退 + 回填草稿」升级为「内联编辑框 +
+// 保存即重发」（桌面同款语义：revert 清理链 + turn/start 带 turnTrigger='edit_user_message'，
+// 由 App.vue 的 onEditMessage 编排）。同一时刻最多一条消息处于编辑态。
+const editingMessage = ref<{ messageId: string; turnId: string; text: string } | null>(null)
+const inlineEditorTextareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function setInlineEditorTextareaRef(el: unknown): void {
+  inlineEditorTextareaRef.value = el instanceof HTMLTextAreaElement ? el : null
+}
+
+function isEditingMessage(messageId: string): boolean {
+  return editingMessage.value?.messageId === messageId
+}
+
+watch(editingMessage, async (editing) => {
+  if (!editing) return
+  await nextTick()
+  const textarea = inlineEditorTextareaRef.value
+  if (!textarea) return
+  textarea.focus()
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+})
+
 function editMessage(messageId: string): void {
-  if (!editableTurnIdByMessageId.value[messageId]) return
-  pendingConfirm.value = { kind: 'edit-message', messageId }
+  const turnId = editableTurnIdByMessageId.value[messageId]
+  if (!turnId) return
+  const message = props.messages.find((item) => item.id === messageId)
+  if (!message || message.text.trim().length === 0) return
+  editingMessage.value = { messageId, turnId, text: message.text }
+}
+
+function cancelInlineEdit(): void {
+  editingMessage.value = null
+}
+
+function confirmInlineEdit(): void {
+  const editing = editingMessage.value
+  editingMessage.value = null
+  if (!editing) return
+  const text = editing.text.trim()
+  if (!text || text === props.messages.find((item) => item.id === editing.messageId)?.text.trim()) return
+  emit('editMessage', { turnId: editing.turnId, text })
 }
 
 function requestFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): void {
@@ -1868,11 +1927,6 @@ function confirmPendingAction(): void {
   const pending = pendingConfirm.value
   pendingConfirm.value = null
   if (!pending) return
-  if (pending.kind === 'edit-message') {
-    const turnId = editableTurnIdByMessageId.value[pending.messageId]
-    if (turnId) emit('rollback', { turnId })
-    return
-  }
   void runFileChangeAction(pending.summary, pending.action, pending.filePaths)
 }
 
@@ -2966,6 +3020,33 @@ onBeforeUnmount(() => {
 
 .turn-error-feedback {
   @apply mt-3 inline-flex w-fit rounded-full border border-alert/30 bg-s2 px-2.5 py-1 text-xs font-semibold leading-none text-alert transition hover:bg-alert/10 focus:outline-none focus:ring-2 focus:ring-alert;
+}
+
+/* 批 4（round-169）：内联消息编辑框（编辑入口升级：确认框+回填草稿 → 原地编辑+保存即重发）。
+   位置固定在 MessageToolbar 之下、消息 article 内，宽度与气泡列对齐。 */
+.message-inline-editor {
+  @apply mt-1.5 flex w-full max-w-full flex-col gap-1.5;
+}
+
+.message-inline-editor-textarea {
+  @apply w-full resize-y rounded-lg border border-s3 bg-s1 px-2.5 py-2 text-body leading-relaxed text-ink-1 placeholder:text-ink-3 focus:border-line-3 focus:outline-none focus:ring-2 focus:ring-line-focus;
+  min-height: 72px;
+}
+
+.message-inline-editor-actions {
+  @apply flex items-center justify-end gap-1.5;
+}
+
+.message-inline-editor-button {
+  @apply rounded-full border border-s3 px-2.5 py-1 text-micro font-medium leading-none text-ink-2 transition hover:bg-s1 hover:text-ink-1 focus:outline-none focus:ring-2 focus:ring-line-focus;
+}
+
+.message-inline-editor-primary {
+  @apply border-transparent bg-s-inv text-ink-inv shadow-sm hover:bg-s-inv-soft hover:text-ink-inv;
+}
+
+.message-inline-editor-note {
+  @apply text-nano leading-snug text-ink-3 select-none;
 }
 
 .message-body {

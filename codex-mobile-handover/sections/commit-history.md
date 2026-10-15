@@ -443,6 +443,13 @@
 
 **未闭环**（详见 [round-163 §六](../rounds/round-163-warm-collapsed-windowing.md)）：展开块出窗 280 估算只影响窗口边界；模型切换分割栏 44px 未实测；常量绑定字体/缩放，换环境须复测；**3c（hot 轮窗口化）未开工**；真实 173 轮线程未验（样本是合成 60 轮）。
 
+## round-169（批 4 后半：内联编辑框 + 编辑重发，未发布）
+
+- **性质**：批 4 #4+#2 落地。① `startThreadTurn` 增 `turnTrigger?: string`（`turn/start.turnTrigger` 为发起方分类自由字符串，仅有值时携带）；`sendMessageToSelectedThread` / `startTurnForThread` 穿参，条件展开保持既有调用点参数个数（3 个 `toHaveBeenCalledWith` 按个数比对）。② 编辑入口升级原地内联编辑框：单编辑态 + 预填原文 + Esc 取消 + 聚焦置尾 + 未改动保存 no-op；PendingEditConfirm 分支删除、死键清理（Rollback this message / Rollback this turn? / This rolls the thread back…），MessageToolbar title/aria 改 Edit this message；样式走既有 token（主按钮 bg-s-inv 反色，无 accent token）。③ App.vue onEditMessageResend：rollbackSelectedThread 完整清理链 → 「目标轮仍在列表 ⇒ 不重发」守卫（吞错语义 + round-141 本地对齐路径兼容）→ 重发带 turnTrigger=edit_user_message。
+- **验证**：单测 1053/1053（92 文件，+`threads.turnTrigger.test.ts` 3 例）、tsc 0、vite build + tsup、探针 `tmp/r169-edit-probe.cjs` 8/8（拦截 RPC：S1 保存 = revert{beforeTurnId:t2} 先于 turn/start 且 turnTrigger=edit_user_message / input 新文本 / 编辑器关闭全中；S2 取消零 RPC；S3 未改动保存零 RPC）、全闸门（uic 59 / fonts 13 / an 56 / media 44 / theme 15 / hot 6 / bl 4）。
+- **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
+- **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
+
 ## round-162（收掉 round-161 的夹具自相矛盾 ＋ 产品侧基线复验，文档/脚本轮 · 未发版）
 
 **性质**：**零产品代码改动** —— 改的是「1 个闸门脚本的 2 处夹具字面量 + 1 行注释 + 文档 / 台账」。**未 bump 版本 / 未 tag / 未发版。**

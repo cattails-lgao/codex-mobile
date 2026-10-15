@@ -232,14 +232,14 @@
 > > **✅ #1、#3 已完成（round-168）**：fork 一步截断（`thread/fork { beforeTurnId }`，含「上游静默忽略参数
 > ⇒ 降级 round-106 副本 revert」的回退层）与能力门控表（`src/utils/capabilityGates.ts`，9 能力）已落地，
 > 见 [round-168](../rounds/round-168-batch4-fork-one-step-and-capability-gates.md)。
-> **#2 依赖 #4**：我方编辑流是「确认框 + 回填草稿」，无自动重发路径，`turnTrigger` 无处附着。
+> **✅ #2、#4 已完成（round-169）**：编辑入口升级为原地内联编辑框（未改动保存 no-op、Esc 取消），保存即「revert 完整清理链 + 编辑重发（`turnTrigger` = `edit_user_message`）」，探针 `tmp/r169-edit-probe.cjs` 8/8，见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 > 本轮实测**不触 `src/server/**`**（桥已声明 `experimentalApi`，RPC 参数透传）⇒ 未 bump `SHARED_BRIDGE_VERSION`。
 | # | 改什么 | 依据 |
 | --- | --- | --- |
 | 1 | ✅（round-168） `forkThreadFromTurn` 改用 `thread/fork { beforeTurnId }`，把「全量 fork + 副本 revert」压成一步 | 我方桥**已声明** `experimentalApi: true`（`src/server/codexAppServerBridge.ts:1046-1047`） |
-| 2 | 编辑重发带 `turnTrigger: 'edit_user_message'` | 桌面端同款，便于列表区分来源 |
+| 2 | ✅（round-169） 编辑重发带 `turnTrigger: 'edit_user_message'`（保存 = revert 清理链 + 重发；探针 8/8） | 桌面端同款，便于列表区分来源 |
 | 3 | ✅（round-168，方法集合维度） **能力门控表**，替掉散落的 `methodSet.has(...)`（9 能力收敛 `capabilityGates.ts`；版本维度待桥上报 CLI 版本） | 工程基建，长期收益 |
-| 4 | 编辑入口升级为**原地内联编辑框**（对齐桌面端文案与图标） | 顺带清掉死键 `'Edit this message'` |
+| 4 | ✅（round-169） 编辑入口升级为**原地内联编辑框**（预填原文、未改动保存 no-op；按钮 title/aria 起用 `'Edit this message'`） | 可编辑集合保持我方口径：所有带 turnId 的用户消息（比桌面「仅最新一条」宽，截断语义对任意轮一致） |
 
 ---
 

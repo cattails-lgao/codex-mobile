@@ -599,6 +599,7 @@
                   :load-earlier-messages="loadOlderMessages"
                   @fork-thread="onForkThreadFromMessage"
                   @rollback="onRollback"
+                  @edit-message="onEditMessageResend"
                   @file-changes-changed="onFileChangesChanged"
                   @respond-server-request="onRespondServerRequest" />
               </div>
@@ -4390,6 +4391,19 @@ function onRollback(payload: { turnId: string }): void {
     }
   }
   void rollbackSelectedThread(payload.turnId)
+}
+
+// 批 4（round-169）：内联编辑保存 = 桌面同款语义「revert 清理链 + 编辑重发」。
+// rollbackSelectedThread 吞错（只 set error），所以用「回退后目标轮仍在列表」判定
+// 失败并不重发——旧轮次还在时重发会产生语义混乱；round-141 本地对齐路径会把目标轮
+// 从列表剔除，重发照常进行。turnTrigger='edit_user_message' 是上游 turn/start 的
+// 发起方分类（schema: string|null，桌面端同款取值）。
+async function onEditMessageResend(payload: { turnId: string; text: string }): Promise<void> {
+  const targetTurnId = payload.turnId.trim()
+  if (!selectedThreadId.value || !targetTurnId || payload.text.trim().length === 0) return
+  await rollbackSelectedThread(targetTurnId)
+  if (filteredMessages.value.some((message) => (message.turnId?.trim() ?? '') === targetTurnId)) return
+  await sendMessageToSelectedThread(payload.text, [], [], 'steer', [], undefined, undefined, 'edit_user_message')
 }
 
 function onImplementPlan(): void {
