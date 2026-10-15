@@ -450,6 +450,13 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-171（v0.1.133 发版：批 0–4 特性批次，未发布→发布中）
+
+- **范围**：`41737a45`（v0.1.132 bump）→ 头 = **54 提交**（round-148 ~ round-170），**194 文件 +15681/−682**。**`src/server/**` 零改动** ⇒ `SHARED_BRIDGE_VERSION` 不动（保持 v7）。
+- **内容三组**：① **消息列表窗口化**（批 0+3，round-148/153/163/164/165/166）——几何层纯函数、距底滚动坐标、warm 折叠块窗口化、RO 锁底确定化、hot 轮 RO 实测缓存窗口化；真实 170 轮实测贴底 DOM 1339 vs 全量 12678（≈9.5×）、scrollHeight 逐位守恒；模型切换分割栏常量 44→30。② **命令面板 + 速查面板**（批 1+2，round-149/150/151/152）——`Ctrl/Cmd+/` 命令面板（25 条 + 指针第二入口）、快捷键速查、时间分隔（跨天 / ≥30 分钟）。③ **桥侧特性**（批 4，round-168/169）——`thread/fork {beforeTurnId}` 一步截断（上游忽略参数时降级副本 revert）、9 能力门控表 `capabilityGates.ts`、原地内联编辑框 + 编辑重发（`turnTrigger: 'edit_user_message'`）。
+- **发布动作**：发版前完整构建验证过（vue-tsc + vite build + tsup；`dist/assets` 旧产物 78 文件触发 `SAFE_DELETE_BULK_CONFIRM_REQUIRED` ⇒ rename 绕过后重跑全绿）。bump `30273a18` → tag `v0.1.133`（annotated，指向本节所在提交）→ `gh release create --latest` → **npm `pnpm publish` 待维护者执行**（`prepublishOnly` 会重跑双构建）。npm 上架后回填时刻/shasum（round-142/143 先例）。
+- **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）；npm 侧以 registry `versions` 出现 `0.1.133` 为准。
+
 ## round-170（chrome MCP 真机复验批 0–4，纯验证轮 · 未发布）
 
 - **性质**：**零产品代码改动** —— 用户要求「直接使用启动 chrome mcp 来验证改动」。产物全在 `tmp/`（`r170-mcp-inject.js` 注入脚本、methods 快照），不进仓。**未 bump 版本 / 未 tag / 未发版。**
