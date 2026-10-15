@@ -25,8 +25,10 @@ export const WARM_CARD_HEIGHT_WITH_PREVIEW_PX = 68.5
 export const WARM_CARD_HEIGHT_HEAD_ONLY_PX = 42
 /** 时间分隔栏 li（`conversation-item-time-divider`）。 */
 export const TIME_DIVIDER_HEIGHT_PX = 34
-/** 模型切换分割栏 li（未实测的估算值 —— 合成线程无法产生 modelSwitch 消息，登记为边界）。 */
-export const MODEL_SWITCH_DIVIDER_HEIGHT_PX = 44
+/** 模型切换分割栏 li。round-166 真机实测 30.0（1440×900 / dpr 1，真实大线程探针
+ *  经 localStorage 播种 round-73 marker 量得；round-163 曾登记 44 为未实测估算，
+ *  估算偏大 14px/条，表现为窗口滑动时贴底落点 +14px 漂移）。 */
+export const MODEL_SWITCH_DIVIDER_HEIGHT_PX = 30
 /** 展开轮兜底估算（展开轮恒被强制入窗、以真实 DOM 参与布局，此值只影响窗口边界选取）。 */
 export const EXPANDED_TURN_ESTIMATED_HEIGHT_PX = 280
 

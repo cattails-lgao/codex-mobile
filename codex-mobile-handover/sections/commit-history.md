@@ -408,6 +408,14 @@
 > ① **round-144 ~ round-147 没有任何提交** —— 那四轮是桌面端 `app.asar` 的**只读盘点**（产出在 `tmp/r145-asar`、`tmp/r146-*`、`tmp/r147-*` 与 `sections/desktop-parity-decision.md`，`tmp/` 不入库）⇒ 台账里没有它们**不是漏记，是本来就没有**。
 > ② `round-142 / round-143` 在首次回填提交（`a60c15be`）之后**还有 3 个文档提交**（发布闭环与 tag/Release 回填），此前只以「本段所在提交」一句带过，本轮补齐哈希。
 
+## round-164 ~ round-166（锁底确定化 / 批 3c / 真实大线程实测，均未发布）
+
+> round-164/165 当时未回填本台账（条目在各自 round 文档与主交接轮次行），此处按「回填说明」先例一并补记。
+
+- **round-164（`2eb8342c`）**：贴底锁定确定性收口——`ThreadConversation.vue` +60：ResizeObserver（容器+直接子元素）+ MutationObserver，`shouldLockToBottom()` 时 `scheduleBottomLock(2)` 回锁；图片快路径与帧锁保留。新闸门 `scripts/check-bottom-lock.cjs` 4 场景（反跑 stub 复现漏锁 dist=500）。附带 `6d14487c` 修 regen 脚本按扩展名过滤（本机 13 个 gitignored .js 伴生产物不再假报 drift）。详见 [round-164](../rounds/round-164-bottom-lock-determinism.md)。
+- **round-165（`73f841e5`）**：批 3c——hot 轮窗口化，新增 `src/utils/hotTurnWindow.ts`（16 例单测）+ 组件 +150：块高度来自 RO 实测缓存、未测块强制入窗 ⇒ spacer 求和只含实测值；0 高哨兵 li / 占位 li 公式 `Σh+(k−1)g` / bottomAnchorRef 实时锚 / JumpBar 强制入窗。新闸门 `check-hot-window` 6 场景（sh=9278 守恒、JumpBar 12.0px）。三坑：spacer shrink-0 复踩 / RO 终末事件振荡 / 冷启动超时。详见 [round-165](../rounds/round-165-hot-turn-windowing.md)。
+- **round-166（本轮）**：真实大线程上机实测（批 3b+3c 组合）——真实数据形态夹具（10 轮 / 554 真实 items × 17 = 170 轮，`tmp/r166-real-big-thread.cjs` 9 场景，真实数据不进仓）；**产品修复一处**：`src/utils/warmTurnWindow.ts` `MODEL_SWITCH_DIVIDER_HEIGHT_PX` 44 → 30（真机实测 30.0px，round-163 §六② 闭环，回底 +14px 漂移消失）。首跑 3 败定性：冷区自动扩页属设计（estSum Δ=1886 与 sh 增量逐位一致）、分割栏估算误差、反跑口径照抄错。结论：估算常量真实数据全部命中（68.5 / 34 逐位一致），hot spacer 实测守恒（窗口化 sh == 反跑 sh == 51247，贴底 dom 1339 vs 反跑 12678 ≈ 9.5×）。验证：探针 9/9、hot-window 6/6、bottom-lock 4/4、单测 1035/1035、tsc 0、vite build + tsup 过。详见 [round-166](../rounds/round-166-real-big-thread-windowing.md)。
+
 ## round-163（批 3b：折叠态 warm 轮窗口化，未发布）
 
 **性质**：产品侧功能（评估批 3 第二步落地；`ThreadConversation.vue` +162/−1，新增 `src/utils/warmTurnWindow.ts` + 21 例单测）。
