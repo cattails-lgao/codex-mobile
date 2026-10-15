@@ -47,10 +47,15 @@ function listSchemaTree() {
   const out = {}
   const dirs = fs.readdirSync(SCHEMA_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name).sort()
+  // 只数快照自己的产物：json/ 只认 .json、typescript/ 只认 .ts。
+  // 本机常有 gitignored 的 .js 编译伴生文件（.gitignore: typescript/**/*.js），
+  // 不按扩展名过滤会把它们当快照文件 → 假报 drift（round-164 实测 +13 行 / 计数 100→112、1→2）。
+  const extOf = { json: '.json', typescript: '.ts' }
   for (const name of dirs) {
     const topDir = path.join(SCHEMA_DIR, name)
+    const ext = extOf[name] || null
     const files = (d) => fs.readdirSync(d, { withFileTypes: true })
-      .filter((e) => e.isFile()).map((e) => e.name).sort()
+      .filter((e) => e.isFile() && (ext === null || e.name.endsWith(ext))).map((e) => e.name).sort()
     const entry = { root: files(topDir) }
     for (const sub of fs.readdirSync(topDir, { withFileTypes: true })
       .filter((e) => e.isDirectory()).map((e) => e.name).sort()) {
