@@ -234,6 +234,7 @@
 > 见 [round-168](../rounds/round-168-batch4-fork-one-step-and-capability-gates.md)。
 > **✅ #2、#4 已完成（round-169）**：编辑入口升级为原地内联编辑框（未改动保存 no-op、Esc 取消），保存即「revert 完整清理链 + 编辑重发（`turnTrigger` = `edit_user_message`）」，探针 `tmp/r169-edit-probe.cjs` 8/8，见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 > 本轮实测**不触 `src/server/**`**（桥已声明 `experimentalApi`，RPC 参数透传）⇒ 未 bump `SHARED_BRIDGE_VERSION`。
+> **✅ round-170 chrome MCP 真机复验**：10 场景全过——内联编辑 4 场景（保存链序 / Cancel / 未改动 no-op / Esc 全零 RPC）、fork 两向（`beforeTurnId` 生效；最后一轮全量 fork = 正确降级）、能力门控正反双向（remoteControl 缺方法 ⇒ "not supported"、剔除 `app/list` ⇒ Apps tab "APIs unavailable"），见 [round-170](../rounds/round-170-chrome-mcp-verification.md)。
 | # | 改什么 | 依据 |
 | --- | --- | --- |
 | 1 | ✅（round-168） `forkThreadFromTurn` 改用 `thread/fork { beforeTurnId }`，把「全量 fork + 副本 revert」压成一步 | 我方桥**已声明** `experimentalApi: true`（`src/server/codexAppServerBridge.ts:1046-1047`） |

@@ -450,6 +450,14 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-170（chrome MCP 真机复验批 0–4，纯验证轮 · 未发布）
+
+- **性质**：**零产品代码改动** —— 用户要求「直接使用启动 chrome mcp 来验证改动」。产物全在 `tmp/`（`r170-mcp-inject.js` 注入脚本、methods 快照），不进仓。**未 bump 版本 / 未 tag / 未发版。**
+- **方法**：chrome-devtools MCP 真实 Chrome + dev server（5173，隔离 home）；playwright 路由拦截换成**页面内 fetch monkey-patch**（`initScript` 同步 XHR + eval 引导 `tmp/r170-mcp-inject.js`，拦 `POST /codex-api/rpc` 与按需 `GET /codex-api/meta/methods`，记录到 `window.__r170`）。坑：initScript 不跨导航保持（每次都要带）；同文档 hash 跳转不重载（每场景换查询串）。
+- **10 场景全过**：内联编辑 4 场景（保存 = revert{t2}→turn/start{turnTrigger:'edit_user_message'} 顺序正确 / Cancel 零 RPC / 未改动保存 no-op / Esc 零 RPC）；fork 两向（倒数第二轮 ⇒ `thread/fork{beforeTurnId:'t2'}` 剔除该轮及后；**最后一轮无 beforeTurnId = 全量 fork 正确降级**——`findForkCutoffTurnId` 返回 null，非回归）；能力门控正反双向（真实桥 104 方法 ⇒ remoteControl 缺 4 方法 ⇒ 设置面板显示 "not supported" 且 toggle 不渲染、hooks 走列表分支；拦截剔除 `app/list` ⇒ 目录页 Apps tab 显示 "Apps APIs unavailable"，正对照不出现）；时间分隔（turn 级 `startedAt`：Yesterday 标 / 20 分钟间隔不标（基准=上一条分隔栏）/ 跨天 Today 标）。
+- **字段层级教训**：时间戳协议来源是 **turn 级 `startedAt`**（秒，>1e11 视为毫秒）；item 的 `turnStartedAtIso` 是 normalizer 产物不是输入。
+- **覆盖结论**：批 0–4 全部代码改动均有验证（批 4 四项 + 批 1 #1 本轮真机；批 3 r155/r163/r165/r166；批 1 #3 + 批 2 r152 有头 36 项；批 0 零调用点纯函数单测即全覆盖）。**唯一悬空 = 批 1 #4 真机人手按键**（Ctrl+J/Ctrl+B，CDP 绕过浏览器加速键前置处理，判定书 §六 登记的人工动作）。详见 [round-170](../rounds/round-170-chrome-mcp-verification.md)。
+
 ## round-162（收掉 round-161 的夹具自相矛盾 ＋ 产品侧基线复验，文档/脚本轮 · 未发版）
 
 **性质**：**零产品代码改动** —— 改的是「1 个闸门脚本的 2 处夹具字面量 + 1 行注释 + 文档 / 台账」。**未 bump 版本 / 未 tag / 未发版。**
